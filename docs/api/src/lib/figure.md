@@ -7,7 +7,7 @@ title: figure
 > FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration.
 
  Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui) and
- the ImPlot plots (figure_implot).
+ the ImPlot plots (figure_implot): items, their style (`ip_spec`) and ImPlot's marker and item-flag constants.
 
 **Source**: `src/lib/figure.F90`
 

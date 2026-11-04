@@ -64,6 +64,17 @@ See [tutorial chapter 2](./tutorial/02-widgets#same-text-different-widgets): `'R
 
 A column of a Fortran array is contiguous: ImPlot reads it in place.
 
+### Combine items and styles in one plot
+
+<<< @/examples/snippets/cb_items-spec.F90{fortran}
+
+<<< @/examples/snippets/cb_items-items.F90{fortran}
+
+Items are drawn in call order: put shaded areas first so the lines stay visible. A spec built once outside the loop
+costs nothing per frame; one built inline (`spec=ip_spec(...)`) is rebuilt every frame, which is cheap but not free.
+The `x(::5)` sections are not contiguous: the compiler copies them (see the next recipe).
+[Plots](/guide/plots#item-style) lists every `ip_spec` argument.
+
 ### Plot the rows of a matrix
 
 <<< @/examples/snippets/cb_rows-rows.F90{fortran}

@@ -33,7 +33,8 @@ The milestones of `plans/plan.md`. Only M1 is done; everything after it is plann
 
 - Textures from contiguous `integer(c_int8_t)` RGBA arrays, uploaded without intermediate copies.
 - ImPlot heatmaps from Fortran 2D arrays (column-major aware).
-- Plot items generic over `real32` and `real64`, so `real32` data is never copied into a `real64` temporary.
+- Plot items generic over `real32` and `real64`, so `real32` data is never copied into a `real64` temporary: done
+  for `ip_line`, `ip_scatter`, `ip_bars` and `ip_shaded`, with item styles (`ip_spec`).
 - Strided series (matrix rows) passed as base address and stride, without the compiler's temporary copy.
 - A Mandelbrot explorer and a live plot as examples; redraw benchmark at 4K.
 

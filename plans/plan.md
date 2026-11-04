@@ -49,8 +49,10 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
 ### M3: images and speed
 - Textures from contiguous `integer(c_int8_t)` RGBA arrays: one `glTexSubImage2D` upload, no intermediate copies.
 - ImPlot heatmaps from Fortran 2D arrays (column-major aware).
-- [x] Plot items generic over `real32`/`real64`: `ip_line` (2026-11-04), through the generated glue; the other
-  items follow the same pattern.
+- [x] Plot items generic over `real32`/`real64`, through the generated glue (2026-11-04): `ip_line`, `ip_scatter`,
+  `ip_bars`, `ip_shaded` (two curves, or curve and `yref`), all with an optional `spec` from `ip_spec`
+  (`plot_spec_object`: ImPlot's C++ defaults, overridden per keyword). Still to wrap: error bars, stems, stairs,
+  histograms, heatmaps, text, axis setup.
 - Strided series (`ImPlotSpec%Offset`/`%Stride` are now reachable from Fortran): the `contiguous` dummies make the compiler copy a matrix row `y(i,:)` into a temporary; ImPlot
   takes a byte stride, so pass base address + stride instead (portable stride from Fortran to be designed).
 - Port a Mandelbrot explorer and a live plot; benchmark redraw at 4K against wxFortran.

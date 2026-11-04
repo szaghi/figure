@@ -47,10 +47,14 @@ Details: [Widgets](widgets).
 |---|---|
 | `ip_begin_plot(title [, width] [, height])` → `logical` | begin a plot; `.true.` when visible |
 | `ip_setup_axes(xlabel, ylabel)` | axis labels |
-| `ip_line(label, x, y [, stat])` | a line through `(x(i), y(i))`, `real(real64)` arrays |
+| `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))` |
+| `ip_scatter(label, x, y [, spec] [, stat])` | markers at `(x(i), y(i))` |
+| `ip_bars(label, x, y, bar_size [, spec] [, stat])` | bars of height `y(i)` at `x(i)` |
+| `ip_shaded(label, x, y1, y2 [, spec] [, stat])`, `ip_shaded(label, x, y, yref ...)` | area between two curves, or a curve and `y = yref` |
+| `ip_spec(...)` → `plot_spec_object` | item style: colours, line weight, markers, flags (`ImPlotMarker_*`, `ImPlot*Flags_*`) |
 | `ip_end_plot()` | end the plot (only if `ip_begin_plot` returned `.true.`) |
 
-Details: [Plots](plots).
+Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots).
 
 ## Errors
 

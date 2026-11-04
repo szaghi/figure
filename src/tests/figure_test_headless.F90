@@ -7,7 +7,10 @@ program figure_test_headless
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : error_unit, int32, output_unit, real32, real64
 use figure, only : FIG_ERR_ARGUMENT, FIG_OK, app_object, figure_last_error, ig_begin, ig_button, ig_checkbox, ig_end, &
-                   ig_item_rect, ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, ip_setup_axes
+                   ig_item_rect, ig_set_next_window, ImPlotMarker_Circle, ip_bars, ip_begin_plot, ip_end_plot, ip_line, &
+                   ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object
+use figure_cimgui, only : im_vec4
+use figure_cimplot, only : ImPlot_GetLastItemColor
 use figure_c_native, only : fig_input_mouse
 
 implicit none
@@ -25,7 +28,12 @@ real(real64)              :: x1             !< Item rectangle, right [pixels].
 real(real64)              :: y1             !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)           !< Plot abscissae.
 real(real64)              :: y(N)           !< Plot ordinates.
-logical                   :: test_passed(7) !< Per-check outcome.
+logical                   :: test_passed(11) !< Per-check outcome.
+integer(int32)            :: stat_items(5)  !< Status of the scatter, bars and shaded items.
+integer(int32)            :: stat_spec      !< Status of a spec with a bad colour.
+type(plot_spec_object)    :: red            !< Red line, 2 pixels, circle markers.
+type(plot_spec_object)    :: bad            !< Spec with a 1-component colour.
+type(im_vec4)             :: red_seen       !< Colour ImPlot gave the last red line.
 integer(int32)            :: stat           !< Status of a failing call.
 integer(int32)            :: stat_r32       !< Status of the single-precision line.
 integer(int32)            :: stat_empty     !< Status of the empty line.
@@ -41,6 +49,10 @@ by = 0.0_real64
 test_passed = .false.
 stat_r32 = -1_int32
 stat_empty = -1_int32
+stat_items = -1_int32
+red = ip_spec(line_color=[1.0_real64, 0.0_real64, 0.0_real64, 1.0_real64], line_weight=2.0_real64, &
+              marker=ImPlotMarker_Circle)
+bad = ip_spec(line_color=[1.0_real64], stat=stat_spec)
 call app%init_headless(800_int32, 600_int32)
 
 do frame = 1_int32, 12_int32
@@ -58,6 +70,13 @@ do frame = 1_int32, 12_int32
          call ip_line('sin', x, y)
          call ip_line('sin (real32)', real(x, real32), real(y, real32), stat=stat_r32)
          call ip_line('empty', x(1:0), y(1:0), stat=stat_empty)
+         call ip_line('red', x, y, spec=red)
+         call ImPlot_GetLastItemColor(red_seen)
+         call ip_scatter('scatter', x, y, spec=red, stat=stat_items(1))
+         call ip_bars('bars (real32)', real(x, real32), real(y, real32), 0.05_real64, stat=stat_items(2))
+         call ip_shaded('band', x, y - 0.1_real64, y + 0.1_real64, stat=stat_items(3))
+         call ip_shaded('to zero (real32)', real(x, real32), real(y, real32), 0.0_real64, stat=stat_items(4))
+         call ip_scatter('scatter (real32)', real(x, real32), real(y, real32), stat=stat_items(5))
          call ip_end_plot()
       endif
    endif
@@ -81,15 +100,19 @@ enddo
 call ip_line('mismatch', x, y(1:N - 1_int32), stat=stat)
 call app%destroy()
 
-test_passed(1) = clicks == 1_int32                                            ! button clicked once
-test_passed(2) = toggles == 1_int32                                           ! check box toggled once
-test_passed(3) = flag                                                         ! check box value is true
-test_passed(4) = stat == int(FIG_ERR_ARGUMENT, int32)                         ! ip_line size mismatch reported
-test_passed(5) = figure_last_error() == 'ip_line: x and y have different sizes' ! ... with its own message
-test_passed(6) = stat_r32 == int(FIG_OK, int32)                               ! single-precision line drawn
-test_passed(7) = stat_empty == int(FIG_OK, int32)                             ! empty series accepted
+test_passed(1) = clicks == 1_int32                                                 ! button clicked once
+test_passed(2) = toggles == 1_int32                                                ! check box toggled once
+test_passed(3) = flag                                                              ! check box value is true
+test_passed(4) = stat == int(FIG_ERR_ARGUMENT, int32)                              ! ip_line size mismatch reported
+test_passed(5) = figure_last_error() == 'ip_line: the series have different sizes' ! ... with its own message
+test_passed(6) = stat_r32 == int(FIG_OK, int32)                                    ! single-precision line drawn
+test_passed(7) = stat_empty == int(FIG_OK, int32)                                  ! empty series accepted
+test_passed(8) = all(stat_items == int(FIG_OK, int32))                             ! scatter, bars, shaded drawn
+test_passed(9) = stat_spec == int(FIG_ERR_ARGUMENT, int32)                         ! bad colour rejected
+test_passed(10) = red_seen%x == 1.0_c_float .and. red_seen%y == 0.0_c_float        ! the red spec reached ImPlot
+test_passed(11) = red_seen%z == 0.0_c_float .and. red_seen%w == 1.0_c_float        ! ... blue and alpha too
 
-write(output_unit, '(A,7L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,11L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,I0,A,I0,A,L1,A,I0,A)') 'clicks: ', clicks, ', toggles: ', toggles, ', flag: ', flag, &

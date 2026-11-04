@@ -45,7 +45,7 @@ cross into Fortran: every glue function catches them and returns `FIG_ERR_EXCEPT
 character. The message is not cleared by a successful call: read it right after the failing call.
 
 `ip_line` checks `size(x) == size(y)` on the Fortran side, before calling the native layer; a mismatch returns
-`FIG_ERR_ARGUMENT` with the message `ip_line: x and y have different sizes`.
+`FIG_ERR_ARGUMENT` with the message `ip_line: the series have different sizes` (each item names itself).
 
 <<< @/examples/snippets/cb_stat-line.F90{fortran}
 
