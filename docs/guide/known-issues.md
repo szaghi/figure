@@ -34,8 +34,9 @@ kinds.
 
 ## Platforms
 
-Linux is built and tested locally; macOS and Windows only by CI (the `Platforms` workflow), and no window has been
-opened on either yet: the headless tests need no display. On WSL2, set `GALLIUM_DRIVER=d3d12`, or Mesa renders in
+Linux is built and tested locally; macOS (arm64) and Windows (MSYS2 UCRT64) are built and tested by CI (the
+`Platforms` workflow), where the headless tests pass with FoBiS and fpm. No window has been opened on either yet: the
+tests need no display, and the windowed path (SDL video, the OpenGL context, the GL loader) is unverified there. On WSL2, set `GALLIUM_DRIVER=d3d12`, or Mesa renders in
 software ([Installation](install#wsl2-wslg)).
 
 ## First build needs the network

@@ -67,7 +67,14 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
   wx_bitmap(rgb) 88-97 ms, draw 3.8-4.2 ms); wx shim rebuilt with -O2: no change. Sources:
   src/examples/figure_bench_texture.F90, scripts/bench/wx_bench.f90; method in docs/guide/images.md.
 
-### M4: platforms and CI: **written 2026-11-04, unverified until the first CI runs**
+### M4: platforms and CI: **done (2026-11-04)**
+- All green on run 41839852987 (+ CI 41839852870): macOS 14 arm64, Windows MSYS2 UCRT64, Linux nvfortran 26.9, Linux
+  gfortran 14 (ci.yml): check_sync vs SDL, FoBiS tests 2/2, fpm tests (headless 21/21, layout 6/6) on macOS and
+  Windows. Four rounds: macOS needs clang for SDL (-fobjc-arc) and clang's runtime (___isPlatformVersionAtLeast,
+  installed as libfigure_clang_rt.a); FoBiS rules run through cmd.exe on Windows (`bash scripts/build_native.sh`);
+  nvhpc needs disk freed; fpm puts --link-flag before the objects, so on GNU ld the platform libraries come from
+  lib/libfigure_platform.a, an implicit linker script (figure_platform in fpm.toml). Windowed runs on macOS/Windows:
+  still never tried.
 - `.github/workflows/platforms.yml` (project-owned, beside the scaffold's ci.yml): macOS 14 (gfortran 14 via
   setup-fortran, Apple clang), Windows (MSYS2 UCRT64), Linux nvfortran (NVIDIA apt repo, `nvhpc-26-9`: the package
   name is the least certain part). Steps: native layer, `check_sync.py` (varset vs SDL's sdl3.pc), FoBiS tests +
