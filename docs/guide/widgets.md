@@ -4,7 +4,7 @@ title: Widgets
 
 # Widgets
 
-`figure_imgui` binds a first set of [Dear ImGui](https://github.com/ocornut/imgui) widgets (Dear ImGui v1.93.0). Call
+`figure_imgui` binds a first set of [Dear ImGui](https://github.com/ocornut/imgui) widgets (Dear ImGui 1.93.1 WIP, docking branch). Call
 them between `next_frame` and the next `next_frame`, inside a window.
 
 ## Values are your variables

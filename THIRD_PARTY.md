@@ -7,9 +7,9 @@ licence file under `share/licenses/<project>/`.
 
 | Project | Version (pinned in `native/CMakeLists.txt`) | Licence | Copyright | In FIGURE |
 |---|---|---|---|---|
-| [Dear ImGui](https://github.com/ocornut/imgui) | v1.93.0, through cimgui `1.93dock` | MIT | Omar Cornut | widgets, windows, the OpenGL 3 and SDL3 backends |
+| [Dear ImGui](https://github.com/ocornut/imgui) | 1.93.1 WIP, docking branch, through cimgui `1.93.1WIPdock` | MIT | Omar Cornut | widgets, windows, the OpenGL 3 and SDL3 backends |
 | [ImPlot](https://github.com/epezent/implot) | 1.2 WIP, through cimplot `v1.1` | MIT | Evan Pezent | plots, heatmaps, colormaps |
-| [cimgui](https://github.com/cimgui/cimgui) | `1.93dock` | MIT | Stephan Dilly | the C API of Dear ImGui, and its metadata used by `scripts/gen_bindings.py` |
+| [cimgui](https://github.com/cimgui/cimgui) | `1.93.1WIPdock` | MIT | Stephan Dilly | the C API of Dear ImGui, and its metadata used by `scripts/gen_bindings.py` |
 | [cimplot](https://github.com/cimgui/cimplot) | `v1.1` | MIT | Victor Bombí | the C API of ImPlot, and its metadata used by `scripts/gen_bindings.py` |
 | [SDL](https://github.com/libsdl-org/SDL) | `release-3.4.20` | zlib | Sam Lantinga | window, input, OpenGL context, file dialogs |
 

@@ -20,7 +20,7 @@ flowchart TD
     BASE --> RAW
     GEN -->|"C ABI: scalars, pointers, ImVec2"| CIM["cimgui / cimplot<br/>C APIs"]
     RAW -->|"C ABI: (pointer, length) strings"| GLUE["figure_native.cpp<br/>FIGURE glue"]
-    CIM --> CPP["Dear ImGui v1.93.0 + ImPlot 1.2 WIP<br/>C++"]
+    CIM --> CPP["Dear ImGui 1.93.1 WIP (docking) + ImPlot 1.2 WIP<br/>C++"]
     GLUE --> CPP
     GLUE --> SDL["SDL3 + OpenGL 3<br/>window, input, GL context"]
     CPP --> BACK["imgui_impl_sdl3 + imgui_impl_opengl3<br/>backends"]

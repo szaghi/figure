@@ -19,7 +19,7 @@ programs use the wrappers (`ig_*`, `ip_*`).
 
 | Library | Public functions | Direct | Glue (generated) | Skipped |
 |---|---|---|---|---|
-| cimgui | 413 | 354 | 8 | 51 |
+| cimgui | 427 | 368 | 8 | 51 |
 | cimplot | 401 | 96 | 272 | 33 |
 
 ## cimgui: through the generated glue (8)

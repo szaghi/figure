@@ -10,12 +10,16 @@ Dear ImGui identifies widgets by their label within a window: two widgets with t
 `'label##suffix'` to repeat a visible text ([Widgets](widgets#labels-and-identifiers)). Labels are passed verbatim,
 trailing blanks included: pass `trim(...)` of a fixed-length buffer.
 
-## Docking is disabled
+## Docking is not enabled yet
 
-The pinned cimgui tag `1.93dock` is, despite its name, generated from the non-docking Dear ImGui: its `cimgui.h` has
-no `ImGuiConfigFlags_DockingEnable`. Docking windows into each other is therefore off. Enabling it needs a cimgui
-commit generated from the docking branch, and possibly cimplot regenerated against it: planned for v0.1.0 (steps S1
-and S2 of the [roadmap](roadmap)).
+FIGURE is built from Dear ImGui's docking branch (cimgui `1.93.1WIPdock`), and the docking functions and constants
+are in the [raw bindings](raw-bindings) (`igDockSpace`, `igSetNextWindowDockID`, `ImGuiDockNodeFlags_*`, ...).
+Docking itself is still off: the switch to enable it, and a Fortran API, are step S2 of the [roadmap](roadmap).
+Multi-viewports (windows dragged out of the main window) are not planned: remote and headless modes cannot support
+them.
+
+The cimgui tag `1.93dock`, pinned before, was generated from Dear ImGui's master branch despite its name (its
+`imgui` submodule points to master): it had no docking at all.
 
 ## nvfortran 26.9: internal compiler error on `size`
 

@@ -3,9 +3,11 @@
 # Built once, before any Fortran build, by scripts/build_native.sh. Neither FoBiS nor fpm compiles C++: both only link
 # the static libraries this project installs into <prefix>/lib (default: the repository's lib/).
 #
-# Pinned third-party versions (a matched set: cimplot v1.1 was generated against cimgui 1.93dock):
-#   cimgui  1.93dock      -> Dear ImGui v1.93.0, NON-docking despite the tag name (docs/guide/known-issues.md)
-#   cimplot v1.1          -> ImPlot 1.2 WIP (git submodule of cimplot)
+# Pinned third-party versions:
+#   cimgui  1.93.1WIPdock -> Dear ImGui 1.93.1 WIP, docking branch (v1.93.0-docking + 10 commits). The tag 1.93dock,
+#                            despite its name, points to Dear ImGui's master branch and has no docking.
+#   cimplot v1.1          -> ImPlot 1.2 WIP (git submodule of cimplot); generated against cimgui 1.93dock, the same
+#                            Dear ImGui 1.93 API (docking only adds to it)
 #   SDL     release-3.4.20
 cmake_minimum_required(VERSION 3.24)
 project(figure_native LANGUAGES C CXX)
@@ -16,7 +18,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(FetchContent)
 
-set(FIGURE_CIMGUI_TAG  "1.93dock"       CACHE STRING "cimgui git tag")
+set(FIGURE_CIMGUI_TAG  "1.93.1WIPdock"  CACHE STRING "cimgui git tag")
 set(FIGURE_CIMPLOT_TAG "v1.1"           CACHE STRING "cimplot git tag")
 set(FIGURE_SDL_TAG     "release-3.4.20" CACHE STRING "SDL git tag")
 
