@@ -3,7 +3,8 @@
 Run by src/tests/figure_test_remote.F90 against the program's server. Checks, in order:
   - GET / serves the client page;
   - the WebSocket handshake (RFC 6455): status 101 and the Sec-WebSocket-Accept of our key;
-  - every message parses to its exact length: textures (id, size, flags, width x height x 4 RGBA bytes) and frames
+  - every message parses to its exact length: the background (r, g, b in [0, 1]), before any frame; textures
+    (id, size, flags, width x height x 4 RGBA bytes) and frames
     (draw lists of 20-byte vertices, 16-bit indices, commands), and draw commands reference received textures only;
   - a size event ("s:640,480") comes back as the display size of a later frame;
   - a click (mouse move, press, release) at the point the program writes to CLICK_FILE.
@@ -158,6 +159,7 @@ def run(port: int, click_file: Path) -> None:
     ws = WebSocket(port)
     textures: set[int] = set()
     sized = clicked = False
+    background: tuple[float, ...] | None = None
     frames = 0
     end = time.monotonic() + TIMEOUT
     try:
@@ -169,9 +171,20 @@ def run(port: int, click_file: Path) -> None:
                     msg = f"texture {tid}: {len(m)} bytes for {tw} x {th}"
                     raise ProtocolError(msg)
                 textures.add(tid)
+            elif m[0] == 4:
+                if len(m) != 13:
+                    msg = f"background message of {len(m)} bytes"
+                    raise ProtocolError(msg)
+                background = struct.unpack_from("<fff", m, 1)
+                if not all(0.0 <= v <= 1.0 for v in background):
+                    msg = f"background colour out of range: {background}"
+                    raise ProtocolError(msg)
             elif m[0] == 3:
                 textures.discard(struct.unpack_from("<I", m, 1)[0])
             elif m[0] == 1:
+                if background is None:
+                    msg = "a frame before the background"
+                    raise ProtocolError(msg)
                 frames += 1
                 w, h = parse_frame(m, textures)
                 if frames == 1:

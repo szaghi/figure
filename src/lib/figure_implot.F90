@@ -31,8 +31,8 @@ use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_Begin
                            ImPlot_PlotHeatmap_FloatPtr, ImPlot_PlotImage, ImPlot_PopColormap,                       &
                            ImPlot_PushColormap_PlotColormap, im_plot_point, im_plot_rect, ImPlot_GetPlotLimits,     &
                            ImPlot_GetPlotSize, ImPlot_SetupAxesLimits
-use figure_cimplot_enums, only : ImPlotAxisFlags_None, ImPlotCond_Always, ImPlotCond_Once, ImPlotFlags_Equal,          &
-                                 ImPlotFlags_None,                                                                 &
+use figure_cimplot_enums, only : ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_None, ImPlotCond_Always, ImPlotCond_Once,     &
+                                 ImPlotFlags_Equal, ImPlotFlags_None,                                              &
                                  ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square,  &
                                  ImPlotMarker_Diamond, ImPlotMarker_Up, ImPlotMarker_Down, ImPlotMarker_Left,     &
                                  ImPlotMarker_Right, ImPlotMarker_Cross, ImPlotMarker_Plus, ImPlotMarker_Asterisk, &
@@ -127,12 +127,19 @@ contains
    call ImPlot_EndPlot()
    endsubroutine ip_end_plot
 
-   subroutine ip_setup_axes(xlabel, ylabel)
-   !< Axis labels (call right after `ip_begin_plot`).
-   character(len=*), intent(in) :: xlabel !< X label.
-   character(len=*), intent(in) :: ylabel !< Y label.
+   subroutine ip_setup_axes(xlabel, ylabel, auto_fit)
+   !< Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes fit the data every frame (data
+   !< that grows while the user watches), instead of once on first use.
+   character(len=*), intent(in)           :: xlabel   !< X label.
+   character(len=*), intent(in)           :: ylabel   !< Y label.
+   logical,          intent(in), optional :: auto_fit !< Fit the axes to the data every frame (default: first use only).
+   integer(c_int)                         :: flags    !< ImPlotAxisFlags of both axes.
 
-   call ImPlot_SetupAxes(cstr(xlabel), cstr(ylabel), ImPlotAxisFlags_None, ImPlotAxisFlags_None)
+   flags = ImPlotAxisFlags_None
+   if (present(auto_fit)) then
+      if (auto_fit) flags = ImPlotAxisFlags_AutoFit
+   endif
+   call ImPlot_SetupAxes(cstr(xlabel), cstr(ylabel), flags, flags)
    endsubroutine ip_setup_axes
 
    subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)

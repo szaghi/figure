@@ -14,6 +14,8 @@ a plot (`ip_image`). Both read Fortran's column-major arrays as they are: no cop
 
 <<< @/examples/snippets/cb_field-heatmap.F90{fortran}
 
+<Media name="cb_field" alt="A heatmap of a Gaussian bump with its colour bar, an image drawn inside the plot and the same image as a widget" caption="docs/examples/src/cb_field.F90: the heatmap, its colour scale, and a texture in the plot and as a widget" />
+
 `ip_heatmap(label, f, xmin, xmax, ymin, ymax [, scale_min, scale_max] [, label_format] [, colormap] [, spec] [, stat])`
 draws `f(:, :)` (`real(real32)` or `real(real64)`, contiguous) over the rectangle `[xmin, xmax] x [ymin, ymax]`:
 
@@ -75,6 +77,8 @@ double-click to fit) on a plot with `equal` axes. Every frame the program reads 
 When they, or the iteration count, change, it recomputes the image at the plot's resolution (OpenMP, `default(none)`)
 and uploads it with `tex%update`; otherwise it only draws the texture again with `ip_image`, so lazy redraw keeps the
 window idle.
+
+<Media name="mandelbrot" video alt="Zooming 5000 times into the seahorse valley of the Mandelbrot set, then raising the iterations" caption="figure_mandelbrot: 100 wheel steps into the spiral at -0.743644 + 0.131826 i, every frame recomputed at the plot's resolution" />
 
 ```bash
 fobis build --mode examples-gnu && exe/figure_mandelbrot      # the example modes build with OpenMP

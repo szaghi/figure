@@ -1,0 +1,17 @@
+#! program exe/figure_hello
+#! frames  210
+#! poster  185
+# the home page: tick "animate", drag the frequency, click the button twice
+0   move 600 400
+5   move 37 126 20
+28  down
+30  up
+45  move 157 80 20
+70  down
+72  move 420 80 40
+115 up
+125 move 59 57 20
+150 down
+152 up
+165 down
+167 up

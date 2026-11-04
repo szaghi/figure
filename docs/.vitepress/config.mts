@@ -38,6 +38,7 @@ const docs = [
       { text: 'Remote UI',               link: '/guide/remote' },
       { text: 'Error handling',          link: '/guide/errors' },
       { text: 'Headless testing',        link: '/guide/testing' },
+      { text: 'Screenshots and videos',  link: '/guide/capture' },
       { text: 'Architecture',            link: '/guide/architecture' },
       { text: 'Raw bindings',            link: '/guide/raw-bindings' },
       { text: 'Known issues',            link: '/guide/known-issues' },
@@ -59,6 +60,7 @@ export default withMermaid({
   title: 'FIGURE',
   description: 'Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration',
   base: '/figure/',
+  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/figure/favicon.svg' }]],
   // ford.md is the formal project file, not a page; the examples are included by the pages, not pages themselves
   srcExclude: ['ford.md', 'examples/**'],
 
@@ -75,6 +77,7 @@ export default withMermaid({
   },
 
   themeConfig: {
+    logo: { light: '/logo.svg', dark: '/logo-dark.svg', alt: 'FIGURE logo' },
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Start here', link: '/guide/', activeMatch: '^/guide/(index|install)?$' },
@@ -83,7 +86,7 @@ export default withMermaid({
       {
         text: 'Reference',
         link: '/guide/features',
-        activeMatch: '^/guide/(features|frame-loop|widgets|plots|images|remote|errors|testing|architecture|raw-bindings|known-issues)',
+        activeMatch: '^/guide/(features|frame-loop|widgets|plots|images|remote|errors|testing|capture|architecture|raw-bindings|known-issues)',
       },
       { text: 'API', link: '/api/' },
       {

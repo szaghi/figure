@@ -6,6 +6,8 @@ title: 1. A first window
 
 <<< @/examples/snippets/tut01_window.F90{fortran}
 
+<Media name="tut01_window" :width="240" alt="A small window titled Hello, with the text Hello from Fortran" caption="The window of tut01_window" />
+
 - `app_object` is the application: one per program. `init` opens a 640 x 360 window titled "FIGURE: first window"
   and creates the Dear ImGui and ImPlot contexts.
 - `next_frame()` renders the previous frame, waits for input, and opens the next frame; it returns `.false.` when the

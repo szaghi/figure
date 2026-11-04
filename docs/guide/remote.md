@@ -19,6 +19,8 @@ call app%destroy()
 
 Try it with the example: `exe/figure_hello --remote 8080`, then open `http://localhost:8080/`.
 
+<Media name="remote" alt="The interface of figure_hello drawn by a web browser at localhost:8080" caption="figure_hello --remote, drawn by Chromium: the same pixels as the native window" />
+
 ## init_remote
 
 `app%init_remote([port] [, host] [, width, height] [, port_used] [, quiet] [, stat])`:
@@ -71,9 +73,9 @@ them.
 The native layer contains a minimal HTTP and WebSocket server (RFC 6455, one client, non-blocking sockets on POSIX and
 Winsock). `GET /` answers the client page, embedded in the library; `GET /ws` upgrades to a WebSocket. After each
 frame the server sends, as binary messages, the textures Dear ImGui created or changed (RGBA, with their filtering)
-and the draw lists (20-byte vertices, 16-bit indices, commands with clip rectangle, texture and index range). The page
-draws them with WebGL, exactly as the OpenGL backend draws a window, and sends input events back as short text
-messages. The protocol is described at the top of `native/figure_remote.cpp`.
+and the draw lists (20-byte vertices, 16-bit indices, commands with clip rectangle, texture and index range); on
+connection, and when the [style](frame-loop#styles) changes, it also sends the background colour. The page draws
+them with WebGL, exactly as the OpenGL backend draws a window, and sends input events back as short text messages. The protocol is described at the top of `native/figure_remote.cpp`.
 
 `src/tests/figure_test_remote.F90` tests it end to end without a browser: it serves on a free port and runs
 `scripts/remote_client.py`, a WebSocket client that checks the page, the handshake, every message byte by byte and a

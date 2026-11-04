@@ -21,7 +21,7 @@ const canvas = document.getElementById("ui");
 const status = document.getElementById("status");
 const gl = canvas.getContext("webgl", { alpha: false, antialias: false, premultipliedAlpha: false });
 const textures = new Map();
-let ws = null, frames = 0, lastFrame = null;
+let ws = null, frames = 0, lastFrame = null, background = [0.10, 0.10, 0.11];
 
 const vs = `attribute vec2 pos; attribute vec2 uv; attribute vec4 col; uniform vec2 scale;
   varying vec2 v_uv; varying vec4 v_col;
@@ -61,7 +61,7 @@ function draw(buf) {
   canvas.width = Math.round(canvas.clientWidth * dpr); canvas.height = Math.round(canvas.clientHeight * dpr);
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.disable(gl.SCISSOR_TEST); // the clear obeys the scissor: left on from the last frame, it would clear one rect
-  gl.clearColor(0.10, 0.10, 0.11, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.clearColor(background[0], background[1], background[2], 1); gl.clear(gl.COLOR_BUFFER_BIT);
   gl.enable(gl.BLEND); gl.blendEquation(gl.FUNC_ADD);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   gl.disable(gl.CULL_FACE); gl.disable(gl.DEPTH_TEST); gl.enable(gl.SCISSOR_TEST);
@@ -98,6 +98,11 @@ function onMessage(ev) {
   if (kind === 1) { lastFrame = buf; draw(buf); status.textContent = "frame " + (++frames); }
   else if (kind === 2) setTexture(dv.getUint32(1, true), dv.getUint32(5, true), dv.getUint32(9, true),
                                   (dv.getUint32(13, true) & 1) !== 0, new Uint8Array(buf, 17));
+  else if (kind === 4) {
+    background = [dv.getFloat32(1, true), dv.getFloat32(5, true), dv.getFloat32(9, true)];
+    const c = background.map(v => Math.round(v * 255)); document.body.style.background = `rgb(${c})`;
+    if (lastFrame) draw(lastFrame);
+  }
   else if (kind === 3) { const id = dv.getUint32(1, true); const t = textures.get(id); if (t) { gl.deleteTexture(t); textures.delete(id); } }
 }
 

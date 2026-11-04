@@ -12,7 +12,8 @@ implicit none
 private
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
-public :: fig_init_remote, fig_set_ini_file, fig_texture_create, fig_texture_destroy, fig_texture_sampling, fig_texture_update
+public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, fig_texture_destroy, fig_texture_sampling
+public :: fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 
 ! Status codes: must match native/figure_native.h.
@@ -87,6 +88,15 @@ interface
    integer(c_int), value              :: path_len !< Path length [bytes].
    integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_set_ini_file
+
+   function fig_set_style(name, name_len) result(status) bind(C, name='fig_set_style')
+   !< Apply a named style: dark, light, classic, seal, seal-light.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Style name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_style
 
    subroutine fig_set_lazy(enabled, max_wait_s) bind(C, name='fig_set_lazy')
    !< Lazy redraw: sleep until an event or `max_wait_s` seconds once the UI has settled.

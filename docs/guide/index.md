@@ -19,25 +19,32 @@ The state of the interface is the program's own variables: a slider is bound to 
 the slider writes the new value into it when the user drags. See [Why immediate mode](why) for what this changes with
 respect to retained-mode toolkits.
 
+<Media name="hello" video alt="figure_hello: a check box starts the animation, a slider changes the frequency of the plotted wave, a button counts clicks" caption="exe/figure_hello, the example of the repository" />
+
 ## Status
 
-FIGURE is at milestone M1 of its [roadmap](roadmap): the build chain and a first set of widgets and plots, verified
-on Linux (WSL2/WSLg, X11 and Wayland). The API is small and will change. VERSION is the placeholder `0.0.0`; the
-licence is not decided yet.
+FIGURE is approaching its first release, v0.1.0: milestones M1 to M5 of the [roadmap](roadmap) are done, except the
+WebAssembly experiment. The API is small and can still change; the licence is not decided yet.
 
 What exists today:
 
-- the application loop: a window, the frame loop, lazy redraw, headless mode for tests;
+- the application loop: a window, the frame loop, lazy redraw; headless mode for tests; remote mode, the interface
+  in a web browser;
 - widgets: windows, buttons, check boxes, sliders (`int32`, `real32`, `real64`), a numeric input, text, layout
   helpers, the Dear ImGui demo window;
-- plots: line plots of `real(real64)` arrays, with axis labels.
+- plots of `real(real32)` and `real(real64)` arrays, read in place: lines (also of matrix rows, with a stride),
+  scatter, bars, shaded areas, with styles; heatmaps with their colour scale; images (`texture_object`), in a plot
+  or as a widget;
+- every Dear ImGui and ImPlot function through the generated [raw bindings](raw-bindings);
+- CI on Linux, macOS and Windows with gfortran, on Linux with nvfortran; builds with FoBiS and fpm.
 
 The [feature map](features) lists every public procedure.
 
 ## What it is not, yet
 
-macOS and Windows are target platforms but not yet built or tested (milestone M4); text input, images, heatmaps and
-docking are not available (see [Known issues](known-issues) and the [roadmap](roadmap)).
+Text input, docking and multiple viewports are not available, and only part of Dear ImGui's widgets have a Fortran
+wrapper (the rest are reachable through the raw bindings). See [Known issues](known-issues) and the
+[roadmap](roadmap).
 
 ## Where to start
 

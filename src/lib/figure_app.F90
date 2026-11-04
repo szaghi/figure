@@ -20,7 +20,7 @@ use, intrinsic :: iso_c_binding, only : c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
 use figure_base, only : figure_check
 use figure_c_native, only : FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, fig_init_headless, &
-                            fig_init_remote, fig_request_frames, fig_set_ini_file, fig_set_lazy, fig_shutdown
+                            fig_init_remote, fig_request_frames, fig_set_ini_file, fig_set_lazy, fig_set_style, fig_shutdown
 
 implicit none
 private
@@ -38,6 +38,7 @@ type :: app_object
       procedure, pass(self) :: init_remote    !< The UI in a web browser (no window, display or GPU).
       procedure, pass(self) :: next_frame     !< Close the current frame, open the next; false on quit.
       procedure, pass(self) :: set_lazy       !< Lazy redraw on/off, longest sleep.
+      procedure, pass(self) :: set_style      !< Colours of the interface, the plots and the background.
       procedure, pass(self) :: request_frames !< Redraw without waiting for input.
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
@@ -157,6 +158,22 @@ contains
    if (present(max_wait)) w = real(max_wait, c_double)
    call fig_set_lazy(merge(1_c_int, 0_c_int, enabled), w)
    endsubroutine set_lazy
+
+   subroutine set_style(self, name, stat)
+   !< Colours of the interface, the plots and the window background, by name, after `init*`:
+   !<
+   !< - `'seal'` (the default), `'seal-light'`: FIGURE's, from its mark: ink (or paper) and one vermilion, spent on
+   !<   what the user touches and on the first plotted line; square corners;
+   !< - `'dark'`, `'light'`, `'classic'`: Dear ImGui's own styles, with ImPlot's default line colours.
+   !<
+   !< The environment variable `FIGURE_STYLE` picks the style at initialisation; this call overrides it. Sizes and
+   !< fonts are kept; colours changed through the raw bindings are reset.
+   class(app_object), intent(inout)         :: self   !< Application.
+   character(len=*),  intent(in)            :: name   !< Style name.
+   integer(int32),    intent(out), optional :: stat   !< Status: `FIG_ERR_ARGUMENT` for an unknown name.
+
+   call figure_check(fig_set_style(name, len(name, c_int)), stat)
+   endsubroutine set_style
 
    subroutine request_frames(self, n)
    !< Draw at least `n` more frames without waiting for input (e.g. after new data arrived).

@@ -28,6 +28,7 @@ graph LR
 - [fig_begin_frame](#fig-begin-frame)
 - [fig_end_frame](#fig-end-frame)
 - [fig_set_ini_file](#fig-set-ini-file)
+- [fig_set_style](#fig-set-style)
 - [fig_content_scale](#fig-content-scale)
 - [fig_last_error](#fig-last-error)
 - [fig_texture_create](#fig-texture-create)
@@ -63,6 +64,8 @@ graph LR
 ### fig_end_frame
 
 ### fig_set_ini_file
+
+### fig_set_style
 
 ### fig_content_scale
 

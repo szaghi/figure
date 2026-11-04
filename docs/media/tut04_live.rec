@@ -1,0 +1,13 @@
+#! program build/docs-examples/bin/tut04_live
+#! frames  300
+#! poster  290
+# tick "running", then raise the iterations per frame
+0   move 500 300
+5   move 37 56 20
+30  down
+32  up
+120 move 59 79 20
+145 down
+147 move 200 79 30
+180 up
+195 move 700 300 30

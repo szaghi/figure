@@ -8,6 +8,8 @@ The setup panel of a solver: its parameters are ordinary Fortran variables, and 
 
 <<< @/examples/snippets/tut02_widgets.F90{fortran}
 
+<Media name="tut02_widgets" video alt="Dragging the cells slider, toggling viscous, pressing Run twice and closing the Tools window" caption="tut02_widgets: every change is in the program's variables at once, as the status line shows" />
+
 ## Widgets edit your variables
 
 <<< @/examples/snippets/tut02_widgets-widgets.F90{fortran}

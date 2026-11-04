@@ -21,6 +21,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%set_lazy(enabled [, max_wait])` | lazy redraw on/off, longest sleep (default 0.5 s) | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
+| `app%set_style(name [, stat])` | colours: `'seal'` (default), `'seal-light'`, `'dark'`, `'light'`, `'classic'` | [frame loop](frame-loop#styles) |
 | `app%destroy()` | close the window, destroy the contexts | [frame loop](frame-loop#the-application) |
 
 ## Widgets: `ig_*`
@@ -47,7 +48,7 @@ Details: [Widgets](widgets).
 | Procedure | Purpose |
 |---|---|
 | `ip_begin_plot(title [, width] [, height] [, equal])` → `logical` | begin a plot; `.true.` when visible |
-| `ip_setup_axes(xlabel, ylabel)` | axis labels |
+| `ip_setup_axes(xlabel, ylabel [, auto_fit])` | axis labels; axes refit to the data every frame |
 | `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | initial axis ranges |
 | `ip_plot_limits(...)`, `ip_plot_size(...)` | the ranges the user panned and zoomed to; the plot's size in pixels |
 | `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))` |
@@ -86,5 +87,7 @@ Details: [Error handling](errors).
 | Variable | Effect |
 |---|---|
 | `FIGURE_DEBUG_REDRAW` | any value: once per second, redraw statistics on standard error (window mode) — see [frame loop](frame-loop#redraw-diagnostics) |
+| `FIGURE_STYLE` | the style at initialisation: a name of `app%set_style` — see [styles](frame-loop#styles) |
+| `FIGURE_CAPTURE`, `FIGURE_CAPTURE_*` | record the frames of a window to image files, with scripted input — see [screenshots and videos](capture) |
 | `GALLIUM_DRIVER=d3d12` | not read by FIGURE: on WSL2, makes Mesa render on the GPU — see [installation](install#wsl2-wslg) |
 | `SDL_VIDEO_DRIVER` | read by SDL3: `x11` or `wayland` to choose the video driver |

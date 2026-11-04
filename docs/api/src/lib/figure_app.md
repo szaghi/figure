@@ -40,6 +40,7 @@ graph LR
 - [init_headless](#init-headless)
 - [init_remote](#init-remote)
 - [set_lazy](#set-lazy)
+- [set_style](#set-style)
 - [request_frames](#request-frames)
 - [destroy](#destroy)
 - [next_frame](#next-frame)
@@ -69,6 +70,7 @@ A FIGURE application (one per program).
 | `init_remote` | pass(self) | The UI in a web browser (no window, display or GPU). |
 | `next_frame` | pass(self) | Close the current frame, open the next; false on quit. |
 | `set_lazy` | pass(self) | Lazy redraw on/off, longest sleep. |
+| `set_style` | pass(self) | Colours of the interface, the plots and the background. |
 | `request_frames` | pass(self) | Redraw without waiting for input. |
 | `content_scale` | pass(self) | Display content scale. |
 | `destroy` | pass(self) | Close everything. |
@@ -189,6 +191,38 @@ subroutine set_lazy(self, enabled, max_wait)
 flowchart TD
   set_lazy["set_lazy"] --> fig_set_lazy["fig_set_lazy"]
   style set_lazy fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_style
+
+Colours of the interface, the plots and the window background, by name, after `init*`:
+
+ - `'seal'` (the default), `'seal-light'`: FIGURE's, from its mark: ink (or paper) and one vermilion, spent on
+   what the user touches and on the first plotted line; square corners;
+ - `'dark'`, `'light'`, `'classic'`: Dear ImGui's own styles, with ImPlot's default line colours.
+
+ The environment variable `FIGURE_STYLE` picks the style at initialisation; this call overrides it. Sizes and
+ fonts are kept; colours changed through the raw bindings are reset.
+
+```fortran
+subroutine set_style(self, name, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `name` | character(len=*) | in |  | Style name. |
+| `stat` | integer(kind=int32) | out | optional |  |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_style["set_style"] --> fig_set_style["fig_set_style"]
+  set_style["set_style"] --> figure_check["figure_check"]
+  style set_style fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### request_frames

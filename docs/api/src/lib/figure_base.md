@@ -72,6 +72,7 @@ flowchart TD
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> figure_check["figure_check"]
   ip_spec["ip_spec"] --> figure_check["figure_check"]
   next_frame["next_frame"] --> figure_check["figure_check"]
+  set_style["set_style"] --> figure_check["figure_check"]
   update["update"] --> figure_check["figure_check"]
   figure_check["figure_check"] --> figure_last_error["figure_last_error"]
   style figure_check fill:#3e63dd,stroke:#99b,stroke-width:2px

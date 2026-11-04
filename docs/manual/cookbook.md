@@ -79,6 +79,8 @@ The `x(::5)` sections are not contiguous: the compiler copies them (see the next
 
 <<< @/examples/snippets/cb_field-heatmap.F90{fortran}
 
+<Media name="cb_field" alt="A heatmap of a Gaussian bump with a colour bar, an image drawn inside the plot and the same image as a widget" caption="docs/examples/src/cb_field.F90: a heatmap with its colour scale, and an image as a plot item and as a widget" />
+
 `f(i, j)` is read in place, `i` along x and `j` along y, `j = 1` at the bottom; the bounds are the outer edges of the
 cells. Fix the scale (`scale_min`, `scale_max`) when the field changes over time, or the colours rescale every frame.
 [Heatmaps and images](/guide/images) has every argument.
@@ -103,6 +105,8 @@ temporary at every call (allocated and freed each frame); copying it yourself in
 same copy without the allocation. Storing series as columns avoids the question.
 
 <<< @/examples/snippets/cb_rows-rows-copied.F90{fortran}
+
+<Media name="cb_rows" :width="620" alt="Three plots of the same two probes: columns read in place, rows read in place with a stride, rows copied" caption="docs/examples/src/cb_rows.F90: the three ways give the same plot" />
 
 ## Errors
 

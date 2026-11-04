@@ -8,6 +8,8 @@ The first three vibration modes of a string, one per column of a matrix.
 
 <<< @/examples/snippets/tut03_plots.F90{fortran}
 
+<Media name="tut03_plots" alt="A window with two plots: three vibration modes with a legend, and the first mode alone" caption="tut03_plots" />
+
 ## A plot
 
 <<< @/examples/snippets/tut03_plots-plot.F90{fortran}

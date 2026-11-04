@@ -135,3 +135,27 @@ ones; 1 in headless mode). FIGURE applies it at `init`: the window is created `w
 and the Dear ImGui style (spacing, fonts) is scaled by it. Positions and sizes the program passes
 (`ig_set_next_window`, button and plot sizes) are not scaled: multiply them by `content_scale()` to keep their
 proportion to the window ([cookbook](/manual/cookbook#size-in-proportion-to-the-display-scale)).
+
+## Styles
+
+`app%set_style(name [, stat])`, after `init` (or `init_headless`, `init_remote`), sets the colours of the interface,
+of the plots and of the window's background:
+
+| Name | Look |
+|---|---|
+| `'seal'` | the default: FIGURE's style, from the palette of its mark: ink windows, paper text, vermilion spent only on what the user touches (slider grabs, check marks, pressed buttons) and on the first plotted line; square corners |
+| `'seal-light'` | the same on paper |
+| `'dark'` | Dear ImGui's dark style, with ImPlot's default line colours |
+| `'light'`, `'classic'` | Dear ImGui's other two styles |
+
+```fortran
+call app%init('FIGURE: light', 900_int32, 600_int32)
+call app%set_style('seal-light')
+```
+
+The environment variable `FIGURE_STYLE` picks the style at initialisation, without changing the program
+(`FIGURE_STYLE=seal exe/figure_hello`); a `set_style` call in the program comes later and wins. An unknown name is
+`FIG_ERR_ARGUMENT` (or a stop, without `stat`). Sizes, spacing and fonts are kept; colours changed through the raw
+bindings are reset. Heatmaps are unaffected: their colormap is the one passed to `ip_heatmap` (the line colours of a
+style are a qualitative colormap, not meant for fields). In remote mode the browser takes the style's background too.
+Every picture of this documentation is recorded in the default style, `'seal'`.

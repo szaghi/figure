@@ -5,8 +5,8 @@ program tut04_live
 !< Jacobi iterations for -u'' = 0 on (0, 1), u(0) = 0, u(1) = 1: a few iterations per frame, the solution and the
 !< residual history plotted as they evolve.
 use, intrinsic :: iso_fortran_env, only : int32, real64
-use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_end, ig_same_line, ig_slider, ig_text, &
-                   ip_begin_plot, ip_end_plot, ip_line, ip_setup_axes
+use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_end, ig_same_line, ig_set_next_window, &
+                   ig_slider, ig_text, ip_begin_plot, ip_end_plot, ip_line, ip_setup_axes
 
 implicit none
 integer(int32), parameter :: N = 64_int32          !< Interior points.
@@ -39,6 +39,7 @@ do while (app%next_frame())
    endif
    !endregion advance
 
+   call ig_set_next_window(20.0_real64, 20.0_real64, 960.0_real64, 660.0_real64)
    if (ig_begin('Jacobi')) then
       if (ig_checkbox('running', running)) continue
       call ig_same_line()
@@ -53,7 +54,7 @@ do while (app%next_frame())
          call ip_end_plot()
       endif
       if (ip_begin_plot('Convergence', height=250.0_real64)) then
-         call ip_setup_axes('iteration', 'log10 max |update|')
+         call ip_setup_axes('iteration', 'log10 max |update|', auto_fit=.true.)
          call ip_line('Jacobi', iterations(1:iter), residual(1:iter))
          call ip_end_plot()
       endif

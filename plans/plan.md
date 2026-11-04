@@ -96,6 +96,25 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
   stale scissor). Measured: hello 110 KB/frame + 256 KB font atlas once. Next: skip unchanged frames / compress.
 - Experiment: whole app to WebAssembly with a patched flang (flang-wasm) + Emscripten SDL3; no OpenMP/MPI there.
 
+### v0.1.0 docs gate: **in progress (2026-11-04)**
+The first release, v0.1.0, is gated on the documentation: pictures of real usage, a brand (mark + palette).
+- [x] Frame capture in the native layer (window mode): `FIGURE_CAPTURE[_FROM|_FRAMES|_FPS|_INPUT]`, hermetic (real
+  input ignored, scale 1, fixed frame time, lazy off), scripted input (move/down/up/wheel/text/key), cursor drawn.
+  Documented in docs/guide/capture.md.
+- [x] scripts/docs_media.py + docs/media/*.rec: 10 recordings (4 MP4 + 10 PNG, 4.4 MB) of the unmodified tutorial,
+  cookbook and example programs, cropped to content; remote mode through headless Chromium in a drawn browser bar.
+  `<Media>` component (docs/.vitepress/theme/Media.vue); pages: home, about, tutorial 1-4, plots, images, remote,
+  cookbook.
+- [x] Found by the pictures: a growing history ran off its plot (axes fit once): `ip_setup_axes(..., auto_fit)`,
+  headless check 22 (fails without it); tutorial 3-4 windows sized with `ig_set_next_window`.
+- [x] Brand: round 1 (five styles) rejected except the sumi taste; round 2 (sumi language drafting a GUI) chose
+  "seal": a brushed window with a plot, signed by a vermilion seal carved with F. Generator docs/brand/marks.py ->
+  docs/public/{logo,logo-dark,favicon}.svg; theme docs/.vitepress/theme/custom.css (WCAG ratios in its header).
+  The other proposals are archived outside the repo, ~/fortran/figure-brand-archive-2026-11-04.
+- [x] `app%set_style(name)`: seal (the default since 2026-11-04), seal-light, dark, light, classic (FIGURE's: ink/paper + vermilion, its
+  own ImPlot line colormap, square corners, window background); `FIGURE_STYLE` at init; remote mode sends the
+  background (message 4, checked by remote_client.py). Headless checks 23-24. Docs recorded in `seal`.
+
 ## Open issues
 
 - **Docking:** cimgui tag `1.93dock` is generated from the *non-docking* Dear ImGui (its `cimgui.h` has no

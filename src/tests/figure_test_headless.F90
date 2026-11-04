@@ -4,14 +4,15 @@ program figure_test_headless
 !<
 !< A button is clicked by queuing mouse states frame by frame (hover, press, release), exactly as real input arrives;
 !< a check box is toggled the same way; a plot is drawn from Fortran arrays. Needs no display, so it runs in CI as is.
-use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
+use, intrinsic :: iso_c_binding, only : c_double, c_f_pointer, c_float, c_int, c_null_char
 use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, real32, real64
 use figure, only : FIG_ERR_ARGUMENT, FIG_OK, app_object, figure_last_error, ig_begin, ig_button, ig_checkbox, ig_end, &
                    ig_item_rect, ig_set_next_window, ImPlotMarker_Circle, ip_bars, ip_begin_plot, ip_end_plot, ip_line, &
                    ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object, FIG_ERR_STATE, ig_image, ip_heatmap,   &
                    ip_image, ImPlotColormap_Viridis, texture_object
-use figure_cimgui, only : im_vec4
-use figure_cimplot, only : im_plot_rect, ImPlot_GetLastItemColor, ImPlot_GetPlotLimits
+use figure_cimgui, only : im_vec4, igGetStyleColorVec4
+use figure_cimgui_enums, only : ImGuiCol_WindowBg
+use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, ImPlot_GetPlotLimits
 use figure_c_native, only : fig_input_mouse
 
 implicit none
@@ -29,7 +30,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(21)  !< Per-check outcome.
+logical                   :: test_passed(24)  !< Per-check outcome.
 type(texture_object)      :: tex              !< A 4 x 2 texture.
 integer(int8)             :: pix(4, 4, 2)     !< Its pixels.
 integer(int8)             :: pix_bad(3, 4, 2) !< Pixels of the wrong shape (3 channels).
@@ -44,6 +45,11 @@ integer(int32)            :: stat_row         !< Status of the strided row line.
 integer(int32)            :: stat_values      !< Status of the uniform-x line.
 integer(int32)            :: stat_bad_row     !< Status of a row out of range.
 type(im_plot_rect)        :: limits           !< Limits of the plot of row 2, after ImPlot's fit.
+type(im_plot_rect)        :: grown            !< Limits of the auto-fit plot of growing data, last frame.
+type(im_vec4)             :: window_bg        !< Window background of the default style (a copy).
+type(im_vec4), pointer    :: style_color      !< A colour of the current style, in Dear ImGui's memory.
+integer(int32)            :: stat_style(2)    !< set_style('dark'), set_style('bogus').
+integer(c_int)            :: seal_cmap        !< Index of the seal colormap.
 integer(int32)            :: stat_items(5)    !< Status of the scatter, bars and shaded items.
 integer(int32)            :: stat_spec        !< Status of a spec with a bad colour.
 type(plot_spec_object)    :: red              !< Red line, 2 pixels, circle markers.
@@ -135,6 +141,17 @@ do frame = 1_int32, 12_int32
       endif
    endif
    call ig_end()
+   ! auto_fit: data growing every frame (x up to 10 frame) must stay in view, not keep the first frame's fit
+   call ig_set_next_window(20.0_real64, 340.0_real64, 400.0_real64, 240.0_real64, always=.true.)
+   if (ig_begin('Growing')) then
+      if (ip_begin_plot('growing')) then
+         call ip_setup_axes('x', 'y', auto_fit=.true.)
+         call ip_line('grows', [0.0_real64, 10.0_real64 * frame], [0.0_real64, real(frame, real64)])
+         call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, grown)
+         call ip_end_plot()
+      endif
+   endif
+   call ig_end()
    ! input for the next frames: frames 2-4 click the button (hover, press, release), 6-8 the check box
    select case (frame)
    case (1_int32, 2_int32)
@@ -152,6 +169,11 @@ do frame = 1_int32, 12_int32
    endselect
 enddo
 call ip_line('bad row', m, 4_int32, stat=stat_bad_row)
+call c_f_pointer(igGetStyleColorVec4(ImGuiCol_WindowBg), style_color)
+window_bg = style_color ! the default style, seal
+seal_cmap = ImPlot_GetColormapIndex('FIGURE seal'//c_null_char)
+call app%set_style('dark', stat=stat_style(1))
+call app%set_style('bogus', stat=stat_style(2))
 call ip_heatmap('one end', fld, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, scale_min=0.0_real64, stat=stat_scale)
 call tex%destroy()
 call tex%update(pix, stat=stat_dead)
@@ -179,8 +201,13 @@ test_passed(18) = all(stat_draw == int(FIG_OK, int32))                          
 test_passed(19) = abs(field_limits%X%Min) < 1.0e-9_c_double .and. abs(field_limits%X%Max - 2.0_c_double) < 1.0e-9_c_double
 test_passed(20) = abs(field_limits%Y%Min) < 1.0e-9_c_double .and. abs(field_limits%Y%Max - 1.0_c_double) < 1.0e-9_c_double
 test_passed(21) = stat_dead == int(FIG_ERR_STATE, int32) .and. stat_scale == int(FIG_ERR_ARGUMENT, int32)
+test_passed(22) = grown%X%Max >= 110.0_c_double .and. grown%Y%Max >= 11.0_c_double ! auto_fit followed the data
+test_passed(23) = stat_style(1) == int(FIG_OK, int32) .and. seal_cmap >= 0_c_int    ! seal by default; dark set
+test_passed(23) = test_passed(23) .and. abs(window_bg%x - 28.0_c_float / 255.0_c_float) < 1.0e-6_c_float &
+                                  .and. abs(window_bg%z - 21.0_c_float / 255.0_c_float) < 1.0e-6_c_float  ! #1c1915
+test_passed(24) = stat_style(2) == int(FIG_ERR_ARGUMENT, int32)                     ! unknown style rejected
 
-write(output_unit, '(A,21L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,24L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

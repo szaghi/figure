@@ -8,6 +8,7 @@
 //   2 texture:  u8 2, u32 id, width, height, flags (bit 0: linear filtering, else nearest), then width x height x 4
 //               RGBA bytes (created or replaced)
 //   3 destroy:  u8 3, u32 id
+//   4 background: u8 4, f32 r, g, b (0 to 1): the colour behind the windows (sent on connection and on change)
 // Client to server: text messages, one event each: "m:x,y" mouse position, "b:button,down", "w:dx,dy" wheel,
 // "k:down,code" key (KeyboardEvent.code), "c:text" typed characters, "s:width,height" canvas size.
 #include "figure_native.h"
@@ -140,6 +141,7 @@ struct server_t {
    std::map<std::uint64_t, texture_t>      textures; // every live texture, sent again to a new client
    std::uint64_t                           next_id = 1;
    bool                                    resend = false; // a client connected: send all textures
+   float                                   background[3] = {0.10f, 0.10f, 0.11f}; // behind the windows
 #ifdef _WIN32
    bool                                    wsa = false;
 #endif
@@ -185,6 +187,13 @@ std::string texture_message(std::uint64_t id, const texture_t &t) {
    put<std::uint32_t>(m, static_cast<std::uint32_t>(t.height));
    put<std::uint32_t>(m, t.linear ? 1u : 0u);
    m.append(reinterpret_cast<const char *>(t.rgba.data()), t.rgba.size());
+   return m;
+}
+
+std::string background_message() {
+   std::string m;
+   put<std::uint8_t>(m, 4);
+   for (float v : sv.background) put<float>(m, v);
    return m;
 }
 
@@ -466,6 +475,13 @@ bool serve(int timeout_ms) {
 
 std::uint64_t new_texture_id() { return sv.next_id++; }
 
+void set_background(float r, float g, float b) {
+   sv.background[0] = r;
+   sv.background[1] = g;
+   sv.background[2] = b;
+   if (connection_t *c = client()) ws_append(*c, 2, background_message());
+}
+
 void texture_update(std::uint64_t id, int width, int height, const unsigned char *rgba, bool linear) {
    texture_t &t = sv.textures[id];
    t.width = width;
@@ -510,7 +526,8 @@ void send_frame(ImDrawData *dd) {
    }
    connection_t *c = client();
    if (!c) return;
-   if (sv.resend) { // a new client: every live texture first
+   if (sv.resend) { // a new client: the background and every live texture first
+      ws_append(*c, 2, background_message());
       for (const auto &t : sv.textures) ws_append(*c, 2, texture_message(t.first, t.second));
       sv.resend = false;
    }

@@ -146,10 +146,11 @@ flowchart TD
 
 ### ip_setup_axes
 
-Axis labels (call right after `ip_begin_plot`).
+Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes fit the data every frame (data
+ that grows while the user watches), instead of once on first use.
 
 ```fortran
-subroutine ip_setup_axes(xlabel, ylabel)
+subroutine ip_setup_axes(xlabel, ylabel, auto_fit)
 ```
 
 **Arguments**
@@ -158,6 +159,7 @@ subroutine ip_setup_axes(xlabel, ylabel)
 |------|------|--------|------------|-------------|
 | `xlabel` | character(len=*) | in |  | X label. |
 | `ylabel` | character(len=*) | in |  | Y label. |
+| `auto_fit` | logical | in | optional | Fit the axes to the data every frame (default: first use only). |
 
 **Call graph**
 

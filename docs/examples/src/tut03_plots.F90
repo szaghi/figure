@@ -2,7 +2,7 @@
 program tut03_plots
 !< tut03_plots, tutorial chapter 3: line plots of Fortran arrays.
 use, intrinsic :: iso_fortran_env, only : int32, real64
-use figure, only : app_object, ig_begin, ig_end, ip_begin_plot, ip_end_plot, ip_line, ip_setup_axes
+use figure, only : app_object, ig_begin, ig_end, ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, ip_setup_axes
 
 implicit none
 integer(int32), parameter :: N = 200_int32 !< Points.
@@ -21,6 +21,7 @@ enddo
 
 call app%init('FIGURE: plots', 900_int32, 700_int32)
 do while (app%next_frame())
+   call ig_set_next_window(20.0_real64, 20.0_real64, 860.0_real64, 600.0_real64)
    if (ig_begin('Modes')) then
       !region plot
       if (ip_begin_plot('Vibration modes', height=300.0_real64)) then

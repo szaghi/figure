@@ -5,6 +5,10 @@ hero:
   name: FIGURE
   text: Immediate-mode GUIs from Fortran
   tagline: Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration. Dear ImGui widgets and ImPlot plots, declared every frame from ordinary Fortran variables, on SDL3 and OpenGL 3.
+  image:
+    light: /logo.svg
+    dark: /logo-dark.svg
+    alt: the FIGURE logo, a window and its plot drafted with a brush, signed with a vermilion seal carved with an F
   actions:
     - theme: brand
       text: Tutorial
@@ -53,10 +57,26 @@ features:
     linkText: Install
 ---
 
+## See it running
+
+<Media name="hello" video alt="figure_hello: a check box starts the animation, a slider changes the frequency of the plotted wave, a button counts clicks" caption="exe/figure_hello: a check box, a slider and a button bound to Fortran variables, and a plot of a Fortran array" />
+
+<div class="fig-gallery">
+<Media name="mandelbrot" video alt="The Mandelbrot explorer zooming 5000 times into the seahorse valley" caption="An explorer: ImPlot zooms, Fortran computes the image, a texture shows it" />
+<Media name="tut04_live" video alt="A Jacobi iteration converging while its solution and residual history are plotted" caption="A live computation: the solver runs inside the frame loop" />
+<Media name="cb_items" alt="One plot with a shaded band, a line, markers, bars and an area to zero" caption="Lines, scatter, bars and shaded areas in one plot" />
+<Media name="remote" alt="The same interface drawn by a web browser at localhost:8080" caption="Remote mode: the program on a cluster node, the UI in a browser" />
+</div>
+
+Every picture on this site is a recording of the program it describes, made by `scripts/docs_media.py`: the frames
+are the program's own back buffer, captured with `FIGURE_CAPTURE` and driven by a scripted mouse, in FIGURE's default
+[style](./guide/frame-loop#styles), `seal`.
+
 ## Status
 
-FIGURE is a spike: milestone M1 of the [roadmap](./guide/roadmap) is done on Linux, the API is small and unstable.
-VERSION is the placeholder `0.0.0` and the licence is not decided yet.
+FIGURE is approaching its first release, v0.1.0. The milestones M1 to M5 of the [roadmap](./guide/roadmap) are done
+except the WebAssembly experiment: widgets, plots, heatmaps and textures, remote mode, CI on Linux, macOS and Windows
+with gfortran and on Linux with nvfortran. The API is small and can still change. The licence is not decided yet.
 
 ## Quick start
 
