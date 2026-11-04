@@ -66,3 +66,46 @@ instead (linear filtering), better for photographs.
 **Lifetime.** `texture_object` has no finaliser on purpose: an assignment or a function result would finalise a copy
 and destroy the texture the original still uses. Destroy textures explicitly, or let `app%destroy` release them. In
 headless mode textures are accepted and checked (sizes, state) but nothing is drawn.
+
+## An explorer: the Mandelbrot set
+
+[`src/examples/figure_mandelbrot.F90`](https://github.com/szaghi/figure/blob/main/src/examples/figure_mandelbrot.F90)
+puts the pieces together. ImPlot handles the interaction (drag to pan, wheel or a right-dragged box to zoom,
+double-click to fit) on a plot with `equal` axes. Every frame the program reads `ip_plot_limits` and `ip_plot_size`.
+When they, or the iteration count, change, it recomputes the image at the plot's resolution (OpenMP, `default(none)`)
+and uploads it with `tex%update`; otherwise it only draws the texture again with `ip_image`, so lazy redraw keeps the
+window idle.
+
+```bash
+fobis build --mode examples-gnu && exe/figure_mandelbrot      # the example modes build with OpenMP
+```
+
+On the development machine (WSL2, RTX 4070 through `GALLIUM_DRIVER=d3d12`, 16 threads) the initial 1210 x 669 view
+computes in about 29 ms and uploads in about 3.7 ms; idle, the window costs 0.5% of one core.
+
+## Speed: a new 4K image every frame
+
+`src/examples/figure_bench_texture.F90` measures the path this page is about: a program that shows a new 3840 x 2160
+image every frame. Each frame it writes new pixels into the array (fill), hands them to the GPU (`tex%update`), and
+renders and presents the window (vsync off, lazy redraw off); 120 frames after 20 of warm-up. For comparison,
+[`scripts/bench/wx_bench.f90`](https://github.com/szaghi/figure/blob/main/scripts/bench/wx_bench.f90) runs the same
+loop with [wxFortran](https://github.com/jacobwilliams/wxFortran) (built as its README prescribes, wxWidgets 3.3 from
+conda-forge): fill its `integer :: rgb(3, w, h)` array, build a `wx_bitmap` from it, draw it scaled in a paint
+handler.
+
+| Per frame, mean of two runs | FIGURE | wxFortran |
+|---|---|---|
+| fill (write the pixel array) | 2.9 ms (`int8` RGBA) | 7.1 ms (default `integer` RGB) |
+| hand-off to the toolkit | 2.2 ms (`tex%update`) | 92 ms (`wx_bitmap(rgb)`) |
+| draw and present | 4.8 ms (`next_frame`) | 4.0 ms (`draw_bitmap`) |
+| **frame rate** | **≈ 100 frames/s** | **≈ 9.5 frames/s** |
+
+Measured on one machine (WSL2/WSLg, x86-64 with 16 hardware threads, RTX 4070 through D3D12, gfortran 16.2 for FIGURE, gfortran 15.3 for
+wxFortran's release profile), so the absolute numbers are that machine's; the ratio is what the two designs cost.
+FIGURE passes the array to one `glTexSubImage2D`; wxFortran converts it through Fortran temporaries (clamp, reshape,
+`int8`), then a `wxImage` and a `wxBitmap`. Building wxFortran's C++ shim with `-O2` (its build passes no optimisation
+flag) changed nothing measurable (90-97 ms), so the cost is in the path, not in the flags.
+
+To reproduce: `fobis build --mode examples-gnu && GALLIUM_DRIVER=d3d12 exe/figure_bench_texture 120`; for wxFortran,
+copy `scripts/bench/wx_bench.f90` into its `example/` directory and run
+`python tools/fpm_wx.py run --profile release --example wx_bench -- 120` in its environment.

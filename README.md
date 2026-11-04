@@ -37,7 +37,7 @@ Two layers: the **native layer** (C/C++: Dear ImGui, ImPlot, cimgui, cimplot, SD
 scripts/build_native.sh                      # once; FoBiS also runs it before every build (no-op when built)
 
 fobis build --mode tests-gnu && exe/figure_test_headless     # gfortran
-fobis build --mode examples-gnu && exe/figure_hello
+fobis build --mode examples-gnu && exe/figure_hello          # also figure_mandelbrot, figure_bench_texture
 fobis build --mode tests-nvf                                 # nvfortran
 fobis rule --ex sync                                         # fobos and fpm.toml describe the same build
 

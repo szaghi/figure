@@ -29,8 +29,10 @@ use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_Begin
                            ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr, ImPlot_PlotShaded_FloatPtrFloatPtrInt,      &
                            ImPlot_SetupAxes, ImPlot_ColormapScale, ImPlot_PlotHeatmap_doublePtr,                   &
                            ImPlot_PlotHeatmap_FloatPtr, ImPlot_PlotImage, ImPlot_PopColormap,                       &
-                           ImPlot_PushColormap_PlotColormap, im_plot_point
-use figure_cimplot_enums, only : ImPlotAxisFlags_None, ImPlotFlags_None,                                          &
+                           ImPlot_PushColormap_PlotColormap, im_plot_point, im_plot_rect, ImPlot_GetPlotLimits,     &
+                           ImPlot_GetPlotSize, ImPlot_SetupAxesLimits
+use figure_cimplot_enums, only : ImPlotAxisFlags_None, ImPlotCond_Always, ImPlotCond_Once, ImPlotFlags_Equal,          &
+                                 ImPlotFlags_None,                                                                 &
                                  ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square,  &
                                  ImPlotMarker_Diamond, ImPlotMarker_Up, ImPlotMarker_Down, ImPlotMarker_Left,     &
                                  ImPlotMarker_Right, ImPlotMarker_Cross, ImPlotMarker_Plus, ImPlotMarker_Asterisk, &
@@ -48,7 +50,7 @@ implicit none
 private
 public :: ip_begin_plot, ip_end_plot, ip_setup_axes
 public :: ip_bars, ip_line, ip_scatter, ip_shaded
-public :: ip_colormap_scale, ip_heatmap, ip_image
+public :: ip_colormap_scale, ip_heatmap, ip_image, ip_plot_limits, ip_plot_size, ip_setup_axes_limits
 public :: ip_spec, plot_spec_object
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -100,18 +102,24 @@ endinterface ip_shaded
 contains
    ! plots
 
-   function ip_begin_plot(title, width, height) result(visible)
+   function ip_begin_plot(title, width, height, equal) result(visible)
    !< Begin a plot; if true, declare its content and call `ip_end_plot`.
    character(len=*), intent(in)           :: title   !< Title (also the plot id; '##id' hides it).
    real(real64),     intent(in), optional :: width   !< Width [pixels] (default: full width).
    real(real64),     intent(in), optional :: height  !< Height [pixels] (default: ImPlot's).
+   logical,          intent(in), optional :: equal   !< Same scale on both axes (one unit = as many pixels on x and y).
    logical                                :: visible !< Plot visible.
    type(im_vec2)                          :: extent  !< Size (named so: a local `size` crashes nvfortran 26.9).
+   integer(c_int)                         :: flags   !< ImPlotFlags.
 
    extent = im_vec2(-1.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
-   visible = logical(ImPlot_BeginPlot(cstr(title), extent, ImPlotFlags_None))
+   flags = ImPlotFlags_None
+   if (present(equal)) then
+      if (equal) flags = ior(flags, ImPlotFlags_Equal)
+   endif
+   visible = logical(ImPlot_BeginPlot(cstr(title), extent, flags))
    endfunction ip_begin_plot
 
    subroutine ip_end_plot()
@@ -126,6 +134,51 @@ contains
 
    call ImPlot_SetupAxes(cstr(xlabel), cstr(ylabel), ImPlotAxisFlags_None, ImPlotAxisFlags_None)
    endsubroutine ip_setup_axes
+
+   subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)
+   !< Initial axis ranges (call right after `ip_begin_plot`): applied on first use only, so the user can pan and zoom
+   !< afterwards, or every frame with `always=.true.`.
+   real(real64), intent(in)           :: xmin   !< Left end of the x axis.
+   real(real64), intent(in)           :: xmax   !< Right end of the x axis.
+   real(real64), intent(in)           :: ymin   !< Bottom end of the y axis.
+   real(real64), intent(in)           :: ymax   !< Top end of the y axis.
+   logical,      intent(in), optional :: always !< Enforce every frame (default: first use only).
+   integer(c_int)                     :: cond   !< ImPlotCond.
+
+   cond = ImPlotCond_Once
+   if (present(always)) then
+      if (always) cond = ImPlotCond_Always
+   endif
+   call ImPlot_SetupAxesLimits(real(xmin, c_double), real(xmax, c_double), real(ymin, c_double), real(ymax, c_double), &
+                               cond)
+   endsubroutine ip_setup_axes_limits
+
+   subroutine ip_plot_limits(xmin, xmax, ymin, ymax)
+   !< Axis ranges of the current plot, as the user has panned and zoomed them (between `ip_begin_plot` and
+   !< `ip_end_plot`; ends the setup phase: call `ip_setup_axes*` before).
+   real(real64), intent(out) :: xmin   !< Left end of the x axis.
+   real(real64), intent(out) :: xmax   !< Right end of the x axis.
+   real(real64), intent(out) :: ymin   !< Bottom end of the y axis.
+   real(real64), intent(out) :: ymax   !< Top end of the y axis.
+   type(im_plot_rect)        :: limits !< Limits.
+
+   call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, limits) ! IMPLOT_AUTO: the current axes
+   xmin = real(limits%X%Min, real64)
+   xmax = real(limits%X%Max, real64)
+   ymin = real(limits%Y%Min, real64)
+   ymax = real(limits%Y%Max, real64)
+   endsubroutine ip_plot_limits
+
+   subroutine ip_plot_size(width, height)
+   !< Size of the current plot's data area [pixels] (between `ip_begin_plot` and `ip_end_plot`).
+   real(real64), intent(out) :: width  !< Width [pixels].
+   real(real64), intent(out) :: height !< Height [pixels].
+   type(im_vec2)             :: extent !< Size.
+
+   extent = ImPlot_GetPlotSize()
+   width = real(extent%x, real64)
+   height = real(extent%y, real64)
+   endsubroutine ip_plot_size
 
    ! item style
 

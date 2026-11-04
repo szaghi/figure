@@ -45,6 +45,9 @@ graph LR
 - [ip_shaded](#ip-shaded)
 - [ip_end_plot](#ip-end-plot)
 - [ip_setup_axes](#ip-setup-axes)
+- [ip_setup_axes_limits](#ip-setup-axes-limits)
+- [ip_plot_limits](#ip-plot-limits)
+- [ip_plot_size](#ip-plot-size)
 - [ip_line_r32](#ip-line-r32)
 - [ip_scatter_r32](#ip-scatter-r32)
 - [ip_bars_r32](#ip-bars-r32)
@@ -163,6 +166,82 @@ flowchart TD
   ip_setup_axes["ip_setup_axes"] --> ImPlot_SetupAxes["ImPlot_SetupAxes"]
   ip_setup_axes["ip_setup_axes"] --> cstr["cstr"]
   style ip_setup_axes fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_setup_axes_limits
+
+Initial axis ranges (call right after `ip_begin_plot`): applied on first use only, so the user can pan and zoom
+ afterwards, or every frame with `always=.true.`.
+
+```fortran
+subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `xmin` | real(kind=real64) | in |  | Left end of the x axis. |
+| `xmax` | real(kind=real64) | in |  | Right end of the x axis. |
+| `ymin` | real(kind=real64) | in |  | Bottom end of the y axis. |
+| `ymax` | real(kind=real64) | in |  | Top end of the y axis. |
+| `always` | logical | in | optional | Enforce every frame (default: first use only). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_setup_axes_limits["ip_setup_axes_limits"] --> ImPlot_SetupAxesLimits["ImPlot_SetupAxesLimits"]
+  style ip_setup_axes_limits fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_plot_limits
+
+Axis ranges of the current plot, as the user has panned and zoomed them (between `ip_begin_plot` and
+ `ip_end_plot`; ends the setup phase: call `ip_setup_axes*` before).
+
+```fortran
+subroutine ip_plot_limits(xmin, xmax, ymin, ymax)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `xmin` | real(kind=real64) | out |  | Left end of the x axis. |
+| `xmax` | real(kind=real64) | out |  | Right end of the x axis. |
+| `ymin` | real(kind=real64) | out |  | Bottom end of the y axis. |
+| `ymax` | real(kind=real64) | out |  | Top end of the y axis. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_plot_limits["ip_plot_limits"] --> ImPlot_GetPlotLimits["ImPlot_GetPlotLimits"]
+  style ip_plot_limits fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_plot_size
+
+Size of the current plot's data area [pixels] (between `ip_begin_plot` and `ip_end_plot`).
+
+```fortran
+subroutine ip_plot_size(width, height)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `width` | real(kind=real64) | out |  | Width [pixels]. |
+| `height` | real(kind=real64) | out |  | Height [pixels]. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_plot_size["ip_plot_size"] --> ImPlot_GetPlotSize["ImPlot_GetPlotSize"]
+  style ip_plot_size fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ip_line_r32
@@ -771,7 +850,7 @@ Begin a plot; if true, declare its content and call `ip_end_plot`.
 **Returns**: `logical`
 
 ```fortran
-function ip_begin_plot(title, width, height) result(visible)
+function ip_begin_plot(title, width, height, equal) result(visible)
 ```
 
 **Arguments**
@@ -781,6 +860,7 @@ function ip_begin_plot(title, width, height) result(visible)
 | `title` | character(len=*) | in |  | Title (also the plot id; '##id' hides it). |
 | `width` | real(kind=real64) | in | optional | Width [pixels] (default: full width). |
 | `height` | real(kind=real64) | in | optional | Height [pixels] (default: ImPlot's). |
+| `equal` | logical | in | optional | Same scale on both axes (one unit = as many pixels on x and y). |
 
 **Call graph**
 

@@ -46,7 +46,7 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
   `structs_and_enums.json`; classify each function: direct bind(C) or glue. Enum values generated, never hand-copied.
 - Generator output committed and checked for drift in CI.
 
-### M3: images and speed
+### M3: images and speed: **done (2026-11-04)**
 - [x] Textures (2026-11-04): `texture_object` (init/update/destroy, no finaliser: a copy would destroy the original's
   texture), `integer(int8) :: rgba(4, w, h)` uploaded in place by one `glTexSubImage2D`; `ig_image` (row 1 at the
   top), `ip_image` (row 1 at ymin). Nearest filtering by default: the GL3 backend's own sampler overrides
@@ -61,7 +61,11 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
 - [x] Strided rows (2026-11-04): `ip_line(label, y, row [, xscale, xstart])` reads `y(row, :)` in place through
   `ImPlotSpec%Stride` (byte stride `size(y,1) * storage_size(y) / 8`, base `c_loc(y(row,1))`: standard Fortran, no
   pointer arithmetic); uniform abscissae only, since ImPlot applies one stride to both `xs` and `ys`.
-- Port a Mandelbrot explorer and a live plot; benchmark redraw at 4K against wxFortran.
+- [x] Mandelbrot explorer (src/examples/figure_mandelbrot.F90, OpenMP; example modes now build with `openmp = True`)
+  and 4K redraw benchmark (2026-11-04, WSLg + d3d12): new 3840x2160 image every frame, FIGURE 98-103 frames/s
+  (fill 2.8-3.1 ms, tex%update 2.1-2.3 ms, next_frame 4.8 ms) vs wxFortran 9.1-9.9 frames/s (fill 6.7-7.5 ms,
+  wx_bitmap(rgb) 88-97 ms, draw 3.8-4.2 ms); wx shim rebuilt with -O2: no change. Sources:
+  src/examples/figure_bench_texture.F90, scripts/bench/wx_bench.f90; method in docs/guide/images.md.
 
 ### M4: platforms and CI
 - GitHub Actions: Linux (gfortran, nvfortran headless), macOS (gfortran + clang), Windows (MSYS2 MinGW gfortran).

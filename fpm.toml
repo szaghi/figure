@@ -27,6 +27,16 @@ name = "figure_hello"
 source-dir = "src/examples"
 main = "figure_hello.F90"
 
+[[example]]
+name = "figure_mandelbrot"
+source-dir = "src/examples"
+main = "figure_mandelbrot.F90"
+
+[[example]]
+name = "figure_bench_texture"
+source-dir = "src/examples"
+main = "figure_bench_texture.F90"
+
 [[test]]
 name = "figure_test_headless"
 source-dir = "src/tests"

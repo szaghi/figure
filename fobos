@@ -36,6 +36,7 @@ src       = src/lib/ src/tests/
 [examples-gnu]
 template  = template-gnu
 cflags    = $CGNU -O2
+openmp    = True
 build_dir = exe
 src       = src/lib/ src/examples/
 
@@ -48,6 +49,7 @@ src       = src/lib/ src/tests/
 [examples-nvf]
 template  = template-nvf
 cflags    = $CNVF -O2
+openmp    = True
 build_dir = exe
 src       = src/lib/ src/examples/
 

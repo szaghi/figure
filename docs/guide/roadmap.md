@@ -29,7 +29,7 @@ The milestones of `plans/plan.md`. Only M1 is done; everything after it is plann
 - The C++ glue for the functions that pass structs by value (above all the ImPlot items, `ImPlotSpec`) is generated
   too, with `bind(C)` mirror types for the structs, size-checked by `figure_test_layout`.
 
-## M3: images and speed — in progress
+## M3: images and speed — done
 
 - Textures from contiguous `integer(int8)` RGBA arrays, uploaded without intermediate copies: done
   (`texture_object`, `ig_image`, `ip_image`).
@@ -40,7 +40,9 @@ The milestones of `plans/plan.md`. Only M1 is done; everything after it is plann
 - Strided series (matrix rows) passed as base address and stride, without the compiler's temporary copy: done for
   `ip_line(label, y, row)` with uniform abscissae (ImPlot applies one stride to x and y, so a contiguous x cannot go
   with a strided row).
-- A Mandelbrot explorer and a live plot as examples; redraw benchmark at 4K.
+- A Mandelbrot explorer (`src/examples/figure_mandelbrot.F90`) and a redraw benchmark at 4K
+  (`src/examples/figure_bench_texture.F90`): about 100 frames/s with a new 3840 x 2160 image every frame, about 10x
+  wxFortran on the same loop ([measurements](images#speed-a-new-4k-image-every-frame)).
 
 ## M4: platforms and CI — planned
 
