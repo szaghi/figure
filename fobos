@@ -100,3 +100,36 @@ rule = scripts/build_native.sh
 [rule-sync]
 help = Check that fobos and fpm.toml describe the same build
 rule = python3 scripts/check_sync.py
+
+[rule-delexe]
+help = Delete exes and libs (the native layer in lib/ included: the next build rebuilds it)
+rule = rm -rf exe/ lib/
+
+[rule-clean]
+help   = Clean the project tree
+rule_1 = fobis rule --ex delexe
+rule_2 = rm -rf mod/ obj/
+rule_3 = rm -f *.gcov
+
+[rule-makecoverage]
+help   = Perform coverage analysis
+rule_1 = fobis build --mode tests-gnu-debug --coverage --force-compile
+rule_2 = bash scripts/run_tests.sh
+rule_3 = ./scripts/compute-coverage.sh
+
+[rule-makecoverage-analysis]
+help   = Perform coverage analysis and saving reports in markdown
+rule_1 = fobis rule --ex makecoverage
+rule_2 = fobis rule --gcov-analyzer docs/guide/ --gcov-analyzer coverage-analysis
+rule_3 = bash -c 'rm -f *.gcov parsed.xml source.xml'
+
+[rule-docs-examples]
+help = Build and run the documentation examples, regenerating their snippets and outputs
+rule = bash docs/examples/build.sh
+
+# fobis scaffold: the CI installs these system packages (SDL3 needs the X11/Wayland/EGL/DBus headers to configure
+# a windowed build; the headless test itself needs no display). LICENSE.gpl3.md is skipped: the licence is undecided.
+[scaffold]
+apt_packages = cmake ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev
+               libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
+skip         = LICENSE.gpl3.md

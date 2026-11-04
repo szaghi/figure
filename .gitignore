@@ -12,3 +12,8 @@ __pycache__/
 docs/node_modules/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+# coverage outputs (fobis rule --ex makecoverage-analysis), published by the CI, never committed
+*.gcov
+docs/guide/coverage-analysis.md
+docs/guide/*.gcov.md
+docs/public/coverage.json
