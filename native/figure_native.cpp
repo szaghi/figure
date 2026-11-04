@@ -8,7 +8,10 @@
 
 #include <SDL3/SDL.h>
 
+#include <cstdio>
+#include <cstdlib>
 #include <exception>
+#include <map>
 #include <string>
 
 namespace {
@@ -42,6 +45,36 @@ struct state_t {
    int           frames_left = 3; // frames still to draw after the last event (ImGui settles in a few)
    float         scale = 1.0f;
 } st;
+
+// Redraw diagnostics, enabled by the environment variable FIGURE_DEBUG_REDRAW (any value): once per second, print to
+// stderr the frames drawn, the wakeups by timeout, the events by SDL type, and the time spent waiting, building the
+// UI (application code between begin and end), rendering and swapping. Costs nothing when disabled.
+struct redraw_stats_t {
+   bool                 on = false;
+   Uint64               t0 = 0;       // start of the current 1 s window [ns]
+   Uint64               t_mark = 0;   // last phase boundary [ns]
+   Uint64               wait = 0;     // in SDL_WaitEventTimeout/SDL_PollEvent [ns]
+   Uint64               build = 0;    // begin_frame to after ImGui::Render: application + ImGui calls [ns]
+   Uint64               render = 0;   // GL draw of the ImGui draw data [ns]
+   Uint64               swap = 0;     // SDL_GL_SwapWindow [ns]
+   int                  frames = 0;   // frames drawn
+   int                  timeouts = 0; // waits that ended without an event
+   std::map<Uint32, int> events;      // events by SDL_EventType
+} rs;
+
+void redraw_stats_flush(Uint64 now) {
+   if (now - rs.t0 < SDL_NS_PER_SECOND) return;
+   const double ms = 1.0e-6, span = static_cast<double>(now - rs.t0) * 1.0e-9;
+   std::fprintf(stderr, "figure redraw: %.2f s frames=%d timeouts=%d wait=%.1fms build=%.1fms render=%.1fms swap=%.1fms events:",
+                span, rs.frames, rs.timeouts, rs.wait * ms, rs.build * ms, rs.render * ms, rs.swap * ms);
+   for (const auto &e : rs.events) std::fprintf(stderr, " 0x%x=%d", e.first, e.second);
+   std::fprintf(stderr, "\n");
+   const bool on = rs.on;
+   rs = redraw_stats_t{};
+   rs.on = on;
+   rs.t0 = now;
+   rs.t_mark = now;
+}
 
 // The three GL calls the glue makes itself, loaded through SDL: no link-time dependency on libGL/opengl32.
 typedef void (*gl_viewport_t)(int, int, int, int);
@@ -142,6 +175,9 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    ImGui_ImplOpenGL3_Init(glsl);
    st.m = mode::window;
    st.frames_left = 3;
+   rs = redraw_stats_t{};
+   rs.on = std::getenv("FIGURE_DEBUG_REDRAW") != nullptr;
+   rs.t0 = rs.t_mark = SDL_GetTicksNS();
    return FIG_OK;
    FIG_CATCH
 }
@@ -185,7 +221,13 @@ int fig_begin_frame(int *running) {
    }
    SDL_Event ev;
    bool      got = false;
+   if (rs.on) {
+      const Uint64 now = SDL_GetTicksNS();
+      redraw_stats_flush(now);
+      rs.t_mark = now;
+   }
    auto handle = [&](const SDL_Event &e) {
+      if (rs.on) ++rs.events[e.type];
       ImGui_ImplSDL3_ProcessEvent(&e);
       if (e.type == SDL_EVENT_QUIT) *running = 0;
       if (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && e.window.windowID == SDL_GetWindowID(st.window)) *running = 0;
@@ -194,13 +236,21 @@ int fig_begin_frame(int *running) {
    // Lazy redraw: once ImGui has settled, sleep until an event arrives or max_wait elapses (a periodic refresh that
    // lets live data from the application appear); never spin at the display rate while idle.
    if (st.lazy && st.frames_left <= 0) {
-      if (SDL_WaitEventTimeout(&ev, st.max_wait_ms)) handle(ev);
+      if (SDL_WaitEventTimeout(&ev, st.max_wait_ms))
+         handle(ev);
+      else if (rs.on)
+         ++rs.timeouts;
    }
    while (SDL_PollEvent(&ev)) handle(ev);
    if (!*running) return FIG_OK; // quitting: no frame is opened
    if (got) st.frames_left = 3;
    else if (st.frames_left > 0) --st.frames_left;
    if (SDL_GetWindowFlags(st.window) & SDL_WINDOW_MINIMIZED) SDL_Delay(10);
+   if (rs.on) {
+      const Uint64 now = SDL_GetTicksNS();
+      rs.wait += now - rs.t_mark;
+      rs.t_mark = now;
+   }
    ImGui_ImplOpenGL3_NewFrame();
    ImGui_ImplSDL3_NewFrame();
    ImGui::NewFrame();
@@ -218,13 +268,26 @@ int fig_end_frame(void) {
       headless_textures();
       return FIG_OK;
    }
+   Uint64 t_render = 0;
+   if (rs.on) {
+      t_render = SDL_GetTicksNS();
+      rs.build += t_render - rs.t_mark;
+   }
    const ImGuiIO &io = ImGui::GetIO();
    p_glViewport(0, 0, static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x),
                 static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y));
    p_glClearColor(0.10f, 0.10f, 0.11f, 1.0f);
    p_glClear(GL_COLOR_BUFFER_BIT_);
    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+   Uint64 t_swap = 0;
+   if (rs.on) t_swap = SDL_GetTicksNS();
    SDL_GL_SwapWindow(st.window);
+   if (rs.on) {
+      const Uint64 now = SDL_GetTicksNS();
+      rs.render += t_swap - t_render;
+      rs.swap += now - t_swap;
+      ++rs.frames;
+   }
    return FIG_OK;
    FIG_CATCH
 }

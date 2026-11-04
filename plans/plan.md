@@ -26,10 +26,13 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
 - [x] FoBiS modes (tests/examples/static, gnu and nvf) and fpm.toml in sync (`fobis rule --ex sync`).
 - [x] `figure_hello` runs in a window on Linux (WSLg, SDL3 X11 driver): widgets and ImPlot render correctly.
 - [x] Native layer rebuilt with Wayland and DBus (2026-11-04); the full FoBiS/fpm test matrix passes on it.
-- [~] Idle CPU with lazy redraw: the 2.6% measured first was on llvmpipe (software GL). On the GPU
-      (`GALLIUM_DRIVER=d3d12`) it is 0.7-0.9% of one core. Expected ~2 frames/s from the 0.5 s `max_wait`
-      refresh; still to check with per-second counts (events by type, frames, swap time) that this is all it does,
-      then decide the default `max_wait`.
+- [x] Idle CPU with lazy redraw, explained (2026-11-04, WSLg, `GALLIUM_DRIVER=d3d12`). The 2.6% measured first was
+      software rendering (llvmpipe). `FIGURE_DEBUG_REDRAW=1` shows exactly 2 frames/s idle, every one ended by the
+      `max_wait` timeout, no spurious events after startup (X11 and Wayland); per frame, UI build + render < 1 ms
+      and swap 3-8 ms wall time. Idle CPU of a one-window program, 60 s samples (`scripts/measure_idle.py`):
+      `max_wait` 0.5 s: 0.37%, 2 s: 0.15%, 5 s: 0.13% of one core, i.e. ~1.5 ms CPU per idle frame on a
+      ~0.08% floor; `figure_hello` 0.40%; lazy redraw off (vsync, 60 frames/s): 37%. **Default `max_wait` kept
+      at 0.5 s**: raising it saves ~0.2% of one core and makes un-signalled live data refresh 4x slower.
 
 ### M2: generated raw layer
 - Generate `figure_c_native`-style interfaces and enum parameters from cimgui/cimplot `definitions.json` and
@@ -76,6 +79,8 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
   |---|---|---|
   | llvmpipe (default) | 5.3%, 6.0% | 2.4% |
   | d3d12 (`GALLIUM_DRIVER=d3d12`) | 0.8%, 0.8%, 0.7% | 0.9% |
+
+  (10 s samples resolve only 0.1% and include the startup tail; the 60 s figures under M1 are the reliable ones.)
 
   Rendering on d3d12 checked by screenshot (`import -window "FIGURE: hello"`): widgets and plot correct.
 
