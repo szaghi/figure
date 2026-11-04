@@ -24,7 +24,7 @@ $NATIVE_LIBS   = figure_native SDL3 stdc++ dl pthread m
 $NATIVE_LFLAGS =
 
 [varset:macos]
-$NATIVE_LIBS   = figure_native SDL3 c++ iconv pthread m
+$NATIVE_LIBS   = figure_native SDL3 c++ objc iconv pthread m
 $NATIVE_LFLAGS = -framework Cocoa -framework Carbon -framework Foundation -framework CoreVideo -framework CoreMedia
                  -framework IOKit -framework Metal -framework QuartzCore -framework UniformTypeIdentifiers
                  -framework AVFoundation
@@ -118,7 +118,7 @@ jobs      = 4
 # rules
 [rule-native]
 help = Build the native layer (ImGui, ImPlot, cimgui, cimplot, SDL3, glue) into lib/ with CMake
-rule = scripts/build_native.sh
+rule = bash scripts/build_native.sh
 
 [rule-bindings]
 help = Regenerate the raw cimgui/cimplot layer (Fortran interfaces, C++ glue, layout test, docs page) from the metadata
