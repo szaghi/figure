@@ -4,7 +4,7 @@
 # the static libraries this project installs into <prefix>/lib (default: the repository's lib/).
 #
 # Pinned third-party versions (a matched set: cimplot v1.1 was generated against cimgui 1.93dock):
-#   cimgui  1.93dock      -> Dear ImGui v1.93.0, NON-docking despite the tag name (see plans/plan.md)
+#   cimgui  1.93dock      -> Dear ImGui v1.93.0, NON-docking despite the tag name (docs/guide/known-issues.md)
 #   cimplot v1.1          -> ImPlot 1.2 WIP (git submodule of cimplot)
 #   SDL     release-3.4.20
 cmake_minimum_required(VERSION 3.24)

@@ -4,7 +4,9 @@ title: Roadmap
 
 # Roadmap
 
-The milestones of `plans/plan.md`. Only M1 is done; everything after it is planned, not available.
+The plan to the first release, v0.1.0, is tracked step by step in
+[issue #1](https://github.com/szaghi/figure/issues/1): each step with its tasks, its checks, the documentation and the
+pictures it updates, and a log of the work. This page summarises it, after the milestones already done.
 
 ## M1: build chain and first widgets — done on Linux
 
@@ -60,10 +62,34 @@ The milestones of `plans/plan.md`. Only M1 is done; everything after it is plann
 - Remote UI: done ([Remote UI](remote)). `app%init_remote` serves the interface to a web browser over a built-in
   WebSocket server; the program needs no display or GPU and stays native (OpenMP, MPI, GPU), e.g. on a cluster node
   reached through an SSH tunnel. Tested end to end on every CI platform.
-- Experiment: the whole application compiled to WebAssembly with a patched flang and Emscripten SDL3 (no OpenMP, no
-  MPI there).
+- Experiment, **deferred**: the whole application compiled to WebAssembly with a patched flang and Emscripten SDL3
+  (no OpenMP, no MPI there).
 
-## Open decisions
+## Documentation with real pictures — done
 
-- Docking: needs a cimgui generated from the docking branch ([Known issues](known-issues#docking-is-disabled)).
-- Version and licence: VERSION is the placeholder `0.0.0`, the licence is undecided.
+- Frame capture with scripted input (`FIGURE_CAPTURE`, [Screenshots and videos](capture)); every picture of this
+  site is a recording of the program it describes, made by `scripts/docs_media.py`.
+- Found by the pictures: a growing history ran off its plot; `ip_setup_axes(..., auto_fit)` refits the axes every
+  frame.
+- The brand: the seal mark (a window and its plot drafted with a brush, signed with a vermilion seal carved with F),
+  the site's palette, and `app%set_style` with `seal` as FIGURE's default [style](frame-loop#styles).
+
+## v0.1.0 — in progress
+
+The scope of the first release, step by step in [issue #1](https://github.com/szaghi/figure/issues/1):
+
+- **Licence:** MIT; the third-party notices.
+- **Docking:** the docking branch of Dear ImGui; windows dock into one another as tabs and splits.
+- **Themes, fully customisable:**
+  - every colour and size of Dear ImGui and ImPlot from Fortran;
+  - themes as files, embedded, with a curated set (`seal`, `seal-light`, `paper`, `high-contrast`, colour-blind-safe
+    line colours);
+  - `load_style` and `save_style`;
+  - fonts, with a bundled default;
+  - window flags and scoped style changes;
+  - a recorded theme gallery.
+- **Testing:** a public testing module for synthetic input.
+- **Performance:** the cost of continuous redraw measured locally and in remote mode, then remote frames skipped when
+  unchanged and, as the numbers justify, compressed or rate-limited; a performance guide.
+- **Remote security:** an access token in the URL (pending a decision).
+- **fpm:** a plain `fpm build`, and FIGURE usable as a dependency of other fpm projects.

@@ -74,7 +74,7 @@ contains
    real(real64),     intent(in), optional :: width   !< Width [pixels] (default: fit the label).
    real(real64),     intent(in), optional :: height  !< Height [pixels] (default: fit the label).
    logical                                :: pressed !< Clicked this frame.
-   type(im_vec2)                          :: extent   !< Size (named so: a local `size` crashes nvfortran 26.9, see plans/plan.md).
+   type(im_vec2)                          :: extent   !< Size (named so: a local `size` crashes nvfortran 26.9, docs/guide/known-issues.md).
 
    extent = im_vec2(0.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)

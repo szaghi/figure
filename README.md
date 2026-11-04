@@ -23,13 +23,14 @@ enddo
 call app%destroy()
 ```
 
-**Status:** spike (milestone 1 of [plans/plan.md](plans/plan.md)). API unstable.
+**Status:** on the way to the first release, v0.1.0 ([roadmap](https://github.com/szaghi/figure/issues/1)). The API
+can still change.
 
 **Remote UI:** `app%init_remote(port=8080)` instead of `app%init(...)` serves the same interface to a web browser: no
 display or GPU needed, e.g. on a cluster node reached through an SSH tunnel (`exe/figure_hello --remote 8080`).
 
 **Documentation:** guide, tutorial, cookbook and API reference in [docs/](docs/) (VitePress). Browse it locally with
-`cd docs && npm install && npm run docs:dev`; the site will be published at https://szaghi.github.io/figure.
+`cd docs && npm install && npm run docs:dev`, or online at https://szaghi.github.io/figure.
 
 ## Building
 
@@ -48,7 +49,8 @@ scripts/fpm.sh test                          # fpm (adds -L lib/)
 scripts/fpm.sh run --example figure_hello
 ```
 
-Linux needs the X11/Wayland/DBus development packages for SDL3 windows (see plans/plan.md, "Platform setup").
+Linux needs the X11/Wayland/DBus development packages for SDL3 windows (see the
+[installation guide](https://szaghi.github.io/figure/guide/install)).
 The headless test needs no display and no GPU.
 
 **WSL2 (WSLg):** set `GALLIUM_DRIVER=d3d12` (e.g. in `~/.bashrc`). Without it, recent Mesa (seen with 25.2) does not

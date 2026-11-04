@@ -14,7 +14,8 @@ trailing blanks included: pass `trim(...)` of a fixed-length buffer.
 
 The pinned cimgui tag `1.93dock` is, despite its name, generated from the non-docking Dear ImGui: its `cimgui.h` has
 no `ImGuiConfigFlags_DockingEnable`. Docking windows into each other is therefore off. Enabling it needs a cimgui
-commit generated from the docking branch, and possibly cimplot regenerated against it.
+commit generated from the docking branch, and possibly cimplot regenerated against it: planned for v0.1.0 (steps S1
+and S2 of the [roadmap](roadmap)).
 
 ## nvfortran 26.9: internal compiler error on `size`
 
@@ -30,7 +31,13 @@ nvfortran 26.9 if you hit the same error.
 ## Synthetic input is internal
 
 `fig_input_mouse`, used for [headless tests](testing), lives in the internal module `figure_c_native` and takes C
-kinds.
+kinds. A public testing module is planned for v0.1.0 (step S10 of the [roadmap](roadmap)).
+
+## A name shared with fortplot
+
+`lazy-fortran/fortplot` has a public procedure named `figure`. A program that uses both libraries cannot have the
+module `figure` and that procedure under the same name in one scope: rename one on import, for example
+`use fortplot, only : fp_figure => figure`.
 
 ## Platforms
 

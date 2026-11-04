@@ -313,7 +313,7 @@ void create_contexts() {
    ImGui::CreateContext();
    ImPlot::CreateContext();
    ImGuiIO &io = ImGui::GetIO();
-   // No docking: the pinned cimgui tag (1.93dock) is generated from the non-docking Dear ImGui (see plans/plan.md).
+   // No docking: the pinned cimgui tag (1.93dock) is generated from the non-docking Dear ImGui (docs/guide/known-issues.md).
    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
    // No imgui.ini by default: a layout restored from whatever directory the program runs in silently overrides the
    // positions and sizes the program sets on first use. fig_set_ini_file opts in.
