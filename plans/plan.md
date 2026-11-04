@@ -26,9 +26,10 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
 - [x] FoBiS modes (tests/examples/static, gnu and nvf) and fpm.toml in sync (`fobis rule --ex sync`).
 - [x] `figure_hello` runs in a window on Linux (WSLg, SDL3 X11 driver): widgets and ImPlot render correctly.
 - [x] Native layer rebuilt with Wayland and DBus (2026-11-04); the full FoBiS/fpm test matrix passes on it.
-- [~] Idle CPU with lazy redraw: 2.6% of one core (10 s sample, WSLg). Expected ~2 frames/s from the 0.5 s
-      `max_wait` refresh; find where the rest goes (spurious X events resetting `frames_left`? swap cost under
-      WSLg's D3D12 GL?) and decide the default `max_wait`.
+- [~] Idle CPU with lazy redraw: the 2.6% measured first was on llvmpipe (software GL). On the GPU
+      (`GALLIUM_DRIVER=d3d12`) it is 0.7-0.9% of one core. Expected ~2 frames/s from the 0.5 s `max_wait`
+      refresh; still to check with per-second counts (events by type, frames, swap time) that this is all it does,
+      then decide the default `max_wait`.
 
 ### M2: generated raw layer
 - Generate `figure_c_native`-style interfaces and enum parameters from cimgui/cimplot `definitions.json` and
@@ -65,8 +66,18 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
 - SDL3 enables Wayland and DBus only when their development packages are present at configure time
   (`libxkbcommon-dev`, `libegl-dev`, `libdbus-1-dev`; see *Platform setup*): without them it silently builds X11
   only, and without DBus there are no XDG-portal file dialogs. On the WSL box they are installed since 2026-11-04
-  and the native layer builds with video drivers `wayland x11` and DBus ON. Which driver SDL3 picks on WSLg, and
-  whether it behaves, is still unchecked.
+  and the native layer builds with video drivers `wayland x11` and DBus ON.
+- **WSLg (checked 2026-11-04, SDL 3.4.20, Mesa 25.2.8, RTX 4070):** SDL3 picks **X11** by default;
+  `SDL_VIDEO_DRIVER=wayland` also works (Mesa EGL prints harmless "failed to get driver name for fd -1" warnings).
+  Mesa renders in **software (llvmpipe)** on either driver unless `GALLIUM_DRIVER=d3d12` is set (documented in
+  the README; not set by FIGURE). Idle `figure_hello`, 10 s samples after 4 s warm-up:
+
+  | Renderer | X11 | Wayland |
+  |---|---|---|
+  | llvmpipe (default) | 5.3%, 6.0% | 2.4% |
+  | d3d12 (`GALLIUM_DRIVER=d3d12`) | 0.8%, 0.8%, 0.7% | 0.9% |
+
+  Rendering on d3d12 checked by screenshot (`import -window "FIGURE: hello"`): widgets and plot correct.
 
 ## Platform setup
 

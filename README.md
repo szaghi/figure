@@ -44,3 +44,8 @@ scripts/fpm.sh run --example figure_hello
 
 Linux needs the X11/Wayland/DBus development packages for SDL3 windows (see plans/plan.md, "Platform setup").
 The headless test needs no display and no GPU.
+
+**WSL2 (WSLg):** set `GALLIUM_DRIVER=d3d12` (e.g. in `~/.bashrc`). Without it, recent Mesa (seen with 25.2) does not
+pick the GPU and renders in software (llvmpipe): FIGURE works, but every frame costs CPU. Check with
+`glxinfo -B`: the renderer must be `D3D12 (<your GPU>)` with `Accelerated: yes`. FIGURE does not set it itself:
+it is a property of the machine, and wrong outside WSL.
