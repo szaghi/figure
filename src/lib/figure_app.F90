@@ -20,7 +20,7 @@ use, intrinsic :: iso_c_binding, only : c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check
 use figure_c_native, only : FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, fig_init_headless, &
-                            fig_request_frames, fig_set_lazy, fig_shutdown
+                            fig_request_frames, fig_set_ini_file, fig_set_lazy, fig_shutdown
 
 implicit none
 private
@@ -43,20 +43,25 @@ type :: app_object
 endtype app_object
 
 contains
-   subroutine init(self, title, width, height, vsync, stat)
+   subroutine init(self, title, width, height, vsync, stat, ini_file)
    !< Open the window (`width` x `height` logical pixels) and create the ImGui/ImPlot contexts.
-   class(app_object), intent(inout)      :: self   !< Application.
-   character(len=*),  intent(in)         :: title  !< Window title.
-   integer(int32),    intent(in)         :: width  !< Width [logical pixels].
-   integer(int32),    intent(in)         :: height !< Height [logical pixels].
-   logical,           intent(in), optional :: vsync !< Synchronize with the display (default true).
-   integer(int32),    intent(out), optional :: stat !< Status.
-   integer(c_int)                        :: status !< Native status.
-   integer(c_int)                        :: v      !< vsync flag.
+   !<
+   !< Window positions and sizes are not saved by default: with `ini_file`, Dear ImGui keeps them in that file, read
+   !< at the first frame and written while the program runs (its `imgui.ini`).
+   class(app_object), intent(inout)         :: self     !< Application.
+   character(len=*),  intent(in)            :: title    !< Window title.
+   integer(int32),    intent(in)            :: width    !< Width [logical pixels].
+   integer(int32),    intent(in)            :: height   !< Height [logical pixels].
+   logical,           intent(in),  optional :: vsync    !< Synchronize with the display (default true).
+   integer(int32),    intent(out), optional :: stat     !< Status.
+   character(len=*),  intent(in),  optional :: ini_file !< File keeping the window layout (default: none).
+   integer(c_int)                           :: status   !< Native status.
+   integer(c_int)                           :: v        !< vsync flag.
 
    v = 1_c_int
    if (present(vsync)) v = merge(1_c_int, 0_c_int, vsync)
    status = fig_init(title, len(title, c_int), int(width, c_int), int(height, c_int), v)
+   if (status == FIG_OK .and. present(ini_file)) status = fig_set_ini_file(ini_file, len(ini_file, c_int))
    call figure_check(status, stat)
    endsubroutine init
 

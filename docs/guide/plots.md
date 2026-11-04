@@ -34,6 +34,8 @@ Every item is generic over `real(real32)` and `real(real64)` (all its arrays of 
 | Procedure | Draws |
 |---|---|
 | `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))` |
+| `ip_line(label, y [, xscale] [, xstart] [, spec] [, stat])` | a line through `y(i)` at `x = xstart + (i - 1) xscale` (defaults 0 and 1) |
+| `ip_line(label, y, row [, xscale] [, xstart] [, spec] [, stat])` | a line through the row `row` of the matrix `y`, read in place with a stride (no copy) |
 | `ip_scatter(label, x, y [, spec] [, stat])` | markers at `(x(i), y(i))` (a circle when `spec` sets no marker) |
 | `ip_bars(label, x, y, bar_size [, spec] [, stat])` | bars of height `y(i)` centred at `x(i)`, `bar_size` wide in x units (`real(real64)`, required: ImPlot has no default for it) |
 | `ip_shaded(label, x, y1, y2 [, spec] [, stat])` | the area between the curves `y1(x)` and `y2(x)` |
@@ -78,8 +80,8 @@ afterwards:
 - a contiguous array or array section (a whole array, `a(1:n)`, a matrix column `a(:, j)`) is passed without any
   copy;
 - a non-contiguous section (a matrix row `a(i, :)`, `a(1:n:2)`) is copied by the compiler into a contiguous
-  temporary, every call. For large data drawn every frame, store series as columns, or copy rows into a buffer you
-  reuse ([cookbook](/manual/cookbook#plot-the-rows-of-a-matrix)).
+  temporary, every call. A matrix row with uniform abscissae is better passed whole, `ip_line(label, a, i)`: ImPlot
+  reads it in place with a stride ([cookbook](/manual/cookbook#plot-the-rows-of-a-matrix)).
 
 `real(real32)`/`real(real64)` passed as `float`/`double` rely on being the same types as `real(c_float)`/
 `real(c_double)`, true on every compiler FIGURE supports; their addresses are passed with `c_loc`.
@@ -91,5 +93,5 @@ Series of different sizes are an error (`FIG_ERR_ARGUMENT`, message `<item>: the
 
 Other items (error bars, stems, stairs, heatmaps, histograms, text, ...), axis setup (log scales, limits, ticks) and
 strided series without copies are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)),
-including `ImPlotSpec`'s `Offset` and `Stride` fields, which make strided series possible without copies
-([roadmap](roadmap)).
+([roadmap](roadmap)). In-place rows exist for `ip_line` only; the same `ImPlotSpec` stride serves the other items when
+they need it.

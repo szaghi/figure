@@ -53,8 +53,9 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
   `ip_bars`, `ip_shaded` (two curves, or curve and `yref`), all with an optional `spec` from `ip_spec`
   (`plot_spec_object`: ImPlot's C++ defaults, overridden per keyword). Still to wrap: error bars, stems, stairs,
   histograms, heatmaps, text, axis setup.
-- Strided series (`ImPlotSpec%Offset`/`%Stride` are now reachable from Fortran): the `contiguous` dummies make the compiler copy a matrix row `y(i,:)` into a temporary; ImPlot
-  takes a byte stride, so pass base address + stride instead (portable stride from Fortran to be designed).
+- [x] Strided rows (2026-11-04): `ip_line(label, y, row [, xscale, xstart])` reads `y(row, :)` in place through
+  `ImPlotSpec%Stride` (byte stride `size(y,1) * storage_size(y) / 8`, base `c_loc(y(row,1))`: standard Fortran, no
+  pointer arithmetic); uniform abscissae only, since ImPlot applies one stride to both `xs` and `ys`.
 - Port a Mandelbrot explorer and a live plot; benchmark redraw at 4K against wxFortran.
 
 ### M4: platforms and CI

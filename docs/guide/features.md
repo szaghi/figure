@@ -48,6 +48,7 @@ Details: [Widgets](widgets).
 | `ip_begin_plot(title [, width] [, height])` → `logical` | begin a plot; `.true.` when visible |
 | `ip_setup_axes(xlabel, ylabel)` | axis labels |
 | `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))` |
+| `ip_line(label, y [, xscale, xstart] ...)`, `ip_line(label, y, row ...)` | uniform x; a matrix row read in place |
 | `ip_scatter(label, x, y [, spec] [, stat])` | markers at `(x(i), y(i))` |
 | `ip_bars(label, x, y, bar_size [, spec] [, stat])` | bars of height `y(i)` at `x(i)` |
 | `ip_shaded(label, x, y1, y2 [, spec] [, stat])`, `ip_shaded(label, x, y, yref ...)` | area between two curves, or a curve and `y = yref` |

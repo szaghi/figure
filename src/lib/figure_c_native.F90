@@ -12,6 +12,7 @@ implicit none
 private
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
+public :: fig_set_ini_file
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 
 ! Status codes: must match native/figure_native.h.
@@ -63,6 +64,15 @@ interface
    !< Destroy contexts, window and platform; safe to call in any state.
    implicit none
    endsubroutine fig_shutdown
+
+   function fig_set_ini_file(path, path_len) result(status) bind(C, name='fig_set_ini_file')
+   !< Keep window positions and sizes in this file (Dear ImGui's imgui.ini); off by default. Before the first frame.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File path (not NUL-terminated); empty: no file.
+   integer(c_int), value              :: path_len !< Path length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_ini_file
 
    subroutine fig_set_lazy(enabled, max_wait_s) bind(C, name='fig_set_lazy')
    !< Lazy redraw: sleep until an event or `max_wait_s` seconds once the UI has settled.

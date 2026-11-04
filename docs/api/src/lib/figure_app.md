@@ -77,8 +77,11 @@ A FIGURE application (one per program).
 
 Open the window (`width` x `height` logical pixels) and create the ImGui/ImPlot contexts.
 
+ Window positions and sizes are not saved by default: with `ini_file`, Dear ImGui keeps them in that file, read
+ at the first frame and written while the program runs (its `imgui.ini`).
+
 ```fortran
-subroutine init(self, title, width, height, vsync, stat)
+subroutine init(self, title, width, height, vsync, stat, ini_file)
 ```
 
 **Arguments**
@@ -91,12 +94,14 @@ subroutine init(self, title, width, height, vsync, stat)
 | `height` | integer(kind=int32) | in |  | Height [logical pixels]. |
 | `vsync` | logical | in | optional | Synchronize with the display (default true). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
+| `ini_file` | character(len=*) | in | optional | File keeping the window layout (default: none). |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   init["init"] --> fig_init["fig_init"]
+  init["init"] --> fig_set_ini_file["fig_set_ini_file"]
   init["init"] --> figure_check["figure_check"]
   style init fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

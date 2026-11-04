@@ -19,8 +19,10 @@ A program has one `app_object`. Its life is one loop:
 - `destroy()` closes the window and destroys the contexts. It is safe in any state, also without a previous `init`
   and inside an open frame.
 
-In window mode Dear ImGui keeps the positions and sizes of the windows in `imgui.ini`, in the working directory (its
-default behaviour; the repository ignores the file). Headless mode writes no such file.
+Window positions and sizes are not saved between runs: FIGURE turns off Dear ImGui's `imgui.ini`, so a layout left in
+the working directory by an earlier run never overrides what the program sets with `ig_set_next_window`. To keep the
+layout, name the file: `app%init(title, width, height, ini_file='my_tool.ini')`. Dear ImGui reads it at the first
+frame and rewrites it while the program runs. Headless mode never uses one.
 
 ## next_frame
 

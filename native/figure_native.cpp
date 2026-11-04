@@ -44,6 +44,7 @@ struct state_t {
    int           max_wait_ms = 500;
    int           frames_left = 3; // frames still to draw after the last event (ImGui settles in a few)
    float         scale = 1.0f;
+   std::string   ini_file;        // where Dear ImGui keeps window positions and sizes; empty: nowhere (the default)
 } st;
 
 // Redraw diagnostics, enabled by the environment variable FIGURE_DEBUG_REDRAW (any value): once per second, print to
@@ -92,6 +93,9 @@ void create_contexts() {
    ImGuiIO &io = ImGui::GetIO();
    // No docking: the pinned cimgui tag (1.93dock) is generated from the non-docking Dear ImGui (see plans/plan.md).
    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+   // No imgui.ini by default: a layout restored from whatever directory the program runs in silently overrides the
+   // positions and sizes the program sets on first use. fig_set_ini_file opts in.
+   io.IniFilename = nullptr;
    ImGui::StyleColorsDark();
 }
 
@@ -195,10 +199,19 @@ int fig_init_headless(int width, int height) {
    if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "display size must be positive");
    create_contexts();
    ImGuiIO &io = ImGui::GetIO();
-   io.IniFilename = nullptr;
    io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
    st.m = mode::headless;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_set_ini_file(const char *path, int path_len) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (ImGui::GetFrameCount() > 0) return fail(FIG_ERR_STATE, "the ini file must be set before the first frame");
+   st.ini_file.assign(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
+   ImGui::GetIO().IniFilename = st.ini_file.empty() ? nullptr : st.ini_file.c_str();
    return FIG_OK;
    FIG_CATCH
 }

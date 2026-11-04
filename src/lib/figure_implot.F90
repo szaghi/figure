@@ -6,7 +6,7 @@ module figure_implot
 !< `ip_end_plot` (only in that case). Items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`) take `real(real32)` or
 !< `real(real64)` arrays, read in place, without copies, during the call: they go straight to ImPlot's `float*` or
 !< `double*` items (ImPlot is templated on the element type). A non-contiguous actual argument (e.g. a matrix row
-!< `y(i,:)`) is copied by the compiler into a temporary.
+!< `y(i,:)`) is copied by the compiler into a temporary: `ip_line(label, y, row)` plots a matrix row in place instead.
 !<
 !< Every item takes an optional `spec`, built by `ip_spec` from ImPlot's defaults (automatic colours, no markers):
 !<
@@ -22,6 +22,7 @@ use figure_cimgui, only : im_vec2, im_vec4
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot, ImPlot_EndPlot,             &
                            ImPlot_PlotBars_doublePtrdoublePtr, ImPlot_PlotBars_FloatPtrFloatPtr,                   &
                            ImPlot_PlotLine_doublePtrdoublePtr, ImPlot_PlotLine_FloatPtrFloatPtr,                   &
+                           ImPlot_PlotLine_doublePtrInt, ImPlot_PlotLine_FloatPtrInt,                               &
                            ImPlot_PlotScatter_doublePtrdoublePtr, ImPlot_PlotScatter_FloatPtrFloatPtr,             &
                            ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr, ImPlot_PlotShaded_doublePtrdoublePtrInt, &
                            ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr, ImPlot_PlotShaded_FloatPtrFloatPtrInt,      &
@@ -58,8 +59,9 @@ type :: plot_spec_object
 endtype plot_spec_object
 
 interface ip_line
-   !< Line through the points (x(i), y(i)).
-   module procedure ip_line_r32, ip_line_r64
+   !< Line through the points (x(i), y(i)); or through y(i) at uniformly spaced x, from a vector or from a row of a
+   !< matrix (read in place, with a stride: no copy).
+   module procedure ip_line_r32, ip_line_r64, ip_line_values_r32, ip_line_values_r64, ip_line_row_r32, ip_line_row_r64
 endinterface ip_line
 
 interface ip_scatter
@@ -219,6 +221,45 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_ref_r32
 
+   subroutine ip_line_values_r32(label, y, xscale, xstart, spec, stat)
+   !< Line through y(i) at x = xstart + (i - 1) xscale, single precision.
+   character(len=*),       intent(in)                     :: label  !< Legend label.
+   real(real32),           intent(in), contiguous, target :: y(:)   !< Ordinates.
+   real(real64),           intent(in), optional           :: xscale !< Spacing of the abscissae (default 1).
+   real(real64),           intent(in), optional           :: xstart !< First abscissa (default 0).
+   type(plot_spec_object), intent(in), optional           :: spec   !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional          :: stat   !< Status.
+
+   if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
+   call ImPlot_PlotLine_FloatPtrInt(cstr(label), addr_r32(y), int(size(y), c_int), uniform(xscale, 1.0_real64), &
+                                    uniform(xstart, 0.0_real64), spec_c(spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_line_values_r32
+
+   subroutine ip_line_row_r32(label, y, row, xscale, xstart, spec, stat)
+   !< Line through the row `row` of `y`, y(row, j) at x = xstart + (j - 1) xscale, read in place (no copy),
+   !< single precision.
+   character(len=*),       intent(in)                     :: label  !< Legend label.
+   real(real32),           intent(in), contiguous, target :: y(:,:) !< Matrix; its row `row` is plotted.
+   integer(int32),         intent(in)                     :: row    !< Row to plot, in 1..size(y, 1).
+   real(real64),           intent(in), optional           :: xscale !< Spacing of the abscissae (default 1).
+   real(real64),           intent(in), optional           :: xstart !< First abscissa (default 0).
+   type(plot_spec_object), intent(in), optional           :: spec   !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional          :: stat   !< Status.
+   type(im_plot_spec)                                     :: c      !< Spec with the row stride.
+   type(c_ptr)                                            :: p      !< Address of y(row, 1), or null.
+
+   if (.not. row_ok(size(y, 1, kind=int64), size(y, 2, kind=int64), storage_size(y, kind=int64), row, stat)) return
+   c = spec_c(spec)
+   c%Offset = 0_c_int
+   c%Stride = int(size(y, 1, kind=int64) * storage_size(y, kind=int64) / 8_int64, c_int) ! bytes between y(row,j), y(row,j+1)
+   p = c_null_ptr
+   if (size(y, 2) > 0) p = c_loc(y(row, 1))
+   call ImPlot_PlotLine_FloatPtrInt(cstr(label), p, int(size(y, 2), c_int), uniform(xscale, 1.0_real64), &
+                                    uniform(xstart, 0.0_real64), c)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_line_row_r32
+
    ! items, double precision
 
    subroutine ip_line_r64(label, x, y, spec, stat)
@@ -294,6 +335,45 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_ref_r64
 
+   subroutine ip_line_values_r64(label, y, xscale, xstart, spec, stat)
+   !< Line through y(i) at x = xstart + (i - 1) xscale, double precision.
+   character(len=*),       intent(in)                     :: label  !< Legend label.
+   real(real64),           intent(in), contiguous, target :: y(:)   !< Ordinates.
+   real(real64),           intent(in), optional           :: xscale !< Spacing of the abscissae (default 1).
+   real(real64),           intent(in), optional           :: xstart !< First abscissa (default 0).
+   type(plot_spec_object), intent(in), optional           :: spec   !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional          :: stat   !< Status.
+
+   if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
+   call ImPlot_PlotLine_doublePtrInt(cstr(label), addr_r64(y), int(size(y), c_int), uniform(xscale, 1.0_real64), &
+                                     uniform(xstart, 0.0_real64), spec_c(spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_line_values_r64
+
+   subroutine ip_line_row_r64(label, y, row, xscale, xstart, spec, stat)
+   !< Line through the row `row` of `y`, y(row, j) at x = xstart + (j - 1) xscale, read in place (no copy),
+   !< double precision.
+   character(len=*),       intent(in)                     :: label  !< Legend label.
+   real(real64),           intent(in), contiguous, target :: y(:,:) !< Matrix; its row `row` is plotted.
+   integer(int32),         intent(in)                     :: row    !< Row to plot, in 1..size(y, 1).
+   real(real64),           intent(in), optional           :: xscale !< Spacing of the abscissae (default 1).
+   real(real64),           intent(in), optional           :: xstart !< First abscissa (default 0).
+   type(plot_spec_object), intent(in), optional           :: spec   !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional          :: stat   !< Status.
+   type(im_plot_spec)                                     :: c      !< Spec with the row stride.
+   type(c_ptr)                                            :: p      !< Address of y(row, 1), or null.
+
+   if (.not. row_ok(size(y, 1, kind=int64), size(y, 2, kind=int64), storage_size(y, kind=int64), row, stat)) return
+   c = spec_c(spec)
+   c%Offset = 0_c_int
+   c%Stride = int(size(y, 1, kind=int64) * storage_size(y, kind=int64) / 8_int64, c_int) ! bytes between y(row,j), y(row,j+1)
+   p = c_null_ptr
+   if (size(y, 2) > 0) p = c_loc(y(row, 1))
+   call ImPlot_PlotLine_doublePtrInt(cstr(label), p, int(size(y, 2), c_int), uniform(xscale, 1.0_real64), &
+                                     uniform(xstart, 0.0_real64), c)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_line_row_r64
+
    ! private helpers
 
    function series_ok(nx, ny, item, stat) result(ok)
@@ -313,6 +393,37 @@ contains
       ok = .true.
    endif
    endfunction series_ok
+
+   function row_ok(rows, cols, bits, row, stat) result(ok)
+   !< Whether a matrix row can be plotted in place: the row exists, and ImPlot's `int` count and byte stride hold it.
+   integer(int64), intent(in)            :: rows !< size(y, 1).
+   integer(int64), intent(in)            :: cols !< size(y, 2): points.
+   integer(int64), intent(in)            :: bits !< storage_size of an element [bits].
+   integer(int32), intent(in)            :: row  !< Row to plot.
+   integer(int32), intent(out), optional :: stat !< Status.
+   logical                               :: ok   !< Plottable.
+
+   ok = .false.
+   if (row < 1_int32 .or. int(row, int64) > rows) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_line: row out of range', stat)
+   elseif (cols > int(huge(0_c_int), int64)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_line: more points than a C int can count', stat)
+   elseif (rows * bits / 8_int64 > int(huge(0_c_int), int64)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_line: row stride beyond a C int (bytes)', stat)
+   else
+      ok = .true.
+   endif
+   endfunction row_ok
+
+   pure function uniform(value, default) result(v)
+   !< An optional abscissa parameter, or its default, as a C double.
+   real(real64), intent(in), optional :: value   !< Given value.
+   real(real64), intent(in)           :: default !< Default.
+   real(c_double)                     :: v       !< Value to pass.
+
+   v = real(default, c_double)
+   if (present(value)) v = real(value, c_double)
+   endfunction uniform
 
    function addr_r32(a) result(p)
    !< Address of a contiguous array for ImPlot; null when empty: `c_loc` needs nonzero size (F2023 18.2.3.7).

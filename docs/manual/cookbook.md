@@ -77,12 +77,17 @@ The `x(::5)` sections are not contiguous: the compiler copies them (see the next
 
 ### Plot the rows of a matrix
 
+A row of a column-major matrix is strided. When its abscissae are uniform, `ip_line(label, y, row [, xscale]
+[, xstart])` plots it in place: ImPlot reads `y(row, j)` with a stride of `size(y, 1)` elements, no copy at all.
+
 <<< @/examples/snippets/cb_rows-rows.F90{fortran}
 
-A row is strided. `ip_line` takes contiguous arrays, so the compiler copies the row into a temporary at every call,
-allocated and freed each frame. Copying it yourself into a buffer allocated once costs the same copy and no
-allocation; storing series as columns costs nothing. Strided series without copies are planned (M3 of the
-[roadmap](/guide/roadmap)).
+With arbitrary abscissae there is no in-place form: ImPlot applies one stride to both `x` and `y`, so a contiguous
+`x` and a strided row cannot be read together. Passing the section `history(i, :)` makes the compiler copy it into a
+temporary at every call (allocated and freed each frame); copying it yourself into a buffer allocated once costs the
+same copy without the allocation. Storing series as columns avoids the question.
+
+<<< @/examples/snippets/cb_rows-rows-copied.F90{fortran}
 
 ## Errors
 

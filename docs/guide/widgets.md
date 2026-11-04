@@ -25,7 +25,7 @@ the value, discard the result with `continue`:
 |---|---|
 | `ig_begin(name [, open]) → logical` | `name` is the title and the identifier. Returns `.false.` when the window is collapsed or clipped: skip its content. |
 | `ig_end()` | Call it after every `ig_begin`, whatever `ig_begin` returned. |
-| `ig_set_next_window(x, y [, width, height] [, always])` | Position, and size if both `width` and `height` are given, of the next `ig_begin`, in pixels. Applied on first use only (the user can move the window afterwards, and `imgui.ini` remembers it), or every frame with `always=.true.`. |
+| `ig_set_next_window(x, y [, width, height] [, always])` | Position, and size if both `width` and `height` are given, of the next `ig_begin`, in pixels. Applied on first use only (the user can move the window afterwards; with `app%init(..., ini_file=...)` the layout is remembered across runs), or every frame with `always=.true.`. |
 
 Widgets called outside any `ig_begin`/`ig_end` pair go to Dear ImGui's implicit "Debug" window.
 

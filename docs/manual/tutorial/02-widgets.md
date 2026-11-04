@@ -39,8 +39,9 @@ With the `open` argument, the window gets a close button that sets `show_tools` 
 the same variable makes it disappear, and the check box in "Setup" brings it back. `ig_show_demo_window` is the Dear
 ImGui demo, with the same convention.
 
-`ig_set_next_window` places a window the first time it appears; afterwards the user moves it, and Dear ImGui
-remembers the place in `imgui.ini`.
+`ig_set_next_window` places a window the first time it appears; afterwards the user moves it. The place is not
+remembered across runs unless the program names a layout file (`app%init(..., ini_file='hello.ini')`, see
+[Frame loop](/guide/frame-loop#the-application)).
 
 ::: tip What you learned
 Widgets bound to variables, their return values, identifiers, closable windows. Reference: [Widgets](/guide/widgets).

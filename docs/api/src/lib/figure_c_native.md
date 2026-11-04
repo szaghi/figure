@@ -26,6 +26,7 @@ graph LR
 - [fig_init_headless](#fig-init-headless)
 - [fig_begin_frame](#fig-begin-frame)
 - [fig_end_frame](#fig-end-frame)
+- [fig_set_ini_file](#fig-set-ini-file)
 - [fig_content_scale](#fig-content-scale)
 - [fig_last_error](#fig-last-error)
 - [fig_shutdown](#fig-shutdown)
@@ -53,6 +54,8 @@ graph LR
 ### fig_begin_frame
 
 ### fig_end_frame
+
+### fig_set_ini_file
 
 ### fig_content_scale
 

@@ -23,6 +23,8 @@ int    fig_begin_frame(int *running);
 int    fig_end_frame(void);
 void   fig_shutdown(void);
 void   fig_set_lazy(int enabled, double max_wait_s);
+/* Keep window positions and sizes in this file (Dear ImGui's imgui.ini); off by default. Before the first frame. */
+int    fig_set_ini_file(const char *path, int path_len);
 void   fig_request_frames(int n);
 double fig_content_scale(void);
 const char *fig_last_error(int *len);

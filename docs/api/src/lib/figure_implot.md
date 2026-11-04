@@ -10,7 +10,7 @@ title: figure_implot
  `ip_end_plot` (only in that case). Items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`) take `real(real32)` or
  `real(real64)` arrays, read in place, without copies, during the call: they go straight to ImPlot's `float*` or
  `double*` items (ImPlot is templated on the element type). A non-contiguous actual argument (e.g. a matrix row
- `y(i,:)`) is copied by the compiler into a temporary.
+ `y(i,:)`) is copied by the compiler into a temporary: `ip_line(label, y, row)` plots a matrix row in place instead.
 
  Every item takes an optional `spec`, built by `ip_spec` from ImPlot's defaults (automatic colours, no markers):
 
@@ -48,14 +48,20 @@ graph LR
 - [ip_bars_r32](#ip-bars-r32)
 - [ip_shaded_r32](#ip-shaded-r32)
 - [ip_shaded_ref_r32](#ip-shaded-ref-r32)
+- [ip_line_values_r32](#ip-line-values-r32)
+- [ip_line_row_r32](#ip-line-row-r32)
 - [ip_line_r64](#ip-line-r64)
 - [ip_scatter_r64](#ip-scatter-r64)
 - [ip_bars_r64](#ip-bars-r64)
 - [ip_shaded_r64](#ip-shaded-r64)
 - [ip_shaded_ref_r64](#ip-shaded-ref-r64)
+- [ip_line_values_r64](#ip-line-values-r64)
+- [ip_line_row_r64](#ip-line-row-r64)
 - [ip_begin_plot](#ip-begin-plot)
 - [ip_spec](#ip-spec)
 - [series_ok](#series-ok)
+- [row_ok](#row-ok)
+- [uniform](#uniform)
 - [addr_r32](#addr-r32)
 - [addr_r64](#addr-r64)
 - [spec_c](#spec-c)
@@ -81,9 +87,10 @@ Style of a plot item: colours, line weight, markers, flags. Build it with `ip_sp
 
 ### ip_line
 
-Line through the points (x(i), y(i)).
+Line through the points (x(i), y(i)); or through y(i) at uniformly spaced x, from a vector or from a row of a
+ matrix (read in place, with a stride: no copy).
 
-**Module procedures**: [`ip_line_r32`](/api/src/lib/figure_implot#ip-line-r32), [`ip_line_r64`](/api/src/lib/figure_implot#ip-line-r64)
+**Module procedures**: [`ip_line_r32`](/api/src/lib/figure_implot#ip-line-r32), [`ip_line_r64`](/api/src/lib/figure_implot#ip-line-r64), [`ip_line_values_r32`](/api/src/lib/figure_implot#ip-line-values-r32), [`ip_line_values_r64`](/api/src/lib/figure_implot#ip-line-values-r64), [`ip_line_row_r32`](/api/src/lib/figure_implot#ip-line-row-r32), [`ip_line_row_r64`](/api/src/lib/figure_implot#ip-line-row-r64)
 
 ### ip_scatter
 
@@ -303,6 +310,73 @@ flowchart TD
   style ip_shaded_ref_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### ip_line_values_r32
+
+Line through y(i) at x = xstart + (i - 1) xscale, single precision.
+
+```fortran
+subroutine ip_line_values_r32(label, y, xscale, xstart, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `y` | real(kind=real32) | in | contiguous, target | Ordinates. |
+| `xscale` | real(kind=real64) | in | optional | Spacing of the abscissae (default 1). |
+| `xstart` | real(kind=real64) | in | optional | First abscissa (default 0). |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_line_values_r32["ip_line_values_r32"] --> ImPlot_PlotLine_FloatPtrInt["ImPlot_PlotLine_FloatPtrInt"]
+  ip_line_values_r32["ip_line_values_r32"] --> addr_r32["addr_r32"]
+  ip_line_values_r32["ip_line_values_r32"] --> cstr["cstr"]
+  ip_line_values_r32["ip_line_values_r32"] --> figure_check["figure_check"]
+  ip_line_values_r32["ip_line_values_r32"] --> series_ok["series_ok"]
+  ip_line_values_r32["ip_line_values_r32"] --> spec_c["spec_c"]
+  ip_line_values_r32["ip_line_values_r32"] --> uniform["uniform"]
+  style ip_line_values_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_line_row_r32
+
+Line through the row `row` of `y`, y(row, j) at x = xstart + (j - 1) xscale, read in place (no copy),
+ single precision.
+
+```fortran
+subroutine ip_line_row_r32(label, y, row, xscale, xstart, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `y` | real(kind=real32) | in | contiguous, target | Matrix; its row `row` is plotted. |
+| `row` | integer(kind=int32) | in |  | Row to plot, in 1..size(y, 1). |
+| `xscale` | real(kind=real64) | in | optional | Spacing of the abscissae (default 1). |
+| `xstart` | real(kind=real64) | in | optional | First abscissa (default 0). |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_line_row_r32["ip_line_row_r32"] --> ImPlot_PlotLine_FloatPtrInt["ImPlot_PlotLine_FloatPtrInt"]
+  ip_line_row_r32["ip_line_row_r32"] --> cstr["cstr"]
+  ip_line_row_r32["ip_line_row_r32"] --> figure_check["figure_check"]
+  ip_line_row_r32["ip_line_row_r32"] --> row_ok["row_ok"]
+  ip_line_row_r32["ip_line_row_r32"] --> spec_c["spec_c"]
+  ip_line_row_r32["ip_line_row_r32"] --> uniform["uniform"]
+  style ip_line_row_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### ip_line_r64
 
 Line through the points (x(i), y(i)), double precision.
@@ -461,6 +535,73 @@ flowchart TD
   style ip_shaded_ref_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### ip_line_values_r64
+
+Line through y(i) at x = xstart + (i - 1) xscale, double precision.
+
+```fortran
+subroutine ip_line_values_r64(label, y, xscale, xstart, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `y` | real(kind=real64) | in | contiguous, target | Ordinates. |
+| `xscale` | real(kind=real64) | in | optional | Spacing of the abscissae (default 1). |
+| `xstart` | real(kind=real64) | in | optional | First abscissa (default 0). |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_line_values_r64["ip_line_values_r64"] --> ImPlot_PlotLine_doublePtrInt["ImPlot_PlotLine_doublePtrInt"]
+  ip_line_values_r64["ip_line_values_r64"] --> addr_r64["addr_r64"]
+  ip_line_values_r64["ip_line_values_r64"] --> cstr["cstr"]
+  ip_line_values_r64["ip_line_values_r64"] --> figure_check["figure_check"]
+  ip_line_values_r64["ip_line_values_r64"] --> series_ok["series_ok"]
+  ip_line_values_r64["ip_line_values_r64"] --> spec_c["spec_c"]
+  ip_line_values_r64["ip_line_values_r64"] --> uniform["uniform"]
+  style ip_line_values_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_line_row_r64
+
+Line through the row `row` of `y`, y(row, j) at x = xstart + (j - 1) xscale, read in place (no copy),
+ double precision.
+
+```fortran
+subroutine ip_line_row_r64(label, y, row, xscale, xstart, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `y` | real(kind=real64) | in | contiguous, target | Matrix; its row `row` is plotted. |
+| `row` | integer(kind=int32) | in |  | Row to plot, in 1..size(y, 1). |
+| `xscale` | real(kind=real64) | in | optional | Spacing of the abscissae (default 1). |
+| `xstart` | real(kind=real64) | in | optional | First abscissa (default 0). |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_line_row_r64["ip_line_row_r64"] --> ImPlot_PlotLine_doublePtrInt["ImPlot_PlotLine_doublePtrInt"]
+  ip_line_row_r64["ip_line_row_r64"] --> cstr["cstr"]
+  ip_line_row_r64["ip_line_row_r64"] --> figure_check["figure_check"]
+  ip_line_row_r64["ip_line_row_r64"] --> row_ok["row_ok"]
+  ip_line_row_r64["ip_line_row_r64"] --> spec_c["spec_c"]
+  ip_line_row_r64["ip_line_row_r64"] --> uniform["uniform"]
+  style ip_line_row_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ## Functions
 
 ### ip_begin_plot
@@ -556,6 +697,8 @@ flowchart TD
   ip_bars_r64["ip_bars_r64"] --> series_ok["series_ok"]
   ip_line_r32["ip_line_r32"] --> series_ok["series_ok"]
   ip_line_r64["ip_line_r64"] --> series_ok["series_ok"]
+  ip_line_values_r32["ip_line_values_r32"] --> series_ok["series_ok"]
+  ip_line_values_r64["ip_line_values_r64"] --> series_ok["series_ok"]
   ip_scatter_r32["ip_scatter_r32"] --> series_ok["series_ok"]
   ip_scatter_r64["ip_scatter_r64"] --> series_ok["series_ok"]
   ip_shaded_r32["ip_shaded_r32"] --> series_ok["series_ok"]
@@ -564,6 +707,66 @@ flowchart TD
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> series_ok["series_ok"]
   series_ok["series_ok"] --> figure_fail["figure_fail"]
   style series_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### row_ok
+
+Whether a matrix row can be plotted in place: the row exists, and ImPlot's `int` count and byte stride hold it.
+
+**Returns**: `logical`
+
+```fortran
+function row_ok(rows, cols, bits, row, stat) result(ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `rows` | integer(kind=int64) | in |  | size(y, 1). |
+| `cols` | integer(kind=int64) | in |  | size(y, 2): points. |
+| `bits` | integer(kind=int64) | in |  | storage_size of an element [bits]. |
+| `row` | integer(kind=int32) | in |  | Row to plot. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_line_row_r32["ip_line_row_r32"] --> row_ok["row_ok"]
+  ip_line_row_r64["ip_line_row_r64"] --> row_ok["row_ok"]
+  row_ok["row_ok"] --> figure_fail["figure_fail"]
+  style row_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### uniform
+
+An optional abscissa parameter, or its default, as a C double.
+
+**Attributes**: pure
+
+**Returns**: `real(kind=c_double)`
+
+```fortran
+function uniform(value, default) result(v)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `value` | real(kind=real64) | in | optional | Given value. |
+| `default` | real(kind=real64) | in |  | Default. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_line_row_r32["ip_line_row_r32"] --> uniform["uniform"]
+  ip_line_row_r64["ip_line_row_r64"] --> uniform["uniform"]
+  ip_line_values_r32["ip_line_values_r32"] --> uniform["uniform"]
+  ip_line_values_r64["ip_line_values_r64"] --> uniform["uniform"]
+  style uniform fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### addr_r32
@@ -591,6 +794,7 @@ function addr_r32(a) result(p)
 flowchart TD
   ip_bars_r32["ip_bars_r32"] --> addr_r32["addr_r32"]
   ip_line_r32["ip_line_r32"] --> addr_r32["addr_r32"]
+  ip_line_values_r32["ip_line_values_r32"] --> addr_r32["addr_r32"]
   ip_scatter_r32["ip_scatter_r32"] --> addr_r32["addr_r32"]
   ip_shaded_r32["ip_shaded_r32"] --> addr_r32["addr_r32"]
   ip_shaded_ref_r32["ip_shaded_ref_r32"] --> addr_r32["addr_r32"]
@@ -622,6 +826,7 @@ function addr_r64(a) result(p)
 flowchart TD
   ip_bars_r64["ip_bars_r64"] --> addr_r64["addr_r64"]
   ip_line_r64["ip_line_r64"] --> addr_r64["addr_r64"]
+  ip_line_values_r64["ip_line_values_r64"] --> addr_r64["addr_r64"]
   ip_scatter_r64["ip_scatter_r64"] --> addr_r64["addr_r64"]
   ip_shaded_r64["ip_shaded_r64"] --> addr_r64["addr_r64"]
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> addr_r64["addr_r64"]
@@ -652,6 +857,10 @@ flowchart TD
   ip_bars_r64["ip_bars_r64"] --> spec_c["spec_c"]
   ip_line_r32["ip_line_r32"] --> spec_c["spec_c"]
   ip_line_r64["ip_line_r64"] --> spec_c["spec_c"]
+  ip_line_row_r32["ip_line_row_r32"] --> spec_c["spec_c"]
+  ip_line_row_r64["ip_line_row_r64"] --> spec_c["spec_c"]
+  ip_line_values_r32["ip_line_values_r32"] --> spec_c["spec_c"]
+  ip_line_values_r64["ip_line_values_r64"] --> spec_c["spec_c"]
   ip_scatter_r32["ip_scatter_r32"] --> spec_c["spec_c"]
   ip_scatter_r64["ip_scatter_r64"] --> spec_c["spec_c"]
   ip_shaded_r32["ip_shaded_r32"] --> spec_c["spec_c"]
