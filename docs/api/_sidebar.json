@@ -1,0 +1,32 @@
+[
+  {
+    "text": "src/lib",
+    "collapsed": true,
+    "items": [
+      {
+        "text": "figure",
+        "link": "/api/src/lib/figure"
+      },
+      {
+        "text": "figure_app",
+        "link": "/api/src/lib/figure_app"
+      },
+      {
+        "text": "figure_base",
+        "link": "/api/src/lib/figure_base"
+      },
+      {
+        "text": "figure_c_native",
+        "link": "/api/src/lib/figure_c_native"
+      },
+      {
+        "text": "figure_imgui",
+        "link": "/api/src/lib/figure_imgui"
+      },
+      {
+        "text": "figure_implot",
+        "link": "/api/src/lib/figure_implot"
+      }
+    ]
+  }
+]

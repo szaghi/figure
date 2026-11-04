@@ -1,0 +1,4 @@
+$ ./cb_stat
+init_headless: stat = 2, "display size must be positive"
+init_headless: stat = 1, "figure is already initialized"
+ip_line: stat = 2, "ip_line: x and y have different sizes"

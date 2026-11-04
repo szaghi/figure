@@ -25,6 +25,9 @@ call app%destroy()
 
 **Status:** spike (milestone 1 of [plans/plan.md](plans/plan.md)). API unstable.
 
+**Documentation:** guide, tutorial, cookbook and API reference in [docs/](docs/) (VitePress). Browse it locally with
+`cd docs && npm install && npm run docs:dev`; the site will be published at https://szaghi.github.io/figure.
+
 ## Building
 
 Two layers: the **native layer** (C/C++: Dear ImGui, ImPlot, cimgui, cimplot, SDL3, glue), built by CMake into

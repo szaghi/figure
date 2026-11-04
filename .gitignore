@@ -8,3 +8,7 @@
 /build_native.log
 imgui.ini
 __pycache__/
+# VitePress (docs/examples/build.sh writes into build/docs-examples, ignored above)
+docs/node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/

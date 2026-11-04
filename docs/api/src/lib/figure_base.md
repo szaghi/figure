@@ -1,0 +1,140 @@
+---
+title: figure_base
+---
+
+# figure_base
+
+> figure_base, error handling and string conversion shared by the FIGURE modules.
+
+ Procedures that can fail take an optional `stat`: if present it receives `FIG_OK` or a `FIG_ERR_*` code and
+ `figure_last_error()` gives the message; if absent, a failure prints the message and stops (`error stop`).
+
+**Source**: `src/lib/figure_base.F90`
+
+**Dependencies**
+
+```mermaid
+graph LR
+  figure_base["figure_base"] --> figure_c_native["figure_c_native"]
+  figure_base["figure_base"] --> iso_c_binding["iso_c_binding"]
+  figure_base["figure_base"] --> iso_fortran_env["iso_fortran_env"]
+```
+
+## Contents
+
+- [figure_check](#figure-check)
+- [figure_fail](#figure-fail)
+- [figure_last_error](#figure-last-error)
+- [cstr](#cstr)
+
+## Subroutines
+
+### figure_check
+
+Store `status` in `stat` if present, else stop on failure with the last error message.
+
+```fortran
+subroutine figure_check(status, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `status` | integer(kind=c_int) | in |  | Status from the native layer. |
+| `stat` | integer(kind=int32) | out | optional | Status for the caller. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  figure_fail["figure_fail"] --> figure_check["figure_check"]
+  init["init"] --> figure_check["figure_check"]
+  init_headless["init_headless"] --> figure_check["figure_check"]
+  ip_line["ip_line"] --> figure_check["figure_check"]
+  next_frame["next_frame"] --> figure_check["figure_check"]
+  figure_check["figure_check"] --> figure_last_error["figure_last_error"]
+  style figure_check fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### figure_fail
+
+Report a failure detected on the Fortran side: set the last error message, then act as `figure_check`.
+
+```fortran
+subroutine figure_fail(status, message, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `status` | integer(kind=c_int) | in |  | Failure status (a `FIG_ERR_*` code). |
+| `message` | character(len=*) | in |  | Message for `figure_last_error`. |
+| `stat` | integer(kind=int32) | out | optional | Status for the caller. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_line["ip_line"] --> figure_fail["figure_fail"]
+  figure_fail["figure_fail"] --> fig_set_last_error["fig_set_last_error"]
+  figure_fail["figure_fail"] --> figure_check["figure_check"]
+  style figure_fail fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+## Functions
+
+### figure_last_error
+
+Message of the last failed call.
+
+**Returns**: `character(len=:)`
+
+```fortran
+function figure_last_error() result(msg)
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  figure_check["figure_check"] --> figure_last_error["figure_last_error"]
+  figure_last_error["figure_last_error"] --> fig_last_error["fig_last_error"]
+  style figure_last_error fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### cstr
+
+`s` NUL-terminated, for cimgui/cimplot (trailing blanks kept: labels are taken verbatim).
+
+**Attributes**: pure
+
+**Returns**: `character(kind=c_char, len=:)`
+
+```fortran
+function cstr(s) result(c)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `s` | character(len=*) | in |  | Fortran string. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin["ig_begin"] --> cstr["cstr"]
+  ig_button["ig_button"] --> cstr["cstr"]
+  ig_checkbox["ig_checkbox"] --> cstr["cstr"]
+  ig_input["ig_input"] --> cstr["cstr"]
+  ig_slider_i32["ig_slider_i32"] --> cstr["cstr"]
+  ig_slider_r32["ig_slider_r32"] --> cstr["cstr"]
+  ig_slider_r64["ig_slider_r64"] --> cstr["cstr"]
+  ig_text["ig_text"] --> cstr["cstr"]
+  ip_begin_plot["ip_begin_plot"] --> cstr["cstr"]
+  ip_setup_axes["ip_setup_axes"] --> cstr["cstr"]
+  style cstr fill:#3e63dd,stroke:#99b,stroke-width:2px
+```

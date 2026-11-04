@@ -1,0 +1,4 @@
+$ ./cb_error_stop
+FIGURE error: figure is already initialized
+ERROR STOP 1
+[exit status 1]

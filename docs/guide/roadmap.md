@@ -1,0 +1,52 @@
+---
+title: Roadmap
+---
+
+# Roadmap
+
+The milestones of `plans/plan.md`. Only M1 is done; everything after it is planned, not available.
+
+## M1: build chain and first widgets — done on Linux
+
+- Native layer: CMake, pinned sources, static `libfigure_native.a` and `libSDL3.a`.
+- Fortran: `figure_app` (loop, lazy redraw), `figure_imgui` (windows, button, check box, sliders for `int32`,
+  `real32`, `real64`, numeric input, text, same line, separator, demo window, window placement, item rectangle),
+  `figure_implot` (plot, axes, line).
+- Headless test (button click, check box toggle, plot) passing with gfortran 16.2 (release and `-fcheck=all`),
+  nvfortran 26.9 and fpm.
+- FoBiS modes (tests, examples, static library; gnu and nvfortran) and `fpm.toml` in sync.
+- `figure_hello` running in a window on Linux (WSLg), X11 and Wayland.
+- Idle cost of lazy redraw measured and explained ([Frame loop](frame-loop#what-idle-costs)); default `max_wait`
+  kept at 0.5 s.
+
+## M2: generated raw layer — planned
+
+- Generate the `bind(C)` interfaces and the enumeration parameters from cimgui's and cimplot's metadata
+  (`definitions.json`, `structs_and_enums.json`); classify each function as direct or glue. Enumeration values
+  generated, never copied by hand.
+- Generator output committed and checked for drift in CI.
+
+## M3: images and speed — planned
+
+- Textures from contiguous `integer(c_int8_t)` RGBA arrays, uploaded without intermediate copies.
+- ImPlot heatmaps from Fortran 2D arrays (column-major aware).
+- Plot items generic over `real32` and `real64`, so `real32` data is never copied into a `real64` temporary.
+- Strided series (matrix rows) passed as base address and stride, without the compiler's temporary copy.
+- A Mandelbrot explorer and a live plot as examples; redraw benchmark at 4K.
+
+## M4: platforms and CI — planned
+
+- GitHub Actions: Linux (gfortran, nvfortran headless), macOS (gfortran and clang), Windows (MSYS2 MinGW gfortran).
+- `check_sync.py` and both builds (FoBiS, fpm) in CI.
+
+## M5: remote and web — planned
+
+- Remote UI: Dear ImGui draw lists streamed over WebSocket to a browser, the Fortran program staying native (OpenMP,
+  MPI, GPU), for example a GUI for a cluster run.
+- Experiment: the whole application compiled to WebAssembly with a patched flang and Emscripten SDL3 (no OpenMP, no
+  MPI there).
+
+## Open decisions
+
+- Docking: needs a cimgui generated from the docking branch ([Known issues](known-issues#docking-is-disabled)).
+- Version and licence: VERSION is the placeholder `0.0.0`, the licence is undecided.
