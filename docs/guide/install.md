@@ -92,9 +92,13 @@ a stale binary of the other compiler can still be there.
 
 ## The Fortran library with fpm
 
-`scripts/fpm.sh` runs fpm with the native layer on the link line: `-L lib` and the platform libraries of the fobos
-varset of the running platform (`python3 scripts/check_sync.py --link-flags`); `fpm.toml` itself links only
-`figure_native` and `SDL3`. It stops if `lib/libfigure_native.a` is missing.
+`scripts/fpm.sh` runs fpm with the native layer on the link line. `fpm.toml` links `figure_native`, `SDL3` and
+`figure_platform`, after the program's objects; `fpm.sh` first runs `python3 scripts/check_sync.py --fpm-link`, which
+makes `lib/libfigure_platform.a` carry the platform libraries of the fobos varset. With GNU ld (Linux, Windows) it is a
+one-line linker script, `INPUT(-lstdc++ ...)`: fpm passes `--link-flag` before the objects, where archives (the C++
+runtime and Windows' import libraries) would resolve nothing. On macOS, where the linker does not depend on order, it
+is an empty archive from the native build and the libraries and frameworks go in `--link-flag`. `fpm.sh` stops if
+`lib/libfigure_native.a` is missing.
 
 ```bash
 scripts/fpm.sh test

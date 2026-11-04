@@ -28,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PROGRAM_RE = re.compile(r"^\s*program\s+\w+", re.IGNORECASE | re.MULTILINE)
 COMMON_LIBS = ["figure_native", "SDL3"]
+FPM_LINK = [*COMMON_LIBS, "figure_platform"]  # fpm.toml [build] link: see fpm_link
 PLATFORMS = ("linux", "macos", "windows")
 
 
@@ -172,9 +173,50 @@ def link_flags(platform: str) -> int:
         print(f"check_sync: fobos has no [varset:{platform}]", file=sys.stderr)
         return 1
     v = varsets[platform]
-    # the whole line, figure_native and SDL3 first: fpm places --link-flag before its own [build] link libraries,
-    # and GNU ld resolves static archives (Windows import libraries too) left to right
     print(" ".join([f"-l{lib}" for lib in v["libs"]] + v["lflags"]))
+    return 0
+
+
+def fpm_link(platform: str) -> int:
+    """Prepare fpm's link: write ``lib/libfigure_platform.a`` where needed and print the ``--link-flag`` value.
+
+    fpm places ``--link-flag`` before the object files and its ``[build] link`` libraries after them; GNU ld scans
+    each archive once, left to right, so archives given before the objects (the C++ runtime and Windows' import
+    libraries) resolve nothing. fpm.toml therefore links ``figure_platform`` last, and with GNU ld (Linux, Windows)
+    ``lib/libfigure_platform.a`` is an implicit linker script, ``INPUT(-l...)``, adding the platform's libraries
+    there. ld64 (macOS) reads no linker scripts but does not depend on order: there the native build installs a
+    real ``libfigure_platform.a`` and the platform's libraries and frameworks go in ``--link-flag``.
+
+    Parameters
+    ----------
+    platform : str
+        Platform name of the varset.
+
+    Returns
+    -------
+    int
+        Exit status: 0, or 1 if the fobos file has no varset for the platform.
+    """
+    varsets = fobos_varsets(ROOT / "fobos")
+    if platform not in varsets:
+        print(f"check_sync: fobos has no [varset:{platform}]", file=sys.stderr)
+        return 1
+    v = varsets[platform]
+    extra = [f"-l{lib}" for lib in v["libs"] if lib not in COMMON_LIBS]
+    if platform == "macos":
+        print(" ".join(extra + v["lflags"]))
+        return 0
+    script = ROOT / "lib" / "libfigure_platform.a"
+    text = (
+        f"/* GNU ld implicit linker script, written by scripts/check_sync.py from fobos [varset:{platform}] */\n"
+        f"INPUT({' '.join(extra)})\n"
+    )
+    if (
+        not script.exists()
+        or script.read_text(encoding="utf-8", errors="replace") != text
+    ):
+        script.write_text(text, encoding="utf-8")
+    print(" ".join(v["lflags"]))
     return 0
 
 
@@ -190,8 +232,8 @@ def check() -> int:
     manifest = tomllib.loads((ROOT / "fpm.toml").read_text(encoding="utf-8"))
 
     fpm_libs = manifest.get("build", {}).get("link", [])
-    if fpm_libs != COMMON_LIBS:
-        errors.append(f"fpm.toml [build] link must be {COMMON_LIBS}, it is {fpm_libs}")
+    if fpm_libs != FPM_LINK:
+        errors.append(f"fpm.toml [build] link must be {FPM_LINK}, it is {fpm_libs}")
     varsets = fobos_varsets(ROOT / "fobos")
     for platform in PLATFORMS:
         if platform not in varsets:
@@ -259,9 +301,16 @@ def main(argv: list[str]) -> int:
         nargs="?",
         const="",
         metavar="PLATFORM",
-        help="print the extra linker flags of a platform varset (default: the current platform)",
+        help="print the native link line of a platform varset (default: the current platform)",
+    )
+    parser.add_argument(
+        "--fpm-link",
+        action="store_true",
+        help="write lib/libfigure_platform.a if needed and print the --link-flag value for fpm (current platform)",
     )
     args = parser.parse_args(argv)
+    if args.fpm_link:
+        return fpm_link(current_platform())
     if args.link_flags is not None:
         return link_flags(args.link_flags or current_platform())
     return check()

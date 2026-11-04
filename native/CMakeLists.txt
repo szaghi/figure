@@ -99,6 +99,13 @@ if(APPLE)
       message(FATAL_ERROR "clang runtime library not found: ${_clang_rt} (build the native layer with Apple clang)")
    endif()
    install(FILES "${_clang_rt}" DESTINATION lib RENAME libfigure_clang_rt.a)
+   # fpm.toml links figure_platform last. With GNU ld (Linux, Windows) scripts/check_sync.py --fpm-link writes it as
+   # a linker script adding the platform libraries after fpm's objects; ld64 reads no linker scripts and does not
+   # depend on link order, so on macOS it is a real (near-empty) archive and the libraries go in fpm's --link-flag.
+   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/figure_platform.c"
+        "/* placeholder of fpm's figure_platform on macOS: see native/CMakeLists.txt */\nint figure_platform_placeholder;\n")
+   add_library(figure_platform STATIC "${CMAKE_CURRENT_BINARY_DIR}/figure_platform.c")
+   install(TARGETS figure_platform ARCHIVE DESTINATION lib)
 endif()
 # The static SDL3 archive, next to ours, so the Fortran link line is just -lfigure_native -lSDL3.
 install(FILES $<TARGET_FILE:SDL3::SDL3-static> DESTINATION lib)
