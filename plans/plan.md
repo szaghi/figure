@@ -65,6 +65,11 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
 - **nvfortran 26.9 ICE:** a local variable named `size` in one procedure plus the intrinsic `size()` in another
   procedure of the same module: "ILM file: can't find intrinsic size", internal compiler error. Legal Fortran;
   avoided by naming the locals `extent`. Worth a reduced reproducer to NVIDIA.
+- **Name check (2026-11-04):** no Fortran project named "figure" on GitHub (`gh search repos`), in the
+  fortran-lang.org package index (212 entries) or the legacy fpm-registry index (42); no Dear ImGui binding for
+  Fortran found at all. `szaghi/figure` is the owner's own (private, empty, created 2026-11-04). Near names:
+  `lazy-fortran/fortplot`, whose public procedure `figure(...)` would clash with `use figure` in the same scope
+  (rename on import); `AnonMiraj/fig` (vector graphics). The new fpm registry API was down: unchecked.
 - **VERSION** is a placeholder (0.0.0) and the **licence** is undecided (fpm.toml says TBD): both are the author's call.
 - SDL3 enables Wayland and DBus only when their development packages are present at configure time
   (`libxkbcommon-dev`, `libegl-dev`, `libdbus-1-dev`; see *Platform setup*): without them it silently builds X11
