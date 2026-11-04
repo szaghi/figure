@@ -125,7 +125,7 @@ export default withMermaid({
     outline: [2, 3],
 
     footer: {
-      message: 'Licence to be decided.',
+      message: 'Released under the MIT licence.',
       copyright: 'Copyright © 2026 Stefano Zaghi',
     },
   },

@@ -24,7 +24,7 @@ respect to retained-mode toolkits.
 ## Status
 
 FIGURE is approaching its first release, v0.1.0: milestones M1 to M5 of the [roadmap](roadmap) are done, except the
-WebAssembly experiment. The API is small and can still change; the licence is not decided yet.
+WebAssembly experiment. The API is small and can still change.
 
 What exists today:
 
@@ -52,6 +52,14 @@ wrapper (the rest are reachable through the raw bindings). See [Known issues](kn
 2. Follow the [tutorial](/manual/): from a first window to a headless test.
 3. Look up a task in the [cookbook](/manual/cookbook), a procedure in the [reference](features) or the
    [API](/api/).
+
+## Licence
+
+FIGURE is released under the [MIT licence](https://github.com/szaghi/figure/blob/main/LICENSE.mit.md). It compiles
+Dear ImGui, ImPlot, cimgui and cimplot (MIT) and SDL3 (zlib) into its native libraries;
+[THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md) lists them, with what a program built
+with FIGURE must carry when it is distributed (the MIT notices; the native build installs them under
+`share/licenses/`).
 
 ## Authors
 

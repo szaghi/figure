@@ -78,7 +78,7 @@ pictures it updates, and a log of the work. This page summarises it, after the m
 
 The scope of the first release, step by step in [issue #1](https://github.com/szaghi/figure/issues/1):
 
-- **Licence:** MIT; the third-party notices.
+- **Licence:** MIT; the third-party notices (step S0).
 - **Docking:** the docking branch of Dear ImGui; windows dock into one another as tabs and splits.
 - **Themes, fully customisable:**
   - every colour and size of Dear ImGui and ImPlot from Fortran;

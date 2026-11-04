@@ -2,6 +2,8 @@
 
 **F**ortran **I**mmediate-mode **G**UI for **U**ser interfaces, **R**endering and **E**xploration.
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#copyrights)
+
 Fortran bindings to [Dear ImGui](https://github.com/ocornut/imgui) and [ImPlot](https://github.com/epezent/implot)
 (through the C APIs of [cimgui](https://github.com/cimgui/cimgui)/[cimplot](https://github.com/cimgui/cimplot)), on
 [SDL3](https://github.com/libsdl-org/SDL) + OpenGL 3. Immediate mode: no widget objects, handles or callbacks; the UI
@@ -57,3 +59,9 @@ The headless test needs no display and no GPU.
 pick the GPU and renders in software (llvmpipe): FIGURE works, but every frame costs CPU. Check with
 `glxinfo -B`: the renderer must be `D3D12 (<your GPU>)` with `Accelerated: yes`. FIGURE does not set it itself:
 it is a property of the machine, and wrong outside WSL.
+
+## Copyrights
+
+FIGURE is released under the [MIT licence](LICENSE.mit.md). Its native layer compiles Dear ImGui, ImPlot, cimgui and
+cimplot (MIT) and SDL3 (zlib): see [THIRD_PARTY.md](THIRD_PARTY.md) for what a program built with FIGURE must carry
+when it is distributed.

@@ -76,7 +76,7 @@ are the program's own back buffer, captured with `FIGURE_CAPTURE` and driven by 
 
 FIGURE is approaching its first release, v0.1.0. The milestones M1 to M5 of the [roadmap](./guide/roadmap) are done
 except the WebAssembly experiment: widgets, plots, heatmaps and textures, remote mode, CI on Linux, macOS and Windows
-with gfortran and on Linux with nvfortran. The API is small and can still change. The licence is not decided yet.
+with gfortran and on Linux with nvfortran. The API is small and can still change. FIGURE is released under the MIT licence.
 
 ## Quick start
 

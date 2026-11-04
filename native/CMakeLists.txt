@@ -121,3 +121,10 @@ endif()
 # The static SDL3 archive, next to ours, so the Fortran link line is just -lfigure_native -lSDL3.
 install(FILES $<TARGET_FILE:SDL3::SDL3-static> DESTINATION lib)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/figure_native.h DESTINATION include)
+# The licences of the code compiled into the libraries (MIT notices must travel with copies; see THIRD_PARTY.md).
+# SDL installs its own, share/licenses/SDL3/LICENSE.txt.
+install(FILES "${cimgui_SOURCE_DIR}/imgui/LICENSE.txt" DESTINATION share/licenses/imgui)
+install(FILES "${cimplot_SOURCE_DIR}/implot/LICENSE" DESTINATION share/licenses/implot)
+install(FILES "${cimgui_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimgui)
+install(FILES "${cimplot_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimplot)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.mit.md" DESTINATION share/licenses/figure)

@@ -50,7 +50,9 @@ scripts/build_native.sh
 
 `scripts/build_native.sh [--prefix DIR] [--build-type Release|Debug] [--clean] [-- EXTRA_CMAKE_ARGS...]` configures
 `native/CMakeLists.txt` in `build/native`, builds it and installs the libraries into `lib/` (and `figure_native.h`
-into `include/`). The C and C++ compilers are CMake's defaults; choose them with `CC` and `CXX`:
+into `include/`, and the licences of the code compiled into the libraries into `share/licenses/`: see
+[THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)). The C and C++ compilers are CMake's
+defaults; choose them with `CC` and `CXX`:
 
 ```bash
 CC=gcc CXX=g++ scripts/build_native.sh --clean
