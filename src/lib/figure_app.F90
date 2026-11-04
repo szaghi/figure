@@ -27,16 +27,18 @@ public :: app_object
 
 type :: app_object
    !< A FIGURE application (one per program).
-   logical, private :: initialized = .false. !< Contexts exist.
-   logical, private :: in_frame    = .false. !< A frame is open.
+   !<
+   !< The native layer owns the lifecycle state (initialized, frame open) and rejects out-of-order calls with
+   !< `FIG_ERR_STATE`; only `in_frame` is mirrored here, because `next_frame` must know whether to close a frame.
+   logical, private :: in_frame = .false. !< A frame is open.
    contains
-      procedure, pass(self) :: init          !< Open the window.
-      procedure, pass(self) :: init_headless !< Contexts only, no window (tests).
-      procedure, pass(self) :: next_frame    !< Close the current frame, open the next; false on quit.
-      procedure, pass(self) :: set_lazy      !< Lazy redraw on/off, longest sleep.
-      procedure, pass(self) :: request_frames!< Redraw without waiting for input.
-      procedure, pass(self) :: content_scale !< Display content scale.
-      procedure, pass(self) :: destroy       !< Close everything.
+      procedure, pass(self) :: init           !< Open the window.
+      procedure, pass(self) :: init_headless  !< Contexts only, no window (tests).
+      procedure, pass(self) :: next_frame     !< Close the current frame, open the next; false on quit.
+      procedure, pass(self) :: set_lazy       !< Lazy redraw on/off, longest sleep.
+      procedure, pass(self) :: request_frames !< Redraw without waiting for input.
+      procedure, pass(self) :: content_scale  !< Display content scale.
+      procedure, pass(self) :: destroy        !< Close everything.
 endtype app_object
 
 contains
@@ -54,7 +56,6 @@ contains
    v = 1_c_int
    if (present(vsync)) v = merge(1_c_int, 0_c_int, vsync)
    status = fig_init(title, len(title, c_int), int(width, c_int), int(height, c_int), v)
-   self%initialized = status == FIG_OK
    call figure_check(status, stat)
    endsubroutine init
 
@@ -67,7 +68,6 @@ contains
    integer(c_int)                          :: status !< Native status.
 
    status = fig_init_headless(int(width, c_int), int(height, c_int))
-   self%initialized = status == FIG_OK
    call figure_check(status, stat)
    endsubroutine init_headless
 
@@ -127,7 +127,6 @@ contains
    class(app_object), intent(inout) :: self !< Application.
 
    call fig_shutdown()
-   self%initialized = .false.
    self%in_frame = .false.
    endsubroutine destroy
 endmodule figure_app

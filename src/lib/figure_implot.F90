@@ -22,7 +22,7 @@ contains
    logical                                :: visible !< Plot visible.
    type(im_vec2)                          :: extent   !< Size (named so: a local `size` crashes nvfortran 26.9, see plans/plan.md).
 
-   extent = im_vec2(-1._c_float, 0._c_float)
+   extent = im_vec2(-1.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
    visible = logical(ImPlot_BeginPlot(cstr(title), extent, 0_c_int))

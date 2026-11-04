@@ -37,13 +37,13 @@ integer(c_int), parameter :: IMGUI_COND_FIRST_USE_EVER = 4_c_int !< ImGuiCond_Fi
 
 type, bind(C) :: im_vec2
    !< ImVec2_c: a 2D vector of floats, passed by value.
-   real(c_float) :: x = 0._c_float !< Abscissa.
-   real(c_float) :: y = 0._c_float !< Ordinate.
+   real(c_float) :: x = 0.0_c_float !< Abscissa.
+   real(c_float) :: y = 0.0_c_float !< Ordinate.
 endtype im_vec2
 
 interface
    ! ---- FIGURE glue ---------------------------------------------------------------------------------------------------
-   integer(c_int) function fig_init(title, title_len, width, height, vsync) bind(C, name='fig_init')
+   function fig_init(title, title_len, width, height, vsync) result(status) bind(C, name='fig_init')
    !< Open the window and create the ImGui/ImPlot contexts.
    import :: c_char, c_int
    implicit none
@@ -52,27 +52,31 @@ interface
    integer(c_int), value              :: width     !< Window width [logical pixels].
    integer(c_int), value              :: height    !< Window height [logical pixels].
    integer(c_int), value              :: vsync     !< 1: synchronize swaps with the display.
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_init
 
-   integer(c_int) function fig_init_headless(width, height) bind(C, name='fig_init_headless')
+   function fig_init_headless(width, height) result(status) bind(C, name='fig_init_headless')
    !< Create the ImGui/ImPlot contexts without a window or GPU (tests).
    import :: c_int
    implicit none
    integer(c_int), value :: width  !< Virtual display width [pixels].
    integer(c_int), value :: height !< Virtual display height [pixels].
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_init_headless
 
-   integer(c_int) function fig_begin_frame(running) bind(C, name='fig_begin_frame')
+   function fig_begin_frame(running) result(status) bind(C, name='fig_begin_frame')
    !< Process events (waiting if lazy) and open a frame; `running` is 0 when the user closed the window.
    import :: c_int
    implicit none
    integer(c_int), intent(out) :: running !< 1 while the application should keep running.
+   integer(c_int)              :: status  !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_begin_frame
 
-   integer(c_int) function fig_end_frame() bind(C, name='fig_end_frame')
+   function fig_end_frame() result(status) bind(C, name='fig_end_frame')
    !< Render the frame and present it.
    import :: c_int
    implicit none
+   integer(c_int) :: status !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_end_frame
 
    subroutine fig_shutdown() bind(C, name='fig_shutdown')
@@ -95,17 +99,19 @@ interface
    integer(c_int), value :: n !< Frames.
    endsubroutine fig_request_frames
 
-   real(c_double) function fig_content_scale() bind(C, name='fig_content_scale')
+   function fig_content_scale() result(scale) bind(C, name='fig_content_scale')
    !< Display content scale (1 on standard displays, 2 on most high-DPI ones).
    import :: c_double
    implicit none
+   real(c_double) :: scale !< Content scale.
    endfunction fig_content_scale
 
-   type(c_ptr) function fig_last_error(len) bind(C, name='fig_last_error')
+   function fig_last_error(len) result(msg) bind(C, name='fig_last_error')
    !< Message of the last failure (borrowed: copy it).
    import :: c_int, c_ptr
    implicit none
    integer(c_int), intent(out) :: len !< Message length [bytes].
+   type(c_ptr)                 :: msg !< First byte of the message (borrowed).
    endfunction fig_last_error
 
    subroutine fig_input_mouse(x, y, left_down) bind(C, name='fig_input_mouse')
@@ -117,7 +123,7 @@ interface
    integer(c_int), value :: left_down !< 1: left button pressed.
    endsubroutine fig_input_mouse
 
-   integer(c_int) function fig_plot_line(label, label_len, xs, ys, n) bind(C, name='fig_plot_line')
+   function fig_plot_line(label, label_len, xs, ys, n) result(status) bind(C, name='fig_plot_line')
    !< ImPlot::PlotLine with default spec.
    import :: c_char, c_double, c_int
    implicit none
@@ -126,16 +132,18 @@ interface
    real(c_double), intent(in)         :: xs(*)     !< Abscissae.
    real(c_double), intent(in)         :: ys(*)     !< Ordinates.
    integer(c_int), value              :: n         !< Number of points.
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_plot_line
 
    ! ---- cimgui -------------------------------------------------------------------------------------------------------
-   logical(c_bool) function igBegin(name, p_open, flags) bind(C, name='igBegin')
+   function igBegin(name, p_open, flags) result(visible) bind(C, name='igBegin')
    !< ImGui::Begin.
    import :: c_bool, c_char, c_int, c_ptr
    implicit none
    character(kind=c_char), intent(in) :: name(*) !< Window name (NUL-terminated).
    type(c_ptr), value                 :: p_open  !< bool* (c_null_ptr: no close button).
    integer(c_int), value              :: flags   !< ImGuiWindowFlags.
+   logical(c_bool)                    :: visible !< False when collapsed or clipped.
    endfunction igBegin
 
    subroutine igEnd() bind(C, name='igEnd')
@@ -143,23 +151,25 @@ interface
    implicit none
    endsubroutine igEnd
 
-   logical(c_bool) function igButton(label, size) bind(C, name='igButton')
+   function igButton(label, size) result(pressed) bind(C, name='igButton')
    !< ImGui::Button.
    import :: c_bool, c_char, im_vec2
    implicit none
    character(kind=c_char), intent(in) :: label(*) !< Label (NUL-terminated).
    type(im_vec2), value               :: size     !< Size (0, 0: fit the label).
+   logical(c_bool)                    :: pressed  !< Clicked this frame.
    endfunction igButton
 
-   logical(c_bool) function igCheckbox(label, v) bind(C, name='igCheckbox')
+   function igCheckbox(label, v) result(changed) bind(C, name='igCheckbox')
    !< ImGui::Checkbox.
    import :: c_bool, c_char
    implicit none
    character(kind=c_char), intent(in) :: label(*) !< Label (NUL-terminated).
    logical(c_bool), intent(inout)     :: v        !< Value.
+   logical(c_bool)                    :: changed  !< Toggled this frame.
    endfunction igCheckbox
 
-   logical(c_bool) function igSliderScalar(label, data_type, p_data, p_min, p_max, format, flags) &
+   function igSliderScalar(label, data_type, p_data, p_min, p_max, format, flags) result(changed) &
       bind(C, name='igSliderScalar')
    !< ImGui::SliderScalar.
    import :: c_bool, c_char, c_int, c_ptr
@@ -171,9 +181,10 @@ interface
    type(c_ptr), value                 :: p_max     !< Maximum.
    type(c_ptr), value                 :: format    !< printf format (c_null_ptr: default).
    integer(c_int), value              :: flags     !< ImGuiSliderFlags.
+   logical(c_bool)                    :: changed   !< Changed this frame.
    endfunction igSliderScalar
 
-   logical(c_bool) function igInputDouble(label, v, step, step_fast, format, flags) bind(C, name='igInputDouble')
+   function igInputDouble(label, v, step, step_fast, format, flags) result(changed) bind(C, name='igInputDouble')
    !< ImGui::InputDouble.
    import :: c_bool, c_char, c_double, c_int
    implicit none
@@ -183,14 +194,15 @@ interface
    real(c_double), value              :: step_fast !< Fast step.
    character(kind=c_char), intent(in) :: format(*) !< printf format (NUL-terminated).
    integer(c_int), value              :: flags     !< ImGuiInputTextFlags.
+   logical(c_bool)                    :: changed   !< Changed this frame.
    endfunction igInputDouble
 
    subroutine igTextUnformatted(text, text_end) bind(C, name='igTextUnformatted')
-   !< ImGui::TextUnformatted: no printf, no NUL needed when `text_end` is given.
-   import :: c_ptr
+   !< ImGui::TextUnformatted: no printf formatting.
+   import :: c_char, c_ptr
    implicit none
-   type(c_ptr), value :: text     !< First byte.
-   type(c_ptr), value :: text_end !< One past the last byte.
+   character(kind=c_char), intent(in) :: text(*)  !< Text (NUL-terminated when `text_end` is null).
+   type(c_ptr), value                 :: text_end !< One past the last byte (c_null_ptr: up to the NUL).
    endsubroutine igTextUnformatted
 
    subroutine igSameLine(offset_from_start_x, spacing) bind(C, name='igSameLine')
@@ -230,26 +242,29 @@ interface
    integer(c_int), value :: cond !< ImGuiCond.
    endsubroutine igSetNextWindowSize
 
-   type(im_vec2) function igGetItemRectMin() bind(C, name='igGetItemRectMin')
+   function igGetItemRectMin() result(corner) bind(C, name='igGetItemRectMin')
    !< ImGui::GetItemRectMin: top-left of the last item [screen pixels].
    import :: im_vec2
    implicit none
+   type(im_vec2) :: corner !< Top-left corner [screen pixels].
    endfunction igGetItemRectMin
 
-   type(im_vec2) function igGetItemRectMax() bind(C, name='igGetItemRectMax')
+   function igGetItemRectMax() result(corner) bind(C, name='igGetItemRectMax')
    !< ImGui::GetItemRectMax: bottom-right of the last item [screen pixels].
    import :: im_vec2
    implicit none
+   type(im_vec2) :: corner !< Bottom-right corner [screen pixels].
    endfunction igGetItemRectMax
 
    ! ---- cimplot ------------------------------------------------------------------------------------------------------
-   logical(c_bool) function ImPlot_BeginPlot(title_id, size, flags) bind(C, name='ImPlot_BeginPlot')
+   function ImPlot_BeginPlot(title_id, size, flags) result(visible) bind(C, name='ImPlot_BeginPlot')
    !< ImPlot::BeginPlot.
    import :: c_bool, c_char, c_int, im_vec2
    implicit none
    character(kind=c_char), intent(in) :: title_id(*) !< Title (NUL-terminated).
    type(im_vec2), value               :: size        !< Size (-1, 0: full width, default height).
    integer(c_int), value              :: flags       !< ImPlotFlags.
+   logical(c_bool)                    :: visible     !< Plot visible.
    endfunction ImPlot_BeginPlot
 
    subroutine ImPlot_EndPlot() bind(C, name='ImPlot_EndPlot')

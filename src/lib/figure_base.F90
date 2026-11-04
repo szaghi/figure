@@ -25,7 +25,7 @@ contains
    allocate(character(len=max(n, 0_c_int)) :: msg)
    if (n <= 0_c_int .or. .not. c_associated(p)) return
    call c_f_pointer(p, buf, [n])
-   do i = 1_int32, n
+   do i = 1_int32, int(n, int32)
       msg(i:i) = buf(i)
    enddo
    endfunction figure_last_error
@@ -36,7 +36,7 @@ contains
    integer(int32), intent(out), optional :: stat   !< Status for the caller.
 
    if (present(stat)) then
-      stat = status
+      stat = int(status, int32)
    elseif (status /= FIG_OK) then
       write(error_unit, '(A)') 'FIGURE error: '//figure_last_error()
       error stop 1

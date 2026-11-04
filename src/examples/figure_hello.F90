@@ -20,13 +20,13 @@ logical                   :: demo           !< Show the Dear ImGui demo.
 character(len=64)         :: line           !< Text buffer.
 integer(int32)            :: i              !< Counter.
 
-frequency = 1._real64
-amplitude = 1._real64
-phase = 0._real64
+frequency = 1.0_real64
+amplitude = 1.0_real64
+phase = 0.0_real64
 clicks = 0_int32
 animate = .false.
 demo = .false.
-x = [(10._real64 * real(i - 1, real64) / real(N - 1, real64), i = 1, N)]
+x = [(10.0_real64 * real(i - 1, real64) / real(N - 1, real64), i = 1, N)]
 
 call app%init('FIGURE: hello', 1100_int32, 700_int32)
 do while (app%next_frame())
@@ -36,19 +36,19 @@ do while (app%next_frame())
    endif
    y = amplitude * sin(frequency * x + phase)
 
-   call ig_set_next_window(20._real64, 20._real64, 1040._real64, 640._real64)
+   call ig_set_next_window(20.0_real64, 20.0_real64, 1040.0_real64, 640.0_real64)
    if (ig_begin('Hello, FIGURE')) then
       if (ig_button('Click me')) clicks = clicks + 1_int32
       call ig_same_line()
       write(line, '(A,I0)') 'clicks: ', clicks
       call ig_text(trim(line))
-      if (ig_slider('frequency', frequency, 0.1_real64, 5._real64)) continue
+      if (ig_slider('frequency', frequency, 0.1_real64, 5.0_real64)) continue
       if (ig_input('amplitude', amplitude, step=0.1_real64)) continue
       if (ig_checkbox('animate', animate)) continue
       call ig_same_line()
       if (ig_checkbox('Dear ImGui demo', demo)) continue
       call ig_separator()
-      if (ip_begin_plot('Wave', height=-1._real64)) then
+      if (ip_begin_plot('Wave', height=-1.0_real64)) then
          call ip_setup_axes('x', 'y')
          call ip_line('a sin(f x + p)', x, y)
          call ip_end_plot()

@@ -6,7 +6,7 @@ module figure_imgui
 !< frame it is clicked, `ig_checkbox`/`ig_slider` are true when they changed the value). Values are ordinary Fortran
 !< variables, updated in place: no handles, no callbacks, no `target` requirements (the C `bool*` of a checkbox is a
 !< local copy, written back).
-use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
+use, intrinsic :: iso_c_binding, only : c_bool, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_base, only : cstr
 use figure_c_native, only : IMGUI_COND_ALWAYS, IMGUI_COND_FIRST_USE_EVER, IMGUI_DATATYPE_DOUBLE, IMGUI_DATATYPE_FLOAT, &
@@ -60,7 +60,7 @@ contains
    if (present(always)) then
       if (always) cond = IMGUI_COND_ALWAYS
    endif
-   call igSetNextWindowPos(im_vec2(real(x, c_float), real(y, c_float)), cond, im_vec2(0._c_float, 0._c_float))
+   call igSetNextWindowPos(im_vec2(real(x, c_float), real(y, c_float)), cond, im_vec2(0.0_c_float, 0.0_c_float))
    if (present(width) .and. present(height)) &
       call igSetNextWindowSize(im_vec2(real(width, c_float), real(height, c_float)), cond)
    endsubroutine ig_set_next_window
@@ -73,7 +73,7 @@ contains
    logical                                :: pressed !< Clicked this frame.
    type(im_vec2)                          :: extent   !< Size (named so: a local `size` crashes nvfortran 26.9, see plans/plan.md).
 
-   extent = im_vec2(0._c_float, 0._c_float)
+   extent = im_vec2(0.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
    pressed = logical(igButton(cstr(label), extent))
@@ -98,9 +98,9 @@ contains
    integer(int32),   intent(in)    :: vmin    !< Minimum.
    integer(int32),   intent(in)    :: vmax    !< Maximum.
    logical                         :: changed !< Changed this frame.
-   integer(c_int), target          :: v       !< C copies.
-   integer(c_int), target          :: lo      !< C copies.
-   integer(c_int), target          :: hi      !< C copies.
+   integer(c_int), target          :: v       !< C copy of `value`.
+   integer(c_int), target          :: lo      !< C copy of `vmin`.
+   integer(c_int), target          :: hi      !< C copy of `vmax`.
 
    v = int(value, c_int)
    lo = int(vmin, c_int)
@@ -116,9 +116,9 @@ contains
    real(real32),     intent(in)    :: vmin    !< Minimum.
    real(real32),     intent(in)    :: vmax    !< Maximum.
    logical                         :: changed !< Changed this frame.
-   real(c_float), target           :: v       !< C copies.
-   real(c_float), target           :: lo      !< C copies.
-   real(c_float), target           :: hi      !< C copies.
+   real(c_float), target           :: v       !< C copy of `value`.
+   real(c_float), target           :: lo      !< C copy of `vmin`.
+   real(c_float), target           :: hi      !< C copy of `vmax`.
 
    v = real(value, c_float)
    lo = real(vmin, c_float)
@@ -135,9 +135,9 @@ contains
    real(real64),     intent(in)    :: vmin    !< Minimum.
    real(real64),     intent(in)    :: vmax    !< Maximum.
    logical                         :: changed !< Changed this frame.
-   real(c_double), target          :: v       !< C copies.
-   real(c_double), target          :: lo      !< C copies.
-   real(c_double), target          :: hi      !< C copies.
+   real(c_double), target          :: v       !< C copy of `value`.
+   real(c_double), target          :: lo      !< C copy of `vmin`.
+   real(c_double), target          :: hi      !< C copy of `vmax`.
 
    v = real(value, c_double)
    lo = real(vmin, c_double)
@@ -158,28 +158,26 @@ contains
    real(c_double)                         :: s       !< Step.
 
    v = real(value, c_double)
-   s = 0._c_double
+   s = 0.0_c_double
    if (present(step)) s = real(step, c_double)
    if (present(format)) then
-      changed = logical(igInputDouble(cstr(label), v, s, 10._c_double * s, cstr(format), 0_c_int))
+      changed = logical(igInputDouble(cstr(label), v, s, 10.0_c_double * s, cstr(format), 0_c_int))
    else
-      changed = logical(igInputDouble(cstr(label), v, s, 10._c_double * s, cstr('%.6g'), 0_c_int))
+      changed = logical(igInputDouble(cstr(label), v, s, 10.0_c_double * s, cstr('%.6g'), 0_c_int))
    endif
    value = real(v, real64)
    endfunction ig_input
 
    subroutine ig_text(text)
    !< Plain text (no formatting: compose it with Fortran internal writes).
-   character(len=*), intent(in)                       :: text !< Text.
-   character(kind=c_char, len=:), allocatable, target :: c    !< NUL-terminated copy.
+   character(len=*), intent(in) :: text !< Text.
 
-   c = cstr(text)
-   call igTextUnformatted(c_loc(c), c_null_ptr)
+   call igTextUnformatted(cstr(text), c_null_ptr)
    endsubroutine ig_text
 
    subroutine ig_same_line()
    !< Put the next item on the same line as the previous one.
-   call igSameLine(0._c_float, -1._c_float)
+   call igSameLine(0.0_c_float, -1.0_c_float)
    endsubroutine ig_same_line
 
    subroutine ig_separator()

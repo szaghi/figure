@@ -5,41 +5,49 @@ program figure_test_headless
 !< A button is clicked by queuing mouse states frame by frame (hover, press, release), exactly as real input arrives;
 !< a check box is toggled the same way; a plot is drawn from Fortran arrays. Needs no display, so it runs in CI as is.
 use, intrinsic :: iso_c_binding, only : c_float, c_int
-use, intrinsic :: iso_fortran_env, only : int32, real64
+use, intrinsic :: iso_fortran_env, only : error_unit, int32, output_unit, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_end, ig_item_rect, ig_set_next_window, ip_begin_plot, &
                    ip_end_plot, ip_line, ip_setup_axes
 use figure_c_native, only : fig_input_mouse
 
 implicit none
-type(app_object) :: app            !< Application.
-integer(int32)   :: frame          !< Frame counter.
-integer(int32)   :: clicks         !< Button clicks seen.
-integer(int32)   :: toggles        !< Check box toggles seen.
-logical          :: flag           !< Check box value.
-real(real64)     :: bx(2), by(2)   !< Button center, check box center [pixels].
-real(real64)     :: x0, y0, x1, y1 !< Item rectangle.
-real(real64)     :: x(100), y(100) !< Plot data.
-integer(int32)   :: i              !< Counter.
-logical          :: failed         !< Some check failed.
+integer(int32), parameter :: N = 100_int32  !< Plot points.
+type(app_object)          :: app            !< Application.
+integer(int32)            :: frame          !< Frame counter.
+integer(int32)            :: clicks         !< Button clicks seen.
+integer(int32)            :: toggles        !< Check box toggles seen.
+logical                   :: flag           !< Check box value.
+real(real64)              :: bx(2)          !< Button center [pixels].
+real(real64)              :: by(2)          !< Check box center [pixels].
+real(real64)              :: x0             !< Item rectangle, left [pixels].
+real(real64)              :: y0             !< Item rectangle, top [pixels].
+real(real64)              :: x1             !< Item rectangle, right [pixels].
+real(real64)              :: y1             !< Item rectangle, bottom [pixels].
+real(real64)              :: x(N)           !< Plot abscissae.
+real(real64)              :: y(N)           !< Plot ordinates.
+logical                   :: test_passed(3) !< Per-check outcome.
+integer(int32)            :: i              !< Counter.
 
-x = [(real(i, real64) / 10._real64, i = 1, 100)]
+x = [(real(i, real64) / 10.0_real64, i = 1_int32, N)]
 y = sin(x)
 clicks = 0_int32
 toggles = 0_int32
 flag = .false.
-failed = .false.
+bx = 0.0_real64
+by = 0.0_real64
+test_passed = .false.
 call app%init_headless(800_int32, 600_int32)
 
 do frame = 1_int32, 12_int32
-   if (.not. app%next_frame()) error stop 'next_frame returned false in headless mode'
-   call ig_set_next_window(20._real64, 20._real64, 400._real64, 500._real64, always=.true.)
+   if (.not. app%next_frame()) error stop 'figure_test_headless: next_frame returned false in headless mode'
+   call ig_set_next_window(20.0_real64, 20.0_real64, 400.0_real64, 500.0_real64, always=.true.)
    if (ig_begin('Test')) then
       if (ig_button('Hit me')) clicks = clicks + 1_int32
       call ig_item_rect(x0, y0, x1, y1)
       bx = [0.5_real64 * (x0 + x1), 0.5_real64 * (y0 + y1)]
       if (ig_checkbox('Flag', flag)) toggles = toggles + 1_int32
       call ig_item_rect(x0, y0, x1, y1)
-      by = [x0 + 8._real64, 0.5_real64 * (y0 + y1)]
+      by = [x0 + 8.0_real64, 0.5_real64 * (y0 + y1)]
       if (ip_begin_plot('sine')) then
          call ip_setup_axes('x', 'sin(x)')
          call ip_line('sin', x, y)
@@ -65,24 +73,14 @@ do frame = 1_int32, 12_int32
 enddo
 call app%destroy()
 
-call check(clicks == 1_int32, 'button clicked once', clicks)
-call check(toggles == 1_int32, 'check box toggled once', toggles)
-call check(flag, 'check box value is true', merge(1_int32, 0_int32, flag))
-if (failed) error stop 'figure_test_headless: FAILED'
-print '(A)', 'figure_test_headless: PASSED'
+test_passed(1) = clicks == 1_int32   ! button clicked once
+test_passed(2) = toggles == 1_int32  ! check box toggled once
+test_passed(3) = flag                ! check box value is true
 
-contains
-   subroutine check(ok, what, got)
-   !< Report one check.
-   logical,          intent(in) :: ok   !< Check passed.
-   character(len=*), intent(in) :: what !< Description.
-   integer(int32),   intent(in) :: got  !< Observed value.
-
-   if (ok) then
-      print '(A)', '  ok    '//what
-   else
-      print '(A,I0)', '  FAIL  '//what//', got ', got
-      failed = .true.
-   endif
-   endsubroutine check
+write(output_unit, '(A,3L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
+if (.not. all(test_passed)) then
+   write(error_unit, '(A,I0,A,I0,A,L1)') 'clicks: ', clicks, ', toggles: ', toggles, ', flag: ', flag
+   error stop 1
+endif
 endprogram figure_test_headless
