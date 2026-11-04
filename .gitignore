@@ -1,0 +1,10 @@
+# build products (native layer: build/native; FoBiS: exe mod obj lib; fpm: build/gfortran_* etc.)
+build/
+exe/
+mod/
+obj/
+lib/
+include/
+build_native.log
+imgui.ini
+__pycache__/

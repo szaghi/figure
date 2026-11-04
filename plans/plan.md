@@ -1,0 +1,70 @@
+# FIGURE: plan
+
+## Design decisions
+
+| Topic | Decision |
+|---|---|
+| Paradigm | Immediate mode (Dear ImGui + ImPlot). No widget objects, handle tables, lifetime contracts or callbacks: the cost centre of retained-mode bindings (wxFortran, gtk-fortran, qt-fortran) does not exist. |
+| Boundary | C ABI only. cimgui/cimplot functions whose arguments are scalars, pointers or `ImVec2_c` are bound directly (`figure_c_native`); functions taking larger structs by value (e.g. `ImPlotSpec_c`) go through the glue (`native/figure_native.cpp`). |
+| Platform | SDL3 (window, input, clipboard, high DPI, native file dialogs via XDG portals) + OpenGL 3. GL calls of the glue are loaded through SDL: no link dependency on libGL/opengl32. |
+| Builds | Native layer: CMake (`scripts/build_native.sh`), static, pinned versions. Fortran: FoBiS primary, fpm mirrored; neither compiles C++. `scripts/check_sync.py` keeps them aligned. |
+| Redraw | Lazy by default: sleep until input or `max_wait`; `app%request_frames(n)` for animation and live data. |
+| Testing | Headless contexts (no window, no GPU) driven by synthetic input, frame by frame: runs in CI without Xvfb. |
+
+Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93dock` (Dear ImGui v1.93.0), cimplot
+`v1.1` (ImPlot 1.2 WIP, generated against that cimgui), SDL `release-3.4.20`.
+
+## Milestones
+
+### M1: spike: build chain and first widgets: **done on Linux (X11 via WSLg)**
+- [x] Native layer: CMake, pinned FetchContent, static libfigure_native.a + libSDL3.a.
+- [x] Fortran: `figure_app` (loop, lazy redraw), `figure_imgui` (begin/end, button, checkbox, slider i32/r32/r64,
+      input, text, same line, separator, demo window, next-window placement, item rect), `figure_implot` (plot,
+      axes, line).
+- [x] Headless test (button click, checkbox toggle, plot) passes: gfortran 16.2 (release and -fcheck=all),
+      nvfortran 26.9, fpm.
+- [x] FoBiS modes (tests/examples/static, gnu and nvf) and fpm.toml in sync (`fobis rule --ex sync`).
+- [x] `figure_hello` runs in a window on Linux (WSLg, SDL3 X11 driver): widgets and ImPlot render correctly.
+- [~] Idle CPU with lazy redraw: 2.6% of one core (10 s sample, WSLg). Expected ~2 frames/s from the 0.5 s
+      `max_wait` refresh; find where the rest goes (spurious X events resetting `frames_left`? swap cost under
+      WSLg's D3D12 GL?) and decide the default `max_wait`.
+
+### M2: generated raw layer
+- Generate `figure_c_native`-style interfaces and enum parameters from cimgui/cimplot `definitions.json` and
+  `structs_and_enums.json`; classify each function: direct bind(C) or glue. Enum values generated, never hand-copied.
+- Generator output committed and checked for drift in CI.
+
+### M3: images and speed
+- Textures from contiguous `integer(c_int8_t)` RGBA arrays: one `glTexSubImage2D` upload, no intermediate copies.
+- ImPlot heatmaps from Fortran 2D arrays (column-major aware).
+- Port a Mandelbrot explorer and a live plot; benchmark redraw at 4K against wxFortran.
+
+### M4: platforms and CI
+- GitHub Actions: Linux (gfortran, nvfortran headless), macOS (gfortran + clang), Windows (MSYS2 MinGW gfortran).
+- `check_sync.py` and both builds (FoBiS, fpm) in CI.
+
+### M5: remote and web
+- Remote UI: stream ImGui draw lists over WebSocket to a browser (imgui-ws approach), Fortran stays native (OpenMP,
+  MPI, GPU); e.g. a GUI for a cluster run.
+- Experiment: whole app to WebAssembly with a patched flang (flang-wasm) + Emscripten SDL3; no OpenMP/MPI there.
+
+## Open issues
+
+- **Docking:** cimgui tag `1.93dock` is generated from the *non-docking* Dear ImGui (its `cimgui.h` has no
+  `ImGuiConfigFlags_DockingEnable`), so docking is off. Pick a cimgui commit generated from the docking branch, and
+  regenerate cimplot against it if needed.
+- **nvfortran 26.9 ICE:** a local variable named `size` in one procedure plus the intrinsic `size()` in another
+  procedure of the same module: "ILM file: can't find intrinsic size", internal compiler error. Legal Fortran;
+  avoided by naming the locals `extent`. Worth a reduced reproducer to NVIDIA.
+- **VERSION** is a placeholder (0.0.0) and the **licence** is undecided (fpm.toml says TBD): both are the author's call.
+- This machine's SDL3 has X11 only: Wayland and DBus are off because `libxkbcommon-dev`, `libegl-dev` and
+  `libdbus-1-dev` are not installed. Without DBus there are no XDG-portal file dialogs.
+
+## Platform setup
+
+Ubuntu 24.04 (SDL3 build dependencies for X11, Wayland and the DBus file-dialog portal):
+
+```sh
+sudo apt install libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
+                 libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
+```

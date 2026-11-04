@@ -1,0 +1,33 @@
+# fpm manifest, kept in sync with fobos (the primary build): scripts/check_sync.py verifies the link libraries and that
+# every program under src/examples/ and src/tests/ is declared here.
+# Build the native layer first (scripts/build_native.sh), then use scripts/fpm.sh, which adds -L lib/ to fpm.
+name = "figure"
+version = "VERSION"
+license = "TBD"
+author = "Stefano Zaghi"
+maintainer = "stefano.zaghi@cnr.it"
+description = "FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration"
+
+[build]
+auto-executables = false
+auto-examples = false
+auto-tests = false
+link = ["figure_native", "SDL3", "stdc++", "dl", "pthread", "m"]
+
+[fortran]
+implicit-typing = false
+implicit-external = false
+source-form = "free"
+
+[library]
+source-dir = "src/lib"
+
+[[example]]
+name = "figure_hello"
+source-dir = "src/examples"
+main = "figure_hello.F90"
+
+[[test]]
+name = "figure_test_headless"
+source-dir = "src/tests"
+main = "figure_test_headless.F90"

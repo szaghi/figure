@@ -1,0 +1,102 @@
+[project]
+name       = figure
+version    = VERSION
+summary    = FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration
+repository = https://github.com/szaghi/figure
+authors    = Stefano Zaghi
+email      = stefano.zaghi@cnr.it
+
+[modes]
+modes = tests-gnu tests-gnu-debug examples-gnu
+        tests-nvf examples-nvf
+        figure-static-gnu figure-static-nvf
+
+# The native layer (libfigure_native.a + libSDL3.a in lib/) is built by `fobis rule --ex native` (CMake), run
+# automatically before every build (pre_build): a no-op once built. NATIVE_LIBS must equal fpm.toml [build] link
+# (scripts/check_sync.py verifies it).
+[common-variables]
+$NATIVE_LIBS = figure_native SDL3 stdc++ dl pthread m
+$CGNU        = -c -std=f2018 -ffree-line-length-132 -fimplicit-none
+$CGNU_DEBUG  = -Og -g3 -fcheck=all -fbacktrace -Wall -Wimplicit-interface -Wimplicit-procedure -finit-real=nan -ffpe-trap=invalid,zero,overflow
+$CNVF        = -c -Mstandard -Mfree
+
+# main modes
+[tests-gnu]
+template  = template-gnu
+cflags    = $CGNU -O2
+build_dir = exe
+src       = src/lib/ src/tests/
+
+[tests-gnu-debug]
+template  = template-gnu
+cflags    = $CGNU $CGNU_DEBUG
+build_dir = exe
+src       = src/lib/ src/tests/
+
+[examples-gnu]
+template  = template-gnu
+cflags    = $CGNU -O2
+build_dir = exe
+src       = src/lib/ src/examples/
+
+[tests-nvf]
+template  = template-nvf
+cflags    = $CNVF -O2
+build_dir = exe
+src       = src/lib/ src/tests/
+
+[examples-nvf]
+template  = template-nvf
+cflags    = $CNVF -O2
+build_dir = exe
+src       = src/lib/ src/examples/
+
+[figure-static-gnu]
+template  = template-gnu
+cflags    = $CGNU -O2
+build_dir = lib
+src       = src/lib/
+target    = src/lib/figure.F90
+output    = libfigure.a
+mklib     = static
+
+[figure-static-nvf]
+template  = template-nvf
+cflags    = $CNVF -O2
+build_dir = lib
+src       = src/lib/
+target    = src/lib/figure.F90
+output    = libfigure.a
+mklib     = static
+
+# templates
+[template-gnu]
+compiler  = gnu
+mod_dir   = mod
+obj_dir   = obj
+lib_dir   = lib
+ext_libs  = $NATIVE_LIBS
+pre_build = native
+colors    = True
+quiet     = False
+jobs      = 4
+
+[template-nvf]
+compiler  = nvfortran
+mod_dir   = mod
+obj_dir   = obj
+lib_dir   = lib
+ext_libs  = $NATIVE_LIBS
+pre_build = native
+colors    = True
+quiet     = False
+jobs      = 4
+
+# rules
+[rule-native]
+help = Build the native layer (ImGui, ImPlot, cimgui, cimplot, SDL3, glue) into lib/ with CMake
+rule = scripts/build_native.sh
+
+[rule-sync]
+help = Check that fobos and fpm.toml describe the same build
+rule = python3 scripts/check_sync.py

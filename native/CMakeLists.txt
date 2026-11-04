@@ -1,0 +1,83 @@
+# FIGURE native layer: Dear ImGui (docking) + ImPlot + cimgui + cimplot + SDL3/OpenGL3 backends + FIGURE glue.
+#
+# Built once, before any Fortran build, by scripts/build_native.sh. Neither FoBiS nor fpm compiles C++: both only link
+# the static libraries this project installs into <prefix>/lib (default: the repository's lib/).
+#
+# Pinned third-party versions (a matched set: cimplot v1.1 was generated against cimgui 1.93dock):
+#   cimgui  1.93dock      -> Dear ImGui v1.93.0-docking (git submodule of cimgui)
+#   cimplot v1.1          -> ImPlot 1.2 WIP (git submodule of cimplot)
+#   SDL     release-3.4.20
+cmake_minimum_required(VERSION 3.24)
+project(figure_native LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+include(FetchContent)
+
+set(FIGURE_CIMGUI_TAG  "1.93dock"       CACHE STRING "cimgui git tag")
+set(FIGURE_CIMPLOT_TAG "v1.1"           CACHE STRING "cimplot git tag")
+set(FIGURE_SDL_TAG     "release-3.4.20" CACHE STRING "SDL git tag")
+
+# ---- SDL3, static ---------------------------------------------------------------------------------------------------
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(SDL3
+   GIT_REPOSITORY https://github.com/libsdl-org/SDL
+   GIT_TAG        ${FIGURE_SDL_TAG}
+   GIT_SHALLOW    TRUE)
+FetchContent_MakeAvailable(SDL3)
+
+# ---- cimgui (with Dear ImGui) and cimplot (with ImPlot): sources only, compiled below -------------------------------
+FetchContent_Declare(cimgui
+   GIT_REPOSITORY https://github.com/cimgui/cimgui
+   GIT_TAG        ${FIGURE_CIMGUI_TAG}
+   GIT_SHALLOW    TRUE
+   GIT_SUBMODULES imgui)
+FetchContent_Declare(cimplot
+   GIT_REPOSITORY https://github.com/cimgui/cimplot
+   GIT_TAG        ${FIGURE_CIMPLOT_TAG}
+   GIT_SHALLOW    TRUE
+   GIT_SUBMODULES implot)
+FetchContent_GetProperties(cimgui)
+if(NOT cimgui_POPULATED)
+   FetchContent_Populate(cimgui)
+endif()
+FetchContent_GetProperties(cimplot)
+if(NOT cimplot_POPULATED)
+   FetchContent_Populate(cimplot)
+endif()
+
+set(IMGUI_DIR  ${cimgui_SOURCE_DIR}/imgui)
+set(IMPLOT_DIR ${cimplot_SOURCE_DIR}/implot)
+
+add_library(figure_native STATIC
+   ${cimgui_SOURCE_DIR}/cimgui.cpp
+   ${IMGUI_DIR}/imgui.cpp
+   ${IMGUI_DIR}/imgui_draw.cpp
+   ${IMGUI_DIR}/imgui_widgets.cpp
+   ${IMGUI_DIR}/imgui_tables.cpp
+   ${IMGUI_DIR}/imgui_demo.cpp
+   ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
+   ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+   ${cimplot_SOURCE_DIR}/cimplot.cpp
+   ${IMPLOT_DIR}/implot.cpp
+   ${IMPLOT_DIR}/implot_items.cpp
+   ${IMPLOT_DIR}/implot_demo.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/figure_native.cpp)
+# Same configuration cimgui/cimplot were generated with: their C structs must match the C++ ones bit for bit.
+target_compile_definitions(figure_native PUBLIC
+   IMGUI_USER_CONFIG="${cimgui_SOURCE_DIR}/cimconfig.h"
+   IMGUI_DISABLE_OBSOLETE_FUNCTIONS=1)
+target_include_directories(figure_native PUBLIC
+   ${CMAKE_CURRENT_SOURCE_DIR} ${cimgui_SOURCE_DIR} ${IMGUI_DIR} ${IMGUI_DIR}/backends ${cimplot_SOURCE_DIR} ${IMPLOT_DIR})
+target_link_libraries(figure_native PUBLIC SDL3::SDL3-static)
+
+install(TARGETS figure_native ARCHIVE DESTINATION lib)
+# The static SDL3 archive, next to ours, so the Fortran link line is just -lfigure_native -lSDL3.
+install(FILES $<TARGET_FILE:SDL3::SDL3-static> DESTINATION lib)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/figure_native.h DESTINATION include)
