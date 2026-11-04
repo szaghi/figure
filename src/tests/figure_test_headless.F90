@@ -6,8 +6,8 @@ program figure_test_headless
 !< a check box is toggled the same way; a plot is drawn from Fortran arrays. Needs no display, so it runs in CI as is.
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : error_unit, int32, output_unit, real64
-use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_end, ig_item_rect, ig_set_next_window, ip_begin_plot, &
-                   ip_end_plot, ip_line, ip_setup_axes
+use figure, only : FIG_ERR_ARGUMENT, app_object, figure_last_error, ig_begin, ig_button, ig_checkbox, ig_end, &
+                   ig_item_rect, ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, ip_setup_axes
 use figure_c_native, only : fig_input_mouse
 
 implicit none
@@ -25,7 +25,8 @@ real(real64)              :: x1             !< Item rectangle, right [pixels].
 real(real64)              :: y1             !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)           !< Plot abscissae.
 real(real64)              :: y(N)           !< Plot ordinates.
-logical                   :: test_passed(3) !< Per-check outcome.
+logical                   :: test_passed(5) !< Per-check outcome.
+integer(int32)            :: stat           !< Status of a failing call.
 integer(int32)            :: i              !< Counter.
 
 x = [(real(i, real64) / 10.0_real64, i = 1_int32, N)]
@@ -71,16 +72,20 @@ do frame = 1_int32, 12_int32
       call fig_input_mouse(real(by(1), c_float), real(by(2), c_float), 0_c_int)
    endselect
 enddo
+call ip_line('mismatch', x, y(1:N - 1_int32), stat=stat)
 call app%destroy()
 
-test_passed(1) = clicks == 1_int32   ! button clicked once
-test_passed(2) = toggles == 1_int32  ! check box toggled once
-test_passed(3) = flag                ! check box value is true
+test_passed(1) = clicks == 1_int32                                            ! button clicked once
+test_passed(2) = toggles == 1_int32                                           ! check box toggled once
+test_passed(3) = flag                                                         ! check box value is true
+test_passed(4) = stat == int(FIG_ERR_ARGUMENT, int32)                         ! ip_line size mismatch reported
+test_passed(5) = figure_last_error() == 'ip_line: x and y have different sizes' ! ... with its own message
 
-write(output_unit, '(A,3L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,5L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
-   write(error_unit, '(A,I0,A,I0,A,L1)') 'clicks: ', clicks, ', toggles: ', toggles, ', flag: ', flag
+   write(error_unit, '(A,I0,A,I0,A,L1,A,I0,A)') 'clicks: ', clicks, ', toggles: ', toggles, ', flag: ', flag, &
+                                               ', stat: ', stat, ', message: "'//figure_last_error()//'"'
    error stop 1
 endif
 endprogram figure_test_headless

@@ -26,6 +26,8 @@ void   fig_set_lazy(int enabled, double max_wait_s);
 void   fig_request_frames(int n);
 double fig_content_scale(void);
 const char *fig_last_error(int *len);
+/* Set the message fig_last_error returns, for failures detected on the Fortran side. */
+void   fig_set_last_error(const char *msg, int msg_len);
 
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);

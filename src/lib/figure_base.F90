@@ -6,11 +6,11 @@ module figure_base
 !< `figure_last_error()` gives the message; if absent, a failure prints the message and stops (`error stop`).
 use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_f_pointer, c_int, c_null_char, c_ptr
 use, intrinsic :: iso_fortran_env, only : error_unit, int32
-use figure_c_native, only : FIG_OK, fig_last_error
+use figure_c_native, only : FIG_OK, fig_last_error, fig_set_last_error
 
 implicit none
 private
-public :: figure_check, figure_last_error, cstr
+public :: figure_check, figure_fail, figure_last_error, cstr
 
 contains
    function figure_last_error() result(msg)
@@ -42,6 +42,16 @@ contains
       error stop 1
    endif
    endsubroutine figure_check
+
+   subroutine figure_fail(status, message, stat)
+   !< Report a failure detected on the Fortran side: set the last error message, then act as `figure_check`.
+   integer(c_int),   intent(in)            :: status  !< Failure status (a `FIG_ERR_*` code).
+   character(len=*), intent(in)            :: message !< Message for `figure_last_error`.
+   integer(int32),   intent(out), optional :: stat    !< Status for the caller.
+
+   call fig_set_last_error(message, len(message, c_int))
+   call figure_check(status, stat)
+   endsubroutine figure_fail
 
    pure function cstr(s) result(c)
    !< `s` NUL-terminated, for cimgui/cimplot (trailing blanks kept: labels are taken verbatim).

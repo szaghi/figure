@@ -122,6 +122,13 @@ const char *fig_last_error(int *len) {
    return last_error.c_str();
 }
 
+void fig_set_last_error(const char *msg, int msg_len) {
+   try {
+      last_error.assign(msg, msg_len > 0 ? static_cast<size_t>(msg_len) : 0);
+   } catch (...) {
+   }
+}
+
 int fig_init(const char *title, int title_len, int width, int height, int vsync) {
    FIG_TRY
    if (st.m != mode::none) return fail(FIG_ERR_STATE, "figure is already initialized");

@@ -12,9 +12,10 @@ module figure_app
 !< call app%destroy()
 !<```
 !<
-!< `next_frame` renders the previous frame, then waits for input (lazy redraw: no CPU use while idle) and opens the
-!< next one; it returns `.false.` when the user closes the window. There are no widget objects, handles or callbacks:
-!< the state is the application's own variables.
+!< `next_frame` renders the previous frame, then waits for input and opens the next one (lazy redraw: once the UI
+!< settles it sleeps until input or `max_wait`, so an idle window costs a fraction of a percent of one core); it
+!< returns `.false.` when the user closes the window. There are no widget objects, handles or callbacks: the state is
+!< the application's own variables.
 use, intrinsic :: iso_c_binding, only : c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check

@@ -15,7 +15,7 @@ public :: IMGUI_DATATYPE_S32, IMGUI_DATATYPE_FLOAT, IMGUI_DATATYPE_DOUBLE
 public :: IMGUI_COND_ALWAYS, IMGUI_COND_ONCE, IMGUI_COND_FIRST_USE_EVER
 public :: im_vec2
 public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
-public :: fig_content_scale, fig_last_error, fig_input_mouse, fig_plot_line
+public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse, fig_plot_line
 public :: igBegin, igEnd, igButton, igCheckbox, igSliderScalar, igInputDouble, igTextUnformatted, igSameLine
 public :: igSeparator, igShowDemoWindow, igSetNextWindowPos, igSetNextWindowSize, igGetItemRectMin, igGetItemRectMax
 public :: ImPlot_BeginPlot, ImPlot_EndPlot, ImPlot_SetupAxes
@@ -113,6 +113,14 @@ interface
    integer(c_int), intent(out) :: len !< Message length [bytes].
    type(c_ptr)                 :: msg !< First byte of the message (borrowed).
    endfunction fig_last_error
+
+   subroutine fig_set_last_error(msg, msg_len) bind(C, name='fig_set_last_error')
+   !< Set the message `fig_last_error` returns (failures detected on the Fortran side).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: msg(*)  !< Message (not NUL-terminated).
+   integer(c_int), value              :: msg_len !< Message length [bytes].
+   endsubroutine fig_set_last_error
 
    subroutine fig_input_mouse(x, y, left_down) bind(C, name='fig_input_mouse')
    !< Queue a synthetic mouse state (tests).

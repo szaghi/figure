@@ -8,7 +8,7 @@ module figure_implot
 !< differ). A non-contiguous actual argument (e.g. a matrix row `y(i,:)`) is copied by the compiler into a temporary.
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64
-use figure_base, only : cstr, figure_check
+use figure_base, only : cstr, figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, im_vec2, fig_plot_line, ImPlot_BeginPlot, ImPlot_EndPlot, ImPlot_SetupAxes
 
 implicit none
@@ -51,7 +51,7 @@ contains
    integer(int32),   intent(out), optional   :: stat  !< Status.
 
    if (size(x) /= size(y)) then
-      call figure_check(FIG_ERR_ARGUMENT, stat)
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_line: x and y have different sizes', stat)
       return
    endif
    call figure_check(fig_plot_line(label, len(label, c_int), x, y, int(size(x), c_int)), stat)
