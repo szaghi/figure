@@ -38,6 +38,10 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
 ### M3: images and speed
 - Textures from contiguous `integer(c_int8_t)` RGBA arrays: one `glTexSubImage2D` upload, no intermediate copies.
 - ImPlot heatmaps from Fortran 2D arrays (column-major aware).
+- Plot items generic over `real32`/`real64` (ImPlot is templated on the element type): one glue instantiation per
+  kind, so `real32` data is never copied into a `real64` temporary.
+- Strided series: the `contiguous` dummies make the compiler copy a matrix row `y(i,:)` into a temporary; ImPlot
+  takes a byte stride, so pass base address + stride instead (portable stride from Fortran to be designed).
 - Port a Mandelbrot explorer and a live plot; benchmark redraw at 4K against wxFortran.
 
 ### M4: platforms and CI

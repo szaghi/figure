@@ -3,8 +3,10 @@ module figure_implot
 !< figure_implot, ImPlot plots with Fortran arrays.
 !<
 !< `ip_begin_plot` returns true when the plot is visible: then declare its axes and items and close it with
-!< `ip_end_plot` (only in that case). Arrays are read in place, without copies, during the call.
-use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
+!< `ip_end_plot` (only in that case). Arrays are read in place, without copies, during the call: `real(real64)` is
+!< passed straight to the C `double*` (the bind(C) interfaces reject at compile time a platform where the two kinds
+!< differ). A non-contiguous actual argument (e.g. a matrix row `y(i,:)`) is copied by the compiler into a temporary.
+use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : cstr, figure_check
 use figure_c_native, only : FIG_ERR_ARGUMENT, im_vec2, fig_plot_line, ImPlot_BeginPlot, ImPlot_EndPlot, ImPlot_SetupAxes
@@ -44,8 +46,8 @@ contains
    subroutine ip_line(label, x, y, stat)
    !< Line through the points (x(i), y(i)).
    character(len=*), intent(in)              :: label !< Legend label.
-   real(c_double),   intent(in), contiguous  :: x(:)  !< Abscissae.
-   real(c_double),   intent(in), contiguous  :: y(:)  !< Ordinates.
+   real(real64),     intent(in), contiguous  :: x(:)  !< Abscissae.
+   real(real64),     intent(in), contiguous  :: y(:)  !< Ordinates.
    integer(int32),   intent(out), optional   :: stat  !< Status.
 
    if (size(x) /= size(y)) then
