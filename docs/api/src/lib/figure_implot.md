@@ -19,6 +19,9 @@ title: figure_implot
 graph LR
   figure_implot["figure_implot"] --> figure_base["figure_base"]
   figure_implot["figure_implot"] --> figure_c_native["figure_c_native"]
+  figure_implot["figure_implot"] --> figure_cimgui["figure_cimgui"]
+  figure_implot["figure_implot"] --> figure_cimplot["figure_cimplot"]
+  figure_implot["figure_implot"] --> figure_cimplot_enums["figure_cimplot_enums"]
   figure_implot["figure_implot"] --> iso_c_binding["iso_c_binding"]
   figure_implot["figure_implot"] --> iso_fortran_env["iso_fortran_env"]
 ```

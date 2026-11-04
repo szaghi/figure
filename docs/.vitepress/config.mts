@@ -37,6 +37,7 @@ const docs = [
       { text: 'Error handling',          link: '/guide/errors' },
       { text: 'Headless testing',        link: '/guide/testing' },
       { text: 'Architecture',            link: '/guide/architecture' },
+      { text: 'Raw bindings',            link: '/guide/raw-bindings' },
       { text: 'Known issues',            link: '/guide/known-issues' },
     ],
   },
@@ -80,7 +81,7 @@ export default withMermaid({
       {
         text: 'Reference',
         link: '/guide/features',
-        activeMatch: '^/guide/(features|frame-loop|widgets|plots|errors|testing|architecture|known-issues)',
+        activeMatch: '^/guide/(features|frame-loop|widgets|plots|errors|testing|architecture|raw-bindings|known-issues)',
       },
       { text: 'API', link: '/api/' },
       {

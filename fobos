@@ -97,6 +97,14 @@ jobs      = 4
 help = Build the native layer (ImGui, ImPlot, cimgui, cimplot, SDL3, glue) into lib/ with CMake
 rule = scripts/build_native.sh
 
+[rule-bindings]
+help = Regenerate the raw cimgui/cimplot layer (src/lib/figure_cim*.F90, docs/guide/raw-bindings.md) from the metadata
+rule = python3 scripts/gen_bindings.py
+
+[rule-bindings-check]
+help = Check that the committed generated bindings match the cimgui/cimplot metadata
+rule = python3 scripts/gen_bindings.py --check
+
 [rule-sync]
 help = Check that fobos and fpm.toml describe the same build
 rule = python3 scripts/check_sync.py
@@ -112,10 +120,11 @@ rule_2 = rm -rf mod/ obj/
 rule_3 = rm -f *.gcov
 
 [rule-makecoverage]
-help   = Perform coverage analysis
+help   = Perform coverage analysis (and check the generated bindings against the cimgui/cimplot metadata)
 rule_1 = fobis build --mode tests-gnu-debug --coverage --force-compile
-rule_2 = bash scripts/run_tests.sh
-rule_3 = ./scripts/compute-coverage.sh
+rule_2 = python3 scripts/gen_bindings.py --check --check-symbols lib/libfigure_native.a
+rule_3 = bash scripts/run_tests.sh
+rule_4 = ./scripts/compute-coverage.sh
 
 [rule-makecoverage-analysis]
 help   = Perform coverage analysis and saving reports in markdown

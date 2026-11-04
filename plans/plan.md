@@ -34,8 +34,12 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
       ~0.08% floor; `figure_hello` 0.40%; lazy redraw off (vsync, 60 frames/s): 37%. **Default `max_wait` kept
       at 0.5 s**: raising it saves ~0.2% of one core and makes un-signalled live data refresh 4x slower.
 
-### M2: generated raw layer
-- Generate `figure_c_native`-style interfaces and enum parameters from cimgui/cimplot `definitions.json` and
+### M2: generated raw layer: **done (2026-11-04), glue for struct-by-value functions to do**
+- `scripts/gen_bindings.py` writes `src/lib/figure_cim{gui,plot}{,_enums}.F90` and `docs/guide/raw-bindings.md`.
+  cimgui: 354 direct, 10 glue, 49 skipped (variadic, callbacks) of 413 public functions; cimplot: 96 / 278 / 27 of 401
+  (the 278 are mostly the ImPlot items, `ImPlotSpec` by value). `--check` and `--check-symbols` run in CI
+  (`makecoverage`): drift, and every bound name defined in `libfigure_native.a`.
+- Original spec: generate `figure_c_native`-style interfaces and enum parameters from cimgui/cimplot `definitions.json` and
   `structs_and_enums.json`; classify each function: direct bind(C) or glue. Enum values generated, never hand-copied.
 - Generator output committed and checked for drift in CI.
 

@@ -26,8 +26,12 @@ fobis rule --ex sync                                             # fobos and fpm
 - **Two builds, one truth.** fobos is the primary build; `fpm.toml` mirrors it. A new program under `src/examples` or
   `src/tests`, or a change of the native link libraries, goes into both: `scripts/check_sync.py` (`fobis rule --ex
   sync`) fails otherwise.
-- **C ABI only.** Bind a cimgui/cimplot function directly only if all its arguments are scalars, pointers or
-  `ImVec2_c`; anything taking a larger structure by value goes through the glue. Glue functions are `extern "C"`,
+- **Generated raw layer.** `src/lib/figure_cimgui*.F90`, `src/lib/figure_cimplot*.F90` and
+  `docs/guide/raw-bindings.md` are generated: never edit them. After changing `scripts/gen_bindings.py` or the pinned
+  cimgui/cimplot, run `fobis rule --ex bindings` and commit the result; `fobis rule --ex bindings-check` (also run by
+  CI) fails on drift.
+- **C ABI only.** A cimgui/cimplot function is bound directly only if all its arguments are scalars, pointers or
+  `ImVec2_c` (the generator decides); anything taking a larger structure by value goes through the glue. Glue functions are `extern "C"`,
   return a status, take strings as (pointer, length), and never let a C++ exception escape.
 - **Status codes** are defined twice, in `native/figure_native.h` and `src/lib/figure_c_native.F90`: change both.
 - **Pinned versions.** cimgui, cimplot and SDL3 are a matched set: do not bump one alone.

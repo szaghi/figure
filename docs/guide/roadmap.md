@@ -19,12 +19,14 @@ The milestones of `plans/plan.md`. Only M1 is done; everything after it is plann
 - Idle cost of lazy redraw measured and explained ([Frame loop](frame-loop#what-idle-costs)); default `max_wait`
   kept at 0.5 s.
 
-## M2: generated raw layer — planned
+## M2: generated raw layer — done
 
-- Generate the `bind(C)` interfaces and the enumeration parameters from cimgui's and cimplot's metadata
-  (`definitions.json`, `structs_and_enums.json`); classify each function as direct or glue. Enumeration values
-  generated, never copied by hand.
-- Generator output committed and checked for drift in CI.
+- `scripts/gen_bindings.py` generates the `bind(C)` interfaces and the enumeration parameters from cimgui's and
+  cimplot's metadata (`definitions.json`, `structs_and_enums.json`) and classifies every public function as direct,
+  glue or skipped ([Raw bindings](raw-bindings)). Enumeration values are generated, never copied by hand.
+- The output is committed; CI checks it for drift and checks that every bound function is defined in the native
+  library (`fobis rule --ex makecoverage`).
+- Still to do: the C++ glue for the functions that pass structs by value, above all the ImPlot items (`ImPlotSpec`).
 
 ## M3: images and speed — planned
 

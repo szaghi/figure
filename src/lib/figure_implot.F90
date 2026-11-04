@@ -9,7 +9,10 @@ module figure_implot
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : cstr, figure_check, figure_fail
-use figure_c_native, only : FIG_ERR_ARGUMENT, im_vec2, fig_plot_line, ImPlot_BeginPlot, ImPlot_EndPlot, ImPlot_SetupAxes
+use figure_c_native, only : FIG_ERR_ARGUMENT, fig_plot_line
+use figure_cimgui, only : im_vec2
+use figure_cimplot, only : ImPlot_BeginPlot, ImPlot_EndPlot, ImPlot_SetupAxes
+use figure_cimplot_enums, only : ImPlotAxisFlags_None, ImPlotFlags_None
 
 implicit none
 private
@@ -27,7 +30,7 @@ contains
    extent = im_vec2(-1.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
-   visible = logical(ImPlot_BeginPlot(cstr(title), extent, 0_c_int))
+   visible = logical(ImPlot_BeginPlot(cstr(title), extent, ImPlotFlags_None))
    endfunction ip_begin_plot
 
    subroutine ip_end_plot()
@@ -40,7 +43,7 @@ contains
    character(len=*), intent(in) :: xlabel !< X label.
    character(len=*), intent(in) :: ylabel !< Y label.
 
-   call ImPlot_SetupAxes(cstr(xlabel), cstr(ylabel), 0_c_int, 0_c_int)
+   call ImPlot_SetupAxes(cstr(xlabel), cstr(ylabel), ImPlotAxisFlags_None, ImPlotAxisFlags_None)
    endsubroutine ip_setup_axes
 
    subroutine ip_line(label, x, y, stat)

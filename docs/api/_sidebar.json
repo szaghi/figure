@@ -20,6 +20,22 @@
         "link": "/api/src/lib/figure_c_native"
       },
       {
+        "text": "figure_cimgui",
+        "link": "/api/src/lib/figure_cimgui"
+      },
+      {
+        "text": "figure_cimgui_enums",
+        "link": "/api/src/lib/figure_cimgui_enums"
+      },
+      {
+        "text": "figure_cimplot",
+        "link": "/api/src/lib/figure_cimplot"
+      },
+      {
+        "text": "figure_cimplot_enums",
+        "link": "/api/src/lib/figure_cimplot_enums"
+      },
+      {
         "text": "figure_imgui",
         "link": "/api/src/lib/figure_imgui"
       },

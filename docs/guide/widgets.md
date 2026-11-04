@@ -74,5 +74,5 @@ Strings are passed verbatim, trailing blanks included: `'Run'` and `'Run   '` ar
 ## Not bound yet
 
 Text input needs a C buffer and a resize callback and is not bound yet; nor are combo boxes, tables, menus, trees,
-tooltips, colours and styles. Milestone M2 generates the raw interfaces of cimgui and cimplot, which is the basis for
-binding the rest ([roadmap](roadmap)).
+tooltips, colours and styles. Their raw interfaces are generated ([Raw bindings](raw-bindings)); the Fortran wrappers
+are still to be written ([roadmap](roadmap)).

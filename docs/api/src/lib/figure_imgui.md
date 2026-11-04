@@ -18,7 +18,8 @@ title: figure_imgui
 ```mermaid
 graph LR
   figure_imgui["figure_imgui"] --> figure_base["figure_base"]
-  figure_imgui["figure_imgui"] --> figure_c_native["figure_c_native"]
+  figure_imgui["figure_imgui"] --> figure_cimgui["figure_cimgui"]
+  figure_imgui["figure_imgui"] --> figure_cimgui_enums["figure_cimgui_enums"]
   figure_imgui["figure_imgui"] --> iso_c_binding["iso_c_binding"]
   figure_imgui["figure_imgui"] --> iso_fortran_env["iso_fortran_env"]
 ```

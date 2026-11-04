@@ -5,8 +5,8 @@ title: Feature map
 # Feature map
 
 `use figure` exports everything below. The modules it re-exports (`figure_app`, `figure_imgui`, `figure_implot`,
-`figure_base`) can also be used directly; `figure_c_native` is internal (its interfaces will be generated in
-milestone M2 and change without notice).
+`figure_base`) can also be used directly; `figure_c_native` and the generated raw modules (`figure_cimgui`,
+`figure_cimplot` and their `_enums`) are internal and change without notice ([Raw bindings](raw-bindings)).
 
 All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional arguments are in brackets.
 

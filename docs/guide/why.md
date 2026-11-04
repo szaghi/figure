@@ -41,9 +41,9 @@ For a Fortran binding this removes:
   [Widgets](widgets#values-are-your-variables)).
 
 The C++ ABI problem is removed by the boundary: Fortran calls only C functions, those of cimgui and cimplot and
-those of FIGURE's own glue ([Architecture](architecture)). Generating the enumeration parameters from cimgui's
-metadata, instead of copying them, is milestone M2 of the [roadmap](roadmap); today the few enumeration values used
-are written by hand in `figure_c_native`.
+those of FIGURE's own glue ([Architecture](architecture)). The `bind(C)` interfaces and every enumeration value
+are generated from cimgui's and cimplot's metadata, never copied by hand, and CI checks them for drift
+([Raw bindings](raw-bindings)).
 
 ## Costs
 

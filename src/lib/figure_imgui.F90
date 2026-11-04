@@ -9,10 +9,11 @@ module figure_imgui
 use, intrinsic :: iso_c_binding, only : c_bool, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_base, only : cstr
-use figure_c_native, only : IMGUI_COND_ALWAYS, IMGUI_COND_FIRST_USE_EVER, IMGUI_DATATYPE_DOUBLE, IMGUI_DATATYPE_FLOAT, &
-                            IMGUI_DATATYPE_S32, im_vec2, igBegin, igButton, igCheckbox, igEnd, igGetItemRectMax,       &
-                            igGetItemRectMin, igInputDouble, igSameLine, igSeparator, igSetNextWindowPos,             &
-                            igSetNextWindowSize, igShowDemoWindow, igSliderScalar, igTextUnformatted
+use figure_cimgui, only : im_vec2, igBegin, igButton, igCheckbox, igEnd, igGetItemRectMax, igGetItemRectMin, igInputDouble, &
+                          igSameLine, igSeparator, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow,              &
+                          igSliderScalar, igTextUnformatted
+use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
+                                ImGuiDataType_S32
 
 implicit none
 private
@@ -56,9 +57,9 @@ contains
    logical,      intent(in), optional :: always !< Enforce every frame (default: first use only).
    integer(c_int)                     :: cond   !< ImGuiCond.
 
-   cond = IMGUI_COND_FIRST_USE_EVER
+   cond = ImGuiCond_FirstUseEver
    if (present(always)) then
-      if (always) cond = IMGUI_COND_ALWAYS
+      if (always) cond = ImGuiCond_Always
    endif
    call igSetNextWindowPos(im_vec2(real(x, c_float), real(y, c_float)), cond, im_vec2(0.0_c_float, 0.0_c_float))
    if (present(width) .and. present(height)) &
@@ -84,10 +85,10 @@ contains
    character(len=*), intent(in)    :: label   !< Label.
    logical,          intent(inout) :: value   !< Value.
    logical                         :: changed !< Toggled this frame.
-   logical(c_bool)                 :: v       !< C copy of `value`.
+   logical(c_bool), target         :: v       !< C copy of `value`.
 
    v = logical(value, c_bool)
-   changed = logical(igCheckbox(cstr(label), v))
+   changed = logical(igCheckbox(cstr(label), c_loc(v)))
    value = logical(v)
    endfunction ig_checkbox
 
@@ -105,7 +106,7 @@ contains
    v = int(value, c_int)
    lo = int(vmin, c_int)
    hi = int(vmax, c_int)
-   changed = logical(igSliderScalar(cstr(label), IMGUI_DATATYPE_S32, c_loc(v), c_loc(lo), c_loc(hi), c_null_ptr, 0_c_int))
+   changed = logical(igSliderScalar(cstr(label), ImGuiDataType_S32, c_loc(v), c_loc(lo), c_loc(hi), c_null_ptr, 0_c_int))
    value = int(v, int32)
    endfunction ig_slider_i32
 
@@ -123,7 +124,7 @@ contains
    v = real(value, c_float)
    lo = real(vmin, c_float)
    hi = real(vmax, c_float)
-   changed = logical(igSliderScalar(cstr(label), IMGUI_DATATYPE_FLOAT, c_loc(v), c_loc(lo), c_loc(hi), c_null_ptr, &
+   changed = logical(igSliderScalar(cstr(label), ImGuiDataType_Float, c_loc(v), c_loc(lo), c_loc(hi), c_null_ptr, &
                                     0_c_int))
    value = real(v, real32)
    endfunction ig_slider_r32
@@ -142,7 +143,7 @@ contains
    v = real(value, c_double)
    lo = real(vmin, c_double)
    hi = real(vmax, c_double)
-   changed = logical(igSliderScalar(cstr(label), IMGUI_DATATYPE_DOUBLE, c_loc(v), c_loc(lo), c_loc(hi), c_null_ptr, &
+   changed = logical(igSliderScalar(cstr(label), ImGuiDataType_Double, c_loc(v), c_loc(lo), c_loc(hi), c_null_ptr, &
                                     0_c_int))
    value = real(v, real64)
    endfunction ig_slider_r64
@@ -154,16 +155,16 @@ contains
    real(real64),     intent(in), optional :: step    !< +/- buttons step (default: none).
    character(len=*), intent(in), optional :: format  !< printf format (default '%.6g').
    logical                                :: changed !< Changed this frame.
-   real(c_double)                         :: v       !< C copy of `value`.
+   real(c_double), target                 :: v       !< C copy of `value`.
    real(c_double)                         :: s       !< Step.
 
    v = real(value, c_double)
    s = 0.0_c_double
    if (present(step)) s = real(step, c_double)
    if (present(format)) then
-      changed = logical(igInputDouble(cstr(label), v, s, 10.0_c_double * s, cstr(format), 0_c_int))
+      changed = logical(igInputDouble(cstr(label), c_loc(v), s, 10.0_c_double * s, cstr(format), 0_c_int))
    else
-      changed = logical(igInputDouble(cstr(label), v, s, 10.0_c_double * s, cstr('%.6g'), 0_c_int))
+      changed = logical(igInputDouble(cstr(label), c_loc(v), s, 10.0_c_double * s, cstr('%.6g'), 0_c_int))
    endif
    value = real(v, real64)
    endfunction ig_input

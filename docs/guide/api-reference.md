@@ -26,4 +26,6 @@ npm run docs:api      # formal generate --mirror-sources --diagrams --project fo
 | `figure_last_error` | `figure_base` | message of the last failure — see [Error handling](errors) |
 | `FIG_OK`, `FIG_ERR_*` | `figure_c_native` | status codes |
 
-`figure_c_native` is internal: its interfaces will be generated (milestone M2) and may change without notice.
+`figure_c_native` (the glue interfaces) and the generated raw modules `figure_cimgui`, `figure_cimplot`,
+`figure_cimgui_enums` and `figure_cimplot_enums` ([Raw bindings](raw-bindings)) are internal and may change without
+notice.
