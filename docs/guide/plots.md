@@ -4,7 +4,8 @@ title: Plots
 
 # Plots
 
-`figure_implot` binds [ImPlot](https://github.com/epezent/implot) (1.2 WIP): line plots of `real(real64)` arrays.
+`figure_implot` binds [ImPlot](https://github.com/epezent/implot) (1.2 WIP): line plots of `real(real32)` or
+`real(real64)` arrays.
 
 ## A plot
 
@@ -27,9 +28,10 @@ by clicking its legend entry; these are ImPlot's interactions, kept by ImPlot fr
 
 ## Arrays: the zero-copy contract
 
-`ip_line` declares `x` and `y` as `real(real64), contiguous, intent(in)` and passes them to the C `double*` of the
-glue, which hands them to `ImPlot::PlotLine`. The arrays are read in place during the call, and nothing keeps a
-pointer to them afterwards:
+`ip_line` is generic: `x` and `y` are `real(real32)` or `real(real64)` (both of the same kind), declared
+`contiguous, intent(in)`, and passed to ImPlot's `float*` or `double*` item through the generated glue
+([Raw bindings](raw-bindings)). The arrays are read in place during the call, and nothing keeps a pointer to them
+afterwards:
 
 - a contiguous array or array section (a whole array, `a(1:n)`, a matrix column `a(:, j)`) is passed without any
   copy;
@@ -37,13 +39,14 @@ pointer to them afterwards:
   temporary, every call. For large data drawn every frame, store series as columns, or copy rows into a buffer you
   reuse ([cookbook](/manual/cookbook#plot-the-rows-of-a-matrix)).
 
-`real(real64)` passed as `double` relies on the two being the same type; the `bind(C)` interfaces use
-`real(c_double)`, so a platform where they differ fails at compile time rather than at run time.
+`real(real32)`/`real(real64)` passed as `float`/`double` rely on being the same types as `real(c_float)`/
+`real(c_double)`, true on every compiler FIGURE supports; their addresses are passed with `c_loc`.
 
 `size(x) /= size(y)` is an error (`FIG_ERR_ARGUMENT`, see [Error handling](errors)): nothing is drawn. An empty pair
 of arrays draws nothing and is not an error.
 
 ## Not bound yet
 
-Other item types (scatter, bars, shaded areas, heatmaps), axis flags (log scales, limits), `real32` data and strided
-series without copies are milestone M3 of the [roadmap](roadmap).
+Other item types (scatter, bars, shaded areas, heatmaps), item styles, axis flags (log scales, limits) and strided
+series without copies are not wrapped yet. Their raw interfaces are generated, including `ImPlotSpec` with its
+`Offset` and `Stride` fields, which make strided series possible without copies ([roadmap](roadmap)).

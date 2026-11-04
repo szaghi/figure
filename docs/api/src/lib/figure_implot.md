@@ -7,9 +7,9 @@ title: figure_implot
 > figure_implot, ImPlot plots with Fortran arrays.
 
  `ip_begin_plot` returns true when the plot is visible: then declare its axes and items and close it with
- `ip_end_plot` (only in that case). Arrays are read in place, without copies, during the call: `real(real64)` is
- passed straight to the C `double*` (the bind(C) interfaces reject at compile time a platform where the two kinds
- differ). A non-contiguous actual argument (e.g. a matrix row `y(i,:)`) is copied by the compiler into a temporary.
+ `ip_end_plot` (only in that case). Arrays are read in place, without copies, during the call: `real(real32)` and
+ `real(real64)` data go straight to the C `float*` and `double*` items (ImPlot is templated on the element type).
+ A non-contiguous actual argument (e.g. a matrix row `y(i,:)`) is copied by the compiler into a temporary.
 
 **Source**: `src/lib/figure_implot.F90`
 
@@ -28,10 +28,21 @@ graph LR
 
 ## Contents
 
+- [ip_line](#ip-line)
 - [ip_end_plot](#ip-end-plot)
 - [ip_setup_axes](#ip-setup-axes)
-- [ip_line](#ip-line)
+- [ip_line_r32](#ip-line-r32)
+- [ip_line_r64](#ip-line-r64)
 - [ip_begin_plot](#ip-begin-plot)
+- [series_ok](#series-ok)
+
+## Interfaces
+
+### ip_line
+
+Line through the points (x(i), y(i)), single or double precision.
+
+**Module procedures**: [`ip_line_r32`](/api/src/lib/figure_implot#ip-line-r32), [`ip_line_r64`](/api/src/lib/figure_implot#ip-line-r64)
 
 ## Subroutines
 
@@ -75,12 +86,12 @@ flowchart TD
   style ip_setup_axes fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
-### ip_line
+### ip_line_r32
 
-Line through the points (x(i), y(i)).
+Line through the points (x(i), y(i)), single precision.
 
 ```fortran
-subroutine ip_line(label, x, y, stat)
+subroutine ip_line_r32(label, x, y, stat)
 ```
 
 **Arguments**
@@ -88,18 +99,49 @@ subroutine ip_line(label, x, y, stat)
 | Name | Type | Intent | Attributes | Description |
 |------|------|--------|------------|-------------|
 | `label` | character(len=*) | in |  | Legend label. |
-| `x` | real(kind=real64) | in | contiguous | Abscissae. |
-| `y` | real(kind=real64) | in | contiguous | Ordinates. |
+| `x` | real(kind=real32) | in | contiguous, target | Abscissae. |
+| `y` | real(kind=real32) | in | contiguous, target | Ordinates. |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
-  ip_line["ip_line"] --> fig_plot_line["fig_plot_line"]
-  ip_line["ip_line"] --> figure_check["figure_check"]
-  ip_line["ip_line"] --> figure_fail["figure_fail"]
-  style ip_line fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ip_line_r32["ip_line_r32"] --> ImPlot_PlotLine_FloatPtrFloatPtr["ImPlot_PlotLine_FloatPtrFloatPtr"]
+  ip_line_r32["ip_line_r32"] --> cstr["cstr"]
+  ip_line_r32["ip_line_r32"] --> figure_ImPlotSpec_default["figure_ImPlotSpec_default"]
+  ip_line_r32["ip_line_r32"] --> figure_check["figure_check"]
+  ip_line_r32["ip_line_r32"] --> series_ok["series_ok"]
+  style ip_line_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_line_r64
+
+Line through the points (x(i), y(i)), double precision.
+
+```fortran
+subroutine ip_line_r64(label, x, y, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `x` | real(kind=real64) | in | contiguous, target | Abscissae. |
+| `y` | real(kind=real64) | in | contiguous, target | Ordinates. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_line_r64["ip_line_r64"] --> ImPlot_PlotLine_doublePtrdoublePtr["ImPlot_PlotLine_doublePtrdoublePtr"]
+  ip_line_r64["ip_line_r64"] --> cstr["cstr"]
+  ip_line_r64["ip_line_r64"] --> figure_ImPlotSpec_default["figure_ImPlotSpec_default"]
+  ip_line_r64["ip_line_r64"] --> figure_check["figure_check"]
+  ip_line_r64["ip_line_r64"] --> series_ok["series_ok"]
+  style ip_line_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions
@@ -129,4 +171,33 @@ flowchart TD
   ip_begin_plot["ip_begin_plot"] --> ImPlot_BeginPlot["ImPlot_BeginPlot"]
   ip_begin_plot["ip_begin_plot"] --> cstr["cstr"]
   style ip_begin_plot fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### series_ok
+
+Whether two series can be plotted together: same size, and a size ImPlot's `int` count holds.
+
+**Returns**: `logical`
+
+```fortran
+function series_ok(nx, ny, item, stat) result(ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `nx` | integer(kind=int64) | in |  | Size of the first series. |
+| `ny` | integer(kind=int64) | in |  | Size of the second series. |
+| `item` | character(len=*) | in |  | Item name, for the message. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_line_r32["ip_line_r32"] --> series_ok["series_ok"]
+  ip_line_r64["ip_line_r64"] --> series_ok["series_ok"]
+  series_ok["series_ok"] --> figure_fail["figure_fail"]
+  style series_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

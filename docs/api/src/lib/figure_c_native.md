@@ -28,7 +28,6 @@ graph LR
 - [fig_end_frame](#fig-end-frame)
 - [fig_content_scale](#fig-content-scale)
 - [fig_last_error](#fig-last-error)
-- [fig_plot_line](#fig-plot-line)
 - [fig_shutdown](#fig-shutdown)
 - [fig_set_lazy](#fig-set-lazy)
 - [fig_request_frames](#fig-request-frames)
@@ -58,8 +57,6 @@ graph LR
 ### fig_content_scale
 
 ### fig_last_error
-
-### fig_plot_line
 
 ### fig_shutdown
 

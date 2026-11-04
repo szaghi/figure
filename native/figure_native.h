@@ -32,8 +32,7 @@ void   fig_set_last_error(const char *msg, int msg_len);
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);
 
-/* ImPlot items whose C signature carries a by-value ImPlotSpec (kept on this side of the boundary). */
-int    fig_plot_line(const char *label, int label_len, const double *xs, const double *ys, int n);
+/* The cimgui/cimplot functions passing structs by value are wrapped in figure_glue_generated.cpp (generated). */
 
 #ifdef __cplusplus
 }

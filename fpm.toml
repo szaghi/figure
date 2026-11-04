@@ -31,3 +31,8 @@ main = "figure_hello.F90"
 name = "figure_test_headless"
 source-dir = "src/tests"
 main = "figure_test_headless.F90"
+
+[[test]]
+name = "figure_test_layout"
+source-dir = "src/tests"
+main = "figure_test_layout.F90"

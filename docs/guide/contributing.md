@@ -26,8 +26,9 @@ fobis rule --ex sync                                             # fobos and fpm
 - **Two builds, one truth.** fobos is the primary build; `fpm.toml` mirrors it. A new program under `src/examples` or
   `src/tests`, or a change of the native link libraries, goes into both: `scripts/check_sync.py` (`fobis rule --ex
   sync`) fails otherwise.
-- **Generated raw layer.** `src/lib/figure_cimgui*.F90`, `src/lib/figure_cimplot*.F90` and
-  `docs/guide/raw-bindings.md` are generated: never edit them. After changing `scripts/gen_bindings.py` or the pinned
+- **Generated raw layer.** `src/lib/figure_cimgui*.F90`, `src/lib/figure_cimplot*.F90`,
+  `native/figure_glue_generated.cpp`, `src/tests/figure_test_layout.F90` and `docs/guide/raw-bindings.md` are
+  generated: never edit them. After changing `scripts/gen_bindings.py` or the pinned
   cimgui/cimplot, run `fobis rule --ex bindings` and commit the result; `fobis rule --ex bindings-check` (also run by
   CI) fails on drift.
 - **C ABI only.** A cimgui/cimplot function is bound directly only if all its arguments are scalars, pointers or

@@ -8,17 +8,21 @@ title: Raw bindings
 
 The raw layer is generated from the cimgui and cimplot metadata by `scripts/gen_bindings.py`. A public free
 function is **direct** when every argument is a scalar, a pointer or an `ImVec2` by value (and so is its
-result): it is bound with `bind(C)` in `figure_cimgui` / `figure_cimplot`. Functions passing a larger struct
-by value need the C++ **glue**; variadic functions and functions taking callbacks are **skipped**. Enumerators
-are in `figure_cimgui_enums` / `figure_cimplot_enums`. These modules are private to the library: programs use
-the wrappers (`ig_*`, `ip_*`).
+result): it is bound with `bind(C)` in `figure_cimgui` / `figure_cimplot`. A function passing a larger
+struct by value (`ImVec4`, `ImPlotSpec`, `ImPlotPoint`, ...) goes through the generated **glue**
+(`native/figure_glue_generated.cpp`): a C wrapper `figure_<name>` takes the struct by pointer and returns a
+struct result through `res`; the Fortran interface keeps the C API name, with the struct as a `bind(C)` mirror
+type (`im_vec4`, `im_plot_spec`, ...) passed by reference. `src/tests/figure_test_layout.F90` checks that each
+mirror has the size of its C struct. Variadic functions and functions taking callbacks are **skipped**.
+Enumerators are in `figure_cimgui_enums` / `figure_cimplot_enums`. These modules are private to the library:
+programs use the wrappers (`ig_*`, `ip_*`).
 
-| Library | Public functions | Direct | Glue | Skipped |
+| Library | Public functions | Direct | Glue (generated) | Skipped |
 |---|---|---|---|---|
-| cimgui | 413 | 354 | 10 | 49 |
-| cimplot | 401 | 96 | 278 | 27 |
+| cimgui | 413 | 354 | 8 | 51 |
+| cimplot | 401 | 96 | 272 | 33 |
 
-## cimgui: need the glue (10)
+## cimgui: through the generated glue (8)
 
 | Function | Reason |
 |---|---|
@@ -27,13 +31,11 @@ the wrappers (`ig_*`, `ip_*`).
 | `igColorConvertU32ToFloat4` | returns `ImVec4_c` by value |
 | `igGetColorU32_Vec4` | `const ImVec4` by value |
 | `igImage` | `ImTextureRef` by value |
-| `igImageButton` | `ImTextureRef` by value |
-| `igImageWithBg` | `ImTextureRef` by value |
+| `igImageButton` | `const ImVec4` by value |
+| `igImageWithBg` | `const ImVec4` by value |
 | `igPushStyleColor_Vec4` | `const ImVec4` by value |
-| `igTextColored` | `const ImVec4` by value |
-| `igTextColoredV` | `const ImVec4` by value |
 
-## cimgui: skipped (49)
+## cimgui: skipped (51)
 
 | Function | Reason |
 |---|---|
@@ -66,7 +68,9 @@ the wrappers (`ig_*`, `ip_*`).
 | `igSetTooltipV` | variadic |
 | `igText` | variadic |
 | `igText0` | variadic (`...0` variant: not compiled, `fmt` still a printf format) |
+| `igTextColored` | variadic |
 | `igTextColored0` | variadic (`...0` variant: not compiled, `fmt` still a printf format) |
+| `igTextColoredV` | variadic |
 | `igTextDisabled` | variadic |
 | `igTextDisabled0` | variadic (`...0` variant: not compiled, `fmt` still a printf format) |
 | `igTextDisabledV` | variadic |
@@ -87,13 +91,11 @@ the wrappers (`ig_*`, `ip_*`).
 | `igTreeNodeV_Ptr` | variadic |
 | `igTreeNodeV_Str` | variadic |
 
-## cimplot: need the glue (278)
+## cimplot: through the generated glue (272)
 
 | Function | Reason |
 |---|---|
 | `ImPlot_Annotation_Bool` | `const ImVec4` by value |
-| `ImPlot_Annotation_Str` | `const ImVec4` by value |
-| `ImPlot_AnnotationV` | `const ImVec4` by value |
 | `ImPlot_DragLineX` | `const ImVec4` by value |
 | `ImPlot_DragLineY` | `const ImVec4` by value |
 | `ImPlot_DragPoint` | `const ImVec4` by value |
@@ -188,37 +190,37 @@ the wrappers (`ig_*`, `ip_*`).
 | `ImPlot_PlotErrorBars_U64PtrU64PtrU64PtrU64Ptr` | `const ImPlotSpec` by value |
 | `ImPlot_PlotErrorBars_U8PtrU8PtrU8PtrInt` | `const ImPlotSpec` by value |
 | `ImPlot_PlotErrorBars_U8PtrU8PtrU8PtrU8Ptr` | `const ImPlotSpec` by value |
-| `ImPlot_PlotHeatmap_doublePtr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHeatmap_FloatPtr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHeatmap_S16Ptr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHeatmap_S32Ptr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHeatmap_S64Ptr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHeatmap_S8Ptr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHeatmap_U16Ptr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHeatmap_U32Ptr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHeatmap_U64Ptr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHeatmap_U8Ptr` | `const ImPlotPoint` by value |
-| `ImPlot_PlotHistogram2D_doublePtr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram2D_FloatPtr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram2D_S16Ptr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram2D_S32Ptr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram2D_S64Ptr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram2D_S8Ptr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram2D_U16Ptr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram2D_U32Ptr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram2D_U64Ptr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram2D_U8Ptr` | `ImPlotRect` by value |
-| `ImPlot_PlotHistogram_doublePtr` | `ImPlotRange` by value |
-| `ImPlot_PlotHistogram_FloatPtr` | `ImPlotRange` by value |
-| `ImPlot_PlotHistogram_S16Ptr` | `ImPlotRange` by value |
-| `ImPlot_PlotHistogram_S32Ptr` | `ImPlotRange` by value |
-| `ImPlot_PlotHistogram_S64Ptr` | `ImPlotRange` by value |
-| `ImPlot_PlotHistogram_S8Ptr` | `ImPlotRange` by value |
-| `ImPlot_PlotHistogram_U16Ptr` | `ImPlotRange` by value |
-| `ImPlot_PlotHistogram_U32Ptr` | `ImPlotRange` by value |
-| `ImPlot_PlotHistogram_U64Ptr` | `ImPlotRange` by value |
-| `ImPlot_PlotHistogram_U8Ptr` | `ImPlotRange` by value |
-| `ImPlot_PlotImage` | `ImTextureRef` by value |
+| `ImPlot_PlotHeatmap_doublePtr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHeatmap_FloatPtr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHeatmap_S16Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHeatmap_S32Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHeatmap_S64Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHeatmap_S8Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHeatmap_U16Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHeatmap_U32Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHeatmap_U64Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHeatmap_U8Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_doublePtr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_FloatPtr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_S16Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_S32Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_S64Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_S8Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_U16Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_U32Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_U64Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram2D_U8Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_doublePtr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_FloatPtr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_S16Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_S32Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_S64Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_S8Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_U16Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_U32Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_U64Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotHistogram_U8Ptr` | `const ImPlotSpec` by value |
+| `ImPlot_PlotImage` | `const ImPlotSpec` by value |
 | `ImPlot_PlotInfLines_doublePtr` | `const ImPlotSpec` by value |
 | `ImPlot_PlotInfLines_FloatPtr` | `const ImPlotSpec` by value |
 | `ImPlot_PlotInfLines_S16Ptr` | `const ImPlotSpec` by value |
@@ -364,17 +366,15 @@ the wrappers (`ig_*`, `ip_*`).
 | `ImPlot_PushStyleColor_Vec4` | `const ImVec4` by value |
 | `ImPlot_SampleColormap` | returns `ImVec4_c` by value |
 | `ImPlot_TagX_Bool` | `const ImVec4` by value |
-| `ImPlot_TagX_Str` | `const ImVec4` by value |
-| `ImPlot_TagXV` | `const ImVec4` by value |
 | `ImPlot_TagY_Bool` | `const ImVec4` by value |
-| `ImPlot_TagY_Str` | `const ImVec4` by value |
-| `ImPlot_TagYV` | `const ImVec4` by value |
 
-## cimplot: skipped (27)
+## cimplot: skipped (33)
 
 | Function | Reason |
 |---|---|
+| `ImPlot_Annotation_Str` | variadic |
 | `ImPlot_Annotation_Str0` | variadic (`...0` variant: not compiled, `fmt` still a printf format) |
+| `ImPlot_AnnotationV` | variadic |
 | `ImPlot_PlotBarsG` | callback argument (`ImPlotGetter`) |
 | `ImPlot_PlotBarsG_LJ` | callback argument (`ImPlotPoint_getter`) |
 | `ImPlot_PlotDigitalG` | callback argument (`ImPlotGetter`) |
@@ -399,5 +399,9 @@ the wrappers (`ig_*`, `ip_*`).
 | `ImPlot_PlotStairsG_LJ` | callback argument (`ImPlotPoint_getter`) |
 | `ImPlot_SetupAxisFormat_PlotFormatter` | callback argument (`ImPlotFormatter`) |
 | `ImPlot_SetupAxisScale_PlotTransform` | callback argument (`ImPlotTransform`) |
+| `ImPlot_TagX_Str` | variadic |
 | `ImPlot_TagX_Str0` | variadic (`...0` variant: not compiled, `fmt` still a printf format) |
+| `ImPlot_TagXV` | variadic |
+| `ImPlot_TagY_Str` | variadic |
 | `ImPlot_TagY_Str0` | variadic (`...0` variant: not compiled, `fmt` still a printf format) |
+| `ImPlot_TagYV` | variadic |

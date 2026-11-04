@@ -12,7 +12,7 @@ implicit none
 private
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
-public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse, fig_plot_line
+public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -110,17 +110,5 @@ interface
    real(c_float), value  :: y         !< Ordinate [pixels].
    integer(c_int), value :: left_down !< 1: left button pressed.
    endsubroutine fig_input_mouse
-
-   function fig_plot_line(label, label_len, xs, ys, n) result(status) bind(C, name='fig_plot_line')
-   !< ImPlot::PlotLine with default spec.
-   import :: c_char, c_double, c_int
-   implicit none
-   character(kind=c_char), intent(in) :: label(*)  !< Item label (not NUL-terminated).
-   integer(c_int), value              :: label_len !< Label length [bytes].
-   real(c_double), intent(in)         :: xs(*)     !< Abscissae.
-   real(c_double), intent(in)         :: ys(*)     !< Ordinates.
-   integer(c_int), value              :: n         !< Number of points.
-   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
-   endfunction fig_plot_line
 endinterface
 endmodule figure_c_native

@@ -26,7 +26,8 @@ The milestones of `plans/plan.md`. Only M1 is done; everything after it is plann
   glue or skipped ([Raw bindings](raw-bindings)). Enumeration values are generated, never copied by hand.
 - The output is committed; CI checks it for drift and checks that every bound function is defined in the native
   library (`fobis rule --ex makecoverage`).
-- Still to do: the C++ glue for the functions that pass structs by value, above all the ImPlot items (`ImPlotSpec`).
+- The C++ glue for the functions that pass structs by value (above all the ImPlot items, `ImPlotSpec`) is generated
+  too, with `bind(C)` mirror types for the structs, size-checked by `figure_test_layout`.
 
 ## M3: images and speed — planned
 

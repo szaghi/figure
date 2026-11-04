@@ -34,11 +34,14 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
       ~0.08% floor; `figure_hello` 0.40%; lazy redraw off (vsync, 60 frames/s): 37%. **Default `max_wait` kept
       at 0.5 s**: raising it saves ~0.2% of one core and makes un-signalled live data refresh 4x slower.
 
-### M2: generated raw layer: **done (2026-11-04), glue for struct-by-value functions to do**
+### M2: generated raw layer: **done (2026-11-04)**
 - `scripts/gen_bindings.py` writes `src/lib/figure_cim{gui,plot}{,_enums}.F90` and `docs/guide/raw-bindings.md`.
-  cimgui: 354 direct, 10 glue, 49 skipped (variadic, callbacks) of 413 public functions; cimplot: 96 / 278 / 27 of 401
-  (the 278 are mostly the ImPlot items, `ImPlotSpec` by value). `--check` and `--check-symbols` run in CI
-  (`makecoverage`): drift, and every bound name defined in `libfigure_native.a`.
+  cimgui: 354 direct, 8 through generated glue, 51 skipped (variadic, callbacks) of 413 public functions; cimplot:
+  96 / 272 / 33 of 401 (the 272 are mostly the ImPlot items, `ImPlotSpec` by value). The glue
+  (`native/figure_glue_generated.cpp`) takes structs by pointer from `bind(C)` mirror types (`im_vec4`,
+  `im_plot_spec`, ...); `figure_test_layout` checks their sizes, static_asserts check ImPlotSpec's C++/C offsets.
+  `--check` and `--check-symbols` run in CI (`makecoverage`): drift, and all 737 bound names defined in
+  `libfigure_native.a`.
 - Original spec: generate `figure_c_native`-style interfaces and enum parameters from cimgui/cimplot `definitions.json` and
   `structs_and_enums.json`; classify each function: direct bind(C) or glue. Enum values generated, never hand-copied.
 - Generator output committed and checked for drift in CI.
@@ -46,9 +49,9 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
 ### M3: images and speed
 - Textures from contiguous `integer(c_int8_t)` RGBA arrays: one `glTexSubImage2D` upload, no intermediate copies.
 - ImPlot heatmaps from Fortran 2D arrays (column-major aware).
-- Plot items generic over `real32`/`real64` (ImPlot is templated on the element type): one glue instantiation per
-  kind, so `real32` data is never copied into a `real64` temporary.
-- Strided series: the `contiguous` dummies make the compiler copy a matrix row `y(i,:)` into a temporary; ImPlot
+- [x] Plot items generic over `real32`/`real64`: `ip_line` (2026-11-04), through the generated glue; the other
+  items follow the same pattern.
+- Strided series (`ImPlotSpec%Offset`/`%Stride` are now reachable from Fortran): the `contiguous` dummies make the compiler copy a matrix row `y(i,:)` into a temporary; ImPlot
   takes a byte stride, so pass base address + stride instead (portable stride from Fortran to be designed).
 - Port a Mandelbrot explorer and a live plot; benchmark redraw at 4K against wxFortran.
 

@@ -5,8 +5,8 @@ program figure_test_headless
 !< A button is clicked by queuing mouse states frame by frame (hover, press, release), exactly as real input arrives;
 !< a check box is toggled the same way; a plot is drawn from Fortran arrays. Needs no display, so it runs in CI as is.
 use, intrinsic :: iso_c_binding, only : c_float, c_int
-use, intrinsic :: iso_fortran_env, only : error_unit, int32, output_unit, real64
-use figure, only : FIG_ERR_ARGUMENT, app_object, figure_last_error, ig_begin, ig_button, ig_checkbox, ig_end, &
+use, intrinsic :: iso_fortran_env, only : error_unit, int32, output_unit, real32, real64
+use figure, only : FIG_ERR_ARGUMENT, FIG_OK, app_object, figure_last_error, ig_begin, ig_button, ig_checkbox, ig_end, &
                    ig_item_rect, ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, ip_setup_axes
 use figure_c_native, only : fig_input_mouse
 
@@ -25,8 +25,10 @@ real(real64)              :: x1             !< Item rectangle, right [pixels].
 real(real64)              :: y1             !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)           !< Plot abscissae.
 real(real64)              :: y(N)           !< Plot ordinates.
-logical                   :: test_passed(5) !< Per-check outcome.
+logical                   :: test_passed(7) !< Per-check outcome.
 integer(int32)            :: stat           !< Status of a failing call.
+integer(int32)            :: stat_r32       !< Status of the single-precision line.
+integer(int32)            :: stat_empty     !< Status of the empty line.
 integer(int32)            :: i              !< Counter.
 
 x = [(real(i, real64) / 10.0_real64, i = 1_int32, N)]
@@ -37,6 +39,8 @@ flag = .false.
 bx = 0.0_real64
 by = 0.0_real64
 test_passed = .false.
+stat_r32 = -1_int32
+stat_empty = -1_int32
 call app%init_headless(800_int32, 600_int32)
 
 do frame = 1_int32, 12_int32
@@ -52,6 +56,8 @@ do frame = 1_int32, 12_int32
       if (ip_begin_plot('sine')) then
          call ip_setup_axes('x', 'sin(x)')
          call ip_line('sin', x, y)
+         call ip_line('sin (real32)', real(x, real32), real(y, real32), stat=stat_r32)
+         call ip_line('empty', x(1:0), y(1:0), stat=stat_empty)
          call ip_end_plot()
       endif
    endif
@@ -80,8 +86,10 @@ test_passed(2) = toggles == 1_int32                                           ! 
 test_passed(3) = flag                                                         ! check box value is true
 test_passed(4) = stat == int(FIG_ERR_ARGUMENT, int32)                         ! ip_line size mismatch reported
 test_passed(5) = figure_last_error() == 'ip_line: x and y have different sizes' ! ... with its own message
+test_passed(6) = stat_r32 == int(FIG_OK, int32)                               ! single-precision line drawn
+test_passed(7) = stat_empty == int(FIG_OK, int32)                             ! empty series accepted
 
-write(output_unit, '(A,5L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,7L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,I0,A,I0,A,L1,A,I0,A)') 'clicks: ', clicks, ', toggles: ', toggles, ', flag: ', flag, &

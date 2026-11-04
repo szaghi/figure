@@ -98,7 +98,7 @@ help = Build the native layer (ImGui, ImPlot, cimgui, cimplot, SDL3, glue) into 
 rule = scripts/build_native.sh
 
 [rule-bindings]
-help = Regenerate the raw cimgui/cimplot layer (src/lib/figure_cim*.F90, docs/guide/raw-bindings.md) from the metadata
+help = Regenerate the raw cimgui/cimplot layer (Fortran interfaces, C++ glue, layout test, docs page) from the metadata
 rule = python3 scripts/gen_bindings.py
 
 [rule-bindings-check]

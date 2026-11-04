@@ -62,18 +62,14 @@ SCALARS: dict[str, tuple[str, str]] = {
 VEC2 = {"ImVec2", "ImVec2_c"}
 # Callback types the typedef tables omit (cimplot defines ImPlotPoint_getter in its own wrapper header).
 CALLBACKS = {"ImPlotPoint_getter"}
-GLUE_STRUCTS = {
-    "ImVec4",
-    "ImVec4_c",
-    "ImPlotSpec",
-    "ImPlotPoint",
-    "ImPlotPoint_c",
-    "ImPlotRange",
-    "ImPlotRange_c",
-    "ImPlotRect",
-    "ImPlotRect_c",
-    "ImTextureRef",
-    "ImTextureRef_c",
+# Structs passed by value that need the glue -> Fortran mirror type (bind(C)) and the module defining it.
+MIRRORS: dict[str, tuple[str, str]] = {
+    "ImVec4": ("im_vec4", "cimgui"),
+    "ImTextureRef": ("im_texture_ref", "cimgui"),
+    "ImPlotPoint": ("im_plot_point", "cimplot"),
+    "ImPlotRange": ("im_plot_range", "cimplot"),
+    "ImPlotRect": ("im_plot_rect", "cimplot"),
+    "ImPlotSpec": ("im_plot_spec", "cimplot"),
 }
 
 
@@ -85,16 +81,11 @@ class Library:
     header: str  # public header location tag in the metadata: imgui | implot
     title: str  # human name for comments
     namespace: str  # C++ namespace of the free functions
-    uses: list[str] = field(
-        default_factory=list
-    )  # extra `use` lines of the function module
 
 
 LIBRARIES = [
     Library("cimgui", "imgui", "Dear ImGui", "ImGui"),
-    Library(
-        "cimplot", "implot", "ImPlot", "ImPlot", ["use figure_cimgui, only : im_vec2"]
-    ),
+    Library("cimplot", "implot", "ImPlot", "ImPlot"),
 ]
 
 
@@ -122,6 +113,15 @@ class Function:
     args: list[Argument] = field(default_factory=list)
     result: tuple[str, str] | None = None  # (Fortran type, kind) or None for void
     ret: str = ""
+    c_args: str = ""  # C-form argument list of the C API, `(...)`
+    ret_struct: str = (
+        ""  # glue: C struct the function returns by value (written through `res`)
+    )
+
+    @property
+    def bind_name(self) -> str:
+        """Name of the C function Fortran binds: the C API one, or its generated glue wrapper."""
+        return f"figure_{self.cname}" if self.status == "glue" else self.cname
 
 
 class GenerationError(Exception):
@@ -218,6 +218,7 @@ def classify(ov: dict, typedefs: dict[str, str]) -> Function:
         location=ov["location"],
         status="direct",
         ret=ov.get("ret", "void"),
+        c_args=ov.get("args", "()"),
     )
     if ov.get(
         "isVARG0"
@@ -262,8 +263,18 @@ def classify(ov: dict, typedefs: dict[str, str]) -> Function:
                 )
         elif base in VEC2:
             fn.args.append(Argument(name, ctype, "type(im_vec2), value", "", note))
-        elif base in GLUE_STRUCTS:
-            return _set(fn, "glue", f"`{ctype}` by value")
+        elif base.removesuffix("_c") in MIRRORS:
+            mirror = MIRRORS[base.removesuffix("_c")][0]
+            fn.args.append(
+                Argument(
+                    name,
+                    ctype,
+                    f"type({mirror}), intent(in)",
+                    "",
+                    note + ", by value in C",
+                )
+            )
+            fn.status, fn.reason = "glue", f"`{ctype}` by value"
         elif base in SCALARS:
             ftype, kind = SCALARS[base]
             fn.args.append(Argument(name, ctype, f"{ftype}, value", kind, note))
@@ -273,13 +284,28 @@ def classify(ov: dict, typedefs: dict[str, str]) -> Function:
     ret = fn.ret
     if ret == "void":
         return fn
+    if resolve(ret, typedefs).removesuffix("_c") in MIRRORS and "*" not in ret:
+        mirror = MIRRORS[resolve(ret, typedefs).removesuffix("_c")][0]
+        fn.ret_struct = resolve(ret, typedefs).removesuffix("_c") + "_c"
+        fn.args.append(
+            Argument(
+                "res",
+                ret,
+                f"type({mirror}), intent(out)",
+                "",
+                f"Result, C `{ret}` by value",
+            )
+        )
+        fn.status = "glue"
+        fn.reason = (
+            fn.reason + "; " if fn.reason else ""
+        ) + f"returns `{ret}` by value"
+        return fn
     rbase = resolve(ret, typedefs)
     if "*" in ret:
         fn.result = ("type(c_ptr)", "c_ptr")
     elif rbase in VEC2:
         fn.result = ("type(im_vec2)", "")
-    elif rbase in GLUE_STRUCTS:
-        return _set(fn, "glue", f"returns `{ret}` by value")
     elif rbase in SCALARS:
         fn.result = SCALARS[rbase]
     else:
@@ -355,30 +381,108 @@ def header(module: str, summary: str, details: list[str]) -> list[str]:
     return lines
 
 
-def function_module(lib: Library, fns: list[Function]) -> str:
-    """Render the bind(C) interface module of a library."""
+def mirror_type(
+    cname: str, fields: list[dict], typedefs: dict[str, str]
+) -> tuple[list[str], set[str]]:
+    """Render the bind(C) Fortran mirror of a C struct, fields in metadata order (zero-initialized).
+
+    Parameters
+    ----------
+    cname : str
+        C++ struct name (``ImPlotSpec``); the C API type is ``<cname>_c``.
+    fields : list[dict]
+        Struct fields from ``structs_and_enums.json``.
+    typedefs : dict[str, str]
+        Typedef map.
+
+    Returns
+    -------
+    tuple[list[str], set[str]]
+        The lines and the iso_c_binding entities they need.
+    """
+    fname = MIRRORS[cname][0]
+    rows: list[tuple[str, str, str]] = []
+    kinds: set[str] = set()
+    taken: set[str] = set()
+    for fld in fields:
+        ctype, name = fld["type"], fortran_name(fld["name"], taken)
+        base = resolve(ctype, typedefs)
+        if "*" in ctype:
+            rows.append(("type(c_ptr)", f"{name} = c_null_ptr", ctype))
+            kinds |= {"c_ptr", "c_null_ptr"}
+        elif base in VEC2:
+            rows.append(("type(im_vec2)", name, ctype))
+        elif base in MIRRORS:
+            rows.append((f"type({MIRRORS[base][0]})", name, ctype))
+        elif base in SCALARS:
+            ftype, kind = SCALARS[base]
+            zero = "0.0_" + kind if ftype.startswith("real") else "0_" + kind
+            rows.append((ftype, f"{name} = {zero}", ctype))
+            kinds.add(kind)
+        else:
+            msg = f"{cname}.{fld['name']}: unmapped field type {ctype!r} (resolved {base!r})"
+            raise GenerationError(msg)
+    w1 = max(len(r[0]) for r in rows)
+    w2 = max(len(r[1]) for r in rows)
+    lines = [
+        f"type, bind(C) :: {fname}",
+        f"   !< `{cname}_c`, the C layout of `{cname}`, zero-initialized (not the C++ defaults).",
+    ]
+    lines += [f"   {t.ljust(w1)} :: {n.ljust(w2)} !< C `{c}`." for t, n, c in rows]
+    lines.append(f"endtype {fname}")
+    return lines, kinds
+
+
+def function_module(
+    lib: Library, fns: list[Function], structs: dict, typedefs: dict[str, str]
+) -> str:
+    """Render the bind(C) interface module of a library: mirror types, direct and glue interfaces."""
     module = f"figure_{lib.name}"
+    bound = [f for f in fns if f.status in ("direct", "glue")]
     direct = [f for f in fns if f.status == "direct"]
-    kinds = sorted(
-        {a.kind for f in direct for a in f.args if a.kind}
-        | {f.result[1] for f in direct if f.result and f.result[1]}
-    )
+    glue = [f for f in fns if f.status == "glue"]
+    mirrors = [c for c, (_, owner) in MIRRORS.items() if owner == lib.name]
+    type_lines: list[str] = []
+    kinds = {a.kind for f in bound for a in f.args if a.kind} | {
+        f.result[1] for f in bound if f.result and f.result[1]
+    }
+    if lib.name == "cimgui":
+        kinds.add("c_float")
+    for c in mirrors:
+        lines_, kinds_ = mirror_type(c, structs[c], typedefs)
+        type_lines += ["", *lines_]
+        kinds |= kinds_
+    if mirrors:
+        kinds.add("c_size_t")
     lines = header(
         module,
         f"raw {lib.title} interfaces (generated by scripts/gen_bindings.py: do not edit).",
         [
-            f"The {len(direct)} public free functions of {lib.name} that Fortran calls directly (`bind(C)`), out of "
-            f"{len(fns)}; the others need the C++ glue or are skipped: see docs/guide/raw-bindings.md. Private to the "
-            "library: applications use the figure_* wrapper modules. Each dummy documents its C type and default.",
+            f"Of the {len(fns)} public free functions of {lib.name}, {len(direct)} are bound directly (`bind(C)`) and "
+            f"{len(glue)} through the generated C++ glue (native/figure_glue_generated.cpp: `figure_<name>`, structs "
+            "passed by reference instead of by value, struct results through `res`); the rest are skipped: see "
+            "docs/guide/raw-bindings.md. Private to the library: applications use the figure_* wrapper modules. Each "
+            "dummy documents its C type and default.",
         ],
     )
-    lines.append(f"use, intrinsic :: iso_c_binding, only : {', '.join(kinds)}")
-    lines += lib.uses
+    lines.append(f"use, intrinsic :: iso_c_binding, only : {', '.join(sorted(kinds))}")
+    if lib.name != "cimgui":  # the cimgui-owned types this module references
+        body = "\n".join(type_lines) + "".join(a.decl for f in bound for a in f.args)
+        body += "".join(f.result[0] for f in bound if f.result)
+        owned = ["im_vec2"] + [m for m, owner in MIRRORS.values() if owner == "cimgui"]
+        used = [t for t in owned if f"type({t})" in body]
+        if used:
+            lines.append(f"use figure_cimgui, only : {', '.join(used)}")
     lines += ["", "implicit none", "private"]
-    if lib.name == "cimgui":
-        lines.append("public :: im_vec2")
-    for chunk in _chunks([f.cname for f in direct], "public :: "):
-        lines.append(chunk)
+    types = (["im_vec2"] if lib.name == "cimgui" else []) + [
+        MIRRORS[c][0] for c in mirrors
+    ]
+    if types:
+        lines.append(f"public :: {', '.join(types)}")
+    probes = [f"figure_sizeof_{c}_c" for c in mirrors] + (
+        ["figure_ImPlotSpec_default"] if lib.name == "cimplot" else []
+    )
+    lines += _chunks([f.cname for f in bound] + probes, "public :: ")
     if lib.name == "cimgui":
         lines += [
             "",
@@ -388,12 +492,176 @@ def function_module(lib: Library, fns: list[Function]) -> str:
             "   real(c_float) :: y = 0.0_c_float !< Ordinate.",
             "endtype im_vec2",
         ]
+    lines += type_lines
     lines += ["", "interface"]
-    for i, f in enumerate(direct):
+    for i, f in enumerate(bound):
         if i:
             lines.append("")
         lines += interface(f, lib)
+    for c in mirrors:
+        lines += [
+            "",
+            f"   function figure_sizeof_{c}_c() result(res) bind(C, name='figure_sizeof_{c}_c')",
+            f"   !< `sizeof({c}_c)` as compiled by the glue (layout check of `{MIRRORS[c][0]}`).",
+            "   import :: c_size_t",
+            "   implicit none",
+            "   integer(c_size_t) :: res !< Size [bytes].",
+            f"   endfunction figure_sizeof_{c}_c",
+        ]
+    if lib.name == "cimplot":
+        lines += [
+            "",
+            "   subroutine figure_ImPlotSpec_default(res) bind(C, name='figure_ImPlotSpec_default')",
+            "   !< An `ImPlotSpec` with the C++ constructor's defaults (automatic colours, markers, sizes, stride).",
+            "   import :: im_plot_spec",
+            "   implicit none",
+            "   type(im_plot_spec), intent(out) :: res !< Default spec.",
+            "   endsubroutine figure_ImPlotSpec_default",
+        ]
     lines += ["endinterface", f"endmodule {module}"]
+    return "\n".join(lines) + "\n"
+
+
+def c_arguments(f: Function) -> list[tuple[str, str, bool]]:
+    """Split the C-form argument list of a glue function.
+
+    Returns
+    -------
+    list[tuple[str, str, bool]]
+        (declaration, name, struct passed by value) per argument.
+    """
+    inner = f.c_args.strip()[1:-1].strip()
+    if not inner:
+        return []
+    if "(" in inner:
+        msg = f"{f.cname}: unexpected parenthesis in the arguments of a glue function: {f.c_args}"
+        raise GenerationError(msg)
+    out = []
+    for decl in inner.split(","):
+        m = re.match(r"^(.*?)(\w+)\s*(\[\d*\])?$", decl.strip())
+        if not m:
+            msg = f"{f.cname}: cannot parse argument {decl!r}"
+            raise GenerationError(msg)
+        ctype, name = m.group(1).strip(), m.group(2)
+        base = ctype.replace("const ", "").strip()
+        out.append(
+            (
+                decl.strip(),
+                name,
+                "*" not in ctype and base.removesuffix("_c") in MIRRORS,
+            )
+        )
+    return out
+
+
+def glue_cpp(glue: list[Function], structs: dict) -> str:
+    """Render the generated C++ glue: wrappers of the struct-by-value functions, layout probes, ImPlotSpec defaults."""
+    out = [
+        "// FIGURE generated glue (scripts/gen_bindings.py: do not edit).",
+        "//",
+        "// C wrappers of the cimgui/cimplot functions that pass structs by value, which Fortran cannot call directly:",
+        "// `figure_<name>` takes each such struct by pointer and returns a struct result through `res`. Every wrapper",
+        "// is noexcept: Dear ImGui and ImPlot do not throw, and an exception must not unwind through Fortran frames,",
+        "// so one would terminate the program. Also: the size of each struct Fortran mirrors (checked by",
+        "// src/tests/figure_test_layout.F90) and the C++ defaults of ImPlotSpec.",
+        "// Same includes, in the same order, as cimplot.cpp: cimgui.h's internal section needs the internal headers.",
+        '#include "implot.h"',
+        '#include "implot_internal.h"',
+        '#include "cimplot.h"',
+        "",
+        "#include <cstddef>",
+        "#include <cstring>",
+        "",
+        'extern "C" {',
+        "",
+    ]
+    for f in glue:
+        params = []
+        call = []
+        for decl, name, by_value in c_arguments(f):
+            if by_value:
+                ctype = decl[: decl.rfind(name)].replace("const ", "").strip()
+                params.append(f"const {ctype}* {name}")
+                call.append(f"*{name}")
+            else:
+                params.append(decl)
+                call.append(name)
+        if f.ret_struct:
+            params.append(f"{f.ret_struct}* res")
+            body = f"*res = {f.cname}({', '.join(call)});"
+            ret = "void"
+        else:
+            ret = f.ret
+            body = f"{'' if ret == 'void' else 'return '}{f.cname}({', '.join(call)});"
+        out.append(
+            f"{ret} figure_{f.cname}({', '.join(params) or 'void'}) noexcept {{ {body} }}"
+        )
+    out.append("")
+    for c in MIRRORS:
+        out.append(
+            f"size_t figure_sizeof_{c}_c(void) noexcept {{ return sizeof({c}_c); }}"
+        )
+    fields = [fld["name"] for fld in structs["ImPlotSpec"]]
+    out += [
+        "",
+        "// ImPlotSpec's defaults from its C++ constructor (IMPLOT_AUTO, IMPLOT_AUTO_COL, ...), never copied by hand: the",
+        "// C++ and C layouts are checked equal field by field, then the bytes are copied.",
+        'static_assert(sizeof(ImPlotSpec) == sizeof(ImPlotSpec_c), "ImPlotSpec and ImPlotSpec_c differ in size");',
+    ]
+    out += [
+        f'static_assert(offsetof(ImPlotSpec, {n}) == offsetof(ImPlotSpec_c, {n}), "ImPlotSpec.{n} misplaced");'
+        for n in fields
+    ]
+    out += [
+        "void figure_ImPlotSpec_default(ImPlotSpec_c* res) noexcept {",
+        "   const ImPlotSpec spec;",
+        "   std::memcpy(res, &spec, sizeof(spec));",
+        "}",
+        "",
+        '} // extern "C"',
+    ]
+    return "\n".join(out) + "\n"
+
+
+def layout_test() -> str:
+    """Render the test program comparing the Fortran mirror sizes with the C sizes."""
+    pairs = [(MIRRORS[c][0], f"figure_sizeof_{c}_c", MIRRORS[c][1]) for c in MIRRORS]
+    n = len(pairs)
+    lines = [
+        "!< figure_test_layout, the Fortran mirrors of the C structs have the C size (generated: do not edit).",
+        "program figure_test_layout",
+        "!< figure_test_layout, the Fortran mirrors of the C structs have the C size (generated: do not edit).",
+        "!<",
+        "!< Generated by scripts/gen_bindings.py: `c_sizeof` of each bind(C) mirror against `sizeof` of the C struct as",
+        "!< compiled by the glue. A mismatch means the mirror and the C struct disagree: every call passing it is wrong.",
+        "use, intrinsic :: iso_c_binding, only : c_sizeof",
+        "use, intrinsic :: iso_fortran_env, only : error_unit, output_unit",
+    ]
+    for owner in ("cimgui", "cimplot"):
+        names = [x for t, f, o in pairs if o == owner for x in (t, f)]
+        lines += wrap(
+            f"use figure_{owner}, only : {', '.join(names)}", "                    "
+        )
+    lines += ["", "implicit none"]
+    w = max(len(t) for t, _, _ in pairs) + 6
+    lines += [
+        f"{('type(' + t + ')').ljust(w)} :: {t}_v{' ' * (w - 6 - len(t))}       !< Mirror instance."
+        for t, _, _ in pairs
+    ]
+    lines += [f"{'logical'.ljust(w)} :: test_passed({n}) !< Per-check outcome.", ""]
+    for k, (t, f, _) in enumerate(pairs, 1):
+        lines.append(f"test_passed({k}) = c_sizeof({t}_v) == {f}()")
+    lines += [
+        "",
+        f"write(output_unit, '(A,{n}L2)') 'figure_test_layout checks:', test_passed",
+        "write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)",
+        "if (.not. all(test_passed)) then",
+    ]
+    for t, f, _ in pairs:
+        lines.append(
+            f"   write(error_unit, '(A,I0,A,I0)') '{t}: Fortran ', c_sizeof({t}_v), ', C ', {f}()"
+        )
+    lines += ["   error stop 1", "endif", "endprogram figure_test_layout"]
     return "\n".join(lines) + "\n"
 
 
@@ -416,22 +684,28 @@ def interface(f: Function, lib: Library) -> list[str]:
     kind = "function" if f.result else "subroutine"
     dummies = ", ".join(a.name for a in f.args)
     res = " result(res)" if f.result else ""
-    tail = f"{res} bind(C, name='{f.cname}')"
+    tail = f"{res} bind(C, name='{f.bind_name}')"
     first = f"   {kind} {f.cname}({dummies}){tail}"
     if len(first) <= MAX_LINE:
         lines = [first]
     else:  # dummies wrapped at commas, the result and binding label kept whole on the last line
         lines = wrap(f"   {kind} {f.cname}({dummies}) &", "      ")
         lines.append(f"      {tail.lstrip()}")
-    lines += doc(f"{f.cpp}{f.signature}, {lib.header}.h.", "   !< ")
+    via = (
+        f" Bound to the generated glue wrapper `{f.bind_name}`."
+        if f.status == "glue"
+        else ""
+    )
+    lines += doc(f"{f.cpp}{f.signature}, {lib.header}.h.{via}", "   !< ")
     kinds = sorted(
         {a.kind for a in f.args if a.kind}
         | ({f.result[1]} if f.result and f.result[1] else set())
     )
-    needs_vec2 = any("im_vec2" in a.decl for a in f.args) or (
-        f.result is not None and "im_vec2" in f.result[0]
+    types = sorted(
+        {t for a in f.args for t in re.findall(r"type\((im_\w+)\)", a.decl)}
+        | set(re.findall(r"type\((im_\w+)\)", f.result[0] if f.result else ""))
     )
-    imports = kinds + (["im_vec2"] if needs_vec2 else [])
+    imports = kinds + types
     if imports:
         lines.append(f"   import :: {', '.join(imports)}")
     lines.append("   implicit none")
@@ -502,12 +776,16 @@ def report(results: list[tuple[Library, list[Function]]]) -> str:
         "",
         "The raw layer is generated from the cimgui and cimplot metadata by `scripts/gen_bindings.py`. A public free",
         "function is **direct** when every argument is a scalar, a pointer or an `ImVec2` by value (and so is its",
-        "result): it is bound with `bind(C)` in `figure_cimgui` / `figure_cimplot`. Functions passing a larger struct",
-        "by value need the C++ **glue**; variadic functions and functions taking callbacks are **skipped**. Enumerators",
-        "are in `figure_cimgui_enums` / `figure_cimplot_enums`. These modules are private to the library: programs use",
-        "the wrappers (`ig_*`, `ip_*`).",
+        "result): it is bound with `bind(C)` in `figure_cimgui` / `figure_cimplot`. A function passing a larger",
+        "struct by value (`ImVec4`, `ImPlotSpec`, `ImPlotPoint`, ...) goes through the generated **glue**",
+        "(`native/figure_glue_generated.cpp`): a C wrapper `figure_<name>` takes the struct by pointer and returns a",
+        "struct result through `res`; the Fortran interface keeps the C API name, with the struct as a `bind(C)` mirror",
+        "type (`im_vec4`, `im_plot_spec`, ...) passed by reference. `src/tests/figure_test_layout.F90` checks that each",
+        "mirror has the size of its C struct. Variadic functions and functions taking callbacks are **skipped**.",
+        "Enumerators are in `figure_cimgui_enums` / `figure_cimplot_enums`. These modules are private to the library:",
+        "programs use the wrappers (`ig_*`, `ip_*`).",
         "",
-        "| Library | Public functions | Direct | Glue | Skipped |",
+        "| Library | Public functions | Direct | Glue (generated) | Skipped |",
         "|---|---|---|---|---|",
     ]
     for lib, fns in results:
@@ -516,7 +794,10 @@ def report(results: list[tuple[Library, list[Function]]]) -> str:
             f"| {lib.name} | {len(fns)} | {n['direct']} | {n['glue']} | {n['skipped']} |"
         )
     for lib, fns in results:
-        for status, title in (("glue", "Need the glue"), ("skipped", "Skipped")):
+        for status, title in (
+            ("glue", "Through the generated glue"),
+            ("skipped", "Skipped"),
+        ):
             sel = [f for f in fns if f.status == status]
             out += [
                 "",
@@ -540,6 +821,7 @@ def generate() -> dict[Path, str]:
     outputs: dict[Path, str] = {}
     results: list[tuple[Library, list[Function]]] = []
     typedefs_all: dict[str, str] = {}
+    structs_all: dict = {}
     for lib in LIBRARIES:
         definitions, structs_enums, typedefs = load(lib)
         typedefs_all.update(typedefs)
@@ -549,14 +831,25 @@ def generate() -> dict[Path, str]:
             typedefs_all.setdefault(enum.rstrip("_"), "int")
         fns = public_functions(lib, definitions, typedefs_all)
         results.append((lib, fns))
+        structs_all.update(structs_enums["structs"])
         outputs[ROOT / "src" / "lib" / f"figure_{lib.name}.F90"] = function_module(
-            lib, fns
+            lib, fns, structs_all, typedefs_all
         )
         outputs[ROOT / "src" / "lib" / f"figure_{lib.name}_enums.F90"] = enum_module(
             lib, structs_enums["enums"], structs_enums.get("locations", {})
         )
     outputs[ROOT / "docs" / "guide" / "raw-bindings.md"] = report(results)
+    glue = [f for _, fns in results for f in fns if f.status == "glue"]
+    outputs[ROOT / "native" / "figure_glue_generated.cpp"] = glue_cpp(glue, structs_all)
+    outputs[ROOT / "src" / "tests" / "figure_test_layout.F90"] = layout_test()
     for path, text in outputs.items():
+        if path.suffix == ".F90":
+            for name in re.findall(
+                r"^\s*(?:function|subroutine|module|program)\s+(\w+)", text, re.M
+            ):
+                if len(name) > 63:
+                    msg = f"{path.name}: Fortran name longer than 63 characters: {name}"
+                    raise GenerationError(msg)
         for n, line in enumerate(text.splitlines(), 1):
             if path.suffix == ".F90" and len(line) > MAX_LINE:
                 msg = f"{path.name}:{n}: line longer than {MAX_LINE} characters"

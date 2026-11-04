@@ -49,10 +49,16 @@ flowchart TD
 Fortran calls only C functions, through `bind(C)` interfaces; no C++ type, exception or ABI crosses. A cimgui or
 cimplot function is bound **directly** when all its arguments are scalars, pointers or the two-float `ImVec2_c`
 (declared in Fortran as the interoperable `im_vec2`). Functions that take larger structures by value, such as
-ImPlot's item functions with their `ImPlotSpec_c`, go through the **glue**, which builds the structure in C++:
-`ip_line` calls `fig_plot_line`, which calls `ImPlot::PlotLine`.
+ImPlot's item functions with their `ImPlotSpec_c`, go through the **generated glue**
+(`native/figure_glue_generated.cpp`): a wrapper `figure_<name>` takes the structure by pointer, from a Fortran
+`bind(C)` mirror type passed by reference (`im_plot_spec`), and calls the C function with it by value. `ip_line`
+calls `ImPlot_PlotLine_doublePtrdoublePtr` (bound to `figure_ImPlot_PlotLine_doublePtrdoublePtr`), which calls
+`ImPlot::PlotLine`. The generated wrappers are `noexcept`: an exception would terminate the program rather than
+unwind through Fortran frames. `ImPlotSpec`'s defaults come from its C++ constructor (`figure_ImPlotSpec_default`),
+and `figure_test_layout` checks that every mirror type has the size of its C struct
+([Raw bindings](raw-bindings)).
 
-Glue conventions (`figure_native.h`):
+Conventions of the hand-written glue (`figure_native.h`):
 
 - every function is plain C (`extern "C"`) and returns an `int` status unless documented otherwise;
 - no C++ exception escapes: each function catches them and returns `FIG_ERR_EXCEPTION`;

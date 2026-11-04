@@ -51,7 +51,8 @@ flowchart TD
   figure_fail["figure_fail"] --> figure_check["figure_check"]
   init["init"] --> figure_check["figure_check"]
   init_headless["init_headless"] --> figure_check["figure_check"]
-  ip_line["ip_line"] --> figure_check["figure_check"]
+  ip_line_r32["ip_line_r32"] --> figure_check["figure_check"]
+  ip_line_r64["ip_line_r64"] --> figure_check["figure_check"]
   next_frame["next_frame"] --> figure_check["figure_check"]
   figure_check["figure_check"] --> figure_last_error["figure_last_error"]
   style figure_check fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -77,7 +78,7 @@ subroutine figure_fail(status, message, stat)
 
 ```mermaid
 flowchart TD
-  ip_line["ip_line"] --> figure_fail["figure_fail"]
+  series_ok["series_ok"] --> figure_fail["figure_fail"]
   figure_fail["figure_fail"] --> fig_set_last_error["fig_set_last_error"]
   figure_fail["figure_fail"] --> figure_check["figure_check"]
   style figure_fail fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -135,6 +136,8 @@ flowchart TD
   ig_slider_r64["ig_slider_r64"] --> cstr["cstr"]
   ig_text["ig_text"] --> cstr["cstr"]
   ip_begin_plot["ip_begin_plot"] --> cstr["cstr"]
+  ip_line_r32["ip_line_r32"] --> cstr["cstr"]
+  ip_line_r64["ip_line_r64"] --> cstr["cstr"]
   ip_setup_axes["ip_setup_axes"] --> cstr["cstr"]
   style cstr fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

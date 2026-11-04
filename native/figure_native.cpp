@@ -327,13 +327,4 @@ void fig_input_mouse(float x, float y, int left_down) {
    io.AddMouseButtonEvent(ImGuiMouseButton_Left, left_down != 0);
 }
 
-int fig_plot_line(const char *label, int label_len, const double *xs, const double *ys, int n) {
-   FIG_TRY
-   if (n < 0) return fail(FIG_ERR_ARGUMENT, "plot_line: negative point count");
-   const std::string l(label, label_len > 0 ? static_cast<size_t>(label_len) : 0);
-   ImPlot::PlotLine(l.c_str(), xs, ys, n);
-   return FIG_OK;
-   FIG_CATCH
-}
-
 } // extern "C"
