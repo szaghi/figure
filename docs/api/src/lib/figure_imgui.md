@@ -18,8 +18,10 @@ title: figure_imgui
 ```mermaid
 graph LR
   figure_imgui["figure_imgui"] --> figure_base["figure_base"]
+  figure_imgui["figure_imgui"] --> figure_c_native["figure_c_native"]
   figure_imgui["figure_imgui"] --> figure_cimgui["figure_cimgui"]
   figure_imgui["figure_imgui"] --> figure_cimgui_enums["figure_cimgui_enums"]
+  figure_imgui["figure_imgui"] --> figure_texture["figure_texture"]
   figure_imgui["figure_imgui"] --> iso_c_binding["iso_c_binding"]
   figure_imgui["figure_imgui"] --> iso_fortran_env["iso_fortran_env"]
 ```
@@ -34,6 +36,7 @@ graph LR
 - [ig_separator](#ig-separator)
 - [ig_show_demo_window](#ig-show-demo-window)
 - [ig_item_rect](#ig-item-rect)
+- [ig_image](#ig-image)
 - [ig_begin](#ig-begin)
 - [ig_button](#ig-button)
 - [ig_checkbox](#ig-checkbox)
@@ -196,6 +199,35 @@ flowchart TD
   ig_item_rect["ig_item_rect"] --> igGetItemRectMax["igGetItemRectMax"]
   ig_item_rect["ig_item_rect"] --> igGetItemRectMin["igGetItemRectMin"]
   style ig_item_rect fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_image
+
+A texture, pixel row 1 at the top (screen and image-file convention), `width` x `height` pixels (default: the
+ texture's size).
+
+```fortran
+subroutine ig_image(tex, width, height)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `tex` | type([texture_object](/api/src/lib/figure_texture#texture-object)) | in |  | Texture. |
+| `width` | real(kind=real64) | in | optional | Width [pixels]. |
+| `height` | real(kind=real64) | in | optional | Height [pixels]. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_image["ig_image"] --> fig_texture_sampling["fig_texture_sampling"]
+  ig_image["ig_image"] --> height["height"]
+  ig_image["ig_image"] --> igImage["igImage"]
+  ig_image["ig_image"] --> texture_ref["texture_ref"]
+  ig_image["ig_image"] --> width["width"]
+  style ig_image fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions

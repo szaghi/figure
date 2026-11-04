@@ -29,10 +29,14 @@ graph LR
 - [fig_set_ini_file](#fig-set-ini-file)
 - [fig_content_scale](#fig-content-scale)
 - [fig_last_error](#fig-last-error)
+- [fig_texture_create](#fig-texture-create)
+- [fig_texture_update](#fig-texture-update)
 - [fig_shutdown](#fig-shutdown)
 - [fig_set_lazy](#fig-set-lazy)
 - [fig_request_frames](#fig-request-frames)
 - [fig_set_last_error](#fig-set-last-error)
+- [fig_texture_destroy](#fig-texture-destroy)
+- [fig_texture_sampling](#fig-texture-sampling)
 - [fig_input_mouse](#fig-input-mouse)
 
 ## Variables
@@ -61,6 +65,10 @@ graph LR
 
 ### fig_last_error
 
+### fig_texture_create
+
+### fig_texture_update
+
 ### fig_shutdown
 
 ### fig_set_lazy
@@ -68,5 +76,9 @@ graph LR
 ### fig_request_frames
 
 ### fig_set_last_error
+
+### fig_texture_destroy
+
+### fig_texture_sampling
 
 ### fig_input_mouse

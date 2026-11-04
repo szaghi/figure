@@ -53,6 +53,18 @@ Details: [Widgets](widgets).
 | `ip_bars(label, x, y, bar_size [, spec] [, stat])` | bars of height `y(i)` at `x(i)` |
 | `ip_shaded(label, x, y1, y2 [, spec] [, stat])`, `ip_shaded(label, x, y, yref ...)` | area between two curves, or a curve and `y = yref` |
 | `ip_spec(...)` → `plot_spec_object` | item style: colours, line weight, markers, flags (`ImPlotMarker_*`, `ImPlot*Flags_*`) |
+| `ip_heatmap(label, f, xmin, xmax, ymin, ymax ...)` | a field `f(i, j)` as coloured cells, read in place, j = 1 at the bottom |
+| `ip_colormap_scale(label, scale_min, scale_max ...)` | the colour bar of a heatmap (`ImPlotColormap_*`) |
+| `ip_image(label, tex, xmin, xmax, ymin, ymax ...)` | a texture in a plot, pixel row 1 at the bottom |
+
+## Images: `texture_object`, `ig_image`
+
+| Procedure | Purpose |
+|---|---|
+| `tex%init(width, height [, smooth])`, `tex%update(rgba)`, `tex%destroy()` | an RGBA texture on the GPU, `integer(int8) :: rgba(4, width, height)` uploaded in place |
+| `ig_image(tex [, width, height])` | the texture in a window, pixel row 1 at the top |
+
+Details: [Heatmaps and images](images).
 | `ip_end_plot()` | end the plot (only if `ip_begin_plot` returned `.true.`) |
 
 Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots).

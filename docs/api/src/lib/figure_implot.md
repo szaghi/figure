@@ -30,6 +30,7 @@ graph LR
   figure_implot["figure_implot"] --> figure_cimgui["figure_cimgui"]
   figure_implot["figure_implot"] --> figure_cimplot["figure_cimplot"]
   figure_implot["figure_implot"] --> figure_cimplot_enums["figure_cimplot_enums"]
+  figure_implot["figure_implot"] --> figure_texture["figure_texture"]
   figure_implot["figure_implot"] --> iso_c_binding["iso_c_binding"]
   figure_implot["figure_implot"] --> iso_fortran_env["iso_fortran_env"]
 ```
@@ -40,6 +41,7 @@ graph LR
 - [ip_line](#ip-line)
 - [ip_scatter](#ip-scatter)
 - [ip_bars](#ip-bars)
+- [ip_heatmap](#ip-heatmap)
 - [ip_shaded](#ip-shaded)
 - [ip_end_plot](#ip-end-plot)
 - [ip_setup_axes](#ip-setup-axes)
@@ -50,6 +52,7 @@ graph LR
 - [ip_shaded_ref_r32](#ip-shaded-ref-r32)
 - [ip_line_values_r32](#ip-line-values-r32)
 - [ip_line_row_r32](#ip-line-row-r32)
+- [ip_heatmap_r32](#ip-heatmap-r32)
 - [ip_line_r64](#ip-line-r64)
 - [ip_scatter_r64](#ip-scatter-r64)
 - [ip_bars_r64](#ip-bars-r64)
@@ -57,9 +60,13 @@ graph LR
 - [ip_shaded_ref_r64](#ip-shaded-ref-r64)
 - [ip_line_values_r64](#ip-line-values-r64)
 - [ip_line_row_r64](#ip-line-row-r64)
+- [ip_heatmap_r64](#ip-heatmap-r64)
+- [ip_image](#ip-image)
+- [ip_colormap_scale](#ip-colormap-scale)
 - [ip_begin_plot](#ip-begin-plot)
 - [ip_spec](#ip-spec)
 - [series_ok](#series-ok)
+- [field_ok](#field-ok)
 - [row_ok](#row-ok)
 - [uniform](#uniform)
 - [addr_r32](#addr-r32)
@@ -103,6 +110,12 @@ Markers at the points (x(i), y(i)).
 Bars of height y(i) centred at x(i).
 
 **Module procedures**: [`ip_bars_r32`](/api/src/lib/figure_implot#ip-bars-r32), [`ip_bars_r64`](/api/src/lib/figure_implot#ip-bars-r64)
+
+### ip_heatmap
+
+A 2D field f(i, j) as coloured cells: i along x, j along y, j = 1 at the bottom.
+
+**Module procedures**: [`ip_heatmap_r32`](/api/src/lib/figure_implot#ip-heatmap-r32), [`ip_heatmap_r64`](/api/src/lib/figure_implot#ip-heatmap-r64)
 
 ### ip_shaded
 
@@ -377,6 +390,47 @@ flowchart TD
   style ip_line_row_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### ip_heatmap_r32
+
+The field f(i, j) as coloured cells over [xmin, xmax] x [ymin, ymax], read in place (no copy, no transpose):
+ cell (i, j) spans the i-th of size(f, 1) columns along x and the j-th of size(f, 2) rows along y, j = 1 at the
+ bottom. Single precision.
+
+```fortran
+subroutine ip_heatmap_r32(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `f` | real(kind=real32) | in | contiguous, target | Field: f(i, j), i along x, j along y. |
+| `xmin` | real(kind=real64) | in |  | Left edge of the first column. |
+| `xmax` | real(kind=real64) | in |  | Right edge of the last column. |
+| `ymin` | real(kind=real64) | in |  | Bottom edge of row 1. |
+| `ymax` | real(kind=real64) | in |  | Top edge of the last row. |
+| `scale_min` | real(kind=real64) | in | optional | Value at the bottom of the colormap. |
+| `scale_max` | real(kind=real64) | in | optional | Value at the top (both or none; none: data). |
+| `label_format` | character(len=*) | in | optional | printf format printing each value in its cell. |
+| `colormap` | integer(kind=int32) | in | optional | Colormap (`ImPlotColormap_*`; default: current). |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_heatmap_r32["ip_heatmap_r32"] --> ImPlot_PlotHeatmap_FloatPtr["ImPlot_PlotHeatmap_FloatPtr"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> ImPlot_PopColormap["ImPlot_PopColormap"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> ImPlot_PushColormap_PlotColormap["ImPlot_PushColormap_PlotColormap"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> cstr["cstr"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> field_ok["field_ok"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> figure_check["figure_check"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> spec_c["spec_c"]
+  style ip_heatmap_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### ip_line_r64
 
 Line through the points (x(i), y(i)), double precision.
@@ -602,6 +656,112 @@ flowchart TD
   style ip_line_row_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### ip_heatmap_r64
+
+The field f(i, j) as coloured cells over [xmin, xmax] x [ymin, ymax], read in place (no copy, no transpose):
+ cell (i, j) spans the i-th of size(f, 1) columns along x and the j-th of size(f, 2) rows along y, j = 1 at the
+ bottom. Double precision.
+
+```fortran
+subroutine ip_heatmap_r64(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `f` | real(kind=real64) | in | contiguous, target | Field: f(i, j), i along x, j along y. |
+| `xmin` | real(kind=real64) | in |  | Left edge of the first column. |
+| `xmax` | real(kind=real64) | in |  | Right edge of the last column. |
+| `ymin` | real(kind=real64) | in |  | Bottom edge of row 1. |
+| `ymax` | real(kind=real64) | in |  | Top edge of the last row. |
+| `scale_min` | real(kind=real64) | in | optional | Value at the bottom of the colormap. |
+| `scale_max` | real(kind=real64) | in | optional | Value at the top (both or none; none: data). |
+| `label_format` | character(len=*) | in | optional | printf format printing each value in its cell. |
+| `colormap` | integer(kind=int32) | in | optional | Colormap (`ImPlotColormap_*`; default: current). |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_heatmap_r64["ip_heatmap_r64"] --> ImPlot_PlotHeatmap_doublePtr["ImPlot_PlotHeatmap_doublePtr"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> ImPlot_PopColormap["ImPlot_PopColormap"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> ImPlot_PushColormap_PlotColormap["ImPlot_PushColormap_PlotColormap"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> cstr["cstr"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> field_ok["field_ok"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> figure_check["figure_check"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> spec_c["spec_c"]
+  style ip_heatmap_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_image
+
+A texture over [xmin, xmax] x [ymin, ymax], pixel row 1 at ymin (plot convention: y up).
+
+```fortran
+subroutine ip_image(label, tex, xmin, xmax, ymin, ymax, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `tex` | type([texture_object](/api/src/lib/figure_texture#texture-object)) | in |  | Texture. |
+| `xmin` | real(kind=real64) | in |  | Left edge. |
+| `xmax` | real(kind=real64) | in |  | Right edge. |
+| `ymin` | real(kind=real64) | in |  | Bottom edge (pixel row 1). |
+| `ymax` | real(kind=real64) | in |  | Top edge (last pixel row). |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_image["ip_image"] --> ImPlot_PlotImage["ImPlot_PlotImage"]
+  ip_image["ip_image"] --> cstr["cstr"]
+  ip_image["ip_image"] --> fig_texture_sampling["fig_texture_sampling"]
+  ip_image["ip_image"] --> figure_check["figure_check"]
+  ip_image["ip_image"] --> figure_fail["figure_fail"]
+  ip_image["ip_image"] --> is_initialized["is_initialized"]
+  ip_image["ip_image"] --> spec_c["spec_c"]
+  ip_image["ip_image"] --> texture_ref["texture_ref"]
+  style ip_image fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_colormap_scale
+
+A colour bar for [scale_min, scale_max], next to a heatmap (outside `ip_begin_plot`/`ip_end_plot`).
+
+```fortran
+subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label (also the widget id). |
+| `scale_min` | real(kind=real64) | in |  | Value at the bottom. |
+| `scale_max` | real(kind=real64) | in |  | Value at the top. |
+| `width` | real(kind=real64) | in | optional | Width [pixels] (default: ImPlot's). |
+| `height` | real(kind=real64) | in | optional | Height [pixels] (default: ImPlot's). |
+| `label_format` | character(len=*) | in | optional | printf format of the tick labels (default '%g', ImPlot's). |
+| `colormap` | integer(kind=int32) | in | optional | Colormap (`ImPlotColormap_*`; default: current). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_colormap_scale["ip_colormap_scale"] --> ImPlot_ColormapScale["ImPlot_ColormapScale"]
+  ip_colormap_scale["ip_colormap_scale"] --> cstr["cstr"]
+  style ip_colormap_scale fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ## Functions
 
 ### ip_begin_plot
@@ -707,6 +867,36 @@ flowchart TD
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> series_ok["series_ok"]
   series_ok["series_ok"] --> figure_fail["figure_fail"]
   style series_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### field_ok
+
+Whether a field can be drawn as a heatmap: a cell count ImPlot's `int` holds, and both scale ends or none.
+
+**Returns**: `logical`
+
+```fortran
+function field_ok(nx, ny, has_min, has_max, stat) result(ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `nx` | integer(kind=int64) | in |  | size(f, 1). |
+| `ny` | integer(kind=int64) | in |  | size(f, 2). |
+| `has_min` | logical | in |  | scale_min given. |
+| `has_max` | logical | in |  | scale_max given. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_heatmap_r32["ip_heatmap_r32"] --> field_ok["field_ok"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> field_ok["field_ok"]
+  field_ok["field_ok"] --> figure_fail["figure_fail"]
+  style field_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### row_ok
@@ -855,6 +1045,9 @@ function spec_c(spec) result(c)
 flowchart TD
   ip_bars_r32["ip_bars_r32"] --> spec_c["spec_c"]
   ip_bars_r64["ip_bars_r64"] --> spec_c["spec_c"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> spec_c["spec_c"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> spec_c["spec_c"]
+  ip_image["ip_image"] --> spec_c["spec_c"]
   ip_line_r32["ip_line_r32"] --> spec_c["spec_c"]
   ip_line_r64["ip_line_r64"] --> spec_c["spec_c"]
   ip_line_row_r32["ip_line_row_r32"] --> spec_c["spec_c"]

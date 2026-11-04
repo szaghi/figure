@@ -60,6 +60,9 @@ SCALARS: dict[str, tuple[str, str]] = {
     "bool": ("logical(c_bool)", "c_bool"),
 }
 VEC2 = {"ImVec2", "ImVec2_c"}
+# `const char*` arguments that accept NULL although their default is a string: ImPlot's per-cell label formats,
+# where NULL means no labels (an empty format would still format and measure a string per cell).
+NULLABLE_STRINGS = {"label_fmt"}
 # Callback types the typedef tables omit (cimplot defines ImPlotPoint_getter in its own wrapper header).
 CALLBACKS = {"ImPlotPoint_getter"}
 # Structs passed by value that need the glue -> Fortran mirror type (bind(C)) and the module defining it.
@@ -247,7 +250,9 @@ def classify(ov: dict, typedefs: dict[str, str]) -> Function:
         )
         if is_ptr:
             plain = ctype.replace(" ", "")
-            if plain == "constchar*" and default not in ("NULL", "nullptr"):
+            # ImPlot's label formats (label_fmt) accept NULL for "no labels": keep them nullable
+            nullable = default in ("NULL", "nullptr") or a["name"] in NULLABLE_STRINGS
+            if plain == "constchar*" and not nullable:
                 fn.args.append(
                     Argument(
                         name,

@@ -45,6 +45,11 @@ struct state_t {
    int           frames_left = 3; // frames still to draw after the last event (ImGui settles in a few)
    float         scale = 1.0f;
    std::string   ini_file;        // where Dear ImGui keeps window positions and sizes; empty: nowhere (the default)
+   struct texture_t {
+      int width = 0, height = 0;
+   };
+   std::map<unsigned long long, texture_t> textures; // user textures by ImTextureID (the GL name in window mode)
+   unsigned long long next_headless_texture = 1;     // headless mode: ids without GL objects
 } st;
 
 // Redraw diagnostics, enabled by the environment variable FIGURE_DEBUG_REDRAW (any value): once per second, print to
@@ -77,7 +82,8 @@ void redraw_stats_flush(Uint64 now) {
    rs.t_mark = now;
 }
 
-// The three GL calls the glue makes itself, loaded through SDL: no link-time dependency on libGL/opengl32.
+// The GL calls the glue makes itself (frame clear, user textures), loaded through SDL: no link-time dependency on
+// libGL/opengl32.
 typedef void (*gl_viewport_t)(int, int, int, int);
 typedef void (*gl_clear_color_t)(float, float, float, float);
 typedef void (*gl_clear_t)(unsigned int);
@@ -85,6 +91,24 @@ gl_viewport_t    p_glViewport = nullptr;
 gl_clear_color_t p_glClearColor = nullptr;
 gl_clear_t       p_glClear = nullptr;
 constexpr unsigned int GL_COLOR_BUFFER_BIT_ = 0x00004000;
+typedef void (*gl_gen_textures_t)(int, unsigned int *);
+typedef void (*gl_delete_textures_t)(int, const unsigned int *);
+typedef void (*gl_bind_texture_t)(unsigned int, unsigned int);
+typedef void (*gl_tex_parameteri_t)(unsigned int, unsigned int, int);
+typedef void (*gl_tex_image_2d_t)(unsigned int, int, int, int, int, int, unsigned int, unsigned int, const void *);
+typedef void (*gl_tex_sub_image_2d_t)(unsigned int, int, int, int, int, int, unsigned int, unsigned int, const void *);
+typedef void (*gl_pixel_storei_t)(unsigned int, int);
+gl_gen_textures_t     p_glGenTextures = nullptr;
+gl_delete_textures_t  p_glDeleteTextures = nullptr;
+gl_bind_texture_t     p_glBindTexture = nullptr;
+gl_tex_parameteri_t   p_glTexParameteri = nullptr;
+gl_tex_image_2d_t     p_glTexImage2D = nullptr;
+gl_tex_sub_image_2d_t p_glTexSubImage2D = nullptr;
+gl_pixel_storei_t     p_glPixelStorei = nullptr;
+constexpr unsigned int GL_TEXTURE_2D_ = 0x0DE1, GL_TEXTURE_MAG_FILTER_ = 0x2800, GL_TEXTURE_MIN_FILTER_ = 0x2801;
+constexpr unsigned int GL_TEXTURE_WRAP_S_ = 0x2802, GL_TEXTURE_WRAP_T_ = 0x2803, GL_CLAMP_TO_EDGE_ = 0x812F;
+constexpr unsigned int GL_NEAREST_ = 0x2600, GL_LINEAR_ = 0x2601, GL_RGBA_ = 0x1908, GL_UNSIGNED_BYTE_ = 0x1401;
+constexpr unsigned int GL_UNPACK_ROW_LENGTH_ = 0x0CF2, GL_UNPACK_ALIGNMENT_ = 0x0CF5;
 
 void create_contexts() {
    IMGUI_CHECKVERSION();
@@ -175,6 +199,13 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    p_glViewport = reinterpret_cast<gl_viewport_t>(SDL_GL_GetProcAddress("glViewport"));
    p_glClearColor = reinterpret_cast<gl_clear_color_t>(SDL_GL_GetProcAddress("glClearColor"));
    p_glClear = reinterpret_cast<gl_clear_t>(SDL_GL_GetProcAddress("glClear"));
+   p_glGenTextures = reinterpret_cast<gl_gen_textures_t>(SDL_GL_GetProcAddress("glGenTextures"));
+   p_glDeleteTextures = reinterpret_cast<gl_delete_textures_t>(SDL_GL_GetProcAddress("glDeleteTextures"));
+   p_glBindTexture = reinterpret_cast<gl_bind_texture_t>(SDL_GL_GetProcAddress("glBindTexture"));
+   p_glTexParameteri = reinterpret_cast<gl_tex_parameteri_t>(SDL_GL_GetProcAddress("glTexParameteri"));
+   p_glTexImage2D = reinterpret_cast<gl_tex_image_2d_t>(SDL_GL_GetProcAddress("glTexImage2D"));
+   p_glTexSubImage2D = reinterpret_cast<gl_tex_sub_image_2d_t>(SDL_GL_GetProcAddress("glTexSubImage2D"));
+   p_glPixelStorei = reinterpret_cast<gl_pixel_storei_t>(SDL_GL_GetProcAddress("glPixelStorei"));
    SDL_SetWindowPosition(st.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
    SDL_ShowWindow(st.window);
 
@@ -319,6 +350,10 @@ void fig_shutdown(void) {
          st.in_frame = false;
       }
       if (st.m == mode::window) {
+         for (const auto &t : st.textures) {
+            const unsigned int name = static_cast<unsigned int>(t.first);
+            p_glDeleteTextures(1, &name);
+         }
          ImGui_ImplOpenGL3_Shutdown();
          ImGui_ImplSDL3_Shutdown();
       }
@@ -331,6 +366,78 @@ void fig_shutdown(void) {
    } catch (...) {
    }
    st = state_t{};
+}
+
+int fig_texture_create(int width, int height, int smooth, unsigned long long *id) {
+   FIG_TRY
+   *id = 0;
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "texture size must be positive");
+   if (st.m == mode::headless) {
+      *id = st.next_headless_texture++;
+   } else {
+      unsigned int name = 0;
+      p_glGenTextures(1, &name);
+      if (name == 0) return fail(FIG_ERR_FAILED, "glGenTextures returned no texture");
+      p_glBindTexture(GL_TEXTURE_2D_, name);
+      const int filter = static_cast<int>(smooth ? GL_LINEAR_ : GL_NEAREST_);
+      p_glTexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, filter);
+      p_glTexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, filter);
+      p_glTexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, static_cast<int>(GL_CLAMP_TO_EDGE_));
+      p_glTexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, static_cast<int>(GL_CLAMP_TO_EDGE_));
+      p_glTexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), width, height, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
+                     nullptr);
+      *id = name;
+   }
+   st.textures[*id] = {width, height};
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_texture_update(unsigned long long id, int width, int height, const unsigned char *rgba) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   const auto t = st.textures.find(id);
+   if (t == st.textures.end()) return fail(FIG_ERR_ARGUMENT, "unknown texture (destroyed, or never created)");
+   if (width != t->second.width || height != t->second.height)
+      return fail(FIG_ERR_ARGUMENT, "pixel array size differs from the texture size");
+   if (st.m == mode::window) {
+      // tightly packed RGBA rows straight from the caller's array: one upload, no staging copy
+      p_glBindTexture(GL_TEXTURE_2D_, static_cast<unsigned int>(id));
+      p_glPixelStorei(GL_UNPACK_ROW_LENGTH_, 0);
+      p_glPixelStorei(GL_UNPACK_ALIGNMENT_, 1);
+      p_glTexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, width, height, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba);
+   }
+   return FIG_OK;
+   FIG_CATCH
+}
+
+void fig_texture_sampling(int plot, int from_texture) {
+   // The OpenGL3 backend samples every texture through its own (linear) sampler object, which overrides the
+   // glTexParameteri filter of user textures: around a user image, ask it to use the texture's own filter, then
+   // restore its render state. No-op without a renderer backend (headless).
+   try {
+      if (!ImGui::GetCurrentContext()) return;
+      const ImGuiPlatformIO &pio = ImGui::GetPlatformIO();
+      const ImDrawCallback cb = from_texture ? pio.DrawCallback_SetSamplerFromTex : pio.DrawCallback_ResetRenderState;
+      if (cb == nullptr) return;
+      ImDrawList *dl = plot ? ImPlot::GetPlotDrawList() : ImGui::GetWindowDrawList();
+      dl->AddCallback(cb, nullptr);
+   } catch (...) {
+   }
+}
+
+void fig_texture_destroy(unsigned long long id) {
+   try {
+      const auto t = st.textures.find(id);
+      if (t == st.textures.end()) return;
+      if (st.m == mode::window) {
+         const unsigned int name = static_cast<unsigned int>(id);
+         p_glDeleteTextures(1, &name);
+      }
+      st.textures.erase(t);
+   } catch (...) {
+   }
 }
 
 void fig_input_mouse(float x, float y, int left_down) {

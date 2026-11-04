@@ -47,8 +47,13 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
 - Generator output committed and checked for drift in CI.
 
 ### M3: images and speed
-- Textures from contiguous `integer(c_int8_t)` RGBA arrays: one `glTexSubImage2D` upload, no intermediate copies.
-- ImPlot heatmaps from Fortran 2D arrays (column-major aware).
+- [x] Textures (2026-11-04): `texture_object` (init/update/destroy, no finaliser: a copy would destroy the original's
+  texture), `integer(int8) :: rgba(4, w, h)` uploaded in place by one `glTexSubImage2D`; `ig_image` (row 1 at the
+  top), `ip_image` (row 1 at ymin). Nearest filtering by default: the GL3 backend's own sampler overrides
+  glTexParameteri, so the images are wrapped in `DrawCallback_SetSamplerFromTex` / `ResetRenderState`.
+- [x] Heatmaps (2026-11-04): `ip_heatmap` reads `f(i, j)` in place as rows = size(f, 2), cols = size(f, 1), row-major,
+  with the y bounds swapped so that j = 1 is at the bottom (ImPlot draws row 0 at bounds_max.y); labels off
+  (`label_fmt` NULL, made nullable in the generator); `ip_colormap_scale`.
 - [x] Plot items generic over `real32`/`real64`, through the generated glue (2026-11-04): `ip_line`, `ip_scatter`,
   `ip_bars`, `ip_shaded` (two curves, or curve and `yref`), all with an optional `spec` from `ip_spec`
   (`plot_spec_object`: ImPlot's C++ defaults, overridden per keyword). Still to wrap: error bars, stems, stairs,

@@ -50,9 +50,13 @@ subroutine figure_check(status, stat)
 flowchart TD
   figure_fail["figure_fail"] --> figure_check["figure_check"]
   init["init"] --> figure_check["figure_check"]
+  init["init"] --> figure_check["figure_check"]
   init_headless["init_headless"] --> figure_check["figure_check"]
   ip_bars_r32["ip_bars_r32"] --> figure_check["figure_check"]
   ip_bars_r64["ip_bars_r64"] --> figure_check["figure_check"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> figure_check["figure_check"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> figure_check["figure_check"]
+  ip_image["ip_image"] --> figure_check["figure_check"]
   ip_line_r32["ip_line_r32"] --> figure_check["figure_check"]
   ip_line_r64["ip_line_r64"] --> figure_check["figure_check"]
   ip_line_row_r32["ip_line_row_r32"] --> figure_check["figure_check"]
@@ -67,6 +71,7 @@ flowchart TD
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> figure_check["figure_check"]
   ip_spec["ip_spec"] --> figure_check["figure_check"]
   next_frame["next_frame"] --> figure_check["figure_check"]
+  update["update"] --> figure_check["figure_check"]
   figure_check["figure_check"] --> figure_last_error["figure_last_error"]
   style figure_check fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -91,9 +96,12 @@ subroutine figure_fail(status, message, stat)
 
 ```mermaid
 flowchart TD
+  field_ok["field_ok"] --> figure_fail["figure_fail"]
+  ip_image["ip_image"] --> figure_fail["figure_fail"]
   ip_spec["ip_spec"] --> figure_fail["figure_fail"]
   row_ok["row_ok"] --> figure_fail["figure_fail"]
   series_ok["series_ok"] --> figure_fail["figure_fail"]
+  update["update"] --> figure_fail["figure_fail"]
   figure_fail["figure_fail"] --> fig_set_last_error["fig_set_last_error"]
   figure_fail["figure_fail"] --> figure_check["figure_check"]
   style figure_fail fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -153,6 +161,10 @@ flowchart TD
   ip_bars_r32["ip_bars_r32"] --> cstr["cstr"]
   ip_bars_r64["ip_bars_r64"] --> cstr["cstr"]
   ip_begin_plot["ip_begin_plot"] --> cstr["cstr"]
+  ip_colormap_scale["ip_colormap_scale"] --> cstr["cstr"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> cstr["cstr"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> cstr["cstr"]
+  ip_image["ip_image"] --> cstr["cstr"]
   ip_line_r32["ip_line_r32"] --> cstr["cstr"]
   ip_line_r64["ip_line_r64"] --> cstr["cstr"]
   ip_line_row_r32["ip_line_row_r32"] --> cstr["cstr"]

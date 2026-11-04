@@ -14,11 +14,12 @@ module figure_implot
 !< call ip_line('residual', it, res, spec=ip_spec(line_color=[1.0_real64, 0.0_real64, 0.0_real64, 1.0_real64], &
 !<                                               line_weight=2.0_real64, marker=ImPlotMarker_Circle))
 !<```
-use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : cstr, figure_check, figure_fail
-use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_texture_sampling
 use figure_cimgui, only : im_vec2, im_vec4
+use figure_texture, only : texture_object, texture_ref
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot, ImPlot_EndPlot,             &
                            ImPlot_PlotBars_doublePtrdoublePtr, ImPlot_PlotBars_FloatPtrFloatPtr,                   &
                            ImPlot_PlotLine_doublePtrdoublePtr, ImPlot_PlotLine_FloatPtrFloatPtr,                   &
@@ -26,7 +27,9 @@ use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_Begin
                            ImPlot_PlotScatter_doublePtrdoublePtr, ImPlot_PlotScatter_FloatPtrFloatPtr,             &
                            ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr, ImPlot_PlotShaded_doublePtrdoublePtrInt, &
                            ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr, ImPlot_PlotShaded_FloatPtrFloatPtrInt,      &
-                           ImPlot_SetupAxes
+                           ImPlot_SetupAxes, ImPlot_ColormapScale, ImPlot_PlotHeatmap_doublePtr,                   &
+                           ImPlot_PlotHeatmap_FloatPtr, ImPlot_PlotImage, ImPlot_PopColormap,                       &
+                           ImPlot_PushColormap_PlotColormap, im_plot_point
 use figure_cimplot_enums, only : ImPlotAxisFlags_None, ImPlotFlags_None,                                          &
                                  ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square,  &
                                  ImPlotMarker_Diamond, ImPlotMarker_Up, ImPlotMarker_Down, ImPlotMarker_Left,     &
@@ -35,12 +38,17 @@ use figure_cimplot_enums, only : ImPlotAxisFlags_None, ImPlotFlags_None,        
                                  ImPlotItemFlags_None, ImPlotItemFlags_NoLegend, ImPlotItemFlags_NoFit,           &
                                  ImPlotLineFlags_Segments, ImPlotLineFlags_Loop, ImPlotLineFlags_SkipNaN,         &
                                  ImPlotLineFlags_NoClip, ImPlotLineFlags_Shaded, ImPlotScatterFlags_NoClip,       &
-                                 ImPlotBarsFlags_Horizontal
+                                 ImPlotBarsFlags_Horizontal,                                                       &
+                                 ImPlotColormap_Deep, ImPlotColormap_Dark, ImPlotColormap_Pastel, ImPlotColormap_Paired, &
+                                 ImPlotColormap_Viridis, ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool, &
+                                 ImPlotColormap_Pink, ImPlotColormap_Jet, ImPlotColormap_Twilight, ImPlotColormap_RdBu,  &
+                                 ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral, ImPlotColormap_Greys
 
 implicit none
 private
 public :: ip_begin_plot, ip_end_plot, ip_setup_axes
 public :: ip_bars, ip_line, ip_scatter, ip_shaded
+public :: ip_colormap_scale, ip_heatmap, ip_image
 public :: ip_spec, plot_spec_object
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -49,6 +57,11 @@ public :: ImPlotMarker_Plus, ImPlotMarker_Asterisk, ImPlotMarker_Vertical, ImPlo
 public :: ImPlotItemFlags_None, ImPlotItemFlags_NoLegend, ImPlotItemFlags_NoFit
 public :: ImPlotLineFlags_Segments, ImPlotLineFlags_Loop, ImPlotLineFlags_SkipNaN, ImPlotLineFlags_NoClip
 public :: ImPlotLineFlags_Shaded, ImPlotScatterFlags_NoClip, ImPlotBarsFlags_Horizontal
+! ImPlot's colormaps, for `ip_heatmap` and `ip_colormap_scale`
+public :: ImPlotColormap_Deep, ImPlotColormap_Dark, ImPlotColormap_Pastel, ImPlotColormap_Paired, ImPlotColormap_Viridis
+public :: ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool, ImPlotColormap_Pink, ImPlotColormap_Jet
+public :: ImPlotColormap_Twilight, ImPlotColormap_RdBu, ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral
+public :: ImPlotColormap_Greys
 
 type :: plot_spec_object
    !< Style of a plot item: colours, line weight, markers, flags. Build it with `ip_spec`.
@@ -73,6 +86,11 @@ interface ip_bars
    !< Bars of height y(i) centred at x(i).
    module procedure ip_bars_r32, ip_bars_r64
 endinterface ip_bars
+
+interface ip_heatmap
+   !< A 2D field f(i, j) as coloured cells: i along x, j along y, j = 1 at the bottom.
+   module procedure ip_heatmap_r32, ip_heatmap_r64
+endinterface ip_heatmap
 
 interface ip_shaded
    !< Area between two curves y1(x) and y2(x), or between a curve y(x) and the line y = yref.
@@ -260,6 +278,50 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_row_r32
 
+   subroutine ip_heatmap_r32(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, &
+                             stat)
+   !< The field f(i, j) as coloured cells over [xmin, xmax] x [ymin, ymax], read in place (no copy, no transpose):
+   !< cell (i, j) spans the i-th of size(f, 1) columns along x and the j-th of size(f, 2) rows along y, j = 1 at the
+   !< bottom. Single precision.
+   character(len=*),       intent(in)                     :: label        !< Legend label.
+   real(real32),           intent(in), contiguous, target :: f(:,:)       !< Field: f(i, j), i along x, j along y.
+   real(real64),           intent(in)                     :: xmin         !< Left edge of the first column.
+   real(real64),           intent(in)                     :: xmax         !< Right edge of the last column.
+   real(real64),           intent(in)                     :: ymin         !< Bottom edge of row 1.
+   real(real64),           intent(in)                     :: ymax         !< Top edge of the last row.
+   real(real64),           intent(in), optional           :: scale_min    !< Value at the bottom of the colormap.
+   real(real64),           intent(in), optional           :: scale_max    !< Value at the top (both or none; none: data).
+   character(len=*),       intent(in), optional           :: label_format !< printf format printing each value in its cell.
+   integer(int32),         intent(in), optional           :: colormap     !< Colormap (`ImPlotColormap_*`; default: current).
+   type(plot_spec_object), intent(in), optional           :: spec         !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional          :: stat         !< Status.
+   real(c_double)                                         :: smin         !< Colormap bottom (0, 0: data range).
+   real(c_double)                                         :: smax         !< Colormap top.
+   character(kind=c_char, len=:), allocatable, target     :: fmt          !< NUL-terminated label format.
+   type(c_ptr)                                            :: pfmt         !< Label format, or null: no labels.
+   type(c_ptr)                                            :: p            !< Field address, or null when empty.
+
+   if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
+   smin = 0.0_c_double
+   smax = 0.0_c_double
+   if (present(scale_min)) smin = real(scale_min, c_double)
+   if (present(scale_max)) smax = real(scale_max, c_double)
+   pfmt = c_null_ptr
+   if (present(label_format)) then
+      fmt = cstr(label_format)
+      pfmt = c_loc(fmt)
+   endif
+   p = c_null_ptr
+   if (size(f) > 0) p = c_loc(f)
+   if (present(colormap)) call ImPlot_PushColormap_PlotColormap(int(colormap, c_int))
+   ! rows = size(f, 2) along y, cols = size(f, 1) along x: ImPlot's row-major cell (r, c) is f(c + 1, r + 1). ImPlot
+   ! draws row 0 at bounds_max%y: the y bounds are swapped so that it lands at ymin.
+   call ImPlot_PlotHeatmap_FloatPtr(cstr(label), p, int(size(f, 2), c_int), int(size(f, 1), c_int), smin, smax, pfmt, &
+                                    im_plot_point(xmin, ymax), im_plot_point(xmax, ymin), spec_c(spec))
+   if (present(colormap)) call ImPlot_PopColormap(1_c_int)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_heatmap_r32
+
    ! items, double precision
 
    subroutine ip_line_r64(label, x, y, spec, stat)
@@ -374,6 +436,102 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_row_r64
 
+   subroutine ip_heatmap_r64(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, &
+                             stat)
+   !< The field f(i, j) as coloured cells over [xmin, xmax] x [ymin, ymax], read in place (no copy, no transpose):
+   !< cell (i, j) spans the i-th of size(f, 1) columns along x and the j-th of size(f, 2) rows along y, j = 1 at the
+   !< bottom. Double precision.
+   character(len=*),       intent(in)                     :: label        !< Legend label.
+   real(real64),           intent(in), contiguous, target :: f(:,:)       !< Field: f(i, j), i along x, j along y.
+   real(real64),           intent(in)                     :: xmin         !< Left edge of the first column.
+   real(real64),           intent(in)                     :: xmax         !< Right edge of the last column.
+   real(real64),           intent(in)                     :: ymin         !< Bottom edge of row 1.
+   real(real64),           intent(in)                     :: ymax         !< Top edge of the last row.
+   real(real64),           intent(in), optional           :: scale_min    !< Value at the bottom of the colormap.
+   real(real64),           intent(in), optional           :: scale_max    !< Value at the top (both or none; none: data).
+   character(len=*),       intent(in), optional           :: label_format !< printf format printing each value in its cell.
+   integer(int32),         intent(in), optional           :: colormap     !< Colormap (`ImPlotColormap_*`; default: current).
+   type(plot_spec_object), intent(in), optional           :: spec         !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional          :: stat         !< Status.
+   real(c_double)                                         :: smin         !< Colormap bottom (0, 0: data range).
+   real(c_double)                                         :: smax         !< Colormap top.
+   character(kind=c_char, len=:), allocatable, target     :: fmt          !< NUL-terminated label format.
+   type(c_ptr)                                            :: pfmt         !< Label format, or null: no labels.
+   type(c_ptr)                                            :: p            !< Field address, or null when empty.
+
+   if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
+   smin = 0.0_c_double
+   smax = 0.0_c_double
+   if (present(scale_min)) smin = real(scale_min, c_double)
+   if (present(scale_max)) smax = real(scale_max, c_double)
+   pfmt = c_null_ptr
+   if (present(label_format)) then
+      fmt = cstr(label_format)
+      pfmt = c_loc(fmt)
+   endif
+   p = c_null_ptr
+   if (size(f) > 0) p = c_loc(f)
+   if (present(colormap)) call ImPlot_PushColormap_PlotColormap(int(colormap, c_int))
+   ! rows = size(f, 2) along y, cols = size(f, 1) along x: ImPlot's row-major cell (r, c) is f(c + 1, r + 1). ImPlot
+   ! draws row 0 at bounds_max%y: the y bounds are swapped so that it lands at ymin.
+   call ImPlot_PlotHeatmap_doublePtr(cstr(label), p, int(size(f, 2), c_int), int(size(f, 1), c_int), smin, smax, pfmt, &
+                                     im_plot_point(xmin, ymax), im_plot_point(xmax, ymin), spec_c(spec))
+   if (present(colormap)) call ImPlot_PopColormap(1_c_int)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_heatmap_r64
+
+   ! images and colour scales
+
+   subroutine ip_image(label, tex, xmin, xmax, ymin, ymax, spec, stat)
+   !< A texture over [xmin, xmax] x [ymin, ymax], pixel row 1 at ymin (plot convention: y up).
+   character(len=*),       intent(in)            :: label !< Legend label.
+   type(texture_object),   intent(in)            :: tex   !< Texture.
+   real(real64),           intent(in)            :: xmin  !< Left edge.
+   real(real64),           intent(in)            :: xmax  !< Right edge.
+   real(real64),           intent(in)            :: ymin  !< Bottom edge (pixel row 1).
+   real(real64),           intent(in)            :: ymax  !< Top edge (last pixel row).
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+
+   if (.not. tex%is_initialized()) then
+      call figure_fail(FIG_ERR_STATE, 'ip_image: the texture is not initialized', stat)
+      return
+   endif
+   ! ImPlot maps uv0 to (xmin, ymax) and uv1 to (xmax, ymin): v = 1 at the top puts the first uploaded row at ymin
+   call fig_texture_sampling(1_c_int, 1_c_int) ! the texture's own filter (nearest unless created smooth)
+   call ImPlot_PlotImage(cstr(label), texture_ref(tex), im_plot_point(xmin, ymin), im_plot_point(xmax, ymax), &
+                         im_vec2(0.0_c_float, 1.0_c_float), im_vec2(1.0_c_float, 0.0_c_float),                    &
+                         im_vec4(1.0_c_float, 1.0_c_float, 1.0_c_float, 1.0_c_float), spec_c(spec))
+   call fig_texture_sampling(1_c_int, 0_c_int)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_image
+
+   subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap)
+   !< A colour bar for [scale_min, scale_max], next to a heatmap (outside `ip_begin_plot`/`ip_end_plot`).
+   character(len=*), intent(in)           :: label        !< Label (also the widget id).
+   real(real64),     intent(in)           :: scale_min    !< Value at the bottom.
+   real(real64),     intent(in)           :: scale_max    !< Value at the top.
+   real(real64),     intent(in), optional :: width        !< Width [pixels] (default: ImPlot's).
+   real(real64),     intent(in), optional :: height       !< Height [pixels] (default: ImPlot's).
+   character(len=*), intent(in), optional :: label_format !< printf format of the tick labels (default '%g', ImPlot's).
+   integer(int32),   intent(in), optional :: colormap     !< Colormap (`ImPlotColormap_*`; default: current).
+   type(im_vec2)                          :: extent       !< Size (0: ImPlot's default).
+   integer(c_int)                         :: cmap         !< Colormap, or IMPLOT_AUTO (-1): the current one.
+
+   extent = im_vec2(0.0_c_float, 0.0_c_float)
+   if (present(width)) extent%x = real(width, c_float)
+   if (present(height)) extent%y = real(height, c_float)
+   cmap = -1_c_int
+   if (present(colormap)) cmap = int(colormap, c_int)
+   if (present(label_format)) then
+      call ImPlot_ColormapScale(cstr(label), real(scale_min, c_double), real(scale_max, c_double), extent, &
+                                cstr(label_format), 0_c_int, cmap)
+   else
+      call ImPlot_ColormapScale(cstr(label), real(scale_min, c_double), real(scale_max, c_double), extent, cstr('%g'), &
+                                0_c_int, cmap)
+   endif
+   endsubroutine ip_colormap_scale
+
    ! private helpers
 
    function series_ok(nx, ny, item, stat) result(ok)
@@ -393,6 +551,25 @@ contains
       ok = .true.
    endif
    endfunction series_ok
+
+   function field_ok(nx, ny, has_min, has_max, stat) result(ok)
+   !< Whether a field can be drawn as a heatmap: a cell count ImPlot's `int` holds, and both scale ends or none.
+   integer(int64), intent(in)            :: nx      !< size(f, 1).
+   integer(int64), intent(in)            :: ny      !< size(f, 2).
+   logical,        intent(in)            :: has_min !< scale_min given.
+   logical,        intent(in)            :: has_max !< scale_max given.
+   integer(int32), intent(out), optional :: stat    !< Status.
+   logical                               :: ok      !< Drawable.
+
+   ok = .false.
+   if (has_min .neqv. has_max) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_heatmap: give both scale_min and scale_max, or neither', stat)
+   elseif (nx * ny > int(huge(0_c_int), int64)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_heatmap: more cells than a C int can count', stat)
+   else
+      ok = .true.
+   endif
+   endfunction field_ok
 
    function row_ok(rows, cols, bits, row, stat) result(ok)
    !< Whether a matrix row can be plotted in place: the row exists, and ImPlot's `int` count and byte stride hold it.

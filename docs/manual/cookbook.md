@@ -75,6 +75,21 @@ costs nothing per frame; one built inline (`spec=ip_spec(...)`) is rebuilt every
 The `x(::5)` sections are not contiguous: the compiler copies them (see the next recipe).
 [Plots](/guide/plots#item-style) lists every `ip_spec` argument.
 
+### Show a field and its colour scale
+
+<<< @/examples/snippets/cb_field-heatmap.F90{fortran}
+
+`f(i, j)` is read in place, `i` along x and `j` along y, `j = 1` at the bottom; the bounds are the outer edges of the
+cells. Fix the scale (`scale_min`, `scale_max`) when the field changes over time, or the colours rescale every frame.
+[Heatmaps and images](/guide/images) has every argument.
+
+### Show an image computed by the program
+
+<<< @/examples/snippets/cb_field-texture.F90{fortran}
+
+Upload once, draw every frame: `tex%update` only when the pixels change (a new iteration of a computation), `ig_image`
+or `ip_image` in the loop.
+
 ### Plot the rows of a matrix
 
 A row of a column-major matrix is strided. When its abscissae are uniform, `ip_line(label, y, row [, xscale]

@@ -34,6 +34,7 @@ const docs = [
       { text: 'Frame loop and redraw',   link: '/guide/frame-loop' },
       { text: 'Widgets',                 link: '/guide/widgets' },
       { text: 'Plots',                   link: '/guide/plots' },
+      { text: 'Heatmaps and images',     link: '/guide/images' },
       { text: 'Error handling',          link: '/guide/errors' },
       { text: 'Headless testing',        link: '/guide/testing' },
       { text: 'Architecture',            link: '/guide/architecture' },
@@ -81,7 +82,7 @@ export default withMermaid({
       {
         text: 'Reference',
         link: '/guide/features',
-        activeMatch: '^/guide/(features|frame-loop|widgets|plots|errors|testing|architecture|raw-bindings|known-issues)',
+        activeMatch: '^/guide/(features|frame-loop|widgets|plots|images|errors|testing|architecture|raw-bindings|known-issues)',
       },
       { text: 'API', link: '/api/' },
       {

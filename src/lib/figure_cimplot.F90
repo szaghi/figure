@@ -1850,16 +1850,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_doublePtr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const double*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const double*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_doublePtr
 
    subroutine ImPlot_PlotHeatmap_FloatPtr(label_id, values, rows, cols, scale_min, scale_max, label_fmt, bounds_min, bounds_max, &
@@ -1869,16 +1869,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_FloatPtr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const float*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const float*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_FloatPtr
 
    subroutine ImPlot_PlotHeatmap_S16Ptr(label_id, values, rows, cols, scale_min, scale_max, label_fmt, bounds_min, bounds_max, &
@@ -1888,16 +1888,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_S16Ptr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const ImS16*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const ImS16*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_S16Ptr
 
    subroutine ImPlot_PlotHeatmap_S32Ptr(label_id, values, rows, cols, scale_min, scale_max, label_fmt, bounds_min, bounds_max, &
@@ -1907,16 +1907,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_S32Ptr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const ImS32*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const ImS32*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_S32Ptr
 
    subroutine ImPlot_PlotHeatmap_S64Ptr(label_id, values, rows, cols, scale_min, scale_max, label_fmt, bounds_min, bounds_max, &
@@ -1926,16 +1926,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_S64Ptr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const ImS64*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const ImS64*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_S64Ptr
 
    subroutine ImPlot_PlotHeatmap_S8Ptr(label_id, values, rows, cols, scale_min, scale_max, label_fmt, bounds_min, bounds_max, &
@@ -1945,16 +1945,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_S8Ptr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const ImS8*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const ImS8*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_S8Ptr
 
    subroutine ImPlot_PlotHeatmap_U16Ptr(label_id, values, rows, cols, scale_min, scale_max, label_fmt, bounds_min, bounds_max, &
@@ -1964,16 +1964,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_U16Ptr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const ImU16*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const ImU16*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_U16Ptr
 
    subroutine ImPlot_PlotHeatmap_U32Ptr(label_id, values, rows, cols, scale_min, scale_max, label_fmt, bounds_min, bounds_max, &
@@ -1983,16 +1983,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_U32Ptr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const ImU32*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const ImU32*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_U32Ptr
 
    subroutine ImPlot_PlotHeatmap_U64Ptr(label_id, values, rows, cols, scale_min, scale_max, label_fmt, bounds_min, bounds_max, &
@@ -2002,16 +2002,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_U64Ptr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const ImU64*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const ImU64*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_U64Ptr
 
    subroutine ImPlot_PlotHeatmap_U8Ptr(label_id, values, rows, cols, scale_min, scale_max, label_fmt, bounds_min, bounds_max, &
@@ -2021,16 +2021,16 @@ interface
    !< const ImPlotSpec), implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotHeatmap_U8Ptr`.
    import :: c_char, c_double, c_int, c_ptr, im_plot_point, im_plot_spec
    implicit none
-   character(kind=c_char), intent(in) :: label_id(*)  !< C `const char*`.
-   type(c_ptr), value                 :: values       !< C `const ImU8*`.
-   integer(c_int), value              :: rows         !< C `int`.
-   integer(c_int), value              :: cols         !< C `int`.
-   real(c_double), value              :: scale_min    !< C `double`, default `0`.
-   real(c_double), value              :: scale_max    !< C `double`, default `0`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   type(im_plot_point), intent(in)    :: bounds_min   !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
-   type(im_plot_point), intent(in)    :: bounds_max   !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   character(kind=c_char), intent(in) :: label_id(*) !< C `const char*`.
+   type(c_ptr), value                 :: values      !< C `const ImU8*`.
+   integer(c_int), value              :: rows        !< C `int`.
+   integer(c_int), value              :: cols        !< C `int`.
+   real(c_double), value              :: scale_min   !< C `double`, default `0`.
+   real(c_double), value              :: scale_max   !< C `double`, default `0`.
+   type(c_ptr), value                 :: label_fmt   !< C `const char*`, default `"%.1f"`.
+   type(im_plot_point), intent(in)    :: bounds_min  !< C `const ImPlotPoint`, default `ImPlotPoint(0,0)`, by value in C.
+   type(im_plot_point), intent(in)    :: bounds_max  !< C `const ImPlotPoint`, default `ImPlotPoint(1,1)`, by value in C.
+   type(im_plot_spec), intent(in)     :: spec        !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotHeatmap_U8Ptr
 
    function ImPlot_PlotHistogram2D_doublePtr(label_id, xs, ys, count, x_bins, y_bins, range, spec) &
@@ -2755,170 +2755,170 @@ interface
       bind(C, name='figure_ImPlot_PlotPieChart_doublePtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const double*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_doublePtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const double*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const double*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_doublePtrStr
 
    subroutine ImPlot_PlotPieChart_FloatPtrStr(label_ids, values, count, x, y, radius, label_fmt, angle0, spec) &
       bind(C, name='figure_ImPlot_PlotPieChart_FloatPtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const float*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_FloatPtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const float*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const float*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_FloatPtrStr
 
    subroutine ImPlot_PlotPieChart_S16PtrStr(label_ids, values, count, x, y, radius, label_fmt, angle0, spec) &
       bind(C, name='figure_ImPlot_PlotPieChart_S16PtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const ImS16*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_S16PtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const ImS16*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const ImS16*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_S16PtrStr
 
    subroutine ImPlot_PlotPieChart_S32PtrStr(label_ids, values, count, x, y, radius, label_fmt, angle0, spec) &
       bind(C, name='figure_ImPlot_PlotPieChart_S32PtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const ImS32*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_S32PtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const ImS32*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const ImS32*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_S32PtrStr
 
    subroutine ImPlot_PlotPieChart_S64PtrStr(label_ids, values, count, x, y, radius, label_fmt, angle0, spec) &
       bind(C, name='figure_ImPlot_PlotPieChart_S64PtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const ImS64*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_S64PtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const ImS64*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const ImS64*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_S64PtrStr
 
    subroutine ImPlot_PlotPieChart_S8PtrStr(label_ids, values, count, x, y, radius, label_fmt, angle0, spec) &
       bind(C, name='figure_ImPlot_PlotPieChart_S8PtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const ImS8*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_S8PtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const ImS8*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const ImS8*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_S8PtrStr
 
    subroutine ImPlot_PlotPieChart_U16PtrStr(label_ids, values, count, x, y, radius, label_fmt, angle0, spec) &
       bind(C, name='figure_ImPlot_PlotPieChart_U16PtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const ImU16*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_U16PtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const ImU16*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const ImU16*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_U16PtrStr
 
    subroutine ImPlot_PlotPieChart_U32PtrStr(label_ids, values, count, x, y, radius, label_fmt, angle0, spec) &
       bind(C, name='figure_ImPlot_PlotPieChart_U32PtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const ImU32*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_U32PtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const ImU32*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const ImU32*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_U32PtrStr
 
    subroutine ImPlot_PlotPieChart_U64PtrStr(label_ids, values, count, x, y, radius, label_fmt, angle0, spec) &
       bind(C, name='figure_ImPlot_PlotPieChart_U64PtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const ImU64*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_U64PtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const ImU64*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const ImU64*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_U64PtrStr
 
    subroutine ImPlot_PlotPieChart_U8PtrStr(label_ids, values, count, x, y, radius, label_fmt, angle0, spec) &
       bind(C, name='figure_ImPlot_PlotPieChart_U8PtrStr')
    !< ImPlot::PlotPieChart(const char* const[],const ImU8*,int,double,double,double,const char*,double,const ImPlotSpec),
    !< implot.h. Bound to the generated glue wrapper `figure_ImPlot_PlotPieChart_U8PtrStr`.
-   import :: c_char, c_double, c_int, c_ptr, im_plot_spec
+   import :: c_double, c_int, c_ptr, im_plot_spec
    implicit none
-   type(c_ptr), value                 :: label_ids    !< C `const char* const[]`.
-   type(c_ptr), value                 :: values       !< C `const ImU8*`.
-   integer(c_int), value              :: count        !< C `int`.
-   real(c_double), value              :: x            !< C `double`.
-   real(c_double), value              :: y            !< C `double`.
-   real(c_double), value              :: radius       !< C `double`.
-   character(kind=c_char), intent(in) :: label_fmt(*) !< C `const char*`, default `"%.1f"`.
-   real(c_double), value              :: angle0       !< C `double`, default `90`.
-   type(im_plot_spec), intent(in)     :: spec         !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
+   type(c_ptr), value             :: label_ids !< C `const char* const[]`.
+   type(c_ptr), value             :: values    !< C `const ImU8*`.
+   integer(c_int), value          :: count     !< C `int`.
+   real(c_double), value          :: x         !< C `double`.
+   real(c_double), value          :: y         !< C `double`.
+   real(c_double), value          :: radius    !< C `double`.
+   type(c_ptr), value             :: label_fmt !< C `const char*`, default `"%.1f"`.
+   real(c_double), value          :: angle0    !< C `double`, default `90`.
+   type(im_plot_spec), intent(in) :: spec      !< C `const ImPlotSpec`, default `ImPlotSpec()`, by value in C.
    endsubroutine ImPlot_PlotPieChart_U8PtrStr
 
    subroutine ImPlot_PlotPolygon_doublePtr(label_id, xs, ys, count, spec) bind(C, name='figure_ImPlot_PlotPolygon_doublePtr')

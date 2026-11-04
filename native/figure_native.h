@@ -31,6 +31,16 @@ const char *fig_last_error(int *len);
 /* Set the message fig_last_error returns, for failures detected on the Fortran side. */
 void   fig_set_last_error(const char *msg, int msg_len);
 
+/* User textures: RGBA, 8 bits per channel, rows of `width` pixels. The id is the ImTextureID (in window mode the GL
+ * texture name); update uploads straight from `rgba` (one glTexSubImage2D, no staging copy); destroy is safe on an
+ * unknown id; shutdown destroys the textures left. In headless mode ids are issued and sizes checked, without GL. */
+int    fig_texture_create(int width, int height, int smooth, unsigned long long *id);
+int    fig_texture_update(unsigned long long id, int width, int height, const unsigned char *rgba);
+void   fig_texture_destroy(unsigned long long id);
+/* Around a user image: from_texture = 1 makes the backend sample with the texture's own filter, 0 restores its
+ * render state; plot = 1 for the current ImPlot plot's draw list, 0 for the current window's. */
+void   fig_texture_sampling(int plot, int from_texture);
+
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);
 

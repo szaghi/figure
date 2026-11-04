@@ -42,6 +42,10 @@
       {
         "text": "figure_implot",
         "link": "/api/src/lib/figure_implot"
+      },
+      {
+        "text": "figure_texture",
+        "link": "/api/src/lib/figure_texture"
       }
     ]
   }

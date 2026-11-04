@@ -24,6 +24,8 @@ npm run docs:api      # formal generate --mirror-sources --diagrams --project fo
 | `ig_*` | `figure_imgui` | Dear ImGui widgets — see [Widgets](widgets) |
 | `ip_*` | `figure_implot` | ImPlot plots — see [Plots](plots) |
 | `plot_spec_object`, `ImPlotMarker_*`, `ImPlot*Flags_*` | `figure_implot` | item style (`ip_spec`) and its constants — see [Plots](plots#item-style) |
+| `ImPlotColormap_*` | `figure_implot` | colormaps of `ip_heatmap` and `ip_colormap_scale` — see [Heatmaps and images](images) |
+| `texture_object` | `figure_texture` | RGBA textures for `ig_image` and `ip_image` — see [Heatmaps and images](images#textures) |
 | `figure_last_error` | `figure_base` | message of the last failure — see [Error handling](errors) |
 | `FIG_OK`, `FIG_ERR_*` | `figure_c_native` | status codes |
 

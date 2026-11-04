@@ -9,8 +9,10 @@ module figure_imgui
 use, intrinsic :: iso_c_binding, only : c_bool, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_base, only : cstr
-use figure_cimgui, only : im_vec2, igBegin, igButton, igCheckbox, igEnd, igGetItemRectMax, igGetItemRectMin, igInputDouble, &
-                          igSameLine, igSeparator, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow,              &
+use figure_c_native, only : fig_texture_sampling
+use figure_texture, only : texture_object, texture_ref
+use figure_cimgui, only : im_vec2, igBegin, igButton, igCheckbox, igEnd, igGetItemRectMax, igGetItemRectMin, igImage,     &
+                          igInputDouble, igSameLine, igSeparator, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
                           igSliderScalar, igTextUnformatted
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
                                 ImGuiDataType_S32
@@ -18,7 +20,7 @@ use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiD
 implicit none
 private
 public :: ig_begin, ig_end, ig_button, ig_checkbox, ig_slider, ig_input, ig_text, ig_same_line, ig_separator
-public :: ig_show_demo_window, ig_set_next_window, ig_item_rect
+public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image
 
 interface ig_slider
    !< Slider for an integer or a real value.
@@ -215,4 +217,20 @@ contains
    xmax = real(v%x, real64)
    ymax = real(v%y, real64)
    endsubroutine ig_item_rect
+
+   subroutine ig_image(tex, width, height)
+   !< A texture, pixel row 1 at the top (screen and image-file convention), `width` x `height` pixels (default: the
+   !< texture's size).
+   type(texture_object), intent(in)           :: tex    !< Texture.
+   real(real64),         intent(in), optional :: width  !< Width [pixels].
+   real(real64),         intent(in), optional :: height !< Height [pixels].
+   type(im_vec2)                              :: extent !< Size (named so: a local `size` crashes nvfortran 26.9).
+
+   extent = im_vec2(real(tex%width(), c_float), real(tex%height(), c_float))
+   if (present(width)) extent%x = real(width, c_float)
+   if (present(height)) extent%y = real(height, c_float)
+   call fig_texture_sampling(0_c_int, 1_c_int) ! the texture's own filter (nearest unless created smooth)
+   call igImage(texture_ref(tex), extent, im_vec2(0.0_c_float, 0.0_c_float), im_vec2(1.0_c_float, 1.0_c_float))
+   call fig_texture_sampling(0_c_int, 0_c_int)
+   endsubroutine ig_image
 endmodule figure_imgui

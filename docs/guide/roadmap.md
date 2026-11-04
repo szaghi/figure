@@ -29,10 +29,12 @@ The milestones of `plans/plan.md`. Only M1 is done; everything after it is plann
 - The C++ glue for the functions that pass structs by value (above all the ImPlot items, `ImPlotSpec`) is generated
   too, with `bind(C)` mirror types for the structs, size-checked by `figure_test_layout`.
 
-## M3: images and speed — planned
+## M3: images and speed — in progress
 
-- Textures from contiguous `integer(c_int8_t)` RGBA arrays, uploaded without intermediate copies.
-- ImPlot heatmaps from Fortran 2D arrays (column-major aware).
+- Textures from contiguous `integer(int8)` RGBA arrays, uploaded without intermediate copies: done
+  (`texture_object`, `ig_image`, `ip_image`).
+- ImPlot heatmaps from Fortran 2D arrays (column-major aware): done (`ip_heatmap`, read in place, j = 1 at the
+  bottom; `ip_colormap_scale`).
 - Plot items generic over `real32` and `real64`, so `real32` data is never copied into a `real64` temporary: done
   for `ip_line`, `ip_scatter`, `ip_bars` and `ip_shaded`, with item styles (`ip_spec`).
 - Strided series (matrix rows) passed as base address and stride, without the compiler's temporary copy: done for

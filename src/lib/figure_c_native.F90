@@ -6,13 +6,13 @@ module figure_c_native
 !< (window, OpenGL context) and calls the cimgui/cimplot functions Fortran cannot call directly (structs larger than
 !< `ImVec2` passed by value); the direct ones are generated in figure_cimgui and figure_cimplot. Strings passed to
 !< the glue are (pointer, length), not NUL-terminated.
-use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_ptr
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_long_long, c_ptr
 
 implicit none
 private
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
-public :: fig_set_ini_file
+public :: fig_set_ini_file, fig_texture_create, fig_texture_destroy, fig_texture_sampling, fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 
 ! Status codes: must match native/figure_native.h.
@@ -111,6 +111,43 @@ interface
    character(kind=c_char), intent(in) :: msg(*)  !< Message (not NUL-terminated).
    integer(c_int), value              :: msg_len !< Message length [bytes].
    endsubroutine fig_set_last_error
+
+   function fig_texture_create(width, height, smooth, id) result(status) bind(C, name='fig_texture_create')
+   !< Create an RGBA texture (contents undefined until updated).
+   import :: c_int, c_long_long
+   implicit none
+   integer(c_int), value             :: width  !< Width [pixels].
+   integer(c_int), value             :: height !< Height [pixels].
+   integer(c_int), value             :: smooth !< 1: linear filtering, 0: nearest (pixels stay sharp).
+   integer(c_long_long), intent(out) :: id     !< ImTextureID (C `unsigned long long`).
+   integer(c_int)                    :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_texture_create
+
+   function fig_texture_update(id, width, height, rgba) result(status) bind(C, name='fig_texture_update')
+   !< Upload all the pixels of a texture: `width` x `height` RGBA, 8 bits per channel, rows of `width` pixels.
+   import :: c_int, c_long_long, c_ptr
+   implicit none
+   integer(c_long_long), value :: id     !< Texture.
+   integer(c_int), value       :: width  !< Width [pixels]: must equal the texture's.
+   integer(c_int), value       :: height !< Height [pixels]: must equal the texture's.
+   type(c_ptr), value          :: rgba   !< First byte of the pixels (read during the call only).
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_texture_update
+
+   subroutine fig_texture_destroy(id) bind(C, name='fig_texture_destroy')
+   !< Destroy a texture; an unknown id (already destroyed, or after shutdown) is ignored.
+   import :: c_long_long
+   implicit none
+   integer(c_long_long), value :: id !< Texture.
+   endsubroutine fig_texture_destroy
+
+   subroutine fig_texture_sampling(plot, from_texture) bind(C, name='fig_texture_sampling')
+   !< Around a user image: 1 = sample with the texture's own filter, 0 = restore the backend's render state.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: plot         !< 1: the current plot's draw list; 0: the current window's.
+   integer(c_int), value :: from_texture !< 1: before the image; 0: after it.
+   endsubroutine fig_texture_sampling
 
    subroutine fig_input_mouse(x, y, left_down) bind(C, name='fig_input_mouse')
    !< Queue a synthetic mouse state (tests).
