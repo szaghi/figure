@@ -88,6 +88,18 @@ target_include_directories(figure_native PUBLIC
 target_link_libraries(figure_native PUBLIC SDL3::SDL3-static)
 
 install(TARGETS figure_native ARCHIVE DESTINATION lib)
+# Apple: SDL's Objective-C uses clang builtins (___isPlatformVersionAtLeast, behind @available) from clang's runtime
+# library, which clang's driver links by itself and gfortran's does not. Installed as libfigure_clang_rt.a for the
+# macos varset of fobos (the path of the original depends on the Xcode version).
+if(APPLE)
+   execute_process(COMMAND ${CMAKE_C_COMPILER} -print-resource-dir OUTPUT_VARIABLE _clang_resource_dir
+                   OUTPUT_STRIP_TRAILING_WHITESPACE)
+   set(_clang_rt "${_clang_resource_dir}/lib/darwin/libclang_rt.osx.a")
+   if(NOT EXISTS "${_clang_rt}")
+      message(FATAL_ERROR "clang runtime library not found: ${_clang_rt} (build the native layer with Apple clang)")
+   endif()
+   install(FILES "${_clang_rt}" DESTINATION lib RENAME libfigure_clang_rt.a)
+endif()
 # The static SDL3 archive, next to ours, so the Fortran link line is just -lfigure_native -lSDL3.
 install(FILES $<TARGET_FILE:SDL3::SDL3-static> DESTINATION lib)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/figure_native.h DESTINATION include)

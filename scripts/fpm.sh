@@ -8,6 +8,6 @@ if [[ ! -f "$root/lib/libfigure_native.a" ]]; then
    echo "fpm.sh: lib/libfigure_native.a missing: run scripts/build_native.sh first" >&2
    exit 1
 fi
-platform_flags="$(python3 "$root/scripts/check_sync.py" --link-flags)"
+native_link="$(python3 "$root/scripts/check_sync.py" --link-flags)"
 cmd="$1"; shift
-exec fpm "$cmd" --link-flag "-L$root/lib $platform_flags" "$@"
+exec fpm "$cmd" --link-flag "-L$root/lib $native_link" "$@"

@@ -9,8 +9,9 @@ Checked:
   - every program under src/examples/ and src/tests/ is declared in fpm.toml (fobos discovers them by itself);
   - every program declared in fpm.toml exists.
 
-``--link-flags [PLATFORM]`` prints instead the linker flags the platform's varset adds to ``figure_native SDL3``
-(``-l`` libraries, then the varset's ``$NATIVE_LFLAGS``), for scripts/fpm.sh. PLATFORM defaults to the current one.
+``--link-flags [PLATFORM]`` prints instead the platform's native link line: the varset's ``$NATIVE_LIBS`` as ``-l``
+options, in order (``figure_native SDL3`` first), then its ``$NATIVE_LFLAGS``, for scripts/fpm.sh and for linking a
+program by hand. PLATFORM defaults to the current one.
 
 Exit status 0 when in sync, 1 otherwise (each discrepancy printed). Standard library only (Python >= 3.11).
 """
@@ -154,7 +155,7 @@ def fpm_programs(manifest: dict) -> set[str]:
 
 
 def link_flags(platform: str) -> int:
-    """Print the linker flags the platform's varset adds to ``figure_native SDL3``.
+    """Print the platform's native link line (``$NATIVE_LIBS`` as ``-l`` options, then ``$NATIVE_LFLAGS``).
 
     Parameters
     ----------
@@ -171,8 +172,9 @@ def link_flags(platform: str) -> int:
         print(f"check_sync: fobos has no [varset:{platform}]", file=sys.stderr)
         return 1
     v = varsets[platform]
-    extra = [f"-l{lib}" for lib in v["libs"] if lib not in COMMON_LIBS]
-    print(" ".join(extra + v["lflags"]))
+    # the whole line, figure_native and SDL3 first: fpm places --link-flag before its own [build] link libraries,
+    # and GNU ld resolves static archives (Windows import libraries too) left to right
+    print(" ".join([f"-l{lib}" for lib in v["libs"]] + v["lflags"]))
     return 0
 
 

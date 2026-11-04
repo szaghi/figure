@@ -109,11 +109,12 @@ Build the static library, then compile against its modules and link it together 
 ```bash
 fobis build --mode figure-static-gnu
 gfortran -I figure/lib/mod my_program.F90 figure/lib/libfigure.a \
-         -L figure/lib -lfigure_native -lSDL3 $(python3 figure/scripts/check_sync.py --link-flags) -o my_program
+         -L figure/lib $(python3 figure/scripts/check_sync.py --link-flags) -o my_program
 ```
 
-The native libraries are `figure_native SDL3` followed by the platform's: on Linux `stdc++ dl pthread m`; the
-complete lists, with macOS's frameworks, are the fobos varsets (next section). In the program, `use figure` gives the
+`check_sync.py --link-flags` prints the native link line of the platform, in order: `figure_native SDL3` followed
+by the platform's libraries (on Linux `stdc++ dl pthread m`); the lists, with macOS's frameworks, are the fobos
+varsets (next section). Order matters where the system libraries are archives (Windows' import libraries). In the program, `use figure` gives the
 whole public API (see the [feature map](features)).
 
 ## Other platforms

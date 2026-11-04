@@ -24,7 +24,7 @@ $NATIVE_LIBS   = figure_native SDL3 stdc++ dl pthread m
 $NATIVE_LFLAGS =
 
 [varset:macos]
-$NATIVE_LIBS   = figure_native SDL3 c++ objc iconv pthread m
+$NATIVE_LIBS   = figure_native SDL3 figure_clang_rt c++ objc iconv pthread m
 $NATIVE_LFLAGS = -framework Cocoa -framework Carbon -framework Foundation -framework CoreVideo -framework CoreMedia
                  -framework IOKit -framework Metal -framework QuartzCore -framework UniformTypeIdentifiers
                  -framework AVFoundation
