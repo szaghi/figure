@@ -25,6 +25,9 @@ call app%destroy()
 
 **Status:** spike (milestone 1 of [plans/plan.md](plans/plan.md)). API unstable.
 
+**Remote UI:** `app%init_remote(port=8080)` instead of `app%init(...)` serves the same interface to a web browser: no
+display or GPU needed, e.g. on a cluster node reached through an SSH tunnel (`exe/figure_hello --remote 8080`).
+
 **Documentation:** guide, tutorial, cookbook and API reference in [docs/](docs/) (VitePress). Browse it locally with
 `cd docs && npm install && npm run docs:dev`; the site will be published at https://szaghi.github.io/figure.
 

@@ -1,6 +1,8 @@
 !< figure_hello, the first FIGURE program: widgets bound to Fortran variables and a live ImPlot plot.
 program figure_hello
 !< figure_hello, the first FIGURE program: widgets bound to Fortran variables and a live ImPlot plot.
+!<
+!< `figure_hello` opens a window; `figure_hello --remote [port]` serves the same UI to a web browser instead.
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_end, ig_input, ig_same_line, ig_separator,    &
                    ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ip_begin_plot, ip_end_plot, ip_line, &
@@ -18,6 +20,8 @@ integer(int32)            :: clicks         !< Button clicks.
 logical                   :: animate        !< Animate the phase.
 logical                   :: demo           !< Show the Dear ImGui demo.
 character(len=64)         :: line           !< Text buffer.
+character(len=16)         :: arg            !< Command-line argument.
+integer(int32)            :: port           !< Port of the remote mode.
 integer(int32)            :: i              !< Counter.
 
 frequency = 1.0_real64
@@ -28,7 +32,15 @@ animate = .false.
 demo = .false.
 x = [(10.0_real64 * real(i - 1, real64) / real(N - 1, real64), i = 1, N)]
 
-call app%init('FIGURE: hello', 1100_int32, 700_int32)
+call get_command_argument(1, arg)
+if (trim(arg) == '--remote') then                     ! the UI in a web browser: no window, display or GPU
+   port = 8080_int32
+   call get_command_argument(2, arg)
+   if (len_trim(arg) > 0) read(arg, *) port
+   call app%init_remote(port=port)
+else
+   call app%init('FIGURE: hello', 1100_int32, 700_int32)
+endif
 do while (app%next_frame())
    if (animate) then
       phase = phase + 0.05_real64

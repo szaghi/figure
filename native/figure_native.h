@@ -19,6 +19,10 @@ enum { FIG_OK = 0, FIG_ERR_STATE = 1, FIG_ERR_ARGUMENT = 2, FIG_ERR_FAILED = 3, 
 /* Platform and frame loop. */
 int    fig_init(const char *title, int title_len, int width, int height, int vsync);
 int    fig_init_headless(int width, int height);
+/* The UI in a web browser: serve it on http://host:port/ (host empty: 127.0.0.1; port 0: any free port, returned in
+ * bound_port). No window, display or GPU needed. One browser at a time; no authentication: keep the default host and
+ * reach a remote machine through an SSH tunnel. */
+int    fig_init_remote(int width, int height, const char *host, int host_len, int port, int *bound_port);
 int    fig_begin_frame(int *running);
 int    fig_end_frame(void);
 void   fig_shutdown(void);

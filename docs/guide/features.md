@@ -16,6 +16,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 |---|---|---|
 | `app%init(title, width, height [, vsync] [, stat])` | open the window, create the ImGui and ImPlot contexts | [frame loop](frame-loop#the-application) |
 | `app%init_headless(width, height [, stat])` | contexts only, on a virtual display: no window, no GPU | [headless testing](testing) |
+| `app%init_remote([port] [, host] ...)` | the interface in a web browser: no window, display or GPU on the program's side | [remote UI](remote) |
 | `app%next_frame([stat])` → `logical` | render the open frame, wait for input, open the next; `.false.` on quit | [frame loop](frame-loop#next-frame) |
 | `app%set_lazy(enabled [, max_wait])` | lazy redraw on/off, longest sleep (default 0.5 s) | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |

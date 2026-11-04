@@ -1,5 +1,6 @@
 // FIGURE native glue: SDL3 window + OpenGL3 renderer + Dear ImGui/ImPlot contexts, behind the C ABI of figure_native.h.
 #include "figure_native.h"
+#include "figure_remote.h"
 
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
@@ -14,6 +15,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include <exception>
 #include <map>
 #include <string>
@@ -37,7 +39,7 @@ int fail(int status, const std::string &msg) {
       return fail(FIG_ERR_EXCEPTION, "unknown C++ exception");                                                        \
    }
 
-enum class mode { none, window, headless };
+enum class mode { none, window, headless, remote };
 
 struct state_t {
    mode          m = mode::none;
@@ -50,8 +52,10 @@ struct state_t {
    float         scale = 1.0f;
    std::string   ini_file;        // where Dear ImGui keeps window positions and sizes; empty: nowhere (the default)
    struct texture_t {
-      int width = 0, height = 0;
+      int  width = 0, height = 0;
+      bool smooth = false;
    };
+   std::chrono::steady_clock::time_point last_frame; // remote mode: the frame clock (no SDL)
    std::map<unsigned long long, texture_t> textures; // user textures by ImTextureID (the GL name in window mode)
    unsigned long long next_headless_texture = 1;     // headless mode: ids without GL objects
 } st;
@@ -242,6 +246,27 @@ int fig_init_headless(int width, int height) {
    FIG_CATCH
 }
 
+int fig_init_remote(int width, int height, const char *host, int host_len, int port, int *bound_port) {
+   FIG_TRY
+   *bound_port = 0;
+   if (st.m != mode::none) return fail(FIG_ERR_STATE, "figure is already initialized");
+   if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "display size must be positive");
+   if (port < 0 || port > 65535) return fail(FIG_ERR_ARGUMENT, "port must be in 0..65535");
+   std::string err;
+   const std::string h(host, host_len > 0 ? static_cast<size_t>(host_len) : 0);
+   if (!figure_remote::start(h.empty() ? "127.0.0.1" : h, port, *bound_port, err)) return fail(FIG_ERR_FAILED, err);
+   create_contexts();
+   ImGuiIO &io = ImGui::GetIO();
+   io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height)); // until the browser sends its size
+   io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+   io.BackendPlatformName = "figure_remote";
+   st.m = mode::remote;
+   st.frames_left = 3;
+   st.last_frame = std::chrono::steady_clock::now();
+   return FIG_OK;
+   FIG_CATCH
+}
+
 int fig_set_ini_file(const char *path, int path_len) {
    FIG_TRY
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
@@ -271,6 +296,20 @@ int fig_begin_frame(int *running) {
    *running = 1;
    if (st.m == mode::headless) {
       ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+      ImGui::NewFrame();
+      st.in_frame = true;
+      return FIG_OK;
+   }
+   if (st.m == mode::remote) {
+      // the same lazy redraw as a window, waiting on the network instead of SDL's event queue
+      bool got = figure_remote::serve(st.lazy && st.frames_left <= 0 ? st.max_wait_ms : 0);
+      while (figure_remote::serve(0)) got = true; // drain what else arrived
+      if (got) st.frames_left = 3;
+      else if (st.frames_left > 0) --st.frames_left;
+      const auto now = std::chrono::steady_clock::now();
+      const float dt = std::chrono::duration<float>(now - st.last_frame).count();
+      st.last_frame = now;
+      ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0e-4f;
       ImGui::NewFrame();
       st.in_frame = true;
       return FIG_OK;
@@ -324,6 +363,10 @@ int fig_end_frame(void) {
       headless_textures();
       return FIG_OK;
    }
+   if (st.m == mode::remote) {
+      figure_remote::send_frame(ImGui::GetDrawData());
+      return FIG_OK;
+   }
    Uint64 t_render = 0;
    if (rs.on) {
       t_render = SDL_GetTicksNS();
@@ -363,6 +406,7 @@ void fig_shutdown(void) {
          ImGui_ImplSDL3_Shutdown();
       }
       destroy_contexts();
+      if (st.m == mode::remote) figure_remote::stop();
       if (st.m == mode::window) {
          SDL_GL_DestroyContext(st.gl);
          SDL_DestroyWindow(st.window);
@@ -380,6 +424,8 @@ int fig_texture_create(int width, int height, int smooth, unsigned long long *id
    if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "texture size must be positive");
    if (st.m == mode::headless) {
       *id = st.next_headless_texture++;
+   } else if (st.m == mode::remote) {
+      *id = figure_remote::new_texture_id();
    } else {
       unsigned int name = 0;
       p_glGenTextures(1, &name);
@@ -394,7 +440,7 @@ int fig_texture_create(int width, int height, int smooth, unsigned long long *id
                      nullptr);
       *id = name;
    }
-   st.textures[*id] = {width, height};
+   st.textures[*id] = {width, height, smooth != 0};
    return FIG_OK;
    FIG_CATCH
 }
@@ -412,6 +458,8 @@ int fig_texture_update(unsigned long long id, int width, int height, const unsig
       p_glPixelStorei(GL_UNPACK_ROW_LENGTH_, 0);
       p_glPixelStorei(GL_UNPACK_ALIGNMENT_, 1);
       p_glTexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, width, height, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba);
+   } else if (st.m == mode::remote) {
+      figure_remote::texture_update(id, width, height, rgba, t->second.smooth); // kept, and sent to the browser
    }
    return FIG_OK;
    FIG_CATCH
@@ -439,6 +487,8 @@ void fig_texture_destroy(unsigned long long id) {
       if (st.m == mode::window) {
          const unsigned int name = static_cast<unsigned int>(id);
          p_glDeleteTextures(1, &name);
+      } else if (st.m == mode::remote) {
+         figure_remote::texture_destroy(id);
       }
       st.textures.erase(t);
    } catch (...) {

@@ -38,6 +38,7 @@ graph LR
 - [app_object](#app-object)
 - [init](#init)
 - [init_headless](#init-headless)
+- [init_remote](#init-remote)
 - [set_lazy](#set-lazy)
 - [request_frames](#request-frames)
 - [destroy](#destroy)
@@ -65,6 +66,7 @@ A FIGURE application (one per program).
 |------|------------|-------------|
 | `init` | pass(self) | Open the window. |
 | `init_headless` | pass(self) | Contexts only, no window (tests). |
+| `init_remote` | pass(self) | The UI in a web browser (no window, display or GPU). |
 | `next_frame` | pass(self) | Close the current frame, open the next; false on quit. |
 | `set_lazy` | pass(self) | Lazy redraw on/off, longest sleep. |
 | `request_frames` | pass(self) | Redraw without waiting for input. |
@@ -130,6 +132,39 @@ flowchart TD
   init_headless["init_headless"] --> fig_init_headless["fig_init_headless"]
   init_headless["init_headless"] --> figure_check["figure_check"]
   style init_headless fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### init_remote
+
+Create the contexts and serve the UI to a web browser on `http://host:port/` instead of opening a window: the
+ program needs no display or GPU (a cluster node will do). One browser at a time, which can come and go while the
+ program runs. There is no authentication: whoever reaches the port controls the program, so keep the default
+ host (127.0.0.1) and reach a remote machine through an SSH tunnel (`ssh -L 8080:localhost:8080 node`).
+
+```fortran
+subroutine init_remote(self, port, host, width, height, port_used, quiet, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `port` | integer(kind=int32) | in | optional | Port (default 8080; 0: any free port). |
+| `host` | character(len=*) | in | optional | Address to listen on (default 127.0.0.1). |
+| `width` | integer(kind=int32) | in | optional | Display width until the browser's [pixels] (default 1280). |
+| `height` | integer(kind=int32) | in | optional | Display height until the browser's [pixels] (default 800). |
+| `port_used` | integer(kind=int32) | out | optional | The port listened on (useful with port 0). |
+| `quiet` | logical | in | optional | Do not print the address to open (default false). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  init_remote["init_remote"] --> fig_init_remote["fig_init_remote"]
+  init_remote["init_remote"] --> figure_check["figure_check"]
+  style init_remote fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### set_lazy

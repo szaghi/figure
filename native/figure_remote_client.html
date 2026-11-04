@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIGURE remote</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1a1a1c; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+  #status { position: fixed; right: 8px; bottom: 6px; font: 12px monospace; color: #888; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="ui" tabindex="0"></canvas>
+<div id="status">connecting</div>
+<script>
+// FIGURE remote client: draws the Dear ImGui draw lists the program streams over a WebSocket, sends input back.
+// Protocol: see native/figure_remote.cpp.
+"use strict";
+const canvas = document.getElementById("ui");
+const status = document.getElementById("status");
+const gl = canvas.getContext("webgl", { alpha: false, antialias: false, premultipliedAlpha: false });
+const textures = new Map();
+let ws = null, frames = 0, lastFrame = null;
+
+const vs = `attribute vec2 pos; attribute vec2 uv; attribute vec4 col; uniform vec2 scale;
+  varying vec2 v_uv; varying vec4 v_col;
+  void main() { v_uv = uv; v_col = col; gl_Position = vec4(pos.x * scale.x - 1.0, 1.0 - pos.y * scale.y, 0.0, 1.0); }`;
+const fs = `precision mediump float; uniform sampler2D tex; varying vec2 v_uv; varying vec4 v_col;
+  void main() { gl_FragColor = v_col * texture2D(tex, v_uv); }`;
+function shader(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, shader(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, fs));
+gl.linkProgram(prog); gl.useProgram(prog);
+const loc = { pos: gl.getAttribLocation(prog, "pos"), uv: gl.getAttribLocation(prog, "uv"),
+              col: gl.getAttribLocation(prog, "col"), scale: gl.getUniformLocation(prog, "scale") };
+const vbo = gl.createBuffer(), ibo = gl.createBuffer();
+
+function setTexture(id, w, h, linear, pixels) {
+  let t = textures.get(id);
+  if (!t) { t = gl.createTexture(); textures.set(id, t); }
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  const filter = linear ? gl.LINEAR : gl.NEAREST; // the font atlas is linear; user images keep sharp pixels
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+}
+
+function draw(buf) {
+  const dv = new DataView(buf);
+  const dpr = window.devicePixelRatio || 1;
+  const dw = dv.getFloat32(1, true), dh = dv.getFloat32(5, true);
+  const nlists = dv.getUint32(9, true);
+  canvas.width = Math.round(canvas.clientWidth * dpr); canvas.height = Math.round(canvas.clientHeight * dpr);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.disable(gl.SCISSOR_TEST); // the clear obeys the scissor: left on from the last frame, it would clear one rect
+  gl.clearColor(0.10, 0.10, 0.11, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.BLEND); gl.blendEquation(gl.FUNC_ADD);
+  gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.disable(gl.CULL_FACE); gl.disable(gl.DEPTH_TEST); gl.enable(gl.SCISSOR_TEST);
+  gl.uniform2f(loc.scale, 2 / dw, 2 / dh);
+  const sx = canvas.width / dw, sy = canvas.height / dh;
+  let p = 13;
+  for (let l = 0; l < nlists; ++l) {
+    const nv = dv.getUint32(p, true), ni = dv.getUint32(p + 4, true), nc = dv.getUint32(p + 8, true); p += 12;
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(buf, p, nv * 20), gl.STREAM_DRAW); p += nv * 20;
+    gl.enableVertexAttribArray(loc.pos); gl.vertexAttribPointer(loc.pos, 2, gl.FLOAT, false, 20, 0);
+    gl.enableVertexAttribArray(loc.uv); gl.vertexAttribPointer(loc.uv, 2, gl.FLOAT, false, 20, 8);
+    gl.enableVertexAttribArray(loc.col); gl.vertexAttribPointer(loc.col, 4, gl.UNSIGNED_BYTE, true, 20, 16);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(buf, p, ni * 2), gl.STREAM_DRAW);
+    p += ni * 2 + (ni % 2) * 2;
+    for (let c = 0; c < nc; ++c) {
+      const x1 = dv.getFloat32(p, true), y1 = dv.getFloat32(p + 4, true);
+      const x2 = dv.getFloat32(p + 8, true), y2 = dv.getFloat32(p + 12, true);
+      const tex = dv.getUint32(p + 16, true), off = dv.getUint32(p + 20, true), count = dv.getUint32(p + 24, true);
+      p += 28;
+      if (x2 <= x1 || y2 <= y1) continue;
+      gl.scissor(Math.floor(x1 * sx), Math.floor(canvas.height - y2 * sy),
+                 Math.ceil((x2 - x1) * sx), Math.ceil((y2 - y1) * sy));
+      const t = textures.get(tex); if (!t) continue;
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, off * 2);
+    }
+  }
+}
+
+function onMessage(ev) {
+  const buf = ev.data, kind = new Uint8Array(buf, 0, 1)[0], dv = new DataView(buf);
+  if (kind === 1) { lastFrame = buf; draw(buf); status.textContent = "frame " + (++frames); }
+  else if (kind === 2) setTexture(dv.getUint32(1, true), dv.getUint32(5, true), dv.getUint32(9, true),
+                                  (dv.getUint32(13, true) & 1) !== 0, new Uint8Array(buf, 17));
+  else if (kind === 3) { const id = dv.getUint32(1, true); const t = textures.get(id); if (t) { gl.deleteTexture(t); textures.delete(id); } }
+}
+
+function send(s) { if (ws && ws.readyState === 1) ws.send(s); }
+function sendSize() { send(`s:${canvas.clientWidth},${canvas.clientHeight}`); }
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { status.textContent = "connected"; sendSize(); };
+  ws.onmessage = onMessage;
+  ws.onclose = () => { status.textContent = "disconnected: retrying"; textures.clear(); setTimeout(connect, 1000); };
+}
+const pos = e => { const r = canvas.getBoundingClientRect(); return `${e.clientX - r.left},${e.clientY - r.top}`; };
+canvas.addEventListener("mousemove", e => send(`m:${pos(e)}`));
+canvas.addEventListener("mousedown", e => { canvas.focus(); send(`m:${pos(e)}`); send(`b:${[0, 2, 1][e.button] ?? 0},1`); e.preventDefault(); });
+window.addEventListener("mouseup", e => send(`b:${[0, 2, 1][e.button] ?? 0},0`));
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+canvas.addEventListener("wheel", e => { send(`w:${-e.deltaX / 100},${-e.deltaY / 100}`); e.preventDefault(); }, { passive: false });
+canvas.addEventListener("keydown", e => { send(`k:1,${e.code}`); if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) send(`c:${e.key}`); if (e.code === "Tab") e.preventDefault(); });
+canvas.addEventListener("keyup", e => send(`k:0,${e.code}`));
+window.addEventListener("resize", () => { sendSize(); if (lastFrame) draw(lastFrame); });
+connect();
+</script>
+</body>
+</html>

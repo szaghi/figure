@@ -87,9 +87,13 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
   4.8 MB. fig_init calls SDL_SetMainReady (Fortran main, SDL_MAIN_HANDLED).
 - build_native.sh: empty arrays expanded with ${a[@]+"${a[@]}"} (bash 3.2 on macOS treats them as unbound).
 
-### M5: remote and web
-- Remote UI: stream ImGui draw lists over WebSocket to a browser (imgui-ws approach), Fortran stays native (OpenMP,
-  MPI, GPU); e.g. a GUI for a cluster run.
+### M5: remote and web: **remote done (2026-11-04), WebAssembly not started**
+- [x] Remote UI: native/figure_remote.{h,cpp} (HTTP + RFC 6455 WebSocket server, one client, POSIX/Winsock, own
+  SHA-1/base64; ws2_32 in the windows varset), client page native/figure_remote_client.html (WebGL) embedded by CMake;
+  glue mode `remote` (no SDL/GL; lazy redraw waits on select); app%init_remote; textures resent on reconnect, per
+  texture filter flag. Test src/tests/figure_test_remote.F90 + scripts/remote_client.py (byte-exact parsing, resize,
+  click). Browser check: headless Chromium screenshot identical to the native window (found and fixed: clear under a
+  stale scissor). Measured: hello 110 KB/frame + 256 KB font atlas once. Next: skip unchanged frames / compress.
 - Experiment: whole app to WebAssembly with a patched flang (flang-wasm) + Emscripten SDL3; no OpenMP/MPI there.
 
 ## Open issues

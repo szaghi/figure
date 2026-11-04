@@ -55,10 +55,11 @@ The milestones of `plans/plan.md`. Only M1 is done; everything after it is plann
 - Platform link lines in fobos varsets (`--varset macos|windows`), checked against `lib/pkgconfig/sdl3.pc`; fpm reads
   them through `scripts/fpm.sh` ([Other platforms](install#other-platforms)).
 
-## M5: remote and web — planned
+## M5: remote and web — remote done, WebAssembly to try
 
-- Remote UI: Dear ImGui draw lists streamed over WebSocket to a browser, the Fortran program staying native (OpenMP,
-  MPI, GPU), for example a GUI for a cluster run.
+- Remote UI: done ([Remote UI](remote)). `app%init_remote` serves the interface to a web browser over a built-in
+  WebSocket server; the program needs no display or GPU and stays native (OpenMP, MPI, GPU), e.g. on a cluster node
+  reached through an SSH tunnel. Tested end to end on every CI platform.
 - Experiment: the whole application compiled to WebAssembly with a patched flang and Emscripten SDL3 (no OpenMP, no
   MPI there).
 

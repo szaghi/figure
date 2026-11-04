@@ -1,0 +1,548 @@
+// FIGURE remote mode: a minimal HTTP + WebSocket server (RFC 6455) streaming Dear ImGui's draw data to a browser.
+//
+// One client at a time. GET / answers the client page; GET /ws upgrades to a WebSocket. Server to client: binary
+// messages, little-endian (the client is JavaScript on little-endian hardware):
+//   1 frame:    u8 1, f32 display_w, display_h, u32 lists; per list: u32 vtx_count, idx_count, cmd_count,
+//               vtx_count x ImDrawVert (f32 x, y, u, v, u32 rgba), idx_count x u16 (padded to 4 bytes),
+//               cmd_count x (f32 clip x1, y1, x2, y2, u32 texture, idx_offset, elem_count)
+//   2 texture:  u8 2, u32 id, width, height, flags (bit 0: linear filtering, else nearest), then width x height x 4
+//               RGBA bytes (created or replaced)
+//   3 destroy:  u8 3, u32 id
+// Client to server: text messages, one event each: "m:x,y" mouse position, "b:button,down", "w:dx,dy" wheel,
+// "k:down,code" key (KeyboardEvent.code), "c:text" typed characters, "s:width,height" canvas size.
+#include "figure_native.h"
+#include "figure_remote.h"
+
+#include "imgui.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <map>
+#include <string>
+#include <vector>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+typedef SOCKET socket_t;
+static const socket_t NO_SOCKET = INVALID_SOCKET;
+static int close_socket(socket_t s) { return closesocket(s); }
+static bool would_block() { return WSAGetLastError() == WSAEWOULDBLOCK; }
+static void set_nonblocking(socket_t s) {
+   u_long on = 1;
+   ioctlsocket(s, FIONBIO, &on);
+}
+static const int SEND_FLAGS = 0;
+#else
+#include <arpa/inet.h>
+#include <cerrno>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <unistd.h>
+typedef int socket_t;
+static const socket_t NO_SOCKET = -1;
+static int close_socket(socket_t s) { return close(s); }
+#ifdef MSG_NOSIGNAL
+static const int SEND_FLAGS = MSG_NOSIGNAL; // a closed peer must not raise SIGPIPE: it would end the program
+#else
+static const int SEND_FLAGS = 0; // macOS: SO_NOSIGPIPE on each socket instead
+#endif
+static bool would_block() { return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR; }
+static void set_nonblocking(socket_t s) { fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK); }
+#endif
+
+namespace {
+
+// The client page, embedded at build time from native/figure_remote_client.html.
+#include "figure_remote_client.inc"
+
+// ---- SHA-1 and base64, for the WebSocket handshake only ----------------------------------------------------------
+
+std::string sha1(const std::string &msg) {
+   std::uint32_t h[5] = {0x67452301u, 0xEFCDAB89u, 0x98BADCFEu, 0x10325476u, 0xC3D2E1F0u};
+   std::string m = msg;
+   const std::uint64_t bits = static_cast<std::uint64_t>(msg.size()) * 8u;
+   m.push_back(static_cast<char>(0x80));
+   while (m.size() % 64 != 56) m.push_back('\0');
+   for (int i = 7; i >= 0; --i) m.push_back(static_cast<char>((bits >> (8 * i)) & 0xFFu));
+   auto rol = [](std::uint32_t x, int n) { return (x << n) | (x >> (32 - n)); };
+   for (size_t chunk = 0; chunk < m.size(); chunk += 64) {
+      std::uint32_t w[80];
+      for (int i = 0; i < 16; ++i) {
+         w[i] = 0;
+         for (int b = 0; b < 4; ++b) w[i] = (w[i] << 8) | static_cast<unsigned char>(m[chunk + 4 * i + b]);
+      }
+      for (int i = 16; i < 80; ++i) w[i] = rol(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+      std::uint32_t a = h[0], b = h[1], c = h[2], d = h[3], e = h[4];
+      for (int i = 0; i < 80; ++i) {
+         std::uint32_t f, k;
+         if (i < 20) { f = (b & c) | (~b & d); k = 0x5A827999u; }
+         else if (i < 40) { f = b ^ c ^ d; k = 0x6ED9EBA1u; }
+         else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8F1BBCDCu; }
+         else { f = b ^ c ^ d; k = 0xCA62C1D6u; }
+         const std::uint32_t t = rol(a, 5) + f + e + k + w[i];
+         e = d; d = c; c = rol(b, 30); b = a; a = t;
+      }
+      h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e;
+   }
+   std::string out;
+   for (std::uint32_t v : h)
+      for (int b = 3; b >= 0; --b) out.push_back(static_cast<char>((v >> (8 * b)) & 0xFFu));
+   return out;
+}
+
+std::string base64(const std::string &in) {
+   static const char *tbl = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+   std::string out;
+   size_t i = 0;
+   for (; i + 2 < in.size(); i += 3) {
+      const unsigned v = (static_cast<unsigned char>(in[i]) << 16) | (static_cast<unsigned char>(in[i + 1]) << 8) |
+                         static_cast<unsigned char>(in[i + 2]);
+      out += tbl[(v >> 18) & 63]; out += tbl[(v >> 12) & 63]; out += tbl[(v >> 6) & 63]; out += tbl[v & 63];
+   }
+   if (i + 1 == in.size()) {
+      const unsigned v = static_cast<unsigned char>(in[i]) << 16;
+      out += tbl[(v >> 18) & 63]; out += tbl[(v >> 12) & 63]; out += "==";
+   } else if (i + 2 == in.size()) {
+      const unsigned v = (static_cast<unsigned char>(in[i]) << 16) | (static_cast<unsigned char>(in[i + 1]) << 8);
+      out += tbl[(v >> 18) & 63]; out += tbl[(v >> 12) & 63]; out += tbl[(v >> 6) & 63]; out += '=';
+   }
+   return out;
+}
+
+// ---- state --------------------------------------------------------------------------------------------------------
+
+struct connection_t {
+   socket_t    s = NO_SOCKET;
+   bool        websocket = false; // handshake done
+   bool        close_after = false; // plain HTTP: close once the answer is sent
+   std::string in;                // bytes received, not yet parsed
+   std::string out;               // bytes to send
+};
+
+struct texture_t {
+   int                        width = 0, height = 0;
+   bool                       linear = false;
+   std::vector<unsigned char> rgba;
+};
+
+struct server_t {
+   socket_t                                listener = NO_SOCKET;
+   std::vector<connection_t>               conns;    // HTTP connections, and the WebSocket client
+   std::map<std::uint64_t, texture_t>      textures; // every live texture, sent again to a new client
+   std::uint64_t                           next_id = 1;
+   bool                                    resend = false; // a client connected: send all textures
+#ifdef _WIN32
+   bool                                    wsa = false;
+#endif
+} sv;
+
+connection_t *client() {
+   for (auto &c : sv.conns)
+      if (c.websocket && c.s != NO_SOCKET) return &c;
+   return nullptr;
+}
+
+// ---- WebSocket framing --------------------------------------------------------------------------------------------
+
+void ws_append(connection_t &c, int opcode, const std::string &payload) {
+   std::string f;
+   f.push_back(static_cast<char>(0x80 | opcode)); // FIN
+   const std::uint64_t n = payload.size();
+   if (n < 126) {
+      f.push_back(static_cast<char>(n));
+   } else if (n < 65536) {
+      f.push_back(126);
+      f.push_back(static_cast<char>((n >> 8) & 0xFF));
+      f.push_back(static_cast<char>(n & 0xFF));
+   } else {
+      f.push_back(127);
+      for (int i = 7; i >= 0; --i) f.push_back(static_cast<char>((n >> (8 * i)) & 0xFF));
+   }
+   c.out += f;
+   c.out += payload;
+}
+
+static_assert(sizeof(ImDrawIdx) == 2, "the client reads 16-bit indices");
+static_assert(sizeof(ImDrawVert) == 20, "the client reads 20-byte vertices (pos, uv, col)");
+
+template <typename T> void put(std::string &b, T v) { b.append(reinterpret_cast<const char *>(&v), sizeof(T)); }
+
+std::string texture_message(std::uint64_t id, const texture_t &t) {
+   std::string m;
+   m.reserve(13 + t.rgba.size());
+   put<std::uint8_t>(m, 2);
+   put<std::uint32_t>(m, static_cast<std::uint32_t>(id));
+   put<std::uint32_t>(m, static_cast<std::uint32_t>(t.width));
+   put<std::uint32_t>(m, static_cast<std::uint32_t>(t.height));
+   put<std::uint32_t>(m, t.linear ? 1u : 0u);
+   m.append(reinterpret_cast<const char *>(t.rgba.data()), t.rgba.size());
+   return m;
+}
+
+void send_texture(std::uint64_t id) {
+   connection_t *c = client();
+   const auto t = sv.textures.find(id);
+   if (c && t != sv.textures.end()) ws_append(*c, 2, texture_message(id, t->second));
+}
+
+void flush(connection_t &c) {
+   while (!c.out.empty()) {
+      const int n = static_cast<int>(send(c.s, c.out.data(), static_cast<int>(std::min<size_t>(c.out.size(), 1 << 20)), SEND_FLAGS));
+      if (n > 0) {
+         c.out.erase(0, static_cast<size_t>(n));
+      } else {
+         if (n < 0 && would_block()) return; // the rest at the next serve/send
+         close_socket(c.s);
+         c.s = NO_SOCKET;
+         return;
+      }
+   }
+}
+
+// ---- input from the client ------------------------------------------------------------------------------------------
+
+ImGuiKey key_of(const std::string &code) {
+   static const std::map<std::string, ImGuiKey> keys = {
+      {"Tab", ImGuiKey_Tab}, {"ArrowLeft", ImGuiKey_LeftArrow}, {"ArrowRight", ImGuiKey_RightArrow},
+      {"ArrowUp", ImGuiKey_UpArrow}, {"ArrowDown", ImGuiKey_DownArrow}, {"PageUp", ImGuiKey_PageUp},
+      {"PageDown", ImGuiKey_PageDown}, {"Home", ImGuiKey_Home}, {"End", ImGuiKey_End}, {"Insert", ImGuiKey_Insert},
+      {"Delete", ImGuiKey_Delete}, {"Backspace", ImGuiKey_Backspace}, {"Space", ImGuiKey_Space},
+      {"Enter", ImGuiKey_Enter}, {"NumpadEnter", ImGuiKey_KeypadEnter}, {"Escape", ImGuiKey_Escape},
+      {"ControlLeft", ImGuiKey_LeftCtrl}, {"ControlRight", ImGuiKey_RightCtrl}, {"ShiftLeft", ImGuiKey_LeftShift},
+      {"ShiftRight", ImGuiKey_RightShift}, {"AltLeft", ImGuiKey_LeftAlt}, {"AltRight", ImGuiKey_RightAlt},
+      {"MetaLeft", ImGuiKey_LeftSuper}, {"MetaRight", ImGuiKey_RightSuper},
+      {"KeyA", ImGuiKey_A}, {"KeyC", ImGuiKey_C}, {"KeyV", ImGuiKey_V}, {"KeyX", ImGuiKey_X}, {"KeyY", ImGuiKey_Y},
+      {"KeyZ", ImGuiKey_Z}};
+   const auto k = keys.find(code);
+   return k == keys.end() ? ImGuiKey_None : k->second;
+}
+
+void handle_event(const std::string &ev) {
+   if (ev.size() < 2 || ev[1] != ':') return;
+   ImGuiIO &io = ImGui::GetIO();
+   const char *p = ev.c_str() + 2;
+   float a = 0.0f, b = 0.0f;
+   switch (ev[0]) {
+   case 'm':
+      if (std::sscanf(p, "%f,%f", &a, &b) == 2) io.AddMousePosEvent(a, b);
+      break;
+   case 'b': {
+      int button = 0, down = 0;
+      if (std::sscanf(p, "%d,%d", &button, &down) == 2 && button >= 0 && button < ImGuiMouseButton_COUNT)
+         io.AddMouseButtonEvent(button, down != 0);
+      break;
+   }
+   case 'w':
+      if (std::sscanf(p, "%f,%f", &a, &b) == 2) io.AddMouseWheelEvent(a, b);
+      break;
+   case 'k': {
+      const char *comma = std::strchr(p, ',');
+      if (comma) {
+         const bool down = *p == '1';
+         const std::string code(comma + 1);
+         const ImGuiKey key = key_of(code);
+         if (key != ImGuiKey_None) io.AddKeyEvent(key, down);
+         if (code == "ControlLeft" || code == "ControlRight") io.AddKeyEvent(ImGuiMod_Ctrl, down);
+         if (code == "ShiftLeft" || code == "ShiftRight") io.AddKeyEvent(ImGuiMod_Shift, down);
+         if (code == "AltLeft" || code == "AltRight") io.AddKeyEvent(ImGuiMod_Alt, down);
+         if (code == "MetaLeft" || code == "MetaRight") io.AddKeyEvent(ImGuiMod_Super, down);
+      }
+      break;
+   }
+   case 'c':
+      io.AddInputCharactersUTF8(p);
+      break;
+   case 's':
+      if (std::sscanf(p, "%f,%f", &a, &b) == 2 && a > 0.0f && b > 0.0f) io.DisplaySize = ImVec2(a, b);
+      break;
+   default:
+      break;
+   }
+}
+
+// Parse the complete WebSocket frames in c.in; true if an event arrived.
+bool ws_read(connection_t &c) {
+   bool got = false;
+   for (;;) {
+      if (c.in.size() < 2) return got;
+      const unsigned char b0 = static_cast<unsigned char>(c.in[0]), b1 = static_cast<unsigned char>(c.in[1]);
+      const int opcode = b0 & 0x0F;
+      const bool masked = (b1 & 0x80) != 0;
+      std::uint64_t n = b1 & 0x7F;
+      size_t pos = 2;
+      if (n == 126) {
+         if (c.in.size() < 4) return got;
+         n = (static_cast<unsigned char>(c.in[2]) << 8) | static_cast<unsigned char>(c.in[3]);
+         pos = 4;
+      } else if (n == 127) {
+         if (c.in.size() < 10) return got;
+         n = 0;
+         for (int i = 0; i < 8; ++i) n = (n << 8) | static_cast<unsigned char>(c.in[2 + i]);
+         pos = 10;
+      }
+      if (n > (1u << 20)) { // client messages are short events: anything else is not ours
+         close_socket(c.s);
+         c.s = NO_SOCKET;
+         return got;
+      }
+      const size_t need = pos + (masked ? 4 : 0) + static_cast<size_t>(n);
+      if (c.in.size() < need) return got;
+      std::string payload = c.in.substr(pos + (masked ? 4 : 0), static_cast<size_t>(n));
+      if (masked)
+         for (size_t i = 0; i < payload.size(); ++i) payload[i] = static_cast<char>(payload[i] ^ c.in[pos + (i % 4)]);
+      c.in.erase(0, need);
+      if (opcode == 0x8) { // close
+         ws_append(c, 0x8, "");
+         flush(c);
+         close_socket(c.s);
+         c.s = NO_SOCKET;
+         return true;
+      }
+      if (opcode == 0x9) { // ping
+         ws_append(c, 0xA, payload);
+      } else if (opcode == 0x1) { // text: one event
+         handle_event(payload);
+         got = true;
+      }
+   }
+}
+
+// Answer an HTTP request in c.in, if complete; may turn the connection into the WebSocket client.
+bool http_read(connection_t &c) {
+   const size_t end = c.in.find("\r\n\r\n");
+   if (end == std::string::npos) return false;
+   const std::string req = c.in.substr(0, end);
+   c.in.erase(0, end + 4);
+   auto header = [&](const char *name) -> std::string {
+      std::string lower = req;
+      std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch) { return std::tolower(ch); });
+      std::string key = std::string("\r\n") + name + ":";
+      const size_t at = lower.find(key);
+      if (at == std::string::npos) return "";
+      size_t from = at + key.size();
+      const size_t to = req.find("\r\n", from);
+      while (from < req.size() && req[from] == ' ') ++from;
+      return req.substr(from, to == std::string::npos ? std::string::npos : to - from);
+   };
+   if (req.rfind("GET /ws", 0) == 0 && !header("sec-websocket-key").empty()) {
+      for (auto &o : sv.conns) // one client: the newest replaces the previous one
+         if (o.websocket && o.s != NO_SOCKET && &o != &c) {
+            close_socket(o.s);
+            o.s = NO_SOCKET;
+         }
+      const std::string accept = base64(sha1(header("sec-websocket-key") + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));
+      c.out += "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+               "Sec-WebSocket-Accept: " + accept + "\r\n\r\n";
+      c.websocket = true;
+      sv.resend = true;
+      return true;
+   }
+   const bool page = req.rfind("GET / ", 0) == 0 || req.rfind("GET /index.html ", 0) == 0;
+   const std::string body = page ? std::string(client_html) : std::string("not found\n");
+   c.out += std::string(page ? "HTTP/1.1 200 OK\r\n" : "HTTP/1.1 404 Not Found\r\n") +
+            (page ? "Content-Type: text/html; charset=utf-8\r\n" : "Content-Type: text/plain\r\n") +
+            "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: " + std::to_string(body.size()) +
+            "\r\n\r\n" + body;
+   c.close_after = true; // one request per connection, closed once the answer is out
+   flush(c);
+   return false;
+}
+
+} // namespace
+
+namespace figure_remote {
+
+bool start(const std::string &host, int port, int &bound_port, std::string &err) {
+#ifdef _WIN32
+   if (!sv.wsa) {
+      WSADATA data;
+      if (WSAStartup(MAKEWORD(2, 2), &data) != 0) { err = "WSAStartup failed"; return false; }
+      sv.wsa = true;
+   }
+#endif
+   addrinfo hints{}, *res = nullptr;
+   hints.ai_family = AF_INET;
+   hints.ai_socktype = SOCK_STREAM;
+   hints.ai_flags = AI_PASSIVE;
+   if (getaddrinfo(host.empty() ? nullptr : host.c_str(), std::to_string(port).c_str(), &hints, &res) != 0 || !res) {
+      err = "cannot resolve the address " + host;
+      return false;
+   }
+   sv.listener = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+   if (sv.listener == NO_SOCKET) { freeaddrinfo(res); err = "socket() failed"; return false; }
+   int yes = 1;
+   setsockopt(sv.listener, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&yes), sizeof(yes));
+   const bool ok = bind(sv.listener, res->ai_addr, static_cast<int>(res->ai_addrlen)) == 0 && listen(sv.listener, 8) == 0;
+   freeaddrinfo(res);
+   if (!ok) {
+      close_socket(sv.listener);
+      sv.listener = NO_SOCKET;
+      err = "cannot listen on " + host + ":" + std::to_string(port) + " (port in use?)";
+      return false;
+   }
+   set_nonblocking(sv.listener);
+   sockaddr_in addr{};
+   socklen_t len = sizeof(addr);
+   getsockname(sv.listener, reinterpret_cast<sockaddr *>(&addr), &len);
+   bound_port = ntohs(addr.sin_port);
+   return true;
+}
+
+void stop() {
+   for (auto &c : sv.conns)
+      if (c.s != NO_SOCKET) close_socket(c.s);
+   if (sv.listener != NO_SOCKET) close_socket(sv.listener);
+   sv = server_t{};
+}
+
+bool serve(int timeout_ms) {
+   if (sv.listener == NO_SOCKET) return false;
+   fd_set rd, wr;
+   FD_ZERO(&rd);
+   FD_ZERO(&wr);
+   FD_SET(sv.listener, &rd);
+   socket_t maxfd = sv.listener;
+   for (auto &c : sv.conns) {
+      if (c.s == NO_SOCKET) continue;
+      FD_SET(c.s, &rd);
+      if (!c.out.empty()) FD_SET(c.s, &wr);
+      maxfd = std::max(maxfd, c.s);
+   }
+   timeval tv{timeout_ms / 1000, (timeout_ms % 1000) * 1000};
+   if (select(static_cast<int>(maxfd + 1), &rd, &wr, nullptr, &tv) <= 0) return false;
+   bool got = false;
+   if (FD_ISSET(sv.listener, &rd)) {
+      for (;;) {
+         const socket_t s = accept(sv.listener, nullptr, nullptr);
+         if (s == NO_SOCKET) break;
+         set_nonblocking(s);
+         int one = 1;
+         setsockopt(s, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&one), sizeof(one));
+#ifdef SO_NOSIGPIPE
+         setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+#endif
+         connection_t c;
+         c.s = s;
+         sv.conns.push_back(c);
+      }
+   }
+   for (auto &c : sv.conns) {
+      if (c.s == NO_SOCKET) continue;
+      if (FD_ISSET(c.s, &rd)) {
+         char buf[16384];
+         for (;;) {
+            const int n = static_cast<int>(recv(c.s, buf, sizeof(buf), 0));
+            if (n > 0) {
+               c.in.append(buf, static_cast<size_t>(n));
+               continue;
+            }
+            if (n < 0 && would_block()) break;
+            close_socket(c.s); // closed by the peer
+            c.s = NO_SOCKET;
+            got = true;
+            break;
+         }
+         if (c.s != NO_SOCKET) got = (c.websocket ? ws_read(c) : http_read(c)) || got;
+      }
+      if (c.s != NO_SOCKET && !c.out.empty()) flush(c);
+      if (c.s != NO_SOCKET && c.close_after && c.out.empty()) {
+         close_socket(c.s);
+         c.s = NO_SOCKET;
+      }
+   }
+   sv.conns.erase(std::remove_if(sv.conns.begin(), sv.conns.end(), [](const connection_t &c) { return c.s == NO_SOCKET; }),
+                  sv.conns.end());
+   return got;
+}
+
+std::uint64_t new_texture_id() { return sv.next_id++; }
+
+void texture_update(std::uint64_t id, int width, int height, const unsigned char *rgba, bool linear) {
+   texture_t &t = sv.textures[id];
+   t.width = width;
+   t.height = height;
+   t.linear = linear;
+   t.rgba.assign(rgba, rgba + static_cast<size_t>(width) * static_cast<size_t>(height) * 4u);
+   send_texture(id);
+}
+
+void texture_destroy(std::uint64_t id) {
+   if (sv.textures.erase(id) == 0) return;
+   if (connection_t *c = client()) {
+      std::string m;
+      put<std::uint8_t>(m, 3);
+      put<std::uint32_t>(m, static_cast<std::uint32_t>(id));
+      ws_append(*c, 2, m);
+   }
+}
+
+void send_frame(ImDrawData *dd) {
+   // Dear ImGui's own textures (font atlas): keep RGBA copies, whether or not a client is connected
+   for (ImTextureData *t : ImGui::GetPlatformIO().Textures) {
+      if (t->Status == ImTextureStatus_WantCreate || t->Status == ImTextureStatus_WantUpdates) {
+         if (t->TexID == ImTextureID_Invalid) t->SetTexID(static_cast<ImTextureID>(new_texture_id()));
+         const unsigned char *px = static_cast<const unsigned char *>(t->GetPixels());
+         std::vector<unsigned char> rgba(static_cast<size_t>(t->Width) * static_cast<size_t>(t->Height) * 4u);
+         if (t->Format == ImTextureFormat_Alpha8) {
+            for (size_t i = 0; i < static_cast<size_t>(t->Width) * static_cast<size_t>(t->Height); ++i) {
+               rgba[4 * i] = rgba[4 * i + 1] = rgba[4 * i + 2] = 255;
+               rgba[4 * i + 3] = px[i];
+            }
+         } else {
+            std::memcpy(rgba.data(), px, rgba.size());
+         }
+         texture_update(static_cast<std::uint64_t>(t->TexID), t->Width, t->Height, rgba.data(), true); // font atlas
+         t->SetStatus(ImTextureStatus_OK);
+      } else if (t->Status == ImTextureStatus_WantDestroy) {
+         texture_destroy(static_cast<std::uint64_t>(t->TexID));
+         t->SetTexID(ImTextureID_Invalid);
+         t->SetStatus(ImTextureStatus_Destroyed);
+      }
+   }
+   connection_t *c = client();
+   if (!c) return;
+   if (sv.resend) { // a new client: every live texture first
+      for (const auto &t : sv.textures) ws_append(*c, 2, texture_message(t.first, t.second));
+      sv.resend = false;
+   }
+   if (c->out.size() > (64u << 20)) return; // the client is not keeping up: drop this frame
+   std::string m;
+   put<std::uint8_t>(m, 1);
+   put<float>(m, dd->DisplaySize.x);
+   put<float>(m, dd->DisplaySize.y);
+   put<std::uint32_t>(m, static_cast<std::uint32_t>(dd->CmdLists.Size));
+   for (const ImDrawList *l : dd->CmdLists) {
+      std::uint32_t ncmd = 0;
+      for (const ImDrawCmd &cmd : l->CmdBuffer)
+         if (cmd.UserCallback == nullptr) ++ncmd; // callbacks (texture sampling) have no meaning in the browser
+      put<std::uint32_t>(m, static_cast<std::uint32_t>(l->VtxBuffer.Size));
+      put<std::uint32_t>(m, static_cast<std::uint32_t>(l->IdxBuffer.Size));
+      put<std::uint32_t>(m, ncmd);
+      m.append(reinterpret_cast<const char *>(l->VtxBuffer.Data), static_cast<size_t>(l->VtxBuffer.Size) * sizeof(ImDrawVert));
+      m.append(reinterpret_cast<const char *>(l->IdxBuffer.Data), static_cast<size_t>(l->IdxBuffer.Size) * sizeof(ImDrawIdx));
+      if (l->IdxBuffer.Size % 2) put<std::uint16_t>(m, 0); // keep the commands 4-byte aligned
+      for (const ImDrawCmd &cmd : l->CmdBuffer) {
+         if (cmd.UserCallback != nullptr) continue;
+         put<float>(m, cmd.ClipRect.x - dd->DisplayPos.x);
+         put<float>(m, cmd.ClipRect.y - dd->DisplayPos.y);
+         put<float>(m, cmd.ClipRect.z - dd->DisplayPos.x);
+         put<float>(m, cmd.ClipRect.w - dd->DisplayPos.y);
+         put<std::uint32_t>(m, static_cast<std::uint32_t>(cmd.GetTexID()));
+         put<std::uint32_t>(m, cmd.IdxOffset);
+         put<std::uint32_t>(m, cmd.ElemCount);
+      }
+   }
+   ws_append(*c, 2, m);
+   flush(*c);
+}
+
+} // namespace figure_remote

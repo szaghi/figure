@@ -52,6 +52,7 @@ flowchart TD
   init["init"] --> figure_check["figure_check"]
   init["init"] --> figure_check["figure_check"]
   init_headless["init_headless"] --> figure_check["figure_check"]
+  init_remote["init_remote"] --> figure_check["figure_check"]
   ip_bars_r32["ip_bars_r32"] --> figure_check["figure_check"]
   ip_bars_r64["ip_bars_r64"] --> figure_check["figure_check"]
   ip_heatmap_r32["ip_heatmap_r32"] --> figure_check["figure_check"]

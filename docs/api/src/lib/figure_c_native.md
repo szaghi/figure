@@ -24,6 +24,7 @@ graph LR
 
 - [fig_init](#fig-init)
 - [fig_init_headless](#fig-init-headless)
+- [fig_init_remote](#fig-init-remote)
 - [fig_begin_frame](#fig-begin-frame)
 - [fig_end_frame](#fig-end-frame)
 - [fig_set_ini_file](#fig-set-ini-file)
@@ -54,6 +55,8 @@ graph LR
 ### fig_init
 
 ### fig_init_headless
+
+### fig_init_remote
 
 ### fig_begin_frame
 

@@ -12,7 +12,7 @@ implicit none
 private
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
-public :: fig_set_ini_file, fig_texture_create, fig_texture_destroy, fig_texture_sampling, fig_texture_update
+public :: fig_init_remote, fig_set_ini_file, fig_texture_create, fig_texture_destroy, fig_texture_sampling, fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 
 ! Status codes: must match native/figure_native.h.
@@ -44,6 +44,20 @@ interface
    integer(c_int), value :: height !< Virtual display height [pixels].
    integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_init_headless
+
+   function fig_init_remote(width, height, host, host_len, port, bound_port) result(status) &
+      bind(C, name='fig_init_remote')
+   !< Create the contexts and serve the UI to a web browser on http://host:port/ (no window, display or GPU).
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value              :: width      !< Initial display width [pixels], until the browser's.
+   integer(c_int), value              :: height     !< Initial display height [pixels].
+   character(kind=c_char), intent(in) :: host(*)    !< Address to listen on (not NUL-terminated); empty: 127.0.0.1.
+   integer(c_int), value              :: host_len   !< Host length [bytes].
+   integer(c_int), value              :: port       !< Port; 0: any free port.
+   integer(c_int), intent(out)        :: bound_port !< The port listened on.
+   integer(c_int)                     :: status     !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_init_remote
 
    function fig_begin_frame(running) result(status) bind(C, name='fig_begin_frame')
    !< Process events (waiting if lazy) and open a frame; `running` is 0 when the user closed the window.
