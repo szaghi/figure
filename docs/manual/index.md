@@ -5,7 +5,7 @@ title: Tutorial
 # Tutorial
 
 Five short programs, from an empty window to a tested panel. Each chapter is a complete program of
-[`docs/examples/src`](https://github.com/szaghi/figure/tree/master/docs/examples/src), compiled against the library
+[`docs/examples/src`](https://github.com/szaghi/figure/tree/main/docs/examples/src), compiled against the library
 by `docs/examples/build.sh`.
 
 | Chapter | You learn |
