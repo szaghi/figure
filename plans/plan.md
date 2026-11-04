@@ -25,6 +25,7 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
       nvfortran 26.9, fpm.
 - [x] FoBiS modes (tests/examples/static, gnu and nvf) and fpm.toml in sync (`fobis rule --ex sync`).
 - [x] `figure_hello` runs in a window on Linux (WSLg, SDL3 X11 driver): widgets and ImPlot render correctly.
+- [x] Native layer rebuilt with Wayland and DBus (2026-11-04); the full FoBiS/fpm test matrix passes on it.
 - [~] Idle CPU with lazy redraw: 2.6% of one core (10 s sample, WSLg). Expected ~2 frames/s from the 0.5 s
       `max_wait` refresh; find where the rest goes (spurious X events resetting `frames_left`? swap cost under
       WSLg's D3D12 GL?) and decide the default `max_wait`.
@@ -57,8 +58,11 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
   procedure of the same module: "ILM file: can't find intrinsic size", internal compiler error. Legal Fortran;
   avoided by naming the locals `extent`. Worth a reduced reproducer to NVIDIA.
 - **VERSION** is a placeholder (0.0.0) and the **licence** is undecided (fpm.toml says TBD): both are the author's call.
-- This machine's SDL3 has X11 only: Wayland and DBus are off because `libxkbcommon-dev`, `libegl-dev` and
-  `libdbus-1-dev` are not installed. Without DBus there are no XDG-portal file dialogs.
+- SDL3 enables Wayland and DBus only when their development packages are present at configure time
+  (`libxkbcommon-dev`, `libegl-dev`, `libdbus-1-dev`; see *Platform setup*): without them it silently builds X11
+  only, and without DBus there are no XDG-portal file dialogs. On the WSL box they are installed since 2026-11-04
+  and the native layer builds with video drivers `wayland x11` and DBus ON. Which driver SDL3 picks on WSLg, and
+  whether it behaves, is still unchecked.
 
 ## Platform setup
 
