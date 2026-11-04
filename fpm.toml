@@ -12,7 +12,7 @@ description = "FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering
 auto-executables = false
 auto-examples = false
 auto-tests = false
-link = ["figure_native", "SDL3", "stdc++", "dl", "pthread", "m"]
+link = ["figure_native", "SDL3"]  # platform libraries: from the fobos varset, added by scripts/fpm.sh
 
 [fortran]
 implicit-typing = false

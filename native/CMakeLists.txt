@@ -23,6 +23,15 @@ set(FIGURE_SDL_TAG     "release-3.4.20" CACHE STRING "SDL git tag")
 # ---- SDL3, static ---------------------------------------------------------------------------------------------------
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
+# Installed next to the native layer: lib/pkgconfig/sdl3.pc carries the exact static link line of this platform
+# (scripts/fpm.sh reads it; scripts/check_sync.py checks the fobos varset of this platform against it).
+set(SDL_INSTALL ON CACHE BOOL "" FORCE)
+set(SDL_INSTALL_DOCS OFF CACHE BOOL "" FORCE)
+# Only what FIGURE uses (window, events, OpenGL, file dialogs): every other subsystem adds link dependencies
+# (ALSA/PulseAudio, CoreAudio, WASAPI, game controllers, ...) on every platform.
+foreach(_sdl_off AUDIO GPU RENDER CAMERA JOYSTICK HAPTIC HIDAPI SENSOR POWER TRAY)
+   set(SDL_${_sdl_off} OFF CACHE BOOL "" FORCE)
+endforeach()
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SDL_TESTS OFF CACHE BOOL "" FORCE)

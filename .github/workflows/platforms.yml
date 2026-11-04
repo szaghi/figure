@@ -1,0 +1,159 @@
+# Platforms beyond ci.yml (Linux, gfortran, coverage; managed by `fobis scaffold`): macOS and Windows with gfortran,
+# Linux with nvfortran. Each job builds the native layer, checks the platform's fobos varset against the static link
+# line SDL reports for it (scripts/check_sync.py), builds and runs the headless tests with FoBiS and with fpm, and
+# builds the examples. Headless tests need no display and no GPU.
+name: Platforms
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS (gfortran, Apple clang)
+    runs-on: macos-14
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Python (scripts need 3.11+, tomllib)
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Fortran compiler
+      uses: fortran-lang/setup-fortran@v1
+      with:
+        compiler: gcc
+        version: 14
+
+    - name: Build tools
+      run: |
+        brew install ninja pkg-config
+        python -m pip install FoBiS.py
+
+    - name: fpm
+      uses: fortran-lang/setup-fpm@v9
+      with:
+        fpm-version: v0.12.0
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Native layer
+      run: |
+        ${FC} --version && c++ --version && cmake --version
+        scripts/build_native.sh
+        cat lib/pkgconfig/sdl3.pc
+
+    - name: Link line of this platform (fobos varset vs SDL)
+      run: python3 scripts/check_sync.py
+
+    - name: Tests (FoBiS)
+      run: |
+        fobis build --mode tests-gnu --varset macos
+        bash scripts/run_tests.sh
+
+    - name: Examples (FoBiS)
+      run: |
+        rm -rf mod obj exe
+        fobis build --mode examples-gnu --varset macos
+
+    - name: Tests (fpm)
+      run: scripts/fpm.sh test --compiler "${FC}"
+
+  windows:
+    name: Windows (MSYS2 UCRT64 gfortran)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: MSYS2 toolchain
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: UCRT64
+        update: true
+        install: git
+        pacboy: >-
+          gcc-fortran:p cmake:p ninja:p pkgconf:p python:p python-pip:p fpm:p
+
+    - name: FoBiS
+      run: python -m pip install --break-system-packages FoBiS.py
+
+    - name: Native layer
+      run: |
+        gfortran --version && g++ --version && cmake --version
+        CC=gcc CXX=g++ scripts/build_native.sh
+        cat lib/pkgconfig/sdl3.pc
+
+    - name: Link line of this platform (fobos varset vs SDL)
+      run: python scripts/check_sync.py
+
+    - name: Tests (FoBiS)
+      run: |
+        fobis build --mode tests-gnu --varset windows
+        bash scripts/run_tests.sh
+
+    - name: Examples (FoBiS)
+      run: |
+        rm -rf mod obj exe
+        fobis build --mode examples-gnu --varset windows
+
+    - name: Tests (fpm)
+      run: scripts/fpm.sh test
+
+  linux-nvfortran:
+    name: Linux (nvfortran)
+    runs-on: ubuntu-latest
+    env:
+      NVHPC: "26.9"            # the version of the development machines; NVIDIA's apt repository names it nvhpc-26-9
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Python (scripts need 3.11+, tomllib)
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: NVIDIA HPC SDK
+      run: |
+        curl -fsSL https://developer.download.nvidia.com/hpc-sdk/ubuntu/DEB-GPG-KEY-NVIDIA-HPC-SDK \
+          | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-hpcsdk-archive-keyring.gpg
+        echo 'deb [signed-by=/usr/share/keyrings/nvidia-hpcsdk-archive-keyring.gpg] https://developer.download.nvidia.com/hpc-sdk/ubuntu/amd64 /' \
+          | sudo tee /etc/apt/sources.list.d/nvhpc.list
+        sudo apt-get update -y
+        sudo apt-get install -y "nvhpc-${NVHPC//./-}" cmake ninja-build libxext-dev libxrandr-dev libxcursor-dev \
+          libxi-dev libxfixes-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev
+        echo "/opt/nvidia/hpc_sdk/Linux_x86_64/${NVHPC}/compilers/bin" >> "$GITHUB_PATH"
+        pip install FoBiS.py
+
+    - name: Native layer
+      run: |
+        nvfortran --version && g++ --version
+        CC=gcc CXX=g++ scripts/build_native.sh
+
+    - name: Link line of this platform (fobos varset vs SDL)
+      run: python3 scripts/check_sync.py
+
+    - name: Tests (FoBiS)
+      run: |
+        fobis build --mode tests-nvf
+        bash scripts/run_tests.sh
+
+    - name: Examples (FoBiS)
+      run: |
+        rm -rf mod obj exe
+        fobis build --mode examples-nvf

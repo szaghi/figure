@@ -14,15 +14,16 @@ FIGURE has two layers, built separately:
 ## Requirements
 
 - A Fortran 2018 compiler. Verified: gfortran 16.2 and nvfortran 26.9 (Linux).
-- A C++17 compiler whose C++ runtime is the one the Fortran link line uses (`libstdc++` with gfortran and nvfortran
-  on Linux). Verified: g++ 16.2.
+- A C++17 compiler whose C++ runtime is the one the Fortran link line uses: `libstdc++` with gfortran and nvfortran
+  on Linux and with MinGW on Windows, `libc++` (Apple clang) on macOS. Verified: g++ 16.2.
 - CMake 3.24 or newer; Ninja is used when present.
 - Network access for the first native build: CMake downloads the pinned sources.
 - FoBiS 3.8 or newer, or fpm.
 - Python 3.11 or newer, only for `scripts/check_sync.py` and `scripts/measure_idle.py`.
 
-Platforms: Linux is verified (X11 and Wayland, under WSL2/WSLg). macOS and Windows are targets, not yet built
-(milestone M4 of the [roadmap](roadmap)).
+Platforms: Linux is verified locally (X11 and Wayland, under WSL2/WSLg). macOS (gfortran with Apple clang) and
+Windows (MSYS2 UCRT64 gfortran) are built and tested by the `Platforms` CI workflow (see
+[Other platforms](#other-platforms)).
 
 ### Linux packages
 
@@ -78,7 +79,7 @@ fobis rule --ex sync                                          # fobos and fpm.to
 |---|---|
 | `tests-gnu`, `tests-nvf` | the headless test, `exe/figure_test_headless` |
 | `tests-gnu-debug` | the same with runtime checks and floating-point traps |
-| `examples-gnu`, `examples-nvf` | the example program, `exe/figure_hello` |
+| `examples-gnu`, `examples-nvf` | the example programs (`exe/figure_hello`, `exe/figure_mandelbrot`, `exe/figure_bench_texture`), with OpenMP |
 | `figure-static-gnu`, `figure-static-nvf` | the static library `lib/libfigure.a`, modules in `lib/mod` |
 
 Two rules: `fobis rule --ex native` builds the native layer, `fobis rule --ex sync` checks fobos against
@@ -91,8 +92,9 @@ a stale binary of the other compiler can still be there.
 
 ## The Fortran library with fpm
 
-`scripts/fpm.sh` runs fpm with the native layer's directory on the link line (`--link-flag -L lib`); it stops if
-`lib/libfigure_native.a` is missing.
+`scripts/fpm.sh` runs fpm with the native layer on the link line: `-L lib` and the platform libraries of the fobos
+varset of the running platform (`python3 scripts/check_sync.py --link-flags`); `fpm.toml` itself links only
+`figure_native` and `SDL3`. It stops if `lib/libfigure_native.a` is missing.
 
 ```bash
 scripts/fpm.sh test
@@ -107,12 +109,31 @@ Build the static library, then compile against its modules and link it together 
 ```bash
 fobis build --mode figure-static-gnu
 gfortran -I figure/lib/mod my_program.F90 figure/lib/libfigure.a \
-         -L figure/lib -lfigure_native -lSDL3 -lstdc++ -ldl -lpthread -lm -o my_program
+         -L figure/lib -lfigure_native -lSDL3 $(python3 figure/scripts/check_sync.py --link-flags) -o my_program
 ```
 
-The native libraries and their order are those of fobos `$NATIVE_LIBS` and fpm.toml `[build] link`:
-`figure_native SDL3 stdc++ dl pthread m`. In the program, `use figure` gives the whole public API (see the
-[feature map](features)).
+The native libraries are `figure_native SDL3` followed by the platform's: on Linux `stdc++ dl pthread m`; the
+complete lists, with macOS's frameworks, are the fobos varsets (next section). In the program, `use figure` gives the
+whole public API (see the [feature map](features)).
+
+## Other platforms
+
+The native layer statically links SDL3, whose system dependencies differ by platform. fobos keeps them in one varset
+per platform; `linux` is the default, the others are selected with `--varset`:
+
+| Platform | Toolchain | FoBiS |
+|---|---|---|
+| Linux | gfortran or nvfortran, g++ | `fobis build --mode tests-gnu` |
+| macOS | gfortran (Homebrew, `fortran-lang/setup-fortran`), Apple clang | `fobis build --mode tests-gnu --varset macos` |
+| Windows | MSYS2 UCRT64: `gcc-fortran`, `cmake`, `ninja`, `python`, `pkgconf` | `fobis build --mode tests-gnu --varset windows` |
+
+The native build installs SDL's own description of its static link line, `lib/pkgconfig/sdl3.pc`.
+`fobis rule --ex sync` (`scripts/check_sync.py`) checks that the varset of the platform it runs on covers it: every
+library and framework SDL needs must be in the varset. The `Platforms` CI workflow runs that check on macOS and
+Windows before linking anything, so a missing system library shows up as a named error, not as an undefined symbol.
+
+SDL is built with only the subsystems FIGURE uses (video, events, OpenGL, file dialogs): audio, game controllers,
+haptics, sensors, camera, GPU, render, power and tray are off, which keeps the link line short on every platform.
 
 ## WSL2 (WSLg)
 

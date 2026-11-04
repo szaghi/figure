@@ -7,6 +7,10 @@
 #include "implot.h"
 
 #include <SDL3/SDL.h>
+// The program's main is the Fortran one, not SDL_main: SDL_MAIN_HANDLED keeps SDL_main.h from redefining main, and
+// fig_init declares the entry point ready (SDL_SetMainReady) before SDL_Init, as SDL documents for this case.
+#define SDL_MAIN_HANDLED
+#include <SDL3/SDL_main.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -161,6 +165,7 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    FIG_TRY
    if (st.m != mode::none) return fail(FIG_ERR_STATE, "figure is already initialized");
    if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "window size must be positive");
+   SDL_SetMainReady();
    if (!SDL_Init(SDL_INIT_VIDEO)) return fail(FIG_ERR_FAILED, std::string("SDL_Init: ") + SDL_GetError());
 #if defined(__APPLE__)
    const char *glsl = "#version 150";

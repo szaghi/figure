@@ -5,6 +5,7 @@
 /obj/
 /lib/
 /include/
+/share/
 /build_native.log
 imgui.ini
 __pycache__/

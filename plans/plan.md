@@ -67,9 +67,18 @@ Pinned set (a matched triple, verified to compile with g++ 16.2): cimgui `1.93do
   wx_bitmap(rgb) 88-97 ms, draw 3.8-4.2 ms); wx shim rebuilt with -O2: no change. Sources:
   src/examples/figure_bench_texture.F90, scripts/bench/wx_bench.f90; method in docs/guide/images.md.
 
-### M4: platforms and CI
-- GitHub Actions: Linux (gfortran, nvfortran headless), macOS (gfortran + clang), Windows (MSYS2 MinGW gfortran).
-- `check_sync.py` and both builds (FoBiS, fpm) in CI.
+### M4: platforms and CI: **written 2026-11-04, unverified until the first CI runs**
+- `.github/workflows/platforms.yml` (project-owned, beside the scaffold's ci.yml): macOS 14 (gfortran 14 via
+  setup-fortran, Apple clang), Windows (MSYS2 UCRT64), Linux nvfortran (NVIDIA apt repo, `nvhpc-26-9`: the package
+  name is the least certain part). Steps: native layer, `check_sync.py` (varset vs SDL's sdl3.pc), FoBiS tests +
+  run_tests.sh, examples, fpm tests.
+- Link model: fobos `[varset:linux|macos|windows]` `$NATIVE_LIBS`/`$NATIVE_LFLAGS` (linux default); fpm.toml links
+  only figure_native SDL3, scripts/fpm.sh adds `check_sync.py --link-flags`; the native build installs SDL
+  (`SDL_INSTALL`) so lib/pkgconfig/sdl3.pc gives SDL's exact static link line, and check_sync checks the running
+  platform's varset covers it (negative-tested). SDL built with video/events/dialog only (audio, GPU, render, camera,
+  joystick, haptic, hidapi, sensor, power, tray off): Linux static SDL now needs only -pthread -lm; libSDL3.a 6.8 ->
+  4.8 MB. fig_init calls SDL_SetMainReady (Fortran main, SDL_MAIN_HANDLED).
+- build_native.sh: empty arrays expanded with ${a[@]+"${a[@]}"} (bash 3.2 on macOS treats them as unbound).
 
 ### M5: remote and web
 - Remote UI: stream ImGui draw lists over WebSocket to a browser (imgui-ws approach), Fortran stays native (OpenMP,

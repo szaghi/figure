@@ -12,10 +12,29 @@ modes = tests-gnu tests-gnu-debug examples-gnu
         figure-static-gnu figure-static-nvf
 
 # The native layer (libfigure_native.a + libSDL3.a in lib/) is built by `fobis rule --ex native` (CMake), run
-# automatically before every build (pre_build): a no-op once built. NATIVE_LIBS must equal fpm.toml [build] link
-# (scripts/check_sync.py verifies it).
+# automatically before every build (pre_build): a no-op once built. Linking it needs platform libraries: one varset per
+# platform (`--varset macos`, `--varset windows`; linux by default). Each must cover the static link line SDL reports
+# for that platform (lib/pkgconfig/sdl3.pc), plus the C++ runtime: scripts/check_sync.py checks the varset of the
+# platform it runs on. fpm.toml [build] link holds only figure_native and SDL3 (scripts/fpm.sh adds the rest).
+[varsets]
+default = linux
+
+[varset:linux]
+$NATIVE_LIBS   = figure_native SDL3 stdc++ dl pthread m
+$NATIVE_LFLAGS =
+
+[varset:macos]
+$NATIVE_LIBS   = figure_native SDL3 c++ iconv pthread m
+$NATIVE_LFLAGS = -framework Cocoa -framework Carbon -framework Foundation -framework CoreVideo -framework CoreMedia
+                 -framework IOKit -framework Metal -framework QuartzCore -framework UniformTypeIdentifiers
+                 -framework AVFoundation
+
+[varset:windows]
+$NATIVE_LIBS   = figure_native SDL3 stdc++ pthread m kernel32 user32 gdi32 winmm imm32 ole32 oleaut32 version uuid
+                 advapi32 setupapi shell32
+$NATIVE_LFLAGS =
+
 [common-variables]
-$NATIVE_LIBS = figure_native SDL3 stdc++ dl pthread m
 $CGNU        = -c -std=f2018 -ffree-line-length-132 -fimplicit-none
 $CGNU_DEBUG  = -Og -g3 -fcheck=all -fbacktrace -Wall -Wimplicit-interface -Wimplicit-procedure -finit-real=nan -ffpe-trap=invalid,zero,overflow
 $CNVF        = -c -Mstandard -Mfree
@@ -78,6 +97,7 @@ mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib
 ext_libs  = $NATIVE_LIBS
+lflags    = $NATIVE_LFLAGS
 pre_build = native
 colors    = True
 quiet     = False
@@ -89,6 +109,7 @@ mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib
 ext_libs  = $NATIVE_LIBS
+lflags    = $NATIVE_LFLAGS
 pre_build = native
 colors    = True
 quiet     = False

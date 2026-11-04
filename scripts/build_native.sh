@@ -27,7 +27,8 @@ build_dir="$root/build/native"
 [[ $clean -eq 1 ]] && rm -rf "$build_dir"
 generator=()
 command -v ninja > /dev/null && generator=(-G Ninja)
-cmake -S "$root/native" -B "$build_dir" "${generator[@]}" \
-   -DCMAKE_BUILD_TYPE="$build_type" -DCMAKE_INSTALL_PREFIX="$prefix" -DCMAKE_INSTALL_LIBDIR=lib "${extra[@]}"
+# ${a[@]+"${a[@]}"}: an empty array is "unbound" under set -u in bash < 4.4 (macOS ships bash 3.2)
+cmake -S "$root/native" -B "$build_dir" ${generator[@]+"${generator[@]}"} \
+   -DCMAKE_BUILD_TYPE="$build_type" -DCMAKE_INSTALL_PREFIX="$prefix" -DCMAKE_INSTALL_LIBDIR=lib ${extra[@]+"${extra[@]}"}
 cmake --build "$build_dir" --parallel
 cmake --install "$build_dir"

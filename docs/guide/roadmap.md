@@ -44,10 +44,13 @@ The milestones of `plans/plan.md`. Only M1 is done; everything after it is plann
   (`src/examples/figure_bench_texture.F90`): about 100 frames/s with a new 3840 x 2160 image every frame, about 10x
   wxFortran on the same loop ([measurements](images#speed-a-new-4k-image-every-frame)).
 
-## M4: platforms and CI — planned
+## M4: platforms and CI — written, awaiting its first runs
 
-- GitHub Actions: Linux (gfortran, nvfortran headless), macOS (gfortran and clang), Windows (MSYS2 MinGW gfortran).
-- `check_sync.py` and both builds (FoBiS, fpm) in CI.
+- GitHub Actions: `ci.yml` (Linux, gfortran, coverage, from the FoBiS scaffold) and `platforms.yml`: macOS (gfortran
+  and Apple clang), Windows (MSYS2 UCRT64 gfortran), Linux with nvfortran. Each builds the native layer, checks the
+  platform's link line against SDL's, builds and runs the headless tests with FoBiS and fpm, and builds the examples.
+- Platform link lines in fobos varsets (`--varset macos|windows`), checked against `lib/pkgconfig/sdl3.pc`; fpm reads
+  them through `scripts/fpm.sh` ([Other platforms](install#other-platforms)).
 
 ## M5: remote and web — planned
 

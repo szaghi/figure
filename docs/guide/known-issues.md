@@ -34,8 +34,9 @@ kinds.
 
 ## Platforms
 
-Only Linux is built and tested. On WSL2, set `GALLIUM_DRIVER=d3d12`, or Mesa renders in software
-([Installation](install#wsl2-wslg)).
+Linux is built and tested locally; macOS and Windows only by CI (the `Platforms` workflow), and no window has been
+opened on either yet: the headless tests need no display. On WSL2, set `GALLIUM_DRIVER=d3d12`, or Mesa renders in
+software ([Installation](install#wsl2-wslg)).
 
 ## First build needs the network
 
