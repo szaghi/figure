@@ -40,6 +40,7 @@ graph LR
 ## Contents
 
 - [test_next_frame](#test-next-frame)
+- [test_plot_tick](#test-plot-tick)
 - [test_quit](#test-quit)
 - [test_mouse_move](#test-mouse-move)
 - [test_mouse_button](#test-mouse-button)
@@ -76,6 +77,35 @@ flowchart TD
   test_next_frame["test_next_frame"] --> fig_input_next_frame["fig_input_next_frame"]
   test_next_frame["test_next_frame"] --> figure_check["figure_check"]
   style test_next_frame fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_plot_tick
+
+The label of tick `index` (from 1) on `axis` (`'x'` or `'y'`) of the plot being declared, and the number of ticks:
+ call it between `ip_begin_plot` and `ip_end_plot`, after the setup (`ip_setup_axes`) and an item. `label` is ''
+ for an index out of range.
+
+```fortran
+subroutine test_plot_tick(axis, index, label, count, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `axis` | character(len=*) | in |  | `'x'` or `'y'`. |
+| `index` | integer(kind=int32) | in |  | Tick, from 1. |
+| `label` | character(len=:) | out | allocatable | Its label. |
+| `count` | integer(kind=int32) | out | optional | Ticks on the axis. |
+| `stat` | integer(kind=int32) | out | optional | Status: `FIG_ERR_STATE` outside a plot. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_plot_tick["test_plot_tick"] --> fig_plot_tick_label["fig_plot_tick_label"]
+  test_plot_tick["test_plot_tick"] --> figure_check["figure_check"]
+  style test_plot_tick fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### test_quit

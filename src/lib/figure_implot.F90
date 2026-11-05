@@ -30,8 +30,11 @@ use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_Begin
                            ImPlot_SetupAxes, ImPlot_ColormapScale, ImPlot_PlotHeatmap_doublePtr,                   &
                            ImPlot_PlotHeatmap_FloatPtr, ImPlot_PlotImage, ImPlot_PopColormap,                       &
                            ImPlot_PushColormap_PlotColormap, im_plot_point, im_plot_rect, ImPlot_GetPlotLimits,     &
-                           ImPlot_GetPlotSize, ImPlot_SetupAxesLimits, ImPlot_SetupAxisScale_PlotScale
-use figure_cimplot_enums, only : ImAxis_X1, ImAxis_Y1, ImPlotScale_Log10,                                             &
+                           ImPlot_GetPlotSize, ImPlot_SetupAxesLimits, ImPlot_SetupAxisScale_PlotScale,             &
+                           ImPlot_SetupAxisFormat_Str, ImPlot_BeginSubplots, ImPlot_EndSubplots,                    &
+                           ImPlot_SetNextAxisToFit
+use figure_cimplot_enums, only : ImAxis_X1, ImAxis_Y1, ImPlotScale_Log10, ImPlotSubplotFlags_LinkAllX,                &
+                                 ImPlotSubplotFlags_LinkAllY, ImPlotSubplotFlags_None,                                &
                                  ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_None, ImPlotCond_Always, ImPlotCond_Once,     &
                                  ImPlotFlags_Equal, ImPlotFlags_None,                                              &
                                  ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square,  &
@@ -49,7 +52,10 @@ use figure_cimplot_enums, only : ImAxis_X1, ImAxis_Y1, ImPlotScale_Log10,       
 
 implicit none
 private
-public :: ip_begin_plot, ip_end_plot, ip_setup_axes
+public :: ip_begin_plot, ip_end_plot, ip_setup_axes, ip_begin_subplots, ip_end_subplots
+
+character(len=128), allocatable :: subplots_seen(:)  !< Titles of the subplot figures drawn so far.
+integer(int32)                  :: fits_pending = 0  !< Plots of a new subplot figure still to fit to their data.
 public :: ip_bars, ip_line, ip_scatter, ip_shaded
 public :: ip_colormap_scale, ip_heatmap, ip_image, ip_plot_limits, ip_plot_size, ip_setup_axes_limits
 public :: ip_spec, plot_spec_object
@@ -120,23 +126,75 @@ contains
    if (present(equal)) then
       if (equal) flags = ior(flags, ImPlotFlags_Equal)
    endif
+   if (fits_pending > 0_int32) then                 ! a cell of a subplot figure drawn for the first time
+      call ImPlot_SetNextAxisToFit(ImAxis_X1)      ! the axes a plot uses: fitting the unused ones (no data, an
+      call ImPlot_SetNextAxisToFit(ImAxis_Y1)      ! empty range) computes inf - inf, an FPE under traps
+      fits_pending = fits_pending - 1_int32
+   endif
    visible = logical(ImPlot_BeginPlot(cstr(title), extent, flags))
    endfunction ip_begin_plot
+
+   function ip_begin_subplots(title, rows, cols, width, height, link_x, link_y) result(visible)
+   !< A grid of `rows` x `cols` plots in one figure; when true, declare the plots (`ip_begin_plot`/`ip_end_plot`, one
+   !< per cell, row by row), then `ip_end_subplots`. `link_x`/`link_y`: the plots share the x (y) range, so zooming one
+   !< zooms all. Size as `ip_begin_plot` (a negative `height` fills the space left). The first time a figure is drawn,
+   !< its plots fit to their data; linked axes take the range of the last plot (the common abscissa, in practice).
+   character(len=*), intent(in)           :: title   !< Title (also the id; '##id' hides it).
+   integer(int32),   intent(in)           :: rows    !< Rows of plots.
+   integer(int32),   intent(in)           :: cols    !< Columns of plots.
+   real(real64),     intent(in), optional :: width   !< Width [pixels] (default: full width).
+   real(real64),     intent(in), optional :: height  !< Height [pixels] (default: ImPlot's for one plot per row).
+   logical,          intent(in), optional :: link_x  !< Share the x range.
+   logical,          intent(in), optional :: link_y  !< Share the y range.
+   logical                                :: visible !< The figure is drawn.
+   type(im_vec2)                          :: extent  !< Size.
+   integer(c_int)                         :: flags   !< ImPlotSubplotFlags.
+
+   extent = im_vec2(-1.0_c_float, 300.0_c_float * real(rows, c_float))
+   if (present(width)) extent%x = real(width, c_float)
+   if (present(height)) extent%y = real(height, c_float)
+   flags = ImPlotSubplotFlags_None
+   if (present(link_x)) then
+      if (link_x) flags = ior(flags, ImPlotSubplotFlags_LinkAllX)
+   endif
+   if (present(link_y)) then
+      if (link_y) flags = ior(flags, ImPlotSubplotFlags_LinkAllY)
+   endif
+   visible = logical(ImPlot_BeginSubplots(cstr(title), int(rows, c_int), int(cols, c_int), extent, flags, c_null_ptr, &
+                                          c_null_ptr))
+   ! ImPlot gives linked axes no initial fit: the first time this figure is drawn, its plots fit to their data (linked
+   ! axes then share the range of the last plot fitted)
+   if (visible) then
+      if (.not. allocated(subplots_seen)) allocate(subplots_seen(0))
+      if (.not. any(subplots_seen == title)) then
+         subplots_seen = [character(len=128) :: subplots_seen, title]
+         fits_pending = rows * cols
+      endif
+   endif
+   endfunction ip_begin_subplots
+
+   subroutine ip_end_subplots()
+   !< End the grid of plots (only after `ip_begin_subplots` returned true).
+   call ImPlot_EndSubplots()
+   endsubroutine ip_end_subplots
 
    subroutine ip_end_plot()
    !< End the plot (only after `ip_begin_plot` returned true).
    call ImPlot_EndPlot()
    endsubroutine ip_end_plot
 
-   subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog)
+   subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat)
    !< Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes fit the data every frame (data
    !< that grows while the user watches), instead of once on first use. `xlog`/`ylog`: a base-10 logarithmic axis
-   !< (values <= 0 are not shown on it).
+   !< (values <= 0 are not shown on it). `xformat`/`yformat`: a C printf format of the tick labels (`'%.6f'`,
+   !< `'%.2e'`, `'%g s'`), for values whose default labels look alike (-3781.31, -3781.31, ...).
    character(len=*), intent(in)           :: xlabel   !< X label.
    character(len=*), intent(in)           :: ylabel   !< Y label.
    logical,          intent(in), optional :: auto_fit !< Fit the axes to the data every frame (default: first use only).
    logical,          intent(in), optional :: xlog     !< Logarithmic x axis (default: linear).
    logical,          intent(in), optional :: ylog     !< Logarithmic y axis (default: linear).
+   character(len=*), intent(in), optional :: xformat  !< printf format of the x tick labels.
+   character(len=*), intent(in), optional :: yformat  !< printf format of the y tick labels.
    integer(c_int)                         :: flags    !< ImPlotAxisFlags of both axes.
 
    flags = ImPlotAxisFlags_None
@@ -150,6 +208,8 @@ contains
    if (present(ylog)) then
       if (ylog) call ImPlot_SetupAxisScale_PlotScale(ImAxis_Y1, ImPlotScale_Log10)
    endif
+   if (present(xformat)) call ImPlot_SetupAxisFormat_Str(ImAxis_X1, cstr(xformat))
+   if (present(yformat)) call ImPlot_SetupAxisFormat_Str(ImAxis_Y1, cstr(yformat))
    endsubroutine ip_setup_axes
 
    subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)

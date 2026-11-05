@@ -14,7 +14,7 @@ title: Plots
 | Procedure | Notes |
 |---|---|
 | `ip_begin_plot(title [, width] [, height] [, equal]) → logical` | `.true.` when the plot is visible. `title` is also the identifier: unique within the window. Default size: full width, ImPlot's default height. A negative `height` fills the space left in the window. `equal=.true.`: one unit spans as many pixels on x as on y (maps, the complex plane). |
-| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog])` | Axis labels. Call it right after `ip_begin_plot`, before any item. The axes fit the data on first use, then follow the user's pan and zoom; with `auto_fit=.true.` they refit to the data every frame (a history that grows while the program runs) and the user cannot pan or zoom them. `xlog=.true.`/`ylog=.true.`: a base-10 logarithmic axis (residual histories, spectra); values <= 0 are not shown on it. |
+| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat])` | Axis labels. Call it right after `ip_begin_plot`, before any item. The axes fit the data on first use, then follow the user's pan and zoom; with `auto_fit=.true.` they refit to the data every frame (a history that grows while the program runs) and the user cannot pan or zoom them. `xlog=.true.`/`ylog=.true.`: a base-10 logarithmic axis (residual histories, spectra); values <= 0 are not shown on it. `xformat`/`yformat`: a C `printf` format of the tick labels (`'%.4f'`, `'%.2e'`, `'%g s'`), for values whose default labels look alike. |
 | `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | Initial axis ranges, applied on first use (the user pans and zooms afterwards), or every frame with `always=.true.`. Right after `ip_begin_plot`. |
 | `ip_plot_limits(xmin, xmax, ymin, ymax)` | The axis ranges as the user has panned and zoomed them, this frame. After the `ip_setup_*` calls (it ends the setup phase). |
 | `ip_plot_size(width, height)` | The size of the plot's data area [pixels], e.g. to compute an image at the screen's resolution. |
@@ -94,9 +94,24 @@ afterwards:
 Series of different sizes are an error (`FIG_ERR_ARGUMENT`, message `<item>: the series have different sizes`, see
 [Error handling](errors)): nothing is drawn. Empty series draw nothing and are not an error.
 
+## Several plots in one figure
+
+<<< @/examples/snippets/cb_subplots-subplots.F90{fortran}
+
+<Media name="cb_subplots" video alt="A drag history and a moment history in one figure; zooming one with the wheel zooms the other" caption="docs/examples/src/cb_subplots.F90: linked x axes, and tick labels printed with '%.4f'" />
+
+| Procedure | Notes |
+|---|---|
+| `ip_begin_subplots(title, rows, cols [, width] [, height] [, link_x] [, link_y])` → `logical`, `ip_end_subplots()` | A grid of plots; the plots inside it (`ip_begin_plot`/`ip_end_plot`) fill the cells row by row. End only after a true begin. |
+
+- `link_x` (`link_y`): the plots share the x (y) range, so panning or zooming one moves all.
+- The first time a figure is drawn its plots fit to their data; linked axes then take the range of the last plot
+  (the common abscissa, in practice). ImPlot itself gives linked axes no initial fit.
+- Size as `ip_begin_plot`: a negative `height` fills the space left; the default is 300 pixels per row.
+
 ## Not bound yet
 
-Other items (error bars, stems, stairs, histograms, text, ...) and axis setup beyond labels, limits and log scales
-(time and symmetric-log scales, ticks) are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)),
+Other items (error bars, stems, stairs, histograms, text, ...) and axis setup beyond labels, limits, log scales and
+tick formats (time and symmetric-log scales, tick positions) are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)),
 ([roadmap](roadmap)). In-place rows exist for `ip_line` only; the same `ImPlotSpec` stride serves the other items when
 they need it.

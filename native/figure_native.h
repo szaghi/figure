@@ -101,6 +101,8 @@ int    fig_input_mouse_button(int button, int down);
 int    fig_input_wheel(float dx, float dy);
 int    fig_input_key(const char *name, int name_len, int down);
 int    fig_input_text(const char *text, int text_len);
+/* A tick label of the plot being declared: axis 0 x, 1 y, index from 1; count of ticks (tests of axis formats). */
+int    fig_plot_tick_label(int axis, int index, char *buf, int buf_len, int *count, int *len);
 /* A window's rectangle (xmin, ymin, xmax, ymax) [pixels] by name, as in the last frame; found 0 if none. */
 int    fig_window_rect(const char *name, int name_len, float *rect, int *found);
 /* Quitting: with confirm_quit on, the window's close button (or SDL's quit event) sets a request, read and cleared by

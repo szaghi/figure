@@ -24,7 +24,7 @@ use figure_cimgui_enums, only : ImGuiWindowFlags_None, ImGuiWindowFlags_NoTitleB
                                 ImGuiWindowFlags_NoDecoration, ImGuiWindowFlags_NoInputs, ImGuiWindowFlags_NoDocking, &
                                 ImGuiWindowFlags_MenuBar
 use figure_dock, only : ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, &
-                        ig_dock_window, ig_window_dock
+                        ig_dock_window, ig_window_dock, ig_set_next_window_dock
 use figure_cimgui_enums, only : ImGuiInputTextFlags_None, ImGuiInputTextFlags_CharsDecimal,                  &
                                 ImGuiInputTextFlags_CharsScientific, ImGuiInputTextFlags_CharsUppercase,      &
                                 ImGuiInputTextFlags_CharsNoBlank, ImGuiInputTextFlags_EnterReturnsTrue,       &
@@ -44,7 +44,8 @@ use figure_imgui, only : ig_begin, ig_button, ig_checkbox, ig_end, ig_image, ig_
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
                          ig_set_next_item_width, ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped,      &
                          ig_text_disabled, ig_text_colored
-use figure_implot, only : ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
+use figure_implot, only : ip_begin_subplots, ip_end_subplots,                                              &
+                          ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
                           ip_plot_limits, ip_plot_size, ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded,   &
                           ip_spec, plot_spec_object,                                                                  &
                           ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square,             &
@@ -85,7 +86,7 @@ public :: ImGuiInputTextFlags_None, ImGuiInputTextFlags_CharsDecimal, ImGuiInput
 public :: ImGuiInputTextFlags_CharsUppercase, ImGuiInputTextFlags_CharsNoBlank, ImGuiInputTextFlags_EnterReturnsTrue
 public :: ImGuiInputTextFlags_ReadOnly, ImGuiInputTextFlags_Password, ImGuiInputTextFlags_AutoSelectAll
 public :: ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window
-public :: ig_window_dock
+public :: ig_window_dock, ig_set_next_window_dock
 public :: ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ig_show_style_editor
 public :: ig_push_font, ig_pop_font
 public :: ig_push_style_color, ig_pop_style_color, ig_push_style_var, ig_pop_style_var
@@ -107,7 +108,7 @@ public :: ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode, 
 public :: ImGuiDockNodeFlags_NoResize, ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking
 public :: ip_bars, ip_begin_plot, ip_end_plot, ip_line, ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object
 public :: ip_colormap_scale, ip_heatmap, ip_image, texture_object
-public :: ip_plot_limits, ip_plot_size, ip_setup_axes_limits
+public :: ip_plot_limits, ip_plot_size, ip_setup_axes_limits, ip_begin_subplots, ip_end_subplots
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
 public :: ImPlotMarker_Up, ImPlotMarker_Down, ImPlotMarker_Left, ImPlotMarker_Right, ImPlotMarker_Cross
 public :: ImPlotMarker_Plus, ImPlotMarker_Asterisk, ImPlotMarker_Vertical, ImPlotMarker_Horizontal

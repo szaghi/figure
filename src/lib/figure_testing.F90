@@ -19,17 +19,18 @@ module figure_testing
 !<
 !< Coordinates are display pixels, as `ig_item_rect` and `test_window_rect` give them. Works in every mode; with
 !< `app%init_headless` no window, display or GPU is needed, so tests run in CI as is.
-use, intrinsic :: iso_c_binding, only : c_float, c_int
+use, intrinsic :: iso_c_binding, only : c_char, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
-                            fig_input_next_frame, fig_input_quit, fig_input_text, fig_input_wheel, fig_window_rect
+                            fig_input_next_frame, fig_input_quit, fig_input_text, fig_input_wheel, fig_window_rect, &
+                            fig_plot_tick_label
 use figure_imgui, only : ig_item_rect
 
 implicit none
 private
 public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel, test_key, test_type
-public :: test_window_rect, test_item_center, test_next_frame, test_quit
+public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick
 
 contains
    subroutine test_next_frame(stat)
@@ -39,6 +40,28 @@ contains
 
    call figure_check(fig_input_next_frame(), stat)
    endsubroutine test_next_frame
+
+   subroutine test_plot_tick(axis, index, label, count, stat)
+   !< The label of tick `index` (from 1) on `axis` (`'x'` or `'y'`) of the plot being declared, and the number of ticks:
+   !< call it between `ip_begin_plot` and `ip_end_plot`, after the setup (`ip_setup_axes`) and an item. `label` is ''
+   !< for an index out of range.
+   character(len=*),              intent(in)            :: axis   !< `'x'` or `'y'`.
+   integer(int32),                intent(in)            :: index  !< Tick, from 1.
+   character(len=:), allocatable, intent(out)           :: label  !< Its label.
+   integer(int32),                intent(out), optional :: count  !< Ticks on the axis.
+   integer(int32),                intent(out), optional :: stat   !< Status: `FIG_ERR_STATE` outside a plot.
+   character(kind=c_char, len=128)                      :: buf    !< Label buffer.
+   integer(c_int)                                       :: n      !< Ticks.
+   integer(c_int)                                       :: l      !< Label length.
+   integer(c_int)                                       :: a      !< Axis code.
+
+   label = ''
+   a = 0_c_int
+   if (axis == 'y') a = 1_c_int
+   call figure_check(fig_plot_tick_label(a, int(index, c_int), buf, len(buf, c_int), n, l), stat)
+   if (present(count)) count = int(n, int32)
+   if (l > 0_c_int) label = buf(1:min(l, len(buf, c_int)))
+   endsubroutine test_plot_tick
 
    subroutine test_quit(stat)
    !< A quit request, as the window's close button makes it: `next_frame` returns `.false.`, or, after

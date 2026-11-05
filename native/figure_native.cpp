@@ -1735,6 +1735,26 @@ int fig_input_text(const char *text, int text_len) {
    return queue_input(e);
 }
 
+// A tick label of the plot being declared (between BeginPlot and EndPlot, after its setup): axis 0 x, 1 y; index from 1;
+// count is the number of ticks. For tests of axis formats.
+int fig_plot_tick_label(int axis, int index, char *buf, int buf_len, int *count, int *len) {
+   *count = 0;
+   *len = 0;
+   ImPlotPlot *plot = ImPlot::GetCurrentContext() ? ImPlot::GetCurrentPlot() : nullptr;
+   if (!plot)
+      return fail(FIG_ERR_STATE, "test_plot_tick: no plot is being declared (between ip_begin_plot and ip_end_plot)");
+   if (axis != 0 && axis != 1) return fail(FIG_ERR_ARGUMENT, "test_plot_tick: axis is 'x' or 'y'");
+   ImPlot::SetupLock(); // the ticks exist once the setup is locked (the first item locks it)
+   const ImPlotTicker &ticker = plot->Axes[axis == 0 ? ImAxis_X1 : ImAxis_Y1].Ticker;
+   *count = ticker.TickCount();
+   if (index < 1 || index > *count) return FIG_OK;
+   const char *text = ticker.GetText(index - 1);
+   *len = static_cast<int>(std::strlen(text));
+   const int n = std::min(*len, buf_len);
+   if (n > 0) std::memcpy(buf, text, static_cast<size_t>(n));
+   return FIG_OK;
+}
+
 // A window's rectangle, by its name (as passed to Begin), as drawn in the last frame; found 0 if no such window.
 int fig_window_rect(const char *name, int name_len, float *rect, int *found) {
    if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");

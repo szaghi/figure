@@ -43,6 +43,7 @@ graph LR
 - [ip_bars](#ip-bars)
 - [ip_heatmap](#ip-heatmap)
 - [ip_shaded](#ip-shaded)
+- [ip_end_subplots](#ip-end-subplots)
 - [ip_end_plot](#ip-end-plot)
 - [ip_setup_axes](#ip-setup-axes)
 - [ip_setup_axes_limits](#ip-setup-axes-limits)
@@ -67,6 +68,7 @@ graph LR
 - [ip_image](#ip-image)
 - [ip_colormap_scale](#ip-colormap-scale)
 - [ip_begin_plot](#ip-begin-plot)
+- [ip_begin_subplots](#ip-begin-subplots)
 - [ip_spec](#ip-spec)
 - [series_ok](#series-ok)
 - [field_ok](#field-ok)
@@ -77,6 +79,13 @@ graph LR
 - [spec_c](#spec-c)
 - [rgba_ok](#rgba-ok)
 - [rgba](#rgba)
+
+## Variables
+
+| Name | Type | Attributes | Description |
+|------|------|------------|-------------|
+| `subplots_seen` | character(len=128) | allocatable | Titles of the subplot figures drawn so far. |
+| `fits_pending` | integer(kind=int32) |  | Plots of a new subplot figure still to fit to their data. |
 
 ## Derived Types
 
@@ -128,6 +137,22 @@ Area between two curves y1(x) and y2(x), or between a curve y(x) and the line y 
 
 ## Subroutines
 
+### ip_end_subplots
+
+End the grid of plots (only after `ip_begin_subplots` returned true).
+
+```fortran
+subroutine ip_end_subplots()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_end_subplots["ip_end_subplots"] --> ImPlot_EndSubplots["ImPlot_EndSubplots"]
+  style ip_end_subplots fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### ip_end_plot
 
 End the plot (only after `ip_begin_plot` returned true).
@@ -148,10 +173,11 @@ flowchart TD
 
 Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes fit the data every frame (data
  that grows while the user watches), instead of once on first use. `xlog`/`ylog`: a base-10 logarithmic axis
- (values <= 0 are not shown on it).
+ (values <= 0 are not shown on it). `xformat`/`yformat`: a C printf format of the tick labels (`'%.6f'`,
+ `'%.2e'`, `'%g s'`), for values whose default labels look alike (-3781.31, -3781.31, ...).
 
 ```fortran
-subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog)
+subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat)
 ```
 
 **Arguments**
@@ -163,12 +189,15 @@ subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog)
 | `auto_fit` | logical | in | optional | Fit the axes to the data every frame (default: first use only). |
 | `xlog` | logical | in | optional | Logarithmic x axis (default: linear). |
 | `ylog` | logical | in | optional | Logarithmic y axis (default: linear). |
+| `xformat` | character(len=*) | in | optional | printf format of the x tick labels. |
+| `yformat` | character(len=*) | in | optional | printf format of the y tick labels. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   ip_setup_axes["ip_setup_axes"] --> ImPlot_SetupAxes["ImPlot_SetupAxes"]
+  ip_setup_axes["ip_setup_axes"] --> ImPlot_SetupAxisFormat_Str["ImPlot_SetupAxisFormat_Str"]
   ip_setup_axes["ip_setup_axes"] --> ImPlot_SetupAxisScale_PlotScale["ImPlot_SetupAxisScale_PlotScale"]
   ip_setup_axes["ip_setup_axes"] --> cstr["cstr"]
   style ip_setup_axes fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -873,8 +902,43 @@ function ip_begin_plot(title, width, height, equal) result(visible)
 ```mermaid
 flowchart TD
   ip_begin_plot["ip_begin_plot"] --> ImPlot_BeginPlot["ImPlot_BeginPlot"]
+  ip_begin_plot["ip_begin_plot"] --> ImPlot_SetNextAxisToFit["ImPlot_SetNextAxisToFit"]
   ip_begin_plot["ip_begin_plot"] --> cstr["cstr"]
   style ip_begin_plot fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_begin_subplots
+
+A grid of `rows` x `cols` plots in one figure; when true, declare the plots (`ip_begin_plot`/`ip_end_plot`, one
+ per cell, row by row), then `ip_end_subplots`. `link_x`/`link_y`: the plots share the x (y) range, so zooming one
+ zooms all. Size as `ip_begin_plot` (a negative `height` fills the space left). The first time a figure is drawn,
+ its plots fit to their data; linked axes take the range of the last plot (the common abscissa, in practice).
+
+**Returns**: `logical`
+
+```fortran
+function ip_begin_subplots(title, rows, cols, width, height, link_x, link_y) result(visible)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `title` | character(len=*) | in |  | Title (also the id; '##id' hides it). |
+| `rows` | integer(kind=int32) | in |  | Rows of plots. |
+| `cols` | integer(kind=int32) | in |  | Columns of plots. |
+| `width` | real(kind=real64) | in | optional | Width [pixels] (default: full width). |
+| `height` | real(kind=real64) | in | optional | Height [pixels] (default: ImPlot's for one plot per row). |
+| `link_x` | logical | in | optional | Share the x range. |
+| `link_y` | logical | in | optional | Share the y range. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_begin_subplots["ip_begin_subplots"] --> ImPlot_BeginSubplots["ImPlot_BeginSubplots"]
+  ip_begin_subplots["ip_begin_subplots"] --> cstr["cstr"]
+  style ip_begin_subplots fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ip_spec

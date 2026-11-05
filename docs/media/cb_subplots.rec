@@ -1,0 +1,15 @@
+#! program build/docs-examples/bin/cb_subplots
+#! frames  160
+#! poster  95
+# zoom on the drag plot with the wheel: the moment plot follows (linked x); then zoom out on the moment plot
+0   move 600 300
+10  move 400 150 15
+30  wheel 0 1
+40  wheel 0 1
+50  wheel 0 1
+60  wheel 0 1
+70  move 700 160 15
+100 move 600 420 15
+120 wheel 0 -1
+130 wheel 0 -1
+140 wheel 0 -1

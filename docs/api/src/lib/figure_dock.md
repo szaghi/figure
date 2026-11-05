@@ -22,6 +22,9 @@ title: figure_dock
  call ig_dock_space(root)
 ```
 
+ A window that appears after the layout was built (a file found later) is docked into a node with
+ `ig_set_next_window_dock(node)` before its `ig_begin`: the first time it appears, then where the user moves it.
+
  Dock ids are Dear ImGui's ImGuiID (unsigned 32-bit), carried in `integer(int32)`: compare and pass them, do not do
  arithmetic on them.
 
@@ -33,6 +36,7 @@ title: figure_dock
 graph LR
   figure_dock["figure_dock"] --> figure_base["figure_base"]
   figure_dock["figure_dock"] --> figure_c_native["figure_c_native"]
+  figure_dock["figure_dock"] --> figure_cimgui["figure_cimgui"]
   figure_dock["figure_dock"] --> figure_cimgui_enums["figure_cimgui_enums"]
   figure_dock["figure_dock"] --> iso_c_binding["iso_c_binding"]
   figure_dock["figure_dock"] --> iso_fortran_env["iso_fortran_env"]
@@ -45,6 +49,7 @@ graph LR
 - [ig_dock_window](#ig-dock-window)
 - [ig_dock_layout_end](#ig-dock-layout-end)
 - [ig_window_dock](#ig-window-dock)
+- [ig_set_next_window_dock](#ig-set-next-window-dock)
 - [ig_dock_id](#ig-dock-id)
 - [ig_dock_layout_begin](#ig-dock-layout-begin)
 
@@ -176,6 +181,30 @@ subroutine ig_window_dock(id, docked)
 flowchart TD
   ig_window_dock["ig_window_dock"] --> fig_window_dock["fig_window_dock"]
   style ig_window_dock fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_set_next_window_dock
+
+Dock the next window (the next `ig_begin`) into the node `id`: the first time it appears (a window created after
+ the layout was built), or every frame with `always`.
+
+```fortran
+subroutine ig_set_next_window_dock(id, always)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | integer(kind=int32) | in |  | Dock node (from the layout, or `ig_window_dock` of a docked window). |
+| `always` | logical | in | optional | Every frame (default: first use only, then the user decides). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_set_next_window_dock["ig_set_next_window_dock"] --> igSetNextWindowDockID["igSetNextWindowDockID"]
+  style ig_set_next_window_dock fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions

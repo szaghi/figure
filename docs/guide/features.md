@@ -85,6 +85,7 @@ Details: [Widgets](widgets).
 | `ig_dock_window(name, id [, stat])` | put a window into a dock node of the layout |
 | `ig_dock_layout_end(id [, stat])` | finish the layout |
 | `ig_window_dock(id, docked)` | inside a window: its dock node and whether it is docked |
+| `ig_set_next_window_dock(id [, always])` | dock the next window into a node the first time it appears (a window created after the layout) |
 
 Details: [Docking](docking).
 
@@ -110,7 +111,8 @@ Details: [Styles](styles).
 | Procedure | Purpose |
 |---|---|
 | `ip_begin_plot(title [, width] [, height] [, equal])` → `logical` | begin a plot; `.true.` when visible |
-| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog])` | axis labels; the axes fit the data on first use, every frame with `auto_fit=.true.`; `xlog`/`ylog`: logarithmic axes |
+| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat])` | axis labels; the axes fit the data on first use, every frame with `auto_fit=.true.`; `xlog`/`ylog`: logarithmic axes; `xformat`/`yformat`: tick label formats |
+| `ip_begin_subplots(title, rows, cols [, width] [, height] [, link_x] [, link_y])` → `logical`, `ip_end_subplots()` | a grid of plots, optionally sharing the x or y range |
 | `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | initial axis ranges |
 | `ip_plot_limits(...)`, `ip_plot_size(...)` | the ranges the user panned and zoomed to; the plot's size in pixels |
 | `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))` |
@@ -146,6 +148,7 @@ Details: [Heatmaps and images](images).
 | `test_next_frame()` | a frame boundary in the queued input |
 | `test_item_center(x, y)`, `test_window_rect(name, ...)` | where a widget or a window is |
 | `test_quit()` | a quit request, as the window's close button makes it |
+| `test_plot_tick(axis, index, label [, count])` | a tick label of the plot being declared (tests of axis formats) |
 
 Details: [Headless testing](testing#synthetic-input).
 

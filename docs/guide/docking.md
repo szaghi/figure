@@ -42,6 +42,20 @@ The layout is the starting point: the user then rearranges it freely. With `app%
 keeps the user's arrangement across runs, and `ig_dock_layout_begin` returns `.false.` when a saved layout exists.
 Without an ini file (the default) every run starts from the program's layout.
 
+## A window that appears later
+
+A layout is built once, on the first frame. A window that appears afterwards (a file found while the program runs,
+a result computed later) is placed in a node with `ig_set_next_window_dock(node)`, right before its `ig_begin`: it
+lands there the first time it appears, then stays where the user moves it (`always=.true.`: every frame).
+
+```fortran
+call ig_set_next_window_dock(right)      ! the node from the layout
+if (ig_begin(trim(file_name))) then
+   ! ...
+endif
+call ig_end()
+```
+
 ## Notes
 
 - Dock ids are Dear ImGui's `ImGuiID` (unsigned 32-bit) carried in `integer(int32)`: pass and compare them, do not

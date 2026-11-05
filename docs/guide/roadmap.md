@@ -116,5 +116,6 @@ editors of its input files.
 - **Popups and modals, a confirmation before quitting** ([Menus, popups and shortcuts](menus#popups-and-modals)):
   done.
 - **File dialogs** ([File dialogs](frame-loop#file-dialogs)): the system's own, asynchronous, window mode: done.
-- Still to come ([issue #2](https://github.com/szaghi/figure/issues/2)): axis tick formats, subplots, docking a window
-  that appears later.
+- **Plots for live checks** ([Plots](plots#several-plots-in-one-figure), [Docking](docking#a-window-that-appears-later)):
+  tick label formats, subplots with linked axes, docking a window that appears later: done.
+- Next ([issue #2](https://github.com/szaghi/figure/issues/2)): the Xall tools built on these, then v0.2.0.

@@ -176,6 +176,15 @@ cells. Fix the scale (`scale_min`, `scale_max`) when the field changes over time
 Upload once, draw every frame: `tex%update` only when the pixels change (a new iteration of a computation), `ig_image`
 or `ip_image` in the loop.
 
+### Several plots sharing the x axis
+
+<<< @/examples/snippets/cb_subplots-subplots.F90{fortran}
+
+<Media name="cb_subplots" alt="A drag and a moment history in one figure, linked in x, the drag ticks printed with four decimals" caption="docs/examples/src/cb_subplots.F90" />
+
+Zoom one, all follow (`link_x`). `yformat='%.4f'` prints the drag's ticks with four decimals, where the default would
+print -3781.31 on every tick. [Plots](/guide/plots#several-plots-in-one-figure) has the details.
+
 ### Plot the rows of a matrix
 
 A row of a column-major matrix is strided. When its abscissae are uniform, `ip_line(label, y, row [, xscale]

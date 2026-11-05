@@ -18,6 +18,9 @@ module figure_dock
 !< call ig_dock_space(root)
 !<```
 !<
+!< A window that appears after the layout was built (a file found later) is docked into a node with
+!< `ig_set_next_window_dock(node)` before its `ig_begin`: the first time it appears, then where the user moves it.
+!<
 !< Dock ids are Dear ImGui's ImGuiID (unsigned 32-bit), carried in `integer(int32)`: compare and pass them, do not do
 !< arithmetic on them.
 use, intrinsic :: iso_c_binding, only : c_double, c_int
@@ -25,12 +28,14 @@ use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_dock_id, fig_dock_layout_begin, fig_dock_layout_end, &
                             fig_dock_space, fig_dock_split, fig_dock_window, fig_window_dock
-use figure_cimgui_enums, only : ImGuiDir_Down, ImGuiDir_Left, ImGuiDir_Right, ImGuiDir_Up, ImGuiDockNodeFlags_None
+use figure_cimgui, only : igSetNextWindowDockID
+use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDir_Down, ImGuiDir_Left, ImGuiDir_Right, &
+                                ImGuiDir_Up, ImGuiDockNodeFlags_None
 
 implicit none
 private
 public :: ig_dock_id, ig_dock_space, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_split, ig_dock_window
-public :: ig_window_dock
+public :: ig_window_dock, ig_set_next_window_dock
 
 contains
    function ig_dock_id(name) result(id)
@@ -132,4 +137,18 @@ contains
    id = int(i, int32)
    docked = d == 1_c_int
    endsubroutine ig_window_dock
+
+   subroutine ig_set_next_window_dock(id, always)
+   !< Dock the next window (the next `ig_begin`) into the node `id`: the first time it appears (a window created after
+   !< the layout was built), or every frame with `always`.
+   integer(int32), intent(in)           :: id     !< Dock node (from the layout, or `ig_window_dock` of a docked window).
+   logical,        intent(in), optional :: always !< Every frame (default: first use only, then the user decides).
+   integer(c_int)                       :: cond   !< ImGuiCond.
+
+   cond = ImGuiCond_FirstUseEver
+   if (present(always)) then
+      if (always) cond = ImGuiCond_Always
+   endif
+   call igSetNextWindowDockID(int(id, c_int), cond)
+   endsubroutine ig_set_next_window_dock
 endmodule figure_dock

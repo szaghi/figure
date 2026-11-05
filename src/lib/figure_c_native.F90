@@ -20,7 +20,7 @@ public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, f
 public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
 public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
-public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord
+public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord, fig_plot_tick_label
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 
 ! Status codes: must match native/figure_native.h.
@@ -503,6 +503,20 @@ interface
    integer(c_int), value              :: text_len !< Text length [bytes].
    integer(c_int)                     :: status   !< Status.
    endfunction fig_input_text
+
+   function fig_plot_tick_label(axis, index, buf, buf_len, count, label_len) result(status) &
+      bind(C, name='fig_plot_tick_label')
+   !< A tick label of the plot being declared.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value               :: axis      !< 0 x, 1 y.
+   integer(c_int), value               :: index     !< Tick, from 1.
+   character(kind=c_char), intent(out) :: buf(*)    !< Label.
+   integer(c_int), value               :: buf_len   !< Buffer length.
+   integer(c_int), intent(out)         :: count     !< Ticks on the axis.
+   integer(c_int), intent(out)         :: label_len !< Length of the label.
+   integer(c_int)                      :: status    !< Status.
+   endfunction fig_plot_tick_label
 
    function fig_key_chord(keys, keys_len, chord) result(status) bind(C, name='fig_key_chord')
    !< A key chord from its name ("ctrl+s").
