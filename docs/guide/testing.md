@@ -65,7 +65,8 @@ and shown from the second: positions read in the first frame are not where the w
 
 Coordinates are display pixels, as `ig_item_rect` gives them. The module works in every mode; headless needs no
 display, so tests run in CI as is. It is a separate module: `use figure_testing` where the tests are, `use figure` in
-the application.
+the application. Both are in the library (`lib/libfigure.a` and `lib/mod`, from `fobis build --mode figure-static-gnu`
+or `fobis fetch`), so a project that depends on FIGURE tests its own interface the same way.
 
 `test_click` and `test_drag` let the pointer rest one frame on the item before pressing, as a user's hand does:
 Dear ImGui's tabs (and other items that may overlap) take a press only once they were hovered in the frame before. A

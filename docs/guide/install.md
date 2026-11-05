@@ -91,7 +91,7 @@ fobis rule --ex sync                                          # fobos and fpm.to
 | `tests-gnu`, `tests-nvf` | the tests: `exe/figure_test_headless`, `figure_test_layout`, `figure_test_remote`, `figure_test_themes` |
 | `tests-gnu-debug` | the same with runtime checks and floating-point traps |
 | `examples-gnu`, `examples-nvf` | the example programs (`exe/figure_hello`, `exe/figure_mandelbrot`, `exe/figure_bench_texture`, `exe/figure_bench_redraw`), with OpenMP |
-| `figure-static-gnu`, `figure-static-nvf` | the static library `lib/libfigure.a`, modules in `lib/mod` |
+| `figure-static-gnu`, `figure-static-nvf` | the static library `lib/libfigure.a` (`figure` and `figure_testing`), modules in `lib/mod` |
 
 Two rules matter here: `fobis rule --ex native` builds the native layer, `fobis rule --ex sync` checks fobos against
 `fpm.toml`.

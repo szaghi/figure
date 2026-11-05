@@ -77,7 +77,7 @@ template  = template-gnu
 cflags    = $CGNU -O2
 build_dir = lib
 src       = src/lib/
-target    = src/lib/figure.F90
+target    = src/lib/figure_library.F90
 output    = libfigure.a
 mklib     = static
 
@@ -86,7 +86,7 @@ template  = template-nvf
 cflags    = $CNVF -O2
 build_dir = lib
 src       = src/lib/
-target    = src/lib/figure.F90
+target    = src/lib/figure_library.F90
 output    = libfigure.a
 mklib     = static
 

@@ -7,7 +7,10 @@ Checked:
     (``lib/pkgconfig/sdl3.pc``, written by the native build): every ``-l`` library and every framework (checked only
     when the native layer is built);
   - every program under src/examples/ and src/tests/ is declared in fpm.toml (fobos discovers them by itself);
-  - every program declared in fpm.toml exists.
+  - every program declared in fpm.toml exists;
+  - the static-library modes (``figure-static-*``) build from ``src/lib/figure_library.F90``, which uses every public
+    module (``figure``, ``figure_testing``): FoBiS archives a target and what it uses, so a module left out of that
+    root is missing from ``lib/libfigure.a`` and ``lib/mod`` (what ``fobis fetch`` gives a downstream project).
 
 ``--link-flags [PLATFORM]`` prints instead the platform's native link line: the varset's ``$NATIVE_LIBS`` as ``-l``
 options, in order (``figure_native SDL3`` first), then its ``$NATIVE_LFLAGS``, for scripts/fpm.sh and for linking a
@@ -30,6 +33,9 @@ PROGRAM_RE = re.compile(r"^\s*program\s+\w+", re.IGNORECASE | re.MULTILINE)
 COMMON_LIBS = ["figure_native", "SDL3"]
 FPM_LINK = [*COMMON_LIBS, "figure_platform"]  # fpm.toml [build] link: see fpm_link
 PLATFORMS = ("linux", "macos", "windows")
+LIBRARY_ROOT = "src/lib/figure_library.F90"
+PUBLIC_MODULES = ("figure", "figure_testing")
+USE_RE = re.compile(r"^\s*use\s+(\w+)", re.IGNORECASE | re.MULTILINE)
 
 
 def current_platform() -> str:
@@ -244,6 +250,32 @@ def package_sources() -> list[str]:
     ]
 
 
+def library_root() -> list[str]:
+    """Check that the static-library modes build from the library root and that it uses every public module.
+
+    Returns
+    -------
+    list[str]
+        The discrepancies.
+    """
+    errors = []
+    cfg = configparser.ConfigParser(interpolation=None, strict=False)
+    cfg.read(ROOT / "fobos", encoding="utf-8")
+    modes = [s for s in cfg.sections() if s.startswith("figure-static-")]
+    if not modes:
+        errors.append("fobos has no figure-static-* mode")
+    for mode in modes:
+        target = cfg.get(mode, "target", fallback="")
+        if target != LIBRARY_ROOT:
+            errors.append(f"fobos [{mode}] target must be {LIBRARY_ROOT} (the library root), it is {target!r}")
+    root = ROOT / LIBRARY_ROOT
+    used = {m.lower() for m in USE_RE.findall(root.read_text(encoding="utf-8"))} if root.exists() else set()
+    errors.extend(
+        f"{LIBRARY_ROOT} does not use {m}: lib/libfigure.a would miss it" for m in PUBLIC_MODULES if m not in used
+    )
+    return errors
+
+
 def check() -> int:
     """Run the checks.
 
@@ -296,6 +328,7 @@ def check() -> int:
     )
 
     errors.extend(package_sources())
+    errors.extend(library_root())
 
     for e in errors:
         print(f"check_sync: {e}", file=sys.stderr)
