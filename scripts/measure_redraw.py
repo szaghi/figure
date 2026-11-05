@@ -103,8 +103,8 @@ def split_frame(m: bytes, st: Stream) -> None:
         st.headers += 12
         st.vertices += nv * 20
         st.indices += ni * 2 + (ni % 2) * 2
-        st.commands += nc * 28
-        p += 12 + nv * 20 + ni * 2 + (ni % 2) * 2 + nc * 28
+        st.commands += nc * 32
+        p += 12 + nv * 20 + ni * 2 + (ni % 2) * 2 + nc * 32
 
 
 def record(ws: remote_client.WebSocket, st: Stream, stop: threading.Event, warm: threading.Event) -> None:
@@ -153,7 +153,7 @@ def lists_of(m: bytes) -> list[bytes]:
     p, out = 13, []
     for _ in range(nlists):
         nv, ni, nc = struct.unpack_from("<III", m, p)
-        n = 12 + nv * 20 + ni * 2 + (ni % 2) * 2 + nc * 28
+        n = 12 + nv * 20 + ni * 2 + (ni % 2) * 2 + nc * 32
         out.append(m[p : p + n])
         p += n
     return out
@@ -174,7 +174,7 @@ def compact(m: bytes) -> bytes:
         cols = b"".join(m[p + 20 * i + 16 : p + 20 * i + 20] for i in range(nv))
         out += [q.tobytes(), u.tobytes(), cols]
         p += nv * 20
-        n = ni * 2 + (ni % 2) * 2 + nc * 28
+        n = ni * 2 + (ni % 2) * 2 + nc * 32
         out.append(m[p : p + n])
         p += n
     return b"".join(out)

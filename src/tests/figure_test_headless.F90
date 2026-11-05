@@ -37,7 +37,10 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(43)  !< Per-check outcome.
+logical                   :: test_passed(44)  !< Per-check outcome.
+real(real64)              :: long_x(100000)   !< A line over 65536 vertices: abscissae.
+real(real64)              :: long_y(100000)   !< Its ordinates.
+integer(int32)            :: long_frames      !< Frames drawn with it.
 type(texture_object)      :: tex              !< A 4 x 2 texture.
 integer(int8)             :: pix(4, 4, 2)     !< Its pixels.
 integer(int8)             :: pix_bad(3, 4, 2) !< Pixels of the wrong shape (3 channels).
@@ -347,6 +350,24 @@ call ip_heatmap('one end', fld, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, 
 call tex%destroy()
 call tex%update(pix, stat=stat_dead)
 call ip_line('mismatch', x, y(1:N - 1_int32), stat=stat)
+! a draw list over 65536 vertices (a 100000-point line): Dear ImGui splits it into vertex ranges, which the headless
+! renderer declares it handles (RendererHasVtxOffset); without that, 16-bit indices abort the program
+long_x = [(real(i, real64), i = 1_int32, size(long_x))]
+long_y = sin(0.01_real64 * long_x)
+long_frames = 0_int32
+do i = 1_int32, 2_int32
+   if (.not. app%next_frame()) exit
+   call ig_set_next_window(10.0_real64, 10.0_real64, 400.0_real64, 300.0_real64)
+   if (ig_begin('Long line')) then
+      if (ip_begin_plot('long', height=-1.0_real64)) then
+         call ip_line('y', long_x, long_y)
+         call ip_end_plot()
+      endif
+   endif
+   call ig_end()
+   long_frames = long_frames + 1_int32
+enddo
+if (app%next_frame()) long_frames = long_frames + 1_int32 ! renders the second frame's long line
 call app%destroy()
 
 test_passed(1) = clicks == 1_int32                                                 ! button clicked once
@@ -408,10 +429,11 @@ test_passed(41) = abs(level - 1.0_real64) < 1.0e-9_real64                       
 test_passed(42) = abs(typed - 2.5_real64) < 1.0e-9_real64                         ! typed into the numeric field
 test_passed(43) = win_found(1) .and. .not. win_found(2) .and.                                                      &
                   all(abs(win - [20.0_real64, 20.0_real64, 420.0_real64, 520.0_real64]) < 1.0e-6_real64) ! window lookup
+test_passed(44) = long_frames == 3_int32                                           ! a list over 65536 vertices
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
                   stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
 
-write(output_unit, '(A,43L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,44L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

@@ -72,9 +72,7 @@ function draw(buf) {
     const nv = dv.getUint32(p, true), ni = dv.getUint32(p + 4, true), nc = dv.getUint32(p + 8, true); p += 12;
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(buf, p, nv * 20), gl.STREAM_DRAW); p += nv * 20;
-    gl.enableVertexAttribArray(loc.pos); gl.vertexAttribPointer(loc.pos, 2, gl.FLOAT, false, 20, 0);
-    gl.enableVertexAttribArray(loc.uv); gl.vertexAttribPointer(loc.uv, 2, gl.FLOAT, false, 20, 8);
-    gl.enableVertexAttribArray(loc.col); gl.vertexAttribPointer(loc.col, 4, gl.UNSIGNED_BYTE, true, 20, 16);
+    let base = -1; // the vertex the attributes start at: indices are 16-bit, relative to each command's vtx_offset
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(buf, p, ni * 2), gl.STREAM_DRAW);
     p += ni * 2 + (ni % 2) * 2;
@@ -82,12 +80,19 @@ function draw(buf) {
       const x1 = dv.getFloat32(p, true), y1 = dv.getFloat32(p + 4, true);
       const x2 = dv.getFloat32(p + 8, true), y2 = dv.getFloat32(p + 12, true);
       const tex = dv.getUint32(p + 16, true), off = dv.getUint32(p + 20, true), count = dv.getUint32(p + 24, true);
-      p += 28;
+      const vtx = dv.getUint32(p + 28, true);
+      p += 32;
       if (x2 <= x1 || y2 <= y1) continue;
       gl.scissor(Math.floor(x1 * sx), Math.floor(canvas.height - y2 * sy),
                  Math.ceil((x2 - x1) * sx), Math.ceil((y2 - y1) * sy));
       const t = textures.get(tex); if (!t) continue;
       gl.bindTexture(gl.TEXTURE_2D, t);
+      if (vtx !== base) { // WebGL has no base vertex: point the attributes at the command's vertex range
+        base = vtx;
+        gl.enableVertexAttribArray(loc.pos); gl.vertexAttribPointer(loc.pos, 2, gl.FLOAT, false, 20, vtx * 20);
+        gl.enableVertexAttribArray(loc.uv); gl.vertexAttribPointer(loc.uv, 2, gl.FLOAT, false, 20, vtx * 20 + 8);
+        gl.enableVertexAttribArray(loc.col); gl.vertexAttribPointer(loc.col, 4, gl.UNSIGNED_BYTE, true, 20, vtx * 20 + 16);
+      }
       gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, off * 2);
     }
   }

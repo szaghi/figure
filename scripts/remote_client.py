@@ -5,7 +5,9 @@ Run by src/tests/figure_test_remote.F90 against the program's server. Checks, in
   - the WebSocket handshake (RFC 6455): status 101 and the Sec-WebSocket-Accept of our key;
   - every message parses to its exact length: the background (r, g, b in [0, 1]), before any frame; textures
     (id, size, flags, width x height x 4 RGBA bytes) and frames
-    (draw lists of 20-byte vertices, 16-bit indices, commands), and draw commands reference received textures only;
+    (draw lists of 20-byte vertices, 16-bit indices, commands), and draw commands reference received textures and
+    vertices only (each command's indices count from its vertex offset);
+  - a draw list over 65536 vertices arrives (the program draws a long line) and stays within those bounds;
   - a size event ("s:640,480") comes back as the display size of a later frame;
   - a click (mouse move, press, release) at the point the program writes to CLICK_FILE.
 Writes "ok" to OK_FILE when every check passed, else the first failure; exits 0 or 1.
@@ -131,22 +133,30 @@ class WebSocket:
         return payload
 
 
+big_lists: set[bool] = set()  # whether a draw list over 65536 vertices was seen (True), one at most (False)
+
+
 def parse_frame(m: bytes, textures: set[int]) -> tuple[float, float]:
     """Parse a frame message exactly; return the display size."""
     w, h, nlists = struct.unpack_from("<ffI", m, 1)
     p = 13
     for _ in range(nlists):
         nv, ni, nc = struct.unpack_from("<III", m, p)
+        ip = p + 12 + nv * 20  # the list's indices
         p += 12 + nv * 20 + ni * 2 + (ni % 2) * 2
         for _ in range(nc):
-            tex, off, count = struct.unpack_from("<III", m, p + 16)
+            tex, off, count, vtx = struct.unpack_from("<IIII", m, p + 16)
             if tex not in textures:
                 msg = f"draw command uses texture {tex}, never received"
                 raise ProtocolError(msg)
             if off + count > ni or count % 3:
                 msg = "draw command indices out of range"
                 raise ProtocolError(msg)
-            p += 28
+            if count and vtx + max(struct.unpack_from(f"<{count}H", m, ip + 2 * off)) >= nv:
+                msg = f"draw command vertices out of range (vtx_offset {vtx}, {nv} vertices)"
+                raise ProtocolError(msg)
+            big_lists.add(nv > 65536)
+            p += 32
     if p != len(m):
         msg = f"frame message of {len(m)} bytes, parsed {p}"
         raise ProtocolError(msg)
@@ -206,6 +216,9 @@ def run(port: int, click_file: Path) -> None:
         pass  # the program ended: expected after the click
     if frames == 0 or not textures:
         msg = f"received {frames} frames and {len(textures)} textures"
+        raise ProtocolError(msg)
+    if True not in big_lists:
+        msg = "no draw list over 65536 vertices arrived"
         raise ProtocolError(msg)
     if not sized:
         msg = "the size event never came back as the display size"

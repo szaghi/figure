@@ -848,6 +848,8 @@ int fig_init_headless(int width, int height) {
    ImGuiIO &io = ImGui::GetIO();
    io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+   // draw lists over 65536 vertices are split into ranges, each command carrying its VtxOffset (16-bit indices)
+   io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
    st.m = mode::headless;
    apply_initial_style();
    return FIG_OK;
@@ -867,6 +869,8 @@ int fig_init_remote(int width, int height, const char *host, int host_len, int p
    ImGuiIO &io = ImGui::GetIO();
    io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height)); // until the browser sends its size
    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+   // draw lists over 65536 vertices are split into ranges, each command carrying its VtxOffset (16-bit indices)
+   io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
    io.BackendPlatformName = "figure_remote";
    st.m = mode::remote;
    apply_initial_style();

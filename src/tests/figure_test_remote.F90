@@ -4,10 +4,12 @@ program figure_test_remote
 !<
 !< Serves the UI on a free port (no window, display or GPU), launches scripts/remote_client.py in the background, and
 !< draws frames until the client's click arrives (or 30 s pass). The client checks the page, the handshake, every
-!< message byte by byte and the resize event; this program checks that the click arrived once, and the client's
-!< verdict. Needs python3 (3.11+) on the PATH; run from the repository root, as scripts/run_tests.sh does.
+!< message byte by byte (with a draw list over 65536 vertices: a 100000-point line) and the resize event; this
+!< program checks that the click arrived once, and the client's verdict. Needs python3 (3.11+) on the PATH; run from
+!< the repository root, as scripts/run_tests.sh does.
 use, intrinsic :: iso_fortran_env, only : error_unit, int32, int64, output_unit, real64
-use figure, only : app_object, ig_begin, ig_button, ig_end, ig_item_rect, ig_set_next_window
+use figure, only : app_object, ig_begin, ig_button, ig_end, ig_item_rect, ig_set_next_window, ip_begin_plot, ip_end_plot, &
+                   ip_line
 
 implicit none
 character(len=*), parameter :: CLICK_FILE = 'figure_test_remote.click' !< Where the click point is written.
@@ -31,9 +33,14 @@ logical                     :: test_passed(3)                           !< Per-c
 character(len=256)          :: verdict                                  !< The client's verdict.
 character(len=512)          :: command                                  !< Command launching the client.
 character(len=16)           :: os                                       !< The OS environment variable (Windows_NT).
+real(real64)                :: lx(100000)                               !< A long line (over 65536 vertices): abscissae.
+real(real64)                :: ly(100000)                               !< Its ordinates.
+integer(int32)              :: i                                        !< Counter.
 
 call remove_file(CLICK_FILE)
 call remove_file(OK_FILE)
+lx = [(real(i, real64), i = 1_int32, size(lx))]
+ly = sin(0.01_real64 * lx)
 clicks = 0_int32
 frames = 0_int32
 written = .false.
@@ -56,6 +63,14 @@ if (test_passed(1)) then
       if (ig_begin('Remote')) then
          if (ig_button('Hit me through the network')) clicks = clicks + 1_int32
          call ig_item_rect(x0, y0, x1, y1)
+      endif
+      call ig_end()
+      call ig_set_next_window(340.0_real64, 20.0_real64, 280.0_real64, 220.0_real64, always=.true.)
+      if (ig_begin('Long line')) then ! one draw list over 65536 vertices: indices relative to each command's offset
+         if (ip_begin_plot('long', height=-1.0_real64)) then
+            call ip_line('y', lx, ly)
+            call ip_end_plot()
+         endif
       endif
       call ig_end()
       if (.not. written .and. frames > 3_int32) then ! the layout has settled: tell the client where to click

@@ -4,7 +4,10 @@
 // messages, little-endian (the client is JavaScript on little-endian hardware):
 //   1 frame:    u8 1, f32 display_w, display_h, u32 lists; per list: u32 vtx_count, idx_count, cmd_count,
 //               vtx_count x ImDrawVert (f32 x, y, u, v, u32 rgba), idx_count x u16 (padded to 4 bytes),
-//               cmd_count x (f32 clip x1, y1, x2, y2, u32 texture, idx_offset, elem_count)
+//               cmd_count x (f32 clip x1, y1, x2, y2, u32 texture, idx_offset, elem_count, vtx_offset): each
+//               command draws elem_count indices from idx_offset, every index counted from vertex vtx_offset (a
+//               list may hold more than 65536 vertices: Dear ImGui then starts a new vertex range, the 16-bit
+//               indices are relative to it)
 //   2 texture:  u8 2, u32 id, width, height, flags (bit 0: linear filtering, else nearest), then width x height x 4
 //               RGBA bytes (created or replaced)
 //   3 destroy:  u8 3, u32 id
@@ -556,6 +559,7 @@ void send_frame(ImDrawData *dd) {
          put<std::uint32_t>(m, static_cast<std::uint32_t>(cmd.GetTexID()));
          put<std::uint32_t>(m, cmd.IdxOffset);
          put<std::uint32_t>(m, cmd.ElemCount);
+         put<std::uint32_t>(m, cmd.VtxOffset);
       }
    }
    ws_append(*c, 2, m);
