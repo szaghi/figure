@@ -92,7 +92,8 @@ def check_page(port: int, token: str) -> None:
         return
     upgrade = "Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
     upgrade += "Sec-WebSocket-Version: 13\r\n"
-    for target, headers in (("/", ""), ("/?token=0" + token[1:], ""), ("/index.html?x=1", ""), ("/ws", upgrade),
+    wrong = ("1" if token[0] == "0" else "0") + token[1:]  # differs from the token in its first character
+    for target, headers in (("/", ""), ("/?token=" + wrong, ""), ("/index.html?x=1", ""), ("/ws", upgrade),
                             ("/ws?token=" + token[:-1], upgrade)):
         if not http_get(port, target, headers).startswith(b"HTTP/1.1 403"):
             msg = f"GET {target} without the right token was not refused"
