@@ -111,6 +111,10 @@ int    fig_window_rect(const char *name, int name_len, float *rect, int *found);
 void   fig_set_confirm_quit(int on);
 int    fig_quit_requested(void);
 void   fig_quit(void);
+/* The window's title: set after fig_init (shown in window mode, kept in every mode); fig_title copies it into buf
+ * (up to buf_len bytes) and returns its length. */
+int    fig_set_title(const char *title, int title_len);
+int    fig_title(char *buf, int buf_len);
 int    fig_input_quit(void);
 /* File dialogs (window mode): kind 0 open, 1 save, 2 folder; filters "name|pattern" separated by newlines. The result
  * is polled by id: state 0 open, 1 chosen (path), 2 cancelled, 3 failed. */

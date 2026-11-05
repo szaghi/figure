@@ -70,3 +70,17 @@ id is scoped like a widget's label).
 
 A test makes the request with `test_quit()` ([Headless testing](testing#synthetic-input)); a capture script with
 `<frame> close` ([Frame capture](capture)).
+
+### The window's title
+
+An editor shows the document in the window's title, with a mark while it has unsaved changes. Set it whenever it
+changes (the call is cheap; doing it every frame is fine):
+
+```fortran
+call app%set_title(merge('* ', '  ', edited)//trim(path)//' - My editor')
+```
+
+| Procedure | Notes |
+|---|---|
+| `app%set_title(text [, stat])` | The window's title after `init`. Shown in window mode; kept in remote and headless modes. |
+| `app%title()` → `character(len=:), allocatable` | The title: `init`'s, or the last `set_title` (`''` headless until set). |

@@ -60,6 +60,7 @@ struct state_t {
    bool          confirm_quit = false;   // a quit request is reported (fig_quit_requested) instead of ending the loop
    bool          quit_requested = false; // a request not yet read by fig_quit_requested
    bool          quit_now = false;       // fig_quit: the next fig_begin_frame ends the loop
+   std::string   title;                  // the window's title (kept in every mode: fig_title)
    int           max_wait_ms = 500;
    int           frames_left = 3; // frames still to draw after the last event (ImGui settles in a few)
    float         scale = 1.0f;
@@ -799,6 +800,7 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    st.scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
    if (st.scale <= 0.0f || cap.on) st.scale = 1.0f; // capture: pixel sizes independent of the display
    const std::string t(title, title_len > 0 ? static_cast<size_t>(title_len) : 0);
+   st.title = t;
    const SDL_WindowFlags flags =
       SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
    st.window = SDL_CreateWindow(t.c_str(), static_cast<int>(width * st.scale), static_cast<int>(height * st.scale), flags);
@@ -1142,6 +1144,22 @@ int fig_quit_requested(void) {
 }
 
 void fig_quit(void) { st.quit_now = true; }
+
+// The window's title after fig_init (the file being edited, a mark when it has changes): shown in window mode, kept
+// in every mode (fig_title).
+int fig_set_title(const char *title, int title_len) {
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   st.title.assign(title, title_len > 0 ? static_cast<size_t>(title_len) : 0);
+   if (st.m == mode::window && st.window && !SDL_SetWindowTitle(st.window, st.title.c_str()))
+      return fail(FIG_ERR_FAILED, std::string("SDL_SetWindowTitle: ") + SDL_GetError());
+   return FIG_OK;
+}
+
+int fig_title(char *buf, int buf_len) {
+   const int n = static_cast<int>(st.title.size());
+   if (buf_len > 0) std::memcpy(buf, st.title.data(), static_cast<size_t>(std::min(n, buf_len)));
+   return n;
+}
 
 // A quit request as the window's close button makes it (tests, headless or not).
 int fig_input_quit(void) {

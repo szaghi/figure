@@ -22,6 +22,7 @@ public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord, fig_plot_tick_label
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
+public :: fig_set_title, fig_title
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -192,6 +193,24 @@ interface
    subroutine fig_quit() bind(C, name='fig_quit')
    !< End the loop at the next begin_frame.
    endsubroutine fig_quit
+
+   function fig_set_title(title, title_len) result(status) bind(C, name='fig_set_title')
+   !< The window's title (window mode: shown; every mode: kept).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: title(*)  !< Title (not NUL-terminated).
+   integer(c_int), value              :: title_len !< Its length.
+   integer(c_int)                     :: status    !< Status.
+   endfunction fig_set_title
+
+   function fig_title(buf, buf_len) result(n) bind(C, name='fig_title')
+   !< Copy the window's title into `buf` (up to `buf_len` characters); its length.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its length.
+   integer(c_int)                      :: n       !< Title length.
+   endfunction fig_title
 
    function fig_input_quit() result(status) bind(C, name='fig_input_quit')
    !< A quit request, as the window's close button makes it.

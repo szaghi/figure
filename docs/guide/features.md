@@ -24,6 +24,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%set_confirm_quit(enabled)` | the close button reports a request instead of ending the loop | [ask before quitting](menus#ask-before-quitting) |
 | `app%quit_requested()` → `logical` | the user asked to quit, once per request | [ask before quitting](menus#ask-before-quitting) |
 | `app%quit()` | the next `next_frame` returns `.false.` | [next_frame](frame-loop#next-frame) |
+| `app%set_title(text [, stat])`, `app%title()` → `character` | the window's title after `init` (window mode shows it; every mode keeps it) | [the window's title](menus#the-window-s-title) |
 | `app%open_file_dialog(id [, filters] [, default_path])`, `app%save_file_dialog(...)`, `app%open_folder_dialog(id [, default_path])` | the system's file dialogs (window mode), answered on a later frame | [file dialogs](frame-loop#file-dialogs) |
 | `app%file_dialog_result(id, path, done [, cancelled])` | the answer to a dialog, once | [file dialogs](frame-loop#file-dialogs) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |

@@ -24,7 +24,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_conte
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
                             fig_set_style, fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
-                            fig_file_dialog, fig_file_dialog_result
+                            fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title
 
 implicit none
 private
@@ -51,6 +51,8 @@ type :: app_object
       procedure, pass(self) :: set_confirm_quit !< Report a quit request instead of quitting.
       procedure, pass(self) :: quit_requested !< The user asked to quit (once per request).
       procedure, pass(self) :: quit           !< End the loop at the next frame.
+      procedure, pass(self) :: set_title      !< The window's title, after init.
+      procedure, pass(self) :: title          !< The window's title.
       procedure, pass(self) :: open_file_dialog   !< The system's dialog to choose a file to open.
       procedure, pass(self) :: save_file_dialog   !< The system's dialog to choose where to save.
       procedure, pass(self) :: open_folder_dialog !< The system's dialog to choose a folder.
@@ -338,6 +340,29 @@ contains
 
    call fig_quit()
    endsubroutine quit
+
+   subroutine set_title(self, text, stat)
+   !< The window's title, after `init`: the document being edited and a mark when it has changes, for example. Shown in
+   !< window mode; in remote and headless modes it is kept (read back by `title`) and nothing shows it.
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: text !< Title.
+   integer(int32),    intent(out), optional :: stat !< Status.
+
+   call figure_check(fig_set_title(text, len(text, c_int)), stat)
+   endsubroutine set_title
+
+   function title(self) result(text)
+   !< The window's title: the one given to `init` or the last `set_title` ('' before `init`, and in headless and remote
+   !< modes until `set_title`).
+   class(app_object), intent(in) :: self !< Application.
+   character(len=:), allocatable :: text !< Title.
+   character(kind=c_char)        :: none(1) !< No buffer (the length only).
+   integer(c_int)                :: n    !< Length.
+
+   n = fig_title(none, 0_c_int)
+   allocate(character(len=n) :: text)
+   if (n > 0_c_int) n = fig_title(text, n)
+   endfunction title
 
    subroutine open_file_dialog(self, id, filters, default_path, stat)
    !< Show the system's dialog to choose a file to open. It does not block: the interface keeps drawing, and the answer

@@ -5,7 +5,7 @@ program figure_test_popups
 !< A popup opened by a button and closed by a click outside it; with set_confirm_quit, a quit request reported once,
 !< answered by a modal: Cancel keeps the program running (and the modal blocks the rest of the interface), Discard ends
 !< it through app%quit; without set_confirm_quit, a quit request ends next_frame at once. File dialogs without a window
-!< are refused; polling an id with no dialog reports nothing yet.
+!< are refused; polling an id with no dialog reports nothing yet. The window's title set after init is read back.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : FIG_ERR_STATE, app_object, ig_begin, ig_begin_popup, ig_begin_popup_modal, &
                    ig_button, ig_checkbox,                                                                  &
@@ -15,7 +15,7 @@ use figure_testing, only : test_click, test_item_center, test_quit
 implicit none
 integer(int32), parameter :: MAX_FRAMES = 300_int32 !< Guard: the loop must end before this.
 type(app_object)          :: app                    !< Application.
-logical                   :: test_passed(11)        !< Per-check outcome.
+logical                   :: test_passed(13)        !< Per-check outcome.
 real(real64)              :: options_at(2)          !< Centre of the button that opens the popup.
 real(real64)              :: cancel_at(2)           !< Centre of the modal's Cancel.
 real(real64)              :: discard_at(2)          !< Centre of the modal's Discard.
@@ -34,6 +34,8 @@ logical                   :: ended_plain            !< Without confirmation, a q
 integer(int32)            :: stat_dialog(2)         !< File dialogs headless: open refused, unknown id.
 character(len=:), allocatable :: chosen             !< Path from a dialog.
 logical                   :: dialog_done            !< A dialog answered.
+character(len=:), allocatable :: titles(:)          !< The title: before set_title, after it.
+integer(int32)            :: stat_title             !< Status of set_title.
 
 flag = .false.
 popup_seen = .false.
@@ -116,6 +118,10 @@ call app%destroy()
 call app%init_headless(800_int32, 600_int32)          ! file dialogs need a window
 call app%open_file_dialog('open', ['Input files|input;inp'], stat=stat_dialog(1))
 call app%file_dialog_result('never opened', chosen, dialog_done, stat=stat_dialog(2))
+allocate(character(len=32) :: titles(2))
+titles(1) = app%title()                               ! headless: no title given
+call app%set_title('* case/overset.input', stat=stat_title)
+titles(2) = app%title()
 call app%destroy()
 
 test_passed(1) = popup_seen                                  ! a popup opened by a button
@@ -129,6 +135,8 @@ test_passed(8) = ended_plain                                 ! no confirmation: 
 test_passed(9) = last_frame <= MAX_FRAMES                    ! the loop did end
 test_passed(10) = stat_dialog(1) == int(FIG_ERR_STATE, int32)  ! no file dialog without a window
 test_passed(11) = stat_dialog(2) == 0_int32 .and. .not. dialog_done .and. chosen == '' ! no dialog: nothing yet
+test_passed(12) = len_trim(titles(1)) == 0                   ! no title before set_title (headless)
+test_passed(13) = stat_title == 0_int32 .and. titles(2) == '* case/overset.input' ! set_title kept, read back
 
 write(output_unit, '(A,*(L2))') 'figure_test_popups checks:', test_passed
 if (.not. all(test_passed)) write(output_unit, '(A,I0,A,I0,A,I0,A,I0,A,I0)') 'requests ', requests, &
