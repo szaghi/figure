@@ -1,0 +1,135 @@
+# FIGURE's self-contained fpm package, published for each release as the tag vX.Y.Z-fpm (scripts/fpm_publish.sh), so
+# that another fpm project can depend on it:
+#    figure = { git = "https://github.com/szaghi/figure", tag = "vX.Y.Z-fpm" }
+# The package is tested by path before the tag is pushed, then as a git dependency on Linux, macOS and Windows.
+# install.yml (called by release.yml) builds the same tag; it waits for this workflow to publish it.
+name: fpm package
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish the fpm package of (e.g. v1.2.3)
+        type: string
+        required: true
+
+concurrency:
+  group: fpm-package-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish vX.Y.Z-fpm (Linux)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # pushes the tag
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+    - name: Checkout the release
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.tag || github.ref_name }}
+
+    - name: Python (scripts need 3.11+, tomllib)
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    # SDL3 only for the tests (Ubuntu 24.04 has no SDL3 package): the native build installs a static one
+    - name: SDL3 build dependencies
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y cmake ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev \
+          libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
+
+    - name: fpm
+      uses: fortran-lang/setup-fpm@v9
+      with:
+        fpm-version: v0.12.0
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Native layer (SDL3 for the tests)
+      run: CC=gcc CXX=g++ scripts/build_native.sh
+
+    - name: The package, as a path dependency
+      run: scripts/fpm_consumer.sh --sdl-prefix . -- --compiler gfortran
+
+    - name: Publish the tag
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        if git ls-remote --exit-code --tags origin "refs/tags/${TAG}-fpm" > /dev/null; then
+          echo "${TAG}-fpm already published: not replaced"
+        else
+          scripts/fpm_publish.sh "$TAG"
+        fi
+
+    - name: The package, as a git dependency
+      run: |
+        scripts/fpm_consumer.sh --sdl-prefix . --git "https://github.com/${GITHUB_REPOSITORY}" --tag "${TAG}-fpm" \
+          -- --compiler gfortran
+
+  consumers:
+    name: Git dependency (${{ matrix.name }})
+    needs: publish
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: macOS
+          os: macos-14
+        - name: Windows
+          os: windows-latest
+    runs-on: ${{ matrix.os }}
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+    - name: Checkout the release (the consumer project and its script)
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.tag || github.ref_name }}
+
+    - name: MSYS2 toolchain
+      if: matrix.os == 'windows-latest'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: UCRT64
+        update: true
+        install: git
+        pacboy: >-
+          gcc-fortran:p python:p fpm:p sdl3:p
+
+    - name: Fortran compiler
+      if: matrix.os == 'macos-14'
+      uses: fortran-lang/setup-fortran@v1
+      with:
+        compiler: gcc
+        version: 14
+
+    - name: fpm
+      if: matrix.os == 'macos-14'
+      uses: fortran-lang/setup-fpm@v9
+      with:
+        fpm-version: v0.12.0
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    # Apple clang for the C/C++ (on macOS fpm links libc++), in C++17 (its default is C++98)
+    - name: The package, as a git dependency (Homebrew SDL3)
+      if: matrix.os == 'macos-14'
+      shell: bash
+      run: |
+        brew install sdl3
+        export CPATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib" FPM_CXXFLAGS="-std=c++17"
+        scripts/fpm_consumer.sh --git "https://github.com/${GITHUB_REPOSITORY}" --tag "${TAG}-fpm" \
+          -- --compiler "${FC}" --c-compiler clang --cxx-compiler clang++
+
+    - name: The package, as a git dependency (MSYS2 SDL3)
+      if: matrix.os == 'windows-latest'
+      shell: msys2 {0}
+      run: scripts/fpm_consumer.sh --git "https://github.com/${GITHUB_REPOSITORY}" --tag "${TAG}-fpm"

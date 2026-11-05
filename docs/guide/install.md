@@ -113,18 +113,30 @@ FPM_FC=gfortran scripts/fpm.sh test
 
 ## FIGURE as an fpm dependency
 
-fpm has no build hooks, so it cannot run CMake. `scripts/fpm_package.py` writes FIGURE as a **self-contained fpm
-package** instead: the Fortran library, FIGURE's glue and the pinned Dear ImGui, ImPlot, cimgui, cimplot and miniz
-sources (only the files FIGURE compiles, copied from CMake's fetched tree, with their licences), and the files CMake
-generates (the browser page, the themes and the font, embedded). A plain `fpm build` compiles all of it; only SDL3
-comes from the system (on macOS fpm also needs `FPM_CXXFLAGS=-std=c++17`, below).
+Another fpm project depends on FIGURE through the package published for each release, the tag `vX.Y.Z-fpm`:
 
-```bash
-scripts/build_native.sh                     # once: fetches the pinned sources (build/native/_deps)
-python3 scripts/fpm_package.py ../figure-fpm
+```toml
+[dependencies]
+figure = { git = "https://github.com/szaghi/figure", tag = "v0.1.0-fpm" }
 ```
 
-Then another fpm project depends on it:
+A plain `fpm build` then compiles everything; only SDL3 comes from the system (on macOS fpm also needs
+`FPM_CXXFLAGS=-std=c++17`, below).
+
+fpm has no build hooks, so it cannot run CMake. `scripts/fpm_package.py` writes FIGURE as a **self-contained fpm
+package** instead: the Fortran library, FIGURE's glue and the pinned Dear ImGui, ImPlot, cimgui, cimplot and miniz
+sources (only the files FIGURE compiles, with their licences), and the files CMake generates (the browser page, the
+themes and the font, embedded). The sources come from CMake's fetched tree, or with `--fetch` from the network at the
+pins of `native/CMakeLists.txt`. For each release tag `vX.Y.Z` the workflow `fpm.yml` runs `scripts/fpm_publish.sh`,
+which commits the package (one commit with no parent: the tag carries the package, not the repository's history) and
+pushes `vX.Y.Z-fpm`, after testing it as a path dependency and before testing it as a git dependency on Linux, macOS
+and Windows.
+
+Between releases, or for a modified FIGURE, write the package yourself and depend on it by path:
+
+```bash
+python3 scripts/fpm_package.py ../figure-fpm --fetch
+```
 
 ```toml
 [dependencies]
