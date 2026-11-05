@@ -70,8 +70,10 @@ Details: [Docking](docking).
 | `ig_get_style_var(name, values, n [, stat])`, `ip_get_style_var(...)` | a style variable by name |
 | `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's style editors, in a window |
 | `ig_push_font(font [, size] [, stat])`, `ig_pop_font([stat])` | another font or size for a block of widgets |
-| `ig_push_style_color(name, color [, stat])`, `ig_pop_style_color([n] [, stat])`, and `ip_*` | a colour for a block of widgets or plots |
-| `ig_push_style_var(name, value [, stat])`, `ig_pop_style_var([n] [, stat])`, and `ip_*` | a style variable for a block |
+| `ig_push_style_color(name, color [, stat])`, `ig_pop_style_color([n] [, stat])` | a colour for a block of widgets |
+| `ip_push_style_color(name, color [, stat])`, `ip_pop_style_color([n] [, stat])` | a colour for a block of plots |
+| `ig_push_style_var(name, value [, stat])`, `ig_pop_style_var([n] [, stat])` | a style variable for a block of widgets |
+| `ip_push_style_var(name, value [, stat])`, `ip_pop_style_var([n] [, stat])` | a style variable for a block of plots |
 
 Details: [Styles](styles).
 
@@ -92,18 +94,19 @@ Details: [Styles](styles).
 | `ip_heatmap(label, f, xmin, xmax, ymin, ymax ...)` | a field `f(i, j)` as coloured cells, read in place, j = 1 at the bottom |
 | `ip_colormap_scale(label, scale_min, scale_max ...)` | the colour bar of a heatmap (`ImPlotColormap_*`) |
 | `ip_image(label, tex, xmin, xmax, ymin, ymax ...)` | a texture in a plot, pixel row 1 at the bottom |
+| `ip_end_plot()` | end the plot (only if `ip_begin_plot` returned `.true.`) |
+
+Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots).
 
 ## Images: `texture_object`, `ig_image`
 
 | Procedure | Purpose |
 |---|---|
 | `tex%init(width, height [, smooth])`, `tex%update(rgba)`, `tex%destroy()` | an RGBA texture on the GPU, `integer(int8) :: rgba(4, width, height)` uploaded in place |
+| `tex%width()`, `tex%height()` → `integer(int32)`, `tex%is_initialized()` → `logical` | its size (0 before `init`); whether it exists |
 | `ig_image(tex [, width, height])` | the texture in a window, pixel row 1 at the top |
 
 Details: [Heatmaps and images](images).
-| `ip_end_plot()` | end the plot (only if `ip_begin_plot` returned `.true.`) |
-
-Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots).
 
 ## Testing: `figure_testing`
 
