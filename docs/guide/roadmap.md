@@ -113,5 +113,7 @@ editors of its input files.
 - **Menus and shortcuts** ([Menus and shortcuts](menus)): menu bars, menus, items, key chords (cmd on macOS, also in
   the browser): done.
 - **Testing:** `test_click` and `test_drag` let the pointer rest on the item before pressing, as a user does: done.
-- Still to come ([issue #2](https://github.com/szaghi/figure/issues/2)): popups and modals, a confirmation before
-  quitting, file dialogs, axis tick formats, subplots, docking a window that appears later.
+- **Popups and modals, a confirmation before quitting** ([Menus, popups and shortcuts](menus#popups-and-modals)):
+  done.
+- Still to come ([issue #2](https://github.com/szaghi/figure/issues/2)): file dialogs, axis tick formats, subplots,
+  docking a window that appears later.

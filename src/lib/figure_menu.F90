@@ -1,21 +1,29 @@
-!< figure_menu, menus and keyboard shortcuts.
+!< figure_menu, menus, popups and keyboard shortcuts.
 module figure_menu
-!< figure_menu, menus and keyboard shortcuts.
+!< figure_menu, menus, popups and keyboard shortcuts.
 !<
 !< Pairing (Dear ImGui's): each `ig_end_*` only after its `ig_begin_*` returned true. A window's own menu bar needs the
 !< window flag `ImGuiWindowFlags_MenuBar` in its `ig_begin`. A menu item's shortcut text is only shown: the program
 !< reacts to the keys with `ig_shortcut`, every frame, outside the menu (the menu is closed most of the time).
+!<
+!< A popup is opened once, by an event (`ig_open_popup`, not every frame), and declared every frame
+!< (`ig_begin_popup`/`ig_begin_popup_modal`, then `ig_end_popup` only when the begin returned true); it closes when
+!< the user clicks outside it (a plain popup) or when the program calls `ig_close_current_popup` inside it. Open and
+!< begin must use the same id in the same id scope (the same window).
 use, intrinsic :: iso_c_binding, only : c_bool, c_int, c_loc, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32
 use figure_base, only : cstr, figure_check
 use figure_c_native, only : FIG_OK, fig_key_chord
 use figure_cimgui, only : igBeginMainMenuBar, igBeginMenu, igBeginMenuBar, igEndMainMenuBar, igEndMenu, igEndMenuBar, &
-                          igIsKeyChordPressed_Nil, igMenuItem_BoolPtr
+                          igIsKeyChordPressed_Nil, igMenuItem_BoolPtr, igBeginPopup, igBeginPopupModal,         &
+                          igCloseCurrentPopup, igEndPopup, igOpenPopup_Str
+use figure_cimgui_enums, only : ImGuiWindowFlags_AlwaysAutoResize
 
 implicit none
 private
 public :: ig_begin_main_menu_bar, ig_end_main_menu_bar, ig_begin_menu_bar, ig_end_menu_bar, ig_begin_menu, ig_end_menu
 public :: ig_menu_item, ig_shortcut
+public :: ig_open_popup, ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
 
 contains
    function ig_begin_main_menu_bar() result(visible)
@@ -104,4 +112,48 @@ contains
    if (status /= FIG_OK) return
    pressed = logical(igIsKeyChordPressed_Nil(chord))
    endfunction ig_shortcut
+
+   subroutine ig_open_popup(id)
+   !< Open the popup `id` (call once, on the event that opens it: a click, a quit request; not every frame).
+   character(len=*), intent(in) :: id !< Popup id, as given to `ig_begin_popup` or `ig_begin_popup_modal`.
+
+   if (igOpenPopup_Str(cstr(id), 0_c_int)) continue
+   endsubroutine ig_open_popup
+
+   function ig_begin_popup(id) result(open)
+   !< A popup (no title bar), declared every frame; true while open: declare its content, then `ig_end_popup`. It
+   !< closes when the user clicks outside it.
+   character(len=*), intent(in) :: id   !< Popup id.
+   logical                      :: open !< The popup is open.
+
+   open = logical(igBeginPopup(cstr(id), 0_c_int))
+   endfunction ig_begin_popup
+
+   function ig_begin_popup_modal(title, open) result(shown)
+   !< A modal dialog titled `title` (also its id), declared every frame; true while open: the rest of the interface
+   !< is greyed out and ignores input until it closes (`ig_close_current_popup`, inside it). With `open`, a close
+   !< button in its title bar sets it false. Its size fits its content.
+   character(len=*), intent(in)              :: title !< Title and id.
+   logical,          intent(inout), optional :: open  !< Close button.
+   logical                                   :: shown !< The dialog is open.
+   logical(c_bool), target                   :: o     !< C copy of `open`.
+
+   if (present(open)) then
+      o = logical(open, c_bool)
+      shown = logical(igBeginPopupModal(cstr(title), c_loc(o), ImGuiWindowFlags_AlwaysAutoResize))
+      open = logical(o)
+   else
+      shown = logical(igBeginPopupModal(cstr(title), c_null_ptr, ImGuiWindowFlags_AlwaysAutoResize))
+   endif
+   endfunction ig_begin_popup_modal
+
+   subroutine ig_end_popup()
+   !< End a popup or modal (only after its begin returned true).
+   call igEndPopup()
+   endsubroutine ig_end_popup
+
+   subroutine ig_close_current_popup()
+   !< Close the popup or modal being declared (call it inside, e.g. when its OK button is pressed).
+   call igCloseCurrentPopup()
+   endsubroutine ig_close_current_popup
 endmodule figure_menu

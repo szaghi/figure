@@ -42,7 +42,8 @@ One event per line, at the frame given first (counted from 0, skipped frames inc
 | `<frame> up [left\|right\|middle]` | a mouse button is released |
 | `<frame> wheel <dx> <dy>` | the wheel turns; positive `dy` away from the user (zoom in, in a plot) |
 | `<frame> text <characters>` | characters are typed, the rest of the line |
-| `<frame> key <name> [down\|up]` | a key is pressed and released, or only pressed or released: `enter`, `tab`, `backspace`, `escape`, `left`, `right`, `up`, `down`, `ctrl` |
+| `<frame> key <name> [down\|up]` | a key is pressed and released, or only pressed or released, by the names of `test_key`: `a`-`z`, `0`-`9`, `f1`-`f12`, `enter`, `tab`, `backspace`, `delete`, `escape`, `space`, the arrows, `home`, `end`, `pageup`, `pagedown`, `ctrl`, `shift`, `alt`, `super` |
+| `<frame> close` | the window's close button is clicked: a quit request (see [`set_confirm_quit`](menus#ask-before-quitting)) |
 
 With a script, Dear ImGui draws its own mouse cursor, so the pointer shows in the frames. A malformed line is
 reported on standard error and skipped. To find coordinates, take one screenshot first and read them from the image.

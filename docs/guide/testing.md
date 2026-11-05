@@ -41,6 +41,7 @@ And to aim and to check:
 | Procedure | Gives |
 |---|---|
 | `test_item_center(x, y)` | the centre of the last widget drawn (call it right after the widget) |
+| `test_quit([stat])` | a quit request, as the window's close button makes it |
 | `test_window_rect(name, xmin, ymin, xmax, ymax [, found] [, stat])` | a window's rectangle, by its name, as drawn in the last frame |
 
 **Timing.** Everything queued reaches Dear ImGui at the next frame, up to a `test_next_frame` boundary; Dear ImGui then

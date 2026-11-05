@@ -55,6 +55,9 @@ struct state_t {
    SDL_GLContext gl = nullptr;
    bool          in_frame = false;
    bool          lazy = true;     // wait for events instead of redrawing continuously
+   bool          confirm_quit = false;   // a quit request is reported (fig_quit_requested) instead of ending the loop
+   bool          quit_requested = false; // a request not yet read by fig_quit_requested
+   bool          quit_now = false;       // fig_quit: the next fig_begin_frame ends the loop
    int           max_wait_ms = 500;
    int           frames_left = 3; // frames still to draw after the last event (ImGui settles in a few)
    float         scale = 1.0f;
@@ -116,6 +119,7 @@ struct redraw_stats_t {
 //    <frame> key <name> [down|up]        a key, by the names of test_key: a-z, 0-9, f1-f12, enter, tab, backspace,
 //                                        delete, escape, space, arrows, home, end, pageup, pagedown, ctrl, shift, alt,
 //                                        super (press and release when down|up is omitted)
+//    <frame> close                       the window's close button is clicked (a quit request)
 // With an input script Dear ImGui draws its own mouse cursor, so the pointer shows in the frames.
 struct capture_event_t {
    long        frame = 0;
@@ -193,6 +197,8 @@ void capture_read_input(const char *path) {
          ok = std::sscanf(rest, "%f %f", &e.x, &e.y) == 2;
       } else if (e.what == "text") {
          e.arg = rest;
+      } else if (e.what == "close") {
+         ok = true;
       } else {
          ok = false;
       }
@@ -237,6 +243,9 @@ void capture_apply_input() {
          io.AddKeyEvent(capture_key(e.arg), false);
       } else if (e.what == "key-down" || e.what == "key-up") {
          io.AddKeyEvent(capture_key(e.arg), e.what == "key-down");
+      } else if (e.what == "close") { // the window's close button: a request with confirm_quit, else the end
+         if (st.confirm_quit) st.quit_requested = true;
+         else st.quit_now = true;
       }
    }
 }
@@ -1118,6 +1127,28 @@ int fig_remote_token(char *buf, int buf_len) {
    return n;
 }
 
+void fig_set_confirm_quit(int on) {
+   st.confirm_quit = on != 0;
+   if (!st.confirm_quit) st.quit_requested = false;
+}
+
+int fig_quit_requested(void) {
+   const bool r = st.quit_requested;
+   st.quit_requested = false;
+   if (r) st.frames_left = 3; // a request is an event: the frames that answer it are drawn
+   return r ? 1 : 0;
+}
+
+void fig_quit(void) { st.quit_now = true; }
+
+// A quit request as the window's close button makes it (tests, headless or not).
+int fig_input_quit(void) {
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (st.confirm_quit) st.quit_requested = true;
+   else st.quit_now = true;
+   return FIG_OK;
+}
+
 void fig_request_frames(int n) {
    if (n > st.frames_left) st.frames_left = n;
 }
@@ -1132,6 +1163,11 @@ int fig_begin_frame(int *running) {
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if (st.in_frame) return fail(FIG_ERR_STATE, "begin_frame called twice without end_frame");
    *running = 1;
+   if (st.quit_now) { // fig_quit, in every mode
+      st.quit_now = false;
+      *running = 0;
+      return FIG_OK;
+   }
    if (st.m == mode::headless) {
       ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
       apply_test_input();
@@ -1175,8 +1211,11 @@ int fig_begin_frame(int *running) {
    auto handle = [&](const SDL_Event &e) {
       if (rs.on) ++rs.events[e.type];
       if (!cap.on) ImGui_ImplSDL3_ProcessEvent(&e); // capture: the program's scripted input only
-      if (e.type == SDL_EVENT_QUIT) *running = 0;
-      if (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && e.window.windowID == SDL_GetWindowID(st.window)) *running = 0;
+      if (e.type == SDL_EVENT_QUIT ||
+          (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && e.window.windowID == SDL_GetWindowID(st.window))) {
+         if (st.confirm_quit) st.quit_requested = true; // the program asks first, then calls fig_quit
+         else *running = 0;
+      }
       got = true;
    };
    // Lazy redraw: once ImGui has settled, sleep until an event arrives or max_wait elapses (a periodic refresh that

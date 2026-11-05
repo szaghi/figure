@@ -23,13 +23,13 @@ use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
-                            fig_input_next_frame, fig_input_text, fig_input_wheel, fig_window_rect
+                            fig_input_next_frame, fig_input_quit, fig_input_text, fig_input_wheel, fig_window_rect
 use figure_imgui, only : ig_item_rect
 
 implicit none
 private
 public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel, test_key, test_type
-public :: test_window_rect, test_item_center, test_next_frame
+public :: test_window_rect, test_item_center, test_next_frame, test_quit
 
 contains
    subroutine test_next_frame(stat)
@@ -39,6 +39,14 @@ contains
 
    call figure_check(fig_input_next_frame(), stat)
    endsubroutine test_next_frame
+
+   subroutine test_quit(stat)
+   !< A quit request, as the window's close button makes it: `next_frame` returns `.false.`, or, after
+   !< `app%set_confirm_quit(.true.)`, `app%quit_requested()` returns `.true.`.
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` before `init*`.
+
+   call figure_check(fig_input_quit(), stat)
+   endsubroutine test_quit
 
    subroutine test_mouse_move(x, y, stat)
    !< Queue a move of the mouse to (x, y).

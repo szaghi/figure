@@ -30,6 +30,8 @@ graph LR
 - [fig_set_ini_file](#fig-set-ini-file)
 - [fig_set_style](#fig-set-style)
 - [fig_remote_token](#fig-remote-token)
+- [fig_quit_requested](#fig-quit-requested)
+- [fig_input_quit](#fig-input-quit)
 - [fig_content_scale](#fig-content-scale)
 - [fig_last_error](#fig-last-error)
 - [fig_texture_create](#fig-texture-create)
@@ -67,6 +69,8 @@ graph LR
 - [fig_set_remote_fps](#fig-set-remote-fps)
 - [fig_set_remote_compress](#fig-set-remote-compress)
 - [fig_set_remote_token](#fig-set-remote-token)
+- [fig_set_confirm_quit](#fig-set-confirm-quit)
+- [fig_quit](#fig-quit)
 - [fig_request_frames](#fig-request-frames)
 - [fig_set_last_error](#fig-set-last-error)
 - [fig_texture_destroy](#fig-texture-destroy)
@@ -100,6 +104,10 @@ graph LR
 ### fig_set_style
 
 ### fig_remote_token
+
+### fig_quit_requested
+
+### fig_input_quit
 
 ### fig_content_scale
 
@@ -174,6 +182,10 @@ graph LR
 ### fig_set_remote_compress
 
 ### fig_set_remote_token
+
+### fig_set_confirm_quit
+
+### fig_quit
 
 ### fig_request_frames
 

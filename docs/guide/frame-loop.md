@@ -37,7 +37,13 @@ return what happened in the frame they belong to: `ig_button` is `.true.` on the
 that clicked it was processed by the `next_frame` that opened the frame.
 
 When `next_frame` returns `.false.`, no frame is open: leave the loop and call `destroy`. In headless mode
-`next_frame` never returns `.false.` (there is no window to close): the program decides how many frames to run.
+`next_frame` returns `.false.` only after `app%quit()` or a `test_quit()` (there is no window to close): the program
+decides how many frames to run.
+
+`app%quit()` ends the loop from the program: the next `next_frame` returns `.false.`, in every mode. With
+`app%set_confirm_quit(.true.)` the window's close button no longer ends the loop: `app%quit_requested()` reports the
+request, once, and the program answers it, typically with a "Discard changes?" dialog
+([Ask before quitting](menus#ask-before-quitting)). In remote mode closing the browser's tab never ends the program.
 
 ## Lazy redraw
 

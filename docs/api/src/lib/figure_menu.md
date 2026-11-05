@@ -4,11 +4,16 @@ title: figure_menu
 
 # figure_menu
 
-> figure_menu, menus and keyboard shortcuts.
+> figure_menu, menus, popups and keyboard shortcuts.
 
  Pairing (Dear ImGui's): each `ig_end_*` only after its `ig_begin_*` returned true. A window's own menu bar needs the
  window flag `ImGuiWindowFlags_MenuBar` in its `ig_begin`. A menu item's shortcut text is only shown: the program
  reacts to the keys with `ig_shortcut`, every frame, outside the menu (the menu is closed most of the time).
+
+ A popup is opened once, by an event (`ig_open_popup`, not every frame), and declared every frame
+ (`ig_begin_popup`/`ig_begin_popup_modal`, then `ig_end_popup` only when the begin returned true); it closes when
+ the user clicks outside it (a plain popup) or when the program calls `ig_close_current_popup` inside it. Open and
+ begin must use the same id in the same id scope (the same window).
 
 **Source**: `src/lib/figure_menu.F90`
 
@@ -19,6 +24,7 @@ graph LR
   figure_menu["figure_menu"] --> figure_base["figure_base"]
   figure_menu["figure_menu"] --> figure_c_native["figure_c_native"]
   figure_menu["figure_menu"] --> figure_cimgui["figure_cimgui"]
+  figure_menu["figure_menu"] --> figure_cimgui_enums["figure_cimgui_enums"]
   figure_menu["figure_menu"] --> iso_c_binding["iso_c_binding"]
   figure_menu["figure_menu"] --> iso_fortran_env["iso_fortran_env"]
 ```
@@ -28,11 +34,16 @@ graph LR
 - [ig_end_main_menu_bar](#ig-end-main-menu-bar)
 - [ig_end_menu_bar](#ig-end-menu-bar)
 - [ig_end_menu](#ig-end-menu)
+- [ig_open_popup](#ig-open-popup)
+- [ig_end_popup](#ig-end-popup)
+- [ig_close_current_popup](#ig-close-current-popup)
 - [ig_begin_main_menu_bar](#ig-begin-main-menu-bar)
 - [ig_begin_menu_bar](#ig-begin-menu-bar)
 - [ig_begin_menu](#ig-begin-menu)
 - [ig_menu_item](#ig-menu-item)
 - [ig_shortcut](#ig-shortcut)
+- [ig_begin_popup](#ig-begin-popup)
+- [ig_begin_popup_modal](#ig-begin-popup-modal)
 
 ## Subroutines
 
@@ -82,6 +93,61 @@ subroutine ig_end_menu()
 flowchart TD
   ig_end_menu["ig_end_menu"] --> igEndMenu["igEndMenu"]
   style ig_end_menu fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_open_popup
+
+Open the popup `id` (call once, on the event that opens it: a click, a quit request; not every frame).
+
+```fortran
+subroutine ig_open_popup(id)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | character(len=*) | in |  | Popup id, as given to `ig_begin_popup` or `ig_begin_popup_modal`. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_open_popup["ig_open_popup"] --> cstr["cstr"]
+  ig_open_popup["ig_open_popup"] --> igOpenPopup_Str["igOpenPopup_Str"]
+  style ig_open_popup fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_end_popup
+
+End a popup or modal (only after its begin returned true).
+
+```fortran
+subroutine ig_end_popup()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_end_popup["ig_end_popup"] --> igEndPopup["igEndPopup"]
+  style ig_end_popup fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_close_current_popup
+
+Close the popup or modal being declared (call it inside, e.g. when its OK button is pressed).
+
+```fortran
+subroutine ig_close_current_popup()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_close_current_popup["ig_close_current_popup"] --> igCloseCurrentPopup["igCloseCurrentPopup"]
+  style ig_close_current_popup fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions
@@ -207,4 +273,58 @@ flowchart TD
   ig_shortcut["ig_shortcut"] --> figure_check["figure_check"]
   ig_shortcut["ig_shortcut"] --> igIsKeyChordPressed_Nil["igIsKeyChordPressed_Nil"]
   style ig_shortcut fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_begin_popup
+
+A popup (no title bar), declared every frame; true while open: declare its content, then `ig_end_popup`. It
+ closes when the user clicks outside it.
+
+**Returns**: `logical`
+
+```fortran
+function ig_begin_popup(id) result(open)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | character(len=*) | in |  | Popup id. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin_popup["ig_begin_popup"] --> cstr["cstr"]
+  ig_begin_popup["ig_begin_popup"] --> igBeginPopup["igBeginPopup"]
+  style ig_begin_popup fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_begin_popup_modal
+
+A modal dialog titled `title` (also its id), declared every frame; true while open: the rest of the interface
+ is greyed out and ignores input until it closes (`ig_close_current_popup`, inside it). With `open`, a close
+ button in its title bar sets it false. Its size fits its content.
+
+**Returns**: `logical`
+
+```fortran
+function ig_begin_popup_modal(title, open) result(shown)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `title` | character(len=*) | in |  | Title and id. |
+| `open` | logical | inout | optional | Close button. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin_popup_modal["ig_begin_popup_modal"] --> cstr["cstr"]
+  ig_begin_popup_modal["ig_begin_popup_modal"] --> igBeginPopupModal["igBeginPopupModal"]
+  style ig_begin_popup_modal fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

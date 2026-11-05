@@ -23,7 +23,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_conte
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
-                            fig_set_style, fig_shutdown
+                            fig_set_style, fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit
 
 implicit none
 private
@@ -47,6 +47,9 @@ type :: app_object
       procedure, pass(self) :: load_style     !< A theme file.
       procedure, pass(self) :: save_style     !< The style in effect, as a theme file.
       procedure, pass(self) :: request_frames !< Redraw without waiting for input.
+      procedure, pass(self) :: set_confirm_quit !< Report a quit request instead of quitting.
+      procedure, pass(self) :: quit_requested !< The user asked to quit (once per request).
+      procedure, pass(self) :: quit           !< End the loop at the next frame.
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
 endtype app_object
@@ -305,6 +308,31 @@ contains
 
    call fig_request_frames(int(n, c_int))
    endsubroutine request_frames
+
+   subroutine set_confirm_quit(self, enabled)
+   !< With `enabled`, the window's close button (and the system's quit) no longer ends `next_frame`: the request is
+   !< reported by `quit_requested`, and the program quits with `quit` (after asking to save, for example).
+   class(app_object), intent(inout) :: self    !< Application.
+   logical,           intent(in)    :: enabled !< Ask first.
+
+   call fig_set_confirm_quit(merge(1_c_int, 0_c_int, enabled))
+   endsubroutine set_confirm_quit
+
+   function quit_requested(self) result(requested)
+   !< The user asked to quit (the window's close button) since the last call: true once per request. Only with
+   !< `set_confirm_quit(.true.)`; otherwise the request ends `next_frame` at once.
+   class(app_object), intent(inout) :: self      !< Application.
+   logical                          :: requested !< Requested.
+
+   requested = fig_quit_requested() == 1_c_int
+   endfunction quit_requested
+
+   subroutine quit(self)
+   !< End the loop: the next `next_frame` returns `.false.` (in every mode).
+   class(app_object), intent(inout) :: self !< Application.
+
+   call fig_quit()
+   endsubroutine quit
 
    function content_scale(self) result(scale)
    !< Display content scale (1 standard, 2 on most high-DPI displays).

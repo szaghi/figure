@@ -102,6 +102,15 @@ before its windows. The user can rearrange everything afterwards. [Docking](/gui
 The menu item shows the shortcut; `ig_shortcut`, called every frame outside the menu, reads the keys (cmd+s on
 macOS). [Menus and shortcuts](/guide/menus) has the rules.
 
+### Ask before discarding changes
+
+<<< @/examples/snippets/cb_quit-quit.F90{fortran}
+
+<Media name="cb_quit" alt="A modal asks Save, Discard or Cancel when the window of an edited document is closed" caption="docs/examples/src/cb_quit.F90" />
+
+`app%set_confirm_quit(.true.)` makes the close button a request; the program opens a modal when there is something to
+lose, and quits at once otherwise. [Menus, popups and shortcuts](/guide/menus#ask-before-quitting) has the details.
+
 ### A list and a help panel
 
 <<< @/examples/snippets/cb_help-list.F90{fortran}

@@ -40,6 +40,7 @@ graph LR
 ## Contents
 
 - [test_next_frame](#test-next-frame)
+- [test_quit](#test-quit)
 - [test_mouse_move](#test-mouse-move)
 - [test_mouse_button](#test-mouse-button)
 - [test_click](#test-click)
@@ -75,6 +76,30 @@ flowchart TD
   test_next_frame["test_next_frame"] --> fig_input_next_frame["fig_input_next_frame"]
   test_next_frame["test_next_frame"] --> figure_check["figure_check"]
   style test_next_frame fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_quit
+
+A quit request, as the window's close button makes it: `next_frame` returns `.false.`, or, after
+ `app%set_confirm_quit(.true.)`, `app%quit_requested()` returns `.true.`.
+
+```fortran
+subroutine test_quit(stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `stat` | integer(kind=int32) | out | optional |  |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_quit["test_quit"] --> fig_input_quit["fig_input_quit"]
+  test_quit["test_quit"] --> figure_check["figure_check"]
+  style test_quit fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### test_mouse_move

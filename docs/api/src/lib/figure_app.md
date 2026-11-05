@@ -46,8 +46,11 @@ graph LR
 - [save_style](#save-style)
 - [set_docking](#set-docking)
 - [request_frames](#request-frames)
+- [set_confirm_quit](#set-confirm-quit)
+- [quit](#quit)
 - [destroy](#destroy)
 - [next_frame](#next-frame)
+- [quit_requested](#quit-requested)
 - [content_scale](#content-scale)
 
 ## Derived Types
@@ -80,6 +83,9 @@ A FIGURE application (one per program).
 | `load_style` | pass(self) | A theme file. |
 | `save_style` | pass(self) | The style in effect, as a theme file. |
 | `request_frames` | pass(self) | Redraw without waiting for input. |
+| `set_confirm_quit` | pass(self) | Report a quit request instead of quitting. |
+| `quit_requested` | pass(self) | The user asked to quit (once per request). |
+| `quit` | pass(self) | End the loop at the next frame. |
 | `content_scale` | pass(self) | Display content scale. |
 | `destroy` | pass(self) | Close everything. |
 
@@ -386,6 +392,52 @@ flowchart TD
   style request_frames fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### set_confirm_quit
+
+With `enabled`, the window's close button (and the system's quit) no longer ends `next_frame`: the request is
+ reported by `quit_requested`, and the program quits with `quit` (after asking to save, for example).
+
+```fortran
+subroutine set_confirm_quit(self, enabled)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `enabled` | logical | in |  | Ask first. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_confirm_quit["set_confirm_quit"] --> fig_set_confirm_quit["fig_set_confirm_quit"]
+  style set_confirm_quit fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### quit
+
+End the loop: the next `next_frame` returns `.false.` (in every mode).
+
+```fortran
+subroutine quit(self)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  quit["quit"] --> fig_quit["fig_quit"]
+  style quit fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### destroy
 
 Close the window and destroy the contexts (safe in any state).
@@ -436,6 +488,31 @@ flowchart TD
   next_frame["next_frame"] --> fig_end_frame["fig_end_frame"]
   next_frame["next_frame"] --> figure_check["figure_check"]
   style next_frame fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### quit_requested
+
+The user asked to quit (the window's close button) since the last call: true once per request. Only with
+ `set_confirm_quit(.true.)`; otherwise the request ends `next_frame` at once.
+
+**Returns**: `logical`
+
+```fortran
+function quit_requested(self) result(requested)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  quit_requested["quit_requested"] --> fig_quit_requested["fig_quit_requested"]
+  style quit_requested fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### content_scale

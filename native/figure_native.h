@@ -103,6 +103,13 @@ int    fig_input_key(const char *name, int name_len, int down);
 int    fig_input_text(const char *text, int text_len);
 /* A window's rectangle (xmin, ymin, xmax, ymax) [pixels] by name, as in the last frame; found 0 if none. */
 int    fig_window_rect(const char *name, int name_len, float *rect, int *found);
+/* Quitting: with confirm_quit on, the window's close button (or SDL's quit event) sets a request, read and cleared by
+ * fig_quit_requested (1 once per request), instead of ending the loop; fig_quit ends it at the next fig_begin_frame.
+ * fig_input_quit makes a request as the close button does (tests). */
+void   fig_set_confirm_quit(int on);
+int    fig_quit_requested(void);
+void   fig_quit(void);
+int    fig_input_quit(void);
 /* A key chord ("ctrl+s": modifiers and one key, by the names of fig_input_key, joined by '+'). */
 int    fig_key_chord(const char *keys, int keys_len, int *chord);
 /* A text field over a caller-owned NUL-terminated buffer of buf_size bytes (InputText without a callback); 1 when

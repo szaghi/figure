@@ -1,0 +1,28 @@
+#! program build/docs-examples/bin/cb_quit
+#! frames  200
+#! poster  135
+# edit the title, tick an option in the popup, close the window: the modal asks; Cancel; close again
+0   move 300 150
+8   move 200 49 12
+22  down
+24  up
+28  key ctrl down
+29  key a
+30  key ctrl up
+34  text wing
+46  move 42 75 12
+60  down
+62  up
+66  move 61 94 8
+78  down
+80  up
+88  move 400 180 12
+100 down
+102 up
+110 close
+118 move 342 150 15
+145 down
+147 up
+165 move 500 200 10
+175 close
+185 move 288 150 12

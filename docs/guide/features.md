@@ -21,6 +21,9 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%next_frame([stat])` → `logical` | render the open frame, wait for input, open the next; `.false.` on quit | [frame loop](frame-loop#next-frame) |
 | `app%set_lazy(enabled [, max_wait])` | lazy redraw on/off, longest sleep (default 0.5 s) | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |
+| `app%set_confirm_quit(enabled)` | the close button reports a request instead of ending the loop | [ask before quitting](menus#ask-before-quitting) |
+| `app%quit_requested()` → `logical` | the user asked to quit, once per request | [ask before quitting](menus#ask-before-quitting) |
+| `app%quit()` | the next `next_frame` returns `.false.` | [next_frame](frame-loop#next-frame) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
 | `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (default, 15 px), `'proggy'`, or a TTF/OTF file | [styles](styles#fonts) |
 | `app%load_style(file [, stat])`, `app%save_style(file [, stat])` | apply a theme file; write the style in effect as one | [styles](styles#load-tune-and-save) |
@@ -48,6 +51,8 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_begin_menu_bar()` → `logical`, `ig_end_menu_bar()` | a window's own menu bar (`ImGuiWindowFlags_MenuBar`) |
 | `ig_begin_menu(label [, enabled])` → `logical`, `ig_end_menu()` | a menu or submenu; `.true.` while open |
 | `ig_menu_item(label [, shortcut] [, selected] [, enabled])` → `logical` | a menu item; `.true.` when picked; a check mark with `selected` |
+| `ig_open_popup(id)`, `ig_close_current_popup()` | open a popup (once, on an event); close the one being declared |
+| `ig_begin_popup(id)` → `logical`, `ig_begin_popup_modal(title [, open])` → `logical`, `ig_end_popup()` | a popup, a modal dialog; end only after a true begin |
 | `ig_shortcut(keys [, stat])` → `logical` | a key chord such as `'ctrl+s'` pressed this frame (cmd on macOS), once per press |
 | `ig_tooltip(text)` | a tooltip on the previous widget, shown while the pointer rests on it |
 | `ig_collapsing_header(label [, default_open])` → `logical` | a header that shows or hides what follows; `.true.` while open (no end call) |
@@ -138,6 +143,7 @@ Details: [Heatmaps and images](images).
 | `test_key(name [, down])`, `test_type(text)` | queue keys and typed text |
 | `test_next_frame()` | a frame boundary in the queued input |
 | `test_item_center(x, y)`, `test_window_rect(name, ...)` | where a widget or a window is |
+| `test_quit()` | a quit request, as the window's close button makes it |
 
 Details: [Headless testing](testing#synthetic-input).
 

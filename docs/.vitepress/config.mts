@@ -33,7 +33,7 @@ const docs = [
       { text: 'Feature map',             link: '/guide/features' },
       { text: 'Frame loop and redraw',   link: '/guide/frame-loop' },
       { text: 'Widgets',                 link: '/guide/widgets' },
-      { text: 'Menus and shortcuts',     link: '/guide/menus' },
+      { text: 'Menus and popups',        link: '/guide/menus' },
       { text: 'Docking',                 link: '/guide/docking' },
       { text: 'Styles',                  link: '/guide/styles' },
       { text: 'Plots',                   link: '/guide/plots' },
