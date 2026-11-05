@@ -29,6 +29,19 @@
 #include "figure_remote.h"
 
 #include "imgui.h"
+// miniz: deflate and zlib streams only, mz_ names only (CMake passes the same; an fpm build passes nothing)
+#ifndef MINIZ_NO_ARCHIVE_APIS
+#define MINIZ_NO_ARCHIVE_APIS
+#endif
+#ifndef MINIZ_NO_STDIO
+#define MINIZ_NO_STDIO
+#endif
+#ifndef MINIZ_NO_TIME
+#define MINIZ_NO_TIME
+#endif
+#ifndef MINIZ_NO_ZLIB_COMPATIBLE_NAMES
+#define MINIZ_NO_ZLIB_COMPATIBLE_NAMES
+#endif
 #include "miniz.h"
 
 #include <algorithm>
@@ -46,6 +59,43 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <windows.h>
+// Winsock is loaded at run time from ws2_32.dll (part of every Windows), so a program links FIGURE with no Windows-only
+// library: an fpm build cannot add one for one platform. Each pointer has the exact type of the function it stands
+// for (decltype keeps the calling convention); the names below are redirected to them.
+namespace winsock {
+#define FIGURE_WINSOCK(X) X(WSAStartup) X(WSAGetLastError) X(socket) X(setsockopt) X(bind) X(listen) X(accept) \
+   X(getaddrinfo) X(freeaddrinfo) X(getsockname) X(recv) X(send) X(select) X(closesocket) X(ioctlsocket) X(__WSAFDIsSet)
+#define FIGURE_WINSOCK_POINTER(f) static decltype(&::f) p_##f = nullptr;
+FIGURE_WINSOCK(FIGURE_WINSOCK_POINTER)
+static bool load() {
+   static HMODULE h = nullptr;
+   if (h) return true;
+   h = LoadLibraryA("ws2_32.dll");
+   if (!h) return false;
+#define FIGURE_WINSOCK_LOAD(f) \
+   p_##f = reinterpret_cast<decltype(&::f)>(reinterpret_cast<void (*)(void)>(GetProcAddress(h, #f))); \
+   if (!p_##f) return false;
+   FIGURE_WINSOCK(FIGURE_WINSOCK_LOAD)
+   return true;
+}
+} // namespace winsock
+#define WSAStartup winsock::p_WSAStartup
+#define WSAGetLastError winsock::p_WSAGetLastError
+#define socket winsock::p_socket
+#define setsockopt winsock::p_setsockopt
+#define bind winsock::p_bind
+#define listen winsock::p_listen
+#define accept winsock::p_accept
+#define getaddrinfo winsock::p_getaddrinfo
+#define freeaddrinfo winsock::p_freeaddrinfo
+#define getsockname winsock::p_getsockname
+#define recv winsock::p_recv
+#define send winsock::p_send
+#define select winsock::p_select
+#define closesocket winsock::p_closesocket
+#define ioctlsocket winsock::p_ioctlsocket
+#define __WSAFDIsSet winsock::p___WSAFDIsSet
 typedef SOCKET socket_t;
 static const socket_t NO_SOCKET = INVALID_SOCKET;
 static int close_socket(socket_t s) { return closesocket(s); }
@@ -483,9 +533,9 @@ bool http_read(connection_t &c) {
             close_socket(o.s);
             o.s = NO_SOCKET;
          }
-      const std::string accept = base64(sha1(header("sec-websocket-key") + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));
+      const std::string accept_key = base64(sha1(header("sec-websocket-key") + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));
       c.out += "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-               "Sec-WebSocket-Accept: " + accept + "\r\n\r\n";
+               "Sec-WebSocket-Accept: " + accept_key + "\r\n\r\n";
       c.websocket = true;
       sv.resend = true;
       return true;
@@ -511,6 +561,7 @@ bool start(const std::string &host, int port, int &bound_port, std::string &err)
       return false;
    }
 #ifdef _WIN32
+   if (!winsock::load()) { err = "cannot load Winsock (ws2_32.dll)"; return false; }
    if (!sv.wsa) {
       WSADATA data;
       if (WSAStartup(MAKEWORD(2, 2), &data) != 0) { err = "WSAStartup failed"; return false; }
@@ -541,7 +592,8 @@ bool start(const std::string &host, int port, int &bound_port, std::string &err)
    sockaddr_in addr{};
    socklen_t len = sizeof(addr);
    getsockname(sv.listener, reinterpret_cast<sockaddr *>(&addr), &len);
-   bound_port = ntohs(addr.sin_port);
+   const unsigned char *pb = reinterpret_cast<const unsigned char *>(&addr.sin_port); // network order: big-endian
+   bound_port = (pb[0] << 8) | pb[1];
    return true;
 }
 

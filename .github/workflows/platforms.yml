@@ -1,7 +1,8 @@
 # Platforms beyond ci.yml (Linux, gfortran, coverage; managed by `fobis scaffold`): macOS and Windows with gfortran,
 # Linux with nvfortran. Each job builds the native layer, checks the platform's fobos varset against the static link
-# line SDL reports for it (scripts/check_sync.py), builds and runs the headless tests with FoBiS and with fpm, and
-# builds the examples. Headless tests need no display and no GPU.
+# line SDL reports for it (scripts/check_sync.py), builds and runs the headless tests with FoBiS and with fpm, builds
+# the examples, and builds FIGURE as a plain fpm dependency of another project (scripts/fpm_consumer.sh). Headless
+# tests need no display and no GPU.
 name: Platforms
 
 on:
@@ -75,6 +76,14 @@ jobs:
     - name: Tests (fpm)
       run: scripts/fpm.sh test --compiler "${FC}"
 
+    # FIGURE as a plain fpm dependency of another project: fpm compiles the native layer itself, SDL3 from Homebrew.
+    # The C/C++ compilers are GCC's, like gfortran: fpm links the C++ runtime as libstdc++.
+    - name: fpm dependency (system SDL3)
+      run: |
+        brew install sdl3
+        export CPATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib"
+        scripts/fpm_consumer.sh -- --compiler "${FC}" --c-compiler "${CC}" --cxx-compiler "${CXX}"
+
   windows:
     name: Windows (MSYS2 UCRT64 gfortran)
     runs-on: windows-latest
@@ -92,7 +101,7 @@ jobs:
         update: true
         install: git
         pacboy: >-
-          gcc-fortran:p cmake:p ninja:p pkgconf:p python:p python-pip:p fpm:p
+          gcc-fortran:p cmake:p ninja:p pkgconf:p python:p python-pip:p fpm:p sdl3:p
 
     - name: FoBiS
       run: python -m pip install --break-system-packages FoBiS.py
@@ -118,6 +127,10 @@ jobs:
 
     - name: Tests (fpm)
       run: scripts/fpm.sh test
+
+    # FIGURE as a plain fpm dependency of another project: fpm compiles the native layer itself, SDL3 from MSYS2
+    - name: fpm dependency (system SDL3)
+      run: scripts/fpm_consumer.sh
 
   linux-nvfortran:
     name: Linux (nvfortran)
@@ -169,3 +182,14 @@ jobs:
       run: |
         rm -rf mod obj exe
         fobis build --mode examples-nvf
+
+    - name: fpm
+      uses: fortran-lang/setup-fpm@v9
+      with:
+        fpm-version: v0.12.0
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    # FIGURE as a plain fpm dependency of another project, with gfortran: Ubuntu 24.04 has no SDL3 package, so the
+    # static SDL3 the native build installed (lib/, include/) stands in for it
+    - name: fpm dependency (SDL3 from the native build)
+      run: scripts/fpm_consumer.sh --sdl-prefix . -- --compiler gfortran

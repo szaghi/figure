@@ -1,0 +1,12 @@
+# A separate fpm project depending on FIGURE, for scripts/fpm_consumer.sh: proves that FIGURE builds as a plain fpm
+# dependency (its native layer compiled by fpm). The dependency's path is replaced by the script.
+name = "figure_consumer"
+version = "0.1.0"
+
+[dependencies]
+figure = { path = "FIGURE_PACKAGE" }
+
+[[executable]]
+name = "consumer"
+source-dir = "app"
+main = "main.F90"

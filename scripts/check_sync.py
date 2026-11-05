@@ -220,6 +220,30 @@ def fpm_link(platform: str) -> int:
     return 0
 
 
+def package_sources() -> list[str]:
+    """Differences between the C/C++ sources CMake compiles and those scripts/fpm_package.py ships.
+
+    Returns
+    -------
+    list[str]
+        One message per source compiled by one build and not the other (by file name).
+    """
+    import importlib.util  # noqa: PLC0415 (only this check needs it)
+
+    spec = importlib.util.spec_from_file_location("fpm_package", ROOT / "scripts" / "fpm_package.py")
+    assert spec is not None and spec.loader is not None
+    pkg = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pkg)
+    shipped = {Path(f).name for f in (*pkg.IMGUI_FILES, *pkg.IMPLOT_FILES, *pkg.NATIVE_FILES) if f.endswith(".cpp")}
+    shipped |= {"cimgui.cpp", "cimplot.cpp", "miniz.c"}
+    cmake = (ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    block = re.search(r"add_library\(figure_native STATIC(.*?)\)\n", cmake, re.S)
+    compiled = set(re.findall(r"([\w.]+\.(?:cpp|c))\b", block.group(1))) if block else set()
+    return [f"compiled by CMake, not shipped by scripts/fpm_package.py: {f}" for f in sorted(compiled - shipped)] + [
+        f"shipped by scripts/fpm_package.py, not compiled by CMake: {f}" for f in sorted(shipped - compiled)
+    ]
+
+
 def check() -> int:
     """Run the checks.
 
@@ -270,6 +294,8 @@ def check() -> int:
     errors.extend(
         f"fpm.toml declares a missing program: {p}" for p in sorted(declared - on_disk)
     )
+
+    errors.extend(package_sources())
 
     for e in errors:
         print(f"check_sync: {e}", file=sys.stderr)

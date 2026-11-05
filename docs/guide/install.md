@@ -9,7 +9,9 @@ FIGURE has two layers, built separately:
 - the **native layer** (C and C++): Dear ImGui, ImPlot, cimgui, cimplot, SDL3 and FIGURE's glue, built by CMake into
   two static libraries, `lib/libfigure_native.a` and `lib/libSDL3.a`;
 - the **Fortran library** (`src/lib`), built by [FoBiS](https://github.com/szaghi/FoBiS) (the primary build) or
-  [fpm](https://fpm.fortran-lang.org). Neither compiles C++: both only link the native layer.
+  [fpm](https://fpm.fortran-lang.org). Neither compiles C++ in this repository: both only link the native layer.
+  For another fpm project, FIGURE can also be [a self-contained fpm package](#figure-as-an-fpm-dependency), where fpm
+  compiles the native layer itself.
 
 ## Requirements
 
@@ -108,6 +110,42 @@ scripts/fpm.sh test
 scripts/fpm.sh run --example figure_hello
 FPM_FC=gfortran scripts/fpm.sh test
 ```
+
+## FIGURE as an fpm dependency
+
+fpm has no build hooks, so it cannot run CMake. `scripts/fpm_package.py` writes FIGURE as a **self-contained fpm
+package** instead: the Fortran library, FIGURE's glue and the pinned Dear ImGui, ImPlot, cimgui, cimplot and miniz
+sources (only the files FIGURE compiles, copied from CMake's fetched tree, with their licences), and the files CMake
+generates (the browser page, the themes and the font, embedded). A plain `fpm build` compiles all of it; only SDL3
+comes from the system.
+
+```bash
+scripts/build_native.sh                     # once: fetches the pinned sources (build/native/_deps)
+python3 scripts/fpm_package.py ../figure-fpm
+```
+
+Then another fpm project depends on it:
+
+```toml
+[dependencies]
+figure = { path = "../figure-fpm" }
+```
+
+SDL3 is the one system library (FIGURE pins and tests SDL 3.4; the package needs SDL 3.2 or later):
+
+| Platform | SDL3 | Notes |
+|---|---|---|
+| Linux | the distribution's SDL3 development package: `libsdl3-dev` (Debian 13, Ubuntu 25.04 and later), `SDL3-devel` (Fedora) | |
+| macOS | `brew install sdl3` | `export CPATH=$(brew --prefix)/include LIBRARY_PATH=$(brew --prefix)/lib`; build with GCC's C/C++ compilers (`fpm build --c-compiler gcc-14 --cxx-compiler g++-14`), since fpm links the C++ runtime as libstdc++ |
+| Windows (MSYS2 UCRT64) | `pacman -S mingw-w64-ucrt-x86_64-sdl3` | Winsock is loaded at run time: no other library |
+
+Without a package (Ubuntu 24.04), the static SDL3 the native build installs serves:
+`FPM_CXXFLAGS=-I$PWD/include FPM_LDFLAGS="-L$PWD/lib -pthread"`.
+
+`scripts/fpm_consumer.sh` checks the whole route: it writes the package and a separate project
+(`scripts/fpm_consumer/`) depending on it, and runs that project's headless test (`--sdl-prefix .` uses the native
+build's SDL3). The Platforms workflow runs it on macOS and Windows with the system's SDL3, and on Linux with the
+native build's. `scripts/check_sync.py` checks that the package compiles the same C and C++ sources as CMake.
 
 ## Use the library
 
