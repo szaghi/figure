@@ -77,12 +77,12 @@ jobs:
       run: scripts/fpm.sh test --compiler "${FC}"
 
     # FIGURE as a plain fpm dependency of another project: fpm compiles the native layer itself, SDL3 from Homebrew.
-    # The C/C++ compilers are GCC's, like gfortran: fpm links the C++ runtime as libstdc++.
+    # The C/C++ compiler is Apple clang: on macOS fpm links the C++ runtime as libc++ (g++ objects need libstdc++).
     - name: fpm dependency (system SDL3)
       run: |
         brew install sdl3
         export CPATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib"
-        scripts/fpm_consumer.sh -- --compiler "${FC}" --c-compiler "${CC}" --cxx-compiler "${CXX}"
+        scripts/fpm_consumer.sh -- --compiler "${FC}" --c-compiler clang --cxx-compiler clang++
 
   windows:
     name: Windows (MSYS2 UCRT64 gfortran)

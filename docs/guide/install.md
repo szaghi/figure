@@ -136,7 +136,7 @@ SDL3 is the one system library (FIGURE pins and tests SDL 3.4; the package needs
 | Platform | SDL3 | Notes |
 |---|---|---|
 | Linux | the distribution's SDL3 development package: `libsdl3-dev` (Debian 13, Ubuntu 25.04 and later), `SDL3-devel` (Fedora) | |
-| macOS | `brew install sdl3` | `export CPATH=$(brew --prefix)/include LIBRARY_PATH=$(brew --prefix)/lib`; build with GCC's C/C++ compilers (`fpm build --c-compiler gcc-14 --cxx-compiler g++-14`), since fpm links the C++ runtime as libstdc++ |
+| macOS | `brew install sdl3` | `export CPATH=$(brew --prefix)/include LIBRARY_PATH=$(brew --prefix)/lib`; build the C/C++ with Apple clang (`fpm build --c-compiler clang --cxx-compiler clang++`, the default `c++` on macOS), since there fpm links the C++ runtime as libc++ |
 | Windows (MSYS2 UCRT64) | `pacman -S mingw-w64-ucrt-x86_64-sdl3` | Winsock is loaded at run time: no other library |
 
 Without a package (Ubuntu 24.04), the static SDL3 the native build installs serves:

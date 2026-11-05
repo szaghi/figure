@@ -103,10 +103,19 @@ if (test_passed(1)) then
       if (exists .or. real(t - t0, real64) / real(rate, real64) > 10.0_real64) exit
    enddo
    if (exists) then ! written atomically by the client (rename), so complete once it exists
-      open(newunit=unit, file=OK_FILE, action='read', status='old')
-      read(unit, '(A)', iostat=stat) verdict
-      if (stat /= 0_int32) verdict = 'unreadable verdict file'
-      close(unit)
+      verdict = 'unreadable verdict file'
+      call system_clock(t0)
+      do ! Windows may still hold the file just after the rename: retry the open for up to 5 s
+         open(newunit=unit, file=OK_FILE, action='read', status='old', iostat=stat)
+         if (stat == 0_int32) then
+            read(unit, '(A)', iostat=stat) verdict
+            if (stat /= 0_int32) verdict = 'unreadable verdict file'
+            close(unit)
+            exit
+         endif
+         call system_clock(t)
+         if (real(t - t0, real64) / real(rate, real64) > 5.0_real64) exit
+      enddo
    endif
 endif
 test_passed(2) = clicks == 1_int32         ! the network click reached the button, once
