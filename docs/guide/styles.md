@@ -41,7 +41,25 @@ palette is `FIG_ERR_ARGUMENT` (or a stop, without `stat`). Sizes, spacing and fo
 changed by name (below) or through the raw bindings are reset. Heatmaps are unaffected: their colormap is the one
 passed to `ip_heatmap` (the line colours of a style are a qualitative colormap, not meant for fields). In remote mode
 the browser takes the style's background too. Every picture of this documentation is recorded in the default style,
-`'seal'`.
+`'seal'`; the [gallery](#gallery) shows the others.
+
+## Gallery
+
+One program, [`docs/examples/src/gallery.F90`](https://github.com/szaghi/figure/blob/main/docs/examples/src/gallery.F90)
+(a docked layout: controls, five plotted lines, a heatmap with its colour bar), in every built-in style. The heatmap
+keeps its own colormap (Viridis) in all of them; the lines take the style's.
+
+<Media name="gallery-cycle" video alt="The gallery program switching through the seven built-in styles, one and a half seconds each" caption="The seven styles in turn: seal, seal-light, paper, high-contrast, dark, light, classic" />
+
+<div class="fig-gallery">
+<Media name="gallery-seal" alt="The gallery in the seal style: ink windows, vermilion accents" caption="seal: the default" />
+<Media name="gallery-seal-light" alt="The gallery in the seal-light style: paper windows, ink text" caption="seal-light" />
+<Media name="gallery-paper" alt="The gallery in the paper style: black on white, thin borders" caption="paper: for publication" />
+<Media name="gallery-high-contrast" alt="The gallery in the high-contrast style: white on black, yellow accents" caption="high-contrast" />
+<Media name="gallery-dark" alt="The gallery in Dear ImGui's dark style" caption="dark: Dear ImGui's" />
+<Media name="gallery-light" alt="The gallery in Dear ImGui's light style" caption="light: Dear ImGui's" />
+<Media name="gallery-classic" alt="The gallery in Dear ImGui's classic style" caption="classic: Dear ImGui's" />
+</div>
 
 ## Colours and variables by name
 

@@ -49,6 +49,8 @@ BACKGROUND = {  # the window background of each style (apply_style in native/fig
     "light": "#cccccc",
     "seal": "#14120f",
     "seal-light": "#e6e0d4",
+    "paper": "#ffffff",
+    "high-contrast": "#000000",
 }
 MARGIN = 12  # pixels around the content
 FPS = 30
@@ -247,7 +249,7 @@ def record(name: str) -> None:
             boxes = [
                 b
                 for f in shots[:: max(1, frames // 24)] + [shots[-1]]
-                if (b := bbox(f, BACKGROUND[header.get("style", STYLE)]))
+                if (b := bbox(f, BACKGROUND.get(header.get("style", STYLE), "#000000")))
             ]
             if not boxes:
                 msg = f"{name}: the frames are empty"

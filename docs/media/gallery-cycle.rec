@@ -1,0 +1,6 @@
+#! program build/docs-examples/bin/gallery
+#! args    cycle
+#! frames  315
+#! poster  10
+#! scale   960
+# the same program in the seven built-in themes, 1.5 s each (the program switches them every 45 frames)

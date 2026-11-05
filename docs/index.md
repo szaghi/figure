@@ -66,6 +66,8 @@ features:
 <Media name="tut04_live" video alt="A Jacobi iteration converging while its solution and residual history are plotted" caption="A live computation: the solver runs inside the frame loop" />
 <Media name="cb_items" alt="One plot with a shaded band, a line, markers, bars and an area to zero" caption="Lines, scatter, bars and shaded areas in one plot" />
 <Media name="remote" alt="The same interface drawn by a web browser at localhost:8080" caption="Remote mode: the program on a cluster node, the UI in a browser" />
+<Media name="gallery-cycle" video alt="One program switching through the seven built-in styles" caption="Seven built-in styles, or a theme file of your own" />
+<Media name="cb_dock" video alt="A window dragged by its title bar docks as a tab" caption="Docking: the user rearranges the windows" />
 </div>
 
 Every picture on this site is a recording of the program it describes, made by `scripts/docs_media.py`: the frames
