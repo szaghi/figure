@@ -24,7 +24,6 @@ a Markdown table and, with ``--json``, are written for the documentation's chart
 from __future__ import annotations
 
 import argparse
-import array
 import importlib.util
 import json
 import math
@@ -83,6 +82,8 @@ class Stream:
 
     messages: dict[int, int] = field(default_factory=dict)  # bytes by message kind
     counts: dict[int, int] = field(default_factory=dict)  # messages by kind
+    inflated: dict[int, int] = field(default_factory=dict)  # bytes by message kind, before deflate
+    deflated: int = 0  # messages that came deflated
     vertices: int = 0  # frame bytes in vertex buffers
     indices: int = 0  # frame bytes in index buffers
     commands: int = 0  # frame bytes in draw commands
@@ -93,18 +94,25 @@ class Stream:
     last: float = 0.0  # time of the last frame
 
 
+def list_layout(m: bytes, p: int) -> tuple[int, int, int, int, int]:
+    """A draw list at `p`: vertex, index and command counts, vertex size (12 compact, 20 float), total bytes."""
+    nv, ni, nc, flags = struct.unpack_from("<IIII", m, p)
+    stride = 12 if flags & 1 else 20
+    return nv, ni, nc, stride, 16 + nv * stride + ni * 2 + (ni % 2) * 2 + nc * 32
+
+
 def split_frame(m: bytes, st: Stream) -> None:
     """Add a frame message's parts to the totals."""
     nlists = struct.unpack_from("<I", m, 9)[0]
     p = 13
     st.headers += 13
     for _ in range(nlists):
-        nv, ni, nc = struct.unpack_from("<III", m, p)
-        st.headers += 12
-        st.vertices += nv * 20
+        nv, ni, nc, stride, n = list_layout(m, p)
+        st.headers += 16
+        st.vertices += nv * stride
         st.indices += ni * 2 + (ni % 2) * 2
         st.commands += nc * 32
-        p += 12 + nv * 20 + ni * 2 + (ni % 2) * 2 + nc * 32
+        p += n
 
 
 def record(ws: remote_client.WebSocket, st: Stream, stop: threading.Event, warm: threading.Event) -> None:
@@ -119,8 +127,13 @@ def record(ws: remote_client.WebSocket, st: Stream, stop: threading.Event, warm:
             return
         if not warm.is_set():
             continue
+        wire = len(m)
+        if m[0] == 6:  # deflated: counted as sent, analysed inflated
+            m = zlib.decompress(m[1:])
+            st.deflated += 1
         kind = m[0]
-        st.messages[kind] = st.messages.get(kind, 0) + len(m)
+        st.messages[kind] = st.messages.get(kind, 0) + wire
+        st.inflated[kind] = st.inflated.get(kind, 0) + len(m)
         st.counts[kind] = st.counts.get(kind, 0) + 1
         if kind == 1:
             now = time.monotonic()
@@ -152,32 +165,10 @@ def lists_of(m: bytes) -> list[bytes]:
     nlists = struct.unpack_from("<I", m, 9)[0]
     p, out = 13, []
     for _ in range(nlists):
-        nv, ni, nc = struct.unpack_from("<III", m, p)
-        n = 12 + nv * 20 + ni * 2 + (ni % 2) * 2 + nc * 32
+        n = list_layout(m, p)[4]
         out.append(m[p : p + n])
         p += n
     return out
-
-
-def compact(m: bytes) -> bytes:
-    """A frame with 12-byte vertices: position as int16 in 1/4 pixel, uv as uint16 (1/65535), colour unchanged."""
-    nlists = struct.unpack_from("<I", m, 9)[0]
-    p, out = 13, [m[:13]]
-    for _ in range(nlists):
-        nv, ni, nc = struct.unpack_from("<III", m, p)
-        out.append(m[p : p + 12])
-        p += 12
-        f = array.array("f")
-        f.frombytes(b"".join(m[p + 20 * i : p + 20 * i + 16] for i in range(nv)))
-        q = array.array("h", (max(-32768, min(32767, round(4.0 * v))) for v in f[0::4] + f[1::4]))
-        u = array.array("H", (max(0, min(65535, round(65535.0 * v))) for v in f[2::4] + f[3::4]))
-        cols = b"".join(m[p + 20 * i + 16 : p + 20 * i + 20] for i in range(nv))
-        out += [q.tobytes(), u.tobytes(), cols]
-        p += nv * 20
-        n = ni * 2 + (ni % 2) * 2 + nc * 32
-        out.append(m[p : p + n])
-        p += n
-    return b"".join(out)
 
 
 def analyse(frames: list[bytes]) -> dict[str, float]:
@@ -212,13 +203,6 @@ def analyse(frames: list[bytes]) -> dict[str, float]:
         else:
             zd += len(zlib.compress(m, 1))
         prev = m
-    sample = frames[:: max(1, len(frames) // 20)]  # the compact encoding is slow in Python: 20 frames
-    c_raw = sum(len(m) for m in sample)
-    c_len = c_z = 0
-    for m in sample:
-        c = compact(m)
-        c_len += len(c)
-        c_z += len(zlib.compress(c, 1))
     mb = raw / 1.0e6
     return {
         "analysed_frames": len(frames),
@@ -227,8 +211,6 @@ def analyse(frames: list[bytes]) -> dict[str, float]:
         "deflate1_ratio": raw / z1,
         "deflate6_ratio": raw / z6,
         "delta_deflate1_ratio": raw / zd,
-        "compact_ratio": c_raw / c_len,
-        "compact_deflate1_ratio": c_raw / c_z,
         "deflate1_ms_per_mb": 1000.0 * t1 / mb,
         "deflate6_ms_per_mb": 1000.0 * t6 / mb,
     }
@@ -337,7 +319,9 @@ def parse_redraw(err: str, skip: int) -> dict[str, float]:
     return tot
 
 
-def run_case(program: str, case: Case, seconds: float, env_extra: dict[str, str], sample_gpu: bool) -> dict:
+def run_case(
+    program: str, case: Case, seconds: float, env_extra: dict[str, str], sample_gpu: bool, compress: str | None
+) -> dict:
     """Run one case; return its numbers."""
     env = dict(os.environ, **env_extra)
     args = [program, *case.args, "--seconds", str(seconds), "--warmup", str(WARMUP_S)]
@@ -345,6 +329,8 @@ def run_case(program: str, case: Case, seconds: float, env_extra: dict[str, str]
     if case.remote:
         port = free_port()
         args += ["--remote", str(port)]
+        if compress:
+            args += ["--compress", compress]
     else:
         env["FIGURE_DEBUG_REDRAW"] = "1"
     proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -426,7 +412,9 @@ def stream_numbers(st: Stream, wall: float) -> dict:
         res["bytes_per_s"] = total / wall
     if nframes:
         res["bytes_per_frame"] = st.messages.get(1, 0) / nframes
-        fb = max(st.messages.get(1, 0), 1)
+        res["raw_bytes_per_frame"] = st.inflated.get(1, 0) / nframes
+        res["deflated_share"] = st.deflated / max(sum(st.counts.values()), 1)
+        fb = max(st.inflated.get(1, 0), 1)
         res["share_vertices"] = st.vertices / fb
         res["share_indices"] = st.indices / fb
         res["share_commands"] = st.commands / fb
@@ -473,8 +461,8 @@ def table(results: list[dict]) -> str:
         ("identical_list_bytes", "same lists", "{:.0%}"),
         ("deflate1_ratio", "deflate-1 x", "{:.1f}"),
         ("delta_deflate1_ratio", "delta+deflate x", "{:.1f}"),
-        ("compact_ratio", "12-byte vtx x", "{:.2f}"),
-        ("compact_deflate1_ratio", "12-byte+deflate x", "{:.1f}"),
+        ("raw_bytes_per_frame", "bytes/frame inflated", "{:,.0f}"),
+        ("deflated_share", "deflated", "{:.0%}"),
     ]
     lines = ["| " + " | ".join(h for _, h, _ in cols) + " |", "|" + "---|" * len(cols)]
     for r in results:
@@ -492,6 +480,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--json", type=Path, default=None)
     ap.add_argument("--connect", default=None, help="HOST:PORT of a program already serving (records only)")
     ap.add_argument("--pointer", action="store_true", help="with --connect: move the pointer")
+    ap.add_argument("--compress", default=None, choices=["auto", "always", "never"], help="remote compression")
     ap.add_argument("--gpu", action="store_true", help="sample GPU 0 utilisation (nvidia-smi) in window mode")
     ap.add_argument("--env", nargs="*", default=[], help="VAR=value for the program (e.g. GALLIUM_DRIVER=d3d12)")
     a = ap.parse_args(argv)
@@ -506,7 +495,7 @@ def main(argv: list[str]) -> int:
             cases = [c for c in cases if any(c.name.startswith(o) for o in a.only)]
         for c in cases:
             print(f"measuring {c.name} ...", file=sys.stderr, flush=True)
-            results.append(run_case(a.program, c, a.seconds, env, a.gpu))
+            results.append(run_case(a.program, c, a.seconds, env, a.gpu, a.compress))
     print(table(results))
     if a.json:
         a.json.write_text(json.dumps(results, indent=1))

@@ -1113,6 +1113,8 @@ void fig_set_lazy(int enabled, double max_wait_s) {
 
 void fig_set_remote_fps(double max_fps) { st.remote_min_dt = max_fps > 0.0 ? 1.0 / max_fps : 0.0; }
 
+void fig_set_remote_compress(int mode) { figure_remote::set_compression(mode); }
+
 void fig_request_frames(int n) {
    if (n > st.frames_left) st.frames_left = n;
 }

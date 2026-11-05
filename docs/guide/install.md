@@ -59,7 +59,8 @@ CC=gcc CXX=g++ scripts/build_native.sh --clean
 ```
 
 The third-party versions are pinned as a matched set: cimgui `1.93.1WIPdock` (Dear ImGui 1.93.1 WIP, docking branch),
-cimplot `v1.1` (ImPlot 1.2 WIP, generated against the same Dear ImGui 1.93 API) and SDL `release-3.4.20`. They are CMake cache variables
+cimplot `v1.1` (ImPlot 1.2 WIP, generated against the same Dear ImGui 1.93 API) and SDL `release-3.4.20`; miniz
+`3.0.2` (deflate, for the remote mode) is fetched as a release archive checked by its SHA-256. They are CMake cache variables
 (`FIGURE_CIMGUI_TAG`, `FIGURE_CIMPLOT_TAG`, `FIGURE_SDL_TAG`), but do not change one of the three alone: cimplot is
 generated against a specific cimgui.
 

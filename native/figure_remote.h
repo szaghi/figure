@@ -32,6 +32,8 @@ void texture_update(std::uint64_t id, int width, int height, const unsigned char
 void texture_destroy(std::uint64_t id);
 // The background behind the windows (the style's), sent to the client now and to every client that connects.
 void set_background(float r, float g, float b);
+// Deflate frames and textures: 0 auto (while the client has been the bottleneck in the last 5 s), 1 always, 2 never.
+void set_compression(int mode);
 // A new texture id, shared by Dear ImGui's and the user's textures.
 std::uint64_t new_texture_id();
 

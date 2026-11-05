@@ -129,6 +129,7 @@ flowchart TD
   field_ok["field_ok"] --> figure_fail["figure_fail"]
   ig_dock_split["ig_dock_split"] --> figure_fail["figure_fail"]
   ig_push_font["ig_push_font"] --> figure_fail["figure_fail"]
+  init_remote["init_remote"] --> figure_fail["figure_fail"]
   ip_image["ip_image"] --> figure_fail["figure_fail"]
   ip_spec["ip_spec"] --> figure_fail["figure_fail"]
   push_color["push_color"] --> figure_fail["figure_fail"]

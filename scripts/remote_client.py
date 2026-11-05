@@ -5,7 +5,8 @@ Run by src/tests/figure_test_remote.F90 against the program's server. Checks, in
   - the WebSocket handshake (RFC 6455): status 101 and the Sec-WebSocket-Accept of our key;
   - every message parses to its exact length: the background (r, g, b in [0, 1]), before any frame; textures
     (id, size, flags, width x height x 4 RGBA bytes) and frames
-    (draw lists of 20-byte vertices, 16-bit indices, commands), and draw commands reference received textures and
+    (draw lists of 12-byte or 20-byte vertices, 16-bit indices, commands; deflated messages inflated first: the test
+    program deflates everything), and draw commands reference received textures and
     vertices only (each command's indices count from its vertex offset);
   - a draw list over 65536 vertices arrives (the program draws a long line) and stays within those bounds; then the
     client presses Z and the program drops the line;
@@ -31,6 +32,7 @@ import struct
 import sys
 import threading
 import time
+import zlib
 from pathlib import Path
 
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -143,6 +145,8 @@ class WebSocket:
 
 
 big_lists: set[bool] = set()  # whether a draw list over 65536 vertices was seen (True), one at most (False)
+compact_lists: set[bool] = set()  # whether a list with 12-byte vertices was seen
+deflated: list[int] = [0]  # deflated messages received
 
 
 def parse_frame(m: bytes, textures: set[int]) -> tuple[float, float]:
@@ -150,9 +154,12 @@ def parse_frame(m: bytes, textures: set[int]) -> tuple[float, float]:
     w, h, nlists = struct.unpack_from("<ffI", m, 1)
     p = 13
     for _ in range(nlists):
-        nv, ni, nc = struct.unpack_from("<III", m, p)
-        ip = p + 12 + nv * 20  # the list's indices
-        p += 12 + nv * 20 + ni * 2 + (ni % 2) * 2
+        nv, ni, nc, flags = struct.unpack_from("<IIII", m, p)
+        stride = 12 if flags & 1 else 20
+        if flags & 1:
+            compact_lists.add(True)
+        ip = p + 16 + nv * stride  # the list's indices
+        p += 16 + nv * stride + ni * 2 + (ni % 2) * 2
         for _ in range(nc):
             tex, off, count, vtx = struct.unpack_from("<IIII", m, p + 16)
             if tex not in textures:
@@ -200,6 +207,12 @@ def run(port: int, click_file: Path) -> None:
     try:
         while time.monotonic() < end:
             m = ws.recv()
+            if m[0] == 6:  # deflated: a zlib stream holding one message
+                m = zlib.decompress(m[1:])
+                deflated[0] += 1
+                if m[0] == 6:
+                    msg = "a deflated message inside a deflated message"
+                    raise ProtocolError(msg)
             if m[0] == 2:
                 tid, tw, th, _ = struct.unpack_from("<IIII", m, 1)
                 if len(m) != 17 + tw * th * 4:
@@ -266,6 +279,12 @@ def run(port: int, click_file: Path) -> None:
         pass  # the program ended: expected after the click
     if frames == 0 or not textures:
         msg = f"received {frames} frames and {len(textures)} textures"
+        raise ProtocolError(msg)
+    if True not in compact_lists:
+        msg = "no draw list with 12-byte vertices arrived"
+        raise ProtocolError(msg)
+    if not deflated[0]:
+        msg = "no deflated message arrived (the test program asks for compress='always')"
         raise ProtocolError(msg)
     if True not in big_lists:
         msg = "no draw list over 65536 vertices arrived"

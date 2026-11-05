@@ -51,7 +51,7 @@ frames = 0_int32
 written = .false.
 test_passed = .false.
 verdict = 'no verdict'
-call app%init_remote(port=0_int32, port_used=port, quiet=.true., stat=stat)
+call app%init_remote(port=0_int32, port_used=port, quiet=.true., compress='always', stat=stat) ! the client inflates all
 test_passed(1) = stat == 0_int32 .and. port > 0_int32
 if (test_passed(1)) then
    call get_environment_variable('OS', os)

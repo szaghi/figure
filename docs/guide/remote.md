@@ -23,7 +23,7 @@ Try it with the example: `exe/figure_hello --remote 8080`, then open `http://loc
 
 ## init_remote
 
-`app%init_remote([port] [, host] [, width, height] [, port_used] [, quiet] [, max_fps] [, stat])`:
+`app%init_remote([port] [, host] [, width, height] [, port_used] [, quiet] [, max_fps] [, compress] [, stat])`:
 
 | Argument | Meaning |
 |---|---|
@@ -33,6 +33,7 @@ Try it with the example: `exe/figure_hello --remote 8080`, then open `http://loc
 | `port_used` | the port listened on |
 | `quiet` | do not print the address to open |
 | `max_fps` | most frames per second (default 60; `0`: no cap): a browser has no vsync to pace the program |
+| `compress` | deflate frames and textures: `'auto'` (default) only while the browser cannot keep up, `'always'`, `'never'` |
 | `stat` | `FIG_ERR_FAILED` if the port cannot be opened (in use, not permitted) |
 
 Everything else is unchanged: widgets, plots, heatmaps, textures (sent to the browser when they change), lazy redraw
@@ -65,37 +66,44 @@ shared machine.
 
 ## Bandwidth
 
-A frame carries the complete draw lists: about **110 KB** for a window of widgets and a 1000-point line, of which 86 %
-are vertices; the font atlas (**256 KB**) goes once per connection. **A frame equal to the last one sent is not sent
-again**: the server says "unchanged" at most once per second instead, so the browser knows the program is alive.
-Textures (`texture_object`) are sent only when `tex%update` changes them.
+A frame carries the complete draw lists, in a compact form: 12 bytes per vertex (position to 1/4 pixel, texture
+coordinates to 1/65535) instead of Dear ImGui's 20. A window of widgets and a 1000-point line is about **71 KB**; the
+font atlas (256 KB) goes once per connection. What keeps the traffic down:
 
-Measured with `scripts/measure_redraw.py` (the program `figure_bench_redraw`, 10 s per case):
+- **A frame equal to the last one sent is not sent again**: the server says "unchanged" at most once per second, so
+  the browser knows the program is alive. An idle interface costs nothing.
+- **Frames are capped** at `max_fps` (60) per second, and **one frame at most is queued**: a slow link gets the newest
+  frame, never a backlog.
+- **Deflate**, when the link is the bottleneck (`compress='auto'`): frames shrink 2.5 to 3.5 times more, for about
+  7 ms of CPU per MB (0.4 ms for that 71 KB frame). On a fast link it stays off, since it would only cost CPU.
+- Textures (`texture_object`) are sent only when `tex%update` changes them.
 
-| what the program does | sent before skipping | sent now |
-|---|---|---|
-| nothing (idle, refreshing twice a second) | 216 KB/s | **1 byte/s** |
-| the user moves the pointer over it | 25.8 MB/s | 4.8 MB/s |
-| live data, 1 update per second | 107 KB/s | 107 KB/s |
-| live data, 10 updates per second | 1.07 MB/s | 1.07 MB/s |
-| live data, 60 updates per second | 6.6 MB/s | 3.3 MB/s |
+Measured with `scripts/measure_redraw.py` (the program `figure_bench_redraw`, remote mode on the same machine, 8–10 s
+per case), from the first version of remote mode to now:
 
-So an idle interface costs nothing, and live data costs what it changes: one frame per update. While the user
-interacts, the cap holds the frames to 60 per second.
+| what the program does | first version | now | now, deflated |
+|---|---|---|---|
+| nothing (idle, refreshing twice a second) | 216 KB/s | **1 byte/s** | |
+| the user moves the pointer over it | 25.8 MB/s (238 frames/s) | 3.1 MB/s (60 frames/s) | 1.2 MB/s |
+| live data, 10 updates per second | 1.07 MB/s | 0.71 MB/s | 0.28 MB/s |
+| live data, 60 updates per second | 6.6 MB/s | 4.2 MB/s | 1.7 MB/s |
+| a 100 000-point line, 10 updates per second | 9.2 MB per frame | 6.0 MB | 1.7 MB |
+| a 256 × 256 heatmap, 10 updates per second | 6.0 MB per frame | 3.9 MB | 1.2 MB |
 
-Through an SSH tunnel from an office to a cluster node (about 9 MB/s on that link): live data at 60 updates per
-second arrives at 60 frames per second (6.5 MB/s); interacting, 45 frames per second; a 100 000-point line (9 MB per
-frame) arrives at one frame per second, always the newest one. Large data is large
-on the wire too: a 100 000-point line is about 9 MB per frame, a 256 × 256 heatmap 6 MB, a 3840 × 2160 texture 33 MB
-per update; on a slow link, decimate what you plot, or show a field as a texture at the size it is displayed.
+Through an SSH tunnel from an office to a cluster node (about 9 MB/s on that link), with the defaults: live data at
+60 updates per second arrives at 60 frames per second (4.2 MB/s, no deflate needed); interacting, 45 frames per
+second; the 100 000-point line at 5 frames per second, deflated (1 frame per second without deflate), always the
+newest. Large data stays large on the wire: on a slow link, decimate what you plot, or show a big field as a texture
+at the size it is displayed (a 3840 × 2160 texture is 33 MB per update before deflate).
 
 ## How it works
 
 The native layer contains a minimal HTTP and WebSocket server (RFC 6455, one client, non-blocking sockets on POSIX and
 Winsock). `GET /` answers the client page, embedded in the library; `GET /ws` upgrades to a WebSocket. After each
 frame the server sends, as binary messages, the textures Dear ImGui created or changed (RGBA, with their filtering)
-and the draw lists (20-byte vertices, 16-bit indices, commands with clip rectangle, texture, index range and vertex offset, so a
-window may hold more than 65 536 vertices, as a long plotted line does), unless they equal the last ones sent; on
+and the draw lists (12-byte vertices, or 20-byte ones for a list reaching beyond ±8191 pixels; 16-bit indices;
+commands with clip rectangle, texture, index range and vertex offset, so a window may hold more than 65 536
+vertices, as a long plotted line does), unless they equal the last ones sent, deflated when compression is on; on
 connection, and when the [style](styles) changes, it also sends the background colour. The page draws
 them with WebGL, exactly as the OpenGL backend draws a window, and sends input events back as short text messages. The protocol is described at the top of `native/figure_remote.cpp`.
 

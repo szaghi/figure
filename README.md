@@ -62,6 +62,6 @@ it is a property of the machine, and wrong outside WSL.
 
 ## Copyrights
 
-FIGURE is released under the [MIT licence](LICENSE.mit.md). Its native layer compiles Dear ImGui, ImPlot, cimgui and
-cimplot (MIT), SDL3 (zlib) and embeds the IBM Plex Sans font (OFL-1.1): see [THIRD_PARTY.md](THIRD_PARTY.md) for what a program built with FIGURE must carry
+FIGURE is released under the [MIT licence](LICENSE.mit.md). Its native layer compiles Dear ImGui, ImPlot, cimgui,
+cimplot and miniz (MIT), SDL3 (zlib) and embeds the IBM Plex Sans font (OFL-1.1): see [THIRD_PARTY.md](THIRD_PARTY.md) for what a program built with FIGURE must carry
 when it is distributed.

@@ -13,7 +13,8 @@ program figure_bench_redraw
 !< - `texture`: a `--width` x `--height` texture (default 3840 x 2160), new pixels `--rate` times per second.
 !<
 !< Options: `--rate R` updates per second (default 10; 0: never), `--seconds S` measured time (default 10), after
-!< `--warmup W` seconds not measured (default 2), `--remote PORT` serve to a browser instead of opening a window.
+!< `--warmup W` seconds not measured (default 2), `--remote PORT` serve to a browser instead of opening a window,
+!< `--compress auto|always|never` its compression (default auto).
 !< Lazy redraw stays on (the default): the program wakes every 1/R s to publish new data, as a live computation would.
 !<
 !< When the warm-up ends it prints `bench warm` (the harness starts counting CPU time there); at the end it prints
@@ -59,6 +60,7 @@ integer(int32)             :: updates                !< Data updates.
 integer(int32)             :: i                      !< Counter.
 integer(int32)             :: j                      !< Counter.
 character(len=64)          :: line                   !< Text buffer.
+character(len=8)           :: compress               !< Remote compression: auto, always, never.
 
 call parse_arguments()
 allocate(x(points), y(points))
@@ -68,7 +70,7 @@ flag = .true.
 updates = 0_int32
 call update_data()
 if (port >= 0_int32) then
-   call app%init_remote(port=port, width=1280_int32, height=800_int32, quiet=.true.)
+   call app%init_remote(port=port, width=1280_int32, height=800_int32, quiet=.true., compress=trim(compress))
 else
    call app%init('FIGURE: redraw benchmark', 1280_int32, 800_int32)
 endif
@@ -134,6 +136,7 @@ contains
    rate = -1.0_real64
    seconds = 10.0_real64
    warmup = 2.0_real64
+   compress = 'auto'
    port = -1_int32
    points = 1000_int32
    cells = 256_int32
@@ -161,6 +164,8 @@ contains
          read(line, *) seconds
       case ('--warmup')
          read(line, *) warmup
+      case ('--compress')
+         compress = line
       case ('--remote')
          read(line, *) port
       case ('--points')

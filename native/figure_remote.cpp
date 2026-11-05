@@ -2,8 +2,10 @@
 //
 // One client at a time. GET / answers the client page; GET /ws upgrades to a WebSocket. Server to client: binary
 // messages, little-endian (the client is JavaScript on little-endian hardware):
-//   1 frame:    u8 1, f32 display_w, display_h, u32 lists; per list: u32 vtx_count, idx_count, cmd_count,
-//               vtx_count x ImDrawVert (f32 x, y, u, v, u32 rgba), idx_count x u16 (padded to 4 bytes),
+//   1 frame:    u8 1, f32 display_w, display_h, u32 lists; per list: u32 vtx_count, idx_count, cmd_count, flags,
+//               the vertices: if flags bit 0, compact, vtx_count x (i16 x, y in 1/4 pixel, u16 u, v in 1/65535,
+//               u32 rgba) = 12 bytes, else vtx_count x ImDrawVert (f32 x, y, u, v, u32 rgba) = 20 bytes (a list
+//               with a position beyond +-8191 pixels or a uv outside [0, 1]); idx_count x u16 (padded to 4 bytes),
 //               cmd_count x (f32 clip x1, y1, x2, y2, u32 texture, idx_offset, elem_count, vtx_offset): each
 //               command draws elem_count indices from idx_offset, every index counted from vertex vtx_offset (a
 //               list may hold more than 65536 vertices: Dear ImGui then starts a new vertex range, the 16-bit
@@ -12,6 +14,8 @@
 //               RGBA bytes (created or replaced)
 //   3 destroy:  u8 3, u32 id
 //   4 background: u8 4, f32 r, g, b (0 to 1): the colour behind the windows (sent on connection and on change)
+//   6 deflated: u8 6, then a zlib stream (RFC 1950) holding one message of the kinds above: frames and textures
+//               are deflated when compression is on (always, or in auto mode while the client is the bottleneck)
 //   5 unchanged: u8 5: the frame equals the last one sent, which is not sent again; at most once per second, so the
 //               client knows the program is alive (an idle interface sends nothing else)
 // Client to server: text messages, one event each: "m:x,y" mouse position, "b:button,down", "w:dx,dy" wheel,
@@ -20,10 +24,12 @@
 #include "figure_remote.h"
 
 #include "imgui.h"
+#include "miniz.h"
 
 #include <algorithm>
 #include <chrono>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -150,6 +156,8 @@ struct server_t {
    std::string                             last_frame;     // the last frame message sent, to skip repeats
    size_t                                  unsent_frame = 0; // bytes of the last frame still in the client's queue
    bool                                    pending = false;  // a frame was skipped while the queue was busy
+   int                                     compress = 0;     // 0 auto, 1 always, 2 never
+   std::chrono::steady_clock::time_point   last_skip;        // when a frame was last skipped for a busy queue
    std::chrono::steady_clock::time_point   last_sent;      // when a message last went to the client
    float                                   background[3] = {0.10f, 0.10f, 0.11f}; // behind the windows
 #ifdef _WIN32
@@ -207,10 +215,55 @@ std::string background_message() {
    return m;
 }
 
+// Compression on now: always, never, or (auto) while the client has been the bottleneck in the last 5 s.
+bool compressing() {
+   if (sv.compress != 0) return sv.compress == 1;
+   return sv.last_skip.time_since_epoch().count() != 0 &&
+          std::chrono::steady_clock::now() - sv.last_skip < std::chrono::seconds(5);
+}
+
+// A message as sent: deflated (kind 6) when compression is on and it pays, else as it is.
+std::string wire(const std::string &m) {
+   if (m.size() < 1024 || !compressing()) return m;
+   mz_ulong n = mz_compressBound(static_cast<mz_ulong>(m.size()));
+   std::string z(1 + static_cast<size_t>(n), '\0');
+   z[0] = 6;
+   if (mz_compress2(reinterpret_cast<unsigned char *>(&z[1]), &n, reinterpret_cast<const unsigned char *>(m.data()),
+                    static_cast<mz_ulong>(m.size()), 1) != MZ_OK || 1 + n >= m.size())
+      return m;
+   z.resize(1 + static_cast<size_t>(n));
+   return z;
+}
+
+// A list's vertices in 12 bytes each, if every position fits in +-8191.75 pixels at 1/4 pixel and every uv in [0, 1].
+bool compact_vertices(const ImDrawList *l, std::string &out) {
+   const ImDrawVert *v = l->VtxBuffer.Data;
+   const int n = l->VtxBuffer.Size;
+   for (int i = 0; i < n; ++i)
+      if (!(std::fabs(v[i].pos.x) <= 8191.75f && std::fabs(v[i].pos.y) <= 8191.75f && v[i].uv.x >= 0.0f &&
+            v[i].uv.x <= 1.0f && v[i].uv.y >= 0.0f && v[i].uv.y <= 1.0f))
+         return false;
+   const size_t at = out.size();
+   out.resize(at + 12u * static_cast<size_t>(n));
+   char *p = &out[at];
+   for (int i = 0; i < n; ++i, p += 12) {
+      const std::int16_t x = static_cast<std::int16_t>(std::lround(v[i].pos.x * 4.0f));
+      const std::int16_t y = static_cast<std::int16_t>(std::lround(v[i].pos.y * 4.0f));
+      const std::uint16_t u = static_cast<std::uint16_t>(std::lround(v[i].uv.x * 65535.0f));
+      const std::uint16_t w = static_cast<std::uint16_t>(std::lround(v[i].uv.y * 65535.0f));
+      std::memcpy(p, &x, 2);
+      std::memcpy(p + 2, &y, 2);
+      std::memcpy(p + 4, &u, 2);
+      std::memcpy(p + 6, &w, 2);
+      std::memcpy(p + 8, &v[i].col, 4);
+   }
+   return true;
+}
+
 void send_texture(std::uint64_t id) {
    connection_t *c = client();
    const auto t = sv.textures.find(id);
-   if (c && t != sv.textures.end()) ws_append(*c, 2, texture_message(id, t->second));
+   if (c && t != sv.textures.end()) ws_append(*c, 2, wire(texture_message(id, t->second)));
 }
 
 void flush(connection_t &c) {
@@ -514,6 +567,8 @@ bool frame_pending() { return sv.pending; }
 
 bool queue_busy() { return sv.unsent_frame > 0; }
 
+void set_compression(int mode) { sv.compress = mode; }
+
 std::uint64_t new_texture_id() { return sv.next_id++; }
 
 void set_background(float r, float g, float b) {
@@ -569,7 +624,7 @@ void send_frame(ImDrawData *dd) {
    if (!c) return;
    if (sv.resend) { // a new client: the background and every live texture first
       ws_append(*c, 2, background_message());
-      for (const auto &t : sv.textures) ws_append(*c, 2, texture_message(t.first, t.second));
+      for (const auto &t : sv.textures) ws_append(*c, 2, wire(texture_message(t.first, t.second)));
       sv.resend = false;
       sv.last_frame.clear(); // the new client has no frame yet
       sv.unsent_frame = 0;
@@ -577,6 +632,7 @@ void send_frame(ImDrawData *dd) {
    }
    if (sv.unsent_frame > 0) { // the previous frame is still queued: skip this one, the next (latest) goes instead
       sv.pending = true;
+      sv.last_skip = std::chrono::steady_clock::now();
       flush(*c);
       return;
    }
@@ -592,7 +648,14 @@ void send_frame(ImDrawData *dd) {
       put<std::uint32_t>(m, static_cast<std::uint32_t>(l->VtxBuffer.Size));
       put<std::uint32_t>(m, static_cast<std::uint32_t>(l->IdxBuffer.Size));
       put<std::uint32_t>(m, ncmd);
-      m.append(reinterpret_cast<const char *>(l->VtxBuffer.Data), static_cast<size_t>(l->VtxBuffer.Size) * sizeof(ImDrawVert));
+      const size_t flags_at = m.size();
+      put<std::uint32_t>(m, 0u);
+      if (compact_vertices(l, m)) {
+         const std::uint32_t compact = 1u;
+         std::memcpy(&m[flags_at], &compact, 4);
+      } else {
+         m.append(reinterpret_cast<const char *>(l->VtxBuffer.Data), static_cast<size_t>(l->VtxBuffer.Size) * sizeof(ImDrawVert));
+      }
       m.append(reinterpret_cast<const char *>(l->IdxBuffer.Data), static_cast<size_t>(l->IdxBuffer.Size) * sizeof(ImDrawIdx));
       if (l->IdxBuffer.Size % 2) put<std::uint16_t>(m, 0); // keep the commands 4-byte aligned
       for (const ImDrawCmd &cmd : l->CmdBuffer) {
@@ -617,7 +680,7 @@ void send_frame(ImDrawData *dd) {
       flush(*c);
       return;
    }
-   ws_append(*c, 2, m);
+   ws_append(*c, 2, wire(m));
    sv.unsent_frame = c->out.size(); // the frame ends the queue: sent once the queue empties up to its end
    sv.pending = false;
    sv.last_frame = std::move(m);

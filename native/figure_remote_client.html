@@ -23,9 +23,10 @@ const gl = canvas.getContext("webgl", { alpha: false, antialias: false, premulti
 const textures = new Map();
 let ws = null, frames = 0, lastFrame = null, background = [0.10, 0.10, 0.11];
 
-const vs = `attribute vec2 pos; attribute vec2 uv; attribute vec4 col; uniform vec2 scale;
+const vs = `attribute vec2 pos; attribute vec2 uv; attribute vec4 col; uniform vec2 scale; uniform float unit;
   varying vec2 v_uv; varying vec4 v_col;
-  void main() { v_uv = uv; v_col = col; gl_Position = vec4(pos.x * scale.x - 1.0, 1.0 - pos.y * scale.y, 0.0, 1.0); }`;
+  void main() { v_uv = uv; v_col = col; vec2 p = pos * unit;
+                gl_Position = vec4(p.x * scale.x - 1.0, 1.0 - p.y * scale.y, 0.0, 1.0); }`;
 const fs = `precision mediump float; uniform sampler2D tex; varying vec2 v_uv; varying vec4 v_col;
   void main() { gl_FragColor = v_col * texture2D(tex, v_uv); }`;
 function shader(type, src) {
@@ -37,7 +38,8 @@ const prog = gl.createProgram();
 gl.attachShader(prog, shader(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, fs));
 gl.linkProgram(prog); gl.useProgram(prog);
 const loc = { pos: gl.getAttribLocation(prog, "pos"), uv: gl.getAttribLocation(prog, "uv"),
-              col: gl.getAttribLocation(prog, "col"), scale: gl.getUniformLocation(prog, "scale") };
+              col: gl.getAttribLocation(prog, "col"), scale: gl.getUniformLocation(prog, "scale"),
+              unit: gl.getUniformLocation(prog, "unit") };
 const vbo = gl.createBuffer(), ibo = gl.createBuffer();
 
 function setTexture(id, w, h, linear, pixels) {
@@ -69,9 +71,11 @@ function draw(buf) {
   const sx = canvas.width / dw, sy = canvas.height / dh;
   let p = 13;
   for (let l = 0; l < nlists; ++l) {
-    const nv = dv.getUint32(p, true), ni = dv.getUint32(p + 4, true), nc = dv.getUint32(p + 8, true); p += 12;
+    const nv = dv.getUint32(p, true), ni = dv.getUint32(p + 4, true), nc = dv.getUint32(p + 8, true);
+    const compact = (dv.getUint32(p + 12, true) & 1) !== 0, stride = compact ? 12 : 20; p += 16;
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(buf, p, nv * 20), gl.STREAM_DRAW); p += nv * 20;
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(buf, p, nv * stride), gl.STREAM_DRAW); p += nv * stride;
+    gl.uniform1f(loc.unit, compact ? 0.25 : 1.0); // compact positions are in 1/4 pixel
     let base = -1; // the vertex the attributes start at: indices are 16-bit, relative to each command's vtx_offset
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(buf, p, ni * 2), gl.STREAM_DRAW);
@@ -89,17 +93,36 @@ function draw(buf) {
       gl.bindTexture(gl.TEXTURE_2D, t);
       if (vtx !== base) { // WebGL has no base vertex: point the attributes at the command's vertex range
         base = vtx;
-        gl.enableVertexAttribArray(loc.pos); gl.vertexAttribPointer(loc.pos, 2, gl.FLOAT, false, 20, vtx * 20);
-        gl.enableVertexAttribArray(loc.uv); gl.vertexAttribPointer(loc.uv, 2, gl.FLOAT, false, 20, vtx * 20 + 8);
-        gl.enableVertexAttribArray(loc.col); gl.vertexAttribPointer(loc.col, 4, gl.UNSIGNED_BYTE, true, 20, vtx * 20 + 16);
+        const at = vtx * stride;
+        gl.enableVertexAttribArray(loc.pos); gl.enableVertexAttribArray(loc.uv); gl.enableVertexAttribArray(loc.col);
+        if (compact) { // i16 x, y; u16 u, v (normalized); u32 rgba
+          gl.vertexAttribPointer(loc.pos, 2, gl.SHORT, false, 12, at);
+          gl.vertexAttribPointer(loc.uv, 2, gl.UNSIGNED_SHORT, true, 12, at + 4);
+          gl.vertexAttribPointer(loc.col, 4, gl.UNSIGNED_BYTE, true, 12, at + 8);
+        } else {
+          gl.vertexAttribPointer(loc.pos, 2, gl.FLOAT, false, 20, at);
+          gl.vertexAttribPointer(loc.uv, 2, gl.FLOAT, false, 20, at + 8);
+          gl.vertexAttribPointer(loc.col, 4, gl.UNSIGNED_BYTE, true, 20, at + 16);
+        }
       }
       gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, off * 2);
     }
   }
 }
 
+// Messages are handled in arrival order; a deflated one (kind 6) is inflated first, asynchronously.
+let queue = Promise.resolve();
 function onMessage(ev) {
-  const buf = ev.data, kind = new Uint8Array(buf, 0, 1)[0], dv = new DataView(buf);
+  queue = queue.then(() => {
+    const kind = new Uint8Array(ev.data, 0, 1)[0];
+    if (kind !== 6) return handle(ev.data);
+    const inflated = new Blob([new Uint8Array(ev.data, 1)]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return new Response(inflated).arrayBuffer().then(handle);
+  }).catch(err => { status.textContent = "error: " + err; });
+}
+
+function handle(buf) {
+  const kind = new Uint8Array(buf, 0, 1)[0], dv = new DataView(buf);
   if (kind === 1) { lastFrame = buf; draw(buf); status.textContent = "frame " + (++frames); }
   else if (kind === 2) { // a texture changed: the frame using it may be unchanged, so not sent again: redraw it
     setTexture(dv.getUint32(1, true), dv.getUint32(5, true), dv.getUint32(9, true),
