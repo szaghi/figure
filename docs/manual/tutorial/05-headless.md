@@ -19,9 +19,9 @@ procedure in headless mode and clicks its button with synthetic mouse input.
   server.
 - Every iteration is a frame: `next_frame` delivers the input queued before it, then `draw_panel` declares the
   panel, and `ig_item_rect` (inside it) records where the button is.
-- `test_click(x, y)`, from the module `figure_testing`, queues a click there after the first frame: the move, the
-  press and the release reach the panel over the next frames, as a real click would, and `ig_button` returns
-  `.true.` once.
+- `test_click(x, y)`, from the module `figure_testing`, queues a click there after the first frame: the move, a
+  frame with the pointer resting on the button, the press and the release reach the panel over the next four frames,
+  as a real click would, and `ig_button` returns `.true.` once. Leave a test enough frames after its last input.
 - The program checks the count and stops with an error otherwise, so a test runner sees the failure in the exit
   status.
 

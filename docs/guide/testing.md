@@ -28,7 +28,7 @@ the input reaches the widgets there. A test queues, draws a few frames, then che
 
 | Procedure | Queues |
 |---|---|
-| `test_click(x, y [, button] [, stat])` | a click at (x, y): move, press, release (`button`: `'left'`, default, `'right'`, `'middle'`) |
+| `test_click(x, y [, button] [, stat])` | a click at (x, y): move, a frame resting there, press, release (`button`: `'left'`, default, `'right'`, `'middle'`) |
 | `test_drag(x0, y0, x1, y1 [, stat])` | a drag with the left button: a slider grab moved, a window dragged by its title bar |
 | `test_mouse_move(x, y [, stat])`, `test_mouse_button(down [, button] [, stat])` | the parts of a click, one by one |
 | `test_wheel(dy [, dx] [, stat])` | a turn of the wheel; positive `dy` away from the user (zoom in, in a plot) |
@@ -65,9 +65,9 @@ Coordinates are display pixels, as `ig_item_rect` gives them. The module works i
 display, so tests run in CI as is. It is a separate module: `use figure_testing` where the tests are, `use figure` in
 the application.
 
-A tab of a tab bar takes a press only after the pointer has rested on it for a frame (Dear ImGui's rule for items
-that may overlap), while `test_click` moves and presses on consecutive frames: move to the tab first (`test_mouse_move`),
-then click it a few frames later.
+`test_click` and `test_drag` let the pointer rest one frame on the item before pressing, as a user's hand does:
+Dear ImGui's tabs (and other items that may overlap) take a press only once they were hovered in the frame before. A
+click therefore lands over the next four frames (move, rest, press, release), a drag over the next five.
 
 To replace the text of a field, select it with keys every platform reads alike: `end`, then `home` with `shift` held.
 Select-all is `ctrl+a` on Linux and Windows but `cmd+a` on macOS (Dear ImGui follows the platform), so a test that

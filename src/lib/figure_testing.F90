@@ -64,7 +64,8 @@ contains
    endsubroutine test_mouse_button
 
    subroutine test_click(x, y, button, stat)
-   !< Queue a click at (x, y): a move, a press and a release, applied over the next three frames.
+   !< Queue a click at (x, y): a move, a frame with the pointer resting there (as a user's hand does: Dear ImGui's
+   !< tabs take a press only once hovered), a press and a release, applied over the next four frames.
    real(real64),     intent(in)            :: x      !< Abscissa [pixels].
    real(real64),     intent(in)            :: y      !< Ordinate [pixels].
    character(len=*), intent(in),  optional :: button !< `'left'` (default), `'right'` or `'middle'`.
@@ -76,6 +77,8 @@ contains
       return
    endif
    call figure_check(fig_input_mouse_pos(real(x, c_float), real(y, c_float)), stat)
+   call figure_check(fig_input_next_frame(), stat) ! the pointer rests one frame on the item: items that may overlap
+   call figure_check(fig_input_next_frame(), stat) ! (tabs) take a press only once hovered in the frame before
    call figure_check(fig_input_mouse_button(b, 1_c_int), stat)
    call figure_check(fig_input_mouse_button(b, 0_c_int), stat)
    endsubroutine test_click
@@ -89,6 +92,8 @@ contains
    integer(int32), intent(out), optional :: stat !< Status.
 
    call figure_check(fig_input_mouse_pos(real(x0, c_float), real(y0, c_float)), stat)
+   call figure_check(fig_input_next_frame(), stat) ! the pointer rests one frame on the item before the press, as in
+   call figure_check(fig_input_next_frame(), stat) ! test_click
    call figure_check(fig_input_mouse_button(0_c_int, 1_c_int), stat)
    call figure_check(fig_input_next_frame(), stat) ! the press is seen at the start before the mouse moves
    call figure_check(fig_input_mouse_pos(real(x1, c_float), real(y1, c_float)), stat)

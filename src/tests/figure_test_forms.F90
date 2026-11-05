@@ -196,10 +196,8 @@ do frame = 1_int32, FRAMES
       hdr_open(1) = is_open
       tab_sel(:, 1) = sel
       call test_click(hdr_at(1), hdr_at(2))
-   case (144_int32)                                  ! tabs take a press only once hovered (Dear ImGui's overlap rule)
-      call test_mouse_move(tab_at(1), tab_at(2))
-   case (148_int32)
-      call test_click(tab_at(1), tab_at(2))
+   case (146_int32)
+      call test_click(tab_at(1), tab_at(2))           ! a tab: test_click lets the pointer rest on it first
    case (152_int32)
       call test_click(row_at(1), row_at(2))
       call test_type('two')
