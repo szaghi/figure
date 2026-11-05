@@ -69,3 +69,40 @@ multiplied by the display's content scale ([Content scale](frame-loop#content-sc
 
 A change applies to everything drawn afterwards, globally, until it is changed again; `app%set_style` resets them
 all to the named style.
+
+## Theme files
+
+Every named style is a small text file in the repository, `themes/<name>.toml`, embedded in the library when the
+native layer is built: adding a file there adds a style. The format is a subset of TOML:
+
+```toml
+# FIGURE theme "seal": ink windows, paper text, one vermilion (the default).
+base = "dark"                                  # dark | light | classic: the Dear ImGui style it starts from
+background = "#14120f"                         # behind the windows (default: the base's)
+lines = ["#e8664c", "#e9e2d4", "#c9a25a"]      # ImPlot's line colours, in order (default: ImPlot's Deep)
+
+[imgui.vars]                                   # ImGuiStyle fields: a number, [x, y], true or false
+WindowRounding = 0
+FramePadding = [4, 3]
+
+[imgui.colors]                                 # ImGuiCol_* names: "#rrggbb", "#rrggbbaa" or ["#rrggbb", alpha]
+Text = "#f6f2ea"
+PopupBg = ["#1c1915", 0.97]
+
+[implot.vars]                                  # ImPlotStyle fields
+[implot.colors]                                # ImPlotCol_* names
+```
+
+- Names are those of [colours and variables by name](#colours-and-variables-by-name); `#` starts a comment.
+- Everything not given comes from `base`: a theme lists only what it changes, and a newer Dear ImGui adding style
+  colours never leaves a theme incomplete.
+- Sizes are in logical pixels, multiplied by the display's content scale when the theme is applied.
+- ImPlot's colours not given are derived from Dear ImGui's (ImPlot's automatic colours), so a theme that sets only
+  Dear ImGui colours gives matching plots.
+- A malformed file is reported with its line: `themes/x.toml:12: unknown Dear ImGui colour "Buton"`.
+
+The built-in themes: [`seal`](https://github.com/szaghi/figure/blob/main/themes/seal.toml),
+[`seal-light`](https://github.com/szaghi/figure/blob/main/themes/seal-light.toml),
+[`dark`](https://github.com/szaghi/figure/blob/main/themes/dark.toml),
+[`light`](https://github.com/szaghi/figure/blob/main/themes/light.toml),
+[`classic`](https://github.com/szaghi/figure/blob/main/themes/classic.toml).

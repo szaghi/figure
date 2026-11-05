@@ -1,0 +1,4 @@
+# FIGURE theme "classic": Dear ImGui's classic style, with ImPlot's default line colours.
+# Format: docs/guide/styles.md#theme-files.
+
+base = "classic"

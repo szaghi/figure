@@ -1,0 +1,5 @@
+# FIGURE theme "light": Dear ImGui's light style, with ImPlot's default line colours.
+# Format: docs/guide/styles.md#theme-files.
+
+base = "light"
+background = "#cccccc"

@@ -1,0 +1,76 @@
+# FIGURE theme "seal": ink windows, paper text, one vermilion (the default).
+# Vermilion is spent on what the user touches (slider grabs, check marks, pressed buttons) and on the first line.
+# Format: docs/guide/styles.md#theme-files. Entries not given come from `base`.
+
+base = "dark"
+background = "#14120f"
+lines = ["#e8664c", "#e9e2d4", "#c9a25a", "#7f9cb0", "#8fa06a", "#a77a95", "#d98b6a", "#a3998c"]
+
+[imgui.vars]
+# the seal's edges are cut straight: no rounding anywhere
+WindowRounding = 0
+ChildRounding = 0
+FrameRounding = 0
+PopupRounding = 0
+ScrollbarRounding = 0
+GrabRounding = 0
+TabRounding = 0
+
+[imgui.colors]
+Text = "#f6f2ea"
+TextDisabled = "#8a8278"
+WindowBg = "#1c1915"
+ChildBg = ["#1c1915", 0.0]
+PopupBg = ["#1c1915", 0.97]
+Border = "#3a332c"
+BorderShadow = ["#000000", 0.0]
+FrameBg = "#2a2520"
+FrameBgHovered = "#3a322b"
+FrameBgActive = "#4a4038"
+TitleBg = "#14120f"
+TitleBgActive = "#2a2520"
+TitleBgCollapsed = "#14120f"
+MenuBarBg = "#14120f"
+ScrollbarBg = "#1c1915"
+ScrollbarGrab = "#3a332c"
+ScrollbarGrabHovered = "#4a4038"
+ScrollbarGrabActive = "#5a4e44"
+CheckMark = "#f08a72"
+SliderGrab = "#d9442c"
+SliderGrabActive = "#f08a72"
+Button = "#3a322b"
+ButtonHovered = "#952414"
+ButtonActive = "#c8321e"
+Header = "#3a322b"
+HeaderHovered = "#3a322b"
+HeaderActive = "#4a4038"
+Separator = "#3a332c"
+SeparatorHovered = ["#d9442c", 0.78]
+SeparatorActive = "#d9442c"
+ResizeGrip = ["#d9442c", 0.20]
+ResizeGripHovered = ["#d9442c", 0.67]
+ResizeGripActive = ["#d9442c", 0.95]
+InputTextCursor = "#f6f2ea"
+Tab = "#2a2520"
+TabHovered = "#3a322b"
+TabSelected = "#4a4038"
+TabSelectedOverline = "#d9442c"
+TabDimmed = "#14120f"
+TabDimmedSelected = "#2a2520"
+TabDimmedSelectedOverline = "#3a332c"
+PlotLines = "#e9e2d4"
+PlotLinesHovered = "#f08a72"
+PlotHistogram = "#c9a25a"
+PlotHistogramHovered = "#f08a72"
+TableHeaderBg = "#2a2520"
+TableBorderStrong = "#3a332c"
+TableBorderLight = "#2a2520"
+TextLink = "#f08a72"
+TextSelectedBg = ["#d9442c", 0.35]
+TreeLines = "#3a332c"
+DragDropTarget = "#f08a72"
+DragDropTargetBg = ["#d9442c", 0.10]
+UnsavedMarker = "#f6f2ea"
+NavCursor = "#f08a72"
+DockingPreview = ["#d9442c", 0.55]
+DockingEmptyBg = "#14120f"

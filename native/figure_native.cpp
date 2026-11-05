@@ -2,6 +2,7 @@
 #include "figure_native.h"
 #include "figure_remote.h"
 #include "figure_style.h"
+#include "figure_theme.h"
 
 #include "imgui.h"
 #include "imgui_internal.h" // DockBuilder*: Dear ImGui keeps the dock builder internal
@@ -330,156 +331,6 @@ void destroy_contexts() {
    if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
 }
 
-// ---- Styles ---------------------------------------------------------------------------------------------------
-// A style sets Dear ImGui's colours, ImPlot's (derived from them) and its colormap of line colours, and the window's
-// background. "dark", "light", "classic": Dear ImGui's own, with ImPlot's default colormap (Deep). "seal" (the
-// default) and "seal-light": FIGURE's, from the palette of its mark (docs/brand/marks.py): ink, paper and one vermilion, spent on
-// what the user touches (slider grabs, check marks, pressed buttons) and on the first plotted line.
-
-ImVec4 hex(unsigned int rgb, float alpha = 1.0f) {
-   return ImVec4(static_cast<float>((rgb >> 16) & 0xFF) / 255.0f, static_cast<float>((rgb >> 8) & 0xFF) / 255.0f,
-                 static_cast<float>(rgb & 0xFF) / 255.0f, alpha);
-}
-
-struct seal_palette_t {
-   unsigned int text, text_disabled, window, popup, border, frame, frame_hovered, frame_active, title, title_active,
-      scroll_grab, scroll_hovered, scroll_active, button, button_hovered, button_active, accent, accent_active,
-      check, plot_lines, clear;
-   bool         light;
-   ImU32        lines[8];
-};
-
-const seal_palette_t SEAL_INK = {
-   0xf6f2ea, 0x8a8278, 0x1c1915, 0x1c1915, 0x3a332c, 0x2a2520, 0x3a322b, 0x4a4038, 0x14120f, 0x2a2520,
-   0x3a332c, 0x4a4038, 0x5a4e44, 0x3a322b, 0x952414, 0xc8321e, 0xd9442c, 0xf08a72,
-   0xf08a72, 0xe9e2d4, 0x14120f, false,
-   {0xe8664c, 0xe9e2d4, 0xc9a25a, 0x7f9cb0, 0x8fa06a, 0xa77a95, 0xd98b6a, 0xa3998c}};
-
-const seal_palette_t SEAL_PAPER = {
-   0x16130f, 0x8a8278, 0xfbf9f4, 0xffffff, 0xd8d0c2, 0xece6da, 0xe2dacb, 0xd8cfbf, 0xece6da, 0xe0d7c6,
-   0xd8d0c2, 0xc8bfae, 0xb8ae9b, 0xe6e0d4, 0xf4c3b4, 0xf08a72, 0xc8321e, 0x952414,
-   0xb42d1a, 0x16130f, 0xe6e0d4, true,
-   {0xb42d1a, 0x16130f, 0xa57a2a, 0x4a6a80, 0x5f7a3a, 0x7d4a6a, 0xc0603a, 0x6b645a}};
-
-void seal_colors(ImGuiStyle &s, const seal_palette_t &p) {
-   if (p.light) ImGui::StyleColorsLight(&s);
-   else ImGui::StyleColorsDark(&s);
-   ImVec4 *c = s.Colors;
-   c[ImGuiCol_Text] = hex(p.text);
-   c[ImGuiCol_TextDisabled] = hex(p.text_disabled);
-   c[ImGuiCol_WindowBg] = hex(p.window);
-   c[ImGuiCol_ChildBg] = hex(p.window, 0.0f);
-   c[ImGuiCol_PopupBg] = hex(p.popup, 0.97f);
-   c[ImGuiCol_Border] = hex(p.border);
-   c[ImGuiCol_BorderShadow] = hex(0, 0.0f);
-   c[ImGuiCol_FrameBg] = hex(p.frame);
-   c[ImGuiCol_FrameBgHovered] = hex(p.frame_hovered);
-   c[ImGuiCol_FrameBgActive] = hex(p.frame_active);
-   c[ImGuiCol_TitleBg] = hex(p.title);
-   c[ImGuiCol_TitleBgActive] = hex(p.title_active);
-   c[ImGuiCol_TitleBgCollapsed] = hex(p.title);
-   c[ImGuiCol_MenuBarBg] = hex(p.title);
-   c[ImGuiCol_ScrollbarBg] = hex(p.window);
-   c[ImGuiCol_ScrollbarGrab] = hex(p.scroll_grab);
-   c[ImGuiCol_ScrollbarGrabHovered] = hex(p.scroll_hovered);
-   c[ImGuiCol_ScrollbarGrabActive] = hex(p.scroll_active);
-   c[ImGuiCol_CheckMark] = hex(p.check);
-   c[ImGuiCol_SliderGrab] = hex(p.accent);
-   c[ImGuiCol_SliderGrabActive] = hex(p.accent_active);
-   c[ImGuiCol_Button] = hex(p.button);
-   c[ImGuiCol_ButtonHovered] = hex(p.button_hovered);
-   c[ImGuiCol_ButtonActive] = hex(p.button_active);
-   c[ImGuiCol_Header] = hex(p.button);
-   c[ImGuiCol_HeaderHovered] = hex(p.frame_hovered);
-   c[ImGuiCol_HeaderActive] = hex(p.frame_active);
-   c[ImGuiCol_Separator] = hex(p.border);
-   c[ImGuiCol_SeparatorHovered] = hex(p.accent, 0.78f);
-   c[ImGuiCol_SeparatorActive] = hex(p.accent);
-   c[ImGuiCol_ResizeGrip] = hex(p.accent, 0.20f);
-   c[ImGuiCol_ResizeGripHovered] = hex(p.accent, 0.67f);
-   c[ImGuiCol_ResizeGripActive] = hex(p.accent, 0.95f);
-   c[ImGuiCol_InputTextCursor] = hex(p.text);
-   c[ImGuiCol_Tab] = hex(p.frame);
-   c[ImGuiCol_TabHovered] = hex(p.frame_hovered);
-   c[ImGuiCol_TabSelected] = hex(p.frame_active);
-   c[ImGuiCol_TabSelectedOverline] = hex(p.accent);
-   c[ImGuiCol_TabDimmed] = hex(p.title);
-   c[ImGuiCol_TabDimmedSelected] = hex(p.frame);
-   c[ImGuiCol_TabDimmedSelectedOverline] = hex(p.border);
-   c[ImGuiCol_PlotLines] = hex(p.plot_lines);
-   c[ImGuiCol_PlotLinesHovered] = hex(p.accent_active);
-   c[ImGuiCol_PlotHistogram] = hex(p.lines[2]);
-   c[ImGuiCol_PlotHistogramHovered] = hex(p.accent_active);
-   c[ImGuiCol_TableHeaderBg] = hex(p.frame);
-   c[ImGuiCol_TableBorderStrong] = hex(p.border);
-   c[ImGuiCol_TableBorderLight] = hex(p.frame);
-   c[ImGuiCol_TextLink] = hex(p.check);
-   c[ImGuiCol_TextSelectedBg] = hex(p.accent, 0.35f);
-   c[ImGuiCol_TreeLines] = hex(p.border);
-   c[ImGuiCol_DragDropTarget] = hex(p.accent_active);
-   c[ImGuiCol_DragDropTargetBg] = hex(p.accent, 0.10f);
-   c[ImGuiCol_UnsavedMarker] = hex(p.text);
-   c[ImGuiCol_NavCursor] = hex(p.check);
-   c[ImGuiCol_DockingPreview] = hex(p.accent, 0.55f); // where a dragged window will dock
-   c[ImGuiCol_DockingEmptyBg] = hex(p.clear);         // an empty dock space shows the window background
-   // the seal's edges are cut straight: no rounding anywhere
-   s.WindowRounding = s.ChildRounding = s.FrameRounding = s.PopupRounding = 0.0f;
-   s.ScrollbarRounding = s.GrabRounding = s.TabRounding = 0.0f;
-}
-
-// ImPlot colormap of a seal style, added once per context (ImPlot keeps colormaps for the context's life).
-int seal_colormap(const char *name, const seal_palette_t &p) {
-   int idx = ImPlot::GetColormapIndex(name);
-   if (idx >= 0) return idx;
-   ImU32 cols[8];
-   for (int i = 0; i < 8; ++i) cols[i] = ImGui::ColorConvertFloat4ToU32(hex(p.lines[i]));
-   return ImPlot::AddColormap(name, cols, 8, true);
-}
-
-// Apply a style by name; false if the name is unknown. Sizes keep the content scale, fonts are untouched.
-bool apply_style(const std::string &name) {
-   const ImGuiStyle old = ImGui::GetStyle();
-   ImGuiStyle s;
-   int cmap = ImPlotColormap_Deep;
-   float clear[3] = {0.10f, 0.10f, 0.11f};
-   if (name == "dark") {
-      ImGui::StyleColorsDark(&s);
-   } else if (name == "light") {
-      ImGui::StyleColorsLight(&s);
-      clear[0] = clear[1] = clear[2] = 0.80f;
-   } else if (name == "classic") {
-      ImGui::StyleColorsClassic(&s);
-   } else if (name == "seal" || name == "seal-light") {
-      const seal_palette_t &p = name == "seal" ? SEAL_INK : SEAL_PAPER;
-      seal_colors(s, p);
-      cmap = seal_colormap(name == "seal" ? "FIGURE seal" : "FIGURE seal light", p);
-      const ImVec4 bg = hex(p.clear);
-      clear[0] = bg.x;
-      clear[1] = bg.y;
-      clear[2] = bg.z;
-   } else {
-      return false;
-   }
-   s.ScaleAllSizes(st.scale);
-   s.FontSizeBase = old.FontSizeBase;
-   s.FontScaleMain = old.FontScaleMain;
-   s.FontScaleDpi = old.FontScaleDpi;
-   ImGui::GetStyle() = s;
-   ImPlot::StyleColorsAuto();
-   ImPlot::GetStyle().Colormap = cmap;
-   for (int i = 0; i < 3; ++i) st.clear[i] = clear[i];
-   if (st.m == mode::remote) figure_remote::set_background(clear[0], clear[1], clear[2]);
-   return true;
-}
-
-// The style at initialisation: "seal", or the one named by the environment variable FIGURE_STYLE (a program's own
-// set_style call comes later and wins). An unknown name is reported and ignored.
-void apply_initial_style() {
-   apply_style("seal");
-   const char *v = std::getenv("FIGURE_STYLE");
-   if (v && *v && !apply_style(v)) std::fprintf(stderr, "figure: FIGURE_STYLE=%s: unknown style, ignored\n", v);
-}
-
 // ---- Style fields by name ------------------------------------------------------------------------------------------
 // lib 0: Dear ImGui (ImGuiStyle), 1: ImPlot (ImPlotStyle). Colours by the libraries' own names (GetStyleColorName);
 // the other fields by the generated tables of figure_style_generated.cpp.
@@ -502,6 +353,127 @@ const figure_style::field *style_field(int lib, const std::string &name) {
 unsigned char *style_base(int lib) {
    return lib == 0 ? reinterpret_cast<unsigned char *>(&ImGui::GetStyle())
                    : reinterpret_cast<unsigned char *>(&ImPlot::GetStyle());
+}
+
+// ---- Styles ---------------------------------------------------------------------------------------------------
+// A style is a theme (figure_theme.h): a base Dear ImGui style, colours and variables of Dear ImGui and ImPlot by name,
+// ImPlot's line colours, and the window's background. The built-in ones are themes/*.toml, embedded in the library:
+// "seal" (the default) and "seal-light", FIGURE's, from the palette of its mark; "dark", "light", "classic", Dear
+// ImGui's own with ImPlot's default line colours.
+
+ImVec4 vec4(const figure_theme::color_t &c) { return ImVec4(c.r, c.g, c.b, c.a); }
+
+// Write a style variable into a style struct (ImGuiStyle or ImPlotStyle) at `base`.
+bool write_var(unsigned char *base, const figure_style::field &f, const std::vector<double> &v) {
+   unsigned char *p = base + f.offset;
+   const size_t ncomp = f.kind == figure_style::FIG_STYLE_VEC2 ? 2 : 1;
+   if (v.size() != ncomp) return false;
+   switch (f.kind) {
+   case figure_style::FIG_STYLE_FLOAT: *reinterpret_cast<float *>(p) = static_cast<float>(v[0]); break;
+   case figure_style::FIG_STYLE_VEC2:
+      *reinterpret_cast<ImVec2 *>(p) = ImVec2(static_cast<float>(v[0]), static_cast<float>(v[1]));
+      break;
+   case figure_style::FIG_STYLE_BOOL: *reinterpret_cast<bool *>(p) = v[0] != 0.0; break;
+   default: *reinterpret_cast<int *>(p) = static_cast<int>(v[0]); break;
+   }
+   return true;
+}
+
+// Apply a parsed theme; false with `err` on an unknown name or a wrong value. Sizes in the theme are logical pixels,
+// scaled by the content scale; fonts are kept. `cmap_name` names the ImPlot colormap of its lines.
+bool apply_theme(const figure_theme::theme_t &t, const std::string &where, const std::string &cmap_name,
+                 std::string &err) {
+   auto bad = [&](const figure_theme::entry_t &e, const std::string &what) {
+      err = where + ":" + std::to_string(e.line) + ": " + what + " \"" + e.name + "\"";
+      return false;
+   };
+   const ImGuiStyle old = ImGui::GetStyle();
+   ImGuiStyle s;
+   if (t.base == "light") ImGui::StyleColorsLight(&s);
+   else if (t.base == "classic") ImGui::StyleColorsClassic(&s);
+   else ImGui::StyleColorsDark(&s);
+   for (const auto &e : t.imgui_vars) {
+      const figure_style::field *f = style_field(0, e.name);
+      if (!f) return bad(e, "unknown Dear ImGui style variable");
+      if (!write_var(reinterpret_cast<unsigned char *>(&s), *f, e.values)) return bad(e, "wrong number of values for");
+   }
+   for (const auto &e : t.imgui_colors) {
+      const int i = style_color_index(0, e.name);
+      if (i < 0) return bad(e, "unknown Dear ImGui colour");
+      s.Colors[i] = vec4(e.color);
+   }
+   ImPlotStyle ps; // ImPlot's defaults; colours derived from Dear ImGui's below (StyleColorsAuto)
+   for (const auto &e : t.implot_vars) {
+      const figure_style::field *f = style_field(1, e.name);
+      if (!f) return bad(e, "unknown ImPlot style variable");
+      if (!write_var(reinterpret_cast<unsigned char *>(&ps), *f, e.values)) return bad(e, "wrong number of values for");
+   }
+   std::vector<std::pair<int, ImVec4>> plot_colors;
+   for (const auto &e : t.implot_colors) {
+      const int i = style_color_index(1, e.name);
+      if (i < 0) return bad(e, "unknown ImPlot colour");
+      plot_colors.emplace_back(i, vec4(e.color));
+   }
+   int cmap = ImPlotColormap_Deep;
+   if (!t.lines.empty()) {
+      cmap = ImPlot::GetColormapIndex(cmap_name.c_str()); // ImPlot keeps colormaps for the context's life
+      if (cmap < 0) {
+         std::vector<ImU32> cols;
+         for (const auto &c : t.lines) cols.push_back(ImGui::ColorConvertFloat4ToU32(vec4(c)));
+         cmap = ImPlot::AddColormap(cmap_name.c_str(), cols.data(), static_cast<int>(cols.size()), true);
+      }
+   }
+   float clear[3] = {0.10f, 0.10f, 0.11f};
+   if (t.has_background) {
+      clear[0] = t.background.r;
+      clear[1] = t.background.g;
+      clear[2] = t.background.b;
+   }
+   s.ScaleAllSizes(st.scale);
+   s.FontSizeBase = old.FontSizeBase;
+   s.FontScaleMain = old.FontScaleMain;
+   s.FontScaleDpi = old.FontScaleDpi;
+   ImGui::GetStyle() = s;
+   ImPlot::GetStyle() = ps;
+   ImPlot::StyleColorsAuto();
+   for (const auto &pc : plot_colors) ImPlot::GetStyle().Colors[pc.first] = pc.second;
+   ImPlot::GetStyle().Colormap = cmap;
+   for (int i = 0; i < 3; ++i) st.clear[i] = clear[i];
+   if (st.m == mode::remote) figure_remote::set_background(clear[0], clear[1], clear[2]);
+   return true;
+}
+
+// Apply a built-in style by name; false if the name is unknown (err empty) or the theme is malformed (err set).
+bool apply_style(const std::string &name, std::string &err) {
+   err.clear();
+   for (int i = 0; i < figure_theme::builtin_count(); ++i) {
+      if (name != figure_theme::builtin_name(i)) continue;
+      figure_theme::theme_t t;
+      const std::string where = "themes/" + name + ".toml";
+      if (!figure_theme::parse(figure_theme::builtin_text(i), where, t, err)) return false;
+      return apply_theme(t, where, "FIGURE " + name, err);
+   }
+   return false;
+}
+
+std::string builtin_style_names() {
+   std::string names;
+   for (int i = 0; i < figure_theme::builtin_count(); ++i) {
+      if (i) names += ", ";
+      names += figure_theme::builtin_name(i);
+   }
+   return names;
+}
+
+// The style at initialisation: "seal", or the one named by the environment variable FIGURE_STYLE (a program's own
+// set_style call comes later and wins). An unknown name is reported and ignored.
+void apply_initial_style() {
+   std::string err;
+   if (!apply_style("seal", err)) std::fprintf(stderr, "figure: the default style: %s\n", err.c_str());
+   const char *v = std::getenv("FIGURE_STYLE");
+   if (v && *v && !apply_style(v, err))
+      std::fprintf(stderr, "figure: FIGURE_STYLE=%s: %s, ignored\n", v,
+                   err.empty() ? ("unknown style (" + builtin_style_names() + ")").c_str() : err.c_str());
 }
 
 // Headless renderer: acknowledge texture requests (font atlas pages) without a GPU, as a real backend would.
@@ -644,8 +616,10 @@ int fig_set_style(const char *name, int name_len) {
    FIG_TRY
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
-   if (!apply_style(n))
-      return fail(FIG_ERR_ARGUMENT, "set_style: unknown style \"" + n + "\" (dark, light, classic, seal, seal-light)");
+   std::string err;
+   if (!apply_style(n, err))
+      return fail(FIG_ERR_ARGUMENT, err.empty() ? "set_style: unknown style \"" + n + "\" (" + builtin_style_names() + ")"
+                                                : "set_style: " + err);
    return FIG_OK;
    FIG_CATCH
 }

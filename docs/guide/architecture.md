@@ -42,6 +42,9 @@ flowchart TD
   `libfigure_native.a`.
 - **Glue** (`native/figure_native.cpp`, `native/figure_native.h`): what the C APIs cannot offer to Fortran directly
   (see below), and everything the platform needs.
+- **Styles and themes** (`native/figure_theme.cpp`, `native/figure_style_generated.cpp`): the theme files of
+  `themes/`, embedded at build time and parsed by the glue; every style colour and variable reached by name, through
+  a table of the style fields generated from the libraries' metadata ([Styles](styles)).
 - **Platform**: SDL3 (window, input, display scale) and OpenGL 3, through the official Dear ImGui backends.
 
 ## The boundary

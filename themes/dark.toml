@@ -1,0 +1,4 @@
+# FIGURE theme "dark": Dear ImGui's dark style, with ImPlot's default line colours.
+# Format: docs/guide/styles.md#theme-files.
+
+base = "dark"
