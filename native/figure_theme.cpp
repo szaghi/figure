@@ -139,6 +139,12 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
          } else if (key == "background") {
             if (!color_value(v, theme.background)) return fail("background must be a colour \"#rrggbb\"");
             theme.has_background = true;
+         } else if (key == "font") {
+            if (v.kind != value_t::STRING || v.str.empty()) return fail("font must be \"plex-sans\", \"proggy\" or a file");
+            theme.font = v.str;
+         } else if (key == "font_size") {
+            if (v.kind != value_t::NUMBER || !(v.num > 0.0 && v.num <= 200.0)) return fail("font_size must be in (0, 200]");
+            theme.font_size = v.num;
          } else if (key == "lines") {
             if (v.kind == value_t::STRING) {
                if (!line_palette(v.str, theme.lines)) return fail("lines: unknown palette \"" + v.str + "\" (okabe-ito)");
@@ -151,7 +157,7 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
                theme.lines.push_back(c);
             }
          } else {
-            return fail("unknown key \"" + key + "\" (base, background, lines, or a [section])");
+            return fail("unknown key \"" + key + "\" (base, background, font, font_size, lines, or a [section])");
          }
          continue;
       }

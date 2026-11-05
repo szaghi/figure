@@ -62,7 +62,7 @@ features:
 <Media name="hello" video alt="figure_hello: a check box starts the animation, a slider changes the frequency of the plotted wave, a button counts clicks" caption="exe/figure_hello: a check box, a slider and a button bound to Fortran variables, and a plot of a Fortran array" />
 
 <div class="fig-gallery">
-<Media name="mandelbrot" video alt="The Mandelbrot explorer zooming 5000 times into the seahorse valley" caption="An explorer: ImPlot zooms, Fortran computes the image, a texture shows it" />
+<Media name="mandelbrot" video alt="The Mandelbrot explorer zooming about 175 times into the seahorse valley" caption="An explorer: ImPlot zooms, Fortran computes the image, a texture shows it" />
 <Media name="tut04_live" video alt="A Jacobi iteration converging while its solution and residual history are plotted" caption="A live computation: the solver runs inside the frame loop" />
 <Media name="cb_items" alt="One plot with a shaded band, a line, markers, bars and an area to zero" caption="Lines, scatter, bars and shaded areas in one plot" />
 <Media name="remote" alt="The same interface drawn by a web browser at localhost:8080" caption="Remote mode: the program on a cluster node, the UI in a browser" />

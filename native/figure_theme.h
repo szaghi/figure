@@ -3,6 +3,8 @@
 //
 //    base = "dark"                        dark | light | classic: Dear ImGui's style the theme starts from
 //    background = "#14120f"               the window background behind the windows (default: base's)
+//    font = "plex-sans"                   the default font: plex-sans (bundled), proggy, or a TTF/OTF file path
+//    font_size = 15                       its size [logical pixels]
 //    lines = ["#e8664c", "#e9e2d4", ...]  ImPlot's line colours, a qualitative colormap (default: ImPlot's Deep);
 //                                         or a named palette: lines = "okabe-ito" (line_palette below)
 //    [imgui.colors]   Name = "#rrggbb" | "#rrggbbaa" | ["#rrggbb", alpha]     Dear ImGui colours (ImGuiCol_*)
@@ -36,6 +38,8 @@ struct theme_t {
    bool                 has_background = false;
    color_t              background;
    std::vector<color_t> lines;
+   std::string          font;            // empty: keep the font in effect
+   double               font_size = 0.0; // 0: keep the size in effect
    std::vector<entry_t> imgui_colors, imgui_vars, implot_colors, implot_vars;
 };
 

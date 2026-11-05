@@ -40,6 +40,12 @@ int    fig_load_style(const char *path, int path_len);
 int    fig_save_style(const char *path, int path_len);
 /* Dear ImGui's and ImPlot's style editors in a window ("Style editor"); open: the window's close button (may be NULL). */
 int    fig_show_style_editor(int *open);
+/* Fonts: "plex-sans" (bundled, the default, 15 px), "proggy" (Dear ImGui's bitmap font) or a TTF/OTF file. set_font
+ * sets the default font and, if size > 0, its size [logical pixels]; push_font switches the font (name empty: the
+ * current one) and/or the size (0: the current one) until pop_font. */
+int    fig_set_font(const char *name, int name_len, double size);
+int    fig_push_font(const char *name, int name_len, double size);
+int    fig_pop_font(void);
 int    fig_style_color(int lib, const char *name, int name_len, int set, float *rgba);
 int    fig_style_var(int lib, const char *name, int name_len, int set, double *values, int *count);
 void   fig_request_frames(int n);

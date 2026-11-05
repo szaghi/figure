@@ -17,7 +17,7 @@ public :: fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
 public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
-public :: fig_show_style_editor
+public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -195,6 +195,33 @@ interface
    integer(c_int), value              :: path_len !< Path length [bytes].
    integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_save_style
+
+   function fig_set_font(name, name_len, size) result(status) bind(C, name='fig_set_font')
+   !< The default font (plex-sans, proggy or a TTF/OTF file) and, if size > 0, its size [logical pixels].
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Font (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   real(c_double), value              :: size     !< Size [logical pixels]; 0: keep.
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_font
+
+   function fig_push_font(name, name_len, size) result(status) bind(C, name='fig_push_font')
+   !< Switch the font (name empty: keep) and/or its size (0: keep) until fig_pop_font.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Font (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   real(c_double), value              :: size     !< Size [logical pixels]; 0: keep.
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_push_font
+
+   function fig_pop_font() result(status) bind(C, name='fig_pop_font')
+   !< Back to the font before the last fig_push_font.
+   import :: c_int
+   implicit none
+   integer(c_int) :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_pop_font
 
    function fig_show_style_editor(open) result(status) bind(C, name='fig_show_style_editor')
    !< Dear ImGui's and ImPlot's style editors in a window.

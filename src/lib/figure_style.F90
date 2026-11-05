@@ -16,13 +16,14 @@ module figure_style
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int, c_loc, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check, figure_fail
-use figure_c_native, only : FIG_ERR_ARGUMENT, fig_show_style_editor, fig_style_color, fig_style_var
+use figure_c_native, only : FIG_ERR_ARGUMENT, fig_pop_font, fig_push_font, fig_show_style_editor, fig_style_color, &
+                            fig_style_var
 
 implicit none
 private
 public :: ig_set_style_color, ig_get_style_color, ig_set_style_var, ig_get_style_var
 public :: ip_set_style_color, ip_get_style_color, ip_set_style_var, ip_get_style_var
-public :: hex_color, ig_show_style_editor
+public :: hex_color, ig_show_style_editor, ig_push_font, ig_pop_font
 
 integer(c_int), parameter :: LIB_IMGUI  = 0_c_int !< Dear ImGui.
 integer(c_int), parameter :: LIB_IMPLOT = 1_c_int !< ImPlot.
@@ -64,6 +65,32 @@ contains
       call figure_check(fig_show_style_editor(c_null_ptr), stat)
    endif
    endsubroutine ig_show_style_editor
+
+   subroutine ig_push_font(font, size, stat)
+   !< Switch the font and/or its size for the widgets that follow, until `ig_pop_font`: `font` as `app%set_font`
+   !< (`''` keeps the current one), `size` in logical pixels (absent: keep). Pair every push with a pop.
+   character(len=*), intent(in)            :: font !< Font (`'plex-sans'`, `'proggy'`, a file), or `''`.
+   real(real64),     intent(in),  optional :: size !< Size [logical pixels], in (0, 200].
+   integer(int32),   intent(out), optional :: stat !< Status.
+   real(c_double)                          :: s    !< Size; 0: keep.
+
+   s = 0.0_c_double
+   if (present(size)) then
+      if (.not. (size > 0.0_real64)) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ig_push_font: size must be in (0, 200] pixels', stat)
+         return
+      endif
+      s = real(size, c_double)
+   endif
+   call figure_check(fig_push_font(font, len(font, c_int), s), stat)
+   endsubroutine ig_push_font
+
+   subroutine ig_pop_font(stat)
+   !< Back to the font before the last `ig_push_font`.
+   integer(int32), intent(out), optional :: stat !< Status.
+
+   call figure_check(fig_pop_font(), stat)
+   endsubroutine ig_pop_font
 
    pure subroutine hex_color(text, rgba, ok)
    !< Parse `'#rrggbb'` or `'#rrggbbaa'` (the `#` optional, either case) into components in [0, 1].

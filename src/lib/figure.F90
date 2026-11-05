@@ -31,8 +31,9 @@ use figure_implot, only : ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot
                           ImPlotColormap_Viridis, ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool,     &
                           ImPlotColormap_Pink, ImPlotColormap_Jet, ImPlotColormap_Twilight, ImPlotColormap_RdBu,      &
                           ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral, ImPlotColormap_Greys
-use figure_style, only : ig_show_style_editor, ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var,       &
-                         ip_get_style_color, ip_get_style_var, ip_set_style_color, ip_set_style_var
+use figure_style, only : ig_get_style_color, ig_get_style_var, ig_pop_font, ig_push_font, ig_set_style_color,    &
+                         ig_set_style_var, ig_show_style_editor, ip_get_style_color, ip_get_style_var,                 &
+                         ip_set_style_color, ip_set_style_var
 use figure_texture, only : texture_object
 
 implicit none
@@ -44,6 +45,7 @@ public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
 public :: ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window
 public :: ig_window_dock
 public :: ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ig_show_style_editor
+public :: ig_push_font, ig_pop_font
 public :: ip_get_style_color, ip_get_style_var, ip_set_style_color, ip_set_style_var
 public :: ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode, ImGuiDockNodeFlags_NoDockingSplit
 public :: ImGuiDockNodeFlags_NoResize, ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking

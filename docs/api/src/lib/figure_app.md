@@ -41,6 +41,7 @@ graph LR
 - [init_remote](#init-remote)
 - [set_lazy](#set-lazy)
 - [set_style](#set-style)
+- [set_font](#set-font)
 - [load_style](#load-style)
 - [save_style](#save-style)
 - [set_docking](#set-docking)
@@ -75,6 +76,7 @@ A FIGURE application (one per program).
 | `set_lazy` | pass(self) | Lazy redraw on/off, longest sleep. |
 | `set_style` | pass(self) | Colours of the interface, the plots and the background. |
 | `set_docking` | pass(self) | Docking on (the default) or off. |
+| `set_font` | pass(self) | The default font and its size. |
 | `load_style` | pass(self) | A theme file. |
 | `save_style` | pass(self) | The style in effect, as a theme file. |
 | `request_frames` | pass(self) | Redraw without waiting for input. |
@@ -233,6 +235,35 @@ flowchart TD
   set_style["set_style"] --> fig_set_style["fig_set_style"]
   set_style["set_style"] --> figure_check["figure_check"]
   style set_style fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_font
+
+The default font of the interface, after `init*`: `'plex-sans'` (IBM Plex Sans, bundled: the default, at 15
+ logical pixels), `'proggy'` (Dear ImGui's own 13-pixel bitmap font), or the path of a TrueType/OpenType file;
+ `size` in logical pixels (multiplied by the display's content scale), kept if absent.
+
+```fortran
+subroutine set_font(self, font, size, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `font` | character(len=*) | in |  | Font. |
+| `size` | real(kind=real64) | in | optional | Size [logical pixels], in (0, 200]. |
+| `stat` | integer(kind=int32) | out | optional | `FIG_ERR_ARGUMENT` if it is not a font or the size is wrong. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_font["set_font"] --> fig_set_font["fig_set_font"]
+  set_font["set_font"] --> figure_check["figure_check"]
+  set_font["set_font"] --> figure_fail["figure_fail"]
+  style set_font fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### load_style

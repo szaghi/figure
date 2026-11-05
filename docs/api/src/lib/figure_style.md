@@ -37,6 +37,8 @@ graph LR
 - [ig_set_style_var](#ig-set-style-var)
 - [ip_set_style_var](#ip-set-style-var)
 - [ig_show_style_editor](#ig-show-style-editor)
+- [ig_push_font](#ig-push-font)
+- [ig_pop_font](#ig-pop-font)
 - [hex_color](#hex-color)
 - [set_color](#set-color)
 - [set_color_hex](#set-color-hex)
@@ -117,6 +119,56 @@ flowchart TD
   ig_show_style_editor["ig_show_style_editor"] --> fig_show_style_editor["fig_show_style_editor"]
   ig_show_style_editor["ig_show_style_editor"] --> figure_check["figure_check"]
   style ig_show_style_editor fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_push_font
+
+Switch the font and/or its size for the widgets that follow, until `ig_pop_font`: `font` as `app%set_font`
+ (`''` keeps the current one), `size` in logical pixels (absent: keep). Pair every push with a pop.
+
+```fortran
+subroutine ig_push_font(font, size, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `font` | character(len=*) | in |  | Font (`'plex-sans'`, `'proggy'`, a file), or `''`. |
+| `size` | real(kind=real64) | in | optional | Size [logical pixels], in (0, 200]. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_font["ig_push_font"] --> fig_push_font["fig_push_font"]
+  ig_push_font["ig_push_font"] --> figure_check["figure_check"]
+  ig_push_font["ig_push_font"] --> figure_fail["figure_fail"]
+  style ig_push_font fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_pop_font
+
+Back to the font before the last `ig_push_font`.
+
+```fortran
+subroutine ig_pop_font(stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_pop_font["ig_pop_font"] --> fig_pop_font["fig_pop_font"]
+  ig_pop_font["ig_pop_font"] --> figure_check["figure_check"]
+  style ig_pop_font fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### hex_color

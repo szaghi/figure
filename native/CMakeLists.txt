@@ -102,6 +102,14 @@ foreach(theme_file ${FIGURE_THEME_FILES})
 endforeach()
 string(APPEND FIGURE_THEMES_INC "};\n")
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/figure_themes.inc "${FIGURE_THEMES_INC}")
+# The bundled font (third_party/fonts, OFL-1.1), embedded as a byte array: the default font of the interface.
+set(FIGURE_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexSans-Regular.ttf)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${FIGURE_FONT_FILE})
+file(READ ${FIGURE_FONT_FILE} FIGURE_FONT_HEX HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_FONT_BYTES "${FIGURE_FONT_HEX}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/figure_font.inc
+     "// generated from third_party/fonts/IBMPlexSans-Regular.ttf by native/CMakeLists.txt\n"
+     "static const unsigned char plex_sans_ttf[] = {${FIGURE_FONT_BYTES}};\n")
 target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 if(WIN32)
    target_link_libraries(figure_native PUBLIC ws2_32)
@@ -144,3 +152,4 @@ install(FILES "${cimplot_SOURCE_DIR}/implot/LICENSE" DESTINATION share/licenses/
 install(FILES "${cimgui_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimgui)
 install(FILES "${cimplot_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimplot)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.mit.md" DESTINATION share/licenses/figure)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexSans.txt" DESTINATION share/licenses/ibm-plex)

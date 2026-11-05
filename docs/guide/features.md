@@ -21,6 +21,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%set_lazy(enabled [, max_wait])` | lazy redraw on/off, longest sleep (default 0.5 s) | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
+| `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (default, 15 px), `'proggy'`, or a TTF/OTF file | [styles](styles#fonts) |
 | `app%load_style(file [, stat])`, `app%save_style(file [, stat])` | apply a theme file; write the style in effect as one | [styles](styles#load-tune-and-save) |
 | `app%set_docking(enabled [, stat])` | docking on (default) or off | [docking](docking) |
 | `app%set_style(name [, lines] [, stat])` | colours: `'seal'` (default), `'seal-light'`, `'paper'`, `'high-contrast'`, `'dark'`, `'light'`, `'classic'`; `lines='okabe-ito'` | [styles](styles) |
@@ -68,6 +69,7 @@ Details: [Docking](docking).
 | `ig_set_style_var(name, value [, stat])`, `ip_set_style_var(...)` | a style variable by name (number, pair, logical, integer) |
 | `ig_get_style_var(name, values, n [, stat])`, `ip_get_style_var(...)` | a style variable by name |
 | `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's style editors, in a window |
+| `ig_push_font(font [, size] [, stat])`, `ig_pop_font([stat])` | another font or size for a block of widgets |
 
 Details: [Styles](styles).
 

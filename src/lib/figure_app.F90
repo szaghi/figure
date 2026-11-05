@@ -18,10 +18,10 @@ module figure_app
 !< the application's own variables.
 use, intrinsic :: iso_c_binding, only : c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
-use figure_base, only : figure_check
-use figure_c_native, only : FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, fig_init_headless, &
-                            fig_init_remote, fig_request_frames, fig_set_docking, fig_set_ini_file, fig_set_lazy, &
-                            fig_set_style, fig_shutdown, fig_load_style, fig_save_style
+use figure_base, only : figure_check, figure_fail
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
+                            fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
+                            fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_style, fig_shutdown
 
 implicit none
 private
@@ -41,6 +41,7 @@ type :: app_object
       procedure, pass(self) :: set_lazy       !< Lazy redraw on/off, longest sleep.
       procedure, pass(self) :: set_style      !< Colours of the interface, the plots and the background.
       procedure, pass(self) :: set_docking    !< Docking on (the default) or off.
+      procedure, pass(self) :: set_font       !< The default font and its size.
       procedure, pass(self) :: load_style     !< A theme file.
       procedure, pass(self) :: save_style     !< The style in effect, as a theme file.
       procedure, pass(self) :: request_frames !< Redraw without waiting for input.
@@ -186,6 +187,28 @@ contains
       call figure_check(fig_set_style(name, len(name, c_int), '', 0_c_int), stat)
    endif
    endsubroutine set_style
+
+   subroutine set_font(self, font, size, stat)
+   !< The default font of the interface, after `init*`: `'plex-sans'` (IBM Plex Sans, bundled: the default, at 15
+   !< logical pixels), `'proggy'` (Dear ImGui's own 13-pixel bitmap font), or the path of a TrueType/OpenType file;
+   !< `size` in logical pixels (multiplied by the display's content scale), kept if absent.
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: font !< Font.
+   real(real64),      intent(in),  optional :: size !< Size [logical pixels], in (0, 200].
+   integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_FAILED` if the file cannot be read,
+                                                    !< `FIG_ERR_ARGUMENT` if it is not a font or the size is wrong.
+   real(c_double)                           :: s    !< Size; 0: keep.
+
+   s = 0.0_c_double
+   if (present(size)) then
+      if (.not. (size > 0.0_real64)) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'set_font: size must be in (0, 200] pixels', stat)
+         return
+      endif
+      s = real(size, c_double)
+   endif
+   call figure_check(fig_set_font(font, len(font, c_int), s), stat)
+   endsubroutine set_font
 
    subroutine load_style(self, file, stat)
    !< Apply a theme file (the format of the files in `themes/`: docs, Styles, Theme files), after `init*`. Sizes in the

@@ -4,18 +4,18 @@
 #! scale   960
 # round the frames, give them a border, widen their padding, then save the theme
 0   move 400 500
-5   move 576 217 20
+5   move 576 235 20
 30  down
-32  move 690 217 30
+32  move 690 235 30
 70  up
-80  move 693 241 15
+80  move 689 259 15
 100 down
 102 up
-115 move 597 379 20
+115 move 598 409 20
 140 down
-142 move 640 379 25
+142 move 641 409 25
 175 up
-185 move 66 57 25
+185 move 62 60 25
 220 down
 222 up
 230 move 300 300 20

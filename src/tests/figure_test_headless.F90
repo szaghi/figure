@@ -13,8 +13,8 @@ use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_
                    ip_image, ImPlotColormap_Viridis, texture_object, ig_dock_id, ig_dock_layout_begin,             &
                    ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_window_dock,                &
                    ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ip_get_style_color,  &
-                   ip_get_style_var, ip_set_style_color, ip_set_style_var
-use figure_cimgui, only : im_vec4, igGetStyleColorVec4
+                   ip_get_style_var, ip_set_style_color, ip_set_style_var, ig_pop_font, ig_push_font
+use figure_cimgui, only : im_vec4, igGetFontSize, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, &
                            ImPlot_GetPlotLimits
@@ -35,7 +35,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(36)  !< Per-check outcome.
+logical                   :: test_passed(38)  !< Per-check outcome.
 type(texture_object)      :: tex              !< A 4 x 2 texture.
 integer(int8)             :: pix(4, 4, 2)     !< Its pixels.
 integer(int8)             :: pix_bad(3, 4, 2) !< Pixels of the wrong shape (3 channels).
@@ -84,6 +84,8 @@ integer(int32)            :: back_n(2)        !< Their counts.
 type(im_vec4)             :: back_line        !< First line colour after the round trip.
 character(len=:), allocatable :: bad_message  !< Error message of the malformed file.
 integer(int32)            :: unit             !< File unit.
+integer(int32)            :: stat_font(4)     !< set_font: proggy, plex-sans at 18, a missing file, not a font.
+real(c_float)             :: font_px(3)       !< Font size: default, pushed to 22, after the pop.
 integer(int32)            :: stat_items(5)    !< Status of the scatter, bars and shaded items.
 integer(int32)            :: stat_spec        !< Status of a spec with a bad colour.
 type(plot_spec_object)    :: red              !< Red line, 2 pixels, circle markers.
@@ -281,6 +283,16 @@ close(unit, status='delete')
 call app%set_style('seal')
 call app%set_docking(.false.)
 if (app%next_frame()) call ig_dock_space(dock_root, stat=stat_dock) ! docking off: rejected
+! fonts: the bundled one at 15 px by default, a size pushed for a block, then the default font switched
+font_px(1) = igGetFontSize()
+call ig_push_font('', 22.0_real64)
+font_px(2) = igGetFontSize()
+call ig_pop_font()
+font_px(3) = igGetFontSize()
+call app%set_font('proggy', stat=stat_font(1))
+call app%set_font('plex-sans', 18.0_real64, stat=stat_font(2))
+call app%set_font('no/such/font.ttf', stat=stat_font(3))
+call app%set_font('fpm.toml', stat=stat_font(4))
 call ip_heatmap('one end', fld, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, scale_min=0.0_real64, stat=stat_scale)
 call tex%destroy()
 call tex%update(pix, stat=stat_dead)
@@ -333,10 +345,14 @@ test_passed(35) = back_n(1) == 1_int32 .and. abs(back_round(1) - 5.0_real64) < 1
                   < 1.0e-6_real64)                                                  ! variables and ImPlot back
 test_passed(36) = stat_file(3) == int(FIG_ERR_ARGUMENT, int32) .and. index(bad_message, ':3:') > 0 .and.   &
                   index(bad_message, 'Buton') > 0 .and. stat_file(4) == int(FIG_ERR_FAILED, int32) ! errors with lines
+test_passed(37) = abs(font_px(1) - 15.0_c_float) < 1.0e-4_c_float .and. abs(font_px(2) - 22.0_c_float) < 1.0e-4_c_float &
+                  .and. abs(font_px(3) - 15.0_c_float) < 1.0e-4_c_float  ! default 15 px, push and pop a size
+test_passed(38) = all(stat_font(1:2) == int(FIG_OK, int32)) .and. stat_font(3) == int(FIG_ERR_FAILED, int32) .and. &
+                  stat_font(4) == int(FIG_ERR_ARGUMENT, int32)                     ! fonts by name, bad files rejected
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
                   stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
 
-write(output_unit, '(A,36L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,38L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

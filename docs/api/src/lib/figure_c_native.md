@@ -35,6 +35,9 @@ graph LR
 - [fig_texture_update](#fig-texture-update)
 - [fig_load_style](#fig-load-style)
 - [fig_save_style](#fig-save-style)
+- [fig_set_font](#fig-set-font)
+- [fig_push_font](#fig-push-font)
+- [fig_pop_font](#fig-pop-font)
 - [fig_show_style_editor](#fig-show-style-editor)
 - [fig_style_color](#fig-style-color)
 - [fig_style_var](#fig-style-var)
@@ -91,6 +94,12 @@ graph LR
 ### fig_load_style
 
 ### fig_save_style
+
+### fig_set_font
+
+### fig_push_font
+
+### fig_pop_font
 
 ### fig_show_style_editor
 

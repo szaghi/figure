@@ -82,6 +82,29 @@ multiplied by the display's content scale ([Content scale](frame-loop#content-sc
 A change applies to everything drawn afterwards, globally, until it is changed again; `app%set_style` resets them
 all to the named style.
 
+## Fonts
+
+The interface is drawn in IBM Plex Sans at 15 logical pixels, a font made for technical interfaces, bundled with
+FIGURE (OFL-1.1, [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)) and embedded in the
+library: programs need no font file.
+
+| Procedure | Does |
+|---|---|
+| `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (the default), `'proggy'` (Dear ImGui's own 13-pixel bitmap font) or the path of a TrueType/OpenType file; `size` in logical pixels |
+| `ig_push_font(font [, size] [, stat])`, `ig_pop_font([stat])` | another font and/or size for the widgets in between (`font=''` keeps the current one): a title, a value shown large |
+
+```fortran
+call app%set_font('proggy')                       ! Dear ImGui's classic look
+call app%set_font('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16.0_real64)
+call ig_push_font('', 28.0_real64)                ! a big value, in the current font
+call ig_text('3.1416')
+call ig_pop_font()
+```
+
+Fonts are rasterised on demand at every size used (Dear ImGui's dynamic font atlas): any size stays sharp, and the
+display's content scale applies on top. A file that cannot be read is `FIG_ERR_FAILED`; one that is not a font, or a
+size outside (0, 200], is `FIG_ERR_ARGUMENT`. A theme file can name the font and its size (`font`, `font_size`).
+
 ## Theme files
 
 Every named style is a small text file in the repository, `themes/<name>.toml`, embedded in the library when the
@@ -90,6 +113,8 @@ native layer is built: adding a file there adds a style. The format is a subset 
 ```toml
 # FIGURE theme "seal": ink windows, paper text, one vermilion (the default).
 base = "dark"                                  # dark | light | classic: the Dear ImGui style it starts from
+font = "plex-sans"                             # plex-sans | proggy | a font file (default: the font in effect)
+font_size = 15                                 # logical pixels (default: the size in effect)
 background = "#14120f"                         # behind the windows (default: the base's)
 lines = ["#e8664c", "#e9e2d4", "#c9a25a"]      # ImPlot's line colours, in order, or "okabe-ito" (default: Deep)
 

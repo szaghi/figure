@@ -19,6 +19,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <chrono>
 #include <algorithm>
 #include <cmath>
@@ -59,6 +60,9 @@ struct state_t {
    float         scale = 1.0f;
    float         clear[3] = {0.10f, 0.10f, 0.11f}; // the window's background, behind the ImGui windows (the style's)
    std::string   style_base = "dark";              // base of the style in effect (what save_style writes against)
+   std::string   font = "plex-sans";               // the default font: plex-sans (bundled), proggy, or a TTF file
+   std::map<std::string, ImFont *> fonts;          // fonts loaded in this context, by name or path
+   std::map<std::string, std::vector<unsigned char>> font_data; // TTF files read at run time (the atlas needs them)
    std::string   ini_file;        // where Dear ImGui keeps window positions and sizes; empty: nowhere (the default)
    struct texture_t {
       int  width = 0, height = 0;
@@ -314,6 +318,56 @@ void capture_write(int w, int h) {
    ++cap.written;
 }
 
+#include "figure_font.inc" // plex_sans_ttf[]: IBM Plex Sans Regular (third_party/fonts, OFL-1.1)
+
+constexpr float DEFAULT_FONT_SIZE = 15.0f; // logical pixels: the size the interface is drawn at
+
+// A font by name ("plex-sans", "proggy") or TTF path, loaded on first use into this context's atlas; null with err.
+ImFont *get_font(const std::string &name, std::string &err) {
+   const auto found = st.fonts.find(name);
+   if (found != st.fonts.end()) return found->second;
+   ImGuiIO &io = ImGui::GetIO();
+   ImFontConfig cfg;
+   cfg.FontDataOwnedByAtlas = false; // the bundled bytes are static; files are kept in st.font_data
+   ImFont *f = nullptr;
+   if (name == "plex-sans") {
+      std::snprintf(cfg.Name, sizeof(cfg.Name), "IBM Plex Sans");
+      f = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(plex_sans_ttf), static_cast<int>(sizeof(plex_sans_ttf)),
+                                         DEFAULT_FONT_SIZE, &cfg);
+   } else if (name == "proggy") {
+      f = io.Fonts->AddFontDefaultBitmap();
+   } else {
+      FILE *in = std::fopen(name.c_str(), "rb");
+      if (!in) {
+         err = "cannot read the font " + name;
+         return nullptr;
+      }
+      std::vector<unsigned char> data;
+      unsigned char buf[65536];
+      size_t n;
+      while ((n = std::fread(buf, 1, sizeof(buf), in)) > 0) data.insert(data.end(), buf, buf + n);
+      std::fclose(in);
+      // TrueType (00 01 00 00, "true") or OpenType with TrueType or CFF outlines ("OTTO"): Dear ImGui reads them
+      const bool ttf = data.size() > 12 && ((data[0] == 0 && data[1] == 1 && data[2] == 0 && data[3] == 0) ||
+                                            std::memcmp(data.data(), "true", 4) == 0 ||
+                                            std::memcmp(data.data(), "OTTO", 4) == 0);
+      if (!ttf) {
+         err = name + " is not a TrueType or OpenType font";
+         return nullptr;
+      }
+      std::vector<unsigned char> &kept = st.font_data[name];
+      kept = std::move(data);
+      std::snprintf(cfg.Name, sizeof(cfg.Name), "%s", name.substr(name.find_last_of("/\\") + 1).c_str());
+      f = io.Fonts->AddFontFromMemoryTTF(kept.data(), static_cast<int>(kept.size()), DEFAULT_FONT_SIZE, &cfg);
+   }
+   if (!f) {
+      err = "cannot load the font " + name;
+      return nullptr;
+   }
+   st.fonts[name] = f;
+   return f;
+}
+
 void create_contexts() {
    IMGUI_CHECKVERSION();
    ImGui::CreateContext();
@@ -326,9 +380,16 @@ void create_contexts() {
    // positions and sizes the program sets on first use. fig_set_ini_file opts in.
    io.IniFilename = nullptr;
    ImGui::StyleColorsDark();
+   // The bundled font at 15 logical pixels (Dear ImGui's own is a 13-pixel bitmap font: set_font('proggy'))
+   std::string err;
+   if (ImFont *f = get_font("plex-sans", err)) io.FontDefault = f;
+   ImGui::GetStyle().FontSizeBase = DEFAULT_FONT_SIZE;
+   st.font = "plex-sans";
 }
 
 void destroy_contexts() {
+   st.fonts.clear(); // the fonts belong to the context's atlas
+   st.font_data.clear();
    if (ImPlot::GetCurrentContext()) ImPlot::DestroyContext();
    if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
 }
@@ -431,8 +492,16 @@ bool apply_theme(const figure_theme::theme_t &t, const std::string &where, const
       clear[1] = t.background.g;
       clear[2] = t.background.b;
    }
+   ImFont *font = nullptr;
+   if (!t.font.empty()) {
+      font = get_font(t.font, err);
+      if (!font) {
+         err = where + ": " + err;
+         return false;
+      }
+   }
    s.ScaleAllSizes(st.scale);
-   s.FontSizeBase = old.FontSizeBase;
+   s.FontSizeBase = t.font_size > 0.0 ? static_cast<float>(t.font_size) : old.FontSizeBase;
    s.FontScaleMain = old.FontScaleMain;
    s.FontScaleDpi = old.FontScaleDpi;
    ImGui::GetStyle() = s;
@@ -442,6 +511,10 @@ bool apply_theme(const figure_theme::theme_t &t, const std::string &where, const
    ImPlot::GetStyle().Colormap = cmap;
    for (int i = 0; i < 3; ++i) st.clear[i] = clear[i];
    st.style_base = t.base;
+   if (font) {
+      ImGui::GetIO().FontDefault = font;
+      st.font = t.font;
+   }
    if (st.m == mode::remote) figure_remote::set_background(clear[0], clear[1], clear[2]);
    return true;
 }
@@ -536,6 +609,8 @@ bool save_style_file(const std::string &path, std::string &err) {
    const ImGuiStyle &cur = ImGui::GetStyle();
    const float scale = st.scale > 0.0f ? st.scale : 1.0f;
    std::string out = "# FIGURE theme, written by app%save_style\n\nbase = \"" + base + "\"\n";
+   if (st.font != "plex-sans") out += "font = \"" + st.font + "\"\n";
+   if (cur.FontSizeBase != DEFAULT_FONT_SIZE) out += "font_size = " + short_float(cur.FontSizeBase) + "\n";
    out += "background = " + theme_color(ImVec4(st.clear[0], st.clear[1], st.clear[2], 1.0f)) + "\n";
    const ImPlotColormap cmap = ImPlot::GetStyle().Colormap;
    if (cmap != ImPlotColormap_Deep) {
@@ -829,6 +904,45 @@ int fig_show_style_editor(int *open) {
    }
    ImGui::End();
    if (open) *open = o ? 1 : 0;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_set_font(const char *name, int name_len, double size) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   if (size < 0.0 || size > 200.0) return fail(FIG_ERR_ARGUMENT, "set_font: size must be in (0, 200] pixels");
+   std::string err;
+   ImFont *f = get_font(n, err);
+   if (!f) return fail(err.rfind("cannot read", 0) == 0 ? FIG_ERR_FAILED : FIG_ERR_ARGUMENT, "set_font: " + err);
+   ImGui::GetIO().FontDefault = f;
+   st.font = n;
+   if (size > 0.0) ImGui::GetStyle().FontSizeBase = static_cast<float>(size);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_push_font(const char *name, int name_len, double size) {
+   FIG_TRY
+   if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_push_font: no frame is open");
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   if (size < 0.0 || size > 200.0) return fail(FIG_ERR_ARGUMENT, "ig_push_font: size must be in (0, 200] pixels");
+   ImFont *f = nullptr;
+   if (!n.empty()) {
+      std::string err;
+      f = get_font(n, err);
+      if (!f) return fail(err.rfind("cannot read", 0) == 0 ? FIG_ERR_FAILED : FIG_ERR_ARGUMENT, "ig_push_font: " + err);
+   }
+   ImGui::PushFont(f, size > 0.0 ? static_cast<float>(size) : 0.0f); // 0: the current size; null font: the current
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_pop_font(void) {
+   FIG_TRY
+   if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_pop_font: no frame is open");
+   ImGui::PopFont();
    return FIG_OK;
    FIG_CATCH
 }
