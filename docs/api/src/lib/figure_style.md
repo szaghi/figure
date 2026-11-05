@@ -36,6 +36,7 @@ graph LR
 - [ip_set_style_color](#ip-set-style-color)
 - [ig_set_style_var](#ig-set-style-var)
 - [ip_set_style_var](#ip-set-style-var)
+- [ig_show_style_editor](#ig-show-style-editor)
 - [hex_color](#hex-color)
 - [set_color](#set-color)
 - [set_color_hex](#set-color-hex)
@@ -92,6 +93,31 @@ Set an ImPlot style variable: a number, a pair or a logical.
 **Module procedures**: [`ip_set_style_var_r64`](/api/src/lib/figure_style#ip-set-style-var-r64), [`ip_set_style_var_vec2`](/api/src/lib/figure_style#ip-set-style-var-vec2), [`ip_set_style_var_logical`](/api/src/lib/figure_style#ip-set-style-var-logical)
 
 ## Subroutines
+
+### ig_show_style_editor
+
+Dear ImGui's and ImPlot's style editors, in a window titled "Style editor": every colour and size, live; with
+ `open`, the window has a close button that sets it false. Keep a look with `app%save_style`.
+
+```fortran
+subroutine ig_show_style_editor(open, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `open` | logical | inout | optional | Window open. |
+| `stat` | integer(kind=int32) | out | optional | Status: `FIG_ERR_STATE` outside a frame. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_show_style_editor["ig_show_style_editor"] --> fig_show_style_editor["fig_show_style_editor"]
+  ig_show_style_editor["ig_show_style_editor"] --> figure_check["figure_check"]
+  style ig_show_style_editor fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### hex_color
 

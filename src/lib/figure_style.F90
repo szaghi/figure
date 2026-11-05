@@ -13,16 +13,16 @@ module figure_style
 !<
 !< Colours are given as `'#rrggbb'` or `'#rrggbbaa'`, or as `[r, g, b]` / `[r, g, b, a]` in [0, 1]. Variables in
 !< pixels hold the values Dear ImGui uses, already multiplied by the display's content scale (`app%content_scale()`).
-use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
+use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int, c_loc, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check, figure_fail
-use figure_c_native, only : FIG_ERR_ARGUMENT, fig_style_color, fig_style_var
+use figure_c_native, only : FIG_ERR_ARGUMENT, fig_show_style_editor, fig_style_color, fig_style_var
 
 implicit none
 private
 public :: ig_set_style_color, ig_get_style_color, ig_set_style_var, ig_get_style_var
 public :: ip_set_style_color, ip_get_style_color, ip_set_style_var, ip_get_style_var
-public :: hex_color
+public :: hex_color, ig_show_style_editor
 
 integer(c_int), parameter :: LIB_IMGUI  = 0_c_int !< Dear ImGui.
 integer(c_int), parameter :: LIB_IMPLOT = 1_c_int !< ImPlot.
@@ -48,6 +48,23 @@ interface ip_set_style_var
 endinterface ip_set_style_var
 
 contains
+   subroutine ig_show_style_editor(open, stat)
+   !< Dear ImGui's and ImPlot's style editors, in a window titled "Style editor": every colour and size, live; with
+   !< `open`, the window has a close button that sets it false. Keep a look with `app%save_style`.
+   logical,        intent(inout), optional :: open !< Window open.
+   integer(int32), intent(out),   optional :: stat !< Status: `FIG_ERR_STATE` outside a frame.
+   integer(c_int), target                  :: o    !< C copy of `open`.
+
+   if (present(open)) then
+      if (.not. open) return
+      o = merge(1_c_int, 0_c_int, open)
+      call figure_check(fig_show_style_editor(c_loc(o)), stat)
+      open = o == 1_c_int
+   else
+      call figure_check(fig_show_style_editor(c_null_ptr), stat)
+   endif
+   endsubroutine ig_show_style_editor
+
    pure subroutine hex_color(text, rgba, ok)
    !< Parse `'#rrggbb'` or `'#rrggbbaa'` (the `#` optional, either case) into components in [0, 1].
    character(len=*), intent(in)  :: text    !< Hex colour.

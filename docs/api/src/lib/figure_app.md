@@ -41,6 +41,8 @@ graph LR
 - [init_remote](#init-remote)
 - [set_lazy](#set-lazy)
 - [set_style](#set-style)
+- [load_style](#load-style)
+- [save_style](#save-style)
 - [set_docking](#set-docking)
 - [request_frames](#request-frames)
 - [destroy](#destroy)
@@ -73,6 +75,8 @@ A FIGURE application (one per program).
 | `set_lazy` | pass(self) | Lazy redraw on/off, longest sleep. |
 | `set_style` | pass(self) | Colours of the interface, the plots and the background. |
 | `set_docking` | pass(self) | Docking on (the default) or off. |
+| `load_style` | pass(self) | A theme file. |
+| `save_style` | pass(self) | The style in effect, as a theme file. |
 | `request_frames` | pass(self) | Redraw without waiting for input. |
 | `content_scale` | pass(self) | Display content scale. |
 | `destroy` | pass(self) | Close everything. |
@@ -229,6 +233,59 @@ flowchart TD
   set_style["set_style"] --> fig_set_style["fig_set_style"]
   set_style["set_style"] --> figure_check["figure_check"]
   style set_style fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### load_style
+
+Apply a theme file (the format of the files in `themes/`: docs, Styles, Theme files), after `init*`. Sizes in the
+ file are logical pixels; what the file does not set comes from its `base`.
+
+```fortran
+subroutine load_style(self, file, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `file` | character(len=*) | in |  | Theme file. |
+| `stat` | integer(kind=int32) | out | optional | malformed (the message gives the line). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  load_style["load_style"] --> fig_load_style["fig_load_style"]
+  load_style["load_style"] --> figure_check["figure_check"]
+  style load_style fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### save_style
+
+Write the style in effect as a theme file: its base, background, line colours, and every colour and variable
+ that differs from the base (sizes in logical pixels; colours as 8-bit hex, alphas exact). Changes made by name
+ or in the style editor (`ig_show_style_editor`) are kept; `load_style` reads the file back.
+
+```fortran
+subroutine save_style(self, file, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `file` | character(len=*) | in |  | Theme file to write. |
+| `stat` | integer(kind=int32) | out | optional |  |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  save_style["save_style"] --> fig_save_style["fig_save_style"]
+  save_style["save_style"] --> figure_check["figure_check"]
+  style save_style fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### set_docking

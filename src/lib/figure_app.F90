@@ -21,7 +21,7 @@ use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
 use figure_base, only : figure_check
 use figure_c_native, only : FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, fig_init_headless, &
                             fig_init_remote, fig_request_frames, fig_set_docking, fig_set_ini_file, fig_set_lazy, &
-                            fig_set_style, fig_shutdown
+                            fig_set_style, fig_shutdown, fig_load_style, fig_save_style
 
 implicit none
 private
@@ -41,6 +41,8 @@ type :: app_object
       procedure, pass(self) :: set_lazy       !< Lazy redraw on/off, longest sleep.
       procedure, pass(self) :: set_style      !< Colours of the interface, the plots and the background.
       procedure, pass(self) :: set_docking    !< Docking on (the default) or off.
+      procedure, pass(self) :: load_style     !< A theme file.
+      procedure, pass(self) :: save_style     !< The style in effect, as a theme file.
       procedure, pass(self) :: request_frames !< Redraw without waiting for input.
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
@@ -184,6 +186,28 @@ contains
       call figure_check(fig_set_style(name, len(name, c_int), '', 0_c_int), stat)
    endif
    endsubroutine set_style
+
+   subroutine load_style(self, file, stat)
+   !< Apply a theme file (the format of the files in `themes/`: docs, Styles, Theme files), after `init*`. Sizes in the
+   !< file are logical pixels; what the file does not set comes from its `base`.
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: file !< Theme file.
+   integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_FAILED` if unreadable, `FIG_ERR_ARGUMENT` if
+                                                    !< malformed (the message gives the line).
+
+   call figure_check(fig_load_style(file, len(file, c_int)), stat)
+   endsubroutine load_style
+
+   subroutine save_style(self, file, stat)
+   !< Write the style in effect as a theme file: its base, background, line colours, and every colour and variable
+   !< that differs from the base (sizes in logical pixels; colours as 8-bit hex, alphas exact). Changes made by name
+   !< or in the style editor (`ig_show_style_editor`) are kept; `load_style` reads the file back.
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: file !< Theme file to write.
+   integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_FAILED` if it cannot be written.
+
+   call figure_check(fig_save_style(file, len(file, c_int)), stat)
+   endsubroutine save_style
 
    subroutine set_docking(self, enabled, stat)
    !< Docking on (the default since `init*`) or off: with docking on, a window dragged by its title bar docks into

@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <chrono>
 #include <algorithm>
+#include <cmath>
 #include <exception>
 #include <map>
 #include <string>
@@ -57,6 +58,7 @@ struct state_t {
    int           frames_left = 3; // frames still to draw after the last event (ImGui settles in a few)
    float         scale = 1.0f;
    float         clear[3] = {0.10f, 0.10f, 0.11f}; // the window's background, behind the ImGui windows (the style's)
+   std::string   style_base = "dark";              // base of the style in effect (what save_style writes against)
    std::string   ini_file;        // where Dear ImGui keeps window positions and sizes; empty: nowhere (the default)
    struct texture_t {
       int  width = 0, height = 0;
@@ -439,6 +441,7 @@ bool apply_theme(const figure_theme::theme_t &t, const std::string &where, const
    for (const auto &pc : plot_colors) ImPlot::GetStyle().Colors[pc.first] = pc.second;
    ImPlot::GetStyle().Colormap = cmap;
    for (int i = 0; i < 3; ++i) st.clear[i] = clear[i];
+   st.style_base = t.base;
    if (st.m == mode::remote) figure_remote::set_background(clear[0], clear[1], clear[2]);
    return true;
 }
@@ -465,6 +468,161 @@ bool apply_style(const std::string &name, std::string &err, const std::string &l
    return false;
 }
 
+// Apply a theme file read at run time; false with err. Its line colours get a colormap named by the colours themselves,
+// so loading the same file again reuses it and a changed file gets a new one (ImPlot cannot replace a colormap).
+bool apply_style_file(const std::string &path, std::string &err) {
+   FILE *f = std::fopen(path.c_str(), "rb");
+   if (!f) {
+      err = "cannot read " + path;
+      return false;
+   }
+   std::string text;
+   char buf[4096];
+   size_t n;
+   while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0) text.append(buf, n);
+   std::fclose(f);
+   figure_theme::theme_t t;
+   if (!figure_theme::parse(text, path, t, err)) return false;
+   std::string cmap = "FIGURE lines";
+   char hex[16];
+   for (const auto &c : t.lines) {
+      std::snprintf(hex, sizeof(hex), " %08x", ImGui::ColorConvertFloat4ToU32(vec4(c)));
+      cmap += hex;
+   }
+   return apply_theme(t, path, cmap, err);
+}
+
+// A style name or a theme file: a value with a '/' or ending in ".toml" is a file.
+bool is_style_file(const std::string &v) {
+   return v.find('/') != std::string::npos || (v.size() > 5 && v.compare(v.size() - 5, 5, ".toml") == 0);
+}
+
+// The shortest decimal that reads back to the same float (0.97, not 0.970000029).
+std::string short_float(float v) {
+   char out[32];
+   for (int digits = 6; digits <= 9; ++digits) {
+      std::snprintf(out, sizeof(out), "%.*g", digits, v);
+      if (std::strtof(out, nullptr) == v) break;
+   }
+   return out;
+}
+
+// Colour as the theme format writes it: "#rrggbb", or ["#rrggbb", alpha] with the alpha exact.
+std::string theme_color(const ImVec4 &c) {
+   auto byte = [](float v) { return static_cast<int>(std::lround(std::min(1.0f, std::max(0.0f, v)) * 255.0f)); };
+   char out[64];
+   if (c.w >= 1.0f) std::snprintf(out, sizeof(out), "\"#%02x%02x%02x\"", byte(c.x), byte(c.y), byte(c.z));
+   else std::snprintf(out, sizeof(out), "[\"#%02x%02x%02x\", %s]", byte(c.x), byte(c.y), byte(c.z), short_float(c.w).c_str());
+   return out;
+}
+
+// Write the style in effect as a theme file: base, background, lines, and every colour and variable that differs from
+// the base. Sizes are written in logical pixels (divided by the content scale): which fields are sizes is asked to Dear
+// ImGui itself (the fields ScaleAllSizes changes).
+bool save_style_file(const std::string &path, std::string &err) {
+   const std::string base = st.style_base;
+   ImGuiStyle ref;
+   if (base == "light") ImGui::StyleColorsLight(&ref);
+   else if (base == "classic") ImGui::StyleColorsClassic(&ref);
+   else ImGui::StyleColorsDark(&ref);
+   ImGuiStyle probe; // every plain field set to 1, then scaled by 2: the sizes become 2
+   for (int i = 0; i < figure_style::IMGUI_FIELDS_COUNT; ++i) {
+      const figure_style::field &f = figure_style::IMGUI_FIELDS[i];
+      unsigned char *p = reinterpret_cast<unsigned char *>(&probe) + f.offset;
+      if (f.kind == figure_style::FIG_STYLE_FLOAT) *reinterpret_cast<float *>(p) = 1.0f;
+      else if (f.kind == figure_style::FIG_STYLE_VEC2) *reinterpret_cast<ImVec2 *>(p) = ImVec2(1.0f, 1.0f);
+   }
+   probe.ScaleAllSizes(2.0f);
+   const ImGuiStyle &cur = ImGui::GetStyle();
+   const float scale = st.scale > 0.0f ? st.scale : 1.0f;
+   std::string out = "# FIGURE theme, written by app%save_style\n\nbase = \"" + base + "\"\n";
+   out += "background = " + theme_color(ImVec4(st.clear[0], st.clear[1], st.clear[2], 1.0f)) + "\n";
+   const ImPlotColormap cmap = ImPlot::GetStyle().Colormap;
+   if (cmap != ImPlotColormap_Deep) {
+      out += "lines = [";
+      for (int i = 0; i < ImPlot::GetColormapSize(cmap); ++i) {
+         if (i) out += ", ";
+         ImVec4 c = ImPlot::GetColormapColor(i, cmap);
+         c.w = 1.0f;
+         out += theme_color(c);
+      }
+      out += "]\n";
+   }
+   char num[96];
+   auto vars = [&](const char *section, const figure_style::field *table, int count, const unsigned char *now,
+                   const unsigned char *was, const unsigned char *sizes) {
+      std::string block;
+      for (int i = 0; i < count; ++i) {
+         const figure_style::field &f = table[i];
+         const unsigned char *a = now + f.offset, *b = was + f.offset;
+         const float k = sizes && f.kind <= figure_style::FIG_STYLE_VEC2 &&
+                                 *reinterpret_cast<const float *>(sizes + f.offset) == 2.0f
+                            ? scale
+                            : 1.0f;
+         switch (f.kind) {
+         case figure_style::FIG_STYLE_FLOAT: {
+            const float v = *reinterpret_cast<const float *>(a) / k;
+            if (v == *reinterpret_cast<const float *>(b)) continue;
+            std::snprintf(num, sizeof(num), "%s", short_float(v).c_str());
+            break;
+         }
+         case figure_style::FIG_STYLE_VEC2: {
+            const ImVec2 v = *reinterpret_cast<const ImVec2 *>(a), w = *reinterpret_cast<const ImVec2 *>(b);
+            if (v.x / k == w.x && v.y / k == w.y) continue;
+            std::snprintf(num, sizeof(num), "[%s, %s]", short_float(v.x / k).c_str(), short_float(v.y / k).c_str());
+            break;
+         }
+         case figure_style::FIG_STYLE_BOOL: {
+            const bool v = *reinterpret_cast<const bool *>(a);
+            if (v == *reinterpret_cast<const bool *>(b)) continue;
+            std::snprintf(num, sizeof(num), "%s", v ? "true" : "false");
+            break;
+         }
+         default: {
+            const int v = *reinterpret_cast<const int *>(a);
+            if (v == *reinterpret_cast<const int *>(b)) continue;
+            std::snprintf(num, sizeof(num), "%d", v);
+            break;
+         }
+         }
+         block += std::string(f.name) + " = " + num + "\n";
+      }
+      if (!block.empty()) out += std::string("\n[") + section + "]\n" + block;
+   };
+   vars("imgui.vars", figure_style::IMGUI_FIELDS, figure_style::IMGUI_FIELDS_COUNT,
+        reinterpret_cast<const unsigned char *>(&cur), reinterpret_cast<const unsigned char *>(&ref),
+        reinterpret_cast<const unsigned char *>(&probe));
+   std::string colors;
+   for (int i = 0; i < ImGuiCol_COUNT; ++i) {
+      const ImVec4 &c = cur.Colors[i], &r = ref.Colors[i];
+      if (c.x == r.x && c.y == r.y && c.z == r.z && c.w == r.w) continue;
+      colors += std::string(ImGui::GetStyleColorName(i)) + " = " + theme_color(c) + "\n";
+   }
+   if (!colors.empty()) out += "\n[imgui.colors]\n" + colors;
+   const ImPlotStyle pref;
+   vars("implot.vars", figure_style::IMPLOT_FIELDS, figure_style::IMPLOT_FIELDS_COUNT,
+        reinterpret_cast<const unsigned char *>(&ImPlot::GetStyle()), reinterpret_cast<const unsigned char *>(&pref),
+        nullptr);
+   colors.clear();
+   for (int i = 0; i < ImPlotCol_COUNT; ++i) {
+      const ImVec4 &c = ImPlot::GetStyle().Colors[i];
+      if (ImPlot::IsColorAuto(c)) continue; // derived from Dear ImGui's: nothing to write
+      colors += std::string(ImPlot::GetStyleColorName(i)) + " = " + theme_color(c) + "\n";
+   }
+   if (!colors.empty()) out += "\n[implot.colors]\n" + colors;
+   FILE *f = std::fopen(path.c_str(), "wb");
+   if (!f) {
+      err = "cannot write " + path;
+      return false;
+   }
+   const bool ok = std::fwrite(out.data(), 1, out.size(), f) == out.size();
+   if (std::fclose(f) != 0 || !ok) {
+      err = "cannot write " + path;
+      return false;
+   }
+   return true;
+}
+
 std::string builtin_style_names() {
    std::string names;
    for (int i = 0; i < figure_theme::builtin_count(); ++i) {
@@ -480,6 +638,10 @@ void apply_initial_style() {
    std::string err;
    if (!apply_style("seal", err)) std::fprintf(stderr, "figure: the default style: %s\n", err.c_str());
    const char *v = std::getenv("FIGURE_STYLE");
+   if (v && *v && is_style_file(v)) {
+      if (!apply_style_file(v, err)) std::fprintf(stderr, "figure: FIGURE_STYLE=%s: %s, ignored\n", v, err.c_str());
+      return;
+   }
    if (v && *v && !apply_style(v, err))
       std::fprintf(stderr, "figure: FIGURE_STYLE=%s: %s, ignored\n", v,
                    err.empty() ? ("unknown style (" + builtin_style_names() + ")").c_str() : err.c_str());
@@ -630,6 +792,43 @@ int fig_set_style(const char *name, int name_len, const char *lines, int lines_l
    if (!apply_style(n, err, l))
       return fail(FIG_ERR_ARGUMENT, err.empty() ? "set_style: unknown style \"" + n + "\" (" + builtin_style_names() + ")"
                                                 : "set_style: " + err);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_load_style(const char *path, int path_len) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   const std::string p(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
+   std::string err;
+   if (!apply_style_file(p, err)) {
+      if (err.rfind("cannot read", 0) == 0) return fail(FIG_ERR_FAILED, "load_style: " + err);
+      return fail(FIG_ERR_ARGUMENT, "load_style: " + err);
+   }
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_save_style(const char *path, int path_len) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   const std::string p(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
+   std::string err;
+   if (!save_style_file(p, err)) return fail(FIG_ERR_FAILED, "save_style: " + err);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_show_style_editor(int *open) {
+   FIG_TRY
+   if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_show_style_editor: no frame is open");
+   bool o = open ? *open != 0 : true;
+   if (ImGui::Begin("Style editor", open ? &o : nullptr)) {
+      if (ImGui::CollapsingHeader("Dear ImGui", ImGuiTreeNodeFlags_DefaultOpen)) ImGui::ShowStyleEditor();
+      if (ImGui::CollapsingHeader("ImPlot")) ImPlot::ShowStyleEditor();
+   }
+   ImGui::End();
+   if (open) *open = o ? 1 : 0;
    return FIG_OK;
    FIG_CATCH
 }

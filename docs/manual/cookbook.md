@@ -65,6 +65,14 @@ See [tutorial chapter 2](./tutorial/02-widgets#same-text-different-widgets): `'R
 Names are Dear ImGui's and ImPlot's own (`Button`, `SliderGrab`, `PlotBg`, `FrameRounding`, ...); the change is
 global and lasts until it is changed again or `app%set_style` resets it. [Styles](/guide/styles) lists them.
 
+### Tune a theme in the style editor and keep it
+
+<<< @/examples/snippets/cb_tune-tune.F90{fortran}
+
+Dear ImGui's style editor changes every colour and size live; `app%save_style` writes what differs from the base as a
+theme file, which `app%load_style` (or `FIGURE_STYLE=my-theme.toml`) applies in any later run.
+[Styles](/guide/styles#load-tune-and-save) shows it at work.
+
 ### Controls on the left, plots on the right
 
 <<< @/examples/snippets/cb_dock-layout.F90{fortran}

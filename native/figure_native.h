@@ -35,6 +35,11 @@ int    fig_set_style(const char *name, int name_len, const char *lines, int line
  * Button, PlotBg, ...), rgba in [0, 1]. Variables: every plain field of ImGuiStyle/ImPlotStyle (WindowRounding,
  * FramePadding, PlotPadding, ...): count values (1, or 2 for an ImVec2; bools as 0/1, enumerations as integers),
  * returned in count when reading. */
+/* Theme files (figure_theme.h format): load one, or write the style in effect as one (what differs from its base). */
+int    fig_load_style(const char *path, int path_len);
+int    fig_save_style(const char *path, int path_len);
+/* Dear ImGui's and ImPlot's style editors in a window ("Style editor"); open: the window's close button (may be NULL). */
+int    fig_show_style_editor(int *open);
 int    fig_style_color(int lib, const char *name, int name_len, int set, float *rgba);
 int    fig_style_var(int lib, const char *name, int name_len, int set, double *values, int *count);
 void   fig_request_frames(int n);

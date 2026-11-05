@@ -120,3 +120,41 @@ The built-in themes: [`seal`](https://github.com/szaghi/figure/blob/main/themes/
 [`classic`](https://github.com/szaghi/figure/blob/main/themes/classic.toml),
 [`paper`](https://github.com/szaghi/figure/blob/main/themes/paper.toml),
 [`high-contrast`](https://github.com/szaghi/figure/blob/main/themes/high-contrast.toml).
+
+## Load, tune and save
+
+| Procedure | Does |
+|---|---|
+| `app%load_style(file [, stat])` | apply a theme file; `FIG_ERR_FAILED` if it cannot be read, `FIG_ERR_ARGUMENT` if it is malformed (the message gives file and line) |
+| `app%save_style(file [, stat])` | write the style in effect as a theme file: its base, background and line colours, and every colour and variable that differs from the base, including the changes made by name or in the style editor |
+| `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's own style editors in a window, "Style editor": every colour and size, live |
+
+`FIGURE_STYLE` also takes a file: a value with a `/` or ending in `.toml` is loaded as a theme
+(`FIGURE_STYLE=./my-theme.toml exe/figure_hello`).
+
+<Media name="cb_tune" video alt="In the style editor, the frame rounding is dragged up, frame borders ticked, the frame padding widened, then Save theme is pressed" caption="docs/examples/src/cb_tune.F90: the sample window follows the editor live; Save theme writes my-theme.toml" />
+
+<<< @/examples/snippets/cb_tune-tune.F90{fortran}
+
+The file written in the recording above begins:
+
+```toml
+# FIGURE theme, written by app%save_style
+
+base = "dark"
+background = "#14120f"
+lines = ["#e8664c", "#e9e2d4", "#c9a25a", "#7f9cb0", "#8fa06a", "#a77a95", "#d98b6a", "#a3998c"]
+
+[imgui.vars]
+FramePadding = [12, 3]
+FrameRounding = 6
+FrameBorderSize = 1
+ScrollbarRounding = 0
+GrabRounding = 6
+TabRounding = 0
+...
+```
+
+`save_style` writes sizes in logical pixels (whatever the display's content scale) and colours as 8-bit hex, with
+their alpha exact; `load_style` reads the file back to the same style. Edit the file freely: everything not in it
+comes from `base`.

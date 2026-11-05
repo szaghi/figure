@@ -6,7 +6,8 @@ program figure_test_headless
 !< a check box is toggled the same way; a plot is drawn from Fortran arrays. Needs no display, so it runs in CI as is.
 use, intrinsic :: iso_c_binding, only : c_double, c_f_pointer, c_float, c_int, c_null_char
 use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, real32, real64
-use figure, only : FIG_ERR_ARGUMENT, FIG_OK, app_object, figure_last_error, ig_begin, ig_button, ig_checkbox, ig_end, &
+use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_last_error, ig_begin, ig_button, &
+                   ig_checkbox, ig_end, &
                    ig_item_rect, ig_set_next_window, ImPlotMarker_Circle, ip_bars, ip_begin_plot, ip_end_plot, ip_line, &
                    ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object, FIG_ERR_STATE, ig_image, ip_heatmap,   &
                    ip_image, ImPlotColormap_Viridis, texture_object, ig_dock_id, ig_dock_layout_begin,             &
@@ -15,7 +16,8 @@ use figure, only : FIG_ERR_ARGUMENT, FIG_OK, app_object, figure_last_error, ig_b
                    ip_get_style_var, ip_set_style_color, ip_set_style_var
 use figure_cimgui, only : im_vec4, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
-use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, ImPlot_GetPlotLimits
+use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, &
+                           ImPlot_GetPlotLimits
 use figure_c_native, only : fig_input_mouse
 
 implicit none
@@ -33,7 +35,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(33)  !< Per-check outcome.
+logical                   :: test_passed(36)  !< Per-check outcome.
 type(texture_object)      :: tex              !< A 4 x 2 texture.
 integer(int8)             :: pix(4, 4, 2)     !< Its pixels.
 integer(int8)             :: pix_bad(3, 4, 2) !< Pixels of the wrong shape (3 channels).
@@ -70,6 +72,18 @@ integer(int32)            :: stat_sv(5)       !< Statuses of the style calls tha
 integer(int32)            :: stat_builtin(5)  !< set_style of every built-in theme.
 integer(int32)            :: stat_lines(2)    !< set_style with the okabe-ito lines, and with an unknown palette.
 integer(c_int)            :: okabe_cmap       !< Index of the okabe-ito colormap.
+character(len=*), parameter :: STYLE_FILE = 'figure_test_headless.style.toml' !< Theme file of the round trip.
+character(len=*), parameter :: BAD_FILE = 'figure_test_headless.bad.toml'     !< A malformed theme file.
+integer(int32)            :: stat_file(4)     !< save, load, load of a malformed file, load of a missing file.
+real(real64)              :: back_button(4)   !< Button after the round trip.
+real(real64)              :: back_window(4)   !< WindowBg after the round trip (from the seal base).
+real(real64)              :: back_plot_bg(4)  !< ImPlot PlotBg after the round trip.
+real(real64)              :: back_round(2)    !< FrameRounding after the round trip.
+real(real64)              :: back_padding(2)  !< ImPlot PlotPadding after the round trip.
+integer(int32)            :: back_n(2)        !< Their counts.
+type(im_vec4)             :: back_line        !< First line colour after the round trip.
+character(len=:), allocatable :: bad_message  !< Error message of the malformed file.
+integer(int32)            :: unit             !< File unit.
 integer(int32)            :: stat_items(5)    !< Status of the scatter, bars and shaded items.
 integer(int32)            :: stat_spec        !< Status of a spec with a bad colour.
 type(plot_spec_object)    :: red              !< Red line, 2 pixels, circle markers.
@@ -239,6 +253,32 @@ call app%set_style('seal', lines='okabe-ito', stat=stat_lines(1))
 okabe_cmap = ImPlot_GetColormapIndex('FIGURE okabe-ito'//c_null_char)
 call app%set_style('seal', lines='rainbow', stat=stat_lines(2))
 call app%set_style('seal')
+! theme files: save the style in effect (seal + four changes by name), switch away, load it back
+call app%set_style('seal')
+call ig_set_style_color('Button', '#123456')
+call ig_set_style_var('FrameRounding', 5.0_real64)
+call ip_set_style_color('PlotBg', '#20304080')
+call ip_set_style_var('PlotPadding', [3.0_real64, 4.0_real64])
+call app%save_style(STYLE_FILE, stat=stat_file(1))
+call app%set_style('dark')
+call app%load_style(STYLE_FILE, stat=stat_file(2))
+call ig_get_style_color('Button', back_button)
+call ig_get_style_color('WindowBg', back_window)
+call ip_get_style_color('PlotBg', back_plot_bg)
+call ig_get_style_var('FrameRounding', back_round, back_n(1))
+call ip_get_style_var('PlotPadding', back_padding, back_n(2))
+call ImPlot_GetColormapColor(0_c_int, -1_c_int, back_line)
+open(newunit=unit, file=BAD_FILE, action='write', status='replace')
+write(unit, '(A)') 'base = "dark"', '[imgui.colors]', 'Buton = "#ffffff"'
+close(unit)
+call app%load_style(BAD_FILE, stat=stat_file(3))
+bad_message = figure_last_error()
+call app%load_style('no/such/theme.toml', stat=stat_file(4))
+open(newunit=unit, file=STYLE_FILE, status='old')
+close(unit, status='delete')
+open(newunit=unit, file=BAD_FILE, status='old')
+close(unit, status='delete')
+call app%set_style('seal')
 call app%set_docking(.false.)
 if (app%next_frame()) call ig_dock_space(dock_root, stat=stat_dock) ! docking off: rejected
 call ip_heatmap('one end', fld, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, scale_min=0.0_real64, stat=stat_scale)
@@ -283,10 +323,20 @@ test_passed(30) = nvar(1) == 1_int32 .and. abs(var(1) - 3.0_real64) < 1.0e-6_rea
                   all(abs(var_plot - [4.0_real64, 6.0_real64]) < 1.0e-6_real64)                ! variables round-trip
 test_passed(31) = all(stat_sv == int(FIG_ERR_ARGUMENT, int32))                     ! bad names, colours, arity
 test_passed(32) = all(stat_builtin == int(FIG_OK, int32))                           ! every built-in theme parses
+test_passed(34) = all(stat_file(1:2) == int(FIG_OK, int32)) .and.                                        &
+                  all(abs(back_button - [18.0_real64, 52.0_real64, 86.0_real64, 255.0_real64] / 255.0_real64) < 1.0e-6_real64) &
+                  .and. all(abs(back_window - [28.0_real64, 25.0_real64, 21.0_real64, 255.0_real64] / 255.0_real64)  &
+                  < 1.0e-6_real64) .and. abs(back_line%x - 232.0_c_float / 255.0_c_float) < 1.0e-6_c_float ! colours back
+test_passed(35) = back_n(1) == 1_int32 .and. abs(back_round(1) - 5.0_real64) < 1.0e-6_real64 .and.          &
+                  back_n(2) == 2_int32 .and. all(abs(back_padding - [3.0_real64, 4.0_real64]) < 1.0e-6_real64) .and. &
+                  all(abs(back_plot_bg - [32.0_real64, 48.0_real64, 64.0_real64, 128.0_real64] / 255.0_real64)       &
+                  < 1.0e-6_real64)                                                  ! variables and ImPlot back
+test_passed(36) = stat_file(3) == int(FIG_ERR_ARGUMENT, int32) .and. index(bad_message, ':3:') > 0 .and.   &
+                  index(bad_message, 'Buton') > 0 .and. stat_file(4) == int(FIG_ERR_FAILED, int32) ! errors with lines
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
                   stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
 
-write(output_unit, '(A,33L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,36L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

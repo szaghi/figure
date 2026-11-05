@@ -16,7 +16,8 @@ public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, 
 public :: fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
-public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var
+public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
+public :: fig_show_style_editor
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -176,6 +177,32 @@ interface
    integer(c_int), value :: plot         !< 1: the current plot's draw list; 0: the current window's.
    integer(c_int), value :: from_texture !< 1: before the image; 0: after it.
    endsubroutine fig_texture_sampling
+
+   function fig_load_style(path, path_len) result(status) bind(C, name='fig_load_style')
+   !< Apply a theme file.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File path (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Path length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_load_style
+
+   function fig_save_style(path, path_len) result(status) bind(C, name='fig_save_style')
+   !< Write the style in effect as a theme file.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File path (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Path length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_save_style
+
+   function fig_show_style_editor(open) result(status) bind(C, name='fig_show_style_editor')
+   !< Dear ImGui's and ImPlot's style editors in a window.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr), value :: open   !< int* (1: open), or null for no close button.
+   integer(c_int)     :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_show_style_editor
 
    function fig_style_color(lib, name, name_len, set, rgba) result(status) bind(C, name='fig_style_color')
    !< Read (set = 0) or write (set = 1) a style colour by name: lib 0 Dear ImGui, 1 ImPlot.
