@@ -52,6 +52,13 @@ graph LR
 - [fig_dock_window](#fig-dock-window)
 - [fig_dock_layout_end](#fig-dock-layout-end)
 - [fig_window_dock](#fig-window-dock)
+- [fig_input_next_frame](#fig-input-next-frame)
+- [fig_input_mouse_pos](#fig-input-mouse-pos)
+- [fig_input_mouse_button](#fig-input-mouse-button)
+- [fig_input_wheel](#fig-input-wheel)
+- [fig_input_key](#fig-input-key)
+- [fig_input_text](#fig-input-text)
+- [fig_window_rect](#fig-window-rect)
 - [fig_shutdown](#fig-shutdown)
 - [fig_set_lazy](#fig-set-lazy)
 - [fig_request_frames](#fig-request-frames)
@@ -131,6 +138,20 @@ graph LR
 ### fig_dock_layout_end
 
 ### fig_window_dock
+
+### fig_input_next_frame
+
+### fig_input_mouse_pos
+
+### fig_input_mouse_button
+
+### fig_input_wheel
+
+### fig_input_key
+
+### fig_input_text
+
+### fig_window_rect
 
 ### fig_shutdown
 

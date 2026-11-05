@@ -18,7 +18,8 @@ public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
 public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
 public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
-public :: fig_pop_style
+public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
+public :: fig_window_rect, fig_input_next_frame
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -362,6 +363,70 @@ interface
    integer(c_int), intent(out) :: docked !< 1: docked.
    integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_window_dock
+
+   function fig_input_next_frame() result(status) bind(C, name='fig_input_next_frame')
+   !< A frame boundary in the queued input: what follows reaches Dear ImGui one frame later.
+   import :: c_int
+   implicit none
+   integer(c_int) :: status !< Status.
+   endfunction fig_input_next_frame
+
+   function fig_input_mouse_pos(x, y) result(status) bind(C, name='fig_input_mouse_pos')
+   !< Queue a mouse position [pixels].
+   import :: c_float, c_int
+   implicit none
+   real(c_float), value :: x      !< Abscissa.
+   real(c_float), value :: y      !< Ordinate.
+   integer(c_int)       :: status !< Status.
+   endfunction fig_input_mouse_pos
+
+   function fig_input_mouse_button(button, down) result(status) bind(C, name='fig_input_mouse_button')
+   !< Queue a mouse button change: 0 left, 1 right, 2 middle.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: button !< Button.
+   integer(c_int), value :: down   !< 1: pressed.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_input_mouse_button
+
+   function fig_input_wheel(dx, dy) result(status) bind(C, name='fig_input_wheel')
+   !< Queue a wheel turn.
+   import :: c_float, c_int
+   implicit none
+   real(c_float), value :: dx     !< Horizontal.
+   real(c_float), value :: dy     !< Vertical (positive: away from the user).
+   integer(c_int)       :: status !< Status.
+   endfunction fig_input_wheel
+
+   function fig_input_key(name, name_len, down) result(status) bind(C, name='fig_input_key')
+   !< Queue a key change, by name.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Key name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   integer(c_int), value              :: down     !< 1: pressed.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_input_key
+
+   function fig_input_text(text, text_len) result(status) bind(C, name='fig_input_text')
+   !< Queue typed characters (UTF-8).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: text(*)  !< Text (not NUL-terminated).
+   integer(c_int), value              :: text_len !< Text length [bytes].
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_input_text
+
+   function fig_window_rect(name, name_len, rect, found) result(status) bind(C, name='fig_window_rect')
+   !< A window's rectangle by name, as in the last frame.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Window name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   real(c_float), intent(out)         :: rect(4)  !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out)        :: found    !< 1: the window exists.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_window_rect
 
    subroutine fig_input_mouse(x, y, left_down) bind(C, name='fig_input_mouse')
    !< Queue a synthetic mouse state (tests).

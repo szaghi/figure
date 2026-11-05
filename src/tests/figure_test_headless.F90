@@ -15,12 +15,12 @@ use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_
                    ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ip_get_style_color,  &
                    ip_get_style_var, ip_set_style_color, ip_set_style_var, ig_pop_font, ig_push_font,         &
                    ig_pop_style_color, ig_pop_style_var, ig_push_style_color, ig_push_style_var, ig_text,      &
-                   ImGuiWindowFlags_NoTitleBar
+                   ImGuiWindowFlags_NoTitleBar, ig_slider, ig_input
 use figure_cimgui, only : im_vec4, igGetFontSize, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, &
                            ImPlot_GetPlotLimits
-use figure_c_native, only : fig_input_mouse
+use figure_testing, only : test_click, test_drag, test_key, test_type, test_window_rect
 
 implicit none
 integer(int32), parameter :: N = 100_int32    !< Plot points.
@@ -37,7 +37,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(40)  !< Per-check outcome.
+logical                   :: test_passed(43)  !< Per-check outcome.
 type(texture_object)      :: tex              !< A 4 x 2 texture.
 integer(int8)             :: pix(4, 4, 2)     !< Its pixels.
 integer(int8)             :: pix_bad(3, 4, 2) !< Pixels of the wrong shape (3 channels).
@@ -94,6 +94,12 @@ real(real64)              :: round_pushed(2)  !< FrameRounding while pushed.
 real(real64)              :: round_popped(2)  !< FrameRounding after the pop.
 integer(int32)            :: stat_pop         !< A pop without a push.
 real(real64)              :: titled_y         !< Top of the first item of a window with a title bar.
+real(real64)              :: level            !< A slider's value, dragged to its maximum.
+real(real64)              :: typed            !< A numeric field's value, typed.
+real(real64)              :: sx(3)            !< Slider: left, right, middle height.
+real(real64)              :: vx(2)            !< Numeric field: centre.
+real(real64)              :: win(4)           !< The Test window's rectangle.
+logical                   :: win_found(2)     !< The Test window found; a missing window not found.
 real(real64)              :: untitled_y       !< The same in a window without one (NoTitleBar).
 integer(int32)            :: stat_items(5)    !< Status of the scatter, bars and shaded items.
 integer(int32)            :: stat_spec        !< Status of a spec with a bad colour.
@@ -135,6 +141,8 @@ call tex%update(pix, stat=stat_tex(2))
 call tex%update(pix_bad, stat=stat_tex(3))
 
 dock_root = ig_dock_id('main')
+level = 0.0_real64
+typed = 1.0_real64
 stat_dock = -1_int32
 titled_y = 0.0_real64
 untitled_y = 0.0_real64
@@ -143,7 +151,7 @@ dock_right = 0_int32
 layouts = 0_int32
 docked = .false.
 dock_node = -1_int32
-do frame = 1_int32, 12_int32
+do frame = 1_int32, 24_int32
    if (.not. app%next_frame()) error stop 'figure_test_headless: next_frame returned false in headless mode'
    ! docking: a layout built once (left 30% | right), two windows docked into it, the dock space every frame
    if (ig_dock_layout_begin(dock_root)) then
@@ -179,6 +187,12 @@ do frame = 1_int32, 12_int32
       if (ig_checkbox('Flag', flag)) toggles = toggles + 1_int32
       call ig_item_rect(x0, y0, x1, y1)
       by = [x0 + 8.0_real64, 0.5_real64 * (y0 + y1)]
+      if (ig_slider('Level', level, 0.0_real64, 1.0_real64)) continue
+      call ig_item_rect(x0, y0, x1, y1)
+      sx = [x0, x1, 0.5_real64 * (y0 + y1)]
+      if (ig_input('Value', typed)) continue
+      call ig_item_rect(x0, y0, x1, y1)
+      vx = [x0 + 20.0_real64, 0.5_real64 * (y0 + y1)]
       if (ip_begin_plot('sine')) then
          call ip_setup_axes('x', 'sin(x)')
          call ip_line('sin', x, y)
@@ -232,20 +246,21 @@ do frame = 1_int32, 12_int32
       endif
    endif
    call ig_end()
-   ! input for the next frames: frames 2-4 click the button (hover, press, release), 6-8 the check box
+   ! input, queued once and applied over the next frames (figure_testing; Dear ImGui trickles it one change per frame)
    select case (frame)
-   case (1_int32, 2_int32)
-      call fig_input_mouse(real(bx(1), c_float), real(bx(2), c_float), 0_c_int)
-   case (3_int32)
-      call fig_input_mouse(real(bx(1), c_float), real(bx(2), c_float), 1_c_int)
-   case (4_int32)
-      call fig_input_mouse(real(bx(1), c_float), real(bx(2), c_float), 0_c_int)
-   case (5_int32, 6_int32)
-      call fig_input_mouse(real(by(1), c_float), real(by(2), c_float), 0_c_int)
-   case (7_int32)
-      call fig_input_mouse(real(by(1), c_float), real(by(2), c_float), 1_c_int)
-   case (8_int32)
-      call fig_input_mouse(real(by(1), c_float), real(by(2), c_float), 0_c_int)
+   case (1_int32)
+      call test_click(bx(1), bx(2))                                  ! the button
+   case (5_int32)
+      call test_click(by(1), by(2))                                  ! the check box
+   case (9_int32)
+      call test_drag(sx(1) + 4.0_real64, sx(3), sx(2) + 40.0_real64, sx(3)) ! the slider, past its right end
+   case (14_int32)
+      call test_click(vx(1), vx(2))                                  ! the numeric field: select all, type, enter
+      call test_key('ctrl', down=.true.)
+      call test_key('a')
+      call test_key('ctrl', down=.false.)
+      call test_type('2.5')
+      call test_key('enter')
    endselect
 enddo
 call ip_line('bad row', m, 4_int32, stat=stat_bad_row)
@@ -305,6 +320,8 @@ close(unit, status='delete')
 open(newunit=unit, file=BAD_FILE, status='old')
 close(unit, status='delete')
 call app%set_style('seal')
+call test_window_rect('Test', win(1), win(2), win(3), win(4), found=win_found(1))
+call test_window_rect('No such window', x0, y0, x1, y1, found=win_found(2))
 call app%set_docking(.false.)
 if (app%next_frame()) call ig_dock_space(dock_root, stat=stat_dock) ! docking off: rejected
 ! fonts: the bundled one at 15 px by default, a size pushed for a block, then the default font switched
@@ -387,10 +404,14 @@ test_passed(39) = all(abs(pushed - [1.0_real64, 0.0_real64, 0.0_real64, 1.0_real
                   .and. abs(round_pushed(1) - 9.0_real64) < 1.0e-6_real64 .and. abs(round_popped(1)) < 1.0e-6_real64     &
                   .and. stat_pop == int(FIG_ERR_STATE, int32)                       ! push, pop, restore; no extra pop
 test_passed(40) = titled_y - untitled_y > 10.0_real64                              ! NoTitleBar: no title bar
+test_passed(41) = abs(level - 1.0_real64) < 1.0e-9_real64                        ! dragged to the slider's maximum
+test_passed(42) = abs(typed - 2.5_real64) < 1.0e-9_real64                         ! typed into the numeric field
+test_passed(43) = win_found(1) .and. .not. win_found(2) .and.                                                      &
+                  all(abs(win - [20.0_real64, 20.0_real64, 420.0_real64, 520.0_real64]) < 1.0e-6_real64) ! window lookup
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
                   stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
 
-write(output_unit, '(A,40L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,43L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

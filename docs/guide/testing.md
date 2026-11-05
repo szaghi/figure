@@ -19,17 +19,51 @@ Differences from window mode:
 
 ## Synthetic input
 
-`fig_input_mouse(x, y, left_down)` queues a mouse state: position in pixels and left button pressed (1) or released
-(0). The next `next_frame` delivers it, exactly as real input would arrive. A click is three frames: hover, press,
-release. To aim at a widget, read its rectangle with `ig_item_rect` right after declaring it.
+The module `figure_testing` queues input as a user would produce it; the program draws its next frames as usual, and
+the input reaches the widgets there. A test queues, draws a few frames, then checks the program's variables:
 
 <<< @/examples/snippets/tut05_headless-test.F90{fortran}
 
 <<< @/examples/output/tut05.txt{text}
 
-`fig_input_mouse` is in the internal module `figure_c_native` (it is not exported by `figure`); its arguments are C
-kinds (`real(c_float)`, `integer(c_int)`). It is the interface the repository's own test uses today; it is not yet
-part of the stable API.
+| Procedure | Queues |
+|---|---|
+| `test_click(x, y [, button] [, stat])` | a click at (x, y): move, press, release (`button`: `'left'`, default, `'right'`, `'middle'`) |
+| `test_drag(x0, y0, x1, y1 [, stat])` | a drag with the left button: a slider grab moved, a window dragged by its title bar |
+| `test_mouse_move(x, y [, stat])`, `test_mouse_button(down [, button] [, stat])` | the parts of a click, one by one |
+| `test_wheel(dy [, dx] [, stat])` | a turn of the wheel; positive `dy` away from the user (zoom in, in a plot) |
+| `test_key(name [, down] [, stat])` | a key, pressed and released (or only pressed or released with `down`): `a`-`z`, `0`-`9`, `enter`, `tab`, `backspace`, `delete`, `escape`, `space`, `left`, `right`, `up`, `down`, `home`, `end`, `pageup`, `pagedown`, `f1`-`f12`, and the modifiers `ctrl`, `shift`, `alt`, `super` |
+| `test_type(text [, stat])` | typed characters, into the focused field |
+| `test_next_frame([stat])` | a frame boundary: what is queued after it arrives one frame later |
+
+And to aim and to check:
+
+| Procedure | Gives |
+|---|---|
+| `test_item_center(x, y)` | the centre of the last widget drawn (call it right after the widget) |
+| `test_window_rect(name, xmin, ymin, xmax, ymax [, found] [, stat])` | a window's rectangle, by its name, as drawn in the last frame |
+
+**Timing.** Everything queued reaches Dear ImGui at the next frame, up to a `test_next_frame` boundary; Dear ImGui then
+applies one change of each kind per frame (its input trickling), so a click queued at once still takes the frames a
+real one takes. Draw a few frames after queuing (three for a click, more for a drag, which `test_drag` spreads with its
+own boundaries) before checking. Editing a numeric field, for example:
+
+```fortran
+call test_click(x, y)                  ! focus the field (its rectangle from ig_item_rect)
+call test_key('ctrl', down=.true.)     ! select what is there
+call test_key('a')
+call test_key('ctrl', down=.false.)
+call test_type('2.5')                  ! replace it
+call test_key('enter')                 ! confirm: the field's variable becomes 2.5
+```
+
+**Aim from the second frame on.** A new window that sizes itself to its content is measured during its first frame
+and shown from the second: positions read in the first frame are not where the widgets end up (place windows with
+`ig_set_next_window` to have them from the first frame).
+
+Coordinates are display pixels, as `ig_item_rect` gives them. The module works in every mode; headless needs no
+display, so tests run in CI as is. It is a separate module: `use figure_testing` where the tests are, `use figure` in
+the application.
 
 ## Test the interface you ship
 
@@ -38,7 +72,9 @@ chapter 5 of the [tutorial](/manual/tutorial/05-headless) does this with a modul
 
 ## The repository's test
 
-`src/tests/figure_test_headless.F90` clicks a button, toggles a check box and draws an ImPlot line, headless:
+`src/tests/figure_test_headless.F90` drives every widget and plot type through `figure_testing` (clicks, a drag, typing
+into a field), checks docking, styles, themes and fonts, headless; `src/tests/figure_test_themes.F90` measures the
+contrast of every built-in style:
 
 ```bash
 fobis build --mode tests-gnu && exe/figure_test_headless

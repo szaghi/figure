@@ -34,11 +34,10 @@ contains
 endmodule tut05_panel
 
 program tut05_headless
-!< Click "Run" once: hover, press, release, one frame each.
-use, intrinsic :: iso_c_binding, only : c_float, c_int
+!< Click "Run" once, with the public testing module.
 use, intrinsic :: iso_fortran_env, only : int32, output_unit
 use figure, only : app_object
-use figure_c_native, only : fig_input_mouse
+use figure_testing, only : test_click
 use tut05_panel, only : panel_object, draw_panel
 
 implicit none
@@ -49,18 +48,10 @@ integer(int32)     :: frame !< Frame counter.
 
 !region test
 call app%init_headless(400_int32, 300_int32)
-do frame = 1_int32, 6_int32
+do frame = 1_int32, 5_int32
    if (.not. app%next_frame()) exit
-   call draw_panel(panel)
-   ! the input queued now is seen by the next frame
-   select case (frame)
-   case (1_int32, 2_int32)
-      call fig_input_mouse(real(panel%run_at(1), c_float), real(panel%run_at(2), c_float), 0_c_int) ! hover
-   case (3_int32)
-      call fig_input_mouse(real(panel%run_at(1), c_float), real(panel%run_at(2), c_float), 1_c_int) ! press
-   case (4_int32)
-      call fig_input_mouse(real(panel%run_at(1), c_float), real(panel%run_at(2), c_float), 0_c_int) ! release
-   endselect
+   call draw_panel(panel)                                          ! the interface under test
+   if (frame == 2_int32) call test_click(panel%run_at(1), panel%run_at(2)) ! "Run", once the window has its size
 enddo
 call app%destroy()
 write(output_unit, '(A,I0)') 'runs: ', panel%runs

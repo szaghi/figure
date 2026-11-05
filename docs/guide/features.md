@@ -105,6 +105,18 @@ Details: [Heatmaps and images](images).
 
 Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots).
 
+## Testing: `figure_testing`
+
+| Procedure | Does |
+|---|---|
+| `test_click(x, y [, button])`, `test_drag(x0, y0, x1, y1)` | queue a click, a drag |
+| `test_mouse_move`, `test_mouse_button`, `test_wheel` | queue mouse input, one part at a time |
+| `test_key(name [, down])`, `test_type(text)` | queue keys and typed text |
+| `test_next_frame()` | a frame boundary in the queued input |
+| `test_item_center(x, y)`, `test_window_rect(name, ...)` | where a widget or a window is |
+
+Details: [Headless testing](testing#synthetic-input).
+
 ## Errors
 
 | Entity | Purpose |

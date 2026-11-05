@@ -27,11 +27,6 @@ nvfortran 26.9 if you hit the same error.
 
 `igInputText` needs a C buffer and a resize callback; it is not bound. Numeric input (`ig_input`, `real64`) is.
 
-## Synthetic input is internal
-
-`fig_input_mouse`, used for [headless tests](testing), lives in the internal module `figure_c_native` and takes C
-kinds. A public testing module is planned for v0.1.0 (step S10 of the [roadmap](roadmap)).
-
 ## A name shared with fortplot
 
 `lazy-fortran/fortplot` has a public procedure named `figure`. A program that uses both libraries cannot have the

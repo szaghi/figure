@@ -196,6 +196,7 @@ subroutine ig_item_rect(xmin, ymin, xmax, ymax)
 
 ```mermaid
 flowchart TD
+  test_item_center["test_item_center"] --> ig_item_rect["ig_item_rect"]
   ig_item_rect["ig_item_rect"] --> igGetItemRectMax["igGetItemRectMax"]
   ig_item_rect["ig_item_rect"] --> igGetItemRectMin["igGetItemRectMin"]
   style ig_item_rect fill:#3e63dd,stroke:#99b,stroke-width:2px

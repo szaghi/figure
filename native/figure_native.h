@@ -83,6 +83,18 @@ int    fig_dock_layout_end(unsigned int id);
 /* Inside a window (between Begin and End): its dock node (0 if none) and whether it is docked. */
 int    fig_window_dock(unsigned int *id, int *docked);
 
+/* Synthetic input (figure_testing), queued as real input is: mouse position [pixels], button (0 left, 1 right,
+ * 2 middle) down/up, wheel, key by name (a-z, 0-9, enter, tab, backspace, delete, escape, space, arrows left/right/
+ * up/down, home, end, pageup, pagedown, f1-f12, ctrl, shift, alt, super) down/up, typed text (UTF-8). */
+/* Queued in FIGURE and handed to Dear ImGui at the next frame, up to a frame boundary (fig_input_next_frame). */
+int    fig_input_next_frame(void);
+int    fig_input_mouse_pos(float x, float y);
+int    fig_input_mouse_button(int button, int down);
+int    fig_input_wheel(float dx, float dy);
+int    fig_input_key(const char *name, int name_len, int down);
+int    fig_input_text(const char *text, int text_len);
+/* A window's rectangle (xmin, ymin, xmax, ymax) [pixels] by name, as in the last frame; found 0 if none. */
+int    fig_window_rect(const char *name, int name_len, float *rect, int *found);
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);
 

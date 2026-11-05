@@ -171,5 +171,6 @@ Without `stat`, the message goes to standard error and the program ends with `er
 
 ### Click a button in a test
 
-See [tutorial chapter 5](./tutorial/05-headless): `init_headless`, `ig_item_rect` to find the button,
-`fig_input_mouse` for hover, press and release.
+See [tutorial chapter 5](./tutorial/05-headless): `init_headless`, `ig_item_rect` (or `test_item_center`) to find the
+button, `test_click` from `figure_testing`, then a few frames before checking. [Headless
+testing](/guide/testing#synthetic-input) has drags, keys and typing.

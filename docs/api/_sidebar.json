@@ -52,6 +52,10 @@
         "link": "/api/src/lib/figure_style"
       },
       {
+        "text": "figure_testing",
+        "link": "/api/src/lib/figure_testing"
+      },
+      {
         "text": "figure_texture",
         "link": "/api/src/lib/figure_texture"
       }

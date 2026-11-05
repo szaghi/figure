@@ -17,14 +17,15 @@ procedure in headless mode and clicks its button with synthetic mouse input.
 
 - `init_headless(400, 300)` creates the contexts on a virtual 400 x 300 display: no window, no GPU, no display
   server.
-- Every iteration is a frame: `next_frame` delivers the input queued in the previous one, then `draw_panel` declares
-  the panel, and `ig_item_rect` (inside it) records where the button is.
-- `fig_input_mouse(x, y, left_down)` queues a mouse state. A click is hover, press, release, one frame each; the
-  press and release frames make `ig_button` return `.true.` once.
+- Every iteration is a frame: `next_frame` delivers the input queued before it, then `draw_panel` declares the
+  panel, and `ig_item_rect` (inside it) records where the button is.
+- `test_click(x, y)`, from the module `figure_testing`, queues a click there after the first frame: the move, the
+  press and the release reach the panel over the next frames, as a real click would, and `ig_button` returns
+  `.true.` once.
 - The program checks the count and stops with an error otherwise, so a test runner sees the failure in the exit
   status.
 
-`fig_input_mouse` comes from the internal module `figure_c_native` and takes C kinds; see
+`figure_testing` also drags, types, presses keys and turns the wheel: see
 [Headless testing](/guide/testing#synthetic-input).
 
 ::: tip What you learned

@@ -68,6 +68,13 @@ struct state_t {
       std::vector<unsigned char> was;
    };
    std::vector<saved_t> pushed_colors, pushed_vars; // scoped changes, undone by the pops (newest last)
+   struct input_t {                                // synthetic input (figure_testing), applied at the next frames
+      int         kind = 0;                        // 0 step (a frame boundary), 1 pos, 2 button, 3 wheel, 4 key, 5 text
+      float       x = 0.0f, y = 0.0f;
+      int         a = 0, b = 0;
+      std::string text;
+   };
+   std::vector<input_t> test_input;                // queued, oldest first
    std::string   ini_file;        // where Dear ImGui keeps window positions and sizes; empty: nowhere (the default)
    struct texture_t {
       int  width = 0, height = 0;
@@ -1099,6 +1106,8 @@ void fig_request_frames(int n) {
 
 double fig_content_scale(void) { return st.scale; }
 
+void apply_test_input(); // figure_testing's queued input (defined with the synthetic input below)
+
 int fig_begin_frame(int *running) {
    FIG_TRY
    *running = 0;
@@ -1107,6 +1116,7 @@ int fig_begin_frame(int *running) {
    *running = 1;
    if (st.m == mode::headless) {
       ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+      apply_test_input();
       ImGui::NewFrame();
       st.in_frame = true;
       return FIG_OK;
@@ -1121,6 +1131,7 @@ int fig_begin_frame(int *running) {
       const float dt = std::chrono::duration<float>(now - st.last_frame).count();
       st.last_frame = now;
       ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0e-4f;
+      apply_test_input();
       ImGui::NewFrame();
       st.in_frame = true;
       return FIG_OK;
@@ -1172,6 +1183,7 @@ int fig_begin_frame(int *running) {
    } else {
       ImGui_ImplSDL3_NewFrame();
    }
+   apply_test_input();
    ImGui::NewFrame();
    st.in_frame = true;
    return FIG_OK;
@@ -1404,6 +1416,127 @@ int fig_window_dock(unsigned int *id, int *docked) {
    *docked = ImGui::IsWindowDocked() ? 1 : 0;
    return FIG_OK;
    FIG_CATCH
+}
+
+// ---- Synthetic input (figure_testing) --------------------------------------------------------------------------------
+// Queued into Dear ImGui's input queue, as real input is: with input trickling (Dear ImGui's default) a move, a press
+// and a release queued together are applied over the next frames, so a click needs no per-frame scheduling.
+
+// Events are kept in FIGURE's queue and handed to Dear ImGui at the start of the next frame, up to the next frame
+// boundary (fig_input_next_frame): what is queued between two boundaries arrives in one frame (and Dear ImGui
+// trickles it further, one change of each kind per frame); a boundary makes the next events wait one frame more.
+int queue_input(const state_t::input_t &e) {
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   st.test_input.push_back(e);
+   return FIG_OK;
+}
+
+// At the start of a frame (before NewFrame): hand the queued events to Dear ImGui, up to the first boundary.
+void apply_test_input() {
+   if (st.test_input.empty()) return;
+   ImGuiIO &io = ImGui::GetIO();
+   size_t i = 0;
+   for (; i < st.test_input.size(); ++i) {
+      const state_t::input_t &e = st.test_input[i];
+      if (e.kind == 0) {
+         ++i; // the boundary is consumed: what follows waits for the next frame
+         break;
+      }
+      switch (e.kind) {
+      case 1: io.AddMousePosEvent(e.x, e.y); break;
+      case 2: io.AddMouseButtonEvent(e.a, e.b != 0); break;
+      case 3: io.AddMouseWheelEvent(e.x, e.y); break;
+      case 4: io.AddKeyEvent(static_cast<ImGuiKey>(e.a), e.b != 0); break;
+      default: io.AddInputCharactersUTF8(e.text.c_str()); break;
+      }
+   }
+   st.test_input.erase(st.test_input.begin(), st.test_input.begin() + static_cast<long>(i));
+}
+
+int fig_input_next_frame(void) {
+   state_t::input_t e;
+   e.kind = 0;
+   return queue_input(e);
+}
+
+int fig_input_mouse_pos(float x, float y) {
+   state_t::input_t e;
+   e.kind = 1;
+   e.x = x;
+   e.y = y;
+   return queue_input(e);
+}
+
+int fig_input_mouse_button(int button, int down) {
+   if (button < 0 || button > 2) return fail(FIG_ERR_ARGUMENT, "mouse button: 0 left, 1 right, 2 middle");
+   state_t::input_t e;
+   e.kind = 2;
+   e.a = button;
+   e.b = down != 0;
+   return queue_input(e);
+}
+
+int fig_input_wheel(float dx, float dy) {
+   state_t::input_t e;
+   e.kind = 3;
+   e.x = dx;
+   e.y = dy;
+   return queue_input(e);
+}
+
+// Keys by name: a-z, 0-9, enter, tab, backspace, delete, escape, space, left, right, up, down, home, end, pageup,
+// pagedown, f1-f12, ctrl, shift, alt, super; ImGuiKey_None if unknown.
+ImGuiKey key_by_name(const std::string &n) {
+   if (n.size() == 1 && n[0] >= 'a' && n[0] <= 'z') return static_cast<ImGuiKey>(ImGuiKey_A + (n[0] - 'a'));
+   if (n.size() == 1 && n[0] >= '0' && n[0] <= '9') return static_cast<ImGuiKey>(ImGuiKey_0 + (n[0] - '0'));
+   if (n.size() >= 2 && n.size() <= 3 && n[0] == 'f') {
+      const int k = std::atoi(n.c_str() + 1);
+      if (k >= 1 && k <= 12) return static_cast<ImGuiKey>(ImGuiKey_F1 + (k - 1));
+   }
+   static const std::pair<const char *, ImGuiKey> named[] = {
+      {"enter", ImGuiKey_Enter},     {"tab", ImGuiKey_Tab},       {"backspace", ImGuiKey_Backspace},
+      {"delete", ImGuiKey_Delete},   {"escape", ImGuiKey_Escape}, {"space", ImGuiKey_Space},
+      {"left", ImGuiKey_LeftArrow},  {"right", ImGuiKey_RightArrow}, {"up", ImGuiKey_UpArrow},
+      {"down", ImGuiKey_DownArrow},  {"home", ImGuiKey_Home},     {"end", ImGuiKey_End},
+      {"pageup", ImGuiKey_PageUp},   {"pagedown", ImGuiKey_PageDown}, {"ctrl", ImGuiMod_Ctrl},
+      {"shift", ImGuiMod_Shift},     {"alt", ImGuiMod_Alt},       {"super", ImGuiMod_Super}};
+   for (const auto &k : named)
+      if (n == k.first) return k.second;
+   return ImGuiKey_None;
+}
+
+int fig_input_key(const char *name, int name_len, int down) {
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   const ImGuiKey k = key_by_name(n);
+   if (k == ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, "key: unknown name \"" + n + "\"");
+   state_t::input_t e;
+   e.kind = 4;
+   e.a = static_cast<int>(k);
+   e.b = down != 0;
+   return queue_input(e);
+}
+
+int fig_input_text(const char *text, int text_len) {
+   state_t::input_t e;
+   e.kind = 5;
+   e.text.assign(text, text_len > 0 ? static_cast<size_t>(text_len) : 0);
+   return queue_input(e);
+}
+
+// A window's rectangle, by its name (as passed to Begin), as drawn in the last frame; found 0 if no such window.
+int fig_window_rect(const char *name, int name_len, float *rect, int *found) {
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   ImGuiWindow *w = ImGui::FindWindowByName(n.c_str());
+   *found = w ? 1 : 0;
+   if (w) {
+      rect[0] = w->Pos.x;
+      rect[1] = w->Pos.y;
+      rect[2] = w->Pos.x + w->Size.x;
+      rect[3] = w->Pos.y + w->Size.y;
+   }
+   return FIG_OK;
 }
 
 void fig_input_mouse(float x, float y, int left_down) {
