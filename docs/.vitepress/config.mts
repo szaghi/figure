@@ -33,6 +33,7 @@ const docs = [
       { text: 'Feature map',             link: '/guide/features' },
       { text: 'Frame loop and redraw',   link: '/guide/frame-loop' },
       { text: 'Widgets',                 link: '/guide/widgets' },
+      { text: 'Menus and shortcuts',     link: '/guide/menus' },
       { text: 'Docking',                 link: '/guide/docking' },
       { text: 'Styles',                  link: '/guide/styles' },
       { text: 'Plots',                   link: '/guide/plots' },
@@ -89,7 +90,7 @@ export default withMermaid({
       {
         text: 'Reference',
         link: '/guide/features',
-        activeMatch: '^/guide/(features|frame-loop|widgets|docking|styles|plots|images|remote|performance|errors|testing|capture|architecture|raw-bindings|known-issues)',
+        activeMatch: '^/guide/(features|frame-loop|widgets|menus|docking|styles|plots|images|remote|performance|errors|testing|capture|architecture|raw-bindings|known-issues)',
       },
       { text: 'API', link: '/api/' },
       {

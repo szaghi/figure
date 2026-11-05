@@ -59,6 +59,7 @@ graph LR
 - [fig_input_wheel](#fig-input-wheel)
 - [fig_input_key](#fig-input-key)
 - [fig_input_text](#fig-input-text)
+- [fig_key_chord](#fig-key-chord)
 - [fig_widget_input_text](#fig-widget-input-text)
 - [fig_window_rect](#fig-window-rect)
 - [fig_shutdown](#fig-shutdown)
@@ -157,6 +158,8 @@ graph LR
 ### fig_input_key
 
 ### fig_input_text
+
+### fig_key_chord
 
 ### fig_widget_input_text
 

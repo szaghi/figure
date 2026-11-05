@@ -82,6 +82,10 @@ shared machine: the token would then travel unencrypted over the network.
   frame at most, never by a growing queue.
 - **Input**: mouse (position, buttons, wheel), keyboard (navigation and editing keys, Ctrl/Shift/Alt/Super, typed
   characters), and the size of the browser's window, which becomes the display size.
+- **Shortcuts stay in the page**: with the interface focused, ctrl (cmd) combinations go to the program, not to the
+  browser (ctrl+s does not open the browser's save dialog), except copy, paste and cut. On a Mac the client sends cmd
+  as ctrl, so the program's `ig_shortcut('ctrl+s')` is cmd+s there, as in a window on macOS
+  ([Menus and shortcuts](menus#shortcuts)).
 
 ## Bandwidth
 

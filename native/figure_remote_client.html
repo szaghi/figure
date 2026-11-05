@@ -154,8 +154,18 @@ canvas.addEventListener("mousedown", e => { canvas.focus(); send(`m:${pos(e)}`);
 window.addEventListener("mouseup", e => send(`b:${[0, 2, 1][e.button] ?? 0},0`));
 canvas.addEventListener("contextmenu", e => e.preventDefault());
 canvas.addEventListener("wheel", e => { send(`w:${-e.deltaX / 100},${-e.deltaY / 100}`); e.preventDefault(); }, { passive: false });
-canvas.addEventListener("keydown", e => { send(`k:1,${e.code}`); if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) send(`c:${e.key}`); if (e.code === "Tab") e.preventDefault(); });
-canvas.addEventListener("keyup", e => send(`k:0,${e.code}`));
+// On a Mac, cmd is the shortcut key: it is sent as ctrl (and ctrl as cmd), as Dear ImGui does on macOS itself, so that
+// ig_shortcut('ctrl+s') is cmd+s there. Shortcuts stay in the page: the browser's own (save, open, print) are not
+// triggered, except copy, paste and cut.
+const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const swap = { MetaLeft: "ControlLeft", MetaRight: "ControlRight", ControlLeft: "MetaLeft", ControlRight: "MetaRight" };
+const keyCode = c => (mac && swap[c]) || c;
+canvas.addEventListener("keydown", e => {
+  send(`k:1,${keyCode(e.code)}`);
+  if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) send(`c:${e.key}`);
+  if (e.code === "Tab" || ((e.ctrlKey || e.metaKey) && !["KeyC", "KeyV", "KeyX"].includes(e.code))) e.preventDefault();
+});
+canvas.addEventListener("keyup", e => send(`k:0,${keyCode(e.code)}`));
 window.addEventListener("resize", () => { sendSize(); if (lastFrame) draw(lastFrame); });
 connect();
 </script>

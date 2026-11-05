@@ -1,0 +1,38 @@
+#! program build/docs-examples/bin/cb_menu
+#! frames  270
+#! poster  262
+# type a title, save from the File menu; edit, save with ctrl+s; tick Autosave, edit: saved at once
+0   move 300 200
+8   move 300 70 12
+24  down
+26  up
+30  key ctrl down
+31  key a
+32  key ctrl up
+36  text wing
+48  move 22 10 15
+66  down
+68  up
+74  move 25 37 10
+88  down
+90  up
+100 move 400 70 12
+116 down
+118 up
+122 key end
+126 text -tip
+140 key ctrl down
+141 key s
+142 key ctrl up
+160 move 22 10 15
+176 down
+178 up
+184 move 40 56 10
+196 down
+198 up
+206 move 400 70 12
+220 down
+222 up
+226 key end
+230 text 2
+240 move 600 200 15

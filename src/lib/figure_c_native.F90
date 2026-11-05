@@ -20,7 +20,7 @@ public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, f
 public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
 public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
-public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text
+public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -448,6 +448,16 @@ interface
    integer(c_int), value              :: text_len !< Text length [bytes].
    integer(c_int)                     :: status   !< Status.
    endfunction fig_input_text
+
+   function fig_key_chord(keys, keys_len, chord) result(status) bind(C, name='fig_key_chord')
+   !< A key chord from its name ("ctrl+s").
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: keys(*)  !< Chord name (not NUL-terminated).
+   integer(c_int), value              :: keys_len !< Name length [bytes].
+   integer(c_int), intent(out)        :: chord    !< ImGuiKeyChord.
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_ARGUMENT.
+   endfunction fig_key_chord
 
    function fig_widget_input_text(label, label_len, hint, hint_len, buf, buf_size, flags) result(edited) &
       bind(C, name='fig_widget_input_text')

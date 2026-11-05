@@ -58,6 +58,7 @@ flowchart TD
   ig_dock_window["ig_dock_window"] --> figure_check["figure_check"]
   ig_pop_font["ig_pop_font"] --> figure_check["figure_check"]
   ig_push_font["ig_push_font"] --> figure_check["figure_check"]
+  ig_shortcut["ig_shortcut"] --> figure_check["figure_check"]
   ig_show_style_editor["ig_show_style_editor"] --> figure_check["figure_check"]
   init["init"] --> figure_check["figure_check"]
   init["init"] --> figure_check["figure_check"]
@@ -192,6 +193,7 @@ function cstr(s) result(c)
 flowchart TD
   ig_begin["ig_begin"] --> cstr["cstr"]
   ig_begin_child["ig_begin_child"] --> cstr["cstr"]
+  ig_begin_menu["ig_begin_menu"] --> cstr["cstr"]
   ig_begin_tab["ig_begin_tab"] --> cstr["cstr"]
   ig_begin_tab_bar["ig_begin_tab_bar"] --> cstr["cstr"]
   ig_begin_table["ig_begin_table"] --> cstr["cstr"]
@@ -201,6 +203,7 @@ flowchart TD
   ig_combo["ig_combo"] --> cstr["cstr"]
   ig_input_i32["ig_input_i32"] --> cstr["cstr"]
   ig_input_r64["ig_input_r64"] --> cstr["cstr"]
+  ig_menu_item["ig_menu_item"] --> cstr["cstr"]
   ig_push_id_str["ig_push_id_str"] --> cstr["cstr"]
   ig_selectable["ig_selectable"] --> cstr["cstr"]
   ig_slider_i32["ig_slider_i32"] --> cstr["cstr"]

@@ -3,9 +3,10 @@ module figure
 !< FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration.
 !<
 !< Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui),
-!< groups of widgets (figure_group: collapsing headers, tabs, tables, id scopes, disabled blocks), docking (figure_dock), the
-!< style colours and variables by name (figure_style), the ImPlot plots (figure_implot): items, heatmaps, images, their
-!< style (`ip_spec`) and ImPlot's constants, and the GPU textures (figure_texture) that `ig_image` and `ip_image` draw.
+!< menus and shortcuts (figure_menu), groups of widgets (figure_group: child regions, collapsing headers, tabs, tables,
+!< id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style), the
+!< ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the GPU
+!< textures (figure_texture) that `ig_image` and `ip_image` draw.
 use figure_app, only : app_object
 use figure_base, only : figure_last_error
 use figure_c_native, only : FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
@@ -20,7 +21,8 @@ use figure_cimgui_enums, only : ImGuiWindowFlags_None, ImGuiWindowFlags_NoTitleB
                                 ImGuiWindowFlags_HorizontalScrollbar, ImGuiWindowFlags_NoFocusOnAppearing, &
                                 ImGuiWindowFlags_NoBringToFrontOnFocus, ImGuiWindowFlags_AlwaysVerticalScrollbar, &
                                 ImGuiWindowFlags_AlwaysHorizontalScrollbar, ImGuiWindowFlags_NoNav, &
-                                ImGuiWindowFlags_NoDecoration, ImGuiWindowFlags_NoInputs, ImGuiWindowFlags_NoDocking
+                                ImGuiWindowFlags_NoDecoration, ImGuiWindowFlags_NoInputs, ImGuiWindowFlags_NoDocking, &
+                                ImGuiWindowFlags_MenuBar
 use figure_dock, only : ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, &
                         ig_dock_window, ig_window_dock
 use figure_cimgui_enums, only : ImGuiInputTextFlags_None, ImGuiInputTextFlags_CharsDecimal,                  &
@@ -35,6 +37,8 @@ use figure_group, only : ig_begin_disabled, ig_begin_tab, ig_begin_tab_bar, ig_c
 use figure_cimgui_enums, only : ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg,         &
                                 ImGuiTableFlags_Borders, ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, &
                                 ImGuiTableFlags_SizingFixedFit, ImGuiTableFlags_SizingStretchSame
+use figure_menu, only : ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar, ig_end_main_menu_bar, ig_end_menu, &
+                        ig_end_menu_bar, ig_menu_item, ig_shortcut
 use figure_imgui, only : ig_begin, ig_button, ig_checkbox, ig_end, ig_image, ig_input, ig_item_rect, ig_same_line, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
                          ig_set_next_item_width, ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped,      &
@@ -93,6 +97,9 @@ public :: ImGuiWindowFlags_HorizontalScrollbar
 public :: ImGuiWindowFlags_NoFocusOnAppearing, ImGuiWindowFlags_NoBringToFrontOnFocus, ImGuiWindowFlags_AlwaysVerticalScrollbar
 public :: ImGuiWindowFlags_AlwaysHorizontalScrollbar
 public :: ImGuiWindowFlags_NoNav, ImGuiWindowFlags_NoDecoration, ImGuiWindowFlags_NoInputs, ImGuiWindowFlags_NoDocking
+public :: ImGuiWindowFlags_MenuBar
+public :: ig_begin_main_menu_bar, ig_end_main_menu_bar, ig_begin_menu_bar, ig_end_menu_bar, ig_begin_menu, ig_end_menu
+public :: ig_menu_item, ig_shortcut
 public :: ip_get_style_color, ip_get_style_var, ip_set_style_color, ip_set_style_var
 public :: ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode, ImGuiDockNodeFlags_NoDockingSplit
 public :: ImGuiDockNodeFlags_NoResize, ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking

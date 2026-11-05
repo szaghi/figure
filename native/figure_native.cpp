@@ -1534,6 +1534,31 @@ ImGuiKey key_by_name(const std::string &n) {
    return ImGuiKey_None;
 }
 
+// A key chord from its name, "ctrl+s", "ctrl+shift+f5", "escape": modifiers (ctrl, shift, alt, super) and one key, by
+// the names of test_key, joined by '+'. With ConfigMacOSXBehaviors (macOS), Dear ImGui reads ctrl as the cmd key.
+int fig_key_chord(const char *keys, int keys_len, int *chord) {
+   const std::string s(keys, keys_len > 0 ? static_cast<size_t>(keys_len) : 0);
+   int mods = 0, key = ImGuiKey_None;
+   size_t start = 0;
+   while (start <= s.size()) {
+      size_t end = s.find('+', start);
+      if (end == std::string::npos) end = s.size();
+      const std::string name = s.substr(start, end - start);
+      const ImGuiKey k = key_by_name(name);
+      if (k == ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, "ig_shortcut: unknown key \"" + name + "\" in \"" + s + "\"");
+      if (k & ImGuiMod_Mask_) {
+         mods |= k;
+      } else {
+         if (key != ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, "ig_shortcut: more than one key in \"" + s + "\"");
+         key = k;
+      }
+      start = end + 1;
+   }
+   if (key == ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, "ig_shortcut: no key besides the modifiers in \"" + s + "\"");
+   *chord = mods | key;
+   return FIG_OK;
+}
+
 int fig_input_key(const char *name, int name_len, int down) {
    if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);

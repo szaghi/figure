@@ -108,4 +108,10 @@ editors of its input files.
 - **Log axes** for residual histories (`ip_setup_axes(..., xlog, ylog)`): done.
 - **Form widgets** ([Widgets](widgets#groups-headers-tabs-tables)): text fields bound to `character` variables, integer
   fields, drop-down lists, tooltips, field widths, collapsing headers, tabs, tables, id scopes, disabled blocks: done.
-- Still to come: menus, trees, multi-line text, child regions, axis tick formats, subplots.
+- **Lists and regions** ([Widgets](widgets#lists-and-regions)): selectable lines, wrapped, disabled and coloured text,
+  child regions that scroll on their own: done.
+- **Menus and shortcuts** ([Menus and shortcuts](menus)): menu bars, menus, items, key chords (cmd on macOS, also in
+  the browser): done.
+- **Testing:** `test_click` and `test_drag` let the pointer rest on the item before pressing, as a user does: done.
+- Still to come ([issue #2](https://github.com/szaghi/figure/issues/2)): popups and modals, a confirmation before
+  quitting, file dialogs, axis tick formats, subplots, docking a window that appears later.

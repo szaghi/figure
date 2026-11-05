@@ -93,6 +93,15 @@ theme file, which `app%load_style` (or `FIGURE_STYLE=my-theme.toml`) applies in 
 The layout is built on the first frame only (`ig_dock_layout_begin`); the dock space is declared every frame,
 before its windows. The user can rearrange everything afterwards. [Docking](/guide/docking) has the details.
 
+### A File menu and its shortcut
+
+<<< @/examples/snippets/cb_menu-menu.F90{fortran}
+
+<Media name="cb_menu" alt="A File menu with Save (Ctrl+S), Autosave and Quit; the status line counts the saves" caption="docs/examples/src/cb_menu.F90" />
+
+The menu item shows the shortcut; `ig_shortcut`, called every frame outside the menu, reads the keys (cmd+s on
+macOS). [Menus and shortcuts](/guide/menus) has the rules.
+
 ### A list and a help panel
 
 <<< @/examples/snippets/cb_help-list.F90{fortran}

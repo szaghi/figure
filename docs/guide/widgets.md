@@ -145,5 +145,6 @@ field is not row 1's (see [Labels and identifiers](#labels-and-identifiers)).
 
 ## Not bound yet
 
-Menus, trees, multi-line text and colour pickers have no wrapper yet. Their raw interfaces are generated
+Trees, multi-line text and colour pickers have no wrapper yet; menus are on their own page,
+[Menus and shortcuts](menus). Their raw interfaces are generated
 ([Raw bindings](raw-bindings)); the Fortran wrappers are still to be written ([roadmap](roadmap)).
