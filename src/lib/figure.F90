@@ -3,7 +3,7 @@ module figure
 !< FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration.
 !<
 !< Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui),
-!< groups of widgets (figure_group: collapsing headers, tabs, id scopes, disabled blocks), docking (figure_dock), the
+!< groups of widgets (figure_group: collapsing headers, tabs, tables, id scopes, disabled blocks), docking (figure_dock), the
 !< style colours and variables by name (figure_style), the ImPlot plots (figure_implot): items, heatmaps, images, their
 !< style (`ip_spec`) and ImPlot's constants, and the GPU textures (figure_texture) that `ig_image` and `ip_image` draw.
 use figure_app, only : app_object
@@ -29,7 +29,12 @@ use figure_cimgui_enums, only : ImGuiInputTextFlags_None, ImGuiInputTextFlags_Ch
                                 ImGuiInputTextFlags_ReadOnly, ImGuiInputTextFlags_Password,                   &
                                 ImGuiInputTextFlags_AutoSelectAll
 use figure_group, only : ig_begin_disabled, ig_begin_tab, ig_begin_tab_bar, ig_collapsing_header, ig_end_disabled, &
-                         ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id
+                         ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_begin_table, ig_end_table,    &
+                         ig_table_setup_column, ig_table_headers_row, ig_table_next_row, ig_table_next_column, &
+                         ig_table_set_column
+use figure_cimgui_enums, only : ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg,         &
+                                ImGuiTableFlags_Borders, ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, &
+                                ImGuiTableFlags_SizingFixedFit, ImGuiTableFlags_SizingStretchSame
 use figure_imgui, only : ig_begin, ig_button, ig_checkbox, ig_end, ig_image, ig_input, ig_item_rect, ig_same_line, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
                          ig_set_next_item_width, ig_combo, ig_tooltip
@@ -64,6 +69,11 @@ public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
 public :: ig_input_text, ig_set_next_item_width, ig_combo, ig_tooltip
 public :: ig_collapsing_header, ig_begin_tab_bar, ig_end_tab_bar, ig_begin_tab, ig_end_tab, ig_push_id, ig_pop_id
 public :: ig_begin_disabled, ig_end_disabled
+public :: ig_begin_table, ig_end_table, ig_table_setup_column, ig_table_headers_row, ig_table_next_row
+public :: ig_table_next_column, ig_table_set_column
+public :: ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg, ImGuiTableFlags_Borders
+public :: ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, ImGuiTableFlags_SizingFixedFit
+public :: ImGuiTableFlags_SizingStretchSame
 public :: ImGuiInputTextFlags_None, ImGuiInputTextFlags_CharsDecimal, ImGuiInputTextFlags_CharsScientific
 public :: ImGuiInputTextFlags_CharsUppercase, ImGuiInputTextFlags_CharsNoBlank, ImGuiInputTextFlags_EnterReturnsTrue
 public :: ImGuiInputTextFlags_ReadOnly, ImGuiInputTextFlags_Password, ImGuiInputTextFlags_AutoSelectAll

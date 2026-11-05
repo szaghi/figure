@@ -8,13 +8,15 @@ use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, ig_input_text, ig_item_rect,   &
                    ig_set_next_item_width, ig_set_next_window, ig_tooltip, ImGuiInputTextFlags_CharsNoBlank,   &
                    ig_begin_disabled, ig_begin_tab, ig_begin_tab_bar, ig_collapsing_header, ig_end_disabled,   &
-                   ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_text
+                   ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_text, ig_begin_table, ig_end_table,   &
+                   ig_table_headers_row, ig_table_next_column, ig_table_next_row, ig_table_set_column,       &
+                   ig_table_setup_column
 use figure_testing, only : test_click, test_item_center, test_key, test_mouse_move, test_type, test_window_rect
 
 implicit none
-integer(int32), parameter :: FRAMES = 200_int32 !< Frames run.
+integer(int32), parameter :: FRAMES = 230_int32 !< Frames run.
 type(app_object)          :: app                !< Application.
-logical                   :: test_passed(15)    !< Per-check outcome.
+logical                   :: test_passed(19)    !< Per-check outcome.
 character(len=16)         :: grid_file          !< A text field.
 character(len=4)          :: short              !< A text field of capacity 4.
 character(len=12)         :: no_blank           !< A text field that refuses blanks.
@@ -46,6 +48,14 @@ logical                   :: is_open            !< 'Advanced' header open this f
 logical                   :: basics_open        !< 'Basics' header open this frame.
 logical                   :: sel(2)             !< Tabs selected this frame.
 integer(int32)            :: r                  !< Row.
+logical                   :: table_shown        !< ig_begin_table returned true on the last frame.
+character(len=8)          :: faces(3)           !< Table column 1.
+integer(int32)            :: conds(3)           !< Table column 2: a combo per row.
+character(len=10)         :: values(3)          !< Table column 3: a text field per row.
+character(len=8)          :: conditions(2)      !< Combo items.
+real(real64)              :: cell(4, 3, 3)      !< (xmin, ymin, xmax, ymax) of the widget in each (column, row).
+real(real64)              :: set_x0             !< Left of the text placed with ig_table_set_column(3).
+real(real64)              :: value3_at(2)       !< Centre of the field of row 3.
 
 grid_file = 'CC/cc'
 short = ''
@@ -60,6 +70,12 @@ hdr_default = .false.
 tab_sel = .false.
 row_value = ''
 off_presses = 0_int32
+faces = ['i-min', 'j-max', 'k-min']
+conds = 1_int32
+values = ''
+conditions = ['wall    ', 'inflow  ']
+table_shown = .false.
+set_x0 = 0.0_real64
 models = ['nul', 'spa', 'des']
 model = 1_int32
 picks = 0_int32
@@ -124,6 +140,39 @@ do frame = 1_int32, FRAMES
       call ig_end_disabled()
    endif
    call ig_end()
+   call ig_set_next_window(20.0_real64, 430.0_real64, 500.0_real64, 160.0_real64, always=.true.)
+   if (ig_begin('Table')) then
+      table_shown = ig_begin_table('patches', 3_int32)
+      if (table_shown) then
+         call ig_table_setup_column('face', width=60.0_real64)
+         call ig_table_setup_column('condition')
+         call ig_table_setup_column('value')
+         call ig_table_headers_row()
+         do r = 1_int32, 3_int32
+            call ig_push_id(r)                      ! one id scope per row: the widgets repeat their labels
+            call ig_table_next_row()
+            call ig_table_next_column()
+            call ig_text(trim(faces(r)))
+            call ig_item_rect(cell(1, 1, r), cell(2, 1, r), cell(3, 1, r), cell(4, 1, r))
+            call ig_table_next_column()
+            call ig_set_next_item_width(-1.0_real64)
+            if (ig_combo('##condition', conds(r), conditions)) continue
+            call ig_item_rect(cell(1, 2, r), cell(2, 2, r), cell(3, 2, r), cell(4, 2, r))
+            call ig_table_next_column()
+            call ig_set_next_item_width(-1.0_real64)
+            if (ig_input_text('##value', values(r))) continue
+            call ig_item_rect(cell(1, 3, r), cell(2, 3, r), cell(3, 3, r), cell(4, 3, r))
+            if (r == 3_int32) call test_item_center(value3_at(1), value3_at(2))
+            call ig_pop_id()
+         enddo
+         call ig_table_next_row()
+         call ig_table_set_column(3_int32)          ! straight to the third cell
+         call ig_text('set')
+         call ig_item_rect(set_x0, y0, x1, y1)
+         call ig_end_table()
+      endif
+   endif
+   call ig_end()
    select case (frame)
    case (2_int32)
       call replace(1_int32, 'MESH/grid')
@@ -157,6 +206,10 @@ do frame = 1_int32, FRAMES
       call test_key('enter')
    case (166_int32)
       call test_click(off_at(1), off_at(2))
+   case (200_int32)
+      call test_click(value3_at(1), value3_at(2))
+      call test_type('1.5')
+      call test_key('enter')
    case (175_int32)
       hdr_open(2) = is_open
       tab_sel(:, 2) = sel
@@ -179,6 +232,11 @@ test_passed(12) = tab_sel(1, 1) .and. .not. tab_sel(2, 1)                     ! 
 test_passed(13) = tab_sel(2, 2) .and. .not. tab_sel(1, 2)                     ! the clicked tab selected after
 test_passed(14) = row_value(1) == '' .and. row_value(2) == 'two'              ! id scopes: only row 2 edited
 test_passed(15) = off_presses == 0_int32                                      ! a disabled button ignores clicks
+test_passed(16) = table_shown                                                 ! the table is drawn
+test_passed(17) = all(cell(1, 2, :) >= cell(3, 1, :)) .and. all(cell(1, 3, :) >= cell(3, 2, :)) .and. &
+                  all(cell(2, :, 2) >= cell(4, :, 1)) .and. all(cell(2, :, 3) >= cell(4, :, 2)) ! cells left to right, rows down
+test_passed(18) = abs(set_x0 - cell(1, 3, 1)) < 1.0_real64                    ! ig_table_set_column(3): column 3
+test_passed(19) = values(3) == '1.5' .and. values(1) == '' .and. values(2) == '' ! one row's field edited
 
 write(output_unit, '(A,*(L2))') 'figure_test_forms checks:', test_passed
 if (.not. all(test_passed)) then
@@ -187,6 +245,8 @@ if (.not. all(test_passed)) then
    write(output_unit, '(A,I0,A,F0.1,A,4(I0,1X))') 'levels ', levels, ', narrow width ', narrow_width, ', edits ', edits
    write(output_unit, '(A,2L2,A,L2,A,4L2,A,A,A,A,A,I0)') 'header', hdr_open, ', default', hdr_default, ', tabs', &
          tab_sel, ', rows "', trim(row_value(1)), '" "', trim(row_value(2)), '", disabled presses ', off_presses
+   write(output_unit, '(A,3(1X,A),A,F0.1,A,F0.1)') 'table values', (trim(values(r)), r = 1_int32, 3_int32), &
+         ', set at x ', set_x0, ', column 3 at x ', cell(1, 3, 1)
    write(output_unit, '(A,I0,A,I0,A,2L2)') 'model ', model, ', picks ', picks, ', tooltip before/after', tip_before, &
                                           tip_after
 endif
