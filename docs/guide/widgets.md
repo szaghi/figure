@@ -80,7 +80,10 @@ as long as `ig_begin` is called for it, so guard the call with the same variable
 | Procedure | Notes |
 |---|---|
 | `ig_text(text)` | Plain text, no formatting: compose numbers with an internal `write`. Trailing blanks are shown: pass `trim(line)`. |
-| `ig_same_line()` | The next item goes on the same line as the previous one. |
+| `ig_same_line([offset])` | The next item goes on the same line as the previous one; with `offset`, at that distance in pixels from the left edge of the window or region (a column of values). |
+| `ig_text_wrapped(text)` | Text wrapped at the right edge of the window or region: help, long messages. |
+| `ig_text_disabled(text)` | Text in the style's disabled colour: a default, a hint, something that does not apply. |
+| `ig_text_colored(text, color)` | Text in `color`, `[r, g, b]` or `[r, g, b, a]` in [0, 1]. Pair the colour with a mark or a word (`[!!]`), so that the meaning does not rest on colour alone. |
 | `ig_separator()` | A horizontal line. |
 | `ig_item_rect(xmin, ymin, xmax, ymax)` | Screen rectangle of the last item, in pixels: for tests and custom layout. |
 | `ig_show_demo_window([open])` | The Dear ImGui demo, a live catalogue of every Dear ImGui widget (most are not bound yet). |
@@ -96,6 +99,20 @@ visible text must repeat, add `##` and a suffix: the text after `##` is part of 
 A label that starts with `##` is invisible altogether (used by [plots](plots) to hide the title).
 
 Strings are passed verbatim, trailing blanks included: `'Run'` and `'Run   '` are different identifiers.
+
+## Lists and regions
+
+| Procedure | Notes |
+|---|---|
+| `ig_selectable(label, selected)` → `logical` | A line of a list, highlighted when `selected`; `.true.` on the frame it is clicked. The program keeps the selection: the line does not change `selected`. |
+| `ig_begin_child(id [, width] [, height] [, border])` → `logical`, `ig_end_child()` | A region of the window that scrolls on its own. Always paired, like `ig_begin`/`ig_end`. `width` and `height` in pixels: absent or 0 fills what is left, negative leaves that much. |
+
+An input-file editor's layout: a list of sections in a narrow region, the section's values and its help in the region
+beside it. Each region scrolls under the wheel on its own; the window does not move.
+
+<<< @/examples/snippets/cb_help-list.F90{fortran}
+
+<Media name="cb_help" alt="A list of three sections on the left; picking one shows its values and its help text on the right" caption="docs/examples/src/cb_help.F90" />
 
 ## Groups: headers, tabs, tables
 
@@ -128,5 +145,5 @@ field is not row 1's (see [Labels and identifiers](#labels-and-identifiers)).
 
 ## Not bound yet
 
-Menus, trees, multi-line text, child regions and colour pickers have no wrapper yet. Their raw interfaces are generated
+Menus, trees, multi-line text and colour pickers have no wrapper yet. Their raw interfaces are generated
 ([Raw bindings](raw-bindings)); the Fortran wrappers are still to be written ([roadmap](roadmap)).

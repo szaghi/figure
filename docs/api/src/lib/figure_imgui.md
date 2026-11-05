@@ -36,6 +36,9 @@ graph LR
 - [ig_set_next_item_width](#ig-set-next-item-width)
 - [ig_text](#ig-text)
 - [ig_same_line](#ig-same-line)
+- [ig_text_wrapped](#ig-text-wrapped)
+- [ig_text_disabled](#ig-text-disabled)
+- [ig_text_colored](#ig-text-colored)
 - [ig_separator](#ig-separator)
 - [ig_show_demo_window](#ig-show-demo-window)
 - [ig_item_rect](#ig-item-rect)
@@ -50,6 +53,7 @@ graph LR
 - [ig_input_i32](#ig-input-i32)
 - [ig_input_text](#ig-input-text)
 - [ig_combo](#ig-combo)
+- [ig_selectable](#ig-selectable)
 
 ## Interfaces
 
@@ -182,11 +186,18 @@ flowchart TD
 
 ### ig_same_line
 
-Put the next item on the same line as the previous one.
+Put the next item on the same line as the previous one; with `offset`, at that distance [pixels] from the
+ window's left edge (aligned columns of labels and fields).
 
 ```fortran
-subroutine ig_same_line()
+subroutine ig_same_line(offset)
 ```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `offset` | real(kind=real64) | in | optional | Distance from the window's left edge [pixels]. |
 
 **Call graph**
 
@@ -194,6 +205,84 @@ subroutine ig_same_line()
 flowchart TD
   ig_same_line["ig_same_line"] --> igSameLine["igSameLine"]
   style ig_same_line fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_text_wrapped
+
+Text wrapped at the right edge of the window or region (help text, long messages).
+
+```fortran
+subroutine ig_text_wrapped(text)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `text` | character(len=*) | in |  | Text. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_text_wrapped["ig_text_wrapped"] --> cstr["cstr"]
+  ig_text_wrapped["ig_text_wrapped"] --> igPopTextWrapPos["igPopTextWrapPos"]
+  ig_text_wrapped["ig_text_wrapped"] --> igPushTextWrapPos["igPushTextWrapPos"]
+  ig_text_wrapped["ig_text_wrapped"] --> igTextUnformatted["igTextUnformatted"]
+  style ig_text_wrapped fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_text_disabled
+
+Text in the style's disabled colour (a default value, a hint, something that does not apply).
+
+```fortran
+subroutine ig_text_disabled(text)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `text` | character(len=*) | in |  | Text. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_text_disabled["ig_text_disabled"] --> cstr["cstr"]
+  ig_text_disabled["ig_text_disabled"] --> igGetStyleColorVec4["igGetStyleColorVec4"]
+  ig_text_disabled["ig_text_disabled"] --> igPopStyleColor["igPopStyleColor"]
+  ig_text_disabled["ig_text_disabled"] --> igPushStyleColor_Vec4["igPushStyleColor_Vec4"]
+  ig_text_disabled["ig_text_disabled"] --> igTextUnformatted["igTextUnformatted"]
+  style ig_text_disabled fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_text_colored
+
+Text in `color` ([r, g, b] or [r, g, b, a] in [0, 1]); pair a colour with a mark or a word (an error marker), so
+ that it does not rest on colour alone.
+
+```fortran
+subroutine ig_text_colored(text, color)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `text` | character(len=*) | in |  | Text. |
+| `color` | real(kind=real64) | in |  | [r, g, b] or [r, g, b, a]. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_text_colored["ig_text_colored"] --> cstr["cstr"]
+  ig_text_colored["ig_text_colored"] --> igPopStyleColor["igPopStyleColor"]
+  ig_text_colored["ig_text_colored"] --> igPushStyleColor_Vec4["igPushStyleColor_Vec4"]
+  ig_text_colored["ig_text_colored"] --> igTextUnformatted["igTextUnformatted"]
+  style ig_text_colored fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_separator
@@ -574,4 +663,31 @@ flowchart TD
   ig_combo["ig_combo"] --> igSelectable_Bool["igSelectable_Bool"]
   ig_combo["ig_combo"] --> igSetItemDefaultFocus["igSetItemDefaultFocus"]
   style ig_combo fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_selectable
+
+A line of a list, highlighted when `selected`; true on the frame it is clicked (the program then updates what is
+ selected: the line does not change `selected` itself).
+
+**Returns**: `logical`
+
+```fortran
+function ig_selectable(label, selected) result(clicked)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label (also its id). |
+| `selected` | logical | in |  | Highlighted. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_selectable["ig_selectable"] --> cstr["cstr"]
+  ig_selectable["ig_selectable"] --> igSelectable_Bool["igSelectable_Bool"]
+  style ig_selectable fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

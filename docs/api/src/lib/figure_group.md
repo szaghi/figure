@@ -4,12 +4,12 @@ title: figure_group
 
 # figure_group
 
-> figure_group, widgets that group other widgets: collapsing headers, tabs, tables, id scopes, disabled blocks.
+> figure_group, widgets that group other widgets: child regions, headers, tabs, tables, id scopes, disabled blocks.
 
  Pairing rules (Dear ImGui's): `ig_end_tab_bar` only when `ig_begin_tab_bar` returned true, `ig_end_tab` only when
  `ig_begin_tab` returned true, `ig_end_table` only when `ig_begin_table` returned true (unlike `ig_begin`/`ig_end`,
- always paired); `ig_pop_id` after every `ig_push_id`, `ig_end_disabled` after every `ig_begin_disabled`. A
- collapsing header needs no end call.
+ always paired); `ig_pop_id` after every `ig_push_id`, `ig_end_disabled` after every `ig_begin_disabled`,
+ `ig_end_child` after every `ig_begin_child`. A collapsing header needs no end call.
 
  A table: `ig_begin_table`, then optionally one `ig_table_setup_column` per column and `ig_table_headers_row`, then
  per row `ig_table_next_row` and per cell `ig_table_next_column` (or `ig_table_set_column`) before its widgets.
@@ -31,6 +31,7 @@ graph LR
 ## Contents
 
 - [ig_push_id](#ig-push-id)
+- [ig_end_child](#ig-end-child)
 - [ig_end_tab_bar](#ig-end-tab-bar)
 - [ig_end_tab](#ig-end-tab)
 - [ig_end_table](#ig-end-table)
@@ -44,6 +45,7 @@ graph LR
 - [ig_pop_id](#ig-pop-id)
 - [ig_begin_disabled](#ig-begin-disabled)
 - [ig_end_disabled](#ig-end-disabled)
+- [ig_begin_child](#ig-begin-child)
 - [ig_collapsing_header](#ig-collapsing-header)
 - [ig_begin_tab_bar](#ig-begin-tab-bar)
 - [ig_begin_tab](#ig-begin-tab)
@@ -58,6 +60,22 @@ Open an id scope, by a string or an integer.
 **Module procedures**: [`ig_push_id_str`](/api/src/lib/figure_group#ig-push-id-str), [`ig_push_id_i32`](/api/src/lib/figure_group#ig-push-id-i32)
 
 ## Subroutines
+
+### ig_end_child
+
+End the region opened by `ig_begin_child` (whatever it returned).
+
+```fortran
+subroutine ig_end_child()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_end_child["ig_end_child"] --> igEndChild["igEndChild"]
+  style ig_end_child fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### ig_end_tab_bar
 
@@ -302,6 +320,36 @@ flowchart TD
 ```
 
 ## Functions
+
+### ig_begin_child
+
+A region inside the window, scrolling on its own (a list that scrolls while a help panel stays); always pair with
+ `ig_end_child`, whatever this returned. `width`/`height` [pixels]: 0 or absent fills what is left, negative leaves
+ that much.
+
+**Returns**: `logical`
+
+```fortran
+function ig_begin_child(id, width, height, border) result(visible)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | character(len=*) | in |  | Id of the region (not shown). |
+| `width` | real(kind=real64) | in | optional | Width [pixels]. |
+| `height` | real(kind=real64) | in | optional | Height [pixels]. |
+| `border` | logical | in | optional | Draw a border (default: none). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin_child["ig_begin_child"] --> cstr["cstr"]
+  ig_begin_child["ig_begin_child"] --> igBeginChild_Str["igBeginChild_Str"]
+  style ig_begin_child fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### ig_collapsing_header
 

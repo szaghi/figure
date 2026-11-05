@@ -6,7 +6,8 @@ module figure_imgui
 !< frame it is clicked, `ig_checkbox`/`ig_slider` are true when they changed the value). Values are ordinary Fortran
 !< variables, updated in place: no handles, no callbacks, no `target` requirements (the C `bool*` of a checkbox is a
 !< local copy, written back).
-use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_int, c_loc, c_null_char, c_null_ptr, c_ptr
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_loc, c_null_char, &
+                                        c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_base, only : cstr
 use figure_c_native, only : fig_texture_sampling, fig_widget_input_text
@@ -15,15 +16,16 @@ use figure_cimgui, only : im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, ig
                           igPushID_Int, igSelectable_Bool, igSetItemDefaultFocus, igButton, igCheckbox, igEnd, &
                           igGetItemRectMax, igGetItemRectMin, igImage, igInputDouble, igInputInt, igSameLine, &
                           igSeparator, igSetNextItemWidth, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
-                          igSliderScalar, igTextUnformatted
+                          igSliderScalar, igTextUnformatted, im_vec4, igGetStyleColorVec4, igPopStyleColor, &
+                          igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
-                                ImGuiDataType_S32
+                                ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled
 
 implicit none
 private
 public :: ig_begin, ig_end, ig_button, ig_checkbox, ig_slider, ig_input, ig_text, ig_same_line, ig_separator
 public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_input_text, ig_set_next_item_width
-public :: ig_combo, ig_tooltip
+public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
 
 interface ig_slider
    !< Slider for an integer or a real value.
@@ -290,10 +292,67 @@ contains
    call igTextUnformatted(cstr(text), c_null_ptr)
    endsubroutine ig_text
 
-   subroutine ig_same_line()
-   !< Put the next item on the same line as the previous one.
-   call igSameLine(0.0_c_float, -1.0_c_float)
+   subroutine ig_same_line(offset)
+   !< Put the next item on the same line as the previous one; with `offset`, at that distance [pixels] from the
+   !< window's left edge (aligned columns of labels and fields).
+   real(real64), intent(in), optional :: offset !< Distance from the window's left edge [pixels].
+
+   if (present(offset)) then
+      call igSameLine(real(offset, c_float), -1.0_c_float)
+   else
+      call igSameLine(0.0_c_float, -1.0_c_float)
+   endif
    endsubroutine ig_same_line
+
+   function ig_selectable(label, selected) result(clicked)
+   !< A line of a list, highlighted when `selected`; true on the frame it is clicked (the program then updates what is
+   !< selected: the line does not change `selected` itself).
+   character(len=*), intent(in) :: label    !< Label (also its id).
+   logical,          intent(in) :: selected !< Highlighted.
+   logical                      :: clicked  !< Clicked this frame.
+
+   clicked = logical(igSelectable_Bool(cstr(label), logical(selected, c_bool), 0_c_int, &
+                                       im_vec2(0.0_c_float, 0.0_c_float)))
+   endfunction ig_selectable
+
+   subroutine ig_text_wrapped(text)
+   !< Text wrapped at the right edge of the window or region (help text, long messages).
+   character(len=*), intent(in) :: text !< Text.
+
+   call igPushTextWrapPos(0.0_c_float)
+   call igTextUnformatted(cstr(text), c_null_ptr)
+   call igPopTextWrapPos()
+   endsubroutine ig_text_wrapped
+
+   subroutine ig_text_disabled(text)
+   !< Text in the style's disabled colour (a default value, a hint, something that does not apply).
+   character(len=*), intent(in) :: text  !< Text.
+   type(im_vec4), pointer       :: muted !< The style's TextDisabled colour.
+
+   call c_f_pointer(igGetStyleColorVec4(ImGuiCol_TextDisabled), muted)
+   call igPushStyleColor_Vec4(ImGuiCol_Text, muted)
+   call igTextUnformatted(cstr(text), c_null_ptr)
+   call igPopStyleColor(1_c_int)
+   endsubroutine ig_text_disabled
+
+   subroutine ig_text_colored(text, color)
+   !< Text in `color` ([r, g, b] or [r, g, b, a] in [0, 1]); pair a colour with a mark or a word (an error marker), so
+   !< that it does not rest on colour alone.
+   character(len=*), intent(in) :: text     !< Text.
+   real(real64),     intent(in) :: color(:) !< [r, g, b] or [r, g, b, a].
+   type(im_vec4)                :: c        !< Colour.
+
+   c = im_vec4(1.0_c_float, 1.0_c_float, 1.0_c_float, 1.0_c_float)
+   if (size(color) >= 3) then
+      c%x = real(color(1), c_float)
+      c%y = real(color(2), c_float)
+      c%z = real(color(3), c_float)
+   endif
+   if (size(color) >= 4) c%w = real(color(4), c_float)
+   call igPushStyleColor_Vec4(ImGuiCol_Text, c)
+   call igTextUnformatted(cstr(text), c_null_ptr)
+   call igPopStyleColor(1_c_int)
+   endsubroutine ig_text_colored
 
    subroutine ig_separator()
    !< Horizontal separator.

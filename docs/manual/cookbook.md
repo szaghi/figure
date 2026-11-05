@@ -93,6 +93,15 @@ theme file, which `app%load_style` (or `FIGURE_STYLE=my-theme.toml`) applies in 
 The layout is built on the first frame only (`ig_dock_layout_begin`); the dock space is declared every frame,
 before its windows. The user can rearrange everything afterwards. [Docking](/guide/docking) has the details.
 
+### A list and a help panel
+
+<<< @/examples/snippets/cb_help-list.F90{fortran}
+
+<Media name="cb_help" alt="A list of sections on the left; the section's values and help on the right" caption="docs/examples/src/cb_help.F90" />
+
+Two regions side by side (`ig_begin_child`, `ig_same_line`), each scrolling on its own: the list keeps the selection
+in a program variable, the values sit in one column (`ig_same_line(offset=...)`), the help wraps at the region's edge.
+
 ### An input-file editor: fields, a list, tabs and a table
 
 <<< @/examples/snippets/cb_form-table.F90{fortran}

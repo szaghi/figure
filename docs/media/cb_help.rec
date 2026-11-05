@@ -1,0 +1,14 @@
+#! program build/docs-examples/bin/cb_help
+#! frames  150
+#! poster  70
+# pick the sections one after the other: the help on the right follows
+0   move 400 250
+10  move 60 73 15
+30  down
+32  up
+60  move 70 92 15
+80  down
+82  up
+110 move 50 54 15
+130 down
+132 up

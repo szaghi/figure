@@ -131,7 +131,8 @@ flowchart TD
 
 ### test_click
 
-Queue a click at (x, y): a move, a press and a release, applied over the next three frames.
+Queue a click at (x, y): a move, a frame with the pointer resting there (as a user's hand does: Dear ImGui's
+ tabs take a press only once hovered), a press and a release, applied over the next four frames.
 
 ```fortran
 subroutine test_click(x, y, button, stat)
@@ -153,6 +154,7 @@ flowchart TD
   test_click["test_click"] --> button_index["button_index"]
   test_click["test_click"] --> fig_input_mouse_button["fig_input_mouse_button"]
   test_click["test_click"] --> fig_input_mouse_pos["fig_input_mouse_pos"]
+  test_click["test_click"] --> fig_input_next_frame["fig_input_next_frame"]
   test_click["test_click"] --> figure_check["figure_check"]
   test_click["test_click"] --> figure_fail["figure_fail"]
   style test_click fill:#3e63dd,stroke:#99b,stroke-width:2px

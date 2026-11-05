@@ -191,6 +191,7 @@ function cstr(s) result(c)
 ```mermaid
 flowchart TD
   ig_begin["ig_begin"] --> cstr["cstr"]
+  ig_begin_child["ig_begin_child"] --> cstr["cstr"]
   ig_begin_tab["ig_begin_tab"] --> cstr["cstr"]
   ig_begin_tab_bar["ig_begin_tab_bar"] --> cstr["cstr"]
   ig_begin_table["ig_begin_table"] --> cstr["cstr"]
@@ -201,11 +202,15 @@ flowchart TD
   ig_input_i32["ig_input_i32"] --> cstr["cstr"]
   ig_input_r64["ig_input_r64"] --> cstr["cstr"]
   ig_push_id_str["ig_push_id_str"] --> cstr["cstr"]
+  ig_selectable["ig_selectable"] --> cstr["cstr"]
   ig_slider_i32["ig_slider_i32"] --> cstr["cstr"]
   ig_slider_r32["ig_slider_r32"] --> cstr["cstr"]
   ig_slider_r64["ig_slider_r64"] --> cstr["cstr"]
   ig_table_setup_column["ig_table_setup_column"] --> cstr["cstr"]
   ig_text["ig_text"] --> cstr["cstr"]
+  ig_text_colored["ig_text_colored"] --> cstr["cstr"]
+  ig_text_disabled["ig_text_disabled"] --> cstr["cstr"]
+  ig_text_wrapped["ig_text_wrapped"] --> cstr["cstr"]
   ig_tooltip["ig_tooltip"] --> cstr["cstr"]
   ip_bars_r32["ip_bars_r32"] --> cstr["cstr"]
   ip_bars_r64["ip_bars_r64"] --> cstr["cstr"]
