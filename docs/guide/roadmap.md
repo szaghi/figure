@@ -93,4 +93,6 @@ The scope of the first release, step by step in [issue #1](https://github.com/sz
   remote frames skipped when unchanged, capped at 60 per second with one frame at most queued, sent with 12-byte
   vertices and deflated when the link is the bottleneck: done ([bandwidth](remote#bandwidth)). A performance guide.
 - **Remote security:** an access token in the URL, random by default ([Remote UI](remote#access-token)): done.
-- **fpm:** a plain `fpm build`, and FIGURE usable as a dependency of other fpm projects.
+- **fpm:** FIGURE usable as a dependency of other fpm projects: a self-contained package (fpm compiles the native
+  layer itself, SDL3 from the system), published for each release as the tag `vX.Y.Z-fpm`
+  ([FIGURE as an fpm dependency](install#figure-as-an-fpm-dependency)): done, first published with v0.1.0.

@@ -161,7 +161,9 @@ rule = bash docs/examples/build.sh
 
 # fobis scaffold: the CI installs these system packages (SDL3 needs the X11/Wayland/EGL/DBus headers to configure
 # a windowed build; the headless test itself needs no display). LICENSE.gpl3.md is skipped: FIGURE is MIT only (LICENSE.mit.md).
+# install.yml is FIGURE's own: its fpm step builds the package published as the tag vX.Y.Z-fpm (fpm.yml), since the
+# repository's fpm.toml needs the native layer built first.
 [scaffold]
 apt_packages = cmake ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev
                libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
-skip         = LICENSE.gpl3.md
+skip         = LICENSE.gpl3.md .github/workflows/install.yml

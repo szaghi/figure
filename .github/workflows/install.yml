@@ -81,10 +81,20 @@ jobs:
         fpm-version: v0.13.0
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
+    # FIGURE (project-owned step: fobos [scaffold] skip lists this file). The repository's fpm.toml links the native
+    # layer CMake builds; fpm users take the self-contained package that fpm.yml publishes as the tag ${TAG}-fpm. The
+    # step waits for it (fpm.yml runs in parallel with the release), then builds a separate project depending on it,
+    # with SDL3 from the release's native build (Ubuntu has no SDL3 package).
     - name: FPM
       if: hashFiles('fpm.toml') != ''
       run: |
+        for i in $(seq 60); do
+          git ls-remote --exit-code --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/${TAG}-fpm" > /dev/null && break
+          echo "waiting for ${TAG}-fpm ($i/60)"
+          sleep 30
+        done
         WORKDIR=$(mktemp -d)
         cd "$WORKDIR"
         git clone --depth 1 --branch "$TAG" https://github.com/$GITHUB_REPOSITORY ./
-        fpm build --profile release
+        CC=gcc CXX=g++ scripts/build_native.sh
+        scripts/fpm_consumer.sh --sdl-prefix . --git "https://github.com/$GITHUB_REPOSITORY" --tag "${TAG}-fpm"
