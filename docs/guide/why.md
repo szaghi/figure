@@ -21,10 +21,8 @@ references to them, registers callbacks on them, and destroys them. From Fortran
 - **The C++ ABI.** Toolkits with a C++ public API need their C++ ABI to match the one of the compiler toolchain
   linked with the Fortran code; on Windows, a toolkit built with MSVC cannot be linked by MinGW gfortran.
 
-These observations come from an audit of an existing wxWidgets binding for Fortran
-([wxFortran](https://github.com/jacobwilliams/wxFortran)), made before FIGURE was started. About half of that
-binding's C++ shim is lifetime bookkeeping. This is not a defect of that project: it is the price of the retained
-paradigm in a language without closures. FIGURE changes the paradigm instead of the toolkit.
+None of this is a defect of a particular binding: it is the price of the retained paradigm in a language without
+closures. FIGURE changes the paradigm instead of the toolkit.
 
 ## Immediate mode
 

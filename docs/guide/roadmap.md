@@ -43,8 +43,8 @@ pictures it updates, and a log of the work. This page summarises it, after the m
   `ip_line(label, y, row)` with uniform abscissae (ImPlot applies one stride to x and y, so a contiguous x cannot go
   with a strided row).
 - A Mandelbrot explorer (`src/examples/figure_mandelbrot.F90`) and a redraw benchmark at 4K
-  (`src/examples/figure_bench_texture.F90`): about 100 frames/s with a new 3840 x 2160 image every frame, about 10x
-  wxFortran on the same loop ([measurements](images#speed-a-new-4k-image-every-frame)).
+  (`src/examples/figure_bench_texture.F90`): about 100 frames/s with a new 3840 x 2160 image every frame
+  ([measurements](images#speed-a-new-4k-image-every-frame)).
 
 ## M4: platforms and CI — done
 
