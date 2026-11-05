@@ -341,13 +341,19 @@ ImFont *get_font(const std::string &name, std::string &err) {
    ImGuiIO &io = ImGui::GetIO();
    ImFontConfig cfg;
    cfg.FontDataOwnedByAtlas = false; // the bundled bytes are static; files are kept in st.font_data
+   // Dear ImGui clamps each advance to GlyphMaxAdvanceX * (size / reference size); its default FLT_MAX overflows to
+   // infinity for any size above the reference, which stops programs built with -ffpe-trap=overflow. No glyph is
+   // 1e30 pixels wide, so a finite bound changes nothing else.
+   cfg.GlyphMaxAdvanceX = 1.0e30f;
    ImFont *f = nullptr;
    if (name == "plex-sans") {
       std::snprintf(cfg.Name, sizeof(cfg.Name), "IBM Plex Sans");
       f = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(plex_sans_ttf), static_cast<int>(sizeof(plex_sans_ttf)),
                                          DEFAULT_FONT_SIZE, &cfg);
    } else if (name == "proggy") {
-      f = io.Fonts->AddFontDefaultBitmap();
+      ImFontConfig bitmap;
+      bitmap.GlyphMaxAdvanceX = cfg.GlyphMaxAdvanceX;
+      f = io.Fonts->AddFontDefaultBitmap(&bitmap);
    } else {
       FILE *in = std::fopen(name.c_str(), "rb");
       if (!in) {
