@@ -78,10 +78,11 @@ jobs:
 
     # FIGURE as a plain fpm dependency of another project: fpm compiles the native layer itself, SDL3 from Homebrew.
     # The C/C++ compiler is Apple clang: on macOS fpm links the C++ runtime as libc++ (g++ objects need libstdc++).
+    # Apple clang defaults to C++98, and fpm 0.12 takes no C++ flags from a manifest: FPM_CXXFLAGS gives C++17.
     - name: fpm dependency (system SDL3)
       run: |
         brew install sdl3
-        export CPATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib"
+        export CPATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib" FPM_CXXFLAGS="-std=c++17"
         scripts/fpm_consumer.sh -- --compiler "${FC}" --c-compiler clang --cxx-compiler clang++
 
   windows:

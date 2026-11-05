@@ -117,7 +117,7 @@ fpm has no build hooks, so it cannot run CMake. `scripts/fpm_package.py` writes 
 package** instead: the Fortran library, FIGURE's glue and the pinned Dear ImGui, ImPlot, cimgui, cimplot and miniz
 sources (only the files FIGURE compiles, copied from CMake's fetched tree, with their licences), and the files CMake
 generates (the browser page, the themes and the font, embedded). A plain `fpm build` compiles all of it; only SDL3
-comes from the system.
+comes from the system (on macOS fpm also needs `FPM_CXXFLAGS=-std=c++17`, below).
 
 ```bash
 scripts/build_native.sh                     # once: fetches the pinned sources (build/native/_deps)
@@ -136,7 +136,7 @@ SDL3 is the one system library (FIGURE pins and tests SDL 3.4; the package needs
 | Platform | SDL3 | Notes |
 |---|---|---|
 | Linux | the distribution's SDL3 development package: `libsdl3-dev` (Debian 13, Ubuntu 25.04 and later), `SDL3-devel` (Fedora) | |
-| macOS | `brew install sdl3` | `export CPATH=$(brew --prefix)/include LIBRARY_PATH=$(brew --prefix)/lib`; build the C/C++ with Apple clang (`fpm build --c-compiler clang --cxx-compiler clang++`, the default `c++` on macOS), since there fpm links the C++ runtime as libc++ |
+| macOS | `brew install sdl3` | `export CPATH=$(brew --prefix)/include LIBRARY_PATH=$(brew --prefix)/lib FPM_CXXFLAGS=-std=c++17` (Apple clang defaults to C++98, and fpm takes no C++ flags from a manifest); build the C/C++ with Apple clang (`--c-compiler clang --cxx-compiler clang++`), since on macOS fpm links the C++ runtime as libc++ |
 | Windows (MSYS2 UCRT64) | `pacman -S mingw-w64-ucrt-x86_64-sdl3` | Winsock is loaded at run time: no other library |
 
 Without a package (Ubuntu 24.04), the static SDL3 the native build installs serves:
