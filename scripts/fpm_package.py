@@ -17,7 +17,11 @@ like any system library (on macOS with Homebrew: ``CPATH`` and ``LIBRARY_PATH`` 
 
 Usage::
 
-    python3 scripts/fpm_package.py OUTDIR [--version X.Y.Z]
+    python3 scripts/fpm_package.py OUTDIR [--version X.Y.Z] [--fetch [CACHE]]
+
+``--fetch`` takes the third-party sources from the network instead of CMake's tree: the pins (cimgui and cimplot git
+tags, miniz's archive and SHA-256) are read from native/CMakeLists.txt, so both builds use the same versions, and
+CACHE (default: a temporary directory) keeps the downloads. Publishing needs no CMake and no SDL build that way.
 
 Then ``cd OUTDIR && fpm build``, or depend on it from another fpm project. Standard library only; run from anywhere.
 """
@@ -25,9 +29,15 @@ Then ``cd OUTDIR && fpm build``, or depend on it from another fpm project. Stand
 from __future__ import annotations
 
 import argparse
+import hashlib
+import io
 import re
 import shutil
+import subprocess
 import sys
+import tempfile
+import urllib.request
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -100,10 +110,51 @@ INCLUDE_DIRS = [
 def copy(src: Path, dst: Path) -> None:
     """Copy one file, creating its directory."""
     if not src.is_file():
-        msg = f"fpm_package: missing {src} (run scripts/build_native.sh first)"
+        msg = f"fpm_package: missing {src} (run scripts/build_native.sh first, or use --fetch)"
         raise SystemExit(msg)
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, dst)
+
+
+def pins() -> dict[str, str]:
+    """The third-party pins of native/CMakeLists.txt: cimgui and cimplot tags, miniz URL and SHA-256."""
+    cmake = (ROOT / "native" / "CMakeLists.txt").read_text()
+    found = {
+        "cimgui": re.search(r'set\(FIGURE_CIMGUI_TAG\s+"([^"]+)"', cmake),
+        "cimplot": re.search(r'set\(FIGURE_CIMPLOT_TAG\s+"([^"]+)"', cmake),
+        "miniz_url": re.search(r"FetchContent_Declare\(miniz\s+URL\s+(\S+)", cmake),
+        "miniz_sha256": re.search(r"URL_HASH\s+SHA256=([0-9a-f]{64})", cmake),
+    }
+    missing = [k for k, m in found.items() if m is None]
+    if missing:
+        msg = f"fpm_package: native/CMakeLists.txt: cannot read the pins {missing}"
+        raise SystemExit(msg)
+    return {k: m.group(1) for k, m in found.items() if m is not None}
+
+
+def fetch(cache: Path) -> Path:
+    """Download the pinned sources into cache/{cimgui-src,cimplot-src,miniz-src}, as CMake lays them out."""
+    p = pins()
+    for name, url in (("cimgui", "https://github.com/cimgui/cimgui"), ("cimplot", "https://github.com/cimgui/cimplot")):
+        dst = cache / f"{name}-src"
+        if not (dst / f"{name}.cpp").is_file():
+            shutil.rmtree(dst, ignore_errors=True)
+            subprocess.run(
+                ["git", "-c", "advice.detachedHead=false", "clone", "--quiet", "--depth", "1", "--branch", p[name], "--recurse-submodules",
+                 "--shallow-submodules", url, str(dst)],
+                check=True,
+            )  # fmt: skip
+    dst = cache / "miniz-src"
+    if not (dst / "miniz.c").is_file():
+        with urllib.request.urlopen(p["miniz_url"], timeout=120) as r:  # noqa: S310 (a pinned https URL)
+            data = r.read()
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != p["miniz_sha256"]:
+            msg = f"fpm_package: {p['miniz_url']}: SHA-256 {digest}, expected {p['miniz_sha256']}"
+            raise SystemExit(msg)
+        dst.mkdir(parents=True, exist_ok=True)
+        zipfile.ZipFile(io.BytesIO(data)).extractall(dst)
+    return cache
 
 
 def cmake_embeds(out: Path) -> None:
@@ -134,7 +185,28 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("outdir", type=Path)
     ap.add_argument("--version", default=None, help="package version (default: the VERSION file, without the v)")
+    ap.add_argument("--fetch", nargs="?", const="", default=None, metavar="CACHE",
+                    help="download the pinned sources (into CACHE, default a temporary directory)")  # fmt: skip
     a = ap.parse_args(argv)
+    deps = DEPS
+    tmp = None
+    if a.fetch is not None:
+        if a.fetch:
+            deps = Path(a.fetch).resolve()
+            deps.mkdir(parents=True, exist_ok=True)
+        else:
+            tmp = tempfile.TemporaryDirectory(prefix="figure-fpm-sources-")
+            deps = Path(tmp.name)
+        fetch(deps)
+    try:
+        return write(a, deps)
+    finally:
+        if tmp is not None:
+            tmp.cleanup()
+
+
+def write(a: argparse.Namespace, deps: Path) -> int:
+    """Write the package from the sources in deps."""
     out = a.outdir.resolve()
     if out.exists() and any(out.iterdir()):
         if not (out / "fpm.toml").is_file():
@@ -152,19 +224,19 @@ def main(argv: list[str]) -> int:
     for f in NATIVE_FILES:
         copy(ROOT / "native" / f, src / "native" / f)
     cmake_embeds(src / "native")
-    cimgui = DEPS / "cimgui-src"
+    cimgui = deps / "cimgui-src"
     copy(cimgui / "cimgui.cpp", src / "cimgui" / "cimgui.cpp")
     copy(cimgui / "cimgui.h", src / "cimgui" / "cimgui.h")
     for f in IMGUI_FILES:
         copy(cimgui / "imgui" / f, src / "cimgui" / "imgui" / f)
     with (src / "cimgui" / "imgui" / "imconfig.h").open("a") as h:
         h.write(IMCONFIG_ADDITION)
-    cimplot = DEPS / "cimplot-src"
+    cimplot = deps / "cimplot-src"
     copy(cimplot / "cimplot.cpp", src / "cimplot" / "cimplot.cpp")
     copy(cimplot / "cimplot.h", src / "cimplot" / "cimplot.h")
     for f in IMPLOT_FILES:
         copy(cimplot / "implot" / f, src / "cimplot" / "implot" / f)
-    miniz = DEPS / "miniz-src"
+    miniz = deps / "miniz-src"
     copy(miniz / "miniz.c", src / "miniz" / "miniz.c.inc")
     copy(miniz / "miniz.h", src / "miniz" / "miniz.h")
     (src / "miniz" / "miniz_figure.c").write_text(MINIZ_WRAPPER)

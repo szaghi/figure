@@ -5,7 +5,7 @@
 # Usage: scripts/fpm_consumer.sh [--sdl-prefix DIR] [-- FPM_OPTIONS...]
 #   --sdl-prefix DIR  SDL3 is not a system package here: take its headers and library from DIR (DIR/include,
 #                     DIR/lib; the repository root after scripts/build_native.sh). Otherwise the system's SDL3.
-# Needs build/native/_deps (scripts/build_native.sh, or only its CMake configure step, fetches the sources).
+# The third-party sources come from build/native/_deps (scripts/build_native.sh) or, without it, from the network.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sdl=""
@@ -20,7 +20,9 @@ while [[ $# -gt 0 ]]; do
 done
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-python3 "$root/scripts/fpm_package.py" "$work/figure"
+fetch=()
+[[ -d "$root/build/native/_deps/cimgui-src" ]] || fetch=(--fetch) # no CMake tree here: download the pinned sources
+python3 "$root/scripts/fpm_package.py" "$work/figure" ${fetch[@]+"${fetch[@]}"}
 cp -R "$root/scripts/fpm_consumer" "$work/consumer"
 sed -i.bak "s#FIGURE_PACKAGE#../figure#" "$work/consumer/fpm.toml" && rm -f "$work/consumer/fpm.toml.bak" # fpm wants it relative
 if [[ -n "$sdl" ]]; then
