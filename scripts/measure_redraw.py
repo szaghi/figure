@@ -28,6 +28,7 @@ import importlib.util
 import json
 import math
 import os
+import secrets
 import socket
 import struct
 import subprocess
@@ -46,6 +47,7 @@ _spec.loader.exec_module(remote_client)
 
 WARMUP_S = 3  # seconds not measured: start-up, font atlas, first frames
 KEEP_BYTES = 400 << 20  # frames kept for the offline analysis, at most [bytes]
+TOKEN = secrets.token_hex(16)  # the benchmark's access token (--token with --connect: the remote program's)  # frames kept for the offline analysis, at most [bytes]
 
 
 @dataclass
@@ -236,7 +238,7 @@ def connect_stream(
     end = time.monotonic() + 15.0
     while True:
         try:
-            ws = remote_client.WebSocket(port) if host == "127.0.0.1" else remote_websocket(host, port)
+            ws = remote_client.WebSocket(port, TOKEN) if host == "127.0.0.1" else remote_websocket(host, port)
             break
         except (remote_client.ProtocolError, OSError):
             if time.monotonic() > end:
@@ -249,16 +251,6 @@ def connect_stream(
     for t in threads:
         t.start()
     return threads
-
-
-def remote_websocket(host: str, port: int) -> remote_client.WebSocket:
-    """A WebSocket to another host (remote_client connects to 127.0.0.1 only)."""
-    original = remote_client.socket.create_connection
-    remote_client.socket.create_connection = lambda addr, timeout=None: original((host, addr[1]), timeout=timeout)
-    try:
-        return remote_client.WebSocket(port)
-    finally:
-        remote_client.socket.create_connection = original
 
 
 class GpuSampler:
@@ -297,6 +289,16 @@ class GpuSampler:
         return sum(self.samples) / len(self.samples) if self.samples else None
 
 
+def remote_websocket(host: str, port: int) -> remote_client.WebSocket:
+    """A WebSocket to another host (remote_client connects to 127.0.0.1 only)."""
+    original = remote_client.socket.create_connection
+    remote_client.socket.create_connection = lambda addr, timeout=None: original((host, addr[1]), timeout=timeout)
+    try:
+        return remote_client.WebSocket(port, TOKEN)
+    finally:
+        remote_client.socket.create_connection = original
+
+
 def parse_bench(out: str) -> dict[str, float]:
     """The benchmark's last line: frames, seconds, app_ms, figure_ms, updates."""
     for line in out.splitlines():
@@ -328,7 +330,7 @@ def run_case(
     port = 0
     if case.remote:
         port = free_port()
-        args += ["--remote", str(port)]
+        args += ["--remote", str(port), "--token", TOKEN]
         if compress:
             args += ["--compress", compress]
     else:
@@ -480,11 +482,15 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--json", type=Path, default=None)
     ap.add_argument("--connect", default=None, help="HOST:PORT of a program already serving (records only)")
     ap.add_argument("--pointer", action="store_true", help="with --connect: move the pointer")
+    ap.add_argument("--token", default=None, help="with --connect: the program's access token")
     ap.add_argument("--compress", default=None, choices=["auto", "always", "never"], help="remote compression")
     ap.add_argument("--gpu", action="store_true", help="sample GPU 0 utilisation (nvidia-smi) in window mode")
     ap.add_argument("--env", nargs="*", default=[], help="VAR=value for the program (e.g. GALLIUM_DRIVER=d3d12)")
     a = ap.parse_args(argv)
     env = dict(kv.split("=", 1) for kv in a.env)
+    if a.token is not None:
+        global TOKEN  # noqa: PLW0603
+        TOKEN = a.token
     results = []
     if a.connect:
         c = Case(f"remote {a.connect}", [], remote=True, pointer=a.pointer)

@@ -128,10 +128,19 @@ def record_remote(name: str, header: dict[str, str]) -> None:
         [str(program), "--remote", str(port)],
         cwd=program.parent,
         env=dict(os.environ, FIGURE_STYLE=header.get("style", STYLE)),
-        stdout=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
+        text=True,
     )
     try:
+        # the address to open, with the program's access token: "FIGURE: open http://localhost:PORT/?token=... in ..."
+        assert server.stdout is not None
+        line = server.stdout.readline()
+        if not line.startswith("FIGURE: open "):
+            msg = f"{name}: the program did not print its address ({line.strip()!r})"
+            raise RuntimeError(msg)
+        url = line.split()[2]
+        token = url.split("?token=", 1)[1] if "?token=" in url else ""
         with tempfile.TemporaryDirectory(prefix="figure-media-") as tmp:
             shot = Path(tmp) / "page.png"
             subprocess.run(
@@ -143,7 +152,7 @@ def record_remote(name: str, header: dict[str, str]) -> None:
                     f"--window-size={width},{height}",
                     "--virtual-time-budget=4000",
                     f"--screenshot={shot}",
-                    f"http://localhost:{port}/",
+                    url,
                 ],
                 check=True,
                 capture_output=True,
@@ -187,7 +196,7 @@ def record_remote(name: str, header: dict[str, str]) -> None:
                     "northwest",
                     "-annotate",
                     "+108+12",
-                    "localhost:8080",
+                    "localhost:8080/" + (f"?token={token}" if token else ""),
                     "-bordercolor",
                     "#2a2520",
                     "-border",

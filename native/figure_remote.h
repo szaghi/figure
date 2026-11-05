@@ -34,6 +34,10 @@ void texture_destroy(std::uint64_t id);
 void set_background(float r, float g, float b);
 // Deflate frames and textures: 0 auto (while the client has been the bottleneck in the last 5 s), 1 always, 2 never.
 void set_compression(int mode);
+// The access token the page and the WebSocket need in their address (?token=...): made at start (32 hex digits from the
+// system's cryptographic generator), replaced by the program's own, or disabled (empty).
+void set_token(const std::string &token);
+const std::string &token();
 // A new texture id, shared by Dear ImGui's and the user's textures.
 std::uint64_t new_texture_id();
 

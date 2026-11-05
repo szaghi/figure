@@ -148,8 +148,10 @@ flowchart TD
 
 Create the contexts and serve the UI to a web browser on `http://host:port/` instead of opening a window: the
  program needs no display or GPU (a cluster node will do). One browser at a time, which can come and go while the
- program runs. There is no authentication: whoever reaches the port controls the program, so keep the default
- host (127.0.0.1) and reach a remote machine through an SSH tunnel (`ssh -L 8080:localhost:8080 node`).
+ program runs. The page and its connection need an access token in the address (`http://localhost:8080/?token=...`,
+ printed at start, returned in `url`): 32 random hex digits, or `token` (`token=''` disables it: anyone who reaches
+ the port then controls the program). Keep the default host (127.0.0.1) and reach a remote machine through an SSH
+ tunnel (`ssh -L 8080:localhost:8080 node`).
 
  A browser has no vsync to pace the program, so frames are capped at `max_fps` per second (default 60), and a
  frame is sent only once the previous one has left: with a slow client the newest frame goes, the ones in between
@@ -158,7 +160,7 @@ Create the contexts and serve the UI to a web browser on `http://host:port/` ins
  skipped), `'always'`, or `'never'`; deflate costs about 7 ms of CPU per MB and saves 2.5 to 4 times.
 
 ```fortran
-subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, stat)
+subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, token, url, stat)
 ```
 
 **Arguments**
@@ -174,6 +176,8 @@ subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fp
 | `quiet` | logical | in | optional | Do not print the address to open (default false). |
 | `max_fps` | real(kind=real64) | in | optional | Most frames per second (default 60; 0: no cap). |
 | `compress` | character(len=*) | in | optional | Deflate frames and textures: 'auto', 'always', 'never'. |
+| `token` | character(len=*) | in | optional | Access token (default: random; '': none). |
+| `url` | character(len=*) | out | optional | The address to open, with the token (blank-padded). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -181,8 +185,10 @@ subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fp
 ```mermaid
 flowchart TD
   init_remote["init_remote"] --> fig_init_remote["fig_init_remote"]
+  init_remote["init_remote"] --> fig_remote_token["fig_remote_token"]
   init_remote["init_remote"] --> fig_set_remote_compress["fig_set_remote_compress"]
   init_remote["init_remote"] --> fig_set_remote_fps["fig_set_remote_fps"]
+  init_remote["init_remote"] --> fig_set_remote_token["fig_set_remote_token"]
   init_remote["init_remote"] --> figure_check["figure_check"]
   init_remote["init_remote"] --> figure_fail["figure_fail"]
   style init_remote fill:#3e63dd,stroke:#99b,stroke-width:2px

@@ -22,7 +22,8 @@ use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
-                            fig_set_remote_fps, fig_set_style, fig_shutdown
+                            fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
+                            fig_set_style, fig_shutdown
 
 implicit none
 private
@@ -85,11 +86,13 @@ contains
    call figure_check(status, stat)
    endsubroutine init_headless
 
-   subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, stat)
+   subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, token, url, stat)
    !< Create the contexts and serve the UI to a web browser on `http://host:port/` instead of opening a window: the
    !< program needs no display or GPU (a cluster node will do). One browser at a time, which can come and go while the
-   !< program runs. There is no authentication: whoever reaches the port controls the program, so keep the default
-   !< host (127.0.0.1) and reach a remote machine through an SSH tunnel (`ssh -L 8080:localhost:8080 node`).
+   !< program runs. The page and its connection need an access token in the address (`http://localhost:8080/?token=...`,
+   !< printed at start, returned in `url`): 32 random hex digits, or `token` (`token=''` disables it: anyone who reaches
+   !< the port then controls the program). Keep the default host (127.0.0.1) and reach a remote machine through an SSH
+   !< tunnel (`ssh -L 8080:localhost:8080 node`).
    !<
    !< A browser has no vsync to pace the program, so frames are capped at `max_fps` per second (default 60), and a
    !< frame is sent only once the previous one has left: with a slow client the newest frame goes, the ones in between
@@ -105,6 +108,8 @@ contains
    logical,           intent(in),  optional :: quiet     !< Do not print the address to open (default false).
    real(real64),      intent(in),  optional :: max_fps   !< Most frames per second (default 60; 0: no cap).
    character(len=*),  intent(in),  optional :: compress  !< Deflate frames and textures: 'auto', 'always', 'never'.
+   character(len=*),  intent(in),  optional :: token     !< Access token (default: random; '': none).
+   character(len=*),  intent(out), optional :: url       !< The address to open, with the token (blank-padded).
    integer(int32),    intent(out), optional :: stat      !< Status.
    integer(c_int)                           :: p         !< Requested port.
    integer(c_int)                           :: bound     !< Port listened on.
@@ -113,7 +118,18 @@ contains
    integer(c_int)                           :: status    !< Native status.
    logical                                  :: talk      !< Print the address.
    integer(c_int)                           :: zmode     !< Compression: 0 auto, 1 always, 2 never.
+   character(len=256)                       :: tok       !< The token in effect (at most 256 characters).
+   character(len=8)                         :: port_text !< The port, as text.
+   integer(c_int)                           :: ntok      !< Its length.
+   character(len=:), allocatable            :: address   !< The address to open.
 
+   if (present(token)) then
+      if (len(token) > len(tok) .or. verify(token, &
+          'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~') /= 0) then ! safe in an address as it is
+         call figure_fail(FIG_ERR_ARGUMENT, 'init_remote: token is at most 256 letters, digits or -._~', stat)
+         return
+      endif
+   endif
    zmode = 0_c_int
    if (present(compress)) then ! checked before anything starts
       select case (compress)
@@ -147,15 +163,22 @@ contains
          call fig_set_remote_fps(60.0_c_double)
       endif
       call fig_set_remote_compress(zmode)
+      if (present(token)) call fig_set_remote_token(token, len(token, c_int))
+      ntok = fig_remote_token(tok, len(tok, c_int))
+      if (present(host)) then
+         address = 'http://'//trim(host)
+      else
+         address = 'http://localhost'
+      endif
+      write(port_text, '(I0)') bound
+      address = address//':'//trim(port_text)//'/'
+      if (ntok > 0_c_int) address = address//'?token='//tok(1:ntok)
+      if (present(url)) url = address
    endif
    talk = .true.
    if (present(quiet)) talk = .not. quiet
    if (status == FIG_OK .and. talk) then
-      if (present(host)) then
-         write(output_unit, '(A,A,A,I0,A)') 'FIGURE: open http://', trim(host), ':', bound, '/ in a web browser'
-      else
-         write(output_unit, '(A,I0,A)') 'FIGURE: open http://localhost:', bound, '/ in a web browser'
-      endif
+      write(output_unit, '(A)') 'FIGURE: open '//address//' in a web browser'
       flush(output_unit)
    endif
    call figure_check(status, stat)

@@ -1115,6 +1115,17 @@ void fig_set_remote_fps(double max_fps) { st.remote_min_dt = max_fps > 0.0 ? 1.0
 
 void fig_set_remote_compress(int mode) { figure_remote::set_compression(mode); }
 
+void fig_set_remote_token(const char *token, int token_len) {
+   figure_remote::set_token(std::string(token, token_len > 0 ? static_cast<size_t>(token_len) : 0));
+}
+
+int fig_remote_token(char *buf, int buf_len) {
+   const std::string &t = figure_remote::token();
+   const int n = static_cast<int>(t.size());
+   if (buf_len > 0) std::memcpy(buf, t.data(), static_cast<size_t>(std::min(n, buf_len)));
+   return n;
+}
+
 void fig_request_frames(int n) {
    if (n > st.frames_left) st.frames_left = n;
 }

@@ -18,8 +18,13 @@
 //               are deflated when compression is on (always, or in auto mode while the client is the bottleneck)
 //   5 unchanged: u8 5: the frame equals the last one sent, which is not sent again; at most once per second, so the
 //               client knows the program is alive (an idle interface sends nothing else)
+// Access: unless the token is disabled, GET / and GET /ws need "?token=<token>" in their target, else 403. The token is
+// 32 hex digits (128 bits from the system's cryptographic generator) made at start, or the program's own.
 // Client to server: text messages, one event each: "m:x,y" mouse position, "b:button,down", "w:dx,dy" wheel,
 // "k:down,code" key (KeyboardEvent.code), "c:text" typed characters, "s:width,height" canvas size.
+#ifdef _WIN32
+#define _CRT_RAND_S // rand_s: the system's cryptographic generator (RtlGenRandom), for the access token
+#endif
 #include "figure_native.h"
 #include "figure_remote.h"
 
@@ -153,6 +158,7 @@ struct server_t {
    std::map<std::uint64_t, texture_t>      textures; // every live texture, sent again to a new client
    std::uint64_t                           next_id = 1;
    bool                                    resend = false; // a client connected: send all textures
+   std::string                             token;          // needed in the page's and the WebSocket's address
    std::string                             last_frame;     // the last frame message sent, to skip repeats
    size_t                                  unsent_frame = 0; // bytes of the last frame still in the client's queue
    bool                                    pending = false;  // a frame was skipped while the queue was busy
@@ -389,6 +395,52 @@ bool ws_read(connection_t &c) {
    }
 }
 
+// 128 random bits as 32 hex digits, from the system's cryptographic generator; empty if it is unavailable.
+std::string random_token() {
+   unsigned char b[16];
+#ifdef _WIN32
+   for (int i = 0; i < 4; ++i) {
+      unsigned int v;
+      if (rand_s(&v) != 0) return "";
+      std::memcpy(b + 4 * i, &v, 4);
+   }
+#else
+   FILE *f = std::fopen("/dev/urandom", "rb");
+   if (!f) return "";
+   const size_t n = std::fread(b, 1, sizeof(b), f);
+   std::fclose(f);
+   if (n != sizeof(b)) return "";
+#endif
+   static const char *hex = "0123456789abcdef";
+   std::string t;
+   for (unsigned char v : b) {
+      t += hex[v >> 4];
+      t += hex[v & 15];
+   }
+   return t;
+}
+
+// The value of `name` in a query string ("a=1&token=x"), or empty.
+std::string query_value(const std::string &query, const std::string &name) {
+   size_t at = 0;
+   while (at <= query.size()) {
+      const size_t end = std::min(query.find('&', at), query.size());
+      const std::string pair = query.substr(at, end - at);
+      if (pair.compare(0, name.size() + 1, name + "=") == 0) return pair.substr(name.size() + 1);
+      at = end + 1;
+   }
+   return "";
+}
+
+// Whether `given` is the token, in a time that does not depend on where they differ.
+bool token_ok(const std::string &given) {
+   if (sv.token.empty()) return true; // disabled by the program
+   if (given.size() != sv.token.size()) return false;
+   unsigned char diff = 0;
+   for (size_t i = 0; i < given.size(); ++i) diff |= static_cast<unsigned char>(given[i] ^ sv.token[i]);
+   return diff == 0;
+}
+
 // Answer an HTTP request in c.in, if complete; may turn the connection into the WebSocket client.
 bool http_read(connection_t &c) {
    const size_t end = c.in.find("\r\n\r\n");
@@ -406,7 +458,26 @@ bool http_read(connection_t &c) {
       while (from < req.size() && req[from] == ' ') ++from;
       return req.substr(from, to == std::string::npos ? std::string::npos : to - from);
    };
-   if (req.rfind("GET /ws", 0) == 0 && !header("sec-websocket-key").empty()) {
+   // request line: method, target (path and query)
+   const size_t sp1 = req.find(' '), sp2 = sp1 == std::string::npos ? sp1 : req.find(' ', sp1 + 1);
+   const std::string method = req.substr(0, sp1);
+   const std::string target = sp2 == std::string::npos ? "" : req.substr(sp1 + 1, sp2 - sp1 - 1);
+   const size_t qm = target.find('?');
+   const std::string path = target.substr(0, qm);
+   const std::string query = qm == std::string::npos ? "" : target.substr(qm + 1);
+   const bool allowed = token_ok(query_value(query, "token"));
+   const bool ws = method == "GET" && path == "/ws" && !header("sec-websocket-key").empty();
+   const bool page = method == "GET" && (path == "/" || path == "/index.html");
+   if ((ws || page) && !allowed) {
+      const std::string body = "FIGURE: this address needs the program's access token: open the address the program "
+                               "printed, with its ?token=...\n";
+      c.out += "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\n"
+               "Connection: close\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body;
+      c.close_after = true;
+      flush(c);
+      return false;
+   }
+   if (ws) {
       for (auto &o : sv.conns) // one client: the newest replaces the previous one
          if (o.websocket && o.s != NO_SOCKET && &o != &c) {
             close_socket(o.s);
@@ -419,7 +490,6 @@ bool http_read(connection_t &c) {
       sv.resend = true;
       return true;
    }
-   const bool page = req.rfind("GET / ", 0) == 0 || req.rfind("GET /index.html ", 0) == 0;
    const std::string body = page ? std::string(client_html) : std::string("not found\n");
    c.out += std::string(page ? "HTTP/1.1 200 OK\r\n" : "HTTP/1.1 404 Not Found\r\n") +
             (page ? "Content-Type: text/html; charset=utf-8\r\n" : "Content-Type: text/plain\r\n") +
@@ -435,6 +505,11 @@ bool http_read(connection_t &c) {
 namespace figure_remote {
 
 bool start(const std::string &host, int port, int &bound_port, std::string &err) {
+   sv.token = random_token();
+   if (sv.token.empty()) {
+      err = "cannot make the access token: the system's random generator is unavailable";
+      return false;
+   }
 #ifdef _WIN32
    if (!sv.wsa) {
       WSADATA data;
@@ -568,6 +643,10 @@ bool frame_pending() { return sv.pending; }
 bool queue_busy() { return sv.unsent_frame > 0; }
 
 void set_compression(int mode) { sv.compress = mode; }
+
+void set_token(const std::string &token) { sv.token = token; }
+
+const std::string &token() { return sv.token; }
 
 std::uint64_t new_texture_id() { return sv.next_id++; }
 

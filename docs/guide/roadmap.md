@@ -89,7 +89,8 @@ The scope of the first release, step by step in [issue #1](https://github.com/sz
   - window flags and scoped style changes;
   - a recorded theme gallery.
 - **Testing:** a public testing module for synthetic input.
-- **Performance:** the cost of continuous redraw measured locally and in remote mode, then remote frames skipped when
-  unchanged and, as the numbers justify, compressed or rate-limited; a performance guide.
-- **Remote security:** an access token in the URL (pending a decision).
+- **Performance:** the cost of continuous redraw measured locally and in remote mode (`scripts/measure_redraw.py`);
+  remote frames skipped when unchanged, capped at 60 per second with one frame at most queued, sent with 12-byte
+  vertices and deflated when the link is the bottleneck: done ([bandwidth](remote#bandwidth)). A performance guide.
+- **Remote security:** an access token in the URL, random by default ([Remote UI](remote#access-token)): done.
 - **fpm:** a plain `fpm build`, and FIGURE usable as a dependency of other fpm projects.

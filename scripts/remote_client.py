@@ -1,7 +1,8 @@
 """A FIGURE remote-mode client for tests: speaks the protocol of native/figure_remote.cpp without a browser.
 
 Run by src/tests/figure_test_remote.F90 against the program's server. Checks, in order:
-  - GET / serves the client page;
+  - GET /?token=TOKEN serves the client page; without the token or with a wrong one, the page and the WebSocket are
+    refused (403);
   - the WebSocket handshake (RFC 6455): status 101 and the Sec-WebSocket-Accept of our key;
   - every message parses to its exact length: the background (r, g, b in [0, 1]), before any frame; textures
     (id, size, flags, width x height x 4 RGBA bytes) and frames
@@ -18,7 +19,7 @@ Run by src/tests/figure_test_remote.F90 against the program's server. Checks, in
     button's hover changed what is drawn).
 Writes "ok" to OK_FILE when every check passed, else the first failure; exits 0 or 1.
 
-Usage: python3 scripts/remote_client.py PORT CLICK_FILE OK_FILE
+Usage: python3 scripts/remote_client.py PORT CLICK_FILE OK_FILE [TOKEN]
 Standard library only (Python >= 3.11).
 """
 
@@ -71,27 +72,42 @@ def read_until(s: socket.socket, marker: bytes) -> bytes:
     return data
 
 
-def check_page(port: int) -> None:
-    """GET / must answer the client page."""
+def http_get(port: int, target: str, headers: str = "") -> bytes:
+    """One HTTP GET; the whole answer (the server closes the connection)."""
     with connect(port) as s:
-        s.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        s.sendall(f"GET {target} HTTP/1.1\r\nHost: localhost\r\n{headers}\r\n".encode())
         data = b""
         while chunk := s.recv(65536):
             data += chunk
+    return data
+
+
+def check_page(port: int, token: str) -> None:
+    """GET /?token= must answer the client page; without the token, or with a wrong one, 403 (page and WebSocket)."""
+    data = http_get(port, f"/?token={token}" if token else "/")
     if not data.startswith(b"HTTP/1.1 200") or b"FIGURE remote" not in data:
         msg = "GET / did not serve the client page"
         raise ProtocolError(msg)
+    if not token:
+        return
+    upgrade = "Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+    upgrade += "Sec-WebSocket-Version: 13\r\n"
+    for target, headers in (("/", ""), ("/?token=0" + token[1:], ""), ("/index.html?x=1", ""), ("/ws", upgrade),
+                            ("/ws?token=" + token[:-1], upgrade)):
+        if not http_get(port, target, headers).startswith(b"HTTP/1.1 403"):
+            msg = f"GET {target} without the right token was not refused"
+            raise ProtocolError(msg)
 
 
 class WebSocket:
     """A minimal WebSocket client: masked text frames out, binary frames in."""
 
-    def __init__(self, port: int) -> None:
+    def __init__(self, port: int, token: str = "") -> None:
         self.s = connect(port)
         key = base64.b64encode(os.urandom(16)).decode()
         self.s.sendall(
             (
-                "GET /ws HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                f"GET /ws{'?token=' + token if token else ''} HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                 f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
             ).encode()
         )
@@ -189,10 +205,10 @@ def toggle_hover(ws: WebSocket, x: float, y: float) -> None:
         time.sleep(0.005)
 
 
-def run(port: int, click_file: Path) -> None:
+def run(port: int, click_file: Path, token: str) -> None:
     """The checks; raises ProtocolError on the first failure."""
-    check_page(port)
-    ws = WebSocket(port)
+    check_page(port, token)
+    ws = WebSocket(port, token)
     textures: set[int] = set()
     sized = clicked = False
     background: tuple[float, ...] | None = None
@@ -316,8 +332,9 @@ def write_verdict(path: Path, text: str) -> None:
 def main(argv: list[str]) -> int:
     """Run the client; write the verdict to OK_FILE."""
     port, click_file, ok_file = int(argv[0]), Path(argv[1]), Path(argv[2])
+    token = argv[3] if len(argv) > 3 else ""
     try:
-        run(port, click_file)
+        run(port, click_file, token)
     except (ProtocolError, OSError) as err:
         write_verdict(ok_file, f"FAILED: {err}")
         return 1

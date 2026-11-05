@@ -141,7 +141,8 @@ function handle(buf) {
 function send(s) { if (ws && ws.readyState === 1) ws.send(s); }
 function sendSize() { send(`s:${canvas.clientWidth},${canvas.clientHeight}`); }
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  const token = new URLSearchParams(location.search).get("token"); // the program's access token, from the address
+  ws = new WebSocket(`ws://${location.host}/ws` + (token ? `?token=${encodeURIComponent(token)}` : ""));
   ws.binaryType = "arraybuffer";
   ws.onopen = () => { status.textContent = "connected"; sendSize(); };
   ws.onmessage = onMessage;

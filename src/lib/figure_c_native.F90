@@ -12,7 +12,7 @@ implicit none
 private
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
-public :: fig_set_remote_fps, fig_set_remote_compress
+public :: fig_set_remote_fps, fig_set_remote_compress, fig_set_remote_token, fig_remote_token
 public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, fig_texture_destroy, fig_texture_sampling
 public :: fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
@@ -127,6 +127,23 @@ interface
    implicit none
    integer(c_int), value :: mode !< Mode.
    endsubroutine fig_set_remote_compress
+
+   subroutine fig_set_remote_token(token, token_len) bind(C, name='fig_set_remote_token')
+   !< Remote mode: the access token (empty: none).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: token(*)  !< Token (not NUL-terminated).
+   integer(c_int), value              :: token_len !< Its length.
+   endsubroutine fig_set_remote_token
+
+   function fig_remote_token(buf, buf_len) result(n) bind(C, name='fig_remote_token')
+   !< Remote mode: copy the access token into `buf` (up to `buf_len` characters); its length.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its length.
+   integer(c_int)                      :: n       !< Token length.
+   endfunction fig_remote_token
 
    subroutine fig_request_frames(n) bind(C, name='fig_request_frames')
    !< Draw at least `n` more frames without waiting (animations, data that changed).

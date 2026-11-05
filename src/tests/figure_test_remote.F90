@@ -39,6 +39,8 @@ character(len=16)           :: os                                       !< The O
 real(real64)                :: lx(100000)                               !< A long line (over 65536 vertices): abscissae.
 real(real64)                :: ly(100000)                               !< Its ordinates.
 integer(int32)              :: i                                        !< Counter.
+character(len=128)          :: url                                      !< The address to open, with the token.
+character(len=64)           :: token                                    !< The access token.
 logical                     :: long_shown                               !< The long line is drawn (until Z is down).
 
 call remove_file(CLICK_FILE)
@@ -51,14 +53,17 @@ frames = 0_int32
 written = .false.
 test_passed = .false.
 verdict = 'no verdict'
-call app%init_remote(port=0_int32, port_used=port, quiet=.true., compress='always', stat=stat) ! the client inflates all
-test_passed(1) = stat == 0_int32 .and. port > 0_int32
+call app%init_remote(port=0_int32, port_used=port, quiet=.true., compress='always', url=url, stat=stat) ! deflate all
+token = url(index(url, '?token=') + 7:)                                 ! the random token, 32 hex digits
+test_passed(1) = stat == 0_int32 .and. port > 0_int32 .and. len_trim(token) == 32 .and. verify(trim(token), '0123456789abcdef') == 0
 if (test_passed(1)) then
    call get_environment_variable('OS', os)
    if (trim(os) == 'Windows_NT') then ! cmd.exe: start /b runs the client without waiting for it
-      write(command, '(A,I0,A)') 'start "" /b python3 scripts/remote_client.py ', port, ' '//CLICK_FILE//' '//OK_FILE
+      write(command, '(A,I0,A)') 'start "" /b python3 scripts/remote_client.py ', port, ' '//CLICK_FILE//' '//OK_FILE//' '// &
+                                 trim(token)
    else ! sh: & runs it in the background
-      write(command, '(A,I0,A)') 'python3 scripts/remote_client.py ', port, ' '//CLICK_FILE//' '//OK_FILE//' &'
+      write(command, '(A,I0,A)') 'python3 scripts/remote_client.py ', port, ' '//CLICK_FILE//' '//OK_FILE//' '// &
+                                 trim(token)//' &'
    endif
    call execute_command_line(trim(command), wait=.true.)
    call system_clock(t0, rate)

@@ -31,6 +31,10 @@ void   fig_set_lazy(int enabled, double max_wait_s);
 void   fig_set_remote_fps(double max_fps);
 // Remote mode: deflate frames and textures, 0 auto (while the client is the bottleneck), 1 always, 2 never.
 void   fig_set_remote_compress(int mode);
+// Remote mode: the access token (empty: none, anyone reaching the port is let in). Set after fig_init_remote, which
+// makes a random one; fig_remote_token copies it into buf (up to buf_len bytes) and returns its length.
+void   fig_set_remote_token(const char *token, int token_len);
+int    fig_remote_token(char *buf, int buf_len);
 /* Keep window positions and sizes in this file (Dear ImGui's imgui.ini); off by default. Before the first frame. */
 int    fig_set_ini_file(const char *path, int path_len);
 /* A built-in style (themes/<name>.toml); lines: a named line palette (okabe-ito), empty for the theme's own. */

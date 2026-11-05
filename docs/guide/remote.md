@@ -23,7 +23,7 @@ Try it with the example: `exe/figure_hello --remote 8080`, then open `http://loc
 
 ## init_remote
 
-`app%init_remote([port] [, host] [, width, height] [, port_used] [, quiet] [, max_fps] [, compress] [, stat])`:
+`app%init_remote([port] [, host] [, width, height] [, port_used] [, quiet] [, max_fps] [, compress] [, token] [, url] [, stat])`:
 
 | Argument | Meaning |
 |---|---|
@@ -33,23 +33,42 @@ Try it with the example: `exe/figure_hello --remote 8080`, then open `http://loc
 | `port_used` | the port listened on |
 | `quiet` | do not print the address to open |
 | `max_fps` | most frames per second (default 60; `0`: no cap): a browser has no vsync to pace the program |
+| `token` | the access token the address must carry (default: 32 random hex digits; `''`: none) |
+| `url` | the address to open, with the token: `http://localhost:8080/?token=...` |
 | `compress` | deflate frames and textures: `'auto'` (default) only while the browser cannot keep up, `'always'`, `'never'` |
 | `stat` | `FIG_ERR_FAILED` if the port cannot be opened (in use, not permitted) |
 
 Everything else is unchanged: widgets, plots, heatmaps, textures (sent to the browser when they change), lazy redraw
 (the loop sleeps on the network instead of the window's events, and wakes up on the browser's input).
 
+## Access token
+
+The program prints the address to open, with an **access token** in it:
+
+```text
+FIGURE: open http://localhost:8080/?token=95f45b3f811f0d5505f5f227eb9be619 in a web browser
+```
+
+The page and its connection are refused (`403`) without the token, so only who has the address controls the
+program: on a shared machine, the other users logged into it can reach the port, but not guess 128 random bits. The
+token is made anew at each start from the system's cryptographic generator (`/dev/urandom`, `rand_s` on Windows);
+`init_remote(token='...')` sets your own (letters, digits, `-._~`, at most 256), `token=''` turns the check off.
+Reloading the page keeps the token (it is in the address); `url` returns the address for a program that prints it
+elsewhere (a log, a job's output).
+
+The token does not encrypt anything: the traffic is plain HTTP. Keep the default host, `127.0.0.1`, and reach a remote
+machine through SSH, which encrypts it.
+
 ## A program on a cluster node
 
-The server has **no authentication**: whoever reaches the port controls the program. Keep the default host,
-`127.0.0.1`, and reach the node through an SSH tunnel from your machine:
+Reach the node through an SSH tunnel from your machine, then open the printed address there:
 
 ```bash
-ssh -L 8080:localhost:8080 user@node        # then open http://localhost:8080/ on your machine
+ssh -L 8080:localhost:8080 user@node        # then open http://localhost:8080/?token=... on your machine
 ```
 
 Through a login node, chain the hops (`ssh -J login -L 8080:localhost:8080 node`). Do not set `host='0.0.0.0'` on a
-shared machine.
+shared machine: the token would then travel unencrypted over the network.
 
 ## Behaviour
 
@@ -99,7 +118,8 @@ at the size it is displayed (a 3840 × 2160 texture is 33 MB per update before d
 ## How it works
 
 The native layer contains a minimal HTTP and WebSocket server (RFC 6455, one client, non-blocking sockets on POSIX and
-Winsock). `GET /` answers the client page, embedded in the library; `GET /ws` upgrades to a WebSocket. After each
+Winsock). `GET /?token=...` answers the client page, embedded in the library; `GET /ws?token=...` upgrades to a WebSocket;
+both answer `403` without the token. After each
 frame the server sends, as binary messages, the textures Dear ImGui created or changed (RGBA, with their filtering)
 and the draw lists (12-byte vertices, or 20-byte ones for a list reaching beyond ±8191 pixels; 16-bit indices;
 commands with clip rectangle, texture, index range and vertex offset, so a window may hold more than 65 536
@@ -108,5 +128,5 @@ connection, and when the [style](styles) changes, it also sends the background c
 them with WebGL, exactly as the OpenGL backend draws a window, and sends input events back as short text messages. The protocol is described at the top of `native/figure_remote.cpp`.
 
 `src/tests/figure_test_remote.F90` tests it end to end without a browser: it serves on a free port and runs
-`scripts/remote_client.py`, a WebSocket client that checks the page, the handshake, every message byte by byte (including a draw
+`scripts/remote_client.py`, a WebSocket client that checks the page and the refusal of a missing or wrong token, the handshake, every message byte by byte (including a draw
 list over 65 536 vertices), a resize, that an idle interface sends no frame (only "unchanged"), then clicks a button the program must see clicked once. It needs `python3` (3.11+).
