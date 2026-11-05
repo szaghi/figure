@@ -113,8 +113,9 @@ struct redraw_stats_t {
 //    <frame> down|up [left|right|middle] a button is pressed or released (default left)
 //    <frame> wheel <dx> <dy>             the wheel turns (positive dy: away from the user)
 //    <frame> text <characters>           characters are typed (the rest of the line)
-//    <frame> key <name> [down|up]        a key: enter, tab, backspace, escape, left, right, up, down, ctrl (press and
-//                                        release when down|up is omitted)
+//    <frame> key <name> [down|up]        a key, by the names of test_key: a-z, 0-9, f1-f12, enter, tab, backspace,
+//                                        delete, escape, space, arrows, home, end, pageup, pagedown, ctrl, shift, alt,
+//                                        super (press and release when down|up is omitted)
 // With an input script Dear ImGui draws its own mouse cursor, so the pointer shows in the frames.
 struct capture_event_t {
    long        frame = 0;
@@ -139,18 +140,9 @@ struct capture_t {
    int         glide = 0;                      // glide frames left
 } cap;
 
-ImGuiKey capture_key(const std::string &name) {
-   if (name == "enter") return ImGuiKey_Enter;
-   if (name == "tab") return ImGuiKey_Tab;
-   if (name == "backspace") return ImGuiKey_Backspace;
-   if (name == "escape") return ImGuiKey_Escape;
-   if (name == "left") return ImGuiKey_LeftArrow;
-   if (name == "right") return ImGuiKey_RightArrow;
-   if (name == "up") return ImGuiKey_UpArrow;
-   if (name == "down") return ImGuiKey_DownArrow;
-   if (name == "ctrl") return ImGuiMod_Ctrl;
-   return ImGuiKey_None;
-}
+// The keys of a capture script: the names of test_key (fig_input_key), defined further down.
+extern "C" ImGuiKey key_by_name(const std::string &n);
+ImGuiKey capture_key(const std::string &name) { return key_by_name(name); }
 
 int capture_button(const std::string &name) {
    if (name == "right") return ImGuiMouseButton_Right;
