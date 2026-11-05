@@ -46,6 +46,20 @@ void   fig_texture_destroy(unsigned long long id);
  * render state; plot = 1 for the current ImPlot plot's draw list, 0 for the current window's. */
 void   fig_texture_sampling(int plot, int from_texture);
 
+/* Docking (Dear ImGui's docking branch). Dock ids are ImGuiIDs: fig_dock_id hashes a name. A layout is built once,
+ * while fig_dock_layout_begin reports it is needed (no node yet: first run without an ini file): split, dock
+ * windows, end; then fig_dock_space every frame, before the windows docked into it. Direction: ImGuiDir (0 left,
+ * 1 right, 2 up, 3 down); fraction: the part of the node given to the side at `direction`. */
+int    fig_set_docking(int enabled);
+unsigned int fig_dock_id(const char *name, int name_len);
+int    fig_dock_space(unsigned int id, int flags);
+int    fig_dock_layout_begin(unsigned int id, int *needed);
+int    fig_dock_split(unsigned int id, int direction, double fraction, unsigned int *id_at_dir, unsigned int *id_other);
+int    fig_dock_window(const char *name, int name_len, unsigned int id);
+int    fig_dock_layout_end(unsigned int id);
+/* Inside a window (between Begin and End): its dock node (0 if none) and whether it is docked. */
+int    fig_window_dock(unsigned int *id, int *docked);
+
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);
 

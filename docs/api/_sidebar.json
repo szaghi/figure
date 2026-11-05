@@ -36,6 +36,10 @@
         "link": "/api/src/lib/figure_cimplot_enums"
       },
       {
+        "text": "figure_dock",
+        "link": "/api/src/lib/figure_dock"
+      },
+      {
         "text": "figure_imgui",
         "link": "/api/src/lib/figure_imgui"
       },

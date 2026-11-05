@@ -15,6 +15,8 @@ public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutd
 public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, fig_texture_destroy, fig_texture_sampling
 public :: fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
+public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
+public :: fig_dock_layout_end, fig_window_dock
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -172,6 +174,80 @@ interface
    integer(c_int), value :: plot         !< 1: the current plot's draw list; 0: the current window's.
    integer(c_int), value :: from_texture !< 1: before the image; 0: after it.
    endsubroutine fig_texture_sampling
+
+   function fig_set_docking(enabled) result(status) bind(C, name='fig_set_docking')
+   !< Docking on (1) or off (0).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: enabled !< 1: docking on.
+   integer(c_int)        :: status  !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_docking
+
+   function fig_dock_id(name, name_len) result(id) bind(C, name='fig_dock_id')
+   !< Dock id (an ImGuiID, unsigned 32-bit, carried as c_int) of a name.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   integer(c_int)                     :: id       !< Dock id.
+   endfunction fig_dock_id
+
+   function fig_dock_space(id, flags) result(status) bind(C, name='fig_dock_space')
+   !< A dock space over the whole display, every frame, before the windows docked into it.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Dock id.
+   integer(c_int), value :: flags  !< ImGuiDockNodeFlags.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_space
+
+   function fig_dock_layout_begin(id, needed) result(status) bind(C, name='fig_dock_layout_begin')
+   !< Start a layout if the dock node does not exist yet (needed = 1).
+   import :: c_int
+   implicit none
+   integer(c_int), value       :: id     !< Dock id.
+   integer(c_int), intent(out) :: needed !< 1: build the layout now.
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_layout_begin
+
+   function fig_dock_split(id, direction, fraction, id_at_dir, id_other) result(status) bind(C, name='fig_dock_split')
+   !< Split a dock node in two.
+   import :: c_double, c_int
+   implicit none
+   integer(c_int), value       :: id        !< Node to split.
+   integer(c_int), value       :: direction !< ImGuiDir: 0 left, 1 right, 2 up, 3 down.
+   real(c_double), value       :: fraction  !< Part of the node given to the side at `direction`.
+   integer(c_int), intent(out) :: id_at_dir !< The new node at `direction`.
+   integer(c_int), intent(out) :: id_other  !< The new node on the other side.
+   integer(c_int)              :: status    !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_split
+
+   function fig_dock_window(name, name_len, id) result(status) bind(C, name='fig_dock_window')
+   !< Dock a window (by its name) into a node of a layout.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Window name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   integer(c_int), value              :: id       !< Dock node.
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_window
+
+   function fig_dock_layout_end(id) result(status) bind(C, name='fig_dock_layout_end')
+   !< Finish a layout.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Dock id.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_layout_end
+
+   function fig_window_dock(id, docked) result(status) bind(C, name='fig_window_dock')
+   !< Inside a window: its dock node (0 if none) and whether it is docked.
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: id     !< Dock node.
+   integer(c_int), intent(out) :: docked !< 1: docked.
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_window_dock
 
    subroutine fig_input_mouse(x, y, left_down) bind(C, name='fig_input_mouse')
    !< Queue a synthetic mouse state (tests).

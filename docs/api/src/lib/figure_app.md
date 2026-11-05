@@ -41,6 +41,7 @@ graph LR
 - [init_remote](#init-remote)
 - [set_lazy](#set-lazy)
 - [set_style](#set-style)
+- [set_docking](#set-docking)
 - [request_frames](#request-frames)
 - [destroy](#destroy)
 - [next_frame](#next-frame)
@@ -71,6 +72,7 @@ A FIGURE application (one per program).
 | `next_frame` | pass(self) | Close the current frame, open the next; false on quit. |
 | `set_lazy` | pass(self) | Lazy redraw on/off, longest sleep. |
 | `set_style` | pass(self) | Colours of the interface, the plots and the background. |
+| `set_docking` | pass(self) | Docking on (the default) or off. |
 | `request_frames` | pass(self) | Redraw without waiting for input. |
 | `content_scale` | pass(self) | Display content scale. |
 | `destroy` | pass(self) | Close everything. |
@@ -223,6 +225,32 @@ flowchart TD
   set_style["set_style"] --> fig_set_style["fig_set_style"]
   set_style["set_style"] --> figure_check["figure_check"]
   style set_style fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_docking
+
+Docking on (the default since `init*`) or off: with docking on, a window dragged by its title bar docks into
+ another window or into a dock space (`ig_dock_space`). After `init*`.
+
+```fortran
+subroutine set_docking(self, enabled, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `enabled` | logical | in |  | Docking on. |
+| `stat` | integer(kind=int32) | out | optional |  |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_docking["set_docking"] --> fig_set_docking["fig_set_docking"]
+  set_docking["set_docking"] --> figure_check["figure_check"]
+  style set_docking fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### request_frames

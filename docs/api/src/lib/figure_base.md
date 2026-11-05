@@ -49,6 +49,11 @@ subroutine figure_check(status, stat)
 ```mermaid
 flowchart TD
   figure_fail["figure_fail"] --> figure_check["figure_check"]
+  ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_check["figure_check"]
+  ig_dock_layout_end["ig_dock_layout_end"] --> figure_check["figure_check"]
+  ig_dock_space["ig_dock_space"] --> figure_check["figure_check"]
+  ig_dock_split["ig_dock_split"] --> figure_check["figure_check"]
+  ig_dock_window["ig_dock_window"] --> figure_check["figure_check"]
   init["init"] --> figure_check["figure_check"]
   init["init"] --> figure_check["figure_check"]
   init_headless["init_headless"] --> figure_check["figure_check"]
@@ -72,6 +77,7 @@ flowchart TD
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> figure_check["figure_check"]
   ip_spec["ip_spec"] --> figure_check["figure_check"]
   next_frame["next_frame"] --> figure_check["figure_check"]
+  set_docking["set_docking"] --> figure_check["figure_check"]
   set_style["set_style"] --> figure_check["figure_check"]
   update["update"] --> figure_check["figure_check"]
   figure_check["figure_check"] --> figure_last_error["figure_last_error"]
@@ -99,6 +105,7 @@ subroutine figure_fail(status, message, stat)
 ```mermaid
 flowchart TD
   field_ok["field_ok"] --> figure_fail["figure_fail"]
+  ig_dock_split["ig_dock_split"] --> figure_fail["figure_fail"]
   ip_image["ip_image"] --> figure_fail["figure_fail"]
   ip_spec["ip_spec"] --> figure_fail["figure_fail"]
   row_ok["row_ok"] --> figure_fail["figure_fail"]

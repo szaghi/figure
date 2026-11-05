@@ -1,0 +1,15 @@
+#! program build/docs-examples/bin/cb_dock
+#! frames  230
+#! poster  220
+# drag "Notes" by its title bar onto the centre of the Log area: it docks there as a tab; then move the frequency
+0   move 500 330
+5   move 690 130 20
+30  down
+33  move 660 400 30
+66  move 650 562 25
+100 up
+112 move 64 37 20
+137 down
+139 move 150 37 35
+180 up
+190 move 600 300 20

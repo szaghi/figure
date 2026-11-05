@@ -21,6 +21,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%set_lazy(enabled [, max_wait])` | lazy redraw on/off, longest sleep (default 0.5 s) | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
+| `app%set_docking(enabled [, stat])` | docking on (default) or off | [docking](docking) |
 | `app%set_style(name [, stat])` | colours: `'seal'` (default), `'seal-light'`, `'dark'`, `'light'`, `'classic'` | [frame loop](frame-loop#styles) |
 | `app%destroy()` | close the window, destroy the contexts | [frame loop](frame-loop#the-application) |
 
@@ -42,6 +43,20 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_item_rect(xmin, ymin, xmax, ymax)` | screen rectangle of the last item |
 
 Details: [Widgets](widgets).
+
+## Docking: `ig_dock_*`
+
+| Procedure | Does |
+|---|---|
+| `ig_dock_id(name)` → `integer(int32)` | the dock id of a name |
+| `ig_dock_space(id [, flags] [, stat])` | a dock space over the display, every frame, before its windows |
+| `ig_dock_layout_begin(id [, stat])` → `logical` | `.true.` when the dock space needs its layout (first time) |
+| `ig_dock_split(id, direction, fraction, id_at_dir, id_other [, stat])` | split a dock node in two |
+| `ig_dock_window(name, id [, stat])` | put a window into a dock node of the layout |
+| `ig_dock_layout_end(id [, stat])` | finish the layout |
+| `ig_window_dock(id, docked)` | inside a window: its dock node and whether it is docked |
+
+Details: [Docking](docking).
 
 ## Plots: `ip_*`
 

@@ -56,6 +56,15 @@ See [tutorial chapter 2](./tutorial/02-widgets#a-window-the-user-can-close): pas
 
 See [tutorial chapter 2](./tutorial/02-widgets#same-text-different-widgets): `'Reset##cfl'` and `'Reset##time'`.
 
+### Controls on the left, plots on the right
+
+<<< @/examples/snippets/cb_dock-layout.F90{fortran}
+
+<Media name="cb_dock" alt="Controls docked on the left, a plot on the right, a log below it" caption="docs/examples/src/cb_dock.F90" />
+
+The layout is built on the first frame only (`ig_dock_layout_begin`); the dock space is declared every frame,
+before its windows. The user can rearrange everything afterwards. [Docking](/guide/docking) has the details.
+
 ## Plots
 
 ### Plot the columns of a matrix

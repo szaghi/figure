@@ -9,7 +9,8 @@ use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, 
 use figure, only : FIG_ERR_ARGUMENT, FIG_OK, app_object, figure_last_error, ig_begin, ig_button, ig_checkbox, ig_end, &
                    ig_item_rect, ig_set_next_window, ImPlotMarker_Circle, ip_bars, ip_begin_plot, ip_end_plot, ip_line, &
                    ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object, FIG_ERR_STATE, ig_image, ip_heatmap,   &
-                   ip_image, ImPlotColormap_Viridis, texture_object
+                   ip_image, ImPlotColormap_Viridis, texture_object, ig_dock_id, ig_dock_layout_begin,             &
+                   ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_window_dock
 use figure_cimgui, only : im_vec4, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, ImPlot_GetPlotLimits
@@ -30,7 +31,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(24)  !< Per-check outcome.
+logical                   :: test_passed(27)  !< Per-check outcome.
 type(texture_object)      :: tex              !< A 4 x 2 texture.
 integer(int8)             :: pix(4, 4, 2)     !< Its pixels.
 integer(int8)             :: pix_bad(3, 4, 2) !< Pixels of the wrong shape (3 channels).
@@ -50,6 +51,13 @@ type(im_vec4)             :: window_bg        !< Window background of the defaul
 type(im_vec4), pointer    :: style_color      !< A colour of the current style, in Dear ImGui's memory.
 integer(int32)            :: stat_style(2)    !< set_style('dark'), set_style('bogus').
 integer(c_int)            :: seal_cmap        !< Index of the seal colormap.
+integer(int32)            :: dock_root        !< Dock space.
+integer(int32)            :: dock_left        !< Its left node.
+integer(int32)            :: dock_right       !< Its right node.
+integer(int32)            :: dock_node(2)     !< Nodes the windows A and B ended in.
+integer(int32)            :: layouts          !< Times the layout was built.
+integer(int32)            :: stat_dock        !< ig_dock_space with docking off.
+logical                   :: docked(2)        !< Windows A and B docked.
 integer(int32)            :: stat_items(5)    !< Status of the scatter, bars and shaded items.
 integer(int32)            :: stat_spec        !< Status of a spec with a bad colour.
 type(plot_spec_object)    :: red              !< Red line, 2 pixels, circle markers.
@@ -89,8 +97,28 @@ call tex%init(4_int32, 2_int32, stat=stat_tex(1))
 call tex%update(pix, stat=stat_tex(2))
 call tex%update(pix_bad, stat=stat_tex(3))
 
+dock_root = ig_dock_id('main')
+stat_dock = -1_int32
+dock_left = 0_int32
+dock_right = 0_int32
+layouts = 0_int32
+docked = .false.
+dock_node = -1_int32
 do frame = 1_int32, 12_int32
    if (.not. app%next_frame()) error stop 'figure_test_headless: next_frame returned false in headless mode'
+   ! docking: a layout built once (left 30% | right), two windows docked into it, the dock space every frame
+   if (ig_dock_layout_begin(dock_root)) then
+      layouts = layouts + 1_int32
+      call ig_dock_split(dock_root, 'left', 0.3_real64, dock_left, dock_right)
+      call ig_dock_window('Dock A', dock_left)
+      call ig_dock_window('Dock B', dock_right)
+      call ig_dock_layout_end(dock_root)
+   endif
+   call ig_dock_space(dock_root)
+   if (ig_begin('Dock A')) call ig_window_dock(dock_node(1), docked(1))
+   call ig_end()
+   if (ig_begin('Dock B')) call ig_window_dock(dock_node(2), docked(2))
+   call ig_end()
    call ig_set_next_window(20.0_real64, 20.0_real64, 400.0_real64, 500.0_real64, always=.true.)
    if (ig_begin('Test')) then
       if (ig_button('Hit me')) clicks = clicks + 1_int32
@@ -174,6 +202,8 @@ window_bg = style_color ! the default style, seal
 seal_cmap = ImPlot_GetColormapIndex('FIGURE seal'//c_null_char)
 call app%set_style('dark', stat=stat_style(1))
 call app%set_style('bogus', stat=stat_style(2))
+call app%set_docking(.false.)
+if (app%next_frame()) call ig_dock_space(dock_root, stat=stat_dock) ! docking off: rejected
 call ip_heatmap('one end', fld, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, scale_min=0.0_real64, stat=stat_scale)
 call tex%destroy()
 call tex%update(pix, stat=stat_dead)
@@ -206,8 +236,11 @@ test_passed(23) = stat_style(1) == int(FIG_OK, int32) .and. seal_cmap >= 0_c_int
 test_passed(23) = test_passed(23) .and. abs(window_bg%x - 28.0_c_float / 255.0_c_float) < 1.0e-6_c_float &
                                   .and. abs(window_bg%z - 21.0_c_float / 255.0_c_float) < 1.0e-6_c_float  ! #1c1915
 test_passed(24) = stat_style(2) == int(FIG_ERR_ARGUMENT, int32)                     ! unknown style rejected
+test_passed(25) = layouts == 1_int32 .and. dock_left /= 0_int32 .and. dock_right /= 0_int32 ! layout built once
+test_passed(26) = all(docked) .and. dock_node(1) == dock_left .and. dock_node(2) == dock_right ! docked where laid out
+test_passed(27) = stat_dock == int(FIG_ERR_STATE, int32)                            ! no dock space with docking off
 
-write(output_unit, '(A,24L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,27L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

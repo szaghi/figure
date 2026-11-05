@@ -20,7 +20,8 @@ use, intrinsic :: iso_c_binding, only : c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
 use figure_base, only : figure_check
 use figure_c_native, only : FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, fig_init_headless, &
-                            fig_init_remote, fig_request_frames, fig_set_ini_file, fig_set_lazy, fig_set_style, fig_shutdown
+                            fig_init_remote, fig_request_frames, fig_set_docking, fig_set_ini_file, fig_set_lazy, &
+                            fig_set_style, fig_shutdown
 
 implicit none
 private
@@ -39,6 +40,7 @@ type :: app_object
       procedure, pass(self) :: next_frame     !< Close the current frame, open the next; false on quit.
       procedure, pass(self) :: set_lazy       !< Lazy redraw on/off, longest sleep.
       procedure, pass(self) :: set_style      !< Colours of the interface, the plots and the background.
+      procedure, pass(self) :: set_docking    !< Docking on (the default) or off.
       procedure, pass(self) :: request_frames !< Redraw without waiting for input.
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
@@ -174,6 +176,16 @@ contains
 
    call figure_check(fig_set_style(name, len(name, c_int)), stat)
    endsubroutine set_style
+
+   subroutine set_docking(self, enabled, stat)
+   !< Docking on (the default since `init*`) or off: with docking on, a window dragged by its title bar docks into
+   !< another window or into a dock space (`ig_dock_space`). After `init*`.
+   class(app_object), intent(inout)         :: self    !< Application.
+   logical,           intent(in)            :: enabled !< Docking on.
+   integer(int32),    intent(out), optional :: stat    !< Status: `FIG_ERR_STATE` before `init*`.
+
+   call figure_check(fig_set_docking(merge(1_c_int, 0_c_int, enabled)), stat)
+   endsubroutine set_docking
 
    subroutine request_frames(self, n)
    !< Draw at least `n` more frames without waiting for input (e.g. after new data arrived).

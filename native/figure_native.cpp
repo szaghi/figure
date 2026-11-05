@@ -3,6 +3,7 @@
 #include "figure_remote.h"
 
 #include "imgui.h"
+#include "imgui_internal.h" // DockBuilder*: Dear ImGui keeps the dock builder internal
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl3.h"
 #include "implot.h"
@@ -313,8 +314,9 @@ void create_contexts() {
    ImGui::CreateContext();
    ImPlot::CreateContext();
    ImGuiIO &io = ImGui::GetIO();
-   // Docking: the library is built from Dear ImGui's docking branch; enabling it is step S2 of the v0.1.0 roadmap.
-   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+   // Docking on by default: a window dragged by its title bar docks into another window or into a dock space
+   // (fig_set_docking turns it off). Multi-viewports stay off: remote and headless modes cannot have them.
+   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
    // No imgui.ini by default: a layout restored from whatever directory the program runs in silently overrides the
    // positions and sizes the program sets on first use. fig_set_ini_file opts in.
    io.IniFilename = nullptr;
@@ -416,6 +418,8 @@ void seal_colors(ImGuiStyle &s, const seal_palette_t &p) {
    c[ImGuiCol_DragDropTargetBg] = hex(p.accent, 0.10f);
    c[ImGuiCol_UnsavedMarker] = hex(p.text);
    c[ImGuiCol_NavCursor] = hex(p.check);
+   c[ImGuiCol_DockingPreview] = hex(p.accent, 0.55f); // where a dragged window will dock
+   c[ImGuiCol_DockingEmptyBg] = hex(p.clear);         // an empty dock space shows the window background
    // the seal's edges are cut straight: no rounding anywhere
    s.WindowRounding = s.ChildRounding = s.FrameRounding = s.PopupRounding = 0.0f;
    s.ScrollbarRounding = s.GrabRounding = s.TabRounding = 0.0f;
@@ -866,6 +870,86 @@ void fig_texture_destroy(unsigned long long id) {
       st.textures.erase(t);
    } catch (...) {
    }
+}
+
+int fig_set_docking(int enabled) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   ImGuiIO &io = ImGui::GetIO();
+   if (enabled) io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+   else io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+unsigned int fig_dock_id(const char *name, int name_len) {
+   if (!ImGui::GetCurrentContext()) return 0;
+   return ImHashStr(name, static_cast<size_t>(name_len > 0 ? name_len : 0));
+}
+
+int fig_dock_space(unsigned int id, int flags) {
+   FIG_TRY
+   if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_dock_space: no frame is open");
+   if (!(ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable))
+      return fail(FIG_ERR_STATE, "ig_dock_space: docking is off (app%set_docking)");
+   // over the whole display; its central node lets the window background through when empty
+   ImGui::DockSpaceOverViewport(id, ImGui::GetMainViewport(), flags | ImGuiDockNodeFlags_PassthruCentralNode);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_dock_layout_begin(unsigned int id, int *needed) {
+   FIG_TRY
+   *needed = 0;
+   if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_dock_layout_begin: no frame is open");
+   if (ImGui::DockBuilderGetNode(id) != nullptr) return FIG_OK; // laid out already (this run, or an ini file)
+   const ImGuiViewport *vp = ImGui::GetMainViewport();
+   ImGui::DockBuilderRemoveNode(id);
+   ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
+   ImGui::DockBuilderSetNodePos(id, vp->WorkPos);
+   ImGui::DockBuilderSetNodeSize(id, vp->WorkSize);
+   *needed = 1;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_dock_split(unsigned int id, int direction, double fraction, unsigned int *id_at_dir, unsigned int *id_other) {
+   FIG_TRY
+   if (direction < ImGuiDir_Left || direction > ImGuiDir_Down)
+      return fail(FIG_ERR_ARGUMENT, "ig_dock_split: direction must be left, right, up or down");
+   if (!(fraction > 0.0 && fraction < 1.0)) return fail(FIG_ERR_ARGUMENT, "ig_dock_split: fraction must be in (0, 1)");
+   if (ImGui::DockBuilderGetNode(id) == nullptr) return fail(FIG_ERR_ARGUMENT, "ig_dock_split: unknown dock node");
+   ImGuiID a = 0, b = 0;
+   ImGui::DockBuilderSplitNode(id, static_cast<ImGuiDir>(direction), static_cast<float>(fraction), &a, &b);
+   *id_at_dir = a;
+   *id_other = b;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_dock_window(const char *name, int name_len, unsigned int id) {
+   FIG_TRY
+   if (ImGui::DockBuilderGetNode(id) == nullptr) return fail(FIG_ERR_ARGUMENT, "ig_dock_window: unknown dock node");
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   ImGui::DockBuilderDockWindow(n.c_str(), id);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_dock_layout_end(unsigned int id) {
+   FIG_TRY
+   if (ImGui::DockBuilderGetNode(id) == nullptr) return fail(FIG_ERR_ARGUMENT, "ig_dock_layout_end: unknown dock node");
+   ImGui::DockBuilderFinish(id);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_window_dock(unsigned int *id, int *docked) {
+   FIG_TRY
+   *id = ImGui::GetWindowDockID();
+   *docked = ImGui::IsWindowDocked() ? 1 : 0;
+   return FIG_OK;
+   FIG_CATCH
 }
 
 void fig_input_mouse(float x, float y, int left_down) {

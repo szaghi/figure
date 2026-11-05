@@ -33,6 +33,14 @@ graph LR
 - [fig_last_error](#fig-last-error)
 - [fig_texture_create](#fig-texture-create)
 - [fig_texture_update](#fig-texture-update)
+- [fig_set_docking](#fig-set-docking)
+- [fig_dock_id](#fig-dock-id)
+- [fig_dock_space](#fig-dock-space)
+- [fig_dock_layout_begin](#fig-dock-layout-begin)
+- [fig_dock_split](#fig-dock-split)
+- [fig_dock_window](#fig-dock-window)
+- [fig_dock_layout_end](#fig-dock-layout-end)
+- [fig_window_dock](#fig-window-dock)
 - [fig_shutdown](#fig-shutdown)
 - [fig_set_lazy](#fig-set-lazy)
 - [fig_request_frames](#fig-request-frames)
@@ -74,6 +82,22 @@ graph LR
 ### fig_texture_create
 
 ### fig_texture_update
+
+### fig_set_docking
+
+### fig_dock_id
+
+### fig_dock_space
+
+### fig_dock_layout_begin
+
+### fig_dock_split
+
+### fig_dock_window
+
+### fig_dock_layout_end
+
+### fig_window_dock
 
 ### fig_shutdown
 

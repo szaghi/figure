@@ -2,12 +2,17 @@
 module figure
 !< FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration.
 !<
-!< Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui) and
-!< the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the
-!< GPU textures (figure_texture) that `ig_image` and `ip_image` draw.
+!< Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui),
+!< docking (figure_dock), the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and
+!< ImPlot's constants, and the GPU textures (figure_texture) that `ig_image` and `ip_image` draw.
 use figure_app, only : app_object
 use figure_base, only : figure_last_error
 use figure_c_native, only : FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
+use figure_cimgui_enums, only : ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode,         &
+                                ImGuiDockNodeFlags_NoDockingSplit, ImGuiDockNodeFlags_NoResize,               &
+                                ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking
+use figure_dock, only : ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, &
+                        ig_dock_window, ig_window_dock
 use figure_imgui, only : ig_begin, ig_button, ig_checkbox, ig_end, ig_image, ig_input, ig_item_rect, ig_same_line, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text
 use figure_implot, only : ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
@@ -33,6 +38,10 @@ public :: app_object, figure_last_error
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: ig_begin, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
+public :: ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window
+public :: ig_window_dock
+public :: ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode, ImGuiDockNodeFlags_NoDockingSplit
+public :: ImGuiDockNodeFlags_NoResize, ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking
 public :: ip_bars, ip_begin_plot, ip_end_plot, ip_line, ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object
 public :: ip_colormap_scale, ip_heatmap, ip_image, texture_object
 public :: ip_plot_limits, ip_plot_size, ip_setup_axes_limits
