@@ -65,6 +65,17 @@ See [tutorial chapter 2](./tutorial/02-widgets#same-text-different-widgets): `'R
 Names are Dear ImGui's and ImPlot's own (`Button`, `SliderGrab`, `PlotBg`, `FrameRounding`, ...); the change is
 global and lasts until it is changed again or `app%set_style` resets it. [Styles](/guide/styles) lists them.
 
+### One red button
+
+<<< @/examples/snippets/cb_scoped-red.F90{fortran}
+
+<Media name="cb_scoped" :width="520" alt="A red Stop button next to a Start button in the theme's colour" caption="docs/examples/src/cb_scoped.F90" />
+
+Push before the widget, pop after: the change covers only what is between. A value shown large works the same way
+with the font size:
+
+<<< @/examples/snippets/cb_scoped-large.F90{fortran}
+
 ### Tune a theme in the style editor and keep it
 
 <<< @/examples/snippets/cb_tune-tune.F90{fortran}

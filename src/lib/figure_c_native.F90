@@ -17,7 +17,8 @@ public :: fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
 public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
-public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font
+public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
+public :: fig_pop_style
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -195,6 +196,38 @@ interface
    integer(c_int), value              :: path_len !< Path length [bytes].
    integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_save_style
+
+   function fig_push_style_color(lib, name, name_len, rgba) result(status) bind(C, name='fig_push_style_color')
+   !< Change a style colour until fig_pop_style(0, n): lib 0 Dear ImGui, 1 ImPlot.
+   import :: c_char, c_float, c_int
+   implicit none
+   integer(c_int), value              :: lib      !< 0: Dear ImGui, 1: ImPlot.
+   character(kind=c_char), intent(in) :: name(*)  !< Colour name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   real(c_float), intent(in)          :: rgba(4)  !< Colour, components in [0, 1].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_push_style_color
+
+   function fig_push_style_var(lib, name, name_len, values, count) result(status) bind(C, name='fig_push_style_var')
+   !< Change a style variable until fig_pop_style(1, n): lib 0 Dear ImGui, 1 ImPlot.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int), value              :: lib       !< 0: Dear ImGui, 1: ImPlot.
+   character(kind=c_char), intent(in) :: name(*)   !< Variable name (not NUL-terminated).
+   integer(c_int), value              :: name_len  !< Name length [bytes].
+   real(c_double), intent(in)         :: values(2) !< Value(s).
+   integer(c_int), value              :: count     !< Values given: 1 or 2.
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_push_style_var
+
+   function fig_pop_style(vars, n) result(status) bind(C, name='fig_pop_style')
+   !< Undo the n newest pushes of colours (vars = 0) or variables (vars = 1).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: vars   !< 0: colours, 1: variables.
+   integer(c_int), value :: n      !< How many.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_pop_style
 
    function fig_set_font(name, name_len, size) result(status) bind(C, name='fig_set_font')
    !< The default font (plex-sans, proggy or a TTF/OTF file) and, if size > 0, its size [logical pixels].

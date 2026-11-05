@@ -23,11 +23,19 @@ the value, discard the result with `continue`:
 
 | Procedure | Notes |
 |---|---|
-| `ig_begin(name [, open]) → logical` | `name` is the title and the identifier. Returns `.false.` when the window is collapsed or clipped: skip its content. |
+| `ig_begin(name [, open] [, flags]) → logical` | `name` is the title and the identifier. Returns `.false.` when the window is collapsed or clipped: skip its content. `flags` combine `ImGuiWindowFlags_*` with `ior` (below). |
 | `ig_end()` | Call it after every `ig_begin`, whatever `ig_begin` returned. |
 | `ig_set_next_window(x, y [, width, height] [, always])` | Position, and size if both `width` and `height` are given, of the next `ig_begin`, in pixels. Applied on first use only (the user can move the window afterwards; with `app%init(..., ini_file=...)` the layout is remembered across runs), or every frame with `always=.true.`. |
 
 Widgets called outside any `ig_begin`/`ig_end` pair go to Dear ImGui's implicit "Debug" window.
+
+**Window flags**, exported by `figure` and combined with `ior`: `ImGuiWindowFlags_NoTitleBar`, `NoResize`, `NoMove`,
+`NoScrollbar`, `NoScrollWithMouse`, `NoCollapse`, `AlwaysAutoResize`, `NoBackground`, `NoSavedSettings`,
+`NoMouseInputs`, `HorizontalScrollbar`, `NoFocusOnAppearing`, `NoBringToFrontOnFocus`, `AlwaysVerticalScrollbar`,
+`AlwaysHorizontalScrollbar`, `NoNav`, `NoDecoration` (no title bar, resize, scrollbars, collapse), `NoInputs`,
+`NoDocking`. An overlay, for example:
+
+<<< @/examples/snippets/cb_scoped-overlay.F90{fortran}
 
 With `open`, the window gets a close button in its title bar that sets `open` to `.false.`. Dear ImGui shows a window
 as long as `ig_begin` is called for it, so guard the call with the same variable:

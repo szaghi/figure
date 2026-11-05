@@ -31,7 +31,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 
 | Procedure | Purpose |
 |---|---|
-| `ig_begin(name [, open])` → `logical` | begin a window; `.false.` when collapsed or clipped |
+| `ig_begin(name [, open] [, flags])` → `logical` | begin a window (`ImGuiWindowFlags_*`); `.false.` when collapsed or clipped |
 | `ig_end()` | end the window (always, whatever `ig_begin` returned) |
 | `ig_set_next_window(x, y [, width, height] [, always])` | place (and size) the next window |
 | `ig_button(label [, width] [, height])` → `logical` | a button; `.true.` on the frame it is clicked |
@@ -70,6 +70,8 @@ Details: [Docking](docking).
 | `ig_get_style_var(name, values, n [, stat])`, `ip_get_style_var(...)` | a style variable by name |
 | `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's style editors, in a window |
 | `ig_push_font(font [, size] [, stat])`, `ig_pop_font([stat])` | another font or size for a block of widgets |
+| `ig_push_style_color(name, color [, stat])`, `ig_pop_style_color([n] [, stat])`, and `ip_*` | a colour for a block of widgets or plots |
+| `ig_push_style_var(name, value [, stat])`, `ig_pop_style_var([n] [, stat])`, and `ip_*` | a style variable for a block |
 
 Details: [Styles](styles).
 

@@ -35,6 +35,9 @@ graph LR
 - [fig_texture_update](#fig-texture-update)
 - [fig_load_style](#fig-load-style)
 - [fig_save_style](#fig-save-style)
+- [fig_push_style_color](#fig-push-style-color)
+- [fig_push_style_var](#fig-push-style-var)
+- [fig_pop_style](#fig-pop-style)
 - [fig_set_font](#fig-set-font)
 - [fig_push_font](#fig-push-font)
 - [fig_pop_font](#fig-pop-font)
@@ -94,6 +97,12 @@ graph LR
 ### fig_load_style
 
 ### fig_save_style
+
+### fig_push_style_color
+
+### fig_push_style_var
+
+### fig_pop_style
 
 ### fig_set_font
 

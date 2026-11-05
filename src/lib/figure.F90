@@ -12,6 +12,15 @@ use figure_c_native, only : FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAI
 use figure_cimgui_enums, only : ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode,         &
                                 ImGuiDockNodeFlags_NoDockingSplit, ImGuiDockNodeFlags_NoResize,               &
                                 ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking
+use figure_cimgui_enums, only : ImGuiWindowFlags_None, ImGuiWindowFlags_NoTitleBar, ImGuiWindowFlags_NoResize, &
+                                ImGuiWindowFlags_NoMove, ImGuiWindowFlags_NoScrollbar, &
+                                ImGuiWindowFlags_NoScrollWithMouse, ImGuiWindowFlags_NoCollapse, &
+                                ImGuiWindowFlags_AlwaysAutoResize, ImGuiWindowFlags_NoBackground, &
+                                ImGuiWindowFlags_NoSavedSettings, ImGuiWindowFlags_NoMouseInputs, &
+                                ImGuiWindowFlags_HorizontalScrollbar, ImGuiWindowFlags_NoFocusOnAppearing, &
+                                ImGuiWindowFlags_NoBringToFrontOnFocus, ImGuiWindowFlags_AlwaysVerticalScrollbar, &
+                                ImGuiWindowFlags_AlwaysHorizontalScrollbar, ImGuiWindowFlags_NoNav, &
+                                ImGuiWindowFlags_NoDecoration, ImGuiWindowFlags_NoInputs, ImGuiWindowFlags_NoDocking
 use figure_dock, only : ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, &
                         ig_dock_window, ig_window_dock
 use figure_imgui, only : ig_begin, ig_button, ig_checkbox, ig_end, ig_image, ig_input, ig_item_rect, ig_same_line, &
@@ -31,7 +40,9 @@ use figure_implot, only : ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot
                           ImPlotColormap_Viridis, ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool,     &
                           ImPlotColormap_Pink, ImPlotColormap_Jet, ImPlotColormap_Twilight, ImPlotColormap_RdBu,      &
                           ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral, ImPlotColormap_Greys
-use figure_style, only : ig_get_style_color, ig_get_style_var, ig_pop_font, ig_push_font, ig_set_style_color,    &
+use figure_style, only : ig_pop_style_color, ig_pop_style_var, ig_push_style_color, ig_push_style_var,        &
+                         ip_pop_style_color, ip_pop_style_var, ip_push_style_color, ip_push_style_var,        &
+                         ig_get_style_color, ig_get_style_var, ig_pop_font, ig_push_font, ig_set_style_color,    &
                          ig_set_style_var, ig_show_style_editor, ip_get_style_color, ip_get_style_var,                 &
                          ip_set_style_color, ip_set_style_var
 use figure_texture, only : texture_object
@@ -46,6 +57,16 @@ public :: ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, i
 public :: ig_window_dock
 public :: ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ig_show_style_editor
 public :: ig_push_font, ig_pop_font
+public :: ig_push_style_color, ig_pop_style_color, ig_push_style_var, ig_pop_style_var
+public :: ip_push_style_color, ip_pop_style_color, ip_push_style_var, ip_pop_style_var
+public :: ImGuiWindowFlags_None, ImGuiWindowFlags_NoTitleBar, ImGuiWindowFlags_NoResize, ImGuiWindowFlags_NoMove
+public :: ImGuiWindowFlags_NoScrollbar, ImGuiWindowFlags_NoScrollWithMouse, ImGuiWindowFlags_NoCollapse
+public :: ImGuiWindowFlags_AlwaysAutoResize
+public :: ImGuiWindowFlags_NoBackground, ImGuiWindowFlags_NoSavedSettings, ImGuiWindowFlags_NoMouseInputs
+public :: ImGuiWindowFlags_HorizontalScrollbar
+public :: ImGuiWindowFlags_NoFocusOnAppearing, ImGuiWindowFlags_NoBringToFrontOnFocus, ImGuiWindowFlags_AlwaysVerticalScrollbar
+public :: ImGuiWindowFlags_AlwaysHorizontalScrollbar
+public :: ImGuiWindowFlags_NoNav, ImGuiWindowFlags_NoDecoration, ImGuiWindowFlags_NoInputs, ImGuiWindowFlags_NoDocking
 public :: ip_get_style_color, ip_get_style_var, ip_set_style_color, ip_set_style_var
 public :: ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode, ImGuiDockNodeFlags_NoDockingSplit
 public :: ImGuiDockNodeFlags_NoResize, ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking

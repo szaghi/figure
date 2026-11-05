@@ -28,11 +28,15 @@ interface ig_slider
 endinterface ig_slider
 
 contains
-   function ig_begin(name, open) result(visible)
+   function ig_begin(name, open, flags) result(visible)
    !< Begin a window; always pair with `ig_end`. With `open`, the window has a close button that sets it false.
+   !< `flags` combine `ImGuiWindowFlags_*` with `ior` (`NoTitleBar`, `NoResize`, `NoMove`, `AlwaysAutoResize`,
+   !< `NoBackground`, `NoDecoration`, `NoDocking`, ...).
    character(len=*), intent(in)              :: name    !< Window name (unique id and title).
    logical,          intent(inout), optional :: open    !< Window open.
+   integer(int32),   intent(in),    optional :: flags   !< `ImGuiWindowFlags_*` (default none).
    logical                                   :: visible !< False when collapsed or clipped: skip its content.
+   integer(c_int)                            :: f       !< Flags.
    logical(c_bool), target                   :: o       !< C copy of `open`.
    type(c_ptr)                               :: p       !< bool* or null.
 
@@ -41,7 +45,9 @@ contains
       o = logical(open, c_bool)
       p = c_loc(o)
    endif
-   visible = logical(igBegin(cstr(name), p, 0_c_int))
+   f = 0_c_int
+   if (present(flags)) f = int(flags, c_int)
+   visible = logical(igBegin(cstr(name), p, f))
    if (present(open)) open = logical(o)
    endfunction ig_begin
 

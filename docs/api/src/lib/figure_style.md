@@ -36,6 +36,29 @@ graph LR
 - [ip_set_style_color](#ip-set-style-color)
 - [ig_set_style_var](#ig-set-style-var)
 - [ip_set_style_var](#ip-set-style-var)
+- [ig_push_style_color](#ig-push-style-color)
+- [ip_push_style_color](#ip-push-style-color)
+- [ig_push_style_var](#ig-push-style-var)
+- [ip_push_style_var](#ip-push-style-var)
+- [push_color](#push-color)
+- [push_color_hex](#push-color-hex)
+- [push_var](#push-var)
+- [pop](#pop)
+- [ig_push_style_color_hex](#ig-push-style-color-hex)
+- [ig_push_style_color_rgba](#ig-push-style-color-rgba)
+- [ig_pop_style_color](#ig-pop-style-color)
+- [ig_push_style_var_r64](#ig-push-style-var-r64)
+- [ig_push_style_var_vec2](#ig-push-style-var-vec2)
+- [ig_push_style_var_logical](#ig-push-style-var-logical)
+- [ig_push_style_var_i32](#ig-push-style-var-i32)
+- [ig_pop_style_var](#ig-pop-style-var)
+- [ip_push_style_color_hex](#ip-push-style-color-hex)
+- [ip_push_style_color_rgba](#ip-push-style-color-rgba)
+- [ip_pop_style_color](#ip-pop-style-color)
+- [ip_push_style_var_r64](#ip-push-style-var-r64)
+- [ip_push_style_var_vec2](#ip-push-style-var-vec2)
+- [ip_push_style_var_logical](#ip-push-style-var-logical)
+- [ip_pop_style_var](#ip-pop-style-var)
 - [ig_show_style_editor](#ig-show-style-editor)
 - [ig_push_font](#ig-push-font)
 - [ig_pop_font](#ig-pop-font)
@@ -94,7 +117,513 @@ Set an ImPlot style variable: a number, a pair or a logical.
 
 **Module procedures**: [`ip_set_style_var_r64`](/api/src/lib/figure_style#ip-set-style-var-r64), [`ip_set_style_var_vec2`](/api/src/lib/figure_style#ip-set-style-var-vec2), [`ip_set_style_var_logical`](/api/src/lib/figure_style#ip-set-style-var-logical)
 
+### ig_push_style_color
+
+Change a Dear ImGui colour until `ig_pop_style_color`, by hex string or by components.
+
+**Module procedures**: [`ig_push_style_color_hex`](/api/src/lib/figure_style#ig-push-style-color-hex), [`ig_push_style_color_rgba`](/api/src/lib/figure_style#ig-push-style-color-rgba)
+
+### ip_push_style_color
+
+Change an ImPlot colour until `ip_pop_style_color`, by hex string or by components.
+
+**Module procedures**: [`ip_push_style_color_hex`](/api/src/lib/figure_style#ip-push-style-color-hex), [`ip_push_style_color_rgba`](/api/src/lib/figure_style#ip-push-style-color-rgba)
+
+### ig_push_style_var
+
+Change a Dear ImGui style variable until `ig_pop_style_var`: a number, a pair, a logical or an integer.
+
+**Module procedures**: [`ig_push_style_var_r64`](/api/src/lib/figure_style#ig-push-style-var-r64), [`ig_push_style_var_vec2`](/api/src/lib/figure_style#ig-push-style-var-vec2), [`ig_push_style_var_logical`](/api/src/lib/figure_style#ig-push-style-var-logical), [`ig_push_style_var_i32`](/api/src/lib/figure_style#ig-push-style-var-i32)
+
+### ip_push_style_var
+
+Change an ImPlot style variable until `ip_pop_style_var`: a number, a pair or a logical.
+
+**Module procedures**: [`ip_push_style_var_r64`](/api/src/lib/figure_style#ip-push-style-var-r64), [`ip_push_style_var_vec2`](/api/src/lib/figure_style#ip-push-style-var-vec2), [`ip_push_style_var_logical`](/api/src/lib/figure_style#ip-push-style-var-logical)
+
 ## Subroutines
+
+### push_color
+
+Push a colour given as components (3 or 4).
+
+```fortran
+subroutine push_color(lib, who, name, rgba, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `lib` | integer(kind=c_int) | in |  | Library. |
+| `who` | character(len=*) | in |  | Caller, for messages. |
+| `name` | character(len=*) | in |  | Colour name. |
+| `rgba` | real(kind=real64) | in |  | Components. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_style_color_rgba["ig_push_style_color_rgba"] --> push_color["push_color"]
+  ip_push_style_color_rgba["ip_push_style_color_rgba"] --> push_color["push_color"]
+  push_color_hex["push_color_hex"] --> push_color["push_color"]
+  push_color["push_color"] --> fig_push_style_color["fig_push_style_color"]
+  push_color["push_color"] --> figure_check["figure_check"]
+  push_color["push_color"] --> figure_fail["figure_fail"]
+  style push_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### push_color_hex
+
+Push a colour given as a hex string.
+
+```fortran
+subroutine push_color_hex(lib, who, name, color, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `lib` | integer(kind=c_int) | in |  | Library. |
+| `who` | character(len=*) | in |  | Caller, for messages. |
+| `name` | character(len=*) | in |  | Colour name. |
+| `color` | character(len=*) | in |  | `'#rrggbb'` or `'#rrggbbaa'`. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_style_color_hex["ig_push_style_color_hex"] --> push_color_hex["push_color_hex"]
+  ip_push_style_color_hex["ip_push_style_color_hex"] --> push_color_hex["push_color_hex"]
+  push_color_hex["push_color_hex"] --> figure_fail["figure_fail"]
+  push_color_hex["push_color_hex"] --> hex_color["hex_color"]
+  push_color_hex["push_color_hex"] --> push_color["push_color"]
+  style push_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### push_var
+
+Push a style variable of `n` values.
+
+```fortran
+subroutine push_var(lib, name, values, n, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `lib` | integer(kind=c_int) | in |  | Library. |
+| `name` | character(len=*) | in |  | Variable name. |
+| `values` | real(kind=real64) | in |  | Values. |
+| `n` | integer(kind=c_int) | in |  | How many. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_style_var_i32["ig_push_style_var_i32"] --> push_var["push_var"]
+  ig_push_style_var_logical["ig_push_style_var_logical"] --> push_var["push_var"]
+  ig_push_style_var_r64["ig_push_style_var_r64"] --> push_var["push_var"]
+  ig_push_style_var_vec2["ig_push_style_var_vec2"] --> push_var["push_var"]
+  ip_push_style_var_logical["ip_push_style_var_logical"] --> push_var["push_var"]
+  ip_push_style_var_r64["ip_push_style_var_r64"] --> push_var["push_var"]
+  ip_push_style_var_vec2["ip_push_style_var_vec2"] --> push_var["push_var"]
+  push_var["push_var"] --> fig_push_style_var["fig_push_style_var"]
+  push_var["push_var"] --> figure_check["figure_check"]
+  style push_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### pop
+
+Undo the `n` newest pushes (default 1) of colours (vars = 0) or variables (vars = 1).
+
+```fortran
+subroutine pop(vars, n, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `vars` | integer(kind=c_int) | in |  | 0: colours, 1: variables. |
+| `n` | integer(kind=int32) | in | optional | How many (default 1). |
+| `stat` | integer(kind=int32) | out | optional | Status: `FIG_ERR_STATE` for more pops than pushes. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_pop_style_color["ig_pop_style_color"] --> pop["pop"]
+  ig_pop_style_var["ig_pop_style_var"] --> pop["pop"]
+  ip_pop_style_color["ip_pop_style_color"] --> pop["pop"]
+  ip_pop_style_var["ip_pop_style_var"] --> pop["pop"]
+  pop["pop"] --> fig_pop_style["fig_pop_style"]
+  pop["pop"] --> figure_check["figure_check"]
+  style pop fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_push_style_color_hex
+
+Change the Dear ImGui colour `name` (`'#rrggbb'` or `'#rrggbbaa'`) until `ig_pop_style_color`.
+
+```fortran
+subroutine ig_push_style_color_hex(name, color, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Colour name (`ImGuiCol_*` without the prefix). |
+| `color` | character(len=*) | in |  | Hex colour. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_style_color_hex["ig_push_style_color_hex"] --> push_color_hex["push_color_hex"]
+  style ig_push_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_push_style_color_rgba
+
+Change the Dear ImGui colour `name` (`[r, g, b(, a)]` in [0, 1]) until `ig_pop_style_color`.
+
+```fortran
+subroutine ig_push_style_color_rgba(name, rgba, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Colour name. |
+| `rgba` | real(kind=real64) | in |  | Components. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_style_color_rgba["ig_push_style_color_rgba"] --> push_color["push_color"]
+  style ig_push_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_pop_style_color
+
+Undo the `n` newest colour pushes (default 1); colours pushed by `ig_push_style_color` and `ip_push_style_color`
+ share one stack.
+
+```fortran
+subroutine ig_pop_style_color(n, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `n` | integer(kind=int32) | in | optional | How many. |
+| `stat` | integer(kind=int32) | out | optional |  |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_pop_style_color["ig_pop_style_color"] --> pop["pop"]
+  style ig_pop_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_push_style_var_r64
+
+Change a Dear ImGui style variable holding one number until `ig_pop_style_var`.
+
+```fortran
+subroutine ig_push_style_var_r64(name, value, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Variable name (a field of `ImGuiStyle`). |
+| `value` | real(kind=real64) | in |  | Value. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_style_var_r64["ig_push_style_var_r64"] --> push_var["push_var"]
+  style ig_push_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_push_style_var_vec2
+
+Change a Dear ImGui style variable holding a pair until `ig_pop_style_var`.
+
+```fortran
+subroutine ig_push_style_var_vec2(name, value, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Variable name (a field of `ImGuiStyle`). |
+| `value` | real(kind=real64) | in |  | Values (x, y). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_style_var_vec2["ig_push_style_var_vec2"] --> push_var["push_var"]
+  style ig_push_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_push_style_var_logical
+
+Change a Dear ImGui style variable holding a logical until `ig_pop_style_var`.
+
+```fortran
+subroutine ig_push_style_var_logical(name, value, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Variable name (a field of `ImGuiStyle`). |
+| `value` | logical | in |  | Value. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_style_var_logical["ig_push_style_var_logical"] --> push_var["push_var"]
+  style ig_push_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_push_style_var_i32
+
+Change a Dear ImGui style variable holding an enumeration until `ig_pop_style_var`.
+
+```fortran
+subroutine ig_push_style_var_i32(name, value, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Variable name (a field of `ImGuiStyle`). |
+| `value` | integer(kind=int32) | in |  | Value. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_style_var_i32["ig_push_style_var_i32"] --> push_var["push_var"]
+  style ig_push_style_var_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_pop_style_var
+
+Undo the `n` newest variable pushes (default 1); variables pushed by `ig_push_style_var` and
+ `ip_push_style_var` share one stack.
+
+```fortran
+subroutine ig_pop_style_var(n, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `n` | integer(kind=int32) | in | optional | How many. |
+| `stat` | integer(kind=int32) | out | optional |  |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_pop_style_var["ig_pop_style_var"] --> pop["pop"]
+  style ig_pop_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_push_style_color_hex
+
+Change the ImPlot colour `name` (`'#rrggbb'` or `'#rrggbbaa'`) until `ip_pop_style_color`.
+
+```fortran
+subroutine ip_push_style_color_hex(name, color, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Colour name (`ImPlotCol_*` without the prefix). |
+| `color` | character(len=*) | in |  | Hex colour. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_push_style_color_hex["ip_push_style_color_hex"] --> push_color_hex["push_color_hex"]
+  style ip_push_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_push_style_color_rgba
+
+Change the ImPlot colour `name` (`[r, g, b(, a)]` in [0, 1]) until `ip_pop_style_color`.
+
+```fortran
+subroutine ip_push_style_color_rgba(name, rgba, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Colour name. |
+| `rgba` | real(kind=real64) | in |  | Components. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_push_style_color_rgba["ip_push_style_color_rgba"] --> push_color["push_color"]
+  style ip_push_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_pop_style_color
+
+Undo the `n` newest colour pushes (default 1): the same stack as `ig_pop_style_color`.
+
+```fortran
+subroutine ip_pop_style_color(n, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `n` | integer(kind=int32) | in | optional | How many. |
+| `stat` | integer(kind=int32) | out | optional |  |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_pop_style_color["ip_pop_style_color"] --> pop["pop"]
+  style ip_pop_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_push_style_var_r64
+
+Change an ImPlot style variable holding one number until `ip_pop_style_var`.
+
+```fortran
+subroutine ip_push_style_var_r64(name, value, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Variable name (a field of `ImPlotStyle`). |
+| `value` | real(kind=real64) | in |  | Value. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_push_style_var_r64["ip_push_style_var_r64"] --> push_var["push_var"]
+  style ip_push_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_push_style_var_vec2
+
+Change an ImPlot style variable holding a pair until `ip_pop_style_var`.
+
+```fortran
+subroutine ip_push_style_var_vec2(name, value, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Variable name (a field of `ImPlotStyle`). |
+| `value` | real(kind=real64) | in |  | Values (x, y). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_push_style_var_vec2["ip_push_style_var_vec2"] --> push_var["push_var"]
+  style ip_push_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_push_style_var_logical
+
+Change an ImPlot style variable holding a logical until `ip_pop_style_var`.
+
+```fortran
+subroutine ip_push_style_var_logical(name, value, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Variable name (a field of `ImPlotStyle`). |
+| `value` | logical | in |  | Value. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_push_style_var_logical["ip_push_style_var_logical"] --> push_var["push_var"]
+  style ip_push_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_pop_style_var
+
+Undo the `n` newest variable pushes (default 1): the same stack as `ig_pop_style_var`.
+
+```fortran
+subroutine ip_pop_style_var(n, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `n` | integer(kind=int32) | in | optional | How many. |
+| `stat` | integer(kind=int32) | out | optional |  |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_pop_style_var["ip_pop_style_var"] --> pop["pop"]
+  style ip_pop_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### ig_show_style_editor
 
@@ -193,6 +722,7 @@ subroutine hex_color(text, rgba, ok)
 
 ```mermaid
 flowchart TD
+  push_color_hex["push_color_hex"] --> hex_color["hex_color"]
   set_color_hex["set_color_hex"] --> hex_color["hex_color"]
   hex_color["hex_color"] --> digit["digit"]
   style hex_color fill:#3e63dd,stroke:#99b,stroke-width:2px

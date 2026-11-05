@@ -63,6 +63,11 @@ struct state_t {
    std::string   font = "plex-sans";               // the default font: plex-sans (bundled), proggy, or a TTF file
    std::map<std::string, ImFont *> fonts;          // fonts loaded in this context, by name or path
    std::map<std::string, std::vector<unsigned char>> font_data; // TTF files read at run time (the atlas needs them)
+   struct saved_t {                                // a style value changed by a push, and what it was
+      unsigned char             *where = nullptr;
+      std::vector<unsigned char> was;
+   };
+   std::vector<saved_t> pushed_colors, pushed_vars; // scoped changes, undone by the pops (newest last)
    std::string   ini_file;        // where Dear ImGui keeps window positions and sizes; empty: nowhere (the default)
    struct texture_t {
       int  width = 0, height = 0;
@@ -904,6 +909,67 @@ int fig_show_style_editor(int *open) {
    }
    ImGui::End();
    if (open) *open = o ? 1 : 0;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+// Scoped style changes: remember the bytes a push overwrites, restore them on pop. Any colour or variable of either
+// library (the whole generated field table, not only Dear ImGui's ImGuiStyleVar subset).
+void remember(std::vector<state_t::saved_t> &stack, unsigned char *where, size_t size) {
+   state_t::saved_t s;
+   s.where = where;
+   s.was.assign(where, where + size);
+   stack.push_back(std::move(s));
+}
+
+int fig_push_style_color(int lib, const char *name, int name_len, const float *rgba) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (lib != 0 && lib != 1) return fail(FIG_ERR_ARGUMENT, "push style colour: unknown library");
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   const int i = style_color_index(lib, n);
+   if (i < 0) return fail(FIG_ERR_ARGUMENT, "push style colour: unknown name \"" + n + "\"");
+   for (int k = 0; k < 4; ++k)
+      if (!(rgba[k] >= 0.0f && rgba[k] <= 1.0f)) return fail(FIG_ERR_ARGUMENT, "push style colour: components must be in [0, 1]");
+   ImVec4 &c = lib == 0 ? ImGui::GetStyle().Colors[i] : ImPlot::GetStyle().Colors[i];
+   remember(st.pushed_colors, reinterpret_cast<unsigned char *>(&c), sizeof(ImVec4));
+   c = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_push_style_var(int lib, const char *name, int name_len, const double *values, int count) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (lib != 0 && lib != 1) return fail(FIG_ERR_ARGUMENT, "push style variable: unknown library");
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   const figure_style::field *f = style_field(lib, n);
+   if (!f) return fail(FIG_ERR_ARGUMENT, "push style variable: unknown name \"" + n + "\"");
+   const int ncomp = f->kind == figure_style::FIG_STYLE_VEC2 ? 2 : 1;
+   if (count != ncomp)
+      return fail(FIG_ERR_ARGUMENT, "push style variable \"" + n + "\" takes " + std::to_string(ncomp) + " value(s)");
+   unsigned char *p = style_base(lib) + f->offset;
+   const size_t size = f->kind == figure_style::FIG_STYLE_VEC2 ? sizeof(ImVec2)
+                       : f->kind == figure_style::FIG_STYLE_BOOL ? sizeof(bool)
+                       : f->kind == figure_style::FIG_STYLE_FLOAT ? sizeof(float) : sizeof(int);
+   remember(st.pushed_vars, p, size);
+   const std::vector<double> v(values, values + count);
+   write_var(style_base(lib), *f, v);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_pop_style(int vars, int n) {
+   FIG_TRY
+   std::vector<state_t::saved_t> &stack = vars ? st.pushed_vars : st.pushed_colors;
+   if (n < 1 || static_cast<size_t>(n) > stack.size())
+      return fail(FIG_ERR_STATE, std::string(vars ? "pop style variable" : "pop style colour") + ": " +
+                                     std::to_string(n) + " pop(s) for " + std::to_string(stack.size()) + " push(es)");
+   for (int k = 0; k < n; ++k) {
+      const state_t::saved_t &s = stack.back();
+      std::memcpy(s.where, s.was.data(), s.was.size());
+      stack.pop_back();
+   }
    return FIG_OK;
    FIG_CATCH
 }

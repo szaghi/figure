@@ -82,6 +82,26 @@ multiplied by the display's content scale ([Content scale](frame-loop#content-sc
 A change applies to everything drawn afterwards, globally, until it is changed again; `app%set_style` resets them
 all to the named style.
 
+## Changes for a block
+
+A colour or a variable can also change for a few widgets only: push it before them, pop it after. Pushes and pops
+pair like `ig_begin` and `ig_end`; one stack holds the colours of both libraries, another the variables.
+
+<<< @/examples/snippets/cb_scoped-red.F90{fortran}
+
+<Media name="cb_scoped" :width="520" alt="A Start button in the theme's colour, a red Stop button, a value shown large, and an undecorated overlay" caption="docs/examples/src/cb_scoped.F90" />
+
+| Procedure | Does |
+|---|---|
+| `ig_push_style_color(name, color [, stat])` | change a Dear ImGui colour (`'#rrggbb[aa]'` or components) until its pop |
+| `ig_pop_style_color([n] [, stat])` | undo the `n` newest colour pushes (default 1) |
+| `ig_push_style_var(name, value [, stat])` | change a Dear ImGui style variable until its pop |
+| `ig_pop_style_var([n] [, stat])` | undo the `n` newest variable pushes (default 1) |
+| `ip_push_style_color`, `ip_pop_style_color`, `ip_push_style_var`, `ip_pop_style_var` | the same for ImPlot |
+
+Every colour and every variable of the [name tables](#colours-and-variables-by-name) can be pushed, not only those
+Dear ImGui's own `PushStyleVar` covers. More pops than pushes are `FIG_ERR_STATE`.
+
 ## Fonts
 
 The interface is drawn in IBM Plex Sans at 15 logical pixels, a font made for technical interfaces, bundled with

@@ -235,11 +235,13 @@ flowchart TD
 ### ig_begin
 
 Begin a window; always pair with `ig_end`. With `open`, the window has a close button that sets it false.
+ `flags` combine `ImGuiWindowFlags_*` with `ior` (`NoTitleBar`, `NoResize`, `NoMove`, `AlwaysAutoResize`,
+ `NoBackground`, `NoDecoration`, `NoDocking`, ...).
 
 **Returns**: `logical`
 
 ```fortran
-function ig_begin(name, open) result(visible)
+function ig_begin(name, open, flags) result(visible)
 ```
 
 **Arguments**
@@ -248,6 +250,7 @@ function ig_begin(name, open) result(visible)
 |------|------|--------|------------|-------------|
 | `name` | character(len=*) | in |  | Window name (unique id and title). |
 | `open` | logical | inout | optional | Window open. |
+| `flags` | integer(kind=int32) | in | optional | `ImGuiWindowFlags_*` (default none). |
 
 **Call graph**
 

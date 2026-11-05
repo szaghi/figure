@@ -13,7 +13,9 @@ use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_
                    ip_image, ImPlotColormap_Viridis, texture_object, ig_dock_id, ig_dock_layout_begin,             &
                    ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_window_dock,                &
                    ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ip_get_style_color,  &
-                   ip_get_style_var, ip_set_style_color, ip_set_style_var, ig_pop_font, ig_push_font
+                   ip_get_style_var, ip_set_style_color, ip_set_style_var, ig_pop_font, ig_push_font,         &
+                   ig_pop_style_color, ig_pop_style_var, ig_push_style_color, ig_push_style_var, ig_text,      &
+                   ImGuiWindowFlags_NoTitleBar
 use figure_cimgui, only : im_vec4, igGetFontSize, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, &
@@ -35,7 +37,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(38)  !< Per-check outcome.
+logical                   :: test_passed(40)  !< Per-check outcome.
 type(texture_object)      :: tex              !< A 4 x 2 texture.
 integer(int8)             :: pix(4, 4, 2)     !< Its pixels.
 integer(int8)             :: pix_bad(3, 4, 2) !< Pixels of the wrong shape (3 channels).
@@ -86,6 +88,13 @@ character(len=:), allocatable :: bad_message  !< Error message of the malformed 
 integer(int32)            :: unit             !< File unit.
 integer(int32)            :: stat_font(4)     !< set_font: proggy, plex-sans at 18, a missing file, not a font.
 real(c_float)             :: font_px(3)       !< Font size: default, pushed to 22, after the pop.
+real(real64)              :: pushed(4)        !< Button colour while pushed.
+real(real64)              :: popped(4)        !< Button colour after the pop.
+real(real64)              :: round_pushed(2)  !< FrameRounding while pushed.
+real(real64)              :: round_popped(2)  !< FrameRounding after the pop.
+integer(int32)            :: stat_pop         !< A pop without a push.
+real(real64)              :: titled_y         !< Top of the first item of a window with a title bar.
+real(real64)              :: untitled_y       !< The same in a window without one (NoTitleBar).
 integer(int32)            :: stat_items(5)    !< Status of the scatter, bars and shaded items.
 integer(int32)            :: stat_spec        !< Status of a spec with a bad colour.
 type(plot_spec_object)    :: red              !< Red line, 2 pixels, circle markers.
@@ -127,6 +136,8 @@ call tex%update(pix_bad, stat=stat_tex(3))
 
 dock_root = ig_dock_id('main')
 stat_dock = -1_int32
+titled_y = 0.0_real64
+untitled_y = 0.0_real64
 dock_left = 0_int32
 dock_right = 0_int32
 layouts = 0_int32
@@ -146,6 +157,19 @@ do frame = 1_int32, 12_int32
    if (ig_begin('Dock A')) call ig_window_dock(dock_node(1), docked(1))
    call ig_end()
    if (ig_begin('Dock B')) call ig_window_dock(dock_node(2), docked(2))
+   call ig_end()
+   ! window flags: the same window placement with and without a title bar
+   call ig_set_next_window(20.0_real64, 530.0_real64, 150.0_real64, 60.0_real64, always=.true.)
+   if (ig_begin('Titled')) then
+      call ig_text('first')
+      call ig_item_rect(x0, titled_y, x1, y1)
+   endif
+   call ig_end()
+   call ig_set_next_window(200.0_real64, 530.0_real64, 150.0_real64, 60.0_real64, always=.true.)
+   if (ig_begin('Untitled', flags=ImGuiWindowFlags_NoTitleBar)) then
+      call ig_text('first')
+      call ig_item_rect(x0, untitled_y, x1, y1)
+   endif
    call ig_end()
    call ig_set_next_window(20.0_real64, 20.0_real64, 400.0_real64, 500.0_real64, always=.true.)
    if (ig_begin('Test')) then
@@ -289,6 +313,15 @@ call ig_push_font('', 22.0_real64)
 font_px(2) = igGetFontSize()
 call ig_pop_font()
 font_px(3) = igGetFontSize()
+call ig_push_style_color('Button', [1.0_real64, 0.0_real64, 0.0_real64])  ! scoped changes, then undone
+call ig_push_style_var('FrameRounding', 9.0_real64)
+call ig_get_style_color('Button', pushed)
+call ig_get_style_var('FrameRounding', round_pushed, back_n(1))
+call ig_pop_style_var()
+call ig_pop_style_color()
+call ig_get_style_color('Button', popped)
+call ig_get_style_var('FrameRounding', round_popped, back_n(1))
+call ig_pop_style_color(stat=stat_pop)
 call app%set_font('proggy', stat=stat_font(1))
 call app%set_font('plex-sans', 18.0_real64, stat=stat_font(2))
 call app%set_font('no/such/font.ttf', stat=stat_font(3))
@@ -349,10 +382,15 @@ test_passed(37) = abs(font_px(1) - 15.0_c_float) < 1.0e-4_c_float .and. abs(font
                   .and. abs(font_px(3) - 15.0_c_float) < 1.0e-4_c_float  ! default 15 px, push and pop a size
 test_passed(38) = all(stat_font(1:2) == int(FIG_OK, int32)) .and. stat_font(3) == int(FIG_ERR_FAILED, int32) .and. &
                   stat_font(4) == int(FIG_ERR_ARGUMENT, int32)                     ! fonts by name, bad files rejected
+test_passed(39) = all(abs(pushed - [1.0_real64, 0.0_real64, 0.0_real64, 1.0_real64]) < 1.0e-6_real64) .and.        &
+                  all(abs(popped - [58.0_real64, 50.0_real64, 43.0_real64, 255.0_real64] / 255.0_real64) < 1.0e-6_real64) &
+                  .and. abs(round_pushed(1) - 9.0_real64) < 1.0e-6_real64 .and. abs(round_popped(1)) < 1.0e-6_real64     &
+                  .and. stat_pop == int(FIG_ERR_STATE, int32)                       ! push, pop, restore; no extra pop
+test_passed(40) = titled_y - untitled_y > 10.0_real64                              ! NoTitleBar: no title bar
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
                   stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
 
-write(output_unit, '(A,38L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,40L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

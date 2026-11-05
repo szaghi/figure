@@ -16,14 +16,16 @@ module figure_style
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int, c_loc, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check, figure_fail
-use figure_c_native, only : FIG_ERR_ARGUMENT, fig_pop_font, fig_push_font, fig_show_style_editor, fig_style_color, &
-                            fig_style_var
+use figure_c_native, only : FIG_ERR_ARGUMENT, fig_pop_font, fig_pop_style, fig_push_font, fig_push_style_color,      &
+                            fig_push_style_var, fig_show_style_editor, fig_style_color, fig_style_var
 
 implicit none
 private
 public :: ig_set_style_color, ig_get_style_color, ig_set_style_var, ig_get_style_var
 public :: ip_set_style_color, ip_get_style_color, ip_set_style_var, ip_get_style_var
 public :: hex_color, ig_show_style_editor, ig_push_font, ig_pop_font
+public :: ig_push_style_color, ig_pop_style_color, ig_push_style_var, ig_pop_style_var
+public :: ip_push_style_color, ip_pop_style_color, ip_push_style_var, ip_pop_style_var
 
 integer(c_int), parameter :: LIB_IMGUI  = 0_c_int !< Dear ImGui.
 integer(c_int), parameter :: LIB_IMPLOT = 1_c_int !< ImPlot.
@@ -48,7 +50,220 @@ interface ip_set_style_var
    module procedure ip_set_style_var_r64, ip_set_style_var_vec2, ip_set_style_var_logical
 endinterface ip_set_style_var
 
+interface ig_push_style_color
+   !< Change a Dear ImGui colour until `ig_pop_style_color`, by hex string or by components.
+   module procedure ig_push_style_color_hex, ig_push_style_color_rgba
+endinterface ig_push_style_color
+
+interface ip_push_style_color
+   !< Change an ImPlot colour until `ip_pop_style_color`, by hex string or by components.
+   module procedure ip_push_style_color_hex, ip_push_style_color_rgba
+endinterface ip_push_style_color
+
+interface ig_push_style_var
+   !< Change a Dear ImGui style variable until `ig_pop_style_var`: a number, a pair, a logical or an integer.
+   module procedure ig_push_style_var_r64, ig_push_style_var_vec2, ig_push_style_var_logical, ig_push_style_var_i32
+endinterface ig_push_style_var
+
+interface ip_push_style_var
+   !< Change an ImPlot style variable until `ip_pop_style_var`: a number, a pair or a logical.
+   module procedure ip_push_style_var_r64, ip_push_style_var_vec2, ip_push_style_var_logical
+endinterface ip_push_style_var
+
 contains
+   ! ---- scoped changes -------------------------------------------------------------------------------------------------
+   subroutine push_color(lib, who, name, rgba, stat)
+   !< Push a colour given as components (3 or 4).
+   integer(c_int),   intent(in)            :: lib     !< Library.
+   character(len=*), intent(in)            :: who     !< Caller, for messages.
+   character(len=*), intent(in)            :: name    !< Colour name.
+   real(real64),     intent(in)            :: rgba(:) !< Components.
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   real(c_float)                           :: c(4)    !< C components.
+
+   if (size(rgba) /= 3 .and. size(rgba) /= 4) then
+      call figure_fail(FIG_ERR_ARGUMENT, who//': a colour has 3 or 4 components', stat)
+      return
+   endif
+   c = 1.0_c_float
+   c(1:size(rgba)) = real(rgba, c_float)
+   call figure_check(fig_push_style_color(lib, name, len(name, c_int), c), stat)
+   endsubroutine push_color
+
+   subroutine push_color_hex(lib, who, name, color, stat)
+   !< Push a colour given as a hex string.
+   integer(c_int),   intent(in)            :: lib     !< Library.
+   character(len=*), intent(in)            :: who     !< Caller, for messages.
+   character(len=*), intent(in)            :: name    !< Colour name.
+   character(len=*), intent(in)            :: color   !< `'#rrggbb'` or `'#rrggbbaa'`.
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   real(real64)                            :: rgba(4) !< Components.
+   logical                                 :: ok      !< Valid hex colour.
+
+   call hex_color(color, rgba, ok)
+   if (.not. ok) then
+      call figure_fail(FIG_ERR_ARGUMENT, who//": '"//trim(color)//"' is not '#rrggbb' or '#rrggbbaa'", stat)
+      return
+   endif
+   call push_color(lib, who, name, rgba, stat)
+   endsubroutine push_color_hex
+
+   subroutine push_var(lib, name, values, n, stat)
+   !< Push a style variable of `n` values.
+   integer(c_int),   intent(in)            :: lib       !< Library.
+   character(len=*), intent(in)            :: name      !< Variable name.
+   real(real64),     intent(in)            :: values(2) !< Values.
+   integer(c_int),   intent(in)            :: n         !< How many.
+   integer(int32),   intent(out), optional :: stat      !< Status.
+
+   call figure_check(fig_push_style_var(lib, name, len(name, c_int), real(values, c_double), n), stat)
+   endsubroutine push_var
+
+   subroutine pop(vars, n, stat)
+   !< Undo the `n` newest pushes (default 1) of colours (vars = 0) or variables (vars = 1).
+   integer(c_int), intent(in)            :: vars !< 0: colours, 1: variables.
+   integer(int32), intent(in),  optional :: n    !< How many (default 1).
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
+   integer(c_int)                        :: k    !< How many.
+
+   k = 1_c_int
+   if (present(n)) k = int(n, c_int)
+   call figure_check(fig_pop_style(vars, k), stat)
+   endsubroutine pop
+
+   subroutine ig_push_style_color_hex(name, color, stat)
+   !< Change the Dear ImGui colour `name` (`'#rrggbb'` or `'#rrggbbaa'`) until `ig_pop_style_color`.
+   character(len=*), intent(in)            :: name  !< Colour name (`ImGuiCol_*` without the prefix).
+   character(len=*), intent(in)            :: color !< Hex colour.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+
+   call push_color_hex(LIB_IMGUI, 'ig_push_style_color', name, color, stat)
+   endsubroutine ig_push_style_color_hex
+
+   subroutine ig_push_style_color_rgba(name, rgba, stat)
+   !< Change the Dear ImGui colour `name` (`[r, g, b(, a)]` in [0, 1]) until `ig_pop_style_color`.
+   character(len=*), intent(in)            :: name    !< Colour name.
+   real(real64),     intent(in)            :: rgba(:) !< Components.
+   integer(int32),   intent(out), optional :: stat    !< Status.
+
+   call push_color(LIB_IMGUI, 'ig_push_style_color', name, rgba, stat)
+   endsubroutine ig_push_style_color_rgba
+
+   subroutine ig_pop_style_color(n, stat)
+   !< Undo the `n` newest colour pushes (default 1); colours pushed by `ig_push_style_color` and `ip_push_style_color`
+   !< share one stack.
+   integer(int32), intent(in),  optional :: n    !< How many.
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
+
+   call pop(0_c_int, n, stat)
+   endsubroutine ig_pop_style_color
+
+   subroutine ig_push_style_var_r64(name, value, stat)
+   !< Change a Dear ImGui style variable holding one number until `ig_pop_style_var`.
+   character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
+   real(real64),     intent(in)            :: value !< Value.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+
+   call push_var(LIB_IMGUI, name, [value, 0.0_real64], 1_c_int, stat)
+   endsubroutine ig_push_style_var_r64
+
+   subroutine ig_push_style_var_vec2(name, value, stat)
+   !< Change a Dear ImGui style variable holding a pair until `ig_pop_style_var`.
+   character(len=*), intent(in)            :: name     !< Variable name (a field of `ImGuiStyle`).
+   real(real64),     intent(in)            :: value(2) !< Values (x, y).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+
+   call push_var(LIB_IMGUI, name, value, 2_c_int, stat)
+   endsubroutine ig_push_style_var_vec2
+
+   subroutine ig_push_style_var_logical(name, value, stat)
+   !< Change a Dear ImGui style variable holding a logical until `ig_pop_style_var`.
+   character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
+   logical,          intent(in)            :: value !< Value.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+
+   call push_var(LIB_IMGUI, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, stat)
+   endsubroutine ig_push_style_var_logical
+
+   subroutine ig_push_style_var_i32(name, value, stat)
+   !< Change a Dear ImGui style variable holding an enumeration until `ig_pop_style_var`.
+   character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
+   integer(int32),   intent(in)            :: value !< Value.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+
+   call push_var(LIB_IMGUI, name, [real(value, real64), 0.0_real64], 1_c_int, stat)
+   endsubroutine ig_push_style_var_i32
+
+   subroutine ig_pop_style_var(n, stat)
+   !< Undo the `n` newest variable pushes (default 1); variables pushed by `ig_push_style_var` and
+   !< `ip_push_style_var` share one stack.
+   integer(int32), intent(in),  optional :: n    !< How many.
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
+
+   call pop(1_c_int, n, stat)
+   endsubroutine ig_pop_style_var
+
+   subroutine ip_push_style_color_hex(name, color, stat)
+   !< Change the ImPlot colour `name` (`'#rrggbb'` or `'#rrggbbaa'`) until `ip_pop_style_color`.
+   character(len=*), intent(in)            :: name  !< Colour name (`ImPlotCol_*` without the prefix).
+   character(len=*), intent(in)            :: color !< Hex colour.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+
+   call push_color_hex(LIB_IMPLOT, 'ip_push_style_color', name, color, stat)
+   endsubroutine ip_push_style_color_hex
+
+   subroutine ip_push_style_color_rgba(name, rgba, stat)
+   !< Change the ImPlot colour `name` (`[r, g, b(, a)]` in [0, 1]) until `ip_pop_style_color`.
+   character(len=*), intent(in)            :: name    !< Colour name.
+   real(real64),     intent(in)            :: rgba(:) !< Components.
+   integer(int32),   intent(out), optional :: stat    !< Status.
+
+   call push_color(LIB_IMPLOT, 'ip_push_style_color', name, rgba, stat)
+   endsubroutine ip_push_style_color_rgba
+
+   subroutine ip_pop_style_color(n, stat)
+   !< Undo the `n` newest colour pushes (default 1): the same stack as `ig_pop_style_color`.
+   integer(int32), intent(in),  optional :: n    !< How many.
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
+
+   call pop(0_c_int, n, stat)
+   endsubroutine ip_pop_style_color
+
+   subroutine ip_push_style_var_r64(name, value, stat)
+   !< Change an ImPlot style variable holding one number until `ip_pop_style_var`.
+   character(len=*), intent(in)            :: name  !< Variable name (a field of `ImPlotStyle`).
+   real(real64),     intent(in)            :: value !< Value.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+
+   call push_var(LIB_IMPLOT, name, [value, 0.0_real64], 1_c_int, stat)
+   endsubroutine ip_push_style_var_r64
+
+   subroutine ip_push_style_var_vec2(name, value, stat)
+   !< Change an ImPlot style variable holding a pair until `ip_pop_style_var`.
+   character(len=*), intent(in)            :: name     !< Variable name (a field of `ImPlotStyle`).
+   real(real64),     intent(in)            :: value(2) !< Values (x, y).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+
+   call push_var(LIB_IMPLOT, name, value, 2_c_int, stat)
+   endsubroutine ip_push_style_var_vec2
+
+   subroutine ip_push_style_var_logical(name, value, stat)
+   !< Change an ImPlot style variable holding a logical until `ip_pop_style_var`.
+   character(len=*), intent(in)            :: name  !< Variable name (a field of `ImPlotStyle`).
+   logical,          intent(in)            :: value !< Value.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+
+   call push_var(LIB_IMPLOT, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, stat)
+   endsubroutine ip_push_style_var_logical
+
+   subroutine ip_pop_style_var(n, stat)
+   !< Undo the `n` newest variable pushes (default 1): the same stack as `ig_pop_style_var`.
+   integer(int32), intent(in),  optional :: n    !< How many.
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
+
+   call pop(1_c_int, n, stat)
+   endsubroutine ip_pop_style_var
+
    subroutine ig_show_style_editor(open, stat)
    !< Dear ImGui's and ImPlot's style editors, in a window titled "Style editor": every colour and size, live; with
    !< `open`, the window has a close button that sets it false. Keep a look with `app%save_style`.

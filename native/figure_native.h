@@ -46,6 +46,11 @@ int    fig_show_style_editor(int *open);
 int    fig_set_font(const char *name, int name_len, double size);
 int    fig_push_font(const char *name, int name_len, double size);
 int    fig_pop_font(void);
+/* Scoped style changes, either library (lib 0 Dear ImGui, 1 ImPlot): a push changes a colour or a variable (any field,
+ * by name) and remembers its value; pop_style(vars 0: colours, 1: variables, n) restores the n newest. */
+int    fig_push_style_color(int lib, const char *name, int name_len, const float *rgba);
+int    fig_push_style_var(int lib, const char *name, int name_len, const double *values, int count);
+int    fig_pop_style(int vars, int n);
 int    fig_style_color(int lib, const char *name, int name_len, int set, float *rgba);
 int    fig_style_var(int lib, const char *name, int name_len, int set, double *values, int *count);
 void   fig_request_frames(int n);
