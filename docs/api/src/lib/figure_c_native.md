@@ -30,6 +30,8 @@ graph LR
 - [fig_set_ini_file](#fig-set-ini-file)
 - [fig_set_style](#fig-set-style)
 - [fig_remote_token](#fig-remote-token)
+- [fig_file_dialog](#fig-file-dialog)
+- [fig_file_dialog_result](#fig-file-dialog-result)
 - [fig_quit_requested](#fig-quit-requested)
 - [fig_input_quit](#fig-input-quit)
 - [fig_content_scale](#fig-content-scale)
@@ -104,6 +106,10 @@ graph LR
 ### fig_set_style
 
 ### fig_remote_token
+
+### fig_file_dialog
+
+### fig_file_dialog_result
 
 ### fig_quit_requested
 

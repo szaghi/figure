@@ -24,6 +24,8 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%set_confirm_quit(enabled)` | the close button reports a request instead of ending the loop | [ask before quitting](menus#ask-before-quitting) |
 | `app%quit_requested()` → `logical` | the user asked to quit, once per request | [ask before quitting](menus#ask-before-quitting) |
 | `app%quit()` | the next `next_frame` returns `.false.` | [next_frame](frame-loop#next-frame) |
+| `app%open_file_dialog(id [, filters] [, default_path])`, `app%save_file_dialog(...)`, `app%open_folder_dialog(id [, default_path])` | the system's file dialogs (window mode), answered on a later frame | [file dialogs](frame-loop#file-dialogs) |
+| `app%file_dialog_result(id, path, done [, cancelled])` | the answer to a dialog, once | [file dialogs](frame-loop#file-dialogs) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
 | `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (default, 15 px), `'proggy'`, or a TTF/OTF file | [styles](styles#fonts) |
 | `app%load_style(file [, stat])`, `app%save_style(file [, stat])` | apply a theme file; write the style in effect as one | [styles](styles#load-tune-and-save) |

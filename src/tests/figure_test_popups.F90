@@ -4,16 +4,18 @@ program figure_test_popups
 !<
 !< A popup opened by a button and closed by a click outside it; with set_confirm_quit, a quit request reported once,
 !< answered by a modal: Cancel keeps the program running (and the modal blocks the rest of the interface), Discard ends
-!< it through app%quit; without set_confirm_quit, a quit request ends next_frame at once.
+!< it through app%quit; without set_confirm_quit, a quit request ends next_frame at once. File dialogs without a window
+!< are refused; polling an id with no dialog reports nothing yet.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
-use figure, only : app_object, ig_begin, ig_begin_popup, ig_begin_popup_modal, ig_button, ig_checkbox, &
+use figure, only : FIG_ERR_STATE, app_object, ig_begin, ig_begin_popup, ig_begin_popup_modal, &
+                   ig_button, ig_checkbox,                                                                  &
                    ig_close_current_popup, ig_end, ig_end_popup, ig_open_popup, ig_set_next_window, ig_text
 use figure_testing, only : test_click, test_item_center, test_quit
 
 implicit none
 integer(int32), parameter :: MAX_FRAMES = 300_int32 !< Guard: the loop must end before this.
 type(app_object)          :: app                    !< Application.
-logical                   :: test_passed(9)         !< Per-check outcome.
+logical                   :: test_passed(11)        !< Per-check outcome.
 real(real64)              :: options_at(2)          !< Centre of the button that opens the popup.
 real(real64)              :: cancel_at(2)           !< Centre of the modal's Cancel.
 real(real64)              :: discard_at(2)          !< Centre of the modal's Discard.
@@ -29,6 +31,9 @@ integer(int32)            :: last_frame             !< Frame on which the loop e
 integer(int32)            :: modal_frames           !< Frames with the modal open.
 logical                   :: alive_after_cancel     !< The loop ran past the Cancel.
 logical                   :: ended_plain            !< Without confirmation, a quit request ends next_frame.
+integer(int32)            :: stat_dialog(2)         !< File dialogs headless: open refused, unknown id.
+character(len=:), allocatable :: chosen             !< Path from a dialog.
+logical                   :: dialog_done            !< A dialog answered.
 
 flag = .false.
 popup_seen = .false.
@@ -108,6 +113,11 @@ do frame = 1_int32, 20_int32
 enddo
 call app%destroy()
 
+call app%init_headless(800_int32, 600_int32)          ! file dialogs need a window
+call app%open_file_dialog('open', ['Input files|input;inp'], stat=stat_dialog(1))
+call app%file_dialog_result('never opened', chosen, dialog_done, stat=stat_dialog(2))
+call app%destroy()
+
 test_passed(1) = popup_seen                                  ! a popup opened by a button
 test_passed(2) = .not. popup_open                            ! ... closed by a click outside it
 test_passed(3) = requests == 2_int32                         ! two requests, each reported once
@@ -117,6 +127,8 @@ test_passed(6) = last_frame > 65_int32 .and. last_frame < 80_int32 ! Discard: ap
 test_passed(7) = modal_frames > 0_int32                      ! the modal was shown
 test_passed(8) = ended_plain                                 ! no confirmation: a request ends next_frame
 test_passed(9) = last_frame <= MAX_FRAMES                    ! the loop did end
+test_passed(10) = stat_dialog(1) == int(FIG_ERR_STATE, int32)  ! no file dialog without a window
+test_passed(11) = stat_dialog(2) == 0_int32 .and. .not. dialog_done .and. chosen == '' ! no dialog: nothing yet
 
 write(output_unit, '(A,*(L2))') 'figure_test_popups checks:', test_passed
 if (.not. all(test_passed)) write(output_unit, '(A,I0,A,I0,A,I0,A,I0,A,I0)') 'requests ', requests, &

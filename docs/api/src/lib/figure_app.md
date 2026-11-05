@@ -48,7 +48,12 @@ graph LR
 - [request_frames](#request-frames)
 - [set_confirm_quit](#set-confirm-quit)
 - [quit](#quit)
+- [open_file_dialog](#open-file-dialog)
+- [save_file_dialog](#save-file-dialog)
+- [open_folder_dialog](#open-folder-dialog)
+- [file_dialog_result](#file-dialog-result)
 - [destroy](#destroy)
+- [show_file_dialog](#show-file-dialog)
 - [next_frame](#next-frame)
 - [quit_requested](#quit-requested)
 - [content_scale](#content-scale)
@@ -86,6 +91,10 @@ A FIGURE application (one per program).
 | `set_confirm_quit` | pass(self) | Report a quit request instead of quitting. |
 | `quit_requested` | pass(self) | The user asked to quit (once per request). |
 | `quit` | pass(self) | End the loop at the next frame. |
+| `open_file_dialog` | pass(self) | The system's dialog to choose a file to open. |
+| `save_file_dialog` | pass(self) | The system's dialog to choose where to save. |
+| `open_folder_dialog` | pass(self) | The system's dialog to choose a folder. |
+| `file_dialog_result` | pass(self) | The answer to a dialog, once given. |
 | `content_scale` | pass(self) | Display content scale. |
 | `destroy` | pass(self) | Close everything. |
 
@@ -438,6 +447,117 @@ flowchart TD
   style quit fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### open_file_dialog
+
+Show the system's dialog to choose a file to open. It does not block: the interface keeps drawing, and the answer
+ is read with `file_dialog_result(id, ...)` on the following frames. `filters`: entries `'name|pattern'`, the
+ pattern being extensions separated by `;` (`'Input files|input;inp'`, `'All files|*'`). Window mode only:
+ `FIG_ERR_STATE` in remote and headless modes (ask for the path in a text field there).
+
+```fortran
+subroutine open_file_dialog(self, id, filters, default_path, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `id` | character(len=*) | in |  | Dialog id (any text, used to read the answer). |
+| `filters` | character(len=*) | in | optional | File type filters. |
+| `default_path` | character(len=*) | in | optional | Folder or file to start from. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  open_file_dialog["open_file_dialog"] --> show_file_dialog["show_file_dialog"]
+  style open_file_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### save_file_dialog
+
+Show the system's dialog to choose where to save (a new or an existing file); as `open_file_dialog`.
+
+```fortran
+subroutine save_file_dialog(self, id, filters, default_path, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `id` | character(len=*) | in |  | Dialog id. |
+| `filters` | character(len=*) | in | optional | File type filters. |
+| `default_path` | character(len=*) | in | optional | Folder or file to start from. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  save_file_dialog["save_file_dialog"] --> show_file_dialog["show_file_dialog"]
+  style save_file_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### open_folder_dialog
+
+Show the system's dialog to choose a folder; as `open_file_dialog`.
+
+```fortran
+subroutine open_folder_dialog(self, id, default_path, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `id` | character(len=*) | in |  | Dialog id. |
+| `default_path` | character(len=*) | in | optional | Folder to start from. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  open_folder_dialog["open_folder_dialog"] --> show_file_dialog["show_file_dialog"]
+  style open_folder_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### file_dialog_result
+
+The answer to the dialog `id`: `done` false while it is open; once answered, `done` true and either `path` (the
+ file or folder chosen) or `cancelled` true. The answer is given once; then the id is free again, and until the
+ next dialog `done` is false: poll it every frame. A dialog that failed (Linux without a portal or zenity) gives
+ `done` true and `FIG_ERR_FAILED` with the reason.
+
+```fortran
+subroutine file_dialog_result(self, id, path, done, cancelled, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `id` | character(len=*) | in |  | Dialog id. |
+| `path` | character(len=:) | out | allocatable | Chosen path ('' while open or if cancelled). |
+| `done` | logical | out |  | The dialog was answered. |
+| `cancelled` | logical | out | optional | The user cancelled it. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  file_dialog_result["file_dialog_result"] --> fig_file_dialog_result["fig_file_dialog_result"]
+  file_dialog_result["file_dialog_result"] --> figure_check["figure_check"]
+  style file_dialog_result fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### destroy
 
 Close the window and destroy the contexts (safe in any state).
@@ -459,6 +579,36 @@ flowchart TD
   init["init"] --> destroy["destroy"]
   destroy["destroy"] --> fig_shutdown["fig_shutdown"]
   style destroy fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### show_file_dialog
+
+Open a native file dialog of `kind` (0 open, 1 save, 2 folder).
+
+```fortran
+subroutine show_file_dialog(kind, id, filters, default_path, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `kind` | integer(kind=c_int) | in |  | Kind. |
+| `id` | character(len=*) | in |  | Dialog id. |
+| `filters` | character(len=*) | in | optional | 'name\|pattern' entries. |
+| `default_path` | character(len=*) | in | optional | Where to start. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  open_file_dialog["open_file_dialog"] --> show_file_dialog["show_file_dialog"]
+  open_folder_dialog["open_folder_dialog"] --> show_file_dialog["show_file_dialog"]
+  save_file_dialog["save_file_dialog"] --> show_file_dialog["show_file_dialog"]
+  show_file_dialog["show_file_dialog"] --> fig_file_dialog["fig_file_dialog"]
+  show_file_dialog["show_file_dialog"] --> figure_check["figure_check"]
+  style show_file_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions

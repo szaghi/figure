@@ -21,7 +21,7 @@ public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, 
 public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord
-public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit
+public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -145,6 +145,35 @@ interface
    integer(c_int), value               :: buf_len !< Its length.
    integer(c_int)                      :: n       !< Token length.
    endfunction fig_remote_token
+
+   function fig_file_dialog(kind, id, id_len, filters, filters_len, path, path_len) result(status) &
+      bind(C, name='fig_file_dialog')
+   !< Open a native file dialog (window mode): kind 0 open, 1 save, 2 folder.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value              :: kind        !< 0 open, 1 save, 2 folder.
+   character(kind=c_char), intent(in) :: id(*)       !< Dialog id (not NUL-terminated).
+   integer(c_int), value              :: id_len      !< Its length.
+   character(kind=c_char), intent(in) :: filters(*)  !< "name|pattern" entries separated by newlines.
+   integer(c_int), value              :: filters_len !< Their length.
+   character(kind=c_char), intent(in) :: path(*)     !< Default location.
+   integer(c_int), value              :: path_len    !< Its length (0: none).
+   integer(c_int)                     :: status      !< Status.
+   endfunction fig_file_dialog
+
+   function fig_file_dialog_result(id, id_len, buf, buf_len, state, path_len) result(status) &
+      bind(C, name='fig_file_dialog_result')
+   !< The result of a dialog: state 0 open, 1 chosen, 2 cancelled, 3 failed.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: id(*)    !< Dialog id.
+   integer(c_int), value               :: id_len   !< Its length.
+   character(kind=c_char), intent(out) :: buf(*)   !< Path chosen.
+   integer(c_int), value               :: buf_len  !< Buffer length.
+   integer(c_int), intent(out)         :: state    !< State.
+   integer(c_int), intent(out)         :: path_len !< Full length of the path.
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_file_dialog_result
 
    subroutine fig_set_confirm_quit(on) bind(C, name='fig_set_confirm_quit')
    !< A quit request (the window's close button) is reported instead of ending the loop (1) or ends it (0).

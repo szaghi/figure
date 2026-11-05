@@ -16,14 +16,15 @@ module figure_app
 !< settles it sleeps until input or `max_wait`, so an idle window costs a fraction of a percent of one core); it
 !< returns `.false.` when the user closes the window. There are no widget objects, handles or callbacks: the state is
 !< the application's own variables.
-use, intrinsic :: iso_c_binding, only : c_double, c_int
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
-                            fig_set_style, fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit
+                            fig_set_style, fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
+                            fig_file_dialog, fig_file_dialog_result
 
 implicit none
 private
@@ -50,6 +51,10 @@ type :: app_object
       procedure, pass(self) :: set_confirm_quit !< Report a quit request instead of quitting.
       procedure, pass(self) :: quit_requested !< The user asked to quit (once per request).
       procedure, pass(self) :: quit           !< End the loop at the next frame.
+      procedure, pass(self) :: open_file_dialog   !< The system's dialog to choose a file to open.
+      procedure, pass(self) :: save_file_dialog   !< The system's dialog to choose where to save.
+      procedure, pass(self) :: open_folder_dialog !< The system's dialog to choose a folder.
+      procedure, pass(self) :: file_dialog_result !< The answer to a dialog, once given.
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
 endtype app_object
@@ -334,6 +339,65 @@ contains
    call fig_quit()
    endsubroutine quit
 
+   subroutine open_file_dialog(self, id, filters, default_path, stat)
+   !< Show the system's dialog to choose a file to open. It does not block: the interface keeps drawing, and the answer
+   !< is read with `file_dialog_result(id, ...)` on the following frames. `filters`: entries `'name|pattern'`, the
+   !< pattern being extensions separated by `;` (`'Input files|input;inp'`, `'All files|*'`). Window mode only:
+   !< `FIG_ERR_STATE` in remote and headless modes (ask for the path in a text field there).
+   class(app_object), intent(inout)         :: self         !< Application.
+   character(len=*),  intent(in)            :: id           !< Dialog id (any text, used to read the answer).
+   character(len=*),  intent(in),  optional :: filters(:)   !< File type filters.
+   character(len=*),  intent(in),  optional :: default_path !< Folder or file to start from.
+   integer(int32),    intent(out), optional :: stat         !< Status.
+
+   call show_file_dialog(0_c_int, id, filters, default_path, stat)
+   endsubroutine open_file_dialog
+
+   subroutine save_file_dialog(self, id, filters, default_path, stat)
+   !< Show the system's dialog to choose where to save (a new or an existing file); as `open_file_dialog`.
+   class(app_object), intent(inout)         :: self         !< Application.
+   character(len=*),  intent(in)            :: id           !< Dialog id.
+   character(len=*),  intent(in),  optional :: filters(:)   !< File type filters.
+   character(len=*),  intent(in),  optional :: default_path !< Folder or file to start from.
+   integer(int32),    intent(out), optional :: stat         !< Status.
+
+   call show_file_dialog(1_c_int, id, filters, default_path, stat)
+   endsubroutine save_file_dialog
+
+   subroutine open_folder_dialog(self, id, default_path, stat)
+   !< Show the system's dialog to choose a folder; as `open_file_dialog`.
+   class(app_object), intent(inout)         :: self         !< Application.
+   character(len=*),  intent(in)            :: id           !< Dialog id.
+   character(len=*),  intent(in),  optional :: default_path !< Folder to start from.
+   integer(int32),    intent(out), optional :: stat         !< Status.
+
+   call show_file_dialog(2_c_int, id, default_path=default_path, stat=stat)
+   endsubroutine open_folder_dialog
+
+   subroutine file_dialog_result(self, id, path, done, cancelled, stat)
+   !< The answer to the dialog `id`: `done` false while it is open; once answered, `done` true and either `path` (the
+   !< file or folder chosen) or `cancelled` true. The answer is given once; then the id is free again, and until the
+   !< next dialog `done` is false: poll it every frame. A dialog that failed (Linux without a portal or zenity) gives
+   !< `done` true and `FIG_ERR_FAILED` with the reason.
+   class(app_object),             intent(inout)         :: self      !< Application.
+   character(len=*),              intent(in)            :: id        !< Dialog id.
+   character(len=:), allocatable, intent(out)           :: path      !< Chosen path ('' while open or if cancelled).
+   logical,                       intent(out)           :: done      !< The dialog was answered.
+   logical,                       intent(out), optional :: cancelled !< The user cancelled it.
+   integer(int32),                intent(out), optional :: stat      !< Status.
+   character(kind=c_char, len=4096)                     :: buf       !< Path buffer.
+   integer(c_int)                                       :: state     !< 0 open, 1 chosen, 2 cancelled, 3 failed.
+   integer(c_int)                                       :: n         !< Path length.
+   integer(c_int)                                       :: status    !< Status.
+
+   path = ''
+   status = fig_file_dialog_result(id, len(id, c_int), buf, len(buf, c_int), state, n)
+   done = state /= 0_c_int
+   if (present(cancelled)) cancelled = state == 2_c_int
+   if (state == 1_c_int) path = buf(1:min(n, len(buf, c_int)))
+   call figure_check(status, stat)
+   endsubroutine file_dialog_result
+
    function content_scale(self) result(scale)
    !< Display content scale (1 standard, 2 on most high-DPI displays).
    class(app_object), intent(in) :: self  !< Application.
@@ -349,4 +413,28 @@ contains
    call fig_shutdown()
    self%in_frame = .false.
    endsubroutine destroy
+
+   subroutine show_file_dialog(kind, id, filters, default_path, stat)
+   !< Open a native file dialog of `kind` (0 open, 1 save, 2 folder).
+   integer(c_int),   intent(in)            :: kind         !< Kind.
+   character(len=*), intent(in)            :: id           !< Dialog id.
+   character(len=*), intent(in), optional  :: filters(:)   !< 'name|pattern' entries.
+   character(len=*), intent(in), optional  :: default_path !< Where to start.
+   integer(int32),   intent(out), optional :: stat         !< Status.
+   character(len=:), allocatable           :: joined       !< Filters joined by newlines.
+   integer(int32)                          :: k            !< Counter.
+
+   joined = ''
+   if (present(filters)) then
+      do k = 1_int32, size(filters, kind=int32)
+         joined = joined//trim(filters(k))//new_line('a')
+      enddo
+   endif
+   if (present(default_path)) then
+      call figure_check(fig_file_dialog(kind, id, len(id, c_int), joined, len(joined, c_int), default_path, &
+                                        len_trim(default_path, c_int)), stat)
+   else
+      call figure_check(fig_file_dialog(kind, id, len(id, c_int), joined, len(joined, c_int), '', 0_c_int), stat)
+   endif
+   endsubroutine show_file_dialog
 endmodule figure_app

@@ -102,6 +102,14 @@ before its windows. The user can rearrange everything afterwards. [Docking](/gui
 The menu item shows the shortcut; `ig_shortcut`, called every frame outside the menu, reads the keys (cmd+s on
 macOS). [Menus and shortcuts](/guide/menus) has the rules.
 
+### Open a file
+
+<<< @/examples/snippets/cb_open-open.F90{fortran}
+
+The system's dialog in a window; a path field where there is none (remote mode: `cb_open --remote PORT`). The answer
+arrives on a later frame: poll it every frame. [File dialogs](/guide/frame-loop#file-dialogs) has the details. (No
+recording: the system's dialog is drawn outside the program's frame.)
+
 ### Ask before discarding changes
 
 <<< @/examples/snippets/cb_quit-quit.F90{fortran}

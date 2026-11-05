@@ -110,6 +110,11 @@ void   fig_set_confirm_quit(int on);
 int    fig_quit_requested(void);
 void   fig_quit(void);
 int    fig_input_quit(void);
+/* File dialogs (window mode): kind 0 open, 1 save, 2 folder; filters "name|pattern" separated by newlines. The result
+ * is polled by id: state 0 open, 1 chosen (path), 2 cancelled, 3 failed. */
+int    fig_file_dialog(int kind, const char *id, int id_len, const char *filters, int filters_len, const char *path,
+                       int path_len);
+int    fig_file_dialog_result(const char *id, int id_len, char *buf, int buf_len, int *state, int *path_len);
 /* A key chord ("ctrl+s": modifiers and one key, by the names of fig_input_key, joined by '+'). */
 int    fig_key_chord(const char *keys, int keys_len, int *chord);
 /* A text field over a caller-owned NUL-terminated buffer of buf_size bytes (InputText without a callback); 1 when

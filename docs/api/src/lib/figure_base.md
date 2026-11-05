@@ -49,6 +49,7 @@ subroutine figure_check(status, stat)
 ```mermaid
 flowchart TD
   figure_fail["figure_fail"] --> figure_check["figure_check"]
+  file_dialog_result["file_dialog_result"] --> figure_check["figure_check"]
   get_color["get_color"] --> figure_check["figure_check"]
   get_var["get_var"] --> figure_check["figure_check"]
   ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_check["figure_check"]
@@ -93,6 +94,7 @@ flowchart TD
   set_font["set_font"] --> figure_check["figure_check"]
   set_style["set_style"] --> figure_check["figure_check"]
   set_var["set_var"] --> figure_check["figure_check"]
+  show_file_dialog["show_file_dialog"] --> figure_check["figure_check"]
   test_click["test_click"] --> figure_check["figure_check"]
   test_drag["test_drag"] --> figure_check["figure_check"]
   test_key["test_key"] --> figure_check["figure_check"]

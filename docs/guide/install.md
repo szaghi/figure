@@ -33,12 +33,16 @@ Windows (MSYS2 UCRT64 gfortran) are built and tested by the `Platforms` CI workf
 
 SDL3 enables its X11, Wayland and DBus support only when their development packages are present when CMake
 configures it. Without them it silently builds X11 only, and without DBus there are no XDG-portal file dialogs
-(FIGURE does not expose file dialogs yet). On Ubuntu 24.04:
+([file dialogs](frame-loop#file-dialogs) then need `zenity` at run time). On Ubuntu 24.04:
 
 ```bash
 sudo apt install libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
                  libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
 ```
+
+**File dialogs at run time** (`app%open_file_dialog` and the others): SDL3 asks the desktop's XDG portal through DBus
+(`xdg-desktop-portal` with a backend such as `xdg-desktop-portal-gtk`, present on most desktops and on WSLg) or, when
+there is none, runs `zenity`. Without either, the dialog fails with that reason in its status.
 
 If you install them after a first native build, rebuild it with `--clean` (the CMake cache keeps the old choice).
 SDL3 refuses to configure on Linux without X11 or Wayland headers; a build without any video driver, for the

@@ -25,6 +25,8 @@
 #include <cmath>
 #include <exception>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -1571,6 +1573,116 @@ ImGuiKey key_by_name(const std::string &n) {
    for (const auto &k : named)
       if (n == k.first) return k.second;
    return ImGuiKey_None;
+}
+
+// File dialogs (SDL3's native ones), window mode only. The dialog is asynchronous: its callback, possibly on another
+// thread, stores the result in the dialog's entry and wakes the loop with an SDL event; the program polls the entry
+// by its id (fig_file_dialog_result) on later frames, so the interface keeps drawing meanwhile. An entry lives from
+// fig_file_dialog to the poll that returns its result; its filters live as long, as SDL requires.
+struct file_dialog_t {
+   int                               state = 0; // 0 pending, 1 chosen, 2 cancelled, 3 failed
+   std::string                       path, error;
+   std::vector<std::string>          names, patterns;
+   std::vector<SDL_DialogFileFilter> filters;
+};
+std::mutex                                            dialogs_mutex;
+std::map<std::string, std::unique_ptr<file_dialog_t>> dialogs;
+
+void SDLCALL file_dialog_done(void *userdata, const char *const *filelist, int) {
+   auto *d = static_cast<file_dialog_t *>(userdata);
+   {
+      std::lock_guard<std::mutex> lock(dialogs_mutex);
+      if (!filelist) {
+         d->state = 3;
+         d->error = SDL_GetError();
+      } else if (!*filelist) {
+         d->state = 2;
+      } else {
+         d->state = 1;
+         d->path = *filelist;
+      }
+   }
+   SDL_Event e;
+   SDL_zero(e);
+   e.type = SDL_EVENT_USER; // wake a lazy loop: the result is drawn at once
+   SDL_PushEvent(&e);
+}
+
+// kind: 0 open a file, 1 save a file, 2 open a folder. filters: "name|pattern" entries separated by newlines, the pattern
+// as SDL wants it ("input;inp", "*" for any). An id with a dialog still open is refused.
+int fig_file_dialog(int kind, const char *id, int id_len, const char *filters, int filters_len, const char *path,
+                    int path_len) {
+   FIG_TRY
+   if (st.m != mode::window)
+      return fail(FIG_ERR_STATE, "file dialogs need a window: in remote and headless modes ask for the path in a field");
+   if (kind < 0 || kind > 2) return fail(FIG_ERR_ARGUMENT, "file dialog: unknown kind");
+   const std::string key(id, id_len > 0 ? static_cast<size_t>(id_len) : 0);
+   auto d = std::make_unique<file_dialog_t>();
+   const std::string f(filters, filters_len > 0 ? static_cast<size_t>(filters_len) : 0);
+   for (size_t start = 0; start < f.size();) {
+      size_t end = f.find('\n', start);
+      if (end == std::string::npos) end = f.size();
+      const std::string entry = f.substr(start, end - start);
+      const size_t bar = entry.find('|');
+      if (!entry.empty()) {
+         if (bar == std::string::npos)
+            return fail(FIG_ERR_ARGUMENT, "file dialog: a filter is \"name|pattern\", got \"" + entry + "\"");
+         d->names.push_back(entry.substr(0, bar));
+         d->patterns.push_back(entry.substr(bar + 1));
+      }
+      start = end + 1;
+   }
+   for (size_t i = 0; i < d->names.size(); ++i) d->filters.push_back({d->names[i].c_str(), d->patterns[i].c_str()});
+   const std::string where(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
+   file_dialog_t *raw = d.get();
+   {
+      std::lock_guard<std::mutex> lock(dialogs_mutex);
+      auto it = dialogs.find(key);
+      if (it != dialogs.end() && it->second->state == 0)
+         return fail(FIG_ERR_STATE, "file dialog \"" + key + "\" is already open");
+      dialogs[key] = std::move(d);
+   }
+   const SDL_DialogFileFilter *fl = raw->filters.empty() ? nullptr : raw->filters.data();
+   const int nf = static_cast<int>(raw->filters.size());
+   const char *loc = where.empty() ? nullptr : where.c_str(); // SDL copies it
+   if (kind == 0) SDL_ShowOpenFileDialog(file_dialog_done, raw, st.window, fl, nf, loc, false);
+   else if (kind == 1) SDL_ShowSaveFileDialog(file_dialog_done, raw, st.window, fl, nf, loc);
+   else SDL_ShowOpenFolderDialog(file_dialog_done, raw, st.window, loc, false);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+// The result of dialog id: state 0 still open, 1 chosen (the path in buf, its full length in path_len, cut to buf_len),
+// 2 cancelled, 3 failed (FIG_ERR_FAILED, with SDL's message); an id with no dialog is state 0, so a program can poll
+// every frame. A final state is returned once: the entry is then forgotten.
+int fig_file_dialog_result(const char *id, int id_len, char *buf, int buf_len, int *state, int *path_len) {
+   const std::string key(id, id_len > 0 ? static_cast<size_t>(id_len) : 0);
+   *state = 0;
+   *path_len = 0;
+   std::unique_ptr<file_dialog_t> done;
+   {
+      std::lock_guard<std::mutex> lock(dialogs_mutex);
+      auto it = dialogs.find(key);
+      if (it == dialogs.end()) return FIG_OK; // no dialog with this id: nothing to report (state 0)
+      *state = it->second->state;
+      if (*state == 0) return FIG_OK;
+      done = std::move(it->second);
+      dialogs.erase(it);
+   }
+   if (*state == 1) {
+      *path_len = static_cast<int>(done->path.size());
+      const int n = std::min(*path_len, buf_len);
+      if (n > 0) std::memcpy(buf, done->path.data(), static_cast<size_t>(n));
+   }
+   if (*state == 3) {
+#if defined(__linux__)
+      return fail(FIG_ERR_FAILED, "file dialog: " + done->error +
+                                  " (Linux needs xdg-desktop-portal or zenity at run time)");
+#else
+      return fail(FIG_ERR_FAILED, "file dialog: " + done->error);
+#endif
+   }
+   return FIG_OK;
 }
 
 // A key chord from its name, "ctrl+s", "ctrl+shift+f5", "escape": modifiers (ctrl, shift, alt, super) and one key, by

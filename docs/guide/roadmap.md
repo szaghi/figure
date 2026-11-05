@@ -115,5 +115,6 @@ editors of its input files.
 - **Testing:** `test_click` and `test_drag` let the pointer rest on the item before pressing, as a user does: done.
 - **Popups and modals, a confirmation before quitting** ([Menus, popups and shortcuts](menus#popups-and-modals)):
   done.
-- Still to come ([issue #2](https://github.com/szaghi/figure/issues/2)): file dialogs, axis tick formats, subplots,
-  docking a window that appears later.
+- **File dialogs** ([File dialogs](frame-loop#file-dialogs)): the system's own, asynchronous, window mode: done.
+- Still to come ([issue #2](https://github.com/szaghi/figure/issues/2)): axis tick formats, subplots, docking a window
+  that appears later.

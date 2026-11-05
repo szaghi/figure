@@ -135,6 +135,30 @@ It reports the renderer (the WSL GPU through D3D12, or Mesa software rendering) 
 one core, with its resolution. The kernel counts CPU time in clock ticks, usually 10 ms: use windows of 60 s or more
 (the default is 10 s, after a 4 s warm-up) to resolve sub-percent costs.
 
+## File dialogs
+
+The system's own dialogs, to choose a file to open, where to save, or a folder:
+
+<<< @/examples/snippets/cb_open-open.F90{fortran}
+
+| Procedure | Notes |
+|---|---|
+| `app%open_file_dialog(id [, filters] [, default_path] [, stat])` | Choose an existing file. |
+| `app%save_file_dialog(id [, filters] [, default_path] [, stat])` | Choose where to save: a new or an existing file. |
+| `app%open_folder_dialog(id [, default_path] [, stat])` | Choose a folder. |
+| `app%file_dialog_result(id, path, done [, cancelled] [, stat])` | The answer: `done` once the user answered, then `path`, or `cancelled`. |
+
+- **Asynchronous.** The dialog does not block the program: the interface keeps drawing, and the answer arrives on a
+  later frame. Poll `file_dialog_result` every frame; it is `done` once per answer, with nothing to report before or
+  after. `id` is any text: it names the dialog whose answer is read.
+- **Filters** are entries `'name|pattern'`, the pattern being extensions separated by `;`: `'Input files|input;inp'`,
+  `'All files|*'`. Platforms may let the user ignore them.
+- **Window mode only.** In remote and headless modes there is no desktop to show a dialog on: the calls return
+  `FIG_ERR_STATE`, and the program asks for the path in a text field instead, as above.
+- **Platforms.** SDL3 shows the platform's dialog: Windows' and macOS' own; on Linux the desktop portal or `zenity`
+  ([run-time needs](install#linux-packages)). A dialog that cannot be shown answers `done` with `FIG_ERR_FAILED` and
+  the reason.
+
 ## Content scale
 
 `content_scale()` returns the display content scale FIGURE read at `init` (1 on standard displays, 2 on most high-DPI
