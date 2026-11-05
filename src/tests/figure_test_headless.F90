@@ -9,17 +9,18 @@ use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, 
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_last_error, ig_begin, ig_button, &
                    ig_checkbox, ig_end, &
                    ig_item_rect, ig_set_next_window, ImPlotMarker_Circle, ip_bars, ip_begin_plot, ip_end_plot, ip_line, &
-                   ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object, FIG_ERR_STATE, ig_image, ip_heatmap,   &
+                   ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded, ip_spec, plot_spec_object, FIG_ERR_STATE,   &
+                   ig_image, ip_heatmap,                                                                               &
                    ip_image, ImPlotColormap_Viridis, texture_object, ig_dock_id, ig_dock_layout_begin,             &
                    ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_window_dock,                &
                    ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ip_get_style_color,  &
                    ip_get_style_var, ip_set_style_color, ip_set_style_var, ig_pop_font, ig_push_font,         &
                    ig_pop_style_color, ig_pop_style_var, ig_push_style_color, ig_push_style_var, ig_text,      &
                    ImGuiWindowFlags_NoTitleBar, ig_slider, ig_input
-use figure_cimgui, only : im_vec4, igGetFontSize, igGetStyleColorVec4
+use figure_cimgui, only : im_vec2, im_vec4, igGetFontSize, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, &
-                           ImPlot_GetPlotLimits
+                           ImPlot_GetPlotLimits, ImPlot_PlotToPixels_double
 use figure_testing, only : test_click, test_drag, test_key, test_type, test_window_rect
 
 implicit none
@@ -37,7 +38,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(44)  !< Per-check outcome.
+logical                   :: test_passed(45)  !< Per-check outcome.
 real(real64)              :: long_x(100000)   !< A line over 65536 vertices: abscissae.
 real(real64)              :: long_y(100000)   !< Its ordinates.
 integer(int32)            :: long_frames      !< Frames drawn with it.
@@ -56,6 +57,7 @@ integer(int32)            :: stat_values      !< Status of the uniform-x line.
 integer(int32)            :: stat_bad_row     !< Status of a row out of range.
 type(im_plot_rect)        :: limits           !< Limits of the plot of row 2, after ImPlot's fit.
 type(im_plot_rect)        :: grown            !< Limits of the auto-fit plot of growing data, last frame.
+type(im_vec2)             :: log_px(3)        !< Pixels of y = 1e-6, 1e-3, 1 on the logarithmic axis.
 type(im_vec4)             :: window_bg        !< Window background of the default style (a copy).
 type(im_vec4), pointer    :: style_color      !< A colour of the current style, in Dear ImGui's memory.
 integer(int32)            :: stat_style(2)    !< set_style('dark'), set_style('bogus').
@@ -126,6 +128,7 @@ stat_r32 = -1_int32
 stat_empty = -1_int32
 stat_items = -1_int32
 stat_row = -1_int32
+log_px = im_vec2(0.0_c_float, 0.0_c_float)
 stat_values = -1_int32
 m(1,:) = 0.5_real64 + 0.5_real64 * y
 m(2,:) = 10.5_real64 + 0.5_real64 * y
@@ -245,6 +248,20 @@ do frame = 1_int32, 24_int32
          call ip_setup_axes('x', 'y', auto_fit=.true.)
          call ip_line('grows', [0.0_real64, 10.0_real64 * frame], [0.0_real64, real(frame, real64)])
          call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, grown)
+         call ip_end_plot()
+      endif
+   endif
+   call ig_end()
+   ! ylog: on [1e-6, 1], 1e-3 must sit halfway between the ends in pixels (on a linear axis it would sit at the bottom)
+   call ig_set_next_window(440.0_real64, 340.0_real64, 340.0_real64, 240.0_real64, always=.true.)
+   if (ig_begin('Log')) then
+      if (ip_begin_plot('log')) then
+         call ip_setup_axes('x', 'residual', ylog=.true.)
+         call ip_setup_axes_limits(0.0_real64, 1.0_real64, 1.0e-6_real64, 1.0_real64, always=.true.)
+         call ip_line('residual', [0.0_real64, 1.0_real64], [1.0_real64, 1.0e-6_real64])
+         log_px(1) = ImPlot_PlotToPixels_double(0.5_c_double, 1.0e-6_c_double, -1_c_int, -1_c_int)
+         log_px(2) = ImPlot_PlotToPixels_double(0.5_c_double, 1.0e-3_c_double, -1_c_int, -1_c_int)
+         log_px(3) = ImPlot_PlotToPixels_double(0.5_c_double, 1.0_c_double, -1_c_int, -1_c_int)
          call ip_end_plot()
       endif
    endif
@@ -430,10 +447,12 @@ test_passed(42) = abs(typed - 2.5_real64) < 1.0e-9_real64                       
 test_passed(43) = win_found(1) .and. .not. win_found(2) .and.                                                      &
                   all(abs(win - [20.0_real64, 20.0_real64, 420.0_real64, 520.0_real64]) < 1.0e-6_real64) ! window lookup
 test_passed(44) = long_frames == 3_int32                                           ! a list over 65536 vertices
+test_passed(45) = log_px(1)%y > log_px(3)%y + 50.0_c_float .and. &
+                  abs(log_px(2)%y - 0.5_c_float * (log_px(1)%y + log_px(3)%y)) < 1.0_c_float ! ylog: 1e-3 halfway
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
                   stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
 
-write(output_unit, '(A,44L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,*(L2))') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

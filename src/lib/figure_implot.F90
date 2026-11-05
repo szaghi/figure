@@ -30,8 +30,9 @@ use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_Begin
                            ImPlot_SetupAxes, ImPlot_ColormapScale, ImPlot_PlotHeatmap_doublePtr,                   &
                            ImPlot_PlotHeatmap_FloatPtr, ImPlot_PlotImage, ImPlot_PopColormap,                       &
                            ImPlot_PushColormap_PlotColormap, im_plot_point, im_plot_rect, ImPlot_GetPlotLimits,     &
-                           ImPlot_GetPlotSize, ImPlot_SetupAxesLimits
-use figure_cimplot_enums, only : ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_None, ImPlotCond_Always, ImPlotCond_Once,     &
+                           ImPlot_GetPlotSize, ImPlot_SetupAxesLimits, ImPlot_SetupAxisScale_PlotScale
+use figure_cimplot_enums, only : ImAxis_X1, ImAxis_Y1, ImPlotScale_Log10,                                             &
+                                 ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_None, ImPlotCond_Always, ImPlotCond_Once,     &
                                  ImPlotFlags_Equal, ImPlotFlags_None,                                              &
                                  ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square,  &
                                  ImPlotMarker_Diamond, ImPlotMarker_Up, ImPlotMarker_Down, ImPlotMarker_Left,     &
@@ -127,12 +128,15 @@ contains
    call ImPlot_EndPlot()
    endsubroutine ip_end_plot
 
-   subroutine ip_setup_axes(xlabel, ylabel, auto_fit)
+   subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog)
    !< Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes fit the data every frame (data
-   !< that grows while the user watches), instead of once on first use.
+   !< that grows while the user watches), instead of once on first use. `xlog`/`ylog`: a base-10 logarithmic axis
+   !< (values <= 0 are not shown on it).
    character(len=*), intent(in)           :: xlabel   !< X label.
    character(len=*), intent(in)           :: ylabel   !< Y label.
    logical,          intent(in), optional :: auto_fit !< Fit the axes to the data every frame (default: first use only).
+   logical,          intent(in), optional :: xlog     !< Logarithmic x axis (default: linear).
+   logical,          intent(in), optional :: ylog     !< Logarithmic y axis (default: linear).
    integer(c_int)                         :: flags    !< ImPlotAxisFlags of both axes.
 
    flags = ImPlotAxisFlags_None
@@ -140,6 +144,12 @@ contains
       if (auto_fit) flags = ImPlotAxisFlags_AutoFit
    endif
    call ImPlot_SetupAxes(cstr(xlabel), cstr(ylabel), flags, flags)
+   if (present(xlog)) then
+      if (xlog) call ImPlot_SetupAxisScale_PlotScale(ImAxis_X1, ImPlotScale_Log10)
+   endif
+   if (present(ylog)) then
+      if (ylog) call ImPlot_SetupAxisScale_PlotScale(ImAxis_Y1, ImPlotScale_Log10)
+   endif
    endsubroutine ip_setup_axes
 
    subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)

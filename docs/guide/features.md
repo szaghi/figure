@@ -83,7 +83,7 @@ Details: [Styles](styles).
 | Procedure | Purpose |
 |---|---|
 | `ip_begin_plot(title [, width] [, height] [, equal])` → `logical` | begin a plot; `.true.` when visible |
-| `ip_setup_axes(xlabel, ylabel [, auto_fit])` | axis labels; the axes fit the data on first use, every frame with `auto_fit=.true.` |
+| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog])` | axis labels; the axes fit the data on first use, every frame with `auto_fit=.true.`; `xlog`/`ylog`: logarithmic axes |
 | `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | initial axis ranges |
 | `ip_plot_limits(...)`, `ip_plot_size(...)` | the ranges the user panned and zoomed to; the plot's size in pixels |
 | `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))` |
