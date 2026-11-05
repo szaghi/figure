@@ -13,7 +13,7 @@ Procedures that can fail take an optional `integer(int32), intent(out) :: stat`:
 - **without `stat`**, a failure writes `FIGURE error: <message>` to standard error and stops the program with
   `error stop 1`.
 
-The procedures with `stat` are `app%init`, `app%init_headless`, `app%next_frame` and `ip_line`. The others cannot
+Every procedure that can fail takes an optional `stat` (the [feature map](features) shows which); the others cannot
 fail in a way FIGURE detects (`destroy` is safe in any state).
 
 <<< @/examples/snippets/cb_stat-stat.F90{fortran}

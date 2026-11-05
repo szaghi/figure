@@ -4,7 +4,7 @@ title: Contributing
 
 # Contributing
 
-FIGURE is at an early stage (milestone M1); the API changes freely until the [roadmap](roadmap) settles it.
+FIGURE is approaching its first release, v0.1.0; the API can still change until then ([roadmap](roadmap)).
 
 ## Reporting issues
 

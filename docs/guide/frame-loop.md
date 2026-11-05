@@ -11,7 +11,7 @@ A program has one `app_object`. Its life is one loop:
 <<< @/examples/snippets/tut01_window-loop.F90{fortran}
 
 - `init(title, width, height [, vsync] [, stat])` opens a resizable window and creates the Dear ImGui and ImPlot
-  contexts, with the dark style and keyboard navigation enabled. `vsync` (default `.true.`) synchronizes the buffer
+  contexts, with the `seal` style, docking and keyboard navigation enabled. `vsync` (default `.true.`) synchronizes the buffer
   swap with the display refresh. A second `init` without `destroy` fails with `FIG_ERR_STATE`; a non-positive size
   with `FIG_ERR_ARGUMENT`.
 - `init_headless(width, height [, stat])` creates the contexts on a virtual display, without window or GPU: see

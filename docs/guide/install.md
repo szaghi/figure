@@ -6,7 +6,8 @@ title: Installation
 
 FIGURE has two layers, built separately:
 
-- the **native layer** (C and C++): Dear ImGui, ImPlot, cimgui, cimplot, SDL3 and FIGURE's glue, built by CMake into
+- the **native layer** (C and C++): Dear ImGui, ImPlot, cimgui, cimplot, miniz, SDL3 and FIGURE's glue, built by CMake
+  into
   two static libraries, `lib/libfigure_native.a` and `lib/libSDL3.a`;
 - the **Fortran library** (`src/lib`), built by [FoBiS](https://github.com/szaghi/FoBiS) (the primary build) or
   [fpm](https://fpm.fortran-lang.org). Neither compiles C++ in this repository: both only link the native layer.
@@ -21,7 +22,8 @@ FIGURE has two layers, built separately:
 - CMake 3.24 or newer; Ninja is used when present.
 - Network access for the first native build: CMake downloads the pinned sources.
 - FoBiS 3.8 or newer, or fpm.
-- Python 3.11 or newer, only for `scripts/check_sync.py` and `scripts/measure_idle.py`.
+- Python 3.11 or newer, for the scripts: `check_sync.py` (which `fpm.sh` runs), the remote test's client, the fpm
+  package and the measurement and documentation scripts.
 
 Platforms: Linux is verified locally (X11 and Wayland, under WSL2/WSLg). macOS (gfortran with Apple clang) and
 Windows (MSYS2 UCRT64 gfortran) are built and tested by the `Platforms` CI workflow (see
@@ -82,12 +84,12 @@ fobis rule --ex sync                                          # fobos and fpm.to
 
 | Mode | Builds |
 |---|---|
-| `tests-gnu`, `tests-nvf` | the headless test, `exe/figure_test_headless` |
+| `tests-gnu`, `tests-nvf` | the tests: `exe/figure_test_headless`, `figure_test_layout`, `figure_test_remote`, `figure_test_themes` |
 | `tests-gnu-debug` | the same with runtime checks and floating-point traps |
-| `examples-gnu`, `examples-nvf` | the example programs (`exe/figure_hello`, `exe/figure_mandelbrot`, `exe/figure_bench_texture`), with OpenMP |
+| `examples-gnu`, `examples-nvf` | the example programs (`exe/figure_hello`, `exe/figure_mandelbrot`, `exe/figure_bench_texture`, `exe/figure_bench_redraw`), with OpenMP |
 | `figure-static-gnu`, `figure-static-nvf` | the static library `lib/libfigure.a`, modules in `lib/mod` |
 
-Two rules: `fobis rule --ex native` builds the native layer, `fobis rule --ex sync` checks fobos against
+Two rules matter here: `fobis rule --ex native` builds the native layer, `fobis rule --ex sync` checks fobos against
 `fpm.toml`.
 
 ::: warning Switching compilers

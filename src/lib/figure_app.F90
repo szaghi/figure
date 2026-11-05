@@ -98,7 +98,7 @@ contains
    !< frame is sent only once the previous one has left: with a slow client the newest frame goes, the ones in between
    !< are skipped. A frame equal to the last one sent is not sent again. Vertices travel in 12 bytes instead of 20, and
    !< `compress` deflates frames and textures: `'auto'` (default) while the client is the bottleneck (frames are being
-   !< skipped), `'always'`, or `'never'`; deflate costs about 7 ms of CPU per MB and saves 2.5 to 4 times.
+   !< skipped), `'always'`, or `'never'`; deflate costs about 7 ms of CPU per MB and shrinks frames 2.5 to 3.5 times.
    class(app_object), intent(inout)         :: self      !< Application.
    integer(int32),    intent(in),  optional :: port      !< Port (default 8080; 0: any free port).
    character(len=*),  intent(in),  optional :: host      !< Address to listen on (default 127.0.0.1).
@@ -230,7 +230,8 @@ contains
    !<
    !< `lines='okabe-ito'` replaces the style's line colours with Okabe and Ito's colour-blind-safe set. Each style is
    !< a theme file (`themes/<name>.toml`, embedded). The environment variable `FIGURE_STYLE` picks the style at
-   !< initialisation; this call overrides it. Sizes and fonts are kept; colours and variables changed by name are reset.
+   !< initialisation; this call overrides it. The font and its size are kept; every other colour and variable comes from
+   !< the style (base and theme file), so changes made by name are reset.
    class(app_object), intent(inout)         :: self  !< Application.
    character(len=*),  intent(in)            :: name  !< Style name.
    character(len=*),  intent(in),  optional :: lines !< Line palette: `'okabe-ito'` (default: the style's own).

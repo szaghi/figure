@@ -109,7 +109,8 @@ A column of a Fortran array is contiguous: ImPlot reads it in place.
 
 Items are drawn in call order: put shaded areas first so the lines stay visible. A spec built once outside the loop
 costs nothing per frame; one built inline (`spec=ip_spec(...)`) is rebuilt every frame, which is cheap but not free.
-The `x(::5)` sections are not contiguous: the compiler copies them (see the next recipe).
+The `x(::5)` sections are not contiguous: the compiler copies them (see
+[Plot the rows of a matrix](#plot-the-rows-of-a-matrix)).
 [Plots](/guide/plots#item-style) lists every `ip_spec` argument.
 
 ### Show a field and its colour scale

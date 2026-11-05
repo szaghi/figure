@@ -70,11 +70,13 @@ the application.
 Put the interface in a procedure that the application calls every frame, and call the same procedure from the test:
 chapter 5 of the [tutorial](/manual/tutorial/05-headless) does this with a module, `draw_panel`, and a state type.
 
-## The repository's test
+## The repository's tests
 
 `src/tests/figure_test_headless.F90` drives every widget and plot type through `figure_testing` (clicks, a drag, typing
 into a field), checks docking, styles, themes and fonts, headless; `src/tests/figure_test_themes.F90` measures the
-contrast of every built-in style:
+contrast of every built-in style; `figure_test_layout` checks that the Fortran mirrors of Dear ImGui's structures
+match the C++ ones, and `figure_test_remote` drives the remote mode end to end through a WebSocket client
+([Remote UI](remote#how-it-works)):
 
 ```bash
 fobis build --mode tests-gnu && exe/figure_test_headless

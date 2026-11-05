@@ -42,7 +42,7 @@ The [feature map](features) lists every public procedure.
 
 ## What it is not, yet
 
-Text input, docking and multiple viewports are not available, and only part of Dear ImGui's widgets have a Fortran
+Text input and multiple viewports are not available, and only part of Dear ImGui's widgets have a Fortran
 wrapper (the rest are reachable through the raw bindings). See [Known issues](known-issues) and the
 [roadmap](roadmap).
 

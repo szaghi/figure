@@ -42,5 +42,5 @@ software ([Installation](install#wsl2-wslg)).
 
 ## First build needs the network
 
-The native build downloads cimgui, cimplot and SDL3 (CMake `FetchContent`) the first time, and every FoBiS mode runs
+The native build downloads cimgui, cimplot, SDL3 and miniz (CMake `FetchContent`) the first time, and every FoBiS mode runs
 it first (a few seconds when nothing changed).

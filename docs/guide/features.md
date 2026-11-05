@@ -4,8 +4,9 @@ title: Feature map
 
 # Feature map
 
-`use figure` exports everything below. The modules it re-exports (`figure_app`, `figure_imgui`, `figure_implot`,
-`figure_base`) can also be used directly; `figure_c_native` and the generated raw modules (`figure_cimgui`,
+`use figure` exports everything below except the testing procedures (`use figure_testing`). The modules it re-exports
+(`figure_app`, `figure_imgui`, `figure_implot`, `figure_dock`, `figure_style`, `figure_texture`, `figure_base`) can
+also be used directly; `figure_c_native` and the generated raw modules (`figure_cimgui`,
 `figure_cimplot` and their `_enums`) are internal and change without notice ([Raw bindings](raw-bindings)).
 
 All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional arguments are in brackets.
@@ -14,7 +15,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 
 | Procedure | Purpose | Details |
 |---|---|---|
-| `app%init(title, width, height [, vsync] [, stat])` | open the window, create the ImGui and ImPlot contexts | [frame loop](frame-loop#the-application) |
+| `app%init(title, width, height [, vsync] [, stat] [, ini_file])` | open the window, create the ImGui and ImPlot contexts | [frame loop](frame-loop#the-application) |
 | `app%init_headless(width, height [, stat])` | contexts only, on a virtual display: no window, no GPU | [headless testing](testing) |
 | `app%init_remote([port] [, host] ...)` | the interface in a web browser: no window, display or GPU on the program's side | [remote UI](remote) |
 | `app%next_frame([stat])` → `logical` | render the open frame, wait for input, open the next; `.false.` on quit | [frame loop](frame-loop#next-frame) |
@@ -82,7 +83,7 @@ Details: [Styles](styles).
 | Procedure | Purpose |
 |---|---|
 | `ip_begin_plot(title [, width] [, height] [, equal])` → `logical` | begin a plot; `.true.` when visible |
-| `ip_setup_axes(xlabel, ylabel [, auto_fit])` | axis labels; axes refit to the data every frame |
+| `ip_setup_axes(xlabel, ylabel [, auto_fit])` | axis labels; the axes fit the data on first use, every frame with `auto_fit=.true.` |
 | `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | initial axis ranges |
 | `ip_plot_limits(...)`, `ip_plot_size(...)` | the ranges the user panned and zoomed to; the plot's size in pixels |
 | `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))` |
@@ -102,7 +103,7 @@ Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots).
 
 | Procedure | Purpose |
 |---|---|
-| `tex%init(width, height [, smooth])`, `tex%update(rgba)`, `tex%destroy()` | an RGBA texture on the GPU, `integer(int8) :: rgba(4, width, height)` uploaded in place |
+| `tex%init(width, height [, smooth] [, stat])`, `tex%update(rgba [, stat])`, `tex%destroy()` | an RGBA texture on the GPU, `integer(int8) :: rgba(4, width, height)` uploaded in place |
 | `tex%width()`, `tex%height()` → `integer(int32)`, `tex%is_initialized()` → `logical` | its size (0 before `init`); whether it exists |
 | `ig_image(tex [, width, height])` | the texture in a window, pixel row 1 at the top |
 

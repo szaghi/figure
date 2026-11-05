@@ -37,8 +37,9 @@ Dear ImGui's own styles are measured, not held to one: `dark` reaches only 3:1 o
 
 The environment variable `FIGURE_STYLE` picks the style at initialisation, without changing the program
 (`FIGURE_STYLE=paper exe/figure_hello`); a `set_style` call in the program comes later and wins. An unknown name or
-palette is `FIG_ERR_ARGUMENT` (or a stop, without `stat`). Sizes, spacing and fonts are kept; colours and variables
-changed by name (below) or through the raw bindings are reset. Heatmaps are unaffected: their colormap is the one
+palette is `FIG_ERR_ARGUMENT` (or a stop, without `stat`). The font and its size are kept; every other colour and variable
+comes from the style (its base and its theme file), so changes made by name (below) or through the raw bindings are
+reset. Heatmaps are unaffected: their colormap is the one
 passed to `ip_heatmap` (the line colours of a style are a qualitative colormap, not meant for fields). In remote mode
 the browser takes the style's background too. Every picture of this documentation is recorded in the default style,
 `'seal'`; the [gallery](#gallery) shows the others.
@@ -149,7 +150,7 @@ Every named style is a small text file in the repository, `themes/<name>.toml`, 
 native layer is built: adding a file there adds a style. The format is a subset of TOML:
 
 ```toml
-# FIGURE theme "seal": ink windows, paper text, one vermilion (the default).
+# A theme file, every kind of entry (themes/seal.toml, the default style, sets fewer).
 base = "dark"                                  # dark | light | classic: the Dear ImGui style it starts from
 font = "plex-sans"                             # plex-sans | proggy | a font file (default: the font in effect)
 font_size = 15                                 # logical pixels (default: the size in effect)

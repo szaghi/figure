@@ -37,7 +37,7 @@ Every item is generic over `real(real32)` and `real(real64)` (all its arrays of 
 | Procedure | Draws |
 |---|---|
 | `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))` |
-| `ip_line(label, y [, xscale] [, xstart] [, spec] [, stat])` | a line through `y(i)` at `x = xstart + (i - 1) xscale` (defaults 0 and 1) |
+| `ip_line(label, y [, xscale] [, xstart] [, spec] [, stat])` | a line through `y(i)` at `x = xstart + (i - 1) xscale` (defaults 1 and 0) |
 | `ip_line(label, y, row [, xscale] [, xstart] [, spec] [, stat])` | a line through the row `row` of the matrix `y`, read in place with a stride (no copy) |
 | `ip_scatter(label, x, y [, spec] [, stat])` | markers at `(x(i), y(i))` (a circle when `spec` sets no marker) |
 | `ip_bars(label, x, y, bar_size [, spec] [, stat])` | bars of height `y(i)` centred at `x(i)`, `bar_size` wide in x units (`real(real64)`, required: ImPlot has no default for it) |
@@ -96,7 +96,7 @@ Series of different sizes are an error (`FIG_ERR_ARGUMENT`, message `<item>: the
 
 ## Not bound yet
 
-Other items (error bars, stems, stairs, heatmaps, histograms, text, ...), axis setup (log scales, limits, ticks) and
-strided series without copies are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)),
+Other items (error bars, stems, stairs, histograms, text, ...) and axis setup beyond labels and limits (log scales,
+ticks) are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)),
 ([roadmap](roadmap)). In-place rows exist for `ip_line` only; the same `ImPlotSpec` stride serves the other items when
 they need it.

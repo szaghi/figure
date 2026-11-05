@@ -78,9 +78,10 @@ pictures it updates, and a log of the work. This page summarises it, after the m
 
 The scope of the first release, step by step in [issue #1](https://github.com/szaghi/figure/issues/1):
 
-- **Licence:** MIT; the third-party notices (step S0).
-- **Docking:** the docking branch of Dear ImGui; windows dock into one another as tabs and splits.
-- **Themes, fully customisable:**
+- **Licence:** MIT; the third-party notices: done.
+- **Docking:** the docking branch of Dear ImGui; windows dock into one another as tabs and splits, and programs set
+  layouts ([Docking](docking)): done.
+- **Themes, fully customisable** ([Styles](styles)): done.
   - every colour and size of Dear ImGui and ImPlot from Fortran;
   - themes as files, embedded, with a curated set (`seal`, `seal-light`, `paper`, `high-contrast`, colour-blind-safe
     line colours);
@@ -88,11 +89,14 @@ The scope of the first release, step by step in [issue #1](https://github.com/sz
   - fonts, with a bundled default;
   - window flags and scoped style changes;
   - a recorded theme gallery.
-- **Testing:** a public testing module for synthetic input.
+- **Testing:** a public testing module for synthetic input ([Headless testing](testing)): done.
 - **Performance:** the cost of continuous redraw measured locally and in remote mode (`scripts/measure_redraw.py`);
   remote frames skipped when unchanged, capped at 60 per second with one frame at most queued, sent with 12-byte
-  vertices and deflated when the link is the bottleneck: done ([bandwidth](remote#bandwidth)). A performance guide.
+  vertices and deflated when the link is the bottleneck; the [Performance](performance) guide: done.
 - **Remote security:** an access token in the URL, random by default ([Remote UI](remote#access-token)): done.
 - **fpm:** FIGURE usable as a dependency of other fpm projects: a self-contained package (fpm compiles the native
   layer itself, SDL3 from the system), published for each release as the tag `vX.Y.Z-fpm`
   ([FIGURE as an fpm dependency](install#figure-as-an-fpm-dependency)): done, first published with v0.1.0.
+- **Documentation:** every page checked against the code, every recording regenerated, the changelog, the README: in
+  progress.
+- **Release v0.1.0:** the tag, the GitHub release, the `v0.1.0-fpm` package.

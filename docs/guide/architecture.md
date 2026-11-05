@@ -10,6 +10,8 @@ flowchart TD
     FIG --> APP["figure_app<br/>app_object: window, frame loop, lazy redraw"]
     FIG --> IG["figure_imgui<br/>ig_* widgets"]
     FIG --> IP["figure_implot<br/>ip_* plots"]
+    FIG --> MORE["figure_dock, figure_style, figure_texture<br/>docking, styles and fonts, textures"]
+    MORE --> BASE
     APP --> BASE["figure_base<br/>stat / error stop, strings"]
     IG --> BASE
     IP --> BASE
@@ -23,13 +25,15 @@ flowchart TD
     CIM --> CPP["Dear ImGui 1.93.1 WIP (docking) + ImPlot 1.2 WIP<br/>C++"]
     GLUE --> CPP
     GLUE --> SDL["SDL3 + OpenGL 3<br/>window, input, GL context"]
+    GLUE --> REMOTE["figure_remote.cpp<br/>HTTP + WebSocket server: the UI in a browser"]
     CPP --> BACK["imgui_impl_sdl3 + imgui_impl_opengl3<br/>backends"]
     BACK --> SDL
 ```
 
 ## Layers
 
-- **Fortran API** (`figure`, `figure_app`, `figure_imgui`, `figure_implot`, `figure_base`): Fortran arguments and
+- **Fortran API** (`figure`, `figure_app`, `figure_imgui`, `figure_implot`, `figure_dock`, `figure_style`,
+  `figure_texture`, `figure_base`; `figure_testing` apart): Fortran arguments and
   kinds (`int32`, `real32`, `real64`, `logical`, `character(len=*)`), optional arguments, generic interfaces. Strings
   are converted here (NUL-terminated for cimgui and cimplot), `logical` to `c_bool` and back, values copied into C
   locals for the call.
@@ -73,7 +77,7 @@ dependency on `libGL` or `opengl32`.
 
 ## Lifecycle
 
-The native layer owns the lifecycle state (not initialized, window, headless; frame open or not) and rejects
+The native layer owns the lifecycle state (not initialized, window, headless, remote; frame open or not) and rejects
 out-of-order calls with `FIG_ERR_STATE`. `app_object` mirrors only whether a frame is open, because `next_frame` must
 know whether to close one before opening the next.
 
@@ -99,5 +103,6 @@ sequenceDiagram
 The native layer is built once by CMake (`scripts/build_native.sh`): static libraries, pinned versions fetched with
 `FetchContent`, compiled with the same configuration cimgui and cimplot were generated with (`cimconfig.h`,
 `IMGUI_DISABLE_OBSOLETE_FUNCTIONS`), so that their C structures match the C++ ones bit for bit. The Fortran library
-is built by FoBiS or fpm, which only link `figure_native SDL3 stdc++ dl pthread m`. `scripts/check_sync.py` checks
+is built by FoBiS or fpm, which only link `figure_native`, `SDL3` and the
+platform's libraries (Linux: `stdc++ dl pthread m`; fpm also links `figure_platform`). `scripts/check_sync.py` checks
 that fobos and `fpm.toml` agree on those libraries and on the programs they build.

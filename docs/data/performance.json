@@ -101,5 +101,27 @@
    "now_mb_s": 37.699678,
    "deflated_mb_s": 9.868776
   }
+ ],
+ "fields": [
+  {
+   "case": "heatmap-512 local",
+   "cpu_ms_per_frame": 9.13
+  },
+  {
+   "case": "texture-512 local",
+   "cpu_ms_per_frame": 2.5
+  },
+  {
+   "case": "heatmap-512 remote",
+   "cpu_ms_per_frame": 37.07,
+   "bytes_per_frame": 13485952,
+   "bytes_per_s": 99149058
+  },
+  {
+   "case": "texture-512 remote",
+   "cpu_ms_per_frame": 1.09,
+   "bytes_per_frame": 4534,
+   "bytes_per_s": 10528641
+  }
  ]
 }

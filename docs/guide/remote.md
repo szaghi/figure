@@ -10,14 +10,14 @@ where computations run, a cluster node or a workstation without a screen, and ke
 GPUs); the browser only draws.
 
 ```fortran
-call app%init_remote(port=8080_int32)   ! prints: FIGURE: open http://localhost:8080/ in a web browser
+call app%init_remote(port=8080_int32)   ! prints: FIGURE: open http://localhost:8080/?token=... in a web browser
 do while (app%next_frame())
    ! the same widgets and plots as in a window
 enddo
 call app%destroy()
 ```
 
-Try it with the example: `exe/figure_hello --remote 8080`, then open `http://localhost:8080/`.
+Try it with the example: `exe/figure_hello --remote 8080`, then open the address it prints (with its `?token=...`).
 
 <Media name="remote" alt="The interface of figure_hello drawn by a web browser at localhost:8080" caption="figure_hello --remote, drawn by Chromium: the same pixels as the native window" />
 
@@ -36,7 +36,7 @@ Try it with the example: `exe/figure_hello --remote 8080`, then open `http://loc
 | `token` | the access token the address must carry (default: 32 random hex digits; `''`: none) |
 | `url` | the address to open, with the token: `http://localhost:8080/?token=...` |
 | `compress` | deflate frames and textures: `'auto'` (default) only while the browser cannot keep up, `'always'`, `'never'` |
-| `stat` | `FIG_ERR_FAILED` if the port cannot be opened (in use, not permitted) |
+| `stat` | `FIG_ERR_FAILED` if the port cannot be opened (in use, not permitted); `FIG_ERR_ARGUMENT` for a bad `port`, size, `compress` or `token`; `FIG_ERR_STATE` if FIGURE is already initialized |
 
 Everything else is unchanged: widgets, plots, heatmaps, textures (sent to the browser when they change), lazy redraw
 (the loop sleeps on the network instead of the window's events, and wakes up on the browser's input).
