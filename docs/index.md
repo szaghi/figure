@@ -36,23 +36,27 @@ features:
     link: /guide/widgets
     linkText: Widgets
   - title: Plots of Fortran arrays
-    details: ip_line passes real(real64) arrays straight to ImPlot as double*, without copies, for contiguous data.
+    details: Lines, scatter, bars, shaded areas, heatmaps and GPU textures, read from real32 or real64 arrays in place, without copies.
     link: /guide/plots
     linkText: Plots
   - title: Lazy redraw
     details: Once the UI settles, the loop sleeps until input arrives or a refresh period elapses; request_frames keeps it drawing while a computation advances.
     link: /guide/frame-loop
     linkText: The frame loop
+  - title: In a web browser
+    details: init_remote serves the same interface to a browser, behind an access token. No display or GPU on the program's side, a cluster node through an SSH tunnel; unchanged frames are not sent.
+    link: /guide/remote
+    linkText: Remote UI
+  - title: Docking and themes
+    details: Windows dock into one another as tabs and splits. Seven built-in styles, every colour and size by name, theme files, fonts.
+    link: /guide/styles
+    linkText: Styles
   - title: Headless tests
-    details: init_headless creates the contexts without a window or a GPU; synthetic mouse input clicks buttons frame by frame, so UI logic is tested in CI as is.
+    details: init_headless creates the contexts without a window or a GPU; the figure_testing module clicks, drags and types frame by frame, so UI logic is tested in CI as is.
     link: /guide/testing
     linkText: Headless testing
-  - title: C ABI end to end
-    details: Fortran calls C functions only, cimgui, cimplot and a small glue layer, through bind(C) interfaces. No C++ ABI crosses the language boundary.
-    link: /guide/architecture
-    linkText: Architecture
   - title: FoBiS and fpm
-    details: A static native layer built once by CMake; the Fortran library built by FoBiS (primary) or fpm, kept in sync by a check script.
+    details: Fortran calls C only, through bind(C). The native layer is built by CMake for FoBiS, or compiled by fpm itself from the package each release publishes (vX.Y.Z-fpm).
     link: /guide/install
     linkText: Install
 ---
