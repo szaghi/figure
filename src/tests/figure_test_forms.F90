@@ -6,13 +6,15 @@ program figure_test_forms
 !< the Fortran variables bound to the fields after the frames have consumed the input.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, ig_input_text, ig_item_rect,   &
-                   ig_set_next_item_width, ig_set_next_window, ig_tooltip, ImGuiInputTextFlags_CharsNoBlank
+                   ig_set_next_item_width, ig_set_next_window, ig_tooltip, ImGuiInputTextFlags_CharsNoBlank,   &
+                   ig_begin_disabled, ig_begin_tab, ig_begin_tab_bar, ig_collapsing_header, ig_end_disabled,   &
+                   ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_text
 use figure_testing, only : test_click, test_item_center, test_key, test_mouse_move, test_type, test_window_rect
 
 implicit none
-integer(int32), parameter :: FRAMES = 140_int32 !< Frames run.
+integer(int32), parameter :: FRAMES = 200_int32 !< Frames run.
 type(app_object)          :: app                !< Application.
-logical                   :: test_passed(9)     !< Per-check outcome.
+logical                   :: test_passed(15)    !< Per-check outcome.
 character(len=16)         :: grid_file          !< A text field.
 character(len=4)          :: short              !< A text field of capacity 4.
 character(len=12)         :: no_blank           !< A text field that refuses blanks.
@@ -31,6 +33,19 @@ real(real64)              :: combo_at(2)        !< Centre of the combo.
 real(real64)              :: help_at(2)         !< Centre of the button with a tooltip.
 logical                   :: tip_before         !< The tooltip window existed before the pointer rested on the button.
 logical                   :: tip_after          !< ... and after.
+logical                   :: hdr_open(2)        !< 'Advanced' header open: before and after its click.
+logical                   :: hdr_default        !< A default_open header is open on its first frame.
+logical                   :: tab_sel(2, 2)      !< (tab, before/after the click): tabs 'Grid' and 'Files' selected.
+real(real64)              :: hdr_at(2)          !< Centre of the 'Advanced' header.
+real(real64)              :: tab_at(2)          !< Centre of the 'Files' tab.
+real(real64)              :: row_at(2)          !< Centre of the field 'value' in id scope 2.
+real(real64)              :: off_at(2)          !< Centre of the disabled button.
+character(len=8)          :: row_value(2)       !< The same label in id scopes 1 and 2.
+integer(int32)            :: off_presses        !< Presses of the disabled button.
+logical                   :: is_open            !< 'Advanced' header open this frame.
+logical                   :: basics_open        !< 'Basics' header open this frame.
+logical                   :: sel(2)             !< Tabs selected this frame.
+integer(int32)            :: r                  !< Row.
 
 grid_file = 'CC/cc'
 short = ''
@@ -40,6 +55,11 @@ levels = 1_int32
 edits = 0_int32
 hint_edits = 0_int32
 narrow_width = 0.0_real64
+hdr_open = .true.
+hdr_default = .false.
+tab_sel = .false.
+row_value = ''
+off_presses = 0_int32
 models = ['nul', 'spa', 'des']
 model = 1_int32
 picks = 0_int32
@@ -70,6 +90,40 @@ do frame = 1_int32, FRAMES
       call test_item_center(help_at(1), help_at(2))
    endif
    call ig_end()
+   call ig_set_next_window(540.0_real64, 20.0_real64, 240.0_real64, 560.0_real64, always=.true.)
+   if (ig_begin('Groups')) then
+      is_open = ig_collapsing_header('Advanced')
+      call test_item_center(hdr_at(1), hdr_at(2))
+      if (is_open) call ig_text('hidden until opened')
+      if (frame == 1_int32) hdr_default = ig_collapsing_header('Basics', default_open=.true.)
+      if (frame > 1_int32) basics_open = ig_collapsing_header('Basics', default_open=.true.)
+      sel = .false.
+      if (ig_begin_tab_bar('sections')) then
+         sel(1) = ig_begin_tab('Grid')
+         if (sel(1)) then
+            call ig_text('grid parameters')
+            call ig_end_tab()
+         endif
+         sel(2) = ig_begin_tab('Files')
+         call test_item_center(tab_at(1), tab_at(2))
+         if (sel(2)) then
+            call ig_text('file parameters')
+            call ig_end_tab()
+         endif
+         call ig_end_tab_bar()
+      endif
+      do r = 1_int32, 2_int32                       ! the same label twice: told apart by the id scope
+         call ig_push_id(r)
+         if (ig_input_text('value', row_value(r))) continue
+         if (r == 2_int32) call test_item_center(row_at(1), row_at(2))
+         call ig_pop_id()
+      enddo
+      call ig_begin_disabled()
+      if (ig_button('disabled')) off_presses = off_presses + 1_int32
+      call test_item_center(off_at(1), off_at(2))
+      call ig_end_disabled()
+   endif
+   call ig_end()
    select case (frame)
    case (2_int32)
       call replace(1_int32, 'MESH/grid')
@@ -89,6 +143,23 @@ do frame = 1_int32, FRAMES
       call test_mouse_move(help_at(1), help_at(2))     ! rest on the button: the tooltip shows after the delay
    case (FRAMES)
       call test_window_rect('##Tooltip_00', x0, y0, x1, y1, found=tip_after)
+   case (140_int32)
+      hdr_open(1) = is_open
+      tab_sel(:, 1) = sel
+      call test_click(hdr_at(1), hdr_at(2))
+   case (144_int32)                                  ! tabs take a press only once hovered (Dear ImGui's overlap rule)
+      call test_mouse_move(tab_at(1), tab_at(2))
+   case (148_int32)
+      call test_click(tab_at(1), tab_at(2))
+   case (152_int32)
+      call test_click(row_at(1), row_at(2))
+      call test_type('two')
+      call test_key('enter')
+   case (166_int32)
+      call test_click(off_at(1), off_at(2))
+   case (175_int32)
+      hdr_open(2) = is_open
+      tab_sel(:, 2) = sel
    endselect
 enddo
 call app%destroy()
@@ -102,12 +173,20 @@ test_passed(6) = abs(narrow_width - 120.0_real64) < 0.5_real64                 !
 test_passed(7) = model == 2_int32 .and. picks == 1_int32                      ! combo: picked by keyboard, once
 test_passed(8) = .not. tip_before                                             ! no tooltip before resting on it
 test_passed(9) = tip_after                                                    ! the tooltip after resting on it
+test_passed(10) = .not. hdr_open(1) .and. hdr_open(2)                         ! header: closed, opened by a click
+test_passed(11) = hdr_default                                                 ! default_open: open at once
+test_passed(12) = tab_sel(1, 1) .and. .not. tab_sel(2, 1)                     ! the first tab selected at first
+test_passed(13) = tab_sel(2, 2) .and. .not. tab_sel(1, 2)                     ! the clicked tab selected after
+test_passed(14) = row_value(1) == '' .and. row_value(2) == 'two'              ! id scopes: only row 2 edited
+test_passed(15) = off_presses == 0_int32                                      ! a disabled button ignores clicks
 
 write(output_unit, '(A,*(L2))') 'figure_test_forms checks:', test_passed
 if (.not. all(test_passed)) then
    write(output_unit, '(A)') 'grid_file "'//trim(grid_file)//'", short "'//trim(short)//'", no_blank "'// &
                              trim(no_blank)//'"'
    write(output_unit, '(A,I0,A,F0.1,A,4(I0,1X))') 'levels ', levels, ', narrow width ', narrow_width, ', edits ', edits
+   write(output_unit, '(A,2L2,A,L2,A,4L2,A,A,A,A,A,I0)') 'header', hdr_open, ', default', hdr_default, ', tabs', &
+         tab_sel, ', rows "', trim(row_value(1)), '" "', trim(row_value(2)), '", disabled presses ', off_presses
    write(output_unit, '(A,I0,A,I0,A,2L2)') 'model ', model, ', picks ', picks, ', tooltip before/after', tip_before, &
                                           tip_after
 endif
