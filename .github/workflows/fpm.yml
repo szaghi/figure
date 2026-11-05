@@ -62,8 +62,10 @@ jobs:
 
     - name: Publish the tag
       run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        # global: the package is committed in a repository of its own (and a dispatch for an older tag runs that
+        # tag's scripts/fpm_publish.sh, which does not carry a local identity over)
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
         if git ls-remote --exit-code --tags origin "refs/tags/${TAG}-fpm" > /dev/null; then
           echo "${TAG}-fpm already published: not replaced"
         else

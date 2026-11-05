@@ -30,6 +30,11 @@ work="$(mktemp -d)"
 [[ $dry -eq 1 ]] || trap 'rm -rf "$work"' EXIT
 python3 "$root/scripts/fpm_package.py" "$work/package" --version "${tag#v}" --fetch "$work/sources"
 source_commit="$(git -C "$root" rev-parse --short=12 HEAD)"
+# the package's own repository does not inherit this repository's local config: carry the identity over
+name="$(git -C "$root" config user.name || true)"
+email="$(git -C "$root" config user.email || true)"
+[[ -n "$name" && -n "$email" ]] || { echo "fpm_publish.sh: set git's user.name and user.email (the commit's author)" >&2; exit 1; }
+export GIT_AUTHOR_NAME="$name" GIT_AUTHOR_EMAIL="$email" GIT_COMMITTER_NAME="$name" GIT_COMMITTER_EMAIL="$email"
 cd "$work/package"
 git init --quiet
 git checkout --quiet -b fpm-package
