@@ -3,7 +3,8 @@
 //
 //    base = "dark"                        dark | light | classic: Dear ImGui's style the theme starts from
 //    background = "#14120f"               the window background behind the windows (default: base's)
-//    lines = ["#e8664c", "#e9e2d4", ...]  ImPlot's line colours, a qualitative colormap (default: ImPlot's Deep)
+//    lines = ["#e8664c", "#e9e2d4", ...]  ImPlot's line colours, a qualitative colormap (default: ImPlot's Deep);
+//                                         or a named palette: lines = "okabe-ito" (line_palette below)
 //    [imgui.colors]   Name = "#rrggbb" | "#rrggbbaa" | ["#rrggbb", alpha]     Dear ImGui colours (ImGuiCol_*)
 //    [imgui.vars]     Name = number | [x, y] | true | false                   ImGuiStyle fields
 //    [implot.colors], [implot.vars]                                           the same for ImPlot
@@ -37,6 +38,10 @@ struct theme_t {
    std::vector<color_t> lines;
    std::vector<entry_t> imgui_colors, imgui_vars, implot_colors, implot_vars;
 };
+
+// A named line palette ("okabe-ito": Okabe and Ito's colour-blind-safe set, without its black so that it reads on
+// dark and light backgrounds); false if the name is unknown.
+bool line_palette(const std::string &name, std::vector<color_t> &lines);
 
 // Parse `text`; false with `err` ("line N: ...") on the first error. `where` prefixes the message (a file name).
 bool parse(const std::string &text, const std::string &where, theme_t &theme, std::string &err);

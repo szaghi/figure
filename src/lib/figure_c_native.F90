@@ -91,13 +91,15 @@ interface
    integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_set_ini_file
 
-   function fig_set_style(name, name_len) result(status) bind(C, name='fig_set_style')
-   !< Apply a named style: dark, light, classic, seal, seal-light.
+   function fig_set_style(name, name_len, lines, lines_len) result(status) bind(C, name='fig_set_style')
+   !< Apply a built-in style (themes/<name>.toml), with its own line colours or a named palette.
    import :: c_char, c_int
    implicit none
-   character(kind=c_char), intent(in) :: name(*)  !< Style name (not NUL-terminated).
-   integer(c_int), value              :: name_len !< Name length [bytes].
-   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   character(kind=c_char), intent(in) :: name(*)   !< Style name (not NUL-terminated).
+   integer(c_int), value              :: name_len  !< Name length [bytes].
+   character(kind=c_char), intent(in) :: lines(*)  !< Line palette (okabe-ito), or empty for the theme's own.
+   integer(c_int), value              :: lines_len !< Palette name length [bytes].
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_set_style
 
    subroutine fig_set_lazy(enabled, max_wait_s) bind(C, name='fig_set_lazy')

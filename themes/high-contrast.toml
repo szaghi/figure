@@ -1,0 +1,87 @@
+# FIGURE theme "high-contrast": white on black, yellow accents.
+# For low vision and bright rooms: text at 7:1 or more against every background it sits on (WCAG AAA), borders on
+# every frame, a yellow that reads on black for what the user touches, and colour-blind-safe lines.
+
+base = "dark"
+background = "#000000"
+lines = "okabe-ito"
+
+[imgui.vars]
+WindowRounding = 0
+ChildRounding = 0
+FrameRounding = 0
+PopupRounding = 0
+ScrollbarRounding = 0
+GrabRounding = 0
+TabRounding = 0
+WindowBorderSize = 1
+FrameBorderSize = 1
+PopupBorderSize = 1
+
+[imgui.colors]
+Text = "#ffffff"
+TextDisabled = "#bfbfbf"
+WindowBg = "#000000"
+ChildBg = ["#000000", 0.0]
+PopupBg = "#000000"
+Border = "#ffffff"
+BorderShadow = ["#000000", 0.0]
+FrameBg = "#000000"
+FrameBgHovered = "#262626"
+FrameBgActive = "#3d3d3d"
+TitleBg = "#000000"
+TitleBgActive = "#1f1f1f"
+TitleBgCollapsed = "#000000"
+MenuBarBg = "#000000"
+ScrollbarBg = "#000000"
+ScrollbarGrab = "#a6a6a6"
+ScrollbarGrabHovered = "#d9d9d9"
+ScrollbarGrabActive = "#ffffff"
+CheckMark = "#ffd400"
+SliderGrab = "#ffd400"
+SliderGrabActive = "#ffe866"
+Button = "#000000"
+ButtonHovered = "#333333"
+ButtonActive = "#4d4d4d"
+Header = "#262626"
+HeaderHovered = "#333333"
+HeaderActive = "#4d4d4d"
+Separator = "#ffffff"
+SeparatorHovered = "#ffd400"
+SeparatorActive = "#ffd400"
+ResizeGrip = ["#ffd400", 0.4]
+ResizeGripHovered = ["#ffd400", 0.7]
+ResizeGripActive = "#ffd400"
+Tab = "#000000"
+TabHovered = "#333333"
+TabSelected = "#262626"
+TabSelectedOverline = "#ffd400"
+TabDimmed = "#000000"
+TabDimmedSelected = "#1f1f1f"
+TabDimmedSelectedOverline = "#ffffff"
+PlotLines = "#ffffff"
+PlotHistogram = "#ffd400"
+TableHeaderBg = "#1f1f1f"
+TableBorderStrong = "#ffffff"
+TableBorderLight = "#808080"
+TextLink = "#ffd400"
+TextSelectedBg = ["#ffd400", 0.35]
+NavCursor = "#ffd400"
+DockingPreview = ["#ffd400", 0.45]
+DockingEmptyBg = "#000000"
+
+[implot.vars]
+PlotBorderSize = 1
+
+[implot.colors]
+FrameBg = "#000000"
+PlotBg = "#000000"
+PlotBorder = "#ffffff"
+LegendBg = "#000000"
+LegendBorder = "#ffffff"
+LegendText = "#ffffff"
+TitleText = "#ffffff"
+InlayText = "#ffffff"
+AxisText = "#ffffff"
+AxisGrid = ["#ffffff", 0.35]
+AxisTick = "#ffffff"

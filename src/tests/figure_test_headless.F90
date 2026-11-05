@@ -33,7 +33,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(32)  !< Per-check outcome.
+logical                   :: test_passed(33)  !< Per-check outcome.
 type(texture_object)      :: tex              !< A 4 x 2 texture.
 integer(int8)             :: pix(4, 4, 2)     !< Its pixels.
 integer(int8)             :: pix_bad(3, 4, 2) !< Pixels of the wrong shape (3 channels).
@@ -68,6 +68,8 @@ real(real64)              :: var_plot(2)      !< An ImPlot variable read back.
 integer(int32)            :: nvar(3)          !< Their counts.
 integer(int32)            :: stat_sv(5)       !< Statuses of the style calls that must fail.
 integer(int32)            :: stat_builtin(5)  !< set_style of every built-in theme.
+integer(int32)            :: stat_lines(2)    !< set_style with the okabe-ito lines, and with an unknown palette.
+integer(c_int)            :: okabe_cmap       !< Index of the okabe-ito colormap.
 integer(int32)            :: stat_items(5)    !< Status of the scatter, bars and shaded items.
 integer(int32)            :: stat_spec        !< Status of a spec with a bad colour.
 type(plot_spec_object)    :: red              !< Red line, 2 pixels, circle markers.
@@ -233,6 +235,10 @@ call app%set_style('light', stat=stat_builtin(2))
 call app%set_style('classic', stat=stat_builtin(3))
 call app%set_style('seal-light', stat=stat_builtin(4))
 call app%set_style('seal', stat=stat_builtin(5))
+call app%set_style('seal', lines='okabe-ito', stat=stat_lines(1))
+okabe_cmap = ImPlot_GetColormapIndex('FIGURE okabe-ito'//c_null_char)
+call app%set_style('seal', lines='rainbow', stat=stat_lines(2))
+call app%set_style('seal')
 call app%set_docking(.false.)
 if (app%next_frame()) call ig_dock_space(dock_root, stat=stat_dock) ! docking off: rejected
 call ip_heatmap('one end', fld, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, scale_min=0.0_real64, stat=stat_scale)
@@ -277,8 +283,10 @@ test_passed(30) = nvar(1) == 1_int32 .and. abs(var(1) - 3.0_real64) < 1.0e-6_rea
                   all(abs(var_plot - [4.0_real64, 6.0_real64]) < 1.0e-6_real64)                ! variables round-trip
 test_passed(31) = all(stat_sv == int(FIG_ERR_ARGUMENT, int32))                     ! bad names, colours, arity
 test_passed(32) = all(stat_builtin == int(FIG_OK, int32))                           ! every built-in theme parses
+test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
+                  stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
 
-write(output_unit, '(A,32L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,33L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

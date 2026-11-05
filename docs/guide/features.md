@@ -22,7 +22,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
 | `app%set_docking(enabled [, stat])` | docking on (default) or off | [docking](docking) |
-| `app%set_style(name [, stat])` | colours: `'seal'` (default), `'seal-light'`, `'dark'`, `'light'`, `'classic'` | [styles](styles) |
+| `app%set_style(name [, lines] [, stat])` | colours: `'seal'` (default), `'seal-light'`, `'paper'`, `'high-contrast'`, `'dark'`, `'light'`, `'classic'`; `lines='okabe-ito'` | [styles](styles) |
 | `app%destroy()` | close the window, destroy the contexts | [frame loop](frame-loop#the-application) |
 
 ## Widgets: `ig_*`

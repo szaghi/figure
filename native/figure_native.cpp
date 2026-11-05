@@ -443,15 +443,24 @@ bool apply_theme(const figure_theme::theme_t &t, const std::string &where, const
    return true;
 }
 
-// Apply a built-in style by name; false if the name is unknown (err empty) or the theme is malformed (err set).
-bool apply_style(const std::string &name, std::string &err) {
+// Apply a built-in style by name, with its own line colours or a named palette (`lines`, empty: the theme's); false if
+// the name is unknown (err empty) or the theme or the palette is wrong (err set).
+bool apply_style(const std::string &name, std::string &err, const std::string &lines = "") {
    err.clear();
    for (int i = 0; i < figure_theme::builtin_count(); ++i) {
       if (name != figure_theme::builtin_name(i)) continue;
       figure_theme::theme_t t;
       const std::string where = "themes/" + name + ".toml";
       if (!figure_theme::parse(figure_theme::builtin_text(i), where, t, err)) return false;
-      return apply_theme(t, where, "FIGURE " + name, err);
+      std::string cmap = "FIGURE " + name;
+      if (!lines.empty()) {
+         if (!figure_theme::line_palette(lines, t.lines)) {
+            err = "unknown line palette \"" + lines + "\" (okabe-ito)";
+            return false;
+         }
+         cmap = "FIGURE " + lines; // the palette's colours, whatever the theme
+      }
+      return apply_theme(t, where, cmap, err);
    }
    return false;
 }
@@ -612,12 +621,13 @@ int fig_init_remote(int width, int height, const char *host, int host_len, int p
    FIG_CATCH
 }
 
-int fig_set_style(const char *name, int name_len) {
+int fig_set_style(const char *name, int name_len, const char *lines, int lines_len) {
    FIG_TRY
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   const std::string l(lines, lines_len > 0 ? static_cast<size_t>(lines_len) : 0);
    std::string err;
-   if (!apply_style(n, err))
+   if (!apply_style(n, err, l))
       return fail(FIG_ERR_ARGUMENT, err.empty() ? "set_style: unknown style \"" + n + "\" (" + builtin_style_names() + ")"
                                                 : "set_style: " + err);
    return FIG_OK;

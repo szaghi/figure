@@ -201,13 +201,16 @@ Colours of the interface, the plots and the window background, by name, after `i
 
  - `'seal'` (the default), `'seal-light'`: FIGURE's, from its mark: ink (or paper) and one vermilion, spent on
    what the user touches and on the first plotted line; square corners;
+ - `'paper'`: for publication, black on white, thin borders, line colours that survive greyscale printing;
+ - `'high-contrast'`: white on black with yellow accents, text at 7:1 or more (WCAG AAA);
  - `'dark'`, `'light'`, `'classic'`: Dear ImGui's own styles, with ImPlot's default line colours.
 
- The environment variable `FIGURE_STYLE` picks the style at initialisation; this call overrides it. Sizes and
- fonts are kept; colours changed through the raw bindings are reset.
+ `lines='okabe-ito'` replaces the style's line colours with Okabe and Ito's colour-blind-safe set. Each style is
+ a theme file (`themes/<name>.toml`, embedded). The environment variable `FIGURE_STYLE` picks the style at
+ initialisation; this call overrides it. Sizes and fonts are kept; colours and variables changed by name are reset.
 
 ```fortran
-subroutine set_style(self, name, stat)
+subroutine set_style(self, name, lines, stat)
 ```
 
 **Arguments**
@@ -216,6 +219,7 @@ subroutine set_style(self, name, stat)
 |------|------|--------|------------|-------------|
 | `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
 | `name` | character(len=*) | in |  | Style name. |
+| `lines` | character(len=*) | in | optional | Line palette: `'okabe-ito'` (default: the style's own). |
 | `stat` | integer(kind=int32) | out | optional |  |
 
 **Call graph**

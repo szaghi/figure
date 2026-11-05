@@ -140,7 +140,11 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
             if (!color_value(v, theme.background)) return fail("background must be a colour \"#rrggbb\"");
             theme.has_background = true;
          } else if (key == "lines") {
-            if (v.kind != value_t::ARRAY || v.items.empty()) return fail("lines must be a list of colours");
+            if (v.kind == value_t::STRING) {
+               if (!line_palette(v.str, theme.lines)) return fail("lines: unknown palette \"" + v.str + "\" (okabe-ito)");
+               continue;
+            }
+            if (v.kind != value_t::ARRAY || v.items.empty()) return fail("lines must be a list of colours or a palette");
             for (const value_t &item : v.items) {
                color_t c;
                if (!color_value(item, c)) return fail("lines: \"" + item.str + "\" is not a colour");
@@ -168,6 +172,20 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
          }
          (section == "imgui.vars" ? theme.imgui_vars : theme.implot_vars).push_back(e);
       }
+   }
+   return true;
+}
+
+bool line_palette(const std::string &name, std::vector<color_t> &lines) {
+   // Okabe & Ito (2008), "Color Universal Design": orange, sky blue, bluish green, yellow, blue, vermilion, reddish
+   // purple (its eighth colour, black, is left out: invisible on dark backgrounds)
+   static const char *OKABE_ITO[] = {"#e69f00", "#56b4e9", "#009e73", "#f0e442", "#0072b2", "#d55e00", "#cc79a7"};
+   if (name != "okabe-ito") return false;
+   lines.clear();
+   for (const char *h : OKABE_ITO) {
+      color_t c;
+      hex_color(h, c);
+      lines.push_back(c);
    }
    return true;
 }

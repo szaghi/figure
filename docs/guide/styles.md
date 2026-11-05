@@ -9,27 +9,39 @@ or variable of Dear ImGui and ImPlot by its own name.
 
 ## Named styles
 
-`app%set_style(name [, stat])`, after `init` (or `init_headless`, `init_remote`), sets the colours of the interface,
-of the plots and of the window's background:
+`app%set_style(name [, lines] [, stat])`, after `init` (or `init_headless`, `init_remote`), sets the colours of the
+interface, of the plots and of the window's background:
 
-| Name | Look |
-|---|---|
-| `'seal'` | the default: FIGURE's style, from the palette of its mark: ink windows, paper text, vermilion spent only on what the user touches (slider grabs, check marks, pressed buttons) and on the first plotted line; square corners |
-| `'seal-light'` | the same on paper |
-| `'dark'` | Dear ImGui's dark style, with ImPlot's default line colours |
-| `'light'`, `'classic'` | Dear ImGui's other two styles |
+| Name | Look | Text contrast (lowest) |
+|---|---|---|
+| `'seal'` | the default: FIGURE's style, from the palette of its mark: ink windows, paper text, vermilion spent only on what the user touches (slider grabs, check marks, pressed buttons) and on the first plotted line; square corners | 7.4:1 |
+| `'seal-light'` | the same on paper | 11.7:1 |
+| `'paper'` | for publication: black on white, thin borders, a light grid, line colours that keep 3:1 on white and stay apart in greyscale | 15.9:1 |
+| `'high-contrast'` | white on black with yellow accents, a border on every frame, colour-blind-safe lines | 12.6:1 |
+| `'dark'` | Dear ImGui's dark style, with ImPlot's default line colours | 3.0:1 |
+| `'light'`, `'classic'` | Dear ImGui's other two styles | 7.0:1, 4.9:1 |
+
+`lines='okabe-ito'` replaces the style's line colours with Okabe and Ito's colour-blind-safe set (orange, sky blue,
+bluish green, yellow, blue, vermilion, reddish purple), whatever the style:
 
 ```fortran
-call app%init('FIGURE: light', 900_int32, 600_int32)
-call app%set_style('seal-light')
+call app%init('FIGURE: paper', 900_int32, 600_int32)
+call app%set_style('paper')                     ! or: call app%set_style('seal', lines='okabe-ito')
 ```
 
+The contrast column is measured by `src/tests/figure_test_themes.F90` on the colours in effect, as WCAG 2 defines
+it: `Text` against every surface it is drawn on (window, popup, frames, buttons, title bar, header), the lowest
+reported. FIGURE's styles are held to a target in the test: 4.5:1 (WCAG AA) for `seal` and `seal-light`, 7:1 (AAA)
+for `paper` and `high-contrast`, and 3:1 for every line colour against the plot background (WCAG 1.4.11, graphics).
+Dear ImGui's own styles are measured, not held to one: `dark` reaches only 3:1 on a hovered button.
+
 The environment variable `FIGURE_STYLE` picks the style at initialisation, without changing the program
-(`FIGURE_STYLE=seal exe/figure_hello`); a `set_style` call in the program comes later and wins. An unknown name is
-`FIG_ERR_ARGUMENT` (or a stop, without `stat`). Sizes, spacing and fonts are kept; colours and variables changed by
-name (below) or through the raw bindings are reset. Heatmaps are unaffected: their colormap is the one passed to `ip_heatmap` (the line colours of a
-style are a qualitative colormap, not meant for fields). In remote mode the browser takes the style's background too.
-Every picture of this documentation is recorded in the default style, `'seal'`.
+(`FIGURE_STYLE=paper exe/figure_hello`); a `set_style` call in the program comes later and wins. An unknown name or
+palette is `FIG_ERR_ARGUMENT` (or a stop, without `stat`). Sizes, spacing and fonts are kept; colours and variables
+changed by name (below) or through the raw bindings are reset. Heatmaps are unaffected: their colormap is the one
+passed to `ip_heatmap` (the line colours of a style are a qualitative colormap, not meant for fields). In remote mode
+the browser takes the style's background too. Every picture of this documentation is recorded in the default style,
+`'seal'`.
 
 ## Colours and variables by name
 
@@ -79,7 +91,7 @@ native layer is built: adding a file there adds a style. The format is a subset 
 # FIGURE theme "seal": ink windows, paper text, one vermilion (the default).
 base = "dark"                                  # dark | light | classic: the Dear ImGui style it starts from
 background = "#14120f"                         # behind the windows (default: the base's)
-lines = ["#e8664c", "#e9e2d4", "#c9a25a"]      # ImPlot's line colours, in order (default: ImPlot's Deep)
+lines = ["#e8664c", "#e9e2d4", "#c9a25a"]      # ImPlot's line colours, in order, or "okabe-ito" (default: Deep)
 
 [imgui.vars]                                   # ImGuiStyle fields: a number, [x, y], true or false
 WindowRounding = 0
@@ -105,4 +117,6 @@ The built-in themes: [`seal`](https://github.com/szaghi/figure/blob/main/themes/
 [`seal-light`](https://github.com/szaghi/figure/blob/main/themes/seal-light.toml),
 [`dark`](https://github.com/szaghi/figure/blob/main/themes/dark.toml),
 [`light`](https://github.com/szaghi/figure/blob/main/themes/light.toml),
-[`classic`](https://github.com/szaghi/figure/blob/main/themes/classic.toml).
+[`classic`](https://github.com/szaghi/figure/blob/main/themes/classic.toml),
+[`paper`](https://github.com/szaghi/figure/blob/main/themes/paper.toml),
+[`high-contrast`](https://github.com/szaghi/figure/blob/main/themes/high-contrast.toml).

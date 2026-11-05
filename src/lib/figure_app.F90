@@ -161,20 +161,28 @@ contains
    call fig_set_lazy(merge(1_c_int, 0_c_int, enabled), w)
    endsubroutine set_lazy
 
-   subroutine set_style(self, name, stat)
+   subroutine set_style(self, name, lines, stat)
    !< Colours of the interface, the plots and the window background, by name, after `init*`:
    !<
    !< - `'seal'` (the default), `'seal-light'`: FIGURE's, from its mark: ink (or paper) and one vermilion, spent on
    !<   what the user touches and on the first plotted line; square corners;
+   !< - `'paper'`: for publication, black on white, thin borders, line colours that survive greyscale printing;
+   !< - `'high-contrast'`: white on black with yellow accents, text at 7:1 or more (WCAG AAA);
    !< - `'dark'`, `'light'`, `'classic'`: Dear ImGui's own styles, with ImPlot's default line colours.
    !<
-   !< The environment variable `FIGURE_STYLE` picks the style at initialisation; this call overrides it. Sizes and
-   !< fonts are kept; colours changed through the raw bindings are reset.
-   class(app_object), intent(inout)         :: self   !< Application.
-   character(len=*),  intent(in)            :: name   !< Style name.
-   integer(int32),    intent(out), optional :: stat   !< Status: `FIG_ERR_ARGUMENT` for an unknown name.
+   !< `lines='okabe-ito'` replaces the style's line colours with Okabe and Ito's colour-blind-safe set. Each style is
+   !< a theme file (`themes/<name>.toml`, embedded). The environment variable `FIGURE_STYLE` picks the style at
+   !< initialisation; this call overrides it. Sizes and fonts are kept; colours and variables changed by name are reset.
+   class(app_object), intent(inout)         :: self  !< Application.
+   character(len=*),  intent(in)            :: name  !< Style name.
+   character(len=*),  intent(in),  optional :: lines !< Line palette: `'okabe-ito'` (default: the style's own).
+   integer(int32),    intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown name or palette.
 
-   call figure_check(fig_set_style(name, len(name, c_int)), stat)
+   if (present(lines)) then
+      call figure_check(fig_set_style(name, len(name, c_int), lines, len(lines, c_int)), stat)
+   else
+      call figure_check(fig_set_style(name, len(name, c_int), '', 0_c_int), stat)
+   endif
    endsubroutine set_style
 
    subroutine set_docking(self, enabled, stat)
