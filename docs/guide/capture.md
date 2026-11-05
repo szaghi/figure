@@ -68,7 +68,7 @@ ffmpeg -framerate 30 -i f_%05d.ppm -c:v libx264 -pix_fmt yuv420p -crf 24 hello.m
 
 `scripts/docs_media.py` records every `docs/media/<name>.rec`: a header of `#!` lines (the program, the number of
 frames, the poster frame, optional size, quality and style) followed by an input script. It runs the program with the
-variables above and `FIGURE_STYLE=seal` (the default [style](frame-loop#styles), set explicitly), crops the frames to
+variables above and `FIGURE_STYLE=seal` (the default [style](styles), set explicitly), crops the frames to
 what differs from the window background, and writes
 `docs/public/media/<name>.png` and, for animations, `<name>.mp4`. Pages show them with the `<Media>` component.
 

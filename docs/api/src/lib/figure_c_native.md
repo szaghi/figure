@@ -33,6 +33,8 @@ graph LR
 - [fig_last_error](#fig-last-error)
 - [fig_texture_create](#fig-texture-create)
 - [fig_texture_update](#fig-texture-update)
+- [fig_style_color](#fig-style-color)
+- [fig_style_var](#fig-style-var)
 - [fig_set_docking](#fig-set-docking)
 - [fig_dock_id](#fig-dock-id)
 - [fig_dock_space](#fig-dock-space)
@@ -82,6 +84,10 @@ graph LR
 ### fig_texture_create
 
 ### fig_texture_update
+
+### fig_style_color
+
+### fig_style_var
 
 ### fig_set_docking
 

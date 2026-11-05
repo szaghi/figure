@@ -70,7 +70,7 @@ features:
 
 Every picture on this site is a recording of the program it describes, made by `scripts/docs_media.py`: the frames
 are the program's own back buffer, captured with `FIGURE_CAPTURE` and driven by a scripted mouse, in FIGURE's default
-[style](./guide/frame-loop#styles), `seal`.
+[style](./guide/styles), `seal`.
 
 ## Status
 

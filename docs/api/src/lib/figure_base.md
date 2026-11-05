@@ -49,6 +49,8 @@ subroutine figure_check(status, stat)
 ```mermaid
 flowchart TD
   figure_fail["figure_fail"] --> figure_check["figure_check"]
+  get_color["get_color"] --> figure_check["figure_check"]
+  get_var["get_var"] --> figure_check["figure_check"]
   ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_check["figure_check"]
   ig_dock_layout_end["ig_dock_layout_end"] --> figure_check["figure_check"]
   ig_dock_space["ig_dock_space"] --> figure_check["figure_check"]
@@ -77,8 +79,10 @@ flowchart TD
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> figure_check["figure_check"]
   ip_spec["ip_spec"] --> figure_check["figure_check"]
   next_frame["next_frame"] --> figure_check["figure_check"]
+  set_color["set_color"] --> figure_check["figure_check"]
   set_docking["set_docking"] --> figure_check["figure_check"]
   set_style["set_style"] --> figure_check["figure_check"]
+  set_var["set_var"] --> figure_check["figure_check"]
   update["update"] --> figure_check["figure_check"]
   figure_check["figure_check"] --> figure_last_error["figure_last_error"]
   style figure_check fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -110,6 +114,8 @@ flowchart TD
   ip_spec["ip_spec"] --> figure_fail["figure_fail"]
   row_ok["row_ok"] --> figure_fail["figure_fail"]
   series_ok["series_ok"] --> figure_fail["figure_fail"]
+  set_color["set_color"] --> figure_fail["figure_fail"]
+  set_color_hex["set_color_hex"] --> figure_fail["figure_fail"]
   update["update"] --> figure_fail["figure_fail"]
   figure_fail["figure_fail"] --> fig_set_last_error["fig_set_last_error"]
   figure_fail["figure_fail"] --> figure_check["figure_check"]

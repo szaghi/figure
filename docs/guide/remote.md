@@ -74,7 +74,7 @@ The native layer contains a minimal HTTP and WebSocket server (RFC 6455, one cli
 Winsock). `GET /` answers the client page, embedded in the library; `GET /ws` upgrades to a WebSocket. After each
 frame the server sends, as binary messages, the textures Dear ImGui created or changed (RGBA, with their filtering)
 and the draw lists (20-byte vertices, 16-bit indices, commands with clip rectangle, texture and index range); on
-connection, and when the [style](frame-loop#styles) changes, it also sends the background colour. The page draws
+connection, and when the [style](styles) changes, it also sends the background colour. The page draws
 them with WebGL, exactly as the OpenGL backend draws a window, and sends input events back as short text messages. The protocol is described at the top of `native/figure_remote.cpp`.
 
 `src/tests/figure_test_remote.F90` tests it end to end without a browser: it serves on a free port and runs

@@ -16,7 +16,7 @@ public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, 
 public :: fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
-public :: fig_dock_layout_end, fig_window_dock
+public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -174,6 +174,31 @@ interface
    integer(c_int), value :: plot         !< 1: the current plot's draw list; 0: the current window's.
    integer(c_int), value :: from_texture !< 1: before the image; 0: after it.
    endsubroutine fig_texture_sampling
+
+   function fig_style_color(lib, name, name_len, set, rgba) result(status) bind(C, name='fig_style_color')
+   !< Read (set = 0) or write (set = 1) a style colour by name: lib 0 Dear ImGui, 1 ImPlot.
+   import :: c_char, c_float, c_int
+   implicit none
+   integer(c_int), value              :: lib      !< 0: Dear ImGui, 1: ImPlot.
+   character(kind=c_char), intent(in) :: name(*)  !< Colour name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   integer(c_int), value              :: set      !< 1: write, 0: read.
+   real(c_float), intent(inout)       :: rgba(4)  !< Colour, components in [0, 1].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_style_color
+
+   function fig_style_var(lib, name, name_len, set, values, count) result(status) bind(C, name='fig_style_var')
+   !< Read (set = 0) or write (set = 1) a style variable by name: lib 0 Dear ImGui, 1 ImPlot.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int), value              :: lib       !< 0: Dear ImGui, 1: ImPlot.
+   character(kind=c_char), intent(in) :: name(*)   !< Variable name (not NUL-terminated).
+   integer(c_int), value              :: name_len  !< Name length [bytes].
+   integer(c_int), value              :: set       !< 1: write, 0: read.
+   real(c_double), intent(inout)      :: values(2) !< Value(s).
+   integer(c_int), intent(inout)      :: count     !< Values given (write) or returned (read): 1 or 2.
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_style_var
 
    function fig_set_docking(enabled) result(status) bind(C, name='fig_set_docking')
    !< Docking on (1) or off (0).

@@ -1,0 +1,117 @@
+// FIGURE generated style tables (scripts/gen_bindings.py: do not edit).
+//
+// Every plain field of ImGuiStyle and ImPlotStyle (float, ImVec2, bool, enumeration), by name, offset and kind:
+// what figure_style reads and writes by name. Colours (the Colors arrays) are reached through each library's
+// colour names, the font fields through the font API; private fields (leading underscore) are left out.
+#include "figure_style.h"
+#include "imgui.h"
+#include "implot.h"
+
+#include <cstddef>
+
+namespace figure_style {
+
+const field IMGUI_FIELDS[] = {
+   {"Alpha", offsetof(ImGuiStyle, Alpha), FIG_STYLE_FLOAT},
+   {"DisabledAlpha", offsetof(ImGuiStyle, DisabledAlpha), FIG_STYLE_FLOAT},
+   {"WindowPadding", offsetof(ImGuiStyle, WindowPadding), FIG_STYLE_VEC2},
+   {"WindowRounding", offsetof(ImGuiStyle, WindowRounding), FIG_STYLE_FLOAT},
+   {"WindowBorderSize", offsetof(ImGuiStyle, WindowBorderSize), FIG_STYLE_FLOAT},
+   {"WindowBorderHoverPadding", offsetof(ImGuiStyle, WindowBorderHoverPadding), FIG_STYLE_FLOAT},
+   {"WindowMinSize", offsetof(ImGuiStyle, WindowMinSize), FIG_STYLE_VEC2},
+   {"WindowTitleAlign", offsetof(ImGuiStyle, WindowTitleAlign), FIG_STYLE_VEC2},
+   {"WindowMenuButtonPosition", offsetof(ImGuiStyle, WindowMenuButtonPosition), FIG_STYLE_INT},
+   {"ChildRounding", offsetof(ImGuiStyle, ChildRounding), FIG_STYLE_FLOAT},
+   {"ChildBorderSize", offsetof(ImGuiStyle, ChildBorderSize), FIG_STYLE_FLOAT},
+   {"PopupRounding", offsetof(ImGuiStyle, PopupRounding), FIG_STYLE_FLOAT},
+   {"PopupBorderSize", offsetof(ImGuiStyle, PopupBorderSize), FIG_STYLE_FLOAT},
+   {"FramePadding", offsetof(ImGuiStyle, FramePadding), FIG_STYLE_VEC2},
+   {"FrameRounding", offsetof(ImGuiStyle, FrameRounding), FIG_STYLE_FLOAT},
+   {"FrameBorderSize", offsetof(ImGuiStyle, FrameBorderSize), FIG_STYLE_FLOAT},
+   {"ItemSpacing", offsetof(ImGuiStyle, ItemSpacing), FIG_STYLE_VEC2},
+   {"ItemInnerSpacing", offsetof(ImGuiStyle, ItemInnerSpacing), FIG_STYLE_VEC2},
+   {"CellPadding", offsetof(ImGuiStyle, CellPadding), FIG_STYLE_VEC2},
+   {"TouchExtraPadding", offsetof(ImGuiStyle, TouchExtraPadding), FIG_STYLE_VEC2},
+   {"IndentSpacing", offsetof(ImGuiStyle, IndentSpacing), FIG_STYLE_FLOAT},
+   {"ColumnsMinSpacing", offsetof(ImGuiStyle, ColumnsMinSpacing), FIG_STYLE_FLOAT},
+   {"ScrollbarSize", offsetof(ImGuiStyle, ScrollbarSize), FIG_STYLE_FLOAT},
+   {"ScrollbarRounding", offsetof(ImGuiStyle, ScrollbarRounding), FIG_STYLE_FLOAT},
+   {"ScrollbarPadding", offsetof(ImGuiStyle, ScrollbarPadding), FIG_STYLE_FLOAT},
+   {"GrabMinSize", offsetof(ImGuiStyle, GrabMinSize), FIG_STYLE_FLOAT},
+   {"GrabRounding", offsetof(ImGuiStyle, GrabRounding), FIG_STYLE_FLOAT},
+   {"LogSliderDeadzone", offsetof(ImGuiStyle, LogSliderDeadzone), FIG_STYLE_FLOAT},
+   {"ImageRounding", offsetof(ImGuiStyle, ImageRounding), FIG_STYLE_FLOAT},
+   {"ImageBorderSize", offsetof(ImGuiStyle, ImageBorderSize), FIG_STYLE_FLOAT},
+   {"TabRounding", offsetof(ImGuiStyle, TabRounding), FIG_STYLE_FLOAT},
+   {"TabBorderSize", offsetof(ImGuiStyle, TabBorderSize), FIG_STYLE_FLOAT},
+   {"TabMinWidthBase", offsetof(ImGuiStyle, TabMinWidthBase), FIG_STYLE_FLOAT},
+   {"TabMinWidthShrink", offsetof(ImGuiStyle, TabMinWidthShrink), FIG_STYLE_FLOAT},
+   {"TabCloseButtonMinWidthSelected", offsetof(ImGuiStyle, TabCloseButtonMinWidthSelected), FIG_STYLE_FLOAT},
+   {"TabCloseButtonMinWidthUnselected", offsetof(ImGuiStyle, TabCloseButtonMinWidthUnselected), FIG_STYLE_FLOAT},
+   {"TabBarBorderSize", offsetof(ImGuiStyle, TabBarBorderSize), FIG_STYLE_FLOAT},
+   {"TabBarOverlineSize", offsetof(ImGuiStyle, TabBarOverlineSize), FIG_STYLE_FLOAT},
+   {"TableAngledHeadersAngle", offsetof(ImGuiStyle, TableAngledHeadersAngle), FIG_STYLE_FLOAT},
+   {"TableAngledHeadersTextAlign", offsetof(ImGuiStyle, TableAngledHeadersTextAlign), FIG_STYLE_VEC2},
+   {"TreeLinesFlags", offsetof(ImGuiStyle, TreeLinesFlags), FIG_STYLE_INT},
+   {"TreeLinesSize", offsetof(ImGuiStyle, TreeLinesSize), FIG_STYLE_FLOAT},
+   {"TreeLinesRounding", offsetof(ImGuiStyle, TreeLinesRounding), FIG_STYLE_FLOAT},
+   {"MenuItemRounding", offsetof(ImGuiStyle, MenuItemRounding), FIG_STYLE_FLOAT},
+   {"SelectableRounding", offsetof(ImGuiStyle, SelectableRounding), FIG_STYLE_FLOAT},
+   {"DragDropTargetRounding", offsetof(ImGuiStyle, DragDropTargetRounding), FIG_STYLE_FLOAT},
+   {"DragDropTargetBorderSize", offsetof(ImGuiStyle, DragDropTargetBorderSize), FIG_STYLE_FLOAT},
+   {"DragDropTargetPadding", offsetof(ImGuiStyle, DragDropTargetPadding), FIG_STYLE_FLOAT},
+   {"ColorMarkerSize", offsetof(ImGuiStyle, ColorMarkerSize), FIG_STYLE_FLOAT},
+   {"ColorButtonPosition", offsetof(ImGuiStyle, ColorButtonPosition), FIG_STYLE_INT},
+   {"ButtonTextAlign", offsetof(ImGuiStyle, ButtonTextAlign), FIG_STYLE_VEC2},
+   {"SelectableTextAlign", offsetof(ImGuiStyle, SelectableTextAlign), FIG_STYLE_VEC2},
+   {"InputTextCursorSize", offsetof(ImGuiStyle, InputTextCursorSize), FIG_STYLE_FLOAT},
+   {"SeparatorSize", offsetof(ImGuiStyle, SeparatorSize), FIG_STYLE_FLOAT},
+   {"SeparatorTextBorderSize", offsetof(ImGuiStyle, SeparatorTextBorderSize), FIG_STYLE_FLOAT},
+   {"SeparatorTextAlign", offsetof(ImGuiStyle, SeparatorTextAlign), FIG_STYLE_VEC2},
+   {"SeparatorTextPadding", offsetof(ImGuiStyle, SeparatorTextPadding), FIG_STYLE_VEC2},
+   {"DisplayWindowPadding", offsetof(ImGuiStyle, DisplayWindowPadding), FIG_STYLE_VEC2},
+   {"DisplaySafeAreaPadding", offsetof(ImGuiStyle, DisplaySafeAreaPadding), FIG_STYLE_VEC2},
+   {"DockingNodeHasCloseButton", offsetof(ImGuiStyle, DockingNodeHasCloseButton), FIG_STYLE_BOOL},
+   {"DockingSeparatorSize", offsetof(ImGuiStyle, DockingSeparatorSize), FIG_STYLE_FLOAT},
+   {"MouseCursorScale", offsetof(ImGuiStyle, MouseCursorScale), FIG_STYLE_FLOAT},
+   {"AntiAliasedLines", offsetof(ImGuiStyle, AntiAliasedLines), FIG_STYLE_BOOL},
+   {"AntiAliasedLineEnds", offsetof(ImGuiStyle, AntiAliasedLineEnds), FIG_STYLE_BOOL},
+   {"AntiAliasedFill", offsetof(ImGuiStyle, AntiAliasedFill), FIG_STYLE_BOOL},
+   {"CurveTessellationMaxError", offsetof(ImGuiStyle, CurveTessellationMaxError), FIG_STYLE_FLOAT},
+   {"CircleTessellationMaxError", offsetof(ImGuiStyle, CircleTessellationMaxError), FIG_STYLE_FLOAT},
+   {"HoverStationaryDelay", offsetof(ImGuiStyle, HoverStationaryDelay), FIG_STYLE_FLOAT},
+   {"HoverDelayShort", offsetof(ImGuiStyle, HoverDelayShort), FIG_STYLE_FLOAT},
+   {"HoverDelayNormal", offsetof(ImGuiStyle, HoverDelayNormal), FIG_STYLE_FLOAT},
+   {"HoverFlagsForTooltipMouse", offsetof(ImGuiStyle, HoverFlagsForTooltipMouse), FIG_STYLE_INT},
+   {"HoverFlagsForTooltipNav", offsetof(ImGuiStyle, HoverFlagsForTooltipNav), FIG_STYLE_INT},
+};
+const int IMGUI_FIELDS_COUNT = 72;
+
+const field IMPLOT_FIELDS[] = {
+   {"PlotDefaultSize", offsetof(ImPlotStyle, PlotDefaultSize), FIG_STYLE_VEC2},
+   {"PlotMinSize", offsetof(ImPlotStyle, PlotMinSize), FIG_STYLE_VEC2},
+   {"PlotBorderSize", offsetof(ImPlotStyle, PlotBorderSize), FIG_STYLE_FLOAT},
+   {"MinorAlpha", offsetof(ImPlotStyle, MinorAlpha), FIG_STYLE_FLOAT},
+   {"MajorTickLen", offsetof(ImPlotStyle, MajorTickLen), FIG_STYLE_VEC2},
+   {"MinorTickLen", offsetof(ImPlotStyle, MinorTickLen), FIG_STYLE_VEC2},
+   {"MajorTickSize", offsetof(ImPlotStyle, MajorTickSize), FIG_STYLE_VEC2},
+   {"MinorTickSize", offsetof(ImPlotStyle, MinorTickSize), FIG_STYLE_VEC2},
+   {"MajorGridSize", offsetof(ImPlotStyle, MajorGridSize), FIG_STYLE_VEC2},
+   {"MinorGridSize", offsetof(ImPlotStyle, MinorGridSize), FIG_STYLE_VEC2},
+   {"PlotPadding", offsetof(ImPlotStyle, PlotPadding), FIG_STYLE_VEC2},
+   {"LabelPadding", offsetof(ImPlotStyle, LabelPadding), FIG_STYLE_VEC2},
+   {"LegendPadding", offsetof(ImPlotStyle, LegendPadding), FIG_STYLE_VEC2},
+   {"LegendInnerPadding", offsetof(ImPlotStyle, LegendInnerPadding), FIG_STYLE_VEC2},
+   {"LegendSpacing", offsetof(ImPlotStyle, LegendSpacing), FIG_STYLE_VEC2},
+   {"MousePosPadding", offsetof(ImPlotStyle, MousePosPadding), FIG_STYLE_VEC2},
+   {"AnnotationPadding", offsetof(ImPlotStyle, AnnotationPadding), FIG_STYLE_VEC2},
+   {"FitPadding", offsetof(ImPlotStyle, FitPadding), FIG_STYLE_VEC2},
+   {"DigitalPadding", offsetof(ImPlotStyle, DigitalPadding), FIG_STYLE_FLOAT},
+   {"DigitalSpacing", offsetof(ImPlotStyle, DigitalSpacing), FIG_STYLE_FLOAT},
+   {"UseLocalTime", offsetof(ImPlotStyle, UseLocalTime), FIG_STYLE_BOOL},
+   {"UseISO8601", offsetof(ImPlotStyle, UseISO8601), FIG_STYLE_BOOL},
+   {"Use24HourClock", offsetof(ImPlotStyle, Use24HourClock), FIG_STYLE_BOOL},
+};
+const int IMPLOT_FIELDS_COUNT = 23;
+
+} // namespace figure_style

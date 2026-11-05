@@ -1,12 +1,14 @@
 // FIGURE native glue: SDL3 window + OpenGL3 renderer + Dear ImGui/ImPlot contexts, behind the C ABI of figure_native.h.
 #include "figure_native.h"
 #include "figure_remote.h"
+#include "figure_style.h"
 
 #include "imgui.h"
 #include "imgui_internal.h" // DockBuilder*: Dear ImGui keeps the dock builder internal
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl3.h"
 #include "implot.h"
+#include "implot_internal.h" // GetStyleColorVec4: ImPlot's automatic colours resolved
 
 #include <SDL3/SDL.h>
 // The program's main is the Fortran one, not SDL_main: SDL_MAIN_HANDLED keeps SDL_main.h from redefining main, and
@@ -478,6 +480,30 @@ void apply_initial_style() {
    if (v && *v && !apply_style(v)) std::fprintf(stderr, "figure: FIGURE_STYLE=%s: unknown style, ignored\n", v);
 }
 
+// ---- Style fields by name ------------------------------------------------------------------------------------------
+// lib 0: Dear ImGui (ImGuiStyle), 1: ImPlot (ImPlotStyle). Colours by the libraries' own names (GetStyleColorName);
+// the other fields by the generated tables of figure_style_generated.cpp.
+
+int style_color_index(int lib, const std::string &name) {
+   const int n = lib == 0 ? static_cast<int>(ImGuiCol_COUNT) : static_cast<int>(ImPlotCol_COUNT);
+   for (int i = 0; i < n; ++i)
+      if (name == (lib == 0 ? ImGui::GetStyleColorName(i) : ImPlot::GetStyleColorName(i))) return i;
+   return -1;
+}
+
+const figure_style::field *style_field(int lib, const std::string &name) {
+   const figure_style::field *t = lib == 0 ? figure_style::IMGUI_FIELDS : figure_style::IMPLOT_FIELDS;
+   const int n = lib == 0 ? figure_style::IMGUI_FIELDS_COUNT : figure_style::IMPLOT_FIELDS_COUNT;
+   for (int i = 0; i < n; ++i)
+      if (name == t[i].name) return &t[i];
+   return nullptr;
+}
+
+unsigned char *style_base(int lib) {
+   return lib == 0 ? reinterpret_cast<unsigned char *>(&ImGui::GetStyle())
+                   : reinterpret_cast<unsigned char *>(&ImPlot::GetStyle());
+}
+
 // Headless renderer: acknowledge texture requests (font atlas pages) without a GPU, as a real backend would.
 void headless_textures() {
    for (ImTextureData *t : ImGui::GetPlatformIO().Textures) {
@@ -620,6 +646,71 @@ int fig_set_style(const char *name, int name_len) {
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
    if (!apply_style(n))
       return fail(FIG_ERR_ARGUMENT, "set_style: unknown style \"" + n + "\" (dark, light, classic, seal, seal-light)");
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_style_color(int lib, const char *name, int name_len, int set, float *rgba) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (lib != 0 && lib != 1) return fail(FIG_ERR_ARGUMENT, "style colour: unknown library");
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   const int i = style_color_index(lib, n);
+   if (i < 0)
+      return fail(FIG_ERR_ARGUMENT, std::string("style colour: unknown name \"") + n + "\" for " +
+                                        (lib == 0 ? "Dear ImGui (ImGuiCol_*)" : "ImPlot (ImPlotCol_*)"));
+   if (set) {
+      for (int k = 0; k < 4; ++k)
+         if (!(rgba[k] >= 0.0f && rgba[k] <= 1.0f)) return fail(FIG_ERR_ARGUMENT, "style colour: components must be in [0, 1]");
+      const ImVec4 c(rgba[0], rgba[1], rgba[2], rgba[3]);
+      if (lib == 0) ImGui::GetStyle().Colors[i] = c;
+      else ImPlot::GetStyle().Colors[i] = c;
+   } else {
+      // ImPlot's automatic colours (derived from Dear ImGui's) are resolved, as ImPlot would draw them
+      const ImVec4 c = lib == 0 ? ImGui::GetStyle().Colors[i] : ImPlot::GetStyleColorVec4(i);
+      rgba[0] = c.x;
+      rgba[1] = c.y;
+      rgba[2] = c.z;
+      rgba[3] = c.w;
+   }
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_style_var(int lib, const char *name, int name_len, int set, double *values, int *count) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (lib != 0 && lib != 1) return fail(FIG_ERR_ARGUMENT, "style variable: unknown library");
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   const figure_style::field *f = style_field(lib, n);
+   if (!f)
+      return fail(FIG_ERR_ARGUMENT, std::string("style variable: unknown name \"") + n + "\" for " +
+                                        (lib == 0 ? "Dear ImGui (ImGuiStyle)" : "ImPlot (ImPlotStyle)"));
+   unsigned char *p = style_base(lib) + f->offset;
+   const int ncomp = f->kind == figure_style::FIG_STYLE_VEC2 ? 2 : 1;
+   if (set) {
+      if (*count != ncomp)
+         return fail(FIG_ERR_ARGUMENT, "style variable \"" + n + "\" takes " + std::to_string(ncomp) + " value(s)");
+      switch (f->kind) {
+      case figure_style::FIG_STYLE_FLOAT: *reinterpret_cast<float *>(p) = static_cast<float>(values[0]); break;
+      case figure_style::FIG_STYLE_VEC2:
+         *reinterpret_cast<ImVec2 *>(p) = ImVec2(static_cast<float>(values[0]), static_cast<float>(values[1]));
+         break;
+      case figure_style::FIG_STYLE_BOOL: *reinterpret_cast<bool *>(p) = values[0] != 0.0; break;
+      default: *reinterpret_cast<int *>(p) = static_cast<int>(values[0]); break;
+      }
+   } else {
+      *count = ncomp;
+      switch (f->kind) {
+      case figure_style::FIG_STYLE_FLOAT: values[0] = *reinterpret_cast<float *>(p); break;
+      case figure_style::FIG_STYLE_VEC2:
+         values[0] = reinterpret_cast<ImVec2 *>(p)->x;
+         values[1] = reinterpret_cast<ImVec2 *>(p)->y;
+         break;
+      case figure_style::FIG_STYLE_BOOL: values[0] = *reinterpret_cast<bool *>(p) ? 1.0 : 0.0; break;
+      default: values[0] = *reinterpret_cast<int *>(p); break;
+      }
+   }
    return FIG_OK;
    FIG_CATCH
 }

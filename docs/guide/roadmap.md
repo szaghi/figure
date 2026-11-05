@@ -72,7 +72,7 @@ pictures it updates, and a log of the work. This page summarises it, after the m
 - Found by the pictures: a growing history ran off its plot; `ip_setup_axes(..., auto_fit)` refits the axes every
   frame.
 - The brand: the seal mark (a window and its plot drafted with a brush, signed with a vermilion seal carved with F),
-  the site's palette, and `app%set_style` with `seal` as FIGURE's default [style](frame-loop#styles).
+  the site's palette, and `app%set_style` with `seal` as FIGURE's default [style](styles).
 
 ## v0.1.0 — in progress
 

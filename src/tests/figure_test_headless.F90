@@ -10,7 +10,9 @@ use figure, only : FIG_ERR_ARGUMENT, FIG_OK, app_object, figure_last_error, ig_b
                    ig_item_rect, ig_set_next_window, ImPlotMarker_Circle, ip_bars, ip_begin_plot, ip_end_plot, ip_line, &
                    ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object, FIG_ERR_STATE, ig_image, ip_heatmap,   &
                    ip_image, ImPlotColormap_Viridis, texture_object, ig_dock_id, ig_dock_layout_begin,             &
-                   ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_window_dock
+                   ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_window_dock,                &
+                   ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ip_get_style_color,  &
+                   ip_get_style_var, ip_set_style_color, ip_set_style_var
 use figure_cimgui, only : im_vec4, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, ImPlot_GetPlotLimits
@@ -31,7 +33,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(27)  !< Per-check outcome.
+logical                   :: test_passed(31)  !< Per-check outcome.
 type(texture_object)      :: tex              !< A 4 x 2 texture.
 integer(int8)             :: pix(4, 4, 2)     !< Its pixels.
 integer(int8)             :: pix_bad(3, 4, 2) !< Pixels of the wrong shape (3 channels).
@@ -58,6 +60,13 @@ integer(int32)            :: dock_node(2)     !< Nodes the windows A and B ended
 integer(int32)            :: layouts          !< Times the layout was built.
 integer(int32)            :: stat_dock        !< ig_dock_space with docking off.
 logical                   :: docked(2)        !< Windows A and B docked.
+real(real64)              :: rgba(4)          !< A colour read back.
+real(real64)              :: rgba_plot(4)     !< An ImPlot colour read back.
+real(real64)              :: var(2)           !< A style variable read back.
+real(real64)              :: var2(2)          !< A pair read back.
+real(real64)              :: var_plot(2)      !< An ImPlot variable read back.
+integer(int32)            :: nvar(3)          !< Their counts.
+integer(int32)            :: stat_sv(5)       !< Statuses of the style calls that must fail.
 integer(int32)            :: stat_items(5)    !< Status of the scatter, bars and shaded items.
 integer(int32)            :: stat_spec        !< Status of a spec with a bad colour.
 type(plot_spec_object)    :: red              !< Red line, 2 pixels, circle markers.
@@ -202,6 +211,22 @@ window_bg = style_color ! the default style, seal
 seal_cmap = ImPlot_GetColormapIndex('FIGURE seal'//c_null_char)
 call app%set_style('dark', stat=stat_style(1))
 call app%set_style('bogus', stat=stat_style(2))
+! style by name: colours (hex and components) and variables of both libraries, then the failures
+call ig_set_style_color('Button', '#3a322b80')
+call ig_get_style_color('Button', rgba)
+call ip_set_style_color('PlotBg', [0.25_real64, 0.5_real64, 0.75_real64])
+call ip_get_style_color('PlotBg', rgba_plot)
+call ig_set_style_var('FrameRounding', 3.0_real64)
+call ig_get_style_var('FrameRounding', var, nvar(1))
+call ig_set_style_var('ItemSpacing', [7.0_real64, 5.0_real64])
+call ig_get_style_var('ItemSpacing', var2, nvar(2))
+call ip_set_style_var('PlotPadding', [4.0_real64, 6.0_real64])
+call ip_get_style_var('PlotPadding', var_plot, nvar(3))
+call ig_set_style_color('NoSuchColour', '#000000', stat=stat_sv(1))
+call ig_set_style_color('Button', '#12345', stat=stat_sv(2))
+call ig_set_style_var('FrameRounding', [1.0_real64, 2.0_real64], stat=stat_sv(3))
+call ip_set_style_var('NoSuchVariable', 1.0_real64, stat=stat_sv(4))
+call ig_set_style_color('Button', [1.5_real64, 0.0_real64, 0.0_real64], stat=stat_sv(5))
 call app%set_docking(.false.)
 if (app%next_frame()) call ig_dock_space(dock_root, stat=stat_dock) ! docking off: rejected
 call ip_heatmap('one end', fld, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, scale_min=0.0_real64, stat=stat_scale)
@@ -239,8 +264,14 @@ test_passed(24) = stat_style(2) == int(FIG_ERR_ARGUMENT, int32)                 
 test_passed(25) = layouts == 1_int32 .and. dock_left /= 0_int32 .and. dock_right /= 0_int32 ! layout built once
 test_passed(26) = all(docked) .and. dock_node(1) == dock_left .and. dock_node(2) == dock_right ! docked where laid out
 test_passed(27) = stat_dock == int(FIG_ERR_STATE, int32)                            ! no dock space with docking off
+test_passed(28) = all(abs(rgba - [58.0_real64, 50.0_real64, 43.0_real64, 128.0_real64] / 255.0_real64) < 1.0e-6_real64) ! hex
+test_passed(29) = all(abs(rgba_plot - [0.25_real64, 0.5_real64, 0.75_real64, 1.0_real64]) < 1.0e-6_real64) ! ImPlot rgb
+test_passed(30) = nvar(1) == 1_int32 .and. abs(var(1) - 3.0_real64) < 1.0e-6_real64 .and. nvar(2) == 2_int32 .and. &
+                  all(abs(var2 - [7.0_real64, 5.0_real64]) < 1.0e-6_real64) .and. nvar(3) == 2_int32 .and.            &
+                  all(abs(var_plot - [4.0_real64, 6.0_real64]) < 1.0e-6_real64)                ! variables round-trip
+test_passed(31) = all(stat_sv == int(FIG_ERR_ARGUMENT, int32))                     ! bad names, colours, arity
 
-write(output_unit, '(A,27L2)') 'figure_test_headless checks:', test_passed
+write(output_unit, '(A,31L2)') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'field plot limits x, y: ', field_limits%X%Min, field_limits%X%Max, &

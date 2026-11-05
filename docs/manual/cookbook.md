@@ -56,6 +56,15 @@ See [tutorial chapter 2](./tutorial/02-widgets#a-window-the-user-can-close): pas
 
 See [tutorial chapter 2](./tutorial/02-widgets#same-text-different-widgets): `'Reset##cfl'` and `'Reset##time'`.
 
+### Change one colour of the whole interface
+
+<<< @/examples/snippets/cb_style-style.F90{fortran}
+
+<Media name="cb_style" :width="560" alt="The interface with a green button, amber accents and a dark-blue plot" caption="docs/examples/src/cb_style.F90" />
+
+Names are Dear ImGui's and ImPlot's own (`Button`, `SliderGrab`, `PlotBg`, `FrameRounding`, ...); the change is
+global and lasts until it is changed again or `app%set_style` resets it. [Styles](/guide/styles) lists them.
+
 ### Controls on the left, plots on the right
 
 <<< @/examples/snippets/cb_dock-layout.F90{fortran}

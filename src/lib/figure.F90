@@ -3,8 +3,9 @@ module figure
 !< FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration.
 !<
 !< Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui),
-!< docking (figure_dock), the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and
-!< ImPlot's constants, and the GPU textures (figure_texture) that `ig_image` and `ip_image` draw.
+!< docking (figure_dock), the style colours and variables by name (figure_style), the ImPlot plots (figure_implot):
+!< items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the GPU textures (figure_texture) that
+!< `ig_image` and `ip_image` draw.
 use figure_app, only : app_object
 use figure_base, only : figure_last_error
 use figure_c_native, only : FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
@@ -30,6 +31,8 @@ use figure_implot, only : ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot
                           ImPlotColormap_Viridis, ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool,     &
                           ImPlotColormap_Pink, ImPlotColormap_Jet, ImPlotColormap_Twilight, ImPlotColormap_RdBu,      &
                           ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral, ImPlotColormap_Greys
+use figure_style, only : ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var,       &
+                         ip_get_style_color, ip_get_style_var, ip_set_style_color, ip_set_style_var
 use figure_texture, only : texture_object
 
 implicit none
@@ -40,6 +43,8 @@ public :: ig_begin, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_s
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
 public :: ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window
 public :: ig_window_dock
+public :: ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var
+public :: ip_get_style_color, ip_get_style_var, ip_set_style_color, ip_set_style_var
 public :: ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode, ImGuiDockNodeFlags_NoDockingSplit
 public :: ImGuiDockNodeFlags_NoResize, ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking
 public :: ip_bars, ip_begin_plot, ip_end_plot, ip_line, ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object

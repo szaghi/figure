@@ -30,6 +30,12 @@ void   fig_set_lazy(int enabled, double max_wait_s);
 /* Keep window positions and sizes in this file (Dear ImGui's imgui.ini); off by default. Before the first frame. */
 int    fig_set_ini_file(const char *path, int path_len);
 int    fig_set_style(const char *name, int name_len);
+/* Style by name, lib 0 Dear ImGui, 1 ImPlot; set 1 writes, 0 reads. Colours: the libraries' colour names (Text,
+ * Button, PlotBg, ...), rgba in [0, 1]. Variables: every plain field of ImGuiStyle/ImPlotStyle (WindowRounding,
+ * FramePadding, PlotPadding, ...): count values (1, or 2 for an ImVec2; bools as 0/1, enumerations as integers),
+ * returned in count when reading. */
+int    fig_style_color(int lib, const char *name, int name_len, int set, float *rgba);
+int    fig_style_var(int lib, const char *name, int name_len, int set, double *values, int *count);
 void   fig_request_frames(int n);
 double fig_content_scale(void);
 const char *fig_last_error(int *len);

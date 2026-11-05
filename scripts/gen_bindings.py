@@ -628,6 +628,60 @@ def glue_cpp(glue: list[Function], structs: dict) -> str:
     return "\n".join(out) + "\n"
 
 
+# Style fields reachable by name (figure_style): plain values of ImGuiStyle and ImPlotStyle. Colours are reached
+# through each library's own colour names; fonts belong to the font API; private fields (`_x`) are not public.
+STYLE_KINDS = {
+    "float": "FIG_STYLE_FLOAT",
+    "ImVec2": "FIG_STYLE_VEC2",
+    "bool": "FIG_STYLE_BOOL",
+}
+STYLE_INT_TYPES = {"ImGuiDir", "ImGuiHoveredFlags", "ImGuiTreeNodeFlags"}
+
+
+def style_tables(structs: dict) -> str:
+    """Render native/figure_style_generated.cpp: name, offset and kind of every plain style field."""
+    out = [
+        "// FIGURE generated style tables (scripts/gen_bindings.py: do not edit).",
+        "//",
+        "// Every plain field of ImGuiStyle and ImPlotStyle (float, ImVec2, bool, enumeration), by name, offset and kind:",
+        "// what figure_style reads and writes by name. Colours (the Colors arrays) are reached through each library's",
+        "// colour names, the font fields through the font API; private fields (leading underscore) are left out.",
+        '#include "figure_style.h"',
+        '#include "imgui.h"',
+        '#include "implot.h"',
+        "",
+        "#include <cstddef>",
+        "",
+        "namespace figure_style {",
+        "",
+    ]
+    for struct, table in (
+        ("ImGuiStyle", "IMGUI_FIELDS"),
+        ("ImPlotStyle", "IMPLOT_FIELDS"),
+    ):
+        rows = []
+        for f in structs[struct]:
+            name, ctype = f["name"], f["type"]
+            if name.startswith(("_", "Font", "Colors")):
+                continue
+            if ctype in STYLE_KINDS:
+                kind = STYLE_KINDS[ctype]
+            elif ctype in STYLE_INT_TYPES:
+                kind = "FIG_STYLE_INT"
+            else:
+                continue
+            rows.append(f'   {{"{name}", offsetof({struct}, {name}), {kind}}},')
+        out += [
+            f"const field {table}[] = {{",
+            *rows,
+            "};",
+            f"const int {table}_COUNT = {len(rows)};",
+            "",
+        ]
+    out += ["} // namespace figure_style", ""]
+    return "\n".join(out)
+
+
 def layout_test() -> str:
     """Render the test program comparing the Fortran mirror sizes with the C sizes."""
     pairs = [(MIRRORS[c][0], f"figure_sizeof_{c}_c", MIRRORS[c][1]) for c in MIRRORS]
@@ -846,6 +900,7 @@ def generate() -> dict[Path, str]:
     outputs[ROOT / "docs" / "guide" / "raw-bindings.md"] = report(results)
     glue = [f for _, fns in results for f in fns if f.status == "glue"]
     outputs[ROOT / "native" / "figure_glue_generated.cpp"] = glue_cpp(glue, structs_all)
+    outputs[ROOT / "native" / "figure_style_generated.cpp"] = style_tables(structs_all)
     outputs[ROOT / "src" / "tests" / "figure_test_layout.F90"] = layout_test()
     for path, text in outputs.items():
         if path.suffix == ".F90":

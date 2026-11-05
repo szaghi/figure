@@ -22,7 +22,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
 | `app%set_docking(enabled [, stat])` | docking on (default) or off | [docking](docking) |
-| `app%set_style(name [, stat])` | colours: `'seal'` (default), `'seal-light'`, `'dark'`, `'light'`, `'classic'` | [frame loop](frame-loop#styles) |
+| `app%set_style(name [, stat])` | colours: `'seal'` (default), `'seal-light'`, `'dark'`, `'light'`, `'classic'` | [styles](styles) |
 | `app%destroy()` | close the window, destroy the contexts | [frame loop](frame-loop#the-application) |
 
 ## Widgets: `ig_*`
@@ -57,6 +57,17 @@ Details: [Widgets](widgets).
 | `ig_window_dock(id, docked)` | inside a window: its dock node and whether it is docked |
 
 Details: [Docking](docking).
+
+## Styles: `ig_/ip_ set_/get_ style_color`, `style_var`
+
+| Procedure | Does |
+|---|---|
+| `ig_set_style_color(name, color [, stat])`, `ip_set_style_color(...)` | a colour by name (`'#rrggbb[aa]'` or components) |
+| `ig_get_style_color(name, rgba [, stat])`, `ip_get_style_color(...)` | a colour by name |
+| `ig_set_style_var(name, value [, stat])`, `ip_set_style_var(...)` | a style variable by name (number, pair, logical, integer) |
+| `ig_get_style_var(name, values, n [, stat])`, `ip_get_style_var(...)` | a style variable by name |
+
+Details: [Styles](styles).
 
 ## Plots: `ip_*`
 
@@ -102,7 +113,7 @@ Details: [Error handling](errors).
 | Variable | Effect |
 |---|---|
 | `FIGURE_DEBUG_REDRAW` | any value: once per second, redraw statistics on standard error (window mode) — see [frame loop](frame-loop#redraw-diagnostics) |
-| `FIGURE_STYLE` | the style at initialisation: a name of `app%set_style` — see [styles](frame-loop#styles) |
+| `FIGURE_STYLE` | the style at initialisation: a name of `app%set_style` — see [styles](styles) |
 | `FIGURE_CAPTURE`, `FIGURE_CAPTURE_*` | record the frames of a window to image files, with scripted input — see [screenshots and videos](capture) |
 | `GALLIUM_DRIVER=d3d12` | not read by FIGURE: on WSL2, makes Mesa render on the GPU — see [installation](install#wsl2-wslg) |
 | `SDL_VIDEO_DRIVER` | read by SDL3: `x11` or `wayland` to choose the video driver |
