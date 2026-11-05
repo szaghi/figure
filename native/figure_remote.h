@@ -15,9 +15,15 @@ namespace figure_remote {
 bool start(const std::string &host, int port, int &bound_port, std::string &err);
 // Close every socket.
 void stop();
-// Serve the network for at most `timeout_ms` (0: just poll): accept, answer HTTP, read WebSocket messages and feed
-// them to Dear ImGui's IO. True if input arrived (or a client connected): the UI must be redrawn.
+// Serve the network for at most `timeout_ms` (0: just poll): accept, answer HTTP, send queued output, read WebSocket
+// messages and feed them to Dear ImGui's IO. Returns early, true, when input arrived (or a client connected) or a
+// skipped frame can now be sent: the UI must be redrawn.
 bool serve(int timeout_ms);
+// A frame was skipped because the previous one was still queued (a slow client): the program should draw again, so
+// that the latest state goes out as soon as the queue drains (serve returns true then).
+bool frame_pending();
+// The last frame sent is still (partly) in the client's queue.
+bool queue_busy();
 // Send a rendered frame to the client, if any: the textures Dear ImGui asks for (created, updated, destroyed), then
 // the draw lists. Also answers Dear ImGui's texture requests when no client is connected.
 void send_frame(ImDrawData *draw_data);

@@ -98,11 +98,12 @@ do
       app_s = 0.0_real64
       figure_s = 0.0_real64
       frames = 0_int32
+      updates = 0_int32
    endif
    if (warm .and. real(t1 - t_start, real64) / real(clock_rate, real64) >= seconds) exit
    frames = frames + 1_int32
    if (rate > 0.0_real64) then
-      if (real(t1 - t_last_update, real64) / real(clock_rate, real64) >= 0.999_real64 / rate) then
+      if (real(t1 - t_last_update, real64) / real(clock_rate, real64) >= 0.9_real64 / rate) then ! the wake-up jitters
          t_last_update = t1
          updates = updates + 1_int32
          call update_data()

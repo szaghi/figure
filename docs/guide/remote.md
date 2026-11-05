@@ -23,7 +23,7 @@ Try it with the example: `exe/figure_hello --remote 8080`, then open `http://loc
 
 ## init_remote
 
-`app%init_remote([port] [, host] [, width, height] [, port_used] [, quiet] [, stat])`:
+`app%init_remote([port] [, host] [, width, height] [, port_used] [, quiet] [, max_fps] [, stat])`:
 
 | Argument | Meaning |
 |---|---|
@@ -32,6 +32,7 @@ Try it with the example: `exe/figure_hello --remote 8080`, then open `http://loc
 | `width`, `height` | display size until a browser connects and sends its own (default 1280 x 800) |
 | `port_used` | the port listened on |
 | `quiet` | do not print the address to open |
+| `max_fps` | most frames per second (default 60; `0`: no cap): a browser has no vsync to pace the program |
 | `stat` | `FIG_ERR_FAILED` if the port cannot be opened (in use, not permitted) |
 
 Everything else is unchanged: widgets, plots, heatmaps, textures (sent to the browser when they change), lazy redraw
@@ -56,6 +57,9 @@ shared machine.
   connection drops.
 - **The program does not wait for a browser.** Without one, frames are drawn and dropped; the computation goes on.
 - **Closing the browser does not end the program**: `next_frame` keeps returning `.true.`; the program ends itself.
+- **Frames are paced.** At most `max_fps` per second, and a frame is sent only once the previous one has left the
+  program: on a slow link the newest frame goes and the ones drawn meanwhile are skipped, so the interface lags by one
+  frame at most, never by a growing queue.
 - **Input**: mouse (position, buttons, wheel), keyboard (navigation and editing keys, Ctrl/Shift/Alt/Super, typed
   characters), and the size of the browser's window, which becomes the display size.
 
@@ -76,7 +80,12 @@ Measured with `scripts/measure_redraw.py` (the program `figure_bench_redraw`, 10
 | live data, 10 updates per second | 1.07 MB/s | 1.07 MB/s |
 | live data, 60 updates per second | 6.6 MB/s | 3.3 MB/s |
 
-So an idle interface costs nothing, and live data costs what it changes: one frame per update. Large data is large
+So an idle interface costs nothing, and live data costs what it changes: one frame per update. While the user
+interacts, the cap holds the frames to 60 per second.
+
+Through an SSH tunnel from an office to a cluster node (about 9 MB/s on that link): live data at 60 updates per
+second arrives at 60 frames per second (6.5 MB/s); interacting, 45 frames per second; a 100 000-point line (9 MB per
+frame) arrives at one frame per second, always the newest one. Large data is large
 on the wire too: a 100 000-point line is about 9 MB per frame, a 256 × 256 heatmap 6 MB, a 3840 × 2160 texture 33 MB
 per update; on a slow link, decimate what you plot, or show a field as a texture at the size it is displayed.
 

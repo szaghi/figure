@@ -151,8 +151,12 @@ Create the contexts and serve the UI to a web browser on `http://host:port/` ins
  program runs. There is no authentication: whoever reaches the port controls the program, so keep the default
  host (127.0.0.1) and reach a remote machine through an SSH tunnel (`ssh -L 8080:localhost:8080 node`).
 
+ A browser has no vsync to pace the program, so frames are capped at `max_fps` per second (default 60), and a
+ frame is sent only once the previous one has left: with a slow client the newest frame goes, the ones in between
+ are skipped. A frame equal to the last one sent is not sent again.
+
 ```fortran
-subroutine init_remote(self, port, host, width, height, port_used, quiet, stat)
+subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, stat)
 ```
 
 **Arguments**
@@ -166,6 +170,7 @@ subroutine init_remote(self, port, host, width, height, port_used, quiet, stat)
 | `height` | integer(kind=int32) | in | optional | Display height until the browser's [pixels] (default 800). |
 | `port_used` | integer(kind=int32) | out | optional | The port listened on (useful with port 0). |
 | `quiet` | logical | in | optional | Do not print the address to open (default false). |
+| `max_fps` | real(kind=real64) | in | optional | Most frames per second (default 60; 0: no cap). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -173,6 +178,7 @@ subroutine init_remote(self, port, host, width, height, port_used, quiet, stat)
 ```mermaid
 flowchart TD
   init_remote["init_remote"] --> fig_init_remote["fig_init_remote"]
+  init_remote["init_remote"] --> fig_set_remote_fps["fig_set_remote_fps"]
   init_remote["init_remote"] --> figure_check["figure_check"]
   style init_remote fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

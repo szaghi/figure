@@ -61,6 +61,7 @@ graph LR
 - [fig_window_rect](#fig-window-rect)
 - [fig_shutdown](#fig-shutdown)
 - [fig_set_lazy](#fig-set-lazy)
+- [fig_set_remote_fps](#fig-set-remote-fps)
 - [fig_request_frames](#fig-request-frames)
 - [fig_set_last_error](#fig-set-last-error)
 - [fig_texture_destroy](#fig-texture-destroy)
@@ -156,6 +157,8 @@ graph LR
 ### fig_shutdown
 
 ### fig_set_lazy
+
+### fig_set_remote_fps
 
 ### fig_request_frames
 

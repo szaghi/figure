@@ -4,12 +4,15 @@ program figure_test_remote
 !<
 !< Serves the UI on a free port (no window, display or GPU), launches scripts/remote_client.py in the background, and
 !< draws frames until the client's click arrives (or 30 s pass). The client checks the page, the handshake, every
-!< message byte by byte (with a draw list over 65536 vertices: a 100000-point line) and the resize event; this
-!< program checks that the click arrived once, and the client's verdict. Needs python3 (3.11+) on the PATH; run from
-!< the repository root, as scripts/run_tests.sh does.
+!< message byte by byte (with a draw list over 65536 vertices: a 100000-point line, until the client presses Z), the
+!< resize event, the skipping of unchanged frames and the frame-rate cap; this program checks that the click arrived
+!< once, and the client's verdict. Needs python3 (3.11+) on the PATH; run from the repository root, as
+!< scripts/run_tests.sh does.
 use, intrinsic :: iso_fortran_env, only : error_unit, int32, int64, output_unit, real64
 use figure, only : app_object, ig_begin, ig_button, ig_end, ig_item_rect, ig_set_next_window, ip_begin_plot, ip_end_plot, &
                    ip_line
+use figure_cimgui, only : igIsKeyDown_Nil
+use figure_cimgui_enums, only : ImGuiKey_Z
 
 implicit none
 character(len=*), parameter :: CLICK_FILE = 'figure_test_remote.click' !< Where the click point is written.
@@ -36,11 +39,13 @@ character(len=16)           :: os                                       !< The O
 real(real64)                :: lx(100000)                               !< A long line (over 65536 vertices): abscissae.
 real(real64)                :: ly(100000)                               !< Its ordinates.
 integer(int32)              :: i                                        !< Counter.
+logical                     :: long_shown                               !< The long line is drawn (until Z is down).
 
 call remove_file(CLICK_FILE)
 call remove_file(OK_FILE)
 lx = [(real(i, real64), i = 1_int32, size(lx))]
 ly = sin(0.01_real64 * lx)
+long_shown = .true.
 clicks = 0_int32
 frames = 0_int32
 written = .false.
@@ -65,14 +70,17 @@ if (test_passed(1)) then
          call ig_item_rect(x0, y0, x1, y1)
       endif
       call ig_end()
-      call ig_set_next_window(340.0_real64, 20.0_real64, 280.0_real64, 220.0_real64, always=.true.)
-      if (ig_begin('Long line')) then ! one draw list over 65536 vertices: indices relative to each command's offset
-         if (ip_begin_plot('long', height=-1.0_real64)) then
-            call ip_line('y', lx, ly)
-            call ip_end_plot()
+      if (igIsKeyDown_Nil(ImGuiKey_Z)) long_shown = .false. ! the client has seen it: small frames from now on
+      if (long_shown) then
+         call ig_set_next_window(340.0_real64, 20.0_real64, 280.0_real64, 220.0_real64, always=.true.)
+         if (ig_begin('Long line')) then ! one draw list over 65536 vertices: indices relative to each command's offset
+            if (ip_begin_plot('long', height=-1.0_real64)) then
+               call ip_line('y', lx, ly)
+               call ip_end_plot()
+            endif
          endif
+         call ig_end()
       endif
-      call ig_end()
       if (.not. written .and. frames > 3_int32) then ! the layout has settled: tell the client where to click
          open(newunit=unit, file=CLICK_FILE, action='write', status='replace')
          write(unit, '(F0.1,1X,F0.1)') 0.5_real64 * (x0 + x1), 0.5_real64 * (y0 + y1)

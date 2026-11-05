@@ -81,6 +81,7 @@ struct state_t {
       bool smooth = false;
    };
    std::chrono::steady_clock::time_point last_frame; // remote mode: the frame clock (no SDL)
+   double        remote_min_dt = 1.0 / 60.0;           // remote mode: shortest time between frames [s] (0: no cap)
    std::map<unsigned long long, texture_t> textures; // user textures by ImTextureID (the GL name in window mode)
    unsigned long long next_headless_texture = 1;     // headless mode: ids without GL objects
 } st;
@@ -1110,6 +1111,8 @@ void fig_set_lazy(int enabled, double max_wait_s) {
    st.max_wait_ms = max_wait_s > 0.0 ? static_cast<int>(max_wait_s * 1000.0) : 0;
 }
 
+void fig_set_remote_fps(double max_fps) { st.remote_min_dt = max_fps > 0.0 ? 1.0 / max_fps : 0.0; }
+
 void fig_request_frames(int n) {
    if (n > st.frames_left) st.frames_left = n;
 }
@@ -1132,12 +1135,23 @@ int fig_begin_frame(int *running) {
       return FIG_OK;
    }
    if (st.m == mode::remote) {
-      // the same lazy redraw as a window, waiting on the network instead of SDL's event queue
-      bool got = figure_remote::serve(st.lazy && st.frames_left <= 0 ? st.max_wait_ms : 0);
+      // the same lazy redraw as a window, waiting on the network instead of SDL's event queue; then the frame-rate
+      // cap (a browser has no vsync to pace the program): input arriving meanwhile is gathered into the next frame
+      using clock = std::chrono::steady_clock;
+      // wait for input up to max_wait when idle, or, when a frame was skipped for a slow client, until the queue
+      // drains (serve returns early then); otherwise go on at once
+      const bool pending = figure_remote::frame_pending(), busy = figure_remote::queue_busy();
+      const bool wait = pending ? busy : st.lazy && st.frames_left <= 0;
+      bool got = figure_remote::serve(wait ? st.max_wait_ms : 0);
+      const auto next = st.last_frame + std::chrono::duration_cast<clock::duration>(
+                                           std::chrono::duration<double>(st.remote_min_dt));
+      for (auto t = clock::now(); t < next; t = clock::now())
+         got = figure_remote::serve(static_cast<int>(
+                  std::chrono::duration_cast<std::chrono::milliseconds>(next - t).count()) + 1) || got;
       while (figure_remote::serve(0)) got = true; // drain what else arrived
       if (got) st.frames_left = 3;
       else if (st.frames_left > 0) --st.frames_left;
-      const auto now = std::chrono::steady_clock::now();
+      const auto now = clock::now();
       const float dt = std::chrono::duration<float>(now - st.last_frame).count();
       st.last_frame = now;
       ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0e-4f;

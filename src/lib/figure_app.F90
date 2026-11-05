@@ -21,7 +21,8 @@ use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
-                            fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_style, fig_shutdown
+                            fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_fps, fig_set_style, &
+                            fig_shutdown
 
 implicit none
 private
@@ -84,11 +85,15 @@ contains
    call figure_check(status, stat)
    endsubroutine init_headless
 
-   subroutine init_remote(self, port, host, width, height, port_used, quiet, stat)
+   subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, stat)
    !< Create the contexts and serve the UI to a web browser on `http://host:port/` instead of opening a window: the
    !< program needs no display or GPU (a cluster node will do). One browser at a time, which can come and go while the
    !< program runs. There is no authentication: whoever reaches the port controls the program, so keep the default
    !< host (127.0.0.1) and reach a remote machine through an SSH tunnel (`ssh -L 8080:localhost:8080 node`).
+   !<
+   !< A browser has no vsync to pace the program, so frames are capped at `max_fps` per second (default 60), and a
+   !< frame is sent only once the previous one has left: with a slow client the newest frame goes, the ones in between
+   !< are skipped. A frame equal to the last one sent is not sent again.
    class(app_object), intent(inout)         :: self      !< Application.
    integer(int32),    intent(in),  optional :: port      !< Port (default 8080; 0: any free port).
    character(len=*),  intent(in),  optional :: host      !< Address to listen on (default 127.0.0.1).
@@ -96,6 +101,7 @@ contains
    integer(int32),    intent(in),  optional :: height    !< Display height until the browser's [pixels] (default 800).
    integer(int32),    intent(out), optional :: port_used !< The port listened on (useful with port 0).
    logical,           intent(in),  optional :: quiet     !< Do not print the address to open (default false).
+   real(real64),      intent(in),  optional :: max_fps   !< Most frames per second (default 60; 0: no cap).
    integer(int32),    intent(out), optional :: stat      !< Status.
    integer(c_int)                           :: p         !< Requested port.
    integer(c_int)                           :: bound     !< Port listened on.
@@ -116,6 +122,13 @@ contains
       status = fig_init_remote(w, h, '', 0_c_int, p, bound)
    endif
    if (present(port_used)) port_used = int(bound, int32)
+   if (status == FIG_OK) then
+      if (present(max_fps)) then
+         call fig_set_remote_fps(real(max_fps, c_double))
+      else
+         call fig_set_remote_fps(60.0_c_double)
+      endif
+   endif
    talk = .true.
    if (present(quiet)) talk = .not. quiet
    if (status == FIG_OK .and. talk) then

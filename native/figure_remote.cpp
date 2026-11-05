@@ -148,6 +148,8 @@ struct server_t {
    std::uint64_t                           next_id = 1;
    bool                                    resend = false; // a client connected: send all textures
    std::string                             last_frame;     // the last frame message sent, to skip repeats
+   size_t                                  unsent_frame = 0; // bytes of the last frame still in the client's queue
+   bool                                    pending = false;  // a frame was skipped while the queue was busy
    std::chrono::steady_clock::time_point   last_sent;      // when a message last went to the client
    float                                   background[3] = {0.10f, 0.10f, 0.11f}; // behind the windows
 #ifdef _WIN32
@@ -216,6 +218,7 @@ void flush(connection_t &c) {
       const int n = static_cast<int>(send(c.s, c.out.data(), static_cast<int>(std::min<size_t>(c.out.size(), 1 << 20)), SEND_FLAGS));
       if (n > 0) {
          c.out.erase(0, static_cast<size_t>(n));
+         if (c.websocket) sv.unsent_frame = static_cast<size_t>(n) >= sv.unsent_frame ? 0 : sv.unsent_frame - n;
       } else {
          if (n < 0 && would_block()) return; // the rest at the next serve/send
          close_socket(c.s);
@@ -433,7 +436,7 @@ void stop() {
    sv = server_t{};
 }
 
-bool serve(int timeout_ms) {
+bool serve_once(int timeout_ms) {
    if (sv.listener == NO_SOCKET) return false;
    fd_set rd, wr;
    FD_ZERO(&rd);
@@ -493,6 +496,24 @@ bool serve(int timeout_ms) {
    return got;
 }
 
+bool serve(int timeout_ms) {
+   // one select at a time until input arrives, a skipped frame can go out, or the time is up: a socket that only
+   // became writable (queued output draining) must not end the wait early
+   const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+   for (;;) {
+      const bool was_busy = sv.unsent_frame > 0;
+      const int left = static_cast<int>(
+         std::chrono::duration_cast<std::chrono::milliseconds>(end - std::chrono::steady_clock::now()).count());
+      if (serve_once(std::max(left, 0))) return true;
+      if (sv.pending && was_busy && sv.unsent_frame == 0) return true; // the latest frame can be sent now
+      if (left <= 0) return false;
+   }
+}
+
+bool frame_pending() { return sv.pending; }
+
+bool queue_busy() { return sv.unsent_frame > 0; }
+
 std::uint64_t new_texture_id() { return sv.next_id++; }
 
 void set_background(float r, float g, float b) {
@@ -551,8 +572,14 @@ void send_frame(ImDrawData *dd) {
       for (const auto &t : sv.textures) ws_append(*c, 2, texture_message(t.first, t.second));
       sv.resend = false;
       sv.last_frame.clear(); // the new client has no frame yet
+      sv.unsent_frame = 0;
+      sv.pending = false;
    }
-   if (c->out.size() > (64u << 20)) return; // the client is not keeping up: drop this frame
+   if (sv.unsent_frame > 0) { // the previous frame is still queued: skip this one, the next (latest) goes instead
+      sv.pending = true;
+      flush(*c);
+      return;
+   }
    std::string m;
    put<std::uint8_t>(m, 1);
    put<float>(m, dd->DisplaySize.x);
@@ -586,10 +613,13 @@ void send_frame(ImDrawData *dd) {
          ws_append(*c, 2, std::string(1, '\x05'));
          sv.last_sent = now;
       }
+      sv.pending = false;
       flush(*c);
       return;
    }
    ws_append(*c, 2, m);
+   sv.unsent_frame = c->out.size(); // the frame ends the queue: sent once the queue empties up to its end
+   sv.pending = false;
    sv.last_frame = std::move(m);
    sv.last_sent = now;
    flush(*c);

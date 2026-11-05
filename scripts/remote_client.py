@@ -7,9 +7,12 @@ Run by src/tests/figure_test_remote.F90 against the program's server. Checks, in
     (id, size, flags, width x height x 4 RGBA bytes) and frames
     (draw lists of 20-byte vertices, 16-bit indices, commands), and draw commands reference received textures and
     vertices only (each command's indices count from its vertex offset);
-  - a draw list over 65536 vertices arrives (the program draws a long line) and stays within those bounds;
+  - a draw list over 65536 vertices arrives (the program draws a long line) and stays within those bounds; then the
+    client presses Z and the program drops the line;
   - a size event ("s:640,480") comes back as the display size of a later frame;
   - then, nothing changing, no frame is sent again for 2.5 s, only "unchanged" messages (at least one);
+  - then the pointer toggles the button's hover 200 times per second: frames keep coming, at most 75 per second
+    (the program caps them at 60);
   - a click (mouse move, press, release) at the point the program writes to CLICK_FILE, and a frame after it (the
     button's hover changed what is drawn).
 Writes "ok" to OK_FILE when every check passed, else the first failure; exits 0 or 1.
@@ -26,12 +29,15 @@ import os
 import socket
 import struct
 import sys
+import threading
 import time
 from pathlib import Path
 
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 TIMEOUT = 30.0
 QUIET = (1.0, 3.5)  # seconds after the resize in which the idle interface must send no frame, only "unchanged"
+PACE = (0.3, 1.3)  # seconds after the pointer starts toggling the button's hover in which frames are counted
+MAX_FPS = 75  # frames per second allowed then (the program's cap is 60)
 
 
 class ProtocolError(Exception):
@@ -166,6 +172,16 @@ def parse_frame(m: bytes, textures: set[int]) -> tuple[float, float]:
     return w, h
 
 
+def toggle_hover(ws: WebSocket, x: float, y: float) -> None:
+    """Move the pointer on and off the button, 200 times per second, for the PACE window."""
+    end = time.monotonic() + PACE[1] + 0.2
+    k = 0
+    while time.monotonic() < end:
+        ws.send(f"m:{x},{y}" if k % 2 == 0 else "m:5,5")
+        k += 1
+        time.sleep(0.005)
+
+
 def run(port: int, click_file: Path) -> None:
     """The checks; raises ProtocolError on the first failure."""
     check_page(port)
@@ -177,6 +193,9 @@ def run(port: int, click_file: Path) -> None:
     sized_at = 0.0  # when the size came back
     quiet_frames = quiet_alive = 0  # frames and "unchanged" messages while nothing changes (S12)
     after_click = 0  # frames received after the pointer moved onto the button
+    paced_at = 0.0  # when the pointer started toggling the hover (200 moves per second)
+    paced_frames = 0  # frames received in the PACE window
+    z_pressed = False  # Z sent: the program stops drawing its long line
     end = time.monotonic() + TIMEOUT
     try:
         while time.monotonic() < end:
@@ -209,8 +228,14 @@ def run(port: int, click_file: Path) -> None:
                     raise ProtocolError(msg)
                 frames += 1
                 w, h = parse_frame(m, textures)
+                if True in big_lists and not z_pressed:  # seen: the program drops the long line (small frames)
+                    ws.send("k:1,KeyZ")
+                    ws.send("k:0,KeyZ")
+                    z_pressed = True
                 if clicked:
                     after_click += 1
+                if paced_at and PACE[0] <= time.monotonic() - paced_at < PACE[1]:
+                    paced_frames += 1
                 if frames == 1:
                     ws.send("s:640,480")
                 elif (w, h) == (640.0, 480.0) and not sized:
@@ -222,7 +247,14 @@ def run(port: int, click_file: Path) -> None:
                 msg = f"unknown message type {m[0]}"
                 raise ProtocolError(msg)
             quiet_over = sized and time.monotonic() - sized_at >= QUIET[1]
-            if quiet_over and not clicked and click_file.exists():
+            if quiet_over and not paced_at and click_file.exists():
+                text = click_file.read_text().split()
+                if len(text) == 2:  # every move changes the button's hover: the cap alone limits the frames
+                    x, y = float(text[0]), float(text[1])
+                    paced_at = time.monotonic()
+                    threading.Thread(target=toggle_hover, args=(ws, x, y), daemon=True).start()
+            paced_over = paced_at and time.monotonic() - paced_at >= PACE[1] + 0.3
+            if paced_over and not clicked:
                 text = click_file.read_text().split()
                 if len(text) == 2:
                     x, y = float(text[0]), float(text[1])
@@ -240,6 +272,9 @@ def run(port: int, click_file: Path) -> None:
         raise ProtocolError(msg)
     if quiet_frames or not quiet_alive:
         msg = f"idle interface: {quiet_frames} frames sent again, {quiet_alive} unchanged messages (expected 0 and >= 1)"
+        raise ProtocolError(msg)
+    if not 5 <= paced_frames <= MAX_FPS * (PACE[1] - PACE[0]):
+        msg = f"{paced_frames} frames in {PACE[1] - PACE[0]:.1f} s of hover changes (expected 5 to {MAX_FPS}/s)"
         raise ProtocolError(msg)
     if not after_click:
         msg = "no frame after the pointer moved onto the button (a change must be sent)"

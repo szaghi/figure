@@ -27,6 +27,8 @@ int    fig_begin_frame(int *running);
 int    fig_end_frame(void);
 void   fig_shutdown(void);
 void   fig_set_lazy(int enabled, double max_wait_s);
+// Remote mode: at most `max_fps` frames per second (default 60; 0 or less: no cap).
+void   fig_set_remote_fps(double max_fps);
 /* Keep window positions and sizes in this file (Dear ImGui's imgui.ini); off by default. Before the first frame. */
 int    fig_set_ini_file(const char *path, int path_len);
 /* A built-in style (themes/<name>.toml); lines: a named line palette (okabe-ito), empty for the theme's own. */

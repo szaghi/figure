@@ -12,6 +12,7 @@ implicit none
 private
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
+public :: fig_set_remote_fps
 public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, fig_texture_destroy, fig_texture_sampling
 public :: fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
@@ -112,6 +113,13 @@ interface
    integer(c_int), value :: enabled    !< 1: lazy redraw on.
    real(c_double), value :: max_wait_s !< Longest sleep [s].
    endsubroutine fig_set_lazy
+
+   subroutine fig_set_remote_fps(max_fps) bind(C, name='fig_set_remote_fps')
+   !< Remote mode: at most `max_fps` frames per second (0 or less: no cap).
+   import :: c_double
+   implicit none
+   real(c_double), value :: max_fps !< Frames per second.
+   endsubroutine fig_set_remote_fps
 
    subroutine fig_request_frames(n) bind(C, name='fig_request_frames')
    !< Draw at least `n` more frames without waiting (animations, data that changed).
