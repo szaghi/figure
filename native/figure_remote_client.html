@@ -101,8 +101,12 @@ function draw(buf) {
 function onMessage(ev) {
   const buf = ev.data, kind = new Uint8Array(buf, 0, 1)[0], dv = new DataView(buf);
   if (kind === 1) { lastFrame = buf; draw(buf); status.textContent = "frame " + (++frames); }
-  else if (kind === 2) setTexture(dv.getUint32(1, true), dv.getUint32(5, true), dv.getUint32(9, true),
-                                  (dv.getUint32(13, true) & 1) !== 0, new Uint8Array(buf, 17));
+  else if (kind === 2) { // a texture changed: the frame using it may be unchanged, so not sent again: redraw it
+    setTexture(dv.getUint32(1, true), dv.getUint32(5, true), dv.getUint32(9, true),
+               (dv.getUint32(13, true) & 1) !== 0, new Uint8Array(buf, 17));
+    if (lastFrame) draw(lastFrame);
+  }
+  else if (kind === 5) status.textContent = "frame " + frames + " (unchanged)"; // the program is alive
   else if (kind === 4) {
     background = [dv.getFloat32(1, true), dv.getFloat32(5, true), dv.getFloat32(9, true)];
     const c = background.map(v => Math.round(v * 255)); document.body.style.background = `rgb(${c})`;
@@ -118,7 +122,7 @@ function connect() {
   ws.binaryType = "arraybuffer";
   ws.onopen = () => { status.textContent = "connected"; sendSize(); };
   ws.onmessage = onMessage;
-  ws.onclose = () => { status.textContent = "disconnected: retrying"; textures.clear(); setTimeout(connect, 1000); };
+  ws.onclose = () => { status.textContent = "disconnected: retrying"; textures.clear(); lastFrame = null; setTimeout(connect, 1000); };
 }
 const pos = e => { const r = canvas.getBoundingClientRect(); return `${e.clientX - r.left},${e.clientY - r.top}`; };
 canvas.addEventListener("mousemove", e => send(`m:${pos(e)}`));

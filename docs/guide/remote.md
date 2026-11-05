@@ -61,12 +61,24 @@ shared machine.
 
 ## Bandwidth
 
-Each frame sends the complete draw lists. Measured for `figure_hello` (a window of widgets and a 1000-point line):
-**110 KB per frame**, plus **256 KB once** per connection for the font atlas. With lazy redraw an idle interface draws
-2 frames per second (about 220 KB/s); while the user interacts it draws at up to 60 frames per second (about 6.6 MB/s).
-That is comfortable on a local network and through a fast tunnel; on a slow link, raise `max_wait` with
-`app%set_lazy` to refresh less often when idle. Textures (`texture_object`) are sent only when `tex%update` changes
-them.
+A frame carries the complete draw lists: about **110 KB** for a window of widgets and a 1000-point line, of which 86 %
+are vertices; the font atlas (**256 KB**) goes once per connection. **A frame equal to the last one sent is not sent
+again**: the server says "unchanged" at most once per second instead, so the browser knows the program is alive.
+Textures (`texture_object`) are sent only when `tex%update` changes them.
+
+Measured with `scripts/measure_redraw.py` (the program `figure_bench_redraw`, 10 s per case):
+
+| what the program does | sent before skipping | sent now |
+|---|---|---|
+| nothing (idle, refreshing twice a second) | 216 KB/s | **1 byte/s** |
+| the user moves the pointer over it | 25.8 MB/s | 4.8 MB/s |
+| live data, 1 update per second | 107 KB/s | 107 KB/s |
+| live data, 10 updates per second | 1.07 MB/s | 1.07 MB/s |
+| live data, 60 updates per second | 6.6 MB/s | 3.3 MB/s |
+
+So an idle interface costs nothing, and live data costs what it changes: one frame per update. Large data is large
+on the wire too: a 100 000-point line is about 9 MB per frame, a 256 × 256 heatmap 6 MB, a 3840 × 2160 texture 33 MB
+per update; on a slow link, decimate what you plot, or show a field as a texture at the size it is displayed.
 
 ## How it works
 
@@ -74,10 +86,10 @@ The native layer contains a minimal HTTP and WebSocket server (RFC 6455, one cli
 Winsock). `GET /` answers the client page, embedded in the library; `GET /ws` upgrades to a WebSocket. After each
 frame the server sends, as binary messages, the textures Dear ImGui created or changed (RGBA, with their filtering)
 and the draw lists (20-byte vertices, 16-bit indices, commands with clip rectangle, texture, index range and vertex offset, so a
-window may hold more than 65 536 vertices, as a long plotted line does); on
+window may hold more than 65 536 vertices, as a long plotted line does), unless they equal the last ones sent; on
 connection, and when the [style](styles) changes, it also sends the background colour. The page draws
 them with WebGL, exactly as the OpenGL backend draws a window, and sends input events back as short text messages. The protocol is described at the top of `native/figure_remote.cpp`.
 
 `src/tests/figure_test_remote.F90` tests it end to end without a browser: it serves on a free port and runs
 `scripts/remote_client.py`, a WebSocket client that checks the page, the handshake, every message byte by byte (including a draw
-list over 65 536 vertices) and a resize, then clicks a button the program must see clicked once. It needs `python3` (3.11+).
+list over 65 536 vertices), a resize, that an idle interface sends no frame (only "unchanged"), then clicks a button the program must see clicked once. It needs `python3` (3.11+).

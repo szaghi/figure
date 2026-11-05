@@ -12,6 +12,8 @@
 //               RGBA bytes (created or replaced)
 //   3 destroy:  u8 3, u32 id
 //   4 background: u8 4, f32 r, g, b (0 to 1): the colour behind the windows (sent on connection and on change)
+//   5 unchanged: u8 5: the frame equals the last one sent, which is not sent again; at most once per second, so the
+//               client knows the program is alive (an idle interface sends nothing else)
 // Client to server: text messages, one event each: "m:x,y" mouse position, "b:button,down", "w:dx,dy" wheel,
 // "k:down,code" key (KeyboardEvent.code), "c:text" typed characters, "s:width,height" canvas size.
 #include "figure_native.h"
@@ -20,6 +22,7 @@
 #include "imgui.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -144,6 +147,8 @@ struct server_t {
    std::map<std::uint64_t, texture_t>      textures; // every live texture, sent again to a new client
    std::uint64_t                           next_id = 1;
    bool                                    resend = false; // a client connected: send all textures
+   std::string                             last_frame;     // the last frame message sent, to skip repeats
+   std::chrono::steady_clock::time_point   last_sent;      // when a message last went to the client
    float                                   background[3] = {0.10f, 0.10f, 0.11f}; // behind the windows
 #ifdef _WIN32
    bool                                    wsa = false;
@@ -410,6 +415,18 @@ bool start(const std::string &host, int port, int &bound_port, std::string &err)
 }
 
 void stop() {
+   // the client gets what is queued (the last frames) and a close frame, within 2 s, before the sockets close
+   if (connection_t *c = client()) ws_append(*c, 0x8, "");
+   const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+   for (auto &c : sv.conns) {
+      while (c.s != NO_SOCKET && !c.out.empty() && std::chrono::steady_clock::now() < end) {
+         fd_set wr;
+         FD_ZERO(&wr);
+         FD_SET(c.s, &wr);
+         timeval tv{0, 100000};
+         if (select(static_cast<int>(c.s + 1), nullptr, &wr, nullptr, &tv) > 0) flush(c);
+      }
+   }
    for (auto &c : sv.conns)
       if (c.s != NO_SOCKET) close_socket(c.s);
    if (sv.listener != NO_SOCKET) close_socket(sv.listener);
@@ -533,6 +550,7 @@ void send_frame(ImDrawData *dd) {
       ws_append(*c, 2, background_message());
       for (const auto &t : sv.textures) ws_append(*c, 2, texture_message(t.first, t.second));
       sv.resend = false;
+      sv.last_frame.clear(); // the new client has no frame yet
    }
    if (c->out.size() > (64u << 20)) return; // the client is not keeping up: drop this frame
    std::string m;
@@ -562,7 +580,18 @@ void send_frame(ImDrawData *dd) {
          put<std::uint32_t>(m, cmd.VtxOffset);
       }
    }
+   const auto now = std::chrono::steady_clock::now();
+   if (m == sv.last_frame) { // nothing changed since the last frame sent: skip it, say so once per second
+      if (now - sv.last_sent >= std::chrono::seconds(1)) {
+         ws_append(*c, 2, std::string(1, '\x05'));
+         sv.last_sent = now;
+      }
+      flush(*c);
+      return;
+   }
    ws_append(*c, 2, m);
+   sv.last_frame = std::move(m);
+   sv.last_sent = now;
    flush(*c);
 }
 
