@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.1.0] — 2026-11-05
 ### Added
 - **native**: Add FIGURE_DEBUG_REDRAW diagnostics and an idle-CPU probe
 
@@ -70,6 +70,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **performance**: A performance guide built on the measurements (S15)
 
+- **features**: List every public procedure; check it with scripts/check_docs.py (S17)
+
+- **media**: Regenerate every recording for v0.1.0 (S17)
+
+- **changelog**: Generate CHANGELOG.md with git-cliff; the docs page includes it (S17)
+
+- **readme**: The mark, an animation, a compiled example, install with FoBiS and fpm (S17)
+
+- Check every page against the code for v0.1.0 (S17)
+
+- **site**: Fixes from a review of the built site (S17)
+
 
 ### Fixed
 - **build**: Anchor build-product paths in .gitignore
@@ -89,6 +101,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **ci**: Retry the remote test's verdict open; Apple clang for the macOS fpm dependency
 
 - **ci**: C++17 for the macOS fpm dependency (Apple clang defaults to C++98)
+
+- **test**: The remote test's wrong token always differs from the token
 
 
 ### Performance
