@@ -1,0 +1,46 @@
+#! program build/docs-examples/bin/cb_form
+#! frames  370
+#! poster  360
+# a field typed over (ctrl+a), a scheme picked, restart ticked, then a row added to the table and edited
+0   move 450 300
+10  move 150 74 15
+28  down
+30  up
+34  key ctrl down
+35  key a
+36  key ctrl up
+40  text MESH/grid
+56  key enter
+62  move 150 149 15
+80  down
+82  up
+90  move 90 213 12
+106 down
+108 up
+116 move 70 175 15
+134 down
+136 up
+144 move 26 199 12
+160 down
+162 up
+170 move 113 49 20
+194 down
+196 up
+204 move 47 147 15
+224 down
+226 up
+236 move 270 145 15
+254 down
+256 up
+264 move 150 210 12
+280 down
+282 up
+290 move 480 145 15
+308 down
+310 up
+314 key ctrl down
+315 key a
+316 key ctrl up
+320 text 3
+326 key enter
+334 move 300 330 20

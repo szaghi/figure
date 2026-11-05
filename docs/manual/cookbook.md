@@ -93,6 +93,17 @@ theme file, which `app%load_style` (or `FIGURE_STYLE=my-theme.toml`) applies in 
 The layout is built on the first frame only (`ig_dock_layout_begin`); the dock space is declared every frame,
 before its windows. The user can rearrange everything afterwards. [Docking](/guide/docking) has the details.
 
+### An input-file editor: fields, a list, tabs and a table
+
+<<< @/examples/snippets/cb_form-table.F90{fortran}
+
+<Media name="cb_form" alt="An input-file editor: fields, a drop-down list, a restart option, a table of boundary conditions" caption="docs/examples/src/cb_form.F90" />
+
+Each field edits a Fortran variable in place: a `character` for text (its length is the capacity), an `int32` index for
+a drop-down list. The rows of the table repeat the same widgets, each in its own id scope (`ig_push_id(r)`). Tabs and
+tables end only when their begin returned `.true.`. [Widgets](/guide/widgets#groups-headers-tabs-tables) has the
+rules.
+
 ## Plots
 
 ### Plot the columns of a matrix

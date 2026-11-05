@@ -65,6 +65,10 @@ Coordinates are display pixels, as `ig_item_rect` gives them. The module works i
 display, so tests run in CI as is. It is a separate module: `use figure_testing` where the tests are, `use figure` in
 the application.
 
+A tab of a tab bar takes a press only after the pointer has rested on it for a frame (Dear ImGui's rule for items
+that may overlap), while `test_click` moves and presses on consecutive frames: move to the tab first (`test_mouse_move`),
+then click it a few frames later.
+
 ## Test the interface you ship
 
 Put the interface in a procedure that the application calls every frame, and call the same procedure from the test:

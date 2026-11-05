@@ -29,8 +29,11 @@ graph LR
 ## Contents
 
 - [ig_slider](#ig-slider)
+- [ig_input](#ig-input)
 - [ig_end](#ig-end)
 - [ig_set_next_window](#ig-set-next-window)
+- [ig_tooltip](#ig-tooltip)
+- [ig_set_next_item_width](#ig-set-next-item-width)
 - [ig_text](#ig-text)
 - [ig_same_line](#ig-same-line)
 - [ig_separator](#ig-separator)
@@ -43,7 +46,10 @@ graph LR
 - [ig_slider_i32](#ig-slider-i32)
 - [ig_slider_r32](#ig-slider-r32)
 - [ig_slider_r64](#ig-slider-r64)
-- [ig_input](#ig-input)
+- [ig_input_r64](#ig-input-r64)
+- [ig_input_i32](#ig-input-i32)
+- [ig_input_text](#ig-input-text)
+- [ig_combo](#ig-combo)
 
 ## Interfaces
 
@@ -52,6 +58,12 @@ graph LR
 Slider for an integer or a real value.
 
 **Module procedures**: [`ig_slider_i32`](/api/src/lib/figure_imgui#ig-slider-i32), [`ig_slider_r32`](/api/src/lib/figure_imgui#ig-slider-r32), [`ig_slider_r64`](/api/src/lib/figure_imgui#ig-slider-r64)
+
+### ig_input
+
+Numeric field for an integer or a real value.
+
+**Module procedures**: [`ig_input_i32`](/api/src/lib/figure_imgui#ig-input-i32), [`ig_input_r64`](/api/src/lib/figure_imgui#ig-input-r64)
 
 ## Subroutines
 
@@ -96,6 +108,53 @@ flowchart TD
   ig_set_next_window["ig_set_next_window"] --> igSetNextWindowPos["igSetNextWindowPos"]
   ig_set_next_window["ig_set_next_window"] --> igSetNextWindowSize["igSetNextWindowSize"]
   style ig_set_next_window fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_tooltip
+
+A tooltip on the previous widget: `text` shows while the pointer rests on it (after Dear ImGui's usual delay).
+
+```fortran
+subroutine ig_tooltip(text)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `text` | character(len=*) | in |  | Text. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_tooltip["ig_tooltip"] --> cstr["cstr"]
+  ig_tooltip["ig_tooltip"] --> igBeginItemTooltip["igBeginItemTooltip"]
+  ig_tooltip["ig_tooltip"] --> igEndTooltip["igEndTooltip"]
+  ig_tooltip["ig_tooltip"] --> igTextUnformatted["igTextUnformatted"]
+  style ig_tooltip fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_set_next_item_width
+
+Width of the next widget's field [pixels]; negative: up to that distance from the window's right edge.
+
+```fortran
+subroutine ig_set_next_item_width(width)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `width` | real(kind=real64) | in |  | Width [pixels]. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_set_next_item_width["ig_set_next_item_width"] --> igSetNextItemWidth["igSetNextItemWidth"]
+  style ig_set_next_item_width fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_text
@@ -399,14 +458,14 @@ flowchart TD
   style ig_slider_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
-### ig_input
+### ig_input_r64
 
 Numeric input field for a real value; true when the user changed it.
 
 **Returns**: `logical`
 
 ```fortran
-function ig_input(label, value, step, format) result(changed)
+function ig_input_r64(label, value, step, format) result(changed)
 ```
 
 **Arguments**
@@ -422,7 +481,97 @@ function ig_input(label, value, step, format) result(changed)
 
 ```mermaid
 flowchart TD
-  ig_input["ig_input"] --> cstr["cstr"]
-  ig_input["ig_input"] --> igInputDouble["igInputDouble"]
-  style ig_input fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ig_input_r64["ig_input_r64"] --> cstr["cstr"]
+  ig_input_r64["ig_input_r64"] --> igInputDouble["igInputDouble"]
+  style ig_input_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_input_i32
+
+Numeric input field for an integer value; true when the user changed it.
+
+**Returns**: `logical`
+
+```fortran
+function ig_input_i32(label, value, step) result(changed)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label. |
+| `value` | integer(kind=int32) | inout |  | Value. |
+| `step` | integer(kind=int32) | in | optional | +/- buttons step (default: none). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_input_i32["ig_input_i32"] --> cstr["cstr"]
+  ig_input_i32["ig_input_i32"] --> igInputInt["igInputInt"]
+  style ig_input_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_input_text
+
+A text field bound to `value`; true when the user edited it. The text can be as long as `value` (its length is
+ the field's capacity); trailing blanks are not part of the text (Fortran pads with them). `hint` is shown while
+ the field is empty; `flags` combine `ImGuiInputTextFlags_*` with `ior` (`CharsNoBlank`, `CharsDecimal`,
+ `CharsScientific`, `ReadOnly`, `EnterReturnsTrue`, ...).
+
+**Returns**: `logical`
+
+```fortran
+function ig_input_text(label, value, hint, flags) result(changed)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label. |
+| `value` | character(len=*) | inout |  | Text. |
+| `hint` | character(len=*) | in | optional | Shown while the field is empty. |
+| `flags` | integer(kind=int32) | in | optional | `ImGuiInputTextFlags_*` (default none). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_input_text["ig_input_text"] --> fig_widget_input_text["fig_widget_input_text"]
+  style ig_input_text fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_combo
+
+A drop-down list of `items`; `current` is the index of the one chosen (1 to `size(items)`; any other value shows
+ none chosen). True on the frame the user picks an item (`current` is then its index).
+
+**Returns**: `logical`
+
+```fortran
+function ig_combo(label, current, items) result(changed)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label. |
+| `current` | integer(kind=int32) | inout |  | Index of the chosen item. |
+| `items` | character(len=*) | in |  | Items (trailing blanks are not shown). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_combo["ig_combo"] --> cstr["cstr"]
+  ig_combo["ig_combo"] --> igBeginCombo["igBeginCombo"]
+  ig_combo["ig_combo"] --> igEndCombo["igEndCombo"]
+  ig_combo["ig_combo"] --> igPopID["igPopID"]
+  ig_combo["ig_combo"] --> igPushID_Int["igPushID_Int"]
+  ig_combo["ig_combo"] --> igSelectable_Bool["igSelectable_Bool"]
+  ig_combo["ig_combo"] --> igSetItemDefaultFocus["igSetItemDefaultFocus"]
+  style ig_combo fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

@@ -40,6 +40,10 @@
         "link": "/api/src/lib/figure_dock"
       },
       {
+        "text": "figure_group",
+        "link": "/api/src/lib/figure_group"
+      },
+      {
         "text": "figure_imgui",
         "link": "/api/src/lib/figure_imgui"
       },

@@ -147,10 +147,11 @@ flowchart TD
 ### ip_setup_axes
 
 Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes fit the data every frame (data
- that grows while the user watches), instead of once on first use.
+ that grows while the user watches), instead of once on first use. `xlog`/`ylog`: a base-10 logarithmic axis
+ (values <= 0 are not shown on it).
 
 ```fortran
-subroutine ip_setup_axes(xlabel, ylabel, auto_fit)
+subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog)
 ```
 
 **Arguments**
@@ -160,12 +161,15 @@ subroutine ip_setup_axes(xlabel, ylabel, auto_fit)
 | `xlabel` | character(len=*) | in |  | X label. |
 | `ylabel` | character(len=*) | in |  | Y label. |
 | `auto_fit` | logical | in | optional | Fit the axes to the data every frame (default: first use only). |
+| `xlog` | logical | in | optional | Logarithmic x axis (default: linear). |
+| `ylog` | logical | in | optional | Logarithmic y axis (default: linear). |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   ip_setup_axes["ip_setup_axes"] --> ImPlot_SetupAxes["ImPlot_SetupAxes"]
+  ip_setup_axes["ip_setup_axes"] --> ImPlot_SetupAxisScale_PlotScale["ImPlot_SetupAxisScale_PlotScale"]
   ip_setup_axes["ip_setup_axes"] --> cstr["cstr"]
   style ip_setup_axes fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

@@ -1,0 +1,412 @@
+---
+title: figure_group
+---
+
+# figure_group
+
+> figure_group, widgets that group other widgets: collapsing headers, tabs, tables, id scopes, disabled blocks.
+
+ Pairing rules (Dear ImGui's): `ig_end_tab_bar` only when `ig_begin_tab_bar` returned true, `ig_end_tab` only when
+ `ig_begin_tab` returned true, `ig_end_table` only when `ig_begin_table` returned true (unlike `ig_begin`/`ig_end`,
+ always paired); `ig_pop_id` after every `ig_push_id`, `ig_end_disabled` after every `ig_begin_disabled`. A
+ collapsing header needs no end call.
+
+ A table: `ig_begin_table`, then optionally one `ig_table_setup_column` per column and `ig_table_headers_row`, then
+ per row `ig_table_next_row` and per cell `ig_table_next_column` (or `ig_table_set_column`) before its widgets.
+ Widgets repeated on every row need an id scope per row (`ig_push_id(row)`) or distinct labels.
+
+**Source**: `src/lib/figure_group.F90`
+
+**Dependencies**
+
+```mermaid
+graph LR
+  figure_group["figure_group"] --> figure_base["figure_base"]
+  figure_group["figure_group"] --> figure_cimgui["figure_cimgui"]
+  figure_group["figure_group"] --> figure_cimgui_enums["figure_cimgui_enums"]
+  figure_group["figure_group"] --> iso_c_binding["iso_c_binding"]
+  figure_group["figure_group"] --> iso_fortran_env["iso_fortran_env"]
+```
+
+## Contents
+
+- [ig_push_id](#ig-push-id)
+- [ig_end_tab_bar](#ig-end-tab-bar)
+- [ig_end_tab](#ig-end-tab)
+- [ig_end_table](#ig-end-table)
+- [ig_table_setup_column](#ig-table-setup-column)
+- [ig_table_headers_row](#ig-table-headers-row)
+- [ig_table_next_row](#ig-table-next-row)
+- [ig_table_next_column](#ig-table-next-column)
+- [ig_table_set_column](#ig-table-set-column)
+- [ig_push_id_str](#ig-push-id-str)
+- [ig_push_id_i32](#ig-push-id-i32)
+- [ig_pop_id](#ig-pop-id)
+- [ig_begin_disabled](#ig-begin-disabled)
+- [ig_end_disabled](#ig-end-disabled)
+- [ig_collapsing_header](#ig-collapsing-header)
+- [ig_begin_tab_bar](#ig-begin-tab-bar)
+- [ig_begin_tab](#ig-begin-tab)
+- [ig_begin_table](#ig-begin-table)
+
+## Interfaces
+
+### ig_push_id
+
+Open an id scope, by a string or an integer.
+
+**Module procedures**: [`ig_push_id_str`](/api/src/lib/figure_group#ig-push-id-str), [`ig_push_id_i32`](/api/src/lib/figure_group#ig-push-id-i32)
+
+## Subroutines
+
+### ig_end_tab_bar
+
+End a bar of tabs (only after `ig_begin_tab_bar` returned true).
+
+```fortran
+subroutine ig_end_tab_bar()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_end_tab_bar["ig_end_tab_bar"] --> igEndTabBar["igEndTabBar"]
+  style ig_end_tab_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_end_tab
+
+End the content of a tab (only after `ig_begin_tab` returned true).
+
+```fortran
+subroutine ig_end_tab()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_end_tab["ig_end_tab"] --> igEndTabItem["igEndTabItem"]
+  style ig_end_tab fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_end_table
+
+End a table (only after `ig_begin_table` returned true).
+
+```fortran
+subroutine ig_end_table()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_end_table["ig_end_table"] --> igEndTable["igEndTable"]
+  style ig_end_table fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_table_setup_column
+
+Declare the next column (before the first row): its header label and, with `width` [pixels], a fixed width
+ (default: the columns share the width left).
+
+```fortran
+subroutine ig_table_setup_column(label, width)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Header label. |
+| `width` | real(kind=real64) | in | optional | Fixed width [pixels]. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_table_setup_column["ig_table_setup_column"] --> cstr["cstr"]
+  ig_table_setup_column["ig_table_setup_column"] --> igTableSetupColumn["igTableSetupColumn"]
+  style ig_table_setup_column fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_table_headers_row
+
+A row with the labels of the columns declared by `ig_table_setup_column` (click a header to resize, ...).
+
+```fortran
+subroutine ig_table_headers_row()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_table_headers_row["ig_table_headers_row"] --> igTableHeadersRow["igTableHeadersRow"]
+  style ig_table_headers_row fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_table_next_row
+
+Start a new row.
+
+```fortran
+subroutine ig_table_next_row()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_table_next_row["ig_table_next_row"] --> igTableNextRow["igTableNextRow"]
+  style ig_table_next_row fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_table_next_column
+
+Move to the next cell of the row (the first after `ig_table_next_row`); the widgets that follow go in it.
+
+```fortran
+subroutine ig_table_next_column()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_table_next_column["ig_table_next_column"] --> igTableNextColumn["igTableNextColumn"]
+  style ig_table_next_column fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_table_set_column
+
+Move to cell `column` (1 to the number of columns) of the current row.
+
+```fortran
+subroutine ig_table_set_column(column)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `column` | integer(kind=int32) | in |  | Column, 1-based. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_table_set_column["ig_table_set_column"] --> igTableSetColumnIndex["igTableSetColumnIndex"]
+  style ig_table_set_column fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_push_id_str
+
+Open an id scope named `id`: widgets with the same label in different scopes are different widgets.
+
+```fortran
+subroutine ig_push_id_str(id)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | character(len=*) | in |  | Scope name. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_id_str["ig_push_id_str"] --> cstr["cstr"]
+  ig_push_id_str["ig_push_id_str"] --> igPushID_Str["igPushID_Str"]
+  style ig_push_id_str fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_push_id_i32
+
+Open an id scope numbered `id` (rows of a table, items of a loop).
+
+```fortran
+subroutine ig_push_id_i32(id)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | integer(kind=int32) | in |  | Scope number. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_push_id_i32["ig_push_id_i32"] --> igPushID_Int["igPushID_Int"]
+  style ig_push_id_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_pop_id
+
+Close the id scope opened by the last `ig_push_id`.
+
+```fortran
+subroutine ig_pop_id()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_pop_id["ig_pop_id"] --> igPopID["igPopID"]
+  style ig_pop_id fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_begin_disabled
+
+Widgets up to `ig_end_disabled` are greyed out and ignore input (when `disabled`, default true).
+
+```fortran
+subroutine ig_begin_disabled(disabled)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `disabled` | logical | in | optional | Disable (default true). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin_disabled["ig_begin_disabled"] --> igBeginDisabled["igBeginDisabled"]
+  style ig_begin_disabled fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_end_disabled
+
+End the block opened by `ig_begin_disabled`.
+
+```fortran
+subroutine ig_end_disabled()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_end_disabled["ig_end_disabled"] --> igEndDisabled["igEndDisabled"]
+  style ig_end_disabled fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+## Functions
+
+### ig_collapsing_header
+
+A header that shows or hides what follows it; true while open (then draw the content). No end call.
+
+**Returns**: `logical`
+
+```fortran
+function ig_collapsing_header(label, default_open) result(open)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label (also its id). |
+| `default_open` | logical | in | optional | Open the first time it is shown (default: closed). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_collapsing_header["ig_collapsing_header"] --> cstr["cstr"]
+  ig_collapsing_header["ig_collapsing_header"] --> igCollapsingHeader_TreeNodeFlags["igCollapsingHeader_TreeNodeFlags"]
+  style ig_collapsing_header fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_begin_tab_bar
+
+Begin a bar of tabs; when true, declare the tabs (`ig_begin_tab`) and close it with `ig_end_tab_bar`.
+
+**Returns**: `logical`
+
+```fortran
+function ig_begin_tab_bar(id) result(visible)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | character(len=*) | in |  | Id of the bar (not shown). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin_tab_bar["ig_begin_tab_bar"] --> cstr["cstr"]
+  ig_begin_tab_bar["ig_begin_tab_bar"] --> igBeginTabBar["igBeginTabBar"]
+  style ig_begin_tab_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_begin_tab
+
+A tab of the current bar; true when it is the selected one: draw its content, then `ig_end_tab`. With `open`,
+ the tab has a close button that sets it false.
+
+**Returns**: `logical`
+
+```fortran
+function ig_begin_tab(label, open) result(selected)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label (also its id). |
+| `open` | logical | inout | optional | Tab open. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin_tab["ig_begin_tab"] --> cstr["cstr"]
+  ig_begin_tab["ig_begin_tab"] --> igBeginTabItem["igBeginTabItem"]
+  style ig_begin_tab fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_begin_table
+
+Begin a table of `columns` columns; when true, fill it and close it with `ig_end_table`. `flags` combine
+ `ImGuiTableFlags_*` with `ior` (default: borders, alternating row background, resizable columns); `height`
+ [pixels] fixes the table's height (with `ImGuiTableFlags_ScrollY`, the rows scroll inside it).
+
+**Returns**: `logical`
+
+```fortran
+function ig_begin_table(id, columns, flags, height) result(visible)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | character(len=*) | in |  | Id of the table (not shown). |
+| `columns` | integer(kind=int32) | in |  | Columns (1 to 512). |
+| `flags` | integer(kind=int32) | in | optional | `ImGuiTableFlags_*`. |
+| `height` | real(kind=real64) | in | optional | Height [pixels] (default: fit the rows). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin_table["ig_begin_table"] --> cstr["cstr"]
+  ig_begin_table["ig_begin_table"] --> igBeginTable["igBeginTable"]
+  style ig_begin_table fill:#3e63dd,stroke:#99b,stroke-width:2px
+```

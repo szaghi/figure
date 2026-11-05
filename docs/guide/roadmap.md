@@ -74,7 +74,7 @@ pictures it updates, and a log of the work. This page summarises it, after the m
 - The brand: the seal mark (a window and its plot drafted with a brush, signed with a vermilion seal carved with F),
   the site's palette, and `app%set_style` with `seal` as FIGURE's default [style](styles).
 
-## v0.1.0 — in progress
+## v0.1.0 — released 2026-11-05
 
 The scope of the first release, step by step in [issue #1](https://github.com/szaghi/figure/issues/1):
 
@@ -97,6 +97,15 @@ The scope of the first release, step by step in [issue #1](https://github.com/sz
 - **fpm:** FIGURE usable as a dependency of other fpm projects: a self-contained package (fpm compiles the native
   layer itself, SDL3 from the system), published for each release as the tag `vX.Y.Z-fpm`
   ([FIGURE as an fpm dependency](install#figure-as-an-fpm-dependency)): done, first published with v0.1.0.
-- **Documentation:** every page checked against the code, every recording regenerated, the changelog, the README: in
-  progress.
-- **Release v0.1.0:** the tag, the GitHub release, the `v0.1.0-fpm` package.
+- **Documentation:** every page checked against the code, every recording regenerated, the changelog, the README: done.
+- **Release v0.1.0:** the tag, the GitHub release, the `v0.1.0-fpm` package: done.
+
+## v0.2.0 — in progress
+
+Driven by a first application outside the repository, tools for a CFD solver: a live checker of its log files and
+editors of its input files.
+
+- **Log axes** for residual histories (`ip_setup_axes(..., xlog, ylog)`): done.
+- **Form widgets** ([Widgets](widgets#groups-headers-tabs-tables)): text fields bound to `character` variables, integer
+  fields, drop-down lists, tooltips, field widths, collapsing headers, tabs, tables, id scopes, disabled blocks: done.
+- Still to come: menus, trees, multi-line text, child regions, axis tick formats, subplots.
