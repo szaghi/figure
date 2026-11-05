@@ -88,7 +88,8 @@ guarantees: the cost per frame depends on the platform, the driver and the inter
 (llvmpipe, the WSLg default without `GALLIUM_DRIVER=d3d12`) every frame costs much more.
 
 The default `max_wait` is 0.5 s: a longer one saves about 0.2% of one core and makes data that changes without
-`request_frames` appear correspondingly later.
+`request_frames` appear correspondingly later. What a frame costs with live data, large plots and fields, in a window
+and in remote mode: [Performance](performance).
 
 ### Redraw diagnostics
 

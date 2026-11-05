@@ -1,0 +1,105 @@
+{
+ "machine": "WSL2/WSLg, x86-64 with 16 hardware threads, RTX 4070 through D3D12, gfortran 16.2; remote mode on the same machine",
+ "tool": "scripts/measure_redraw.py running src/examples/figure_bench_redraw.F90, 8-10 s per case after a 3 s warm-up",
+ "date": "2026-11-05",
+ "window": [
+  {
+   "case": "idle",
+   "fps": 8.1,
+   "cpu_ms_per_frame": 1.81,
+   "app_ms": 0.05
+  },
+  {
+   "case": "pointer moving",
+   "fps": 486.1,
+   "cpu_ms_per_frame": 0.9,
+   "app_ms": 0.04
+  },
+  {
+   "case": "live data, 10 updates/s",
+   "fps": 9.4,
+   "cpu_ms_per_frame": 2.09,
+   "app_ms": 0.08
+  },
+  {
+   "case": "live data, 60 updates/s",
+   "fps": 44.4,
+   "cpu_ms_per_frame": 1.77,
+   "app_ms": 0.08
+  },
+  {
+   "case": "100 000-point line, 10/s",
+   "fps": 9.0,
+   "cpu_ms_per_frame": 4.85,
+   "app_ms": 2.17
+  },
+  {
+   "case": "1 000 000-point line, 10/s",
+   "fps": 5.2,
+   "cpu_ms_per_frame": 32.83,
+   "app_ms": 23.78
+  },
+  {
+   "case": "256² heatmap, 10/s",
+   "fps": 9.0,
+   "cpu_ms_per_frame": 3.85,
+   "app_ms": 1.52
+  },
+  {
+   "case": "512² heatmap, 10/s",
+   "fps": 7.8,
+   "cpu_ms_per_frame": 9.13,
+   "app_ms": 5.71
+  },
+  {
+   "case": "512² texture, 10/s",
+   "fps": 9.3,
+   "cpu_ms_per_frame": 2.5,
+   "app_ms": 0.62
+  },
+  {
+   "case": "3840×2160 texture, 10/s",
+   "fps": 6.9,
+   "cpu_ms_per_frame": 18.17,
+   "app_ms": 16.73
+  }
+ ],
+ "remote": [
+  {
+   "case": "idle",
+   "first_mb_s": 0.215738,
+   "now_mb_s": 1e-06,
+   "deflated_mb_s": null
+  },
+  {
+   "case": "pointer moving",
+   "first_mb_s": 25.82409,
+   "now_mb_s": 3.07729,
+   "deflated_mb_s": 1.225613
+  },
+  {
+   "case": "live data, 10 updates/s",
+   "first_mb_s": 1.073444,
+   "now_mb_s": 0.708729,
+   "deflated_mb_s": 0.281997
+  },
+  {
+   "case": "live data, 60 updates/s",
+   "first_mb_s": 6.616269,
+   "now_mb_s": 4.235499,
+   "deflated_mb_s": 1.690102
+  },
+  {
+   "case": "100 000-point line, 10/s",
+   "first_mb_s": 544.712079,
+   "now_mb_s": 54.807409,
+   "deflated_mb_s": 12.988504
+  },
+  {
+   "case": "256² heatmap, 10/s",
+   "first_mb_s": 241.871071,
+   "now_mb_s": 37.699678,
+   "deflated_mb_s": 9.868776
+  }
+ ]
+}

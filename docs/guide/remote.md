@@ -85,6 +85,10 @@ shared machine: the token would then travel unencrypted over the network.
 
 ## Bandwidth
 
+How the cost of what you draw carries over to the network, and what to do about it:
+[Performance](performance#remote-mode).
+
+
 A frame carries the complete draw lists, in a compact form: 12 bytes per vertex (position to 1/4 pixel, texture
 coordinates to 1/65535) instead of Dear ImGui's 20. A window of widgets and a 1000-point line is about **71 KB**; the
 font atlas (256 KB) goes once per connection. What keeps the traffic down:

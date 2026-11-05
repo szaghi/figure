@@ -132,3 +132,18 @@
 .fig-gallery .fig-media {
   margin: 0.8rem 0;
 }
+
+/* Performance charts (scripts/perf_charts.py): inline SVG, colours by role. Categorical slots validated for both
+   surfaces with the dataviz validator (CVD and normal-vision separation pass; the aqua slot is below 3:1 on the light
+   surface, so the page gives the same numbers as tables). */
+.perf-chart { --perf-first: #eb6834; --perf-now: #2a78d6; --perf-deflated: #1baf7a; display: block; margin: 16px 0; }
+.dark .perf-chart { --perf-first: #d95926; --perf-now: #3987e5; --perf-deflated: #199e70; }
+.perf-chart text { font-family: var(--vp-font-family-base); font-size: 13.5px; fill: var(--vp-c-text-2); }
+.perf-chart text.label, .perf-chart text.legend { fill: var(--vp-c-text-1); }
+.perf-chart text.value { fill: var(--vp-c-text-1); font-variant-numeric: tabular-nums; }
+.perf-chart .grid { stroke: var(--vp-c-divider); stroke-width: 1; }
+.perf-chart .link { stroke: var(--vp-c-text-3); stroke-width: 2; }
+.perf-chart .s-first { fill: var(--perf-first); }
+.perf-chart .s-now { fill: var(--perf-now); }
+.perf-chart .s-deflated { fill: var(--perf-deflated); }
+.perf-chart .ring { stroke: var(--vp-c-bg); stroke-width: 2; }

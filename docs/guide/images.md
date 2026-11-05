@@ -10,6 +10,10 @@ a plot (`ip_image`). Both read Fortran's column-major arrays as they are: no cop
 
 ## Heatmaps
 
+A heatmap draws each cell as vertices, rebuilt every frame; past a few hundred cells a side a [texture](#textures)
+costs a fraction of it, in a window and over the network ([Performance](performance#large-data)).
+
+
 <<< @/examples/snippets/cb_field-field.F90{fortran}
 
 <<< @/examples/snippets/cb_field-heatmap.F90{fortran}

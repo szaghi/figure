@@ -71,6 +71,8 @@ def default_cases() -> list[Case]:
         ("bigplot-1e5", ["bigplot", "--points", "100000", "--rate", "10"], False),
         ("bigplot-1e6", ["bigplot", "--points", "1000000", "--rate", "10"], False),
         ("heatmap-256", ["heatmap", "--cells", "256", "--rate", "10"], False),
+        ("heatmap-512", ["heatmap", "--cells", "512", "--rate", "10"], False),
+        ("texture-512", ["texture", "--width", "512", "--height", "512", "--rate", "10"], False),
         ("texture-4k", ["texture", "--rate", "10"], False),
     ]
     cases = [Case(f"{n} local", a, remote=False) for n, a, _ in base]
