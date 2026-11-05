@@ -30,7 +30,7 @@ use figure_cimgui_enums, only : ImGuiInputTextFlags_None, ImGuiInputTextFlags_Ch
                                 ImGuiInputTextFlags_AutoSelectAll
 use figure_imgui, only : ig_begin, ig_button, ig_checkbox, ig_end, ig_image, ig_input, ig_item_rect, ig_same_line, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
-                         ig_set_next_item_width
+                         ig_set_next_item_width, ig_combo, ig_tooltip
 use figure_implot, only : ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
                           ip_plot_limits, ip_plot_size, ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded,   &
                           ip_spec, plot_spec_object,                                                                  &
@@ -59,7 +59,7 @@ public :: app_object, figure_last_error
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: ig_begin, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
-public :: ig_input_text, ig_set_next_item_width
+public :: ig_input_text, ig_set_next_item_width, ig_combo, ig_tooltip
 public :: ImGuiInputTextFlags_None, ImGuiInputTextFlags_CharsDecimal, ImGuiInputTextFlags_CharsScientific
 public :: ImGuiInputTextFlags_CharsUppercase, ImGuiInputTextFlags_CharsNoBlank, ImGuiInputTextFlags_EnterReturnsTrue
 public :: ImGuiInputTextFlags_ReadOnly, ImGuiInputTextFlags_Password, ImGuiInputTextFlags_AutoSelectAll

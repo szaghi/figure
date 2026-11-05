@@ -40,6 +40,8 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_slider(label, value, vmin, vmax)` → `logical` | a slider for `int32`, `real32` or `real64`; `.true.` when changed |
 | `ig_input(label, value [, step] [, format])` → `logical` | a numeric field for an `int32` or a `real64` (`format` for reals only); `.true.` when changed |
 | `ig_input_text(label, value [, hint] [, flags])` → `logical` | a text field bound to a `character` variable, whose length is the field's capacity; `.true.` when edited |
+| `ig_combo(label, current, items)` → `logical` | a drop-down list of the `character` array `items`; `current` is the index chosen; `.true.` when the user picks one |
+| `ig_tooltip(text)` | a tooltip on the previous widget, shown while the pointer rests on it |
 | `ig_set_next_item_width(width)` | width of the next widget's field [pixels]; negative: up to that distance from the right edge |
 | `ig_text(text)` | plain text |
 | `ig_same_line()` | put the next item on the same line |

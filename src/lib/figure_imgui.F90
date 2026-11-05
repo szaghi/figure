@@ -11,9 +11,11 @@ use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_base, only : cstr
 use figure_c_native, only : fig_texture_sampling, fig_widget_input_text
 use figure_texture, only : texture_object, texture_ref
-use figure_cimgui, only : im_vec2, igBegin, igButton, igCheckbox, igEnd, igGetItemRectMax, igGetItemRectMin, igImage,     &
-                          igInputDouble, igInputInt, igSameLine, igSeparator, igSetNextItemWidth, igSetNextWindowPos,   &
-                          igSetNextWindowSize, igShowDemoWindow, igSliderScalar, igTextUnformatted
+use figure_cimgui, only : im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
+                          igPushID_Int, igSelectable_Bool, igSetItemDefaultFocus, igButton, igCheckbox, igEnd, &
+                          igGetItemRectMax, igGetItemRectMin, igImage, igInputDouble, igInputInt, igSameLine, &
+                          igSeparator, igSetNextItemWidth, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
+                          igSliderScalar, igTextUnformatted
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
                                 ImGuiDataType_S32
 
@@ -21,6 +23,7 @@ implicit none
 private
 public :: ig_begin, ig_end, ig_button, ig_checkbox, ig_slider, ig_input, ig_text, ig_same_line, ig_separator
 public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_input_text, ig_set_next_item_width
+public :: ig_combo, ig_tooltip
 
 interface ig_slider
    !< Slider for an integer or a real value.
@@ -233,6 +236,45 @@ contains
       value(i:i) = buf(i)
    enddo
    endfunction ig_input_text
+
+   function ig_combo(label, current, items) result(changed)
+   !< A drop-down list of `items`; `current` is the index of the one chosen (1 to `size(items)`; any other value shows
+   !< none chosen). True on the frame the user picks an item (`current` is then its index).
+   character(len=*), intent(in)    :: label    !< Label.
+   integer(int32),   intent(inout) :: current  !< Index of the chosen item.
+   character(len=*), intent(in)    :: items(:) !< Items (trailing blanks are not shown).
+   logical                         :: changed  !< An item was picked this frame.
+   integer(int32)                  :: i        !< Item.
+   logical                         :: chosen   !< Item i is the current one.
+
+   changed = .false.
+   if (current >= 1_int32 .and. current <= size(items, kind=int32)) then
+      if (.not. logical(igBeginCombo(cstr(label), cstr(trim(items(current))), 0_c_int))) return
+   else
+      if (.not. logical(igBeginCombo(cstr(label), cstr(''), 0_c_int))) return
+   endif
+   do i = 1_int32, size(items, kind=int32)
+      chosen = i == current
+      call igPushID_Int(int(i, c_int))                ! items may repeat a text: the index tells them apart
+      if (logical(igSelectable_Bool(cstr(trim(items(i))), logical(chosen, c_bool), 0_c_int, &
+                                    im_vec2(0.0_c_float, 0.0_c_float)))) then
+         current = i
+         changed = .true.
+      endif
+      if (chosen) call igSetItemDefaultFocus()        ! keyboard navigation starts from the current item
+      call igPopID()
+   enddo
+   call igEndCombo()
+   endfunction ig_combo
+
+   subroutine ig_tooltip(text)
+   !< A tooltip on the previous widget: `text` shows while the pointer rests on it (after Dear ImGui's usual delay).
+   character(len=*), intent(in) :: text !< Text.
+
+   if (.not. logical(igBeginItemTooltip())) return
+   call igTextUnformatted(cstr(text), c_null_ptr)
+   call igEndTooltip()
+   endsubroutine ig_tooltip
 
    subroutine ig_set_next_item_width(width)
    !< Width of the next widget's field [pixels]; negative: up to that distance from the window's right edge.
