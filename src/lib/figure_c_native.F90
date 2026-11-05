@@ -20,7 +20,7 @@ public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, f
 public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
 public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
-public :: fig_window_rect, fig_input_next_frame
+public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -448,6 +448,21 @@ interface
    integer(c_int), value              :: text_len !< Text length [bytes].
    integer(c_int)                     :: status   !< Status.
    endfunction fig_input_text
+
+   function fig_widget_input_text(label, label_len, hint, hint_len, buf, buf_size, flags) result(edited) &
+      bind(C, name='fig_widget_input_text')
+   !< A text field over a NUL-terminated buffer of `buf_size` bytes; 1 when the user edited it this frame.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)    :: label(*)  !< Label (not NUL-terminated).
+   integer(c_int), value                 :: label_len !< Label length [bytes].
+   character(kind=c_char), intent(in)    :: hint(*)   !< Hint shown while empty (not NUL-terminated).
+   integer(c_int), value                 :: hint_len  !< Hint length [bytes] (0: no hint).
+   character(kind=c_char), intent(inout) :: buf(*)    !< Text, NUL-terminated.
+   integer(c_int), value                 :: buf_size  !< Buffer size [bytes], NUL included.
+   integer(c_int), value                 :: flags     !< ImGuiInputTextFlags.
+   integer(c_int)                        :: edited    !< 1: edited this frame.
+   endfunction fig_widget_input_text
 
    function fig_window_rect(name, name_len, rect, found) result(status) bind(C, name='fig_window_rect')
    !< A window's rectangle by name, as in the last frame.

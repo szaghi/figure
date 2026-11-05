@@ -103,6 +103,10 @@ int    fig_input_key(const char *name, int name_len, int down);
 int    fig_input_text(const char *text, int text_len);
 /* A window's rectangle (xmin, ymin, xmax, ymax) [pixels] by name, as in the last frame; found 0 if none. */
 int    fig_window_rect(const char *name, int name_len, float *rect, int *found);
+/* A text field over a caller-owned NUL-terminated buffer of buf_size bytes (InputText without a callback); 1 when
+ * edited this frame. hint_len 0: no hint. */
+int    fig_widget_input_text(const char *label, int label_len, const char *hint, int hint_len, char *buf, int buf_size,
+                             int flags);
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);
 

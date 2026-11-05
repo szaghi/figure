@@ -23,8 +23,14 @@ use figure_cimgui_enums, only : ImGuiWindowFlags_None, ImGuiWindowFlags_NoTitleB
                                 ImGuiWindowFlags_NoDecoration, ImGuiWindowFlags_NoInputs, ImGuiWindowFlags_NoDocking
 use figure_dock, only : ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, &
                         ig_dock_window, ig_window_dock
+use figure_cimgui_enums, only : ImGuiInputTextFlags_None, ImGuiInputTextFlags_CharsDecimal,                  &
+                                ImGuiInputTextFlags_CharsScientific, ImGuiInputTextFlags_CharsUppercase,      &
+                                ImGuiInputTextFlags_CharsNoBlank, ImGuiInputTextFlags_EnterReturnsTrue,       &
+                                ImGuiInputTextFlags_ReadOnly, ImGuiInputTextFlags_Password,                   &
+                                ImGuiInputTextFlags_AutoSelectAll
 use figure_imgui, only : ig_begin, ig_button, ig_checkbox, ig_end, ig_image, ig_input, ig_item_rect, ig_same_line, &
-                         ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text
+                         ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
+                         ig_set_next_item_width
 use figure_implot, only : ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
                           ip_plot_limits, ip_plot_size, ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded,   &
                           ip_spec, plot_spec_object,                                                                  &
@@ -53,6 +59,10 @@ public :: app_object, figure_last_error
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: ig_begin, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
+public :: ig_input_text, ig_set_next_item_width
+public :: ImGuiInputTextFlags_None, ImGuiInputTextFlags_CharsDecimal, ImGuiInputTextFlags_CharsScientific
+public :: ImGuiInputTextFlags_CharsUppercase, ImGuiInputTextFlags_CharsNoBlank, ImGuiInputTextFlags_EnterReturnsTrue
+public :: ImGuiInputTextFlags_ReadOnly, ImGuiInputTextFlags_Password, ImGuiInputTextFlags_AutoSelectAll
 public :: ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window
 public :: ig_window_dock
 public :: ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ig_show_style_editor

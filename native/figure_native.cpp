@@ -1576,6 +1576,20 @@ int fig_window_rect(const char *name, int name_len, float *rect, int *found) {
    return FIG_OK;
 }
 
+// A text field over a caller-owned buffer of buf_size bytes (NUL-terminated, the text at most buf_size - 1 bytes): Dear
+// ImGui's InputText/InputTextWithHint without a callback, which the bindings generator skips. Returns 1 when the user
+// edited the text this frame. An empty hint draws no hint.
+int fig_widget_input_text(const char *label, int label_len, const char *hint, int hint_len, char *buf, int buf_size,
+                          int flags) {
+   if (!ImGui::GetCurrentContext() || buf_size < 1) return 0;
+   const std::string l(label, label_len > 0 ? static_cast<size_t>(label_len) : 0);
+   const bool edited = hint_len > 0
+      ? ImGui::InputTextWithHint(l.c_str(), std::string(hint, static_cast<size_t>(hint_len)).c_str(), buf,
+                                 static_cast<size_t>(buf_size), static_cast<ImGuiInputTextFlags>(flags))
+      : ImGui::InputText(l.c_str(), buf, static_cast<size_t>(buf_size), static_cast<ImGuiInputTextFlags>(flags));
+   return edited ? 1 : 0;
+}
+
 void fig_input_mouse(float x, float y, int left_down) {
    if (!ImGui::GetCurrentContext()) return;
    ImGuiIO &io = ImGui::GetIO();

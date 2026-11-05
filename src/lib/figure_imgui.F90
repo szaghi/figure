@@ -6,26 +6,31 @@ module figure_imgui
 !< frame it is clicked, `ig_checkbox`/`ig_slider` are true when they changed the value). Values are ordinary Fortran
 !< variables, updated in place: no handles, no callbacks, no `target` requirements (the C `bool*` of a checkbox is a
 !< local copy, written back).
-use, intrinsic :: iso_c_binding, only : c_bool, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_int, c_loc, c_null_char, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_base, only : cstr
-use figure_c_native, only : fig_texture_sampling
+use figure_c_native, only : fig_texture_sampling, fig_widget_input_text
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : im_vec2, igBegin, igButton, igCheckbox, igEnd, igGetItemRectMax, igGetItemRectMin, igImage,     &
-                          igInputDouble, igSameLine, igSeparator, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
-                          igSliderScalar, igTextUnformatted
+                          igInputDouble, igInputInt, igSameLine, igSeparator, igSetNextItemWidth, igSetNextWindowPos,   &
+                          igSetNextWindowSize, igShowDemoWindow, igSliderScalar, igTextUnformatted
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
                                 ImGuiDataType_S32
 
 implicit none
 private
 public :: ig_begin, ig_end, ig_button, ig_checkbox, ig_slider, ig_input, ig_text, ig_same_line, ig_separator
-public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image
+public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_input_text, ig_set_next_item_width
 
 interface ig_slider
    !< Slider for an integer or a real value.
    module procedure ig_slider_i32, ig_slider_r32, ig_slider_r64
 endinterface ig_slider
+
+interface ig_input
+   !< Numeric field for an integer or a real value.
+   module procedure ig_input_i32, ig_input_r64
+endinterface ig_input
 
 contains
    function ig_begin(name, open, flags) result(visible)
@@ -156,7 +161,7 @@ contains
    value = real(v, real64)
    endfunction ig_slider_r64
 
-   function ig_input(label, value, step, format) result(changed)
+   function ig_input_r64(label, value, step, format) result(changed)
    !< Numeric input field for a real value; true when the user changed it.
    character(len=*), intent(in)           :: label   !< Label.
    real(real64),     intent(inout)        :: value   !< Value.
@@ -175,7 +180,66 @@ contains
       changed = logical(igInputDouble(cstr(label), c_loc(v), s, 10.0_c_double * s, cstr('%.6g'), 0_c_int))
    endif
    value = real(v, real64)
-   endfunction ig_input
+   endfunction ig_input_r64
+
+   function ig_input_i32(label, value, step) result(changed)
+   !< Numeric input field for an integer value; true when the user changed it.
+   character(len=*), intent(in)           :: label   !< Label.
+   integer(int32),   intent(inout)        :: value   !< Value.
+   integer(int32),   intent(in), optional :: step    !< +/- buttons step (default: none).
+   logical                                :: changed !< Changed this frame.
+   integer(c_int), target                 :: v       !< C copy of `value`.
+   integer(c_int)                         :: s       !< Step.
+
+   v = int(value, c_int)
+   s = 0_c_int
+   if (present(step)) s = int(step, c_int)
+   changed = logical(igInputInt(cstr(label), c_loc(v), s, 10_c_int * s, 0_c_int))
+   value = int(v, int32)
+   endfunction ig_input_i32
+
+   function ig_input_text(label, value, hint, flags) result(changed)
+   !< A text field bound to `value`; true when the user edited it. The text can be as long as `value` (its length is
+   !< the field's capacity); trailing blanks are not part of the text (Fortran pads with them). `hint` is shown while
+   !< the field is empty; `flags` combine `ImGuiInputTextFlags_*` with `ior` (`CharsNoBlank`, `CharsDecimal`,
+   !< `CharsScientific`, `ReadOnly`, `EnterReturnsTrue`, ...).
+   character(len=*), intent(in)               :: label   !< Label.
+   character(len=*), intent(inout)            :: value   !< Text.
+   character(len=*), intent(in),    optional  :: hint    !< Shown while the field is empty.
+   integer(int32),   intent(in),    optional  :: flags   !< `ImGuiInputTextFlags_*` (default none).
+   logical                                    :: changed !< Edited this frame.
+   character(kind=c_char)                     :: buf(len(value) + 1) !< C copy of the text, NUL-terminated.
+   integer(c_int)                             :: f       !< Flags.
+   integer(int32)                             :: n       !< Length of the text.
+   integer(int32)                             :: i       !< Counter.
+
+   n = len_trim(value)
+   do i = 1_int32, n
+      buf(i) = value(i:i)
+   enddo
+   buf(n + 1:) = c_null_char
+   f = 0_c_int
+   if (present(flags)) f = int(flags, c_int)
+   if (present(hint)) then
+      changed = fig_widget_input_text(label, len(label, c_int), hint, len(hint, c_int), buf, size(buf, kind=c_int), &
+                                      f) == 1_c_int
+   else
+      changed = fig_widget_input_text(label, len(label, c_int), '', 0_c_int, buf, size(buf, kind=c_int), f) == 1_c_int
+   endif
+   if (.not. changed) return
+   value = ''
+   do i = 1_int32, len(value, kind=int32)
+      if (buf(i) == c_null_char) exit
+      value(i:i) = buf(i)
+   enddo
+   endfunction ig_input_text
+
+   subroutine ig_set_next_item_width(width)
+   !< Width of the next widget's field [pixels]; negative: up to that distance from the window's right edge.
+   real(real64), intent(in) :: width !< Width [pixels].
+
+   call igSetNextItemWidth(real(width, c_float))
+   endsubroutine ig_set_next_item_width
 
    subroutine ig_text(text)
    !< Plain text (no formatting: compose it with Fortran internal writes).
