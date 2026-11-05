@@ -13,6 +13,8 @@ replays (see FIGURE_CAPTURE_INPUT in native/figure_native.cpp):
     #! scale   960                                     width of the video and poster [pixels] (default: the crop's)
     #! crf     24                                      H.264 quality, lower is better and larger (default 24)
     #! style   seal                                    the program's style, through FIGURE_STYLE (default seal)
+    #! gif     640                                     also an animated GIF of the video, this wide (for the README:
+                                                       GitHub plays no repository video there)
     #! remote  1100 700                                remote mode: the program is started with "--remote PORT" and
                                                        a headless Chromium (CHROME, or puppeteer's) draws the page
                                                        at this size; the still gets a browser bar (no input script)
@@ -316,6 +318,22 @@ def record(name: str) -> None:
                 ],
                 check=True,
             )
+            if "gif" in header:  # from the video: 10 frames/s, 64 colours, no dithering (flat UI colours)
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-v",
+                        "error",
+                        "-y",
+                        "-i",
+                        str(OUT / f"{name}.mp4"),
+                        "-vf",
+                        f"fps=10,scale={header['gif']}:-1:flags=lanczos,split[a][b];"
+                        "[a]palettegen=max_colors=64:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle",
+                        str(OUT / f"{name}.gif"),
+                    ],
+                    check=True,
+                )
     sizes = ", ".join(
         f"{p.name} {p.stat().st_size // 1024} KB" for p in sorted(OUT.glob(f"{name}.*"))
     )
