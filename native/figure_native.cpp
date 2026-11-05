@@ -1713,7 +1713,13 @@ int fig_key_chord(const char *keys, int keys_len, int *chord) {
 int fig_input_key(const char *name, int name_len, int down) {
    if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
-   const ImGuiKey k = key_by_name(n);
+   // "shortcut": the platform's shortcut key, the one ig_shortcut's ctrl means: cmd (super) on macOS, where Dear ImGui
+   // swaps it with ctrl as the events arrive, ctrl elsewhere
+#if defined(__APPLE__)
+   const ImGuiKey k = n == "shortcut" ? ImGuiMod_Super : key_by_name(n);
+#else
+   const ImGuiKey k = n == "shortcut" ? ImGuiMod_Ctrl : key_by_name(n);
+#endif
    if (k == ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, "key: unknown name \"" + n + "\"");
    state_t::input_t e;
    e.kind = 4;

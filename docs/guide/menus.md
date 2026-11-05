@@ -37,6 +37,8 @@ differ: `ig_end` follows every `ig_begin`).
   with no change to the program. In [remote mode](remote) the browser on a Mac sends cmd as ctrl for the same reason.
 - An unknown name returns `.false.` and `FIG_ERR_ARGUMENT` in `stat` (without `stat`, the program stops with the
   message).
+- **In a test**, press the platform's shortcut key with `test_key('shortcut', down=.true.)`: cmd on macOS, ctrl
+  elsewhere. `test_key('ctrl')` is the physical ctrl key, which on macOS is not the shortcut key.
 
 ## Popups and modals
 

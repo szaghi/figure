@@ -78,15 +78,15 @@ do frame = 1_int32, FRAMES
    case (70_int32)
       call test_key('escape')                          ! close the menu
    case (76_int32)
-      call test_key('ctrl', down=.true.)               ! ctrl+s once
+      call test_key('shortcut', down=.true.)           ! ctrl+s once (cmd+s on macOS)
       call test_key('s')
-      call test_key('ctrl', down=.false.)
+      call test_key('shortcut', down=.false.)
    case (84_int32)
-      call test_key('ctrl', down=.true.)               ! ctrl+s held for 40 frames: still one press
+      call test_key('shortcut', down=.true.)           ! ctrl+s held for 40 frames: still one press
       call test_key('s', down=.true.)
    case (124_int32)
       call test_key('s', down=.false.)
-      call test_key('ctrl', down=.false.)
+      call test_key('shortcut', down=.false.)
    case (130_int32)
       call test_key('s')                               ! s alone: not the shortcut
    endselect

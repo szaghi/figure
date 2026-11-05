@@ -276,9 +276,9 @@ do frame = 1_int32, 24_int32
       call test_drag(sx(1) + 4.0_real64, sx(3), sx(2) + 40.0_real64, sx(3)) ! the slider, past its right end
    case (14_int32)
       call test_click(vx(1), vx(2))                                  ! the numeric field: select all, type, enter
-      call test_key('ctrl', down=.true.)
+      call test_key('shortcut', down=.true.)
       call test_key('a')
-      call test_key('ctrl', down=.false.)
+      call test_key('shortcut', down=.false.)
       call test_type('2.5')
       call test_key('enter')
    endselect

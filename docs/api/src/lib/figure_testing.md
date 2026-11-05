@@ -244,6 +244,8 @@ flowchart TD
 Queue a key: pressed and released, or only pressed (`down=.true.`) or released (`down=.false.`). Names: `a`-`z`,
  `0`-`9`, `enter`, `tab`, `backspace`, `delete`, `escape`, `space`, `left`, `right`, `up`, `down`, `home`, `end`,
  `pageup`, `pagedown`, `f1`-`f12`, and the modifiers `ctrl`, `shift`, `alt`, `super` (hold one with `down`).
+ `shortcut` is the platform's shortcut key, the one `ig_shortcut('ctrl+...')` and select-all mean: cmd on macOS,
+ ctrl elsewhere (`ctrl` itself is the physical ctrl key, which macOS does not use for shortcuts).
 
 ```fortran
 subroutine test_key(name, down, stat)

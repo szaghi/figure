@@ -46,14 +46,14 @@ And to aim and to check:
 
 **Timing.** Everything queued reaches Dear ImGui at the next frame, up to a `test_next_frame` boundary; Dear ImGui then
 applies one change of each kind per frame (its input trickling), so a click queued at once still takes the frames a
-real one takes. Draw a few frames after queuing (three for a click, more for a drag, which `test_drag` spreads with its
+real one takes. Draw a few frames after queuing (four for a click, more for a drag, which `test_drag` spreads with its
 own boundaries) before checking. Editing a numeric field, for example:
 
 ```fortran
 call test_click(x, y)                  ! focus the field (its rectangle from ig_item_rect)
-call test_key('ctrl', down=.true.)     ! select what is there
+call test_key('shortcut', down=.true.) ! select what is there: ctrl+a (cmd+a on macOS)
 call test_key('a')
-call test_key('ctrl', down=.false.)
+call test_key('shortcut', down=.false.)
 call test_type('2.5')                  ! replace it
 call test_key('enter')                 ! confirm: the field's variable becomes 2.5
 ```
@@ -70,9 +70,9 @@ the application.
 Dear ImGui's tabs (and other items that may overlap) take a press only once they were hovered in the frame before. A
 click therefore lands over the next four frames (move, rest, press, release), a drag over the next five.
 
-To replace the text of a field, select it with keys every platform reads alike: `end`, then `home` with `shift` held.
-Select-all is `ctrl+a` on Linux and Windows but `cmd+a` on macOS (Dear ImGui follows the platform), so a test that
-types after `ctrl+a` appends to the old text on macOS.
+To press a shortcut, hold `'shortcut'`: the platform's shortcut key, cmd on macOS and ctrl elsewhere, the one that
+select-all (`a`) and `ig_shortcut('ctrl+s')` mean there. `'ctrl'` is the physical ctrl key, which macOS does not use for
+shortcuts: Dear ImGui swaps the two as the events arrive.
 
 ## Test the interface you ship
 
