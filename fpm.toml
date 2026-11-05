@@ -37,6 +37,11 @@ name = "figure_bench_texture"
 source-dir = "src/examples"
 main = "figure_bench_texture.F90"
 
+[[example]]
+name = "figure_bench_redraw"
+source-dir = "src/examples"
+main = "figure_bench_redraw.F90"
+
 [[test]]
 name = "figure_test_headless"
 source-dir = "src/tests"
