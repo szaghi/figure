@@ -69,6 +69,10 @@ A tab of a tab bar takes a press only after the pointer has rested on it for a f
 that may overlap), while `test_click` moves and presses on consecutive frames: move to the tab first (`test_mouse_move`),
 then click it a few frames later.
 
+To replace the text of a field, select it with keys every platform reads alike: `end`, then `home` with `shift` held.
+Select-all is `ctrl+a` on Linux and Windows but `cmd+a` on macOS (Dear ImGui follows the platform), so a test that
+types after `ctrl+a` appends to the old text on macOS.
+
 ## Test the interface you ship
 
 Put the interface in a procedure that the application calls every frame, and call the same procedure from the test:

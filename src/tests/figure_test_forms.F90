@@ -2,7 +2,7 @@
 program figure_test_forms
 !< figure_test_forms, the form widgets (fields, combo, tooltip, ...) driven by synthetic input, headless.
 !<
-!< Each field is clicked, its text selected (ctrl+a) and replaced by typing, then confirmed with enter; the checks read
+!< Each field is clicked, its text selected (end, shift+home) and replaced by typing, then confirmed with enter; the checks read
 !< the Fortran variables bound to the fields after the frames have consumed the input.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, ig_input_text, ig_item_rect,   &
@@ -255,14 +255,16 @@ if (.not. all(test_passed)) error stop 1
 
 contains
    subroutine replace(k, text)
-   !< Click field k, select all its text, type `text`, confirm with enter.
+   !< Click field k, select its text, type `text`, confirm with enter. The text is selected with end, then shift+home,
+   !< which every platform reads the same way (select-all is ctrl+a, but cmd+a on macOS).
    integer(int32),   intent(in) :: k    !< Field.
    character(len=*), intent(in) :: text !< New text.
 
    call test_click(at(1, k), at(2, k))
-   call test_key('ctrl', down=.true.)
-   call test_key('a')
-   call test_key('ctrl', down=.false.)
+   call test_key('end')
+   call test_key('shift', down=.true.)
+   call test_key('home')
+   call test_key('shift', down=.false.)
    call test_type(text)
    call test_key('enter')
    endsubroutine replace
