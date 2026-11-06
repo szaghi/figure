@@ -60,6 +60,19 @@ laid-out dock space and a window per file popped out on demand ([Docking](dockin
 dialogs](frame-loop#file-dialogs)), and lazy redraw: the checker sleeps between looks at the files ([Frame loop and
 redraw](frame-loop#lazy-redraw)).
 
+## A case in one window
+
+`xall_gui` puts the Xall input editor and the run checker of a case in one window, as workspaces picked on a toolbar
+(left, top, right or bottom): each keeps its menu bar, its windows and its state while the other is shown, and the
+run is followed meanwhile. Opening a case opens its input file and follows the history files it names. The toolbar's
+buttons carry a mark each: the input edited or with errors, the run's worst finding.
+
+<Media name="showcase_xall_gui" video alt="One window for a case: the input editor shows a section; the Monitor button of the toolbar shows the run checker and a force group; the Input button goes back" caption="xall_gui: the input and the run of a case, picked on the toolbar (synthetic run files)" />
+
+Built from: a bar along a side of the window that the dock space leaves free (`ig_begin_side_bar`,
+[A bar along a side](docking#a-bar-along-a-side)), Lucide icons in the labels (`ICON_*`, [Icons](styles#icons)), and the
+two tools' own frames drawn in turn, each with its dock space.
+
 ## Shared by the three tools
 
 Each tool has a menu bar (File, Edit, Help; `xall_evol` also View) and the same **Edit > Preferences** window: the font
