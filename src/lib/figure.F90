@@ -35,7 +35,7 @@ use figure_cimgui_enums, only : ImGuiInputTextFlags_None, ImGuiInputTextFlags_Ch
 use figure_group, only : ig_begin_disabled, ig_begin_tab, ig_begin_tab_bar, ig_collapsing_header, ig_end_disabled, &
                          ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_begin_table, ig_end_table,    &
                          ig_table_setup_column, ig_table_headers_row, ig_table_next_row, ig_table_next_column, &
-                         ig_table_set_column, ig_begin_child, ig_end_child
+                         ig_table_set_column, ig_begin_child, ig_end_child, list_clipper_object
 use figure_cimgui_enums, only : ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg,         &
                                 ImGuiTableFlags_Borders, ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, &
                                 ImGuiTableFlags_SizingFixedFit, ImGuiTableFlags_SizingStretchSame
@@ -46,7 +46,8 @@ use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig
                          ig_item_rect, ig_same_line, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
                          ig_set_next_item_width, ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped,      &
-                         ig_text_disabled, ig_text_colored
+                         ig_text_disabled, ig_text_colored, ig_tool_button, ig_focus_window,            &
+                         ig_align_text_to_frame_padding
 use figure_implot, only : ip_begin_subplots, ip_end_subplots,                                              &
                           ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
                           ip_plot_limits, ip_plot_size, ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded,   &
@@ -81,7 +82,8 @@ public :: ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored, ig_
 public :: ig_collapsing_header, ig_begin_tab_bar, ig_end_tab_bar, ig_begin_tab, ig_end_tab, ig_push_id, ig_pop_id
 public :: ig_begin_disabled, ig_end_disabled
 public :: ig_begin_table, ig_end_table, ig_table_setup_column, ig_table_headers_row, ig_table_next_row
-public :: ig_table_next_column, ig_table_set_column
+public :: ig_table_next_column, ig_table_set_column, list_clipper_object
+public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding
 public :: ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg, ImGuiTableFlags_Borders
 public :: ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, ImGuiTableFlags_SizingFixedFit
 public :: ImGuiTableFlags_SizingStretchSame

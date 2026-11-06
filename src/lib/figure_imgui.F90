@@ -10,22 +10,24 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c
                                         c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_base, only : cstr
-use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_widget_input_text
+use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
                           igPushID_Int, igSelectable_Bool, igSetItemDefaultFocus, igButton, igCheckbox, igEnd, &
                           igGetItemRectMax, igGetItemRectMin, igImage, igInputDouble, igInputInt, igSameLine, &
                           igSeparator, igSetNextItemWidth, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
                           igSliderScalar, igTextUnformatted, im_vec4, igGetStyleColorVec4, igPopStyleColor, &
-                          igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos
+                          igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos, igAlignTextToFramePadding, &
+                          igIsPopupOpen_Str, igSetWindowFocus_Str
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
-                                ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled
+                                ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup
 
 implicit none
 private
 public :: ig_begin, ig_begin_side_bar, ig_end, ig_button, ig_checkbox, ig_slider, ig_input, ig_text, ig_same_line, ig_separator
 public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_input_text, ig_set_next_item_width
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
+public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding
 
 interface ig_slider
    !< Slider for an integer or a real value.
@@ -86,6 +88,17 @@ contains
    visible = fig_begin_side_bar(name, len(name, c_int), s, real(size, c_double)) == 1_c_int
    endfunction ig_begin_side_bar
 
+   function ig_focus_window(name) result(focused)
+   !< Bring window `name` forward and give it the keyboard (a docked window: its tab is shown). Not while a popup or a
+   !< modal is open, since focusing another window would close it: then nothing happens and the result is false; ask
+   !< again on a later frame. A window not drawn yet (this frame or before) is not found: ask after its `ig_begin`.
+   character(len=*), intent(in) :: name    !< Window name (as given to `ig_begin`, or its `###id` part).
+   logical                      :: focused !< Focused (false: a popup is open, ask again later).
+
+   focused = .not. logical(igIsPopupOpen_Str(c_null_char, ImGuiPopupFlags_AnyPopup))
+   if (focused) call igSetWindowFocus_Str(cstr(name))
+   endfunction ig_focus_window
+
    subroutine ig_end()
    !< End the window opened by `ig_begin` (whatever it returned).
    call igEnd()
@@ -122,6 +135,40 @@ contains
    if (present(height)) extent%y = real(height, c_float)
    pressed = logical(igButton(cstr(label), extent))
    endfunction ig_button
+
+   function ig_tool_button(label, icon, width, height, selected, accent) result(clicked)
+   !< A workspace button, as Fusion 360's: `icon` (an `ICON_*`) above `label`, larger than it, on a framed, rounded button
+   !< that shades under the pointer. `selected`: framed and tinted in the accent colour, the icon drawn in it (`accent`
+   !< `[r, g, b]` in [0, 1]; default: the style's CheckMark colour). `width`, `height` [pixels]: default as wide as the
+   !< label (at least 4.6 font sizes) and tall enough for the icon (1.8 font sizes) above the label. The text before
+   !< `##` is shown, all of `label` is the id. True on the frame it is clicked; `ig_tooltip` and `ig_item_rect` apply to
+   !< it as to any widget.
+   character(len=*), intent(in)           :: label    !< Label (also its id).
+   character(len=*), intent(in)           :: icon     !< Icon (UTF-8: an ICON_* constant).
+   real(real64),     intent(in), optional :: width    !< Width [pixels].
+   real(real64),     intent(in), optional :: height   !< Height [pixels].
+   logical,          intent(in), optional :: selected !< The one shown (default false).
+   real(real64),     intent(in), optional :: accent(3) !< Accent colour.
+   logical                                :: clicked  !< Clicked this frame.
+   real(c_double)                         :: w, h, acc(4) !< C copies.
+   integer(c_int)                         :: sel      !< C copy of `selected`.
+
+   w = 0.0_c_double
+   h = 0.0_c_double
+   if (present(width)) w = real(width, c_double)
+   if (present(height)) h = real(height, c_double)
+   sel = 0_c_int
+   if (present(selected)) sel = merge(1_c_int, 0_c_int, selected)
+   acc = [0.0_c_double, 0.0_c_double, 0.0_c_double, -1.0_c_double]
+   if (present(accent)) acc = [real(accent, c_double), 1.0_c_double]
+   clicked = fig_tool_button(label, len(label, c_int), icon, len(icon, c_int), w, h, sel, acc) == 1_c_int
+   endfunction ig_tool_button
+
+   subroutine ig_align_text_to_frame_padding()
+   !< The text that follows on this line is lowered to the text of framed widgets (fields, buttons): a label or a value
+   !< beside fields, in a table row of fields.
+   call igAlignTextToFramePadding()
+   endsubroutine ig_align_text_to_frame_padding
 
    function ig_checkbox(label, value) result(changed)
    !< A check box bound to `value`; true when the user toggled it.

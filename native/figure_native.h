@@ -126,6 +126,12 @@ int    fig_image_result(char *buf, int buf_len, int *state, int *path_len);
 int    fig_save_layout(const char *path, int path_len, const char *comment, int comment_len);
 int    fig_load_layout(const char *path, int path_len);
 int    fig_begin_side_bar(const char *name, int name_len, int side, double size);
+int    fig_tool_button(const char *label, int label_len, const char *icon, int icon_len, double width, double height,
+                       int selected, const double *accent);
+void  *fig_clipper_new(void);
+void   fig_clipper_begin(void *clipper, int count, double item_height);
+int    fig_clipper_step(void *clipper, int *first, int *last);
+void   fig_clipper_delete(void *clipper);
 /* A key chord ("ctrl+s": modifiers and one key, by the names of fig_input_key, joined by '+'). */
 int    fig_key_chord(const char *keys, int keys_len, int *chord);
 /* A text field over a caller-owned NUL-terminated buffer of buf_size bytes (InputText without a callback); 1 when

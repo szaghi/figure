@@ -23,6 +23,7 @@ public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord, fig_plot_tick_label
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
+public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
 public :: fig_set_title, fig_title
 
 ! Status codes: must match native/figure_native.h.
@@ -221,6 +222,55 @@ interface
    real(c_double), value              :: size     !< Width (left, right) or height (top, bottom) [pixels].
    integer(c_int)                     :: visible  !< 1: drawn.
    endfunction fig_begin_side_bar
+
+   function fig_tool_button(label, label_len, icon, icon_len, width, height, selected, accent) result(clicked) &
+      bind(C, name='fig_tool_button')
+   !< A workspace button, an icon above its label: 1 on the frame it is clicked.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: label(*)   !< Label (text before '##' shown; all of it the id).
+   integer(c_int), value              :: label_len  !< Its length.
+   character(kind=c_char), intent(in) :: icon(*)    !< Icon (UTF-8).
+   integer(c_int), value              :: icon_len   !< Its length.
+   real(c_double), value              :: width      !< Width [pixels] (<= 0: default).
+   real(c_double), value              :: height     !< Height [pixels] (<= 0: default).
+   integer(c_int), value              :: selected   !< 1: framed and tinted in the accent.
+   real(c_double), intent(in)         :: accent(4)  !< Accent [r, g, b, _] (accent(4) < 0: the style's).
+   integer(c_int)                     :: clicked    !< 1: clicked.
+   endfunction fig_tool_button
+
+   function fig_clipper_new() result(clipper) bind(C, name='fig_clipper_new')
+   !< A list clipper.
+   import :: c_ptr
+   implicit none
+   type(c_ptr) :: clipper !< Clipper.
+   endfunction fig_clipper_new
+
+   subroutine fig_clipper_begin(clipper, count, item_height) bind(C, name='fig_clipper_begin')
+   !< Start clipping `count` rows (item_height <= 0: measured on the first row).
+   import :: c_double, c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: clipper     !< Clipper.
+   integer(c_int), value :: count       !< Rows.
+   real(c_double), value :: item_height !< Row height [pixels].
+   endsubroutine fig_clipper_begin
+
+   function fig_clipper_step(clipper, first, last) result(more) bind(C, name='fig_clipper_step')
+   !< The next range of rows to draw (1-based): 1 while there is one.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value       :: clipper !< Clipper.
+   integer(c_int), intent(out) :: first   !< First row.
+   integer(c_int), intent(out) :: last    !< Last row.
+   integer(c_int)              :: more    !< 1: draw first..last.
+   endfunction fig_clipper_step
+
+   subroutine fig_clipper_delete(clipper) bind(C, name='fig_clipper_delete')
+   !< Free a clipper (ended first when left before its end).
+   import :: c_ptr
+   implicit none
+   type(c_ptr), value :: clipper !< Clipper.
+   endsubroutine fig_clipper_delete
 
    function fig_load_layout(path, path_len) result(status) bind(C, name='fig_load_layout')
    !< Read a layout from `path`, applied before the next frame.

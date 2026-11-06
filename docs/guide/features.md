@@ -46,7 +46,9 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_begin_side_bar(name, side, size)` | a bar along one side of the display (a toolbar), left out of the dock space | [Docking](docking#a-bar-along-a-side) |
 | `ig_end()` | end the window (always, whatever `ig_begin` returned) |
 | `ig_set_next_window(x, y [, width, height] [, always])` | place (and size) the next window |
+| `ig_focus_window(name)` → `logical` | bring a window forward (a docked one: its tab); refused (`.false.`) while a popup is open |
 | `ig_button(label [, width] [, height])` → `logical` | a button; `.true.` on the frame it is clicked |
+| `ig_tool_button(label, icon [, width] [, height] [, selected] [, accent])` → `logical` | a workspace button: an icon above the label, framed; `selected` tinted in the accent |
 | `ig_checkbox(label, value)` → `logical` | a check box bound to a `logical`; `.true.` when toggled |
 | `ig_slider(label, value, vmin, vmax)` → `logical` | a slider for `int32`, `real32` or `real64`; `.true.` when changed |
 | `ig_input(label, value [, step] [, format])` → `logical` | a numeric field for an `int32` or a `real64` (`format` for reals only); `.true.` when changed |
@@ -55,6 +57,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_selectable(label, selected)` → `logical` | a line of a list, highlighted when `selected`; `.true.` when clicked |
 | `ig_text_wrapped(text)`, `ig_text_disabled(text)`, `ig_text_colored(text, color)` | text wrapped at the region's edge, in the disabled colour, in a given colour |
 | `ig_begin_child(id [, width] [, height] [, border])` → `logical`, `ig_end_child()` | a region that scrolls on its own; always paired |
+| `list_clipper_object`: `clip%begin(count [, item_height])`, `clip%step()` → `logical`, `clip%first`, `clip%last` | a long list: only the rows in view are drawn |
 | `ig_begin_main_menu_bar()` → `logical`, `ig_end_main_menu_bar()` | the menu bar along the top of the display; end only after a true begin |
 | `ig_begin_menu_bar()` → `logical`, `ig_end_menu_bar()` | a window's own menu bar (`ImGuiWindowFlags_MenuBar`) |
 | `ig_begin_menu(label [, enabled])` → `logical`, `ig_end_menu()` | a menu or submenu; `.true.` while open |
@@ -74,6 +77,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_set_next_item_width(width)` | width of the next widget's field [pixels]; negative: up to that distance from the right edge |
 | `ig_text(text)` | plain text |
 | `ig_same_line([offset])` | put the next item on the same line; with `offset`, at that distance from the left edge |
+| `ig_align_text_to_frame_padding()` | the text that follows on the line is level with the text of fields and buttons |
 | `ig_separator()` | horizontal separator |
 | `ig_show_demo_window([open])` | the Dear ImGui demo window |
 | `ig_item_rect(xmin, ymin, xmax, ymax)` | screen rectangle of the last item |

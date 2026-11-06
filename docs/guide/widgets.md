@@ -26,6 +26,7 @@ the value, discard the result with `continue`:
 | `ig_begin(name [, open] [, flags]) → logical` | `name` is the title and the identifier. Returns `.false.` when the window is collapsed or clipped: skip its content. `flags` combine `ImGuiWindowFlags_*` with `ior` (below). |
 | `ig_end()` | Call it after every `ig_begin`, whatever `ig_begin` returned. |
 | `ig_set_next_window(x, y [, width, height] [, always])` | Position, and size if both `width` and `height` are given, of the next `ig_begin`, in pixels. Applied on first use only (the user can move the window afterwards; with `app%init(..., ini_file=...)` the layout is remembered across runs), or every frame with `always=.true.`. |
+| `ig_focus_window(name)` → `logical` | Brings window `name` forward and gives it the keyboard; a docked window's tab is shown. While a popup or a modal is open it does nothing and returns `.false.` (focusing another window would close the popup): ask again on a later frame. The window must have been drawn (`ig_begin`) this frame or before. |
 
 Widgets called outside any `ig_begin`/`ig_end` pair go to Dear ImGui's implicit "Debug" window.
 
@@ -47,6 +48,7 @@ as long as `ig_begin` is called for it, so guard the call with the same variable
 | Procedure | Value | Returns `.true.` |
 |---|---|---|
 | `ig_button(label [, width] [, height])` | none | on the frame it is clicked |
+| `ig_tool_button(label, icon [, width] [, height] [, selected] [, accent])` | none | on the frame it is clicked |
 | `ig_checkbox(label, value)` | `logical` | when toggled |
 | `ig_slider(label, value, vmin, vmax)` | `integer(int32)`, `real(real32)` or `real(real64)`; `vmin`, `vmax` of the same kind | when changed |
 | `ig_input(label, value [, step] [, format])` | `integer(int32)` or `real(real64)` (`format` for reals) | when changed |
@@ -75,12 +77,26 @@ as long as `ig_begin` is called for it, so guard the call with the same variable
 | `ig_tooltip(text)` | On the widget just drawn: `text` shows while the pointer rests on it, after Dear ImGui's tooltip delay. |
 | `ig_set_next_item_width(width)` | Width of the next widget's field, in pixels; negative: up to that distance from the window's right edge (`-1.0` fills a table cell). |
 
+`ig_tool_button` is a workspace button of a toolbar, as Fusion 360 draws them: `icon` (an `ICON_*`, see
+[Icons](styles#icons)) above the label and larger than it, on a framed, rounded button that shades under the pointer.
+With `selected`, the button is framed and tinted in the accent colour and the icon drawn in it: `accent` `[r, g, b]`,
+default the style's CheckMark colour. The default size fits the label (at least 4.6 font sizes wide) and the icon above
+it; the text before `##` is shown, as for any label. Put the buttons in a bar along a side
+([`ig_begin_side_bar`](docking#a-bar-along-a-side)), one per workspace, and keep which one is selected yourself.
+
+```fortran
+if (ig_tool_button('Input', ICON_FILE_PEN, selected=tool == 1)) tool = 1
+call ig_tooltip('the input files')
+if (ig_tool_button('Monitor', ICON_ACTIVITY, selected=tool == 2)) tool = 2
+```
+
 ## Text and layout
 
 | Procedure | Notes |
 |---|---|
 | `ig_text(text)` | Plain text, no formatting: compose numbers with an internal `write`. Trailing blanks are shown: pass `trim(line)`. |
 | `ig_same_line([offset])` | The next item goes on the same line as the previous one; with `offset`, at that distance in pixels from the left edge of the window or region (a column of values). |
+| `ig_align_text_to_frame_padding()` | The text that follows on the line is lowered to the text of framed widgets: a label before a field, a line number in a table row of fields. Text after a field on the same line is level already. |
 | `ig_text_wrapped(text)` | Text wrapped at the right edge of the window or region: help, long messages. |
 | `ig_text_disabled(text)` | Text in the style's disabled colour: a default, a hint, something that does not apply. |
 | `ig_text_colored(text, color)` | Text in `color`, `[r, g, b]` or `[r, g, b, a]` in [0, 1]. Pair the colour with a mark or a word (`[!!]`), so that the meaning does not rest on colour alone. |
@@ -106,6 +122,25 @@ Strings are passed verbatim, trailing blanks included: `'Run'` and `'Run   '` ar
 |---|---|
 | `ig_selectable(label, selected)` → `logical` | A line of a list, highlighted when `selected`; `.true.` on the frame it is clicked. The program keeps the selection: the line does not change `selected`. |
 | `ig_begin_child(id [, width] [, height] [, border])` → `logical`, `ig_end_child()` | A region of the window that scrolls on its own. Always paired, like `ig_begin`/`ig_end`. `width` and `height` in pixels: absent or 0 fills what is left, negative leaves that much. |
+
+A list of thousands of rows draws only those in view with a `list_clipper_object`, rows of equal height (lines of
+text, selectables, a table's rows of fields): `call clip%begin(n)`, then `do while (clip%step())` draws rows
+`clip%first` to `clip%last`. The loop ends by itself (a few steps); left early, the clipper is closed by the next
+`begin` or when it goes out of scope.
+
+```fortran
+type(list_clipper_object) :: clip
+
+if (ig_begin_child('rows', height=300.0_real64)) then
+   call clip%begin(size(names))
+   do while (clip%step())
+      do i = clip%first, clip%last
+         if (ig_selectable(names(i), i == current)) current = i
+      enddo
+   enddo
+endif
+call ig_end_child()
+```
 
 An input-file editor's layout: a list of sections in a narrow region, the section's values and its help in the region
 beside it. Each region scrolls under the wheel on its own; the window does not move.

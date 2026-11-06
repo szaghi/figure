@@ -10,9 +10,10 @@ module figure_group
 !< A table: `ig_begin_table`, then optionally one `ig_table_setup_column` per column and `ig_table_headers_row`, then
 !< per row `ig_table_next_row` and per cell `ig_table_next_column` (or `ig_table_set_column`) before its widgets.
 !< Widgets repeated on every row need an id scope per row (`ig_push_id(row)`) or distinct labels.
-use, intrinsic :: iso_c_binding, only : c_bool, c_float, c_int, c_loc, c_null_ptr, c_ptr
+use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : cstr
+use figure_c_native, only : fig_clipper_begin, fig_clipper_delete, fig_clipper_new, fig_clipper_step
 use figure_cimgui, only : igBeginChild_Str, igEndChild, im_vec2, igBeginDisabled, igBeginTabBar, igBeginTabItem, &
                           igBeginTable,                                                                         &
                           igCollapsingHeader_TreeNodeFlags, igEndDisabled, igEndTabBar, igEndTabItem, igEndTable, &
@@ -28,6 +29,21 @@ public :: ig_collapsing_header, ig_begin_tab_bar, ig_end_tab_bar, ig_begin_tab, 
 public :: ig_begin_disabled, ig_end_disabled
 public :: ig_begin_table, ig_end_table, ig_table_setup_column, ig_table_headers_row, ig_table_next_row
 public :: ig_table_next_column, ig_table_set_column, ig_begin_child, ig_end_child
+public :: list_clipper_object
+
+type :: list_clipper_object
+   !< Only the rows of a long list that are in view are drawn: `call clip%begin(n)`, then
+   !< `do while (clip%step())`, drawing rows `clip%first` to `clip%last` (rows of equal height; in a window, a child
+   !< region or a table). The loop ends by itself; a clipper left before its end is closed when it is begun again or
+   !< goes out of scope.
+   integer(int32)          :: first = 1_int32  !< First row to draw (1-based).
+   integer(int32)          :: last = 0_int32   !< Last row to draw.
+   type(c_ptr),    private :: p = c_null_ptr   !< Dear ImGui's clipper.
+   contains
+      procedure, pass(self) :: begin => clipper_begin !< Start: the number of rows.
+      procedure, pass(self) :: step => clipper_step   !< The next rows to draw: false at the end.
+      final                 :: clipper_final
+endtype list_clipper_object
 
 interface ig_push_id
    !< Open an id scope, by a string or an integer.
@@ -35,6 +51,48 @@ interface ig_push_id
 endinterface ig_push_id
 
 contains
+   subroutine clipper_begin(self, count, item_height)
+   !< Start clipping `count` rows; `item_height` [pixels] (default: measured on the first row drawn).
+   class(list_clipper_object), intent(inout)        :: self        !< Clipper.
+   integer(int32),             intent(in)           :: count       !< Rows.
+   real(real64),               intent(in), optional :: item_height !< Row height.
+   real(c_double)                                   :: h           !< C copy.
+
+   if (c_associated(self%p)) call fig_clipper_delete(self%p)
+   self%p = fig_clipper_new()
+   h = -1.0_c_double
+   if (present(item_height)) h = real(item_height, c_double)
+   call fig_clipper_begin(self%p, int(max(count, 0_int32), c_int), h)
+   self%first = 1_int32
+   self%last = 0_int32
+   endsubroutine clipper_begin
+
+   function clipper_step(self) result(more)
+   !< The next rows to draw, `self%first` to `self%last`: true while there are some (false: the clipper ended).
+   class(list_clipper_object), intent(inout) :: self  !< Clipper.
+   logical                                   :: more  !< Draw first..last.
+   integer(c_int)                            :: f, l  !< C copies.
+
+   more = .false.
+   if (.not. c_associated(self%p)) return
+   more = fig_clipper_step(self%p, f, l) == 1_c_int
+   if (more) then
+      self%first = int(f, int32)
+      self%last = int(l, int32)
+   else
+      call fig_clipper_delete(self%p)
+      self%p = c_null_ptr
+   endif
+   endfunction clipper_step
+
+   subroutine clipper_final(self)
+   !< A clipper going out of scope: freed.
+   type(list_clipper_object), intent(inout) :: self !< Clipper.
+
+   if (c_associated(self%p)) call fig_clipper_delete(self%p)
+   self%p = c_null_ptr
+   endsubroutine clipper_final
+
    function ig_begin_child(id, width, height, border) result(visible)
    !< A region inside the window, scrolling on its own (a list that scrolls while a help panel stays); always pair with
    !< `ig_end_child`, whatever this returned. `width`/`height` [pixels]: 0 or absent fills what is left, negative leaves

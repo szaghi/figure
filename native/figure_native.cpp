@@ -1540,6 +1540,72 @@ int fig_begin_side_bar(const char *name, int name_len, int side, double size) {
    return ImGui::BeginViewportSideBar(n.c_str(), ImGui::GetMainViewport(), dir, static_cast<float>(size), flags) ? 1 : 0;
 }
 
+// A workspace button: an icon above its label (Fusion 360's style), on a framed, rounded button that shades under the
+// pointer; selected, it is framed and tinted in the accent colour (accent[3] < 0: the style's CheckMark colour) and
+// the icon is drawn in it. width/height <= 0: the default size (as wide as the label, room for the icon at 1.8 font
+// sizes). The label's text before "##" is shown; the whole label is the id. Returns 1 on the frame it is clicked.
+int fig_tool_button(const char *label, int label_len, const char *icon, int icon_len, double width, double height,
+                    int selected, const double *accent) {
+   const std::string lab(label, label_len > 0 ? static_cast<size_t>(label_len) : 0);
+   const std::string ic(icon, icon_len > 0 ? static_cast<size_t>(icon_len) : 0);
+   const float fs = ImGui::GetFontSize();
+   const char *shown_end = ImGui::FindRenderedTextEnd(lab.c_str());
+   const ImVec2 text = ImGui::CalcTextSize(lab.c_str(), shown_end);
+   const float icon_px = 1.8f * fs;
+   const float w = width > 0.0 ? static_cast<float>(width) : std::max(4.6f * fs, text.x + 1.2f * fs);
+   const float h = height > 0.0 ? static_cast<float>(height) : icon_px + 2.0f * fs;
+   const ImVec4 acc = accent[3] < 0.0 ? ImGui::GetStyleColorVec4(ImGuiCol_CheckMark)
+                                      : ImVec4(static_cast<float>(accent[0]), static_cast<float>(accent[1]),
+                                               static_cast<float>(accent[2]), 1.0f);
+   const ImVec4 ink = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+   ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.35f * fs);
+   ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, (selected ? 2.0f : 1.0f) * std::max(1.0f, fs / 15.0f));
+   if (selected) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(acc.x, acc.y, acc.z, 0.22f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(acc.x, acc.y, acc.z, 0.32f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(acc.x, acc.y, acc.z, 0.42f));
+      ImGui::PushStyleColor(ImGuiCol_Border, acc);
+   } else {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(ink.x, ink.y, ink.z, 0.0f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(ink.x, ink.y, ink.z, 0.10f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(ink.x, ink.y, ink.z, 0.18f));
+   }
+   const bool clicked = ImGui::Button(("##" + lab).c_str(), ImVec2(w, h));
+   ImGui::PopStyleColor(selected ? 4 : 3);
+   ImGui::PopStyleVar(2);
+   const ImVec2 at = ImGui::GetItemRectMin();
+   ImDrawList *dl = ImGui::GetWindowDrawList();
+   ImFont *font = ImGui::GetFont();
+   const ImVec2 isz = font->CalcTextSizeA(icon_px, FLT_MAX, 0.0f, ic.c_str());
+   dl->AddText(font, icon_px, ImVec2(at.x + 0.5f * (w - isz.x), at.y + 0.3f * fs),
+               ImGui::GetColorU32(selected ? acc : ink), ic.c_str());
+   dl->AddText(font, fs, ImVec2(at.x + 0.5f * (w - text.x), at.y + h - 1.45f * fs), ImGui::GetColorU32(ink),
+               lab.c_str(), shown_end);
+   return clicked ? 1 : 0;
+}
+
+// Dear ImGui's list clipper: only the rows of a long list that are in view are drawn (rows of equal height).
+void *fig_clipper_new(void) { return IM_NEW(ImGuiListClipper)(); }
+
+void fig_clipper_begin(void *clipper, int count, double item_height) {
+   static_cast<ImGuiListClipper *>(clipper)->Begin(count, static_cast<float>(item_height));
+}
+
+// The next range of rows to draw, 1-based [first, last]: 1 while there is one; 0 at the end (the clipper ended).
+int fig_clipper_step(void *clipper, int *first, int *last) {
+   ImGuiListClipper *c = static_cast<ImGuiListClipper *>(clipper);
+   if (!c->Step()) return 0;
+   *first = c->DisplayStart + 1;
+   *last = c->DisplayEnd;
+   return 1;
+}
+
+void fig_clipper_delete(void *clipper) {
+   ImGuiListClipper *c = static_cast<ImGuiListClipper *>(clipper);
+   if (c->ItemsCount >= 0 && ImGui::GetCurrentContext()) c->End(); // left before its end
+   IM_DELETE(c);
+}
+
 int fig_dock_space(unsigned int id, int flags) {
    FIG_TRY
    if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_dock_space: no frame is open");
