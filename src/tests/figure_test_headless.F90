@@ -4,7 +4,7 @@ program figure_test_headless
 !<
 !< A button is clicked by queuing mouse states frame by frame (hover, press, release), exactly as real input arrives;
 !< a check box is toggled the same way; a plot is drawn from Fortran arrays. Needs no display, so it runs in CI as is.
-use, intrinsic :: iso_c_binding, only : c_double, c_f_pointer, c_float, c_int, c_null_char
+use, intrinsic :: iso_c_binding, only : c_bool, c_double, c_f_pointer, c_float, c_int, c_null_char, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, real32, real64
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_last_error, ig_begin, ig_begin_side_bar, &
                    ig_button, &
@@ -17,8 +17,8 @@ use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_
                    ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ip_get_style_color,  &
                    ip_get_style_var, ip_set_style_color, ip_set_style_var, ig_pop_font, ig_push_font,         &
                    ig_pop_style_color, ig_pop_style_var, ig_push_style_color, ig_push_style_var, ig_text,      &
-                   ImGuiWindowFlags_NoTitleBar, ig_slider, ig_input
-use figure_cimgui, only : im_vec2, im_vec4, igGetFontSize, igGetStyleColorVec4
+                   ImGuiWindowFlags_NoTitleBar, ig_slider, ig_input, ICON_FILE_PEN, ICON_PLAY
+use figure_cimgui, only : im_vec2, im_vec4, igCalcTextSize, igGetFontSize, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, &
                            ImPlot_GetPlotLimits, ImPlot_PlotToPixels_double
@@ -39,7 +39,7 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(48)  !< Per-check outcome.
+logical                   :: test_passed(50)  !< Per-check outcome.
 real(real64)              :: bar(4), panel(4) !< A side bar, and the window docked beside it.
 integer(int32)            :: bar_root         !< The dock space beside the bar.
 real(real64)              :: lay(4)           !< The Layout window after a layout is loaded.
@@ -102,6 +102,9 @@ character(len=:), allocatable :: bad_message  !< Error message of the malformed 
 integer(int32)            :: unit             !< File unit.
 integer(int32)            :: stat_font(4)     !< set_font: proggy, plex-sans at 18, a missing file, not a font.
 real(c_float)             :: font_px(4)       !< Font size: default, pushed to 22, after the pop, the frame after set_font 18.
+character(len=*), parameter :: NO_GLYPH = char(238)//char(128)//char(128) !< U+E000: in no bundled font (the fallback).
+real(c_float)             :: icon_w(3, 3)     !< Widths of an icon, of 2 icons, of NO_GLYPH: default, a font file at 30, proggy.
+real(c_float)             :: icon_px(3)       !< The font sizes the widths were taken at.
 real(real64)              :: pushed(4)        !< Button colour while pushed.
 real(real64)              :: popped(4)        !< Button colour after the pop.
 real(real64)              :: round_pushed(2)  !< FrameRounding while pushed.
@@ -375,6 +378,12 @@ call ig_push_font('', 22.0_real64)
 font_px(2) = igGetFontSize()
 call ig_pop_font()
 font_px(3) = igGetFontSize()
+! icons: the Lucide glyphs merged into every text font, the default one and one read from a file; a code point no
+! font has is drawn as the fallback glyph
+call icon_widths(icon_w(:, 1), icon_px(1))
+call ig_push_font('third_party/fonts/IBMPlexSans-Regular.ttf', 30.0_real64)
+call icon_widths(icon_w(:, 2), icon_px(2))
+call ig_pop_font()
 call ig_push_style_color('Button', [1.0_real64, 0.0_real64, 0.0_real64])  ! scoped changes, then undone
 call ig_push_style_var('FrameRounding', 9.0_real64)
 call ig_get_style_color('Button', pushed)
@@ -387,6 +396,7 @@ call ig_pop_style_color(stat=stat_pop)
 call app%save_image('x.png', 0.0_real64, 0.0_real64, 10.0_real64, 10.0_real64, stat=stat_img(1)) ! headless: no pixels
 call app%image_result(img_path, img_done, stat=stat_img(2))
 call app%set_font('proggy', stat=stat_font(1))
+if (app%next_frame()) call icon_widths(icon_w(:, 3), icon_px(3)) ! the icons in Dear ImGui's bitmap font too
 call app%set_font('plex-sans', 18.0_real64, stat=stat_font(2))
 call app%set_font('no/such/font.ttf', stat=stat_font(3))
 call app%set_font('fpm.toml', stat=stat_font(4))
@@ -513,6 +523,8 @@ test_passed(46) = stat_img(1) == int(FIG_ERR_STATE, int32) .and. stat_img(2) == 
                   .not. img_done .and. len(img_path) == 0                          ! save_image needs a window
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
                   stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
+test_passed(49) = icons_drawn(icon_w(:, 1), icon_px(1)) .and. icons_drawn(icon_w(:, 2), icon_px(2)) ! default, file
+test_passed(50) = icons_drawn(icon_w(:, 3), icon_px(3))                            ! icons in proggy
 
 write(output_unit, '(A,*(L2))') 'figure_test_headless checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
@@ -522,6 +534,39 @@ if (.not. all(test_passed)) then
    write(error_unit, '(A,4(G0,1X))') 'row 2 plot limits x, y: ', limits%X%Min, limits%X%Max, limits%Y%Min, limits%Y%Max
    write(error_unit, '(A,I0,A,I0,A,L1,A,I0,A)') 'clicks: ', clicks, ', toggles: ', toggles, ', flag: ', flag, &
                                                ', stat: ', stat, ', message: "'//figure_last_error()//'"'
+   write(error_unit, '(A,9(G0,1X))') 'icon widths (icon, 2 icons, no glyph) x (default, file 30, proggy): ', icon_w
    error stop 1
 endif
+contains
+   subroutine icon_widths(w, px)
+   !< Widths of an icon, of two icons, and of a code point no font has, in the current font.
+   real(c_float), intent(out) :: w(3) !< Widths [pixels].
+   real(c_float), intent(out) :: px   !< The current font size [pixels].
+
+   w(1) = text_width(ICON_PLAY)
+   w(2) = text_width(ICON_PLAY//ICON_FILE_PEN)
+   w(3) = text_width(NO_GLYPH)
+   px = igGetFontSize()
+   endsubroutine icon_widths
+
+   pure function icons_drawn(w, px) result(drawn)
+   !< The icons have glyphs: an icon is about as wide as the font is high (Lucide's are square), two are twice as wide,
+   !< and neither is the fallback glyph of a code point no font has.
+   real(c_float), intent(in) :: w(3)  !< Widths of an icon, of two icons, of no glyph [pixels].
+   real(c_float), intent(in) :: px    !< The font size [pixels].
+   logical                   :: drawn !< The icons have glyphs.
+
+   drawn = w(1) > 0.8_c_float * px .and. w(1) < 1.5_c_float * px .and. abs(w(1) - w(3)) > 1.0_c_float .and. &
+           abs(w(2) - 2.0_c_float * w(1)) <= 2.0_c_float ! widths are rounded up to whole pixels
+   endfunction icons_drawn
+
+   function text_width(text) result(w)
+   !< Width of a text in the current font [pixels].
+   character(len=*), intent(in) :: text !< UTF-8 text.
+   real(c_float)                :: w    !< Width.
+   type(im_vec2)                :: size !< Text size.
+
+   size = igCalcTextSize(text//c_null_char, c_null_ptr, .false._c_bool, -1.0_c_float)
+   w = size%x
+   endfunction text_width
 endprogram figure_test_headless

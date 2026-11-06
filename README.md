@@ -126,5 +126,5 @@ still change until then.
 ## Copyrights
 
 FIGURE is released under the [MIT licence](LICENSE.mit.md). Its native layer compiles Dear ImGui, ImPlot, cimgui,
-cimplot and miniz (MIT) and SDL3 (zlib), and embeds the IBM Plex Sans font (OFL-1.1): see
+cimplot and miniz (MIT) and SDL3 (zlib), and embeds the IBM Plex Sans font (OFL-1.1) and the Lucide icons (ISC): see
 [THIRD_PARTY.md](THIRD_PARTY.md) for what a program built with FIGURE must carry when it is distributed.

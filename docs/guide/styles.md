@@ -144,6 +144,28 @@ Fonts are rasterised on demand at every size used (Dear ImGui's dynamic font atl
 display's content scale applies on top. A file that cannot be read is `FIG_ERR_FAILED`; one that is not a font, or a
 size outside (0, 200], is `FIG_ERR_ARGUMENT`. A theme file can name the font and its size (`font`, `font_size`).
 
+## Icons
+
+The [Lucide](https://lucide.dev/icons/) icons (ISC licence, bundled and embedded like the font) are merged into every
+text font FIGURE loads: the bundled one, Proggy, and any font file given to `app%set_font` or `ig_push_font`. An icon
+is a UTF-8 string, `ICON_<NAME>`, exported by `use figure`: it goes in any label, before or after the text, and takes
+the size and colour of the text around it.
+
+```fortran
+if (ig_button(ICON_PLAY//' Run')) call start()
+call ig_text(ICON_TRIANGLE_ALERT//' 3 warnings')
+call ig_push_font('', 32.0_real64)                ! a big icon, alone
+call ig_text(ICON_CHART_LINE)
+call ig_pop_font()
+```
+
+The names are those of the [Lucide gallery](https://lucide.dev/icons/), upper-cased, with `-` turned into `_`, after
+`ICON_`: `file-pen` is `ICON_FILE_PEN`, `chart-line` is `ICON_CHART_LINE`. All 2171 names of the bundled Lucide
+1.61.0 are there, the older names of renamed icons included (`ICON_ALERT_CIRCLE` and `ICON_CIRCLE_ALERT` are one
+glyph); `src/lib/figure_icons.F90` lists them with their code points. Icons are as wide as the font is high, and
+centred on the capitals of the text. The constants are generated from the font's code point map by
+`scripts/gen_icons.py`.
+
 ## Theme files
 
 Every named style is a small text file in the repository, `themes/<name>.toml`, embedded in the library when the

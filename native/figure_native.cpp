@@ -387,9 +387,27 @@ void image_write(const ImGuiIO &io) {
    if (!ok) img.error = "save_image: cannot write " + img.path + ": " + SDL_GetError();
 }
 
-#include "figure_font.inc" // plex_sans_ttf[]: IBM Plex Sans Regular (third_party/fonts, OFL-1.1)
+#include "figure_font.inc" // plex_sans_ttf[]: IBM Plex Sans Regular (OFL-1.1); lucide_ttf[]: Lucide (ISC); third_party/fonts
 
 constexpr float DEFAULT_FONT_SIZE = 15.0f; // logical pixels: the size the interface is drawn at
+constexpr float PROGGY_FONT_SIZE = 13.0f;  // logical pixels: Dear ImGui's bitmap font, drawn sharp at this size only
+
+// Merge the Lucide icons into a text font just added (its reference size ref_size): the icons (Private Use Area code
+// points, figure_icons.F90) then draw in any label set in that font, at any size. Since Dear ImGui 1.92 the sources of
+// a font are asked in order for each glyph, so no glyph range is needed: the text font keeps every glyph it has.
+bool merge_icons(ImFont *dst, float ref_size) {
+   ImFontConfig cfg;
+   cfg.MergeMode = true;
+   cfg.DstFont = dst;
+   cfg.FontDataOwnedByAtlas = false; // static bytes
+   cfg.GlyphMaxAdvanceX = 1.0e30f;   // finite, as for the text fonts (see get_font)
+   // Lucide's glyphs stand on the baseline, a font size tall: lowered by 0.23 of the size they are centred on the
+   // capitals of IBM Plex Sans (measured at 15 and 32 pixels) and nearly so on Proggy's
+   cfg.GlyphOffset.y = 0.23f * ref_size;
+   std::snprintf(cfg.Name, sizeof(cfg.Name), "Lucide");
+   return ImGui::GetIO().Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(lucide_ttf),
+                                                     static_cast<int>(sizeof(lucide_ttf)), ref_size, &cfg) != nullptr;
+}
 
 // A font by name ("plex-sans", "proggy") or TTF path, loaded on first use into this context's atlas; null with err.
 ImFont *get_font(const std::string &name, std::string &err) {
@@ -403,6 +421,7 @@ ImFont *get_font(const std::string &name, std::string &err) {
    // 1e30 pixels wide, so a finite bound changes nothing else.
    cfg.GlyphMaxAdvanceX = 1.0e30f;
    ImFont *f = nullptr;
+   float ref_size = DEFAULT_FONT_SIZE;
    if (name == "plex-sans") {
       std::snprintf(cfg.Name, sizeof(cfg.Name), "IBM Plex Sans");
       f = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(plex_sans_ttf), static_cast<int>(sizeof(plex_sans_ttf)),
@@ -410,6 +429,10 @@ ImFont *get_font(const std::string &name, std::string &err) {
    } else if (name == "proggy") {
       ImFontConfig bitmap;
       bitmap.GlyphMaxAdvanceX = cfg.GlyphMaxAdvanceX;
+      // Its reference size given explicitly (the default, 13, when left implicit): Dear ImGui merges a font with an
+      // explicit size, as the icons need for their finite GlyphMaxAdvanceX, only into one with an explicit size.
+      bitmap.SizePixels = PROGGY_FONT_SIZE;
+      ref_size = PROGGY_FONT_SIZE;
       f = io.Fonts->AddFontDefaultBitmap(&bitmap);
    } else {
       FILE *in = std::fopen(name.c_str(), "rb");
@@ -437,6 +460,10 @@ ImFont *get_font(const std::string &name, std::string &err) {
    }
    if (!f) {
       err = "cannot load the font " + name;
+      return nullptr;
+   }
+   if (!merge_icons(f, ref_size)) {
+      err = "cannot merge the icons into the font " + name;
       return nullptr;
    }
    st.fonts[name] = f;

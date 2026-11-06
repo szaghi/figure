@@ -10,7 +10,8 @@ title: figure
  menus, popups and shortcuts (figure_menu), groups of widgets (figure_group: child regions, collapsing headers, tabs,
  tables, id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style),
  the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the
- GPU textures (figure_texture) that `ig_image` and `ip_image` draw.
+ GPU textures (figure_texture) that `ig_image` and `ip_image` draw, and the Lucide icons by name, `ICON_*`
+ (figure_icons), UTF-8 strings for any label: `ig_button(ICON_PLAY//' Run')`.
 
 **Source**: `src/lib/figure.F90`
 
@@ -24,6 +25,7 @@ graph LR
   figure["figure"] --> figure_cimgui_enums["figure_cimgui_enums"]
   figure["figure"] --> figure_dock["figure_dock"]
   figure["figure"] --> figure_group["figure_group"]
+  figure["figure"] --> figure_icons["figure_icons"]
   figure["figure"] --> figure_imgui["figure_imgui"]
   figure["figure"] --> figure_implot["figure_implot"]
   figure["figure"] --> figure_menu["figure_menu"]

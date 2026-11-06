@@ -5,8 +5,8 @@ title: Feature map
 # Feature map
 
 `use figure` exports everything below except the testing procedures (`use figure_testing`). The modules it re-exports
-(`figure_app`, `figure_imgui`, `figure_implot`, `figure_dock`, `figure_style`, `figure_texture`, `figure_base`) can
-also be used directly; `figure_c_native` and the generated raw modules (`figure_cimgui`,
+(`figure_app`, `figure_imgui`, `figure_implot`, `figure_dock`, `figure_style`, `figure_texture`, `figure_icons`,
+`figure_base`) can also be used directly; `figure_c_native` and the generated raw modules (`figure_cimgui`,
 `figure_cimplot` and their `_enums`) are internal and change without notice ([Raw bindings](raw-bindings)).
 
 All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional arguments are in brackets.
@@ -109,8 +109,9 @@ Details: [Docking](docking).
 | `ip_push_style_color(name, color [, stat])`, `ip_pop_style_color([n] [, stat])` | a colour for a block of plots |
 | `ig_push_style_var(name, value [, stat])`, `ig_pop_style_var([n] [, stat])` | a style variable for a block of widgets |
 | `ip_push_style_var(name, value [, stat])`, `ip_pop_style_var([n] [, stat])` | a style variable for a block of plots |
+| `ICON_*` (`ICON_PLAY`, `ICON_FILE_PEN`, ... 2171 Lucide icons) | an icon as a UTF-8 string, for any label: `ICON_PLAY//' Run'` |
 
-Details: [Styles](styles).
+Details: [Styles](styles), [Icons](styles#icons).
 
 ## Plots: `ip_*`
 

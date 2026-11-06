@@ -44,6 +44,10 @@
         "link": "/api/src/lib/figure_group"
       },
       {
+        "text": "figure_icons",
+        "link": "/api/src/lib/figure_icons"
+      },
+      {
         "text": "figure_imgui",
         "link": "/api/src/lib/figure_imgui"
       },

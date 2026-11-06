@@ -172,12 +172,12 @@ def cmake_embeds(out: Path) -> None:
     for t in themes:
         text += f'   {{"{t.stem}", R"FIGURETHEME({t.read_text()})FIGURETHEME"}},\n'
     (out / "figure_themes.inc").write_text(text + "};\n")
-    font = (ROOT / "third_party" / "fonts" / "IBMPlexSans-Regular.ttf").read_bytes()
-    rows = [",".join(f"0x{b:02x}" for b in font[i : i + 32]) for i in range(0, len(font), 32)]
-    (out / "figure_font.inc").write_text(
-        "// generated from third_party/fonts/IBMPlexSans-Regular.ttf by scripts/fpm_package.py\n"
-        "static const unsigned char plex_sans_ttf[] = {\n" + ",\n".join(rows) + "};\n"
-    )
+    text = "// generated from third_party/fonts/{IBMPlexSans-Regular,lucide}.ttf by scripts/fpm_package.py\n"
+    for array, ttf in (("plex_sans_ttf", "IBMPlexSans-Regular.ttf"), ("lucide_ttf", "lucide.ttf")):
+        font = (ROOT / "third_party" / "fonts" / ttf).read_bytes()
+        rows = [",".join(f"0x{b:02x}" for b in font[i : i + 32]) for i in range(0, len(font), 32)]
+        text += f"static const unsigned char {array}[] = {{\n" + ",\n".join(rows) + "};\n"
+    (out / "figure_font.inc").write_text(text)
 
 
 def main(argv: list[str]) -> int:
@@ -219,8 +219,8 @@ def write(a: argparse.Namespace, deps: Path) -> int:
             elif p.exists():
                 p.unlink()
     src = out / "src"
-    for f in sorted((ROOT / "src" / "lib").glob("*.F90")):
-        copy(f, src / "fortran" / f.name)
+    for f in sorted([*(ROOT / "src" / "lib").glob("*.F90"), *(ROOT / "src" / "lib").glob("*.inc")]):
+        copy(f, src / "fortran" / f.name)  # *.inc: figure_icons_public.inc, included by figure.F90
     for f in NATIVE_FILES:
         copy(ROOT / "native" / f, src / "native" / f)
     cmake_embeds(src / "native")
@@ -249,6 +249,7 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(cimplot / "LICENSE", licences / "cimplot.txt")
     copy(miniz / "LICENSE", licences / "miniz.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexSans.txt", licences / "ibm-plex.txt")
+    copy(ROOT / "third_party" / "fonts" / "LICENSE-Lucide.txt", licences / "lucide.txt")
     version = a.version or (ROOT / "VERSION").read_text().strip().removeprefix("v")
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         version = "0.0.0"

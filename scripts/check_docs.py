@@ -2,9 +2,9 @@
 example is the compiled one.
 
 The public API is what ``use figure`` and ``use figure_testing`` export: the module procedures and types named in
-their ``public`` statements (constants, the ``ImGui*``/``ImPlot*``/``FIG_*`` names, are documented by family), and
-the type-bound procedures of the public types (``app%init``, ``tex%update``, ...). Each must appear in the feature
-map as code (``name`` or ``app%name``). Exits 1 and lists what is missing.
+their ``public`` statements (constants, the ``ImGui*``/``ImPlot*``/``FIG_*``/``ICON_*`` names, are documented by
+family), and the type-bound procedures of the public types (``app%init``, ``tex%update``, ...). Each must appear in
+the feature map as code (``name`` or ``app%name``). Exits 1 and lists what is missing.
 
 README.md's first ```fortran block must equal docs/examples/src/readme.F90, which docs/examples/build.sh compiles.
 
@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LIB = ROOT / "src" / "lib"
 FEATURES = ROOT / "docs" / "guide" / "features.md"
-CONSTANT = re.compile(r"^(ImGui|ImPlot|FIG_)")
+CONSTANT = re.compile(r"^(ImGui|ImPlot|FIG_|ICON_)")
 TYPES = {"app_object": "app", "texture_object": "tex"}  # public types and the variable name the docs use
 
 

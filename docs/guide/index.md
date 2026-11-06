@@ -67,7 +67,7 @@ wrapper (the rest are reachable through the raw bindings). See [Known issues](kn
 
 FIGURE is released under the [MIT licence](https://github.com/szaghi/figure/blob/main/LICENSE.mit.md). It compiles
 Dear ImGui, ImPlot, cimgui, cimplot and miniz (MIT) and SDL3 (zlib) into its native libraries, and embeds the IBM Plex Sans
-font (OFL-1.1);
+font (OFL-1.1) and the Lucide icons (ISC);
 [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md) lists them, with what a program built
 with FIGURE must carry when it is distributed (the MIT notices; the native build installs them under
 `share/licenses/`).

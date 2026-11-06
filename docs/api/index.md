@@ -18,6 +18,7 @@ Auto-generated from Fortran source doc comments using [FORMAL](https://github.co
 - [figure_cimplot_enums](/api/src/lib/figure_cimplot_enums)
 - [figure_dock](/api/src/lib/figure_dock)
 - [figure_group](/api/src/lib/figure_group)
+- [figure_icons](/api/src/lib/figure_icons)
 - [figure_imgui](/api/src/lib/figure_imgui)
 - [figure_implot](/api/src/lib/figure_implot)
 - [figure_library](/api/src/lib/figure_library)
