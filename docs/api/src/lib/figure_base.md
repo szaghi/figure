@@ -212,6 +212,7 @@ flowchart TD
   ig_checkbox["ig_checkbox"] --> cstr["cstr"]
   ig_collapsing_header["ig_collapsing_header"] --> cstr["cstr"]
   ig_combo["ig_combo"] --> cstr["cstr"]
+  ig_focus_window["ig_focus_window"] --> cstr["cstr"]
   ig_input_i32["ig_input_i32"] --> cstr["cstr"]
   ig_input_r64["ig_input_r64"] --> cstr["cstr"]
   ig_menu_item["ig_menu_item"] --> cstr["cstr"]

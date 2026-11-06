@@ -36,6 +36,9 @@ graph LR
 - [fig_image_result](#fig-image-result)
 - [fig_save_layout](#fig-save-layout)
 - [fig_begin_side_bar](#fig-begin-side-bar)
+- [fig_tool_button](#fig-tool-button)
+- [fig_clipper_new](#fig-clipper-new)
+- [fig_clipper_step](#fig-clipper-step)
 - [fig_load_layout](#fig-load-layout)
 - [fig_quit_requested](#fig-quit-requested)
 - [fig_set_title](#fig-set-title)
@@ -79,6 +82,8 @@ graph LR
 - [fig_set_remote_fps](#fig-set-remote-fps)
 - [fig_set_remote_compress](#fig-set-remote-compress)
 - [fig_set_remote_token](#fig-set-remote-token)
+- [fig_clipper_begin](#fig-clipper-begin)
+- [fig_clipper_delete](#fig-clipper-delete)
 - [fig_set_confirm_quit](#fig-set-confirm-quit)
 - [fig_quit](#fig-quit)
 - [fig_request_frames](#fig-request-frames)
@@ -126,6 +131,12 @@ graph LR
 ### fig_save_layout
 
 ### fig_begin_side_bar
+
+### fig_tool_button
+
+### fig_clipper_new
+
+### fig_clipper_step
 
 ### fig_load_layout
 
@@ -212,6 +223,10 @@ graph LR
 ### fig_set_remote_compress
 
 ### fig_set_remote_token
+
+### fig_clipper_begin
+
+### fig_clipper_delete
 
 ### fig_set_confirm_quit
 

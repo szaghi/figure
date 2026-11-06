@@ -32,6 +32,7 @@ graph LR
 - [ig_input](#ig-input)
 - [ig_end](#ig-end)
 - [ig_set_next_window](#ig-set-next-window)
+- [ig_align_text_to_frame_padding](#ig-align-text-to-frame-padding)
 - [ig_tooltip](#ig-tooltip)
 - [ig_set_next_item_width](#ig-set-next-item-width)
 - [ig_text](#ig-text)
@@ -45,7 +46,9 @@ graph LR
 - [ig_image](#ig-image)
 - [ig_begin](#ig-begin)
 - [ig_begin_side_bar](#ig-begin-side-bar)
+- [ig_focus_window](#ig-focus-window)
 - [ig_button](#ig-button)
+- [ig_tool_button](#ig-tool-button)
 - [ig_checkbox](#ig-checkbox)
 - [ig_slider_i32](#ig-slider-i32)
 - [ig_slider_r32](#ig-slider-r32)
@@ -113,6 +116,23 @@ flowchart TD
   ig_set_next_window["ig_set_next_window"] --> igSetNextWindowPos["igSetNextWindowPos"]
   ig_set_next_window["ig_set_next_window"] --> igSetNextWindowSize["igSetNextWindowSize"]
   style ig_set_next_window fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_align_text_to_frame_padding
+
+The text that follows on this line is lowered to the text of framed widgets (fields, buttons): a label or a value
+ beside fields, in a table row of fields.
+
+```fortran
+subroutine ig_align_text_to_frame_padding()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_align_text_to_frame_padding["ig_align_text_to_frame_padding"] --> igAlignTextToFramePadding["igAlignTextToFramePadding"]
+  style ig_align_text_to_frame_padding fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_tooltip
@@ -441,6 +461,34 @@ flowchart TD
   style ig_begin_side_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### ig_focus_window
+
+Bring window `name` forward and give it the keyboard (a docked window: its tab is shown). Not while a popup or a
+ modal is open, since focusing another window would close it: then nothing happens and the result is false; ask
+ again on a later frame. A window not drawn yet (this frame or before) is not found: ask after its `ig_begin`.
+
+**Returns**: `logical`
+
+```fortran
+function ig_focus_window(name) result(focused)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Window name (as given to `ig_begin`, or its `###id` part). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_focus_window["ig_focus_window"] --> cstr["cstr"]
+  ig_focus_window["ig_focus_window"] --> igIsPopupOpen_Str["igIsPopupOpen_Str"]
+  ig_focus_window["ig_focus_window"] --> igSetWindowFocus_Str["igSetWindowFocus_Str"]
+  style ig_focus_window fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### ig_button
 
 A button; true on the frame it is clicked.
@@ -466,6 +514,40 @@ flowchart TD
   ig_button["ig_button"] --> cstr["cstr"]
   ig_button["ig_button"] --> igButton["igButton"]
   style ig_button fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_tool_button
+
+A workspace button, as Fusion 360's: `icon` (an `ICON_*`) above `label`, larger than it, on a framed, rounded button
+ that shades under the pointer. `selected`: framed and tinted in the accent colour, the icon drawn in it (`accent`
+ `[r, g, b]` in [0, 1]; default: the style's CheckMark colour). `width`, `height` [pixels]: default as wide as the
+ label (at least 4.6 font sizes) and tall enough for the icon (1.8 font sizes) above the label. The text before
+ `##` is shown, all of `label` is the id. True on the frame it is clicked; `ig_tooltip` and `ig_item_rect` apply to
+ it as to any widget.
+
+**Returns**: `logical`
+
+```fortran
+function ig_tool_button(label, icon, width, height, selected, accent) result(clicked)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label (also its id). |
+| `icon` | character(len=*) | in |  | Icon (UTF-8: an ICON_* constant). |
+| `width` | real(kind=real64) | in | optional | Width [pixels]. |
+| `height` | real(kind=real64) | in | optional | Height [pixels]. |
+| `selected` | logical | in | optional | The one shown (default false). |
+| `accent` | real(kind=real64) | in | optional | Accent colour. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_tool_button["ig_tool_button"] --> fig_tool_button["fig_tool_button"]
+  style ig_tool_button fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_checkbox

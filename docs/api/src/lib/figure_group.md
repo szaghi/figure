@@ -22,6 +22,7 @@ title: figure_group
 ```mermaid
 graph LR
   figure_group["figure_group"] --> figure_base["figure_base"]
+  figure_group["figure_group"] --> figure_c_native["figure_c_native"]
   figure_group["figure_group"] --> figure_cimgui["figure_cimgui"]
   figure_group["figure_group"] --> figure_cimgui_enums["figure_cimgui_enums"]
   figure_group["figure_group"] --> iso_c_binding["iso_c_binding"]
@@ -30,7 +31,10 @@ graph LR
 
 ## Contents
 
+- [list_clipper_object](#list-clipper-object)
 - [ig_push_id](#ig-push-id)
+- [clipper_begin](#clipper-begin)
+- [clipper_final](#clipper-final)
 - [ig_end_child](#ig-end-child)
 - [ig_end_tab_bar](#ig-end-tab-bar)
 - [ig_end_tab](#ig-end-tab)
@@ -45,11 +49,36 @@ graph LR
 - [ig_pop_id](#ig-pop-id)
 - [ig_begin_disabled](#ig-begin-disabled)
 - [ig_end_disabled](#ig-end-disabled)
+- [clipper_step](#clipper-step)
 - [ig_begin_child](#ig-begin-child)
 - [ig_collapsing_header](#ig-collapsing-header)
 - [ig_begin_tab_bar](#ig-begin-tab-bar)
 - [ig_begin_tab](#ig-begin-tab)
 - [ig_begin_table](#ig-begin-table)
+
+## Derived Types
+
+### list_clipper_object
+
+Only the rows of a long list that are in view are drawn: `call clip%begin(n)`, then
+ `do while (clip%step())`, drawing rows `clip%first` to `clip%last` (rows of equal height; in a window, a child
+ region or a table). The loop ends by itself; a clipper left before its end is closed when it is begun again or
+ goes out of scope.
+
+#### Components
+
+| Name | Type | Attributes | Description |
+|------|------|------------|-------------|
+| `first` | integer(kind=int32) |  | First row to draw (1-based). |
+| `last` | integer(kind=int32) |  | Last row to draw. |
+| `p` | type(c_ptr) |  | Dear ImGui's clipper. |
+
+#### Type-Bound Procedures
+
+| Name | Attributes | Description |
+|------|------------|-------------|
+| `begin` | pass(self) | Start: the number of rows. |
+| `step` | pass(self) | The next rows to draw: false at the end. |
 
 ## Interfaces
 
@@ -60,6 +89,54 @@ Open an id scope, by a string or an integer.
 **Module procedures**: [`ig_push_id_str`](/api/src/lib/figure_group#ig-push-id-str), [`ig_push_id_i32`](/api/src/lib/figure_group#ig-push-id-i32)
 
 ## Subroutines
+
+### clipper_begin
+
+Start clipping `count` rows; `item_height` [pixels] (default: measured on the first row drawn).
+
+```fortran
+subroutine clipper_begin(self, count, item_height)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([list_clipper_object](/api/src/lib/figure_group#list-clipper-object)) | inout |  | Clipper. |
+| `count` | integer(kind=int32) | in |  | Rows. |
+| `item_height` | real(kind=real64) | in | optional | Row height. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  clipper_begin["clipper_begin"] --> fig_clipper_begin["fig_clipper_begin"]
+  clipper_begin["clipper_begin"] --> fig_clipper_delete["fig_clipper_delete"]
+  clipper_begin["clipper_begin"] --> fig_clipper_new["fig_clipper_new"]
+  style clipper_begin fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### clipper_final
+
+A clipper going out of scope: freed.
+
+```fortran
+subroutine clipper_final(self)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | type([list_clipper_object](/api/src/lib/figure_group#list-clipper-object)) | inout |  | Clipper. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  clipper_final["clipper_final"] --> fig_clipper_delete["fig_clipper_delete"]
+  style clipper_final fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### ig_end_child
 
@@ -320,6 +397,31 @@ flowchart TD
 ```
 
 ## Functions
+
+### clipper_step
+
+The next rows to draw, `self%first` to `self%last`: true while there are some (false: the clipper ended).
+
+**Returns**: `logical`
+
+```fortran
+function clipper_step(self) result(more)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([list_clipper_object](/api/src/lib/figure_group#list-clipper-object)) | inout |  | Clipper. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  clipper_step["clipper_step"] --> fig_clipper_delete["fig_clipper_delete"]
+  clipper_step["clipper_step"] --> fig_clipper_step["fig_clipper_step"]
+  style clipper_step fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### ig_begin_child
 
