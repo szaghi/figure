@@ -8,6 +8,7 @@ const docs = [
     items: [
       { text: 'About',        link: '/guide/' },
       { text: 'Installation', link: '/guide/install' },
+      { text: 'Showcase',     link: '/guide/showcase' },
     ],
   },
   {
@@ -84,7 +85,7 @@ export default withMermaid({
     logo: { light: '/logo.svg', dark: '/logo-dark.svg', alt: 'FIGURE logo' },
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Start here', link: '/guide/', activeMatch: '^/guide/(index|install)?$' },
+      { text: 'Start here', link: '/guide/', activeMatch: '^/guide/(index|install|showcase)?$' },
       { text: 'Tutorial', link: '/manual/tutorial/01-first-window', activeMatch: '^/manual/(index|tutorial/)' },
       { text: 'Cookbook', link: '/manual/cookbook', activeMatch: '^/manual/cookbook' },
       {
