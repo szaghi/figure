@@ -73,6 +73,18 @@ Built from: a bar along a side of the window that the dock space leaves free (`i
 [A bar along a side](docking#a-bar-along-a-side)), Lucide icons in the labels (`ICON_*`, [Icons](styles#icons)), and the
 two tools' own frames drawn in turn, each with its dock space.
 
+The Input workspace also holds the case's other input files: the block-to-process map and the optional tables the
+solver reads (periodic faces, blocks at rest, boundary values and their histories), listed under the sections with
+their state, each opened in a tab of its own. A table is edited as cells and checked as the solver reads it: the line
+where its read stops and the lines it never reads, values out of range, a line short of values, the processes the run
+needs.
+
+<Media name="showcase_xall_gui_files" video alt="The case's files listed under the sections; the block-to-process map shown as a table; a periodicity file with a face 7 flagged on its row, fixed and saved" caption="xall_gui: a case's other input files, checked as the solver reads them" />
+
+Built from: tables of input fields with a row's finding beside it (`ig_begin_table`, `ig_input_text`), windows docked
+under and beside the editor's in its layout (`ig_dock_window`), and a confirmation before quitting that asks about
+each kind of unsaved file in turn.
+
 ## Shared by the three tools
 
 Each tool has a menu bar (File, Edit, Help; `xall_evol` also View) and the same **Edit > Preferences** window: the font
