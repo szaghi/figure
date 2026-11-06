@@ -226,6 +226,7 @@ flowchart TD
   ig_text["ig_text"] --> cstr["cstr"]
   ig_text_colored["ig_text_colored"] --> cstr["cstr"]
   ig_text_disabled["ig_text_disabled"] --> cstr["cstr"]
+  ig_text_size["ig_text_size"] --> cstr["cstr"]
   ig_text_wrapped["ig_text_wrapped"] --> cstr["cstr"]
   ig_tooltip["ig_tooltip"] --> cstr["cstr"]
   ip_bars_r32["ip_bars_r32"] --> cstr["cstr"]

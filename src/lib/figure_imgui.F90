@@ -18,7 +18,7 @@ use figure_cimgui, only : im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, ig
                           igSeparator, igSetNextItemWidth, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
                           igSliderScalar, igTextUnformatted, im_vec4, igGetStyleColorVec4, igPopStyleColor, &
                           igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos, igAlignTextToFramePadding, &
-                          igIsPopupOpen_Str, igSetWindowFocus_Str
+                          igIsPopupOpen_Str, igSetWindowFocus_Str, igCalcTextSize
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
                                 ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup
 
@@ -27,7 +27,7 @@ private
 public :: ig_begin, ig_begin_side_bar, ig_end, ig_button, ig_checkbox, ig_slider, ig_input, ig_text, ig_same_line, ig_separator
 public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_input_text, ig_set_next_item_width
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
-public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding
+public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
 
 interface ig_slider
    !< Slider for an integer or a real value.
@@ -163,6 +163,17 @@ contains
    if (present(accent)) acc = [real(accent, c_double), 1.0_c_double]
    clicked = fig_tool_button(label, len(label, c_int), icon, len(icon, c_int), w, h, sel, acc) == 1_c_int
    endfunction ig_tool_button
+
+   function ig_text_size(text) result(size)
+   !< The size a text takes in the current font [pixels]: width and height (the text before `##` when it is a label):
+   !< buttons of one width, a column as wide as its longest value.
+   character(len=*), intent(in) :: text    !< Text (UTF-8).
+   real(real64)                 :: size(2) !< Width, height.
+   type(im_vec2)                :: ext     !< Its extent.
+
+   ext = igCalcTextSize(cstr(text), c_null_ptr, .true._c_bool, -1.0_c_float)
+   size = [real(ext%x, real64), real(ext%y, real64)]
+   endfunction ig_text_size
 
    subroutine ig_align_text_to_frame_padding()
    !< The text that follows on this line is lowered to the text of framed widgets (fields, buttons): a label or a value

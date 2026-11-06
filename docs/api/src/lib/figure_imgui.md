@@ -49,6 +49,7 @@ graph LR
 - [ig_focus_window](#ig-focus-window)
 - [ig_button](#ig-button)
 - [ig_tool_button](#ig-tool-button)
+- [ig_text_size](#ig-text-size)
 - [ig_checkbox](#ig-checkbox)
 - [ig_slider_i32](#ig-slider-i32)
 - [ig_slider_r32](#ig-slider-r32)
@@ -548,6 +549,32 @@ function ig_tool_button(label, icon, width, height, selected, accent) result(cli
 flowchart TD
   ig_tool_button["ig_tool_button"] --> fig_tool_button["fig_tool_button"]
   style ig_tool_button fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_text_size
+
+The size a text takes in the current font [pixels]: width and height (the text before `##` when it is a label):
+ buttons of one width, a column as wide as its longest value.
+
+**Returns**: `real(kind=real64)`
+
+```fortran
+function ig_text_size(text) result(size)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `text` | character(len=*) | in |  | Text (UTF-8). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_text_size["ig_text_size"] --> cstr["cstr"]
+  ig_text_size["ig_text_size"] --> igCalcTextSize["igCalcTextSize"]
+  style ig_text_size fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_checkbox

@@ -78,6 +78,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_text(text)` | plain text |
 | `ig_same_line([offset])` | put the next item on the same line; with `offset`, at that distance from the left edge |
 | `ig_align_text_to_frame_padding()` | the text that follows on the line is level with the text of fields and buttons |
+| `ig_text_size(text)` → `real(real64)(2)` | width and height of a text in the current font [pixels] (a label: the part before `##`) |
 | `ig_separator()` | horizontal separator |
 | `ig_show_demo_window([open])` | the Dear ImGui demo window |
 | `ig_item_rect(xmin, ymin, xmax, ymax)` | screen rectangle of the last item |

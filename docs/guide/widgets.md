@@ -97,6 +97,7 @@ if (ig_tool_button('Monitor', ICON_ACTIVITY, selected=tool == 2)) tool = 2
 | `ig_text(text)` | Plain text, no formatting: compose numbers with an internal `write`. Trailing blanks are shown: pass `trim(line)`. |
 | `ig_same_line([offset])` | The next item goes on the same line as the previous one; with `offset`, at that distance in pixels from the left edge of the window or region (a column of values). |
 | `ig_align_text_to_frame_padding()` | The text that follows on the line is lowered to the text of framed widgets: a label before a field, a line number in a table row of fields. Text after a field on the same line is level already. |
+| `ig_text_size(text)` → `real(real64)(2)` | Width and height of `text` in the current font, in pixels; for a label, of the part before `##`. Buttons of one width (the widest label), a column as wide as its longest value. |
 | `ig_text_wrapped(text)` | Text wrapped at the right edge of the window or region: help, long messages. |
 | `ig_text_disabled(text)` | Text in the style's disabled colour: a default, a hint, something that does not apply. |
 | `ig_text_colored(text, color)` | Text in `color`, `[r, g, b]` or `[r, g, b, a]` in [0, 1]. Pair the colour with a mark or a word (`[!!]`), so that the meaning does not rest on colour alone. |

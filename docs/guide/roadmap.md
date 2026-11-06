@@ -129,6 +129,6 @@ editors of its input files.
 - **Workspaces and long lists**: a bar along a side of the window (`ig_begin_side_bar`,
   [Docking](docking#a-bar-along-a-side)), Lucide icons in every font (`ICON_*`, [Icons](styles#icons)), workspace
   buttons with an icon above the label (`ig_tool_button`), bringing a window forward (`ig_focus_window`), text level
-  with fields (`ig_align_text_to_frame_padding`), long lists drawn row by row in view only (`list_clipper_object`,
+  with fields (`ig_align_text_to_frame_padding`), the size of a text (`ig_text_size`), long lists drawn row by row in view only (`list_clipper_object`,
   [Widgets](widgets#lists-and-regions)): done.
 - Next: the release, v0.2.0.

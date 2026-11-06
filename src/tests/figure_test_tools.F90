@@ -7,11 +7,12 @@ program figure_test_tools
 !< (`list_clipper_object`): only the rows in view are drawn, from row 1, and the loop ends. A label before a button,
 !< lowered to its text by `ig_align_text_to_frame_padding` (and not without it). Two overlapping windows: the one
 !< behind brought forward by `ig_focus_window`; with a popup open, the request is refused and the popup stays open.
+!< A text's size (`ig_text_size`): twice the text, twice the width; a label measured without its `##` part.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ICON_ACTIVITY, ICON_HOUSE, ig_align_text_to_frame_padding, ig_begin, ig_begin_child, &
                    ig_begin_popup, ig_button, ig_end, ig_end_child, ig_end_popup, ig_focus_window, ig_item_rect, &
                    ig_open_popup, ig_same_line, ig_selectable, ig_set_next_window, ig_text, ig_tool_button, &
-                   list_clipper_object
+                   ig_text_size, list_clipper_object
 use figure_cimgui, only : igIsWindowFocused
 use figure_testing, only : test_click
 
@@ -19,7 +20,8 @@ implicit none
 integer(int32), parameter :: MAX_FRAMES = 60_int32 !< Frames run.
 type(app_object)          :: app                   !< Application (headless).
 type(list_clipper_object) :: clip                  !< Clipper.
-logical                   :: test_passed(8)        !< Per-check outcome.
+logical                   :: test_passed(9)        !< Per-check outcome.
+real(real64)              :: size1(2), size2(2), size3(2) !< Text sizes.
 integer(int32)            :: frame, i, shown       !< Frame, row, the tool shown.
 integer(int32)            :: clicks(2)             !< Clicks per tool button.
 integer(int32)            :: drawn, steps, first_drawn !< Rows drawn, clipper steps, the first row drawn.
@@ -56,6 +58,9 @@ do while (app%next_frame())
       call ig_item_rect(tool_rect(1, 2), tool_rect(2, 2), tool_rect(3, 2), tool_rect(4, 2))
       if (ig_tool_button('Sized', ICON_HOUSE, width=90.0_real64, height=70.0_real64)) continue
       call ig_item_rect(tool_rect(1, 3), tool_rect(2, 3), tool_rect(3, 3), tool_rect(4, 3))
+      size1 = ig_text_size('abc')
+      size2 = ig_text_size('abcabc')
+      size3 = ig_text_size('abc##hidden')
       call ig_align_text_to_frame_padding()                     ! a label level with the button beside it
       call ig_text('label')
       call ig_item_rect(a(1), a(2), a(3), a(4))
@@ -121,6 +126,8 @@ test_passed(3) = clicks(2) == 1_int32 .and. clicks(1) == 0_int32 .and. shown == 
 test_passed(4) = first_drawn == 1_int32 .and. drawn > 0_int32 .and. drawn < 40_int32          ! rows in view only
 test_passed(5) = steps <= 10_int32                                                              ! the loop ended
 test_passed(6) = aligned_dy > 0.5_real64 .and. abs(plain_dy) < 0.5_real64                      ! level with the field
+test_passed(9) = size1(1) > 0.0_real64 .and. abs(size2(1) - 2.0_real64 * size1(1)) < 1.0_real64 .and. &
+                 size1(2) > 0.0_real64 .and. abs(size3(1) - size1(1)) < 1.0e-6_real64    ! a text's size, a label's
 if (.not. all(test_passed)) then
    write(output_unit, '(A,4F8.1)') 'tool button: ', tool_rect(:, 1)
    write(output_unit, '(A,4I8)') 'clicks, shown, drawn: ', clicks, shown, drawn
