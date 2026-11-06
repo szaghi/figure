@@ -85,7 +85,7 @@ jobs:
       matrix:
         include:
         - name: macOS
-          os: macos-14
+          os: macos-15
         - name: Windows
           os: windows-latest
     runs-on: ${{ matrix.os }}
@@ -108,14 +108,14 @@ jobs:
           gcc-fortran:p python:p fpm:p sdl3:p
 
     - name: Fortran compiler
-      if: matrix.os == 'macos-14'
+      if: matrix.os == 'macos-15'
       uses: fortran-lang/setup-fortran@v1
       with:
         compiler: gcc
         version: 14
 
     - name: fpm
-      if: matrix.os == 'macos-14'
+      if: matrix.os == 'macos-15'
       uses: fortran-lang/setup-fpm@v9
       with:
         fpm-version: v0.12.0
@@ -123,7 +123,7 @@ jobs:
 
     # Apple clang for the C/C++ (on macOS fpm links libc++), in C++17 (its default is C++98)
     - name: The package, as a git dependency (Homebrew SDL3)
-      if: matrix.os == 'macos-14'
+      if: matrix.os == 'macos-15'
       shell: bash
       run: |
         brew install sdl3
