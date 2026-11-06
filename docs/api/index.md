@@ -20,6 +20,7 @@ Auto-generated from Fortran source doc comments using [FORMAL](https://github.co
 - [figure_group](/api/src/lib/figure_group)
 - [figure_imgui](/api/src/lib/figure_imgui)
 - [figure_implot](/api/src/lib/figure_implot)
+- [figure_library](/api/src/lib/figure_library)
 - [figure_menu](/api/src/lib/figure_menu)
 - [figure_style](/api/src/lib/figure_style)
 - [figure_testing](/api/src/lib/figure_testing)

@@ -52,6 +52,10 @@
         "link": "/api/src/lib/figure_implot"
       },
       {
+        "text": "figure_library",
+        "link": "/api/src/lib/figure_library"
+      },
+      {
         "text": "figure_menu",
         "link": "/api/src/lib/figure_menu"
       },

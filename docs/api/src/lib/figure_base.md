@@ -93,6 +93,7 @@ flowchart TD
   set_docking["set_docking"] --> figure_check["figure_check"]
   set_font["set_font"] --> figure_check["figure_check"]
   set_style["set_style"] --> figure_check["figure_check"]
+  set_title["set_title"] --> figure_check["figure_check"]
   set_var["set_var"] --> figure_check["figure_check"]
   show_file_dialog["show_file_dialog"] --> figure_check["figure_check"]
   test_click["test_click"] --> figure_check["figure_check"]

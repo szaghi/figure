@@ -33,6 +33,8 @@ graph LR
 - [fig_file_dialog](#fig-file-dialog)
 - [fig_file_dialog_result](#fig-file-dialog-result)
 - [fig_quit_requested](#fig-quit-requested)
+- [fig_set_title](#fig-set-title)
+- [fig_title](#fig-title)
 - [fig_input_quit](#fig-input-quit)
 - [fig_content_scale](#fig-content-scale)
 - [fig_last_error](#fig-last-error)
@@ -113,6 +115,10 @@ graph LR
 ### fig_file_dialog_result
 
 ### fig_quit_requested
+
+### fig_set_title
+
+### fig_title
 
 ### fig_input_quit
 

@@ -48,6 +48,7 @@ graph LR
 - [request_frames](#request-frames)
 - [set_confirm_quit](#set-confirm-quit)
 - [quit](#quit)
+- [set_title](#set-title)
 - [open_file_dialog](#open-file-dialog)
 - [save_file_dialog](#save-file-dialog)
 - [open_folder_dialog](#open-folder-dialog)
@@ -56,6 +57,7 @@ graph LR
 - [show_file_dialog](#show-file-dialog)
 - [next_frame](#next-frame)
 - [quit_requested](#quit-requested)
+- [title](#title)
 - [content_scale](#content-scale)
 
 ## Derived Types
@@ -91,6 +93,8 @@ A FIGURE application (one per program).
 | `set_confirm_quit` | pass(self) | Report a quit request instead of quitting. |
 | `quit_requested` | pass(self) | The user asked to quit (once per request). |
 | `quit` | pass(self) | End the loop at the next frame. |
+| `set_title` | pass(self) | The window's title, after init. |
+| `title` | pass(self) | The window's title. |
 | `open_file_dialog` | pass(self) | The system's dialog to choose a file to open. |
 | `save_file_dialog` | pass(self) | The system's dialog to choose where to save. |
 | `open_folder_dialog` | pass(self) | The system's dialog to choose a folder. |
@@ -447,6 +451,32 @@ flowchart TD
   style quit fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### set_title
+
+The window's title, after `init`: the document being edited and a mark when it has changes, for example. Shown in
+ window mode; in remote and headless modes it is kept (read back by `title`) and nothing shows it.
+
+```fortran
+subroutine set_title(self, text, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `text` | character(len=*) | in |  | Title. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_title["set_title"] --> fig_set_title["fig_set_title"]
+  set_title["set_title"] --> figure_check["figure_check"]
+  style set_title fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### open_file_dialog
 
 Show the system's dialog to choose a file to open. It does not block: the interface keeps drawing, and the answer
@@ -663,6 +693,31 @@ function quit_requested(self) result(requested)
 flowchart TD
   quit_requested["quit_requested"] --> fig_quit_requested["fig_quit_requested"]
   style quit_requested fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### title
+
+The window's title: the one given to `init` or the last `set_title` ('' before `init`, and in headless and remote
+ modes until `set_title`).
+
+**Returns**: `character(len=:)`
+
+```fortran
+function title(self) result(text)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | in |  | Application. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  title["title"] --> fig_title["fig_title"]
+  style title fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### content_scale
