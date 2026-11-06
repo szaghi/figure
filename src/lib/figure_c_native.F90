@@ -22,7 +22,7 @@ public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord, fig_plot_tick_label
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
-public :: fig_save_image, fig_image_result
+public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout
 public :: fig_set_title, fig_title
 
 ! Status codes: must match native/figure_native.h.
@@ -199,6 +199,26 @@ interface
    integer(c_int), intent(out)         :: path_len !< Full length of the path.
    integer(c_int)                      :: status   !< Status.
    endfunction fig_image_result
+
+   function fig_save_layout(path, path_len, comment, comment_len) result(status) bind(C, name='fig_save_layout')
+   !< Write the layout (Dear ImGui's settings) to `path`, after the `comment` lines (newline-separated) as comments.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)     !< File.
+   integer(c_int), value              :: path_len    !< Its length.
+   character(kind=c_char), intent(in) :: comment(*)  !< Comment lines.
+   integer(c_int), value              :: comment_len !< Their length.
+   integer(c_int)                     :: status      !< Status.
+   endfunction fig_save_layout
+
+   function fig_load_layout(path, path_len) result(status) bind(C, name='fig_load_layout')
+   !< Read a layout from `path`, applied before the next frame.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File.
+   integer(c_int), value              :: path_len !< Its length.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_load_layout
 
    subroutine fig_set_confirm_quit(on) bind(C, name='fig_set_confirm_quit')
    !< A quit request (the window's close button) is reported instead of ending the loop (1) or ends it (0).

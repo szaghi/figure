@@ -56,6 +56,28 @@ endif
 call ig_end()
 ```
 
+## Save and load a layout
+
+How the user arranged the windows (where each is docked, the splits' sizes, the floating windows' places, the tables'
+columns) is saved to a file, and loaded back while the program runs:
+
+```fortran
+call app%save_layout('analysis.layout', comment='popped = ufor_03.dat ufor_07.dat')   ! any time
+call app%load_layout('analysis.layout', stat=stat)                                   ! applied before the next frame
+```
+
+- The file is Dear ImGui's settings text (`[Window][...]`, `[Docking][Data]`, ...). `comment` lines come first, led
+  by `; `: Dear ImGui skips them, the program reads them back itself (which windows it opens on demand, which panels
+  are shown: what it, not Dear ImGui, decides).
+- A load clears the settings in effect, then reads the file: the dock nodes are rebuilt and the windows that exist
+  take their saved place; a window that appears later takes its own when it does. The dock space keeps its layout:
+  `ig_dock_layout_begin` is false for it, as on a start with an ini file. The dock space's id must be the one saved
+  (the same `ig_dock_id` name).
+- With `ini_file` in `app%init` Dear ImGui also keeps the layout by itself, between runs; `save_layout` and
+  `load_layout` are for named layouts the user picks.
+- Any mode; a file that cannot be read is `FIG_ERR_FAILED`, one with no `[Window]` or `[Docking]` section
+  `FIG_ERR_ARGUMENT`.
+
 ## Notes
 
 - Dock ids are Dear ImGui's `ImGuiID` (unsigned 32-bit) carried in `integer(int32)`: pass and compare them, do not

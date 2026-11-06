@@ -29,6 +29,8 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%file_dialog_result(id, path, done [, cancelled])` | the answer to a dialog, once | [file dialogs](frame-loop#file-dialogs) |
 | `app%save_image(path, xmin, ymin, xmax, ymax)` | a rectangle of the window as a PNG file (window mode) | [save an image](capture#save-an-image-from-the-program) |
 | `app%image_result(path, done)` | the outcome of `save_image`, once | [save an image](capture#save-an-image-from-the-program) |
+| `app%save_layout(path [, comment])` | the arrangement of the windows (docking included) to a file | [layouts](docking#save-and-load-a-layout) |
+| `app%load_layout(path)` | an arrangement from a file, before the next frame | [layouts](docking#save-and-load-a-layout) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
 | `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (default, 15 px), `'proggy'`, or a TTF/OTF file | [styles](styles#fonts) |
 | `app%load_style(file [, stat])`, `app%save_style(file [, stat])` | apply a theme file; write the style in effect as one | [styles](styles#load-tune-and-save) |

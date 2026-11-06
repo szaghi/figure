@@ -25,7 +25,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_conte
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
                             fig_set_style, fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
                             fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title, fig_save_image, &
-                            fig_image_result
+                            fig_image_result, fig_save_layout, fig_load_layout
 
 implicit none
 private
@@ -60,6 +60,8 @@ type :: app_object
       procedure, pass(self) :: file_dialog_result !< The answer to a dialog, once given.
       procedure, pass(self) :: save_image     !< A rectangle of the window as a PNG file, after this frame.
       procedure, pass(self) :: image_result   !< The outcome of save_image, once.
+      procedure, pass(self) :: save_layout    !< The arrangement of the windows (docking included) to a file.
+      procedure, pass(self) :: load_layout    !< An arrangement from a file, applied before the next frame.
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
 endtype app_object
@@ -465,6 +467,37 @@ contains
    if (done) path = buf(1:min(n, len(buf, c_int)))
    call figure_check(status, stat)
    endsubroutine image_result
+
+   subroutine save_layout(self, path, comment, stat)
+   !< Write the layout to `path`: the windows' positions, sizes and docking (the dock nodes and which window is in
+   !< which), the tables' columns: Dear ImGui's settings, as its ini text, for every window shown in this session and
+   !< those read before. `comment` (lines separated by `new_line('a')`) is written first, each line led by '; ', which
+   !< `load_layout` skips: the program's own state (the windows it opens on demand, say) for itself to read back.
+   !< Any mode. `FIG_ERR_FAILED` if the file cannot be written.
+   class(app_object), intent(inout)         :: self    !< Application.
+   character(len=*),  intent(in)            :: path    !< File.
+   character(len=*),  intent(in),  optional :: comment !< Lines to keep with it.
+   integer(int32),    intent(out), optional :: stat    !< Status.
+
+   if (present(comment)) then
+      call figure_check(fig_save_layout(path, len(path, c_int), comment, len(comment, c_int)), stat)
+   else
+      call figure_check(fig_save_layout(path, len(path, c_int), '', 0_c_int), stat)
+   endif
+   endsubroutine save_layout
+
+   subroutine load_layout(self, path, stat)
+   !< Read a layout written by `save_layout` (or an ini file of Dear ImGui), applied before the next frame: the
+   !< settings in effect are cleared, the file's are read, the dock nodes are rebuilt and the windows that exist take
+   !< their saved position, size and dock; the others take theirs when they appear. A program that lays out its dock
+   !< space with `ig_dock_layout_begin` should not lay it out again: the dock space has a layout again (the same id as
+   !< when saved). `FIG_ERR_FAILED` if the file cannot be read, `FIG_ERR_ARGUMENT` if it holds no layout.
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: path !< File.
+   integer(int32),    intent(out), optional :: stat !< Status.
+
+   call figure_check(fig_load_layout(path, len(path, c_int)), stat)
+   endsubroutine load_layout
 
    function content_scale(self) result(scale)
    !< Display content scale (1 standard, 2 on most high-DPI displays).

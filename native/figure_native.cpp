@@ -336,6 +336,20 @@ void capture_write(int w, int h) {
    ++cap.written;
 }
 
+// Layouts (fig_save_layout, fig_load_layout): Dear ImGui's settings (windows' positions and sizes, docking nodes,
+// tables' columns) as text. A load is applied before the next NewFrame: the settings cleared, then read, which rebuilds
+// the dock nodes and applies the windows' settings to the windows that exist.
+std::string layout_pending;
+bool        layout_due = false;
+
+void apply_layout() {
+   if (!layout_due) return;
+   layout_due = false;
+   ImGui::ClearIniSettings();
+   ImGui::LoadIniSettingsFromMemory(layout_pending.data(), layout_pending.size());
+   layout_pending.clear();
+}
+
 // Save an image of a rectangle of the window (fig_save_image): asked for during a frame, written when that frame is
 // rendered (fig_end_frame, before the swap), reported once by fig_image_result. Window mode only.
 struct image_request_t {
@@ -1234,6 +1248,7 @@ int fig_begin_frame(int *running) {
    if (st.m == mode::headless) {
       ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
       apply_test_input();
+      apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
       ImGui::NewFrame();
       st.in_frame = true;
       return FIG_OK;
@@ -1260,6 +1275,7 @@ int fig_begin_frame(int *running) {
       st.last_frame = now;
       ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0e-4f;
       apply_test_input();
+      apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
       ImGui::NewFrame();
       st.in_frame = true;
       return FIG_OK;
@@ -1315,6 +1331,7 @@ int fig_begin_frame(int *running) {
       ImGui_ImplSDL3_NewFrame();
    }
    apply_test_input();
+   apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
    ImGui::NewFrame();
    st.in_frame = true;
    return FIG_OK;
@@ -1753,6 +1770,49 @@ int fig_file_dialog_result(const char *id, int id_len, char *buf, int buf_len, i
 #endif
    }
    return FIG_OK;
+}
+
+int fig_save_layout(const char *path, int path_len, const char *comment, int comment_len) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (path_len <= 0) return fail(FIG_ERR_ARGUMENT, "save_layout: no file name");
+   const std::string p(path, static_cast<size_t>(path_len));
+   const std::string c(comment, comment_len > 0 ? static_cast<size_t>(comment_len) : 0);
+   size_t n = 0;
+   const char *ini = ImGui::SaveIniSettingsToMemory(&n);
+   FILE *f = std::fopen(p.c_str(), "wb");
+   if (!f) return fail(FIG_ERR_FAILED, "save_layout: cannot write " + p);
+   for (size_t start = 0; start < c.size();) { // the program's lines, as comments Dear ImGui skips
+      size_t end = c.find('\n', start);
+      if (end == std::string::npos) end = c.size();
+      std::fprintf(f, "; %s\n", c.substr(start, end - start).c_str());
+      start = end + 1;
+   }
+   const bool ok = std::fwrite(ini, 1, n, f) == n;
+   std::fclose(f);
+   if (!ok) return fail(FIG_ERR_FAILED, "save_layout: cannot write " + p);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_load_layout(const char *path, int path_len) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (path_len <= 0) return fail(FIG_ERR_ARGUMENT, "load_layout: no file name");
+   const std::string p(path, static_cast<size_t>(path_len));
+   FILE *f = std::fopen(p.c_str(), "rb");
+   if (!f) return fail(FIG_ERR_FAILED, "load_layout: cannot read " + p);
+   std::string data;
+   char buf[4096];
+   for (size_t n; (n = std::fread(buf, 1, sizeof(buf), f)) > 0;) data.append(buf, n);
+   std::fclose(f);
+   if (data.find("[Window][") == std::string::npos && data.find("[Docking][") == std::string::npos)
+      return fail(FIG_ERR_ARGUMENT, "load_layout: " + p + " is not a layout (no [Window] or [Docking] section)");
+   layout_pending = data;
+   layout_due = true;
+   st.frames_left = std::max(st.frames_left, 3);
+   return FIG_OK;
+   FIG_CATCH
 }
 
 int fig_save_image(const char *path, int path_len, double x0, double y0, double x1, double y1) {

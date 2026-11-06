@@ -55,6 +55,8 @@ graph LR
 - [file_dialog_result](#file-dialog-result)
 - [save_image](#save-image)
 - [image_result](#image-result)
+- [save_layout](#save-layout)
+- [load_layout](#load-layout)
 - [destroy](#destroy)
 - [show_file_dialog](#show-file-dialog)
 - [next_frame](#next-frame)
@@ -103,6 +105,8 @@ A FIGURE application (one per program).
 | `file_dialog_result` | pass(self) | The answer to a dialog, once given. |
 | `save_image` | pass(self) | A rectangle of the window as a PNG file, after this frame. |
 | `image_result` | pass(self) | The outcome of save_image, once. |
+| `save_layout` | pass(self) | The arrangement of the windows (docking included) to a file. |
+| `load_layout` | pass(self) | An arrangement from a file, applied before the next frame. |
 | `content_scale` | pass(self) | Display content scale. |
 | `destroy` | pass(self) | Close everything. |
 
@@ -650,6 +654,65 @@ flowchart TD
   image_result["image_result"] --> fig_image_result["fig_image_result"]
   image_result["image_result"] --> figure_check["figure_check"]
   style image_result fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### save_layout
+
+Write the layout to `path`: the windows' positions, sizes and docking (the dock nodes and which window is in
+ which), the tables' columns: Dear ImGui's settings, as its ini text, for every window shown in this session and
+ those read before. `comment` (lines separated by `new_line('a')`) is written first, each line led by '; ', which
+ `load_layout` skips: the program's own state (the windows it opens on demand, say) for itself to read back.
+ Any mode. `FIG_ERR_FAILED` if the file cannot be written.
+
+```fortran
+subroutine save_layout(self, path, comment, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `path` | character(len=*) | in |  | File. |
+| `comment` | character(len=*) | in | optional | Lines to keep with it. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  save_layout["save_layout"] --> fig_save_layout["fig_save_layout"]
+  save_layout["save_layout"] --> figure_check["figure_check"]
+  style save_layout fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### load_layout
+
+Read a layout written by `save_layout` (or an ini file of Dear ImGui), applied before the next frame: the
+ settings in effect are cleared, the file's are read, the dock nodes are rebuilt and the windows that exist take
+ their saved position, size and dock; the others take theirs when they appear. A program that lays out its dock
+ space with `ig_dock_layout_begin` should not lay it out again: the dock space has a layout again (the same id as
+ when saved). `FIG_ERR_FAILED` if the file cannot be read, `FIG_ERR_ARGUMENT` if it holds no layout.
+
+```fortran
+subroutine load_layout(self, path, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `path` | character(len=*) | in |  | File. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  load_layout["load_layout"] --> fig_load_layout["fig_load_layout"]
+  load_layout["load_layout"] --> figure_check["figure_check"]
+  style load_layout fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### destroy

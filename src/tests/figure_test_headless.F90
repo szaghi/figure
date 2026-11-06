@@ -38,7 +38,10 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(46)  !< Per-check outcome.
+logical                   :: test_passed(47)  !< Per-check outcome.
+real(real64)              :: lay(4)           !< The Layout window after a layout is loaded.
+integer(int32)            :: stat_lay(4)      !< save_layout, load_layout, a missing file, not a layout.
+character(len=:), allocatable :: lay_text     !< The layout file's first line.
 integer(int32)            :: stat_img(2)      !< save_image headless (no pixels), image_result with nothing asked.
 logical                   :: img_done         !< image_result: done.
 character(len=:), allocatable :: img_path     !< image_result: the file.
@@ -368,6 +371,32 @@ call app%set_font('proggy', stat=stat_font(1))
 call app%set_font('plex-sans', 18.0_real64, stat=stat_font(2))
 call app%set_font('no/such/font.ttf', stat=stat_font(3))
 call app%set_font('fpm.toml', stat=stat_font(4))
+! a layout: a window placed, saved, moved elsewhere, then the layout loaded: back where it was saved
+call ig_set_next_window(50.0_real64, 60.0_real64, 300.0_real64, 200.0_real64)
+if (ig_begin('Layout')) call ig_text('placed')
+call ig_end()
+if (app%next_frame()) continue
+if (ig_begin('Layout')) call ig_text('placed')
+call ig_end()
+call app%save_layout('figure_test_layout.ini', comment='kept by the program'//new_line('a')//'second line', &
+                     stat=stat_lay(1))
+if (app%next_frame()) continue
+call ig_set_next_window(200.0_real64, 250.0_real64, 300.0_real64, 200.0_real64, always=.true.)
+if (ig_begin('Layout')) call ig_text('moved')
+call ig_end()
+call app%load_layout('figure_test_layout.ini', stat=stat_lay(2))
+call app%load_layout('no/such/layout.ini', stat=stat_lay(3))
+call app%load_layout('fpm.toml', stat=stat_lay(4))
+do i = 1_int32, 3_int32
+   if (.not. app%next_frame()) exit
+   if (ig_begin('Layout')) call ig_text('back?')
+   call ig_end()
+enddo
+call test_window_rect('Layout', lay(1), lay(2), lay(3), lay(4))
+open(newunit=unit, file='figure_test_layout.ini', status='old', action='read')
+allocate(character(len=64) :: lay_text)
+read(unit, '(A)') lay_text
+close(unit, status='delete')
 call ip_heatmap('one end', fld, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, scale_min=0.0_real64, stat=stat_scale)
 call tex%destroy()
 call tex%update(pix, stat=stat_dead)
@@ -456,6 +485,9 @@ test_passed(43) = win_found(1) .and. .not. win_found(2) .and.                   
 test_passed(44) = long_frames == 3_int32                                           ! a list over 65536 vertices
 test_passed(45) = log_px(1)%y > log_px(3)%y + 50.0_c_float .and. &
                   abs(log_px(2)%y - 0.5_c_float * (log_px(1)%y + log_px(3)%y)) < 1.0_c_float ! ylog: 1e-3 halfway
+test_passed(47) = all(stat_lay(1:2) == int(FIG_OK, int32)) .and. stat_lay(3) == int(FIG_ERR_FAILED, int32) .and. &
+                  stat_lay(4) == int(FIG_ERR_ARGUMENT, int32) .and. trim(lay_text) == '; kept by the program' .and. &
+                  all(abs(lay - [50.0_real64, 60.0_real64, 350.0_real64, 260.0_real64]) < 1.0e-6_real64) ! a layout
 test_passed(46) = stat_img(1) == int(FIG_ERR_STATE, int32) .and. stat_img(2) == int(FIG_OK, int32) .and. &
                   .not. img_done .and. len(img_path) == 0                          ! save_image needs a window
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &

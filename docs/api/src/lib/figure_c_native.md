@@ -34,6 +34,8 @@ graph LR
 - [fig_file_dialog_result](#fig-file-dialog-result)
 - [fig_save_image](#fig-save-image)
 - [fig_image_result](#fig-image-result)
+- [fig_save_layout](#fig-save-layout)
+- [fig_load_layout](#fig-load-layout)
 - [fig_quit_requested](#fig-quit-requested)
 - [fig_set_title](#fig-set-title)
 - [fig_title](#fig-title)
@@ -119,6 +121,10 @@ graph LR
 ### fig_save_image
 
 ### fig_image_result
+
+### fig_save_layout
+
+### fig_load_layout
 
 ### fig_quit_requested
 

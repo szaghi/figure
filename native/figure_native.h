@@ -123,6 +123,8 @@ int    fig_file_dialog(int kind, const char *id, int id_len, const char *filters
 int    fig_file_dialog_result(const char *id, int id_len, char *buf, int buf_len, int *state, int *path_len);
 int    fig_save_image(const char *path, int path_len, double x0, double y0, double x1, double y1);
 int    fig_image_result(char *buf, int buf_len, int *state, int *path_len);
+int    fig_save_layout(const char *path, int path_len, const char *comment, int comment_len);
+int    fig_load_layout(const char *path, int path_len);
 /* A key chord ("ctrl+s": modifiers and one key, by the names of fig_input_key, joined by '+'). */
 int    fig_key_chord(const char *keys, int keys_len, int *chord);
 /* A text field over a caller-owned NUL-terminated buffer of buf_size bytes (InputText without a callback); 1 when
