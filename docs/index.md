@@ -47,10 +47,18 @@ features:
     details: init_remote serves the same interface to a browser, behind an access token. No display or GPU on the program's side, a cluster node through an SSH tunnel; unchanged frames are not sent.
     link: /guide/remote
     linkText: Remote UI
+  - title: Forms, menus and dialogs
+    details: Text and numeric fields bound to your variables, drop-down lists, tables, tabs; menu bars and keyboard shortcuts; popups, modals and the system's file dialogs.
+    link: /guide/menus
+    linkText: Menus and popups
   - title: Docking and themes
-    details: Windows dock into one another as tabs and splits. Seven built-in styles, every colour and size by name, theme files, fonts.
+    details: Windows dock into one another as tabs and splits, layouts saved and loaded at run time. Seven built-in styles, every colour and size by name, theme files, fonts.
     link: /guide/styles
     linkText: Styles
+  - title: Built with it
+    details: Tools for a CFD solver, a run checker following hundreds of history files and two input editors, each in a window or a browser.
+    link: /guide/showcase
+    linkText: Showcase
   - title: Headless tests
     details: init_headless creates the contexts without a window or a GPU; the figure_testing module clicks, drags and types frame by frame, so UI logic is tested in CI as is.
     link: /guide/testing

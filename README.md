@@ -62,17 +62,25 @@ gfortran -I lib/mod readme.F90 lib/libfigure.a -L lib $(python3 scripts/check_sy
 
 ## What it does
 
-- **Widgets and plots**: buttons, sliders, numeric fields, check boxes, text; lines, scatter, bars, shaded areas,
-  heatmaps with colour bars, GPU textures, all read from Fortran arrays in place.
-- **Docking**: windows dock into one another as tabs and splits; layouts can be set by the program.
+- **Widgets and plots**: buttons, sliders, numeric and text fields, drop-down lists, check boxes, tables, tabs,
+  headers; lines, scatter, bars, shaded areas, subplots with linked axes, logarithmic axes, heatmaps with colour bars,
+  GPU textures, all read from Fortran arrays in place.
+- **Menus and dialogs**: menu bars, keyboard shortcuts, popups and modals, a question before quitting, the system's
+  file dialogs.
+- **Docking**: windows dock into one another as tabs and splits; layouts set by the program, or arranged by the user,
+  saved to a file and loaded back.
 - **Themes**: seven built-in styles (`seal`, `paper` for publication, `high-contrast`, ...), every colour and size of
-  Dear ImGui and ImPlot by name, theme files, fonts.
+  Dear ImGui and ImPlot by name, theme files, fonts and their size, changed at run time.
 - **Lazy redraw**: an idle window sleeps (about 0.4 % of a core); live data redraws when it changes.
 - **Remote mode**: `app%init_remote()` serves the same interface to a web browser, with an access token: no display or
   GPU on the program's side, e.g. a cluster node through an SSH tunnel. Unchanged frames are not sent, frames are
   capped and compressed when the link is slow.
+- **Pictures**: `app%save_image` writes a plot or a panel as a PNG; every frame can be recorded, with scripted input.
 - **Headless testing**: `app%init_headless` and the `figure_testing` module drive the interface with synthetic input,
   in CI without a display.
+
+Built with it: [tools for a CFD solver](https://szaghi.github.io/figure/guide/showcase), a run checker and two input
+editors.
 
 ## Install
 

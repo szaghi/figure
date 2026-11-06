@@ -4,6 +4,65 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+### Added
+- **implot**: Logarithmic axes in ip_setup_axes (xlog, ylog)
+
+- **imgui**: Text fields, integer fields and the next item's width
+
+- **imgui**: Drop-down lists and tooltips
+
+- **imgui**: Collapsing headers, tabs, id scopes and disabled blocks
+
+- **imgui**: Tables
+
+- **testing**: Test_click and test_drag let the pointer rest before pressing (F1)
+
+- **imgui**: Selectable lines, wrapped/disabled/coloured text, child regions (F2)
+
+- **imgui**: Menus and keyboard shortcuts (F3)
+
+- Popups, modals and a confirmation before quitting (F4)
+
+- **app**: The system's file dialogs (F5)
+
+- **implot**: Tick formats, subplots, docking a window that appears later (F6)
+
+- **app**: The window's title after init (set_title, title)
+
+- **app**: Save a rectangle of the window as a PNG (save_image)
+
+- **app**: Save and load the arrangement of the windows (layouts)
+
+
+### Documentation
+- Forms in the widgets guide, a cookbook editor, roadmap v0.2.0
+
+- **showcase**: The tools built for Xall with FIGURE (R1)
+
+- **api**: The API pages regenerated for F7 (figure_library, set_title, title)
+
+- **showcase**: The run checker's navigator and comparison
+
+- **showcase**: The run checker saves its plots (image, data)
+
+
+### Fixed
+- **fpm**: Give the package commit an author on CI
+
+- **native**: Capture scripts accept every key name test_key accepts
+
+- **test**: Select a field's text with keys every platform reads alike
+
+- **testing**: A 'shortcut' key name for the platform's shortcut key
+
+- **build**: Ship figure_testing in the static library
+
+- **app**: Set_font's size reaches the next frame
+
+- **app**: File dialogs start from the program's working directory
+
+
 ## [0.1.0] — 2026-11-05
 ### Added
 - **native**: Add FIGURE_DEBUG_REDRAW diagnostics and an idle-CPU probe

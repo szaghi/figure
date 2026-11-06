@@ -118,4 +118,12 @@ editors of its input files.
 - **File dialogs** ([File dialogs](frame-loop#file-dialogs)): the system's own, asynchronous, window mode: done.
 - **Plots for live checks** ([Plots](plots#several-plots-in-one-figure), [Docking](docking#a-window-that-appears-later)):
   tick label formats, subplots with linked axes, docking a window that appears later: done.
-- Next ([issue #2](https://github.com/szaghi/figure/issues/2)): the Xall tools built on these, then v0.2.0.
+- **Found by the tools** ([issue #2](https://github.com/szaghi/figure/issues/2)): `figure_testing` in the static
+  library; the window's title after `init` (`app%set_title`); a font size changed at run time reaching the next frame;
+  file dialogs starting from the program's working directory: done.
+- **Pictures and layouts**: a rectangle of the window saved as a PNG (`app%save_image`,
+  [Save an image](capture#save-an-image-from-the-program)); the windows' arrangement saved and loaded at run time
+  (`app%save_layout`, `app%load_layout`, [Docking](docking#save-and-load-a-layout)): done.
+- **The tools** ([Showcase](showcase)): a run checker following a run's history files (a navigator for hundreds of
+  them, comparison, saved plots and layouts), the editors of the solver's and the grid tool's input files: done.
+- Next: the release, v0.2.0.

@@ -23,18 +23,28 @@ respect to retained-mode toolkits.
 
 ## Status
 
-FIGURE is approaching its first release, v0.1.0: milestones M1 to M5 of the [roadmap](roadmap) are done, except the
-WebAssembly experiment. The API is small and can still change.
+FIGURE v0.1.0 is released; v0.2.0 is in progress ([roadmap](roadmap)), driven by its first application outside this
+repository, tools for a CFD solver ([showcase](showcase)). The API can still change.
 
 What exists today:
 
 - the application loop: a window, the frame loop, lazy redraw; headless mode for tests; remote mode, the interface
-  in a web browser;
-- widgets: windows, buttons, check boxes, sliders (`int32`, `real32`, `real64`), a numeric input, text, layout
-  helpers, the Dear ImGui demo window;
+  in a web browser; the window's title, a confirmation before quitting;
+- widgets: windows, buttons, check boxes, sliders (`int32`, `real32`, `real64`), numeric fields, text fields bound to
+  `character` variables, drop-down lists, tooltips, selectable lines, wrapped and coloured text, child regions,
+  collapsing headers, tabs, tables, disabled blocks, the Dear ImGui demo window;
+- menus (the main menu bar, a window's), keyboard shortcuts (cmd on macOS), popups and modals; the system's file
+  dialogs;
+- docking: dock spaces, layouts set by the program, windows that appear later; the user's arrangement saved to a file
+  and loaded back while the program runs;
+- styles: seven built-in themes, every colour and size by name, theme files, fonts (bundled or from a file) and their
+  size, changed at run time;
 - plots of `real(real32)` and `real(real64)` arrays, read in place: lines (also of matrix rows, with a stride),
-  scatter, bars, shaded areas, with styles; heatmaps with their colour scale; images (`texture_object`), in a plot
-  or as a widget;
+  scatter, bars, shaded areas, with styles; logarithmic axes, tick label formats, subplots with linked axes; heatmaps
+  with their colour scale; images (`texture_object`), in a plot or as a widget;
+- pictures: a rectangle of the window saved as a PNG by the program; every frame recorded, with scripted input, for
+  documentation;
+- headless testing with synthetic input (`figure_testing`, in the library);
 - every Dear ImGui and ImPlot function through the generated [raw bindings](raw-bindings);
 - CI on Linux, macOS and Windows with gfortran, on Linux with nvfortran; builds with FoBiS and fpm.
 
