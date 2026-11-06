@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.2.0] — 2026-11-06
 ### Added
 - **implot**: Logarithmic axes in ip_setup_axes (xlog, ylog)
 
@@ -34,6 +34,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **app**: Save and load the arrangement of the windows (layouts)
 
+- **imgui**: A bar along one side of the window (ig_begin_side_bar)
+
+- **style**: Lucide icons in every font, by name (ICON_*)
+
+- **imgui**: Workspace buttons, window focus, list clipper, text level with fields
+
+- **imgui**: The size of a text in the current font (ig_text_size)
+
+
+### Changed
+- **imgui**: Ig_text_size's result named extent
+
 
 ### Documentation
 - Forms in the widgets guide, a cookbook editor, roadmap v0.2.0
@@ -45,6 +57,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **showcase**: The run checker's navigator and comparison
 
 - **showcase**: The run checker saves its plots (image, data)
+
+- The overview pages catch up with v0.2.0 so far
+
+- **showcase**: Xall_gui, a case's input and run in one window
+
+- **showcase**: Xall_gui's case files, checked as the solver reads them
+
+- **api**: The API pages regenerated for the new wrappers
+
+- The pages say v0.2.0, released
 
 
 ### Fixed
