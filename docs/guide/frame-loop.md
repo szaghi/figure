@@ -153,6 +153,9 @@ The system's own dialogs, to choose a file to open, where to save, or a folder:
   after. `id` is any text: it names the dialog whose answer is read.
 - **Filters** are entries `'name|pattern'`, the pattern being extensions separated by `;`: `'Input files|input;inp'`,
   `'All files|*'`. Platforms may let the user ignore them.
+- **Where it starts.** `default_path` is a folder, or a file (a save dialog proposes its name); a relative one is taken
+  from the program's working directory, and without one the dialog starts there. (On Linux the dialog is shown by
+  another process, the desktop portal or `zenity`, which would otherwise start from its own directory, the home.)
 - **Window mode only.** In remote and headless modes there is no desktop to show a dialog on: the calls return
   `FIG_ERR_STATE`, and the program asks for the path in a text field instead, as above.
 - **Platforms.** SDL3 shows the platform's dialog: Windows' and macOS' own; on Linux the desktop portal or `zenity`

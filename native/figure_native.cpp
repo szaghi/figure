@@ -22,6 +22,7 @@
 #include <cstring>
 #include <chrono>
 #include <algorithm>
+#include <filesystem>
 #include <cmath>
 #include <exception>
 #include <map>
@@ -1694,7 +1695,15 @@ int fig_file_dialog(int kind, const char *id, int id_len, const char *filters, i
       start = end + 1;
    }
    for (size_t i = 0; i < d->names.size(); ++i) d->filters.push_back({d->names[i].c_str(), d->patterns[i].c_str()});
-   const std::string where(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
+   // The default location, absolute: the dialog may be shown by another process (the desktop portal, zenity) that
+   // resolves a relative path against its own working directory (the user's home), not the program's. No location: the
+   // program's working directory.
+   std::string where(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
+   {
+      std::error_code ec;
+      const std::filesystem::path abs = std::filesystem::absolute(where.empty() ? "." : where, ec);
+      if (!ec) where = abs.lexically_normal().string();
+   }
    file_dialog_t *raw = d.get();
    {
       std::lock_guard<std::mutex> lock(dialogs_mutex);

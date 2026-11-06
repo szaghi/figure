@@ -499,7 +499,7 @@ subroutine open_file_dialog(self, id, filters, default_path, stat)
 | `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
 | `id` | character(len=*) | in |  | Dialog id (any text, used to read the answer). |
 | `filters` | character(len=*) | in | optional | File type filters. |
-| `default_path` | character(len=*) | in | optional | Folder or file to start from. |
+| `default_path` | character(len=*) | in | optional | Folder or file to start from (relative: to the |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -525,7 +525,7 @@ subroutine save_file_dialog(self, id, filters, default_path, stat)
 | `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
 | `id` | character(len=*) | in |  | Dialog id. |
 | `filters` | character(len=*) | in | optional | File type filters. |
-| `default_path` | character(len=*) | in | optional | Folder or file to start from. |
+| `default_path` | character(len=*) | in | optional | Folder or file to start from (relative: to the |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -550,7 +550,7 @@ subroutine open_folder_dialog(self, id, default_path, stat)
 |------|------|--------|------------|-------------|
 | `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
 | `id` | character(len=*) | in |  | Dialog id. |
-| `default_path` | character(len=*) | in | optional | Folder to start from. |
+| `default_path` | character(len=*) | in | optional | Folder to start from (relative: to the working |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**

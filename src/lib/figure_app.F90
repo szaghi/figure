@@ -375,7 +375,8 @@ contains
    class(app_object), intent(inout)         :: self         !< Application.
    character(len=*),  intent(in)            :: id           !< Dialog id (any text, used to read the answer).
    character(len=*),  intent(in),  optional :: filters(:)   !< File type filters.
-   character(len=*),  intent(in),  optional :: default_path !< Folder or file to start from.
+   character(len=*),  intent(in),  optional :: default_path !< Folder or file to start from (relative: to the
+                                                                    !< working directory; absent: that directory).
    integer(int32),    intent(out), optional :: stat         !< Status.
 
    call show_file_dialog(0_c_int, id, filters, default_path, stat)
@@ -386,7 +387,8 @@ contains
    class(app_object), intent(inout)         :: self         !< Application.
    character(len=*),  intent(in)            :: id           !< Dialog id.
    character(len=*),  intent(in),  optional :: filters(:)   !< File type filters.
-   character(len=*),  intent(in),  optional :: default_path !< Folder or file to start from.
+   character(len=*),  intent(in),  optional :: default_path !< Folder or file to start from (relative: to the
+                                                                    !< working directory; absent: that directory).
    integer(int32),    intent(out), optional :: stat         !< Status.
 
    call show_file_dialog(1_c_int, id, filters, default_path, stat)
@@ -396,7 +398,8 @@ contains
    !< Show the system's dialog to choose a folder; as `open_file_dialog`.
    class(app_object), intent(inout)         :: self         !< Application.
    character(len=*),  intent(in)            :: id           !< Dialog id.
-   character(len=*),  intent(in),  optional :: default_path !< Folder to start from.
+   character(len=*),  intent(in),  optional :: default_path !< Folder to start from (relative: to the working
+                                                                    !< directory; absent: that directory).
    integer(int32),    intent(out), optional :: stat         !< Status.
 
    call show_file_dialog(2_c_int, id, default_path=default_path, stat=stat)
