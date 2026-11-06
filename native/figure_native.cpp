@@ -1007,7 +1007,12 @@ int fig_set_font(const char *name, int name_len, double size) {
    if (!f) return fail(err.rfind("cannot read", 0) == 0 ? FIG_ERR_FAILED : FIG_ERR_ARGUMENT, "set_font: " + err);
    ImGui::GetIO().FontDefault = f;
    st.font = n;
-   if (size > 0.0) ImGui::GetStyle().FontSizeBase = static_cast<float>(size);
+   if (size > 0.0) {
+      // Dear ImGui (1.92) takes the base size at the next NewFrame from _NextFrameFontSizeBase when set, as its own
+      // style editor does: a FontSizeBase written alone between frames does not reach the next frame.
+      ImGui::GetStyle().FontSizeBase = static_cast<float>(size);
+      ImGui::GetStyle()._NextFrameFontSizeBase = static_cast<float>(size);
+   }
    return FIG_OK;
    FIG_CATCH
 }

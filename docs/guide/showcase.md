@@ -53,6 +53,13 @@ appears ([Docking](docking)), a table for the summary, the system's folder dialo
 dialogs](frame-loop#file-dialogs)), and lazy redraw: the checker sleeps between looks at the files ([Frame loop and
 redraw](frame-loop#lazy-redraw)).
 
+## Shared by the three tools
+
+Each tool has a menu bar (File, Edit, Help; `xall_evol` also View) and the same **Edit > Preferences** window: the font
+(the bundled IBM Plex Sans, Proggy, or any TrueType/OpenType file), its size and the theme, applied at once with
+`app%set_font` and `app%set_style` ([Fonts](styles#fonts), [Named styles](styles#named-styles)) and kept in one
+preferences file for the three tools.
+
 ## How they are tested
 
 The editors are modules whose `frame` procedure draws one frame: the program calls it in its loop, and a headless

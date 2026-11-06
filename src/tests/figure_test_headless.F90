@@ -92,7 +92,7 @@ type(im_vec4)             :: back_line        !< First line colour after the rou
 character(len=:), allocatable :: bad_message  !< Error message of the malformed file.
 integer(int32)            :: unit             !< File unit.
 integer(int32)            :: stat_font(4)     !< set_font: proggy, plex-sans at 18, a missing file, not a font.
-real(c_float)             :: font_px(3)       !< Font size: default, pushed to 22, after the pop.
+real(c_float)             :: font_px(4)       !< Font size: default, pushed to 22, after the pop, the frame after set_font 18.
 real(real64)              :: pushed(4)        !< Button colour while pushed.
 real(real64)              :: popped(4)        !< Button colour after the pop.
 real(real64)              :: round_pushed(2)  !< FrameRounding while pushed.
@@ -374,6 +374,7 @@ long_y = sin(0.01_real64 * long_x)
 long_frames = 0_int32
 do i = 1_int32, 2_int32
    if (.not. app%next_frame()) exit
+   if (i == 1_int32) font_px(4) = igGetFontSize()   ! the size set by set_font in an earlier frame reaches this one
    call ig_set_next_window(10.0_real64, 10.0_real64, 400.0_real64, 300.0_real64)
    if (ig_begin('Long line')) then
       if (ip_begin_plot('long', height=-1.0_real64)) then
@@ -434,7 +435,8 @@ test_passed(35) = back_n(1) == 1_int32 .and. abs(back_round(1) - 5.0_real64) < 1
 test_passed(36) = stat_file(3) == int(FIG_ERR_ARGUMENT, int32) .and. index(bad_message, ':3:') > 0 .and.   &
                   index(bad_message, 'Buton') > 0 .and. stat_file(4) == int(FIG_ERR_FAILED, int32) ! errors with lines
 test_passed(37) = abs(font_px(1) - 15.0_c_float) < 1.0e-4_c_float .and. abs(font_px(2) - 22.0_c_float) < 1.0e-4_c_float &
-                  .and. abs(font_px(3) - 15.0_c_float) < 1.0e-4_c_float  ! default 15 px, push and pop a size
+                  .and. abs(font_px(3) - 15.0_c_float) < 1.0e-4_c_float &  ! default 15 px, push and pop a size
+                  .and. abs(font_px(4) - 18.0_c_float) < 1.0e-4_c_float    ! set_font's size, from the next frame
 test_passed(38) = all(stat_font(1:2) == int(FIG_OK, int32)) .and. stat_font(3) == int(FIG_ERR_FAILED, int32) .and. &
                   stat_font(4) == int(FIG_ERR_ARGUMENT, int32)                     ! fonts by name, bad files rejected
 test_passed(39) = all(abs(pushed - [1.0_real64, 0.0_real64, 0.0_real64, 1.0_real64]) < 1.0e-6_real64) .and.        &
