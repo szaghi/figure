@@ -99,13 +99,13 @@ fobis build --mode tests-gnu && scripts/run_tests.sh # the tests, headless
 fobis build --mode examples-gnu && exe/figure_hello  # the examples (also figure_mandelbrot)
 ```
 
-**fpm**, as a dependency of your project (from v0.1.0): each release publishes a self-contained package as the tag
+**fpm**, as a dependency of your project: each release publishes a self-contained package as the tag
 `vX.Y.Z-fpm`, where fpm compiles the native layer itself; only SDL3 comes from the system (`libsdl3-dev`,
 `brew install sdl3`, MSYS2's `mingw-w64-ucrt-x86_64-sdl3`):
 
 ```toml
 [dependencies]
-figure = { git = "https://github.com/szaghi/figure", tag = "v0.1.0-fpm" }
+figure = { git = "https://github.com/szaghi/figure", tag = "v0.2.0-fpm" }
 ```
 
 Inside this repository, `scripts/fpm.sh test` runs fpm on the native layer CMake built.
@@ -120,8 +120,8 @@ a [cookbook](https://szaghi.github.io/figure/manual/cookbook), the [guide](https
 (widgets, plots, styles, docking, remote mode, [performance](https://szaghi.github.io/figure/guide/performance),
 testing) and the API reference. Every picture there is recorded from the program it describes.
 
-**Status:** on the way to the first release, v0.1.0 ([roadmap](https://github.com/szaghi/figure/issues/1)); the API can
-still change until then.
+**Status:** v0.2.0, released 2026-11-06 ([changelog](CHANGELOG.md),
+[roadmap](https://szaghi.github.io/figure/guide/roadmap)); the API can still change before v1.0.
 
 ## Copyrights
 

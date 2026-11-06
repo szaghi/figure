@@ -25,7 +25,8 @@ nvfortran 26.9 if you hit the same error.
 
 ## Text input
 
-`igInputText` needs a C buffer and a resize callback; it is not bound. Numeric input (`ig_input`, `real64`) is.
+`ig_input_text` edits a `character` variable, whose length is the field's capacity: a longer text is cut at it.
+Multi-line text (`igInputTextMultiline`) has no wrapper yet.
 
 ## A name shared with fortplot
 

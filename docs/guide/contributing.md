@@ -4,7 +4,7 @@ title: Contributing
 
 # Contributing
 
-FIGURE is approaching its first release, v0.1.0; the API can still change until then ([roadmap](roadmap)).
+FIGURE is at v0.2.0; the API can still change before v1.0 ([roadmap](roadmap)).
 
 ## Reporting issues
 

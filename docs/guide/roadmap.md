@@ -4,9 +4,10 @@ title: Roadmap
 
 # Roadmap
 
-The plan to the first release, v0.1.0, is tracked step by step in
-[issue #1](https://github.com/szaghi/figure/issues/1): each step with its tasks, its checks, the documentation and the
-pictures it updates, and a log of the work. This page summarises it, after the milestones already done.
+The plan of each release is tracked step by step in an issue: v0.1.0 in
+[issue #1](https://github.com/szaghi/figure/issues/1), v0.2.0 in [issue #2](https://github.com/szaghi/figure/issues/2),
+each step with its tasks, its checks, the documentation and the pictures it updates, and a log of the work. This page
+summarises them.
 
 ## M1: build chain and first widgets — done on Linux
 
@@ -100,7 +101,7 @@ The scope of the first release, step by step in [issue #1](https://github.com/sz
 - **Documentation:** every page checked against the code, every recording regenerated, the changelog, the README: done.
 - **Release v0.1.0:** the tag, the GitHub release, the `v0.1.0-fpm` package: done.
 
-## v0.2.0 — in progress
+## v0.2.0 — released 2026-11-06
 
 Driven by a first application outside the repository, tools for a CFD solver: a live checker of its log files and
 editors of its input files.
@@ -129,6 +130,11 @@ editors of its input files.
 - **Workspaces and long lists**: a bar along a side of the window (`ig_begin_side_bar`,
   [Docking](docking#a-bar-along-a-side)), Lucide icons in every font (`ICON_*`, [Icons](styles#icons)), workspace
   buttons with an icon above the label (`ig_tool_button`), bringing a window forward (`ig_focus_window`), text level
-  with fields (`ig_align_text_to_frame_padding`), the size of a text (`ig_text_size`), long lists drawn row by row in view only (`list_clipper_object`,
-  [Widgets](widgets#lists-and-regions)): done.
-- Next: the release, v0.2.0.
+  with fields (`ig_align_text_to_frame_padding`), the size of a text (`ig_text_size`), long lists drawn row by row
+  in view only (`list_clipper_object`, [Widgets](widgets#lists-and-regions)): done.
+- **Release v0.2.0:** the tag, the GitHub release, the `v0.2.0-fpm` package: done.
+
+## Next
+
+Candidates, to be driven by what applications need: multi-line text fields, trees, colour pickers; more of ImPlot (error
+bars, annotations); the windowed path verified on macOS and Windows.

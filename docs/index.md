@@ -88,9 +88,10 @@ are the program's own back buffer, captured with `FIGURE_CAPTURE` and driven by 
 
 ## Status
 
-FIGURE is approaching its first release, v0.1.0. The milestones M1 to M5 of the [roadmap](./guide/roadmap) are done
-except the WebAssembly experiment: widgets, plots, heatmaps and textures, remote mode, CI on Linux, macOS and Windows
-with gfortran and on Linux with nvfortran. The API is small and can still change. FIGURE is released under the MIT licence.
+FIGURE v0.2.0 is released (2026-11-06). It grew from its first application outside this repository, tools for a CFD
+solver ([showcase](./guide/showcase)): forms, menus and dialogs, docking layouts, icons and workspace toolbars, plots
+for live checks. CI runs on Linux, macOS and Windows with gfortran and on Linux with nvfortran. The API can still change
+before v1.0 ([roadmap](./guide/roadmap)). FIGURE is released under the MIT licence.
 
 ## Quick start
 
