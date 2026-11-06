@@ -335,6 +335,43 @@ void capture_write(int w, int h) {
    ++cap.written;
 }
 
+// Save an image of a rectangle of the window (fig_save_image): asked for during a frame, written when that frame is
+// rendered (fig_end_frame, before the swap), reported once by fig_image_result. Window mode only.
+struct image_request_t {
+   std::string path, error;
+   float       x0 = 0.0f, y0 = 0.0f, x1 = 0.0f, y1 = 0.0f; // logical pixels
+   int         state = 0;                                 // 0 none, 1 pending, 2 written, 3 failed
+};
+image_request_t img;
+
+void image_write(const ImGuiIO &io) {
+   const float sx = io.DisplayFramebufferScale.x, sy = io.DisplayFramebufferScale.y;
+   const int fw = static_cast<int>(io.DisplaySize.x * sx), fh = static_cast<int>(io.DisplaySize.y * sy);
+   const int x0 = std::max(0, static_cast<int>(img.x0 * sx)), x1 = std::min(fw, static_cast<int>(img.x1 * sx + 0.5f));
+   const int y0 = std::max(0, static_cast<int>(img.y0 * sy)), y1 = std::min(fh, static_cast<int>(img.y1 * sy + 0.5f));
+   const int w = x1 - x0, h = y1 - y0;
+   if (w <= 0 || h <= 0) {
+      img.state = 3;
+      img.error = "save_image: the rectangle is outside the window";
+      return;
+   }
+   std::vector<unsigned char> px(static_cast<size_t>(w) * h * 3), top(px.size());
+   p_glPixelStorei(GL_PACK_ALIGNMENT_, 1);
+   p_glReadPixels(x0, fh - y1, w, h, GL_RGB_, GL_UNSIGNED_BYTE_, px.data()); // GL counts rows from the bottom
+   const size_t row = static_cast<size_t>(w) * 3;
+   for (int y = 0; y < h; ++y) std::memcpy(top.data() + y * row, px.data() + (h - 1 - y) * row, row);
+   SDL_Surface *surf = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGB24, top.data(), static_cast<int>(row));
+   if (!surf) {
+      img.state = 3;
+      img.error = std::string("save_image: ") + SDL_GetError();
+      return;
+   }
+   const bool ok = SDL_SavePNG(surf, img.path.c_str());
+   SDL_DestroySurface(surf);
+   img.state = ok ? 2 : 3;
+   if (!ok) img.error = "save_image: cannot write " + img.path + ": " + SDL_GetError();
+}
+
 #include "figure_font.inc" // plex_sans_ttf[]: IBM Plex Sans Regular (third_party/fonts, OFL-1.1)
 
 constexpr float DEFAULT_FONT_SIZE = 15.0f; // logical pixels: the size the interface is drawn at
@@ -1313,6 +1350,7 @@ int fig_end_frame(void) {
                        static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y));
       ++cap.frame;
    }
+   if (img.state == 1) image_write(io);
    Uint64 t_swap = 0;
    if (rs.on) t_swap = SDL_GetTicksNS();
    SDL_GL_SwapWindow(st.window);
@@ -1705,6 +1743,39 @@ int fig_file_dialog_result(const char *id, int id_len, char *buf, int buf_len, i
       return fail(FIG_ERR_FAILED, "file dialog: " + done->error);
 #endif
    }
+   return FIG_OK;
+}
+
+int fig_save_image(const char *path, int path_len, double x0, double y0, double x1, double y1) {
+   FIG_TRY
+   if (st.m != mode::window)
+      return fail(FIG_ERR_STATE, "save_image needs a window: in remote and headless modes there are no pixels here");
+   if (path_len <= 0) return fail(FIG_ERR_ARGUMENT, "save_image: no file name");
+   if (!(x1 > x0) || !(y1 > y0)) return fail(FIG_ERR_ARGUMENT, "save_image: an empty rectangle");
+   img = image_request_t{};
+   img.path.assign(path, static_cast<size_t>(path_len));
+   img.x0 = static_cast<float>(x0);
+   img.y0 = static_cast<float>(y0);
+   img.x1 = static_cast<float>(x1);
+   img.y1 = static_cast<float>(y1);
+   img.state = 1;
+   st.frames_left = std::max(st.frames_left, 2); // the frame that renders it, even in lazy mode
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_image_result(char *buf, int buf_len, int *state, int *path_len) {
+   *state = 0;
+   *path_len = 0;
+   if (img.state < 2) return FIG_OK; // none, or not rendered yet
+   *state = img.state;
+   *path_len = static_cast<int>(img.path.size());
+   const int n = std::min(*path_len, buf_len);
+   if (n > 0) std::memcpy(buf, img.path.data(), static_cast<size_t>(n));
+   const int s = img.state;
+   const std::string err = img.error;
+   img = image_request_t{};
+   if (s == 3) return fail(FIG_ERR_FAILED, err);
    return FIG_OK;
 }
 

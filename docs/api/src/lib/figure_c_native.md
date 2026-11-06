@@ -32,6 +32,8 @@ graph LR
 - [fig_remote_token](#fig-remote-token)
 - [fig_file_dialog](#fig-file-dialog)
 - [fig_file_dialog_result](#fig-file-dialog-result)
+- [fig_save_image](#fig-save-image)
+- [fig_image_result](#fig-image-result)
 - [fig_quit_requested](#fig-quit-requested)
 - [fig_set_title](#fig-set-title)
 - [fig_title](#fig-title)
@@ -113,6 +115,10 @@ graph LR
 ### fig_file_dialog
 
 ### fig_file_dialog_result
+
+### fig_save_image
+
+### fig_image_result
 
 ### fig_quit_requested
 

@@ -53,6 +53,8 @@ graph LR
 - [save_file_dialog](#save-file-dialog)
 - [open_folder_dialog](#open-folder-dialog)
 - [file_dialog_result](#file-dialog-result)
+- [save_image](#save-image)
+- [image_result](#image-result)
 - [destroy](#destroy)
 - [show_file_dialog](#show-file-dialog)
 - [next_frame](#next-frame)
@@ -99,6 +101,8 @@ A FIGURE application (one per program).
 | `save_file_dialog` | pass(self) | The system's dialog to choose where to save. |
 | `open_folder_dialog` | pass(self) | The system's dialog to choose a folder. |
 | `file_dialog_result` | pass(self) | The answer to a dialog, once given. |
+| `save_image` | pass(self) | A rectangle of the window as a PNG file, after this frame. |
+| `image_result` | pass(self) | The outcome of save_image, once. |
 | `content_scale` | pass(self) | Display content scale. |
 | `destroy` | pass(self) | Close everything. |
 
@@ -586,6 +590,66 @@ flowchart TD
   file_dialog_result["file_dialog_result"] --> fig_file_dialog_result["fig_file_dialog_result"]
   file_dialog_result["file_dialog_result"] --> figure_check["figure_check"]
   style file_dialog_result fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### save_image
+
+Write the rectangle (xmin, ymin)-(xmax, ymax) of the window [logical pixels, as `ig_item_rect` and
+ `test_window_rect` give them] as a PNG file, at the screen's resolution, when the current frame is rendered.
+ Ask for it outside the frame in which a menu or popup covers the rectangle (they would be in the picture).
+ The outcome comes once, from `image_result`. Window mode only: in remote and headless modes there are no
+ pixels on the program's side, `FIG_ERR_STATE`; an empty rectangle or file name, `FIG_ERR_ARGUMENT`.
+
+```fortran
+subroutine save_image(self, path, xmin, ymin, xmax, ymax, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `path` | character(len=*) | in |  | PNG file. |
+| `xmin` | real(kind=real64) | in |  | Left. |
+| `ymin` | real(kind=real64) | in |  | Top. |
+| `xmax` | real(kind=real64) | in |  | Right. |
+| `ymax` | real(kind=real64) | in |  | Bottom. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  save_image["save_image"] --> fig_save_image["fig_save_image"]
+  save_image["save_image"] --> figure_check["figure_check"]
+  style save_image fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### image_result
+
+The outcome of `save_image`, once, after the frame that wrote it: `done` true and the file `path`, or
+ `FIG_ERR_FAILED` with the reason (the file cannot be written). `done` false before and after: poll it every frame.
+
+```fortran
+subroutine image_result(self, path, done, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `path` | character(len=:) | out | allocatable | The file ('' until done). |
+| `done` | logical | out |  | Written, or failed. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  image_result["image_result"] --> fig_image_result["fig_image_result"]
+  image_result["image_result"] --> figure_check["figure_check"]
+  style image_result fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### destroy

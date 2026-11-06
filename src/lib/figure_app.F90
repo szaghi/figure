@@ -24,7 +24,8 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_conte
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
                             fig_set_style, fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
-                            fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title
+                            fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title, fig_save_image, &
+                            fig_image_result
 
 implicit none
 private
@@ -57,6 +58,8 @@ type :: app_object
       procedure, pass(self) :: save_file_dialog   !< The system's dialog to choose where to save.
       procedure, pass(self) :: open_folder_dialog !< The system's dialog to choose a folder.
       procedure, pass(self) :: file_dialog_result !< The answer to a dialog, once given.
+      procedure, pass(self) :: save_image     !< A rectangle of the window as a PNG file, after this frame.
+      procedure, pass(self) :: image_result   !< The outcome of save_image, once.
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
 endtype app_object
@@ -422,6 +425,43 @@ contains
    if (state == 1_c_int) path = buf(1:min(n, len(buf, c_int)))
    call figure_check(status, stat)
    endsubroutine file_dialog_result
+
+   subroutine save_image(self, path, xmin, ymin, xmax, ymax, stat)
+   !< Write the rectangle (xmin, ymin)-(xmax, ymax) of the window [logical pixels, as `ig_item_rect` and
+   !< `test_window_rect` give them] as a PNG file, at the screen's resolution, when the current frame is rendered.
+   !< Ask for it outside the frame in which a menu or popup covers the rectangle (they would be in the picture).
+   !< The outcome comes once, from `image_result`. Window mode only: in remote and headless modes there are no
+   !< pixels on the program's side, `FIG_ERR_STATE`; an empty rectangle or file name, `FIG_ERR_ARGUMENT`.
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: path !< PNG file.
+   real(real64),      intent(in)            :: xmin !< Left.
+   real(real64),      intent(in)            :: ymin !< Top.
+   real(real64),      intent(in)            :: xmax !< Right.
+   real(real64),      intent(in)            :: ymax !< Bottom.
+   integer(int32),    intent(out), optional :: stat !< Status.
+
+   call figure_check(fig_save_image(path, len(path, c_int), real(xmin, c_double), real(ymin, c_double), &
+                                    real(xmax, c_double), real(ymax, c_double)), stat)
+   endsubroutine save_image
+
+   subroutine image_result(self, path, done, stat)
+   !< The outcome of `save_image`, once, after the frame that wrote it: `done` true and the file `path`, or
+   !< `FIG_ERR_FAILED` with the reason (the file cannot be written). `done` false before and after: poll it every frame.
+   class(app_object),             intent(inout)         :: self !< Application.
+   character(len=:), allocatable, intent(out)           :: path !< The file ('' until done).
+   logical,                       intent(out)           :: done !< Written, or failed.
+   integer(int32),                intent(out), optional :: stat !< Status.
+   character(kind=c_char, len=4096)                     :: buf  !< Path buffer.
+   integer(c_int)                                       :: state !< 0 none, 2 written, 3 failed.
+   integer(c_int)                                       :: n    !< Path length.
+   integer(c_int)                                       :: status !< Status.
+
+   path = ''
+   status = fig_image_result(buf, len(buf, c_int), state, n)
+   done = state /= 0_c_int
+   if (done) path = buf(1:min(n, len(buf, c_int)))
+   call figure_check(status, stat)
+   endsubroutine image_result
 
    function content_scale(self) result(scale)
    !< Display content scale (1 standard, 2 on most high-DPI displays).

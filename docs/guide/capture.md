@@ -65,6 +65,31 @@ FIGURE_CAPTURE=f_ FIGURE_CAPTURE_INPUT=hello.input FIGURE_CAPTURE_FRAMES=150 exe
 ffmpeg -framerate 30 -i f_%05d.ppm -c:v libx264 -pix_fmt yuv420p -crf 24 hello.mp4
 ```
 
+## Save an image from the program
+
+`app%save_image(path, xmin, ymin, xmax, ymax)` writes a rectangle of the window as a PNG file, at the screen's
+resolution, when the current frame is rendered: a plot, a panel, the whole window. The rectangle is in logical pixels,
+as `ig_item_rect` gives it for the widget drawn last (after `ip_end_plot` or `ip_end_subplots`: the plot or the grid).
+`app%image_result(path, done)` reports the outcome once, on a later frame: `done` with the file written, or
+`FIG_ERR_FAILED` with the reason (the file cannot be written).
+
+```fortran
+if (ip_begin_plot('history')) then
+   call ip_line('x', t, x)
+   call ip_end_plot()
+endif
+call ig_item_rect(r(1), r(2), r(3), r(4))                     ! the plot just drawn
+if (save_now) call app%save_image('history.png', r(1), r(2), r(3), r(4), stat=stat)
+call app%image_result(written, done, stat=stat)               ! every frame: done once, after the write
+```
+
+- Ask for it on a frame where no menu or popup covers the rectangle: they would be in the picture. A menu item that
+  saves is picked on a frame where its menu is still drawn: ask on the next frame.
+- **Window mode only.** In remote and headless modes there are no pixels on the program's side: `FIG_ERR_STATE`.
+  (A browser's own screenshot, or the data, are the alternatives there.)
+- One image at a time: a request replaces the previous one if that one has not been reported yet (its file may
+  still have been written). Wait for `done` before asking for the next.
+
 ## The documentation's recordings
 
 `scripts/docs_media.py` records every `docs/media/<name>.rec`: a header of `#!` lines (the program, the number of

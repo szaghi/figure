@@ -22,6 +22,7 @@ public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord, fig_plot_tick_label
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
+public :: fig_save_image, fig_image_result
 public :: fig_set_title, fig_title
 
 ! Status codes: must match native/figure_native.h.
@@ -175,6 +176,29 @@ interface
    integer(c_int), intent(out)         :: path_len !< Full length of the path.
    integer(c_int)                      :: status   !< Status.
    endfunction fig_file_dialog_result
+
+   function fig_save_image(path, path_len, x0, y0, x1, y1) result(status) bind(C, name='fig_save_image')
+   !< Ask for the rectangle (x0, y0)-(x1, y1) [logical pixels] of the window as a PNG file, written when this frame is
+   !< rendered.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File.
+   integer(c_int), value              :: path_len !< Its length.
+   real(c_double), value              :: x0, y0   !< Top left.
+   real(c_double), value              :: x1, y1   !< Bottom right.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_save_image
+
+   function fig_image_result(buf, buf_len, state, path_len) result(status) bind(C, name='fig_image_result')
+   !< The outcome of the last save_image, once: state 0 none yet, 2 written, 3 failed.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*)   !< File.
+   integer(c_int), value               :: buf_len  !< Buffer length.
+   integer(c_int), intent(out)         :: state    !< State.
+   integer(c_int), intent(out)         :: path_len !< Full length of the path.
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_image_result
 
    subroutine fig_set_confirm_quit(on) bind(C, name='fig_set_confirm_quit')
    !< A quit request (the window's close button) is reported instead of ending the loop (1) or ends it (0).

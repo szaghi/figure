@@ -38,7 +38,10 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(45)  !< Per-check outcome.
+logical                   :: test_passed(46)  !< Per-check outcome.
+integer(int32)            :: stat_img(2)      !< save_image headless (no pixels), image_result with nothing asked.
+logical                   :: img_done         !< image_result: done.
+character(len=:), allocatable :: img_path     !< image_result: the file.
 real(real64)              :: long_x(100000)   !< A line over 65536 vertices: abscissae.
 real(real64)              :: long_y(100000)   !< Its ordinates.
 integer(int32)            :: long_frames      !< Frames drawn with it.
@@ -359,6 +362,8 @@ call ig_pop_style_color()
 call ig_get_style_color('Button', popped)
 call ig_get_style_var('FrameRounding', round_popped, back_n(1))
 call ig_pop_style_color(stat=stat_pop)
+call app%save_image('x.png', 0.0_real64, 0.0_real64, 10.0_real64, 10.0_real64, stat=stat_img(1)) ! headless: no pixels
+call app%image_result(img_path, img_done, stat=stat_img(2))
 call app%set_font('proggy', stat=stat_font(1))
 call app%set_font('plex-sans', 18.0_real64, stat=stat_font(2))
 call app%set_font('no/such/font.ttf', stat=stat_font(3))
@@ -451,6 +456,8 @@ test_passed(43) = win_found(1) .and. .not. win_found(2) .and.                   
 test_passed(44) = long_frames == 3_int32                                           ! a list over 65536 vertices
 test_passed(45) = log_px(1)%y > log_px(3)%y + 50.0_c_float .and. &
                   abs(log_px(2)%y - 0.5_c_float * (log_px(1)%y + log_px(3)%y)) < 1.0_c_float ! ylog: 1e-3 halfway
+test_passed(46) = stat_img(1) == int(FIG_ERR_STATE, int32) .and. stat_img(2) == int(FIG_OK, int32) .and. &
+                  .not. img_done .and. len(img_path) == 0                          ! save_image needs a window
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
                   stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
 
