@@ -164,15 +164,15 @@ contains
    clicked = fig_tool_button(label, len(label, c_int), icon, len(icon, c_int), w, h, sel, acc) == 1_c_int
    endfunction ig_tool_button
 
-   function ig_text_size(text) result(size)
+   function ig_text_size(text) result(extent)
    !< The size a text takes in the current font [pixels]: width and height (the text before `##` when it is a label):
    !< buttons of one width, a column as wide as its longest value.
    character(len=*), intent(in) :: text    !< Text (UTF-8).
-   real(real64)                 :: size(2) !< Width, height.
+   real(real64)                 :: extent(2) !< Width, height.
    type(im_vec2)                :: ext     !< Its extent.
 
    ext = igCalcTextSize(cstr(text), c_null_ptr, .true._c_bool, -1.0_c_float)
-   size = [real(ext%x, real64), real(ext%y, real64)]
+   extent = [real(ext%x, real64), real(ext%y, real64)]
    endfunction ig_text_size
 
    subroutine ig_align_text_to_frame_padding()

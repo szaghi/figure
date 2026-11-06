@@ -559,7 +559,7 @@ The size a text takes in the current font [pixels]: width and height (the text b
 **Returns**: `real(kind=real64)`
 
 ```fortran
-function ig_text_size(text) result(size)
+function ig_text_size(text) result(extent)
 ```
 
 **Arguments**
