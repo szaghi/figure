@@ -41,17 +41,22 @@ Built from the same parts, plus tables whose rows are added, copied, moved and d
 ## The run checker
 
 `xall_evol` follows the history files a run writes (residuals, forces and moments, time step, timings) while the run
-goes on: a docked tab per file, the plots, and checks for what goes wrong (NaN, residuals that grow, a time step that
-collapses), every file's findings in one table with the errors first. It reads only the lines appended since the last
+goes on, and checks them for what goes wrong (NaN, residuals that grow, a time step that collapses), every file's
+findings in one table with the errors first. How many files a run writes is not known in advance (one per force
+group: hundreds with many groups), so the files are a navigator, grouped by kind, filtered by name, the worst first,
+and the plots show one file, or several ticked to compare, overlaid. It reads only the lines appended since the last
 look: a refresh of a 10⁶-line residual file takes 0.02 s instead of the 6.4 s of reading it again.
 
 <Media name="showcase_xall_evol" video alt="The run checker: residuals of six variables on a logarithmic axis keep descending as the synthetic run appends lines; the summary table updates" caption="xall_evol on synthetic files that keep growing while it records" />
 
-Built from: plots on logarithmic axes ([Plots](plots)), subplots sharing the abscissa with formatted tick labels for the
-forces and moments ([Several plots in one figure](plots#several-plots-in-one-figure)), a window per file docked as it
-appears ([Docking](docking)), a table for the summary, the system's folder dialog ([File
-dialogs](frame-loop#file-dialogs)), and lazy redraw: the checker sleeps between looks at the files ([Frame loop and
-redraw](frame-loop#lazy-redraw)).
+<Media name="showcase_xall_evol_compare" alt="The run checker's navigator lists 24 force groups, one marked with an error; three are ticked and their coefficients are overlaid in a grid of six plots" caption="xall_evol: three of 24 force groups compared (synthetic files)" />
+
+Built from: plots on logarithmic axes ([Plots](plots)), subplots sharing the abscissa with formatted tick labels for
+the forces and moments ([Several plots in one figure](plots#several-plots-in-one-figure)), a navigator of collapsing
+headers and tables of selectable rows with check boxes, a filter field ([Widgets](widgets#groups-headers-tabs-tables)),
+a laid-out dock space and a window per file popped out on demand ([Docking](docking)), the system's folder dialog
+([File dialogs](frame-loop#file-dialogs)), and lazy redraw: the checker sleeps between looks at the files ([Frame
+loop and redraw](frame-loop#lazy-redraw)).
 
 ## Shared by the three tools
 
