@@ -22,7 +22,7 @@ public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord, fig_plot_tick_label
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
-public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout
+public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_set_title, fig_title
 
 ! Status codes: must match native/figure_native.h.
@@ -210,6 +210,17 @@ interface
    integer(c_int), value              :: comment_len !< Their length.
    integer(c_int)                     :: status      !< Status.
    endfunction fig_save_layout
+
+   function fig_begin_side_bar(name, name_len, side, size) result(visible) bind(C, name='fig_begin_side_bar')
+   !< Begin a bar along one side of the display (0 left, 1 right, 2 top, 3 bottom): 1 when its content is drawn.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Window name.
+   integer(c_int), value              :: name_len !< Its length.
+   integer(c_int), value              :: side     !< Side.
+   real(c_double), value              :: size     !< Width (left, right) or height (top, bottom) [pixels].
+   integer(c_int)                     :: visible  !< 1: drawn.
+   endfunction fig_begin_side_bar
 
    function fig_load_layout(path, path_len) result(status) bind(C, name='fig_load_layout')
    !< Read a layout from `path`, applied before the next frame.

@@ -56,6 +56,28 @@ endif
 call ig_end()
 ```
 
+## A bar along a side
+
+A toolbar, an activity bar or a status bar is a bar along one side of the display that the dock space leaves free:
+
+```fortran
+if (ig_begin_main_menu_bar()) then
+   ! menus
+   call ig_end_main_menu_bar()
+endif
+if (ig_begin_side_bar('Tools', 'left', 64.0_real64)) then     ! 'left', 'right', 'top' or 'bottom'
+   if (ig_button('Input')) tool = 1
+   if (ig_button('Run')) tool = 2
+endif
+call ig_end()
+call ig_dock_space(root)                                      ! fills what the bars leave
+```
+
+The bar is a window without title bar, not movable, resizable or dockable, at the side given and as wide (left,
+right) or as high (top, bottom) as `size`; the work area loses that strip, so the dock space and the windows placed in
+the work area do not cover it. Declare it every frame after the main menu bar and before the dock space, and always
+end it with `ig_end`. Several bars stack (a toolbar and a status bar).
+
 ## Save and load a layout
 
 How the user arranged the windows (where each is docked, the splits' sizes, the floating windows' places, the tables'

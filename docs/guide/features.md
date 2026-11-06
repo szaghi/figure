@@ -43,6 +43,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | Procedure | Purpose |
 |---|---|
 | `ig_begin(name [, open] [, flags])` → `logical` | begin a window (`ImGuiWindowFlags_*`); `.false.` when collapsed or clipped |
+| `ig_begin_side_bar(name, side, size)` | a bar along one side of the display (a toolbar), left out of the dock space | [Docking](docking#a-bar-along-a-side) |
 | `ig_end()` | end the window (always, whatever `ig_begin` returned) |
 | `ig_set_next_window(x, y [, width, height] [, always])` | place (and size) the next window |
 | `ig_button(label [, width] [, height])` → `logical` | a button; `.true.` on the frame it is clicked |

@@ -6,7 +6,8 @@ program figure_test_headless
 !< a check box is toggled the same way; a plot is drawn from Fortran arrays. Needs no display, so it runs in CI as is.
 use, intrinsic :: iso_c_binding, only : c_double, c_f_pointer, c_float, c_int, c_null_char
 use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, real32, real64
-use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_last_error, ig_begin, ig_button, &
+use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_last_error, ig_begin, ig_begin_side_bar, &
+                   ig_button, &
                    ig_checkbox, ig_end, &
                    ig_item_rect, ig_set_next_window, ImPlotMarker_Circle, ip_bars, ip_begin_plot, ip_end_plot, ip_line, &
                    ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded, ip_spec, plot_spec_object, FIG_ERR_STATE,   &
@@ -38,7 +39,9 @@ real(real64)              :: x1               !< Item rectangle, right [pixels].
 real(real64)              :: y1               !< Item rectangle, bottom [pixels].
 real(real64)              :: x(N)             !< Plot abscissae.
 real(real64)              :: y(N)             !< Plot ordinates.
-logical                   :: test_passed(47)  !< Per-check outcome.
+logical                   :: test_passed(48)  !< Per-check outcome.
+real(real64)              :: bar(4), panel(4) !< A side bar, and the window docked beside it.
+integer(int32)            :: bar_root         !< The dock space beside the bar.
 real(real64)              :: lay(4)           !< The Layout window after a layout is loaded.
 integer(int32)            :: stat_lay(4)      !< save_layout, load_layout, a missing file, not a layout.
 character(len=:), allocatable :: lay_text     !< The layout file's first line.
@@ -348,6 +351,22 @@ close(unit, status='delete')
 call app%set_style('seal')
 call test_window_rect('Test', win(1), win(2), win(3), win(4), found=win_found(1))
 call test_window_rect('No such window', x0, y0, x1, y1, found=win_found(2))
+! a bar along the left side: the dock space, and the window docked in it, leave it free
+bar_root = ig_dock_id('beside the bar')
+do i = 1_int32, 4_int32
+   if (.not. app%next_frame()) exit
+   if (ig_begin_side_bar('Bar', 'left', 80.0_real64)) call ig_text('bar')
+   call ig_end()
+   if (ig_dock_layout_begin(bar_root)) then
+      call ig_dock_window('Panel', bar_root)
+      call ig_dock_layout_end(bar_root)
+   endif
+   call ig_dock_space(bar_root)
+   if (ig_begin('Panel')) call ig_text('panel')
+   call ig_end()
+enddo
+call test_window_rect('Bar', bar(1), bar(2), bar(3), bar(4))
+call test_window_rect('Panel', panel(1), panel(2), panel(3), panel(4))
 call app%set_docking(.false.)
 if (app%next_frame()) call ig_dock_space(dock_root, stat=stat_dock) ! docking off: rejected
 ! fonts: the bundled one at 15 px by default, a size pushed for a block, then the default font switched
@@ -485,6 +504,8 @@ test_passed(43) = win_found(1) .and. .not. win_found(2) .and.                   
 test_passed(44) = long_frames == 3_int32                                           ! a list over 65536 vertices
 test_passed(45) = log_px(1)%y > log_px(3)%y + 50.0_c_float .and. &
                   abs(log_px(2)%y - 0.5_c_float * (log_px(1)%y + log_px(3)%y)) < 1.0_c_float ! ylog: 1e-3 halfway
+test_passed(48) = abs(bar(1)) < 1.0e-6_real64 .and. abs(bar(3) - 80.0_real64) < 1.0e-6_real64 .and. &
+                  abs(panel(1) - 80.0_real64) < 1.0e-6_real64 .and. panel(3) > 400.0_real64  ! the side bar left free
 test_passed(47) = all(stat_lay(1:2) == int(FIG_OK, int32)) .and. stat_lay(3) == int(FIG_ERR_FAILED, int32) .and. &
                   stat_lay(4) == int(FIG_ERR_ARGUMENT, int32) .and. trim(lay_text) == '; kept by the program' .and. &
                   all(abs(lay - [50.0_real64, 60.0_real64, 350.0_real64, 260.0_real64]) < 1.0e-6_real64) ! a layout

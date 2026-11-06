@@ -1502,6 +1502,17 @@ unsigned int fig_dock_id(const char *name, int name_len) {
    return ImHashStr(name, static_cast<size_t>(name_len > 0 ? name_len : 0));
 }
 
+// A bar along one side of the display (Dear ImGui's viewport side bar, as the main menu bar is): it takes its size
+// from the work area, so a dock space over the viewport (fig_dock_space) and the windows placed in the work area leave
+// it free. side: 0 left, 1 right, 2 top, 3 bottom. Returns 1 when its content is drawn; ImGui::End always follows.
+int fig_begin_side_bar(const char *name, int name_len, int side, double size) {
+   const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
+   const ImGuiDir dir = side == 0 ? ImGuiDir_Left : side == 1 ? ImGuiDir_Right : side == 2 ? ImGuiDir_Up : ImGuiDir_Down;
+   const ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+                                  ImGuiWindowFlags_NoSavedSettings;
+   return ImGui::BeginViewportSideBar(n.c_str(), ImGui::GetMainViewport(), dir, static_cast<float>(size), flags) ? 1 : 0;
+}
+
 int fig_dock_space(unsigned int id, int flags) {
    FIG_TRY
    if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_dock_space: no frame is open");

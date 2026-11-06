@@ -44,6 +44,7 @@ graph LR
 - [ig_item_rect](#ig-item-rect)
 - [ig_image](#ig-image)
 - [ig_begin](#ig-begin)
+- [ig_begin_side_bar](#ig-begin-side-bar)
 - [ig_button](#ig-button)
 - [ig_checkbox](#ig-checkbox)
 - [ig_slider_i32](#ig-slider-i32)
@@ -408,6 +409,36 @@ flowchart TD
   ig_begin["ig_begin"] --> cstr["cstr"]
   ig_begin["ig_begin"] --> igBegin["igBegin"]
   style ig_begin fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_begin_side_bar
+
+Begin a bar along one side of the display: a toolbar, a status bar. `side` is `'left'`, `'right'`, `'top'` or
+ `'bottom'`; `size` its width (left, right) or height (top, bottom) [pixels]. It is a window without title bar,
+ not movable, not resizable, not dockable, which the work area leaves out: a dock space (`ig_dock_space`) and
+ the main menu bar's neighbours fill the rest. Declare it every frame, after the main menu bar and before the dock
+ space; always pair with `ig_end`. An unknown side is taken as `'left'`.
+
+**Returns**: `logical`
+
+```fortran
+function ig_begin_side_bar(name, side, size) result(visible)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Window name (unique id). |
+| `side` | character(len=*) | in |  | left, right, top, bottom. |
+| `size` | real(kind=real64) | in |  | Width or height [pixels]. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin_side_bar["ig_begin_side_bar"] --> fig_begin_side_bar["fig_begin_side_bar"]
+  style ig_begin_side_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_button

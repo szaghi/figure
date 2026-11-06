@@ -40,7 +40,8 @@ use figure_cimgui_enums, only : ImGuiTableFlags_None, ImGuiTableFlags_Resizable,
 use figure_menu, only : ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar, ig_end_main_menu_bar, ig_end_menu, &
                         ig_end_menu_bar, ig_menu_item, ig_shortcut, ig_open_popup, ig_begin_popup,            &
                         ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
-use figure_imgui, only : ig_begin, ig_button, ig_checkbox, ig_end, ig_image, ig_input, ig_item_rect, ig_same_line, &
+use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_image, ig_input, &
+                         ig_item_rect, ig_same_line, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
                          ig_set_next_item_width, ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped,      &
                          ig_text_disabled, ig_text_colored
@@ -71,7 +72,7 @@ implicit none
 private
 public :: app_object, figure_last_error
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
-public :: ig_begin, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
+public :: ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
 public :: ig_input_text, ig_set_next_item_width, ig_combo, ig_tooltip
 public :: ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored, ig_begin_child, ig_end_child

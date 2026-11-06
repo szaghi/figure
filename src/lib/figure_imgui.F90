@@ -10,7 +10,7 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c
                                         c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_base, only : cstr
-use figure_c_native, only : fig_texture_sampling, fig_widget_input_text
+use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_widget_input_text
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
                           igPushID_Int, igSelectable_Bool, igSetItemDefaultFocus, igButton, igCheckbox, igEnd, &
@@ -23,7 +23,7 @@ use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiD
 
 implicit none
 private
-public :: ig_begin, ig_end, ig_button, ig_checkbox, ig_slider, ig_input, ig_text, ig_same_line, ig_separator
+public :: ig_begin, ig_begin_side_bar, ig_end, ig_button, ig_checkbox, ig_slider, ig_input, ig_text, ig_same_line, ig_separator
 public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_input_text, ig_set_next_item_width
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
 
@@ -60,6 +60,31 @@ contains
    visible = logical(igBegin(cstr(name), p, f))
    if (present(open)) open = logical(o)
    endfunction ig_begin
+
+   function ig_begin_side_bar(name, side, size) result(visible)
+   !< Begin a bar along one side of the display: a toolbar, a status bar. `side` is `'left'`, `'right'`, `'top'` or
+   !< `'bottom'`; `size` its width (left, right) or height (top, bottom) [pixels]. It is a window without title bar,
+   !< not movable, not resizable, not dockable, which the work area leaves out: a dock space (`ig_dock_space`) and
+   !< the main menu bar's neighbours fill the rest. Declare it every frame, after the main menu bar and before the dock
+   !< space; always pair with `ig_end`. An unknown side is taken as `'left'`.
+   character(len=*), intent(in) :: name    !< Window name (unique id).
+   character(len=*), intent(in) :: side    !< left, right, top, bottom.
+   real(real64),     intent(in) :: size    !< Width or height [pixels].
+   logical                      :: visible !< Its content is drawn.
+   integer(c_int)               :: s       !< Side code.
+
+   select case (side)
+   case ('right')
+      s = 1_c_int
+   case ('top')
+      s = 2_c_int
+   case ('bottom')
+      s = 3_c_int
+   case default
+      s = 0_c_int
+   endselect
+   visible = fig_begin_side_bar(name, len(name, c_int), s, real(size, c_double)) == 1_c_int
+   endfunction ig_begin_side_bar
 
    subroutine ig_end()
    !< End the window opened by `ig_begin` (whatever it returned).

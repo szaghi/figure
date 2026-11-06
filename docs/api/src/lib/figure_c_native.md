@@ -35,6 +35,7 @@ graph LR
 - [fig_save_image](#fig-save-image)
 - [fig_image_result](#fig-image-result)
 - [fig_save_layout](#fig-save-layout)
+- [fig_begin_side_bar](#fig-begin-side-bar)
 - [fig_load_layout](#fig-load-layout)
 - [fig_quit_requested](#fig-quit-requested)
 - [fig_set_title](#fig-set-title)
@@ -123,6 +124,8 @@ graph LR
 ### fig_image_result
 
 ### fig_save_layout
+
+### fig_begin_side_bar
 
 ### fig_load_layout
 
