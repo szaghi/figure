@@ -4,7 +4,7 @@ module figure
 !<
 !< Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui),
 !< menus, popups and shortcuts (figure_menu), groups of widgets (figure_group: child regions, collapsing headers, tabs,
-!< tables, id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style),
+!< tables, trees, id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style),
 !< the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the
 !< GPU textures (figure_texture) that `ig_image` and `ip_image` draw, and the Lucide icons by name, `ICON_*`
 !< (figure_icons), UTF-8 strings for any label: `ig_button(ICON_PLAY//' Run')`.
@@ -35,7 +35,8 @@ use figure_cimgui_enums, only : ImGuiInputTextFlags_None, ImGuiInputTextFlags_Ch
 use figure_group, only : ig_begin_disabled, ig_begin_tab, ig_begin_tab_bar, ig_collapsing_header, ig_end_disabled, &
                          ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_begin_table, ig_end_table,    &
                          ig_table_setup_column, ig_table_headers_row, ig_table_next_row, ig_table_next_column, &
-                         ig_table_set_column, ig_begin_child, ig_end_child, list_clipper_object
+                         ig_table_set_column, ig_begin_child, ig_end_child, list_clipper_object,            &
+                         ig_tree_node, ig_tree_pop, ig_set_next_item_open
 use figure_cimgui_enums, only : ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg,         &
                                 ImGuiTableFlags_Borders, ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, &
                                 ImGuiTableFlags_SizingFixedFit, ImGuiTableFlags_SizingStretchSame
@@ -83,6 +84,7 @@ public :: ig_collapsing_header, ig_begin_tab_bar, ig_end_tab_bar, ig_begin_tab, 
 public :: ig_begin_disabled, ig_end_disabled
 public :: ig_begin_table, ig_end_table, ig_table_setup_column, ig_table_headers_row, ig_table_next_row
 public :: ig_table_next_column, ig_table_set_column, list_clipper_object
+public :: ig_tree_node, ig_tree_pop, ig_set_next_item_open
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
 public :: ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg, ImGuiTableFlags_Borders
 public :: ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, ImGuiTableFlags_SizingFixedFit

@@ -53,7 +53,7 @@ The [feature map](features) lists every public procedure.
 
 ## What it is not, yet
 
-Multi-line text, trees, colour pickers and multiple viewports are not available, and only part of Dear ImGui's widgets
+Multi-line text, colour pickers and multiple viewports are not available, and only part of Dear ImGui's widgets
 have a Fortran wrapper (the rest are reachable through the raw bindings). See [Known issues](known-issues) and the
 [roadmap](roadmap).
 

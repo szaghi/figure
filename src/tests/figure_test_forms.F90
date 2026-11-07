@@ -1,6 +1,6 @@
-!< figure_test_forms, the form widgets (fields, combo, tooltip, ...) driven by synthetic input, headless.
+!< figure_test_forms, the form widgets (fields, combo, tooltip, trees, ...) driven by synthetic input, headless.
 program figure_test_forms
-!< figure_test_forms, the form widgets (fields, combo, tooltip, ...) driven by synthetic input, headless.
+!< figure_test_forms, the form widgets (fields, combo, tooltip, trees, ...) driven by synthetic input, headless.
 !<
 !< Each field is clicked, its text selected (end, shift+home) and replaced by typing, then confirmed with enter; the checks read
 !< the Fortran variables bound to the fields after the frames have consumed the input.
@@ -10,13 +10,14 @@ use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, 
                    ig_begin_disabled, ig_begin_tab, ig_begin_tab_bar, ig_collapsing_header, ig_end_disabled,   &
                    ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_text, ig_begin_table, ig_end_table,   &
                    ig_table_headers_row, ig_table_next_column, ig_table_next_row, ig_table_set_column,       &
-                   ig_table_setup_column
+                   ig_table_setup_column, ig_set_next_item_open, ig_tree_node, ig_tree_pop
 use figure_testing, only : test_click, test_item_center, test_key, test_mouse_move, test_type, test_window_rect
 
 implicit none
-integer(int32), parameter :: FRAMES = 230_int32 !< Frames run.
+integer(int32), parameter :: FRAMES = 400_int32 !< Frames run.
+integer(int32), parameter :: TIP_FRAME = 230_int32 !< Frame on which the tooltip is looked for.
 type(app_object)          :: app                !< Application.
-logical                   :: test_passed(19)    !< Per-check outcome.
+logical                   :: test_passed(26)    !< Per-check outcome.
 character(len=16)         :: grid_file          !< A text field.
 character(len=4)          :: short              !< A text field of capacity 4.
 character(len=12)         :: no_blank           !< A text field that refuses blanks.
@@ -56,6 +57,22 @@ character(len=8)          :: conditions(2)      !< Combo items.
 real(real64)              :: cell(4, 3, 3)      !< (xmin, ymin, xmax, ymax) of the widget in each (column, row).
 real(real64)              :: set_x0             !< Left of the text placed with ig_table_set_column(3).
 real(real64)              :: value3_at(2)       !< Centre of the field of row 3.
+real(real64)              :: body_rect(4)       !< Rectangle of the node 'Body 1' [pixels].
+real(real64)              :: leaf_rect(4)       !< Rectangle of the leaf 'block 1' [pixels].
+real(real64)              :: group_rect(4)      !< Rectangle of the node 'Group A' in the table's first column.
+real(real64)              :: count_rect(4)      !< Rectangle of the text in the second column of its row.
+logical                   :: body_open(3)       !< 'Body 1' open: at first, after the arrow, after the label click.
+logical                   :: node_click         !< 'Body 1' reported a click this frame.
+logical                   :: leaf_click         !< 'block 1' reported a click this frame.
+integer(int32)            :: body_clicks        !< Clicks of 'Body 1' since frame 239.
+integer(int32)            :: clicks_seen(2)     !< body_clicks after the arrow, after the label.
+integer(int32)            :: leaf_clicks        !< Clicks of the leaf.
+logical                   :: is_body            !< 'Body 1' open this frame.
+logical                   :: is_body2           !< 'Body 2' open this frame.
+logical                   :: body2_open(2)      !< 'Body 2': opened by the program, then closed by it.
+logical                   :: is_group           !< 'Group A' open this frame.
+integer(int32)            :: child_rows         !< Frames on which the child row of 'Group A' was drawn.
+integer(int32)            :: tree_depth_ok      !< Frames on which the tree pops balanced (always, if it is right).
 
 grid_file = 'CC/cc'
 short = ''
@@ -81,7 +98,15 @@ model = 1_int32
 picks = 0_int32
 tip_before = .true.
 tip_after = .false.
-call app%init_headless(800_int32, 600_int32)
+body_open = .true.
+body_clicks = 0_int32
+clicks_seen = -1_int32
+leaf_clicks = 0_int32
+node_click = .false.
+body2_open = [.false., .true.]
+child_rows = 0_int32
+tree_depth_ok = 0_int32
+call app%init_headless(1100_int32, 600_int32)
 do frame = 1_int32, FRAMES
    if (.not. app%next_frame()) error stop 'figure_test_forms: next_frame returned false in headless mode'
    call ig_set_next_window(20.0_real64, 20.0_real64, 500.0_real64, 400.0_real64, always=.true.)
@@ -173,6 +198,49 @@ do frame = 1_int32, FRAMES
       endif
    endif
    call ig_end()
+   call ig_set_next_window(800.0_real64, 20.0_real64, 280.0_real64, 560.0_real64, always=.true.)
+   if (ig_begin('Tree')) then
+      is_body = ig_tree_node('Body 1, chimera blocks', clicked=node_click)
+      call ig_item_rect(body_rect(1), body_rect(2), body_rect(3), body_rect(4))
+      if (node_click) body_clicks = body_clicks + 1_int32
+      if (is_body) then
+         if (ig_tree_node('block 1', leaf=.true., clicked=leaf_click)) then
+            call ig_item_rect(leaf_rect(1), leaf_rect(2), leaf_rect(3), leaf_rect(4))
+            if (leaf_click) leaf_clicks = leaf_clicks + 1_int32
+            call ig_tree_pop()
+         endif
+         call ig_tree_pop()
+      endif
+      if (frame == 1_int32) call ig_set_next_item_open(.true.)                ! opened by the program, once
+      if (frame == 330_int32) call ig_set_next_item_open(.false., always=.true.) ! closed by the program
+      is_body2 = ig_tree_node('Body 2')
+      if (is_body2) then
+         call ig_text('patch 1')
+         call ig_tree_pop()
+      endif
+      if (frame == 2_int32) body2_open(1) = is_body2
+      if (frame == 331_int32) body2_open(2) = is_body2
+      if (ig_begin_table('blocks', 2_int32)) then
+         call ig_table_next_row()
+         call ig_table_next_column()
+         is_group = ig_tree_node('Group A', span_full_width=.true.)
+         call ig_item_rect(group_rect(1), group_rect(2), group_rect(3), group_rect(4))
+         call ig_table_next_column()
+         call ig_text('3 blocks')
+         call ig_item_rect(count_rect(1), count_rect(2), count_rect(3), count_rect(4))
+         if (is_group) then
+            call ig_table_next_row()
+            call ig_table_next_column()
+            call ig_text('block 7')
+            child_rows = child_rows + 1_int32
+            call ig_tree_pop()
+         endif
+         call ig_end_table()
+      endif
+      if (ig_tree_node('Body 3', leaf=.true.)) call ig_tree_pop()
+      tree_depth_ok = tree_depth_ok + 1_int32
+   endif
+   call ig_end()
    select case (frame)
    case (2_int32)
       call replace(1_int32, 'MESH/grid')
@@ -190,8 +258,22 @@ do frame = 1_int32, FRAMES
    case (95_int32)
       call test_window_rect('##Tooltip_00', x0, y0, x1, y1, found=tip_before)
       call test_mouse_move(help_at(1), help_at(2))     ! rest on the button: the tooltip shows after the delay
-   case (FRAMES)
+   case (TIP_FRAME)
       call test_window_rect('##Tooltip_00', x0, y0, x1, y1, found=tip_after)
+   case (239_int32)
+      body_open(1) = is_body
+      body_clicks = 0_int32
+      call test_click(body_rect(1) + 6.0_real64, 0.5_real64 * (body_rect(2) + body_rect(4)))  ! the arrow
+   case (260_int32)
+      body_open(2) = is_body
+      clicks_seen(1) = body_clicks
+      call test_click(0.5_real64 * (body_rect(1) + body_rect(3)), 0.5_real64 * (body_rect(2) + body_rect(4))) ! label
+   case (290_int32)
+      body_open(3) = is_body
+      clicks_seen(2) = body_clicks
+      call test_click(leaf_rect(1) + 6.0_real64, 0.5_real64 * (leaf_rect(2) + leaf_rect(4)))  ! where an arrow would be
+   case (360_int32)
+      call test_click(group_rect(1) + 6.0_real64, 0.5_real64 * (group_rect(2) + group_rect(4))) ! the arrow, in a table
    case (140_int32)
       hdr_open(1) = is_open
       tab_sel(:, 1) = sel
@@ -235,6 +317,13 @@ test_passed(17) = all(cell(1, 2, :) >= cell(3, 1, :)) .and. all(cell(1, 3, :) >=
                   all(cell(2, :, 2) >= cell(4, :, 1)) .and. all(cell(2, :, 3) >= cell(4, :, 2)) ! cells left to right, rows down
 test_passed(18) = abs(set_x0 - cell(1, 3, 1)) < 1.0_real64                    ! ig_table_set_column(3): column 3
 test_passed(19) = values(3) == '1.5' .and. values(1) == '' .and. values(2) == '' ! one row's field edited
+test_passed(20) = .not. body_open(1) .and. body_open(2) .and. clicks_seen(1) == 0_int32 ! the arrow opens, no click
+test_passed(21) = body_open(3) .and. clicks_seen(2) == 1_int32                 ! the label: a click, still open
+test_passed(22) = leaf_clicks == 1_int32                                       ! a leaf has no arrow: a click there is a click
+test_passed(23) = body2_open(1) .and. .not. body2_open(2)                      ! opened, then closed, by the program
+test_passed(24) = child_rows > 0_int32 .and. child_rows < FRAMES - 360_int32   ! in a table: opened by its arrow
+test_passed(25) = group_rect(3) <= count_rect(1) + 0.5_real64 .and. group_rect(1) < count_rect(1) ! in the first column
+test_passed(26) = tree_depth_ok == FRAMES                                     ! the tree drawn on every frame
 
 write(output_unit, '(A,*(L2))') 'figure_test_forms checks:', test_passed
 if (.not. all(test_passed)) then
@@ -245,6 +334,9 @@ if (.not. all(test_passed)) then
          tab_sel, ', rows "', trim(row_value(1)), '" "', trim(row_value(2)), '", disabled presses ', off_presses
    write(output_unit, '(A,3(1X,A),A,F0.1,A,F0.1)') 'table values', (trim(values(r)), r = 1_int32, 3_int32), &
          ', set at x ', set_x0, ', column 3 at x ', cell(1, 3, 1)
+   write(output_unit, '(A,3L2,A,2(I0,1X),A,I0,A,2L2,A,I0,A,8(F0.1,1X))') 'tree: Body 1 open', body_open, &
+         ', clicks', clicks_seen, ', leaf clicks ', leaf_clicks, ', Body 2', body2_open, ', child rows ', child_rows, &
+         ', group/count rects ', group_rect, count_rect
    write(output_unit, '(A,I0,A,I0,A,2L2)') 'model ', model, ', picks ', picks, ', tooltip before/after', tip_before, &
                                           tip_after
 endif

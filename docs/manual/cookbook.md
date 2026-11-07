@@ -155,6 +155,17 @@ lose, and quits at once otherwise. [Menus, popups and shortcuts](/guide/menus#as
 Two regions side by side (`ig_begin_child`, `ig_same_line`), each scrolling on its own: the list keeps the selection
 in a program variable, the values sit in one column (`ig_same_line(offset=...)`), the help wraps at the region's edge.
 
+### A hierarchy with values in columns
+
+<<< @/examples/snippets/cb_tree-tree.F90{fortran}
+
+<Media name="cb_tree" video alt="A table of grids with the bodies as tree nodes: a block chosen by a click on its label, the fuselage opened by its arrow, then a node of 20000 blocks opened and scrolled" caption="docs/examples/src/cb_tree.F90" />
+
+Each body is a node in the table's first column with its total in the next cell; its blocks are leaf rows between the
+node and `ig_tree_pop`. A click on a label chooses the block (`clicked`), the arrow opens the body: the two never mix.
+The node of 20000 blocks clips its children with a `list_clipper_object`. [Trees](/guide/widgets#trees) has the
+rules.
+
 ### An input-file editor: fields, a list, tabs and a table
 
 <<< @/examples/snippets/cb_form-table.F90{fortran}

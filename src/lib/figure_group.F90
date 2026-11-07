@@ -1,9 +1,10 @@
-!< figure_group, widgets that group other widgets: child regions, headers, tabs, tables, id scopes, disabled blocks.
+!< figure_group, widgets that group other widgets: child regions, headers, tabs, tables, trees, id scopes, disabled blocks.
 module figure_group
-!< figure_group, widgets that group other widgets: child regions, headers, tabs, tables, id scopes, disabled blocks.
+!< figure_group, widgets that group other widgets: child regions, headers, tabs, tables, trees, id scopes, disabled blocks.
 !<
 !< Pairing rules (Dear ImGui's): `ig_end_tab_bar` only when `ig_begin_tab_bar` returned true, `ig_end_tab` only when
-!< `ig_begin_tab` returned true, `ig_end_table` only when `ig_begin_table` returned true (unlike `ig_begin`/`ig_end`,
+!< `ig_begin_tab` returned true, `ig_end_table` only when `ig_begin_table` returned true, `ig_tree_pop` only when
+!< `ig_tree_node` returned true (unlike `ig_begin`/`ig_end`,
 !< always paired); `ig_pop_id` after every `ig_push_id`, `ig_end_disabled` after every `ig_begin_disabled`,
 !< `ig_end_child` after every `ig_begin_child`. A collapsing header needs no end call.
 !<
@@ -18,10 +19,14 @@ use figure_cimgui, only : igBeginChild_Str, igEndChild, im_vec2, igBeginDisabled
                           igBeginTable,                                                                         &
                           igCollapsingHeader_TreeNodeFlags, igEndDisabled, igEndTabBar, igEndTabItem, igEndTable, &
                           igPopID, igPushID_Int, igPushID_Str, igTableHeadersRow, igTableNextColumn, igTableNextRow, &
-                          igTableSetColumnIndex, igTableSetupColumn
+                          igTableSetColumnIndex, igTableSetupColumn, igIsItemClicked, igIsItemToggledOpen,          &
+                          igSetNextItemOpen, igTreeNodeEx_Str, igTreePop
 use figure_cimgui_enums, only : ImGuiTableColumnFlags_WidthFixed, ImGuiTableColumnFlags_WidthStretch,        &
                                 ImGuiTableFlags_Borders, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg,    &
-                                ImGuiTreeNodeFlags_DefaultOpen, ImGuiChildFlags_Borders
+                                ImGuiTreeNodeFlags_DefaultOpen, ImGuiChildFlags_Borders, ImGuiCond_Always,      &
+                                ImGuiCond_Once, ImGuiTreeNodeFlags_Leaf, ImGuiTreeNodeFlags_OpenOnArrow,       &
+                                ImGuiTreeNodeFlags_OpenOnDoubleClick, ImGuiTreeNodeFlags_Selected,             &
+                                ImGuiTreeNodeFlags_SpanFullWidth
 
 implicit none
 private
@@ -29,6 +34,7 @@ public :: ig_collapsing_header, ig_begin_tab_bar, ig_end_tab_bar, ig_begin_tab, 
 public :: ig_begin_disabled, ig_end_disabled
 public :: ig_begin_table, ig_end_table, ig_table_setup_column, ig_table_headers_row, ig_table_next_row
 public :: ig_table_next_column, ig_table_set_column, ig_begin_child, ig_end_child
+public :: ig_tree_node, ig_tree_pop, ig_set_next_item_open
 public :: list_clipper_object
 
 type :: list_clipper_object
@@ -133,6 +139,56 @@ contains
    endif
    open = logical(igCollapsingHeader_TreeNodeFlags(cstr(label), flags))
    endfunction ig_collapsing_header
+
+   function ig_tree_node(label, default_open, selected, leaf, span_full_width, clicked) result(open)
+   !< A node of a tree (`TreeNodeEx`); true while open: draw its children, then `ig_tree_pop` (only after true).
+   !< The arrow, or a double-click on the label, opens and closes the node; a single click on the label is reported
+   !< by `clicked` (`IsItemClicked` and not `IsItemToggledOpen`), so choosing a node and expanding it stay different.
+   !< A leaf has no arrow and is always open: it too is popped.
+   character(len=*), intent(in)            :: label           !< Label (also its id).
+   logical,          intent(in),  optional :: default_open    !< Open the first time it is shown (default: closed).
+   logical,          intent(in),  optional :: selected        !< Highlighted as selected (the program keeps it).
+   logical,          intent(in),  optional :: leaf            !< No children: no arrow (default: false).
+   logical,          intent(in),  optional :: span_full_width !< Highlight and hit the whole width (or cell).
+   logical,          intent(out), optional :: clicked         !< The label was clicked this frame (not the arrow).
+   logical                                 :: open            !< The node is open: draw its children, then pop.
+   integer(c_int)                          :: flags           !< ImGuiTreeNodeFlags.
+
+   flags = ior(ImGuiTreeNodeFlags_OpenOnArrow, ImGuiTreeNodeFlags_OpenOnDoubleClick)
+   if (present(default_open)) then
+      if (default_open) flags = ior(flags, ImGuiTreeNodeFlags_DefaultOpen)
+   endif
+   if (present(selected)) then
+      if (selected) flags = ior(flags, ImGuiTreeNodeFlags_Selected)
+   endif
+   if (present(leaf)) then
+      if (leaf) flags = ior(flags, ImGuiTreeNodeFlags_Leaf)
+   endif
+   if (present(span_full_width)) then
+      if (span_full_width) flags = ior(flags, ImGuiTreeNodeFlags_SpanFullWidth)
+   endif
+   open = logical(igTreeNodeEx_Str(cstr(label), flags))
+   if (present(clicked)) clicked = logical(igIsItemClicked(0_c_int)) .and. .not. logical(igIsItemToggledOpen())
+   endfunction ig_tree_node
+
+   subroutine ig_tree_pop()
+   !< Close the children of a node (only after `ig_tree_node` returned true).
+   call igTreePop()
+   endsubroutine ig_tree_pop
+
+   subroutine ig_set_next_item_open(open, always)
+   !< Open or close the next tree node (or collapsing header) from the program: the first time it is shown, or, with
+   !< `always`, on this frame whatever its state (an "expand all" button calls it with `always` once per node).
+   logical, intent(in)           :: open   !< Open (true) or closed.
+   logical, intent(in), optional :: always !< Enforce on this frame (default: only when the node has no state yet).
+   integer(c_int)                :: cond   !< ImGuiCond.
+
+   cond = ImGuiCond_Once
+   if (present(always)) then
+      if (always) cond = ImGuiCond_Always
+   endif
+   call igSetNextItemOpen(logical(open, c_bool), cond)
+   endsubroutine ig_set_next_item_open
 
    function ig_begin_tab_bar(id) result(visible)
    !< Begin a bar of tabs; when true, declare the tabs (`ig_begin_tab`) and close it with `ig_end_tab_bar`.

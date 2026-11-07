@@ -74,6 +74,8 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_begin_table(id, columns [, flags] [, height])` → `logical`, `ig_end_table()` | a table; end it only when the begin returned `.true.` |
 | `ig_table_setup_column(label [, width])`, `ig_table_headers_row()` | declare a column (fixed `width`, or a share of the rest); a row of their labels |
 | `ig_table_next_row()`, `ig_table_next_column()`, `ig_table_set_column(column)` | start a row; move to the next cell, or to cell `column` (1-based) |
+| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked])` → `logical`, `ig_tree_pop()` | a tree node; `.true.` while open: draw its children, then pop (only then); `clicked`: the label, not the arrow ([Trees](widgets#trees)) |
+| `ig_set_next_item_open(open [, always])` | open or close the next tree node or header from the program: first time only, or with `always` now |
 | `ig_push_id(id)`, `ig_pop_id()` | an id scope (`character` or `int32`): the same label in two scopes is two widgets (rows, loops) |
 | `ig_begin_disabled([disabled])`, `ig_end_disabled()` | the widgets in between are greyed out and ignore input |
 | `ig_set_next_item_width(width)` | width of the next widget's field [pixels]; negative: up to that distance from the right edge |

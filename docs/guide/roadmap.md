@@ -149,8 +149,11 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   `decorations='figure'`, a borderless window with a title bar drawn by FIGURE in the palette's colours, the main menu
   bar inside it, the buttons on the right (left on macOS), the system's hit test answered from the last frame,
   double-click to maximize, close through the quit path; `app%set_icon` from an image or an `ICON_*`: done.
+- **Trees** ([Widgets](widgets#trees)): `ig_tree_node` with a click on the label told apart from the arrow
+  (`clicked`), leaves, selection, the full width; `ig_tree_pop`; `ig_set_next_item_open`; trees in a table's first
+  column with values in the others; the children of a large node clipped: done.
 
 ## Next
 
-Candidates, to be driven by what applications need: multi-line text fields, trees, colour pickers; more of ImPlot (error
+Candidates, to be driven by what applications need: multi-line text fields, colour pickers; more of ImPlot (error
 bars, annotations); the windowed path verified on macOS and Windows.

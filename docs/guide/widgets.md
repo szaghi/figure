@@ -179,8 +179,45 @@ field is not row 1's (see [Labels and identifiers](#labels-and-identifiers)).
 
 <Media name="cb_form" alt="An input-file editor: a field typed over, a scheme picked from a list, a restart option ticked, then a row added to a table of boundary conditions and edited" caption="docs/examples/src/cb_form.F90: the preview on the right follows the variables" />
 
+## Trees
+
+| Procedure | Notes |
+|---|---|
+| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked])` → `logical` | A node of a tree (`TreeNodeEx`); `.true.` while open: draw its children, then `ig_tree_pop`. |
+| `ig_tree_pop()` | Closes the children of a node: only after `ig_tree_node` returned `.true.`. |
+| `ig_set_next_item_open(open [, always])` | Opens or closes the next node from the program: the first time it is shown, or with `always` on this frame whatever its state. |
+
+The pairing rule is the tabs' and the tables': `ig_tree_pop` follows only a node that returned `.true.`. A leaf
+(`leaf=.true.`) has no arrow and is always open, so it too is popped: `if (ig_tree_node(name, leaf=.true.)) call
+ig_tree_pop()`.
+
+**Choosing is not expanding.** The arrow, or a double-click on the label, opens and closes a node; a single click on
+the label sets `clicked` (Dear ImGui's `IsItemClicked` without `IsItemToggledOpen`) and leaves the node as it was. The
+program keeps what is chosen, as with `ig_selectable`, and shows it with `selected`. `default_open` opens a node the
+first time it is shown; `span_full_width` makes the highlight and the click area as wide as the window, or as the
+cell in a table. `ig_set_next_item_open` also opens a collapsing header; an "expand all" button calls it with
+`always=.true.` before each node, on the frame of the press.
+
+**Values in columns.** A tree goes in a table's first column: each node and each child is a row
+(`ig_table_next_row`), the node's values in the next cells, and the children's rows come between the node and its
+pop, so the first column keeps their indentation.
+
+<<< @/examples/snippets/cb_tree-tree.F90{fortran}
+
+**Large trees.** A `list_clipper_object` needs rows of equal height in one run, and an open node in the middle of the
+list breaks the run: a tree cannot be clipped as a whole. The children of one node can: a node with thousands of
+blocks clips them between the node and its pop. A deep tree with many open nodes is flattened by the program: it keeps
+the open state of each node, builds the list of the visible rows (node or child, with its depth) when a node opens or
+closes, and clips that list.
+
+<<< @/examples/snippets/cb_tree-large.F90{fortran}
+
+<Media name="cb_tree" alt="A table of grids: the wing open with three blocks; block 2 is chosen by a click on its label and highlighted, the fuselage opened by its arrow shows two more blocks, then the background node opens on a region of 20000 blocks that scrolls" caption="docs/examples/src/cb_tree.F90" />
+
+Trees are drawn the same in window, headless and remote modes; they have no failure status.
+
 ## Not bound yet
 
-Trees, multi-line text and colour pickers have no wrapper yet; menus are on their own page,
+Multi-line text and colour pickers have no wrapper yet; menus are on their own page,
 [Menus and shortcuts](menus). Their raw interfaces are generated
 ([Raw bindings](raw-bindings)); the Fortran wrappers are still to be written ([roadmap](roadmap)).
