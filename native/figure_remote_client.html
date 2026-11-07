@@ -136,6 +136,13 @@ function handle(buf) {
     if (lastFrame) draw(lastFrame);
   }
   else if (kind === 3) { const id = dv.getUint32(1, true); const t = textures.get(id); if (t) { gl.deleteTexture(t); textures.delete(id); } }
+  else if (kind === 7) { // the program copied a text: to the browser's clipboard, where the browser allows it
+    const text = new TextDecoder().decode(new Uint8Array(buf, 1));
+    const kept = "copied in the program only: ";
+    if (navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(text).catch(() => { status.textContent = kept + "the browser refused its clipboard"; });
+    else status.textContent = kept + "the browser's clipboard needs https or localhost";
+  }
 }
 
 function send(s) { if (ws && ws.readyState === 1) ws.send(s); }
@@ -160,12 +167,39 @@ canvas.addEventListener("wheel", e => { send(`w:${-e.deltaX / 100},${-e.deltaY /
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const swap = { MetaLeft: "ControlLeft", MetaRight: "ControlRight", ControlLeft: "MetaLeft", ControlRight: "MetaRight" };
 const keyCode = c => (mac && swap[c]) || c;
+// Paste: the browser hands its clipboard to the page only in the paste event that follows ctrl+v (cmd+v), so that key
+// is held back until then and sent after the text ("p:"): the program's paste reads the browser's clipboard. Without
+// a paste event in 200 ms the key goes alone (the program pastes its own clipboard).
+let heldPaste = null; // the held ctrl+v: { up: its keyup came meanwhile }
+function releasePaste(text) {
+  if (!heldPaste) return;
+  if (text !== null) send(`p:${text}`);
+  send("k:1,KeyV");
+  if (heldPaste.up) send("k:0,KeyV");
+  heldPaste = null;
+}
+document.addEventListener("paste", e => {
+  releasePaste(e.clipboardData ? e.clipboardData.getData("text/plain") : null);
+  e.preventDefault();
+});
+// Files dropped on the page stay on this computer, not on the server: the page refuses them (a dropped file would
+// otherwise replace the page).
+window.addEventListener("dragover", e => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "none"; });
+window.addEventListener("drop", e => { e.preventDefault(); status.textContent = "files cannot be dropped in remote mode"; });
 canvas.addEventListener("keydown", e => {
+  if (e.code === "KeyV" && (e.ctrlKey || e.metaKey) && !e.repeat) {
+    heldPaste = { up: false };
+    setTimeout(() => releasePaste(null), 200);
+    return;
+  }
   send(`k:1,${keyCode(e.code)}`);
   if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) send(`c:${e.key}`);
   if (e.code === "Tab" || ((e.ctrlKey || e.metaKey) && !["KeyC", "KeyV", "KeyX"].includes(e.code))) e.preventDefault();
 });
-canvas.addEventListener("keyup", e => send(`k:0,${keyCode(e.code)}`));
+canvas.addEventListener("keyup", e => {
+  if (e.code === "KeyV" && heldPaste) { heldPaste.up = true; return; }
+  send(`k:0,${keyCode(e.code)}`);
+});
 window.addEventListener("resize", () => { sendSize(); if (lastFrame) draw(lastFrame); });
 connect();
 </script>

@@ -173,6 +173,11 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   `text_buffer_object`, text of any length kept by the native layer and grown while the user types or pastes, CRLF
   read as LF; `ig_input_text_multiline`, editable or read-only, Tab as a character on request, Dear ImGui's undo and
   redo kept; IBM Plex Mono bundled as `'plex-mono'`, the Lucide icons merged into it: done.
+- **Drag and drop, the clipboard** ([Drops](frame-loop#drops), [Clipboard](widgets#clipboard)): `app%dropped`, the
+  files and folders dropped on the window, reported once with the point of the drop, so that a program tells which
+  pane received them; `test_drop` for tests; `ig_set_clipboard` and `ig_get_clipboard`, on the system's clipboard in
+  a window, the program's own in headless mode, and in remote mode the program's own joined to the browser's (a copy
+  written to it where the browser allows it, a paste read from it): done.
 - **A one-line installer** ([Installation](install#the-one-line-installer)): `install.sh --gnu|--nvidia|--fc`, the
   missing packages printed (`--deps` runs them), installs per compiler with a pkg-config file and a manifest,
   `--uninstall`: done.

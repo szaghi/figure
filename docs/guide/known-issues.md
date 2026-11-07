@@ -29,8 +29,24 @@ nvfortran 26.9 if you hit the same error.
 of any length goes in a `text_buffer_object`, edited by `ig_input_text_multiline`
 ([Multi-line text](widgets#multi-line-text)), which is a plain field: no line numbers, no syntax highlighting, no
 search, and Dear ImGui goes through the whole text on every frame (a log that grows without end belongs in a
-[log view](processes#the-log-view)). In remote mode its copy and paste stay inside the program on the server, without
-the browser's clipboard.
+[log view](processes#the-log-view)).
+
+## The clipboard and drops
+
+- **Remote mode, copy:** the browser's clipboard is written only where the browser allows it: a secure context
+  (`localhost`, `https`), and in some browsers (Safari) only within a click or a key. Elsewhere the copy stays in the
+  program on the server, and the page's status line says so ([Remote UI](remote#the-clipboard-and-drops)).
+- **Remote mode, paste:** the program sees the browser's clipboard only through a paste (ctrl+v, cmd+v) in the page;
+  a button that pastes reads the program's own clipboard. If a browser sends no paste event within 200 ms of the
+  key, the key goes alone and pastes the program's own clipboard.
+- **Remote mode, drops:** none: a browser gives a page the contents of dropped files, not paths on the server.
+- **Window mode, drops:** they come from the system through SDL. Under WSLg, dragging from Windows' Explorer onto a
+  Linux window is not delivered (WSLg does not carry drag and drop between Windows and Linux); drop from a Linux file
+  manager, or open with the [file browser](frame-loop#figure-s-file-browser). Dropped text is not reported, only
+  files and folders.
+- **Untested:** drops and the system clipboard in a window on macOS and Windows have not been tried (no window is
+  opened there yet, see [Platforms](#platforms)); the tests check the remote clipboard's messages with a client of
+  their own, not a browser's permissions.
 
 ## A name shared with fortplot
 

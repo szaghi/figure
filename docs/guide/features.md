@@ -24,6 +24,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%set_confirm_quit(enabled)` | the close button reports a request instead of ending the loop | [ask before quitting](menus#ask-before-quitting) |
 | `app%quit_requested()` → `logical` | the user asked to quit, once per request | [ask before quitting](menus#ask-before-quitting) |
+| `app%dropped(paths [, x] [, y])` → `logical` | the files and folders dropped on the window since the last frame, and the point of the drop; `.true.` on that frame only | [drops](frame-loop#drops) |
 | `app%quit()` | the next `next_frame` returns `.false.` | [next_frame](frame-loop#next-frame) |
 | `app%set_title(text [, stat])`, `app%title()` → `character` | the window's title after `init` (window mode shows it; every mode keeps it) | [the window's title](menus#the-window-s-title) |
 | `app%open_file_dialog(id [, filters] [, default_path])`, `app%save_file_dialog(...)`, `app%open_folder_dialog(id [, default_path])` | the system's file dialogs (window mode), answered on a later frame | [file dialogs](frame-loop#file-dialogs) |
@@ -73,6 +74,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_begin_popup(id)` → `logical`, `ig_begin_popup_modal(title [, open])` → `logical`, `ig_end_popup()` | a popup, a modal dialog; end only after a true begin |
 | `ig_shortcut(keys [, stat])` → `logical` | a key chord such as `'ctrl+s'` pressed this frame (cmd on macOS), once per press |
 | `ig_tooltip(text)` | a tooltip on the previous widget, shown while the pointer rests on it |
+| `ig_set_clipboard(text [, stat])`, `ig_get_clipboard()` → `character` | put a text on the clipboard; read it (window: the system's; headless: the program's own; remote: the program's, joined to the browser's where it allows it) ([Clipboard](widgets#clipboard)) |
 | `ig_collapsing_header(label [, default_open])` → `logical` | a header that shows or hides what follows; `.true.` while open (no end call) |
 | `ig_begin_tab_bar(id)` → `logical`, `ig_end_tab_bar()` | a bar of tabs; end it only when the begin returned `.true.` |
 | `ig_begin_tab(label [, open])` → `logical`, `ig_end_tab()` | a tab; `.true.` when selected: draw its content, then end it (only then) |
@@ -193,6 +195,7 @@ Details: [Processes and tasks](processes#tasks).
 | `test_click(x, y [, button])`, `test_drag(x0, y0, x1, y1)` | queue a click, a drag |
 | `test_mouse_move`, `test_mouse_button`, `test_wheel` | queue mouse input, one part at a time |
 | `test_key(name [, down])`, `test_type(text)` | queue keys and typed text |
+| `test_drop(paths, x, y [, stat])` | queue a drop of files or folders at (x, y), reported by `app%dropped` on the next frame |
 | `test_next_frame()` | a frame boundary in the queued input |
 | `test_item_center(x, y)`, `test_window_rect(name, ...)` | where a widget or a window is |
 | `test_quit()` | a quit request, as the window's close button makes it |

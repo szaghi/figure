@@ -12,6 +12,8 @@ Run by src/tests/figure_test_remote.F90 against the program's server. Checks, in
   - a draw list over 65536 vertices arrives (the program draws a long line) and stays within those bounds; then the
     client presses Z and the program drops the line;
   - a size event ("s:640,480") comes back as the display size of a later frame;
+  - a paste ("p:" with the browser's clipboard) reaches the program's clipboard, whose answer, a copy, comes back as
+    one clipboard message (kind 7);
   - then, nothing changing, no frame is sent again for 2.5 s, only "unchanged" messages (at least one);
   - then the pointer toggles the button's hover 200 times per second: frames keep coming, at most 75 per second
     (the program caps them at 60);
@@ -41,6 +43,8 @@ TIMEOUT = 30.0
 QUIET = (1.0, 3.5)  # seconds after the resize in which the idle interface must send no frame, only "unchanged"
 PACE = (0.3, 1.3)  # seconds after the pointer starts toggling the button's hover in which frames are counted
 MAX_FPS = 75  # frames per second allowed then (the program's cap is 60)
+PASTE = "pasted in the browser \u00e9"  # the browser's clipboard, sent as a paste ("p:")
+COPY = "copied on the server"  # the program's answer: it reads PASTE (ig_get_clipboard) and copies this
 
 
 class ProtocolError(Exception):
@@ -220,6 +224,7 @@ def run(port: int, click_file: Path, token: str) -> None:
     paced_at = 0.0  # when the pointer started toggling the hover (200 moves per second)
     paced_frames = 0  # frames received in the PACE window
     z_pressed = False  # Z sent: the program stops drawing its long line
+    copies: list[bytes] = []  # the clipboard messages (kind 7)
     end = time.monotonic() + TIMEOUT
     try:
         while time.monotonic() < end:
@@ -246,6 +251,8 @@ def run(port: int, click_file: Path, token: str) -> None:
                     raise ProtocolError(msg)
             elif m[0] == 3:
                 textures.discard(struct.unpack_from("<I", m, 1)[0])
+            elif m[0] == 7:  # the program's copy, for the browser's clipboard
+                copies.append(m[1:])
             elif m[0] == 5:
                 if len(m) != 1:
                     msg = f"unchanged message of {len(m)} bytes"
@@ -268,6 +275,7 @@ def run(port: int, click_file: Path, token: str) -> None:
                     paced_frames += 1
                 if frames == 1:
                     ws.send("s:640,480")
+                    ws.send("p:" + PASTE)  # a paste in the page: the browser's clipboard, for the program
                 elif (w, h) == (640.0, 480.0) and not sized:
                     sized = True
                     sized_at = time.monotonic()
@@ -320,6 +328,9 @@ def run(port: int, click_file: Path, token: str) -> None:
         raise ProtocolError(msg)
     if not clicked:
         msg = "the click point never appeared"
+        raise ProtocolError(msg)
+    if copies != [COPY.encode()]:
+        msg = f"clipboard messages {copies!r}, expected one, {COPY!r} (the answer to the paste)"
         raise ProtocolError(msg)
 
 

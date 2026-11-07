@@ -322,6 +322,38 @@ Statuses: `FIG_ERR_STATE` before `init*` and from a [task](processes#tasks) (a t
 notifies when it sees the task done), `FIG_ERR_ARGUMENT` for an unknown kind; `stat` is optional (absent: `error
 stop` with the message). The same in window, headless and remote modes.
 
+## Drops
+
+| Procedure | Notes |
+|---|---|
+| `app%dropped(paths [, x] [, y])` → `logical` | The files and folders dropped on the window since the last frame, and where; `.true.` on that frame only. |
+
+Dropping a case folder or a file on the window is the shortest way to open it. FIGURE collects SDL's drop events while
+it waits for the next frame and hands them to that frame: `app%dropped` is `.true.` on the frame after the drop, and
+`.false.` on every other one, so a drop is reported once.
+
+- **`paths`** (`character(len=:), allocatable, intent(out) :: paths(:)`): the absolute paths, in the order the system
+  gave them, UTF-8, padded with blanks to the longest (pass `trim(paths(k))`). A folder is a path like a file's; the
+  program tells them apart (`inquire`, or FIGURE's [file browser](#figure-s-file-browser) for what is inside). Empty
+  when nothing was dropped.
+- **`x`, `y`**, in pixels: the point of the drop, in the coordinates of `ig_item_rect` and of the mouse. Several files
+  dropped at once come together, at one point. The point tells which window or region received the drop: keep the
+  rectangle of each region from the frame before (`ig_item_rect` after `ig_end_child`, or after `ig_end` for a
+  window's last item) and test the point against them. During a drag the system may not send pointer moves, so
+  Dear ImGui's hover state does not follow it: the point is the way.
+- Dropped text (a selection dragged from an editor) is not a drop: only files and folders are.
+
+**Modes:** in **window** mode, the system's drag and drop (from a file manager, the desktop, another program);
+**headless** mode has none of its own: `test_drop(paths, x, y)` of [figure_testing](testing#synthetic-input) queues
+one, in every mode; **remote** mode has none: a browser gives a page the contents of the files dropped on it, never a
+path on the server, and the page refuses them (dropped files would otherwise replace the page). The server's files
+are opened with [FIGURE's file browser](remote#opening-and-saving-files). No failure status: before `init*` and from
+a [task](processes#tasks) the result is `.false.`.
+
+<<< @/examples/snippets/cb_drop-drop.F90{fortran}
+
+<Media name="cb_drop" video alt="Two panes: a case folder dropped on the left one becomes the case; two files dropped on the right one are listed there; then Copy the case path puts the folder's path on the clipboard and the window reads copied, with the path" caption="docs/examples/src/cb_drop.F90" />
+
 ## Content scale
 
 `content_scale()` returns the display content scale FIGURE read at `init` (1 on standard displays, 2 on most high-DPI

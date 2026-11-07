@@ -11,19 +11,23 @@ program figure_test_tools
 !< Progress bars (`ig_progress_bar`): the filled width at known fractions, an indeterminate band that moves.
 !< Notifications (`app%notify`): shown in the bottom-right corner, the newest under the older, gone after their time
 !< (the fixed frame time), dismissed by a click, the kept list (the last 100), an unknown kind refused.
+!< Drops (`app%dropped`, `test_drop`): two paths dropped at once reported together on the next frame, once, with the
+!< point of the drop; nothing on the other frames. The clipboard (`ig_set_clipboard`, `ig_get_clipboard`): a text of
+!< two lines set and read back, an empty one, and a field's copy (ctrl+a, ctrl+c) read by the program.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ICON_ACTIVITY, ICON_HOUSE, ig_align_text_to_frame_padding, ig_begin, ig_begin_child, &
                    ig_begin_popup, ig_button, ig_end, ig_end_child, ig_end_popup, ig_focus_window, ig_item_rect, &
                    ig_open_popup, ig_same_line, ig_selectable, ig_set_next_window, ig_text, ig_tool_button, &
-                   ig_text_size, list_clipper_object, ig_progress_bar, FIG_ERR_ARGUMENT, FIG_OK, ig_get_style_var
+                   ig_text_size, list_clipper_object, ig_progress_bar, FIG_ERR_ARGUMENT, FIG_OK, ig_get_style_var, &
+                   ig_get_clipboard, ig_input_text, ig_set_clipboard
 use figure_cimgui, only : igIsWindowFocused
-use figure_testing, only : test_click, test_drawn_extent, test_notification_rect
+use figure_testing, only : test_click, test_drawn_extent, test_drop, test_item_center, test_key, test_notification_rect
 
 implicit none
 integer(int32), parameter :: MAX_FRAMES = 60_int32 !< Frames run.
 type(app_object)          :: app                   !< Application (headless).
 type(list_clipper_object) :: clip                  !< Clipper.
-logical                   :: test_passed(16)       !< Per-check outcome.
+logical                   :: test_passed(21)       !< Per-check outcome.
 real(real64)              :: size1(2), size2(2), size3(2) !< Text sizes.
 integer(int32)            :: frame, i, shown       !< Frame, row, the tool shown.
 integer(int32)            :: clicks(2)             !< Clicks per tool button.
@@ -139,6 +143,7 @@ if (.not. all(test_passed)) then
 endif
 call progress_bars(test_passed(10:11))
 call notifications(test_passed(12:16))
+call drops_and_clipboard(test_passed(17:21))
 write(output_unit, '(A,*(L2))') 'figure_test_tools checks:', test_passed
 do i = 1_int32, size(test_passed, kind=int32)
    if (.not. test_passed(i)) write(output_unit, '(A,I0,A)') 'figure_test_tools: check ', i, ' FAILED'
@@ -148,6 +153,81 @@ call app%destroy()
 if (.not. all(test_passed)) error stop 1
 
 contains
+   subroutine drops_and_clipboard(ok)
+   !< A drop of two paths (one with a space and a non-ASCII letter) at (123, 45): reported on the next frame only, the
+   !< paths in order, at that point; no drop before it. The clipboard: two lines set and read back, then an empty one;
+   !< a field's text selected and copied (ctrl+a, ctrl+c) read back by the program; a drop of nothing refused.
+   logical, intent(out)          :: ok(5)        !< Outcomes.
+   character(len=*), parameter   :: SECOND = '/tmp/case '//char(195)//char(169)//'/run.log' !< "case é".
+   character(len=*), parameter   :: TWO_LINES = 'p = 1.5e5'//char(10)//'T = 300' !< A text of two lines.
+   character(len=:), allocatable :: paths(:)     !< Paths dropped.
+   character(len=:), allocatable :: back         !< The clipboard read back.
+   character(len=:), allocatable :: empty        !< ... after an empty text.
+   character(len=:), allocatable :: copied       !< ... after the field's copy.
+   character(len=32)             :: field        !< A field's text.
+   real(real64)                  :: x, y         !< Point of the drop.
+   real(real64)                  :: field_at(2)  !< Centre of the field.
+   integer(int32)                :: fr           !< Frame.
+   integer(int32)                :: reported     !< Frames on which a drop was reported.
+   integer(int32)                :: reported_at  !< The frame of the report.
+   integer(int32)                :: stat         !< Status.
+   logical                       :: early        !< A drop was reported before the drop.
+   logical                       :: got_drop     !< The paths and the point matched.
+
+   x = 0.0_real64
+   y = 0.0_real64
+   reported = 0_int32
+   reported_at = 0_int32
+   early = .false.
+   got_drop = .false.
+   field = 'mesh/grid'
+   copied = ''
+   call ig_set_clipboard(TWO_LINES)
+   back = ig_get_clipboard()
+   call ig_set_clipboard('')
+   empty = ig_get_clipboard()
+   do fr = 1_int32, 30_int32
+      if (.not. app%next_frame()) exit
+      call ig_set_next_window(10.0_real64, 10.0_real64, 300.0_real64, 100.0_real64, always=.true.)
+      if (ig_begin('clipboard')) then
+         if (ig_input_text('##field', field)) continue
+         call test_item_center(field_at(1), field_at(2))
+      endif
+      call ig_end()
+      if (app%dropped(paths, x, y)) then
+         reported = reported + 1_int32
+         reported_at = fr
+         got_drop = size(paths) == 2 .and. x == 123.0_real64 .and. y == 45.0_real64
+         if (got_drop) got_drop = paths(1) == '/tmp/case' .and. paths(2) == SECOND .and. len(paths) == len(SECOND)
+      elseif (size(paths) /= 0) then
+         early = .true.
+      endif
+      select case (fr)
+      case (3_int32)
+         if (reported /= 0_int32) early = .true.
+         call test_drop([character(len=len(SECOND)) :: '/tmp/case', SECOND], 123.0_real64, 45.0_real64)
+      case (8_int32)
+         call test_click(field_at(1), field_at(2))
+      case (14_int32)
+         call test_key('shortcut', down=.true.)
+         call test_key('a')
+         call test_key('c')
+         call test_key('shortcut', down=.false.)
+      case (22_int32)
+         copied = ig_get_clipboard()
+      endselect
+   enddo
+   call test_drop([character(len=1) ::], 0.0_real64, 0.0_real64, stat=stat)
+   ok(1) = got_drop .and. reported_at == 4_int32                 ! both paths, together, the frame after, at the point
+   ok(2) = reported == 1_int32 .and. .not. early                 ! once, and nothing on the other frames
+   ok(3) = back == TWO_LINES .and. empty == ''                   ! the clipboard set and read back
+   ok(4) = copied == 'mesh/grid'                                 ! a field's copy read by the program
+   ok(5) = stat == FIG_ERR_ARGUMENT                              ! a drop of nothing refused
+   if (.not. all(ok)) write(output_unit, '(A,2I4,L2,2F8.1,A)') 'drops: reported, at, early, x, y ', reported, &
+                                                              reported_at, early, x, y, &
+                                                              ', clipboard "'//back//'" "'//copied//'"'
+   endsubroutine drops_and_clipboard
+
    subroutine progress_bars(ok)
    !< Bars 400 pixels wide at 0, 0.25, 0.75 and 1: the fill (PlotHistogram) grows in proportion, empty at 0, full at 1
    !< (inside the frame's border); an indeterminate bar's band is narrower than the bar and moves between frames.

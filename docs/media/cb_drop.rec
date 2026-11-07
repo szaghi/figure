@@ -1,0 +1,14 @@
+#! program build/docs-examples/bin/cb_drop
+#! frames  150
+#! poster  140
+# A case folder dropped on the left pane becomes the case; two files dropped on the right pane are listed; then the
+# case path is copied to the clipboard
+0   move 400 250
+10  move 180 140 20
+32  drop 180 140 /home/user/cases/cylinder Re100
+60  move 560 150 20
+82  drop 560 150 /home/user/cases/cylinder Re100/overset.input
+82  drop 560 150 /home/user/cases/cylinder Re100/run.log
+100 move 80 257 20
+125 down
+127 up

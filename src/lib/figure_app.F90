@@ -27,7 +27,8 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_conte
                             fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title, fig_save_image, &
                             fig_image_result, fig_save_layout, fig_load_layout, fig_set_style_parts, fig_palette_color, &
                             fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_notify,              &
-                            fig_notification_count, fig_notification_get, fig_file_browser
+                            fig_notification_count, fig_notification_get, fig_file_browser, fig_dropped, &
+                            fig_dropped_path
 use figure_icons, only : ICON_CIRCLE_CHECK, ICON_CIRCLE_X, ICON_INFO, ICON_TRIANGLE_ALERT
 
 implicit none
@@ -55,6 +56,7 @@ type :: app_object
       procedure, pass(self) :: request_frames !< Redraw without waiting for input.
       procedure, pass(self) :: set_confirm_quit !< Report a quit request instead of quitting.
       procedure, pass(self) :: quit_requested !< The user asked to quit (once per request).
+      procedure, pass(self) :: dropped        !< The files and folders dropped on the window this frame.
       procedure, pass(self) :: quit           !< End the loop at the next frame.
       procedure, pass(self) :: set_title      !< The window's title, after init.
       procedure, pass(self) :: title          !< The window's title.
@@ -542,6 +544,47 @@ contains
 
    requested = fig_quit_requested() == 1_c_int
    endfunction quit_requested
+
+   recursive function dropped(self, paths, x, y) result(any_dropped)
+   !< The files and folders dropped on the window since the last frame (SDL's drop events), and where: true on the
+   !< frame after the drop only, with `paths` the absolute paths (UTF-8, blank-padded to the longest; folders as
+   !< folders, without a trailing separator) and (`x`, `y`) the point of the drop [pixels], the coordinates of
+   !< `ig_item_rect` and of the mouse, so that the program can tell which window or region received it. Several files
+   !< dropped at once come together, at one point. False, with `paths` empty, on every other frame; also before
+   !< `init*` and from a task. Window mode: the system's drag and drop; headless mode: only the drops of `test_drop`;
+   !< remote mode: none (a browser gives a page the dropped files' contents, not paths on the server: the page refuses
+   !< them), but those of `test_drop`.
+   class(app_object),             intent(in)            :: self        !< Application.
+   character(len=:), allocatable, intent(out)           :: paths(:)    !< Paths dropped.
+   real(real64),                  intent(out), optional :: x           !< Abscissa of the drop [pixels].
+   real(real64),                  intent(out), optional :: y           !< Ordinate of the drop [pixels].
+   logical                                              :: any_dropped !< Something was dropped.
+   integer(c_int)                                       :: n           !< Paths.
+   integer(c_int)                                       :: i           !< Counter.
+   integer(c_int)                                       :: longest     !< The longest path [bytes].
+   integer(c_int)                                       :: m           !< A path's length [bytes].
+   real(c_float)                                        :: px, py      !< Point of the drop.
+   character(len=1)                                     :: probe       !< A buffer for a length alone.
+
+   n = 0_c_int
+   px = 0.0_c_float
+   py = 0.0_c_float
+   if (.not. figure_refused('app%dropped')) then
+      if (fig_dropped(n, px, py) /= FIG_OK) n = 0_c_int
+   endif
+   longest = 0_c_int
+   do i = 1_c_int, n
+      longest = max(longest, fig_dropped_path(i, probe, 0_c_int))
+   enddo
+   allocate(character(len=longest) :: paths(n))
+   do i = 1_c_int, n
+      paths(i) = ''
+      m = fig_dropped_path(i, paths(i), longest)
+   enddo
+   if (present(x)) x = real(px, real64)
+   if (present(y)) y = real(py, real64)
+   any_dropped = n > 0_c_int
+   endfunction dropped
 
    subroutine quit(self)
    !< End the loop: the next `next_frame` returns `.false.` (in every mode).

@@ -127,9 +127,8 @@ optional (absent: `error stop` with the message). `buf%set`, `buf%text()` and `b
 `init*` and from a [task](processes#tasks); the field itself, from a task, draws nothing and returns `.false.`
 (`FIG_ERR_STATE` for the task).
 
-**Modes:** the same in window, headless and remote modes. Copy and paste use the system's clipboard in window mode
-and a clipboard of the program's own in headless mode; in remote mode the text lives on the server and copy and paste
-stay inside the program: the browser's clipboard is not reached ([Known issues](known-issues#text-input)).
+**Modes:** the same in window, headless and remote modes; copy and paste go through the [clipboard](#clipboard) of
+each mode.
 
 <<< @/examples/snippets/cb_text-edit.F90{fortran}
 
@@ -138,6 +137,36 @@ stay inside the program: the browser's clipboard is not reached ([Known issues](
 What it is not: an editor for code. There are no line numbers, no syntax highlighting, no search and replace; for a
 large text Dear ImGui goes through all of it on every frame the field is drawn, so a log that grows without end
 belongs in a [log view](processes#the-log-view), which draws only the lines in view.
+
+## Clipboard
+
+| Procedure | Notes |
+|---|---|
+| `ig_set_clipboard(text [, stat])` | Puts `text` on the clipboard, as a copy in a field does: a value, a table, a finding. |
+| `ig_get_clipboard()` → `character(len=:), allocatable` | The clipboard's text, as a paste in a field reads it (`''` when empty). |
+
+The text is UTF-8; trailing blanks are part of it (pass `trim` of a padded variable), and lines end with LF. The
+fields' own copy and paste (ctrl+c, ctrl+x, ctrl+v; cmd on macOS) use the same clipboard, so a text set by
+`ig_set_clipboard` is what ctrl+v pastes into a field, and what the user copies from a field or a
+[log view](processes#the-log-view) is what `ig_get_clipboard` returns.
+
+<<< @/examples/snippets/cb_drop-copy.F90{fortran}
+
+**Modes:**
+- **window:** the system's clipboard (SDL's): other programs paste what FIGURE copies, and the reverse.
+- **headless:** a clipboard of the program's own, the same on every platform: tests set and read it.
+- **remote:** the program keeps its own clipboard on the server, joined to the browser's where the browser allows it.
+  A copy (a field's, or `ig_set_clipboard`) is sent to the page, which writes it to the browser's clipboard: browsers
+  allow it only in a secure context (an `https` page, or `localhost`, as through an
+  [SSH tunnel](remote#a-program-on-a-cluster-node)), and some (Safari) only within a click or a key; when the browser
+  refuses, the page's status line says so and the copy stays in the program. A page reads the browser's clipboard
+  only in the paste event of ctrl+v (cmd+v): the page sends the text to the program before the key, so a field pastes
+  what the user copied elsewhere on their computer, and `ig_get_clipboard` returns it from then on. Nothing else
+  reads the browser's clipboard: a "paste" button in the program pastes the program's own clipboard.
+
+**Status:** `ig_set_clipboard` is refused with `FIG_ERR_STATE` before `init*` and from a [task](processes#tasks);
+`stat` is optional (absent: `error stop` with the message). `ig_get_clipboard` cannot fail: `''` before `init*` and
+from a task.
 
 ## Text and layout
 

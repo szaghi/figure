@@ -38,6 +38,11 @@ void set_compression(int mode);
 // system's cryptographic generator), replaced by the program's own, or disabled (empty).
 void set_token(const std::string &token);
 const std::string &token();
+// The clipboard of remote mode (Dear ImGui's platform clipboard): set keeps the text and sends it to the page (message
+// 7), which writes it to the browser's clipboard where the browser allows it; the page sends the browser's clipboard
+// on a paste ("p:" event), before the key that pastes. clipboard is the last of the two.
+void set_clipboard(const char *text);
+const char *clipboard();
 // A new texture id, shared by Dear ImGui's and the user's textures.
 std::uint64_t new_texture_id();
 

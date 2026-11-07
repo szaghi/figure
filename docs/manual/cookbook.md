@@ -145,6 +145,22 @@ The browser lists folders first, sorts by a click on a column's header, filters 
 keeps the recent folders between runs, makes folders and asks before a save replaces a file.
 [File dialogs](/guide/frame-loop#file-dialogs) has the details.
 
+### Open what the user drops
+
+<<< @/examples/snippets/cb_drop-drop.F90{fortran}
+
+<Media name="cb_drop" video alt="Two panes: a case folder dropped on the left one becomes the case; two files dropped on the right one are listed there; then Copy the case path puts the folder's path on the clipboard and the window reads copied, with the path" caption="docs/examples/src/cb_drop.F90" />
+
+`app%dropped` is `.true.` on the frame after a drop, with the paths and the point where they landed. The program keeps
+each pane's rectangle from the frame before (`ig_item_rect` after `ig_end_child`) and gives the drop to the pane under
+the point: a folder on the left is the case, files on the right join the list. A button copies the case path:
+
+<<< @/examples/snippets/cb_drop-copy.F90{fortran}
+
+In remote mode nothing can be dropped (the files are on the browser's computer): open the server's files with the
+file browser, as in the recipe above.
+[Drops](/guide/frame-loop#drops) and [Clipboard](/guide/widgets#clipboard) have the details.
+
 ### Ask before discarding changes
 
 <<< @/examples/snippets/cb_quit-quit.F90{fortran}

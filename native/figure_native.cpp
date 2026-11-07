@@ -156,12 +156,17 @@ struct state_t {
    };
    std::vector<saved_t> pushed_colors, pushed_vars; // scoped changes, undone by the pops (newest last)
    struct input_t {                                // synthetic input (figure_testing), applied at the next frames
-      int         kind = 0;                        // 0 step (a frame boundary), 1 pos, 2 button, 3 wheel, 4 key, 5 text
+      int         kind = 0;                        // 0 step (a frame boundary), 1 pos, 2 button, 3 wheel, 4 key, 5 text,
+                                                   // 6 a dropped path (text) at (x, y)
       float       x = 0.0f, y = 0.0f;
       int         a = 0, b = 0;
       std::string text;
    };
    std::vector<input_t> test_input;                // queued, oldest first
+   std::vector<std::string> drops;                 // paths dropped since the last frame began (SDL, tests, capture)
+   float         drop_x = 0.0f, drop_y = 0.0f;     // ... where the last one was dropped [pixels]
+   std::vector<std::string> dropped;               // the paths dropped for this frame (app%dropped)
+   float         dropped_x = 0.0f, dropped_y = 0.0f;
    std::string   ini_file;        // where Dear ImGui keeps window positions and sizes; empty: nowhere (the default)
    struct texture_t {
       int  width = 0, height = 0;
@@ -205,7 +210,8 @@ struct redraw_stats_t {
 //    <frame> move <x> <y> [<n>]          the pointer glides to (x, y) [pixels] over n frames (default 1)
 //    <frame> down|up [left|right|middle] a button is pressed or released (default left)
 //    <frame> wheel <dx> <dy>             the wheel turns (positive dy: away from the user)
-//    <frame> text <characters>           characters are typed (the rest of the line)
+//    <frame> text <characters>           characters are typed (the rest of the line, after one space)
+//    <frame> drop <x> <y> <path>         a file or folder is dropped on the window at (x, y) [pixels]
 //    <frame> key <name> [down|up]        a key, by the names of test_key: a-z, 0-9, f1-f12, enter, tab, backspace,
 //                                        delete, escape, space, arrows, home, end, pageup, pagedown, ctrl, shift, alt,
 //                                        super (press and release when down|up is omitted)
@@ -233,6 +239,21 @@ struct capture_t {
    float       gx = 0.0f, gy = 0.0f;           // glide target
    int         glide = 0;                      // glide frames left
 } cap;
+
+// Drops: a path dropped on the window (SDL's drop events; a test's or a capture script's), at (x, y) [pixels]; the
+// paths dropped before a frame begins are that frame's (app%dropped), and only that frame's.
+void drop_path(const std::string &path, float x, float y) {
+   st.drops.push_back(path);
+   st.drop_x = x;
+   st.drop_y = y;
+}
+
+void take_drops() {
+   st.dropped = std::move(st.drops);
+   st.drops.clear();
+   st.dropped_x = st.drop_x;
+   st.dropped_y = st.drop_y;
+}
 
 // The keys of a capture script: the names of test_key (fig_input_key), defined further down.
 extern "C" ImGuiKey key_by_name(const std::string &n);
@@ -286,7 +307,11 @@ void capture_read_input(const char *path) {
       } else if (e.what == "wheel") {
          ok = std::sscanf(rest, "%f %f", &e.x, &e.y) == 2;
       } else if (e.what == "text") {
-         e.arg = rest;
+         e.arg = l.size() > l.find("text") + 5 ? l.substr(l.find("text") + 5) : ""; // after one space: the rest typed
+      } else if (e.what == "drop") {
+         int at = 0;
+         ok = std::sscanf(rest, "%f %f %n", &e.x, &e.y, &at) == 2 && rest[at] != '\0';
+         if (ok) e.arg = rest + at;
       } else if (e.what == "close") {
          ok = true;
       } else {
@@ -333,6 +358,8 @@ void capture_apply_input() {
          io.AddKeyEvent(capture_key(e.arg), false);
       } else if (e.what == "key-down" || e.what == "key-up") {
          io.AddKeyEvent(capture_key(e.arg), e.what == "key-down");
+      } else if (e.what == "drop") {
+         drop_path(e.arg, e.x, e.y);
       } else if (e.what == "close") { // the window's close button: a request with confirm_quit, else the end
          if (st.confirm_quit) st.quit_requested = true;
          else st.quit_now = true;
@@ -1715,6 +1742,7 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "window size must be positive");
    SDL_SetMainReady();
    if (!SDL_Init(SDL_INIT_VIDEO)) return fail(FIG_ERR_FAILED, std::string("SDL_Init: ") + SDL_GetError());
+   SDL_SetEventEnabled(SDL_EVENT_DROP_FILE, true); // files and folders dropped on the window (app%dropped)
    sdl_events = true;
 #if defined(__APPLE__)
    const char *glsl = "#version 150";
@@ -1837,6 +1865,10 @@ int fig_init_remote(int width, int height, const char *host, int host_len, int p
    // draw lists over 65536 vertices are split into ranges, each command carrying its VtxOffset (16-bit indices)
    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
    io.BackendPlatformName = "figure_remote";
+   // the clipboard: the program's own on the server, sent to the browser on a copy, set from it on a paste
+   ImGuiPlatformIO &pio = ImGui::GetPlatformIO();
+   pio.Platform_SetClipboardTextFn = [](ImGuiContext *, const char *text) { figure_remote::set_clipboard(text); };
+   pio.Platform_GetClipboardTextFn = [](ImGuiContext *) { return figure_remote::clipboard(); };
    st.m = mode::remote;
    fig_file_browser_reset(1, 1);
    apply_initial_style();
@@ -2287,6 +2319,7 @@ int fig_begin_frame(int *running) {
    if (st.m == mode::headless) {
       ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
       apply_test_input();
+      take_drops();
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
       ImGui::NewFrame();
       st.in_frame = true;
@@ -2323,6 +2356,7 @@ int fig_begin_frame(int *running) {
       st.last_frame = now;
       ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0e-4f;
       apply_test_input();
+      take_drops();
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
       ImGui::NewFrame();
       st.in_frame = true;
@@ -2340,6 +2374,7 @@ int fig_begin_frame(int *running) {
       if (rs.on) ++rs.events[e.type];
       if (!cap.on) ImGui_ImplSDL3_ProcessEvent(&e); // capture: the program's scripted input only
       if (e.type == SDL_EVENT_SYSTEM_THEME_CHANGED && st.system_theme < 0) system_theme_changed();
+      if (e.type == SDL_EVENT_DROP_FILE && !cap.on && e.drop.data) drop_path(e.drop.data, e.drop.x, e.drop.y);
       if (e.type == SDL_EVENT_QUIT ||
           (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && e.window.windowID == SDL_GetWindowID(st.window))) {
          if (st.confirm_quit) st.quit_requested = true; // the program asks first, then calls fig_quit
@@ -2382,6 +2417,7 @@ int fig_begin_frame(int *running) {
       ImGui_ImplSDL3_NewFrame();
    }
    apply_test_input();
+   take_drops();
    apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
    ImGui::NewFrame();
    st.in_frame = true;
@@ -2737,6 +2773,7 @@ void apply_test_input() {
       case 2: io.AddMouseButtonEvent(e.a, e.b != 0); break;
       case 3: io.AddMouseWheelEvent(e.x, e.y); break;
       case 4: io.AddKeyEvent(static_cast<ImGuiKey>(e.a), e.b != 0); break;
+      case 6: drop_path(e.text, e.x, e.y); break;
       default: io.AddInputCharactersUTF8(e.text.c_str()); break;
       }
    }
@@ -3046,6 +3083,50 @@ int fig_input_text(const char *text, int text_len) {
    e.kind = 5;
    e.text.assign(text, text_len > 0 ? static_cast<size_t>(text_len) : 0);
    return queue_input(e);
+}
+
+int fig_input_drop(const char *path, int path_len, float x, float y) {
+   if (path_len <= 0) return fail(FIG_ERR_ARGUMENT, "test_drop: a path is empty");
+   state_t::input_t e;
+   e.kind = 6;
+   e.text.assign(path, static_cast<size_t>(path_len));
+   e.x = x;
+   e.y = y;
+   return queue_input(e);
+}
+
+int fig_dropped(int *count, float *x, float *y) {
+   *count = static_cast<int>(st.dropped.size());
+   *x = st.dropped_x;
+   *y = st.dropped_y;
+   return st.m == mode::none ? fail(FIG_ERR_STATE, "figure is not initialized") : FIG_OK;
+}
+
+int fig_dropped_path(int index, char *buf, int buf_len) {
+   if (index < 1 || index > static_cast<int>(st.dropped.size())) return 0;
+   const std::string &s = st.dropped[static_cast<size_t>(index - 1)];
+   const size_t n = std::min(s.size(), static_cast<size_t>(buf_len > 0 ? buf_len : 0));
+   if (n > 0) std::memcpy(buf, s.data(), n);
+   return static_cast<int>(s.size());
+}
+
+int fig_set_clipboard(const char *text, int text_len) {
+   FIG_TRY
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "ig_set_clipboard: figure is not initialized");
+   const std::string s(text, text_len > 0 ? static_cast<size_t>(text_len) : 0);
+   ImGui::SetClipboardText(s.c_str());
+   return FIG_OK;
+   FIG_CATCH
+}
+
+long long fig_get_clipboard(char *buf, long long cap) {
+   if (!ImGui::GetCurrentContext()) return 0;
+   const char *text = ImGui::GetClipboardText();
+   if (!text) return 0;
+   const size_t len = std::strlen(text);
+   const size_t n = std::min(len, static_cast<size_t>(cap > 0 ? cap : 0));
+   if (n > 0) std::memcpy(buf, text, n);
+   return static_cast<long long>(len);
 }
 
 // A tick label of the plot being declared (between BeginPlot and EndPlot, after its setup): axis 0 x, 1 y; index from 1;

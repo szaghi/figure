@@ -18,10 +18,13 @@
 //               are deflated when compression is on (always, or in auto mode while the client is the bottleneck)
 //   5 unchanged: u8 5: the frame equals the last one sent, which is not sent again; at most once per second, so the
 //               client knows the program is alive (an idle interface sends nothing else)
+//   7 clipboard: u8 7, then UTF-8 text: the program copied it (Dear ImGui's copy, ig_set_clipboard); the page writes it
+//               to the browser's clipboard where the browser allows it (a secure context, such as localhost)
 // Access: unless the token is disabled, GET / and GET /ws need "?token=<token>" in their target, else 403. The token is
 // 32 hex digits (128 bits from the system's cryptographic generator) made at start, or the program's own.
 // Client to server: text messages, one event each: "m:x,y" mouse position, "b:button,down", "w:dx,dy" wheel,
-// "k:down,code" key (KeyboardEvent.code), "c:text" typed characters, "s:width,height" canvas size.
+// "k:down,code" key (KeyboardEvent.code), "c:text" typed characters, "s:width,height" canvas size, "p:text" the
+// browser's clipboard (sent on a paste, before the key that pastes).
 #ifdef _WIN32
 #define _CRT_RAND_S // rand_s: the system's cryptographic generator (RtlGenRandom), for the access token
 #endif
@@ -216,6 +219,7 @@ struct server_t {
    std::chrono::steady_clock::time_point   last_skip;        // when a frame was last skipped for a busy queue
    std::chrono::steady_clock::time_point   last_sent;      // when a message last went to the client
    float                                   background[3] = {0.10f, 0.10f, 0.11f}; // behind the windows
+   std::string                             clipboard;      // the program's clipboard: its copies, the browser's pastes
 #ifdef _WIN32
    bool                                    wsa = false;
 #endif
@@ -389,6 +393,9 @@ void handle_event(const std::string &ev) {
    }
    case 'c':
       io.AddInputCharactersUTF8(p);
+      break;
+   case 'p': // the browser's clipboard, sent by the page on a paste (ctrl+v), before the key that pastes
+      sv.clipboard.assign(ev, 2, std::string::npos);
       break;
    case 's':
       if (std::sscanf(p, "%f,%f", &a, &b) == 2 && a > 0.0f && b > 0.0f) io.DisplaySize = ImVec2(a, b);
@@ -701,6 +708,17 @@ void set_token(const std::string &token) { sv.token = token; }
 const std::string &token() { return sv.token; }
 
 std::uint64_t new_texture_id() { return sv.next_id++; }
+
+void set_clipboard(const char *text) {
+   sv.clipboard = text ? text : "";
+   if (connection_t *c = client()) { // the page writes it to the browser's clipboard, where the browser allows it
+      std::string m(1, '\x07');
+      m += sv.clipboard;
+      ws_append(*c, 2, m);
+   }
+}
+
+const char *clipboard() { return sv.clipboard.c_str(); }
 
 void set_background(float r, float g, float b) {
    sv.background[0] = r;

@@ -11,7 +11,8 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : cstr, figure_check, figure_refused
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
-                            fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline
+                            fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
+                            fig_get_clipboard, fig_set_clipboard
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : igGetTime, igProgressBar, &
                           im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
@@ -33,6 +34,7 @@ public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
 public :: ig_progress_bar
 public :: ig_input_text_multiline, text_buffer_object
+public :: ig_set_clipboard, ig_get_clipboard
 
 type :: text_buffer_object
    !< Text of any length, edited by `ig_input_text_multiline`: a file shown or edited as text, notes, a read-only view.
@@ -383,6 +385,43 @@ contains
    endif
    changed = fig_widget_input_text_multiline(buffer%id, label, len(label, c_int), w, h, f) == 1_c_int
    endfunction ig_input_text_multiline
+
+   recursive subroutine ig_set_clipboard(text, stat)
+   !< Put `text` (UTF-8, trailing blanks included: pass `trim` of a padded variable) on the clipboard, as a copy in a
+   !< field does. Window mode: the system's clipboard (SDL's). Headless mode: a clipboard of the program's own.
+   !< Remote mode: the program's own on the server, also written to the browser's clipboard where the browser allows
+   !< it (a page reached as https or localhost, and in a few browsers only right after a click or a key). Status:
+   !< `FIG_ERR_STATE` before `init*` or from a task (`stat` optional: absent, `error stop` with the message).
+   character(len=*), intent(in)            :: text !< Text.
+   integer(int32),   intent(out), optional :: stat !< Status.
+
+   if (figure_refused('ig_set_clipboard', stat)) return ! a task does not reach Dear ImGui
+   call figure_check(fig_set_clipboard(text, len(text, c_int)), stat)
+   endsubroutine ig_set_clipboard
+
+   recursive function ig_get_clipboard() result(text)
+   !< The clipboard's text (UTF-8), as a paste in a field reads it: the system's in window mode, the program's own in
+   !< headless mode; in remote mode the program's own, which a paste in the page (ctrl+v, cmd+v) sets from the
+   !< browser's clipboard first. `''` before `init*`, for an empty clipboard, or from a task.
+   character(len=:), allocatable :: text !< Text.
+   integer(c_long_long)          :: n    !< Bytes asked.
+   integer(c_long_long)          :: got  !< The text's length when copied.
+   character(len=1)              :: probe !< A buffer for the length alone.
+
+   if (figure_refused('ig_get_clipboard')) then ! a task does not reach Dear ImGui
+      text = ''
+      return
+   endif
+   n = fig_get_clipboard(probe, 0_c_long_long)
+   do ! another program may change the clipboard between the two calls: copy again while it is longer than asked
+      allocate(character(len=n) :: text)
+      got = fig_get_clipboard(text, n)
+      if (got <= n) exit
+      deallocate(text)
+      n = got
+   enddo
+   if (got < n) text = text(1:got)
+   endfunction ig_get_clipboard
 
    ! ---- text_buffer_object --------------------------------------------------------------------------------------------
    recursive subroutine text_buffer_set(self, text, stat)

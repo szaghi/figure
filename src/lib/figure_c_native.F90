@@ -33,6 +33,7 @@ public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig_file_browser_rect
 public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_widget_input_text_multiline
+public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -1091,6 +1092,55 @@ interface
    integer(c_int),         value         :: flags     !< ImGuiInputTextFlags.
    integer(c_int)                        :: edited    !< 1: edited this frame.
    endfunction fig_widget_input_text_multiline
+
+   function fig_input_drop(path, path_len, x, y) result(status) bind(C, name='fig_input_drop')
+   !< Queue a synthetic drop of one path at (x, y) (tests).
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< Path (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Its length [bytes].
+   real(c_float), value               :: x        !< Abscissa [pixels].
+   real(c_float), value               :: y        !< Ordinate [pixels].
+   integer(c_int)                     :: status   !< Status: FIG_OK, FIG_ERR_ARGUMENT (empty), FIG_ERR_STATE.
+   endfunction fig_input_drop
+
+   function fig_dropped(count, x, y) result(status) bind(C, name='fig_dropped')
+   !< The paths dropped for this frame: how many, and where the last one was dropped.
+   import :: c_float, c_int
+   implicit none
+   integer(c_int), intent(out) :: count  !< Paths.
+   real(c_float),  intent(out) :: x      !< Abscissa [pixels].
+   real(c_float),  intent(out) :: y      !< Ordinate [pixels].
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_STATE before init.
+   endfunction fig_dropped
+
+   function fig_dropped_path(index, buf, buf_len) result(length) bind(C, name='fig_dropped_path')
+   !< A path dropped for this frame (index from 1): up to `buf_len` bytes copied; its length.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value               :: index   !< Index, from 1.
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its size [bytes].
+   integer(c_int)                      :: length  !< The path's length [bytes] (0: no such path).
+   endfunction fig_dropped_path
+
+   function fig_set_clipboard(text, text_len) result(status) bind(C, name='fig_set_clipboard')
+   !< Put a text on the clipboard.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: text(*)  !< Text (not NUL-terminated).
+   integer(c_int), value              :: text_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_STATE before init.
+   endfunction fig_set_clipboard
+
+   function fig_get_clipboard(buf, cap) result(length) bind(C, name='fig_get_clipboard')
+   !< Copy at most `cap` bytes of the clipboard's text; its whole length (0 before init).
+   import :: c_char, c_long_long
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*) !< Buffer.
+   integer(c_long_long),   value       :: cap    !< Its size [bytes].
+   integer(c_long_long)                :: length !< The text's length [bytes].
+   endfunction fig_get_clipboard
 
    function fig_window_rect(name, name_len, rect, found) result(status) bind(C, name='fig_window_rect')
    !< A window's rectangle by name, as in the last frame.

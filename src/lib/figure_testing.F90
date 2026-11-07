@@ -26,7 +26,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_but
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
                             fig_frame_state, fig_notification_rect, fig_drawn_extent, fig_file_browser_get, &
-                            fig_file_browser_rect, fig_file_browser_settings
+                            fig_file_browser_rect, fig_file_browser_settings, fig_input_drop
 use figure_imgui, only : ig_item_rect
 
 implicit none
@@ -34,7 +34,7 @@ private
 public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel, test_key, test_type
 public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick, test_system_theme
 public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_rect, test_drawn_extent
-public :: test_file_browser, test_file_browser_rect, test_settings_file
+public :: test_file_browser, test_file_browser_rect, test_settings_file, test_drop
 
 contains
    subroutine test_next_frame(stat)
@@ -411,6 +411,28 @@ contains
 
    call figure_check(fig_input_text(text, len(text, c_int)), stat)
    endsubroutine test_type
+
+   subroutine test_drop(paths, x, y, stat)
+   !< Queue a drop of `paths` (each trimmed of trailing blanks) at (x, y), as dropping files from a file manager makes
+   !< it: `app%dropped` reports them together on the next frame, and only on that one. Works in every mode.
+   character(len=*), intent(in)            :: paths(:) !< Files or folders.
+   real(real64),     intent(in)            :: x        !< Abscissa [pixels].
+   real(real64),     intent(in)            :: y        !< Ordinate [pixels].
+   integer(int32),   intent(out), optional :: stat     !< Status: `FIG_ERR_ARGUMENT` for no path or an empty one,
+                                                       !< `FIG_ERR_STATE` before `init*`.
+   integer(int32)                          :: k        !< Counter.
+
+   if (size(paths) == 0) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'test_drop: no path to drop', stat)
+      return
+   endif
+   do k = 1_int32, size(paths, kind=int32)
+      call figure_check(fig_input_drop(paths(k), len_trim(paths(k), c_int), real(x, c_float), real(y, c_float)), stat)
+      if (present(stat)) then
+         if (stat /= 0_int32) return
+      endif
+   enddo
+   endsubroutine test_drop
 
    subroutine test_window_rect(name, xmin, ymin, xmax, ymax, found, stat)
    !< The rectangle of the window `name` (as passed to `ig_begin`) as drawn in the last frame [pixels].

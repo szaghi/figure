@@ -35,6 +35,7 @@ the input reaches the widgets there. A test queues, draws a few frames, then che
 | `test_key(name [, down] [, stat])` | a key, pressed and released (or only pressed or released with `down`): `a`-`z`, `0`-`9`, `enter`, `tab`, `backspace`, `delete`, `escape`, `space`, `left`, `right`, `up`, `down`, `home`, `end`, `pageup`, `pagedown`, `f1`-`f12`, and the modifiers `ctrl`, `shift`, `alt`, `super` |
 | `test_type(text [, stat])` | typed characters, into the focused field |
 | `test_next_frame([stat])` | a frame boundary: what is queued after it arrives one frame later |
+| `test_drop(paths, x, y [, stat])` | files or folders dropped at (x, y): `app%dropped` reports them together on the next frame ([Drops](frame-loop#drops)); no path is `FIG_ERR_ARGUMENT` |
 
 And to aim and to check:
 

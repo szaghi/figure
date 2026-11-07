@@ -196,6 +196,17 @@ long long fig_text_length(int id);
 void      fig_text_release(int id);
 int       fig_widget_input_text_multiline(int *id, const char *label, int label_len, double width, double height,
                                           int flags);
+/* Drops (app%dropped): the paths dropped on the window since the last frame began (SDL's drop events; in every mode
+ * a test's, fig_input_drop, queued as the other synthetic input), and where the last one was dropped [pixels]: count
+ * and position for this frame, then each path (index from 1; up to buf_len bytes copied, its length returned). */
+int    fig_input_drop(const char *path, int path_len, float x, float y);
+int    fig_dropped(int *count, float *x, float *y);
+int    fig_dropped_path(int index, char *buf, int buf_len);
+/* The clipboard (Dear ImGui's platform clipboard: SDL's in a window, the program's own in headless mode, in remote
+ * mode the program's own, sent to the browser on a set and set by the browser on a paste). get copies at most cap
+ * bytes and returns the text's length [bytes]; 0 before init. */
+int       fig_set_clipboard(const char *text, int text_len);
+long long fig_get_clipboard(char *buf, long long cap);
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);
 
