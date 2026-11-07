@@ -1,0 +1,25 @@
+# FIGURE palette "catppuccin-latte": Catppuccin Latte, the light Catppuccin flavour.
+# Source: https://github.com/catppuccin/palette (palette.json, v1.8.0, commit 07d02aa).
+# MIT licence, Copyright (c) 2021 Catppuccin.
+# Licence: third_party/palettes/LICENSE-catppuccin.txt, installed in share/licenses/catppuccin/.
+# The hex values are the upstream ones, by their upstream names (after each role).
+# Surface is mantle: surface0 under text is the raised surface, so frames and buttons differ.
+# Lines are the five colours of Latte that keep 3:1 on base: blue, red, mauve, teal, maroon.
+# Format: docs/guide/styles.md#palettes. The Dear ImGui colours are derived from the roles.
+
+background = "#dce0e8"   # crust, behind the windows
+lines = ["#1e66f5", "#d20f39", "#8839ef", "#179299", "#e64553"]
+
+[palette]
+background     = "#eff1f5"   # base
+surface        = "#e6e9ef"   # mantle
+raised_surface = "#ccd0da"   # surface0
+border         = "#acb0be"   # surface2
+text           = "#4c4f69"   # text
+dimmed_text    = "#6c6f85"   # subtext0
+accent         = "#8839ef"   # mauve
+text_on_accent = "#eff1f5"   # base
+selection      = "#ccd0da"   # surface0
+success        = "#40a02b"   # green
+warning        = "#df8e1d"   # yellow
+error          = "#d20f39"   # red

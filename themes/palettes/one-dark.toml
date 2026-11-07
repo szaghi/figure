@@ -1,0 +1,25 @@
+# FIGURE palette "one-dark": One Dark, Atom's dark palette.
+# Source: https://github.com/joshdick/onedark.vim (autoload/onedark.vim, commit ad9610c).
+# MIT licence, Copyright (c) 2015 Joshua Dick, and (c) 2011-2022 GitHub Inc. for mono-2.
+# Licence: third_party/palettes/LICENSE-one-dark.txt, installed in share/licenses/one-dark/.
+# The hex values are the upstream ones, by their upstream names (after each role).
+# Dimmed text is mono-2 of the original One Dark (atom/atom, packages/one-dark-syntax/styles/colors.less, commit
+# 8ae45ca, hsl(220, 9%, 55%)): onedark.vim has no grey between its comment grey (2.3:1 on the background) and the text.
+# Lines leave out dark_red, below 3:1 on the background.
+# Format: docs/guide/styles.md#palettes. The Dear ImGui colours are derived from the roles.
+
+lines = ["#61afef", "#98c379", "#e5c07b", "#e06c75", "#c678dd", "#56b6c2", "#d19a66"]
+
+[palette]
+background     = "#282c34"   # background
+surface        = "#2c323c"   # cursor_grey
+raised_surface = "#3e4452"   # visual_grey
+border         = "#4b5263"   # gutter_fg_grey
+text           = "#abb2bf"   # foreground
+dimmed_text    = "#828997"   # mono-2 of Atom One Dark
+accent         = "#61afef"   # blue
+text_on_accent = "#282c34"   # background
+selection      = "#3e4452"   # visual_grey
+success        = "#98c379"   # green
+warning        = "#e5c07b"   # yellow
+error          = "#e06c75"   # red

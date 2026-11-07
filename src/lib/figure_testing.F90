@@ -23,14 +23,14 @@ use, intrinsic :: iso_c_binding, only : c_char, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
-                            fig_input_next_frame, fig_input_quit, fig_input_text, fig_input_wheel, fig_window_rect, &
-                            fig_plot_tick_label
+                            fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
+                            fig_input_wheel, fig_window_rect, fig_plot_tick_label
 use figure_imgui, only : ig_item_rect
 
 implicit none
 private
 public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel, test_key, test_type
-public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick
+public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick, test_system_theme
 
 contains
    subroutine test_next_frame(stat)
@@ -70,6 +70,26 @@ contains
 
    call figure_check(fig_input_quit(), stat)
    endsubroutine test_quit
+
+   subroutine test_system_theme(theme, stat)
+   !< The system's light or dark setting changes, as SDL's theme-changed event reports it, at the next frame:
+   !< `palette='auto'` (`app%set_style`) is chosen again. `theme` is `'light'`, `'dark'`, or `'system'` (the real
+   !< setting again, read from SDL in window mode; unknown, so dark, in headless and remote modes). Works in every mode.
+   character(len=*), intent(in)            :: theme !< `'light'`, `'dark'` or `'system'`.
+   integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for another value, `FIG_ERR_STATE`
+                                                    !< before `init*`.
+
+   select case (theme)
+   case ('system')
+      call figure_check(fig_input_system_theme(0_c_int), stat)
+   case ('light')
+      call figure_check(fig_input_system_theme(1_c_int), stat)
+   case ('dark')
+      call figure_check(fig_input_system_theme(2_c_int), stat)
+   case default
+      call figure_fail(FIG_ERR_ARGUMENT, "test_system_theme: theme is 'light', 'dark' or 'system'", stat)
+   endselect
+   endsubroutine test_system_theme
 
    subroutine test_mouse_move(x, y, stat)
    !< Queue a move of the mouse to (x, y).

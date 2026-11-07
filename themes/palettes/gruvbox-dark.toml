@@ -1,0 +1,22 @@
+# FIGURE palette "gruvbox-dark": Gruvbox, dark: retro groove colours.
+# Source: https://github.com/morhetz/gruvbox (colors/gruvbox.vim, commit 0401386).
+# MIT licence, Copyright (c) Pavel Pertsev (morhetz).
+# Licence: third_party/palettes/LICENSE-gruvbox.txt, installed in share/licenses/gruvbox/.
+# The hex values are the upstream ones, by their upstream names (after each role).
+# Format: docs/guide/styles.md#palettes. The Dear ImGui colours are derived from the roles.
+
+lines = ["#83a598", "#fabd2f", "#b8bb26", "#fb4934", "#d3869b", "#8ec07c", "#fe8019", "#a89984"]
+
+[palette]
+background     = "#282828"   # dark0
+surface        = "#3c3836"   # dark1
+raised_surface = "#504945"   # dark2
+border         = "#665c54"   # dark3
+text           = "#ebdbb2"   # light1
+dimmed_text    = "#a89984"   # light4
+accent         = "#fabd2f"   # bright_yellow
+text_on_accent = "#282828"   # dark0
+selection      = "#504945"   # dark2
+success        = "#b8bb26"   # bright_green
+warning        = "#fe8019"   # bright_orange
+error          = "#fb4934"   # bright_red

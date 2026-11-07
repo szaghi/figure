@@ -1,0 +1,24 @@
+# FIGURE palette "tokyo-night": Tokyo Night, the lights of Downtown Tokyo at night.
+# Source: https://github.com/enkia/tokyo-night-vscode-theme (README.md and themes/tokyo-night-color-theme.json, commit da5546b).
+# MIT licence, Copyright (c) 2018-present Enkia.
+# Licence: third_party/palettes/LICENSE-tokyo-night.txt, installed in share/licenses/tokyo-night/.
+# The hex values are the upstream ones, by their upstream names (after each role).
+# Selection is #363b54: the theme's own selection colours are translucent (#515c7e4d), and roles are opaque.
+# Format: docs/guide/styles.md#palettes. The Dear ImGui colours are derived from the roles.
+
+background = "#16161e"   # side bar, behind the windows
+lines = ["#7aa2f7", "#9ece6a", "#e0af68", "#f7768e", "#bb9af7", "#7dcfff", "#ff9e64", "#73daca"]
+
+[palette]
+background     = "#1a1b26"   # editor background
+surface        = "#16161e"   # side bar and widgets
+raised_surface = "#24283b"   # Storm background
+border         = "#414868"   # terminal black
+text           = "#c0caf5"   # variables, terminal white
+dimmed_text    = "#787c99"   # interface foreground
+accent         = "#7aa2f7"   # function names, terminal blue
+text_on_accent = "#1a1b26"   # editor background
+selection      = "#363b54"   # indent guides, terminal black
+success        = "#9ece6a"   # strings
+warning        = "#e0af68"   # parameters, terminal yellow
+error          = "#f7768e"   # keywords, terminal red

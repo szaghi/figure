@@ -1,0 +1,27 @@
+# FIGURE look "fluent": close to Windows 11 (Fluent 2).
+# Medium rounding (4 on controls, 8 on windows and popups), framed fields, round slider grabs, moderate spacing.
+# Proportions only, not a copy (Dear ImGui draws no acrylic, gradients or shadows).
+# Format: docs/guide/styles.md#looks. A look holds geometry only: [imgui.vars] and [implot.vars], logical pixels.
+
+[imgui.vars]
+WindowPadding = [10, 10]
+WindowRounding = 8
+WindowBorderSize = 1
+ChildRounding = 4
+PopupRounding = 8
+PopupBorderSize = 1
+FramePadding = [8, 5]
+FrameRounding = 4
+FrameBorderSize = 1
+ItemSpacing = [8, 6]
+ItemInnerSpacing = [6, 4]
+CellPadding = [6, 3]
+IndentSpacing = 20
+ScrollbarSize = 10
+ScrollbarRounding = 6
+GrabMinSize = 12
+GrabRounding = 6
+TabRounding = 4
+
+[implot.vars]
+PlotBorderSize = 1

@@ -43,6 +43,13 @@ int    fig_set_style(const char *name, int name_len, const char *lines, int line
  * Button, PlotBg, ...), rgba in [0, 1]. Variables: every plain field of ImGuiStyle/ImPlotStyle (WindowRounding,
  * FramePadding, PlotPadding, ...): count values (1, or 2 for an ImVec2; bools as 0/1, enumerations as integers),
  * returned in count when reading. */
+/* The style by parts, at once (nothing changes on an error): a built-in style by name, then a look, then a palette (a
+ * bundled name or "auto", choosing between auto_dark and auto_light), then a line palette; an empty part is kept. */
+int    fig_set_style_parts(const char *name, int name_len, const char *look, int look_len, const char *palette,
+                           int palette_len, const char *auto_dark, int auto_dark_len, const char *auto_light,
+                           int auto_light_len, const char *lines, int lines_len);
+/* The colour of a palette role in effect (rgba[4] in [0, 1]); without a palette, read from Dear ImGui's colours. */
+int    fig_palette_color(const char *role, int role_len, float *rgba);
 /* Theme files (figure_theme.h format): load one, or write the style in effect as one (what differs from its base). */
 int    fig_load_style(const char *path, int path_len);
 int    fig_save_style(const char *path, int path_len);
@@ -116,6 +123,9 @@ void   fig_quit(void);
 int    fig_set_title(const char *title, int title_len);
 int    fig_title(char *buf, int buf_len);
 int    fig_input_quit(void);
+/* The system's light (1) or dark (2) setting, as SDL's theme-changed event reports it, handled at the next frame;
+ * 0 gives the setting back to the system (tests of palette "auto"). */
+int    fig_input_system_theme(int theme);
 /* File dialogs (window mode): kind 0 open, 1 save, 2 folder; filters "name|pattern" separated by newlines. The result
  * is polled by id: state 0 open, 1 chosen (path), 2 cancelled, 3 failed. */
 int    fig_file_dialog(int kind, const char *id, int id_len, const char *filters, int filters_len, const char *path,

@@ -50,7 +50,7 @@ done
 # programs: the library sources and the examples in one FoBiS build, with the flags of fobos (template-gnu, -O2)
 ext_libs=()
 for lib in figure_native SDL3 stdc++ dl pthread m; do ext_libs+=(--ext-libs "$lib"); done # fobos $NATIVE_LIBS
-cp "$root"/src/lib/*.F90 "$ex"/src/*.F90 "$build/src/"
+cp "$root"/src/lib/*.F90 "$root"/src/lib/*.inc "$ex"/src/*.F90 "$build/src/" # the .inc: included by figure.F90
 (cd "$build" && fobis build --compiler gnu --fc "$fc" --src src --build-dir bin --mod-dir mod --obj-dir obj \
                      --cflags "-c -std=f2018 -ffree-line-length-132 -fimplicit-none -O2" \
                      --lib-dir "$root/lib" "${ext_libs[@]}" --jobs 1) \

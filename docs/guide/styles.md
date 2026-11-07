@@ -4,13 +4,14 @@ title: Styles
 
 # Styles
 
-Every colour and size of the interface and of the plots can be chosen: a whole style by name, or any single colour
-or variable of Dear ImGui and ImPlot by its own name.
+Every colour and size of the interface and of the plots can be chosen: a whole style by name; its two parts, a
+**look** (the geometry: rounding, padding, spacing, borders) and a **palette** (the colours), each by name; or any
+single colour or variable of Dear ImGui and ImPlot by its own name.
 
 ## Named styles
 
-`app%set_style(name [, lines] [, stat])`, after `init` (or `init_headless`, `init_remote`), sets the colours of the
-interface, of the plots and of the window's background:
+`app%set_style(name [, lines] [, stat])`, after `init` (or `init_headless`, `init_remote`), sets the geometry and
+the colours of the interface, of the plots and of the window's background:
 
 | Name | Look | Text contrast (lowest) |
 |---|---|---|
@@ -34,6 +35,11 @@ it: `Text` against every surface it is drawn on (window, popup, frames, buttons,
 reported. FIGURE's styles are held to a target in the test: 4.5:1 (WCAG AA) for `seal` and `seal-light`, 7:1 (AAA)
 for `paper` and `high-contrast`, and 3:1 for every line colour against the plot background (WCAG 1.4.11, graphics).
 Dear ImGui's own styles are measured, not held to one: `dark` reaches only 3:1 on a hovered button.
+
+Each of FIGURE's four styles is a look and a palette: the look `seal` with the palette of the same name (`paper` and
+`high-contrast` add borders to it). Dear ImGui's three are its own geometry with its own colours, no palette. The
+same test holds every built-in style to the colours and sizes it had before styles were split into looks and
+palettes, bit for bit.
 
 The environment variable `FIGURE_STYLE` picks the style at initialisation, without changing the program
 (`FIGURE_STYLE=paper exe/figure_hello`); a `set_style` call in the program comes later and wins. An unknown name or
@@ -61,6 +67,155 @@ keeps its own colormap (Viridis) in all of them; the lines take the style's.
 <Media name="gallery-light" alt="The gallery in Dear ImGui's light style" caption="light: Dear ImGui's" />
 <Media name="gallery-classic" alt="The gallery in Dear ImGui's classic style" caption="classic: Dear ImGui's" />
 </div>
+
+## Looks and palettes
+
+A style has two parts, chosen separately:
+
+- a **look**: the geometry, the variables of Dear ImGui (`ImGuiStyle`) and ImPlot (`ImPlotStyle`) that size and shape
+  the widgets: rounding, padding, spacing, border widths, the scroll bar;
+- a **palette**: the colours, twelve [roles](#palette-roles) from which every colour of Dear ImGui and ImPlot is
+  [derived](#how-the-colours-are-derived), plus the window's background and the line colours of the plots.
+
+| Procedure | Does |
+|---|---|
+| `app%set_style([name] [, lines] [, stat] [, look] [, palette] [, auto_dark] [, auto_light])` | a named style, then a look, then a palette, then line colours: each argument optional, what is not given is kept |
+| `app%palette_color(role, rgba [, stat])` | the colour of a role of the palette in effect, `rgba(4)` in [0, 1] |
+| `test_system_theme(theme [, stat])` | (`figure_testing`) the system's light or dark setting changes at the next frame: `'light'`, `'dark'`, `'system'` |
+
+<<< @/examples/snippets/cb_palette-pair.F90{fortran}
+
+<Media name="cb_palette" :width="560" alt="A window in the fluent look and the Nord palette: rounded buttons and fields on blue-grey, a light-blue check mark and slider grab, three status lines marked [ok] in green, (!) in yellow and [!!] in red, and a plot of three residuals in blue, green and yellow" caption="docs/examples/src/cb_palette.F90: look fluent, palette nord" />
+
+- **Changing one part keeps the other:** `look=` replaces every variable and keeps the colours; `palette=` replaces
+  every colour, the window's background and the line colours, and keeps the variables. A `name` sets both, then
+  `look` and `palette` replace their part of it.
+- **All or none:** the arguments are checked before anything changes; an unknown name, look or palette, or a palette
+  below the [contrast rule](#the-contrast-rule), is `FIG_ERR_ARGUMENT` (or a stop, without `stat`) and leaves the
+  style in effect as it was. A call with no argument is `FIG_ERR_ARGUMENT` too.
+- Colours and variables changed [by name](#colours-and-variables-by-name) are reset by the part that sets them: a
+  new palette resets the colours, a new look the variables. The font and its size are never changed.
+- **Modes:** the same in window, headless and remote mode (in remote mode the browser takes the palette's
+  background); only `palette='auto'` [differs](#follow-the-system-s-light-or-dark-setting).
+
+### Looks
+
+<Media name="looks" alt="The same small window four times, side by side, in the palette seal: in the look seal with square corners and compact spacing; in fusion with corners rounded by 2 pixels, framed fields and dense rows; in adwaita with rounder corners, round slider grabs, more padding and no window border; in fluent with medium rounding, framed fields and round grabs" caption="docs/examples/src/gallery.F90, run as gallery looks: seal, fusion, adwaita, fluent" />
+
+| Look | Close to | Geometry |
+|---|---|---|
+| `'seal'` | FIGURE's own (the default) | square corners, Dear ImGui's compact spacing |
+| `'fusion'` | Qt's Fusion style | corners of 2 pixels, a border on fields and windows, dense rows |
+| `'adwaita'` | GNOME's Adwaita (GTK 4) | corners of 6 to 10 pixels, round slider grabs and scroll bars, roomy padding, no borders on fields and windows |
+| `'fluent'` | Windows 11 (Fluent 2) | corners of 4 pixels on controls and 8 on windows, framed fields, round slider grabs |
+
+Dear ImGui draws no gradients, shadows or translucency effects: a look reproduces the proportions of its model, not
+its rendering. Each look is a file, `themes/looks/<name>.toml`, with `[imgui.vars]` and `[implot.vars]` only (sizes
+in logical pixels), embedded in the library; a style without a look (`'dark'`, `'light'`, `'classic'`) has Dear
+ImGui's own geometry.
+
+### Palettes
+
+<Media name="palettes" alt="Fourteen small windows in a grid, one per bundled palette, each with its name in the title bar: text and dimmed text, a button, a check box, a selected line, a slider, a status line marked [ok], (!) and [!!] in the palette's success, warning and error colours, and a plot of four lines in the palette's line colours. Row one: seal, seal-light, paper, high-contrast. Row two: nord, solarized-dark, solarized-light, gruvbox-dark. Row three: gruvbox-light, dracula, catppuccin-mocha, catppuccin-latte. Row four: tokyo-night, one-dark" caption="docs/examples/src/gallery.F90, run as gallery palettes: every bundled palette, in the look seal" />
+
+| Palette | Light or dark | Source |
+|---|---|---|
+| `'seal'`, `'seal-light'` | dark, light | FIGURE's: ink, paper, one vermilion |
+| `'paper'` | light | FIGURE's: black on white, for publication |
+| `'high-contrast'` | dark | FIGURE's: white on black, yellow accents |
+| `'nord'` | dark | [Nord](https://github.com/nordtheme/nord), MIT |
+| `'solarized-dark'`, `'solarized-light'` | dark, light | [Solarized](https://github.com/altercation/solarized), MIT |
+| `'gruvbox-dark'`, `'gruvbox-light'` | dark, light | [Gruvbox](https://github.com/morhetz/gruvbox), MIT |
+| `'dracula'` | dark | [Dracula](https://github.com/dracula/dracula-theme), MIT |
+| `'catppuccin-mocha'`, `'catppuccin-latte'` | dark, light | [Catppuccin](https://github.com/catppuccin/palette), MIT |
+| `'tokyo-night'` | dark | [Tokyo Night](https://github.com/enkia/tokyo-night-vscode-theme), MIT |
+| `'one-dark'` | dark | [One Dark](https://github.com/joshdick/onedark.vim), MIT |
+| `'auto'` | the system's | `auto_dark` or `auto_light`, [below](#follow-the-system-s-light-or-dark-setting) |
+
+Each palette is a file, `themes/palettes/<name>.toml`, embedded in the library. The hex values are the upstream
+projects' own, named after each role in the file; where an upstream colour fails the [contrast
+rule](#the-contrast-rule) in its role, another colour of the same palette takes its place, and the file's comment
+says which (Nord's comment grey is too dark for dimmed text, so its `nord4` is used; Solarized's blue is too weak
+under text, so its cyan is the accent). Their licences are in
+[THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md). FIGURE's four palettes give every Dear
+ImGui colour by hand (the colours of the styles of the same name), so none of theirs is derived.
+
+### Palette roles
+
+| Role | Colours |
+|---|---|
+| `background` | window backgrounds (`WindowBg`), title bars, the plot background |
+| `surface` | fields, popups, menu bars, tabs, the plot frame (`FrameBg`, `PopupBg`, `MenuBarBg`, `Tab`) |
+| `raised_surface` | buttons and the selected tab (`Button`, `TabSelected`) |
+| `border` | borders, separators, scroll bar grabs, table and tree lines |
+| `text` | text, the input cursor, the plot's text and grid |
+| `dimmed_text` | disabled text (`TextDisabled`), ImGui's own small line plots |
+| `accent` | what the user touches: check marks, slider grabs, the selected tab's line, links, resize grips, the docking preview |
+| `text_on_accent` | text drawn on an accent fill, by FIGURE's own widgets |
+| `selection` | selected lines and headers (`Header`), selected text (`TextSelectedBg`) |
+| `success`, `warning`, `error` | not used by Dear ImGui: for the program's own messages, through `app%palette_color` |
+
+The roles are opaque colours. `app%palette_color(role, rgba)` gives the program the roles in effect, so its own
+messages follow the palette; with a style that has no palette (`'dark'`, `'light'`, `'classic'`, a theme file without
+one) the roles are read from Dear ImGui's colours (`WindowBg`, `FrameBg`, `Button`, `Border`, `Text`,
+`TextDisabled`, `CheckMark`, `Header`), and `success`, `warning` and `error` are Okabe and Ito's bluish green, orange
+and vermilion. An unknown role is `FIG_ERR_ARGUMENT`. Colour is never the only carrier of meaning: a mark or a word
+goes with it.
+
+<<< @/examples/snippets/cb_palette-roles.F90{fortran}
+
+<<< @/examples/snippets/cb_palette-status.F90{fortran}
+
+### How the colours are derived
+
+One function of the native layer maps the twelve roles to every colour of Dear ImGui (`ImGuiCol_*`); ImPlot's
+colours (`ImPlotCol_*`) are left automatic, so ImPlot derives them from Dear ImGui's: the plot frame from `FrameBg`,
+the plot background from `WindowBg`, the axis text, grid and ticks from `Text`, the legend from `PopupBg`.
+
+- **Fills** are the roles: `WindowBg` the background, `FrameBg` the surface, `Button` the raised surface, `Header`
+  the selection.
+- **Hovered and active fills** are mixes toward the text colour (8 % and 16 % for fields and headers, 10 % and 20 %
+  for buttons), or away from it where the mix would bring the text below 4.5:1 on them.
+- **Disabled text** is the dimmed text; scroll bar grabs are the border mixed toward the text.
+- **Accents:** check marks, slider grabs, links, the selected tab's line and the navigation cursor are the accent;
+  separators, resize grips and the docking preview are the accent with transparency.
+- **The window's background**, behind the windows, is the background darkened (by 25 % for a dark palette, 8 % for a
+  light one), unless the palette file gives one.
+- **Line colours** are the palette file's `lines`, or ImPlot's default (Deep) if it has none.
+
+Explicit colours still override: a palette file's or a theme file's `[imgui.colors]` and `[implot.colors]` are
+applied after the derivation.
+
+### The contrast rule
+
+A palette is checked when it is applied, with the WCAG 2 contrast ratio:
+
+| Pair | At least |
+|---|---|
+| `text` on `background`, `surface`, `raised_surface` and `selection` | 4.5:1 |
+| `dimmed_text` on `background` | 3:1 |
+| `text_on_accent` on `accent` | 4.5:1 |
+
+A palette that fails is refused with `FIG_ERR_ARGUMENT`, and the message names the first failing pair, its ratio and
+its colours. A theme file `my-theme.toml` with `palette = "nord"` and, in its `[palette]` table,
+`text = "#4c566a"` (Nord's comment grey) gives
+`load_style: my-theme.toml: [palette]: text on background is 1.69:1, below 4.5:1 (#4c566a on #2e3440)`. `src/tests/figure_test_themes.F90` holds every bundled palette to
+the rule, and further to text at 4.5:1 on every fill it is drawn on (hovered and active included) and to line
+colours at 3:1 on the plot background.
+
+### Follow the system's light or dark setting
+
+<<< @/examples/snippets/cb_palette-auto.F90{fortran}
+
+`palette='auto'` takes `auto_dark` (default `'seal'`) when the system is set to dark and `auto_light` (default
+`'seal-light'`) when it is set to light, and changes palette when the setting changes while the program runs. The
+geometry and the line colours given with `lines=` are kept through the change; colours changed by name are not.
+`auto_dark` and `auto_light` given alone change the pair of an `'auto'` in effect.
+
+**Modes:** in **window** mode the setting is SDL's (`SDL_GetSystemTheme`), read again on its theme-changed event; an
+unknown setting counts as dark. In **headless** and **remote** mode the setting is unknown, so `'auto'` is
+`auto_dark` (in remote mode the browser's own setting is not read). In every mode `test_system_theme` (from
+`figure_testing`) changes the setting at the next frame, as the event would, for tests; `'system'` gives it back.
 
 ## Colours and variables by name
 
@@ -172,19 +327,27 @@ Every named style is a small text file in the repository, `themes/<name>.toml`, 
 native layer is built: adding a file there adds a style. The format is a subset of TOML:
 
 ```toml
-# A theme file, every kind of entry (themes/seal.toml, the default style, sets fewer).
-base = "dark"                                  # dark | light | classic: the Dear ImGui style it starts from
+# A theme file, every kind of entry (themes/seal.toml, the default style, sets two: look and palette).
+look = "fluent"                                # a look: its geometry first (default: Dear ImGui's)
+palette = "nord"                               # a palette, or "auto" (default: none, the colours of base)
+auto_dark = "nord"                             # the palettes of "auto" (defaults: seal, seal-light)
+auto_light = "solarized-light"
+base = "dark"                                  # dark | light | classic: the colours without a palette
 font = "plex-sans"                             # plex-sans | proggy | a font file (default: the font in effect)
 font_size = 15                                 # logical pixels (default: the size in effect)
-background = "#14120f"                         # behind the windows (default: the base's)
-lines = ["#e8664c", "#e9e2d4", "#c9a25a"]      # ImPlot's line colours, in order, or "okabe-ito" (default: Deep)
+background = "#14120f"                         # behind the windows (default: the palette's, or the base's)
+lines = ["#e8664c", "#e9e2d4", "#c9a25a"]      # ImPlot's line colours, in order, or "okabe-ito" (default: the
+                                               # palette's, or ImPlot's Deep)
+
+[palette]                                      # roles: all twelve, or some over the named palette
+accent = "#d08770"
 
 [imgui.vars]                                   # ImGuiStyle fields: a number, [x, y], true or false
 WindowRounding = 0
 FramePadding = [4, 3]
 
-[imgui.colors]                                 # ImGuiCol_* names: "#rrggbb", "#rrggbbaa" or ["#rrggbb", alpha]
-Text = "#f6f2ea"
+[imgui.colors]                                 # ImGuiCol_* names: "#rrggbb", "#rrggbbaa", ["#rrggbb", alpha]
+Text = "#f6f2ea"                               # or [r, g, b, a] in [0, 1]
 PopupBg = ["#1c1915", 0.97]
 
 [implot.vars]                                  # ImPlotStyle fields
@@ -192,12 +355,21 @@ PopupBg = ["#1c1915", 0.97]
 ```
 
 - Names are those of [colours and variables by name](#colours-and-variables-by-name); `#` starts a comment.
-- Everything not given comes from `base`: a theme lists only what it changes, and a newer Dear ImGui adding style
-  colours never leaves a theme incomplete.
+- **The order:** the colours come from the palette (derived from its roles) or, without one, from `base`; the
+  variables from the look or, without one, from Dear ImGui's defaults; then the file's own `[imgui.vars]`,
+  `[imgui.colors]`, `[implot.vars]` and `[implot.colors]` override them. With a palette, `base` gives no colour.
+- **A `[palette]` table** gives roles: with `palette = "name"` it overrides single roles of that palette; without, it
+  must give all twelve. Either way the [contrast rule](#the-contrast-rule) applies to the result.
+- Everything not given comes from the look, the palette or `base`: a theme lists only what it changes, and a newer
+  Dear ImGui adding style colours never leaves a theme incomplete.
 - Sizes are in logical pixels, multiplied by the display's content scale when the theme is applied.
 - ImPlot's colours not given are derived from Dear ImGui's (ImPlot's automatic colours), so a theme that sets only
   Dear ImGui colours gives matching plots.
 - A malformed file is reported with its line: `themes/x.toml:12: unknown Dear ImGui colour "Buton"`.
+
+A look file (`themes/looks/`) holds `[imgui.vars]` and `[implot.vars]` only; a palette file (`themes/palettes/`) holds
+a complete `[palette]` table and, optionally, `background`, `lines`, `[imgui.colors]` and `[implot.colors]`. Adding a
+file there and rebuilding the native layer adds a look or a palette.
 
 The built-in themes: [`seal`](https://github.com/szaghi/figure/blob/main/themes/seal.toml),
 [`seal-light`](https://github.com/szaghi/figure/blob/main/themes/seal-light.toml),
@@ -212,7 +384,7 @@ The built-in themes: [`seal`](https://github.com/szaghi/figure/blob/main/themes/
 | Procedure | Does |
 |---|---|
 | `app%load_style(file [, stat])` | apply a theme file; `FIG_ERR_FAILED` if it cannot be read, `FIG_ERR_ARGUMENT` if it is malformed (the message gives file and line) |
-| `app%save_style(file [, stat])` | write the style in effect as a theme file: its base, background and line colours, and every colour and variable that differs from the base, including the changes made by name or in the style editor |
+| `app%save_style(file [, stat])` | write the style in effect as a theme file: its look and palette (or its base), background and line colours, and every colour and variable that differs from what they give, including the changes made by name or in the style editor |
 | `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's own style editors in a window, "Style editor": every colour and size, live |
 
 `FIGURE_STYLE` also takes a file: a value with a `/` or ending in `.toml` is loaded as a theme
@@ -242,5 +414,7 @@ TabRounding = 0
 ```
 
 `save_style` writes sizes in logical pixels (whatever the display's content scale) and colours as 8-bit hex, with
-their alpha exact; `load_style` reads the file back to the same style. Edit the file freely: everything not in it
-comes from `base`.
+their alpha exact; `load_style` reads the file back to the same style. A look and a palette are written by name
+(`look = "fluent"`, `palette = "nord"`, and for `'auto'` its pair), a palette given as a `[palette]` table as its twelve
+roles; what follows is only what differs from them. Edit the file freely: everything not in it comes from the look,
+the palette or `base`.

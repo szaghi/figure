@@ -1,0 +1,12 @@
+# FIGURE look "seal": square and compact, FIGURE's own (the default).
+# Dear ImGui's proportions with every corner cut straight, as the seal's edges are.
+# Format: docs/guide/styles.md#looks. A look holds geometry only: [imgui.vars] and [implot.vars], logical pixels.
+
+[imgui.vars]
+WindowRounding = 0
+ChildRounding = 0
+FrameRounding = 0
+PopupRounding = 0
+ScrollbarRounding = 0
+GrabRounding = 0
+TabRounding = 0

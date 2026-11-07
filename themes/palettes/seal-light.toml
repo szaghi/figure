@@ -1,0 +1,88 @@
+# FIGURE palette "seal-light": the seal on paper: paper windows, ink text, the same vermilion.
+# Paper windows, ink text, the same vermilion accents.
+# The roles are what FIGURE draws its own widgets with and what the contrast rule checks; the Dear ImGui colours
+# are all given below, hand-tuned (the theme "seal-light" before looks and palettes, unchanged), so none is derived.
+# Format: docs/guide/styles.md#palettes.
+
+background = "#e6e0d4"
+lines = ["#b42d1a", "#16130f", "#a57a2a", "#4a6a80", "#5f7a3a", "#7d4a6a", "#c0603a", "#6b645a"]
+
+[palette]
+background = "#fbf9f4"
+surface = "#ece6da"
+raised_surface = "#e6e0d4"
+border = "#d8d0c2"
+text = "#16130f"
+dimmed_text = "#8a8278"
+accent = "#b42d1a"
+text_on_accent = "#fbf9f4"
+selection = "#e6e0d4"
+success = "#5f7a3a"
+warning = "#a57a2a"
+error = "#b42d1a"
+
+[imgui.colors]
+Text = "#16130f"
+TextDisabled = "#8a8278"
+WindowBg = "#fbf9f4"
+ChildBg = ["#fbf9f4", 0.0]
+PopupBg = ["#ffffff", 0.97]
+Border = "#d8d0c2"
+BorderShadow = ["#000000", 0.0]
+FrameBg = "#ece6da"
+FrameBgHovered = "#e2dacb"
+FrameBgActive = "#d8cfbf"
+TitleBg = "#ece6da"
+TitleBgActive = "#e0d7c6"
+TitleBgCollapsed = "#ece6da"
+MenuBarBg = "#ece6da"
+ScrollbarBg = "#fbf9f4"
+ScrollbarGrab = "#d8d0c2"
+ScrollbarGrabHovered = "#c8bfae"
+ScrollbarGrabActive = "#b8ae9b"
+CheckMark = "#b42d1a"
+SliderGrab = "#c8321e"
+SliderGrabActive = "#952414"
+Button = "#e6e0d4"
+ButtonHovered = "#f4c3b4"
+ButtonActive = "#f08a72"
+Header = "#e6e0d4"
+HeaderHovered = "#e2dacb"
+HeaderActive = "#d8cfbf"
+Separator = "#d8d0c2"
+SeparatorHovered = ["#c8321e", 0.78]
+SeparatorActive = "#c8321e"
+ResizeGrip = ["#c8321e", 0.20]
+ResizeGripHovered = ["#c8321e", 0.67]
+ResizeGripActive = ["#c8321e", 0.95]
+InputTextCursor = "#16130f"
+Tab = "#ece6da"
+TabHovered = "#e2dacb"
+TabSelected = "#d8cfbf"
+TabSelectedOverline = "#c8321e"
+TabDimmed = "#ece6da"
+TabDimmedSelected = "#ece6da"
+TabDimmedSelectedOverline = "#d8d0c2"
+PlotLines = "#16130f"
+PlotLinesHovered = "#952414"
+PlotHistogram = "#a57a2a"
+PlotHistogramHovered = "#952414"
+TableHeaderBg = "#ece6da"
+TableBorderStrong = "#d8d0c2"
+TableBorderLight = "#ece6da"
+TextLink = "#b42d1a"
+TextSelectedBg = ["#c8321e", 0.35]
+TreeLines = "#d8d0c2"
+DragDropTarget = "#952414"
+DragDropTargetBg = ["#c8321e", 0.10]
+UnsavedMarker = "#16130f"
+NavCursor = "#b42d1a"
+DockingPreview = ["#c8321e", 0.55]
+DockingEmptyBg = "#e6e0d4"
+# not set by the theme before: Dear ImGui's light style's, kept as they were
+CheckboxSelectedBg = [0.95, 0.97, 1, 1]
+TableRowBg = ["#000000", 0]
+TableRowBgAlt = [0.3, 0.3, 0.3, 0.09]
+NavWindowingHighlight = [0.7, 0.7, 0.7, 0.7]
+NavWindowingDimBg = ["#333333", 0.2]
+ModalWindowDimBg = ["#333333", 0.35]

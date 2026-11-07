@@ -1,0 +1,103 @@
+# FIGURE palette "paper": black on white, for publication.
+# Screenshots that go into papers and slides: white background, black text and thin borders, a light grey grid, and
+# lines in the five colours of Okabe and Ito's colour-blind-safe set that keep 3:1 against white (its orange, sky blue
+# and yellow do not), in order of greyscale lightness, black first.
+# The roles are what FIGURE draws its own widgets with and what the contrast rule checks; the Dear ImGui colours
+# are all given below, hand-tuned (the theme "paper" before looks and palettes, unchanged), so none is derived.
+# Format: docs/guide/styles.md#palettes.
+
+background = "#ffffff"
+lines = ["#000000", "#0072b2", "#d55e00", "#009e73", "#cc79a7"]
+
+[palette]
+background = "#ffffff"
+surface = "#f2f2f2"
+raised_surface = "#f2f2f2"
+border = "#9a9a9a"
+text = "#000000"
+dimmed_text = "#6b6b6b"
+accent = "#000000"
+text_on_accent = "#ffffff"
+selection = "#ececec"
+success = "#009e73"
+warning = "#d55e00"
+error = "#d55e00"
+
+[imgui.colors]
+Text = "#000000"
+TextDisabled = "#6b6b6b"
+WindowBg = "#ffffff"
+ChildBg = ["#ffffff", 0.0]
+PopupBg = "#ffffff"
+Border = "#9a9a9a"
+BorderShadow = ["#000000", 0.0]
+FrameBg = "#f2f2f2"
+FrameBgHovered = "#e6e6e6"
+FrameBgActive = "#d9d9d9"
+TitleBg = "#f2f2f2"
+TitleBgActive = "#e6e6e6"
+TitleBgCollapsed = "#f2f2f2"
+MenuBarBg = "#f2f2f2"
+ScrollbarBg = "#ffffff"
+ScrollbarGrab = "#c8c8c8"
+ScrollbarGrabHovered = "#b0b0b0"
+ScrollbarGrabActive = "#989898"
+CheckMark = "#000000"
+SliderGrab = "#000000"
+SliderGrabActive = "#444444"
+Button = "#f2f2f2"
+ButtonHovered = "#e0e0e0"
+ButtonActive = "#cccccc"
+Header = "#ececec"
+HeaderHovered = "#e0e0e0"
+HeaderActive = "#d0d0d0"
+Separator = "#bdbdbd"
+SeparatorHovered = "#6b6b6b"
+SeparatorActive = "#000000"
+ResizeGrip = ["#000000", 0.15]
+ResizeGripHovered = ["#000000", 0.35]
+ResizeGripActive = ["#000000", 0.6]
+Tab = "#f2f2f2"
+TabHovered = "#e0e0e0"
+TabSelected = "#ffffff"
+TabSelectedOverline = "#000000"
+TabDimmed = "#f2f2f2"
+TabDimmedSelected = "#ffffff"
+TabDimmedSelectedOverline = "#9a9a9a"
+PlotLines = "#000000"
+PlotHistogram = "#555555"
+TableHeaderBg = "#f2f2f2"
+TableBorderStrong = "#9a9a9a"
+TableBorderLight = "#d9d9d9"
+TextLink = "#0072b2"
+TextSelectedBg = ["#0072b2", 0.25]
+NavCursor = "#000000"
+DockingPreview = ["#000000", 0.25]
+DockingEmptyBg = "#ffffff"
+# not set by the theme before: Dear ImGui's light style's, kept as they were
+CheckboxSelectedBg = [0.95, 0.97, 1, 1]
+InputTextCursor = "#000000"
+PlotLinesHovered = [1, 0.43, 0.35, 1]
+PlotHistogramHovered = [1, 0.45, 0, 1]
+TableRowBg = ["#000000", 0]
+TableRowBgAlt = [0.3, 0.3, 0.3, 0.09]
+TreeLines = ["#000000", 0.3]
+DragDropTarget = [0.26, 0.59, 0.98, 0.95]
+DragDropTargetBg = ["#000000", 0]
+UnsavedMarker = "#000000"
+NavWindowingHighlight = [0.7, 0.7, 0.7, 0.7]
+NavWindowingDimBg = ["#333333", 0.2]
+ModalWindowDimBg = ["#333333", 0.35]
+
+[implot.colors]
+FrameBg = "#ffffff"
+PlotBg = "#ffffff"
+PlotBorder = "#000000"
+LegendBg = ["#ffffff", 0.92]
+LegendBorder = "#9a9a9a"
+LegendText = "#000000"
+TitleText = "#000000"
+InlayText = "#000000"
+AxisText = "#000000"
+AxisGrid = ["#000000", 0.15]
+AxisTick = "#000000"

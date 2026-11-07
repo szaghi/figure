@@ -16,16 +16,16 @@ module figure_app
 !< settles it sleeps until input or `max_wait`, so an idle window costs a fraction of a percent of one core); it
 !< returns `.false.` when the user closes the window. There are no widget objects, handles or callbacks: the state is
 !< the application's own variables.
-use, intrinsic :: iso_c_binding, only : c_char, c_double, c_int
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
-                            fig_set_style, fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
+                            fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
                             fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title, fig_save_image, &
-                            fig_image_result, fig_save_layout, fig_load_layout
+                            fig_image_result, fig_save_layout, fig_load_layout, fig_set_style_parts, fig_palette_color
 
 implicit none
 private
@@ -43,7 +43,8 @@ type :: app_object
       procedure, pass(self) :: init_remote    !< The UI in a web browser (no window, display or GPU).
       procedure, pass(self) :: next_frame     !< Close the current frame, open the next; false on quit.
       procedure, pass(self) :: set_lazy       !< Lazy redraw on/off, longest sleep.
-      procedure, pass(self) :: set_style      !< Colours of the interface, the plots and the background.
+      procedure, pass(self) :: set_style      !< The style: a name, or a look and a palette.
+      procedure, pass(self) :: palette_color  !< The colour of a palette role in effect.
       procedure, pass(self) :: set_docking    !< Docking on (the default) or off.
       procedure, pass(self) :: set_font       !< The default font and its size.
       procedure, pass(self) :: load_style     !< A theme file.
@@ -234,8 +235,11 @@ contains
    call fig_set_lazy(merge(1_c_int, 0_c_int, enabled), w)
    endsubroutine set_lazy
 
-   subroutine set_style(self, name, lines, stat)
-   !< Colours of the interface, the plots and the window background, by name, after `init*`:
+   subroutine set_style(self, name, lines, stat, look, palette, auto_dark, auto_light)
+   !< The style of the interface, the plots and the window's background, after `init*`: by name, or by its two parts,
+   !< a look (the geometry) and a palette (the colours). Changing one part keeps the other.
+   !<
+   !< Names (each a theme file, `themes/<name>.toml`, embedded):
    !<
    !< - `'seal'` (the default), `'seal-light'`: FIGURE's, from its mark: ink (or paper) and one vermilion, spent on
    !<   what the user touches and on the first plotted line; square corners;
@@ -243,21 +247,50 @@ contains
    !< - `'high-contrast'`: white on black with yellow accents, text at 7:1 or more (WCAG AAA);
    !< - `'dark'`, `'light'`, `'classic'`: Dear ImGui's own styles, with ImPlot's default line colours.
    !<
-   !< `lines='okabe-ito'` replaces the style's line colours with Okabe and Ito's colour-blind-safe set. Each style is
-   !< a theme file (`themes/<name>.toml`, embedded). The environment variable `FIGURE_STYLE` picks the style at
-   !< initialisation; this call overrides it. The font and its size are kept; every other colour and variable comes from
-   !< the style (base and theme file), so changes made by name are reset.
-   class(app_object), intent(inout)         :: self  !< Application.
-   character(len=*),  intent(in)            :: name  !< Style name.
-   character(len=*),  intent(in),  optional :: lines !< Line palette: `'okabe-ito'` (default: the style's own).
-   integer(int32),    intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown name or palette.
+   !< Looks: `'seal'`, `'fusion'`, `'adwaita'`, `'fluent'`. Palettes: `'seal'`, `'seal-light'`, `'paper'`,
+   !< `'high-contrast'`, `'nord'`, `'solarized-dark'`, `'solarized-light'`, `'gruvbox-dark'`, `'gruvbox-light'`,
+   !< `'dracula'`, `'catppuccin-mocha'`, `'catppuccin-latte'`, `'tokyo-night'`, `'one-dark'`, and `'auto'`, which
+   !< follows the system's light or dark setting (`auto_dark`, default `'seal'`; `auto_light`, default `'seal-light'`)
+   !< and changes with it while the program runs; in headless and remote modes the setting is unknown and counts as
+   !< dark. A palette's colours are derived from twelve roles and checked for contrast (docs, Styles, Palettes).
+   !<
+   !< The parts are applied in order, all or none: `name`, then `look`, then `palette`, then `lines` (`'okabe-ito'`
+   !< replaces the line colours with Okabe and Ito's colour-blind-safe set). The environment variable `FIGURE_STYLE`
+   !< picks the style at initialisation; this call overrides it. The font and its size are kept; colours and variables
+   !< changed by name are reset by the part that sets them.
+   class(app_object), intent(inout)         :: self       !< Application.
+   character(len=*),  intent(in),  optional :: name       !< Style name.
+   character(len=*),  intent(in),  optional :: lines      !< Line palette: `'okabe-ito'` (default: the style's own).
+   integer(int32),    intent(out), optional :: stat       !< Status: `FIG_ERR_ARGUMENT` for an unknown name, look or
+                                                          !< palette, a palette below the contrast rule, or no argument.
+   character(len=*),  intent(in),  optional :: look       !< Look: the geometry (rounding, padding, spacing, borders).
+   character(len=*),  intent(in),  optional :: palette    !< Palette: the colours, or `'auto'`.
+   character(len=*),  intent(in),  optional :: auto_dark  !< Palette of `'auto'` on a dark system (default `'seal'`).
+   character(len=*),  intent(in),  optional :: auto_light !< Palette of `'auto'` on a light system (default
+                                                          !< `'seal-light'`).
 
-   if (present(lines)) then
-      call figure_check(fig_set_style(name, len(name, c_int), lines, len(lines, c_int)), stat)
-   else
-      call figure_check(fig_set_style(name, len(name, c_int), '', 0_c_int), stat)
-   endif
+   call figure_check(fig_set_style_parts(opt(name), opt_len(name), opt(look), opt_len(look), opt(palette),      &
+                                         opt_len(palette), opt(auto_dark), opt_len(auto_dark), opt(auto_light), &
+                                         opt_len(auto_light), opt(lines), opt_len(lines)), stat)
    endsubroutine set_style
+
+   subroutine palette_color(self, role, rgba, stat)
+   !< The colour of a palette role in effect, as `[r, g, b, a]` in [0, 1]: `'background'`, `'surface'`,
+   !< `'raised_surface'`, `'border'`, `'text'`, `'dimmed_text'`, `'accent'`, `'text_on_accent'`, `'selection'`,
+   !< `'success'`, `'warning'`, `'error'`. With a style that has no palette (`'dark'`, `'light'`, `'classic'`, a theme
+   !< file without one), the roles are read from Dear ImGui's colours (`WindowBg`, `FrameBg`, `Button`, `Border`,
+   !< `Text`, `TextDisabled`, `CheckMark`, `Header`), and success, warning and error are Okabe and Ito's bluish green,
+   !< orange and vermilion. After `init*`; the same in every mode.
+   class(app_object), intent(inout)         :: self    !< Application.
+   character(len=*),  intent(in)            :: role    !< Role name.
+   real(real64),      intent(out)           :: rgba(4) !< Colour, components in [0, 1].
+   integer(int32),    intent(out), optional :: stat    !< Status: `FIG_ERR_ARGUMENT` for an unknown role.
+   real(c_float)                            :: c(4)    !< Native colour.
+
+   c = 0.0_c_float
+   call figure_check(fig_palette_color(role, len(role, c_int), c), stat)
+   rgba = real(c, real64)
+   endsubroutine palette_color
 
    subroutine set_font(self, font, size, stat)
    !< The default font of the interface, after `init*`: `'plex-sans'` (IBM Plex Sans, bundled: the default, at 15
@@ -538,4 +571,22 @@ contains
       call figure_check(fig_file_dialog(kind, id, len(id, c_int), joined, len(joined, c_int), '', 0_c_int), stat)
    endif
    endsubroutine show_file_dialog
+
+   pure function opt(s) result(v)
+   !< An optional string, or '' when absent (the native layer takes a length of 0 as not given).
+   character(len=*), intent(in), optional :: s !< String.
+   character(len=:), allocatable          :: v !< Value.
+
+   v = ''
+   if (present(s)) v = s
+   endfunction opt
+
+   pure function opt_len(s) result(n)
+   !< The length of an optional string, 0 when absent.
+   character(len=*), intent(in), optional :: s !< String.
+   integer(c_int)                         :: n !< Length [bytes].
+
+   n = 0_c_int
+   if (present(s)) n = len(s, c_int)
+   endfunction opt_len
 endmodule figure_app

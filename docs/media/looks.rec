@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    looks
+#! from    10
+#! frames  1
+# the four looks side by side, in the palette seal

@@ -1,0 +1,23 @@
+# FIGURE palette "nord": Nord, an arctic, north-bluish palette.
+# Source: https://github.com/nordtheme/nord (src/nord.css, commit 005e87e).
+# MIT licence, Copyright (c) 2016-present Sven Greb.
+# Licence: third_party/palettes/LICENSE-nord.txt, installed in share/licenses/nord/.
+# The hex values are the upstream ones, by their upstream names (after each role).
+# Dimmed text is nord4: nord3, the comment colour, is 1.9:1 on nord0 (the rule asks 3:1).
+# Format: docs/guide/styles.md#palettes. The Dear ImGui colours are derived from the roles.
+
+lines = ["#88c0d0", "#a3be8c", "#ebcb8b", "#d08770", "#b48ead", "#bf616a", "#8fbcbb", "#81a1c1"]
+
+[palette]
+background     = "#2e3440"   # nord0
+surface        = "#3b4252"   # nord1
+raised_surface = "#434c5e"   # nord2
+border         = "#4c566a"   # nord3
+text           = "#eceff4"   # nord6
+dimmed_text    = "#d8dee9"   # nord4
+accent         = "#88c0d0"   # nord8
+text_on_accent = "#2e3440"   # nord0
+selection      = "#434c5e"   # nord2
+success        = "#a3be8c"   # nord14
+warning        = "#ebcb8b"   # nord13
+error          = "#bf616a"   # nord11

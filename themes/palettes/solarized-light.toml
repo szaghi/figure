@@ -1,0 +1,26 @@
+# FIGURE palette "solarized-light": Solarized, light: Ethan Schoonover's precision colours.
+# Source: https://github.com/altercation/solarized (README.md, commit 4f90b03).
+# MIT licence, Copyright (c) 2011 Ethan Schoonover.
+# Licence: third_party/palettes/LICENSE-solarized.txt, installed in share/licenses/solarized/.
+# The hex values are the upstream ones, by their upstream names (after each role).
+# Text is base02 and dimmed text base00: base00 and base01, the body text of the light mode, are below 4.5:1 on
+# base2 (the surfaces). Solarized has two light backgrounds only, so surface and raised surface are both base2.
+# The accent is cyan, with base03 on it: blue keeps 4.1:1 with base03 and 3.4:1 with base3.
+# Lines leave out yellow, green and cyan, below 3:1 on base3.
+# Format: docs/guide/styles.md#palettes. The Dear ImGui colours are derived from the roles.
+
+lines = ["#268bd2", "#cb4b16", "#d33682", "#6c71c4", "#dc322f", "#586e75"]
+
+[palette]
+background     = "#fdf6e3"   # base3
+surface        = "#eee8d5"   # base2
+raised_surface = "#eee8d5"   # base2
+border         = "#93a1a1"   # base1
+text           = "#073642"   # base02
+dimmed_text    = "#657b83"   # base00
+accent         = "#2aa198"   # cyan
+text_on_accent = "#002b36"   # base03
+selection      = "#eee8d5"   # base2
+success        = "#859900"   # green
+warning        = "#b58900"   # yellow
+error          = "#dc322f"   # red

@@ -24,7 +24,7 @@ public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
-public :: fig_set_title, fig_title
+public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_input_system_theme
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -109,6 +109,45 @@ interface
    integer(c_int), value              :: lines_len !< Palette name length [bytes].
    integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_set_style
+
+   function fig_set_style_parts(name, name_len, look, look_len, palette, palette_len, auto_dark, auto_dark_len, &
+                                auto_light, auto_light_len, lines, lines_len) result(status) &
+                                bind(C, name='fig_set_style_parts')
+   !< The style by parts, at once: a built-in style, then a look, a palette, a line palette (empty: kept).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)        !< Style name (not NUL-terminated).
+   integer(c_int), value              :: name_len       !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: look(*)        !< Look name.
+   integer(c_int), value              :: look_len       !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: palette(*)     !< Palette name, or auto.
+   integer(c_int), value              :: palette_len    !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: auto_dark(*)   !< Palette of auto on a dark system.
+   integer(c_int), value              :: auto_dark_len  !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: auto_light(*)  !< Palette of auto on a light system.
+   integer(c_int), value              :: auto_light_len !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: lines(*)       !< Line palette (okabe-ito).
+   integer(c_int), value              :: lines_len      !< Its length [bytes]; 0: not given.
+   integer(c_int)                     :: status         !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_style_parts
+
+   function fig_palette_color(role, role_len, rgba) result(status) bind(C, name='fig_palette_color')
+   !< The colour of a palette role in effect.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: role(*)  !< Role name (not NUL-terminated).
+   integer(c_int), value               :: role_len !< Its length [bytes].
+   real(c_float),          intent(out) :: rgba(4)  !< Colour, components in [0, 1].
+   integer(c_int)                      :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_palette_color
+
+   function fig_input_system_theme(theme) result(status) bind(C, name='fig_input_system_theme')
+   !< The system's light (1) or dark (2) setting, handled at the next frame as SDL's event; 0: the system's again.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: theme  !< 0, 1 or 2.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_input_system_theme
 
    subroutine fig_set_lazy(enabled, max_wait_s) bind(C, name='fig_set_lazy')
    !< Lazy redraw: sleep until an event or `max_wait_s` seconds once the UI has settled.

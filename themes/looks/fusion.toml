@@ -1,0 +1,29 @@
+# FIGURE look "fusion": close to Qt's Fusion style.
+# Small rounding, framed fields and windows, dense spacing: a desktop tool that packs many controls.
+# Proportions only, not a copy (Dear ImGui draws no gradients or shadows).
+# Format: docs/guide/styles.md#looks. A look holds geometry only: [imgui.vars] and [implot.vars], logical pixels.
+
+[imgui.vars]
+WindowPadding = [6, 6]
+WindowRounding = 2
+WindowBorderSize = 1
+ChildRounding = 2
+ChildBorderSize = 1
+PopupRounding = 2
+PopupBorderSize = 1
+FramePadding = [6, 3]
+FrameRounding = 2
+FrameBorderSize = 1
+ItemSpacing = [6, 4]
+ItemInnerSpacing = [4, 4]
+CellPadding = [4, 2]
+IndentSpacing = 18
+ScrollbarSize = 12
+ScrollbarRounding = 2
+GrabMinSize = 10
+GrabRounding = 2
+TabRounding = 2
+TabBorderSize = 1
+
+[implot.vars]
+PlotBorderSize = 1

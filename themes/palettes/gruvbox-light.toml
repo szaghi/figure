@@ -1,0 +1,23 @@
+# FIGURE palette "gruvbox-light": Gruvbox, light: retro groove colours.
+# Source: https://github.com/morhetz/gruvbox (colors/gruvbox.vim, commit 0401386).
+# MIT licence, Copyright (c) Pavel Pertsev (morhetz).
+# Licence: third_party/palettes/LICENSE-gruvbox.txt, installed in share/licenses/gruvbox/.
+# The hex values are the upstream ones, by their upstream names (after each role).
+# The accent is faded_blue: gruvbox light mode uses the faded colours, which keep their contrast on light0.
+# Format: docs/guide/styles.md#palettes. The Dear ImGui colours are derived from the roles.
+
+lines = ["#076678", "#9d0006", "#79740e", "#b57614", "#8f3f71", "#427b58", "#af3a03", "#7c6f64"]
+
+[palette]
+background     = "#fbf1c7"   # light0
+surface        = "#ebdbb2"   # light1
+raised_surface = "#d5c4a1"   # light2
+border         = "#bdae93"   # light3
+text           = "#3c3836"   # dark1
+dimmed_text    = "#7c6f64"   # dark4
+accent         = "#076678"   # faded_blue
+text_on_accent = "#fbf1c7"   # light0
+selection      = "#d5c4a1"   # light2
+success        = "#79740e"   # faded_green
+warning        = "#af3a03"   # faded_orange
+error          = "#9d0006"   # faded_red

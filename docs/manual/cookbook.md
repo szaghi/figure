@@ -56,6 +56,23 @@ See [tutorial chapter 2](./tutorial/02-widgets#a-window-the-user-can-close): pas
 
 See [tutorial chapter 2](./tutorial/02-widgets#same-text-different-widgets): `'Reset##cfl'` and `'Reset##time'`.
 
+### Choose a look and a palette
+
+<<< @/examples/snippets/cb_palette-pair.F90{fortran}
+
+<Media name="cb_palette" :width="560" alt="A window in the fluent look and the Nord palette, with status lines marked [ok], (!) and [!!] in green, yellow and red" caption="docs/examples/src/cb_palette.F90" />
+
+The look sets the geometry, the palette the colours; each can change without the other. To follow the system's light
+or dark setting, and to colour the program's own messages with the palette:
+
+<<< @/examples/snippets/cb_palette-auto.F90{fortran}
+
+<<< @/examples/snippets/cb_palette-roles.F90{fortran}
+
+<<< @/examples/snippets/cb_palette-status.F90{fortran}
+
+[Styles](/guide/styles#looks-and-palettes) lists the looks, the palettes and their roles.
+
 ### Change one colour of the whole interface
 
 <<< @/examples/snippets/cb_style-style.F90{fortran}

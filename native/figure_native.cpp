@@ -67,6 +67,16 @@ struct state_t {
    float         scale = 1.0f;
    float         clear[3] = {0.10f, 0.10f, 0.11f}; // the window's background, behind the ImGui windows (the style's)
    std::string   style_base = "dark";              // base of the style in effect (what save_style writes against)
+   std::string   look;                             // the look in effect (themes/looks); empty: Dear ImGui's geometry
+   std::string   palette;                          // the palette in effect: a bundled name, "auto", "custom" (a
+                                                   // [palette] table) or empty (the colours of a base)
+   std::string   palette_resolved;                 // the bundled palette "auto" chose
+   std::string   auto_dark = "seal", auto_light = "seal-light"; // the palettes of "auto"
+   std::string   lines_name;                       // the line palette of the last set_style (kept by "auto")
+   bool          has_roles = false;                // roles: those of the palette in effect
+   figure_theme::color_t roles[figure_theme::ROLE_COUNT];
+   int           system_theme = -1;                // the system's light (1) or dark (2) setting given by a test; -1: SDL's
+   bool          system_theme_changed = false;     // a change to handle at the next frame (fig_input_system_theme)
    std::string   font = "plex-sans";               // the default font: plex-sans (bundled), proggy, or a TTF file
    std::map<std::string, ImFont *> fonts;          // fonts loaded in this context, by name or path
    std::map<std::string, std::vector<unsigned char>> font_data; // TTF files read at run time (the atlas needs them)
@@ -521,12 +531,27 @@ unsigned char *style_base(int lib) {
 }
 
 // ---- Styles ---------------------------------------------------------------------------------------------------
-// A style is a theme (figure_theme.h): a base Dear ImGui style, colours and variables of Dear ImGui and ImPlot by name,
-// ImPlot's line colours, and the window's background. The built-in ones are themes/*.toml, embedded in the library:
-// "seal" (the default) and "seal-light", FIGURE's, from the palette of its mark; "dark", "light", "classic", Dear
-// ImGui's own with ImPlot's default line colours.
+// A style is a theme (figure_theme.h): a look (geometry: the variables of both libraries), a palette or a base (the
+// colours), explicit colours and variables of Dear ImGui and ImPlot by name, ImPlot's line colours, and the window's
+// background. The built-in ones are themes/*.toml, embedded in the library: "seal" (the default) and "seal-light",
+// FIGURE's, from the palette of its mark; "paper" and "high-contrast"; "dark", "light", "classic", Dear ImGui's own
+// with ImPlot's default line colours. The bundled looks are themes/looks/*.toml, the palettes themes/palettes/*.toml.
 
-ImVec4 vec4(const figure_theme::color_t &c) { return ImVec4(c.r, c.g, c.b, c.a); }
+using figure_theme::color_t;
+using figure_theme::ROLE_COUNT;
+
+ImVec4 vec4(const color_t &c) { return ImVec4(c.r, c.g, c.b, c.a); }
+
+color_t mix_color(const color_t &a, const color_t &b, float t) {
+   color_t c;
+   c.r = a.r + (b.r - a.r) * t;
+   c.g = a.g + (b.g - a.g) * t;
+   c.b = a.b + (b.b - a.b) * t;
+   c.a = 1.0f;
+   return c;
+}
+
+ImVec4 with_alpha(const color_t &c, float a) { return ImVec4(c.r, c.g, c.b, a); }
 
 // Write a style variable into a style struct (ImGuiStyle or ImPlotStyle) at `base`.
 bool write_var(unsigned char *base, const figure_style::field &f, const std::vector<double> &v) {
@@ -544,103 +569,519 @@ bool write_var(unsigned char *base, const figure_style::field &f, const std::vec
    return true;
 }
 
-// Apply a parsed theme; false with `err` on an unknown name or a wrong value. Sizes in the theme are logical pixels,
-// scaled by the content scale; fonts are kept. `cmap_name` names the ImPlot colormap of its lines.
-bool apply_theme(const figure_theme::theme_t &t, const std::string &where, const std::string &cmap_name,
-                 std::string &err) {
+// The window's background of a palette without its own: the background role darkened (the windows stand out).
+color_t derived_clear(const color_t roles[ROLE_COUNT]) {
+   const color_t &bg = roles[figure_theme::ROLE_BACKGROUND];
+   return mix_color(bg, color_t{0.0f, 0.0f, 0.0f, 1.0f}, figure_theme::luminance(bg) < 0.5 ? 0.25f : 0.08f);
+}
+
+// Every Dear ImGui colour from the twelve palette roles. Hovered and active fills are mixes toward the text colour,
+// or away from it where the mix would bring the text below 4.5:1 on them; disabled text is the dimmed text; ImPlot's
+// colours stay automatic, derived by ImPlot from these (plot frame from FrameBg, plot background from WindowBg, grid
+// and ticks from Text).
+void derive_colors(const color_t roles[ROLE_COUNT], ImVec4 *colors) {
+   using namespace figure_theme;
+   const color_t &bg = roles[ROLE_BACKGROUND], &sf = roles[ROLE_SURFACE], &rs = roles[ROLE_RAISED_SURFACE];
+   const color_t &bd = roles[ROLE_BORDER], &tx = roles[ROLE_TEXT], &dm = roles[ROLE_DIMMED_TEXT];
+   const color_t &ac = roles[ROLE_ACCENT], &sel = roles[ROLE_SELECTION];
+   const color_t black{0.0f, 0.0f, 0.0f, 1.0f}, white{1.0f, 1.0f, 1.0f, 1.0f};
+   auto shade = [&](const color_t &c, float t) {
+      const color_t toward = mix_color(c, tx, t);
+      if (contrast(tx, toward) >= 4.5 || contrast(tx, toward) >= contrast(tx, c)) return vec4(toward);
+      return vec4(mix_color(c, luminance(tx) > luminance(c) ? black : white, t));
+   };
+   colors[ImGuiCol_Text] = vec4(tx);
+   colors[ImGuiCol_TextDisabled] = vec4(dm);
+   colors[ImGuiCol_WindowBg] = vec4(bg);
+   colors[ImGuiCol_ChildBg] = with_alpha(bg, 0.0f);
+   colors[ImGuiCol_PopupBg] = vec4(sf);
+   colors[ImGuiCol_Border] = vec4(bd);
+   colors[ImGuiCol_BorderShadow] = with_alpha(black, 0.0f);
+   colors[ImGuiCol_FrameBg] = vec4(sf);
+   colors[ImGuiCol_FrameBgHovered] = shade(sf, 0.08f);
+   colors[ImGuiCol_FrameBgActive] = shade(sf, 0.16f);
+   colors[ImGuiCol_TitleBg] = vec4(bg);
+   colors[ImGuiCol_TitleBgActive] = vec4(sf);
+   colors[ImGuiCol_TitleBgCollapsed] = vec4(bg);
+   colors[ImGuiCol_MenuBarBg] = vec4(sf);
+   colors[ImGuiCol_ScrollbarBg] = vec4(bg);
+   colors[ImGuiCol_ScrollbarGrab] = vec4(bd);
+   colors[ImGuiCol_ScrollbarGrabHovered] = vec4(mix_color(bd, tx, 0.20f));
+   colors[ImGuiCol_ScrollbarGrabActive] = vec4(mix_color(bd, tx, 0.35f));
+   colors[ImGuiCol_CheckMark] = vec4(ac);
+   colors[ImGuiCol_CheckboxSelectedBg] = vec4(sf);
+   colors[ImGuiCol_SliderGrab] = vec4(ac);
+   colors[ImGuiCol_SliderGrabActive] = vec4(mix_color(ac, tx, 0.25f));
+   colors[ImGuiCol_Button] = vec4(rs);
+   colors[ImGuiCol_ButtonHovered] = shade(rs, 0.10f);
+   colors[ImGuiCol_ButtonActive] = shade(rs, 0.20f);
+   colors[ImGuiCol_Header] = vec4(sel);
+   colors[ImGuiCol_HeaderHovered] = shade(sel, 0.08f);
+   colors[ImGuiCol_HeaderActive] = shade(sel, 0.16f);
+   colors[ImGuiCol_Separator] = vec4(bd);
+   colors[ImGuiCol_SeparatorHovered] = with_alpha(ac, 0.78f);
+   colors[ImGuiCol_SeparatorActive] = vec4(ac);
+   colors[ImGuiCol_ResizeGrip] = with_alpha(ac, 0.20f);
+   colors[ImGuiCol_ResizeGripHovered] = with_alpha(ac, 0.67f);
+   colors[ImGuiCol_ResizeGripActive] = with_alpha(ac, 0.95f);
+   colors[ImGuiCol_InputTextCursor] = vec4(tx);
+   colors[ImGuiCol_TabHovered] = shade(sf, 0.10f);
+   colors[ImGuiCol_Tab] = vec4(sf);
+   colors[ImGuiCol_TabSelected] = vec4(rs);
+   colors[ImGuiCol_TabSelectedOverline] = vec4(ac);
+   colors[ImGuiCol_TabDimmed] = vec4(bg);
+   colors[ImGuiCol_TabDimmedSelected] = vec4(sf);
+   colors[ImGuiCol_TabDimmedSelectedOverline] = vec4(bd);
+   colors[ImGuiCol_DockingPreview] = with_alpha(ac, 0.55f);
+   colors[ImGuiCol_DockingEmptyBg] = vec4(derived_clear(roles));
+   colors[ImGuiCol_PlotLines] = vec4(dm);
+   colors[ImGuiCol_PlotLinesHovered] = vec4(ac);
+   colors[ImGuiCol_PlotHistogram] = vec4(ac);
+   colors[ImGuiCol_PlotHistogramHovered] = vec4(mix_color(ac, tx, 0.30f));
+   colors[ImGuiCol_TableHeaderBg] = vec4(sf);
+   colors[ImGuiCol_TableBorderStrong] = vec4(bd);
+   colors[ImGuiCol_TableBorderLight] = vec4(mix_color(bd, bg, 0.50f));
+   colors[ImGuiCol_TableRowBg] = with_alpha(bg, 0.0f);
+   colors[ImGuiCol_TableRowBgAlt] = with_alpha(tx, 0.04f);
+   colors[ImGuiCol_TextLink] = vec4(ac);
+   colors[ImGuiCol_TextSelectedBg] = vec4(sel);
+   colors[ImGuiCol_TreeLines] = vec4(bd);
+   colors[ImGuiCol_DragDropTarget] = vec4(ac);
+   colors[ImGuiCol_DragDropTargetBg] = with_alpha(ac, 0.10f);
+   colors[ImGuiCol_UnsavedMarker] = vec4(tx);
+   colors[ImGuiCol_NavCursor] = vec4(ac);
+   colors[ImGuiCol_NavWindowingHighlight] = with_alpha(tx, 0.70f);
+   colors[ImGuiCol_NavWindowingDimBg] = with_alpha(black, 0.30f);
+   colors[ImGuiCol_ModalWindowDimBg] = with_alpha(black, 0.45f);
+}
+
+// The roles of a style without a palette, read from its Dear ImGui colours (what FIGURE's own widgets draw with);
+// success, warning and error are Okabe and Ito's bluish green, orange and vermilion.
+void infer_roles(const ImVec4 *colors, color_t roles[ROLE_COUNT]) {
+   using namespace figure_theme;
+   auto opaque = [](const ImVec4 &c) { return color_t{c.x, c.y, c.z, 1.0f}; };
+   roles[ROLE_BACKGROUND] = opaque(colors[ImGuiCol_WindowBg]);
+   roles[ROLE_SURFACE] = opaque(colors[ImGuiCol_FrameBg]);
+   roles[ROLE_RAISED_SURFACE] = opaque(colors[ImGuiCol_Button]);
+   roles[ROLE_BORDER] = opaque(colors[ImGuiCol_Border]);
+   roles[ROLE_TEXT] = opaque(colors[ImGuiCol_Text]);
+   roles[ROLE_DIMMED_TEXT] = opaque(colors[ImGuiCol_TextDisabled]);
+   roles[ROLE_ACCENT] = opaque(colors[ImGuiCol_CheckMark]);
+   roles[ROLE_TEXT_ON_ACCENT] = contrast(roles[ROLE_TEXT], roles[ROLE_ACCENT]) >=
+                                      contrast(roles[ROLE_BACKGROUND], roles[ROLE_ACCENT])
+                                   ? roles[ROLE_TEXT]
+                                   : roles[ROLE_BACKGROUND];
+   roles[ROLE_SELECTION] = opaque(colors[ImGuiCol_Header]);
+   roles[ROLE_SUCCESS] = color_t{0.0f, 158.0f / 255.0f, 115.0f / 255.0f, 1.0f};
+   roles[ROLE_WARNING] = color_t{230.0f / 255.0f, 159.0f / 255.0f, 0.0f, 1.0f};
+   roles[ROLE_ERROR] = color_t{213.0f / 255.0f, 94.0f / 255.0f, 0.0f, 1.0f};
+}
+
+// The system's dark setting: a test's (fig_input_system_theme), else SDL's in window mode; unknown counts as dark.
+bool system_is_dark() {
+   if (st.system_theme > 0) return st.system_theme == 2;
+   if (st.m == mode::window) return SDL_GetSystemTheme() != SDL_SYSTEM_THEME_LIGHT;
+   return true;
+}
+
+// A bundled look: its file parsed and checked (variables only).
+bool load_look(const std::string &name, figure_theme::theme_t &look, std::string &err) {
+   const char *text = figure_theme::look_text(name);
+   if (!text) {
+      err = "unknown look \"" + name + "\" (" + figure_theme::look_names() + ")";
+      return false;
+   }
+   const std::string where = "themes/looks/" + name + ".toml";
+   if (!figure_theme::parse(text, where, look, err)) return false;
+   for (const std::string &k : look.keys)
+      if (k != "[imgui.vars]" && k != "[implot.vars]") {
+         err = where + ": a look holds [imgui.vars] and [implot.vars] only, not " + k;
+         return false;
+      }
+   return true;
+}
+
+// A bundled palette: its file parsed and checked (a complete [palette] table; background, lines and explicit colours
+// only besides it).
+bool load_palette(const std::string &name, figure_theme::theme_t &pal, std::string &err) {
+   const char *text = figure_theme::palette_text(name);
+   if (!text) {
+      err = "unknown palette \"" + name + "\" (" + figure_theme::palette_names() + ", auto)";
+      return false;
+   }
+   const std::string where = "themes/palettes/" + name + ".toml";
+   if (!figure_theme::parse(text, where, pal, err)) return false;
+   for (const std::string &k : pal.keys)
+      if (k != "[palette]" && k != "background" && k != "lines" && k != "[imgui.colors]" && k != "[implot.colors]") {
+         err = where + ": a palette holds [palette], background, lines, [imgui.colors] and [implot.colors] only, not " +
+               k;
+         return false;
+      }
+   for (int r = 0; r < ROLE_COUNT; ++r)
+      if (!pal.role_given[r]) {
+         err = where + ": [palette] misses " + figure_theme::ROLE_NAMES[r];
+         return false;
+      }
+   return true;
+}
+
+// A style being built: both libraries' styles and what goes with them, applied at once by commit_style (a failure
+// on the way leaves the style in effect untouched).
+struct style_build_t {
+   ImGuiStyle           s;                // sizes multiplied by the content scale
+   ImPlotStyle          ps;               // colours: ImPlot's automatic ones unless set
+   bool                 lines_set = false; // the line colours change (empty lines: ImPlot's Deep)
+   std::vector<color_t> lines;
+   std::string          cmap_name;
+   float                clear[3] = {0.10f, 0.10f, 0.11f};
+   std::string          base = "dark", look, palette, palette_resolved;
+   bool                 has_roles = false;
+   color_t              roles[ROLE_COUNT];
+   ImFont              *font = nullptr;
+   std::string          font_name;
+   float                font_size = 0.0f; // 0: keep
+};
+
+// The style in effect, as a build to change parts of.
+style_build_t current_build() {
+   style_build_t b;
+   b.s = ImGui::GetStyle();
+   b.ps = ImPlot::GetStyle();
+   for (int i = 0; i < 3; ++i) b.clear[i] = st.clear[i];
+   b.base = st.style_base;
+   b.look = st.look;
+   b.palette = st.palette;
+   b.palette_resolved = st.palette_resolved;
+   b.has_roles = st.has_roles;
+   for (int r = 0; r < ROLE_COUNT; ++r) b.roles[r] = st.roles[r];
+   return b;
+}
+
+// The colours of a palette (t.palette: a bundled name or "auto"; t's [palette] table: roles over it, or all twelve)
+// into b: Dear ImGui's derived from the roles, then the palette file's explicit ones; ImPlot's automatic, then the
+// palette file's; the window's background and the line colours.
+bool palette_colors(const figure_theme::theme_t &t, const std::string &where, style_build_t &b, std::string &err) {
+   figure_theme::theme_t pal;
+   std::string name = t.palette;
+   if (name == "auto") {
+      const std::string dark = t.auto_dark.empty() ? st.auto_dark : t.auto_dark;
+      const std::string light = t.auto_light.empty() ? st.auto_light : t.auto_light;
+      name = system_is_dark() ? dark : light;
+   }
+   color_t roles[ROLE_COUNT];
+   if (!name.empty()) {
+      if (!load_palette(name, pal, err)) return false;
+      for (int r = 0; r < ROLE_COUNT; ++r) roles[r] = pal.roles[r];
+   }
+   bool table = false;
+   for (int r = 0; r < ROLE_COUNT; ++r) {
+      if (!t.role_given[r]) continue;
+      roles[r] = t.roles[r];
+      table = true;
+   }
+   if (name.empty()) {
+      std::string missing;
+      for (int r = 0; r < ROLE_COUNT; ++r)
+         if (!t.role_given[r]) missing += std::string(missing.empty() ? "" : ", ") + figure_theme::ROLE_NAMES[r];
+      if (!missing.empty()) {
+         err = where + ": [palette] misses " + missing + " (or name a palette: palette = \"...\")";
+         return false;
+      }
+   }
+   std::string why;
+   if (!figure_theme::check_contrast(roles, why)) {
+      err = (table || name.empty() ? where + ": [palette]" : "palette \"" + name + "\"") + ": " + why;
+      return false;
+   }
+   derive_colors(roles, b.s.Colors);
+   for (const auto &e : pal.imgui_colors) {
+      const int i = style_color_index(0, e.name);
+      if (i < 0) {
+         err = "themes/palettes/" + name + ".toml:" + std::to_string(e.line) + ": unknown Dear ImGui colour \"" + e.name + "\"";
+         return false;
+      }
+      b.s.Colors[i] = vec4(e.color);
+   }
+   for (ImVec4 &c : b.ps.Colors) c = IMPLOT_AUTO_COL; // as ImPlot::StyleColorsAuto, which also resets MinorAlpha
+   for (const auto &e : pal.implot_colors) {
+      const int i = style_color_index(1, e.name);
+      if (i < 0) {
+         err = "themes/palettes/" + name + ".toml:" + std::to_string(e.line) + ": unknown ImPlot colour \"" + e.name + "\"";
+         return false;
+      }
+      b.ps.Colors[i] = vec4(e.color);
+   }
+   const color_t clear = pal.has_background ? pal.background : derived_clear(roles);
+   b.clear[0] = clear.r;
+   b.clear[1] = clear.g;
+   b.clear[2] = clear.b;
+   b.lines_set = true;
+   b.lines = pal.lines;
+   b.cmap_name = "FIGURE " + name; // as the theme of the same name names its lines (same colours)
+   b.palette = table ? "custom" : t.palette;
+   b.palette_resolved = name;
+   b.has_roles = true;
+   for (int r = 0; r < ROLE_COUNT; ++r) b.roles[r] = roles[r];
+   return true;
+}
+
+// The variables of a look (`name`) into fresh styles: Dear ImGui's and ImPlot's defaults, then the look's.
+bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, std::string &err) {
+   figure_theme::theme_t look;
+   if (!load_look(name, look, err)) return false;
+   const std::string where = "themes/looks/" + name + ".toml";
+   for (const auto &e : look.imgui_vars) {
+      const figure_style::field *f = style_field(0, e.name);
+      if (!f || !write_var(reinterpret_cast<unsigned char *>(&s), *f, e.values)) {
+         err = where + ":" + std::to_string(e.line) + ": wrong Dear ImGui style variable \"" + e.name + "\"";
+         return false;
+      }
+   }
+   for (const auto &e : look.implot_vars) {
+      const figure_style::field *f = style_field(1, e.name);
+      if (!f || !write_var(reinterpret_cast<unsigned char *>(&ps), *f, e.values)) {
+         err = where + ":" + std::to_string(e.line) + ": wrong ImPlot style variable \"" + e.name + "\"";
+         return false;
+      }
+   }
+   return true;
+}
+
+// A look in place of the geometry of b: every variable from the look (sizes scaled), the colours kept.
+bool apply_look(const std::string &name, style_build_t &b, std::string &err) {
+   ImGuiStyle  s;
+   ImPlotStyle ps;
+   if (!look_vars(name, s, ps, err)) return false;
+   s.ScaleAllSizes(st.scale);
+   std::memcpy(s.Colors, b.s.Colors, sizeof(s.Colors));
+   s.FontSizeBase = b.s.FontSizeBase;
+   s.FontScaleMain = b.s.FontScaleMain;
+   s.FontScaleDpi = b.s.FontScaleDpi;
+   std::memcpy(ps.Colors, b.ps.Colors, sizeof(ps.Colors));
+   ps.Colormap = b.ps.Colormap;
+   b.s = s;
+   b.ps = ps;
+   b.look = name;
+   return true;
+}
+
+// Build a parsed theme: colours from its palette or its base, variables from its look, then its own entries; false
+// with `err` on an unknown name or a wrong value. Sizes in the theme are logical pixels, scaled by the content scale
+// unless `scale` is false (save_style's reference). `cmap_name` names the ImPlot colormap of the theme's own lines.
+bool build_theme(const figure_theme::theme_t &t, const std::string &where, const std::string &cmap_name, bool scale,
+                 style_build_t &b, std::string &err) {
    auto bad = [&](const figure_theme::entry_t &e, const std::string &what) {
       err = where + ":" + std::to_string(e.line) + ": " + what + " \"" + e.name + "\"";
       return false;
    };
-   const ImGuiStyle old = ImGui::GetStyle();
-   ImGuiStyle s;
-   if (t.base == "light") ImGui::StyleColorsLight(&s);
-   else if (t.base == "classic") ImGui::StyleColorsClassic(&s);
-   else ImGui::StyleColorsDark(&s);
+   b = style_build_t{};
+   b.base = t.base;
+   if (t.base == "light") ImGui::StyleColorsLight(&b.s);
+   else if (t.base == "classic") ImGui::StyleColorsClassic(&b.s);
+   else ImGui::StyleColorsDark(&b.s);
+   b.lines_set = true;
+   if (t.has_palette() && !palette_colors(t, where, b, err)) return false;
+   if (!t.look.empty()) {
+      ImGuiStyle  s;
+      ImPlotStyle ps;
+      if (!look_vars(t.look, s, ps, err)) return false;
+      std::memcpy(s.Colors, b.s.Colors, sizeof(s.Colors));
+      std::memcpy(ps.Colors, b.ps.Colors, sizeof(ps.Colors));
+      b.s = s;
+      b.ps = ps;
+      b.look = t.look;
+   }
    for (const auto &e : t.imgui_vars) {
       const figure_style::field *f = style_field(0, e.name);
       if (!f) return bad(e, "unknown Dear ImGui style variable");
-      if (!write_var(reinterpret_cast<unsigned char *>(&s), *f, e.values)) return bad(e, "wrong number of values for");
+      if (!write_var(reinterpret_cast<unsigned char *>(&b.s), *f, e.values)) return bad(e, "wrong number of values for");
    }
    for (const auto &e : t.imgui_colors) {
       const int i = style_color_index(0, e.name);
       if (i < 0) return bad(e, "unknown Dear ImGui colour");
-      s.Colors[i] = vec4(e.color);
+      b.s.Colors[i] = vec4(e.color);
    }
-   ImPlotStyle ps; // ImPlot's defaults; colours derived from Dear ImGui's below (StyleColorsAuto)
    for (const auto &e : t.implot_vars) {
       const figure_style::field *f = style_field(1, e.name);
       if (!f) return bad(e, "unknown ImPlot style variable");
-      if (!write_var(reinterpret_cast<unsigned char *>(&ps), *f, e.values)) return bad(e, "wrong number of values for");
+      if (!write_var(reinterpret_cast<unsigned char *>(&b.ps), *f, e.values)) return bad(e, "wrong number of values for");
    }
-   std::vector<std::pair<int, ImVec4>> plot_colors;
    for (const auto &e : t.implot_colors) {
       const int i = style_color_index(1, e.name);
       if (i < 0) return bad(e, "unknown ImPlot colour");
-      plot_colors.emplace_back(i, vec4(e.color));
+      b.ps.Colors[i] = vec4(e.color);
    }
-   int cmap = ImPlotColormap_Deep;
    if (!t.lines.empty()) {
-      cmap = ImPlot::GetColormapIndex(cmap_name.c_str()); // ImPlot keeps colormaps for the context's life
-      if (cmap < 0) {
-         std::vector<ImU32> cols;
-         for (const auto &c : t.lines) cols.push_back(ImGui::ColorConvertFloat4ToU32(vec4(c)));
-         cmap = ImPlot::AddColormap(cmap_name.c_str(), cols.data(), static_cast<int>(cols.size()), true);
-      }
+      b.lines = t.lines;
+      b.cmap_name = cmap_name;
    }
-   float clear[3] = {0.10f, 0.10f, 0.11f};
    if (t.has_background) {
-      clear[0] = t.background.r;
-      clear[1] = t.background.g;
-      clear[2] = t.background.b;
+      b.clear[0] = t.background.r;
+      b.clear[1] = t.background.g;
+      b.clear[2] = t.background.b;
    }
-   ImFont *font = nullptr;
    if (!t.font.empty()) {
-      font = get_font(t.font, err);
-      if (!font) {
+      b.font = get_font(t.font, err);
+      if (!b.font) {
          err = where + ": " + err;
          return false;
       }
+      b.font_name = t.font;
    }
-   s.ScaleAllSizes(st.scale);
-   s.FontSizeBase = t.font_size > 0.0 ? static_cast<float>(t.font_size) : old.FontSizeBase;
-   s.FontScaleMain = old.FontScaleMain;
-   s.FontScaleDpi = old.FontScaleDpi;
-   ImGui::GetStyle() = s;
-   ImPlot::GetStyle() = ps;
-   ImPlot::StyleColorsAuto();
-   for (const auto &pc : plot_colors) ImPlot::GetStyle().Colors[pc.first] = pc.second;
-   ImPlot::GetStyle().Colormap = cmap;
-   for (int i = 0; i < 3; ++i) st.clear[i] = clear[i];
-   st.style_base = t.base;
-   if (font) {
-      ImGui::GetIO().FontDefault = font;
-      st.font = t.font;
+   b.font_size = static_cast<float>(t.font_size);
+   if (!t.auto_dark.empty() && !figure_theme::palette_text(t.auto_dark)) {
+      err = where + ": auto_dark: unknown palette \"" + t.auto_dark + "\" (" + figure_theme::palette_names() + ")";
+      return false;
    }
-   if (st.m == mode::remote) figure_remote::set_background(clear[0], clear[1], clear[2]);
+   if (!t.auto_light.empty() && !figure_theme::palette_text(t.auto_light)) {
+      err = where + ": auto_light: unknown palette \"" + t.auto_light + "\" (" + figure_theme::palette_names() + ")";
+      return false;
+   }
+   if (scale) b.s.ScaleAllSizes(st.scale);
+   return true;
+}
+
+// Make a build the style in effect. The font sizes in effect are kept unless the build sets one.
+void commit_style(style_build_t &b, const figure_theme::theme_t *t = nullptr) {
+   const ImGuiStyle old = ImGui::GetStyle();
+   b.s.FontSizeBase = b.font_size > 0.0f ? b.font_size : old.FontSizeBase;
+   b.s.FontScaleMain = old.FontScaleMain;
+   b.s.FontScaleDpi = old.FontScaleDpi;
+   if (b.lines_set) {
+      int cmap = ImPlotColormap_Deep;
+      if (!b.lines.empty()) {
+         cmap = ImPlot::GetColormapIndex(b.cmap_name.c_str()); // ImPlot keeps colormaps for the context's life
+         if (cmap < 0) {
+            std::vector<ImU32> cols;
+            for (const auto &c : b.lines) cols.push_back(ImGui::ColorConvertFloat4ToU32(vec4(c)));
+            cmap = ImPlot::AddColormap(b.cmap_name.c_str(), cols.data(), static_cast<int>(cols.size()), true);
+         }
+      }
+      b.ps.Colormap = cmap;
+   }
+   ImGui::GetStyle() = b.s;
+   ImPlot::GetStyle() = b.ps;
+   for (int i = 0; i < 3; ++i) st.clear[i] = b.clear[i];
+   st.style_base = b.base;
+   st.look = b.look;
+   st.palette = b.palette;
+   st.palette_resolved = b.palette_resolved;
+   st.has_roles = b.has_roles;
+   for (int r = 0; r < ROLE_COUNT; ++r) st.roles[r] = b.roles[r];
+   if (t && !t->auto_dark.empty()) st.auto_dark = t->auto_dark;
+   if (t && !t->auto_light.empty()) st.auto_light = t->auto_light;
+   if (b.font) {
+      ImGui::GetIO().FontDefault = b.font;
+      st.font = b.font_name;
+   }
+   if (st.m == mode::remote) figure_remote::set_background(b.clear[0], b.clear[1], b.clear[2]);
+}
+
+// Apply a parsed theme; false with `err`.
+bool apply_theme(const figure_theme::theme_t &t, const std::string &where, const std::string &cmap_name,
+                 std::string &err) {
+   style_build_t b;
+   if (!build_theme(t, where, cmap_name, true, b, err)) return false;
+   commit_style(b, &t);
+   return true;
+}
+
+// A built-in theme by name, parsed; false if the name is unknown (err empty) or the theme is wrong (err set).
+bool builtin_theme(const std::string &name, figure_theme::theme_t &t, std::string &err) {
+   err.clear();
+   for (int i = 0; i < figure_theme::builtin_count(); ++i) {
+      if (name != figure_theme::builtin_name(i)) continue;
+      return figure_theme::parse(figure_theme::builtin_text(i), "themes/" + name + ".toml", t, err);
+   }
+   return false;
+}
+
+// A named line palette in place of the build's line colours; false with err if the name is unknown.
+bool apply_lines(const std::string &lines, style_build_t &b, std::string &err) {
+   if (!figure_theme::line_palette(lines, b.lines)) {
+      err = "unknown line palette \"" + lines + "\" (okabe-ito)";
+      return false;
+   }
+   b.lines_set = true;
+   b.cmap_name = "FIGURE " + lines; // the palette's colours, whatever the theme
+   return true;
+}
+
+std::string builtin_style_names() {
+   std::string names;
+   for (int i = 0; i < figure_theme::builtin_count(); ++i) {
+      if (i) names += ", ";
+      names += figure_theme::builtin_name(i);
+   }
+   return names;
+}
+
+// The style by parts, at once (nothing changes on an error): a built-in theme by `name`, then a look, then a
+// palette (a bundled name or "auto", choosing between auto_dark and auto_light), then a line palette. An empty
+// argument is not given: what is not given is kept from the style in effect (or from the theme `name`).
+bool apply_style_parts(const std::string &name, const std::string &look, const std::string &palette,
+                       const std::string &auto_dark, const std::string &auto_light, const std::string &lines,
+                       std::string &err) {
+   err.clear();
+   style_build_t b;
+   figure_theme::theme_t named;
+   if (!name.empty()) {
+      if (!builtin_theme(name, named, err)) {
+         if (err.empty()) err = "unknown style \"" + name + "\" (" + builtin_style_names() + ")";
+         return false;
+      }
+      if (!build_theme(named, "themes/" + name + ".toml", "FIGURE " + name, true, b, err)) return false;
+   } else {
+      b = current_build();
+   }
+   for (const std::string *p : {&auto_dark, &auto_light})
+      if (!p->empty() && !figure_theme::palette_text(*p)) {
+         err = std::string(p == &auto_dark ? "auto_dark" : "auto_light") + ": unknown palette \"" + *p + "\" (" +
+               figure_theme::palette_names() + ")";
+         return false;
+      }
+   if (!look.empty() && !apply_look(look, b, err)) return false;
+   figure_theme::theme_t t; // the palette's part: its name and the auto pair
+   t.auto_dark = auto_dark.empty() ? named.auto_dark : auto_dark;
+   t.auto_light = auto_light.empty() ? named.auto_light : auto_light;
+   // a new auto pair re-applies "auto" in effect
+   const std::string pal = !palette.empty() ? palette
+                           : (name.empty() && b.palette == "auto" && (!auto_dark.empty() || !auto_light.empty()))
+                               ? "auto"
+                               : "";
+   if (!pal.empty()) {
+      t.palette = pal;
+      if (!palette_colors(t, "set_style", b, err)) return false;
+   }
+   if (!lines.empty() && !apply_lines(lines, b, err)) return false;
+   commit_style(b, &t);
+   if (!lines.empty()) st.lines_name = lines;
+   else if (!name.empty() || !palette.empty()) st.lines_name.clear();
    return true;
 }
 
 // Apply a built-in style by name, with its own line colours or a named palette (`lines`, empty: the theme's); false if
 // the name is unknown (err empty) or the theme or the palette is wrong (err set).
 bool apply_style(const std::string &name, std::string &err, const std::string &lines = "") {
-   err.clear();
-   for (int i = 0; i < figure_theme::builtin_count(); ++i) {
-      if (name != figure_theme::builtin_name(i)) continue;
-      figure_theme::theme_t t;
-      const std::string where = "themes/" + name + ".toml";
-      if (!figure_theme::parse(figure_theme::builtin_text(i), where, t, err)) return false;
-      std::string cmap = "FIGURE " + name;
-      if (!lines.empty()) {
-         if (!figure_theme::line_palette(lines, t.lines)) {
-            err = "unknown line palette \"" + lines + "\" (okabe-ito)";
-            return false;
-         }
-         cmap = "FIGURE " + lines; // the palette's colours, whatever the theme
-      }
-      return apply_theme(t, where, cmap, err);
+   figure_theme::theme_t t;
+   if (!builtin_theme(name, t, err)) return false;
+   return apply_style_parts(name, "", "", "", "", lines, err);
+}
+
+// The system's light or dark setting changed: a palette "auto" in effect is chosen again (the geometry and the line
+// palette of the last set_style are kept; colours changed by name are not).
+void system_theme_changed() {
+   if (st.palette != "auto") return;
+   style_build_t b = current_build();
+   figure_theme::theme_t t;
+   t.palette = "auto";
+   std::string err;
+   if (!palette_colors(t, "auto", b, err) || (!st.lines_name.empty() && !apply_lines(st.lines_name, b, err))) {
+      std::fprintf(stderr, "figure: the system's theme changed: %s\n", err.c_str());
+      return;
    }
-   return false;
+   commit_style(b);
+   st.frames_left = 3;
 }
 
 // Apply a theme file read at run time; false with err. Its line colours get a colormap named by the colours themselves,
@@ -691,15 +1132,26 @@ std::string theme_color(const ImVec4 &c) {
    return out;
 }
 
-// Write the style in effect as a theme file: base, background, lines, and every colour and variable that differs from
-// the base. Sizes are written in logical pixels (divided by the content scale): which fields are sizes is asked to Dear
-// ImGui itself (the fields ScaleAllSizes changes).
+// Write the style in effect as a theme file: its look and palette (or base), background, lines, and every colour and
+// variable that differs from what the look and the palette (or the base) give. Sizes are written in logical pixels
+// (divided by the content scale): which fields are sizes is asked to Dear ImGui itself (the fields ScaleAllSizes
+// changes).
 bool save_style_file(const std::string &path, std::string &err) {
-   const std::string base = st.style_base;
-   ImGuiStyle ref;
-   if (base == "light") ImGui::StyleColorsLight(&ref);
-   else if (base == "classic") ImGui::StyleColorsClassic(&ref);
-   else ImGui::StyleColorsDark(&ref);
+   figure_theme::theme_t r; // what the file's look, palette and base give, unscaled: the reference
+   r.base = st.style_base;
+   r.look = st.look;
+   const bool custom = st.palette == "custom";
+   if (custom) {
+      r.has_palette_table = true;
+      for (int k = 0; k < ROLE_COUNT; ++k) {
+         r.roles[k] = st.roles[k];
+         r.role_given[k] = true;
+      }
+   } else {
+      r.palette = st.palette;
+   }
+   style_build_t ref;
+   if (!build_theme(r, path, "", false, ref, err)) return false;
    ImGuiStyle probe; // every plain field set to 1, then scaled by 2: the sizes become 2
    for (int i = 0; i < figure_style::IMGUI_FIELDS_COUNT; ++i) {
       const figure_style::field &f = figure_style::IMGUI_FIELDS[i];
@@ -710,7 +1162,12 @@ bool save_style_file(const std::string &path, std::string &err) {
    probe.ScaleAllSizes(2.0f);
    const ImGuiStyle &cur = ImGui::GetStyle();
    const float scale = st.scale > 0.0f ? st.scale : 1.0f;
-   std::string out = "# FIGURE theme, written by app%save_style\n\nbase = \"" + base + "\"\n";
+   std::string out = "# FIGURE theme, written by app%save_style\n\n";
+   if (st.palette.empty()) out += "base = \"" + st.style_base + "\"\n";
+   if (!st.look.empty()) out += "look = \"" + st.look + "\"\n";
+   if (!st.palette.empty() && !custom) out += "palette = \"" + st.palette + "\"\n";
+   if (st.palette == "auto")
+      out += "auto_dark = \"" + st.auto_dark + "\"\nauto_light = \"" + st.auto_light + "\"\n";
    if (st.font != "plex-sans") out += "font = \"" + st.font + "\"\n";
    if (cur.FontSizeBase != DEFAULT_FONT_SIZE) out += "font_size = " + short_float(cur.FontSizeBase) + "\n";
    out += "background = " + theme_color(ImVec4(st.clear[0], st.clear[1], st.clear[2], 1.0f)) + "\n";
@@ -724,6 +1181,11 @@ bool save_style_file(const std::string &path, std::string &err) {
          out += theme_color(c);
       }
       out += "]\n";
+   }
+   if (custom) {
+      out += "\n[palette]\n";
+      for (int k = 0; k < ROLE_COUNT; ++k)
+         out += std::string(figure_theme::ROLE_NAMES[k]) + " = " + theme_color(vec4(st.roles[k])) + "\n";
    }
    char num[96];
    auto vars = [&](const char *section, const figure_style::field *table, int count, const unsigned char *now,
@@ -767,23 +1229,23 @@ bool save_style_file(const std::string &path, std::string &err) {
       if (!block.empty()) out += std::string("\n[") + section + "]\n" + block;
    };
    vars("imgui.vars", figure_style::IMGUI_FIELDS, figure_style::IMGUI_FIELDS_COUNT,
-        reinterpret_cast<const unsigned char *>(&cur), reinterpret_cast<const unsigned char *>(&ref),
+        reinterpret_cast<const unsigned char *>(&cur), reinterpret_cast<const unsigned char *>(&ref.s),
         reinterpret_cast<const unsigned char *>(&probe));
    std::string colors;
    for (int i = 0; i < ImGuiCol_COUNT; ++i) {
-      const ImVec4 &c = cur.Colors[i], &r = ref.Colors[i];
-      if (c.x == r.x && c.y == r.y && c.z == r.z && c.w == r.w) continue;
+      const ImVec4 &c = cur.Colors[i], &rc = ref.s.Colors[i];
+      if (c.x == rc.x && c.y == rc.y && c.z == rc.z && c.w == rc.w) continue;
       colors += std::string(ImGui::GetStyleColorName(i)) + " = " + theme_color(c) + "\n";
    }
    if (!colors.empty()) out += "\n[imgui.colors]\n" + colors;
-   const ImPlotStyle pref;
    vars("implot.vars", figure_style::IMPLOT_FIELDS, figure_style::IMPLOT_FIELDS_COUNT,
-        reinterpret_cast<const unsigned char *>(&ImPlot::GetStyle()), reinterpret_cast<const unsigned char *>(&pref),
+        reinterpret_cast<const unsigned char *>(&ImPlot::GetStyle()), reinterpret_cast<const unsigned char *>(&ref.ps),
         nullptr);
    colors.clear();
    for (int i = 0; i < ImPlotCol_COUNT; ++i) {
-      const ImVec4 &c = ImPlot::GetStyle().Colors[i];
+      const ImVec4 &c = ImPlot::GetStyle().Colors[i], &rc = ref.ps.Colors[i];
       if (ImPlot::IsColorAuto(c)) continue; // derived from Dear ImGui's: nothing to write
+      if (c.x == rc.x && c.y == rc.y && c.z == rc.z && c.w == rc.w) continue; // as the palette gives it
       colors += std::string(ImPlot::GetStyleColorName(i)) + " = " + theme_color(c) + "\n";
    }
    if (!colors.empty()) out += "\n[implot.colors]\n" + colors;
@@ -798,15 +1260,6 @@ bool save_style_file(const std::string &path, std::string &err) {
       return false;
    }
    return true;
-}
-
-std::string builtin_style_names() {
-   std::string names;
-   for (int i = 0; i < figure_theme::builtin_count(); ++i) {
-      if (i) names += ", ";
-      names += figure_theme::builtin_name(i);
-   }
-   return names;
 }
 
 // The style at initialisation: "seal", or the one named by the environment variable FIGURE_STYLE (a program's own
@@ -974,6 +1427,54 @@ int fig_set_style(const char *name, int name_len, const char *lines, int lines_l
    if (!apply_style(n, err, l))
       return fail(FIG_ERR_ARGUMENT, err.empty() ? "set_style: unknown style \"" + n + "\" (" + builtin_style_names() + ")"
                                                 : "set_style: " + err);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_set_style_parts(const char *name, int name_len, const char *look, int look_len, const char *palette,
+                        int palette_len, const char *auto_dark, int auto_dark_len, const char *auto_light,
+                        int auto_light_len, const char *lines, int lines_len) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   auto str = [](const char *p, int n) { return std::string(p, n > 0 ? static_cast<size_t>(n) : 0); };
+   const std::string n = str(name, name_len), lk = str(look, look_len), pal = str(palette, palette_len);
+   const std::string ad = str(auto_dark, auto_dark_len), al = str(auto_light, auto_light_len);
+   const std::string l = str(lines, lines_len);
+   if (n.empty() && lk.empty() && pal.empty() && ad.empty() && al.empty() && l.empty())
+      return fail(FIG_ERR_ARGUMENT, "set_style: give a name, a look, a palette or line colours");
+   std::string err;
+   if (!apply_style_parts(n, lk, pal, ad, al, l, err)) return fail(FIG_ERR_ARGUMENT, "set_style: " + err);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_palette_color(const char *role, int role_len, float *rgba) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   const std::string r(role, role_len > 0 ? static_cast<size_t>(role_len) : 0);
+   const int k = figure_theme::role_index(r);
+   if (k < 0) {
+      std::string names;
+      for (int i = 0; i < ROLE_COUNT; ++i) names += std::string(i ? ", " : "") + figure_theme::ROLE_NAMES[i];
+      return fail(FIG_ERR_ARGUMENT, "palette_color: unknown role \"" + r + "\" (" + names + ")");
+   }
+   color_t roles[ROLE_COUNT];
+   if (st.has_roles) std::copy(st.roles, st.roles + ROLE_COUNT, roles);
+   else infer_roles(ImGui::GetStyle().Colors, roles);
+   rgba[0] = roles[k].r;
+   rgba[1] = roles[k].g;
+   rgba[2] = roles[k].b;
+   rgba[3] = roles[k].a;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_input_system_theme(int theme) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (theme < 0 || theme > 2) return fail(FIG_ERR_ARGUMENT, "test_system_theme: 0 (the system's), 1 light or 2 dark");
+   st.system_theme = theme == 0 ? -1 : theme;
+   st.system_theme_changed = true;
    return FIG_OK;
    FIG_CATCH
 }
@@ -1272,6 +1773,10 @@ int fig_begin_frame(int *running) {
       *running = 0;
       return FIG_OK;
    }
+   if (st.system_theme_changed) { // a test's change of the system's light or dark setting, handled as SDL's event
+      st.system_theme_changed = false;
+      system_theme_changed();
+   }
    if (st.m == mode::headless) {
       ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
       apply_test_input();
@@ -1317,6 +1822,7 @@ int fig_begin_frame(int *running) {
    auto handle = [&](const SDL_Event &e) {
       if (rs.on) ++rs.events[e.type];
       if (!cap.on) ImGui_ImplSDL3_ProcessEvent(&e); // capture: the program's scripted input only
+      if (e.type == SDL_EVENT_SYSTEM_THEME_CHANGED && st.system_theme < 0) system_theme_changed();
       if (e.type == SDL_EVENT_QUIT ||
           (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && e.window.windowID == SDL_GetWindowID(st.window))) {
          if (st.confirm_quit) st.quit_requested = true; // the program asks first, then calls fig_quit

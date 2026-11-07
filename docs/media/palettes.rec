@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    palettes
+#! from    10
+#! frames  1
+# every bundled palette at once: one small window per palette, the look seal

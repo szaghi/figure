@@ -1,0 +1,30 @@
+# FIGURE look "adwaita": close to GNOME's Adwaita (GTK 4).
+# Rounder corners, roomier padding and spacing, flat fields without borders; popups keep a thin border.
+# Proportions only, not a copy (Dear ImGui draws no gradients or shadows).
+# Format: docs/guide/styles.md#looks. A look holds geometry only: [imgui.vars] and [implot.vars], logical pixels.
+
+[imgui.vars]
+WindowPadding = [12, 12]
+WindowRounding = 10
+WindowBorderSize = 0
+ChildRounding = 8
+PopupRounding = 8
+PopupBorderSize = 1
+FramePadding = [10, 6]
+FrameRounding = 6
+FrameBorderSize = 0
+ItemSpacing = [8, 8]
+ItemInnerSpacing = [6, 6]
+CellPadding = [6, 4]
+IndentSpacing = 24
+ScrollbarSize = 12
+ScrollbarRounding = 12
+GrabMinSize = 14
+GrabRounding = 12
+TabRounding = 6
+TabBarBorderSize = 0
+SeparatorTextPadding = [20, 6]
+
+[implot.vars]
+PlotBorderSize = 0
+PlotPadding = [12, 12]

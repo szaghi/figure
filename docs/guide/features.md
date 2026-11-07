@@ -35,7 +35,8 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (default, 15 px), `'proggy'`, or a TTF/OTF file | [styles](styles#fonts) |
 | `app%load_style(file [, stat])`, `app%save_style(file [, stat])` | apply a theme file; write the style in effect as one | [styles](styles#load-tune-and-save) |
 | `app%set_docking(enabled [, stat])` | docking on (default) or off | [docking](docking) |
-| `app%set_style(name [, lines] [, stat])` | colours: `'seal'` (default), `'seal-light'`, `'paper'`, `'high-contrast'`, `'dark'`, `'light'`, `'classic'`; `lines='okabe-ito'` | [styles](styles) |
+| `app%set_style([name] [, lines] [, stat] [, look] [, palette] [, auto_dark] [, auto_light])` | the style by name (`'seal'`, default, `'seal-light'`, `'paper'`, `'high-contrast'`, `'dark'`, `'light'`, `'classic'`), or by parts: a look (geometry) and a palette (colours, or `'auto'`: the system's light or dark setting); `lines='okabe-ito'` | [styles](styles#looks-and-palettes) |
+| `app%palette_color(role, rgba [, stat])` | the colour of a palette role in effect (`'text'`, `'accent'`, `'error'`, ...) as `[r, g, b, a]` in [0, 1] | [palette roles](styles#palette-roles) |
 | `app%destroy()` | close the window, destroy the contexts | [frame loop](frame-loop#the-application) |
 
 ## Widgets: `ig_*`
@@ -161,6 +162,7 @@ Details: [Heatmaps and images](images).
 | `test_item_center(x, y)`, `test_window_rect(name, ...)` | where a widget or a window is |
 | `test_quit()` | a quit request, as the window's close button makes it |
 | `test_plot_tick(axis, index, label [, count])` | a tick label of the plot being declared (tests of axis formats) |
+| `test_system_theme(theme [, stat])` | the system's light or dark setting changes (`'light'`, `'dark'`, `'system'`), at the next frame: tests of `palette='auto'` ([styles](styles#follow-the-system-s-light-or-dark-setting)) |
 
 Details: [Headless testing](testing#synthetic-input).
 

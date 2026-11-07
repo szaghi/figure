@@ -1,0 +1,23 @@
+# FIGURE palette "dracula": Dracula, a dark palette.
+# Source: https://github.com/dracula/dracula-theme (README.md, commit 1e04a4b).
+# MIT licence, Copyright (c) 2023 Dracula Theme.
+# Licence: third_party/palettes/LICENSE-dracula.txt, installed in share/licenses/dracula/.
+# The hex values are the upstream ones, by their upstream names (after each role).
+# Dracula has one neutral besides the background: surface and raised surface are both Current Line.
+# Format: docs/guide/styles.md#palettes. The Dear ImGui colours are derived from the roles.
+
+lines = ["#bd93f9", "#50fa7b", "#ffb86c", "#ff79c6", "#8be9fd", "#f1fa8c", "#ff5555", "#6272a4"]
+
+[palette]
+background     = "#282a36"   # Background
+surface        = "#44475a"   # Current Line
+raised_surface = "#44475a"   # Current Line
+border         = "#6272a4"   # Comment
+text           = "#f8f8f2"   # Foreground
+dimmed_text    = "#6272a4"   # Comment
+accent         = "#bd93f9"   # Purple
+text_on_accent = "#282a36"   # Background
+selection      = "#44475a"   # Selection
+success        = "#50fa7b"   # Green
+warning        = "#ffb86c"   # Orange
+error          = "#ff5555"   # Red

@@ -1,0 +1,23 @@
+# FIGURE palette "catppuccin-mocha": Catppuccin Mocha, the darkest of the four Catppuccin flavours.
+# Source: https://github.com/catppuccin/palette (palette.json, v1.8.0, commit 07d02aa).
+# MIT licence, Copyright (c) 2021 Catppuccin.
+# Licence: third_party/palettes/LICENSE-catppuccin.txt, installed in share/licenses/catppuccin/.
+# The hex values are the upstream ones, by their upstream names (after each role).
+# Format: docs/guide/styles.md#palettes. The Dear ImGui colours are derived from the roles.
+
+background = "#11111b"   # crust, behind the windows
+lines = ["#89b4fa", "#a6e3a1", "#fab387", "#f38ba8", "#cba6f7", "#94e2d5", "#f9e2af", "#f5c2e7"]
+
+[palette]
+background     = "#1e1e2e"   # base
+surface        = "#313244"   # surface0
+raised_surface = "#45475a"   # surface1
+border         = "#585b70"   # surface2
+text           = "#cdd6f4"   # text
+dimmed_text    = "#a6adc8"   # subtext0
+accent         = "#cba6f7"   # mauve
+text_on_accent = "#1e1e2e"   # base
+selection      = "#45475a"   # surface1
+success        = "#a6e3a1"   # green
+warning        = "#f9e2af"   # yellow
+error          = "#f38ba8"   # red

@@ -1,7 +1,10 @@
 // FIGURE themes: the parser of the theme format (figure_theme.h) and the embedded themes (themes/*.toml).
 #include "figure_theme.h"
 
+#include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -87,9 +90,17 @@ bool hex_color(const std::string &s, figure_theme::color_t &c) {
    return true;
 }
 
-// a colour value: "#rrggbb[aa]" or ["#rrggbb", alpha]
+// a colour value: "#rrggbb[aa]", ["#rrggbb", alpha] or [r, g, b, a] (components in [0, 1])
 bool color_value(const value_t &v, figure_theme::color_t &c) {
    if (v.kind == value_t::STRING) return hex_color(v.str, c);
+   if (v.kind == value_t::ARRAY && v.items.size() == 4) {
+      float *k[4] = {&c.r, &c.g, &c.b, &c.a};
+      for (int i = 0; i < 4; ++i) {
+         if (v.items[i].kind != value_t::NUMBER || !(v.items[i].num >= 0.0 && v.items[i].num <= 1.0)) return false;
+         *k[i] = static_cast<float>(v.items[i].num);
+      }
+      return true;
+   }
    if (v.kind == value_t::ARRAY && v.items.size() == 2 && v.items[0].kind == value_t::STRING &&
        v.items[1].kind == value_t::NUMBER && hex_color(v.items[0].str, c)) {
       if (!(v.items[1].num >= 0.0 && v.items[1].num <= 1.0)) return false;
@@ -122,8 +133,11 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
       if (line.front() == '[' && line.back() == ']' && line.find('=') == std::string::npos) {
          section = trim(line.substr(1, line.size() - 2));
          if (section != "imgui.colors" && section != "imgui.vars" && section != "implot.colors" &&
-             section != "implot.vars")
-            return fail("unknown section [" + section + "] (imgui.colors, imgui.vars, implot.colors, implot.vars)");
+             section != "implot.vars" && section != "palette")
+            return fail("unknown section [" + section + "] (palette, imgui.colors, imgui.vars, implot.colors, "
+                        "implot.vars)");
+         if (section == "palette") theme.has_palette_table = true;
+         theme.keys.push_back("[" + section + "]");
          continue;
       }
       const size_t eq = line.find('=');
@@ -132,6 +146,7 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
       value_t v;
       if (key.empty() || !parse_value(line.substr(eq + 1), v)) return fail("cannot read the value of \"" + key + "\"");
       if (section.empty()) {
+         theme.keys.push_back(key);
          if (key == "base") {
             if (v.kind != value_t::STRING || (v.str != "dark" && v.str != "light" && v.str != "classic"))
                return fail("base must be \"dark\", \"light\" or \"classic\"");
@@ -156,9 +171,26 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
                if (!color_value(item, c)) return fail("lines: \"" + item.str + "\" is not a colour");
                theme.lines.push_back(c);
             }
+         } else if (key == "look" || key == "palette" || key == "auto_dark" || key == "auto_light") {
+            if (v.kind != value_t::STRING || v.str.empty()) return fail(key + " must be a name");
+            (key == "look" ? theme.look : key == "palette" ? theme.palette : key == "auto_dark" ? theme.auto_dark
+                                                                                                : theme.auto_light) = v.str;
          } else {
-            return fail("unknown key \"" + key + "\" (base, background, font, font_size, lines, or a [section])");
+            return fail("unknown key \"" + key + "\" (base, look, palette, auto_dark, auto_light, background, font, "
+                        "font_size, lines, or a [section])");
          }
+         continue;
+      }
+      if (section == "palette") {
+         const int r = role_index(key);
+         if (r < 0) {
+            std::string names;
+            for (int i = 0; i < ROLE_COUNT; ++i) names += std::string(i ? ", " : "") + ROLE_NAMES[i];
+            return fail("unknown palette role \"" + key + "\" (" + names + ")");
+         }
+         if (!color_value(v, theme.roles[r]) || theme.roles[r].a != 1.0f)
+            return fail(key + ": a palette role is an opaque colour \"#rrggbb\"");
+         theme.role_given[r] = true;
          continue;
       }
       entry_t e;
@@ -195,6 +227,81 @@ bool line_palette(const std::string &name, std::vector<color_t> &lines) {
    }
    return true;
 }
+
+const char *const ROLE_NAMES[ROLE_COUNT] = {"background", "surface", "raised_surface", "border", "text",
+                                            "dimmed_text", "accent", "text_on_accent", "selection", "success",
+                                            "warning", "error"};
+
+int role_index(const std::string &name) {
+   for (int i = 0; i < ROLE_COUNT; ++i)
+      if (name == ROLE_NAMES[i]) return i;
+   return -1;
+}
+
+bool theme_t::has(const std::string &key) const {
+   for (const std::string &k : keys)
+      if (k == key) return true;
+   return false;
+}
+
+double luminance(const color_t &c) {
+   auto lin = [](double v) { return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
+   return 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
+}
+
+double contrast(const color_t &a, const color_t &b) {
+   const double la = luminance(a), lb = luminance(b);
+   return (std::max(la, lb) + 0.05) / (std::min(la, lb) + 0.05);
+}
+
+bool check_contrast(const color_t roles[ROLE_COUNT], std::string &err) {
+   struct pair_t {
+      int    fg, bg;
+      double min;
+   };
+   static const pair_t PAIRS[] = {{ROLE_TEXT, ROLE_BACKGROUND, 4.5},     {ROLE_TEXT, ROLE_SURFACE, 4.5},
+                                  {ROLE_TEXT, ROLE_RAISED_SURFACE, 4.5}, {ROLE_TEXT, ROLE_SELECTION, 4.5},
+                                  {ROLE_DIMMED_TEXT, ROLE_BACKGROUND, 3.0}, {ROLE_TEXT_ON_ACCENT, ROLE_ACCENT, 4.5}};
+   auto hex = [](const color_t &c) {
+      char out[16];
+      std::snprintf(out, sizeof(out), "#%02x%02x%02x", static_cast<int>(std::lround(c.r * 255.0f)),
+                    static_cast<int>(std::lround(c.g * 255.0f)), static_cast<int>(std::lround(c.b * 255.0f)));
+      return std::string(out);
+   };
+   for (const pair_t &p : PAIRS) {
+      const double r = contrast(roles[p.fg], roles[p.bg]);
+      if (r < p.min) {
+         char ratio[64];
+         std::snprintf(ratio, sizeof(ratio), "%.2f:1, below %.1f:1", r, p.min);
+         err = std::string(ROLE_NAMES[p.fg]) + " on " + ROLE_NAMES[p.bg] + " is " + ratio + " (" + hex(roles[p.fg]) +
+               " on " + hex(roles[p.bg]) + ")";
+         return false;
+      }
+   }
+   return true;
+}
+
+namespace {
+const char *find_source(const theme_source *table, int n, const std::string &name) {
+   for (int i = 0; i < n; ++i)
+      if (name == table[i].name) return table[i].text;
+   return nullptr;
+}
+std::string join_names(const theme_source *table, int n) {
+   std::string out;
+   for (int i = 0; i < n; ++i) out += std::string(i ? ", " : "") + table[i].name;
+   return out;
+}
+constexpr int NLOOKS = static_cast<int>(sizeof(LOOKS) / sizeof(LOOKS[0]));
+constexpr int NPALETTES = static_cast<int>(sizeof(PALETTES) / sizeof(PALETTES[0]));
+} // namespace
+
+const char *look_text(const std::string &name) { return find_source(LOOKS, NLOOKS, name); }
+const char *palette_text(const std::string &name) { return find_source(PALETTES, NPALETTES, name); }
+std::string look_names() { return join_names(LOOKS, NLOOKS); }
+std::string palette_names() { return join_names(PALETTES, NPALETTES); }
+int         palette_count() { return NPALETTES; }
+const char *palette_name(int i) { return PALETTES[i].name; }
 
 int builtin_count() { return static_cast<int>(sizeof(THEMES) / sizeof(THEMES[0])); }
 const char *builtin_name(int i) { return THEMES[i].name; }
