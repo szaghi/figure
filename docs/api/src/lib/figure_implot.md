@@ -67,9 +67,13 @@ graph LR
 - [ip_heatmap_r64](#ip-heatmap-r64)
 - [ip_image](#ip-image)
 - [ip_colormap_scale](#ip-colormap-scale)
+- [ip_load_colormap](#ip-load-colormap)
+- [ip_colormap_names](#ip-colormap-names)
 - [ip_begin_plot](#ip-begin-plot)
 - [ip_begin_subplots](#ip-begin-subplots)
 - [ip_spec](#ip-spec)
+- [ip_colormap](#ip-colormap)
+- [colormap_ok](#colormap-ok)
 - [series_ok](#series-ok)
 - [field_ok](#field-ok)
 - [row_ok](#row-ok)
@@ -527,7 +531,7 @@ subroutine ip_heatmap_r32(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max
 | `scale_min` | real(kind=real64) | in | optional | Value at the bottom of the colormap. |
 | `scale_max` | real(kind=real64) | in | optional | Value at the top (both or none; none: data). |
 | `label_format` | character(len=*) | in | optional | printf format printing each value in its cell. |
-| `colormap` | integer(kind=int32) | in | optional | Colormap (`ImPlotColormap_*`; default: current). |
+| `colormap` | integer(kind=int32) | in | optional | Colormap (`ip_colormap`; default: Viridis). |
 | `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
@@ -538,6 +542,7 @@ flowchart TD
   ip_heatmap_r32["ip_heatmap_r32"] --> ImPlot_PlotHeatmap_FloatPtr["ImPlot_PlotHeatmap_FloatPtr"]
   ip_heatmap_r32["ip_heatmap_r32"] --> ImPlot_PopColormap["ImPlot_PopColormap"]
   ip_heatmap_r32["ip_heatmap_r32"] --> ImPlot_PushColormap_PlotColormap["ImPlot_PushColormap_PlotColormap"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> colormap_ok["colormap_ok"]
   ip_heatmap_r32["ip_heatmap_r32"] --> cstr["cstr"]
   ip_heatmap_r32["ip_heatmap_r32"] --> field_ok["field_ok"]
   ip_heatmap_r32["ip_heatmap_r32"] --> figure_check["figure_check"]
@@ -793,7 +798,7 @@ subroutine ip_heatmap_r64(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max
 | `scale_min` | real(kind=real64) | in | optional | Value at the bottom of the colormap. |
 | `scale_max` | real(kind=real64) | in | optional | Value at the top (both or none; none: data). |
 | `label_format` | character(len=*) | in | optional | printf format printing each value in its cell. |
-| `colormap` | integer(kind=int32) | in | optional | Colormap (`ImPlotColormap_*`; default: current). |
+| `colormap` | integer(kind=int32) | in | optional | Colormap (`ip_colormap`; default: Viridis). |
 | `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
@@ -804,6 +809,7 @@ flowchart TD
   ip_heatmap_r64["ip_heatmap_r64"] --> ImPlot_PlotHeatmap_doublePtr["ImPlot_PlotHeatmap_doublePtr"]
   ip_heatmap_r64["ip_heatmap_r64"] --> ImPlot_PopColormap["ImPlot_PopColormap"]
   ip_heatmap_r64["ip_heatmap_r64"] --> ImPlot_PushColormap_PlotColormap["ImPlot_PushColormap_PlotColormap"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> colormap_ok["colormap_ok"]
   ip_heatmap_r64["ip_heatmap_r64"] --> cstr["cstr"]
   ip_heatmap_r64["ip_heatmap_r64"] --> field_ok["field_ok"]
   ip_heatmap_r64["ip_heatmap_r64"] --> figure_check["figure_check"]
@@ -849,10 +855,11 @@ flowchart TD
 
 ### ip_colormap_scale
 
-A colour bar for [scale_min, scale_max], next to a heatmap (outside `ip_begin_plot`/`ip_end_plot`).
+A colour bar for [scale_min, scale_max], next to a heatmap (outside `ip_begin_plot`/`ip_end_plot`). Statuses:
+ `FIG_ERR_ARGUMENT` for a colormap id that is not registered.
 
 ```fortran
-subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap)
+subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap, stat)
 ```
 
 **Arguments**
@@ -865,15 +872,81 @@ subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_f
 | `width` | real(kind=real64) | in | optional | Width [pixels] (default: ImPlot's). |
 | `height` | real(kind=real64) | in | optional | Height [pixels] (default: ImPlot's). |
 | `label_format` | character(len=*) | in | optional | printf format of the tick labels (default '%g', ImPlot's). |
-| `colormap` | integer(kind=int32) | in | optional | Colormap (`ImPlotColormap_*`; default: current). |
+| `colormap` | integer(kind=int32) | in | optional | Colormap (`ip_colormap`; default: Viridis). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
   ip_colormap_scale["ip_colormap_scale"] --> ImPlot_ColormapScale["ImPlot_ColormapScale"]
+  ip_colormap_scale["ip_colormap_scale"] --> colormap_ok["colormap_ok"]
   ip_colormap_scale["ip_colormap_scale"] --> cstr["cstr"]
+  ip_colormap_scale["ip_colormap_scale"] --> figure_check["figure_check"]
   style ip_colormap_scale fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_load_colormap
+
+Read a colormap from `file` and register it under `name` for `ip_colormap`. The file is a CSV table, one colour a
+ row, `r, g, b` (or `x, r, g, b`, with `x` a position: resampled to 256 uniform positions), separated by commas,
+ semicolons, blanks or tabs, components in [0, 1] (or [0, 255] when one exceeds 1), `#` comments and a header line
+ allowed; or a ParaView JSON preset (a file of ParaView's "Export" of presets, or one preset): the one whose
+ `Name` is `name`, or the only one, its `RGBPoints` sampled at 256 positions in its `ColorSpace` (RGB, Lab,
+ Diverging, HSV or Step). The map is kept for the program's life. Statuses: `FIG_ERR_FAILED` if the file cannot be
+ read, `FIG_ERR_ARGUMENT` if it is malformed (the message gives the line) or the name is taken (a map, or the
+ reverse of one: ImPlot cannot replace a colormap), empty, holds `|` or starts with `'FIGURE '`; `FIG_ERR_STATE`
+ from a task. The same in every mode, before `init*` too.
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_load_colormap(name, file, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Name to register the map under. |
+| `file` | character(len=*) | in |  | CSV table or ParaView JSON preset. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_load_colormap["ip_load_colormap"] --> fig_load_colormap["fig_load_colormap"]
+  ip_load_colormap["ip_load_colormap"] --> figure_check["figure_check"]
+  ip_load_colormap["ip_load_colormap"] --> figure_refused["figure_refused"]
+  style ip_load_colormap fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_colormap_names
+
+The names `ip_colormap` knows: the bundled maps (alphabetical), ImPlot's own (in ImPlot's order), then the maps
+ loaded with `ip_load_colormap` (in load order); reversed and discrete maps are not listed. From a task: none.
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_colormap_names(names)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `names` | character(len=:) | out | allocatable | Names (as long as the longest). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_colormap_names["ip_colormap_names"] --> fig_colormap_count["fig_colormap_count"]
+  ip_colormap_names["ip_colormap_names"] --> fig_colormap_name["fig_colormap_name"]
+  ip_colormap_names["ip_colormap_names"] --> figure_refused["figure_refused"]
+  style ip_colormap_names fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions
@@ -984,6 +1057,75 @@ flowchart TD
   ip_spec["ip_spec"] --> rgba["rgba"]
   ip_spec["ip_spec"] --> rgba_ok["rgba_ok"]
   style ip_spec fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_colormap
+
+The colormap `name` as an ImPlot id, for the `colormap` argument of `ip_heatmap` and `ip_colormap_scale`: a
+ bundled map (`'cividis'`, `'batlow'`, `'cool-warm'`, ...), one of ImPlot's own (`'Viridis'`, `'Jet'`, ...) or a
+ map loaded with `ip_load_colormap`; names are case-sensitive (`ip_colormap_names` lists them). `<name>_r` is the
+ map reversed; `levels` gives that many discrete bands of equal width, each coloured as the map at its centre. A
+ map is registered with ImPlot (`AddColormap`) at its first use, and the same id is returned after; ids hold for
+ the application's life (a new `init` registers the maps again). Statuses: `FIG_ERR_ARGUMENT` for an unknown name
+ or `levels` outside [2, 256], `FIG_ERR_STATE` before `init*` and from a task; the id is then -1 (and `ip_heatmap`
+ refuses it). The same in every mode.
+
+**Attributes**: recursive
+
+**Returns**: `integer(kind=int32)`
+
+```fortran
+function ip_colormap(name, levels, stat) result(id)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | Colormap name; `_r`: reversed. |
+| `levels` | integer(kind=int32) | in | optional | Discrete bands, in [2, 256] (default: continuous). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_colormap["ip_colormap"] --> fig_colormap["fig_colormap"]
+  ip_colormap["ip_colormap"] --> figure_check["figure_check"]
+  ip_colormap["ip_colormap"] --> figure_fail["figure_fail"]
+  ip_colormap["ip_colormap"] --> figure_refused["figure_refused"]
+  style ip_colormap fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### colormap_ok
+
+The colormap id to draw with (default ImPlot's Viridis); false, with `FIG_ERR_ARGUMENT`, if it is not registered.
+
+**Returns**: `logical`
+
+```fortran
+function colormap_ok(caller, colormap, cmap, stat) result(ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `caller` | character(len=*) | in |  | Calling procedure, for the message. |
+| `colormap` | integer(kind=int32) | in | optional | Colormap id, if given. |
+| `cmap` | integer(kind=c_int) | out |  | The id to use. |
+| `stat` | integer(kind=int32) | out | optional | Status, on a failure. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_colormap_scale["ip_colormap_scale"] --> colormap_ok["colormap_ok"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> colormap_ok["colormap_ok"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> colormap_ok["colormap_ok"]
+  colormap_ok["colormap_ok"] --> ImPlot_GetColormapCount["ImPlot_GetColormapCount"]
+  colormap_ok["colormap_ok"] --> figure_fail["figure_fail"]
+  style colormap_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### series_ok

@@ -118,6 +118,10 @@ graph LR
 - [fig_set_clipboard](#fig-set-clipboard)
 - [fig_get_clipboard](#fig-get-clipboard)
 - [fig_window_rect](#fig-window-rect)
+- [fig_colormap](#fig-colormap)
+- [fig_load_colormap](#fig-load-colormap)
+- [fig_colormap_count](#fig-colormap-count)
+- [fig_colormap_name](#fig-colormap-name)
 - [fig_shutdown](#fig-shutdown)
 - [fig_process_release](#fig-process-release)
 - [fig_task_release](#fig-task-release)
@@ -339,6 +343,14 @@ graph LR
 ### fig_get_clipboard
 
 ### fig_window_rect
+
+### fig_colormap
+
+### fig_load_colormap
+
+### fig_colormap_count
+
+### fig_colormap_name
 
 ### fig_shutdown
 
