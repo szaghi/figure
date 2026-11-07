@@ -4,10 +4,11 @@ title: figure_group
 
 # figure_group
 
-> figure_group, widgets that group other widgets: child regions, headers, tabs, tables, id scopes, disabled blocks.
+> figure_group, widgets that group other widgets: child regions, headers, tabs, tables, trees, id scopes, disabled blocks.
 
  Pairing rules (Dear ImGui's): `ig_end_tab_bar` only when `ig_begin_tab_bar` returned true, `ig_end_tab` only when
- `ig_begin_tab` returned true, `ig_end_table` only when `ig_begin_table` returned true (unlike `ig_begin`/`ig_end`,
+ `ig_begin_tab` returned true, `ig_end_table` only when `ig_begin_table` returned true, `ig_tree_pop` only when
+ `ig_tree_node` returned true (unlike `ig_begin`/`ig_end`,
  always paired); `ig_pop_id` after every `ig_push_id`, `ig_end_disabled` after every `ig_begin_disabled`,
  `ig_end_child` after every `ig_begin_child`. A collapsing header needs no end call.
 
@@ -36,6 +37,8 @@ graph LR
 - [clipper_begin](#clipper-begin)
 - [clipper_final](#clipper-final)
 - [ig_end_child](#ig-end-child)
+- [ig_tree_pop](#ig-tree-pop)
+- [ig_set_next_item_open](#ig-set-next-item-open)
 - [ig_end_tab_bar](#ig-end-tab-bar)
 - [ig_end_tab](#ig-end-tab)
 - [ig_end_table](#ig-end-table)
@@ -52,6 +55,7 @@ graph LR
 - [clipper_step](#clipper-step)
 - [ig_begin_child](#ig-begin-child)
 - [ig_collapsing_header](#ig-collapsing-header)
+- [ig_tree_node](#ig-tree-node)
 - [ig_begin_tab_bar](#ig-begin-tab-bar)
 - [ig_begin_tab](#ig-begin-tab)
 - [ig_begin_table](#ig-begin-table)
@@ -152,6 +156,46 @@ subroutine ig_end_child()
 flowchart TD
   ig_end_child["ig_end_child"] --> igEndChild["igEndChild"]
   style ig_end_child fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_tree_pop
+
+Close the children of a node (only after `ig_tree_node` returned true).
+
+```fortran
+subroutine ig_tree_pop()
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_tree_pop["ig_tree_pop"] --> igTreePop["igTreePop"]
+  style ig_tree_pop fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_set_next_item_open
+
+Open or close the next tree node (or collapsing header) from the program: the first time it is shown, or, with
+ `always`, on this frame whatever its state (an "expand all" button calls it with `always` once per node).
+
+```fortran
+subroutine ig_set_next_item_open(open, always)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `open` | logical | in |  | Open (true) or closed. |
+| `always` | logical | in | optional | Enforce on this frame (default: only when the node has no state yet). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_set_next_item_open["ig_set_next_item_open"] --> igSetNextItemOpen["igSetNextItemOpen"]
+  style ig_set_next_item_open fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_end_tab_bar
@@ -477,6 +521,41 @@ flowchart TD
   ig_collapsing_header["ig_collapsing_header"] --> cstr["cstr"]
   ig_collapsing_header["ig_collapsing_header"] --> igCollapsingHeader_TreeNodeFlags["igCollapsingHeader_TreeNodeFlags"]
   style ig_collapsing_header fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_tree_node
+
+A node of a tree (`TreeNodeEx`); true while open: draw its children, then `ig_tree_pop` (only after true).
+ The arrow, or a double-click on the label, opens and closes the node; a single click on the label is reported
+ by `clicked` (`IsItemClicked` and not `IsItemToggledOpen`), so choosing a node and expanding it stay different.
+ A leaf has no arrow and is always open: it too is popped.
+
+**Returns**: `logical`
+
+```fortran
+function ig_tree_node(label, default_open, selected, leaf, span_full_width, clicked) result(open)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label (also its id). |
+| `default_open` | logical | in | optional | Open the first time it is shown (default: closed). |
+| `selected` | logical | in | optional | Highlighted as selected (the program keeps it). |
+| `leaf` | logical | in | optional | No children: no arrow (default: false). |
+| `span_full_width` | logical | in | optional | Highlight and hit the whole width (or cell). |
+| `clicked` | logical | out | optional | The label was clicked this frame (not the arrow). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_tree_node["ig_tree_node"] --> cstr["cstr"]
+  ig_tree_node["ig_tree_node"] --> igIsItemClicked["igIsItemClicked"]
+  ig_tree_node["ig_tree_node"] --> igIsItemToggledOpen["igIsItemToggledOpen"]
+  ig_tree_node["ig_tree_node"] --> igTreeNodeEx_Str["igTreeNodeEx_Str"]
+  style ig_tree_node fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_begin_tab_bar

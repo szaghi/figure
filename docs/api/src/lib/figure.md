@@ -8,7 +8,7 @@ title: figure
 
  Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui),
  menus, popups and shortcuts (figure_menu), groups of widgets (figure_group: child regions, collapsing headers, tabs,
- tables, id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style),
+ tables, trees, id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style),
  the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the
  GPU textures (figure_texture) that `ig_image` and `ip_image` draw, and the Lucide icons by name, `ICON_*`
  (figure_icons), UTF-8 strings for any label: `ig_button(ICON_PLAY//' Run')`.

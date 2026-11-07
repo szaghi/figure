@@ -238,6 +238,7 @@ flowchart TD
   ig_text_size["ig_text_size"] --> cstr["cstr"]
   ig_text_wrapped["ig_text_wrapped"] --> cstr["cstr"]
   ig_tooltip["ig_tooltip"] --> cstr["cstr"]
+  ig_tree_node["ig_tree_node"] --> cstr["cstr"]
   ip_bars_r32["ip_bars_r32"] --> cstr["cstr"]
   ip_bars_r64["ip_bars_r64"] --> cstr["cstr"]
   ip_begin_plot["ip_begin_plot"] --> cstr["cstr"]
