@@ -45,6 +45,8 @@ graph LR
 - [fig_notification_get](#fig-notification-get)
 - [fig_notification_rect](#fig-notification-rect)
 - [fig_drawn_extent](#fig-drawn-extent)
+- [fig_drawn_extent_rgba](#fig-drawn-extent-rgba)
+- [fig_popup_rect](#fig-popup-rect)
 - [fig_task_start](#fig-task-start)
 - [fig_task_state](#fig-task-state)
 - [fig_task_report](#fig-task-report)
@@ -106,6 +108,7 @@ graph LR
 - [fig_input_key](#fig-input-key)
 - [fig_input_text](#fig-input-text)
 - [fig_plot_tick_label](#fig-plot-tick-label)
+- [fig_plot_annotation](#fig-plot-annotation)
 - [fig_key_chord](#fig-key-chord)
 - [fig_widget_input_text](#fig-widget-input-text)
 - [fig_text_set](#fig-text-set)
@@ -119,6 +122,7 @@ graph LR
 - [fig_get_clipboard](#fig-get-clipboard)
 - [fig_window_rect](#fig-window-rect)
 - [fig_colormap](#fig-colormap)
+- [fig_colormap_legend](#fig-colormap-legend)
 - [fig_load_colormap](#fig-load-colormap)
 - [fig_colormap_count](#fig-colormap-count)
 - [fig_colormap_name](#fig-colormap-name)
@@ -197,6 +201,10 @@ graph LR
 ### fig_notification_rect
 
 ### fig_drawn_extent
+
+### fig_drawn_extent_rgba
+
+### fig_popup_rect
 
 ### fig_task_start
 
@@ -320,6 +328,8 @@ graph LR
 
 ### fig_plot_tick_label
 
+### fig_plot_annotation
+
 ### fig_key_chord
 
 ### fig_widget_input_text
@@ -345,6 +355,8 @@ graph LR
 ### fig_window_rect
 
 ### fig_colormap
+
+### fig_colormap_legend
 
 ### fig_load_colormap
 

@@ -31,6 +31,7 @@ graph LR
   figure_implot["figure_implot"] --> figure_cimplot["figure_cimplot"]
   figure_implot["figure_implot"] --> figure_cimplot_enums["figure_cimplot_enums"]
   figure_implot["figure_implot"] --> figure_texture["figure_texture"]
+  figure_implot["figure_implot"] --> ieee_arithmetic["ieee_arithmetic"]
   figure_implot["figure_implot"] --> iso_c_binding["iso_c_binding"]
   figure_implot["figure_implot"] --> iso_fortran_env["iso_fortran_env"]
 ```
@@ -42,6 +43,10 @@ graph LR
 - [ip_scatter](#ip-scatter)
 - [ip_bars](#ip-bars)
 - [ip_heatmap](#ip-heatmap)
+- [ip_error_bars](#ip-error-bars)
+- [ip_contour](#ip-contour)
+- [ip_contour_lines](#ip-contour-lines)
+- [ip_contour_levels](#ip-contour-levels)
 - [ip_shaded](#ip-shaded)
 - [ip_end_subplots](#ip-end-subplots)
 - [ip_end_plot](#ip-end-plot)
@@ -67,12 +72,34 @@ graph LR
 - [ip_heatmap_r64](#ip-heatmap-r64)
 - [ip_image](#ip-image)
 - [ip_colormap_scale](#ip-colormap-scale)
+- [ip_colormap_legend](#ip-colormap-legend)
 - [ip_load_colormap](#ip-load-colormap)
 - [ip_colormap_names](#ip-colormap-names)
+- [ip_error_bars_r32](#ip-error-bars-r32)
+- [ip_error_bars_r64](#ip-error-bars-r64)
+- [ip_annotation](#ip-annotation)
+- [ip_contour_r32](#ip-contour-r32)
+- [ip_contour_r64](#ip-contour-r64)
+- [ip_contour_lines_r32](#ip-contour-lines-r32)
+- [ip_contour_lines_r64](#ip-contour-lines-r64)
+- [cell_segments](#cell-segments)
+- [finite_range_r32](#finite-range-r32)
+- [finite_range_r64](#finite-range-r64)
+- [contour_draw](#contour-draw)
 - [ip_begin_plot](#ip-begin-plot)
 - [ip_begin_subplots](#ip-begin-subplots)
 - [ip_spec](#ip-spec)
 - [ip_colormap](#ip-colormap)
+- [ip_drag_line_x](#ip-drag-line-x)
+- [ip_drag_line_y](#ip-drag-line-y)
+- [ip_drag_point](#ip-drag-point)
+- [ip_contour_levels_r32](#ip-contour-levels-r32)
+- [ip_contour_levels_r64](#ip-contour-levels-r64)
+- [nice_levels](#nice-levels)
+- [contour_ok](#contour-ok)
+- [level_text](#level-text)
+- [drag_ok](#drag-ok)
+- [drag_color](#drag-color)
 - [colormap_ok](#colormap-ok)
 - [series_ok](#series-ok)
 - [field_ok](#field-ok)
@@ -132,6 +159,30 @@ Bars of height y(i) centred at x(i).
 A 2D field f(i, j) as coloured cells: i along x, j along y, j = 1 at the bottom.
 
 **Module procedures**: [`ip_heatmap_r32`](/api/src/lib/figure_implot#ip-heatmap-r32), [`ip_heatmap_r64`](/api/src/lib/figure_implot#ip-heatmap-r64)
+
+### ip_error_bars
+
+Vertical error bars at the points (x(i), y(i)): from y(i) - err(i) to y(i) + err(i), or to y(i) + err_high(i).
+
+**Module procedures**: [`ip_error_bars_r32`](/api/src/lib/figure_implot#ip-error-bars-r32), [`ip_error_bars_r64`](/api/src/lib/figure_implot#ip-error-bars-r64)
+
+### ip_contour
+
+Contour lines of a 2D field f(i, j), sampled at uniformly spaced points, i along x, j along y.
+
+**Module procedures**: [`ip_contour_r32`](/api/src/lib/figure_implot#ip-contour-r32), [`ip_contour_r64`](/api/src/lib/figure_implot#ip-contour-r64)
+
+### ip_contour_lines
+
+The segments of the contour lines of a 2D field (marching squares), without drawing them.
+
+**Module procedures**: [`ip_contour_lines_r32`](/api/src/lib/figure_implot#ip-contour-lines-r32), [`ip_contour_lines_r64`](/api/src/lib/figure_implot#ip-contour-lines-r64)
+
+### ip_contour_levels
+
+Contour levels at round numbers ("nice" steps: 1, 2, 2.5 or 5 times a power of ten) inside a field's range.
+
+**Module procedures**: [`ip_contour_levels_r32`](/api/src/lib/figure_implot#ip-contour-levels-r32), [`ip_contour_levels_r64`](/api/src/lib/figure_implot#ip-contour-levels-r64)
 
 ### ip_shaded
 
@@ -886,6 +937,52 @@ flowchart TD
   style ip_colormap_scale fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### ip_colormap_legend
+
+A colour-scale legend: a bar coloured by `colormap` from `vmin` to `vmax` (bottom to top, or left to right with
+ `horizontal=.true.`), with ticks and their values on its right (or below). An item of the current window, outside
+ a plot: beside any plot (`ig_same_line`), above or below it, or in any window. With `levels`: that many bands of
+ equal width, each the map's colour at its centre (as `ip_colormap(name, levels)` colours a field), the ticks at the
+ bands' edges; without: a continuous bar, ticks at round values (a step of 1, 2, 2.5 or 5 times a power of ten)
+ about every 40 pixels (100 horizontal). `vmin > vmax` turns the scale over. Sizes [pixels]: positive given,
+ negative the space left in the window, absent the default (vertical: 300 long, as wide as the bar and the labels;
+ horizontal: the space left, as tall as the bar and a line of labels). Statuses: `FIG_ERR_ARGUMENT` for a colormap
+ that is not registered, equal or non-finite `vmin`/`vmax`, `levels` outside [2, 256]; `FIG_ERR_STATE` outside a
+ window and from a task. The same in every mode.
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_colormap_legend(id, colormap, vmin, vmax, levels, horizontal, width, height, label_format, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | character(len=*) | in |  | Widget id, unique in the window (not shown). |
+| `colormap` | integer(kind=int32) | in |  | Colormap (`ip_colormap`). |
+| `vmin` | real(kind=real64) | in |  | Value at the bottom (left). |
+| `vmax` | real(kind=real64) | in |  | Value at the top (right). |
+| `levels` | integer(kind=int32) | in | optional | Discrete bands, in [2, 256] (default: continuous). |
+| `horizontal` | logical | in | optional | Horizontal bar (default: vertical). |
+| `width` | real(kind=real64) | in | optional | Width [pixels]. |
+| `height` | real(kind=real64) | in | optional | Height [pixels]. |
+| `label_format` | character(len=*) | in | optional | printf format of the values (default '%g'). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_colormap_legend["ip_colormap_legend"] --> fig_colormap_legend["fig_colormap_legend"]
+  ip_colormap_legend["ip_colormap_legend"] --> figure_check["figure_check"]
+  ip_colormap_legend["ip_colormap_legend"] --> figure_fail["figure_fail"]
+  ip_colormap_legend["ip_colormap_legend"] --> figure_refused["figure_refused"]
+  ip_colormap_legend["ip_colormap_legend"] --> uniform["uniform"]
+  style ip_colormap_legend fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### ip_load_colormap
 
 Read a colormap from `file` and register it under `name` for `ip_colormap`. The file is a CSV table, one colour a
@@ -947,6 +1044,417 @@ flowchart TD
   ip_colormap_names["ip_colormap_names"] --> fig_colormap_name["fig_colormap_name"]
   ip_colormap_names["ip_colormap_names"] --> figure_refused["figure_refused"]
   style ip_colormap_names fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_error_bars_r32
+
+Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to
+ y(i) + err_high(i) (asymmetric). Read in place. Single precision.
+
+```fortran
+subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `x` | real(kind=real32) | in | contiguous, target | Abscissae. |
+| `y` | real(kind=real32) | in | contiguous, target | Ordinates. |
+| `err` | real(kind=real32) | in | contiguous, target | Error below (and above) [y units]. |
+| `err_high` | real(kind=real32) | in | contiguous, target, optional | Error above [y units]. |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_error_bars_r32["ip_error_bars_r32"] --> ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr["ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt["ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> addr_r32["addr_r32"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> cstr["cstr"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> figure_check["figure_check"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> series_ok["series_ok"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> spec_c["spec_c"]
+  style ip_error_bars_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_error_bars_r64
+
+Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to
+ y(i) + err_high(i) (asymmetric). Read in place. Double precision.
+
+```fortran
+subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `x` | real(kind=real64) | in | contiguous, target | Abscissae. |
+| `y` | real(kind=real64) | in | contiguous, target | Ordinates. |
+| `err` | real(kind=real64) | in | contiguous, target | Error below (and above) [y units]. |
+| `err_high` | real(kind=real64) | in | contiguous, target, optional | Error above [y units]. |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_error_bars_r64["ip_error_bars_r64"] --> ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt["ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr["ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> addr_r64["addr_r64"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> cstr["cstr"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> figure_check["figure_check"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> series_ok["series_ok"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> spec_c["spec_c"]
+  style ip_error_bars_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_annotation
+
+A text at the point (x, y) of the current plot (between `ip_begin_plot` and `ip_end_plot`), drawn when the plot
+ ends, over its items and kept inside the plot area. Without `color`: the text alone, in the plot's text colour; with
+ it: in a box of that colour, the text black or white for contrast. `offset` moves it [pixels] from the point, with a
+ leader line to it (x right, y down); a zero component centres it on the point along that axis (the default).
+ Statuses: `FIG_ERR_ARGUMENT` for a colour of size /= 4 or an offset of size /= 2, `FIG_ERR_STATE` outside a plot
+ and from a task.
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_annotation(x, y, text, color, offset, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `x` | real(kind=real64) | in |  | Abscissa [plot units]. |
+| `y` | real(kind=real64) | in |  | Ordinate [plot units]. |
+| `text` | character(len=*) | in |  | Text (UTF-8). |
+| `color` | real(kind=real64) | in | optional | Box colour, RGBA in [0, 1] (default: no box). |
+| `offset` | real(kind=real64) | in | optional | Offset [pixels], (x right, y down) (default: centred). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_annotation["ip_annotation"] --> fig_plot_annotation["fig_plot_annotation"]
+  ip_annotation["ip_annotation"] --> figure_check["figure_check"]
+  ip_annotation["ip_annotation"] --> figure_fail["figure_fail"]
+  ip_annotation["ip_annotation"] --> figure_refused["figure_refused"]
+  ip_annotation["ip_annotation"] --> rgba_ok["rgba_ok"]
+  style ip_annotation fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_contour_r32
+
+Contour lines of the field f(i, j), sampled at x = x0 .. x1 (i = 1 .. size(f, 1)) and y = y0 .. y1 (j = 1 ..
+ size(f, 2)), uniformly spaced, read in place: as `ip_contour_r64`. Single precision.
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_contour_r32(label, f, x0, x1, y0, y1, levels, nlevels, colormap, color, labels, line_weight, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label (one entry for every level). |
+| `f` | real(kind=real32) | in |  | Field: f(i, j), i along x, j along y. |
+| `x0` | real(kind=real64) | in |  | Abscissa of f(1, :). |
+| `x1` | real(kind=real64) | in |  | Abscissa of f(size(f, 1), :). |
+| `y0` | real(kind=real64) | in |  | Ordinate of f(:, 1). |
+| `y1` | real(kind=real64) | in |  | Ordinate of f(:, size(f, 2)). |
+| `levels` | real(kind=real64) | in | optional | Levels (default: `ip_contour_levels(f, nlevels)`). |
+| `nlevels` | integer(kind=int32) | in | optional | Automatic levels wanted, about (default 10). |
+| `colormap` | integer(kind=int32) | in | optional | Colour each level from this colormap (`ip_colormap`). |
+| `color` | real(kind=real64) | in | optional | One colour for every level, RGBA in [0, 1]. |
+| `labels` | logical | in | optional | Label each level with its value (default: no). |
+| `line_weight` | real(kind=real64) | in | optional | Line weight [pixels] (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_r32["ip_contour_r32"] --> contour_draw["contour_draw"]
+  ip_contour_r32["ip_contour_r32"] --> contour_ok["contour_ok"]
+  ip_contour_r32["ip_contour_r32"] --> figure_refused["figure_refused"]
+  ip_contour_r32["ip_contour_r32"] --> finite_range_r32["finite_range_r32"]
+  ip_contour_r32["ip_contour_r32"] --> ip_contour_levels["ip_contour_levels"]
+  ip_contour_r32["ip_contour_r32"] --> ip_contour_lines["ip_contour_lines"]
+  style ip_contour_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_contour_r64
+
+Contour lines of the field f(i, j), sampled at x = x0 .. x1 (i = 1 .. size(f, 1)) and y = y0 .. y1 (j = 1 ..
+ size(f, 2)), uniformly spaced, read in place (between `ip_begin_plot` and `ip_end_plot`). The segments are
+ computed every call (`ip_contour_lines`, marching squares) and drawn as one ImPlot line item per level, with one
+ legend entry (`label`). Levels: `levels`, or about `nlevels` round numbers inside the field's range
+ (`ip_contour_levels`). Colours: from `colormap`, the level's value placed in the field's finite range (as a heatmap
+ of the field with the same colormap colours it); or `color` for every level; or the item's automatic colour.
+ `labels=.true.`: each level's value in a box of its colour on one of its segments (an annotation, drawn when the
+ plot ends), the segments chosen part-way through each level's list so that labels of nearby levels fall apart.
+ Non-finite values (NaN, infinities) leave holes: a cell with one is skipped. A field with fewer than 2 points
+ along an axis has no lines. Statuses: `FIG_ERR_ARGUMENT` for a colour of size /= 4, a colormap that is not
+ registered, `nlevels` < 1, or a level with more segments than a C int counts; `FIG_ERR_STATE` from a task.
+ Double precision.
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_contour_r64(label, f, x0, x1, y0, y1, levels, nlevels, colormap, color, labels, line_weight, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label (one entry for every level). |
+| `f` | real(kind=real64) | in |  | Field: f(i, j), i along x, j along y. |
+| `x0` | real(kind=real64) | in |  | Abscissa of f(1, :). |
+| `x1` | real(kind=real64) | in |  | Abscissa of f(size(f, 1), :). |
+| `y0` | real(kind=real64) | in |  | Ordinate of f(:, 1). |
+| `y1` | real(kind=real64) | in |  | Ordinate of f(:, size(f, 2)). |
+| `levels` | real(kind=real64) | in | optional | Levels (default: `ip_contour_levels(f, nlevels)`). |
+| `nlevels` | integer(kind=int32) | in | optional | Automatic levels wanted, about (default 10). |
+| `colormap` | integer(kind=int32) | in | optional | Colour each level from this colormap (`ip_colormap`). |
+| `color` | real(kind=real64) | in | optional | One colour for every level, RGBA in [0, 1]. |
+| `labels` | logical | in | optional | Label each level with its value (default: no). |
+| `line_weight` | real(kind=real64) | in | optional | Line weight [pixels] (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_r64["ip_contour_r64"] --> contour_draw["contour_draw"]
+  ip_contour_r64["ip_contour_r64"] --> contour_ok["contour_ok"]
+  ip_contour_r64["ip_contour_r64"] --> figure_refused["figure_refused"]
+  ip_contour_r64["ip_contour_r64"] --> finite_range_r64["finite_range_r64"]
+  ip_contour_r64["ip_contour_r64"] --> ip_contour_levels["ip_contour_levels"]
+  ip_contour_r64["ip_contour_r64"] --> ip_contour_lines["ip_contour_lines"]
+  style ip_contour_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_contour_lines_r32
+
+The contour lines of f at `levels`, as segments: as `ip_contour_lines_r64`. Single precision.
+
+**Attributes**: pure
+
+```fortran
+subroutine ip_contour_lines_r32(f, x0, x1, y0, y1, levels, x, y, first)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `f` | real(kind=real32) | in |  | Field: f(i, j), i along x, j along y. |
+| `x0` | real(kind=real64) | in |  | Abscissa of f(1, :). |
+| `x1` | real(kind=real64) | in |  | Abscissa of f(size(f, 1), :). |
+| `y0` | real(kind=real64) | in |  | Ordinate of f(:, 1). |
+| `y1` | real(kind=real64) | in |  | Ordinate of f(:, size(f, 2)). |
+| `levels` | real(kind=real64) | in |  | Levels. |
+| `x` | real(kind=real64) | out | allocatable | Segment ends, x: (x(2s-1), y(2s-1)) to (x(2s), y(2s)). |
+| `y` | real(kind=real64) | out | allocatable | Segment ends, y. |
+| `first` | integer(kind=int64) | out | allocatable | Ends of level k: first(k) .. first(k+1)-1. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_lines_r32["ip_contour_lines_r32"] --> cell_segments["cell_segments"]
+  style ip_contour_lines_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_contour_lines_r64
+
+The contour lines of f at `levels`, as segments, without drawing them (no GUI needed): marching squares on the
+ cells of four neighbouring samples, f sampled at x = x0 .. x1 and y = y0 .. y1 (uniformly spaced). Level k's
+ segments join (x(e), y(e)) to (x(e+1), y(e+1)) for e = first(k), first(k) + 2, ... < first(k+1). A line crosses
+ a cell's edge where linear interpolation of the edge's two values gives the level (a value equal to the level
+ counts as above it); in a saddle cell (two opposite corners above, the others below) the cell's centre value, the
+ mean of its corners, decides which corners the lines join. A shared edge gives its point exactly the same in both
+ cells: closed lines close. Cells with a non-finite corner are skipped (holes); so are non-finite levels.
+ Double precision.
+
+**Attributes**: pure
+
+```fortran
+subroutine ip_contour_lines_r64(f, x0, x1, y0, y1, levels, x, y, first)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `f` | real(kind=real64) | in |  | Field: f(i, j), i along x, j along y. |
+| `x0` | real(kind=real64) | in |  | Abscissa of f(1, :). |
+| `x1` | real(kind=real64) | in |  | Abscissa of f(size(f, 1), :). |
+| `y0` | real(kind=real64) | in |  | Ordinate of f(:, 1). |
+| `y1` | real(kind=real64) | in |  | Ordinate of f(:, size(f, 2)). |
+| `levels` | real(kind=real64) | in |  | Levels. |
+| `x` | real(kind=real64) | out | allocatable | Segment ends, x: (x(2s-1), y(2s-1)) to (x(2s), y(2s)). |
+| `y` | real(kind=real64) | out | allocatable | Segment ends, y. |
+| `first` | integer(kind=int64) | out | allocatable | Ends of level k: first(k) .. first(k+1)-1. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_lines_r64["ip_contour_lines_r64"] --> cell_segments["cell_segments"]
+  style ip_contour_lines_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### cell_segments
+
+Marching squares in one cell: the segments of the contour line at `level` through the cell with corner values
+ v = (bottom-left, bottom-right, top-right, top-left). An edge is crossed when its ends lie on opposite sides of
+ the level (a value equal to it is above); its point is interpolated from the edge's left (bottom) end, so a shared
+ edge gives the same point in both cells. A saddle (four edges crossed) is resolved by the centre value, the mean
+ of the corners: the corners on its side are joined through the centre. A non-finite corner: no segments.
+
+**Attributes**: pure
+
+```fortran
+subroutine cell_segments(v, level, xl, xr, yb, yt, m, sx, sy)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `v` | real(kind=real64) | in |  | Corner values: bottom-left, bottom-right, top-right, top-left. |
+| `level` | real(kind=real64) | in |  | Level. |
+| `xl` | real(kind=real64) | in |  | Left abscissa. |
+| `xr` | real(kind=real64) | in |  | Right abscissa. |
+| `yb` | real(kind=real64) | in |  | Bottom ordinate. |
+| `yt` | real(kind=real64) | in |  | Top ordinate. |
+| `m` | integer(kind=int32) | out |  | Segments: 0, 1 or 2. |
+| `sx` | real(kind=real64) | out |  | Segment ends, x: (sx(1), sy(1)) to (sx(2), sy(2)), then 3 to 4. |
+| `sy` | real(kind=real64) | out |  | Segment ends, y. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_lines_r32["ip_contour_lines_r32"] --> cell_segments["cell_segments"]
+  ip_contour_lines_r64["ip_contour_lines_r64"] --> cell_segments["cell_segments"]
+  style cell_segments fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### finite_range_r32
+
+The smallest and largest finite values of f (0, 0 and found false if none).
+
+**Attributes**: pure
+
+```fortran
+subroutine finite_range_r32(f, fmin, fmax, found)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `f` | real(kind=real32) | in |  | Field. |
+| `fmin` | real(kind=real64) | out |  | Smallest finite value. |
+| `fmax` | real(kind=real64) | out |  | Largest finite value. |
+| `found` | logical | out |  | f has finite values. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_levels_r32["ip_contour_levels_r32"] --> finite_range_r32["finite_range_r32"]
+  ip_contour_r32["ip_contour_r32"] --> finite_range_r32["finite_range_r32"]
+  style finite_range_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### finite_range_r64
+
+The smallest and largest finite values of f (0, 0 and found false if none).
+
+**Attributes**: pure
+
+```fortran
+subroutine finite_range_r64(f, fmin, fmax, found)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `f` | real(kind=real64) | in |  | Field. |
+| `fmin` | real(kind=real64) | out |  | Smallest finite value. |
+| `fmax` | real(kind=real64) | out |  | Largest finite value. |
+| `found` | logical | out |  | f has finite values. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_levels_r64["ip_contour_levels_r64"] --> finite_range_r64["finite_range_r64"]
+  ip_contour_r64["ip_contour_r64"] --> finite_range_r64["finite_range_r64"]
+  style finite_range_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### contour_draw
+
+Draw contour segments, one line item per level, all under `label`.
+
+```fortran
+subroutine contour_draw(label, lev, xs, ys, first, fmin, fmax, by_map, cmap, color, labels, line_weight, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `lev` | real(kind=real64) | in |  | Levels. |
+| `xs` | real(kind=real64) | in | target | Segment ends, x. |
+| `ys` | real(kind=real64) | in | target | Segment ends, y. |
+| `first` | integer(kind=int64) | in |  | First end of each level. |
+| `fmin` | real(kind=real64) | in |  | Field's finite range: the colormap's bottom ... |
+| `fmax` | real(kind=real64) | in |  | ... and top. |
+| `by_map` | logical | in |  | Colour from the colormap. |
+| `cmap` | integer(kind=c_int) | in |  | Colormap id. |
+| `color` | real(kind=real64) | in | optional | One colour, RGBA. |
+| `labels` | logical | in | optional | Write the levels' values. |
+| `line_weight` | real(kind=real64) | in | optional | Line weight [pixels]. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_r32["ip_contour_r32"] --> contour_draw["contour_draw"]
+  ip_contour_r64["ip_contour_r64"] --> contour_draw["contour_draw"]
+  contour_draw["contour_draw"] --> ImPlot_GetLastItemColor["ImPlot_GetLastItemColor"]
+  contour_draw["contour_draw"] --> ImPlot_PlotLine_doublePtrdoublePtr["ImPlot_PlotLine_doublePtrdoublePtr"]
+  contour_draw["contour_draw"] --> ImPlot_SampleColormap["ImPlot_SampleColormap"]
+  contour_draw["contour_draw"] --> cstr["cstr"]
+  contour_draw["contour_draw"] --> fig_plot_annotation["fig_plot_annotation"]
+  contour_draw["contour_draw"] --> figure_ImPlotSpec_default["figure_ImPlotSpec_default"]
+  contour_draw["contour_draw"] --> figure_check["figure_check"]
+  contour_draw["contour_draw"] --> figure_fail["figure_fail"]
+  contour_draw["contour_draw"] --> level_text["level_text"]
+  contour_draw["contour_draw"] --> rgba["rgba"]
+  style contour_draw fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ## Functions
@@ -1097,6 +1605,320 @@ flowchart TD
   style ip_colormap fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### ip_drag_line_x
+
+A vertical line at `x` in the current plot that the user drags along x (between `ip_begin_plot` and
+ `ip_end_plot`): `x` is updated in place, and the result is true in the frames it moves. `id` tells the drag
+ tools of a plot apart (any integer, unique in the plot). Statuses: `FIG_ERR_ARGUMENT` for a colour of size /= 4,
+ `FIG_ERR_STATE` from a task.
+
+**Attributes**: recursive
+
+**Returns**: `logical`
+
+```fortran
+function ip_drag_line_x(id, x, color, thickness, stat) result(moved)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | integer(kind=int32) | in |  | Id, unique among the plot's drag tools. |
+| `x` | real(kind=real64) | inout | target | Position [plot units]. |
+| `color` | real(kind=real64) | in | optional | Colour, RGBA in [0, 1] (default: the text colour). |
+| `thickness` | real(kind=real64) | in | optional | Line thickness [pixels] (default 1). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_drag_line_x["ip_drag_line_x"] --> ImPlot_DragLineX["ImPlot_DragLineX"]
+  ip_drag_line_x["ip_drag_line_x"] --> drag_color["drag_color"]
+  ip_drag_line_x["ip_drag_line_x"] --> drag_ok["drag_ok"]
+  ip_drag_line_x["ip_drag_line_x"] --> figure_check["figure_check"]
+  ip_drag_line_x["ip_drag_line_x"] --> uniform["uniform"]
+  style ip_drag_line_x fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_drag_line_y
+
+A horizontal line at `y` in the current plot that the user drags along y: as `ip_drag_line_x`.
+
+**Attributes**: recursive
+
+**Returns**: `logical`
+
+```fortran
+function ip_drag_line_y(id, y, color, thickness, stat) result(moved)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | integer(kind=int32) | in |  | Id, unique among the plot's drag tools. |
+| `y` | real(kind=real64) | inout | target | Position [plot units]. |
+| `color` | real(kind=real64) | in | optional | Colour, RGBA in [0, 1] (default: the text colour). |
+| `thickness` | real(kind=real64) | in | optional | Line thickness [pixels] (default 1). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_drag_line_y["ip_drag_line_y"] --> ImPlot_DragLineY["ImPlot_DragLineY"]
+  ip_drag_line_y["ip_drag_line_y"] --> drag_color["drag_color"]
+  ip_drag_line_y["ip_drag_line_y"] --> drag_ok["drag_ok"]
+  ip_drag_line_y["ip_drag_line_y"] --> figure_check["figure_check"]
+  ip_drag_line_y["ip_drag_line_y"] --> uniform["uniform"]
+  style ip_drag_line_y fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_drag_point
+
+A point at (x, y) in the current plot that the user drags: as `ip_drag_line_x`, both coordinates updated.
+
+**Attributes**: recursive
+
+**Returns**: `logical`
+
+```fortran
+function ip_drag_point(id, x, y, color, radius, stat) result(moved)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `id` | integer(kind=int32) | in |  | Id, unique among the plot's drag tools. |
+| `x` | real(kind=real64) | inout | target | Abscissa [plot units]. |
+| `y` | real(kind=real64) | inout | target | Ordinate [plot units]. |
+| `color` | real(kind=real64) | in | optional | Colour, RGBA in [0, 1] (default: the text colour). |
+| `radius` | real(kind=real64) | in | optional | Radius [pixels] (default 4). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_drag_point["ip_drag_point"] --> ImPlot_DragPoint["ImPlot_DragPoint"]
+  ip_drag_point["ip_drag_point"] --> drag_color["drag_color"]
+  ip_drag_point["ip_drag_point"] --> drag_ok["drag_ok"]
+  ip_drag_point["ip_drag_point"] --> figure_check["figure_check"]
+  ip_drag_point["ip_drag_point"] --> uniform["uniform"]
+  style ip_drag_point fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_contour_levels_r32
+
+About `count` levels at round numbers strictly inside the finite range of f: as `ip_contour_levels_r64`.
+
+**Attributes**: pure
+
+**Returns**: `real(kind=real64)`
+
+```fortran
+function ip_contour_levels_r32(f, count) result(levels)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `f` | real(kind=real32) | in |  | Field. |
+| `count` | integer(kind=int32) | in | optional | Levels wanted, about (default 10). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_levels_r32["ip_contour_levels_r32"] --> finite_range_r32["finite_range_r32"]
+  ip_contour_levels_r32["ip_contour_levels_r32"] --> nice_levels["nice_levels"]
+  style ip_contour_levels_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ip_contour_levels_r64
+
+About `count` levels at round numbers strictly inside the finite range [fmin, fmax] of f (NaNs and infinities
+ ignored): the multiples of a step of 1, 2, 2.5 or 5 times a power of ten, the smallest such step not below
+ (fmax - fmin) / count. None for a constant field, one without finite values, or `count` < 1. Double precision.
+
+**Attributes**: pure
+
+**Returns**: `real(kind=real64)`
+
+```fortran
+function ip_contour_levels_r64(f, count) result(levels)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `f` | real(kind=real64) | in |  | Field. |
+| `count` | integer(kind=int32) | in | optional | Levels wanted, about (default 10). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_levels_r64["ip_contour_levels_r64"] --> finite_range_r64["finite_range_r64"]
+  ip_contour_levels_r64["ip_contour_levels_r64"] --> nice_levels["nice_levels"]
+  style ip_contour_levels_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### nice_levels
+
+About `count` levels at multiples of a round step strictly inside (fmin, fmax) (see `ip_contour_levels_r64`).
+
+**Attributes**: pure
+
+**Returns**: `real(kind=real64)`
+
+```fortran
+function nice_levels(fmin, fmax, found, count) result(levels)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `fmin` | real(kind=real64) | in |  | Smallest value. |
+| `fmax` | real(kind=real64) | in |  | Largest value. |
+| `found` | logical | in |  | The range exists. |
+| `count` | integer(kind=int32) | in | optional | Levels wanted (default 10). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_levels_r32["ip_contour_levels_r32"] --> nice_levels["nice_levels"]
+  ip_contour_levels_r64["ip_contour_levels_r64"] --> nice_levels["nice_levels"]
+  style nice_levels fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### contour_ok
+
+Whether ip_contour's options are valid; the colormap id to draw with.
+
+**Returns**: `logical`
+
+```fortran
+function contour_ok(nlevels, colormap, color, cmap, stat) result(ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `nlevels` | integer(kind=int32) | in | optional | Automatic levels wanted. |
+| `colormap` | integer(kind=int32) | in | optional | Colormap id. |
+| `color` | real(kind=real64) | in | optional | One colour, RGBA. |
+| `cmap` | integer(kind=c_int) | out |  | The colormap id (Viridis when absent). |
+| `stat` | integer(kind=int32) | out | optional | Status, on a failure. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_contour_r32["ip_contour_r32"] --> contour_ok["contour_ok"]
+  ip_contour_r64["ip_contour_r64"] --> contour_ok["contour_ok"]
+  contour_ok["contour_ok"] --> colormap_ok["colormap_ok"]
+  contour_ok["contour_ok"] --> figure_fail["figure_fail"]
+  contour_ok["contour_ok"] --> rgba_ok["rgba_ok"]
+  style contour_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### level_text
+
+A level's value, short: 0.25, -3, 1.5e+06.
+
+**Attributes**: pure
+
+**Returns**: `character(len=:)`
+
+```fortran
+function level_text(v) result(text)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `v` | real(kind=real64) | in |  | Value. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  contour_draw["contour_draw"] --> level_text["level_text"]
+  style level_text fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### drag_ok
+
+Whether a drag tool can be drawn: not from a task, a colour of 4 components if given.
+
+**Attributes**: recursive
+
+**Returns**: `logical`
+
+```fortran
+function drag_ok(caller, color, stat) result(ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `caller` | character(len=*) | in |  | The entry point. |
+| `color` | real(kind=real64) | in | optional | Colour, RGBA. |
+| `stat` | integer(kind=int32) | out | optional | Status, on a failure. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_drag_line_x["ip_drag_line_x"] --> drag_ok["drag_ok"]
+  ip_drag_line_y["ip_drag_line_y"] --> drag_ok["drag_ok"]
+  ip_drag_point["ip_drag_point"] --> drag_ok["drag_ok"]
+  drag_ok["drag_ok"] --> figure_fail["figure_fail"]
+  drag_ok["drag_ok"] --> figure_refused["figure_refused"]
+  drag_ok["drag_ok"] --> rgba_ok["rgba_ok"]
+  style drag_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### drag_color
+
+A drag tool's colour: the given one, or ImPlot's automatic colour (IMPLOT_AUTO_COL: alpha -1).
+
+**Attributes**: pure
+
+**Returns**: type([im_vec4](/api/src/lib/figure_cimgui#im-vec4))
+
+```fortran
+function drag_color(color) result(v)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `color` | real(kind=real64) | in | optional | Colour, RGBA. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ip_drag_line_x["ip_drag_line_x"] --> drag_color["drag_color"]
+  ip_drag_line_y["ip_drag_line_y"] --> drag_color["drag_color"]
+  ip_drag_point["ip_drag_point"] --> drag_color["drag_color"]
+  drag_color["drag_color"] --> rgba["rgba"]
+  style drag_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### colormap_ok
 
 The colormap id to draw with (default ImPlot's Viridis); false, with `FIG_ERR_ARGUMENT`, if it is not registered.
@@ -1120,6 +1942,7 @@ function colormap_ok(caller, colormap, cmap, stat) result(ok)
 
 ```mermaid
 flowchart TD
+  contour_ok["contour_ok"] --> colormap_ok["colormap_ok"]
   ip_colormap_scale["ip_colormap_scale"] --> colormap_ok["colormap_ok"]
   ip_heatmap_r32["ip_heatmap_r32"] --> colormap_ok["colormap_ok"]
   ip_heatmap_r64["ip_heatmap_r64"] --> colormap_ok["colormap_ok"]
@@ -1153,6 +1976,8 @@ function series_ok(nx, ny, item, stat) result(ok)
 flowchart TD
   ip_bars_r32["ip_bars_r32"] --> series_ok["series_ok"]
   ip_bars_r64["ip_bars_r64"] --> series_ok["series_ok"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> series_ok["series_ok"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> series_ok["series_ok"]
   ip_line_r32["ip_line_r32"] --> series_ok["series_ok"]
   ip_line_r64["ip_line_r64"] --> series_ok["series_ok"]
   ip_line_values_r32["ip_line_values_r32"] --> series_ok["series_ok"]
@@ -1250,6 +2075,10 @@ function uniform(value, default) result(v)
 
 ```mermaid
 flowchart TD
+  ip_colormap_legend["ip_colormap_legend"] --> uniform["uniform"]
+  ip_drag_line_x["ip_drag_line_x"] --> uniform["uniform"]
+  ip_drag_line_y["ip_drag_line_y"] --> uniform["uniform"]
+  ip_drag_point["ip_drag_point"] --> uniform["uniform"]
   ip_line_row_r32["ip_line_row_r32"] --> uniform["uniform"]
   ip_line_row_r64["ip_line_row_r64"] --> uniform["uniform"]
   ip_line_values_r32["ip_line_values_r32"] --> uniform["uniform"]
@@ -1281,6 +2110,7 @@ function addr_r32(a) result(p)
 ```mermaid
 flowchart TD
   ip_bars_r32["ip_bars_r32"] --> addr_r32["addr_r32"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> addr_r32["addr_r32"]
   ip_line_r32["ip_line_r32"] --> addr_r32["addr_r32"]
   ip_line_values_r32["ip_line_values_r32"] --> addr_r32["addr_r32"]
   ip_scatter_r32["ip_scatter_r32"] --> addr_r32["addr_r32"]
@@ -1313,6 +2143,7 @@ function addr_r64(a) result(p)
 ```mermaid
 flowchart TD
   ip_bars_r64["ip_bars_r64"] --> addr_r64["addr_r64"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> addr_r64["addr_r64"]
   ip_line_r64["ip_line_r64"] --> addr_r64["addr_r64"]
   ip_line_values_r64["ip_line_values_r64"] --> addr_r64["addr_r64"]
   ip_scatter_r64["ip_scatter_r64"] --> addr_r64["addr_r64"]
@@ -1343,6 +2174,8 @@ function spec_c(spec) result(c)
 flowchart TD
   ip_bars_r32["ip_bars_r32"] --> spec_c["spec_c"]
   ip_bars_r64["ip_bars_r64"] --> spec_c["spec_c"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> spec_c["spec_c"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> spec_c["spec_c"]
   ip_heatmap_r32["ip_heatmap_r32"] --> spec_c["spec_c"]
   ip_heatmap_r64["ip_heatmap_r64"] --> spec_c["spec_c"]
   ip_image["ip_image"] --> spec_c["spec_c"]
@@ -1384,6 +2217,9 @@ function rgba_ok(color) result(ok)
 
 ```mermaid
 flowchart TD
+  contour_ok["contour_ok"] --> rgba_ok["rgba_ok"]
+  drag_ok["drag_ok"] --> rgba_ok["rgba_ok"]
+  ip_annotation["ip_annotation"] --> rgba_ok["rgba_ok"]
   ip_spec["ip_spec"] --> rgba_ok["rgba_ok"]
   style rgba_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1410,6 +2246,8 @@ function rgba(color) result(v)
 
 ```mermaid
 flowchart TD
+  contour_draw["contour_draw"] --> rgba["rgba"]
+  drag_color["drag_color"] --> rgba["rgba"]
   ip_spec["ip_spec"] --> rgba["rgba"]
   style rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

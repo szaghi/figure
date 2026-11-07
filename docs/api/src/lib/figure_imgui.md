@@ -66,6 +66,7 @@ graph LR
 - [ig_get_clipboard](#ig-get-clipboard)
 - [text_buffer_text](#text-buffer-text)
 - [text_buffer_length](#text-buffer-length)
+- [ig_color_edit](#ig-color-edit)
 - [ig_combo](#ig-combo)
 - [ig_selectable](#ig-selectable)
 
@@ -1041,6 +1042,45 @@ function text_buffer_length(self) result(length)
 flowchart TD
   text_buffer_length["text_buffer_length"] --> fig_text_length["fig_text_length"]
   style text_buffer_length fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_color_edit
+
+A colour editor (`ColorEdit4`) bound to `rgba`, components in [0, 1]: a swatch that opens a picker (a
+ saturation-value square and a hue bar) when clicked, and one field per component, dragged or typed (0-255). A
+ `rgba` of 3 components is RGB; of 4, RGBA, with the alpha shown unless `alpha=.false.` (then `rgba(4)` is left
+ alone). True on the frames the user changes the colour; `rgba` is written only then (Dear ImGui edits single
+ precision: an untouched colour keeps its double precision bits). Right-click on the swatch: Dear ImGui's options
+ (RGB, HSV or hexadecimal fields, copy as text). Statuses: `FIG_ERR_ARGUMENT` for a size other than 3 or 4,
+ `FIG_ERR_STATE` from a task. The same in every mode.
+
+**Attributes**: recursive
+
+**Returns**: `logical`
+
+```fortran
+function ig_color_edit(label, rgba, alpha, stat) result(changed)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label (also the id; '##id' hides it). |
+| `rgba` | real(kind=real64) | inout |  | Colour, RGB or RGBA in [0, 1]. |
+| `alpha` | logical | in | optional | Show and edit the alpha (default: when size(rgba) is 4). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_color_edit["ig_color_edit"] --> cstr["cstr"]
+  ig_color_edit["ig_color_edit"] --> figure_check["figure_check"]
+  ig_color_edit["ig_color_edit"] --> figure_fail["figure_fail"]
+  ig_color_edit["ig_color_edit"] --> figure_refused["figure_refused"]
+  ig_color_edit["ig_color_edit"] --> igColorEdit4["igColorEdit4"]
+  style ig_color_edit fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_combo

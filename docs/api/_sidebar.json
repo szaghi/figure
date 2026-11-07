@@ -82,6 +82,10 @@
       {
         "text": "figure_texture",
         "link": "/api/src/lib/figure_texture"
+      },
+      {
+        "text": "figure_view3d",
+        "link": "/api/src/lib/figure_view3d"
       }
     ]
   }

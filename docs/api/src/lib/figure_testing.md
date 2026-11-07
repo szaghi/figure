@@ -39,6 +39,7 @@ graph LR
 
 ## Contents
 
+- [test_drawn_extent](#test-drawn-extent)
 - [test_next_frame](#test-next-frame)
 - [test_plot_tick](#test-plot-tick)
 - [test_quit](#test-quit)
@@ -46,7 +47,8 @@ graph LR
 - [test_frame_rect](#test-frame-rect)
 - [test_frame_state](#test-frame-state)
 - [test_notification_rect](#test-notification-rect)
-- [test_drawn_extent](#test-drawn-extent)
+- [test_drawn_extent_name](#test-drawn-extent-name)
+- [test_drawn_extent_rgba](#test-drawn-extent-rgba)
 - [test_file_browser](#test-file-browser)
 - [test_file_browser_rect](#test-file-browser-rect)
 - [test_settings_file](#test-settings-file)
@@ -60,10 +62,20 @@ graph LR
 - [test_type](#test-type)
 - [test_drop](#test-drop)
 - [test_window_rect](#test-window-rect)
+- [test_popup_rect](#test-popup-rect)
 - [test_item_center](#test-item-center)
 - [test_frame_hit](#test-frame-hit)
 - [browser_text](#browser-text)
 - [button_index](#button-index)
+
+## Interfaces
+
+### test_drawn_extent
+
+The extent [pixels] of what was drawn so far in the current window in a colour: Dear ImGui's style colour by its
+ name, or an RGBA colour (an item's `ip_spec` colour).
+
+**Module procedures**: [`test_drawn_extent_name`](/api/src/lib/figure_testing#test-drawn-extent-name), [`test_drawn_extent_rgba`](/api/src/lib/figure_testing#test-drawn-extent-rgba)
 
 ## Subroutines
 
@@ -255,13 +267,13 @@ flowchart TD
   style test_notification_rect fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
-### test_drawn_extent
+### test_drawn_extent_name
 
 The extent [pixels] of what was drawn so far in the current window in Dear ImGui's style colour `color`, by
  its name (`'PlotHistogram'`: the fill of a progress bar): call it inside the window, after the widget.
 
 ```fortran
-subroutine test_drawn_extent(color, xmin, ymin, xmax, ymax, found, stat)
+subroutine test_drawn_extent_name(color, xmin, ymin, xmax, ymax, found, stat)
 ```
 
 **Arguments**
@@ -280,9 +292,40 @@ subroutine test_drawn_extent(color, xmin, ymin, xmax, ymax, found, stat)
 
 ```mermaid
 flowchart TD
-  test_drawn_extent["test_drawn_extent"] --> fig_drawn_extent["fig_drawn_extent"]
-  test_drawn_extent["test_drawn_extent"] --> figure_check["figure_check"]
-  style test_drawn_extent fill:#3e63dd,stroke:#99b,stroke-width:2px
+  test_drawn_extent_name["test_drawn_extent_name"] --> fig_drawn_extent["fig_drawn_extent"]
+  test_drawn_extent_name["test_drawn_extent_name"] --> figure_check["figure_check"]
+  style test_drawn_extent_name fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_drawn_extent_rgba
+
+The extent [pixels] of what was drawn so far in the current window in the RGBA colour `color` (as an item drawn
+ with `ip_spec(line_color=color)`): call it inside the window, after the item (after `ip_end_plot` for what a plot
+ draws at its end: annotations). Antialiased edges are drawn in other colours: the extent is that of the lines' cores.
+
+```fortran
+subroutine test_drawn_extent_rgba(color, xmin, ymin, xmax, ymax, found, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `color` | real(kind=real64) | in |  | Colour, RGBA in [0, 1]. |
+| `xmin` | real(kind=real64) | out |  | Left. |
+| `ymin` | real(kind=real64) | out |  | Top. |
+| `xmax` | real(kind=real64) | out |  | Right. |
+| `ymax` | real(kind=real64) | out |  | Bottom. |
+| `found` | logical | out | optional | Something was drawn in it. |
+| `stat` | integer(kind=int32) | out | optional | Status: `FIG_ERR_STATE` outside a window. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_drawn_extent_rgba["test_drawn_extent_rgba"] --> fig_drawn_extent_rgba["fig_drawn_extent_rgba"]
+  test_drawn_extent_rgba["test_drawn_extent_rgba"] --> figure_check["figure_check"]
+  style test_drawn_extent_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### test_file_browser
@@ -647,6 +690,35 @@ flowchart TD
   test_window_rect["test_window_rect"] --> fig_window_rect["fig_window_rect"]
   test_window_rect["test_window_rect"] --> figure_check["figure_check"]
   style test_window_rect fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_popup_rect
+
+The rectangle of the innermost open popup (a menu, a combo's list, `ig_color_edit`'s picker) as drawn in the last
+ frame [pixels]; zero, with `found` false, when no popup is open.
+
+```fortran
+subroutine test_popup_rect(xmin, ymin, xmax, ymax, found, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `xmin` | real(kind=real64) | out |  | Left. |
+| `ymin` | real(kind=real64) | out |  | Top. |
+| `xmax` | real(kind=real64) | out |  | Right. |
+| `ymax` | real(kind=real64) | out |  | Bottom. |
+| `found` | logical | out | optional | A popup is open. |
+| `stat` | integer(kind=int32) | out | optional | Status: `FIG_ERR_STATE` before `init*`. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_popup_rect["test_popup_rect"] --> fig_popup_rect["fig_popup_rect"]
+  test_popup_rect["test_popup_rect"] --> figure_check["figure_check"]
+  style test_popup_rect fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### test_item_center

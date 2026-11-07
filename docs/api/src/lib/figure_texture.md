@@ -156,6 +156,7 @@ subroutine destroy(self)
 ```mermaid
 flowchart TD
   init["init"] --> destroy["destroy"]
+  init["init"] --> destroy["destroy"]
   destroy["destroy"] --> fig_texture_destroy["fig_texture_destroy"]
   style destroy fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

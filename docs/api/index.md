@@ -28,3 +28,4 @@ Auto-generated from Fortran source doc comments using [FORMAL](https://github.co
 - [figure_task](/api/src/lib/figure_task)
 - [figure_testing](/api/src/lib/figure_testing)
 - [figure_texture](/api/src/lib/figure_texture)
+- [figure_view3d](/api/src/lib/figure_view3d)
