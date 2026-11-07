@@ -71,6 +71,7 @@ graph LR
 - [frame_options](#frame-options)
 - [next_frame](#next-frame)
 - [quit_requested](#quit-requested)
+- [dropped](#dropped)
 - [title](#title)
 - [content_scale](#content-scale)
 - [opt](#opt)
@@ -109,6 +110,7 @@ A FIGURE application (one per program).
 | `request_frames` | pass(self) | Redraw without waiting for input. |
 | `set_confirm_quit` | pass(self) | Report a quit request instead of quitting. |
 | `quit_requested` | pass(self) | The user asked to quit (once per request). |
+| `dropped` | pass(self) | The files and folders dropped on the window this frame. |
 | `quit` | pass(self) | End the loop at the next frame. |
 | `set_title` | pass(self) | The window's title, after init. |
 | `title` | pass(self) | The window's title. |
@@ -488,8 +490,9 @@ flowchart TD
 ### set_font
 
 The default font of the interface, after `init*`: `'plex-sans'` (IBM Plex Sans, bundled: the default, at 15
- logical pixels), `'proggy'` (Dear ImGui's own 13-pixel bitmap font), or the path of a TrueType/OpenType file;
- `size` in logical pixels (multiplied by the display's content scale), kept if absent.
+ logical pixels), `'plex-mono'` (IBM Plex Mono, bundled: monospace, every character as wide), `'proggy'` (Dear
+ ImGui's own 13-pixel bitmap font), or the path of a TrueType/OpenType file; `size` in logical pixels (multiplied
+ by the display's content scale), kept if absent.
 
 ```fortran
 subroutine set_font(self, font, size, stat)
@@ -1152,6 +1155,44 @@ function quit_requested(self) result(requested)
 flowchart TD
   quit_requested["quit_requested"] --> fig_quit_requested["fig_quit_requested"]
   style quit_requested fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### dropped
+
+The files and folders dropped on the window since the last frame (SDL's drop events), and where: true on the
+ frame after the drop only, with `paths` the absolute paths (UTF-8, blank-padded to the longest; folders as
+ folders, without a trailing separator) and (`x`, `y`) the point of the drop [pixels], the coordinates of
+ `ig_item_rect` and of the mouse, so that the program can tell which window or region received it. Several files
+ dropped at once come together, at one point. False, with `paths` empty, on every other frame; also before
+ `init*` and from a task. Window mode: the system's drag and drop; headless mode: only the drops of `test_drop`;
+ remote mode: none (a browser gives a page the dropped files' contents, not paths on the server: the page refuses
+ them), but those of `test_drop`.
+
+**Attributes**: recursive
+
+**Returns**: `logical`
+
+```fortran
+function dropped(self, paths, x, y) result(any_dropped)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | in |  | Application. |
+| `paths` | character(len=:) | out | allocatable | Paths dropped. |
+| `x` | real(kind=real64) | out | optional | Abscissa of the drop [pixels]. |
+| `y` | real(kind=real64) | out | optional | Ordinate of the drop [pixels]. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  dropped["dropped"] --> fig_dropped["fig_dropped"]
+  dropped["dropped"] --> fig_dropped_path["fig_dropped_path"]
+  dropped["dropped"] --> figure_refused["figure_refused"]
+  style dropped fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### title

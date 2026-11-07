@@ -28,11 +28,15 @@ graph LR
 
 ## Contents
 
+- [text_buffer_object](#text-buffer-object)
 - [ig_slider](#ig-slider)
 - [ig_input](#ig-input)
 - [ig_end](#ig-end)
 - [ig_set_next_window](#ig-set-next-window)
 - [ig_align_text_to_frame_padding](#ig-align-text-to-frame-padding)
+- [ig_set_clipboard](#ig-set-clipboard)
+- [text_buffer_set](#text-buffer-set)
+- [text_buffer_final](#text-buffer-final)
 - [ig_tooltip](#ig-tooltip)
 - [ig_set_next_item_width](#ig-set-next-item-width)
 - [ig_text](#ig-text)
@@ -58,8 +62,36 @@ graph LR
 - [ig_input_r64](#ig-input-r64)
 - [ig_input_i32](#ig-input-i32)
 - [ig_input_text](#ig-input-text)
+- [ig_input_text_multiline](#ig-input-text-multiline)
+- [ig_get_clipboard](#ig-get-clipboard)
+- [text_buffer_text](#text-buffer-text)
+- [text_buffer_length](#text-buffer-length)
 - [ig_combo](#ig-combo)
 - [ig_selectable](#ig-selectable)
+
+## Derived Types
+
+### text_buffer_object
+
+Text of any length, edited by `ig_input_text_multiline`: a file shown or edited as text, notes, a read-only view.
+ The text is kept by FIGURE's native layer, which grows it while the user types or pastes (no capacity to choose,
+ no copy per frame); `set` replaces it, `text` returns a copy. Lines end with LF (`set` turns CRLF into LF).
+ Usable before `init*` and from a task (it draws nothing). Not to be copied: the copy would share the text, and
+ the first of the two to end would take it away from the other.
+
+#### Components
+
+| Name | Type | Attributes | Description |
+|------|------|------------|-------------|
+| `id` | integer(kind=c_int) |  | Native handle (0: no text yet, an empty one). |
+
+#### Type-Bound Procedures
+
+| Name | Attributes | Description |
+|------|------------|-------------|
+| `set` | pass(self) | Replace the text. |
+| `text` | pass(self) | A copy of the text. |
+| `length` | pass(self) | Its length [bytes]. |
 
 ## Interfaces
 
@@ -138,6 +170,90 @@ subroutine ig_align_text_to_frame_padding()
 flowchart TD
   ig_align_text_to_frame_padding["ig_align_text_to_frame_padding"] --> igAlignTextToFramePadding["igAlignTextToFramePadding"]
   style ig_align_text_to_frame_padding fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_set_clipboard
+
+Put `text` (UTF-8, trailing blanks included: pass `trim` of a padded variable) on the clipboard, as a copy in a
+ field does. Window mode: the system's clipboard (SDL's). Headless mode: a clipboard of the program's own.
+ Remote mode: the program's own on the server, also written to the browser's clipboard where the browser allows
+ it (a page reached as https or localhost, and in a few browsers only right after a click or a key). Status:
+ `FIG_ERR_STATE` before `init*` or from a task (`stat` optional: absent, `error stop` with the message).
+
+**Attributes**: recursive
+
+```fortran
+subroutine ig_set_clipboard(text, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `text` | character(len=*) | in |  | Text. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_set_clipboard["ig_set_clipboard"] --> fig_set_clipboard["fig_set_clipboard"]
+  ig_set_clipboard["ig_set_clipboard"] --> figure_check["figure_check"]
+  ig_set_clipboard["ig_set_clipboard"] --> figure_refused["figure_refused"]
+  style ig_set_clipboard fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### text_buffer_set
+
+Replace the text with `text` (UTF-8, lines ended by LF or CRLF; trailing blanks are part of it: pass `trim` of a
+ padded line). A field being edited shows the new text at once, its undo history kept. A NUL byte ends the text.
+ Status: `FIG_ERR_ARGUMENT` for a text of 2 GiB or more (`stat` optional: absent, `error stop` with the message).
+
+**Attributes**: recursive
+
+```fortran
+subroutine text_buffer_set(self, text, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([text_buffer_object](/api/src/lib/figure_imgui#text-buffer-object)) | inout |  | Buffer. |
+| `text` | character(len=*) | in |  | New text. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  text_buffer_set["text_buffer_set"] --> fig_text_set["fig_text_set"]
+  text_buffer_set["text_buffer_set"] --> figure_check["figure_check"]
+  style text_buffer_set fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### text_buffer_final
+
+The buffer ends: its text is released.
+
+**Attributes**: recursive
+
+```fortran
+subroutine text_buffer_final(self)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | type([text_buffer_object](/api/src/lib/figure_imgui#text-buffer-object)) | inout |  | Buffer. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  text_buffer_final["text_buffer_final"] --> fig_text_release["fig_text_release"]
+  style text_buffer_final fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_tooltip
@@ -809,6 +925,122 @@ function ig_input_text(label, value, hint, flags) result(changed)
 flowchart TD
   ig_input_text["ig_input_text"] --> fig_widget_input_text["fig_widget_input_text"]
   style ig_input_text fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_input_text_multiline
+
+A multi-line text field (`InputTextMultiline`) over `buffer`; true on the frame the user edited the text.
+ Enter inserts a newline; the field scrolls when the text is longer than it. Keys (cmd for ctrl on macOS):
+ ctrl+z undoes, ctrl+y or ctrl+shift+z redoes, ctrl+a selects all, ctrl+c, ctrl+x and ctrl+v copy, cut and
+ paste. `width`, `height` [pixels]: absent or 0, the item width and 8 lines; negative, up to that distance from
+ the region's right or bottom edge. `read_only`: the text can be selected and copied, not changed. `tab_input`:
+ Tab inserts a tab character (default: it moves to the next widget). `flags` add `ImGuiInputTextFlags_*` with
+ `ior` (`WordWrap`, `NoUndoRedo`, ...). The same in every mode; from a task it draws nothing and returns false
+ (the task's status becomes `FIG_ERR_STATE`).
+
+**Attributes**: recursive
+
+**Returns**: `logical`
+
+```fortran
+function ig_input_text_multiline(label, buffer, width, height, read_only, tab_input, flags) result(changed)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label (`'##text'`: none shown). |
+| `buffer` | type([text_buffer_object](/api/src/lib/figure_imgui#text-buffer-object)) | inout |  | The text. |
+| `width` | real(kind=real64) | in | optional | Width [pixels]. |
+| `height` | real(kind=real64) | in | optional | Height [pixels]. |
+| `read_only` | logical | in | optional | Selection and copy only (default false). |
+| `tab_input` | logical | in | optional | Tab inserts a tab (default false). |
+| `flags` | integer(kind=int32) | in | optional | More `ImGuiInputTextFlags_*` (default none). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_input_text_multiline["ig_input_text_multiline"] --> fig_widget_input_text_multiline["fig_widget_input_text_multiline"]
+  ig_input_text_multiline["ig_input_text_multiline"] --> figure_refused["figure_refused"]
+  style ig_input_text_multiline fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_get_clipboard
+
+The clipboard's text (UTF-8), as a paste in a field reads it: the system's in window mode, the program's own in
+ headless mode; in remote mode the program's own, which a paste in the page (ctrl+v, cmd+v) sets from the
+ browser's clipboard first. `''` before `init*`, for an empty clipboard, or from a task.
+
+**Attributes**: recursive
+
+**Returns**: `character(len=:)`
+
+```fortran
+function ig_get_clipboard() result(text)
+```
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_get_clipboard["ig_get_clipboard"] --> fig_get_clipboard["fig_get_clipboard"]
+  ig_get_clipboard["ig_get_clipboard"] --> figure_refused["figure_refused"]
+  style ig_get_clipboard fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### text_buffer_text
+
+A copy of the text (`''` before any `set` or edit).
+
+**Attributes**: recursive
+
+**Returns**: `character(len=:)`
+
+```fortran
+function text_buffer_text(self) result(text)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([text_buffer_object](/api/src/lib/figure_imgui#text-buffer-object)) | in |  | Buffer. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  text_buffer_text["text_buffer_text"] --> fig_text_get["fig_text_get"]
+  text_buffer_text["text_buffer_text"] --> fig_text_length["fig_text_length"]
+  style text_buffer_text fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### text_buffer_length
+
+The length of the text [bytes] (UTF-8: a character outside ASCII takes 2 to 4).
+
+**Attributes**: recursive
+
+**Returns**: `integer(kind=int64)`
+
+```fortran
+function text_buffer_length(self) result(length)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([text_buffer_object](/api/src/lib/figure_imgui#text-buffer-object)) | in |  | Buffer. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  text_buffer_length["text_buffer_length"] --> fig_text_length["fig_text_length"]
+  style text_buffer_length fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_combo

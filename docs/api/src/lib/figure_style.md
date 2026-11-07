@@ -663,7 +663,7 @@ subroutine ig_push_font(font, size, stat)
 
 | Name | Type | Intent | Attributes | Description |
 |------|------|--------|------------|-------------|
-| `font` | character(len=*) | in |  | Font (`'plex-sans'`, `'proggy'`, a file), or `''`. |
+| `font` | character(len=*) | in |  | Font (`'plex-sans'`, `'plex-mono'`, `'proggy'`, a file), or `''`. |
 | `size` | real(kind=real64) | in | optional | Size [logical pixels], in (0, 200]. |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 

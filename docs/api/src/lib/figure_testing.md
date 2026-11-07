@@ -58,6 +58,7 @@ graph LR
 - [test_wheel](#test-wheel)
 - [test_key](#test-key)
 - [test_type](#test-type)
+- [test_drop](#test-drop)
 - [test_window_rect](#test-window-rect)
 - [test_item_center](#test-item-center)
 - [test_frame_hit](#test-frame-hit)
@@ -589,6 +590,34 @@ flowchart TD
   test_type["test_type"] --> fig_input_text["fig_input_text"]
   test_type["test_type"] --> figure_check["figure_check"]
   style test_type fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_drop
+
+Queue a drop of `paths` (each trimmed of trailing blanks) at (x, y), as dropping files from a file manager makes
+ it: `app%dropped` reports them together on the next frame, and only on that one. Works in every mode.
+
+```fortran
+subroutine test_drop(paths, x, y, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `paths` | character(len=*) | in |  | Files or folders. |
+| `x` | real(kind=real64) | in |  | Abscissa [pixels]. |
+| `y` | real(kind=real64) | in |  | Ordinate [pixels]. |
+| `stat` | integer(kind=int32) | out | optional | `FIG_ERR_STATE` before `init*`. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_drop["test_drop"] --> fig_input_drop["fig_input_drop"]
+  test_drop["test_drop"] --> figure_check["figure_check"]
+  test_drop["test_drop"] --> figure_fail["figure_fail"]
+  style test_drop fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### test_window_rect

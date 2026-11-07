@@ -60,6 +60,7 @@ flowchart TD
   ig_dock_window["ig_dock_window"] --> figure_check["figure_check"]
   ig_pop_font["ig_pop_font"] --> figure_check["figure_check"]
   ig_push_font["ig_push_font"] --> figure_check["figure_check"]
+  ig_set_clipboard["ig_set_clipboard"] --> figure_check["figure_check"]
   ig_shortcut["ig_shortcut"] --> figure_check["figure_check"]
   ig_show_style_editor["ig_show_style_editor"] --> figure_check["figure_check"]
   image_result["image_result"] --> figure_check["figure_check"]
@@ -116,6 +117,7 @@ flowchart TD
   test_click["test_click"] --> figure_check["figure_check"]
   test_drag["test_drag"] --> figure_check["figure_check"]
   test_drawn_extent["test_drawn_extent"] --> figure_check["figure_check"]
+  test_drop["test_drop"] --> figure_check["figure_check"]
   test_frame_hit["test_frame_hit"] --> figure_check["figure_check"]
   test_frame_rect["test_frame_rect"] --> figure_check["figure_check"]
   test_frame_state["test_frame_state"] --> figure_check["figure_check"]
@@ -130,6 +132,7 @@ flowchart TD
   test_type["test_type"] --> figure_check["figure_check"]
   test_wheel["test_wheel"] --> figure_check["figure_check"]
   test_window_rect["test_window_rect"] --> figure_check["figure_check"]
+  text_buffer_set["text_buffer_set"] --> figure_check["figure_check"]
   update["update"] --> figure_check["figure_check"]
   figure_check["figure_check"] --> figure_last_error["figure_last_error"]
   style figure_check fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -179,6 +182,7 @@ flowchart TD
   task_result["task_result"] --> figure_fail["figure_fail"]
   task_start["task_start"] --> figure_fail["figure_fail"]
   test_click["test_click"] --> figure_fail["figure_fail"]
+  test_drop["test_drop"] --> figure_fail["figure_fail"]
   test_mouse_button["test_mouse_button"] --> figure_fail["figure_fail"]
   test_system_theme["test_system_theme"] --> figure_fail["figure_fail"]
   update["update"] --> figure_fail["figure_fail"]
@@ -233,6 +237,7 @@ function figure_refused(name, stat) result(refused)
 
 ```mermaid
 flowchart TD
+  dropped["dropped"] --> figure_refused["figure_refused"]
   ig_begin["ig_begin"] --> figure_refused["figure_refused"]
   ig_begin_child["ig_begin_child"] --> figure_refused["figure_refused"]
   ig_begin_main_menu_bar["ig_begin_main_menu_bar"] --> figure_refused["figure_refused"]
@@ -246,6 +251,9 @@ flowchart TD
   ig_dock_space["ig_dock_space"] --> figure_refused["figure_refused"]
   ig_end["ig_end"] --> figure_refused["figure_refused"]
   ig_end_child["ig_end_child"] --> figure_refused["figure_refused"]
+  ig_get_clipboard["ig_get_clipboard"] --> figure_refused["figure_refused"]
+  ig_input_text_multiline["ig_input_text_multiline"] --> figure_refused["figure_refused"]
+  ig_set_clipboard["ig_set_clipboard"] --> figure_refused["figure_refused"]
   ig_tree_node["ig_tree_node"] --> figure_refused["figure_refused"]
   init["init"] --> figure_refused["figure_refused"]
   ip_begin_plot["ip_begin_plot"] --> figure_refused["figure_refused"]

@@ -108,6 +108,15 @@ graph LR
 - [fig_plot_tick_label](#fig-plot-tick-label)
 - [fig_key_chord](#fig-key-chord)
 - [fig_widget_input_text](#fig-widget-input-text)
+- [fig_text_set](#fig-text-set)
+- [fig_text_get](#fig-text-get)
+- [fig_text_length](#fig-text-length)
+- [fig_widget_input_text_multiline](#fig-widget-input-text-multiline)
+- [fig_input_drop](#fig-input-drop)
+- [fig_dropped](#fig-dropped)
+- [fig_dropped_path](#fig-dropped-path)
+- [fig_set_clipboard](#fig-set-clipboard)
+- [fig_get_clipboard](#fig-get-clipboard)
 - [fig_window_rect](#fig-window-rect)
 - [fig_shutdown](#fig-shutdown)
 - [fig_process_release](#fig-process-release)
@@ -124,6 +133,7 @@ graph LR
 - [fig_set_last_error](#fig-set-last-error)
 - [fig_texture_destroy](#fig-texture-destroy)
 - [fig_texture_sampling](#fig-texture-sampling)
+- [fig_text_release](#fig-text-release)
 - [fig_input_mouse](#fig-input-mouse)
 
 ## Variables
@@ -310,6 +320,24 @@ graph LR
 
 ### fig_widget_input_text
 
+### fig_text_set
+
+### fig_text_get
+
+### fig_text_length
+
+### fig_widget_input_text_multiline
+
+### fig_input_drop
+
+### fig_dropped
+
+### fig_dropped_path
+
+### fig_set_clipboard
+
+### fig_get_clipboard
+
 ### fig_window_rect
 
 ### fig_shutdown
@@ -341,5 +369,7 @@ graph LR
 ### fig_texture_destroy
 
 ### fig_texture_sampling
+
+### fig_text_release
 
 ### fig_input_mouse
