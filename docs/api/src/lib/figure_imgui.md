@@ -40,6 +40,7 @@ graph LR
 - [ig_text_wrapped](#ig-text-wrapped)
 - [ig_text_disabled](#ig-text-disabled)
 - [ig_text_colored](#ig-text-colored)
+- [ig_progress_bar](#ig-progress-bar)
 - [ig_separator](#ig-separator)
 - [ig_show_demo_window](#ig-show-demo-window)
 - [ig_item_rect](#ig-item-rect)
@@ -306,6 +307,35 @@ flowchart TD
   ig_text_colored["ig_text_colored"] --> igPushStyleColor_Vec4["igPushStyleColor_Vec4"]
   ig_text_colored["ig_text_colored"] --> igTextUnformatted["igTextUnformatted"]
   style ig_text_colored fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### ig_progress_bar
+
+A progress bar (`ProgressBar`), `fraction` of it filled, in [0, 1] (clamped); `fraction` < 0 gives an
+ indeterminate bar, a band sliding along it (animated by FIGURE with the frame clock: draw it every frame).
+ `label` is written over it (default: the percentage; none for an indeterminate bar); `width` [pixels] (default:
+ the width left; negative: up to that distance from the right edge). The same in every mode.
+
+```fortran
+subroutine ig_progress_bar(fraction, label, width)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `fraction` | real(kind=real64) | in |  | Done, in [0, 1]; < 0: indeterminate. |
+| `label` | character(len=*) | in | optional | Text over the bar. |
+| `width` | real(kind=real64) | in | optional | Width [pixels]. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_progress_bar["ig_progress_bar"] --> cstr["cstr"]
+  ig_progress_bar["ig_progress_bar"] --> igGetTime["igGetTime"]
+  ig_progress_bar["ig_progress_bar"] --> igProgressBar["igProgressBar"]
+  style ig_progress_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_separator

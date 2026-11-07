@@ -45,6 +45,8 @@ graph LR
 - [test_system_theme](#test-system-theme)
 - [test_frame_rect](#test-frame-rect)
 - [test_frame_state](#test-frame-state)
+- [test_notification_rect](#test-notification-rect)
+- [test_drawn_extent](#test-drawn-extent)
 - [test_mouse_move](#test-mouse-move)
 - [test_mouse_button](#test-mouse-button)
 - [test_click](#test-click)
@@ -217,6 +219,64 @@ flowchart TD
   test_frame_state["test_frame_state"] --> fig_frame_state["fig_frame_state"]
   test_frame_state["test_frame_state"] --> figure_check["figure_check"]
   style test_frame_state fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_notification_rect
+
+The rectangle [pixels] of a notification shown in the last frame (`app%notify`): `index` 1 is the newest, at the
+ bottom, 2 the one above it, ...; `found` is false past the last shown.
+
+```fortran
+subroutine test_notification_rect(index, xmin, ymin, xmax, ymax, found)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `index` | integer(kind=int32) | in |  | 1: the newest shown. |
+| `xmin` | real(kind=real64) | out |  | Left. |
+| `ymin` | real(kind=real64) | out |  | Top. |
+| `xmax` | real(kind=real64) | out |  | Right. |
+| `ymax` | real(kind=real64) | out |  | Bottom. |
+| `found` | logical | out | optional | It was shown. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_notification_rect["test_notification_rect"] --> fig_notification_rect["fig_notification_rect"]
+  style test_notification_rect fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_drawn_extent
+
+The extent [pixels] of what was drawn so far in the current window in Dear ImGui's style colour `color`, by
+ its name (`'PlotHistogram'`: the fill of a progress bar): call it inside the window, after the widget.
+
+```fortran
+subroutine test_drawn_extent(color, xmin, ymin, xmax, ymax, found, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `color` | character(len=*) | in |  | Dear ImGui's colour name. |
+| `xmin` | real(kind=real64) | out |  | Left. |
+| `ymin` | real(kind=real64) | out |  | Top. |
+| `xmax` | real(kind=real64) | out |  | Right. |
+| `ymax` | real(kind=real64) | out |  | Bottom. |
+| `found` | logical | out | optional | Something was drawn in it. |
+| `stat` | integer(kind=int32) | out | optional | `FIG_ERR_STATE` outside a window. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_drawn_extent["test_drawn_extent"] --> fig_drawn_extent["fig_drawn_extent"]
+  test_drawn_extent["test_drawn_extent"] --> figure_check["figure_check"]
+  style test_drawn_extent fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### test_mouse_move

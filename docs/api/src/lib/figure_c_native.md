@@ -40,6 +40,11 @@ graph LR
 - [fig_process_take](#fig-process-take)
 - [fig_process_info](#fig-process-info)
 - [fig_process_kill](#fig-process-kill)
+- [fig_notify](#fig-notify)
+- [fig_notification_count](#fig-notification-count)
+- [fig_notification_get](#fig-notification-get)
+- [fig_notification_rect](#fig-notification-rect)
+- [fig_drawn_extent](#fig-drawn-extent)
 - [fig_task_start](#fig-task-start)
 - [fig_task_state](#fig-task-state)
 - [fig_task_report](#fig-task-report)
@@ -164,6 +169,16 @@ graph LR
 ### fig_process_info
 
 ### fig_process_kill
+
+### fig_notify
+
+### fig_notification_count
+
+### fig_notification_get
+
+### fig_notification_rect
+
+### fig_drawn_extent
 
 ### fig_task_start
 

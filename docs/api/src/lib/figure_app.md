@@ -29,6 +29,7 @@ title: figure_app
 graph LR
   figure_app["figure_app"] --> figure_base["figure_base"]
   figure_app["figure_app"] --> figure_c_native["figure_c_native"]
+  figure_app["figure_app"] --> figure_icons["figure_icons"]
   figure_app["figure_app"] --> iso_c_binding["iso_c_binding"]
   figure_app["figure_app"] --> iso_fortran_env["iso_fortran_env"]
 ```
@@ -44,6 +45,8 @@ graph LR
 - [set_lazy](#set-lazy)
 - [set_style](#set-style)
 - [palette_color](#palette-color)
+- [notify](#notify)
+- [notifications](#notifications)
 - [set_font](#set-font)
 - [load_style](#load-style)
 - [save_style](#save-style)
@@ -114,6 +117,8 @@ A FIGURE application (one per program).
 | `image_result` | pass(self) | The outcome of save_image, once. |
 | `save_layout` | pass(self) | The arrangement of the windows (docking included) to a file. |
 | `load_layout` | pass(self) | An arrangement from a file, applied before the next frame. |
+| `notify` | pass(self) | Tell the user something, in a notification. |
+| `notifications` | pass(self) | The notifications kept (the last 100). |
 | `content_scale` | pass(self) | Display content scale. |
 | `destroy` | pass(self) | Close everything. |
 | `set_icon_image` | pass(self) | The window's icon from an image. |
@@ -407,6 +412,70 @@ flowchart TD
   palette_color["palette_color"] --> fig_palette_color["fig_palette_color"]
   palette_color["palette_color"] --> figure_check["figure_check"]
   style palette_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### notify
+
+Tell the user something without a dialog: a notification drawn by FIGURE after the program's windows, in the
+ bottom-right corner (above a bottom side bar), the newest at the bottom, older ones stacked above. `kind`:
+ `'info'` (default), `'success'`, `'warning'` or `'error'`, drawn with its palette role (accent, success, warning,
+ error) and its icon (`ICON_INFO`, `ICON_CIRCLE_CHECK`, `ICON_TRIANGLE_ALERT`, `ICON_CIRCLE_X`). It stays
+ `seconds` (default 5; 0 or less: until clicked), fading out in its last half second, timed by the frame time
+ (the fixed one in headless mode and in recordings); a click dismisses it. The last 100 are kept
+ (`notifications`). Statuses: `FIG_ERR_STATE` before `init*` or from a task, `FIG_ERR_ARGUMENT` for an unknown
+ kind. The same in every mode.
+
+```fortran
+subroutine notify(self, text, kind, seconds, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `text` | character(len=*) | in |  | What to tell (UTF-8; wrapped). |
+| `kind` | character(len=*) | in | optional | 'info', 'success', 'warning' or 'error'. |
+| `seconds` | real(kind=real64) | in | optional | Time shown [s] (default 5; <= 0: until clicked). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  notify["notify"] --> fig_notify["fig_notify"]
+  notify["notify"] --> figure_check["figure_check"]
+  notify["notify"] --> figure_fail["figure_fail"]
+  notify["notify"] --> figure_refused["figure_refused"]
+  style notify fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### notifications
+
+The notifications kept, the last 100, oldest first: their texts (`list`, padded with blanks to the longest),
+ their kinds (`'info'`, ...) and whether each is still shown (not yet timed out or dismissed). None before
+ `init*`.
+
+```fortran
+subroutine notifications(self, list, kinds, shown)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | in |  | Application. |
+| `list` | character(len=:) | out | allocatable | Texts. |
+| `kinds` | character(len=7) | out | allocatable, optional | Kinds. |
+| `shown` | logical | out | allocatable, optional | Still shown. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  notifications["notifications"] --> fig_notification_count["fig_notification_count"]
+  notifications["notifications"] --> fig_notification_get["fig_notification_get"]
+  style notifications fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### set_font
