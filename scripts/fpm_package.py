@@ -164,14 +164,17 @@ def cmake_embeds(out: Path) -> None:
         "// generated from native/figure_remote_client.html by scripts/fpm_package.py\n"
         f'static const char client_html[] = R"FIGUREHTML({html})FIGUREHTML";\n'
     )
-    themes = sorted((ROOT / "themes").glob("*.toml"))
     text = (
-        "// generated from themes/*.toml by scripts/fpm_package.py\n"
-        "struct theme_source { const char *name; const char *text; };\nconst theme_source THEMES[] = {\n"
+        "// generated from themes/*.toml, themes/looks/*.toml and themes/palettes/*.toml by scripts/fpm_package.py\n"
+        "struct theme_source { const char *name; const char *text; };\n"
     )
-    for t in themes:
-        text += f'   {{"{t.stem}", R"FIGURETHEME({t.read_text()})FIGURETHEME"}},\n'
-    (out / "figure_themes.inc").write_text(text + "};\n")
+    for array, folder in (("THEMES", ROOT / "themes"), ("LOOKS", ROOT / "themes" / "looks"),
+                          ("PALETTES", ROOT / "themes" / "palettes")):
+        text += f"const theme_source {array}[] = {{\n"
+        for t in sorted(folder.glob("*.toml")):
+            text += f'   {{"{t.stem}", R"FIGURETHEME({t.read_text()})FIGURETHEME"}},\n'
+        text += "};\n"
+    (out / "figure_themes.inc").write_text(text)
     text = "// generated from third_party/fonts/{IBMPlexSans-Regular,lucide}.ttf by scripts/fpm_package.py\n"
     for array, ttf in (("plex_sans_ttf", "IBMPlexSans-Regular.ttf"), ("lucide_ttf", "lucide.ttf")):
         font = (ROOT / "third_party" / "fonts" / ttf).read_bytes()
@@ -250,6 +253,8 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(miniz / "LICENSE", licences / "miniz.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexSans.txt", licences / "ibm-plex.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-Lucide.txt", licences / "lucide.txt")
+    for lic in sorted((ROOT / "third_party" / "palettes").glob("LICENSE-*.txt")):  # the bundled palettes
+        copy(lic, licences / f"palette-{lic.stem.removeprefix('LICENSE-')}.txt")
     version = a.version or (ROOT / "VERSION").read_text().strip().removeprefix("v")
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         version = "0.0.0"

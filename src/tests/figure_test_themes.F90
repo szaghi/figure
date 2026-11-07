@@ -250,12 +250,13 @@ contains
    endfunction c_string
 
    function same_as_golden(t, fp) result(same)
-   !< The fingerprint of theme `t` equals its golden values; the differences are reported.
+   !< The fingerprint of theme `t` equals its golden values (within 4 ulps); the differences are reported.
    integer(int32), intent(in) :: t         !< Theme.
    integer(int32), intent(in) :: fp(:)     !< Fingerprint.
    logical                    :: same      !< Equal.
    integer(int32)             :: i         !< Counter.
    integer(int32)             :: reported  !< Differences reported.
+   real(real32)               :: a, b      !< A value and its golden one.
 
    same = GOLDEN_RECORDED .and. size(fp) == GOLDEN_N
    if (.not. same) then
@@ -265,6 +266,11 @@ contains
    reported = 0_int32
    do i = 1_int32, GOLDEN_N
       if (fp(i) == GOLDEN(i, t)) cycle
+      ! a few ulps apart is the same value: compilers round Dear ImGui's own colour arithmetic differently (Apple
+      ! clang and g++ differ by 1 ulp on some of the dark and light colours)
+      a = transfer(fp(i), 1.0_real32)
+      b = transfer(GOLDEN(i, t), 1.0_real32)
+      if (abs(a - b) <= 4.0_real32 * spacing(max(abs(a), abs(b)))) cycle
       same = .false.
       reported = reported + 1_int32
       if (reported <= 5_int32) write(error_unit, '(A,A,A,I0,A,Z8.8,A,Z8.8)') 'figure_test_themes: ', &

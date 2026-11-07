@@ -37,7 +37,7 @@ integer(int32)          :: stat2                  !< Another.
 
 test_passed = .false.
 menu_open = .false.
-call app%init_headless(int(W, int32), int(H, int32), decorations='figure')
+call app%init_headless(int(W, int32), int(H, int32), decorations='figure', buttons='right') ! (macOS: left by default)
 call app%set_title('FIGURE: frame test')
 call app%set_confirm_quit(.true.)
 call frames(3_int32)
