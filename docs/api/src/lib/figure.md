@@ -11,7 +11,8 @@ title: figure
  tables, trees, id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style),
  the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the
  GPU textures (figure_texture) that `ig_image` and `ip_image` draw, and the Lucide icons by name, `ICON_*`
- (figure_icons), UTF-8 strings for any label: `ig_button(ICON_PLAY//' Run')`.
+ (figure_icons), UTF-8 strings for any label: `ig_button(ICON_PLAY//' Run')`; programs started from the program and
+ a view of their output (figure_process: `process_object`, `log_view_object`).
 
 **Source**: `src/lib/figure.F90`
 
@@ -29,6 +30,7 @@ graph LR
   figure["figure"] --> figure_imgui["figure_imgui"]
   figure["figure"] --> figure_implot["figure_implot"]
   figure["figure"] --> figure_menu["figure_menu"]
+  figure["figure"] --> figure_process["figure_process"]
   figure["figure"] --> figure_style["figure_style"]
   figure["figure"] --> figure_texture["figure_texture"]
 ```
