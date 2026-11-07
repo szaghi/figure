@@ -377,7 +377,7 @@ contains
 
    subroutine log_view(ok)
    !< The log view: its cap; following the end at the bottom, staying put when scrolled up; a range of lines chosen
-   !< by click and shift+click, copied with ctrl+c.
+   !< by click and shift+click, copied with ctrl+c (cmd+c on macOS).
    logical, intent(out)           :: ok(6)     !< Outcomes.
    type(app_object)               :: app       !< Application.
    type(log_view_object)          :: log       !< A log that grows.
@@ -444,9 +444,9 @@ contains
          call test_click(rect(1) + 40.0_real64, rect(2) + pad(2) + 2.5_real64 * pitch)  ! shift: up to 'gamma'
          call test_key('shift', down=.false.)
       case (112_int32)
-         call test_key('ctrl', down=.true.)
+         call test_key('shortcut', down=.true.)                    ! the platform's: cmd on macOS
          call test_key('c')
-         call test_key('ctrl', down=.false.)
+         call test_key('shortcut', down=.false.)
       endselect
    enddo
    clip = clipboard()
@@ -456,7 +456,7 @@ contains
    ok(4) = .not. follow(3) .and. seen(1, 3) == seen(1, 2) .and. seen(2, 3) == seen(2, 2) ! lines added: no move
    ok(5) = pick%copy() == 'beta'//LF//'gamma' .and. pick%copy(all=.true.) == 'alpha'//LF//'beta'//LF//'gamma'//LF// &
            'delta'                                                                   ! the chosen range
-   ok(6) = clip == 'beta'//LF//'gamma'                                                 ! ctrl+c copied it
+   ok(6) = clip == 'beta'//LF//'gamma'                                                 ! the shortcut copied it
    if (.not. all(ok)) then
       write(error_unit, '(A,6(I0,1X),A,3L2)') 'log view: in view ', seen, ', following ', follow
       write(error_unit, '(A,A,A,A,A)') 'log view: chosen "', pick%copy(), '", clipboard "', clip, '"'
