@@ -320,11 +320,12 @@ with fpm, builds the examples and builds FIGURE as an fpm dependency (`scripts/f
 | Windows (MSYS2 UCRT64) | gfortran | g++ | `windows` | the runner's display, Mesa's software OpenGL |
 
 **A real window:** `scripts/window_check.py` runs `exe/figure_hello` in a window twice, with the system's frame and
-with FIGURE's (`--frame`, [`decorations='figure'`](frame-loop#the-window-s-frame)), captures its frames
-([Screenshots and videos](capture)) and checks the last one: the window's size, not blank, and known widgets' pixels
-(the background, the "Click me" button, the slider's grab, and FIGURE's title bar with its title and close button).
-The frames are kept as the workflow's `window-frames-linux`, `-macos` and `-windows` artifacts. Run it on your own
-display after `fobis build --mode examples-gnu`:
+with FIGURE's (`--frame`, [`decorations='figure'`](frame-loop#the-window-s-frame)), captures its frames ([Screenshots
+and videos](capture)) and checks the last one: the window's size (or less, down to 1000 x 600, when the system clamps
+the window to a small display, as on the macOS runner's 1024 x 768), not blank, and known widgets' pixels (the
+background, the "Click me" button, the slider's grab, and FIGURE's title bar with its title and close button, on the
+left on macOS). The frames are kept as the workflow's `window-frames-linux`, `-macos` and `-windows` artifacts. Run it
+on your own display after `fobis build --mode examples-gnu`:
 
 ```bash
 python3 scripts/window_check.py --out window-frames   # writes window-frames/native.png and figure.png

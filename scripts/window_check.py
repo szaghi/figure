@@ -4,11 +4,14 @@ The program (default ``exe/figure_hello``) is run twice in a window on the displ
 native layer (``FIGURE_CAPTURE``, see docs/guide/capture.md): once with the system's frame, once with the frame drawn
 by FIGURE (``--frame``: ``decorations='figure'``). Each run must write the frames asked for, and its last frame must
 
-  - have the window's size, 1100 x 700 pixels (or an integer multiple of it, on a display of higher pixel density);
+  - have the window's size, 1100 x 700 pixels (or an integer multiple of it, on a display of higher pixel density),
+    or less, down to 1000 x 600, when the system clamps the window to a small display (a CI runner's 1024 x 768):
+    probes then falling outside the frame are skipped;
   - not be blank: many distinct colours, and none covering nearly the whole frame;
   - show known widgets at known places, in the colours of FIGURE's default style (``seal``): the window background,
     the "Click me" button, the frequency slider's grab and, with ``--frame``, the title bar with its title and the
-    close button (without it: no bar, the background).
+    close button, on the left on macOS and on the right elsewhere, FIGURE's default (without it: no bar, the
+    background).
 
 The last frame of each run is written as ``<out>/<case>.png`` (``native.png``, ``figure.png``), for the CI's artifacts
 and for a look by eye. The probes below are measured on figure_hello in the ``seal`` style: update them when either
@@ -33,6 +36,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WIDTH, HEIGHT = 1100, 700  # figure_hello's window [logical pixels]
+MIN_WIDTH, MIN_HEIGHT = 1000, 600  # the least a window clamped to a small display may keep [pixels]
 SKIP, FRAMES = 10, 3  # frames skipped (Dear ImGui sizes its windows in the first ones), frames written
 STYLE = "seal"
 BACKGROUND = (20, 18, 15)  # seal's window background
@@ -74,7 +78,8 @@ CASES = {
             *COMMON,
             Probe("title bar", 100, 2, 300, 14, "fill", (42, 37, 32), 0.99),
             Probe("title bar, the title", 500, 3, 100, 14, "ink", (42, 37, 32), 0.05),
-            Probe("title bar, the close button", 1072, 3, 18, 14, "ink", (42, 37, 32), 0.05),
+            Probe("title bar, the close button", 8 if sys.platform == "darwin" else 1072, 3, 18, 14, "ink",
+                  (42, 37, 32), 0.05),
         ),
     ),
 }
@@ -145,9 +150,10 @@ def check_frame(w: int, h: int, rgb: bytes, probes: tuple[Probe, ...]) -> list[s
     list[str]
         The failures (empty: the frame passes).
     """
-    scale = w // WIDTH
-    if scale < 1 or w != WIDTH * scale or h != HEIGHT * scale:
-        return [f"size {w}x{h}, expected {WIDTH}x{HEIGHT} (or a multiple of it)"]
+    scale = max(w // WIDTH, 1)
+    clamped = MIN_WIDTH <= w <= WIDTH and MIN_HEIGHT <= h <= HEIGHT and (w, h) != (WIDTH, HEIGHT)
+    if not clamped and (w != WIDTH * scale or h != HEIGHT * scale):
+        return [f"size {w}x{h}, expected {WIDTH}x{HEIGHT} (or a multiple of it, or clamped to a small display)"]
     errors = []
     counts: dict[bytes, int] = {}
     for i in range(0, len(rgb), 3):
@@ -157,6 +163,9 @@ def check_frame(w: int, h: int, rgb: bytes, probes: tuple[Probe, ...]) -> list[s
     if len(counts) < 64 or top > 0.95 * w * h:
         errors.append(f"blank: {len(counts)} colours, the commonest on {100 * top // (w * h)}% of the frame")
     for p in probes:
+        if (p.x + p.w) * scale > w or (p.y + p.h) * scale > h:
+            print(f"window_check: {p.name}: outside the {w}x{h} frame (window clamped), skipped")
+            continue
         hits = total = 0
         for y in range(p.y * scale, (p.y + p.h) * scale):
             for x in range(p.x * scale, (p.x + p.w) * scale):
