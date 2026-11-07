@@ -146,11 +146,14 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_shaded(label, x, y1, y2 [, spec] [, stat])`, `ip_shaded(label, x, y, yref ...)` | area between two curves, or a curve and `y = yref` |
 | `ip_spec(...)` → `plot_spec_object` | item style: colours, line weight, markers, flags (`ImPlotMarker_*`, `ImPlot*Flags_*`) |
 | `ip_heatmap(label, f, xmin, xmax, ymin, ymax ...)` | a field `f(i, j)` as coloured cells, read in place, j = 1 at the bottom |
-| `ip_colormap_scale(label, scale_min, scale_max ...)` | the colour bar of a heatmap (`ImPlotColormap_*`) |
+| `ip_colormap_scale(label, scale_min, scale_max ... [, colormap] [, stat])` | the colour bar of a heatmap (default colormap: Viridis) |
+| `ip_colormap(name [, levels] [, stat])` → `integer(int32)` | a colormap's id by name: bundled (`'cividis'`, `'batlow'`, `'cool-warm'`, ...), ImPlot's own or loaded; `<name>_r` reversed, `levels` discrete bands ([colormaps](colormaps)) |
+| `ip_load_colormap(name, file [, stat])` | a user colormap from a CSV table of RGB rows or a ParaView JSON preset ([user maps](colormaps#user-maps)) |
+| `ip_colormap_names(names)` | the names `ip_colormap` knows ([colormaps](colormaps)) |
 | `ip_image(label, tex, xmin, xmax, ymin, ymax ...)` | a texture in a plot, pixel row 1 at the bottom |
 | `ip_end_plot()` | end the plot (only if `ip_begin_plot` returned `.true.`) |
 
-Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots).
+Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots), [Colormaps](colormaps).
 
 ## Images: `texture_object`, `ig_image`
 

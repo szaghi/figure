@@ -34,6 +34,7 @@ public :: fig_notify, fig_notification_count, fig_notification_get, fig_notifica
 public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig_file_browser_rect
 public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_widget_input_text_multiline
 public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
+public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -1161,5 +1162,44 @@ interface
    real(c_float), value  :: y         !< Ordinate [pixels].
    integer(c_int), value :: left_down !< 1: left button pressed.
    endsubroutine fig_input_mouse
+
+   function fig_colormap(name, name_len, levels, id) result(status) bind(C, name='fig_colormap')
+   !< The ImPlot id of a colormap by name (`<name>_r` reversed, levels > 0 discrete), registered at its first use.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: name(*)  !< Name (not NUL-terminated).
+   integer(c_int), value               :: name_len !< Its length [bytes].
+   integer(c_int), value               :: levels   !< Discrete bands, in [2, 256]; 0: continuous.
+   integer(c_int),         intent(out) :: id       !< ImPlot colormap id (-1 on a failure).
+   integer(c_int)                      :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_colormap
+
+   function fig_load_colormap(name, name_len, path, path_len) result(status) bind(C, name='fig_load_colormap')
+   !< Read a user colormap (CSV table of RGB rows, or a ParaView JSON preset) under a new name.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Its length [bytes].
+   character(kind=c_char), intent(in) :: path(*)  !< File (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_load_colormap
+
+   function fig_colormap_count() result(count) bind(C, name='fig_colormap_count')
+   !< The number of colormap names: bundled, ImPlot's own, the user's.
+   import :: c_int
+   implicit none
+   integer(c_int) :: count !< Names.
+   endfunction fig_colormap_count
+
+   function fig_colormap_name(index, buf, buf_len) result(length) bind(C, name='fig_colormap_name')
+   !< The index-th colormap name (from 1): up to `buf_len` bytes copied; its length.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value               :: index   !< Index, from 1.
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its size [bytes].
+   integer(c_int)                      :: length  !< The name's length [bytes] (0: no such name).
+   endfunction fig_colormap_name
 endinterface
 endmodule figure_c_native

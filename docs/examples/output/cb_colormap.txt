@@ -1,0 +1,4 @@
+$ ./cb_colormap
+30 colormaps, the first ones:
+balance, batlow, cividis, cool-warm, curl, deep
+ip_colormap: unknown colormap 'jet' (ip_colormap_names lists them)

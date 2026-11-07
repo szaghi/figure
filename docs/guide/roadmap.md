@@ -181,6 +181,10 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
 - **A one-line installer** ([Installation](install#the-one-line-installer)): `install.sh --gnu|--nvidia|--fc`, the
   missing packages printed (`--deps` runs them), installs per compiler with a pkg-config file and a manifest,
   `--uninstall`: done.
+- **A colormap registry and scientific colormaps** ([Colormaps](colormaps)): `ip_colormap` by name, reversed
+  (`<name>_r`) and in discrete bands (`levels`); bundled cividis, inferno, magma, turbo, cmocean's thermal, haline,
+  deep, balance and curl, ParaView's Cool to Warm, Crameri's batlow, vik, roma and romaO, each after a licence check;
+  `ip_load_colormap` from a CSV table or a ParaView JSON preset; Viridis the default of heatmaps: done.
 
 ## Next
 

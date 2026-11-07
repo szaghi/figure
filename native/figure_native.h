@@ -263,6 +263,16 @@ void   fig_task_release(int id);
 int    fig_task_on_worker(void);
 int    fig_task_refuse(const char *name, int name_len);
 
+/* Colormaps (figure_colormap.cpp): the bundled maps (third_party/colormaps), ImPlot's own and the user's, by name.
+ * fig_colormap gives the ImPlot id of `name` (<name>_r reversed; levels > 0: that many discrete bands, in [2, 256]),
+ * registering it with ImPlot at its first use (an ImPlot context is needed). fig_load_colormap reads a user map from a
+ * CSV table of RGB rows or a ParaView JSON preset (no context needed; kept for the process's life). The names: count,
+ * and the index-th (from 1: bundled, ImPlot's, the user's) copied into buf (up to buf_len bytes), its length returned. */
+int    fig_colormap(const char *name, int name_len, int levels, int *id);
+int    fig_load_colormap(const char *name, int name_len, const char *path, int path_len);
+int    fig_colormap_count(void);
+int    fig_colormap_name(int index, char *buf, int buf_len);
+
 /* The cimgui/cimplot functions passing structs by value are wrapped in figure_glue_generated.cpp (generated). */
 
 #ifdef __cplusplus

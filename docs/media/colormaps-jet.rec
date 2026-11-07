@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    jet
+#! from    10
+#! frames  1
+# one smooth bump coloured by Jet and by cividis

@@ -17,7 +17,8 @@ module figure_implot
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : cstr, figure_check, figure_fail, figure_refused
-use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_texture_sampling
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
+                            fig_colormap_name, fig_load_colormap, fig_texture_sampling
 use figure_cimgui, only : im_vec2, im_vec4
 use figure_texture, only : texture_object, texture_ref
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot, ImPlot_EndPlot,             &
@@ -32,7 +33,7 @@ use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_Begin
                            ImPlot_PushColormap_PlotColormap, im_plot_point, im_plot_rect, ImPlot_GetPlotLimits,     &
                            ImPlot_GetPlotSize, ImPlot_SetupAxesLimits, ImPlot_SetupAxisScale_PlotScale,             &
                            ImPlot_SetupAxisFormat_Str, ImPlot_BeginSubplots, ImPlot_EndSubplots,                    &
-                           ImPlot_SetNextAxisToFit
+                           ImPlot_SetNextAxisToFit, ImPlot_GetColormapCount
 use figure_cimplot_enums, only : ImAxis_X1, ImAxis_Y1, ImPlotScale_Log10, ImPlotSubplotFlags_LinkAllX,                &
                                  ImPlotSubplotFlags_LinkAllY, ImPlotSubplotFlags_None,                                &
                                  ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_None, ImPlotCond_Always, ImPlotCond_Once,     &
@@ -58,6 +59,7 @@ character(len=128), allocatable :: subplots_seen(:)  !< Titles of the subplot fi
 integer(int32)                  :: fits_pending = 0  !< Plots of a new subplot figure still to fit to their data.
 public :: ip_bars, ip_line, ip_scatter, ip_shaded
 public :: ip_colormap_scale, ip_heatmap, ip_image, ip_plot_limits, ip_plot_size, ip_setup_axes_limits
+public :: ip_colormap, ip_colormap_names, ip_load_colormap
 public :: ip_spec, plot_spec_object
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -66,7 +68,7 @@ public :: ImPlotMarker_Plus, ImPlotMarker_Asterisk, ImPlotMarker_Vertical, ImPlo
 public :: ImPlotItemFlags_None, ImPlotItemFlags_NoLegend, ImPlotItemFlags_NoFit
 public :: ImPlotLineFlags_Segments, ImPlotLineFlags_Loop, ImPlotLineFlags_SkipNaN, ImPlotLineFlags_NoClip
 public :: ImPlotLineFlags_Shaded, ImPlotScatterFlags_NoClip, ImPlotBarsFlags_Horizontal
-! ImPlot's colormaps, for `ip_heatmap` and `ip_colormap_scale`
+! ImPlot's colormaps, for `ip_heatmap` and `ip_colormap_scale` (by name, with the bundled ones: `ip_colormap`)
 public :: ImPlotColormap_Deep, ImPlotColormap_Dark, ImPlotColormap_Pastel, ImPlotColormap_Paired, ImPlotColormap_Viridis
 public :: ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool, ImPlotColormap_Pink, ImPlotColormap_Jet
 public :: ImPlotColormap_Twilight, ImPlotColormap_RdBu, ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral
@@ -426,7 +428,7 @@ contains
    real(real64),           intent(in), optional           :: scale_min    !< Value at the bottom of the colormap.
    real(real64),           intent(in), optional           :: scale_max    !< Value at the top (both or none; none: data).
    character(len=*),       intent(in), optional           :: label_format !< printf format printing each value in its cell.
-   integer(int32),         intent(in), optional           :: colormap     !< Colormap (`ImPlotColormap_*`; default: current).
+   integer(int32),         intent(in), optional           :: colormap     !< Colormap (`ip_colormap`; default: Viridis).
    type(plot_spec_object), intent(in), optional           :: spec         !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat         !< Status.
    real(c_double)                                         :: smin         !< Colormap bottom (0, 0: data range).
@@ -434,8 +436,10 @@ contains
    character(kind=c_char, len=:), allocatable, target     :: fmt          !< NUL-terminated label format.
    type(c_ptr)                                            :: pfmt         !< Label format, or null: no labels.
    type(c_ptr)                                            :: p            !< Field address, or null when empty.
+   integer(c_int)                                         :: cmap         !< The colormap's id.
 
    if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
+   if (.not. colormap_ok('ip_heatmap', colormap, cmap, stat)) return
    smin = 0.0_c_double
    smax = 0.0_c_double
    if (present(scale_min)) smin = real(scale_min, c_double)
@@ -447,12 +451,12 @@ contains
    endif
    p = c_null_ptr
    if (size(f) > 0) p = c_loc(f)
-   if (present(colormap)) call ImPlot_PushColormap_PlotColormap(int(colormap, c_int))
+   call ImPlot_PushColormap_PlotColormap(cmap)
    ! rows = size(f, 2) along y, cols = size(f, 1) along x: ImPlot's row-major cell (r, c) is f(c + 1, r + 1). ImPlot
    ! draws row 0 at bounds_max%y: the y bounds are swapped so that it lands at ymin.
    call ImPlot_PlotHeatmap_FloatPtr(cstr(label), p, int(size(f, 2), c_int), int(size(f, 1), c_int), smin, smax, pfmt, &
                                     im_plot_point(xmin, ymax), im_plot_point(xmax, ymin), spec_c(spec))
-   if (present(colormap)) call ImPlot_PopColormap(1_c_int)
+   call ImPlot_PopColormap(1_c_int)
    call figure_check(FIG_OK, stat)
    endsubroutine ip_heatmap_r32
 
@@ -584,7 +588,7 @@ contains
    real(real64),           intent(in), optional           :: scale_min    !< Value at the bottom of the colormap.
    real(real64),           intent(in), optional           :: scale_max    !< Value at the top (both or none; none: data).
    character(len=*),       intent(in), optional           :: label_format !< printf format printing each value in its cell.
-   integer(int32),         intent(in), optional           :: colormap     !< Colormap (`ImPlotColormap_*`; default: current).
+   integer(int32),         intent(in), optional           :: colormap     !< Colormap (`ip_colormap`; default: Viridis).
    type(plot_spec_object), intent(in), optional           :: spec         !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat         !< Status.
    real(c_double)                                         :: smin         !< Colormap bottom (0, 0: data range).
@@ -592,8 +596,10 @@ contains
    character(kind=c_char, len=:), allocatable, target     :: fmt          !< NUL-terminated label format.
    type(c_ptr)                                            :: pfmt         !< Label format, or null: no labels.
    type(c_ptr)                                            :: p            !< Field address, or null when empty.
+   integer(c_int)                                         :: cmap         !< The colormap's id.
 
    if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
+   if (.not. colormap_ok('ip_heatmap', colormap, cmap, stat)) return
    smin = 0.0_c_double
    smax = 0.0_c_double
    if (present(scale_min)) smin = real(scale_min, c_double)
@@ -605,12 +611,12 @@ contains
    endif
    p = c_null_ptr
    if (size(f) > 0) p = c_loc(f)
-   if (present(colormap)) call ImPlot_PushColormap_PlotColormap(int(colormap, c_int))
+   call ImPlot_PushColormap_PlotColormap(cmap)
    ! rows = size(f, 2) along y, cols = size(f, 1) along x: ImPlot's row-major cell (r, c) is f(c + 1, r + 1). ImPlot
    ! draws row 0 at bounds_max%y: the y bounds are swapped so that it lands at ymin.
    call ImPlot_PlotHeatmap_doublePtr(cstr(label), p, int(size(f, 2), c_int), int(size(f, 1), c_int), smin, smax, pfmt, &
                                      im_plot_point(xmin, ymax), im_plot_point(xmax, ymin), spec_c(spec))
-   if (present(colormap)) call ImPlot_PopColormap(1_c_int)
+   call ImPlot_PopColormap(1_c_int)
    call figure_check(FIG_OK, stat)
    endsubroutine ip_heatmap_r64
 
@@ -640,23 +646,24 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_image
 
-   subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap)
-   !< A colour bar for [scale_min, scale_max], next to a heatmap (outside `ip_begin_plot`/`ip_end_plot`).
-   character(len=*), intent(in)           :: label        !< Label (also the widget id).
-   real(real64),     intent(in)           :: scale_min    !< Value at the bottom.
-   real(real64),     intent(in)           :: scale_max    !< Value at the top.
-   real(real64),     intent(in), optional :: width        !< Width [pixels] (default: ImPlot's).
-   real(real64),     intent(in), optional :: height       !< Height [pixels] (default: ImPlot's).
-   character(len=*), intent(in), optional :: label_format !< printf format of the tick labels (default '%g', ImPlot's).
-   integer(int32),   intent(in), optional :: colormap     !< Colormap (`ImPlotColormap_*`; default: current).
-   type(im_vec2)                          :: extent       !< Size (0: ImPlot's default).
-   integer(c_int)                         :: cmap         !< Colormap, or IMPLOT_AUTO (-1): the current one.
+   subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap, stat)
+   !< A colour bar for [scale_min, scale_max], next to a heatmap (outside `ip_begin_plot`/`ip_end_plot`). Statuses:
+   !< `FIG_ERR_ARGUMENT` for a colormap id that is not registered.
+   character(len=*), intent(in)            :: label        !< Label (also the widget id).
+   real(real64),     intent(in)            :: scale_min    !< Value at the bottom.
+   real(real64),     intent(in)            :: scale_max    !< Value at the top.
+   real(real64),     intent(in),  optional :: width        !< Width [pixels] (default: ImPlot's).
+   real(real64),     intent(in),  optional :: height       !< Height [pixels] (default: ImPlot's).
+   character(len=*), intent(in),  optional :: label_format !< printf format of the tick labels (default '%g', ImPlot's).
+   integer(int32),   intent(in),  optional :: colormap     !< Colormap (`ip_colormap`; default: Viridis).
+   integer(int32),   intent(out), optional :: stat         !< Status.
+   type(im_vec2)                           :: extent       !< Size (0: ImPlot's default).
+   integer(c_int)                          :: cmap         !< The colormap's id.
 
+   if (.not. colormap_ok('ip_colormap_scale', colormap, cmap, stat)) return
    extent = im_vec2(0.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
-   cmap = -1_c_int
-   if (present(colormap)) cmap = int(colormap, c_int)
    if (present(label_format)) then
       call ImPlot_ColormapScale(cstr(label), real(scale_min, c_double), real(scale_max, c_double), extent, &
                                 cstr(label_format), 0_c_int, cmap)
@@ -664,9 +671,105 @@ contains
       call ImPlot_ColormapScale(cstr(label), real(scale_min, c_double), real(scale_max, c_double), extent, cstr('%g'), &
                                 0_c_int, cmap)
    endif
+   call figure_check(FIG_OK, stat)
    endsubroutine ip_colormap_scale
 
+   ! colormaps by name
+
+   recursive function ip_colormap(name, levels, stat) result(id)
+   !< The colormap `name` as an ImPlot id, for the `colormap` argument of `ip_heatmap` and `ip_colormap_scale`: a
+   !< bundled map (`'cividis'`, `'batlow'`, `'cool-warm'`, ...), one of ImPlot's own (`'Viridis'`, `'Jet'`, ...) or a
+   !< map loaded with `ip_load_colormap`; names are case-sensitive (`ip_colormap_names` lists them). `<name>_r` is the
+   !< map reversed; `levels` gives that many discrete bands of equal width, each coloured as the map at its centre. A
+   !< map is registered with ImPlot (`AddColormap`) at its first use, and the same id is returned after; ids hold for
+   !< the application's life (a new `init` registers the maps again). Statuses: `FIG_ERR_ARGUMENT` for an unknown name
+   !< or `levels` outside [2, 256], `FIG_ERR_STATE` before `init*` and from a task; the id is then -1 (and `ip_heatmap`
+   !< refuses it). The same in every mode.
+   character(len=*), intent(in)            :: name   !< Colormap name; `<name>_r`: reversed.
+   integer(int32),   intent(in),  optional :: levels !< Discrete bands, in [2, 256] (default: continuous).
+   integer(int32),   intent(out), optional :: stat   !< Status.
+   integer(int32)                          :: id     !< ImPlot colormap id (-1 on a failure).
+   integer(c_int)                          :: n      !< Bands (0: continuous).
+   integer(c_int)                          :: c_id   !< The native id.
+   character(len=12)                       :: text   !< A number, printed.
+
+   id = -1_int32
+   if (figure_refused('ip_colormap', stat)) return ! ImPlot's context belongs to the main thread
+   n = 0_c_int
+   if (present(levels)) then
+      if (levels < 2_int32 .or. levels > 256_int32) then
+         write(text, '(I0)') levels
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_colormap: levels must be in [2, 256], got '//trim(text), stat)
+         return
+      endif
+      n = int(levels, c_int)
+   endif
+   c_id = -1_c_int
+   call figure_check(fig_colormap(name, len(name, c_int), n, c_id), stat)
+   id = int(c_id, int32)
+   endfunction ip_colormap
+
+   recursive subroutine ip_load_colormap(name, file, stat)
+   !< Read a colormap from `file` and register it under `name` for `ip_colormap`. The file is a CSV table, one colour a
+   !< row, `r, g, b` (or `x, r, g, b`, with `x` a position: resampled to 256 uniform positions), separated by commas,
+   !< semicolons, blanks or tabs, components in [0, 1] (or [0, 255] when one exceeds 1), `#` comments and a header line
+   !< allowed; or a ParaView JSON preset (a file of ParaView's "Export" of presets, or one preset): the one whose
+   !< `Name` is `name`, or the only one, its `RGBPoints` sampled at 256 positions in its `ColorSpace` (RGB, Lab,
+   !< Diverging, HSV or Step). The map is kept for the program's life. Statuses: `FIG_ERR_FAILED` if the file cannot be
+   !< read, `FIG_ERR_ARGUMENT` if it is malformed (the message gives the line) or the name is taken (a map, or the
+   !< reverse of one: ImPlot cannot replace a colormap), empty, holds `|` or starts with `'FIGURE '`; `FIG_ERR_STATE`
+   !< from a task. The same in every mode, before `init*` too.
+   character(len=*), intent(in)            :: name !< Name to register the map under.
+   character(len=*), intent(in)            :: file !< CSV table or ParaView JSON preset.
+   integer(int32),   intent(out), optional :: stat !< Status.
+
+   if (figure_refused('ip_load_colormap', stat)) return ! the registry belongs to the main thread
+   call figure_check(fig_load_colormap(name, len(name, c_int), file, len(file, c_int)), stat)
+   endsubroutine ip_load_colormap
+
+   recursive subroutine ip_colormap_names(names)
+   !< The names `ip_colormap` knows: the bundled maps (alphabetical), ImPlot's own (in ImPlot's order), then the maps
+   !< loaded with `ip_load_colormap` (in load order); reversed and discrete maps are not listed. From a task: none.
+   character(len=:), allocatable, intent(out) :: names(:) !< Names (as long as the longest).
+   integer(c_int)                             :: n        !< Names.
+   integer(c_int)                             :: longest  !< The longest one [bytes].
+   integer(c_int)                             :: i        !< Counter.
+   integer(c_int)                             :: m        !< A name's length.
+   character(len=1)                           :: probe    !< A buffer for a length alone.
+
+   n = 0_c_int
+   if (.not. figure_refused('ip_colormap_names')) n = fig_colormap_count()
+   longest = 1_c_int
+   do i = 1_c_int, n
+      longest = max(longest, fig_colormap_name(i, probe, 0_c_int))
+   enddo
+   allocate(character(len=longest) :: names(n))
+   do i = 1_c_int, n
+      names(i) = ''
+      m = fig_colormap_name(i, names(i), longest)
+   enddo
+   endsubroutine ip_colormap_names
+
    ! private helpers
+
+   function colormap_ok(caller, colormap, cmap, stat) result(ok)
+   !< The colormap id to draw with (default ImPlot's Viridis); false, with `FIG_ERR_ARGUMENT`, if it is not registered.
+   character(len=*),         intent(in)            :: caller   !< Calling procedure, for the message.
+   integer(int32), optional, intent(in)            :: colormap !< Colormap id, if given.
+   integer(c_int),           intent(out)           :: cmap     !< The id to use.
+   integer(int32),           intent(out), optional :: stat     !< Status, on a failure.
+   logical                                         :: ok       !< Usable.
+   character(len=12)                               :: text     !< The id, printed.
+
+   cmap = int(ImPlotColormap_Viridis, c_int) ! perceptually uniform: not the line colours ImPlot's current map holds
+   if (present(colormap)) cmap = int(colormap, c_int)
+   ok = cmap >= 0_c_int .and. cmap < ImPlot_GetColormapCount()
+   if (.not. ok) then
+      write(text, '(I0)') cmap
+      call figure_fail(FIG_ERR_ARGUMENT, caller//': the colormap '//trim(text)//' is not registered (see ip_colormap)', &
+                       stat)
+   endif
+   endfunction colormap_ok
 
    function series_ok(nx, ny, item, stat) result(ok)
    !< Whether two series can be plotted together: same size, and a size ImPlot's `int` count holds.

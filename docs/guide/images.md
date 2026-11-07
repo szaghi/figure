@@ -31,12 +31,13 @@ draws `f(:, :)` (`real(real32)` or `real(real64)`, contiguous) over the rectangl
   (`FIG_ERR_ARGUMENT` otherwise); with neither, the range of the data, computed by ImPlot every frame;
 - **labels**: `label_format` (a printf format, e.g. `'%.2f'`) prints each value in its cell. Off by default: on a
   large field, formatting a string per cell every frame costs far more than drawing the cells;
-- **colormap**: `colormap=ImPlotColormap_Viridis` (also `_Plasma`, `_Hot`, `_Cool`, `_Jet`, `_Greys`, `_RdBu`,
-  `_BrBG`, `_PiYG`, `_Spectral`, `_Twilight`, `_Pink`, and the qualitative `_Deep`, `_Dark`, `_Pastel`,
-  `_Paired`) for this item only; default: the current colormap.
+- **colormap**: an id from [`ip_colormap`](colormaps), by name (`colormap=ip_colormap('batlow')`, reversed
+  `'batlow_r'`, in discrete bands with `levels`), or one of ImPlot's constants (`ImPlotColormap_Viridis`, ...), for
+  this item only; default: Viridis. An id that is not registered is refused with `FIG_ERR_ARGUMENT`. Which map suits
+  which data, and why not Jet: [Colormaps](colormaps).
 
-`ip_colormap_scale(label, scale_min, scale_max [, width] [, height] [, label_format] [, colormap])` draws the matching
-colour bar. It is a widget of its own: call it outside `ip_begin_plot`/`ip_end_plot`, typically after `ig_same_line`,
+`ip_colormap_scale(label, scale_min, scale_max [, width] [, height] [, label_format] [, colormap] [, stat])` draws the
+matching colour bar. It is a widget of its own: call it outside `ip_begin_plot`/`ip_end_plot`, typically after `ig_same_line`,
 with the same scale and colormap as the heatmap. A label starting with `##` is hidden.
 
 ## Textures

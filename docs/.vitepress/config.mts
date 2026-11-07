@@ -40,6 +40,7 @@ const docs = [
       { text: 'Styles',                  link: '/guide/styles' },
       { text: 'Plots',                   link: '/guide/plots' },
       { text: 'Heatmaps and images',     link: '/guide/images' },
+      { text: 'Colormaps',               link: '/guide/colormaps' },
       { text: 'Processes and tasks',     link: '/guide/processes' },
       { text: 'Remote UI',               link: '/guide/remote' },
       { text: 'Performance',             link: '/guide/performance' },

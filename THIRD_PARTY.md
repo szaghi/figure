@@ -2,9 +2,10 @@
 
 FIGURE is released under the [MIT licence](LICENSE.mit.md). Its native layer (`scripts/build_native.sh`) downloads
 and compiles the projects below into `lib/libfigure_native.a` and `lib/libSDL3.a`, and embeds the fonts kept in
-`third_party/fonts/` and the palettes of `themes/palettes/`, whose colours are those of the projects named below
-(their licence files in `third_party/palettes/`): a program linked with FIGURE contains them. Their licences are all permissive and compatible with FIGURE's. The native build installs each
-licence file under `share/licenses/<project>/`.
+`third_party/fonts/`, the palettes of `themes/palettes/`, whose colours are those of the projects named below
+(their licence files in `third_party/palettes/`), and the colormaps of `third_party/colormaps/` (256 RGB samples
+each, with their licence files): a program linked with FIGURE contains them. Their licences are all permissive and
+compatible with FIGURE's. The native build installs each licence file under `share/licenses/<project>/`.
 
 | Project | Version (pinned in `native/CMakeLists.txt`) | Licence | Copyright | In FIGURE |
 |---|---|---|---|---|
@@ -23,6 +24,12 @@ licence file under `share/licenses/<project>/`.
 | [Catppuccin](https://github.com/catppuccin/palette) | `palette.json`, v1.8.0 (commit `07d02aa`) | MIT | Catppuccin | the palettes `catppuccin-mocha` and `catppuccin-latte` |
 | [Tokyo Night](https://github.com/enkia/tokyo-night-vscode-theme) | `README.md` and `themes/tokyo-night-color-theme.json`, commit `da5546b` | MIT | Enkia | the palette `tokyo-night` |
 | [One Dark](https://github.com/joshdick/onedark.vim) | `autoload/onedark.vim`, commit `ad9610c`; one grey (mono-2) from [Atom's One Dark](https://github.com/atom/atom/tree/master/packages/one-dark-syntax), commit `8ae45ca` | MIT | Joshua Dick; GitHub Inc. | the palette `one-dark` |
+| [matplotlib](https://github.com/matplotlib/matplotlib) | v3.11.2, `lib/matplotlib/_cm_listed.py` (`_cividis_data`, `_inferno_data`, `_magma_data`, `_turbo_data`) | matplotlib licence (`LICENSE/LICENSE`) | Matplotlib Development Team | the colormaps `cividis` (designed by J. R. Nuñez, C. R. Anderton and R. S. Renslow, PNNL, contributed to matplotlib by its author, PR #9871), `inferno`, `magma` and `turbo`; values unchanged, written as CSV (`third_party/colormaps/<name>.csv`) |
+| [mpl-colormaps](https://github.com/BIDS/colormap) | `colormaps.py`, commit `bc54947` | CC0-1.0 | Nathaniel J. Smith, Stéfan van der Walt | `inferno` and `magma`: their tables, equal to matplotlib's (checked by `scripts/gen_colormaps.py`) |
+| [Turbo](https://gist.github.com/mikhailov-work/ee72ba4191942acecc03fe6da94fc73f) | `turbo_colormap.py`, gist revision `dccf285` | Apache-2.0 | Google LLC (Anton Mikhailov) | `turbo`: its table, equal to matplotlib's (checked) |
+| [cmocean](https://github.com/matplotlib/cmocean) | v4.0.3, `cmocean/rgb/<name>-rgb.txt` | MIT | Kristen M. Thyng | the colormaps `thermal`, `haline`, `deep`, `balance` and `curl` (`curl`: 512 rows resampled linearly to 256, as cmocean does) |
+| [Cool to Warm](https://www.kennethmoreland.com/color-advice/) (Kenneth Moreland) | `smooth-cool-warm-table-float-0256.csv`, [kennethmoreland-com.github.io](https://github.com/kennethmoreland-com/kennethmoreland-com.github.io) commit `04f580e`; licence: ParaView's, as that page states, text from ParaView v6.2.0 `Copyright.txt` | BSD-3-Clause | Kitware Inc. | the colormap `cool-warm`, ParaView's "Cool to Warm" |
+| [Scientific colour maps](https://www.fabiocrameri.ch/colourmaps/) | 8.0.1, [Zenodo 10.5281/zenodo.8409685](https://doi.org/10.5281/zenodo.8409685), `ScientificColourMaps8.zip`, `<name>/<name>.txt`; licence from its `+LICENCE.pdf` | MIT | Fabio Crameri | the colormaps `batlow`, `vik`, `roma` and `romaO` |
 | [Lucide](https://lucide.dev) | `lucide-static` 1.61.0 (npm), `third_party/fonts/lucide.ttf` and its code point map `lucide-info.json` (both unmodified, from `font/`) | ISC, and MIT for the icons derived from Feather | Lucide Icons and Contributors; Cole Bemis (Feather) | the icons (`ICON_*`), embedded and merged into every text font |
 
 ## Distributing a program built with FIGURE
@@ -32,6 +39,12 @@ licence file under `share/licenses/<project>/`.
   and the permission notice must be included in all copies or substantial portions of the software. For a binary,
   ship the licence files with it (the `share/licenses/` tree, where the Lucide one is `share/licenses/lucide/` and the
   palettes' are `share/licenses/<palette>/`, or the texts in your documentation or "About" box).
+- **The colormaps** (`share/licenses/<project>/`, `<project>` one of `matplotlib`, `mpl-colormaps`, `turbo`,
+  `cmocean`, `paraview`, `crameri`): MIT (cmocean, Crameri's), as above; **BSD-3-Clause** (ParaView's Cool to Warm):
+  reproduce the copyright notice, the conditions and the disclaimer in the documentation of a binary, and do not use
+  Kitware's name to promote it; **Apache-2.0** (Turbo): ship the licence and Google's notice with it (`LICENSE-turbo.txt`
+  holds both); the **matplotlib licence**: keep its copyright notice, and a derivative work states its changes (here:
+  the tables are matplotlib's values written as CSV); **CC0** (mpl-colormaps): no condition.
 - **OFL-1.1** (IBM Plex Sans, IBM Plex Mono): the fonts may be bundled and embedded with any software; their
   copyright and licence must accompany them (`share/licenses/ibm-plex/`, one file per font, the same text), and they
   may not be sold by themselves. A modified version may not use the name "Plex".

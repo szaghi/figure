@@ -23,6 +23,14 @@ module make nvfortran 26.9 fail with "ILM file: can't find intrinsic size" (an i
 legal Fortran. FIGURE names such locals `extent`; avoid naming a local `size` in modules of your own built with
 nvfortran 26.9 if you hit the same error.
 
+## gfortran: a section of a deferred-length character array
+
+A section of a deferred-length allocatable character array (`character(len=:), allocatable :: names(:)`, as
+`ip_colormap_names` returns), passed to an assumed-shape dummy argument, arrives from the array's first element:
+`call show(names(3:4))` sees `names(1:2)`. Seen with gfortran 15.2 and 16.2, at every optimisation level; nvfortran
+26.9 passes the section right, and so does gfortran for a fixed-length array. Copy the section into a fixed-length
+array first (`own = names(k:k + 15)`, as `docs/examples/src/gallery.F90` does), or pass the elements one by one.
+
 ## Text input
 
 `ig_input_text` edits a `character` variable, whose length is the field's capacity: a longer text is cut at it. Text

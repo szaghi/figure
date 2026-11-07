@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    colormaps
+#! from    10
+#! frames  1
+# every colormap FIGURE knows, one colour bar each: the bundled ones by category, then ImPlot's own

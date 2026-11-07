@@ -51,6 +51,10 @@ Every item is generic over `real(real32)` and `real(real64)` (all its arrays of 
 The two `ip_shaded` forms are told apart by the fourth argument: an array (`y2`) or a scalar (`yref`). Items are
 drawn in the order they are called, each above the previous ones.
 
+Fields are items too: `ip_heatmap` colours the cells of a 2D array through a colormap, and `ip_colormap_scale` draws
+its colour bar ([Heatmaps](images#heatmaps)); the colormap is chosen by name with `ip_colormap`, among the bundled
+scientific maps, ImPlot's own and the user's ([Colormaps](colormaps)).
+
 ## Item style
 
 `ip_spec(...)` returns a `plot_spec_object`: ImPlot's defaults (colours from the colormap, no markers on lines),

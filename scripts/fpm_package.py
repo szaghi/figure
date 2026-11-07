@@ -5,7 +5,7 @@ native layer itself, next to the Fortran library:
 
 - ``src/fortran/``: the Fortran library (src/lib);
 - ``src/native/``: FIGURE's C++ glue (native/), with the files CMake generates at configure time (the browser page,
-  the themes and the font, embedded) written here by the same rules;
+  the themes, the colormaps and the font, embedded) written here by the same rules;
 - ``src/cimgui/`` (with ``imgui/``), ``src/cimplot/`` (with ``implot/``), ``src/miniz/``: the pinned third-party sources,
   copied from CMake's fetched tree (build/native/_deps, so run scripts/build_native.sh first), only the files FIGURE
   compiles; Dear ImGui's ``imconfig.h`` carries the two settings CMake passes as definitions, so no compiler flag is
@@ -53,7 +53,7 @@ IMGUI_FILES = [
 IMPLOT_FILES = ["implot.cpp", "implot_items.cpp", "implot_demo.cpp", "implot.h", "implot_internal.h", "LICENSE"]
 NATIVE_FILES = [
     "figure_native.cpp", "figure_native.h", "figure_process.cpp", "figure_task.cpp", "figure_files.cpp",
-    "figure_remote.cpp",
+    "figure_remote.cpp", "figure_colormap.cpp",
     "figure_remote.h", "figure_theme.cpp", "figure_theme.h", "figure_style.h", "figure_glue_generated.cpp", "figure_style_generated.cpp",
 ]  # fmt: skip
 
@@ -159,7 +159,7 @@ def fetch(cache: Path) -> Path:
 
 
 def cmake_embeds(out: Path) -> None:
-    """The three files native/CMakeLists.txt generates at configure time, by the same rules."""
+    """The four files native/CMakeLists.txt generates at configure time, by the same rules."""
     html = (ROOT / "native" / "figure_remote_client.html").read_text()
     (out / "figure_remote_client.inc").write_text(
         "// generated from native/figure_remote_client.html by scripts/fpm_package.py\n"
@@ -176,6 +176,15 @@ def cmake_embeds(out: Path) -> None:
             text += f'   {{"{t.stem}", R"FIGURETHEME({t.read_text()})FIGURETHEME"}},\n'
         text += "};\n"
     (out / "figure_themes.inc").write_text(text)
+    text = (
+        "// generated from third_party/colormaps/*.csv by scripts/fpm_package.py\n"
+        "struct colormap_source { const char *name; const char *text; };\n"
+        "const colormap_source COLORMAPS[] = {\n"
+    )
+    for t in sorted((ROOT / "third_party" / "colormaps").glob("*.csv")):
+        text += f'   {{"{t.stem}", R"FIGURECMAP({t.read_text()})FIGURECMAP"}},\n'
+    text += "};\n"
+    (out / "figure_colormaps.inc").write_text(text)
     text = "// generated from third_party/fonts/{IBMPlexSans-Regular,IBMPlexMono-Regular,lucide}.ttf by scripts/fpm_package.py\n"
     for array, ttf in (("plex_sans_ttf", "IBMPlexSans-Regular.ttf"), ("plex_mono_ttf", "IBMPlexMono-Regular.ttf"),
                        ("lucide_ttf", "lucide.ttf")):
@@ -258,6 +267,8 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(ROOT / "third_party" / "fonts" / "LICENSE-Lucide.txt", licences / "lucide.txt")
     for lic in sorted((ROOT / "third_party" / "palettes").glob("LICENSE-*.txt")):  # the bundled palettes
         copy(lic, licences / f"palette-{lic.stem.removeprefix('LICENSE-')}.txt")
+    for lic in sorted((ROOT / "third_party" / "colormaps").glob("LICENSE-*.txt")):  # the bundled colormaps
+        copy(lic, licences / f"colormap-{lic.stem.removeprefix('LICENSE-')}.txt")
     version = a.version or (ROOT / "VERSION").read_text().strip().removeprefix("v")
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         version = "0.0.0"
