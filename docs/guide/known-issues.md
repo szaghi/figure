@@ -77,6 +77,19 @@ POSIX):
 - **A crashed program** (killed by a signal) cannot kill its captured children; they end when they next write to the
   closed pipe, or by themselves.
 
+## Tasks
+
+[Tasks](processes#tasks) run Fortran procedures on SDL threads:
+
+- **nvfortran's I/O runtime is thread-safe only with `-mp`:** without it, Fortran I/O from two threads at once
+  (formatted, list-directed, internal `write` to a string included) fails at random (`FIO-F-222 ... unbalanced
+  parentheses in format string`) or crashes; compile the code a task runs, and the program, with `-mp` (OpenMP: FoBiS
+  `openmp = True`). Measured with nvfortran 26.9: 8 tasks writing to strings fail in most runs without `-mp`, in none
+  with it. gfortran's I/O is thread-safe with no flag.
+- **Drawing from a task** is refused at FIGURE's container entry points only (the list is in
+  [Tasks](processes#tasks)); a lone widget called from a task outside any container is not caught.
+- **No preemption:** a task with no safe point (`h%cancelled()`) cannot be stopped; its object's end waits for it.
+
 ## First build needs the network
 
 The native build downloads cimgui, cimplot, SDL3 and miniz (CMake `FetchContent`) the first time, and every FoBiS mode runs

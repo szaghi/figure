@@ -6,7 +6,7 @@ module figure_c_native
 !< (window, OpenGL context) and calls the cimgui/cimplot functions Fortran cannot call directly (structs larger than
 !< `ImVec2` passed by value); the direct ones are generated in figure_cimgui and figure_cimplot. Strings passed to
 !< the glue are (pointer, length), not NUL-terminated.
-use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_long_long, c_ptr
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_funptr, c_int, c_long_long, c_ptr
 
 implicit none
 private
@@ -28,6 +28,8 @@ public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_
 public :: fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_frame_hit, fig_frame_rect, fig_frame_state
 public :: fig_process_start, fig_process_pending, fig_process_take, fig_process_info, fig_process_kill
 public :: fig_process_release
+public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_task_cancel, fig_task_cancelled
+public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -252,6 +254,100 @@ interface
    implicit none
    integer(c_int), value :: id !< Handle.
    endsubroutine fig_process_release
+
+   function fig_task_start(fn, arg, id) result(status) bind(C, name='fig_task_start')
+   !< Run fn(arg) on a worker thread.
+   import :: c_funptr, c_int, c_ptr
+   implicit none
+   type(c_funptr), value       :: fn     !< The bind(C) trampoline.
+   type(c_ptr),    value       :: arg    !< Its argument.
+   integer(c_int), intent(out) :: id     !< Handle.
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_task_start
+
+   function fig_task_state(id, done, fraction, msg, msg_len, length, task_status) result(status) &
+            bind(C, name='fig_task_state')
+   !< A task's end, last progress and message, and its failure's status.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int),         value       :: id          !< Handle.
+   integer(c_int),         intent(out) :: done        !< 1 once ended.
+   real(c_double),         intent(out) :: fraction    !< Last progress (negative: none yet).
+   character(kind=c_char), intent(out) :: msg(*)      !< Its message (up to msg_len bytes).
+   integer(c_int),         value       :: msg_len     !< Buffer size [bytes].
+   integer(c_int),         intent(out) :: length      !< Message length [bytes].
+   integer(c_int),         intent(out) :: task_status !< FIG_OK or the failure's status.
+   integer(c_int)                      :: status      !< Status: FIG_OK or FIG_ERR_STATE.
+   endfunction fig_task_state
+
+   function fig_task_report(id, fraction, msg, msg_len, keep_message) result(status) bind(C, name='fig_task_report')
+   !< Progress from the task.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int),         value      :: id           !< Handle.
+   real(c_double),         value      :: fraction     !< Done [0, 1].
+   character(kind=c_char), intent(in) :: msg(*)       !< Message.
+   integer(c_int),         value      :: msg_len      !< Its length [bytes].
+   integer(c_int),         value      :: keep_message !< 1: keep the previous message.
+   integer(c_int)                     :: status       !< Status.
+   endfunction fig_task_report
+
+   function fig_task_fail(id, msg, msg_len) result(status) bind(C, name='fig_task_fail')
+   !< A failure reported by the task.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int),         value      :: id      !< Handle.
+   character(kind=c_char), intent(in) :: msg(*)  !< Message.
+   integer(c_int),         value      :: msg_len !< Its length [bytes].
+   integer(c_int)                     :: status  !< Status.
+   endfunction fig_task_fail
+
+   function fig_task_cancel(id) result(status) bind(C, name='fig_task_cancel')
+   !< Ask a task to stop.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Handle.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_task_cancel
+
+   function fig_task_cancelled(id) result(cancelled) bind(C, name='fig_task_cancelled')
+   !< 1 once the task was asked to stop.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id        !< Handle.
+   integer(c_int)        :: cancelled !< 1: asked to stop.
+   endfunction fig_task_cancelled
+
+   function fig_task_finish(id) result(status) bind(C, name='fig_task_finish')
+   !< Wait for an ended task's thread; its failure's status (message in fig_last_error).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Handle.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_task_finish
+
+   subroutine fig_task_release(id) bind(C, name='fig_task_release')
+   !< Forget a task (a running one is asked to stop and waited for).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id !< Handle.
+   endsubroutine fig_task_release
+
+   function fig_task_on_worker() result(on) bind(C, name='fig_task_on_worker')
+   !< 1 on a task's thread.
+   import :: c_int
+   implicit none
+   integer(c_int) :: on !< 1 on a worker.
+   endfunction fig_task_on_worker
+
+   function fig_task_refuse(name, name_len) result(refused) bind(C, name='fig_task_refuse')
+   !< At a drawing entry point: 1 on a worker (the refusal recorded in its task), 0 on the main thread.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< The entry point.
+   integer(c_int),         value      :: name_len !< Its length [bytes].
+   integer(c_int)                     :: refused  !< 1: refused.
+   endfunction fig_task_refuse
 
    function fig_frame_hit(x, y, hit) result(status) bind(C, name='fig_frame_hit')
    !< The frame's hit-test class at (x, y), from the last frame.

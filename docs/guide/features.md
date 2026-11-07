@@ -168,6 +168,18 @@ Details: [Heatmaps and images](images).
 
 Details: [Processes and tasks](processes).
 
+## Tasks: `task_object`, `task_handle_object`
+
+| Procedure | Purpose |
+|---|---|
+| `t%start(work, data [, stat])` | run `work(h, data)` (a `task_work` module procedure) on a worker thread, on a copy of `data` (`class(*)`) |
+| `t%running()` → `logical`, `t%done()` → `logical`, `t%progress(fraction [, message])` | it runs; it has ended (its result waits); its last progress in [0, 1] and message |
+| `t%cancel([stat])`, `t%result(data [, stat])` | ask it to stop at its next safe point; once done, its data moved out (`class(*), allocatable`) |
+| `h%report(fraction [, message])`, `h%cancelled()` → `logical`, `h%fail(message)` | in the task: post progress (wakes the frame loop), the program asked it to stop, report a failure |
+
+A task never draws: FIGURE's drawing entry points refuse a call from a worker with `FIG_ERR_STATE`.
+Details: [Processes and tasks](processes#tasks).
+
 ## Testing: `figure_testing`
 
 | Procedure | Does |

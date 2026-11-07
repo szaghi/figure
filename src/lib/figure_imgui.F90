@@ -9,7 +9,7 @@ module figure_imgui
 use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_loc, c_null_char, &
                                         c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
-use figure_base, only : cstr
+use figure_base, only : cstr, figure_refused
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
@@ -52,6 +52,8 @@ contains
    logical(c_bool), target                   :: o       !< C copy of `open`.
    type(c_ptr)                               :: p       !< bool* or null.
 
+   visible = .false.
+   if (figure_refused('ig_begin')) return ! a task does not draw
    p = c_null_ptr
    if (present(open)) then
       o = logical(open, c_bool)
@@ -75,6 +77,8 @@ contains
    logical                      :: visible !< Its content is drawn.
    integer(c_int)               :: s       !< Side code.
 
+   visible = .false.
+   if (figure_refused('ig_begin_side_bar')) return ! a task does not draw
    select case (side)
    case ('right')
       s = 1_c_int
@@ -101,6 +105,7 @@ contains
 
    subroutine ig_end()
    !< End the window opened by `ig_begin` (whatever it returned).
+   if (figure_refused('ig_end')) return ! a task does not draw
    call igEnd()
    endsubroutine ig_end
 

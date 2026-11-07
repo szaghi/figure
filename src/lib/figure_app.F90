@@ -18,7 +18,7 @@ module figure_app
 !< the application's own variables.
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc
 use, intrinsic :: iso_fortran_env, only : int8, int32, output_unit, real64
-use figure_base, only : figure_check, figure_fail
+use figure_base, only : figure_check, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
@@ -294,6 +294,8 @@ contains
    integer(c_int)                          :: status  !< Native status.
    integer(c_int)                          :: r       !< Running flag.
 
+   running = .false.
+   if (figure_refused('app%next_frame', stat)) return ! a task does not draw
    running = .false.
    if (self%in_frame) then
       self%in_frame = .false.

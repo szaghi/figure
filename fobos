@@ -59,9 +59,11 @@ openmp    = True
 build_dir = exe
 src       = src/lib/ src/examples/
 
+# tests-nvf: -mp (openmp) also makes nvfortran's I/O runtime thread-safe, which the tasks' test needs
 [tests-nvf]
 template  = template-nvf
 cflags    = $CNVF -O2
+openmp    = True
 build_dir = exe
 src       = src/lib/ src/tests/
 

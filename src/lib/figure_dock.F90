@@ -25,7 +25,7 @@ module figure_dock
 !< arithmetic on them.
 use, intrinsic :: iso_c_binding, only : c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64
-use figure_base, only : figure_check, figure_fail
+use figure_base, only : figure_check, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_dock_id, fig_dock_layout_begin, fig_dock_layout_end, &
                             fig_dock_space, fig_dock_split, fig_dock_window, fig_window_dock
 use figure_cimgui, only : igSetNextWindowDockID
@@ -54,6 +54,7 @@ contains
    integer(int32), intent(out), optional :: stat  !< Status: `FIG_ERR_STATE` outside a frame or with docking off.
    integer(c_int)                        :: f     !< Flags.
 
+   if (figure_refused('ig_dock_space', stat)) return ! a task does not draw
    f = ImGuiDockNodeFlags_None
    if (present(flags)) f = int(flags, c_int)
    call figure_check(fig_dock_space(int(id, c_int), f), stat)

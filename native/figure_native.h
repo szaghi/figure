@@ -187,6 +187,24 @@ int    fig_process_kill(int id, int force);
 void   fig_process_release(int id);
 void   fig_process_shutdown(void);
 
+/* Tasks (figure_task.cpp): fn(arg) run on an SDL thread (64 MiB of stack). state: done, the last progress (fraction
+ * in [0, 1], negative before the first report) and message (copied into msg, up to msg_len bytes; len its length),
+ * and the failure's status. report and fail are called by the task (keep_message 1: the message stays); cancel and
+ * cancelled are the cooperative stop. finish waits for an ended task's thread and returns its failure (message in
+ * fig_last_error); release asks a task to stop and waits for it. refuse(name), at FIGURE's drawing entry points: 0 on
+ * the main thread; on a worker 1, the task's status becomes FIG_ERR_STATE with a message naming the entry point, and
+ * the task is asked to stop. */
+int    fig_task_start(void (*fn)(void *), void *arg, int *id);
+int    fig_task_state(int id, int *done, double *fraction, char *msg, int msg_len, int *len, int *status);
+int    fig_task_report(int id, double fraction, const char *msg, int msg_len, int keep_message);
+int    fig_task_fail(int id, const char *msg, int msg_len);
+int    fig_task_cancel(int id);
+int    fig_task_cancelled(int id);
+int    fig_task_finish(int id);
+void   fig_task_release(int id);
+int    fig_task_on_worker(void);
+int    fig_task_refuse(const char *name, int name_len);
+
 /* The cimgui/cimplot functions passing structs by value are wrapped in figure_glue_generated.cpp (generated). */
 
 #ifdef __cplusplus

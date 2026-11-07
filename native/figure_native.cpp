@@ -2174,6 +2174,7 @@ void apply_test_input(); // figure_testing's queued input (defined with the synt
 
 int fig_begin_frame(int *running) {
    FIG_TRY
+   if (fig_task_refuse("app%next_frame", 14)) return FIG_ERR_STATE; // a task does not draw
    *running = 0;
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if (st.in_frame) return fail(FIG_ERR_STATE, "begin_frame called twice without end_frame");
@@ -2295,6 +2296,7 @@ int fig_begin_frame(int *running) {
 
 int fig_end_frame(void) {
    FIG_TRY
+   if (fig_task_refuse("app%next_frame", 14)) return FIG_ERR_STATE; // a task does not draw
    if (!st.in_frame) return fail(FIG_ERR_STATE, "end_frame without begin_frame");
    frame_bar_close();
    st.in_frame = false;
@@ -2370,6 +2372,7 @@ void fig_shutdown(void) {
 
 int fig_texture_create(int width, int height, int smooth, unsigned long long *id) {
    FIG_TRY
+   if (fig_task_refuse("texture_object%init", 19)) return FIG_ERR_STATE; // a task does not draw
    *id = 0;
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "texture size must be positive");
@@ -2398,6 +2401,7 @@ int fig_texture_create(int width, int height, int smooth, unsigned long long *id
 
 int fig_texture_update(unsigned long long id, int width, int height, const unsigned char *rgba) {
    FIG_TRY
+   if (fig_task_refuse("texture_object%update", 21)) return FIG_ERR_STATE; // a task does not draw
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    const auto t = st.textures.find(id);
    if (t == st.textures.end()) return fail(FIG_ERR_ARGUMENT, "unknown texture (destroyed, or never created)");

@@ -16,7 +16,7 @@ module figure_implot
 !<```
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_base, only : cstr, figure_check, figure_fail
+use figure_base, only : cstr, figure_check, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_texture_sampling
 use figure_cimgui, only : im_vec2, im_vec4
 use figure_texture, only : texture_object, texture_ref
@@ -119,6 +119,8 @@ contains
    type(im_vec2)                          :: extent  !< Size (named so: a local `size` crashes nvfortran 26.9).
    integer(c_int)                         :: flags   !< ImPlotFlags.
 
+   visible = .false.
+   if (figure_refused('ip_begin_plot')) return ! a task does not draw
    extent = im_vec2(-1.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
@@ -150,6 +152,8 @@ contains
    type(im_vec2)                          :: extent  !< Size.
    integer(c_int)                         :: flags   !< ImPlotSubplotFlags.
 
+   visible = .false.
+   if (figure_refused('ip_begin_subplots')) return ! a task does not draw
    extent = im_vec2(-1.0_c_float, 300.0_c_float * real(rows, c_float))
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)

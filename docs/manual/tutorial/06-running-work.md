@@ -6,11 +6,11 @@ title: 6. Running work
 
 Chapter 4 advanced a computation a little in every frame. Work that cannot be cut into such slices, or that is
 another program altogether, runs beside the frame loop: the window keeps answering while it runs. This chapter starts
-a tool from a button and shows what it prints.
+a tool from a button and shows what it prints, then runs a computation of the program as a task.
 
 <<< @/examples/snippets/tut06_work.F90{fortran}
 
-<Media name="tut06_work" alt="A window with a Check the grid button; after the click, the log view below fills with one line per block and ends with grid check: 24 blocks, no error" caption="docs/examples/src/tut06_work.F90" />
+<Media name="tut06_work" alt="A window with two buttons: Smooth the field, then Check the grid; the smoothing's progress shows beside its button and ends with the smoothed value, the tool's lines fill the log view below and end with grid check: 24 blocks, no error" caption="docs/examples/src/tut06_work.F90" />
 
 ## A tool from a button
 
@@ -28,7 +28,26 @@ a tool from a button and shows what it prints.
 - A tool still running when the program ends is stopped with it. A run that must outlive the program is started with
   `detached=.true.` and a `log_file`.
 
+## A computation as a task
+
+The program's own long computations run as tasks: a Fortran procedure on a thread of its own. The work is a
+module procedure with a fixed interface; its data is any type, here a field to smooth:
+
+<<< @/examples/snippets/tut06_work-work.F90{fortran}
+
+<<< @/examples/snippets/tut06_work-task.F90{fortran}
+
+- `smoother%start(smooth_field, field)` runs `smooth_field` on a worker thread, on a copy of `field`: the program's
+  own `field` is not touched while the task runs.
+- Inside the task, `h%report(fraction, message)` posts the progress and wakes the frame loop; `h%cancelled()` is the
+  safe point where the task returns if the program asked it to stop (`smoother%cancel()`).
+- Every frame the program reads the progress (`smoother%progress`); once `smoother%done()`, it takes the field back
+  with `smoother%result(data)`, without a copy, and `select type` gives it its type again.
+- **A task never draws:** no `ig_*` or `ip_*` call inside `smooth_field`. Only the main thread draws; FIGURE refuses a
+  drawing call from a task ([the threading rule](/guide/processes#tasks)).
+
 ::: tip What you learned
-A program started from the program, its output followed in a log view, and why the window does not freeze.
+A program started from the program, its output followed in a log view; a computation run as a task, with its
+progress; and why the window does not freeze.
 Reference: [Processes and tasks](/guide/processes).
 :::

@@ -13,7 +13,7 @@ module figure_group
 !< Widgets repeated on every row need an id scope per row (`ig_push_id(row)`) or distinct labels.
 use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real64
-use figure_base, only : cstr
+use figure_base, only : cstr, figure_refused
 use figure_c_native, only : fig_clipper_begin, fig_clipper_delete, fig_clipper_new, fig_clipper_step
 use figure_cimgui, only : igBeginChild_Str, igEndChild, im_vec2, igBeginDisabled, igBeginTabBar, igBeginTabItem, &
                           igBeginTable,                                                                         &
@@ -111,6 +111,8 @@ contains
    type(im_vec2)                          :: extent  !< Size.
    integer(c_int)                         :: flags   !< ImGuiChildFlags.
 
+   visible = .false.
+   if (figure_refused('ig_begin_child')) return ! a task does not draw
    extent = im_vec2(0.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
@@ -123,6 +125,7 @@ contains
 
    subroutine ig_end_child()
    !< End the region opened by `ig_begin_child` (whatever it returned).
+   if (figure_refused('ig_end_child')) return ! a task does not draw
    call igEndChild()
    endsubroutine ig_end_child
 
@@ -133,6 +136,8 @@ contains
    logical                                :: open         !< The header is open.
    integer(c_int)                         :: flags        !< ImGuiTreeNodeFlags.
 
+   open = .false.
+   if (figure_refused('ig_collapsing_header')) return ! a task does not draw
    flags = 0_c_int
    if (present(default_open)) then
       if (default_open) flags = ImGuiTreeNodeFlags_DefaultOpen
@@ -154,6 +159,9 @@ contains
    logical                                 :: open            !< The node is open: draw its children, then pop.
    integer(c_int)                          :: flags           !< ImGuiTreeNodeFlags.
 
+   open = .false.
+   if (present(clicked)) clicked = .false.
+   if (figure_refused('ig_tree_node')) return ! a task does not draw
    flags = ior(ImGuiTreeNodeFlags_OpenOnArrow, ImGuiTreeNodeFlags_OpenOnDoubleClick)
    if (present(default_open)) then
       if (default_open) flags = ior(flags, ImGuiTreeNodeFlags_DefaultOpen)
@@ -195,6 +203,8 @@ contains
    character(len=*), intent(in) :: id      !< Id of the bar (not shown).
    logical                      :: visible !< The bar is drawn.
 
+   visible = .false.
+   if (figure_refused('ig_begin_tab_bar')) return ! a task does not draw
    visible = logical(igBeginTabBar(cstr(id), 0_c_int))
    endfunction ig_begin_tab_bar
 
@@ -238,6 +248,8 @@ contains
    integer(c_int)                         :: f       !< Flags.
    type(im_vec2)                          :: outer   !< Outer size.
 
+   visible = .false.
+   if (figure_refused('ig_begin_table')) return ! a task does not draw
    f = ior(ior(ImGuiTableFlags_Borders, ImGuiTableFlags_RowBg), ImGuiTableFlags_Resizable)
    if (present(flags)) f = int(flags, c_int)
    outer = im_vec2(0.0_c_float, 0.0_c_float)

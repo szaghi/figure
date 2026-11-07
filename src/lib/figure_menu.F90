@@ -12,7 +12,7 @@ module figure_menu
 !< begin must use the same id in the same id scope (the same window).
 use, intrinsic :: iso_c_binding, only : c_bool, c_int, c_loc, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32
-use figure_base, only : cstr, figure_check
+use figure_base, only : cstr, figure_check, figure_refused
 use figure_c_native, only : FIG_OK, fig_key_chord
 use figure_cimgui, only : igBeginMainMenuBar, igBeginMenu, igBeginMenuBar, igEndMainMenuBar, igEndMenu, igEndMenuBar, &
                           igIsKeyChordPressed_Nil, igMenuItem_BoolPtr, igBeginPopup, igBeginPopupModal,         &
@@ -30,6 +30,8 @@ contains
    !< Begin the menu bar along the top of the display; when true, declare menus, then `ig_end_main_menu_bar`.
    logical :: visible !< The bar is drawn.
 
+   visible = .false.
+   if (figure_refused('ig_begin_main_menu_bar')) return ! a task does not draw
    visible = logical(igBeginMainMenuBar())
    endfunction ig_begin_main_menu_bar
 
@@ -42,6 +44,8 @@ contains
    !< Begin the current window's menu bar (the window needs `ImGuiWindowFlags_MenuBar`); then `ig_end_menu_bar`.
    logical :: visible !< The bar is drawn.
 
+   visible = .false.
+   if (figure_refused('ig_begin_menu_bar')) return ! a task does not draw
    visible = logical(igBeginMenuBar())
    endfunction ig_begin_menu_bar
 
@@ -126,6 +130,8 @@ contains
    character(len=*), intent(in) :: id   !< Popup id.
    logical                      :: open !< The popup is open.
 
+   open = .false.
+   if (figure_refused('ig_begin_popup')) return ! a task does not draw
    open = logical(igBeginPopup(cstr(id), 0_c_int))
    endfunction ig_begin_popup
 
@@ -138,6 +144,8 @@ contains
    logical                                   :: shown !< The dialog is open.
    logical(c_bool), target                   :: o     !< C copy of `open`.
 
+   shown = .false.
+   if (figure_refused('ig_begin_popup_modal')) return ! a task does not draw
    if (present(open)) then
       o = logical(open, c_bool)
       shown = logical(igBeginPopupModal(cstr(title), c_loc(o), ImGuiWindowFlags_AlwaysAutoResize))

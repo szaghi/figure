@@ -156,6 +156,10 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   shell, captured (the output drained by a native thread that wakes the frame loop, the child killed when the
   program ends) or detached (the output to a file, the child outliving the program); `log_view_object`, a ring buffer
   of lines drawn row by row in view, following the end, lines chosen and copied: done.
+- **Background tasks** ([Processes and tasks](processes#tasks)): `task_object`, a Fortran module procedure run on a
+  native thread with its own copy of the data, progress and its message posted to the frame loop, cooperative
+  cancel, failures reported, the result moved back without a copy; the threading rule enforced at FIGURE's drawing
+  entry points (`FIG_ERR_STATE`): done.
 
 ## Next
 

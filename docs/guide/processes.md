@@ -10,7 +10,8 @@ browser stops receiving frames and looks dead. FIGURE runs two kinds of work bes
 
 - **processes**: other programs (a grid tool, `sbatch` and `squeue`, a local solver run), started from the program,
   with their output shown in a log view;
-- **tasks**: Fortran procedures of the program run on a thread of their own (to come with v0.3.0).
+- **tasks**: Fortran procedures of the program run on a thread of their own (reading a large file, a long
+  computation), with their progress and a cancel.
 
 ## Processes
 
@@ -125,3 +126,92 @@ gives otherwise ([Error handling](errors)). `kill` on a process that has ended d
   reached).
 - `set_cap` with fewer lines than kept drops the oldest; `cap` below 1 is refused with `FIG_ERR_ARGUMENT`.
 - The same in window, headless and remote modes.
+
+## Tasks
+
+| Procedure | Notes |
+|---|---|
+| `t%start(work, data [, stat])` | Run `work(h, data)` on a worker thread; `data` (any type) is copied into the task. |
+| `t%running()` → `logical`, `t%done()` → `logical` | It runs; it has ended and its result waits for `t%result`. |
+| `t%progress(fraction [, message])` | The last progress the task reported: `fraction` in [0, 1] (-1 before its first report). |
+| `t%cancel([stat])` | Ask the task to stop at its next safe point. |
+| `t%result(data [, stat])` | Once done, the task's data, moved out (no copy); the object is free for another `start`. |
+| `h%report(fraction [, message])` | In the task: post its progress, `fraction` in [0, 1]; the frame loop is woken to show it. |
+| `h%cancelled()` → `logical` | In the task: `.true.` once the program asked it to stop. |
+| `h%fail(message)` | In the task: report a failure (the task then returns). |
+
+`t` is a `task_object`, `h` the `task_handle_object` FIGURE gives to `work`, a subroutine with the interface
+`task_work`: `subroutine work(h, data)`, with `type(task_handle_object), intent(inout) :: h` and
+`class(*), intent(inout) :: data`. `work` is a **module procedure** (it runs on another thread: an internal procedure reaches its host's variables
+through the host's stack frame, which is the main thread's). `data` is the task's own copy of what `start` was given:
+a file name, or an extended type holding both the input and the arrays the task fills. `work` selects its type,
+works on it, reports its progress, and checks `h%cancelled()` at its safe points; `t%result(data)` hands it back
+without a copy:
+
+<<< @/examples/snippets/cb_task-work.F90{fortran}
+
+The program starts the task from a button and, every frame, shows its progress until it is done, then takes its
+result once:
+
+<<< @/examples/snippets/cb_task-ui.F90{fortran}
+
+<Media name="cb_task" alt="Read is clicked: the task reads a field of two million values block by block while its progress shows; then the window shows the number of values read, their minimum, maximum and mean" caption="docs/examples/src/cb_task.F90" />
+
+::: warning The threading rule
+A task computes and reads its own files; it **never calls FIGURE's drawing procedures**: Dear ImGui is
+single-threaded, and only the main thread draws. FIGURE refuses such a call from a worker: the call returns at once
+(`.false.` for a begin), the task's status becomes `FIG_ERR_STATE`, given by `t%result` with a message naming the
+procedure, and the task is asked to stop (`h%cancelled()` becomes `.true.`).
+:::
+
+The entry points that check are: `app%next_frame`; `ig_begin` and `ig_end`; `ig_begin_child` and `ig_end_child`;
+`ig_begin_side_bar`; `ig_begin_main_menu_bar` and `ig_begin_menu_bar`; `ig_begin_popup` and `ig_begin_popup_modal`;
+`ig_begin_tab_bar`; `ig_begin_table`; `ig_tree_node` and `ig_collapsing_header`; `ip_begin_plot` and
+`ip_begin_subplots`; `ig_dock_space`; `texture_object%init` and `texture_object%update`; `log%draw`. Every widget
+lives inside one of them, so a task that opens nothing is refused at its first container. A widget called from a task
+**outside** any container (an `ig_button` with no `ig_begin` of its own) is not checked: it would draw into the
+window the main thread has open at that moment, a data race with an undefined result.
+
+### Cancelling
+
+Cancellation is cooperative: `t%cancel()` sets a flag, and the task returns at its next safe point, where `data` is
+consistent (between two blocks of a file, two passes of a smoother). Nothing is stopped in the middle of a write. A
+cancelled task is done like a finished one: `t%result` gives its data as it was left, with `FIG_OK`. A `task_object`
+that ends while its task runs (a local variable, the end of the program's scope) asks it to stop and waits for it, up
+to its next safe point: a task with no safe point is waited for until its end.
+
+### What code is safe on a worker
+
+- **Its own data and its own files.** The task works on its copy of `data`; the program does not reach it until
+  `t%result`. Variables shared with the main thread (module variables, pointers into the program's arrays) are the
+  program's to protect: a data race there is the program's, not FIGURE's.
+- **Fortran I/O on units of its own.** Open and close units inside the task (`newunit=`), never read or write a unit
+  the main thread also uses. gfortran's I/O is thread-safe per unit; **nvfortran's only when compiled with `-mp`**
+  (OpenMP): without it, concurrent formatted I/O, internal `write` to a string included, fails at random
+  ([Known issues](known-issues#tasks)).
+- **A large stack.** Each worker has 64 MiB of stack (a secondary thread's default is 512 KiB on macOS): automatic
+  arrays and temporaries of a few MiB fit.
+- **No drawing:** see the rule above.
+
+### Statuses
+
+| Failure | Status |
+|---|---|
+| `start` while this object's task runs, or from a task | `FIG_ERR_STATE` |
+| no thread can be created | `FIG_ERR_FAILED` |
+| `cancel` or `result` before `start`; `result` while the task runs | `FIG_ERR_STATE` |
+| `result` of a task that called a drawing procedure | `FIG_ERR_STATE` (the message names it) |
+| `result` of a task that reported a failure with `h%fail` | `FIG_ERR_FAILED` (the message is the task's) |
+
+`stat` is optional: absent, a failure stops the program (`error stop`) with the message ([Error handling](errors)).
+
+### Modes
+
+- **Window:** the task's reports and its end wake the frame loop with an event: the progress is drawn at once, even
+  with lazy redraw.
+- **Headless:** the same (the loop does not wait).
+- **Remote:** the same: the task runs on the server; while a task is alive the remote loop waits on the network in
+  slices of 10 ms, so that its progress is sent at once. A long read no longer stops the streaming, so the browser
+  stays alive.
+
+Several tasks may run at once, each with its own object. Tasks do not start tasks.

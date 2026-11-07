@@ -1,0 +1,9 @@
+#! program build/docs-examples/bin/cb_task
+#! frames  300
+#! poster  290
+# Read clicked: the task reads the field block by block, its progress shown; then its statistics
+0   move 280 160
+5   move 45 42 15
+25  down
+27  up
+45  move 450 42 20

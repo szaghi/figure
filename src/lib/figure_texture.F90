@@ -20,7 +20,7 @@ module figure_texture
 !< so the array is uploaded in place.
 use, intrinsic :: iso_c_binding, only : c_int, c_loc, c_long_long, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64
-use figure_base, only : figure_check, figure_fail
+use figure_base, only : figure_check, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_texture_create, fig_texture_destroy, fig_texture_update
 use figure_cimgui, only : im_texture_ref
 
@@ -56,6 +56,7 @@ contains
    integer(c_int)                               :: s      !< Filtering flag.
    integer(c_int)                               :: status !< Native status.
 
+   if (figure_refused('texture_object%init', stat)) return ! a task does not draw
    call self%destroy()
    s = 0_c_int
    if (present(smooth)) s = merge(1_c_int, 0_c_int, smooth)
@@ -73,6 +74,7 @@ contains
    integer(int8),         intent(in), contiguous, target :: rgba(:,:,:) !< Pixels: rgba(:, i, j) = R, G, B, A of (i, j).
    integer(int32),        intent(out), optional          :: stat       !< Status.
 
+   if (figure_refused('texture_object%update', stat)) return ! a task does not draw
    if (self%id == 0_c_long_long) then
       call figure_fail(FIG_ERR_STATE, 'texture%update: the texture is not initialized', stat)
       return

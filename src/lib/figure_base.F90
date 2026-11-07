@@ -6,11 +6,11 @@ module figure_base
 !< `figure_last_error()` gives the message; if absent, a failure prints the message and stops (`error stop`).
 use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_f_pointer, c_int, c_null_char, c_ptr
 use, intrinsic :: iso_fortran_env, only : error_unit, int32
-use figure_c_native, only : FIG_OK, fig_last_error, fig_set_last_error
+use figure_c_native, only : FIG_ERR_STATE, FIG_OK, fig_last_error, fig_set_last_error, fig_task_refuse
 
 implicit none
 private
-public :: figure_check, figure_fail, figure_last_error, cstr
+public :: figure_check, figure_fail, figure_last_error, cstr, figure_refused
 
 contains
    function figure_last_error() result(msg)
@@ -52,6 +52,18 @@ contains
    call fig_set_last_error(message, len(message, c_int))
    call figure_check(status, stat)
    endsubroutine figure_fail
+
+   function figure_refused(name, stat) result(refused)
+   !< True when called from a task's worker thread: the drawing entry point `name` must return at once. The task's
+   !< status becomes `FIG_ERR_STATE` with a message naming `name` (given by `t%result`), the task is asked to stop, and
+   !< `stat`, if present, is `FIG_ERR_STATE`. False on the main thread (nothing changes).
+   character(len=*), intent(in)            :: name    !< The entry point.
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: refused !< Refused: return.
+
+   refused = fig_task_refuse(name, len(name, c_int)) == 1_c_int
+   if (refused .and. present(stat)) stat = int(FIG_ERR_STATE, int32)
+   endfunction figure_refused
 
    pure function cstr(s) result(c)
    !< `s` NUL-terminated, for cimgui/cimplot (trailing blanks kept: labels are taken verbatim).

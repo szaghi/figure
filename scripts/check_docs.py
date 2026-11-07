@@ -27,6 +27,8 @@ TYPES = {
     "list_clipper_object": "clip",
     "process_object": "p",
     "log_view_object": "log",
+    "task_object": "t",
+    "task_handle_object": "h",
 }  # public types and the variable name the docs use
 
 

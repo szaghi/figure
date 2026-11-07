@@ -253,6 +253,19 @@ keeps answering and the tool never waits for the program; every frame the progra
 the bottom. Stop asks the tool to end; a tool still running when the program ends is stopped. A run that must outlive
 the program is started `detached=.true.` with a `log_file`. [Processes and tasks](/guide/processes) has the details.
 
+### Read a large file without freezing the window
+
+<<< @/examples/snippets/cb_task-work.F90{fortran}
+
+<<< @/examples/snippets/cb_task-ui.F90{fortran}
+
+<Media name="cb_task" video alt="Read is clicked: a task reads a field of two million values block by block, its progress shown as a percentage and the block; then the number of values, the minimum, maximum and mean" caption="docs/examples/src/cb_task.F90" />
+
+The reading runs as a task, on a thread of its own: the window keeps drawing, in remote mode the browser keeps
+receiving frames. The task opens its own unit, reports after each block and checks `h%cancelled()` there, so Cancel
+stops it between two blocks with consistent statistics. Every frame the program shows the progress; once the task is
+done it takes the result, once. The task never draws: [the threading rule](/guide/processes#tasks).
+
 ## Errors
 
 ### Handle a failure instead of stopping
