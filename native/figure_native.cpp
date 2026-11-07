@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <cmath>
+#include <atomic>
 #include <exception>
 #include <map>
 #include <memory>
@@ -41,6 +42,13 @@
 namespace {
 
 std::string last_error;
+
+// Work off the frame loop (process readers, tasks) wakes it: window mode pushes an SDL event (SDL_PushEvent is safe
+// from any thread); remote mode, which waits on its sockets, waits in slices of 10 ms while such work exists and
+// ends the wait when woken; headless mode never waits.
+std::atomic<bool> woken{false};       // fig_wake since the last frame began
+std::atomic<int>  background{0};      // readers and workers alive
+std::atomic<bool> sdl_events{false};  // window mode: SDL's event queue is up
 
 int fail(int status, const std::string &msg) {
    last_error = msg;
@@ -1624,6 +1632,7 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "window size must be positive");
    SDL_SetMainReady();
    if (!SDL_Init(SDL_INIT_VIDEO)) return fail(FIG_ERR_FAILED, std::string("SDL_Init: ") + SDL_GetError());
+   sdl_events = true;
 #if defined(__APPLE__)
    const char *glsl = "#version 150";
    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
@@ -2195,7 +2204,15 @@ int fig_begin_frame(int *running) {
       // drains (serve returns early then); otherwise go on at once
       const bool pending = figure_remote::frame_pending(), busy = figure_remote::queue_busy();
       const bool wait = pending ? busy : st.lazy && st.frames_left <= 0;
-      bool got = figure_remote::serve(wait ? st.max_wait_ms : 0);
+      bool got = false;
+      if (wait && background.load() > 0) { // in slices, so that a reader or a task can end the wait
+         const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(st.max_wait_ms);
+         while (!got && !woken.load() && std::chrono::steady_clock::now() < until) got = figure_remote::serve(10);
+         got = got || woken.load();
+      } else {
+         got = figure_remote::serve(wait ? st.max_wait_ms : 0);
+      }
+      woken = false;
       const auto next = st.last_frame + std::chrono::duration_cast<clock::duration>(
                                            std::chrono::duration<double>(st.remote_min_dt));
       for (auto t = clock::now(); t < next; t = clock::now())
@@ -2243,6 +2260,7 @@ int fig_begin_frame(int *running) {
          ++rs.timeouts;
    }
    while (SDL_PollEvent(&ev)) handle(ev);
+   woken = false;
    if (!*running) return FIG_OK; // quitting: no frame is opened
    if (got) st.frames_left = 3;
    else if (st.frames_left > 0) --st.frames_left;
@@ -2322,6 +2340,7 @@ int fig_end_frame(void) {
 
 void fig_shutdown(void) {
    try {
+      fig_process_shutdown(); // the captured children end with the program (before SDL_Quit)
       if (st.in_frame) {
          ImGui::EndFrame();
          st.in_frame = false;
@@ -2338,6 +2357,7 @@ void fig_shutdown(void) {
       destroy_contexts();
       if (st.m == mode::remote) figure_remote::stop();
       if (st.m == mode::window) {
+         sdl_events = false;
          SDL_GL_DestroyContext(st.gl);
          SDL_DestroyWindow(st.window);
          SDL_Quit();
@@ -2971,3 +2991,15 @@ void fig_input_mouse(float x, float y, int left_down) {
 }
 
 } // extern "C"
+
+extern "C" void fig_wake(void) {
+   if (woken.exchange(true)) return; // one wake-up per frame is enough
+   if (sdl_events.load()) {
+      SDL_Event e;
+      SDL_zero(e);
+      e.type = SDL_EVENT_USER;
+      SDL_PushEvent(&e);
+   }
+}
+
+extern "C" void fig_background(int delta) { background += delta; }

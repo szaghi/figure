@@ -20,6 +20,7 @@ const docs = [
       { text: '3. Plots',                     link: '/manual/tutorial/03-plots' },
       { text: '4. A live computation',        link: '/manual/tutorial/04-live' },
       { text: '5. Testing without a display', link: '/manual/tutorial/05-headless' },
+      { text: '6. Running work',              link: '/manual/tutorial/06-running-work' },
     ],
   },
   {
@@ -39,6 +40,7 @@ const docs = [
       { text: 'Styles',                  link: '/guide/styles' },
       { text: 'Plots',                   link: '/guide/plots' },
       { text: 'Heatmaps and images',     link: '/guide/images' },
+      { text: 'Processes and tasks',     link: '/guide/processes' },
       { text: 'Remote UI',               link: '/guide/remote' },
       { text: 'Performance',             link: '/guide/performance' },
       { text: 'Error handling',          link: '/guide/errors' },

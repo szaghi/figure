@@ -61,6 +61,22 @@ frame does beyond moving, resizing and the three buttons is lost:
 
 The windowed path on each platform is to be verified by the windowed CI runs (issue #3, S11).
 
+## Processes
+
+[Processes](processes) are started without a shell, through SDL3's process API (captured) or a double fork (detached,
+POSIX):
+
+- **Killing a tree:** `p%kill` stops the program started, not the programs it started (`sh -c 'a; b'` leaves `a`
+  running; on Windows `cmd /c` leaves its children). A captured child that ended while one of its own children holds
+  the pipe is read for 0.1 s more, then FIGURE stops reading.
+- **Windows:** a polite kill is a close request to the child's windows or console, which a console program may
+  ignore: use `force=.true.` (TerminateProcess). Windows has no `sh`: write `['cmd', '/c', '...']` for a command line.
+- **Exit codes:** a detached child's exit code is not known (its parent is the system's init, not the program); after
+  a kill, a captured child's exit code is the negative signal number on POSIX (-15, -9) and 1 on Windows: test
+  `p%killed()` instead.
+- **A crashed program** (killed by a signal) cannot kill its captured children; they end when they next write to the
+  closed pipe, or by themselves.
+
 ## First build needs the network
 
 The native build downloads cimgui, cimplot, SDL3 and miniz (CMake `FetchContent`) the first time, and every FoBiS mode runs

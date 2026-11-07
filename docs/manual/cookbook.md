@@ -239,6 +239,20 @@ same copy without the allocation. Storing series as columns avoids the question.
 
 <Media name="cb_rows" :width="620" alt="Three plots of the same two probes: columns read in place, rows read in place with a stride, rows copied" caption="docs/examples/src/cb_rows.F90: the three ways give the same plot" />
 
+## Running work
+
+### Run a tool and show its output
+
+<<< @/examples/snippets/cb_process-run.F90{fortran}
+
+<Media name="cb_process" video alt="Run is clicked: the tool prints a solver's log of 120 iterations into the log view, which follows the end; the status line then reads ended, exit code 0" caption="docs/examples/src/cb_process.F90" />
+
+The tool's arguments are an array, without a shell. Its output is read by FIGURE as the tool writes, so the window
+keeps answering and the tool never waits for the program; every frame the program takes the complete lines
+(`poll`) and adds them to a log view, which draws only the lines in view and follows the end while it is scrolled to
+the bottom. Stop asks the tool to end; a tool still running when the program ends is stopped. A run that must outlive
+the program is started `detached=.true.` with a `log_file`. [Processes and tasks](/guide/processes) has the details.
+
 ## Errors
 
 ### Handle a failure instead of stopping

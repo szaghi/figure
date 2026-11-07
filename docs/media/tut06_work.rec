@@ -1,0 +1,9 @@
+#! program build/docs-examples/bin/tut06_work
+#! frames  90
+#! poster  85
+# the button clicked: the tool's lines fill the log view
+0   move 300 250
+5   move 70 42 15
+25  down
+27  up
+50  move 500 45 20

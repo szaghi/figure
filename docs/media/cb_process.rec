@@ -1,0 +1,9 @@
+#! program build/docs-examples/bin/cb_process
+#! frames  120
+#! poster  110
+# Run clicked: the tool's log fills the view, which follows the end; the status line gives the exit code
+0   move 360 300
+5   move 45 42 15
+25  down
+27  up
+45  move 600 45 20

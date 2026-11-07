@@ -164,6 +164,29 @@ int    fig_widget_input_text(const char *label, int label_len, const char *hint,
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);
 
+/* Work off the frame loop: fig_wake, from any thread, makes a lazy frame loop draw the next frame at once (window:
+ * an SDL event; remote: the wait on the sockets ends; headless: nothing waits); fig_background(+1/-1) counts the
+ * readers and workers alive (remote mode waits in slices of 10 ms while there are some). */
+void   fig_wake(void);
+void   fig_background(int delta);
+
+/* Processes (figure_process.cpp). args, env: packed strings (one buffer, the byte length of each); env entries are
+ * NAME=value, added to (or replacing in) the program's environment. Captured (detached 0): standard output piped to
+ * the program, standard error merged into it with merge_stderr (else inherited), drained by a reader thread; killed
+ * when released, at fig_shutdown and at exit. Detached: output to log (required), the child survives the program.
+ * pending: the bytes ready to take (complete lines; all at the end) and whether it still runs; take copies them out
+ * (got: bytes copied). info: exited, exit code (captured), killed (ended after fig_process_kill), pid. release
+ * forgets the process (a captured one is killed if running). */
+int    fig_process_start(int *id, const char *args, const int *arg_lens, int nargs, const char *cwd, int cwd_len,
+                         const char *env, const int *env_lens, int nenv, int merge_stderr, int detached,
+                         const char *log, int log_len);
+int    fig_process_pending(int id, long long *len, int *running);
+int    fig_process_take(int id, char *buf, long long len, long long *got);
+int    fig_process_info(int id, int *running, int *exited, int *code, int *killed, long long *pid, int *detached);
+int    fig_process_kill(int id, int force);
+void   fig_process_release(int id);
+void   fig_process_shutdown(void);
+
 /* The cimgui/cimplot functions passing structs by value are wrapped in figure_glue_generated.cpp (generated). */
 
 #ifdef __cplusplus

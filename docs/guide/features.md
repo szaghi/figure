@@ -154,6 +154,20 @@ Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots).
 
 Details: [Heatmaps and images](images).
 
+## Processes: `process_object`, `log_view_object`
+
+| Procedure | Purpose |
+|---|---|
+| `p%start(args [, cwd] [, env] [, merge_stderr] [, detached] [, log_file] [, stat])` | start a program, the arguments as an array (no shell): captured (output piped) or detached (output to `log_file`, it outlives the program) |
+| `p%poll(lines [, stat])` | the complete lines printed since the last poll (`character(len=:), allocatable :: lines(:)`) |
+| `p%running()` → `logical`, `p%exit_code([stat])` → `int32`, `p%killed()` → `logical`, `p%pid()` → `int64` | its state: running, its exit code (captured, ended), ended by `kill`, its process id |
+| `p%kill([force] [, stat])` | ask it to end (`force`: at once) |
+| `log%add(line \| lines)`, `log%clear()`, `log%set_cap(cap [, stat])` | the lines of a log view, a ring buffer of `cap` lines (default 10000) |
+| `log%draw(id [, height])` | the lines in a region of their own, only those in view; follows the end while at the bottom; click, shift+click, ctrl+c to copy |
+| `log%count()` → `int32`, `log%line(i)` → `character`, `log%following()` → `logical`, `log%in_view(first, last)`, `log%copy([all])` → `character` | the lines kept, one line, whether the view follows the end, the lines in view, the chosen lines |
+
+Details: [Processes and tasks](processes).
+
 ## Testing: `figure_testing`
 
 | Procedure | Does |

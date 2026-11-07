@@ -21,7 +21,13 @@ ROOT = Path(__file__).resolve().parent.parent
 LIB = ROOT / "src" / "lib"
 FEATURES = ROOT / "docs" / "guide" / "features.md"
 CONSTANT = re.compile(r"^(ImGui|ImPlot|FIG_|ICON_)")
-TYPES = {"app_object": "app", "texture_object": "tex", "list_clipper_object": "clip"}  # public types and the variable name the docs use
+TYPES = {
+    "app_object": "app",
+    "texture_object": "tex",
+    "list_clipper_object": "clip",
+    "process_object": "p",
+    "log_view_object": "log",
+}  # public types and the variable name the docs use
 
 
 def public_names(module: Path) -> list[str]:

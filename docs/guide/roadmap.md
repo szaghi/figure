@@ -152,6 +152,10 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
 - **Trees** ([Widgets](widgets#trees)): `ig_tree_node` with a click on the label told apart from the arrow
   (`clicked`), leaves, selection, the full width; `ig_tree_pop`; `ig_set_next_item_open`; trees in a table's first
   column with values in the others; the children of a large node clipped: done.
+- **Processes and a log view** ([Processes and tasks](processes)): `process_object`, programs started without a
+  shell, captured (the output drained by a native thread that wakes the frame loop, the child killed when the
+  program ends) or detached (the output to a file, the child outliving the program); `log_view_object`, a ring buffer
+  of lines drawn row by row in view, following the end, lines chosen and copied: done.
 
 ## Next
 

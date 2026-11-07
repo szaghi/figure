@@ -26,6 +26,8 @@ public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fi
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
 public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_input_system_theme
 public :: fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_frame_hit, fig_frame_rect, fig_frame_state
+public :: fig_process_start, fig_process_pending, fig_process_take, fig_process_info, fig_process_kill
+public :: fig_process_release
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -177,6 +179,79 @@ interface
    integer(c_int), value              :: icon_len !< Its length [bytes].
    integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_set_icon_glyph
+
+   function fig_process_start(id, args, arg_lens, nargs, cwd, cwd_len, env, env_lens, nenv, merge_stderr, detached, &
+                              log, log_len) result(status) bind(C, name='fig_process_start')
+   !< Start a process: captured (output piped, a reader thread drains it) or detached (output to `log`).
+   import :: c_char, c_int
+   implicit none
+   integer(c_int),         intent(out) :: id           !< Its handle.
+   character(kind=c_char), intent(in)  :: args(*)      !< The arguments, packed (program first).
+   integer(c_int),         intent(in)  :: arg_lens(*)  !< Length of each argument [bytes].
+   integer(c_int),         value       :: nargs        !< Arguments.
+   character(kind=c_char), intent(in)  :: cwd(*)       !< Working directory (empty: the program's).
+   integer(c_int),         value       :: cwd_len      !< Its length [bytes].
+   character(kind=c_char), intent(in)  :: env(*)       !< NAME=value entries, packed.
+   integer(c_int),         intent(in)  :: env_lens(*)  !< Length of each entry [bytes].
+   integer(c_int),         value       :: nenv         !< Entries.
+   integer(c_int),         value       :: merge_stderr !< 1: standard error into standard output.
+   integer(c_int),         value       :: detached     !< 1: detached, output to `log`.
+   character(kind=c_char), intent(in)  :: log(*)       !< Log file (detached).
+   integer(c_int),         value       :: log_len      !< Its length [bytes].
+   integer(c_int)                      :: status       !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_process_start
+
+   function fig_process_pending(id, length, running) result(status) bind(C, name='fig_process_pending')
+   !< Bytes ready to take (complete lines; all of them once it ended) and whether it runs.
+   import :: c_int, c_long_long
+   implicit none
+   integer(c_int),       value       :: id      !< Handle.
+   integer(c_long_long), intent(out) :: length  !< Bytes ready [bytes].
+   integer(c_int),       intent(out) :: running !< 1 while running.
+   integer(c_int)                    :: status  !< Status: FIG_OK or FIG_ERR_STATE.
+   endfunction fig_process_pending
+
+   function fig_process_take(id, buf, length, got) result(status) bind(C, name='fig_process_take')
+   !< Copy out up to `length` bytes of output (as given by fig_process_pending).
+   import :: c_char, c_int, c_long_long
+   implicit none
+   integer(c_int),         value       :: id     !< Handle.
+   character(kind=c_char), intent(out) :: buf(*) !< Buffer.
+   integer(c_long_long),   value       :: length !< Its size [bytes].
+   integer(c_long_long),   intent(out) :: got    !< Bytes copied [bytes].
+   integer(c_int)                      :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_process_take
+
+   function fig_process_info(id, running, exited, code, killed, pid, detached) result(status) &
+            bind(C, name='fig_process_info')
+   !< The state of a process.
+   import :: c_int, c_long_long
+   implicit none
+   integer(c_int),       value       :: id       !< Handle.
+   integer(c_int),       intent(out) :: running  !< 1 while running (captured: until its output is all read).
+   integer(c_int),       intent(out) :: exited   !< 1 once it ended.
+   integer(c_int),       intent(out) :: code     !< Exit code (captured).
+   integer(c_int),       intent(out) :: killed   !< 1 when it ended after a kill.
+   integer(c_long_long), intent(out) :: pid      !< Process id.
+   integer(c_int),       intent(out) :: detached !< 1 if detached.
+   integer(c_int)                    :: status   !< Status: FIG_OK or FIG_ERR_STATE.
+   endfunction fig_process_info
+
+   function fig_process_kill(id, force) result(status) bind(C, name='fig_process_kill')
+   !< Ask a process to end (force: at once).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Handle.
+   integer(c_int), value :: force  !< 1: SIGKILL / TerminateProcess.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_process_kill
+
+   subroutine fig_process_release(id) bind(C, name='fig_process_release')
+   !< Forget a process: a captured one still running is killed, a detached one goes on.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id !< Handle.
+   endsubroutine fig_process_release
 
    function fig_frame_hit(x, y, hit) result(status) bind(C, name='fig_frame_hit')
    !< The frame's hit-test class at (x, y), from the last frame.
