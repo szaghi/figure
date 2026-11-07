@@ -18,6 +18,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -640,4 +641,115 @@ int fig_colormap_name(int index, char *buf, int buf_len) {
    const int len = static_cast<int>(n.size());
    if (len > 0 && buf_len > 0) std::memcpy(buf, n.data(), static_cast<size_t>(std::min(len, buf_len)));
    return len;
+}
+
+// A colour-scale legend (ip_colormap_legend): an ImGui item of a bar coloured by the colormap cmap from vmin to vmax
+// (vmin at the bottom, or at the left when horizontal) with ticks and their values beside it (right, or below).
+// levels > 0: that many bands of equal width, each the map's colour at its centre (as ip_colormap(name, levels)
+// colours them), the ticks at the bands' edges; 0: a continuous bar, the ticks at round values. width, height: the
+// item's size [pixels]; > 0 given, < 0 the space left in the window, 0 the default (vertical: the bar's thickness plus
+// the labels by 300 pixels; horizontal: the space left by the bar plus a line of labels).
+int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, double vmax, int levels, int horizontal,
+                        float width, float height, const char *fmt, int fmt_len) {
+   try {
+      if (!ImGui::GetCurrentContext() || !ImPlot::GetCurrentContext() || !ImGui::GetCurrentWindowRead())
+         return fail(FIG_ERR_STATE, "ip_colormap_legend: call it inside a window, in a frame");
+      if (cmap < 0 || cmap >= ImPlot::GetColormapCount())
+         return fail(FIG_ERR_ARGUMENT, "ip_colormap_legend: the colormap " + std::to_string(cmap) +
+                                           " is not registered (see ip_colormap)");
+      if (!std::isfinite(vmin) || !std::isfinite(vmax) || vmin == vmax)
+         return fail(FIG_ERR_ARGUMENT, "ip_colormap_legend: vmin and vmax must be finite and different");
+      if (levels != 0 && (levels < 2 || levels > MAX_LEVELS))
+         return fail(FIG_ERR_ARGUMENT, "ip_colormap_legend: levels must be in [2, " + std::to_string(MAX_LEVELS) +
+                                           "], got " + std::to_string(levels));
+      ImGuiWindow *window = ImGui::GetCurrentWindow();
+      if (window->SkipItems) return FIG_OK;
+      const std::string format = fmt_len > 0 ? str(fmt, fmt_len) : std::string("%g");
+      const ImGuiStyle &style = ImGui::GetStyle();
+      const float bar = ImGui::GetFrameHeight();       // the bar's thickness
+      const float tick = 4.0f;                         // a tick's length
+      const float text_h = ImGui::GetTextLineHeight();
+      auto label = [&](double v) {
+         char buf[64];
+         std::snprintf(buf, sizeof(buf), format.c_str(), v);
+         return std::string(buf);
+      };
+      const ImVec2 avail = ImGui::GetContentRegionAvail();
+      auto extent = [](float v, float left, float fallback) { return v > 0 ? v : (v < 0 ? std::max(left, 1.0f) : fallback); };
+      // ticks: the bands' edges, or round values (a step of 1, 2, 2.5 or 5 times a power of ten) about every
+      // 40 pixels (vertical) or every 100 (horizontal)
+      const float length0 = horizontal ? extent(width, avail.x, avail.x) : extent(height, avail.y, 300.0f);
+      std::vector<double> ticks;
+      const double lo = std::min(vmin, vmax), hi = std::max(vmin, vmax);
+      if (levels > 0) {
+         for (int k = 0; k <= levels; ++k) ticks.push_back(vmin + (vmax - vmin) * k / levels);
+      } else {
+         const double count = std::max(2.0, std::floor(length0 / (horizontal ? 100.0 : 40.0)));
+         const double raw = (hi - lo) / count;
+         const double p = std::pow(10.0, std::floor(std::log10(raw)));
+         double step = 10.0 * p;
+         for (double s : {5.0, 2.5, 2.0, 1.0})
+            if (raw <= s * p * (1.0 + 1e-12)) step = s * p;
+         for (double q = std::ceil(lo / step - 1e-9); q * step <= hi * (1.0 + 1e-12) + 1e-300; q += 1.0)
+            ticks.push_back(std::fabs(q) < 0.5 ? 0.0 : q * step);
+      }
+      float label_w = 0.0f;
+      for (double t : ticks) label_w = std::max(label_w, ImGui::CalcTextSize(label(t).c_str()).x);
+      const ImVec2 size = horizontal ? ImVec2(length0, extent(height, avail.y, bar + tick + style.ItemInnerSpacing.y + text_h))
+                               : ImVec2(extent(width, avail.x, bar + tick + style.ItemInnerSpacing.x + label_w), length0);
+      const ImVec2 pos = window->DC.CursorPos;
+      const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
+      ImGui::ItemSize(bb);
+      if (!ImGui::ItemAdd(bb, window->GetID(str(id, id_len).c_str()))) return FIG_OK;
+      // the bar, with room for the end labels (half a label beyond each end)
+      ImRect r = horizontal ? ImRect(bb.Min.x + label_w * 0.5f, bb.Min.y, bb.Max.x - label_w * 0.5f, bb.Min.y + bar)
+                            : ImRect(bb.Min.x, bb.Min.y + text_h * 0.5f, bb.Min.x + bar, bb.Max.y - text_h * 0.5f);
+      r = ImRect(std::floor(r.Min.x), std::floor(r.Min.y), std::floor(r.Max.x), std::floor(r.Max.y)); // whole pixels:
+                                       // Dear ImGui antialiases the edges of rectangles off the pixel grid
+      if (r.Max.x <= r.Min.x || r.Max.y <= r.Min.y) return FIG_OK;
+      // position of the value fraction t in [0, 1] along the bar: vmin at the bottom (left)
+      auto at = [&](double t) {
+         return horizontal ? r.Min.x + static_cast<float>(t) * (r.Max.x - r.Min.x)
+                           : r.Max.y - static_cast<float>(t) * (r.Max.y - r.Min.y);
+      };
+      auto colour = [&](double t) { return ImGui::GetColorU32(ImPlot::SampleColormap(static_cast<float>(t), cmap)); };
+      ImDrawList *dl = window->DrawList;
+      if (levels > 0) {
+         for (int k = 0; k < levels; ++k) {
+            const float a = std::floor(at(static_cast<double>(k) / levels) + 0.5f); // bands on whole pixels: crisp,
+            const float b = std::floor(at(static_cast<double>(k + 1) / levels) + 0.5f); // and with no seam between them
+            const ImU32 c = colour((k + 0.5) / levels);
+            if (horizontal) dl->AddRectFilled(ImVec2(a, r.Min.y), ImVec2(b, r.Max.y), c);
+            else dl->AddRectFilled(ImVec2(r.Min.x, b), ImVec2(r.Max.x, a), c);
+         }
+      } else {
+         const int strips = 64; // even: the middle value is a strip's edge
+         for (int k = 0; k < strips; ++k) {
+            const double t0 = static_cast<double>(k) / strips, t1 = static_cast<double>(k + 1) / strips;
+            const ImU32 c0 = colour(t0), c1 = colour(t1);
+            const float a = at(t0), b = at(t1);
+            if (horizontal) dl->AddRectFilledMultiColor(ImVec2(a, r.Min.y), ImVec2(b, r.Max.y), c0, c1, c1, c0);
+            else dl->AddRectFilledMultiColor(ImVec2(r.Min.x, b), ImVec2(r.Max.x, a), c1, c1, c0, c0);
+         }
+      }
+      dl->AddRect(r.Min, r.Max, ImGui::GetColorU32(ImGuiCol_Border));
+      const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
+      for (double v : ticks) {
+         const float p = at((v - vmin) / (vmax - vmin));
+         const std::string s = label(v);
+         const ImVec2 ts = ImGui::CalcTextSize(s.c_str());
+         if (horizontal) {
+            dl->AddLine(ImVec2(p, r.Max.y), ImVec2(p, r.Max.y + tick), text);
+            dl->AddText(ImVec2(p - ts.x * 0.5f, r.Max.y + tick + style.ItemInnerSpacing.y), text, s.c_str());
+         } else {
+            dl->AddLine(ImVec2(r.Max.x, p), ImVec2(r.Max.x + tick, p), text);
+            dl->AddText(ImVec2(r.Max.x + tick + style.ItemInnerSpacing.x, p - ts.y * 0.5f), text, s.c_str());
+         }
+      }
+      return FIG_OK;
+   } catch (const std::exception &e) {
+      return fail(FIG_ERR_EXCEPTION, std::string("C++ exception: ") + e.what());
+   } catch (...) {
+      return fail(FIG_ERR_EXCEPTION, "unknown C++ exception");
+   }
 }

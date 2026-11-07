@@ -1,0 +1,18 @@
+#! program build/docs-examples/bin/cb_legend
+#! from    10
+#! frames  160
+#! poster  110
+# open the colour editor's picker, choose a yellow hue, then a saturated bright yellow: the contour lines follow
+0   move 487 49 5
+10  down
+12  up
+25  move 646 129 15
+45  down
+47  up
+60  move 520 200 10
+75  down
+77  move 620 105 25
+105 up
+120 move 300 565 10
+135 down
+137 up

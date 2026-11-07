@@ -27,7 +27,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_but
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
                             fig_frame_state, fig_notification_rect, fig_drawn_extent, fig_file_browser_get, &
                             fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
-                            fig_drawn_extent_rgba
+                            fig_drawn_extent_rgba, fig_popup_rect
 use figure_imgui, only : ig_item_rect
 
 implicit none
@@ -36,6 +36,7 @@ public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel,
 public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick, test_system_theme
 public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_rect, test_drawn_extent
 public :: test_file_browser, test_file_browser_rect, test_settings_file, test_drop
+public :: test_popup_rect
 
 interface test_drawn_extent
    !< The extent [pixels] of what was drawn so far in the current window in a colour: Dear ImGui's style colour by its
@@ -487,6 +488,29 @@ contains
    ymax = real(r(4), real64)
    if (present(found)) found = f == 1_c_int
    endsubroutine test_window_rect
+
+   subroutine test_popup_rect(xmin, ymin, xmax, ymax, found, stat)
+   !< The rectangle of the innermost open popup (a menu, a combo's list, `ig_color_edit`'s picker) as drawn in the last
+   !< frame [pixels]; zero, with `found` false, when no popup is open.
+   real(real64),   intent(out)           :: xmin  !< Left.
+   real(real64),   intent(out)           :: ymin  !< Top.
+   real(real64),   intent(out)           :: xmax  !< Right.
+   real(real64),   intent(out)           :: ymax  !< Bottom.
+   logical,        intent(out), optional :: found !< A popup is open.
+   integer(int32), intent(out), optional :: stat  !< Status: `FIG_ERR_STATE` before `init*`.
+   real(c_float)                         :: r(4)  !< Rectangle.
+   integer(c_int)                        :: f     !< 1: found.
+
+   r = 0.0_c_float
+   f = 0_c_int
+   call figure_check(fig_popup_rect(r, f), stat)
+   if (f /= 1_c_int) r = 0.0_c_float
+   xmin = real(r(1), real64)
+   ymin = real(r(2), real64)
+   xmax = real(r(3), real64)
+   ymax = real(r(4), real64)
+   if (present(found)) found = f == 1_c_int
+   endsubroutine test_popup_rect
 
    subroutine test_item_center(x, y)
    !< The centre of the last item drawn (call it right after the widget): where `test_click` should aim.

@@ -129,6 +129,8 @@ int    fig_plot_annotation(double x, double y, const float *rgba, float dx, floa
                            int text_len);
 /* A window's rectangle (xmin, ymin, xmax, ymax) [pixels] by name, as in the last frame; found 0 if none. */
 int    fig_window_rect(const char *name, int name_len, float *rect, int *found);
+/* The rectangle of the innermost open popup, as in the last frame; found 0 if none. */
+int    fig_popup_rect(float *rect, int *found);
 /* Quitting: with confirm_quit on, the window's close button (or SDL's quit event) sets a request, read and cleared by
  * fig_quit_requested (1 once per request), instead of ending the loop; fig_quit ends it at the next fig_begin_frame.
  * fig_input_quit makes a request as the close button does (tests). */
@@ -278,6 +280,11 @@ int    fig_colormap(const char *name, int name_len, int levels, int *id);
 int    fig_load_colormap(const char *name, int name_len, const char *path, int path_len);
 int    fig_colormap_count(void);
 int    fig_colormap_name(int index, char *buf, int buf_len);
+/* A colour-scale legend: a bar of the colormap cmap from vmin to vmax (bottom to top, or left to right when horizontal),
+ * ticks and their values (fmt, printf; empty: %g); levels > 0: that many bands; width, height [pixels]: > 0 given,
+ * < 0 the space left, 0 the default. An ImGui item of the current window. */
+int    fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, double vmax, int levels, int horizontal,
+                           float width, float height, const char *fmt, int fmt_len);
 
 /* The cimgui/cimplot functions passing structs by value are wrapped in figure_glue_generated.cpp (generated). */
 

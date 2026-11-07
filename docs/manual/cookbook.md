@@ -255,6 +255,23 @@ half a spacing more on each side, and the lines fall on the colours they bound. 
 round values inside the field's range are chosen. Where the field is NaN (a body, cells outside the domain) the lines
 stop: a hole, not a line to a meaningless value. [Contour lines](/guide/plots#contour-lines) has every argument.
 
+### A colour-scale legend beside a plot
+
+<<< @/examples/snippets/cb_legend-legend.F90{fortran}
+
+<Media name="cb_legend" alt="A field in eight blue-to-red bands with contour lines, a vertical legend of the same eight bands on its right, a horizontal continuous legend below" caption="docs/examples/src/cb_legend.F90" />
+
+`ig_same_line` puts the legend beside the plot. Give it the continuous map and the heatmap's `levels`: its bands are
+then the heatmap's, labelled at their edges. [A colour-scale legend](/guide/colormaps#a-colour-scale-legend) has
+every argument.
+
+### Let the user choose a colour
+
+<<< @/examples/snippets/cb_legend-color.F90{fortran}
+
+The editor writes `line_color` on the frames the user changes it; the plot reads it every frame. The swatch opens a
+picker; the fields are dragged, or typed after a double-click. [Colour editing](/guide/widgets#colour-editing).
+
 ### Probe a field with lines and points the user drags
 
 <<< @/examples/snippets/cb_contour-probes.F90{fortran}

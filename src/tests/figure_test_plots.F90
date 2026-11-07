@@ -15,6 +15,10 @@ program figure_test_plots
 !< the corners the centre value says; NaNs leave holes; automatic levels are round numbers inside the range. In a
 !< plot: error bars, an annotation and a contour drawn where expected (by their colours' extents); two drag lines and a
 !< drag point moved by synthetic drags; bad arguments refused.
+!<
+!< Colour-scale legends: a continuous vertical one has the map's first colour at the bottom, its last at the top and its
+!< middle colour half-way; a horizontal one of 5 levels has 5 bands of equal width in order, each the map's colour at
+!< its centre, and the value 0.3 of [-1, 1] falls in the fourth; bad arguments refused.
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
@@ -25,6 +29,7 @@ use figure, only : app_object, ig_begin, ig_dock_id, ig_dock_layout_begin, ig_do
                    FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK
 use figure, only : ig_set_next_window, ip_annotation, ip_contour, ip_contour_levels, ip_contour_lines, ip_drag_line_x, &
                    ip_drag_line_y, ip_drag_point, ip_error_bars, ip_setup_axes_limits, ip_spec
+use figure, only : ig_item_rect, ip_colormap_legend
 use figure_cimgui, only : im_vec4
 use figure_cimgui, only : im_vec2
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapCount, ImPlot_GetColormapSize, &
@@ -34,7 +39,7 @@ use figure_testing, only : test_drag, test_drawn_extent, test_plot_tick
 implicit none
 integer(int32), parameter     :: FRAMES = 40_int32 !< Frames run.
 type(app_object)              :: app               !< Application.
-logical                       :: test_passed(24)   !< Per-check outcome.
+logical                       :: test_passed(27)   !< Per-check outcome.
 character(len=:), allocatable :: label             !< A tick label.
 integer(int32)                :: nticks(2)         !< Ticks: formatted axis, default axis.
 logical                       :: all_formatted     !< Every tick of the formatted axis starts with 'T='.
@@ -87,6 +92,12 @@ real(real64)                  :: pix(2, 6)         !< Pixels of plot points: 1-2
 real(real64)                  :: ext(4, 3)         !< Extents drawn: error bars, annotation, contour.
 logical                       :: drawn(3)          !< ... found.
 integer(int32)                :: s_extra(4)        !< Statuses of the plot extras.
+real(real64)                  :: leg_y(3)          !< Vertical legend: rows of the colours at 0, 0.5, 1 [pixels].
+real(real64)                  :: leg_item(4)       !< ... its item rectangle.
+logical                       :: leg_found(3)      !< ... those colours found.
+real(real64)                  :: band(4, 5)        !< Horizontal legend: each band's extent.
+logical                       :: band_found(5)     !< ... found.
+integer(int32)                :: s_legend(5)       !< Statuses of the legends.
 
 late_node = 0_int32
 late_docked = .false.
@@ -152,6 +163,7 @@ do frame = 1_int32, FRAMES
    endif
    call ig_end()
    call draw_extras(frame)
+   call draw_legends()
    if (frame >= 10_int32) then                       ! a window that appears after the layout was built
       call ig_set_next_window_dock(right)
       if (ig_begin('Late')) then
@@ -180,6 +192,14 @@ test_passed(20) = drawn(3) .and. abs(ext(1, 3) - pix(1, 4)) < 3.0_real64 .and. a
                   .and. s_extra(4) == FIG_OK                                   ! the circle of radius 2, 2 units wide
 test_passed(21) = moved(1) .and. abs(drag_x - 3.0_real64) < 0.15_real64          ! dragged by one unit
 test_passed(22) = moved(2) .and. abs(drag_y - 4.0_real64) < 0.15_real64          ! by two
+test_passed(25) = all(leg_found) .and. leg_y(1) > leg_y(3) + 150.0_real64 .and. &          ! vmin at the bottom
+                  abs(leg_y(2) - 0.5_real64 * (leg_y(1) + leg_y(3))) < 1.0_real64 .and. &   ! the middle half-way
+                  leg_y(1) <= leg_item(4) .and. leg_y(3) >= leg_item(2) .and. all(s_legend(1:2) == FIG_OK)
+test_passed(26) = all(band_found) .and. all(abs(band(1, 2:5) - band(3, 1:4)) < 1.0_real64) .and.            &
+                  all(abs((band(3, :) - band(1, :)) - (band(3, 1) - band(1, 1))) < 1.5_real64) .and.         &
+                  band(1, 4) < band(1, 1) + 0.65_real64 * (band(3, 5) - band(1, 1)) .and.                    &
+                  band(3, 4) > band(1, 1) + 0.65_real64 * (band(3, 5) - band(1, 1)) ! 0.3 of [-1, 1]: band 4
+test_passed(27) = all(s_legend(3:5) == FIG_ERR_ARGUMENT)
 test_passed(23) = moved(3) .and. all(abs(point - [8.0_real64, 7.0_real64]) < 0.15_real64)
 
 write(output_unit, '(A,*(L2))') 'figure_test_plots checks:', test_passed
@@ -188,6 +208,8 @@ if (.not. all(test_passed)) write(output_unit, '(A,2I3,A,2L2,A,4F9.3,A,2I12,L2)'
    unlinked(1)%X%Max, unlinked(2)%X%Max, ', late node/right/docked', late_node, right, late_docked
 if (.not. all(test_passed(18:23))) write(output_unit, '(A,12F8.1,A,12F8.1,A,3L2,A,4F8.3,A,4I3)') 'pixels', pix, &
    ', extents', ext, ', drawn', drawn, ', drags', drag_x, drag_y, point, ', statuses', s_extra
+if (.not. all(test_passed(25:27))) write(output_unit, '(A,3F8.1,A,4F8.1,A,3L2,A,20F8.1,A,5L2,A,5I3)') 'legend rows', &
+   leg_y, ', item', leg_item, ', found', leg_found, ', bands', band, ', found', band_found, ', statuses', s_legend
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -357,6 +379,37 @@ contains
    v = ImPlot_PlotToPixels_double(real(x, c_double), real(y, c_double), -1_c_int, -1_c_int)
    p = real([v%x, v%y], real64)
    endfunction pixel
+
+   subroutine draw_legends()
+   !< A vertical continuous legend and a horizontal one of 5 levels, measured by their colours; bad arguments.
+   integer(int32) :: k          !< Band.
+   real(real64)   :: c(4)       !< A colour.
+   real(real64)   :: x0, x1, y0 !< An extent.
+   integer(int32) :: magma      !< Colormap ids.
+   integer(int32) :: cw         !< ...
+
+   magma = ip_colormap('magma')
+   cw = ip_colormap('cool-warm')
+   call ig_set_next_window(520.0_real64, 500.0_real64, 460.0_real64, 290.0_real64, always=.true.)
+   if (ig_begin('Legends')) then
+      call ip_colormap_legend('##v', magma, 0.0_real64, 10.0_real64, height=200.0_real64, stat=s_legend(1))
+      call ig_item_rect(leg_item(1), leg_item(2), leg_item(3), leg_item(4))
+      do k = 1_int32, 3_int32
+         c = [sample(magma, 0.5_real64 * (k - 1)), 1.0_real64]
+         call test_drawn_extent(c, x0, y0, x1, leg_y(k), leg_found(k))
+      enddo
+      call ip_colormap_legend('##h', cw, -1.0_real64, 1.0_real64, levels=5_int32, horizontal=.true., &
+                              width=400.0_real64, stat=s_legend(2))
+      do k = 1_int32, 5_int32
+         c = [sample(cw, (k - 0.5_real64) / 5.0_real64), 1.0_real64]
+         call test_drawn_extent(c, band(1, k), band(2, k), band(3, k), band(4, k), band_found(k))
+      enddo
+      call ip_colormap_legend('##bad1', -3_int32, 0.0_real64, 1.0_real64, stat=s_legend(3))
+      call ip_colormap_legend('##bad2', magma, 1.0_real64, 1.0_real64, stat=s_legend(4))
+      call ip_colormap_legend('##bad3', magma, 0.0_real64, 1.0_real64, levels=1_int32, stat=s_legend(5))
+   endif
+   call ig_end()
+   endsubroutine draw_legends
 
    subroutine draw_extras(frame)
    !< A plot with error bars, an annotation, contours and drag tools, the drags queued on frames 5, 15 and 25.

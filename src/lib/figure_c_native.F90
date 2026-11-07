@@ -36,6 +36,7 @@ public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_wid
 public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
 public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
 public :: fig_plot_annotation, fig_drawn_extent_rgba
+public :: fig_colormap_legend, fig_popup_rect
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -326,6 +327,15 @@ interface
    integer(c_int), intent(out) :: found   !< 1: something was drawn in it.
    integer(c_int)              :: status  !< Status.
    endfunction fig_drawn_extent_rgba
+
+   function fig_popup_rect(rect, found) result(status) bind(C, name='fig_popup_rect')
+   !< The rectangle of the innermost open popup, as in the last frame.
+   import :: c_float, c_int
+   implicit none
+   real(c_float),  intent(out) :: rect(4) !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out) :: found   !< 1: a popup is open.
+   integer(c_int)              :: status  !< Status.
+   endfunction fig_popup_rect
 
    function fig_task_start(fn, arg, id) result(status) bind(C, name='fig_task_start')
    !< Run fn(arg) on a worker thread.
@@ -1200,6 +1210,25 @@ interface
    integer(c_int),         intent(out) :: id       !< ImPlot colormap id (-1 on a failure).
    integer(c_int)                      :: status   !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_colormap
+
+   function fig_colormap_legend(id, id_len, cmap, vmin, vmax, levels, horizontal, width, height, fmt, fmt_len) &
+      result(status) bind(C, name='fig_colormap_legend')
+   !< A colour-scale legend of a colormap, as an item of the current window.
+   import :: c_char, c_double, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: id(*)      !< Widget id (not NUL-terminated).
+   integer(c_int), value              :: id_len     !< Its length [bytes].
+   integer(c_int), value              :: cmap       !< ImPlot colormap id.
+   real(c_double), value              :: vmin       !< Value at the bottom (left).
+   real(c_double), value              :: vmax       !< Value at the top (right).
+   integer(c_int), value              :: levels     !< Bands (0: continuous).
+   integer(c_int), value              :: horizontal !< 1: horizontal.
+   real(c_float), value               :: width      !< Width [pixels] (0: default, < 0: the space left).
+   real(c_float), value               :: height     !< Height [pixels] (0: default, < 0: the space left).
+   character(kind=c_char), intent(in) :: fmt(*)     !< printf format of the values (not NUL-terminated; empty: %g).
+   integer(c_int), value              :: fmt_len    !< Its length [bytes].
+   integer(c_int)                     :: status     !< Status.
+   endfunction fig_colormap_legend
 
    function fig_load_colormap(name, name_len, path, path_len) result(status) bind(C, name='fig_load_colormap')
    !< Read a user colormap (CSV table of RGB rows, or a ParaView JSON preset) under a new name.

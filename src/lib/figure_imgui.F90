@@ -9,10 +9,10 @@ module figure_imgui
 use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_loc, c_long_long, &
                                         c_null_char, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_base, only : cstr, figure_check, figure_refused
+use figure_base, only : cstr, figure_check, figure_fail, figure_refused
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
-                            fig_get_clipboard, fig_set_clipboard
+                            fig_get_clipboard, fig_set_clipboard, FIG_ERR_ARGUMENT, FIG_OK
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : igGetTime, igProgressBar, &
                           im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
@@ -21,10 +21,11 @@ use figure_cimgui, only : igGetTime, igProgressBar, &
                           igSeparator, igSetNextItemWidth, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
                           igSliderScalar, igTextUnformatted, im_vec4, igGetStyleColorVec4, igPopStyleColor, &
                           igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos, igAlignTextToFramePadding, &
-                          igIsPopupOpen_Str, igSetWindowFocus_Str, igCalcTextSize
+                          igIsPopupOpen_Str, igSetWindowFocus_Str, igCalcTextSize, igColorEdit4
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
                                 ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup, &
-                                ImGuiInputTextFlags_AllowTabInput, ImGuiInputTextFlags_ReadOnly
+                                ImGuiInputTextFlags_AllowTabInput, ImGuiInputTextFlags_ReadOnly, &
+                                ImGuiColorEditFlags_AlphaBar, ImGuiColorEditFlags_NoAlpha
 
 implicit none
 private
@@ -33,6 +34,7 @@ public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_in
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
 public :: ig_progress_bar
+public :: ig_color_edit
 public :: ig_input_text_multiline, text_buffer_object
 public :: ig_set_clipboard, ig_get_clipboard
 
@@ -468,6 +470,48 @@ contains
    if (self%id /= 0_c_int) call fig_text_release(self%id)
    self%id = 0_c_int
    endsubroutine text_buffer_final
+
+   recursive function ig_color_edit(label, rgba, alpha, stat) result(changed)
+   !< A colour editor (`ColorEdit4`) bound to `rgba`, components in [0, 1]: a swatch that opens a picker (a
+   !< saturation-value square and a hue bar) when clicked, and one field per component, dragged or typed (0-255). A
+   !< `rgba` of 3 components is RGB; of 4, RGBA, with the alpha shown unless `alpha=.false.` (then `rgba(4)` is left
+   !< alone). True on the frames the user changes the colour; `rgba` is written only then (Dear ImGui edits single
+   !< precision: an untouched colour keeps its double precision bits). Right-click on the swatch: Dear ImGui's options
+   !< (RGB, HSV or hexadecimal fields, copy as text). Statuses: `FIG_ERR_ARGUMENT` for a size other than 3 or 4,
+   !< `FIG_ERR_STATE` from a task. The same in every mode.
+   character(len=*), intent(in)            :: label   !< Label (also the id; '##id' hides it).
+   real(real64),     intent(inout)         :: rgba(:) !< Colour, RGB or RGBA in [0, 1].
+   logical,          intent(in), optional  :: alpha   !< Show and edit the alpha (default: when size(rgba) is 4).
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   logical                                 :: changed !< Changed this frame.
+   real(c_float), target                   :: c(4)    !< Single-precision copy for Dear ImGui.
+   integer(c_int)                          :: flags   !< ImGuiColorEditFlags.
+   integer(int32)                          :: n       !< Components.
+
+   changed = .false.
+   if (figure_refused('ig_color_edit', stat)) return ! a task does not draw
+   n = size(rgba, kind=int32)
+   if (n /= 3_int32 .and. n /= 4_int32) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ig_color_edit: the colour needs 3 (RGB) or 4 (RGBA) components', stat)
+      return
+   endif
+   flags = ImGuiColorEditFlags_AlphaBar
+   if (n == 3_int32) flags = ImGuiColorEditFlags_NoAlpha
+   if (present(alpha)) then
+      if (.not. alpha) flags = ImGuiColorEditFlags_NoAlpha
+   endif
+   c = 1.0_c_float
+   c(1:n) = real(rgba, c_float)
+   changed = logical(igColorEdit4(cstr(label), c_loc(c), flags))
+   if (changed) then
+      if (iand(flags, ImGuiColorEditFlags_NoAlpha) /= 0_c_int) then
+         rgba(1:3) = real(c(1:3), real64)
+      else
+         rgba = real(c, real64)
+      endif
+   endif
+   call figure_check(FIG_OK, stat)
+   endfunction ig_color_edit
 
    function ig_combo(label, current, items) result(changed)
    !< A drop-down list of `items`; `current` is the index of the one chosen (1 to `size(items)`; any other value shows

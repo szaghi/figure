@@ -95,6 +95,35 @@ reference value on an edge between two bands, with an odd number in the middle o
 
 Reversed and discrete maps are registered under derived names: `'<name>_r'` and `'<name>|<levels>'`.
 
+## A colour-scale legend
+
+| Procedure | Notes |
+|---|---|
+| `ip_colormap_legend(id, colormap, vmin, vmax [, levels] [, horizontal] [, width] [, height] [, label_format] [, stat])` | A bar coloured by `colormap` from `vmin` to `vmax`, with ticks and their values: vertical (`vmin` at the bottom, values on the right) or `horizontal=.true.` (`vmin` at the left, values below). |
+
+<<< @/examples/snippets/cb_legend-legend.F90{fortran}
+
+<Media name="cb_legend" alt="A field drawn in eight bands of a diverging map from blue to red, with yellow contour lines at -0.5, 0 and 0.5; on its right a vertical legend of the same eight bands, their edges labelled -1, -0.75, ... 1; below, a horizontal continuous legend of the same map, labelled -1.0, -0.5, 0.0, 0.5, 1.0; above, the colour editor's picker open on a yellow" caption="docs/examples/src/cb_legend.F90" />
+
+- **An item of the window**, not of a plot: put it beside a plot (`ig_same_line`), above or below it, in a side bar,
+  in any window. `id` tells legends of one window apart and is not shown.
+- **Discrete levels.** With `levels`, the bar has that many bands of equal width, each the map's colour at its centre:
+  the colours a heatmap drawn with `ip_colormap(name, levels)` takes ([Discrete levels](#discrete-levels)); the ticks
+  mark the bands' edges. Without `levels`, the bar is continuous and the ticks fall on round values (steps of 1, 2,
+  2.5 or 5 times a power of ten), about every 40 pixels (100 when horizontal). Pass the continuous map's id with
+  `levels`, as the example does: the bands are computed from it.
+- **The scale** runs from `vmin` to `vmax`, the values a heatmap's `scale_min` and `scale_max` map to the colormap's
+  ends; `vmin > vmax` turns it over.
+- **Sizes** [pixels]: positive, given; negative, the space left in the window; absent, the default: vertical, 300
+  long and as wide as the bar (a field's height) and the longest label; horizontal, the space left and as tall as the
+  bar and a line of labels. `label_format` is a C `printf` format (default `'%g'`).
+- Bands and the bar sit on whole pixels, so neighbouring bands share their edge with no seam.
+- Unlike `ip_colormap_scale` (ImPlot's `ColormapScale`, vertical only, continuous colours), the legend is horizontal
+  or vertical and shows discrete levels as bands.
+- Statuses: `FIG_ERR_ARGUMENT` for a colormap that is not registered, `vmin` equal to `vmax` or either not finite,
+  `levels` outside [2, 256]; `FIG_ERR_STATE` outside a frame and from a [task](processes#tasks).
+- Modes: the same in **window**, **headless** and **remote** mode.
+
 ## User maps
 
 <<< @/examples/snippets/cb_colormap-load.F90{fortran}

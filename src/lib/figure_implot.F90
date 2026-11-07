@@ -19,7 +19,8 @@ use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use figure_base, only : cstr, figure_check, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
-                            fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation
+                            fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
+                            fig_colormap_legend
 use figure_cimgui, only : im_vec2, im_vec4
 use figure_texture, only : texture_object, texture_ref
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot, ImPlot_EndPlot,             &
@@ -69,6 +70,7 @@ public :: ip_colormap_scale, ip_heatmap, ip_image, ip_plot_limits, ip_plot_size,
 public :: ip_colormap, ip_colormap_names, ip_load_colormap
 public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point
 public :: ip_contour, ip_contour_lines, ip_contour_levels
+public :: ip_colormap_legend
 public :: ip_spec, plot_spec_object
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -702,6 +704,56 @@ contains
    endif
    call figure_check(FIG_OK, stat)
    endsubroutine ip_colormap_scale
+
+   recursive subroutine ip_colormap_legend(id, colormap, vmin, vmax, levels, horizontal, width, height, label_format, &
+                                           stat)
+   !< A colour-scale legend: a bar coloured by `colormap` from `vmin` to `vmax` (bottom to top, or left to right with
+   !< `horizontal=.true.`), with ticks and their values on its right (or below). An item of the current window, outside
+   !< a plot: beside any plot (`ig_same_line`), above or below it, or in any window. With `levels`: that many bands of
+   !< equal width, each the map's colour at its centre (as `ip_colormap(name, levels)` colours a field), the ticks at the
+   !< bands' edges; without: a continuous bar, ticks at round values (a step of 1, 2, 2.5 or 5 times a power of ten)
+   !< about every 40 pixels (100 horizontal). `vmin > vmax` turns the scale over. Sizes [pixels]: positive given,
+   !< negative the space left in the window, absent the default (vertical: 300 long, as wide as the bar and the labels;
+   !< horizontal: the space left, as tall as the bar and a line of labels). Statuses: `FIG_ERR_ARGUMENT` for a colormap
+   !< that is not registered, equal or non-finite `vmin`/`vmax`, `levels` outside [2, 256]; `FIG_ERR_STATE` outside a
+   !< window and from a task. The same in every mode.
+   character(len=*), intent(in)            :: id           !< Widget id, unique in the window (not shown).
+   integer(int32),   intent(in)            :: colormap     !< Colormap (`ip_colormap`).
+   real(real64),     intent(in)            :: vmin         !< Value at the bottom (left).
+   real(real64),     intent(in)            :: vmax         !< Value at the top (right).
+   integer(int32),   intent(in), optional  :: levels       !< Discrete bands, in [2, 256] (default: continuous).
+   logical,          intent(in), optional  :: horizontal   !< Horizontal bar (default: vertical).
+   real(real64),     intent(in), optional  :: width        !< Width [pixels].
+   real(real64),     intent(in), optional  :: height       !< Height [pixels].
+   character(len=*), intent(in), optional  :: label_format !< printf format of the values (default '%g').
+   integer(int32),   intent(out), optional :: stat         !< Status.
+   integer(c_int)                          :: n            !< Bands.
+   integer(c_int)                          :: h            !< Horizontal flag.
+
+   if (figure_refused('ip_colormap_legend', stat)) return ! a task does not draw
+   n = 0_c_int
+   if (present(levels)) then
+      if (levels < 2_int32 .or. levels > 256_int32) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_colormap_legend: levels must be in [2, 256]', stat)
+         return
+      endif
+      n = int(levels, c_int)
+   endif
+   h = 0_c_int
+   if (present(horizontal)) then
+      if (horizontal) h = 1_c_int
+   endif
+   if (present(label_format)) then
+      call figure_check(fig_colormap_legend(id, len(id, c_int), int(colormap, c_int), real(vmin, c_double),             &
+                                            real(vmax, c_double), n, h, real(uniform(width, 0.0_real64), c_float),      &
+                                            real(uniform(height, 0.0_real64), c_float), label_format,                  &
+                                            len(label_format, c_int)), stat)
+   else
+      call figure_check(fig_colormap_legend(id, len(id, c_int), int(colormap, c_int), real(vmin, c_double),             &
+                                            real(vmax, c_double), n, h, real(uniform(width, 0.0_real64), c_float),      &
+                                            real(uniform(height, 0.0_real64), c_float), '', 0_c_int), stat)
+   endif
+   endsubroutine ip_colormap_legend
 
    ! colormaps by name
 

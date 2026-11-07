@@ -3160,6 +3160,22 @@ int fig_plot_annotation(double x, double y, const float *rgba, float dx, float d
    return FIG_OK;
 }
 
+// The rectangle of the innermost open popup (a menu, a combo's list, a colour picker), as drawn in the last frame;
+// found 0 if no popup is open.
+int fig_popup_rect(float *rect, int *found) {
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   ImGuiContext &g = *ImGui::GetCurrentContext();
+   ImGuiWindow *w = g.OpenPopupStack.Size > 0 ? g.OpenPopupStack.back().Window : nullptr;
+   *found = w ? 1 : 0;
+   if (w) {
+      rect[0] = w->Pos.x;
+      rect[1] = w->Pos.y;
+      rect[2] = w->Pos.x + w->Size.x;
+      rect[3] = w->Pos.y + w->Size.y;
+   }
+   return FIG_OK;
+}
+
 // A window's rectangle, by its name (as passed to Begin), as drawn in the last frame; found 0 if no such window.
 int fig_window_rect(const char *name, int name_len, float *rect, int *found) {
    if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");

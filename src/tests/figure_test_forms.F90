@@ -4,6 +4,10 @@ program figure_test_forms
 !<
 !< Each field is clicked, its text selected (end, shift+home) and replaced by typing, then confirmed with enter; the checks read
 !< the Fortran variables bound to the fields after the frames have consumed the input.
+!<
+!< Colour editing: a component field dragged; the swatch clicked opens the picker, and a click in its saturation-value
+!< square near the top-left corner (white) picks a near-white colour, the alpha kept; an RGB colour keeps 3 components;
+!< a colour of 2 components refused.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, ig_input_text, ig_item_rect,   &
                    ig_set_next_item_width, ig_set_next_window, ig_tooltip, ImGuiInputTextFlags_CharsNoBlank,   &
@@ -11,13 +15,15 @@ use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, 
                    ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_text, ig_begin_table, ig_end_table,   &
                    ig_table_headers_row, ig_table_next_column, ig_table_next_row, ig_table_set_column,       &
                    ig_table_setup_column, ig_set_next_item_open, ig_tree_node, ig_tree_pop
-use figure_testing, only : test_click, test_item_center, test_key, test_mouse_move, test_type, test_window_rect
+use figure, only : ig_color_edit, FIG_ERR_ARGUMENT, FIG_OK
+use figure_testing, only : test_click, test_drag, test_item_center, test_key, test_mouse_move, test_popup_rect, test_type, &
+                           test_window_rect
 
 implicit none
 integer(int32), parameter :: FRAMES = 400_int32 !< Frames run.
 integer(int32), parameter :: TIP_FRAME = 230_int32 !< Frame on which the tooltip is looked for.
 type(app_object)          :: app                !< Application.
-logical                   :: test_passed(26)    !< Per-check outcome.
+logical                   :: test_passed(30)    !< Per-check outcome.
 character(len=16)         :: grid_file          !< A text field.
 character(len=4)          :: short              !< A text field of capacity 4.
 character(len=12)         :: no_blank           !< A text field that refuses blanks.
@@ -73,6 +79,15 @@ logical                   :: body2_open(2)      !< 'Body 2': opened by the progr
 logical                   :: is_group           !< 'Group A' open this frame.
 integer(int32)            :: child_rows         !< Frames on which the child row of 'Group A' was drawn.
 integer(int32)            :: tree_depth_ok      !< Frames on which the tree pops balanced (always, if it is right).
+real(real64)              :: tint(4)            !< An RGBA colour edited.
+real(real64)              :: tint_dragged(4)    !< ... after its red field was dragged.
+real(real64)              :: rgb(3)             !< An RGB colour, not touched.
+real(real64)              :: bad(2)             !< A colour of 2 components.
+real(real64)              :: edit_rect(4)       !< The colour editor's rectangle.
+real(real64)              :: popup(4)           !< The picker's rectangle.
+logical                   :: popup_open(2)      !< The picker: open after the swatch's click, closed at the end.
+integer(int32)            :: colour_changes     !< Frames on which the editor reported a change.
+integer(int32)            :: s_colour(3)        !< Statuses of the colour editors.
 
 grid_file = 'CC/cc'
 short = ''
@@ -295,6 +310,7 @@ do frame = 1_int32, FRAMES
       tab_sel(:, 2) = sel
    endselect
 enddo
+call colour_frames()
 call app%destroy()
 
 test_passed(1) = grid_file == 'MESH/grid' .and. edits(1) > 0_int32            ! typed text, written back
@@ -324,6 +340,13 @@ test_passed(23) = body2_open(1) .and. .not. body2_open(2)                      !
 test_passed(24) = child_rows > 0_int32 .and. child_rows < FRAMES - 360_int32   ! in a table: opened by its arrow
 test_passed(25) = group_rect(3) <= count_rect(1) + 0.5_real64 .and. group_rect(1) < count_rect(1) ! in the first column
 test_passed(26) = tree_depth_ok == FRAMES                                     ! the tree drawn on every frame
+test_passed(27) = tint_dragged(1) > 0.2_real64 + 20.0_real64 / 255.0_real64 .and. &   ! red dragged up, the others kept
+                  all(abs(tint_dragged(2:4) - [0.4_real64, 0.8_real64, 1.0_real64]) < 1.0e-6_real64)
+test_passed(28) = popup_open(1) .and. .not. popup_open(2) .and. all(tint(1:3) > 0.9_real64) .and. & ! picked, the
+                  abs(tint(4) - 1.0_real64) < 1.0e-6_real64                              ! alpha kept; closed
+test_passed(29) = colour_changes > 0_int32 .and. all(s_colour(1:2) == FIG_OK) .and. &      ! an untouched colour keeps
+                  all(rgb == [0.1_real64, 0.2_real64, 0.3_real64])                        ! its double precision bits
+test_passed(30) = s_colour(3) == FIG_ERR_ARGUMENT                                         ! 2 components refused
 
 write(output_unit, '(A,*(L2))') 'figure_test_forms checks:', test_passed
 if (.not. all(test_passed)) then
@@ -339,11 +362,56 @@ if (.not. all(test_passed)) then
          ', group/count rects ', group_rect, count_rect
    write(output_unit, '(A,I0,A,I0,A,2L2)') 'model ', model, ', picks ', picks, ', tooltip before/after', tip_before, &
                                           tip_after
+   write(output_unit, '(A,4F7.3,A,4F7.3,A,2L2,A,4F7.1,A,I0,A,3I3)') 'colour dragged', tint_dragged, ', picked', tint, &
+         ', picker open', popup_open, ', picker', popup, ', changes ', colour_changes, ', statuses', s_colour
 endif
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   subroutine colour_frames()
+   !< The colour editors, in a window of their own, after the forms: drag the red field, then pick from the picker.
+   integer(int32) :: f    !< Frame.
+   real(real64)   :: h    !< The editor's height: a frame's, and the swatch's side.
+   logical        :: open !< A popup is open.
+
+   tint = [0.2_real64, 0.4_real64, 0.8_real64, 1.0_real64]
+   tint_dragged = 0.0_real64
+   rgb = [0.1_real64, 0.2_real64, 0.3_real64]
+   bad = 0.0_real64
+   popup_open = [.false., .true.]
+   colour_changes = 0_int32
+   edit_rect = 0.0_real64
+   do f = 1_int32, 60_int32
+      if (.not. app%next_frame()) exit
+      call ig_set_next_window(800.0_real64, 20.0_real64, 280.0_real64, 200.0_real64, always=.true.)
+      if (ig_begin('Colour')) then
+         if (ig_color_edit('##tint', tint, stat=s_colour(1))) colour_changes = colour_changes + 1_int32
+         call ig_item_rect(edit_rect(1), edit_rect(2), edit_rect(3), edit_rect(4))
+         if (ig_color_edit('rgb', rgb, stat=s_colour(2))) colour_changes = colour_changes + 1_int32
+         if (ig_color_edit('bad', bad, stat=s_colour(3))) colour_changes = colour_changes + 1_int32
+      endif
+      call ig_end()
+      h = edit_rect(4) - edit_rect(2)
+      select case (f)
+      case (5_int32)  ! drag the red field (the first) 40 pixels right: about 40 steps of 1/255
+         call test_drag(edit_rect(1) + 8.0_real64, edit_rect(2) + 0.5_real64 * h, edit_rect(1) + 48.0_real64, &
+                        edit_rect(2) + 0.5_real64 * h)
+      case (20_int32) ! click the swatch, the rightmost square (the label is hidden)
+         tint_dragged = tint
+         call test_click(edit_rect(3) - 0.5_real64 * h, edit_rect(2) + 0.5_real64 * h)
+      case (30_int32) ! the picker is open: click its saturation-value square near the top-left corner (white)
+         call test_popup_rect(popup(1), popup(2), popup(3), popup(4), popup_open(1))
+         call test_click(popup(1) + 12.0_real64, popup(2) + 12.0_real64)
+      case (45_int32) ! close it
+         call test_key('escape')
+      case (60_int32)
+         call test_popup_rect(popup(1), popup(2), popup(3), popup(4), open)
+         popup_open(2) = open
+      endselect
+   enddo
+   endsubroutine colour_frames
+
    subroutine replace(k, text)
    !< Click field k, select its text, type `text`, confirm with enter. The text is selected with end, then shift+home,
    !< which every platform reads the same way (select-all is ctrl+a, but cmd+a on macOS).

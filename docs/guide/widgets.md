@@ -204,6 +204,26 @@ A status bar with a progress bar, along the bottom of the window ([bar along a s
 
 <Media name="cb_status" alt="A run in progress: the status bar along the bottom reads running, iteration 213 of 240, beside a progress bar filled to 89 percent; above it, a warning notification: levels is 0, it must be at least 1" caption="docs/examples/src/cb_status.F90" />
 
+## Colour editing
+
+| Procedure | Notes |
+|---|---|
+| `ig_color_edit(label, rgba [, alpha] [, stat])` → `logical` | A colour editor (`ColorEdit4`) bound to `rgba`, `real(real64)`, components in [0, 1]: one field per component and a swatch that opens a picker when clicked. `.true.` on the frames the user changes the colour. |
+
+<<< @/examples/snippets/cb_legend-color.F90{fortran}
+
+<Media name="cb_legend" video alt="A colour editor above a plot: four fields at 255 and a white swatch. A click on the swatch opens the picker: a saturation-value square, a hue bar and an alpha bar. A click on the hue bar at yellow, then a drag in the square to its top right corner: the fields read 239, 242, 13, 255, the swatch turns yellow, and the contour lines in the plot below turn yellow too. A click outside closes the picker." caption="docs/examples/src/cb_legend.F90: the contour lines' colour chosen with ig_color_edit" />
+
+- `rgba` has 3 components (RGB, no alpha) or 4 (RGBA). With 4, the alpha has a field and a bar in the picker;
+  `alpha=.false.` hides them and leaves `rgba(4)` alone.
+- The fields show 0-255 and are dragged, or typed after a double-click; right-click on the swatch offers Dear ImGui's
+  options (RGB, HSV or hexadecimal fields, copy the colour as text).
+- Dear ImGui edits single-precision values: `rgba` is written only on the frames the user changes it, so an untouched
+  colour keeps its double-precision bits; a changed one has single precision.
+- Statuses: `FIG_ERR_ARGUMENT` for a size other than 3 or 4, `FIG_ERR_STATE` from a [task](processes#tasks); `stat` is
+  optional (absent: `error stop` with the message).
+- Modes: the same in **window**, **headless** and **remote** mode (the picker is a popup drawn by Dear ImGui).
+
 ## Labels and identifiers
 
 Dear ImGui identifies a widget by a hash of its label within its window. Two widgets with the same label in the same

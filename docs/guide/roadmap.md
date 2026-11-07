@@ -196,7 +196,11 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   saddles resolved by the cell's centre value, NaNs leaving holes), levels given or at round numbers
   (`ip_contour_levels`), coloured from a colormap or in one colour, labelled on request; `ip_contour_lines` for the
   segments alone: done.
+- **Colour editing and a colour-scale legend** ([Colour editing](widgets#colour-editing),
+  [Colormaps](colormaps#a-colour-scale-legend)): `ig_color_edit`, a colour editor with a picker bound to
+  `real(real64)` RGB or RGBA; `ip_colormap_legend`, a legend of a colormap, vertical or horizontal, continuous or with
+  discrete levels as bands, as an item of any window: done.
 
 ## Next
 
-Candidates, to be driven by what applications need: colour pickers.
+Candidates, to be driven by what applications need.

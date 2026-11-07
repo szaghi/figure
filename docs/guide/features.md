@@ -88,6 +88,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_set_next_item_width(width)` | width of the next widget's field [pixels]; negative: up to that distance from the right edge |
 | `ig_text(text)` | plain text |
 | `ig_progress_bar(fraction [, label] [, width])` | a progress bar, `fraction` in [0, 1]; `fraction` < 0: indeterminate ([Progress bars](widgets#progress-bars)) |
+| `ig_color_edit(label, rgba [, alpha] [, stat])` → `logical` | a colour editor with a picker, bound to `real(real64)` RGB or RGBA ([Colour editing](widgets#colour-editing)) |
 | `ig_same_line([offset])` | put the next item on the same line; with `offset`, at that distance from the left edge |
 | `ig_align_text_to_frame_padding()` | the text that follows on the line is level with the text of fields and buttons |
 | `ig_text_size(text)` → `real(real64)(2)` | width and height of a text in the current font [pixels] (a label: the part before `##`) |
@@ -147,6 +148,7 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_spec(...)` → `plot_spec_object` | item style: colours, line weight, markers, flags (`ImPlotMarker_*`, `ImPlot*Flags_*`) |
 | `ip_heatmap(label, f, xmin, xmax, ymin, ymax ...)` | a field `f(i, j)` as coloured cells, read in place, j = 1 at the bottom |
 | `ip_colormap_scale(label, scale_min, scale_max ... [, colormap] [, stat])` | the colour bar of a heatmap (default colormap: Viridis) |
+| `ip_colormap_legend(id, colormap, vmin, vmax [, levels] [, horizontal] [, width] [, height] [, label_format] [, stat])` | a colour-scale legend, vertical or horizontal, continuous or in bands ([legend](colormaps#a-colour-scale-legend)) |
 | `ip_colormap(name [, levels] [, stat])` → `integer(int32)` | a colormap's id by name: bundled (`'cividis'`, `'batlow'`, `'cool-warm'`, ...), ImPlot's own or loaded; `<name>_r` reversed, `levels` discrete bands ([colormaps](colormaps)) |
 | `ip_load_colormap(name, file [, stat])` | a user colormap from a CSV table of RGB rows or a ParaView JSON preset ([user maps](colormaps#user-maps)) |
 | `ip_colormap_names(names)` | the names `ip_colormap` knows ([colormaps](colormaps)) |
@@ -208,6 +210,7 @@ Details: [Processes and tasks](processes#tasks).
 | `test_drop(paths, x, y [, stat])` | queue a drop of files or folders at (x, y), reported by `app%dropped` on the next frame |
 | `test_next_frame()` | a frame boundary in the queued input |
 | `test_item_center(x, y)`, `test_window_rect(name, ...)` | where a widget or a window is |
+| `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | where the open popup is (a menu, a combo's list, a colour picker) |
 | `test_quit()` | a quit request, as the window's close button makes it |
 | `test_plot_tick(axis, index, label [, count])` | a tick label of the plot being declared (tests of axis formats) |
 | `test_frame_hit(x, y)` → `character` | what the frame of `decorations='figure'` does at a point: `'client'`, `'drag'`, `'resize-top-left'`, ... ([the window's frame](frame-loop#the-window-s-frame)) |
