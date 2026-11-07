@@ -60,6 +60,10 @@ graph LR
 - [fig_remote_token](#fig-remote-token)
 - [fig_file_dialog](#fig-file-dialog)
 - [fig_file_dialog_result](#fig-file-dialog-result)
+- [fig_file_browser](#fig-file-browser)
+- [fig_file_browser_settings](#fig-file-browser-settings)
+- [fig_file_browser_get](#fig-file-browser-get)
+- [fig_file_browser_rect](#fig-file-browser-rect)
 - [fig_save_image](#fig-save-image)
 - [fig_image_result](#fig-image-result)
 - [fig_save_layout](#fig-save-layout)
@@ -209,6 +213,14 @@ graph LR
 ### fig_file_dialog
 
 ### fig_file_dialog_result
+
+### fig_file_browser
+
+### fig_file_browser_settings
+
+### fig_file_browser_get
+
+### fig_file_browser_rect
 
 ### fig_save_image
 

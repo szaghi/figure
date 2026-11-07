@@ -47,6 +47,10 @@ graph LR
 - [test_frame_state](#test-frame-state)
 - [test_notification_rect](#test-notification-rect)
 - [test_drawn_extent](#test-drawn-extent)
+- [test_file_browser](#test-file-browser)
+- [test_file_browser_rect](#test-file-browser-rect)
+- [test_settings_file](#test-settings-file)
+- [browser_list](#browser-list)
 - [test_mouse_move](#test-mouse-move)
 - [test_mouse_button](#test-mouse-button)
 - [test_click](#test-click)
@@ -57,6 +61,7 @@ graph LR
 - [test_window_rect](#test-window-rect)
 - [test_item_center](#test-item-center)
 - [test_frame_hit](#test-frame-hit)
+- [browser_text](#browser-text)
 - [button_index](#button-index)
 
 ## Subroutines
@@ -277,6 +282,123 @@ flowchart TD
   test_drawn_extent["test_drawn_extent"] --> fig_drawn_extent["fig_drawn_extent"]
   test_drawn_extent["test_drawn_extent"] --> figure_check["figure_check"]
   style test_drawn_extent fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_file_browser
+
+The file browser in front (`app%open_file_browser`, `app%save_file_browser`), as it stands after the last frame:
+ `shown` false without one (then the texts are '' and the lists empty, but `recent`). `folder`: the folder listed
+ (absolute); `entries`: the entries shown, in the order shown, folders ending in `/` (blank-padded to the longest);
+ `error`: the error shown ('' none); `asking`: a save over an existing file is being asked; `path_field`,
+ `name_field`: the texts of the path and name fields; `recent`: the recent folders, newest first (also without a
+ browser). Texts are UTF-8.
+
+```fortran
+subroutine test_file_browser(shown, folder, entries, error, asking, path_field, name_field, recent)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `shown` | logical | out |  | A browser is open. |
+| `folder` | character(len=:) | out | allocatable, optional | Folder listed. |
+| `entries` | character(len=:) | out | allocatable, optional | Entries shown. |
+| `error` | character(len=:) | out | allocatable, optional | Error shown. |
+| `asking` | logical | out | optional | Replacing a file is asked. |
+| `path_field` | character(len=:) | out | allocatable, optional | Path field. |
+| `name_field` | character(len=:) | out | allocatable, optional | Name field. |
+| `recent` | character(len=:) | out | allocatable, optional | Recent folders. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_file_browser["test_file_browser"] --> browser_list["browser_list"]
+  test_file_browser["test_file_browser"] --> browser_text["browser_text"]
+  style test_file_browser fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_file_browser_rect
+
+The rectangle [pixels] of a part of the file browser in front, as drawn in the last frame: `'entry:NAME'` (an
+ entry's row, by its name; rows out of view are not drawn), `'parent'`, `'refresh'`, `'path'`, `'new folder'`,
+ `'new folder name'`, `'create'`, `'sort:name'`, `'sort:size'`, `'sort:modified'` (the columns' headers),
+ `'place:home'`, `'place:cwd'`, `'place:root:N'`, `'place:recent:N'`, `'name'`, `'filter'` and, while its list is
+ open, `'filter:N'`, `'hidden'`, `'cancel'`, `'ok'` (Open, Save or Choose), and, while a replace is asked,
+ `'replace'` and `'keep'`. `found` is false for a part not drawn.
+
+```fortran
+subroutine test_file_browser_rect(part, xmin, ymin, xmax, ymax, found)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `part` | character(len=*) | in |  | Part. |
+| `xmin` | real(kind=real64) | out |  | Left. |
+| `ymin` | real(kind=real64) | out |  | Top. |
+| `xmax` | real(kind=real64) | out |  | Right. |
+| `ymax` | real(kind=real64) | out |  | Bottom. |
+| `found` | logical | out | optional | It was drawn. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_file_browser_rect["test_file_browser_rect"] --> fig_file_browser_rect["fig_file_browser_rect"]
+  style test_file_browser_rect fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_settings_file
+
+The settings file that keeps the file browser's recent folders, instead of FIGURE's own, until the program ends:
+ read when a browser opens, written when one is answered. `''`: none, the recent folders are kept in memory only
+ (the default in headless mode). Before or after `init*`.
+
+```fortran
+subroutine test_settings_file(path, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `path` | character(len=*) | in |  | File. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_settings_file["test_settings_file"] --> fig_file_browser_settings["fig_file_browser_settings"]
+  test_settings_file["test_settings_file"] --> figure_check["figure_check"]
+  style test_settings_file fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### browser_list
+
+A list of the browser in front (fig_file_browser_get), blank-padded to the longest.
+
+```fortran
+subroutine browser_list(what, list)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `what` | integer(kind=c_int) | in |  | Query. |
+| `list` | character(len=:) | out | allocatable | Texts. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_file_browser["test_file_browser"] --> browser_list["browser_list"]
+  browser_list["browser_list"] --> browser_text["browser_text"]
+  style browser_list fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### test_mouse_move
@@ -551,6 +673,34 @@ flowchart TD
   test_frame_hit["test_frame_hit"] --> fig_frame_hit["fig_frame_hit"]
   test_frame_hit["test_frame_hit"] --> figure_check["figure_check"]
   style test_frame_hit fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### browser_text
+
+A text of the browser in front (fig_file_browser_get).
+
+**Returns**: `character(len=:)`
+
+```fortran
+function browser_text(what, index, count) result(text)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `what` | integer(kind=c_int) | in |  | Query. |
+| `index` | integer(kind=c_int) | in |  | Index, from 1. |
+| `count` | integer(kind=c_int) | out |  | The list's length (0: no browser). |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  browser_list["browser_list"] --> browser_text["browser_text"]
+  test_file_browser["test_file_browser"] --> browser_text["browser_text"]
+  browser_text["browser_text"] --> fig_file_browser_get["fig_file_browser_get"]
+  style browser_text fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### button_index

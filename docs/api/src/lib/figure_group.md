@@ -146,6 +146,8 @@ flowchart TD
 
 End the region opened by `ig_begin_child` (whatever it returned).
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_end_child()
 ```
@@ -474,6 +476,8 @@ A region inside the window, scrolling on its own (a list that scrolls while a he
  `ig_end_child`, whatever this returned. `width`/`height` [pixels]: 0 or absent fills what is left, negative leaves
  that much.
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -502,6 +506,8 @@ flowchart TD
 ### ig_collapsing_header
 
 A header that shows or hides what follows it; true while open (then draw the content). No end call.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -532,6 +538,8 @@ A node of a tree (`TreeNodeEx`); true while open: draw its children, then `ig_tr
  The arrow, or a double-click on the label, opens and closes the node; a single click on the label is reported
  by `clicked` (`IsItemClicked` and not `IsItemToggledOpen`), so choosing a node and expanding it stay different.
  A leaf has no arrow and is always open: it too is popped.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -565,6 +573,8 @@ flowchart TD
 ### ig_begin_tab_bar
 
 Begin a bar of tabs; when true, declare the tabs (`ig_begin_tab`) and close it with `ig_end_tab_bar`.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -620,6 +630,8 @@ flowchart TD
 Begin a table of `columns` columns; when true, fill it and close it with `ig_end_table`. `flags` combine
  `ImGuiTableFlags_*` with `ior` (default: borders, alternating row background, resizable columns); `height`
  [pixels] fixes the table's height (with `ImGuiTableFlags_ScrollY`, the rows scroll inside it).
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 

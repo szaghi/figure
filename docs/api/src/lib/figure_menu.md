@@ -156,6 +156,8 @@ flowchart TD
 
 Begin the menu bar along the top of the display; when true, declare menus, then `ig_end_main_menu_bar`.
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -174,6 +176,8 @@ flowchart TD
 ### ig_begin_menu_bar
 
 Begin the current window's menu bar (the window needs `ImGuiWindowFlags_MenuBar`); then `ig_end_menu_bar`.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -282,6 +286,8 @@ flowchart TD
 A popup (no title bar), declared every frame; true while open: declare its content, then `ig_end_popup`. It
  closes when the user clicks outside it.
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -309,6 +315,8 @@ flowchart TD
 A modal dialog titled `title` (also its id), declared every frame; true while open: the rest of the interface
  is greyed out and ignores input until it closes (`ig_close_current_popup`, inside it). With `open`, a close
  button in its title bar sets it false. Its size fits its content.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 

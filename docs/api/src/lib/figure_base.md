@@ -108,6 +108,7 @@ flowchart TD
   set_style["set_style"] --> figure_check["figure_check"]
   set_title["set_title"] --> figure_check["figure_check"]
   set_var["set_var"] --> figure_check["figure_check"]
+  show_file_browser["show_file_browser"] --> figure_check["figure_check"]
   show_file_dialog["show_file_dialog"] --> figure_check["figure_check"]
   task_cancel["task_cancel"] --> figure_check["figure_check"]
   task_result["task_result"] --> figure_check["figure_check"]
@@ -124,6 +125,7 @@ flowchart TD
   test_next_frame["test_next_frame"] --> figure_check["figure_check"]
   test_plot_tick["test_plot_tick"] --> figure_check["figure_check"]
   test_quit["test_quit"] --> figure_check["figure_check"]
+  test_settings_file["test_settings_file"] --> figure_check["figure_check"]
   test_system_theme["test_system_theme"] --> figure_check["figure_check"]
   test_type["test_type"] --> figure_check["figure_check"]
   test_wheel["test_wheel"] --> figure_check["figure_check"]
@@ -212,6 +214,8 @@ True when called from a task's worker thread: the drawing entry point `name` mus
  status becomes `FIG_ERR_STATE` with a message naming `name` (given by `t%result`), the task is asked to stop, and
  `stat`, if present, is `FIG_ERR_STATE`. False on the main thread (nothing changes).
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -249,6 +253,8 @@ flowchart TD
   log_draw["log_draw"] --> figure_refused["figure_refused"]
   next_frame["next_frame"] --> figure_refused["figure_refused"]
   notify["notify"] --> figure_refused["figure_refused"]
+  open_file_browser["open_file_browser"] --> figure_refused["figure_refused"]
+  save_file_browser["save_file_browser"] --> figure_refused["figure_refused"]
   update["update"] --> figure_refused["figure_refused"]
   figure_refused["figure_refused"] --> fig_task_refuse["fig_task_refuse"]
   style figure_refused fill:#3e63dd,stroke:#99b,stroke-width:2px

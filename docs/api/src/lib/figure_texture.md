@@ -81,6 +81,8 @@ An RGBA texture, 8 bits per channel.
 
 Create a `width` x `height` texture (contents undefined until `update`); an existing one is destroyed first.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine init(self, width, height, smooth, stat)
 ```
@@ -109,6 +111,8 @@ flowchart TD
 ### update
 
 Upload all the pixels, `rgba(4, width, height)`, in place (no copy); the array may change after the call.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine update(self, rgba, stat)

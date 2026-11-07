@@ -58,6 +58,8 @@ graph LR
 - [open_file_dialog](#open-file-dialog)
 - [save_file_dialog](#save-file-dialog)
 - [open_folder_dialog](#open-folder-dialog)
+- [open_file_browser](#open-file-browser)
+- [save_file_browser](#save-file-browser)
 - [file_dialog_result](#file-dialog-result)
 - [save_image](#save-image)
 - [image_result](#image-result)
@@ -65,6 +67,7 @@ graph LR
 - [load_layout](#load-layout)
 - [destroy](#destroy)
 - [show_file_dialog](#show-file-dialog)
+- [show_file_browser](#show-file-browser)
 - [frame_options](#frame-options)
 - [next_frame](#next-frame)
 - [quit_requested](#quit-requested)
@@ -112,7 +115,9 @@ A FIGURE application (one per program).
 | `open_file_dialog` | pass(self) | The system's dialog to choose a file to open. |
 | `save_file_dialog` | pass(self) | The system's dialog to choose where to save. |
 | `open_folder_dialog` | pass(self) | The system's dialog to choose a folder. |
-| `file_dialog_result` | pass(self) | The answer to a dialog, once given. |
+| `open_file_browser` | pass(self) | FIGURE's browser to choose a file (or a folder) to open. |
+| `save_file_browser` | pass(self) | FIGURE's browser to choose where to save. |
+| `file_dialog_result` | pass(self) | The answer to a dialog or a browser, once given. |
 | `save_image` | pass(self) | A rectangle of the window as a PNG file, after this frame. |
 | `image_result` | pass(self) | The outcome of save_image, once. |
 | `save_layout` | pass(self) | The arrangement of the windows (docking included) to a file. |
@@ -425,6 +430,8 @@ Tell the user something without a dialog: a notification drawn by FIGURE after t
  (`notifications`). Statuses: `FIG_ERR_STATE` before `init*` or from a task, `FIG_ERR_ARGUMENT` for an unknown
  kind. The same in every mode.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine notify(self, text, kind, seconds, stat)
 ```
@@ -686,7 +693,7 @@ flowchart TD
 Show the system's dialog to choose a file to open. It does not block: the interface keeps drawing, and the answer
  is read with `file_dialog_result(id, ...)` on the following frames. `filters`: entries `'name|pattern'`, the
  pattern being extensions separated by `;` (`'Input files|input;inp'`, `'All files|*'`). Window mode only:
- `FIG_ERR_STATE` in remote and headless modes (ask for the path in a text field there).
+ `FIG_ERR_STATE` in remote and headless modes (FIGURE's own browser, `open_file_browser`, works there).
 
 ```fortran
 subroutine open_file_dialog(self, id, filters, default_path, stat)
@@ -761,12 +768,82 @@ flowchart TD
   style open_folder_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### open_file_browser
+
+Show FIGURE's file browser to choose a file to open (or, with `folders`, a folder): a modal drawn by FIGURE in
+ Dear ImGui, in the palette's colours, the same in window, remote and headless modes (in remote mode it lists the
+ files of the machine the program runs on). It does not block: the answer is read with `file_dialog_result(id,
+ ...)`, as a system dialog's, so a program switches between the two by changing this call. The browser lists the
+ folder's entries (folders first, sizes, modification times; sorted by a click on a column's header), filtered by
+ `filters` (as `open_file_dialog`'s, chosen in a list) with hidden files on request; a path field (Enter goes
+ there, Tab completes), the parent folder, places (home, the working directory, the file systems' roots, the
+ recent folders kept between runs in FIGURE's settings file) and a new folder. Escape or Cancel cancels. A folder
+ that cannot be read is reported in the browser. Statuses: `FIG_ERR_STATE` before `init*`, from a task, or for an
+ id with a dialog or a browser still open; `FIG_ERR_ARGUMENT` for a malformed filter.
+
+**Attributes**: recursive
+
+```fortran
+subroutine open_file_browser(self, id, filters, default_path, folders, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `id` | character(len=*) | in |  | Dialog id (any text, used to read the answer). |
+| `filters` | character(len=*) | in | optional | File type filters, `'name\|pattern'` (the first in effect). |
+| `default_path` | character(len=*) | in | optional | Folder to start in, or a file (its folder; the file |
+| `folders` | logical | in | optional | Choose a folder instead of a file (default false). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  open_file_browser["open_file_browser"] --> figure_refused["figure_refused"]
+  open_file_browser["open_file_browser"] --> show_file_browser["show_file_browser"]
+  style open_file_browser fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### save_file_browser
+
+Show FIGURE's file browser to choose where to save: a name typed in the folder shown, or an existing file; a file
+ that exists is replaced only after the user says so. As `open_file_browser`; `default_path` may name the file
+ to propose (its folder need exist, the file need not).
+
+**Attributes**: recursive
+
+```fortran
+subroutine save_file_browser(self, id, filters, default_path, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `id` | character(len=*) | in |  | Dialog id. |
+| `filters` | character(len=*) | in | optional | File type filters, `'name\|pattern'`. |
+| `default_path` | character(len=*) | in | optional | Folder to start in, or the file to propose. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  save_file_browser["save_file_browser"] --> figure_refused["figure_refused"]
+  save_file_browser["save_file_browser"] --> show_file_browser["show_file_browser"]
+  style save_file_browser fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ### file_dialog_result
 
-The answer to the dialog `id`: `done` false while it is open; once answered, `done` true and either `path` (the
- file or folder chosen) or `cancelled` true. The answer is given once; then the id is free again, and until the
- next dialog `done` is false: poll it every frame. A dialog that failed (Linux without a portal or zenity) gives
- `done` true and `FIG_ERR_FAILED` with the reason.
+The answer to the dialog or the browser `id`: `done` false while it is open; once answered, `done` true and
+ either `path` (the file or folder chosen, absolute for the browser) or `cancelled` true. The answer is given once;
+ then the id is free again, and until the next dialog `done` is false: poll it every frame. A dialog that failed
+ (Linux without a portal or zenity) gives `done` true and `FIG_ERR_FAILED` with the reason.
 
 ```fortran
 subroutine file_dialog_result(self, id, path, done, cancelled, stat)
@@ -964,6 +1041,35 @@ flowchart TD
   style show_file_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
+### show_file_browser
+
+Open FIGURE's file browser of `kind` (0 open, 1 save, 2 folder).
+
+```fortran
+subroutine show_file_browser(kind, id, filters, default_path, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `kind` | integer(kind=c_int) | in |  | Kind. |
+| `id` | character(len=*) | in |  | Dialog id. |
+| `filters` | character(len=*) | in | optional | 'name\|pattern' entries. |
+| `default_path` | character(len=*) | in | optional | Where to start. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  open_file_browser["open_file_browser"] --> show_file_browser["show_file_browser"]
+  save_file_browser["save_file_browser"] --> show_file_browser["show_file_browser"]
+  show_file_browser["show_file_browser"] --> fig_file_browser["fig_file_browser"]
+  show_file_browser["show_file_browser"] --> figure_check["figure_check"]
+  style show_file_browser fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
 ## Functions
 
 ### frame_options
@@ -996,6 +1102,8 @@ flowchart TD
 ### next_frame
 
 Render the open frame (if any), then process input and open the next; `.false.` when the user quits.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 

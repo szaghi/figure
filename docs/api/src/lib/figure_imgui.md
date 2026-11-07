@@ -81,6 +81,8 @@ Numeric field for an integer or a real value.
 
 End the window opened by `ig_begin` (whatever it returned).
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_end()
 ```
@@ -440,6 +442,8 @@ Begin a window; always pair with `ig_end`. With `open`, the window has a close b
  `flags` combine `ImGuiWindowFlags_*` with `ior` (`NoTitleBar`, `NoResize`, `NoMove`, `AlwaysAutoResize`,
  `NoBackground`, `NoDecoration`, `NoDocking`, ...).
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -471,6 +475,8 @@ Begin a bar along one side of the display: a toolbar, a status bar. `side` is `'
  not movable, not resizable, not dockable, which the work area leaves out: a dock space (`ig_dock_space`) and
  the main menu bar's neighbours fill the rest. Declare it every frame, after the main menu bar and before the dock
  space; always pair with `ig_end`. An unknown side is taken as `'left'`.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 

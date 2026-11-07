@@ -60,6 +60,8 @@ graph LR
 A dock space covering the display, every frame, before the windows docked into it. Where nothing is docked it
  is transparent: floating windows and the window background show through.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_dock_space(id, flags, stat)
 ```

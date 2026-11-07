@@ -882,6 +882,8 @@ flowchart TD
 
 Begin a plot; if true, declare its content and call `ip_end_plot`.
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -914,6 +916,8 @@ A grid of `rows` x `cols` plots in one figure; when true, declare the plots (`ip
  per cell, row by row), then `ip_end_subplots`. `link_x`/`link_y`: the plots share the x (y) range, so zooming one
  zooms all. Size as `ip_begin_plot` (a negative `height` fills the space left). The first time a figure is drawn,
  its plots fit to their data; linked axes take the range of the last plot (the common abscissa, in practice).
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 

@@ -108,6 +108,8 @@ A procedure of the program run on a worker thread. Not to be copied. An object t
 
 The worker thread's entry: the task's work on its data.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine task_trampoline(arg)
 ```
@@ -122,6 +124,8 @@ subroutine task_trampoline(arg)
 
 Post the progress, `fraction` of the work done in [0, 1] (clamped), and a message (absent: the previous one
  stays); the frame loop is woken to show it. Cheap: call it as often as useful, a few times a second is plenty.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine handle_report(self, fraction, message)
@@ -147,6 +151,8 @@ flowchart TD
 
 Report a failure (a file that cannot be read): `t%result` gives `FIG_ERR_FAILED` and `message`. The task should
  then return; the first failure is kept.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine handle_fail(self, message)
@@ -334,6 +340,8 @@ flowchart TD
 
 True once the program asked the task to stop (`t%cancel`, the object's end, a refused drawing call): return
  from `work` at this safe point, leaving `data` consistent.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
