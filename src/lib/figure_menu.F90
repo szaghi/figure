@@ -26,7 +26,7 @@ public :: ig_menu_item, ig_shortcut
 public :: ig_open_popup, ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
 
 contains
-   function ig_begin_main_menu_bar() result(visible)
+   recursive function ig_begin_main_menu_bar() result(visible)
    !< Begin the menu bar along the top of the display; when true, declare menus, then `ig_end_main_menu_bar`.
    logical :: visible !< The bar is drawn.
 
@@ -40,7 +40,7 @@ contains
    call igEndMainMenuBar()
    endsubroutine ig_end_main_menu_bar
 
-   function ig_begin_menu_bar() result(visible)
+   recursive function ig_begin_menu_bar() result(visible)
    !< Begin the current window's menu bar (the window needs `ImGuiWindowFlags_MenuBar`); then `ig_end_menu_bar`.
    logical :: visible !< The bar is drawn.
 
@@ -124,7 +124,7 @@ contains
    if (igOpenPopup_Str(cstr(id), 0_c_int)) continue
    endsubroutine ig_open_popup
 
-   function ig_begin_popup(id) result(open)
+   recursive function ig_begin_popup(id) result(open)
    !< A popup (no title bar), declared every frame; true while open: declare its content, then `ig_end_popup`. It
    !< closes when the user clicks outside it.
    character(len=*), intent(in) :: id   !< Popup id.
@@ -135,7 +135,7 @@ contains
    open = logical(igBeginPopup(cstr(id), 0_c_int))
    endfunction ig_begin_popup
 
-   function ig_begin_popup_modal(title, open) result(shown)
+   recursive function ig_begin_popup_modal(title, open) result(shown)
    !< A modal dialog titled `title` (also its id), declared every frame; true while open: the rest of the interface
    !< is greyed out and ignores input until it closes (`ig_close_current_popup`, inside it). With `open`, a close
    !< button in its title bar sets it false. Its size fits its content.

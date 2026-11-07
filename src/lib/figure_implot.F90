@@ -109,7 +109,7 @@ endinterface ip_shaded
 contains
    ! plots
 
-   function ip_begin_plot(title, width, height, equal) result(visible)
+   recursive function ip_begin_plot(title, width, height, equal) result(visible)
    !< Begin a plot; if true, declare its content and call `ip_end_plot`.
    character(len=*), intent(in)           :: title   !< Title (also the plot id; '##id' hides it).
    real(real64),     intent(in), optional :: width   !< Width [pixels] (default: full width).
@@ -136,7 +136,7 @@ contains
    visible = logical(ImPlot_BeginPlot(cstr(title), extent, flags))
    endfunction ip_begin_plot
 
-   function ip_begin_subplots(title, rows, cols, width, height, link_x, link_y) result(visible)
+   recursive function ip_begin_subplots(title, rows, cols, width, height, link_x, link_y) result(visible)
    !< A grid of `rows` x `cols` plots in one figure; when true, declare the plots (`ip_begin_plot`/`ip_end_plot`, one
    !< per cell, row by row), then `ip_end_subplots`. `link_x`/`link_y`: the plots share the x (y) range, so zooming one
    !< zooms all. Size as `ip_begin_plot` (a negative `height` fills the space left). The first time a figure is drawn,

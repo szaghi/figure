@@ -46,7 +46,7 @@ contains
    id = int(fig_dock_id(name, len(name, c_int)), int32)
    endfunction ig_dock_id
 
-   subroutine ig_dock_space(id, flags, stat)
+   recursive subroutine ig_dock_space(id, flags, stat)
    !< A dock space covering the display, every frame, before the windows docked into it. Where nothing is docked it
    !< is transparent: floating windows and the window background show through.
    integer(int32), intent(in)            :: id    !< Dock id (`ig_dock_id`).

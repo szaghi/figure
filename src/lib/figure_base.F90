@@ -53,7 +53,7 @@ contains
    call figure_check(status, stat)
    endsubroutine figure_fail
 
-   function figure_refused(name, stat) result(refused)
+   recursive function figure_refused(name, stat) result(refused)
    !< True when called from a task's worker thread: the drawing entry point `name` must return at once. The task's
    !< status becomes `FIG_ERR_STATE` with a message naming `name` (given by `t%result`), the task is asked to stop, and
    !< `stat`, if present, is `FIG_ERR_STATE`. False on the main thread (nothing changes).

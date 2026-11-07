@@ -42,7 +42,7 @@ interface ig_input
 endinterface ig_input
 
 contains
-   function ig_begin(name, open, flags) result(visible)
+   recursive function ig_begin(name, open, flags) result(visible)
    !< Begin a window; always pair with `ig_end`. With `open`, the window has a close button that sets it false.
    !< `flags` combine `ImGuiWindowFlags_*` with `ior` (`NoTitleBar`, `NoResize`, `NoMove`, `AlwaysAutoResize`,
    !< `NoBackground`, `NoDecoration`, `NoDocking`, ...).
@@ -67,7 +67,7 @@ contains
    if (present(open)) open = logical(o)
    endfunction ig_begin
 
-   function ig_begin_side_bar(name, side, size) result(visible)
+   recursive function ig_begin_side_bar(name, side, size) result(visible)
    !< Begin a bar along one side of the display: a toolbar, a status bar. `side` is `'left'`, `'right'`, `'top'` or
    !< `'bottom'`; `size` its width (left, right) or height (top, bottom) [pixels]. It is a window without title bar,
    !< not movable, not resizable, not dockable, which the work area leaves out: a dock space (`ig_dock_space`) and
@@ -105,7 +105,7 @@ contains
    if (focused) call igSetWindowFocus_Str(cstr(name))
    endfunction ig_focus_window
 
-   subroutine ig_end()
+   recursive subroutine ig_end()
    !< End the window opened by `ig_begin` (whatever it returned).
    if (figure_refused('ig_end')) return ! a task does not draw
    call igEnd()

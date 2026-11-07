@@ -469,7 +469,7 @@ contains
    enddo
    endfunction log_copy
 
-   subroutine log_draw(self, id, height)
+   recursive subroutine log_draw(self, id, height)
    !< Draw the lines in a region of their own (`id`, not shown) as wide as the space left and `height` [pixels] high
    !< (absent or 0: the rest of the window; negative: leave that much below). Only the lines in view are drawn. The
    !< view follows the end while it is scrolled to the bottom; scrolled up, it stays where it is.

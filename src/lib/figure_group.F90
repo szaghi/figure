@@ -99,7 +99,7 @@ contains
    self%p = c_null_ptr
    endsubroutine clipper_final
 
-   function ig_begin_child(id, width, height, border) result(visible)
+   recursive function ig_begin_child(id, width, height, border) result(visible)
    !< A region inside the window, scrolling on its own (a list that scrolls while a help panel stays); always pair with
    !< `ig_end_child`, whatever this returned. `width`/`height` [pixels]: 0 or absent fills what is left, negative leaves
    !< that much.
@@ -123,13 +123,13 @@ contains
    visible = logical(igBeginChild_Str(cstr(id), extent, flags, 0_c_int))
    endfunction ig_begin_child
 
-   subroutine ig_end_child()
+   recursive subroutine ig_end_child()
    !< End the region opened by `ig_begin_child` (whatever it returned).
    if (figure_refused('ig_end_child')) return ! a task does not draw
    call igEndChild()
    endsubroutine ig_end_child
 
-   function ig_collapsing_header(label, default_open) result(open)
+   recursive function ig_collapsing_header(label, default_open) result(open)
    !< A header that shows or hides what follows it; true while open (then draw the content). No end call.
    character(len=*), intent(in)           :: label        !< Label (also its id).
    logical,          intent(in), optional :: default_open !< Open the first time it is shown (default: closed).
@@ -145,7 +145,7 @@ contains
    open = logical(igCollapsingHeader_TreeNodeFlags(cstr(label), flags))
    endfunction ig_collapsing_header
 
-   function ig_tree_node(label, default_open, selected, leaf, span_full_width, clicked) result(open)
+   recursive function ig_tree_node(label, default_open, selected, leaf, span_full_width, clicked) result(open)
    !< A node of a tree (`TreeNodeEx`); true while open: draw its children, then `ig_tree_pop` (only after true).
    !< The arrow, or a double-click on the label, opens and closes the node; a single click on the label is reported
    !< by `clicked` (`IsItemClicked` and not `IsItemToggledOpen`), so choosing a node and expanding it stay different.
@@ -198,7 +198,7 @@ contains
    call igSetNextItemOpen(logical(open, c_bool), cond)
    endsubroutine ig_set_next_item_open
 
-   function ig_begin_tab_bar(id) result(visible)
+   recursive function ig_begin_tab_bar(id) result(visible)
    !< Begin a bar of tabs; when true, declare the tabs (`ig_begin_tab`) and close it with `ig_end_tab_bar`.
    character(len=*), intent(in) :: id      !< Id of the bar (not shown).
    logical                      :: visible !< The bar is drawn.
@@ -236,7 +236,7 @@ contains
    call igEndTabItem()
    endsubroutine ig_end_tab
 
-   function ig_begin_table(id, columns, flags, height) result(visible)
+   recursive function ig_begin_table(id, columns, flags, height) result(visible)
    !< Begin a table of `columns` columns; when true, fill it and close it with `ig_end_table`. `flags` combine
    !< `ImGuiTableFlags_*` with `ior` (default: borders, alternating row background, resizable columns); `height`
    !< [pixels] fixes the table's height (with `ImGuiTableFlags_ScrollY`, the rows scroll inside it).

@@ -46,7 +46,7 @@ type :: texture_object
 endtype texture_object
 
 contains
-   subroutine init(self, width, height, smooth, stat)
+   recursive subroutine init(self, width, height, smooth, stat)
    !< Create a `width` x `height` texture (contents undefined until `update`); an existing one is destroyed first.
    class(texture_object), intent(inout)         :: self   !< Texture.
    integer(int32),        intent(in)            :: width  !< Width [pixels].
@@ -68,7 +68,7 @@ contains
    call figure_check(status, stat)
    endsubroutine init
 
-   subroutine update(self, rgba, stat)
+   recursive subroutine update(self, rgba, stat)
    !< Upload all the pixels, `rgba(4, width, height)`, in place (no copy); the array may change after the call.
    class(texture_object), intent(in)                     :: self       !< Texture.
    integer(int8),         intent(in), contiguous, target :: rgba(:,:,:) !< Pixels: rgba(:, i, j) = R, G, B, A of (i, j).
