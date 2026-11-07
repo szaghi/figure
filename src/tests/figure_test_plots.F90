@@ -10,22 +10,31 @@ program figure_test_plots
 !< `<name>_r` is reversed, `levels` gives discrete bands (the map's colour at each band's centre, not blended); a CSV
 !< table (loaded before init) and a ParaView JSON preset (Diverging, checked against Moreland's table) are loaded;
 !< unknown names, bad levels, taken names and malformed files are refused with their statuses.
-use, intrinsic :: iso_c_binding, only : c_float, c_int
-use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
+!<
+!< Contour lines, without a GUI: a paraboloid gives closed circles of the expected radii; the two saddle cases join
+!< the corners the centre value says; NaNs leave holes; automatic levels are round numbers inside the range. In a
+!< plot: error bars, an annotation and a contour drawn where expected (by their colours' extents); two drag lines and a
+!< drag point moved by synthetic drags; bad arguments refused.
+use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
+use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
+use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use figure, only : app_object, ig_begin, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, &
                    ig_dock_split, ig_dock_window, ig_end, ig_set_next_window_dock, ig_text, ig_window_dock,   &
                    ip_begin_plot, ip_begin_subplots, ip_end_plot, ip_end_subplots, ip_line, ip_setup_axes,   &
                    ip_colormap, ip_colormap_names, ip_colormap_scale, ip_heatmap, ip_load_colormap,         &
                    FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK
+use figure, only : ig_set_next_window, ip_annotation, ip_contour, ip_contour_levels, ip_contour_lines, ip_drag_line_x, &
+                   ip_drag_line_y, ip_drag_point, ip_error_bars, ip_setup_axes_limits, ip_spec
 use figure_cimgui, only : im_vec4
+use figure_cimgui, only : im_vec2
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapCount, ImPlot_GetColormapSize, &
-                           ImPlot_GetPlotLimits, ImPlot_SampleColormap
-use figure_testing, only : test_plot_tick
+                           ImPlot_GetPlotLimits, ImPlot_SampleColormap, ImPlot_PlotToPixels_double
+use figure_testing, only : test_drag, test_drawn_extent, test_plot_tick
 
 implicit none
-integer(int32), parameter     :: FRAMES = 20_int32 !< Frames run.
+integer(int32), parameter     :: FRAMES = 40_int32 !< Frames run.
 type(app_object)              :: app               !< Application.
-logical                       :: test_passed(13)   !< Per-check outcome.
+logical                       :: test_passed(24)   !< Per-check outcome.
 character(len=:), allocatable :: label             !< A tick label.
 integer(int32)                :: nticks(2)         !< Ticks: formatted axis, default axis.
 logical                       :: all_formatted     !< Every tick of the formatted axis starts with 'T='.
@@ -65,10 +74,24 @@ character(len=*), parameter   :: JSON = 'figure_test_plots.tmp.json'   !< ParaVi
 character(len=:), allocatable :: names(:)          !< The colormap names.
 integer(int32)                :: stat_before(2)    !< ip_load_colormap and ip_colormap before init.
 integer(int32)                :: id_before         !< ip_colormap's id before init.
+real(real64), parameter       :: C_ERR(4) = [0.9_real64, 0.1_real64, 0.8_real64, 1.0_real64] !< Error bars' colour.
+real(real64), parameter       :: C_ANN(4) = [0.1_real64, 0.9_real64, 0.7_real64, 1.0_real64] !< Annotation's box.
+real(real64), parameter       :: C_CON(4) = [0.8_real64, 0.7_real64, 0.1_real64, 1.0_real64] !< A contour's colour.
+real(real64)                  :: bowl(41, 41)      !< (x - 5)^2 + (y - 5)^2 over [0, 10]^2.
+real(real64)                  :: drag_x = 2.0_real64     !< The vertical drag line.
+real(real64)                  :: drag_y = 2.0_real64     !< The horizontal drag line.
+real(real64)                  :: point(2) = [7.0_real64, 6.0_real64] !< The drag point.
+logical                       :: moved(3) = .false.      !< Each drag tool reported a move.
+real(real64)                  :: pix(2, 6)         !< Pixels of plot points: 1-2 bars' ends, 3 annotation, 4-5 the
+                                                   !< circle's left and right, 6 a pixel per unit (x, y).
+real(real64)                  :: ext(4, 3)         !< Extents drawn: error bars, annotation, contour.
+logical                       :: drawn(3)          !< ... found.
+integer(int32)                :: s_extra(4)        !< Statuses of the plot extras.
 
 late_node = 0_int32
 late_docked = .false.
 call write_files()
+call check_contours(test_passed(14:17))
 call ip_load_colormap('rgb-test', CSV, stat=stat_before(1)) ! no ImPlot context needed
 id_before = ip_colormap('magma', stat=stat_before(2))      ! one is: refused
 call app%init_headless(1000_int32, 800_int32)
@@ -128,6 +151,7 @@ do frame = 1_int32, FRAMES
       endif
    endif
    call ig_end()
+   call draw_extras(frame)
    if (frame >= 10_int32) then                       ! a window that appears after the layout was built
       call ig_set_next_window_dock(right)
       if (ig_begin('Late')) then
@@ -138,6 +162,7 @@ do frame = 1_int32, FRAMES
    endif
 enddo
 call check_colormaps(test_passed(7:13))
+call check_refusals(test_passed(24))
 call app%destroy()
 
 test_passed(1) = nticks(1) > 1_int32 .and. all_formatted                       ! every label follows the format
@@ -147,11 +172,22 @@ test_passed(4) = abs(linked(1)%X%Max - linked(2)%X%Max) < 1.0e-9_real64 .and. li
                                                                     ! fitted to the data (ImPlot gives linked axes none)
 test_passed(5) = unlinked(1)%X%Max < 5.0_real64 .and. unlinked(2)%X%Max > 5.0_real64     ! unlinked: their own
 test_passed(6) = late_docked .and. late_node == right                          ! the late window in its node
+test_passed(18) = drawn(1) .and. abs(ext(4, 1) - pix(2, 1)) < 3.0_real64 .and. abs(ext(2, 1) - pix(2, 2)) < 3.0_real64 &
+                  .and. all(s_extra(1:2) == FIG_OK)                            ! error bars from y - err to y + err_high
+test_passed(19) = drawn(2) .and. ext(1, 2) < pix(1, 3) .and. pix(1, 3) < ext(3, 2) .and. ext(2, 2) < pix(2, 3) .and. &
+                  pix(2, 3) < ext(4, 2) .and. s_extra(3) == FIG_OK               ! the annotation's box around its point
+test_passed(20) = drawn(3) .and. abs(ext(1, 3) - pix(1, 4)) < 3.0_real64 .and. abs(ext(3, 3) - pix(1, 5)) < 3.0_real64 &
+                  .and. s_extra(4) == FIG_OK                                   ! the circle of radius 2, 2 units wide
+test_passed(21) = moved(1) .and. abs(drag_x - 3.0_real64) < 0.15_real64          ! dragged by one unit
+test_passed(22) = moved(2) .and. abs(drag_y - 4.0_real64) < 0.15_real64          ! by two
+test_passed(23) = moved(3) .and. all(abs(point - [8.0_real64, 7.0_real64]) < 0.15_real64)
 
 write(output_unit, '(A,*(L2))') 'figure_test_plots checks:', test_passed
 if (.not. all(test_passed)) write(output_unit, '(A,2I3,A,2L2,A,4F9.3,A,2I12,L2)') 'ticks', nticks, &
    ', formatted/default', all_formatted, any_default, ', x max linked/unlinked', linked(1)%X%Max, linked(2)%X%Max, &
    unlinked(1)%X%Max, unlinked(2)%X%Max, ', late node/right/docked', late_node, right, late_docked
+if (.not. all(test_passed(18:23))) write(output_unit, '(A,12F8.1,A,12F8.1,A,3L2,A,4F8.3,A,4I3)') 'pixels', pix, &
+   ', extents', ext, ', drawn', drawn, ', drags', drag_x, drag_y, point, ', statuses', s_extra
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
@@ -311,4 +347,209 @@ contains
    if (.not. all(passed)) write(output_unit, '(A,7L2,A,8I3)') 'colormaps', passed, ', statuses', s
    call delete_files()
    endsubroutine check_colormaps
+   function pixel(x, y) result(p)
+   !< The pixel of the plot point (x, y), in the plot being declared.
+   real(real64), intent(in) :: x    !< Abscissa.
+   real(real64), intent(in) :: y    !< Ordinate.
+   real(real64)             :: p(2) !< Pixel.
+   type(im_vec2)            :: v    !< ImPlot's.
+
+   v = ImPlot_PlotToPixels_double(real(x, c_double), real(y, c_double), -1_c_int, -1_c_int)
+   p = real([v%x, v%y], real64)
+   endfunction pixel
+
+   subroutine draw_extras(frame)
+   !< A plot with error bars, an annotation, contours and drag tools, the drags queued on frames 5, 15 and 25.
+   integer(int32), intent(in) :: frame  !< Frame.
+   integer(int32)             :: i, j   !< Counters.
+   real(real64)               :: a(2)   !< A drag's start [pixels].
+   real(real64)               :: b(2)   !< Its end.
+
+   if (frame == 1_int32) then
+      do j = 1_int32, 41_int32
+         do i = 1_int32, 41_int32
+            bowl(i, j) = ((i - 1) * 0.25_real64 - 5.0_real64)**2 + ((j - 1) * 0.25_real64 - 5.0_real64)**2
+         enddo
+      enddo
+   endif
+   call ig_set_next_window(520.0_real64, 20.0_real64, 460.0_real64, 460.0_real64, always=.true.)
+   if (ig_begin('Extras')) then
+      if (ip_begin_plot('extras', width=420.0_real64, height=400.0_real64)) then
+         call ip_setup_axes('x', 'y')
+         call ip_setup_axes_limits(0.0_real64, 10.0_real64, 0.0_real64, 10.0_real64, always=.true.)
+         call ip_error_bars('err', [2.0_real64, 4.0_real64], [5.0_real64, 5.0_real64], [1.0_real64, 2.0_real64], &
+                            [1.0_real64, 1.5_real64], spec=ip_spec(line_color=C_ERR), stat=s_extra(1))
+         call ip_error_bars('err32', [2.0_real32], [5.0_real32], [0.5_real32], stat=s_extra(2))
+         call ip_annotation(8.0_real64, 8.0_real64, 'peak', color=C_ANN, stat=s_extra(3))
+         call ip_annotation(1.0_real64, 9.0_real64, 'note', offset=[10.0_real64, -10.0_real64])
+         call ip_contour('##bowl', bowl, 0.0_real64, 10.0_real64, 0.0_real64, 10.0_real64, levels=[4.0_real64], &
+                         color=C_CON, line_weight=2.0_real64, stat=s_extra(4))
+         call ip_contour('bowl levels', bowl, 0.0_real64, 10.0_real64, 0.0_real64, 10.0_real64, nlevels=5_int32, &
+                         colormap=ip_colormap('magma'), labels=.true.)
+         call ip_contour('bowl32', real(bowl, real32), 0.0_real64, 10.0_real64, 0.0_real64, 10.0_real64, &
+                         levels=[1.0_real64])
+         moved(1) = ip_drag_line_x(1_int32, drag_x) .or. moved(1)
+         moved(2) = ip_drag_line_y(2_int32, drag_y, color=[1.0_real64, 0.0_real64, 0.0_real64, 1.0_real64]) .or. moved(2)
+         moved(3) = ip_drag_point(3_int32, point(1), point(2), radius=6.0_real64) .or. moved(3)
+         pix(:, 1) = pixel(4.0_real64, 3.0_real64)
+         pix(:, 2) = pixel(4.0_real64, 6.5_real64)
+         pix(:, 3) = pixel(8.0_real64, 8.0_real64)
+         pix(:, 4) = pixel(3.0_real64, 5.0_real64)
+         pix(:, 5) = pixel(7.0_real64, 5.0_real64)
+         if (frame == 5_int32) then
+            a = pixel(drag_x, 8.0_real64)
+            b = pixel(drag_x + 1.0_real64, 8.0_real64)
+         elseif (frame == 15_int32) then
+            a = pixel(9.0_real64, drag_y)
+            b = pixel(9.0_real64, drag_y + 2.0_real64)
+         elseif (frame == 25_int32) then
+            a = pixel(point(1), point(2))
+            b = pixel(point(1) + 1.0_real64, point(2) + 1.0_real64)
+         endif
+         call ip_end_plot()
+         if (frame == 5_int32 .or. frame == 15_int32 .or. frame == 25_int32) call test_drag(a(1), a(2), b(1), b(2))
+         call test_drawn_extent(C_ERR, ext(1, 1), ext(2, 1), ext(3, 1), ext(4, 1), drawn(1))
+         call test_drawn_extent(C_ANN, ext(1, 2), ext(2, 2), ext(3, 2), ext(4, 2), drawn(2))
+         call test_drawn_extent(C_CON, ext(1, 3), ext(2, 3), ext(3, 3), ext(4, 3), drawn(3))
+      endif
+   endif
+   call ig_end()
+   endsubroutine draw_extras
+
+   function closed(x, y) result(ok)
+   !< Whether segment ends make closed lines: every end is shared by an even number of ends (within 1e-12).
+   real(real64), intent(in) :: x(:) !< Ends, x.
+   real(real64), intent(in) :: y(:) !< Ends, y.
+   logical                  :: ok   !< Closed.
+   integer(int64)           :: e    !< Counter.
+
+   ok = .true.
+   do e = 1_int64, size(x, kind=int64)
+      ok = ok .and. mod(count(abs(x - x(e)) < 1.0e-12_real64 .and. abs(y - y(e)) < 1.0e-12_real64), 2) == 0
+   enddo
+   endfunction closed
+
+   function edge_of(x, y) result(c)
+   !< The edge of the unit square a point lies on: B, R, T, L (or ? for none).
+   real(real64), intent(in) :: x !< Abscissa.
+   real(real64), intent(in) :: y !< Ordinate.
+   character(len=1)         :: c !< Edge.
+
+   c = '?'
+   if (abs(y) < 1.0e-12_real64) c = 'B'
+   if (abs(x - 1.0_real64) < 1.0e-12_real64) c = 'R'
+   if (abs(y - 1.0_real64) < 1.0e-12_real64) c = 'T'
+   if (abs(x) < 1.0e-12_real64) c = 'L'
+   endfunction edge_of
+
+   function saddle(g, pairs) result(ok)
+   !< Whether the single cell g (unit square) at level 0.5 gives two segments joining the edges `pairs` (two pairs).
+   real(real64),     intent(in) :: g(2, 2) !< Corner values.
+   character(len=4), intent(in) :: pairs   !< Expected pairs of edges, each sorted: 'BLRT' is B-L and R-T.
+   logical                      :: ok      !< As expected.
+   real(real64), allocatable    :: x(:)    !< Ends, x.
+   real(real64), allocatable    :: y(:)    !< Ends, y.
+   integer(int64), allocatable  :: first(:)!< Level offsets.
+   character(len=2)             :: got(2)  !< Edges of each segment, sorted.
+   integer(int32)               :: s       !< Segment.
+
+   call ip_contour_lines(g, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, [0.5_real64], x, y, first)
+   ok = size(x) == 4
+   if (.not. ok) return
+   do s = 1_int32, 2_int32
+      got(s) = edge_of(x(2 * s - 1), y(2 * s - 1))//edge_of(x(2 * s), y(2 * s))
+      if (got(s)(1:1) > got(s)(2:2)) got(s) = got(s)(2:2)//got(s)(1:1)
+   enddo
+   ok = (got(1) == pairs(1:2) .and. got(2) == pairs(3:4)) .or. (got(1) == pairs(3:4) .and. got(2) == pairs(1:2))
+   endfunction saddle
+
+   subroutine check_contours(passed)
+   !< The contour checks, without a GUI: circles, saddles, holes, automatic levels.
+   logical, intent(out)          :: passed(4) !< Outcomes.
+   real(real64)                  :: f(41, 41) !< x^2 + y^2 over [-1, 1]^2.
+   real(real64)                  :: fn(41, 41)!< ... with NaNs where x > 0.31.
+   real(real64), allocatable     :: x(:), y(:), lev(:)
+   integer(int64), allocatable   :: first(:)  !< Level offsets.
+   real(real64), parameter       :: RADII(2) = [0.5_real64, 0.7071067811865476_real64] !< sqrt of the levels.
+   integer(int32)                :: i, j, k   !< Counters.
+   integer(int64)                :: e         !< An end.
+   logical                       :: ok        !< Accumulated outcome.
+
+   do j = 1_int32, 41_int32
+      do i = 1_int32, 41_int32
+         f(i, j) = (-1.0_real64 + (i - 1) * 0.05_real64)**2 + (-1.0_real64 + (j - 1) * 0.05_real64)**2
+         fn(i, j) = f(i, j)
+         if (-1.0_real64 + (i - 1) * 0.05_real64 > 0.31_real64) fn(i, j) = ieee_value(1.0_real64, ieee_quiet_nan)
+      enddo
+   enddo
+   ! 1. a paraboloid: closed circles of radius sqrt(level), within the interpolation's error; single precision too
+   call ip_contour_lines(f, -1.0_real64, 1.0_real64, -1.0_real64, 1.0_real64, [0.25_real64, 0.5_real64], x, y, first)
+   ok = size(first) == 3 .and. first(1) == 1_int64 .and. first(3) == size(x, kind=int64) + 1_int64
+   do k = 1_int32, 2_int32
+      ok = ok .and. first(k + 1) - first(k) > 80_int64
+      do e = first(k), first(k + 1) - 1_int64
+         ok = ok .and. abs(hypot(x(e), y(e)) - RADII(k)) < 2.0e-3_real64
+      enddo
+      ok = ok .and. closed(x(first(k):first(k + 1) - 1), y(first(k):first(k + 1) - 1))
+   enddo
+   call ip_contour_lines(real(f, real32), -1.0_real64, 1.0_real64, -1.0_real64, 1.0_real64, [0.25_real64], x, y, first)
+   ok = ok .and. size(x) > 80 .and. all(abs(hypot(x, y) - RADII(1)) < 2.0e-3_real64)
+   passed(1) = ok
+   ! 2. saddles: the centre value (the mean) decides which corners are joined
+   passed(2) = saddle(reshape([1.0_real64, 0.0_real64, 0.0_real64, 0.9_real64], [2, 2]), 'BLRT') .and. & ! mean below
+               saddle(reshape([1.0_real64, 0.0_real64, 0.2_real64, 1.0_real64], [2, 2]), 'BRLT') .and. & ! mean above
+               saddle(reshape([0.0_real64, 1.0_real64, 1.0_real64, 0.1_real64], [2, 2]), 'BLRT')       ! the other diagonal
+   ! 3. NaNs leave holes: no line where a cell has one, none at all in a field of NaNs
+   call ip_contour_lines(fn, -1.0_real64, 1.0_real64, -1.0_real64, 1.0_real64, [0.25_real64], x, y, first)
+   ok = size(x) > 20
+   ok = ok .and. all(ieee_finite(x)) .and. all(ieee_finite(y)) .and. all(x < 0.31_real64)
+   call ip_contour_lines(fn(30:, :), -1.0_real64, 1.0_real64, -1.0_real64, 1.0_real64, [0.25_real64], x, y, first)
+   passed(3) = ok .and. size(x) == 0 .and. all(first == 1_int64)
+   ! 4. automatic levels: round numbers strictly inside the finite range
+   lev = ip_contour_levels(f)
+   ok = size(lev) == 9
+   if (ok) ok = all(abs(lev - [(0.2_real64 * k, k = 1, 9)]) < 1.0e-12_real64)
+   lev = ip_contour_levels(real(f, real32), 4_int32)
+   ok = ok .and. size(lev) == 3
+   if (ok) ok = all(abs(lev - [0.5_real64, 1.0_real64, 1.5_real64]) < 1.0e-12_real64)
+   lev = ip_contour_levels(fn(20:, :), 3_int32)            ! the NaNs ignored: range [0, 0.3^2 + 1], step 0.5
+   ok = ok .and. size(lev) == 2
+   if (ok) ok = all(abs(lev - [0.5_real64, 1.0_real64]) < 1.0e-12_real64)
+   lev = ip_contour_levels(reshape([3.0_real64, 3.0_real64, 3.0_real64, 3.0_real64], [2, 2])) ! constant: none
+   ok = ok .and. size(lev) == 0
+   lev = ip_contour_levels(fn(30:, :))                     ! no finite value: none
+   passed(4) = ok .and. size(lev) == 0
+   if (.not. all(passed)) write(output_unit, '(A,4L2,A,*(F8.3))') 'contours', passed, ', levels', &
+      ip_contour_levels(f), ip_contour_levels(real(f, real32), 4_int32), ip_contour_levels(fn(20:, :), 3_int32)
+   endsubroutine check_contours
+
+   elemental function ieee_finite(v) result(ok)
+   !< Whether v is finite.
+   use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
+   real(real64), intent(in) :: v  !< Value.
+   logical                  :: ok !< Finite.
+
+   ok = ieee_is_finite(v)
+   endfunction ieee_finite
+
+   subroutine check_refusals(passed)
+   !< Bad arguments of the plot extras refused (outside a plot: the checks come first).
+   logical, intent(out) :: passed !< Outcome.
+   integer(int32)       :: s(9)   !< Statuses.
+   real(real64)         :: v      !< A drag value.
+   logical              :: m(2)   !< Drags' results.
+
+   v = 1.0_real64
+   call ip_annotation(0.0_real64, 0.0_real64, 'x', stat=s(1))                                 ! outside a plot
+   call ip_annotation(0.0_real64, 0.0_real64, 'x', color=[1.0_real64, 0.0_real64], stat=s(2))
+   call ip_annotation(0.0_real64, 0.0_real64, 'x', offset=[1.0_real64, 2.0_real64, 3.0_real64], stat=s(3))
+   call ip_contour('c', bowl, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, color=[1.0_real64], stat=s(4))
+   call ip_contour('c', bowl, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, nlevels=0_int32, stat=s(5))
+   call ip_contour('c', real(bowl, real32), 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, colormap=-5_int32, stat=s(6))
+   m(1) = ip_drag_line_x(1_int32, v, color=[1.0_real64], stat=s(7))
+   m(2) = ip_drag_point(1_int32, v, v, color=[1.0_real64, 1.0_real64, 1.0_real64], stat=s(8))
+   call ip_error_bars('e', [1.0_real64, 2.0_real64], [1.0_real64, 2.0_real64], [1.0_real64], stat=s(9))
+   passed = s(1) == FIG_ERR_STATE .and. all(s(2:9) == FIG_ERR_ARGUMENT) .and. .not. any(m)
+   if (.not. passed) write(output_unit, '(A,9I3)') 'refusals', s
+   endsubroutine check_refusals
 endprogram figure_test_plots

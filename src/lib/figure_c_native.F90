@@ -35,6 +35,7 @@ public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig
 public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_widget_input_text_multiline
 public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
 public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
+public :: fig_plot_annotation, fig_drawn_extent_rgba
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -315,6 +316,16 @@ interface
    integer(c_int),         intent(out) :: found     !< 1 if anything.
    integer(c_int)                      :: status    !< Status.
    endfunction fig_drawn_extent
+
+   function fig_drawn_extent_rgba(rgba, rect, found) result(status) bind(C, name='fig_drawn_extent_rgba')
+   !< The extent of the vertices drawn so far in the current window in an RGBA colour.
+   import :: c_float, c_int
+   implicit none
+   real(c_float),  intent(in)  :: rgba(4) !< Colour, RGBA in [0, 1].
+   real(c_float),  intent(out) :: rect(4) !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out) :: found   !< 1: something was drawn in it.
+   integer(c_int)              :: status  !< Status.
+   endfunction fig_drawn_extent_rgba
 
    function fig_task_start(fn, arg, id) result(status) bind(C, name='fig_task_start')
    !< Run fn(arg) on a worker thread.
@@ -1019,6 +1030,22 @@ interface
    integer(c_int), intent(out)         :: label_len !< Length of the label.
    integer(c_int)                      :: status    !< Status.
    endfunction fig_plot_tick_label
+
+   function fig_plot_annotation(x, y, rgba, dx, dy, clamp, text, text_len) result(status) &
+      bind(C, name='fig_plot_annotation')
+   !< An annotation of the plot being declared (drawn at its end).
+   import :: c_char, c_double, c_float, c_int
+   implicit none
+   real(c_double), value              :: x        !< Abscissa [plot units].
+   real(c_double), value              :: y        !< Ordinate [plot units].
+   real(c_float),          intent(in) :: rgba(4)  !< Box colour (alpha 0: no box).
+   real(c_float), value               :: dx       !< Offset along x [pixels] (0: centred).
+   real(c_float), value               :: dy       !< Offset along y [pixels], down (0: centred).
+   integer(c_int), value              :: clamp    !< 1: kept inside the plot.
+   character(kind=c_char), intent(in) :: text(*)  !< Text (not NUL-terminated).
+   integer(c_int), value              :: text_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_plot_annotation
 
    function fig_key_chord(keys, keys_len, chord) result(status) bind(C, name='fig_key_chord')
    !< A key chord from its name ("ctrl+s").

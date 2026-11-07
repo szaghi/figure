@@ -113,9 +113,79 @@ Series of different sizes are an error (`FIG_ERR_ARGUMENT`, message `<item>: the
   (the common abscissa, in practice). ImPlot itself gives linked axes no initial fit.
 - Size as `ip_begin_plot`: a negative `height` fills the space left; the default is 300 pixels per row.
 
+## Error bars, annotations and drag tools
+
+| Procedure | Notes |
+|---|---|
+| `ip_error_bars(label, x, y, err [, err_high] [, spec] [, stat])` | Vertical error bars (`PlotErrorBars`) at `(x(i), y(i))`, from `y(i) - err(i)` to `y(i) + err(i)`, or to `y(i) + err_high(i)` when given (asymmetric). Generic over `real(real32)` and `real(real64)`, read in place as the other items. The whisker width is `ip_spec(size=)` [pixels]. |
+| `ip_annotation(x, y, text [, color] [, offset] [, stat])` | A text (`Annotation`) at the plot point `(x, y)`, drawn when the plot ends, over the items, kept inside the plot area. Without `color`: the text alone in the plot's text colour; with it: in a box of that colour (RGBA in [0, 1]), the text black or white for contrast. `offset`: `[dx, dy]` [pixels], x right, y down, with a leader line to the point; a zero component centres the text on the point along that axis (the default). |
+| `ip_drag_line_x(id, x [, color] [, thickness] [, stat])` → `logical` | A vertical line at `x` that the user drags along x (`DragLineX`). `x` (`real(real64)`) is updated in place; `.true.` in the frames it moves. `thickness` [pixels], default 1. |
+| `ip_drag_line_y(id, y [, color] [, thickness] [, stat])` → `logical` | A horizontal line at `y`, dragged along y (`DragLineY`). |
+| `ip_drag_point(id, x, y [, color] [, radius] [, stat])` → `logical` | A point dragged in both directions (`DragPoint`); `radius` [pixels], default 4. |
+
+<<< @/examples/snippets/cb_contour-probes.F90{fortran}
+
+<<< @/examples/snippets/cb_contour-profile.F90{fortran}
+
+<Media name="cb_contour" video alt="Three plots. Top left: two vortices as a heatmap with black contour lines labelled with their values. Top right: the same lines coloured by value around a circular hole marked NaN, a white vertical line and a white point. The vertical line is dragged left to x = 1.1 and the profile plot below, the field along that line with error bars on nine samples, gets a gap where the line crosses the hole. Then the point is dragged into the hole, its label reads 'inside the body', and on to the right vortex, where it reads g = -0.484." caption="docs/examples/src/cb_contour.F90: contour lines, a drag line choosing the profile, a drag point with an annotation" />
+
+- Call them between `ip_begin_plot` and `ip_end_plot`, after the setup (`ip_setup_axes*`).
+- `id` tells the drag tools of one plot apart: any integer, unique among them. The drag tools are not items: they
+  have no legend entry, but their positions take part in fitting the axes.
+- A drag tool only moves its variable; constraints are the program's: clamp the value when the result is `.true.`,
+  as the example does. Without `color`, a drag tool is drawn in the style's text colour.
+- An annotation is not an item either: no legend entry, and it does not take part in fitting the axes.
+- Statuses: `FIG_ERR_ARGUMENT` for a colour without 4 components, an offset without 2, error-bar arrays of
+  different sizes; `FIG_ERR_STATE` for `ip_annotation` outside a plot, and for any of them from a
+  [task](processes#tasks). `stat` is optional (absent: `error stop` with the message).
+- Modes: the same in **window**, **headless** and **remote** mode. In headless mode the drag tools answer synthetic
+  input (`test_drag`, [Testing](testing)); in remote mode the browser's pointer drags them.
+
+## Contour lines
+
+ImPlot has no contour lines: FIGURE computes them in Fortran (marching squares) and draws them as ImPlot line
+segments.
+
+| Procedure | Notes |
+|---|---|
+| `ip_contour(label, f, x0, x1, y0, y1 [, levels] [, nlevels] [, colormap] [, color] [, labels] [, line_weight] [, stat])` | The contour lines of the field `f(i, j)` in the current plot. `f` is `real(real32)` or `real(real64)`, read in place (any array, sections too). The segments are computed at every call and drawn as one line item per level, with one legend entry, `label`. |
+| `ip_contour_lines(f, x0, x1, y0, y1, levels, x, y, first)` | The same segments without drawing them, a `pure` subroutine (no GUI needed): `x(:)`, `y(:)` (`real(real64)`, allocatable) hold the segments' ends in pairs, level `k`'s from `first(k)` to `first(k+1) - 1` (`integer(int64)`, allocatable, `size(levels) + 1`). |
+| `ip_contour_levels(f [, count])` → `real(real64)` array | About `count` (default 10) levels at round numbers strictly inside the finite range of `f`: the multiples of a step of 1, 2, 2.5 or 5 times a power of ten, the smallest such step not below the range over `count`. None for a constant field, one with no finite value, or `count < 1`. `pure`. |
+
+<<< @/examples/snippets/cb_contour-contour.F90{fortran}
+
+- **Sampling.** `f(i, j)` is the value at `x = x0 + (i - 1) (x1 - x0) / (size(f, 1) - 1)` and
+  `y = y0 + (j - 1) (y1 - y0) / (size(f, 2) - 1)`: `x0`, `x1`, `y0`, `y1` are the positions of the first and last
+  samples, as in a node-based grid. A [heatmap](images#heatmaps) takes the outer edges of its cells instead: to lay
+  the lines over a heatmap of the same array, give the heatmap bounds half a spacing beyond the samples, as above.
+  The grid is uniform along each axis; curvilinear and unstructured grids are not supported.
+- **Levels.** `levels` (`real(real64)`, any order) or, without it, `ip_contour_levels(f, nlevels)`; `nlevels` < 1
+  is refused.
+- **Colours.** With `colormap` (an id from [`ip_colormap`](colormaps)) each level takes the map's colour at its
+  value placed in the field's finite range, as a heatmap of `f` with the same map and no fixed scale colours it;
+  with `color` (RGBA in [0, 1]) every level has that colour; with neither, the item's automatic colour.
+  `line_weight` [pixels].
+- **Labels.** `labels=.true.` writes each level's value in a box of its colour on one of its segments (an
+  annotation, drawn when the plot ends). The segment is taken part-way through the level's segments, a different
+  fraction for each level, so the labels of nearby levels fall apart; they can still overlap where lines crowd.
+- **The algorithm.** Each cell of four neighbouring samples is cut by a level where linear interpolation along an
+  edge gives it; a value equal to the level counts as above it. A saddle cell (two opposite corners above, the other
+  two below) is resolved by its centre value, the mean of its corners: the corners on the centre's side are joined.
+  A shared edge gives the same point in both its cells, so closed lines close.
+- **Holes.** A cell with a NaN or an infinite corner is skipped: undefined regions (a body in a flow field, cells
+  outside a domain) leave holes, not lines to spurious values.
+- **Cost.** `ip_contour` visits every cell for every level at each call. For a large field that does not change,
+  compute the segments once with `ip_contour_lines` and draw each level with `ip_line` and
+  `ip_spec(flags=ImPlotLineFlags_Segments)`.
+- Statuses: `FIG_ERR_ARGUMENT` for a colour without 4 components, a colormap that is not registered, `nlevels` < 1,
+  or a level with more segment ends than a C `int` counts; `FIG_ERR_STATE` from a [task](processes#tasks).
+- Modes: the same in **window**, **headless** and **remote** mode.
+- Not done: filled contours (bands between levels: a heatmap of a discrete colormap, `ip_colormap(name, levels)`,
+  shows them), smoothing of the lines, labels following the lines' direction.
+
 ## Not bound yet
 
-Other items (error bars, stems, stairs, histograms, text, ...) and axis setup beyond labels, limits, log scales and
+Other items (stems, stairs, histograms, text, ...) and axis setup beyond labels, limits, log scales and
 tick formats (time and symmetric-log scales, tick positions) are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)),
 ([roadmap](roadmap)). In-place rows exist for `ip_line` only; the same `ImPlotSpec` stride serves the other items when
 they need it.

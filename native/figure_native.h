@@ -123,6 +123,10 @@ int    fig_input_key(const char *name, int name_len, int down);
 int    fig_input_text(const char *text, int text_len);
 /* A tick label of the plot being declared: axis 0 x, 1 y, index from 1; count of ticks (tests of axis formats). */
 int    fig_plot_tick_label(int axis, int index, char *buf, int buf_len, int *count, int *len);
+/* An annotation of the plot being declared: text in a box at (x, y), offset (dx, dy) [pixels] (0: centred), rgba the
+ * box (alpha 0: none); clamp keeps it inside the plot. FIG_ERR_STATE outside a plot. */
+int    fig_plot_annotation(double x, double y, const float *rgba, float dx, float dy, int clamp, const char *text,
+                           int text_len);
 /* A window's rectangle (xmin, ymin, xmax, ymax) [pixels] by name, as in the last frame; found 0 if none. */
 int    fig_window_rect(const char *name, int name_len, float *rect, int *found);
 /* Quitting: with confirm_quit on, the window's close button (or SDL's quit event) sets a request, read and cleared by
@@ -244,6 +248,8 @@ int    fig_notification_rect(int index, float *rect, int *found);
 /* Tests: the extent (xmin, ymin, xmax, ymax) of the vertices drawn so far in the current window in a style colour of
  * Dear ImGui, by name (PlotHistogram: a progress bar's fill); found 0 if none. */
 int    fig_drawn_extent(const char *color, int color_len, float *rect, int *found);
+/* The same for an RGBA colour in [0, 1] (as an item's spec colour is drawn). */
+int    fig_drawn_extent_rgba(const float *rgba, float *rect, int *found);
 
 /* Tasks (figure_task.cpp): fn(arg) run on an SDL thread (64 MiB of stack). state: done, the last progress (fraction
  * in [0, 1], negative before the first report) and message (copied into msg, up to msg_len bytes; len its length),

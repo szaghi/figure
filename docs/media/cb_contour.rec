@@ -1,0 +1,16 @@
+#! program build/docs-examples/bin/cb_contour
+#! from    10
+#! frames  200
+#! poster  172
+# drag the profile's line into the body (the profile gets a gap), then the point probe through the body to a vortex
+0   move 600 600
+5   move 897 280 15
+25  down
+27  move 850 280 40
+70  up
+80  move 724 148 15
+100 down
+102 move 827 194 30
+140 move 960 176 30
+175 up
+185 move 600 600 10

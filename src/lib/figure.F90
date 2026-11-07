@@ -69,6 +69,8 @@ use figure_implot, only : ip_begin_subplots, ip_end_subplots,                   
                           ImPlotColormap_Viridis, ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool,     &
                           ImPlotColormap_Pink, ImPlotColormap_Jet, ImPlotColormap_Twilight, ImPlotColormap_RdBu,      &
                           ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral, ImPlotColormap_Greys
+use figure_implot, only : ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_contour, &
+                          ip_contour_lines, ip_contour_levels
 use figure_style, only : ig_pop_style_color, ig_pop_style_var, ig_push_style_color, ig_push_style_var,        &
                          ip_pop_style_color, ip_pop_style_var, ip_push_style_color, ip_push_style_var,        &
                          ig_get_style_color, ig_get_style_var, ig_pop_font, ig_push_font, ig_set_style_color,    &
@@ -125,6 +127,8 @@ public :: ImGuiDockNodeFlags_NoResize, ImGuiDockNodeFlags_AutoHideTabBar, ImGuiD
 public :: ip_bars, ip_begin_plot, ip_end_plot, ip_line, ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object
 public :: ip_colormap_scale, ip_heatmap, ip_image, texture_object
 public :: ip_colormap, ip_colormap_names, ip_load_colormap
+public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point
+public :: ip_contour, ip_contour_lines, ip_contour_levels
 public :: process_object, log_view_object, task_object, task_handle_object, task_work
 public :: ip_plot_limits, ip_plot_size, ip_setup_axes_limits, ip_begin_subplots, ip_end_subplots
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond

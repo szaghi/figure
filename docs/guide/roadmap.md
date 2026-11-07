@@ -190,8 +190,13 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   (`<name>_r`) and in discrete bands (`levels`); bundled cividis, inferno, magma, turbo, cmocean's thermal, haline,
   deep, balance and curl, ParaView's Cool to Warm, Crameri's batlow, vik, roma and romaO, each after a licence check;
   `ip_load_colormap` from a CSV table or a ParaView JSON preset; Viridis the default of heatmaps: done.
+- **ImPlot extras and contour lines** ([Plots](plots#error-bars-annotations-and-drag-tools)): `ip_error_bars`,
+  symmetric or not; `ip_annotation`; drag lines and points (`ip_drag_line_x`, `ip_drag_line_y`, `ip_drag_point`)
+  updating the program's variables in place; `ip_contour`, contour lines computed in Fortran (marching squares,
+  saddles resolved by the cell's centre value, NaNs leaving holes), levels given or at round numbers
+  (`ip_contour_levels`), coloured from a colormap or in one colour, labelled on request; `ip_contour_lines` for the
+  segments alone: done.
 
 ## Next
 
-Candidates, to be driven by what applications need: colour pickers; more of ImPlot (error
-bars, annotations).
+Candidates, to be driven by what applications need: colour pickers.

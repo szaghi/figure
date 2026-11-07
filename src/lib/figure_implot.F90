@@ -16,9 +16,10 @@ module figure_implot
 !<```
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use figure_base, only : cstr, figure_check, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
-                            fig_colormap_name, fig_load_colormap, fig_texture_sampling
+                            fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation
 use figure_cimgui, only : im_vec2, im_vec4
 use figure_texture, only : texture_object, texture_ref
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot, ImPlot_EndPlot,             &
@@ -34,6 +35,12 @@ use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_Begin
                            ImPlot_GetPlotSize, ImPlot_SetupAxesLimits, ImPlot_SetupAxisScale_PlotScale,             &
                            ImPlot_SetupAxisFormat_Str, ImPlot_BeginSubplots, ImPlot_EndSubplots,                    &
                            ImPlot_SetNextAxisToFit, ImPlot_GetColormapCount
+use figure_cimplot, only : ImPlot_DragLineX, ImPlot_DragLineY, ImPlot_DragPoint, ImPlot_GetLastItemColor,           &
+                           ImPlot_SampleColormap,                                                                       &
+                           ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr,                                   &
+                           ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt,                                         &
+                           ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr,                                       &
+                           ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt
 use figure_cimplot_enums, only : ImAxis_X1, ImAxis_Y1, ImPlotScale_Log10, ImPlotSubplotFlags_LinkAllX,                &
                                  ImPlotSubplotFlags_LinkAllY, ImPlotSubplotFlags_None,                                &
                                  ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_None, ImPlotCond_Always, ImPlotCond_Once,     &
@@ -60,6 +67,8 @@ integer(int32)                  :: fits_pending = 0  !< Plots of a new subplot f
 public :: ip_bars, ip_line, ip_scatter, ip_shaded
 public :: ip_colormap_scale, ip_heatmap, ip_image, ip_plot_limits, ip_plot_size, ip_setup_axes_limits
 public :: ip_colormap, ip_colormap_names, ip_load_colormap
+public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point
+public :: ip_contour, ip_contour_lines, ip_contour_levels
 public :: ip_spec, plot_spec_object
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -102,6 +111,26 @@ interface ip_heatmap
    !< A 2D field f(i, j) as coloured cells: i along x, j along y, j = 1 at the bottom.
    module procedure ip_heatmap_r32, ip_heatmap_r64
 endinterface ip_heatmap
+
+interface ip_error_bars
+   !< Vertical error bars at the points (x(i), y(i)): from y(i) - err(i) to y(i) + err(i), or to y(i) + err_high(i).
+   module procedure ip_error_bars_r32, ip_error_bars_r64
+endinterface ip_error_bars
+
+interface ip_contour
+   !< Contour lines of a 2D field f(i, j), sampled at uniformly spaced points, i along x, j along y.
+   module procedure ip_contour_r32, ip_contour_r64
+endinterface ip_contour
+
+interface ip_contour_lines
+   !< The segments of the contour lines of a 2D field (marching squares), without drawing them.
+   module procedure ip_contour_lines_r32, ip_contour_lines_r64
+endinterface ip_contour_lines
+
+interface ip_contour_levels
+   !< Contour levels at round numbers ("nice" steps: 1, 2, 2.5 or 5 times a power of ten) inside a field's range.
+   module procedure ip_contour_levels_r32, ip_contour_levels_r64
+endinterface ip_contour_levels
 
 interface ip_shaded
    !< Area between two curves y1(x) and y2(x), or between a curve y(x) and the line y = yref.
@@ -750,7 +779,652 @@ contains
    enddo
    endsubroutine ip_colormap_names
 
+   ! error bars
+
+   subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, stat)
+   !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to
+   !< y(i) + err_high(i) (asymmetric). Read in place. Single precision.
+   character(len=*),       intent(in)                               :: label       !< Legend label.
+   real(real32),           intent(in), contiguous, target           :: x(:)        !< Abscissae.
+   real(real32),           intent(in), contiguous, target           :: y(:)        !< Ordinates.
+   real(real32),           intent(in), contiguous, target           :: err(:)      !< Error below (and above) [y units].
+   real(real32),           intent(in), contiguous, target, optional :: err_high(:) !< Error above [y units].
+   type(plot_spec_object), intent(in), optional                     :: spec        !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional                    :: stat        !< Status.
+
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(err, kind=int64), 'ip_error_bars', stat)) return
+   if (present(err_high)) then
+      if (.not. series_ok(size(x, kind=int64), size(err_high, kind=int64), 'ip_error_bars', stat)) return
+      call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr(cstr(label), addr_r32(x), addr_r32(y), addr_r32(err), &
+                                                                 addr_r32(err_high), int(size(x), c_int), spec_c(spec))
+   else
+      call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt(cstr(label), addr_r32(x), addr_r32(y), addr_r32(err), &
+                                                            int(size(x), c_int), spec_c(spec))
+   endif
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_error_bars_r32
+
+   subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, stat)
+   !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to
+   !< y(i) + err_high(i) (asymmetric). Read in place. Double precision.
+   character(len=*),       intent(in)                               :: label       !< Legend label.
+   real(real64),           intent(in), contiguous, target           :: x(:)        !< Abscissae.
+   real(real64),           intent(in), contiguous, target           :: y(:)        !< Ordinates.
+   real(real64),           intent(in), contiguous, target           :: err(:)      !< Error below (and above) [y units].
+   real(real64),           intent(in), contiguous, target, optional :: err_high(:) !< Error above [y units].
+   type(plot_spec_object), intent(in), optional                     :: spec        !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional                    :: stat        !< Status.
+
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(err, kind=int64), 'ip_error_bars', stat)) return
+   if (present(err_high)) then
+      if (.not. series_ok(size(x, kind=int64), size(err_high, kind=int64), 'ip_error_bars', stat)) return
+      call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr(cstr(label), addr_r64(x), addr_r64(y),          &
+                                                                     addr_r64(err), addr_r64(err_high),              &
+                                                                     int(size(x), c_int), spec_c(spec))
+   else
+      call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt(cstr(label), addr_r64(x), addr_r64(y), addr_r64(err), &
+                                                               int(size(x), c_int), spec_c(spec))
+   endif
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_error_bars_r64
+
+   ! annotations and drag tools
+
+   recursive subroutine ip_annotation(x, y, text, color, offset, stat)
+   !< A text at the point (x, y) of the current plot (between `ip_begin_plot` and `ip_end_plot`), drawn when the plot
+   !< ends, over its items and kept inside the plot area. Without `color`: the text alone, in the plot's text colour; with
+   !< it: in a box of that colour, the text black or white for contrast. `offset` moves it [pixels] from the point, with a
+   !< leader line to it (x right, y down); a zero component centres it on the point along that axis (the default).
+   !< Statuses: `FIG_ERR_ARGUMENT` for a colour of size /= 4 or an offset of size /= 2, `FIG_ERR_STATE` outside a plot
+   !< and from a task.
+   real(real64),     intent(in)            :: x         !< Abscissa [plot units].
+   real(real64),     intent(in)            :: y         !< Ordinate [plot units].
+   character(len=*), intent(in)            :: text      !< Text (UTF-8).
+   real(real64),     intent(in), optional  :: color(:)  !< Box colour, RGBA in [0, 1] (default: no box).
+   real(real64),     intent(in), optional  :: offset(:) !< Offset [pixels], (x right, y down) (default: centred).
+   integer(int32),   intent(out), optional :: stat      !< Status.
+   real(c_float)                           :: c(4)      !< Box colour.
+   real(c_float)                           :: d(2)      !< Offset.
+
+   if (figure_refused('ip_annotation', stat)) return ! a task does not draw
+   if (.not. rgba_ok(color)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_annotation: a colour needs 4 components (RGBA)', stat)
+      return
+   endif
+   if (present(offset)) then
+      if (size(offset) /= 2) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_annotation: the offset needs 2 components (x, y)', stat)
+         return
+      endif
+   endif
+   c = 0.0_c_float
+   if (present(color)) c = real(color, c_float)
+   d = 0.0_c_float
+   if (present(offset)) d = real(offset, c_float)
+   call figure_check(fig_plot_annotation(real(x, c_double), real(y, c_double), c, d(1), d(2), 1_c_int, text, &
+                                         len(text, c_int)), stat)
+   endsubroutine ip_annotation
+
+   recursive function ip_drag_line_x(id, x, color, thickness, stat) result(moved)
+   !< A vertical line at `x` in the current plot that the user drags along x (between `ip_begin_plot` and
+   !< `ip_end_plot`): `x` is updated in place, and the result is true in the frames it moves. `id` tells the drag
+   !< tools of a plot apart (any integer, unique in the plot). Statuses: `FIG_ERR_ARGUMENT` for a colour of size /= 4,
+   !< `FIG_ERR_STATE` from a task.
+   integer(int32),   intent(in)            :: id        !< Id, unique among the plot's drag tools.
+   real(real64),     intent(inout), target :: x         !< Position [plot units].
+   real(real64),     intent(in), optional  :: color(:)  !< Colour, RGBA in [0, 1] (default: the text colour).
+   real(real64),     intent(in), optional  :: thickness !< Line thickness [pixels] (default 1).
+   integer(int32),   intent(out), optional :: stat      !< Status.
+   logical                                 :: moved     !< Moved by the user in this frame.
+
+   moved = .false.
+   if (.not. drag_ok('ip_drag_line_x', color, stat)) return
+   moved = logical(ImPlot_DragLineX(int(id, c_int), c_loc(x), drag_color(color),                                &
+                                    real(uniform(thickness, 1.0_real64), c_float), 0_c_int, c_null_ptr, c_null_ptr, c_null_ptr))
+   call figure_check(FIG_OK, stat)
+   endfunction ip_drag_line_x
+
+   recursive function ip_drag_line_y(id, y, color, thickness, stat) result(moved)
+   !< A horizontal line at `y` in the current plot that the user drags along y: as `ip_drag_line_x`.
+   integer(int32),   intent(in)            :: id        !< Id, unique among the plot's drag tools.
+   real(real64),     intent(inout), target :: y         !< Position [plot units].
+   real(real64),     intent(in), optional  :: color(:)  !< Colour, RGBA in [0, 1] (default: the text colour).
+   real(real64),     intent(in), optional  :: thickness !< Line thickness [pixels] (default 1).
+   integer(int32),   intent(out), optional :: stat      !< Status.
+   logical                                 :: moved     !< Moved by the user in this frame.
+
+   moved = .false.
+   if (.not. drag_ok('ip_drag_line_y', color, stat)) return
+   moved = logical(ImPlot_DragLineY(int(id, c_int), c_loc(y), drag_color(color),                                &
+                                    real(uniform(thickness, 1.0_real64), c_float), 0_c_int, c_null_ptr, c_null_ptr, c_null_ptr))
+   call figure_check(FIG_OK, stat)
+   endfunction ip_drag_line_y
+
+   recursive function ip_drag_point(id, x, y, color, radius, stat) result(moved)
+   !< A point at (x, y) in the current plot that the user drags: as `ip_drag_line_x`, both coordinates updated.
+   integer(int32),   intent(in)            :: id       !< Id, unique among the plot's drag tools.
+   real(real64),     intent(inout), target :: x        !< Abscissa [plot units].
+   real(real64),     intent(inout), target :: y        !< Ordinate [plot units].
+   real(real64),     intent(in), optional  :: color(:) !< Colour, RGBA in [0, 1] (default: the text colour).
+   real(real64),     intent(in), optional  :: radius   !< Radius [pixels] (default 4).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   logical                                 :: moved    !< Moved by the user in this frame.
+
+   moved = .false.
+   if (.not. drag_ok('ip_drag_point', color, stat)) return
+   moved = logical(ImPlot_DragPoint(int(id, c_int), c_loc(x), c_loc(y), drag_color(color),                         &
+                                    real(uniform(radius, 4.0_real64), c_float), 0_c_int, c_null_ptr, c_null_ptr, c_null_ptr))
+   call figure_check(FIG_OK, stat)
+   endfunction ip_drag_point
+
+   ! contour lines
+
+   recursive subroutine ip_contour_r32(label, f, x0, x1, y0, y1, levels, nlevels, colormap, color, labels, line_weight, &
+                                       stat)
+   !< Contour lines of the field f(i, j), sampled at x = x0 .. x1 (i = 1 .. size(f, 1)) and y = y0 .. y1 (j = 1 ..
+   !< size(f, 2)), uniformly spaced, read in place: as `ip_contour_r64`. Single precision.
+   character(len=*), intent(in)            :: label       !< Legend label (one entry for every level).
+   real(real32),     intent(in)            :: f(:,:)      !< Field: f(i, j), i along x, j along y.
+   real(real64),     intent(in)            :: x0          !< Abscissa of f(1, :).
+   real(real64),     intent(in)            :: x1          !< Abscissa of f(size(f, 1), :).
+   real(real64),     intent(in)            :: y0          !< Ordinate of f(:, 1).
+   real(real64),     intent(in)            :: y1          !< Ordinate of f(:, size(f, 2)).
+   real(real64),     intent(in), optional  :: levels(:)   !< Levels (default: `ip_contour_levels(f, nlevels)`).
+   integer(int32),   intent(in), optional  :: nlevels     !< Automatic levels wanted, about (default 10).
+   integer(int32),   intent(in), optional  :: colormap    !< Colour each level from this colormap (`ip_colormap`).
+   real(real64),     intent(in), optional  :: color(:)    !< One colour for every level, RGBA in [0, 1].
+   logical,          intent(in), optional  :: labels      !< Label each level with its value (default: no).
+   real(real64),     intent(in), optional  :: line_weight !< Line weight [pixels] (default: ImPlot's).
+   integer(int32),   intent(out), optional :: stat        !< Status.
+   real(real64), allocatable, target       :: xs(:)       !< Segment ends, x.
+   real(real64), allocatable, target       :: ys(:)       !< Segment ends, y.
+   integer(int64), allocatable             :: first(:)    !< First end of each level.
+   real(real64), allocatable               :: lev(:)      !< Levels drawn.
+   real(real64)                            :: fmin, fmax  !< Finite range of the field.
+   logical                                 :: found       !< The field has finite values.
+   integer(c_int)                          :: cmap        !< Colormap id.
+
+   if (figure_refused('ip_contour', stat)) return ! a task does not draw
+   if (.not. contour_ok(nlevels, colormap, color, cmap, stat)) return
+   if (present(levels)) then
+      lev = levels
+   else
+      lev = ip_contour_levels(f, nlevels)
+   endif
+   call ip_contour_lines(f, x0, x1, y0, y1, lev, xs, ys, first)
+   call finite_range_r32(f, fmin, fmax, found)
+   call contour_draw(label, lev, xs, ys, first, fmin, fmax, present(colormap), cmap, color, labels, line_weight, stat)
+   endsubroutine ip_contour_r32
+
+   recursive subroutine ip_contour_r64(label, f, x0, x1, y0, y1, levels, nlevels, colormap, color, labels, line_weight, &
+                                       stat)
+   !< Contour lines of the field f(i, j), sampled at x = x0 .. x1 (i = 1 .. size(f, 1)) and y = y0 .. y1 (j = 1 ..
+   !< size(f, 2)), uniformly spaced, read in place (between `ip_begin_plot` and `ip_end_plot`). The segments are
+   !< computed every call (`ip_contour_lines`, marching squares) and drawn as one ImPlot line item per level, with one
+   !< legend entry (`label`). Levels: `levels`, or about `nlevels` round numbers inside the field's range
+   !< (`ip_contour_levels`). Colours: from `colormap`, the level's value placed in the field's finite range (as a heatmap
+   !< of the field with the same colormap colours it); or `color` for every level; or the item's automatic colour.
+   !< `labels=.true.`: each level's value in a box of its colour on one of its segments (an annotation, drawn when the
+   !< plot ends), the segments chosen part-way through each level's list so that labels of nearby levels fall apart.
+   !< Non-finite values (NaN, infinities) leave holes: a cell with one is skipped. A field with fewer than 2 points
+   !< along an axis has no lines. Statuses: `FIG_ERR_ARGUMENT` for a colour of size /= 4, a colormap that is not
+   !< registered, `nlevels` < 1, or a level with more segments than a C int counts; `FIG_ERR_STATE` from a task.
+   !< Double precision.
+   character(len=*), intent(in)            :: label       !< Legend label (one entry for every level).
+   real(real64),     intent(in)            :: f(:,:)      !< Field: f(i, j), i along x, j along y.
+   real(real64),     intent(in)            :: x0          !< Abscissa of f(1, :).
+   real(real64),     intent(in)            :: x1          !< Abscissa of f(size(f, 1), :).
+   real(real64),     intent(in)            :: y0          !< Ordinate of f(:, 1).
+   real(real64),     intent(in)            :: y1          !< Ordinate of f(:, size(f, 2)).
+   real(real64),     intent(in), optional  :: levels(:)   !< Levels (default: `ip_contour_levels(f, nlevels)`).
+   integer(int32),   intent(in), optional  :: nlevels     !< Automatic levels wanted, about (default 10).
+   integer(int32),   intent(in), optional  :: colormap    !< Colour each level from this colormap (`ip_colormap`).
+   real(real64),     intent(in), optional  :: color(:)    !< One colour for every level, RGBA in [0, 1].
+   logical,          intent(in), optional  :: labels      !< Label each level with its value (default: no).
+   real(real64),     intent(in), optional  :: line_weight !< Line weight [pixels] (default: ImPlot's).
+   integer(int32),   intent(out), optional :: stat        !< Status.
+   real(real64), allocatable, target       :: xs(:)       !< Segment ends, x.
+   real(real64), allocatable, target       :: ys(:)       !< Segment ends, y.
+   integer(int64), allocatable             :: first(:)    !< First end of each level.
+   real(real64), allocatable               :: lev(:)      !< Levels drawn.
+   real(real64)                            :: fmin, fmax  !< Finite range of the field.
+   logical                                 :: found       !< The field has finite values.
+   integer(c_int)                          :: cmap        !< Colormap id.
+
+   if (figure_refused('ip_contour', stat)) return ! a task does not draw
+   if (.not. contour_ok(nlevels, colormap, color, cmap, stat)) return
+   if (present(levels)) then
+      lev = levels
+   else
+      lev = ip_contour_levels(f, nlevels)
+   endif
+   call ip_contour_lines(f, x0, x1, y0, y1, lev, xs, ys, first)
+   call finite_range_r64(f, fmin, fmax, found)
+   call contour_draw(label, lev, xs, ys, first, fmin, fmax, present(colormap), cmap, color, labels, line_weight, stat)
+   endsubroutine ip_contour_r64
+
+   pure subroutine ip_contour_lines_r32(f, x0, x1, y0, y1, levels, x, y, first)
+   !< The contour lines of f at `levels`, as segments: as `ip_contour_lines_r64`. Single precision.
+   real(real32),                intent(in)  :: f(:,:)    !< Field: f(i, j), i along x, j along y.
+   real(real64),                intent(in)  :: x0        !< Abscissa of f(1, :).
+   real(real64),                intent(in)  :: x1        !< Abscissa of f(size(f, 1), :).
+   real(real64),                intent(in)  :: y0        !< Ordinate of f(:, 1).
+   real(real64),                intent(in)  :: y1        !< Ordinate of f(:, size(f, 2)).
+   real(real64),                intent(in)  :: levels(:) !< Levels.
+   real(real64),   allocatable, intent(out) :: x(:)      !< Segment ends, x: (x(2s-1), y(2s-1)) to (x(2s), y(2s)).
+   real(real64),   allocatable, intent(out) :: y(:)      !< Segment ends, y.
+   integer(int64), allocatable, intent(out) :: first(:)  !< Ends of level k: first(k) .. first(k+1)-1.
+   integer(int64)                           :: n         !< Ends.
+   integer(int32)                           :: pass      !< 1: count, 2: fill.
+   integer(int32)                           :: i, j, k   !< Counters.
+   integer(int32)                           :: m         !< Segments in a cell.
+   real(real64)                             :: sx(4), sy(4) !< A cell's segments.
+   real(real64)                             :: dx, dy    !< Spacing.
+
+   allocate(first(size(levels) + 1))
+   allocate(x(0), y(0))
+   first = 1_int64
+   if (size(f, 1) < 2 .or. size(f, 2) < 2) return
+   dx = (x1 - x0) / real(size(f, 1) - 1, real64)
+   dy = (y1 - y0) / real(size(f, 2) - 1, real64)
+   do pass = 1_int32, 2_int32
+      n = 0_int64
+      do k = 1_int32, size(levels, kind=int32)
+         first(k) = n + 1_int64
+         if (.not. ieee_is_finite(levels(k))) cycle
+         do j = 1_int32, size(f, 2, kind=int32) - 1_int32
+            do i = 1_int32, size(f, 1, kind=int32) - 1_int32
+               call cell_segments(real([f(i, j), f(i + 1, j), f(i + 1, j + 1), f(i, j + 1)], real64), levels(k),      &
+                                  x0 + (i - 1) * dx, x0 + i * dx, y0 + (j - 1) * dy, y0 + j * dy, m, sx, sy)
+               if (pass == 2_int32 .and. m > 0_int32) then
+                  x(n + 1:n + 2 * m) = sx(1:2 * m)
+                  y(n + 1:n + 2 * m) = sy(1:2 * m)
+               endif
+               n = n + 2_int64 * m
+            enddo
+         enddo
+      enddo
+      first(size(levels) + 1) = n + 1_int64
+      if (pass == 1_int32) then
+         deallocate(x, y)
+         allocate(x(n), y(n))
+      endif
+   enddo
+   endsubroutine ip_contour_lines_r32
+
+   pure subroutine ip_contour_lines_r64(f, x0, x1, y0, y1, levels, x, y, first)
+   !< The contour lines of f at `levels`, as segments, without drawing them (no GUI needed): marching squares on the
+   !< cells of four neighbouring samples, f sampled at x = x0 .. x1 and y = y0 .. y1 (uniformly spaced). Level k's
+   !< segments join (x(e), y(e)) to (x(e+1), y(e+1)) for e = first(k), first(k) + 2, ... < first(k+1). A line crosses
+   !< a cell's edge where linear interpolation of the edge's two values gives the level (a value equal to the level
+   !< counts as above it); in a saddle cell (two opposite corners above, the others below) the cell's centre value, the
+   !< mean of its corners, decides which corners the lines join. A shared edge gives its point exactly the same in both
+   !< cells: closed lines close. Cells with a non-finite corner are skipped (holes); so are non-finite levels.
+   !< Double precision.
+   real(real64),                intent(in)  :: f(:,:)    !< Field: f(i, j), i along x, j along y.
+   real(real64),                intent(in)  :: x0        !< Abscissa of f(1, :).
+   real(real64),                intent(in)  :: x1        !< Abscissa of f(size(f, 1), :).
+   real(real64),                intent(in)  :: y0        !< Ordinate of f(:, 1).
+   real(real64),                intent(in)  :: y1        !< Ordinate of f(:, size(f, 2)).
+   real(real64),                intent(in)  :: levels(:) !< Levels.
+   real(real64),   allocatable, intent(out) :: x(:)      !< Segment ends, x: (x(2s-1), y(2s-1)) to (x(2s), y(2s)).
+   real(real64),   allocatable, intent(out) :: y(:)      !< Segment ends, y.
+   integer(int64), allocatable, intent(out) :: first(:)  !< Ends of level k: first(k) .. first(k+1)-1.
+   integer(int64)                           :: n         !< Ends.
+   integer(int32)                           :: pass      !< 1: count, 2: fill.
+   integer(int32)                           :: i, j, k   !< Counters.
+   integer(int32)                           :: m         !< Segments in a cell.
+   real(real64)                             :: sx(4), sy(4) !< A cell's segments.
+   real(real64)                             :: dx, dy    !< Spacing.
+
+   allocate(first(size(levels) + 1))
+   allocate(x(0), y(0))
+   first = 1_int64
+   if (size(f, 1) < 2 .or. size(f, 2) < 2) return
+   dx = (x1 - x0) / real(size(f, 1) - 1, real64)
+   dy = (y1 - y0) / real(size(f, 2) - 1, real64)
+   do pass = 1_int32, 2_int32
+      n = 0_int64
+      do k = 1_int32, size(levels, kind=int32)
+         first(k) = n + 1_int64
+         if (.not. ieee_is_finite(levels(k))) cycle
+         do j = 1_int32, size(f, 2, kind=int32) - 1_int32
+            do i = 1_int32, size(f, 1, kind=int32) - 1_int32
+               call cell_segments([f(i, j), f(i + 1, j), f(i + 1, j + 1), f(i, j + 1)], levels(k),                    &
+                                  x0 + (i - 1) * dx, x0 + i * dx, y0 + (j - 1) * dy, y0 + j * dy, m, sx, sy)
+               if (pass == 2_int32 .and. m > 0_int32) then
+                  x(n + 1:n + 2 * m) = sx(1:2 * m)
+                  y(n + 1:n + 2 * m) = sy(1:2 * m)
+               endif
+               n = n + 2_int64 * m
+            enddo
+         enddo
+      enddo
+      first(size(levels) + 1) = n + 1_int64
+      if (pass == 1_int32) then
+         deallocate(x, y)
+         allocate(x(n), y(n))
+      endif
+   enddo
+   endsubroutine ip_contour_lines_r64
+
+   pure function ip_contour_levels_r32(f, count) result(levels)
+   !< About `count` levels at round numbers strictly inside the finite range of f: as `ip_contour_levels_r64`.
+   real(real32),   intent(in)           :: f(:,:)    !< Field.
+   integer(int32), intent(in), optional :: count     !< Levels wanted, about (default 10).
+   real(real64), allocatable            :: levels(:) !< Levels, increasing.
+   real(real64)                         :: fmin      !< Smallest finite value.
+   real(real64)                         :: fmax      !< Largest finite value.
+   logical                              :: found     !< f has finite values.
+
+   call finite_range_r32(f, fmin, fmax, found)
+   levels = nice_levels(fmin, fmax, found, count)
+   endfunction ip_contour_levels_r32
+
+   pure function ip_contour_levels_r64(f, count) result(levels)
+   !< About `count` levels at round numbers strictly inside the finite range [fmin, fmax] of f (NaNs and infinities
+   !< ignored): the multiples of a step of 1, 2, 2.5 or 5 times a power of ten, the smallest such step not below
+   !< (fmax - fmin) / count. None for a constant field, one without finite values, or `count` < 1. Double precision.
+   real(real64),   intent(in)           :: f(:,:)    !< Field.
+   integer(int32), intent(in), optional :: count     !< Levels wanted, about (default 10).
+   real(real64), allocatable            :: levels(:) !< Levels, increasing.
+   real(real64)                         :: fmin      !< Smallest finite value.
+   real(real64)                         :: fmax      !< Largest finite value.
+   logical                              :: found     !< f has finite values.
+
+   call finite_range_r64(f, fmin, fmax, found)
+   levels = nice_levels(fmin, fmax, found, count)
+   endfunction ip_contour_levels_r64
+
    ! private helpers
+
+   pure subroutine cell_segments(v, level, xl, xr, yb, yt, m, sx, sy)
+   !< Marching squares in one cell: the segments of the contour line at `level` through the cell with corner values
+   !< v = (bottom-left, bottom-right, top-right, top-left). An edge is crossed when its ends lie on opposite sides of
+   !< the level (a value equal to it is above); its point is interpolated from the edge's left (bottom) end, so a shared
+   !< edge gives the same point in both cells. A saddle (four edges crossed) is resolved by the centre value, the mean
+   !< of the corners: the corners on its side are joined through the centre. A non-finite corner: no segments.
+   real(real64),   intent(in)  :: v(4)   !< Corner values: bottom-left, bottom-right, top-right, top-left.
+   real(real64),   intent(in)  :: level  !< Level.
+   real(real64),   intent(in)  :: xl     !< Left abscissa.
+   real(real64),   intent(in)  :: xr     !< Right abscissa.
+   real(real64),   intent(in)  :: yb     !< Bottom ordinate.
+   real(real64),   intent(in)  :: yt     !< Top ordinate.
+   integer(int32), intent(out) :: m      !< Segments: 0, 1 or 2.
+   real(real64),   intent(out) :: sx(4)  !< Segment ends, x: (sx(1), sy(1)) to (sx(2), sy(2)), then 3 to 4.
+   real(real64),   intent(out) :: sy(4)  !< Segment ends, y.
+   integer(int32), parameter   :: LO(4) = [1_int32, 2_int32, 4_int32, 1_int32] !< Edges' first corners: bottom, right,
+   integer(int32), parameter   :: HI(4) = [2_int32, 3_int32, 3_int32, 4_int32] !< top, left; and their second ones.
+   real(real64)                :: cx(4)  !< Corner abscissae.
+   real(real64)                :: cy(4)  !< Corner ordinates.
+   real(real64)                :: ex(4)  !< Crossing points on the edges, x.
+   real(real64)                :: ey(4)  !< Crossing points on the edges, y.
+   real(real64)                :: t      !< Position along an edge.
+   logical                     :: up(4)  !< Corners at or above the level.
+   integer(int32)              :: e(4)   !< Crossed edges.
+   integer(int32)              :: ne     !< Their number.
+   integer(int32)              :: k      !< Counter.
+
+   m = 0_int32
+   sx = 0.0_real64
+   sy = 0.0_real64
+   if (.not. all(ieee_is_finite(v))) return ! a hole (and no comparison with a NaN: an FPE under traps)
+   up = v >= level
+   cx = [xl, xr, xr, xl]
+   cy = [yb, yb, yt, yt]
+   ex = 0.0_real64
+   ey = 0.0_real64
+   ne = 0_int32
+   e = 0_int32
+   do k = 1_int32, 4_int32
+      if (up(LO(k)) .neqv. up(HI(k))) then
+         t = (level - v(LO(k))) / (v(HI(k)) - v(LO(k)))
+         ex(k) = cx(LO(k)) + t * (cx(HI(k)) - cx(LO(k)))
+         ey(k) = cy(LO(k)) + t * (cy(HI(k)) - cy(LO(k)))
+         ne = ne + 1_int32
+         e(ne) = k
+      endif
+   enddo
+   if (ne == 2_int32) then
+      m = 1_int32
+      sx(1:2) = ex(e(1:2))
+      sy(1:2) = ey(e(1:2))
+   elseif (ne == 4_int32) then ! a saddle
+      m = 2_int32
+      if (up(1) .eqv. (0.25_real64 * v(1) + 0.25_real64 * v(2) + 0.25_real64 * v(3) + 0.25_real64 * v(4) >= level)) then
+         e = [1_int32, 2_int32, 3_int32, 4_int32] ! bottom-left and top-right joined: the other two corners cut off
+      else
+         e = [1_int32, 4_int32, 2_int32, 3_int32] ! bottom-right and top-left joined: bottom-left and top-right cut off
+      endif
+      sx = ex(e)
+      sy = ey(e)
+   endif
+   endsubroutine cell_segments
+
+   pure subroutine finite_range_r32(f, fmin, fmax, found)
+   !< The smallest and largest finite values of f (0, 0 and found false if none).
+   real(real32), intent(in)  :: f(:,:) !< Field.
+   real(real64), intent(out) :: fmin   !< Smallest finite value.
+   real(real64), intent(out) :: fmax   !< Largest finite value.
+   logical,      intent(out) :: found  !< f has finite values.
+   integer(int64)            :: i, j   !< Counters.
+
+   fmin = 0.0_real64
+   fmax = 0.0_real64
+   found = .false.
+   do j = 1_int64, size(f, 2, kind=int64)
+      do i = 1_int64, size(f, 1, kind=int64)
+         if (.not. ieee_is_finite(f(i, j))) cycle
+         if (.not. found) then
+            fmin = real(f(i, j), real64)
+            fmax = fmin
+            found = .true.
+         endif
+         fmin = min(fmin, real(f(i, j), real64))
+         fmax = max(fmax, real(f(i, j), real64))
+      enddo
+   enddo
+   endsubroutine finite_range_r32
+
+   pure subroutine finite_range_r64(f, fmin, fmax, found)
+   !< The smallest and largest finite values of f (0, 0 and found false if none).
+   real(real64), intent(in)  :: f(:,:) !< Field.
+   real(real64), intent(out) :: fmin   !< Smallest finite value.
+   real(real64), intent(out) :: fmax   !< Largest finite value.
+   logical,      intent(out) :: found  !< f has finite values.
+   integer(int64)            :: i, j   !< Counters.
+
+   fmin = 0.0_real64
+   fmax = 0.0_real64
+   found = .false.
+   do j = 1_int64, size(f, 2, kind=int64)
+      do i = 1_int64, size(f, 1, kind=int64)
+         if (.not. ieee_is_finite(f(i, j))) cycle
+         if (.not. found) then
+            fmin = f(i, j)
+            fmax = fmin
+            found = .true.
+         endif
+         fmin = min(fmin, f(i, j))
+         fmax = max(fmax, f(i, j))
+      enddo
+   enddo
+   endsubroutine finite_range_r64
+
+   pure function nice_levels(fmin, fmax, found, count) result(levels)
+   !< About `count` levels at multiples of a round step strictly inside (fmin, fmax) (see `ip_contour_levels_r64`).
+   real(real64),   intent(in)           :: fmin      !< Smallest value.
+   real(real64),   intent(in)           :: fmax      !< Largest value.
+   logical,        intent(in)           :: found     !< The range exists.
+   integer(int32), intent(in), optional :: count     !< Levels wanted (default 10).
+   real(real64), allocatable            :: levels(:) !< Levels, increasing.
+   real(real64), parameter              :: STEPS(5) = [1.0_real64, 2.0_real64, 2.5_real64, 5.0_real64, 10.0_real64]
+   real(real64)                         :: raw       !< (fmax - fmin) / count.
+   real(real64)                         :: p         !< A power of ten.
+   real(real64)                         :: step      !< The step.
+   integer(int32)                       :: n         !< Levels wanted.
+   integer(int32)                       :: k         !< Counter.
+   integer(int64)                       :: k0, k1    !< Multiples of the step around the range.
+   integer(int64)                       :: q         !< Counter.
+
+   allocate(levels(0))
+   n = 10_int32
+   if (present(count)) n = count
+   if (.not. found .or. n < 1_int32 .or. .not. fmax > fmin) return
+   if (.not. ieee_is_finite(fmax - fmin)) return
+   raw = (fmax - fmin) / real(n, real64)
+   p = 10.0_real64**floor(log10(raw))
+   step = STEPS(5) * p
+   do k = 4_int32, 1_int32, -1_int32
+      if (raw <= STEPS(k) * p * (1.0_real64 + 1.0e-12_real64)) step = STEPS(k) * p
+   enddo
+   if (max(abs(fmin), abs(fmax)) / step > 1.0e15_real64) then ! multiples beyond an integer: uniform levels instead
+      levels = [(fmin + (fmax - fmin) * real(k, real64) / real(n + 1, real64), k = 1_int32, n)]
+      return
+   endif
+   k0 = floor(fmin / step, int64)
+   k1 = ceiling(fmax / step, int64)
+   levels = pack([(real(q, real64) * step, q = k0, k1)], [(real(q, real64) * step > fmin .and. &
+                                                            real(q, real64) * step < fmax, q = k0, k1)])
+   endfunction nice_levels
+
+   function contour_ok(nlevels, colormap, color, cmap, stat) result(ok)
+   !< Whether ip_contour's options are valid; the colormap id to draw with.
+   integer(int32), intent(in), optional  :: nlevels  !< Automatic levels wanted.
+   integer(int32), intent(in), optional  :: colormap !< Colormap id.
+   real(real64),   intent(in), optional  :: color(:) !< One colour, RGBA.
+   integer(c_int), intent(out)           :: cmap     !< The colormap id (Viridis when absent).
+   integer(int32), intent(out), optional :: stat     !< Status, on a failure.
+   logical                               :: ok       !< Valid.
+
+   ok = .false.
+   cmap = int(ImPlotColormap_Viridis, c_int)
+   if (.not. rgba_ok(color)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_contour: a colour needs 4 components (RGBA)', stat)
+      return
+   endif
+   if (present(nlevels)) then
+      if (nlevels < 1_int32) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_contour: nlevels must be 1 or more', stat)
+         return
+      endif
+   endif
+   if (present(colormap)) then
+      if (.not. colormap_ok('ip_contour', colormap, cmap, stat)) return
+   endif
+   ok = .true.
+   endfunction contour_ok
+
+   subroutine contour_draw(label, lev, xs, ys, first, fmin, fmax, by_map, cmap, color, labels, line_weight, stat)
+   !< Draw contour segments, one line item per level, all under `label`.
+   character(len=*), intent(in)            :: label       !< Legend label.
+   real(real64),     intent(in)            :: lev(:)      !< Levels.
+   real(real64),     intent(in), target    :: xs(:)       !< Segment ends, x.
+   real(real64),     intent(in), target    :: ys(:)       !< Segment ends, y.
+   integer(int64),   intent(in)            :: first(:)    !< First end of each level.
+   real(real64),     intent(in)            :: fmin        !< Field's finite range: the colormap's bottom ...
+   real(real64),     intent(in)            :: fmax        !< ... and top.
+   logical,          intent(in)            :: by_map      !< Colour from the colormap.
+   integer(c_int),   intent(in)            :: cmap        !< Colormap id.
+   real(real64),     intent(in), optional  :: color(:)    !< One colour, RGBA.
+   logical,          intent(in), optional  :: labels      !< Write the levels' values.
+   real(real64),     intent(in), optional  :: line_weight !< Line weight [pixels].
+   integer(int32),   intent(out), optional :: stat        !< Status.
+   type(im_plot_spec)                      :: c           !< Line spec.
+   integer(c_int)                          :: status      !< A label's status (always FIG_OK inside a plot).
+   type(im_vec4)                           :: v           !< A colormap colour.
+   integer(int64)                          :: n           !< Ends of a level.
+   integer(int64)                          :: e           !< An end: the first of the level's middle segment.
+   integer(int32)                          :: k           !< Counter.
+   real(real64)                            :: t           !< Position in the colormap.
+   logical                                 :: write_text  !< Labels wanted.
+
+   do k = 1_int32, size(lev, kind=int32)
+      if (first(k + 1) - first(k) > int(huge(0_c_int), int64)) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_contour: a level has more segment ends than a C int can count', stat)
+         return
+      endif
+   enddo
+   write_text = .false.
+   if (present(labels)) write_text = labels
+   call figure_ImPlotSpec_default(c)
+   c%Flags = int(ImPlotLineFlags_Segments, c_int)
+   if (present(line_weight)) c%LineWeight = real(line_weight, c_float)
+   if (present(color)) c%LineColor = rgba(color)
+   do k = 1_int32, size(lev, kind=int32)
+      n = first(k + 1) - first(k)
+      if (n < 2_int64) cycle
+      if (by_map) then
+         t = 0.5_real64
+         if (fmax > fmin) t = min(1.0_real64, max(0.0_real64, (lev(k) - fmin) / (fmax - fmin)))
+         call ImPlot_SampleColormap(real(t, c_float), cmap, v)
+         c%LineColor = v
+      endif
+      call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), c_loc(xs(first(k))), c_loc(ys(first(k))), int(n, c_int), c)
+      if (write_text) then ! on a segment part-way through the level's list (rows bottom to top), by level: apart
+         e = first(k) + 2_int64 * int(real(n / 2_int64, real64) * (k - 0.5_real64) / size(lev), int64)
+         call ImPlot_GetLastItemColor(v)
+         status = fig_plot_annotation(0.5_c_double * (xs(e) + xs(e + 1)), 0.5_c_double * (ys(e) + ys(e + 1)), &
+                                      [v%x, v%y, v%z, v%w], 0.0_c_float, 0.0_c_float, 0_c_int, level_text(lev(k)), &
+                                      len(level_text(lev(k)), c_int))
+      endif
+   enddo
+   call figure_check(FIG_OK, stat)
+   endsubroutine contour_draw
+
+   pure function level_text(v) result(text)
+   !< A level's value, short: 0.25, -3, 1.5e+06.
+   real(real64), intent(in)      :: v    !< Value.
+   character(len=:), allocatable :: text !< Text.
+   character(len=32)             :: buf  !< Buffer.
+   integer                       :: i    !< Last character kept.
+
+   if (v == 0.0_real64) then
+      text = '0'
+      return
+   endif
+   if (abs(v) >= 1.0e-3_real64 .and. abs(v) < 1.0e6_real64) then
+      write(buf, '(F32.6)') v
+      buf = adjustl(buf)
+      i = len_trim(buf)
+      do while (buf(i:i) == '0')
+         i = i - 1
+      enddo
+      if (buf(i:i) == '.') i = i - 1
+      text = buf(1:i)
+   else
+      write(buf, '(ES12.3)') v
+      text = trim(adjustl(buf))
+   endif
+   endfunction level_text
+
+   recursive function drag_ok(caller, color, stat) result(ok)
+   !< Whether a drag tool can be drawn: not from a task, a colour of 4 components if given.
+   character(len=*), intent(in)            :: caller   !< The entry point.
+   real(real64),     intent(in), optional  :: color(:) !< Colour, RGBA.
+   integer(int32),   intent(out), optional :: stat     !< Status, on a failure.
+   logical                                 :: ok       !< Drawable.
+
+   ok = .false.
+   if (figure_refused(caller, stat)) return ! a task does not draw
+   if (.not. rgba_ok(color)) then
+      call figure_fail(FIG_ERR_ARGUMENT, caller//': a colour needs 4 components (RGBA)', stat)
+      return
+   endif
+   ok = .true.
+   endfunction drag_ok
+
+   pure function drag_color(color) result(v)
+   !< A drag tool's colour: the given one, or ImPlot's automatic colour (IMPLOT_AUTO_COL: alpha -1).
+   real(real64), intent(in), optional :: color(:) !< Colour, RGBA.
+   type(im_vec4)                      :: v        !< Colour.
+
+   v = im_vec4(0.0_c_float, 0.0_c_float, 0.0_c_float, -1.0_c_float)
+   if (present(color)) v = rgba(color)
+   endfunction drag_color
+
 
    function colormap_ok(caller, colormap, cmap, stat) result(ok)
    !< The colormap id to draw with (default ImPlot's Viridis); false, with `FIG_ERR_ARGUMENT`, if it is not registered.

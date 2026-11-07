@@ -26,7 +26,8 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_but
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
                             fig_frame_state, fig_notification_rect, fig_drawn_extent, fig_file_browser_get, &
-                            fig_file_browser_rect, fig_file_browser_settings, fig_input_drop
+                            fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
+                            fig_drawn_extent_rgba
 use figure_imgui, only : ig_item_rect
 
 implicit none
@@ -35,6 +36,12 @@ public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel,
 public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick, test_system_theme
 public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_rect, test_drawn_extent
 public :: test_file_browser, test_file_browser_rect, test_settings_file, test_drop
+
+interface test_drawn_extent
+   !< The extent [pixels] of what was drawn so far in the current window in a colour: Dear ImGui's style colour by its
+   !< name, or an RGBA colour (an item's `ip_spec` colour).
+   module procedure test_drawn_extent_name, test_drawn_extent_rgba
+endinterface test_drawn_extent
 
 contains
    subroutine test_next_frame(stat)
@@ -192,7 +199,7 @@ contains
    if (present(found)) found = f == 1_c_int
    endsubroutine test_notification_rect
 
-   subroutine test_drawn_extent(color, xmin, ymin, xmax, ymax, found, stat)
+   subroutine test_drawn_extent_name(color, xmin, ymin, xmax, ymax, found, stat)
    !< The extent [pixels] of what was drawn so far in the current window in Dear ImGui's style colour `color`, by
    !< its name (`'PlotHistogram'`: the fill of a progress bar): call it inside the window, after the widget.
    character(len=*), intent(in)            :: color !< Dear ImGui's colour name.
@@ -214,7 +221,31 @@ contains
    xmax = real(r(3), real64)
    ymax = real(r(4), real64)
    if (present(found)) found = f == 1_c_int
-   endsubroutine test_drawn_extent
+   endsubroutine test_drawn_extent_name
+
+   subroutine test_drawn_extent_rgba(color, xmin, ymin, xmax, ymax, found, stat)
+   !< The extent [pixels] of what was drawn so far in the current window in the RGBA colour `color` (as an item drawn
+   !< with `ip_spec(line_color=color)`): call it inside the window, after the item (after `ip_end_plot` for what a plot
+   !< draws at its end: annotations). Antialiased edges are drawn in other colours: the extent is that of the lines' cores.
+   real(real64),   intent(in)            :: color(4) !< Colour, RGBA in [0, 1].
+   real(real64),   intent(out)           :: xmin     !< Left.
+   real(real64),   intent(out)           :: ymin     !< Top.
+   real(real64),   intent(out)           :: xmax     !< Right.
+   real(real64),   intent(out)           :: ymax     !< Bottom.
+   logical,        intent(out), optional :: found    !< Something was drawn in it.
+   integer(int32), intent(out), optional :: stat     !< Status: `FIG_ERR_STATE` outside a window.
+   real(c_float)                         :: r(4)     !< Native rectangle.
+   integer(c_int)                        :: f        !< Found flag.
+
+   r = 0.0_c_float
+   f = 0_c_int
+   call figure_check(fig_drawn_extent_rgba(real(color, c_float), r, f), stat)
+   xmin = real(r(1), real64)
+   ymin = real(r(2), real64)
+   xmax = real(r(3), real64)
+   ymax = real(r(4), real64)
+   if (present(found)) found = f == 1_c_int
+   endsubroutine test_drawn_extent_rgba
 
    subroutine test_file_browser(shown, folder, entries, error, asking, path_field, name_field, recent)
    !< The file browser in front (`app%open_file_browser`, `app%save_file_browser`), as it stands after the last frame:

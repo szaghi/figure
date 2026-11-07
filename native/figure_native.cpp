@@ -3149,6 +3149,17 @@ int fig_plot_tick_label(int axis, int index, char *buf, int buf_len, int *count,
    return FIG_OK;
 }
 
+// An annotation of the plot being declared: text in a box at (x, y) [plot units], offset [pixels] (0: centred), drawn at
+// EndPlot; rgba[3] = 0: no box, the plot's inlay text colour. Refused outside a plot (ImPlot would assert).
+int fig_plot_annotation(double x, double y, const float *rgba, float dx, float dy, int clamp, const char *text,
+                        int text_len) {
+   if (!ImPlot::GetCurrentContext() || !ImPlot::GetCurrentPlot())
+      return fail(FIG_ERR_STATE, "ip_annotation: no plot is being declared (between ip_begin_plot and ip_end_plot)");
+   const std::string t(text, text_len > 0 ? static_cast<size_t>(text_len) : 0);
+   ImPlot::Annotation(x, y, ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]), ImVec2(dx, dy), clamp != 0, "%s", t.c_str());
+   return FIG_OK;
+}
+
 // A window's rectangle, by its name (as passed to Begin), as drawn in the last frame; found 0 if no such window.
 int fig_window_rect(const char *name, int name_len, float *rect, int *found) {
    if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
@@ -3346,16 +3357,8 @@ extern "C" int fig_notification_rect(int index, float *rect, int *found) {
    return FIG_OK;
 }
 
-extern "C" int fig_drawn_extent(const char *color, int color_len, float *rect, int *found) {
-   *found = 0;
-   if (!ImGui::GetCurrentContext() || !ImGui::GetCurrentWindowRead())
-      return fail(FIG_ERR_STATE, "test_drawn_extent: call it inside a window, in a frame");
-   const std::string name(color, color_len > 0 ? static_cast<size_t>(color_len) : 0);
-   int col = -1;
-   for (int i = 0; i < ImGuiCol_COUNT; ++i)
-      if (name == ImGui::GetStyleColorName(i)) col = i;
-   if (col < 0) return fail(FIG_ERR_ARGUMENT, "test_drawn_extent: unknown colour \"" + name + "\" (Dear ImGui's names)");
-   const ImU32 c = ImGui::GetColorU32(col);
+// The extent of the vertices of colour c in the current window's draw list (rect: xmin, ymin, xmax, ymax).
+static void drawn_extent(ImU32 c, float *rect, int *found) {
    const ImDrawList *dl = ImGui::GetWindowDrawList();
    for (const ImDrawVert &v : dl->VtxBuffer) {
       if (v.col != c) continue;
@@ -3369,5 +3372,26 @@ extern "C" int fig_drawn_extent(const char *color, int color_len, float *rect, i
       rect[2] = std::max(rect[2], v.pos.x);
       rect[3] = std::max(rect[3], v.pos.y);
    }
+}
+
+extern "C" int fig_drawn_extent(const char *color, int color_len, float *rect, int *found) {
+   *found = 0;
+   if (!ImGui::GetCurrentContext() || !ImGui::GetCurrentWindowRead())
+      return fail(FIG_ERR_STATE, "test_drawn_extent: call it inside a window, in a frame");
+   const std::string name(color, color_len > 0 ? static_cast<size_t>(color_len) : 0);
+   int col = -1;
+   for (int i = 0; i < ImGuiCol_COUNT; ++i)
+      if (name == ImGui::GetStyleColorName(i)) col = i;
+   if (col < 0) return fail(FIG_ERR_ARGUMENT, "test_drawn_extent: unknown colour \"" + name + "\" (Dear ImGui's names)");
+   drawn_extent(ImGui::GetColorU32(col), rect, found);
+   return FIG_OK;
+}
+
+// The same for an RGBA colour (as an item's spec colour is drawn: ImGui::GetColorU32 of it).
+extern "C" int fig_drawn_extent_rgba(const float *rgba, float *rect, int *found) {
+   *found = 0;
+   if (!ImGui::GetCurrentContext() || !ImGui::GetCurrentWindowRead())
+      return fail(FIG_ERR_STATE, "test_drawn_extent: call it inside a window, in a frame");
+   drawn_extent(ImGui::GetColorU32(ImVec4(rgba[0], rgba[1], rgba[2], rgba[3])), rect, found);
    return FIG_OK;
 }

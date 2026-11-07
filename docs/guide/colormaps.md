@@ -8,6 +8,7 @@ A **colormap** turns a value into a colour: a [heatmap](images#heatmaps) colours
 its colour bar (`ip_colormap_scale`) shows the scale. FIGURE bundles the maps that scientific plotting has settled on
 (matplotlib's, cmocean's, ParaView's Cool to Warm, Fabio Crameri's), knows ImPlot's own, and loads the user's from a
 CSV table or a ParaView preset. All of them are chosen **by name**, reversed or cut into discrete bands.
+[Contour lines](plots#contour-lines) take their colours from a colormap too, each level the colour of its value.
 
 <Media name="colormaps" alt="Four windows of vertical colour bars, each labelled with its colormap's name. Sequential: cividis, inferno, magma, batlow, thermal, haline, deep, turbo. Diverging: cool-warm, balance, curl, vik, roma. Cyclic: romaO, whose two ends have the same colour. Below, ImPlot's own sixteen: the qualitative Deep, Dark, Pastel and Paired in separate blocks of colour, then Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral and Greys." caption="docs/examples/src/gallery.F90 (run with colormaps): every colormap FIGURE knows, from ip_colormap_names" />
 

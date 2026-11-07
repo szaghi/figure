@@ -151,6 +151,13 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_load_colormap(name, file [, stat])` | a user colormap from a CSV table of RGB rows or a ParaView JSON preset ([user maps](colormaps#user-maps)) |
 | `ip_colormap_names(names)` | the names `ip_colormap` knows ([colormaps](colormaps)) |
 | `ip_image(label, tex, xmin, xmax, ymin, ymax ...)` | a texture in a plot, pixel row 1 at the bottom |
+| `ip_error_bars(label, x, y, err [, err_high] [, spec] [, stat])` | vertical error bars, symmetric or not ([plots](plots#error-bars-annotations-and-drag-tools)) |
+| `ip_annotation(x, y, text [, color] [, offset] [, stat])` | a text at a plot point, in a box of a colour or alone ([plots](plots#error-bars-annotations-and-drag-tools)) |
+| `ip_drag_line_x(id, x [, color] [, thickness] [, stat])` → `logical`, `ip_drag_line_y(...)` | a vertical (horizontal) line the user drags; the value updated in place ([plots](plots#error-bars-annotations-and-drag-tools)) |
+| `ip_drag_point(id, x, y [, color] [, radius] [, stat])` → `logical` | a point the user drags ([plots](plots#error-bars-annotations-and-drag-tools)) |
+| `ip_contour(label, f, x0, x1, y0, y1 [, levels] [, nlevels] [, colormap] [, color] [, labels] [, line_weight] [, stat])` | contour lines of a field, read in place; NaNs leave holes ([plots](plots#contour-lines)) |
+| `ip_contour_lines(f, x0, x1, y0, y1, levels, x, y, first)` | the contour segments without drawing them (marching squares, `pure`) ([plots](plots#contour-lines)) |
+| `ip_contour_levels(f [, count])` → `real(real64)` array | levels at round numbers inside a field's finite range ([plots](plots#contour-lines)) |
 | `ip_end_plot()` | end the plot (only if `ip_begin_plot` returned `.true.`) |
 
 Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots), [Colormaps](colormaps).
@@ -208,7 +215,7 @@ Details: [Processes and tasks](processes#tasks).
 | `test_frame_state(minimized, maximized [, stat])` | the window minimized, maximized (headless: as the bar's buttons recorded it) |
 | `test_system_theme(theme [, stat])` | the system's light or dark setting changes (`'light'`, `'dark'`, `'system'`), at the next frame: tests of `palette='auto'` ([styles](styles#follow-the-system-s-light-or-dark-setting)) |
 | `test_notification_rect(index, x0, y0, x1, y1 [, found])` | a notification shown in the last frame, 1 the newest ([notifications](frame-loop#notifications)) |
-| `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat])` | the extent drawn so far in the current window in a style colour (`'PlotHistogram'`: a progress bar's fill) |
+| `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat])` | the extent drawn so far in the current window in a style colour by name (`'PlotHistogram'`: a progress bar's fill) or an RGBA colour (an item's `ip_spec` colour) |
 | `test_file_browser(shown [, folder] [, entries] [, error] [, asking] [, path_field] [, name_field] [, recent])` | the file browser in front: its folder, the entries in the order shown, the error shown, the replace question, the fields, the recent folders ([file browser](frame-loop#figure-s-file-browser)) |
 | `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser in the last frame (`'entry:NAME'`, `'ok'`, `'cancel'`, `'path'`, ...), to click it |
 | `test_settings_file(path [, stat])` | the file keeping the browser's recent folders, instead of FIGURE's own (`''`: memory only) |

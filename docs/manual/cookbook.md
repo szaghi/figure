@@ -244,6 +244,27 @@ The `x(::5)` sections are not contiguous: the compiler copies them (see
 cells. Fix the scale (`scale_min`, `scale_max`) when the field changes over time, or the colours rescale every frame.
 [Heatmaps and images](/guide/images) has every argument.
 
+### Contour lines over a field
+
+<<< @/examples/snippets/cb_contour-contour.F90{fortran}
+
+<Media name="cb_contour" alt="Two vortices as a heatmap with black contour lines labelled with their values; beside it the same lines coloured by value around a hole marked NaN, with a drag line and a drag point; below, the field along the drag line with error bars" caption="docs/examples/src/cb_contour.F90" />
+
+`ip_contour` takes the positions of the first and last samples; a heatmap takes the outer edges of its cells: give it
+half a spacing more on each side, and the lines fall on the colours they bound. Without `levels`, about `nlevels`
+round values inside the field's range are chosen. Where the field is NaN (a body, cells outside the domain) the lines
+stop: a hole, not a line to a meaningless value. [Contour lines](/guide/plots#contour-lines) has every argument.
+
+### Probe a field with lines and points the user drags
+
+<<< @/examples/snippets/cb_contour-probes.F90{fortran}
+
+<<< @/examples/snippets/cb_contour-profile.F90{fortran}
+
+The drag tools update `probe_x`, `px` and `py` in place and return `.true.` while they move: clamp the values there.
+The profile is the row `i` of `g`, read in place with a stride (`ip_line(label, g, i)`); a NaN in it draws a gap.
+[Error bars, annotations and drag tools](/guide/plots#error-bars-annotations-and-drag-tools) has the details.
+
 ### Show an image computed by the program
 
 <<< @/examples/snippets/cb_field-texture.F90{fortran}
