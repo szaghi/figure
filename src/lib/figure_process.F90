@@ -322,7 +322,7 @@ contains
       longest = max(longest, l)
    endif
    allocate(character(len=longest) :: lines(count))
-   lines = ''
+   lines(:) = '' ! a section: `lines = ''` reallocates lines to the length of '', 0 (F2018 10.2.1.3)
    k = 1_int32
    s = 0_int32
    do i = 1_int32, len(buf, int32)
