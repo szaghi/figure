@@ -40,38 +40,12 @@ jobs:
         ref: ${{ inputs.tag }}
         sparse-checkout: .github/actions
 
-    # Same compiler, [scaffold] apt_packages and FoBiS.py as the CI: every
-    # build below needs them, not only the fobis one.
+    # Same compiler, [scaffold] apt_packages and FoBiS.py as the CI. The
+    # release's install.sh (FIGURE's own installer, no longer the generic
+    # --download/--build one) is tested by installer.yml, which release.yml
+    # calls next to this workflow.
     - name: Setup build environment
       uses: ./.github/actions/setup-build-env
-
-    - name: INSTALL SCRIPT + make
-      if: hashFiles('Makefile', 'makefile', 'GNUmakefile') != ''
-      run: |
-        WORKDIR=$(mktemp -d)
-        cd "$WORKDIR"
-        wget $(curl -s https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$TAG | jq -r '.assets[] | select(.name | test("install.sh"; "i")) | .browser_download_url')
-        chmod +x install.sh
-        ./install.sh --download wget --build make
-
-    - name: INSTALL SCRIPT + cmake
-      if: hashFiles('CMakeLists.txt') != ''
-      run: |
-        WORKDIR=$(mktemp -d)
-        cd "$WORKDIR"
-        wget $(curl -s https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$TAG | jq -r '.assets[] | select(.name | test("install.sh"; "i")) | .browser_download_url')
-        chmod +x install.sh
-        ./install.sh --download wget --build cmake
-
-    - name: INSTALL SCRIPT + fobis
-      if: hashFiles('fobos') != ''
-      run: |
-        WORKDIR=$(mktemp -d)
-        cd "$WORKDIR"
-        wget $(curl -s https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$TAG | jq -r '.assets[] | select(.name | test("install.sh"; "i")) | .browser_download_url')
-        chmod +x install.sh
-        # fetches the fobos [dependencies], then builds the fobos default mode
-        ./install.sh --download wget --build fobis
 
     - name: Setup fpm
       if: hashFiles('fpm.toml') != ''

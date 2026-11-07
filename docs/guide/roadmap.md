@@ -173,6 +173,9 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   `text_buffer_object`, text of any length kept by the native layer and grown while the user types or pastes, CRLF
   read as LF; `ig_input_text_multiline`, editable or read-only, Tab as a character on request, Dear ImGui's undo and
   redo kept; IBM Plex Mono bundled as `'plex-mono'`, the Lucide icons merged into it: done.
+- **A one-line installer** ([Installation](install#the-one-line-installer)): `install.sh --gnu|--nvidia|--fc`, the
+  missing packages printed (`--deps` runs them), installs per compiler with a pkg-config file and a manifest,
+  `--uninstall`: done.
 
 ## Next
 

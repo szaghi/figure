@@ -1,0 +1,72 @@
+# The one-line installer (scripts/install.sh) on fresh runners: Ubuntu, where --deps installs SDL's development
+# packages with apt, and macOS, with Homebrew. Each run builds FIGURE, installs it into a scratch prefix, compiles and
+# runs the installer's proof program (pkg-config, headless), then checks that --uninstall leaves the prefix empty.
+#   - push (when the installer changes) and a dispatch with no tag: this commit, with --source;
+#   - a dispatch with a tag, and release.yml after it publishes a release: the one-liner itself, the install.sh asset
+#     of releases/latest, building that tag.
+name: Installer
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["**"]
+    paths:
+      - scripts/install.sh
+      - .github/workflows/installer.yml
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to install with the one-liner (empty, this commit with --source)
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: shellcheck
+      run: shellcheck --version && shellcheck scripts/install.sh
+
+  install:
+    name: install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      TAG: ${{ inputs.tag }}
+      PREFIX: ${{ github.workspace }}/../figure-prefix
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install this commit (--source)
+      if: inputs.tag == ''
+      run: bash scripts/install.sh --gnu --deps --source "$GITHUB_WORKSPACE" --prefix "$PREFIX"
+
+    - name: Install the release (the one-liner)
+      if: inputs.tag != ''
+      run: |
+        curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/install.sh" \
+          | bash -s -- --gnu --deps --tag "$TAG" --prefix "$PREFIX"
+
+    - name: figure.pc
+      run: |
+        export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
+        pkg-config --modversion figure
+        pkg-config --cflags --libs figure
+
+    - name: Uninstall leaves an empty prefix
+      run: |
+        bash scripts/install.sh --uninstall --prefix "$PREFIX"
+        left="$(find "$PREFIX" -mindepth 1)"
+        if [ -n "$left" ]; then echo "left in the prefix:"; echo "$left"; exit 1; fi

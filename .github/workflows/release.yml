@@ -66,3 +66,12 @@ jobs:
     uses: ./.github/workflows/install.yml
     with:
       tag: ${{ github.ref_name }}
+
+  installer:
+    # the one-liner on fresh Ubuntu and macOS runners, with the install.sh asset just published (issue #3, S10)
+    needs: release
+    permissions:
+      contents: read
+    uses: ./.github/workflows/installer.yml
+    with:
+      tag: ${{ github.ref_name }}

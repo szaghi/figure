@@ -4,6 +4,108 @@ title: Installation
 
 # Installation
 
+```bash
+curl -fsSL https://github.com/szaghi/figure/releases/latest/download/install.sh | bash -s -- --gnu
+```
+
+This builds the latest release with gfortran, installs it into `~/.local` and checks it with a test program. Then
+compile any program against it:
+
+```bash
+export PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}
+gfortran my_program.F90 $(pkg-config --cflags --libs figure) -o my_program
+```
+
+FIGURE is always built from source: `.mod` files work only with the compiler, and the compiler version, that wrote
+them, so there are no prebuilt binaries. Four routes lead to a usable library:
+
+| Route | Use it when | Section |
+|---|---|---|
+| The one-line installer | your program is built by anything (Make, CMake, a shell line, FoBiS) and you want FIGURE installed once per compiler, found by `pkg-config` | [The one-line installer](#the-one-line-installer) |
+| fpm | your program is an fpm project: fpm compiles FIGURE, native layer included, as one of its dependencies | [FIGURE as an fpm dependency](#figure-as-an-fpm-dependency) |
+| FoBiS fetch | your program is a FoBiS project and should pin FIGURE's version in its own fobos | [FIGURE as a FoBiS dependency](#figure-as-a-fobis-dependency) |
+| Manual build | you work on FIGURE itself, run its tests and examples, or need a modified FIGURE | [Building from the repository](#building-from-the-repository) |
+
+## The one-line installer
+
+`scripts/install.sh`, attached to every release, works in five stages and stops at the first that fails:
+
+1. **Toolchain.** The Fortran compiler (`--gnu`: `gfortran`; `--nvidia`: `nvfortran`; `--fc FC`: either, by name or
+   path), the C and C++ compilers that go with it, CMake 3.24 or newer, `pkg-config`, Python 3.11 or newer, and
+   `curl` or `git`. With `--gnu`, the C and C++ compilers are the `gcc` and `g++` beside `gfortran` (on macOS, Apple
+   clang, whose C++ runtime the link line uses); with `--nvidia`, `gcc` and `g++` (nvfortran links `libstdc++`);
+   `CC` and `CXX`, when both are set, override them. Every version is printed.
+2. **System packages.** On Linux, SDL3 enables X11, Wayland (with libdecor) and DBus only when their development
+   packages are present when it is configured. The script checks them by their `pkg-config` names, and the missing
+   tools with them; if anything is missing, it prints the exact `apt-get` or `dnf` command that installs it and
+   stops (exit status 3). **It never runs `sudo` by itself:** run that command, or run the script again with
+   `--deps`, which shows the command and then runs it. On macOS, SDL needs only the system's frameworks: `--deps`
+   runs `brew install` for missing tools (no `sudo`).
+3. **Download and build.** The release (`--tag`, default the latest) is downloaded and built in a temporary
+   directory: the native layer with CMake (whose first build downloads Dear ImGui, ImPlot, cimgui, cimplot, SDL3 and
+   miniz), then `libfigure.a` with FoBiS. When FoBiS 3.8 or newer is not on `PATH`, it is installed in a private
+   virtual environment inside that directory, removed at the end. `--source DIR` builds a local FIGURE tree instead
+   (a copy of it: the tree itself is not written).
+4. **Install** into `--prefix` (default `~/.local`), under the compiler's tag, such as `gnu-16.2.0` or `nvidia-26.9`
+   (table below). Installs for different compilers live side by side; installing the same compiler again replaces
+   its previous install.
+5. **Proof.** A ten-line program that draws three frames headless is compiled with
+   `pkg-config --cflags --libs figure-<tag>` and run; then the compile line for your programs is printed.
+
+| Installed | What |
+|---|---|
+| `lib/figure/<tag>/` | `libfigure.a`, and the native layer `libfigure_native.a`, `libSDL3.a` (static; on macOS also `libfigure_clang_rt.a`) |
+| `include/figure/<tag>/` | the `.mod` files, for this compiler and version only |
+| `lib/pkgconfig/figure-<tag>.pc` | this install's flags: `-I` for the modules, then the libraries and the platform's link line |
+| `lib/pkgconfig/figure.pc` | a copy of the last install's `.pc`: `pkg-config figure` means the compiler installed last |
+| `share/figure/<tag>/` | the licences (FIGURE's and those of the code compiled into the libraries, see [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)), the theme files, and `manifest`, the list of every file and directory installed |
+
+| Option | Meaning |
+|---|---|
+| `--gnu`, `--nvidia`, `--fc FC` | the Fortran compiler (one is required) |
+| `--prefix DIR` | where to install (default `~/.local`) |
+| `--tag TAG` | the release to build (default the latest) |
+| `--source DIR` | build a local FIGURE tree instead of a release |
+| `--deps` | run the package command of stage 2, after showing it |
+| `--dry-run` | run stages 1 and 2, print the package command, build nothing |
+| `--uninstall` | remove what the script installed in `--prefix`: every install, or with a compiler option only that compiler's |
+| `--keep` | keep the build directory (a failed stage always keeps it, and prints the path of its log) |
+| `--verbose` | show the build's output (otherwise written to the log) |
+
+With two compilers installed, choose one by its `.pc`: `pkg-config --cflags --libs figure-nvidia-26.9`.
+
+To remove an install, run the script with `--uninstall` (and the same `--prefix`):
+
+```bash
+curl -fsSL https://github.com/szaghi/figure/releases/latest/download/install.sh | bash -s -- --uninstall
+```
+
+It removes exactly the files and directories listed in the manifests, and nothing else in the prefix. What the
+installer does not cover is listed in the [known issues](known-issues#the-one-line-installer).
+
+## FIGURE as a FoBiS dependency
+
+A FoBiS project fetches and builds FIGURE with its own fobos (`use=fobos`, the static-library mode of your
+compiler), then links the native layer from the clone's `lib/`:
+
+```ini
+[dependencies]
+figure = https://github.com/szaghi/figure :: tag=v0.2.0 :: use=fobos :: mode=figure-static-gnu
+```
+
+```ini
+[gnu]
+; ... your mode: FoBiS adds FIGURE's modules and libfigure.a; the native layer and the platform's libraries are yours
+lib_dir  = .fobis_deps/figure/lib
+ext_libs = figure_native SDL3 stdc++ dl pthread m
+```
+
+`fobis fetch` clones the tag and builds it (the mode's `pre_build` runs the native build, with CMake, so the
+requirements below apply); `fobis build` then rebuilds nothing that is up to date. `ext_libs` is the Linux link line;
+`python3 .fobis_deps/figure/scripts/check_sync.py --link-flags` prints that of the platform it runs on.
+
+## Building from the repository
+
 FIGURE has two layers, built separately:
 
 - the **native layer** (C and C++): Dear ImGui, ImPlot, cimgui, cimplot, miniz, SDL3 and FIGURE's glue, built by CMake
