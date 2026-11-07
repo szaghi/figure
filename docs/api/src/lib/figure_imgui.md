@@ -88,6 +88,7 @@ subroutine ig_end()
 
 ```mermaid
 flowchart TD
+  ig_end["ig_end"] --> figure_refused["figure_refused"]
   ig_end["ig_end"] --> igEnd["igEnd"]
   style ig_end fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -428,6 +429,7 @@ function ig_begin(name, open, flags) result(visible)
 ```mermaid
 flowchart TD
   ig_begin["ig_begin"] --> cstr["cstr"]
+  ig_begin["ig_begin"] --> figure_refused["figure_refused"]
   ig_begin["ig_begin"] --> igBegin["igBegin"]
   style ig_begin fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -459,6 +461,7 @@ function ig_begin_side_bar(name, side, size) result(visible)
 ```mermaid
 flowchart TD
   ig_begin_side_bar["ig_begin_side_bar"] --> fig_begin_side_bar["fig_begin_side_bar"]
+  ig_begin_side_bar["ig_begin_side_bar"] --> figure_refused["figure_refused"]
   style ig_begin_side_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 

@@ -72,6 +72,10 @@
         "link": "/api/src/lib/figure_style"
       },
       {
+        "text": "figure_task",
+        "link": "/api/src/lib/figure_task"
+      },
+      {
         "text": "figure_testing",
         "link": "/api/src/lib/figure_testing"
       },

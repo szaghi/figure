@@ -40,6 +40,15 @@ graph LR
 - [fig_process_take](#fig-process-take)
 - [fig_process_info](#fig-process-info)
 - [fig_process_kill](#fig-process-kill)
+- [fig_task_start](#fig-task-start)
+- [fig_task_state](#fig-task-state)
+- [fig_task_report](#fig-task-report)
+- [fig_task_fail](#fig-task-fail)
+- [fig_task_cancel](#fig-task-cancel)
+- [fig_task_cancelled](#fig-task-cancelled)
+- [fig_task_finish](#fig-task-finish)
+- [fig_task_on_worker](#fig-task-on-worker)
+- [fig_task_refuse](#fig-task-refuse)
 - [fig_frame_hit](#fig-frame-hit)
 - [fig_frame_rect](#fig-frame-rect)
 - [fig_frame_state](#fig-frame-state)
@@ -93,6 +102,7 @@ graph LR
 - [fig_window_rect](#fig-window-rect)
 - [fig_shutdown](#fig-shutdown)
 - [fig_process_release](#fig-process-release)
+- [fig_task_release](#fig-task-release)
 - [fig_set_lazy](#fig-set-lazy)
 - [fig_set_remote_fps](#fig-set-remote-fps)
 - [fig_set_remote_compress](#fig-set-remote-compress)
@@ -154,6 +164,24 @@ graph LR
 ### fig_process_info
 
 ### fig_process_kill
+
+### fig_task_start
+
+### fig_task_state
+
+### fig_task_report
+
+### fig_task_fail
+
+### fig_task_cancel
+
+### fig_task_cancelled
+
+### fig_task_finish
+
+### fig_task_on_worker
+
+### fig_task_refuse
 
 ### fig_frame_hit
 
@@ -260,6 +288,8 @@ graph LR
 ### fig_shutdown
 
 ### fig_process_release
+
+### fig_task_release
 
 ### fig_set_lazy
 

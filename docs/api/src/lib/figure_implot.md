@@ -904,6 +904,7 @@ flowchart TD
   ip_begin_plot["ip_begin_plot"] --> ImPlot_BeginPlot["ImPlot_BeginPlot"]
   ip_begin_plot["ip_begin_plot"] --> ImPlot_SetNextAxisToFit["ImPlot_SetNextAxisToFit"]
   ip_begin_plot["ip_begin_plot"] --> cstr["cstr"]
+  ip_begin_plot["ip_begin_plot"] --> figure_refused["figure_refused"]
   style ip_begin_plot fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -938,6 +939,7 @@ function ip_begin_subplots(title, rows, cols, width, height, link_x, link_y) res
 flowchart TD
   ip_begin_subplots["ip_begin_subplots"] --> ImPlot_BeginSubplots["ImPlot_BeginSubplots"]
   ip_begin_subplots["ip_begin_subplots"] --> cstr["cstr"]
+  ip_begin_subplots["ip_begin_subplots"] --> figure_refused["figure_refused"]
   style ip_begin_subplots fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 

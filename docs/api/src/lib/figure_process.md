@@ -435,6 +435,7 @@ flowchart TD
   log_draw["log_draw"] --> clipboard["clipboard"]
   log_draw["log_draw"] --> copy["copy"]
   log_draw["log_draw"] --> cstr["cstr"]
+  log_draw["log_draw"] --> figure_refused["figure_refused"]
   log_draw["log_draw"] --> igBeginChild_Str["igBeginChild_Str"]
   log_draw["log_draw"] --> igBeginPopupContextWindow["igBeginPopupContextWindow"]
   log_draw["log_draw"] --> igEndChild["igEndChild"]

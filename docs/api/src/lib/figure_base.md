@@ -25,6 +25,7 @@ graph LR
 - [figure_check](#figure-check)
 - [figure_fail](#figure-fail)
 - [figure_last_error](#figure-last-error)
+- [figure_refused](#figure-refused)
 - [cstr](#cstr)
 
 ## Subroutines
@@ -107,6 +108,9 @@ flowchart TD
   set_title["set_title"] --> figure_check["figure_check"]
   set_var["set_var"] --> figure_check["figure_check"]
   show_file_dialog["show_file_dialog"] --> figure_check["figure_check"]
+  task_cancel["task_cancel"] --> figure_check["figure_check"]
+  task_result["task_result"] --> figure_check["figure_check"]
+  task_start["task_start"] --> figure_check["figure_check"]
   test_click["test_click"] --> figure_check["figure_check"]
   test_drag["test_drag"] --> figure_check["figure_check"]
   test_frame_hit["test_frame_hit"] --> figure_check["figure_check"]
@@ -166,6 +170,9 @@ flowchart TD
   set_color_hex["set_color_hex"] --> figure_fail["figure_fail"]
   set_font["set_font"] --> figure_fail["figure_fail"]
   set_icon_image["set_icon_image"] --> figure_fail["figure_fail"]
+  task_cancel["task_cancel"] --> figure_fail["figure_fail"]
+  task_result["task_result"] --> figure_fail["figure_fail"]
+  task_start["task_start"] --> figure_fail["figure_fail"]
   test_click["test_click"] --> figure_fail["figure_fail"]
   test_mouse_button["test_mouse_button"] --> figure_fail["figure_fail"]
   test_system_theme["test_system_theme"] --> figure_fail["figure_fail"]
@@ -194,6 +201,53 @@ flowchart TD
   figure_check["figure_check"] --> figure_last_error["figure_last_error"]
   figure_last_error["figure_last_error"] --> fig_last_error["fig_last_error"]
   style figure_last_error fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### figure_refused
+
+True when called from a task's worker thread: the drawing entry point `name` must return at once. The task's
+ status becomes `FIG_ERR_STATE` with a message naming `name` (given by `t%result`), the task is asked to stop, and
+ `stat`, if present, is `FIG_ERR_STATE`. False on the main thread (nothing changes).
+
+**Returns**: `logical`
+
+```fortran
+function figure_refused(name, stat) result(refused)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `name` | character(len=*) | in |  | The entry point. |
+| `stat` | integer(kind=int32) | out | optional | Status, on a refusal. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  ig_begin["ig_begin"] --> figure_refused["figure_refused"]
+  ig_begin_child["ig_begin_child"] --> figure_refused["figure_refused"]
+  ig_begin_main_menu_bar["ig_begin_main_menu_bar"] --> figure_refused["figure_refused"]
+  ig_begin_menu_bar["ig_begin_menu_bar"] --> figure_refused["figure_refused"]
+  ig_begin_popup["ig_begin_popup"] --> figure_refused["figure_refused"]
+  ig_begin_popup_modal["ig_begin_popup_modal"] --> figure_refused["figure_refused"]
+  ig_begin_side_bar["ig_begin_side_bar"] --> figure_refused["figure_refused"]
+  ig_begin_tab_bar["ig_begin_tab_bar"] --> figure_refused["figure_refused"]
+  ig_begin_table["ig_begin_table"] --> figure_refused["figure_refused"]
+  ig_collapsing_header["ig_collapsing_header"] --> figure_refused["figure_refused"]
+  ig_dock_space["ig_dock_space"] --> figure_refused["figure_refused"]
+  ig_end["ig_end"] --> figure_refused["figure_refused"]
+  ig_end_child["ig_end_child"] --> figure_refused["figure_refused"]
+  ig_tree_node["ig_tree_node"] --> figure_refused["figure_refused"]
+  init["init"] --> figure_refused["figure_refused"]
+  ip_begin_plot["ip_begin_plot"] --> figure_refused["figure_refused"]
+  ip_begin_subplots["ip_begin_subplots"] --> figure_refused["figure_refused"]
+  log_draw["log_draw"] --> figure_refused["figure_refused"]
+  next_frame["next_frame"] --> figure_refused["figure_refused"]
+  update["update"] --> figure_refused["figure_refused"]
+  figure_refused["figure_refused"] --> fig_task_refuse["fig_task_refuse"]
+  style figure_refused fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### cstr

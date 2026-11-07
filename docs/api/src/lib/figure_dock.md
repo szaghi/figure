@@ -78,6 +78,7 @@ subroutine ig_dock_space(id, flags, stat)
 flowchart TD
   ig_dock_space["ig_dock_space"] --> fig_dock_space["fig_dock_space"]
   ig_dock_space["ig_dock_space"] --> figure_check["figure_check"]
+  ig_dock_space["ig_dock_space"] --> figure_refused["figure_refused"]
   style ig_dock_space fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 

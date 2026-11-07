@@ -102,6 +102,7 @@ flowchart TD
   init["init"] --> destroy["destroy"]
   init["init"] --> fig_texture_create["fig_texture_create"]
   init["init"] --> figure_check["figure_check"]
+  init["init"] --> figure_refused["figure_refused"]
   style init fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -128,6 +129,7 @@ flowchart TD
   update["update"] --> fig_texture_update["fig_texture_update"]
   update["update"] --> figure_check["figure_check"]
   update["update"] --> figure_fail["figure_fail"]
+  update["update"] --> figure_refused["figure_refused"]
   style update fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 

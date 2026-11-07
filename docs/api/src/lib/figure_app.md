@@ -948,6 +948,7 @@ flowchart TD
   next_frame["next_frame"] --> fig_begin_frame["fig_begin_frame"]
   next_frame["next_frame"] --> fig_end_frame["fig_end_frame"]
   next_frame["next_frame"] --> figure_check["figure_check"]
+  next_frame["next_frame"] --> figure_refused["figure_refused"]
   style next_frame fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 

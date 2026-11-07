@@ -25,5 +25,6 @@ Auto-generated from Fortran source doc comments using [FORMAL](https://github.co
 - [figure_menu](/api/src/lib/figure_menu)
 - [figure_process](/api/src/lib/figure_process)
 - [figure_style](/api/src/lib/figure_style)
+- [figure_task](/api/src/lib/figure_task)
 - [figure_testing](/api/src/lib/figure_testing)
 - [figure_texture](/api/src/lib/figure_texture)

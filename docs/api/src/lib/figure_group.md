@@ -154,6 +154,7 @@ subroutine ig_end_child()
 
 ```mermaid
 flowchart TD
+  ig_end_child["ig_end_child"] --> figure_refused["figure_refused"]
   ig_end_child["ig_end_child"] --> igEndChild["igEndChild"]
   style ig_end_child fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -493,6 +494,7 @@ function ig_begin_child(id, width, height, border) result(visible)
 ```mermaid
 flowchart TD
   ig_begin_child["ig_begin_child"] --> cstr["cstr"]
+  ig_begin_child["ig_begin_child"] --> figure_refused["figure_refused"]
   ig_begin_child["ig_begin_child"] --> igBeginChild_Str["igBeginChild_Str"]
   style ig_begin_child fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -519,6 +521,7 @@ function ig_collapsing_header(label, default_open) result(open)
 ```mermaid
 flowchart TD
   ig_collapsing_header["ig_collapsing_header"] --> cstr["cstr"]
+  ig_collapsing_header["ig_collapsing_header"] --> figure_refused["figure_refused"]
   ig_collapsing_header["ig_collapsing_header"] --> igCollapsingHeader_TreeNodeFlags["igCollapsingHeader_TreeNodeFlags"]
   style ig_collapsing_header fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -552,6 +555,7 @@ function ig_tree_node(label, default_open, selected, leaf, span_full_width, clic
 ```mermaid
 flowchart TD
   ig_tree_node["ig_tree_node"] --> cstr["cstr"]
+  ig_tree_node["ig_tree_node"] --> figure_refused["figure_refused"]
   ig_tree_node["ig_tree_node"] --> igIsItemClicked["igIsItemClicked"]
   ig_tree_node["ig_tree_node"] --> igIsItemToggledOpen["igIsItemToggledOpen"]
   ig_tree_node["ig_tree_node"] --> igTreeNodeEx_Str["igTreeNodeEx_Str"]
@@ -579,6 +583,7 @@ function ig_begin_tab_bar(id) result(visible)
 ```mermaid
 flowchart TD
   ig_begin_tab_bar["ig_begin_tab_bar"] --> cstr["cstr"]
+  ig_begin_tab_bar["ig_begin_tab_bar"] --> figure_refused["figure_refused"]
   ig_begin_tab_bar["ig_begin_tab_bar"] --> igBeginTabBar["igBeginTabBar"]
   style ig_begin_tab_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -636,6 +641,7 @@ function ig_begin_table(id, columns, flags, height) result(visible)
 ```mermaid
 flowchart TD
   ig_begin_table["ig_begin_table"] --> cstr["cstr"]
+  ig_begin_table["ig_begin_table"] --> figure_refused["figure_refused"]
   ig_begin_table["ig_begin_table"] --> igBeginTable["igBeginTable"]
   style ig_begin_table fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

@@ -166,6 +166,7 @@ function ig_begin_main_menu_bar() result(visible)
 
 ```mermaid
 flowchart TD
+  ig_begin_main_menu_bar["ig_begin_main_menu_bar"] --> figure_refused["figure_refused"]
   ig_begin_main_menu_bar["ig_begin_main_menu_bar"] --> igBeginMainMenuBar["igBeginMainMenuBar"]
   style ig_begin_main_menu_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -184,6 +185,7 @@ function ig_begin_menu_bar() result(visible)
 
 ```mermaid
 flowchart TD
+  ig_begin_menu_bar["ig_begin_menu_bar"] --> figure_refused["figure_refused"]
   ig_begin_menu_bar["ig_begin_menu_bar"] --> igBeginMenuBar["igBeginMenuBar"]
   style ig_begin_menu_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -297,6 +299,7 @@ function ig_begin_popup(id) result(open)
 ```mermaid
 flowchart TD
   ig_begin_popup["ig_begin_popup"] --> cstr["cstr"]
+  ig_begin_popup["ig_begin_popup"] --> figure_refused["figure_refused"]
   ig_begin_popup["ig_begin_popup"] --> igBeginPopup["igBeginPopup"]
   style ig_begin_popup fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -325,6 +328,7 @@ function ig_begin_popup_modal(title, open) result(shown)
 ```mermaid
 flowchart TD
   ig_begin_popup_modal["ig_begin_popup_modal"] --> cstr["cstr"]
+  ig_begin_popup_modal["ig_begin_popup_modal"] --> figure_refused["figure_refused"]
   ig_begin_popup_modal["ig_begin_popup_modal"] --> igBeginPopupModal["igBeginPopupModal"]
   style ig_begin_popup_modal fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
