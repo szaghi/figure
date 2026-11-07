@@ -21,7 +21,7 @@ endtype sum_job
 logical :: ended_by_object = .false. !< forever_work saw the cancel of its object's end.
 
 contains
-   subroutine pause(seconds)
+   recursive subroutine pause(seconds)
    !< Wait `seconds` (by the clock).
    real(real64), intent(in) :: seconds     !< Time [s].
    integer(int64)           :: t0, t, rate !< Clock.
@@ -33,7 +33,7 @@ contains
    enddo
    endsubroutine pause
 
-   subroutine sum_work(h, data)
+   recursive subroutine sum_work(h, data)
    !< The sum, in 10 chunks, reporting each; stops at a cancel.
    type(task_handle_object), intent(inout) :: h    !< Handle.
    class(*),                 intent(inout) :: data !< A sum_job.
@@ -58,7 +58,7 @@ contains
    endselect
    endsubroutine sum_work
 
-   subroutine forever_work(h, data)
+   recursive subroutine forever_work(h, data)
    !< Counts until cancelled.
    type(task_handle_object), intent(inout) :: h    !< Handle.
    class(*),                 intent(inout) :: data !< A sum_job.
@@ -75,7 +75,7 @@ contains
    endselect
    endsubroutine forever_work
 
-   subroutine draw_work(h, data)
+   recursive subroutine draw_work(h, data)
    !< Breaks the threading rule: calls drawing procedures, which must refuse.
    type(task_handle_object), intent(inout) :: h    !< Handle.
    class(*),                 intent(inout) :: data !< A sum_job.
@@ -91,7 +91,7 @@ contains
    endselect
    endsubroutine draw_work
 
-   subroutine fail_work(h, data)
+   recursive subroutine fail_work(h, data)
    !< Reports a failure.
    type(task_handle_object), intent(inout) :: h    !< Handle.
    class(*),                 intent(inout) :: data !< Any.

@@ -143,7 +143,10 @@ gives otherwise ([Error handling](errors)). `kill` on a process that has ended d
 `t` is a `task_object`, `h` the `task_handle_object` FIGURE gives to `work`, a subroutine with the interface
 `task_work`: `subroutine work(h, data)`, with `type(task_handle_object), intent(inout) :: h` and
 `class(*), intent(inout) :: data`. `work` is a **module procedure** (it runs on another thread: an internal procedure reaches its host's variables
-through the host's stack frame, which is the main thread's). `data` is the task's own copy of what `start` was given:
+through the host's stack frame, which is the main thread's), and it is **`recursive`**, as is every procedure of yours
+that it calls: two tasks run the same code at the same time, which a procedure not declared `recursive` does not allow
+(gfortran's `-fcheck=recursion`, part of `-fcheck=all`, stops the program with "Recursive call to nonrecursive
+procedure"). `data` is the task's own copy of what `start` was given:
 a file name, or an extended type holding both the input and the arrays the task fills. `work` selects its type,
 works on it, reports its progress, and checks `h%cancelled()` at its safe points; `t%result(data)` hands it back
 without a copy:

@@ -15,7 +15,7 @@ type :: field_t
 endtype field_t
 
 contains
-   subroutine smooth_field(h, data)
+   recursive subroutine smooth_field(h, data)
    !< Smooth the field 200 times, reporting each pass.
    type(task_handle_object), intent(inout) :: h    !< The task's handle.
    class(*),                 intent(inout) :: data !< A field_t.

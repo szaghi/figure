@@ -1781,6 +1781,12 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    FIG_CATCH
 }
 
+// Headless mode's clipboard: its own text, the same on every platform (without a window there is no system
+// clipboard to reach: on macOS Dear ImGui's default then reads back nothing).
+static std::string headless_clipboard;
+static void headless_set_clipboard(ImGuiContext *, const char *text) { headless_clipboard = text ? text : ""; }
+static const char *headless_get_clipboard(ImGuiContext *) { return headless_clipboard.c_str(); }
+
 int fig_init_headless(int width, int height) {
    FIG_TRY
    if (st.m != mode::none) return fail(FIG_ERR_STATE, "figure is already initialized");
@@ -1791,6 +1797,10 @@ int fig_init_headless(int width, int height) {
    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
    // draw lists over 65536 vertices are split into ranges, each command carrying its VtxOffset (16-bit indices)
    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+   ImGuiPlatformIO &pio = ImGui::GetPlatformIO();
+   headless_clipboard.clear();
+   pio.Platform_SetClipboardTextFn = headless_set_clipboard;
+   pio.Platform_GetClipboardTextFn = headless_get_clipboard;
    st.m = mode::headless;
    st.frame.on = frame_options.decorations == 1; // the bar drawn, its actions recorded as state (tests)
    st.frame.buttons_left = frame_options.buttons == 2 || (frame_options.buttons == 0 && frame_buttons_left_default());

@@ -88,6 +88,9 @@ POSIX):
   with it. gfortran's I/O is thread-safe with no flag.
 - **Drawing from a task** is refused at FIGURE's container entry points only (the list is in
   [Tasks](processes#tasks)); a lone widget called from a task outside any container is not caught.
+- **`recursive` procedures:** two tasks may run the same procedure at the same time; a procedure not declared
+  `recursive` then stops a program built with gfortran's `-fcheck=recursion` (in `-fcheck=all`): declare the task's
+  procedures `recursive`. In such a build, a drawing call from a task may also stop there, before FIGURE refuses it.
 - **No preemption:** a task with no safe point (`h%cancelled()`) cannot be stopped; its object's end waits for it.
 
 ## First build needs the network

@@ -66,7 +66,7 @@ endtype task_object
 
 contains
    ! ---- the worker's side ---------------------------------------------------------------------------------------------
-   subroutine task_trampoline(arg) bind(C)
+   recursive subroutine task_trampoline(arg) bind(C)
    !< The worker thread's entry: the task's work on its data.
    type(c_ptr), value         :: arg !< The task's record.
    type(task_record), pointer :: rec !< Record.
@@ -75,7 +75,7 @@ contains
    call rec%work(rec%handle, rec%data)
    endsubroutine task_trampoline
 
-   subroutine handle_report(self, fraction, message)
+   recursive subroutine handle_report(self, fraction, message)
    !< Post the progress, `fraction` of the work done in [0, 1] (clamped), and a message (absent: the previous one
    !< stays); the frame loop is woken to show it. Cheap: call it as often as useful, a few times a second is plenty.
    class(task_handle_object), intent(in)           :: self     !< Handle.
@@ -90,7 +90,7 @@ contains
    endif
    endsubroutine handle_report
 
-   function handle_cancelled(self) result(cancelled)
+   recursive function handle_cancelled(self) result(cancelled)
    !< True once the program asked the task to stop (`t%cancel`, the object's end, a refused drawing call): return
    !< from `work` at this safe point, leaving `data` consistent.
    class(task_handle_object), intent(in) :: self      !< Handle.
@@ -99,7 +99,7 @@ contains
    cancelled = fig_task_cancelled(self%id) == 1_c_int
    endfunction handle_cancelled
 
-   subroutine handle_fail(self, message)
+   recursive subroutine handle_fail(self, message)
    !< Report a failure (a file that cannot be read): `t%result` gives `FIG_ERR_FAILED` and `message`. The task should
    !< then return; the first failure is kept.
    class(task_handle_object), intent(in) :: self    !< Handle.

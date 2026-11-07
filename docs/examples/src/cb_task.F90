@@ -23,7 +23,7 @@ endtype field_stats
 
 contains
    !region work
-   subroutine read_field(h, data)
+   recursive subroutine read_field(h, data)
    !< Read the field block by block: report the progress after each block, stop at a cancel.
    type(task_handle_object), intent(inout) :: h          !< The task's handle.
    class(*),                 intent(inout) :: data       !< A field_stats.
