@@ -1,0 +1,17 @@
+if (ig_button('+x')) call view%view('+x')
+call ig_same_line()
+if (ig_button('-y')) call view%view('-y')
+call ig_same_line()
+if (ig_button('+z')) call view%view('+z')
+call ig_same_line()
+if (ig_button('Fit')) call view%fit()
+call ig_same_line()
+if (ig_checkbox('grid', edges)) call view%set_mesh(hull, edges=edges)
+call ig_same_line()
+if (ig_checkbox('cut at z = 0', cut)) then
+   call view%unclip()
+   if (cut) call view%clip([0.0_real64, 0.0_real64, -1.0_real64], [0.0_real64, 0.0_real64, 0.0_real64])
+endif
+call ig_same_line()
+call ig_text(trim(text))
+call ig_separator()

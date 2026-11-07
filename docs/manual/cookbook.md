@@ -282,6 +282,19 @@ The drag tools update `probe_x`, `px` and `py` in place and return `.true.` whil
 The profile is the row `i` of `g`, read in place with a stride (`ip_line(label, g, i)`); a NaN in it draws a gap.
 [Error bars, annotations and drag tools](/guide/plots#error-bars-annotations-and-drag-tools) has the details.
 
+### Show a surface coloured by a field
+
+<<< @/examples/snippets/cb_view3d-setup.F90{fortran}
+
+<<< @/examples/snippets/cb_view3d-draw.F90{fortran}
+
+<Media name="cb_view3d" alt="A slender body with its grid lines, coloured from blue at the middle to red at both ends, a yellow line along its axis; above it buttons for the standard views, check boxes 'grid' and 'cut at z = 0', and the text of the cell clicked with its value and position. In the video a drag turns the body, the wheel brings it closer, a click fills the text, the check box cuts the body in half." caption="docs/examples/src/cb_view3d.F90" />
+
+The arrays are read in place at every render: give them the `target` attribute and keep them allocated while the
+mesh exists; after changing their values, call `view%changed(hull)`. The view is rendered only when something
+changed, so a still view costs nothing per frame. A click on the surface gives the cell `i + (j - 1) * (ni - 1)` and
+the point hit. [3-D views](/guide/view3d) has the camera, clipping planes and the cost per mode.
+
 ### Show an image computed by the program
 
 <<< @/examples/snippets/cb_field-texture.F90{fortran}

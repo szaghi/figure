@@ -200,6 +200,21 @@ Details: [Processes and tasks](processes).
 A task never draws: FIGURE's drawing entry points refuse a call from a worker with `FIG_ERR_STATE`.
 Details: [Processes and tasks](processes#tasks).
 
+## 3-D views: `view3d_object`
+
+| Procedure | Purpose |
+|---|---|
+| `v%init([threads] [, fast_moves] [, lighting] [, background] [, stat])`, `v%destroy()`, `v%is_initialized()` → `logical` | create a 3-D view drawn by FIGURE's software rasterizer (the same pixels in every mode); release it; whether it exists |
+| `v%triangles(xyz, tri [, scalar] [, cell_scalar] [, colormap] [, color] [, edges] [, flat] [, stat])` → `int32`, `v%quads(xyz, quad [, ...])` → `int32`, `v%surface(xyz [, ...])` → `int32`, `v%lines(xyz [, seg] [, ...])` → `int32` | add a mesh, read in place from the program's `target` arrays: triangles, quads, a structured surface `xyz(3, ni, nj)`, lines; coloured by a scalar per vertex or per cell through a colormap, or in one colour |
+| `v%set_mesh(mesh [, scalar] [, cell_scalar] [, no_scalar] [, colormap] [, vmin, vmax] [, auto_range] [, color] [, edges] [, edge_color] [, flat] [, visible] [, stat])`, `v%changed([mesh] [, stat])`, `v%remove(mesh [, stat])`, `v%clear([stat])` | change a mesh's field or style; its arrays changed in place; remove one, all |
+| `v%set_camera([target] [, distance] [, azimuth] [, elevation] [, fov] [, stat])`, `v%get_camera(...)`, `v%fit([stat])`, `v%view(name [, stat])`, `v%orbit(azimuth [, elevation] [, stat])`, `v%pan(right, up [, stat])`, `v%zoom(factor [, stat])` | the camera: set, read, fit, the six standard views (`'+x'` ... `'-z'`), turn, move, zoom |
+| `v%clip(normal, point [, stat])`, `v%unclip([stat])` | clipping planes (up to 6) |
+| `v%draw(id [, width] [, height] [, stat])` | the view as a widget; the mouse orbits, pans, zooms, fits; rendered only when something changed, at half resolution while moving |
+| `v%pick(x, y, mesh, element [, point] [, stat])` → `logical`, `v%hovered(mesh, element [, point] [, stat])` → `logical`, `v%clicked(...)` → `logical` | the element under a pixel, under the mouse, clicked |
+| `v%image(rgba [, stat])`, `v%render_info([count] [, milliseconds] [, width] [, height] [, half] [, stat])` | the pixels of the last render; renders so far, the last one's time and size |
+
+Details: [3-D views](view3d).
+
 ## Testing: `figure_testing`
 
 | Procedure | Does |

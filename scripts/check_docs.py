@@ -30,6 +30,7 @@ TYPES = {
     "task_object": "t",
     "task_handle_object": "h",
     "text_buffer_object": "buf",
+    "view3d_object": "v",
 }  # public types and the variable name the docs use
 
 

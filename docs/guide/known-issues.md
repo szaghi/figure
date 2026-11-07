@@ -160,6 +160,19 @@ POSIX):
   refusal happens in such a build too.
 - **No preemption:** a task with no safe point (`h%cancelled()`) cannot be stopped; its object's end waits for it.
 
+## 3-D views
+
+[3-D views](view3d) are rendered on the CPU, into an image:
+
+- **Remote mode sends every render as raw RGBA:** `4 * width * height` bytes per render, a quarter of that while the
+  camera moves (fast moves). Turning a 1600x1000 view at 30 renders a second sends about 48 MB/s: fine on the same
+  machine; through an SSH tunnel the browser gets a few renders a second (FIGURE drops what it cannot take). Make the
+  view smaller, or turn it from the program in steps. Compressed images (JPEG while moving) are an open step of the
+  plan.
+- **Large meshes:** above a million triangles a render takes tens of milliseconds (`threads=4` halves it), and the
+  camera moves at that rate.
+- **The image has the view's size in logical pixels:** on a display scaled 2x it is magnified.
+
 ## The one-line installer
 
 What [the installer](install#the-one-line-installer) does not cover:

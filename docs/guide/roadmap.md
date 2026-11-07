@@ -200,6 +200,13 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   [Colormaps](colormaps#a-colour-scale-legend)): `ig_color_edit`, a colour editor with a picker bound to
   `real(real64)` RGB or RGBA; `ip_colormap_legend`, a legend of a colormap, vertical or horizontal, continuous or with
   discrete levels as bands, as an item of any window: done.
+- **The 3-D view** ([3-D views](view3d)): `view3d_object`, meshes of triangles, quads, structured surfaces and lines
+  read in place from the program's arrays, coloured per vertex or per cell through the colormaps, a camera (orbit,
+  pan, zoom, fit, the six standard views) driven by the mouse or the program, picking of the element under a pixel,
+  hovered or clicked, up to six clipping planes; drawn by a software rasterizer, the same pixels in window, remote and
+  headless modes, rendered only when something changed, at half resolution while the camera moves, on up to 4
+  threads: done. GPU rendering in a window (design B) and WebGL in remote mode (C) stay open, with compressed images
+  for remote mode.
 
 ## Next
 

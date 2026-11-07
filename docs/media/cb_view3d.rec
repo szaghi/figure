@@ -1,0 +1,18 @@
+#! program build/docs-examples/bin/cb_view3d
+#! from    5
+#! frames  240
+#! poster  160
+# turn the body by a drag, zoom with the wheel, click a cell (its value shows above the view), then cut it at z = 0
+0   move 500 600
+5   move 640 420 15
+25  down
+27  move 720 470 45
+75  up
+85  wheel 0 5
+100 move 500 345 20
+125 down
+127 up
+175 move 196 49 15
+193 down
+195 up
+205 move 900 600 20
