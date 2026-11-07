@@ -280,11 +280,12 @@ Dear ImGui's own `PushStyleVar` covers. More pops than pushes are `FIG_ERR_STATE
 
 The interface is drawn in IBM Plex Sans at 15 logical pixels, a font made for technical interfaces, bundled with
 FIGURE (OFL-1.1, [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)) and embedded in the
-library: programs need no font file.
+library: programs need no font file. Its monospace sibling, IBM Plex Mono, is bundled the same way, for text whose
+columns must line up: input files, tables of numbers, the output of a tool.
 
 | Procedure | Does |
 |---|---|
-| `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (the default), `'proggy'` (Dear ImGui's own 13-pixel bitmap font) or the path of a TrueType/OpenType file; `size` in logical pixels |
+| `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (the default), `'plex-mono'` (IBM Plex Mono, monospace), `'proggy'` (Dear ImGui's own 13-pixel bitmap font) or the path of a TrueType/OpenType file; `size` in logical pixels |
 | `ig_push_font(font [, size] [, stat])`, `ig_pop_font([stat])` | another font and/or size for the widgets in between (`font=''` keeps the current one): a title, a value shown large |
 
 ```fortran
@@ -295,6 +296,11 @@ call ig_text('3.1416')
 call ig_pop_font()
 ```
 
+`'plex-mono'` gives every character the same advance, so the columns of a text line up; it is the font for a
+[multi-line field](widgets#multi-line-text) showing a file, pushed around it:
+
+<<< @/examples/snippets/cb_text-edit.F90{fortran}
+
 Fonts are rasterised on demand at every size used (Dear ImGui's dynamic font atlas): any size stays sharp, and the
 display's content scale applies on top. A file that cannot be read is `FIG_ERR_FAILED`; one that is not a font, or a
 size outside (0, 200], is `FIG_ERR_ARGUMENT`. A theme file can name the font and its size (`font`, `font_size`).
@@ -302,7 +308,7 @@ size outside (0, 200], is `FIG_ERR_ARGUMENT`. A theme file can name the font and
 ## Icons
 
 The [Lucide](https://lucide.dev/icons/) icons (ISC licence, bundled and embedded like the font) are merged into every
-text font FIGURE loads: the bundled one, Proggy, and any font file given to `app%set_font` or `ig_push_font`. An icon
+text font FIGURE loads: the two bundled ones, Proggy, and any font file given to `app%set_font` or `ig_push_font`. An icon
 is a UTF-8 string, `ICON_<NAME>`, exported by `use figure`: it goes in any label, before or after the text, and takes
 the size and colour of the text around it.
 
@@ -333,7 +339,7 @@ palette = "nord"                               # a palette, or "auto" (default: 
 auto_dark = "nord"                             # the palettes of "auto" (defaults: seal, seal-light)
 auto_light = "solarized-light"
 base = "dark"                                  # dark | light | classic: the colours without a palette
-font = "plex-sans"                             # plex-sans | proggy | a font file (default: the font in effect)
+font = "plex-sans"                             # plex-sans | plex-mono | proggy | a font file (default: the font in effect)
 font_size = 15                                 # logical pixels (default: the size in effect)
 background = "#14120f"                         # behind the windows (default: the palette's, or the base's)
 lines = ["#e8664c", "#e9e2d4", "#c9a25a"]      # ImPlot's line colours, in order, or "okabe-ito" (default: the

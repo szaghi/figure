@@ -32,7 +32,7 @@ Without `stat`:
 |---|---|---|
 | `FIG_OK` | 0 | success |
 | `FIG_ERR_STATE` | 1 | call not allowed in the current state: `init` twice, `next_frame` before `init`, a process started again while it runs ([Processes](processes#statuses)), a drawing procedure called from a task ([Tasks](processes#tasks)), a file dialog or browser whose id is still open ([File dialogs](frame-loop#file-dialogs)) |
-| `FIG_ERR_ARGUMENT` | 2 | invalid argument: non-positive window size, `ip_line` arrays of different sizes, a palette below the [contrast rule](styles#the-contrast-rule) |
+| `FIG_ERR_ARGUMENT` | 2 | invalid argument: non-positive window size, `ip_line` arrays of different sizes, a palette below the [contrast rule](styles#the-contrast-rule), a text of 2 GiB or more for a [text buffer](widgets#multi-line-text) |
 | `FIG_ERR_FAILED` | 3 | the platform (SDL, OpenGL) reported a failure: no display, no OpenGL 3 context, a program that cannot be started |
 | `FIG_ERR_EXCEPTION` | 4 | a C++ exception was caught at the C boundary |
 

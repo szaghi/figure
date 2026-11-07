@@ -25,8 +25,12 @@ nvfortran 26.9 if you hit the same error.
 
 ## Text input
 
-`ig_input_text` edits a `character` variable, whose length is the field's capacity: a longer text is cut at it.
-Multi-line text (`igInputTextMultiline`) has no wrapper yet.
+`ig_input_text` edits a `character` variable, whose length is the field's capacity: a longer text is cut at it. Text
+of any length goes in a `text_buffer_object`, edited by `ig_input_text_multiline`
+([Multi-line text](widgets#multi-line-text)), which is a plain field: no line numbers, no syntax highlighting, no
+search, and Dear ImGui goes through the whole text on every frame (a log that grows without end belongs in a
+[log view](processes#the-log-view)). In remote mode its copy and paste stay inside the program on the server, without
+the browser's clipboard.
 
 ## A name shared with fortplot
 
@@ -111,6 +115,25 @@ POSIX):
   procedures `recursive`. FIGURE's entry points that refuse a task's drawing calls are `recursive` themselves, so the
   refusal happens in such a build too.
 - **No preemption:** a task with no safe point (`h%cancelled()`) cannot be stopped; its object's end waits for it.
+
+## The one-line installer
+
+What [the installer](install#the-one-line-installer) does not cover:
+
+- **Windows:** it runs on Linux and macOS only. On Windows, build under MSYS2 UCRT64 by hand
+  ([Other platforms](install#other-platforms)).
+- **Compilers:** gfortran and nvfortran only; any other `--fc` (Intel ifx included) is refused. nvfortran itself is
+  not installed: `--deps` installs only packages of the distribution (`apt-get`, `dnf`) or of Homebrew, and only
+  gfortran among the Fortran compilers.
+- **Distributions:** the package command is written for `apt-get` (Debian, Ubuntu) and `dnf` (Fedora, RHEL). Elsewhere
+  the script names the missing `pkg-config` modules and stops: install their development packages by hand.
+- **Run-time packages:** file dialogs need an XDG desktop portal or `zenity` at run time
+  ([Linux packages](install#linux-packages)); the installer neither checks nor installs them.
+- **`PKG_CONFIG_PATH`:** the script does not edit shell start-up files; when `pkg-config` does not already search
+  the prefix, it prints the `export` line to add.
+- **Network:** a build needs GitHub (the release and the native layer's sources) and, when FoBiS is missing, PyPI.
+- **Tested on fresh runners** (`Installer` workflow: Ubuntu with `--deps`, macOS with Homebrew); other systems are
+  untested.
 
 ## First build needs the network
 

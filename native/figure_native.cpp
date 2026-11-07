@@ -24,6 +24,7 @@
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL_main.h>
 
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -146,7 +147,7 @@ struct state_t {
    } frame;
    int           system_theme = -1;                // the system's light (1) or dark (2) setting given by a test; -1: SDL's
    bool          system_theme_changed = false;     // a change to handle at the next frame (fig_input_system_theme)
-   std::string   font = "plex-sans";               // the default font: plex-sans (bundled), proggy, or a TTF file
+   std::string   font = "plex-sans";               // the default font: plex-sans, plex-mono, proggy, or a TTF file
    std::map<std::string, ImFont *> fonts;          // fonts loaded in this context, by name or path
    std::map<std::string, std::vector<unsigned char>> font_data; // TTF files read at run time (the atlas needs them)
    struct saved_t {                                // a style value changed by a push, and what it was
@@ -472,7 +473,9 @@ void image_write(const ImGuiIO &io) {
    if (!ok) img.error = "save_image: cannot write " + img.path + ": " + SDL_GetError();
 }
 
-#include "figure_font.inc" // plex_sans_ttf[]: IBM Plex Sans Regular (OFL-1.1); lucide_ttf[]: Lucide (ISC); third_party/fonts
+// plex_sans_ttf[], plex_mono_ttf[]: IBM Plex Sans and Plex Mono Regular (OFL-1.1); lucide_ttf[]: Lucide (ISC); from
+// third_party/fonts
+#include "figure_font.inc"
 
 constexpr float DEFAULT_FONT_SIZE = 15.0f; // logical pixels: the size the interface is drawn at
 constexpr float PROGGY_FONT_SIZE = 13.0f;  // logical pixels: Dear ImGui's bitmap font, drawn sharp at this size only
@@ -494,7 +497,8 @@ bool merge_icons(ImFont *dst, float ref_size) {
                                                      static_cast<int>(sizeof(lucide_ttf)), ref_size, &cfg) != nullptr;
 }
 
-// A font by name ("plex-sans", "proggy") or TTF path, loaded on first use into this context's atlas; null with err.
+// A font by name ("plex-sans", "plex-mono", "proggy") or TTF path, loaded on first use into this context's atlas;
+// null with err.
 ImFont *get_font(const std::string &name, std::string &err) {
    const auto found = st.fonts.find(name);
    if (found != st.fonts.end()) return found->second;
@@ -510,6 +514,10 @@ ImFont *get_font(const std::string &name, std::string &err) {
    if (name == "plex-sans") {
       std::snprintf(cfg.Name, sizeof(cfg.Name), "IBM Plex Sans");
       f = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(plex_sans_ttf), static_cast<int>(sizeof(plex_sans_ttf)),
+                                         DEFAULT_FONT_SIZE, &cfg);
+   } else if (name == "plex-mono") {
+      std::snprintf(cfg.Name, sizeof(cfg.Name), "IBM Plex Mono");
+      f = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(plex_mono_ttf), static_cast<int>(sizeof(plex_mono_ttf)),
                                          DEFAULT_FONT_SIZE, &cfg);
    } else if (name == "proggy") {
       ImFontConfig bitmap;
@@ -3086,6 +3094,104 @@ int fig_widget_input_text(const char *label, int label_len, const char *hint, in
       ? ImGui::InputTextWithHint(l.c_str(), std::string(hint, static_cast<size_t>(hint_len)).c_str(), buf,
                                  static_cast<size_t>(buf_size), static_cast<ImGuiInputTextFlags>(flags))
       : ImGui::InputText(l.c_str(), buf, static_cast<size_t>(buf_size), static_cast<ImGuiInputTextFlags>(flags));
+   return edited ? 1 : 0;
+}
+
+// ---- Text buffers (text_buffer_object) -----------------------------------------------------------------------------
+// The text of a multi-line field, owned here: bytes[0, len) and a NUL, in a vector at least len + 1 long whose whole
+// size is the capacity Dear ImGui is given, so that it edits in place and asks the resize callback for more. gen
+// counts the sets, so that a field being edited reloads a text set by the program (shown is the gen it last drew).
+struct text_buffer_t {
+   std::vector<char> bytes = std::vector<char>(1, '\0');
+   size_t            len = 0;
+   unsigned          gen = 0;
+   unsigned          shown = 0;
+};
+static std::mutex                   text_mutex;   // the handles and the texts: tasks may set and read them
+static std::map<int, text_buffer_t> text_buffers;
+static int                          text_next_id = 1;
+
+// Dear ImGui's resize request: the text is growing past the capacity (BufSize is at least the new length + 1), or has
+// a new length (every edit applied). The vector grows geometrically (std::vector's resize), not by the byte.
+static int text_resize(ImGuiInputTextCallbackData *d) {
+   if (d->EventFlag != ImGuiInputTextFlags_CallbackResize) return 0;
+   text_buffer_t *b = static_cast<text_buffer_t *>(d->UserData);
+   if (static_cast<size_t>(d->BufSize) > b->bytes.size()) {
+      const size_t need = static_cast<size_t>(d->BufSize);
+      b->bytes.resize(std::max(need, b->bytes.size() + b->bytes.size() / 2));
+   }
+   b->len = static_cast<size_t>(d->BufTextLen);
+   d->Buf = b->bytes.data();
+   d->BufSize = static_cast<int>(std::min(b->bytes.size(), static_cast<size_t>(INT_MAX)));
+   return 0;
+}
+
+int fig_text_set(int *id, const char *text, long long len) {
+   FIG_TRY
+   std::lock_guard<std::mutex> lock(text_mutex);
+   if (*id <= 0 || text_buffers.find(*id) == text_buffers.end()) {
+      *id = text_next_id++;
+      text_buffers[*id];
+   }
+   text_buffer_t &b = text_buffers[*id];
+   const size_t n = len > 0 ? static_cast<size_t>(len) : 0;
+   if (n >= static_cast<size_t>(INT_MAX)) return fail(FIG_ERR_ARGUMENT, "text_buffer%set: the text is 2 GiB or more");
+   b.bytes.assign(n + 1, '\0');
+   size_t k = 0;
+   for (size_t i = 0; i < n; ++i) {
+      if (text[i] == '\r' && i + 1 < n && text[i + 1] == '\n') continue; // CRLF: the LF alone
+      if (text[i] == '\0') break;                                        // Dear ImGui's text ends at a NUL
+      b.bytes[k++] = text[i];
+   }
+   b.bytes[k] = '\0';
+   b.len = k;
+   ++b.gen;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+long long fig_text_get(int id, char *buf, long long cap) {
+   std::lock_guard<std::mutex> lock(text_mutex);
+   const auto it = text_buffers.find(id);
+   if (it == text_buffers.end()) return 0;
+   const size_t n = std::min(it->second.len, cap > 0 ? static_cast<size_t>(cap) : 0);
+   if (n > 0) std::memcpy(buf, it->second.bytes.data(), n);
+   return static_cast<long long>(it->second.len);
+}
+
+long long fig_text_length(int id) {
+   std::lock_guard<std::mutex> lock(text_mutex);
+   const auto it = text_buffers.find(id);
+   return it == text_buffers.end() ? 0 : static_cast<long long>(it->second.len);
+}
+
+void fig_text_release(int id) {
+   std::lock_guard<std::mutex> lock(text_mutex);
+   text_buffers.erase(id);
+}
+
+int fig_widget_input_text_multiline(int *id, const char *label, int label_len, double width, double height,
+                                    int flags) {
+   if (!ImGui::GetCurrentContext()) return 0;
+   std::lock_guard<std::mutex> lock(text_mutex); // held while Dear ImGui edits the text: a task's set waits
+   if (*id <= 0 || text_buffers.find(*id) == text_buffers.end()) {
+      *id = text_next_id++;
+      text_buffers[*id];
+   }
+   text_buffer_t &b = text_buffers[*id];
+   const std::string l(label, label_len > 0 ? static_cast<size_t>(label_len) : 0);
+   if (b.gen != b.shown) { // a set since the last draw: a field being edited shows it (its undo history kept)
+      const ImGuiID wid = ImGui::GetID(l.c_str());
+      if (ImGui::GetActiveID() == wid)
+         if (ImGuiInputTextState *s = ImGui::GetInputTextState(wid)) s->ReloadUserBufAndKeepSelection();
+      b.shown = b.gen;
+   }
+   const ImVec2 extent(static_cast<float>(width), static_cast<float>(height));
+   const bool edited = ImGui::InputTextMultiline(l.c_str(), b.bytes.data(), b.bytes.size(), extent,
+                                                 static_cast<ImGuiInputTextFlags>(flags) |
+                                                    ImGuiInputTextFlags_CallbackResize,
+                                                 text_resize, &b);
+   if (edited) b.len = std::strlen(b.bytes.data());
    return edited ? 1 : 0;
 }
 

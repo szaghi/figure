@@ -6,11 +6,12 @@ module figure_imgui
 !< frame it is clicked, `ig_checkbox`/`ig_slider` are true when they changed the value). Values are ordinary Fortran
 !< variables, updated in place: no handles, no callbacks, no `target` requirements (the C `bool*` of a checkbox is a
 !< local copy, written back).
-use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_loc, c_null_char, &
-                                        c_null_ptr, c_ptr
-use, intrinsic :: iso_fortran_env, only : int32, real32, real64
-use figure_base, only : cstr, figure_refused
-use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_loc, c_long_long, &
+                                        c_null_char, c_null_ptr, c_ptr
+use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
+use figure_base, only : cstr, figure_check, figure_refused
+use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
+                            fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : igGetTime, igProgressBar, &
                           im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
@@ -21,7 +22,8 @@ use figure_cimgui, only : igGetTime, igProgressBar, &
                           igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos, igAlignTextToFramePadding, &
                           igIsPopupOpen_Str, igSetWindowFocus_Str, igCalcTextSize
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
-                                ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup
+                                ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup, &
+                                ImGuiInputTextFlags_AllowTabInput, ImGuiInputTextFlags_ReadOnly
 
 implicit none
 private
@@ -30,6 +32,21 @@ public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_in
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
 public :: ig_progress_bar
+public :: ig_input_text_multiline, text_buffer_object
+
+type :: text_buffer_object
+   !< Text of any length, edited by `ig_input_text_multiline`: a file shown or edited as text, notes, a read-only view.
+   !< The text is kept by FIGURE's native layer, which grows it while the user types or pastes (no capacity to choose,
+   !< no copy per frame); `set` replaces it, `text` returns a copy. Lines end with LF (`set` turns CRLF into LF).
+   !< Usable before `init*` and from a task (it draws nothing). Not to be copied: the copy would share the text, and
+   !< the first of the two to end would take it away from the other.
+   integer(c_int), private :: id = 0_c_int !< Native handle (0: no text yet, an empty one).
+   contains
+      procedure, pass(self) :: set => text_buffer_set       !< Replace the text.
+      procedure, pass(self) :: text => text_buffer_text     !< A copy of the text.
+      procedure, pass(self) :: length => text_buffer_length !< Its length [bytes].
+      final                 :: text_buffer_final
+endtype text_buffer_object
 
 interface ig_slider
    !< Slider for an integer or a real value.
@@ -328,6 +345,90 @@ contains
       value(i:i) = buf(i)
    enddo
    endfunction ig_input_text
+
+   recursive function ig_input_text_multiline(label, buffer, width, height, read_only, tab_input, flags) result(changed)
+   !< A multi-line text field (`InputTextMultiline`) over `buffer`; true on the frame the user edited the text.
+   !< Enter inserts a newline; the field scrolls when the text is longer than it. Keys (cmd for ctrl on macOS):
+   !< ctrl+z undoes, ctrl+y or ctrl+shift+z redoes, ctrl+a selects all, ctrl+c, ctrl+x and ctrl+v copy, cut and
+   !< paste. `width`, `height` [pixels]: absent or 0, the item width and 8 lines; negative, up to that distance from
+   !< the region's right or bottom edge. `read_only`: the text can be selected and copied, not changed. `tab_input`:
+   !< Tab inserts a tab character (default: it moves to the next widget). `flags` add `ImGuiInputTextFlags_*` with
+   !< `ior` (`WordWrap`, `NoUndoRedo`, ...). The same in every mode; from a task it draws nothing and returns false
+   !< (the task's status becomes `FIG_ERR_STATE`).
+   character(len=*),         intent(in)           :: label     !< Label (`'##text'`: none shown).
+   type(text_buffer_object), intent(inout)        :: buffer    !< The text.
+   real(real64),             intent(in), optional :: width     !< Width [pixels].
+   real(real64),             intent(in), optional :: height    !< Height [pixels].
+   logical,                  intent(in), optional :: read_only !< Selection and copy only (default false).
+   logical,                  intent(in), optional :: tab_input !< Tab inserts a tab (default false).
+   integer(int32),           intent(in), optional :: flags     !< More `ImGuiInputTextFlags_*` (default none).
+   logical                                        :: changed   !< Edited this frame.
+   real(c_double)                                 :: w         !< Width.
+   real(c_double)                                 :: h         !< Height.
+   integer(c_int)                                 :: f         !< Flags.
+
+   changed = .false.
+   if (figure_refused('ig_input_text_multiline')) return ! a task does not draw
+   w = 0.0_c_double
+   if (present(width)) w = real(width, c_double)
+   h = 0.0_c_double
+   if (present(height)) h = real(height, c_double)
+   f = 0_c_int
+   if (present(flags)) f = int(flags, c_int)
+   if (present(read_only)) then
+      if (read_only) f = ior(f, ImGuiInputTextFlags_ReadOnly)
+   endif
+   if (present(tab_input)) then
+      if (tab_input) f = ior(f, ImGuiInputTextFlags_AllowTabInput)
+   endif
+   changed = fig_widget_input_text_multiline(buffer%id, label, len(label, c_int), w, h, f) == 1_c_int
+   endfunction ig_input_text_multiline
+
+   ! ---- text_buffer_object --------------------------------------------------------------------------------------------
+   recursive subroutine text_buffer_set(self, text, stat)
+   !< Replace the text with `text` (UTF-8, lines ended by LF or CRLF; trailing blanks are part of it: pass `trim` of a
+   !< padded line). A field being edited shows the new text at once, its undo history kept. A NUL byte ends the text.
+   !< Status: `FIG_ERR_ARGUMENT` for a text of 2 GiB or more (`stat` optional: absent, `error stop` with the message).
+   class(text_buffer_object), intent(inout)         :: self !< Buffer.
+   character(len=*),          intent(in)            :: text !< New text.
+   integer(int32),            intent(out), optional :: stat !< Status.
+
+   call figure_check(fig_text_set(self%id, text, len(text, c_long_long)), stat)
+   endsubroutine text_buffer_set
+
+   recursive function text_buffer_text(self) result(text)
+   !< A copy of the text (`''` before any `set` or edit).
+   class(text_buffer_object), intent(in) :: self !< Buffer.
+   character(len=:), allocatable         :: text !< The text.
+   integer(c_long_long)                  :: n    !< Bytes asked.
+   integer(c_long_long)                  :: got  !< The text's length when copied.
+
+   n = fig_text_length(self%id)
+   do ! the text may change between the two calls (a task's set): copy again while it is longer than asked
+      allocate(character(len=n) :: text)
+      got = fig_text_get(self%id, text, n)
+      if (got <= n) exit
+      deallocate(text)
+      n = got
+   enddo
+   if (got < n) text = text(1:got)
+   endfunction text_buffer_text
+
+   recursive function text_buffer_length(self) result(length)
+   !< The length of the text [bytes] (UTF-8: a character outside ASCII takes 2 to 4).
+   class(text_buffer_object), intent(in) :: self   !< Buffer.
+   integer(int64)                        :: length !< Length [bytes].
+
+   length = int(fig_text_length(self%id), int64)
+   endfunction text_buffer_length
+
+   recursive subroutine text_buffer_final(self)
+   !< The buffer ends: its text is released.
+   type(text_buffer_object), intent(inout) :: self !< Buffer.
+
+   if (self%id /= 0_c_int) call fig_text_release(self%id)
+   self%id = 0_c_int
+   endsubroutine text_buffer_final
 
    function ig_combo(label, current, items) result(changed)
    !< A drop-down list of `items`; `current` is the index of the one chosen (1 to `size(items)`; any other value shows

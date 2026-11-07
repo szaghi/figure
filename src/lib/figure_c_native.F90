@@ -32,6 +32,7 @@ public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_ta
 public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig_file_browser_rect
+public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_widget_input_text_multiline
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -1041,6 +1042,55 @@ interface
    integer(c_int), value                 :: flags     !< ImGuiInputTextFlags.
    integer(c_int)                        :: edited    !< 1: edited this frame.
    endfunction fig_widget_input_text
+
+   function fig_text_set(id, text, length) result(status) bind(C, name='fig_text_set')
+   !< Set the text of a text buffer, CRLF turned into LF; `id` 0 (or unknown): a new buffer, its handle returned.
+   import :: c_char, c_int, c_long_long
+   implicit none
+   integer(c_int),         intent(inout) :: id      !< Handle (0: new).
+   character(kind=c_char), intent(in)    :: text(*) !< Text (not NUL-terminated).
+   integer(c_long_long),   value         :: length  !< Its length [bytes].
+   integer(c_int)                        :: status  !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_text_set
+
+   function fig_text_get(id, buf, cap) result(length) bind(C, name='fig_text_get')
+   !< Copy at most `cap` bytes of a text buffer's text; its whole length (an unknown handle: 0).
+   import :: c_char, c_int, c_long_long
+   implicit none
+   integer(c_int),         value       :: id     !< Handle.
+   character(kind=c_char), intent(out) :: buf(*) !< Buffer.
+   integer(c_long_long),   value       :: cap    !< Its size [bytes].
+   integer(c_long_long)                :: length !< The text's length [bytes].
+   endfunction fig_text_get
+
+   function fig_text_length(id) result(length) bind(C, name='fig_text_length')
+   !< The length of a text buffer's text (an unknown handle: 0).
+   import :: c_int, c_long_long
+   implicit none
+   integer(c_int), value :: id     !< Handle.
+   integer(c_long_long)  :: length !< Length [bytes].
+   endfunction fig_text_length
+
+   subroutine fig_text_release(id) bind(C, name='fig_text_release')
+   !< Forget a text buffer (an unknown handle: nothing).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id !< Handle.
+   endsubroutine fig_text_release
+
+   function fig_widget_input_text_multiline(id, label, label_len, width, height, flags) result(edited) &
+      bind(C, name='fig_widget_input_text_multiline')
+   !< A multi-line text field over a text buffer (`id` 0: a new, empty one); 1 when the user edited it this frame.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int),         intent(inout) :: id        !< Handle (0: new).
+   character(kind=c_char), intent(in)    :: label(*)  !< Label (not NUL-terminated).
+   integer(c_int),         value         :: label_len !< Label length [bytes].
+   real(c_double),         value         :: width     !< Width [pixels] (0: default).
+   real(c_double),         value         :: height    !< Height [pixels] (0: default).
+   integer(c_int),         value         :: flags     !< ImGuiInputTextFlags.
+   integer(c_int)                        :: edited    !< 1: edited this frame.
+   endfunction fig_widget_input_text_multiline
 
    function fig_window_rect(name, name_len, rect, found) result(status) bind(C, name='fig_window_rect')
    !< A window's rectangle by name, as in the last frame.

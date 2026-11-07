@@ -3,7 +3,7 @@
 //
 //    base = "dark"                        dark | light | classic: Dear ImGui's style the theme starts from
 //    background = "#14120f"               the window background behind the windows (default: base's)
-//    font = "plex-sans"                   the default font: plex-sans (bundled), proggy, or a TTF/OTF file path
+//    font = "plex-sans"                   the default font: plex-sans, plex-mono (bundled), proggy, or a TTF/OTF file
 //    font_size = 15                       its size [logical pixels]
 //    lines = ["#e8664c", "#e9e2d4", ...]  ImPlot's line colours, a qualitative colormap (default: ImPlot's Deep);
 //                                         or a named palette: lines = "okabe-ito" (line_palette below)

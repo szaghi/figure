@@ -68,9 +68,9 @@ int    fig_load_style(const char *path, int path_len);
 int    fig_save_style(const char *path, int path_len);
 /* Dear ImGui's and ImPlot's style editors in a window ("Style editor"); open: the window's close button (may be NULL). */
 int    fig_show_style_editor(int *open);
-/* Fonts: "plex-sans" (bundled, the default, 15 px), "proggy" (Dear ImGui's bitmap font) or a TTF/OTF file. set_font
- * sets the default font and, if size > 0, its size [logical pixels]; push_font switches the font (name empty: the
- * current one) and/or the size (0: the current one) until pop_font. */
+/* Fonts: "plex-sans" (bundled, the default, 15 px), "plex-mono" (bundled, monospace), "proggy" (Dear ImGui's bitmap
+ * font) or a TTF/OTF file. set_font sets the default font and, if size > 0, its size [logical pixels]; push_font
+ * switches the font (name empty: the current one) and/or the size (0: the current one) until pop_font. */
 int    fig_set_font(const char *name, int name_len, double size);
 int    fig_push_font(const char *name, int name_len, double size);
 int    fig_pop_font(void);
@@ -184,6 +184,18 @@ int    fig_key_chord(const char *keys, int keys_len, int *chord);
  * edited this frame. hint_len 0: no hint. */
 int    fig_widget_input_text(const char *label, int label_len, const char *hint, int hint_len, char *buf, int buf_size,
                              int flags);
+/* Text buffers (text_buffer_object): text of any length owned here, edited in place by a multi-line field that grows
+ * it through Dear ImGui's resize callback. A handle is created by set or by the first draw (*id 0: a new one); any
+ * thread may set, read and release one (a mutex guards them). set turns CRLF into LF. get copies at most cap bytes
+ * and returns the text's length [bytes]; length gives it alone; an unknown handle is an empty text. The widget: width
+ * and height [pixels] as ImGui's size (0: default, negative: up to that distance from the region's edge); 1 when
+ * edited this frame. */
+int       fig_text_set(int *id, const char *text, long long len);
+long long fig_text_get(int id, char *buf, long long cap);
+long long fig_text_length(int id);
+void      fig_text_release(int id);
+int       fig_widget_input_text_multiline(int *id, const char *label, int label_len, double width, double height,
+                                          int flags);
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);
 

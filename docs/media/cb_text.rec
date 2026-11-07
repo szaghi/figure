@@ -1,0 +1,19 @@
+#! program build/docs-examples/bin/cb_text
+#! args    /tmp/figure-overset.input
+#! frames  160
+#! poster  112
+# The example input file shown as text in IBM Plex Mono; a click at the end of the iterations line, Enter opens a new
+# line, a cfl entry is typed in the same columns ("(!) modified"), then Save writes the file ("saved")
+0   move 400 300
+10  move 300 285 15
+30  down
+32  up
+40  key enter
+48  text c
+51  text f
+54  text l         = 0
+71  text .
+74  text 8
+112 move 43 49 15
+130 down
+132 up

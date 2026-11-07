@@ -169,8 +169,12 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   remote and headless modes: folders first with sizes and dates, sorting, filters, hidden files on request, a path
   field with Tab completion, the parent, places (home, working directory, roots, recent folders kept between runs in
   FIGURE's settings file), a new folder, a question before a save replaces a file, errors shown in the browser: done.
+- **Multi-line text and a monospace font** ([Multi-line text](widgets#multi-line-text), [Fonts](styles#fonts)):
+  `text_buffer_object`, text of any length kept by the native layer and grown while the user types or pastes, CRLF
+  read as LF; `ig_input_text_multiline`, editable or read-only, Tab as a character on request, Dear ImGui's undo and
+  redo kept; IBM Plex Mono bundled as `'plex-mono'`, the Lucide icons merged into it: done.
 
 ## Next
 
-Candidates, to be driven by what applications need: multi-line text fields, colour pickers; more of ImPlot (error
+Candidates, to be driven by what applications need: colour pickers; more of ImPlot (error
 bars, annotations); the windowed path verified on macOS and Windows.

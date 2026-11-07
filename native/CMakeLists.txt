@@ -132,17 +132,22 @@ foreach(theme_kind THEMES LOOKS PALETTES)
 endforeach()
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/figure_themes.inc "${FIGURE_THEMES_INC}")
 # The bundled fonts (third_party/fonts), embedded as byte arrays: IBM Plex Sans (OFL-1.1), the default font of the
-# interface, and the Lucide icons (ISC), merged into every text font.
+# interface, IBM Plex Mono (OFL-1.1), the monospace one, and the Lucide icons (ISC), merged into every text font.
 set(FIGURE_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexSans-Regular.ttf)
+set(FIGURE_MONO_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexMono-Regular.ttf)
 set(FIGURE_ICON_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/lucide.ttf)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${FIGURE_FONT_FILE} ${FIGURE_ICON_FONT_FILE})
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${FIGURE_FONT_FILE} ${FIGURE_MONO_FONT_FILE}
+             ${FIGURE_ICON_FONT_FILE})
 file(READ ${FIGURE_FONT_FILE} FIGURE_FONT_HEX HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_FONT_BYTES "${FIGURE_FONT_HEX}")
+file(READ ${FIGURE_MONO_FONT_FILE} FIGURE_MONO_FONT_HEX HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_MONO_FONT_BYTES "${FIGURE_MONO_FONT_HEX}")
 file(READ ${FIGURE_ICON_FONT_FILE} FIGURE_ICON_FONT_HEX HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_ICON_FONT_BYTES "${FIGURE_ICON_FONT_HEX}")
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/figure_font.inc
-     "// generated from third_party/fonts/{IBMPlexSans-Regular,lucide}.ttf by native/CMakeLists.txt\n"
+     "// generated from third_party/fonts/{IBMPlexSans-Regular,IBMPlexMono-Regular,lucide}.ttf by native/CMakeLists.txt\n"
      "static const unsigned char plex_sans_ttf[] = {${FIGURE_FONT_BYTES}};\n"
+     "static const unsigned char plex_mono_ttf[] = {${FIGURE_MONO_FONT_BYTES}};\n"
      "static const unsigned char lucide_ttf[] = {${FIGURE_ICON_FONT_BYTES}};\n")
 target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 if(WIN32)
@@ -188,6 +193,7 @@ install(FILES "${cimplot_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimplot
 install(FILES "${miniz_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/miniz)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.mit.md" DESTINATION share/licenses/figure)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexSans.txt" DESTINATION share/licenses/ibm-plex)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexMono.txt" DESTINATION share/licenses/ibm-plex)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-Lucide.txt" DESTINATION share/licenses/lucide)
 # The bundled palettes' licences (themes/palettes: their colours are the upstream projects' own, MIT)
 file(GLOB FIGURE_PALETTE_LICENSES ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/palettes/LICENSE-*.txt)

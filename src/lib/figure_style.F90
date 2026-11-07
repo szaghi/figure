@@ -284,7 +284,7 @@ contains
    subroutine ig_push_font(font, size, stat)
    !< Switch the font and/or its size for the widgets that follow, until `ig_pop_font`: `font` as `app%set_font`
    !< (`''` keeps the current one), `size` in logical pixels (absent: keep). Pair every push with a pop.
-   character(len=*), intent(in)            :: font !< Font (`'plex-sans'`, `'proggy'`, a file), or `''`.
+   character(len=*), intent(in)            :: font !< Font (`'plex-sans'`, `'plex-mono'`, `'proggy'`, a file), or `''`.
    real(real64),     intent(in),  optional :: size !< Size [logical pixels], in (0, 200].
    integer(int32),   intent(out), optional :: stat !< Status.
    real(c_double)                          :: s    !< Size; 0: keep.

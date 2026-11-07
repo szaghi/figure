@@ -90,6 +90,55 @@ call ig_tooltip('the input files')
 if (ig_tool_button('Monitor', ICON_ACTIVITY, selected=tool == 2)) tool = 2
 ```
 
+## Multi-line text
+
+| Procedure | Notes |
+|---|---|
+| `ig_input_text_multiline(label, buffer [, width] [, height] [, read_only] [, tab_input] [, flags])` → `logical` | A field of several lines (`InputTextMultiline`) over a `text_buffer_object`; `.true.` on the frame the user edited the text. |
+| `buf%set(text [, stat])` | Replaces the text of `buf`; CRLF line ends become LF. |
+| `buf%text()` → `character(len=:), allocatable` | A copy of the text (`''` before any `set` or edit). |
+| `buf%length()` → `integer(int64)` | The length of the text, in bytes (UTF-8). |
+
+A `text_buffer_object` holds text of any length: a file shown or edited as text, notes, a log kept for reading. The
+text is kept by FIGURE's native layer, not in a Fortran variable, and grows while the user types or pastes (through
+Dear ImGui's resize callback): there is no capacity to choose, as there is for `ig_input_text`, and nothing is copied
+per frame. `buf%text()` copies it out when the program needs it (to save it, to parse it). The object releases its
+text when it goes out of scope. Do not copy it with `=`: the copy would share the text, and the first of the two to
+end would take it away from the other.
+
+- **Keys.** Enter inserts a newline; ctrl+z undoes and ctrl+y or ctrl+shift+z redo (Dear ImGui's undo history, kept
+  across a `set`); ctrl+a selects all; ctrl+c, ctrl+x and ctrl+v copy, cut and paste. On macOS cmd takes ctrl's place.
+- **Size.** `width` and `height` in pixels; absent or 0, the item width ([`ig_set_next_item_width`](#tooltips-and-widths))
+  and 8 lines; negative, up to that distance from the right or bottom edge of the window or region (`-1.0` fills it).
+  The field scrolls when the text is longer or wider than it; `flags=ImGuiInputTextFlags_WordWrap` wraps the lines at
+  its width instead.
+- **`read_only`:** the text can be selected and copied, not changed. A view of a file or of a tool's output.
+- **`tab_input`:** Tab inserts a tab character; without it, Tab moves to the next widget.
+- **`flags`** add `ImGuiInputTextFlags_*` with `ior` (`WordWrap`, `NoUndoRedo`).
+- **Set while edited.** A `set` while the user edits the field shows the new text at once, the cursor kept where it
+  was (or at the end, if the text is shorter).
+- **Lines end with LF.** `set` turns CRLF into LF; `text()` returns LF line ends whatever the platform: write it to a
+  file in stream access to keep them so. A NUL byte ends the text.
+- **The font.** Text in columns (input files, tables of numbers) lines up in a monospace font: `ig_push_font('plex-mono')`
+  before the field and `ig_pop_font()` after it ([Fonts](styles#fonts)).
+
+**Status:** `buf%set` fails only for a text of 2 GiB or more (`FIG_ERR_ARGUMENT`, Dear ImGui's limit); `stat` is
+optional (absent: `error stop` with the message). `buf%set`, `buf%text()` and `buf%length()` may be called before
+`init*` and from a [task](processes#tasks); the field itself, from a task, draws nothing and returns `.false.`
+(`FIG_ERR_STATE` for the task).
+
+**Modes:** the same in window, headless and remote modes. Copy and paste use the system's clipboard in window mode
+and a clipboard of the program's own in headless mode; in remote mode the text lives on the server and copy and paste
+stay inside the program: the browser's clipboard is not reached ([Known issues](known-issues#text-input)).
+
+<<< @/examples/snippets/cb_text-edit.F90{fortran}
+
+<Media name="cb_text" video alt="An input file shown as text in a monospace font: a click at the end of the iterations line, Enter opens a new line, a cfl entry is typed in the same columns and the status reads (!) modified, then Save writes the file and the status reads saved" caption="docs/examples/src/cb_text.F90" />
+
+What it is not: an editor for code. There are no line numbers, no syntax highlighting, no search and replace; for a
+large text Dear ImGui goes through all of it on every frame the field is drawn, so a log that grows without end
+belongs in a [log view](processes#the-log-view), which draws only the lines in view.
+
 ## Text and layout
 
 | Procedure | Notes |
@@ -239,6 +288,6 @@ Trees are drawn the same in window, headless and remote modes; they have no fail
 
 ## Not bound yet
 
-Multi-line text and colour pickers have no wrapper yet; menus are on their own page,
+Colour pickers have no wrapper yet; menus are on their own page,
 [Menus and shortcuts](menus). Their raw interfaces are generated
 ([Raw bindings](raw-bindings)); the Fortran wrappers are still to be written ([roadmap](roadmap)).

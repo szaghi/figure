@@ -155,7 +155,8 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
             if (!color_value(v, theme.background)) return fail("background must be a colour \"#rrggbb\"");
             theme.has_background = true;
          } else if (key == "font") {
-            if (v.kind != value_t::STRING || v.str.empty()) return fail("font must be \"plex-sans\", \"proggy\" or a file");
+            if (v.kind != value_t::STRING || v.str.empty())
+               return fail("font must be \"plex-sans\", \"plex-mono\", \"proggy\" or a file");
             theme.font = v.str;
          } else if (key == "font_size") {
             if (v.kind != value_t::NUMBER || !(v.num > 0.0 && v.num <= 200.0)) return fail("font_size must be in (0, 200]");

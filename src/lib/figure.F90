@@ -33,7 +33,8 @@ use figure_cimgui_enums, only : ImGuiInputTextFlags_None, ImGuiInputTextFlags_Ch
                                 ImGuiInputTextFlags_CharsScientific, ImGuiInputTextFlags_CharsUppercase,      &
                                 ImGuiInputTextFlags_CharsNoBlank, ImGuiInputTextFlags_EnterReturnsTrue,       &
                                 ImGuiInputTextFlags_ReadOnly, ImGuiInputTextFlags_Password,                   &
-                                ImGuiInputTextFlags_AutoSelectAll
+                                ImGuiInputTextFlags_AutoSelectAll, ImGuiInputTextFlags_WordWrap,              &
+                                ImGuiInputTextFlags_NoUndoRedo
 use figure_group, only : ig_begin_disabled, ig_begin_tab, ig_begin_tab_bar, ig_collapsing_header, ig_end_disabled, &
                          ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_begin_table, ig_end_table,    &
                          ig_table_setup_column, ig_table_headers_row, ig_table_next_row, ig_table_next_column, &
@@ -50,7 +51,8 @@ use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
                          ig_set_next_item_width, ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped,      &
                          ig_text_disabled, ig_text_colored, ig_tool_button, ig_focus_window,            &
-                         ig_align_text_to_frame_padding, ig_text_size, ig_progress_bar
+                         ig_align_text_to_frame_padding, ig_text_size, ig_progress_bar, ig_input_text_multiline, &
+                         text_buffer_object
 use figure_implot, only : ip_begin_subplots, ip_end_subplots,                                              &
                           ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
                           ip_plot_limits, ip_plot_size, ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded,   &
@@ -90,12 +92,14 @@ public :: ig_begin_table, ig_end_table, ig_table_setup_column, ig_table_headers_
 public :: ig_table_next_column, ig_table_set_column, list_clipper_object
 public :: ig_tree_node, ig_tree_pop, ig_set_next_item_open
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size, ig_progress_bar
+public :: ig_input_text_multiline, text_buffer_object
 public :: ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg, ImGuiTableFlags_Borders
 public :: ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, ImGuiTableFlags_SizingFixedFit
 public :: ImGuiTableFlags_SizingStretchSame
 public :: ImGuiInputTextFlags_None, ImGuiInputTextFlags_CharsDecimal, ImGuiInputTextFlags_CharsScientific
 public :: ImGuiInputTextFlags_CharsUppercase, ImGuiInputTextFlags_CharsNoBlank, ImGuiInputTextFlags_EnterReturnsTrue
 public :: ImGuiInputTextFlags_ReadOnly, ImGuiInputTextFlags_Password, ImGuiInputTextFlags_AutoSelectAll
+public :: ImGuiInputTextFlags_WordWrap, ImGuiInputTextFlags_NoUndoRedo
 public :: ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window
 public :: ig_window_dock, ig_set_next_window_dock
 public :: ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style_var, ig_show_style_editor

@@ -185,6 +185,19 @@ a drop-down list. The rows of the table repeat the same widgets, each in its own
 tables end only when their begin returned `.true.`. [Widgets](/guide/widgets#groups-headers-tabs-tables) has the
 rules.
 
+### Edit a text file
+
+<<< @/examples/snippets/cb_text-load.F90{fortran}
+
+<<< @/examples/snippets/cb_text-edit.F90{fortran}
+
+<Media name="cb_text" video alt="An input file shown as text in a monospace font: a click at the end of the iterations line, Enter opens a new line, a cfl entry is typed in the same columns and the status reads (!) modified, then Save writes the file and the status reads saved" caption="docs/examples/src/cb_text.F90" />
+
+The file's bytes go into a `text_buffer_object` once; the field edits them in place, growing the buffer as the user
+types or pastes, and `buffer%text()` copies them out to save. IBM Plex Mono (`'plex-mono'`), pushed around the
+field, keeps the columns of the input file aligned; `tab_input` lets Tab insert a tab. The program reads and writes the
+file in stream access, so line ends stay LF. [Multi-line text](/guide/widgets#multi-line-text) has the rules.
+
 ## Plots
 
 ### Plot the columns of a matrix

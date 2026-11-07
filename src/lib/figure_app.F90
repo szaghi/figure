@@ -464,8 +464,9 @@ contains
 
    subroutine set_font(self, font, size, stat)
    !< The default font of the interface, after `init*`: `'plex-sans'` (IBM Plex Sans, bundled: the default, at 15
-   !< logical pixels), `'proggy'` (Dear ImGui's own 13-pixel bitmap font), or the path of a TrueType/OpenType file;
-   !< `size` in logical pixels (multiplied by the display's content scale), kept if absent.
+   !< logical pixels), `'plex-mono'` (IBM Plex Mono, bundled: monospace, every character as wide), `'proggy'` (Dear
+   !< ImGui's own 13-pixel bitmap font), or the path of a TrueType/OpenType file; `size` in logical pixels (multiplied
+   !< by the display's content scale), kept if absent.
    class(app_object), intent(inout)         :: self !< Application.
    character(len=*),  intent(in)            :: font !< Font.
    real(real64),      intent(in),  optional :: size !< Size [logical pixels], in (0, 200].

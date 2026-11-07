@@ -15,6 +15,7 @@ licence file under `share/licenses/<project>/`.
 | [miniz](https://github.com/richgel999/miniz) | `3.0.2` (release archive, SHA-256 pinned) | MIT | Rich Geldreich, RAD Game Tools, Valve Software | deflate for the remote mode's compressed messages |
 | [SDL](https://github.com/libsdl-org/SDL) | `release-3.4.20` | zlib | Sam Lantinga | window, input, OpenGL context, file dialogs |
 | [IBM Plex Sans](https://github.com/IBM/plex) | Regular 3.005, `third_party/fonts/IBMPlexSans-Regular.ttf` (unmodified) | OFL-1.1 | IBM Corp. (Reserved Font Name "Plex") | the default font of the interface, embedded |
+| [IBM Plex Mono](https://github.com/IBM/plex) | Regular 2.005, release `@ibm/plex-mono@2.5.0`, `third_party/fonts/IBMPlexMono-Regular.ttf` (unmodified) | OFL-1.1 | IBM Corp. (Reserved Font Name "Plex") | the monospace font (`'plex-mono'`), embedded |
 | [Nord](https://github.com/nordtheme/nord) | `src/nord.css`, commit `005e87e` | MIT | Sven Greb | the colours of the palette `nord` (`themes/palettes/nord.toml`), embedded |
 | [Solarized](https://github.com/altercation/solarized) | `README.md`, commit `4f90b03` | MIT | Ethan Schoonover | the palettes `solarized-dark` and `solarized-light` |
 | [Gruvbox](https://github.com/morhetz/gruvbox) | `colors/gruvbox.vim`, commit `0401386` | MIT (stated in its README and `package.json`; no licence file) | Pavel Pertsev | the palettes `gruvbox-dark` and `gruvbox-light` |
@@ -31,9 +32,9 @@ licence file under `share/licenses/<project>/`.
   and the permission notice must be included in all copies or substantial portions of the software. For a binary,
   ship the licence files with it (the `share/licenses/` tree, where the Lucide one is `share/licenses/lucide/` and the
   palettes' are `share/licenses/<palette>/`, or the texts in your documentation or "About" box).
-- **OFL-1.1** (IBM Plex Sans): the font may be bundled and embedded with any software; its copyright and licence
-  must accompany it (`share/licenses/ibm-plex/`), and it may not be sold by itself. A modified version may not use
-  the name "Plex".
+- **OFL-1.1** (IBM Plex Sans, IBM Plex Mono): the fonts may be bundled and embedded with any software; their
+  copyright and licence must accompany them (`share/licenses/ibm-plex/`, one file per font, the same text), and they
+  may not be sold by themselves. A modified version may not use the name "Plex".
 - **zlib** (SDL): no notice is required in a binary distribution. Altered source versions must be marked as such, and
   the notice may not be removed from source distributions.
 

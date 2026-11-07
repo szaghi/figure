@@ -36,7 +36,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%notify(text [, kind] [, seconds] [, stat])` | tell the user something in a notification drawn by FIGURE (bottom-right, stacked): `'info'`, `'success'`, `'warning'`, `'error'`; it fades after `seconds` (default 5; 0: until clicked) | [notifications](frame-loop#notifications) |
 | `app%notifications(list [, kinds] [, shown])` | the notifications kept (the last 100), oldest first | [notifications](frame-loop#notifications) |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
-| `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (default, 15 px), `'proggy'`, or a TTF/OTF file | [styles](styles#fonts) |
+| `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (default, 15 px), `'plex-mono'` (monospace), `'proggy'`, or a TTF/OTF file | [styles](styles#fonts) |
 | `app%load_style(file [, stat])`, `app%save_style(file [, stat])` | apply a theme file; write the style in effect as one | [styles](styles#load-tune-and-save) |
 | `app%set_docking(enabled [, stat])` | docking on (default) or off | [docking](docking) |
 | `app%set_style([name] [, lines] [, stat] [, look] [, palette] [, auto_dark] [, auto_light])` | the style by name (`'seal'`, default, `'seal-light'`, `'paper'`, `'high-contrast'`, `'dark'`, `'light'`, `'classic'`), or by parts: a look (geometry) and a palette (colours, or `'auto'`: the system's light or dark setting); `lines='okabe-ito'` | [styles](styles#looks-and-palettes) |
@@ -58,6 +58,8 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_slider(label, value, vmin, vmax)` → `logical` | a slider for `int32`, `real32` or `real64`; `.true.` when changed |
 | `ig_input(label, value [, step] [, format])` → `logical` | a numeric field for an `int32` or a `real64` (`format` for reals only); `.true.` when changed |
 | `ig_input_text(label, value [, hint] [, flags])` → `logical` | a text field bound to a `character` variable, whose length is the field's capacity; `.true.` when edited |
+| `ig_input_text_multiline(label, buffer [, width] [, height] [, read_only] [, tab_input] [, flags])` → `logical` | a field of several lines over a `text_buffer_object`, of any length; Enter a newline, undo and redo; `.true.` when edited ([Multi-line text](widgets#multi-line-text)) |
+| `text_buffer_object`: `buf%set(text [, stat])`, `buf%text()` → `character`, `buf%length()` → `int64` | the text of a multi-line field, kept by the native layer and grown as needed: replace it (CRLF becomes LF), copy it out, its length in bytes |
 | `ig_combo(label, current, items)` → `logical` | a drop-down list of the `character` array `items`; `current` is the index chosen; `.true.` when the user picks one |
 | `ig_selectable(label, selected)` → `logical` | a line of a list, highlighted when `selected`; `.true.` when clicked |
 | `ig_text_wrapped(text)`, `ig_text_disabled(text)`, `ig_text_colored(text, color)` | text wrapped at the region's edge, in the disabled colour, in a given colour |
@@ -117,7 +119,7 @@ Details: [Docking](docking).
 | `ig_set_style_var(name, value [, stat])`, `ip_set_style_var(...)` | a style variable by name (number, pair, logical, integer) |
 | `ig_get_style_var(name, values, n [, stat])`, `ip_get_style_var(...)` | a style variable by name |
 | `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's style editors, in a window |
-| `ig_push_font(font [, size] [, stat])`, `ig_pop_font([stat])` | another font or size for a block of widgets |
+| `ig_push_font(font [, size] [, stat])`, `ig_pop_font([stat])` | another font (`'plex-mono'` for columns that line up) or size for a block of widgets |
 | `ig_push_style_color(name, color [, stat])`, `ig_pop_style_color([n] [, stat])` | a colour for a block of widgets |
 | `ip_push_style_color(name, color [, stat])`, `ip_pop_style_color([n] [, stat])` | a colour for a block of plots |
 | `ig_push_style_var(name, value [, stat])`, `ig_pop_style_var([n] [, stat])` | a style variable for a block of widgets |

@@ -29,6 +29,7 @@ TYPES = {
     "log_view_object": "log",
     "task_object": "t",
     "task_handle_object": "h",
+    "text_buffer_object": "buf",
 }  # public types and the variable name the docs use
 
 
