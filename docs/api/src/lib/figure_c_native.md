@@ -32,6 +32,12 @@ graph LR
 - [fig_set_style_parts](#fig-set-style-parts)
 - [fig_palette_color](#fig-palette-color)
 - [fig_input_system_theme](#fig-input-system-theme)
+- [fig_frame_options](#fig-frame-options)
+- [fig_set_icon_rgba](#fig-set-icon-rgba)
+- [fig_set_icon_glyph](#fig-set-icon-glyph)
+- [fig_frame_hit](#fig-frame-hit)
+- [fig_frame_rect](#fig-frame-rect)
+- [fig_frame_state](#fig-frame-state)
 - [fig_remote_token](#fig-remote-token)
 - [fig_file_dialog](#fig-file-dialog)
 - [fig_file_dialog_result](#fig-file-dialog-result)
@@ -126,6 +132,18 @@ graph LR
 ### fig_palette_color
 
 ### fig_input_system_theme
+
+### fig_frame_options
+
+### fig_set_icon_rgba
+
+### fig_set_icon_glyph
+
+### fig_frame_hit
+
+### fig_frame_rect
+
+### fig_frame_state
 
 ### fig_remote_token
 

@@ -43,6 +43,8 @@ graph LR
 - [test_plot_tick](#test-plot-tick)
 - [test_quit](#test-quit)
 - [test_system_theme](#test-system-theme)
+- [test_frame_rect](#test-frame-rect)
+- [test_frame_state](#test-frame-state)
 - [test_mouse_move](#test-mouse-move)
 - [test_mouse_button](#test-mouse-button)
 - [test_click](#test-click)
@@ -52,6 +54,7 @@ graph LR
 - [test_type](#test-type)
 - [test_window_rect](#test-window-rect)
 - [test_item_center](#test-item-center)
+- [test_frame_hit](#test-frame-hit)
 - [button_index](#button-index)
 
 ## Subroutines
@@ -158,6 +161,62 @@ flowchart TD
   test_system_theme["test_system_theme"] --> figure_check["figure_check"]
   test_system_theme["test_system_theme"] --> figure_fail["figure_fail"]
   style test_system_theme fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_frame_rect
+
+A part of the title bar of `decorations='figure'` in the last frame: `'bar'`, `'icon'`, `'menus'` (the program's
+ main menu bar inside it), `'title'`, `'minimize'`, `'maximize'`, `'close'`; `found` is false when not drawn.
+
+```fortran
+subroutine test_frame_rect(part, x0, y0, x1, y1, found, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `part` | character(len=*) | in |  | Part. |
+| `x0` | real(kind=real64) | out |  | Left [pixels]. |
+| `y0` | real(kind=real64) | out |  | Top [pixels]. |
+| `x1` | real(kind=real64) | out |  | Right [pixels]. |
+| `y1` | real(kind=real64) | out |  | Bottom [pixels]. |
+| `found` | logical | out | optional | Drawn in the last frame. |
+| `stat` | integer(kind=int32) | out | optional | Status: `FIG_ERR_ARGUMENT` for an unknown part. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_frame_rect["test_frame_rect"] --> fig_frame_rect["fig_frame_rect"]
+  test_frame_rect["test_frame_rect"] --> figure_check["figure_check"]
+  style test_frame_rect fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_frame_state
+
+The window minimized, maximized: the system's in window mode; in headless mode, as the buttons of
+ `decorations='figure'` recorded them.
+
+```fortran
+subroutine test_frame_state(minimized, maximized, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `minimized` | logical | out |  | Minimized. |
+| `maximized` | logical | out |  | Maximized. |
+| `stat` | integer(kind=int32) | out | optional | Status: `FIG_ERR_STATE` before `init*`. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_frame_state["test_frame_state"] --> fig_frame_state["fig_frame_state"]
+  test_frame_state["test_frame_state"] --> figure_check["figure_check"]
+  style test_frame_state fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### test_mouse_move
@@ -403,6 +462,36 @@ flowchart TD
 ```
 
 ## Functions
+
+### test_frame_hit
+
+What the window's frame (`decorations='figure'`) does with the point (x, y), as its hit test answers the system,
+ from the last frame drawn: `'client'` (the program's: the buttons, the menus, everything below the bar),
+ `'drag'` (the bar's empty space, the icon, the title), or a resize edge or corner, `'resize-top-left'`,
+ `'resize-top'`, `'resize-top-right'`, `'resize-right'`, `'resize-bottom-right'`, `'resize-bottom'`,
+ `'resize-bottom-left'`, `'resize-left'` (none when maximized). `'client'` everywhere without the frame.
+
+**Returns**: `character(len=:)`
+
+```fortran
+function test_frame_hit(x, y) result(hit)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `x` | real(kind=real64) | in |  | Abscissa [pixels]. |
+| `y` | real(kind=real64) | in |  | Ordinate [pixels]. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_frame_hit["test_frame_hit"] --> fig_frame_hit["fig_frame_hit"]
+  test_frame_hit["test_frame_hit"] --> figure_check["figure_check"]
+  style test_frame_hit fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### button_index
 

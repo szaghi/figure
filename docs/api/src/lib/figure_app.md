@@ -38,6 +38,8 @@ graph LR
 - [app_object](#app-object)
 - [init](#init)
 - [init_headless](#init-headless)
+- [set_icon_image](#set-icon-image)
+- [set_icon_glyph](#set-icon-glyph)
 - [init_remote](#init-remote)
 - [set_lazy](#set-lazy)
 - [set_style](#set-style)
@@ -60,6 +62,7 @@ graph LR
 - [load_layout](#load-layout)
 - [destroy](#destroy)
 - [show_file_dialog](#show-file-dialog)
+- [frame_options](#frame-options)
 - [next_frame](#next-frame)
 - [quit_requested](#quit-requested)
 - [title](#title)
@@ -113,6 +116,9 @@ A FIGURE application (one per program).
 | `load_layout` | pass(self) | An arrangement from a file, applied before the next frame. |
 | `content_scale` | pass(self) | Display content scale. |
 | `destroy` | pass(self) | Close everything. |
+| `set_icon_image` | pass(self) | The window's icon from an image. |
+| `set_icon_glyph` | pass(self) | The window's icon from an ICON_*. |
+| `set_icon` |  | The window's icon: an image or an ICON_*. |
 
 ## Subroutines
 
@@ -123,8 +129,14 @@ Open the window (`width` x `height` logical pixels) and create the ImGui/ImPlot 
  Window positions and sizes are not saved by default: with `ini_file`, Dear ImGui keeps them in that file, read
  at the first frame and written while the program runs (its `imgui.ini`).
 
+ `decorations='figure'` opens the window without the system's frame and draws one: a title bar with the icon
+ (`set_icon`), the program's main menu bar (`ig_begin_main_menu_bar`) inside it, the title centred, and the
+ minimize, maximize (restore) and close buttons, in the colours of the palette's roles. The bar drags the window,
+ its edges resize it, a double-click on it maximizes; close takes the quit path of the system's close button
+ (`set_confirm_quit`). `buttons` puts them on the `'right'` (the default) or the `'left'` (the default on macOS).
+
 ```fortran
-subroutine init(self, title, width, height, vsync, stat, ini_file)
+subroutine init(self, title, width, height, vsync, stat, ini_file, decorations, buttons)
 ```
 
 **Arguments**
@@ -136,8 +148,10 @@ subroutine init(self, title, width, height, vsync, stat, ini_file)
 | `width` | integer(kind=int32) | in |  | Width [logical pixels]. |
 | `height` | integer(kind=int32) | in |  | Height [logical pixels]. |
 | `vsync` | logical | in | optional | Synchronize with the display (default true). |
-| `stat` | integer(kind=int32) | out | optional | Status. |
+| `stat` | integer(kind=int32) | out | optional | `FIG_ERR_ARGUMENT` for a wrong size or option. |
 | `ini_file` | character(len=*) | in | optional | File keeping the window layout (default: none). |
+| `decorations` | character(len=*) | in | optional | The window's frame: `'native'` (default) or `'figure'`. |
+| `buttons` | character(len=*) | in | optional | With `'figure'`: `'right'` or `'left'` (default: the |
 
 **Call graph**
 
@@ -146,6 +160,7 @@ flowchart TD
   init["init"] --> fig_init["fig_init"]
   init["init"] --> fig_set_ini_file["fig_set_ini_file"]
   init["init"] --> figure_check["figure_check"]
+  init["init"] --> frame_options["frame_options"]
   style init fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -153,8 +168,11 @@ flowchart TD
 
 Create the contexts on a virtual `width` x `height` display, without window or GPU.
 
+ `decorations='figure'` draws the title bar of `init`'s `decorations='figure'` as in a window, for tests: its
+ buttons' actions are recorded as state (`test_frame_state`), close takes the quit path.
+
 ```fortran
-subroutine init_headless(self, width, height, stat)
+subroutine init_headless(self, width, height, stat, decorations, buttons)
 ```
 
 **Arguments**
@@ -164,7 +182,9 @@ subroutine init_headless(self, width, height, stat)
 | `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
 | `width` | integer(kind=int32) | in |  | Width [pixels]. |
 | `height` | integer(kind=int32) | in |  | Height [pixels]. |
-| `stat` | integer(kind=int32) | out | optional | Status. |
+| `stat` | integer(kind=int32) | out | optional | Status: `FIG_ERR_ARGUMENT` for a wrong size or option. |
+| `decorations` | character(len=*) | in | optional | `'native'` (default: no bar) or `'figure'`. |
+| `buttons` | character(len=*) | in | optional | With `'figure'`: `'right'` or `'left'`. |
 
 **Call graph**
 
@@ -172,7 +192,63 @@ subroutine init_headless(self, width, height, stat)
 flowchart TD
   init_headless["init_headless"] --> fig_init_headless["fig_init_headless"]
   init_headless["init_headless"] --> figure_check["figure_check"]
+  init_headless["init_headless"] --> frame_options["frame_options"]
   style init_headless fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_icon_image
+
+The window's icon (task bar, dock, the title bar of `decorations='figure'`) from an image, `image(4, width,
+ height)`: `image(:, i, j)` = R, G, B, A of pixel (i, j), j = 1 the top row. Window mode only; 1 to 1024 pixels a
+ side (64 x 64 or 256 x 256 are usual).
+
+```fortran
+subroutine set_icon_image(self, image, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `image` | integer(kind=int8) | in | contiguous, target | Pixels. |
+| `stat` | integer(kind=int32) | out | optional | modes, `FIG_ERR_ARGUMENT` for a wrong shape. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_icon_image["set_icon_image"] --> fig_set_icon_rgba["fig_set_icon_rgba"]
+  set_icon_image["set_icon_image"] --> figure_check["figure_check"]
+  set_icon_image["set_icon_image"] --> figure_fail["figure_fail"]
+  style set_icon_image fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### set_icon_glyph
+
+The window's icon from one of the bundled icons, `ICON_*`: rendered at 64 x 64 pixels in the palette's text on
+ accent colour on a rounded square of its accent; the title bar of `decorations='figure'` shows the glyph in the
+ accent colour. Window mode only.
+
+```fortran
+subroutine set_icon_glyph(self, icon, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `icon` | character(len=*) | in |  | One `ICON_*` constant. |
+| `stat` | integer(kind=int32) | out | optional | `FIG_ERR_ARGUMENT` if `icon` is not one icon. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_icon_glyph["set_icon_glyph"] --> fig_set_icon_glyph["fig_set_icon_glyph"]
+  set_icon_glyph["set_icon_glyph"] --> figure_check["figure_check"]
+  style set_icon_glyph fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### init_remote
@@ -820,6 +896,33 @@ flowchart TD
 ```
 
 ## Functions
+
+### frame_options
+
+Give the frame options to the native layer, before init: `FIG_ERR_ARGUMENT` for an unknown value.
+
+**Returns**: `integer(kind=c_int)`
+
+```fortran
+function frame_options(decorations, buttons) result(status)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `decorations` | character(len=*) | in | optional | `'native'` or `'figure'`. |
+| `buttons` | character(len=*) | in | optional | `'right'` or `'left'`. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  init["init"] --> frame_options["frame_options"]
+  init_headless["init_headless"] --> frame_options["frame_options"]
+  frame_options["frame_options"] --> fig_frame_options["fig_frame_options"]
+  style frame_options fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
 
 ### next_frame
 
