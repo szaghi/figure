@@ -47,7 +47,8 @@ What exists today:
   documentation;
 - headless testing with synthetic input (`figure_testing`, in the library);
 - every Dear ImGui and ImPlot function through the generated [raw bindings](raw-bindings);
-- CI on Linux, macOS and Windows with gfortran, on Linux with nvfortran; builds with FoBiS and fpm.
+- CI on Linux, macOS and Windows with gfortran, on Linux with nvfortran and Intel ifx; builds with FoBiS and fpm; a
+  real window opened and its frames checked on the three systems.
 
 The [feature map](features) lists every public procedure.
 

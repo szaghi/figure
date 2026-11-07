@@ -1,8 +1,10 @@
 # Platforms beyond ci.yml (Linux, gfortran, coverage; managed by `fobis scaffold`): macOS and Windows with gfortran,
-# Linux with nvfortran. Each job builds the native layer, checks the platform's fobos varset against the static link
-# line SDL reports for it (scripts/check_sync.py), builds and runs the headless tests with FoBiS and with fpm, builds
-# the examples, and builds FIGURE as a plain fpm dependency of another project (scripts/fpm_consumer.sh). Headless
-# tests need no display and no GPU.
+# Linux with nvfortran and with Intel ifx. Each job builds the native layer, checks the platform's fobos varset against
+# the static link line SDL reports for it (scripts/check_sync.py), builds and runs the headless tests with FoBiS and
+# with fpm, builds the examples, and builds FIGURE as a plain fpm dependency of another project
+# (scripts/fpm_consumer.sh). Headless tests need no display and no GPU. The macOS, Windows and nvfortran jobs also run
+# an example in a real window (scripts/window_check.py: frames captured and checked, kept as the window-frames-*
+# artifacts), Linux under Xvfb, Windows on Mesa's software OpenGL (the runner's own is OpenGL 1.1).
 name: Platforms
 
 on:
@@ -73,6 +75,17 @@ jobs:
         rm -rf mod obj exe
         fobis build --mode examples-gnu --varset macos
 
+    - name: Windowed run (figure_hello, frames checked)
+      run: python3 scripts/window_check.py --out window-frames
+
+    - name: Upload the frames of the windowed run
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: window-frames-macos
+        path: window-frames
+        if-no-files-found: warn
+
     - name: Tests (fpm)
       run: scripts/fpm.sh test --compiler "${FC}"
 
@@ -102,7 +115,14 @@ jobs:
         update: true
         install: git
         pacboy: >-
-          gcc-fortran:p cmake:p ninja:p pkgconf:p python:p python-pip:p fpm:p sdl3:p
+          gcc-fortran:p cmake:p ninja:p pkgconf:p python:p python-pip:p fpm:p sdl3:p mesa:p
+
+    # the runner's display is 1024 x 768, narrower than figure_hello's window (1100 x 700)
+    - name: Display resolution
+      shell: pwsh
+      run: |
+        try { Set-DisplayResolution -Width 1920 -Height 1080 -Force } catch { Write-Warning "$_" }
+        Get-CimInstance Win32_VideoController | Format-List Name, CurrentHorizontalResolution, CurrentVerticalResolution
 
     - name: FoBiS
       run: python -m pip install --break-system-packages FoBiS.py
@@ -125,6 +145,23 @@ jobs:
       run: |
         rm -rf mod obj exe
         fobis build --mode examples-gnu --varset windows
+
+    # the runner has no GPU and Windows' own OpenGL is 1.1: Mesa's opengl32.dll (llvmpipe), placed beside the program,
+    # is loaded before the system's
+    - name: Windowed run (figure_hello, frames checked)
+      env:
+        GALLIUM_DRIVER: llvmpipe
+      run: |
+        cp /ucrt64/bin/opengl32.dll exe/
+        python scripts/window_check.py --out window-frames
+
+    - name: Upload the frames of the windowed run
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: window-frames-windows
+        path: window-frames
+        if-no-files-found: warn
 
     - name: Tests (fpm)
       run: scripts/fpm.sh test
@@ -162,7 +199,8 @@ jobs:
           | sudo tee /etc/apt/sources.list.d/nvhpc.list
         sudo apt-get update -y
         sudo apt-get install -y "nvhpc-${NVHPC//./-}" cmake ninja-build libxext-dev libxrandr-dev libxcursor-dev \
-          libxi-dev libxfixes-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev
+          libxi-dev libxfixes-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev \
+          xvfb libgl1-mesa-dri libglx-mesa0
         echo "/opt/nvidia/hpc_sdk/Linux_x86_64/${NVHPC}/compilers/bin" >> "$GITHUB_PATH"
         pip install FoBiS.py
 
@@ -184,6 +222,18 @@ jobs:
         rm -rf mod obj exe
         fobis build --mode examples-nvf
 
+    # no display on the runner: Xvfb, 24-bit (xvfb-run's default screen is 640 x 480, 8-bit), OpenGL by Mesa (llvmpipe)
+    - name: Windowed run under Xvfb (figure_hello, frames checked)
+      run: xvfb-run -a -s "-screen 0 1280x1024x24" python3 scripts/window_check.py --out window-frames
+
+    - name: Upload the frames of the windowed run
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: window-frames-linux
+        path: window-frames
+        if-no-files-found: warn
+
     - name: fpm
       uses: fortran-lang/setup-fpm@v9
       with:
@@ -194,3 +244,70 @@ jobs:
     # static SDL3 the native build installed (lib/, include/) stands in for it
     - name: fpm dependency (SDL3 from the native build)
       run: scripts/fpm_consumer.sh --sdl-prefix . -- --compiler gfortran
+
+  linux-ifx:
+    name: Linux (Intel ifx)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # oneAPI from Intel's apt repository (setup-fortran sources setvars.sh and exports FC=ifx, CC=icx, CXX=icpx); the
+    # newest ifx it knows, while the development machines have 2026.2
+    - name: Fortran compiler
+      uses: fortran-lang/setup-fortran@v1
+      with:
+        compiler: intel
+        version: "2026.1"
+
+    # after setup-fortran, which writes the whole PATH of setvars.sh to GITHUB_PATH: this Python comes first
+    - name: Python (scripts need 3.11+, tomllib)
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Build tools
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y cmake ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev \
+          libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev
+        python -m pip install FoBiS.py
+
+    # the native layer with gcc/g++, as for nvfortran: ifx links libstdc++
+    - name: Native layer
+      run: |
+        ifx --version && g++ --version
+        CC=gcc CXX=g++ scripts/build_native.sh
+
+    - name: Link line of this platform (fobos varset vs SDL)
+      run: python3 scripts/check_sync.py
+
+    - name: Tests (FoBiS)
+      run: |
+        fobis build --mode tests-ifx
+        bash scripts/run_tests.sh
+
+    - name: Static library (FoBiS)
+      run: fobis build --mode figure-static-ifx
+
+    - name: Examples (FoBiS)
+      run: |
+        rm -rf mod obj exe
+        fobis build --mode examples-ifx
+
+    - name: fpm
+      uses: fortran-lang/setup-fpm@v9
+      with:
+        fpm-version: v0.12.0
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    # -fpscomp logicals, as fobos' $CIFX: .true. is 1, the value of a C bool (fpm's ifx flags leave it -1)
+    - name: Tests (fpm)
+      run: scripts/fpm.sh test --compiler ifx --flag "-fpscomp logicals"
+
+    # FIGURE as a plain fpm dependency of another project, compiled by ifx (the C/C++ by gcc/g++); SDL3 from the
+    # native build (Ubuntu 24.04 has no SDL3 package)
+    - name: fpm dependency (SDL3 from the native build)
+      run: |
+        scripts/fpm_consumer.sh --sdl-prefix . -- --compiler ifx --c-compiler gcc --cxx-compiler g++ \
+          --flag "-fpscomp logicals"

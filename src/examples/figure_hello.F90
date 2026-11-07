@@ -2,7 +2,8 @@
 program figure_hello
 !< figure_hello, the first FIGURE program: widgets bound to Fortran variables and a live ImPlot plot.
 !<
-!< `figure_hello` opens a window; `figure_hello --remote [port]` serves the same UI to a web browser instead.
+!< `figure_hello` opens a window; `figure_hello --frame` opens it with the frame drawn by FIGURE
+!< (`decorations='figure'`); `figure_hello --remote [port]` serves the same UI to a web browser instead.
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_end, ig_input, ig_same_line, ig_separator,    &
                    ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ip_begin_plot, ip_end_plot, ip_line, &
@@ -38,6 +39,8 @@ if (trim(arg) == '--remote') then                     ! the UI in a web browser:
    call get_command_argument(2, arg)
    if (len_trim(arg) > 0) read(arg, *) port
    call app%init_remote(port=port)
+elseif (trim(arg) == '--frame') then                  ! the window's frame drawn by FIGURE, not by the system
+   call app%init('FIGURE: hello', 1100_int32, 700_int32, decorations='figure')
 else
    call app%init('FIGURE: hello', 1100_int32, 700_int32)
 endif

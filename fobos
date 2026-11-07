@@ -9,7 +9,8 @@ email      = stefano.zaghi@cnr.it
 [modes]
 modes = tests-gnu tests-gnu-debug examples-gnu
         tests-nvf examples-nvf
-        figure-static-gnu figure-static-nvf
+        tests-ifx examples-ifx
+        figure-static-gnu figure-static-nvf figure-static-ifx
 
 # The native layer (libfigure_native.a + libSDL3.a in lib/) is built by `fobis rule --ex native` (CMake), run
 # automatically before every build (pre_build): a no-op once built. Linking it needs platform libraries: one varset per
@@ -38,6 +39,7 @@ $NATIVE_LFLAGS =
 $CGNU        = -c -std=f2018 -ffree-line-length-132 -fimplicit-none
 $CGNU_DEBUG  = -Og -g3 -fcheck=all -fbacktrace -Wall -Wimplicit-interface -Wimplicit-procedure -finit-real=nan -ffpe-trap=invalid,zero,overflow
 $CNVF        = -c -Mstandard -Mfree
+$CIFX        = -c -stand f18 -free -fpscomp logicals
 
 # main modes
 [tests-gnu]
@@ -74,6 +76,21 @@ openmp    = True
 build_dir = exe
 src       = src/lib/ src/examples/
 
+# ifx (Intel oneAPI): -fpscomp logicals makes .true. the C value 1 (the default is -1, which is not a C bool); its
+# I/O runtime is thread-safe with no flag (ifx links libifcoremt by default), so tests-ifx needs no openmp
+[tests-ifx]
+template  = template-ifx
+cflags    = $CIFX -O2
+build_dir = exe
+src       = src/lib/ src/tests/
+
+[examples-ifx]
+template  = template-ifx
+cflags    = $CIFX -O2
+openmp    = True
+build_dir = exe
+src       = src/lib/ src/examples/
+
 [figure-static-gnu]
 template  = template-gnu
 cflags    = $CGNU -O2
@@ -86,6 +103,15 @@ mklib     = static
 [figure-static-nvf]
 template  = template-nvf
 cflags    = $CNVF -O2
+build_dir = lib
+src       = src/lib/
+target    = src/lib/figure_library.F90
+output    = libfigure.a
+mklib     = static
+
+[figure-static-ifx]
+template  = template-ifx
+cflags    = $CIFX -O2
 build_dir = lib
 src       = src/lib/
 target    = src/lib/figure_library.F90
@@ -107,6 +133,18 @@ jobs      = 4
 
 [template-nvf]
 compiler  = nvfortran
+mod_dir   = mod
+obj_dir   = obj
+lib_dir   = lib
+ext_libs  = $NATIVE_LIBS
+lflags    = $NATIVE_LFLAGS
+pre_build = native
+colors    = True
+quiet     = False
+jobs      = 4
+
+[template-ifx]
+compiler  = intel_nextgen
 mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib

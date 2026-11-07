@@ -86,7 +86,8 @@ installer does not cover is listed in the [known issues](known-issues#the-one-li
 ## FIGURE as a FoBiS dependency
 
 A FoBiS project fetches and builds FIGURE with its own fobos (`use=fobos`, the static-library mode of your
-compiler), then links the native layer from the clone's `lib/`:
+compiler: `figure-static-gnu`, `figure-static-nvf` or `figure-static-ifx`), then links the native layer from the
+clone's `lib/`:
 
 ```ini
 [dependencies]
@@ -118,7 +119,8 @@ FIGURE has two layers, built separately:
 
 ## Requirements
 
-- A Fortran 2018 compiler. Verified: gfortran 16.2 and nvfortran 26.9 (Linux).
+- A Fortran 2018 compiler. Verified: gfortran 16.2, nvfortran 26.9 and Intel ifx 2026.2 (Linux); the CI's versions
+  are in [Verified platforms and compilers](#verified-platforms-and-compilers).
 - A C++17 compiler whose C++ runtime is the one the Fortran link line uses: `libstdc++` with gfortran and nvfortran
   on Linux and with MinGW on Windows, `libc++` (Apple clang) on macOS. Verified: g++ 16.2.
 - CMake 3.24 or newer; Ninja is used when present.
@@ -128,8 +130,8 @@ FIGURE has two layers, built separately:
   package and the measurement and documentation scripts.
 
 Platforms: Linux is verified locally (X11 and Wayland, under WSL2/WSLg). macOS (gfortran with Apple clang) and
-Windows (MSYS2 UCRT64 gfortran) are built and tested by the `Platforms` CI workflow (see
-[Other platforms](#other-platforms)).
+Windows (MSYS2 UCRT64 gfortran) are built, tested and opened in a window by the `Platforms` CI workflow (see
+[Verified platforms and compilers](#verified-platforms-and-compilers)).
 
 ### Linux packages
 
@@ -183,6 +185,7 @@ layer is built.
 fobis build --mode tests-gnu && exe/figure_test_headless      # gfortran
 fobis build --mode examples-gnu && exe/figure_hello
 fobis build --mode tests-nvf                                  # nvfortran
+fobis build --mode tests-ifx                                  # Intel ifx (after: source /opt/intel/oneapi/setvars.sh)
 fobis rule --ex sync                                          # fobos and fpm.toml describe the same build
 ```
 
@@ -190,16 +193,16 @@ fobis rule --ex sync                                          # fobos and fpm.to
 
 | Mode | Builds |
 |---|---|
-| `tests-gnu`, `tests-nvf` | the tests: `exe/figure_test_headless`, `figure_test_layout`, `figure_test_remote`, `figure_test_themes` |
+| `tests-gnu`, `tests-nvf`, `tests-ifx` | the tests: `exe/figure_test_headless`, `figure_test_layout`, `figure_test_remote`, `figure_test_themes` |
 | `tests-gnu-debug` | the same with runtime checks and floating-point traps |
-| `examples-gnu`, `examples-nvf` | the example programs (`exe/figure_hello`, `exe/figure_mandelbrot`, `exe/figure_bench_texture`, `exe/figure_bench_redraw`), with OpenMP |
-| `figure-static-gnu`, `figure-static-nvf` | the static library `lib/libfigure.a` (`figure` and `figure_testing`), modules in `lib/mod` |
+| `examples-gnu`, `examples-nvf`, `examples-ifx` | the example programs (`exe/figure_hello`, `exe/figure_mandelbrot`, `exe/figure_bench_texture`, `exe/figure_bench_redraw`), with OpenMP |
+| `figure-static-gnu`, `figure-static-nvf`, `figure-static-ifx` | the static library `lib/libfigure.a` (`figure` and `figure_testing`), modules in `lib/mod` |
 
 Two rules matter here: `fobis rule --ex native` builds the native layer, `fobis rule --ex sync` checks fobos against
 `fpm.toml`.
 
 ::: warning Switching compilers
-Test and example modes of both compilers write into `exe/`. Run `rm -rf exe` before trusting a run after a switch:
+Test and example modes of every compiler write into `exe/`. Run `rm -rf exe` before trusting a run after a switch:
 a stale binary of the other compiler can still be there.
 :::
 
@@ -217,7 +220,11 @@ is an empty archive from the native build and the libraries and frameworks go in
 scripts/fpm.sh test
 scripts/fpm.sh run --example figure_hello
 FPM_FC=gfortran scripts/fpm.sh test
+scripts/fpm.sh test --compiler ifx --flag "-fpscomp logicals"
 ```
+
+With ifx, pass `--flag "-fpscomp logicals"` (here and to an fpm project depending on FIGURE), as fobos does:
+[Intel ifx](#intel-ifx).
 
 ## FIGURE as an fpm dependency
 
@@ -300,6 +307,44 @@ Windows before linking anything, so a missing system library shows up as a named
 
 SDL is built with only the subsystems FIGURE uses (video, events, OpenGL, file dialogs): audio, game controllers,
 haptics, sensors, camera, GPU, render, power and tray are off, which keeps the link line short on every platform.
+
+## Verified platforms and compilers
+
+The `Platforms` CI workflow builds the native layer and the Fortran library, runs the headless tests with FoBiS and
+with fpm, builds the examples and builds FIGURE as an fpm dependency (`scripts/fpm_consumer.sh`), on:
+
+| Platform | Fortran | C/C++ | fobos varset | A real window |
+|---|---|---|---|---|
+| Linux (Ubuntu) | gfortran (`ci.yml`), nvfortran 26.9, Intel ifx 2026.1 | g++ | `linux` (default) | Xvfb, Mesa's OpenGL (nvfortran job) |
+| macOS (arm64) | gfortran 14 (Homebrew) | Apple clang | `macos` | the runner's display |
+| Windows (MSYS2 UCRT64) | gfortran | g++ | `windows` | the runner's display, Mesa's software OpenGL |
+
+**A real window:** `scripts/window_check.py` runs `exe/figure_hello` in a window twice, with the system's frame and
+with FIGURE's (`--frame`, [`decorations='figure'`](frame-loop#the-window-s-frame)), captures its frames
+([Screenshots and videos](capture)) and checks the last one: the window's size, not blank, and known widgets' pixels
+(the background, the "Click me" button, the slider's grab, and FIGURE's title bar with its title and close button).
+The frames are kept as the workflow's `window-frames-linux`, `-macos` and `-windows` artifacts. Run it on your own
+display after `fobis build --mode examples-gnu`:
+
+```bash
+python3 scripts/window_check.py --out window-frames   # writes window-frames/native.png and figure.png
+```
+
+The Windows runner has no GPU and its own OpenGL is version 1.1: the job places Mesa's `opengl32.dll` (MSYS2's
+`mesa` package, software rendering) beside the program. On a Windows machine with a GPU driver nothing is needed.
+
+### Intel ifx
+
+The ifx modes (`tests-ifx`, `examples-ifx`, `figure-static-ifx`) use FoBiS' `intel_nextgen` compiler with
+`-stand f18 -free -fpscomp logicals`. Load oneAPI first (`source /opt/intel/oneapi/setvars.sh`); the native layer is
+built with `gcc` and `g++` as for gfortran (`CC=gcc CXX=g++ scripts/build_native.sh`): ifx links `libstdc++`.
+
+- **`-fpscomp logicals`:** by default ifx stores `.true.` as -1, also in a `logical(c_bool)`, which C and C++ do not
+  accept as a `bool` (ifx warns, #5472, at every logical passed to Dear ImGui). With the option `.true.` is 1 and any
+  non-zero value is true. A program compiled without it may still use a FIGURE built with it: each side reads the
+  other's `.true.` as true.
+- **Threads:** ifx links its thread-safe run-time library by default, so the tasks' Fortran I/O needs no OpenMP
+  flag (unlike nvfortran's `-mp`, [Known issues](known-issues#tasks)).
 
 ## WSL2 (WSLg)
 

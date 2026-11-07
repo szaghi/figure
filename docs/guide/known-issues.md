@@ -52,9 +52,9 @@ search, and Dear ImGui goes through the whole text on every frame (a log that gr
   Linux window is not delivered (WSLg does not carry drag and drop between Windows and Linux); drop from a Linux file
   manager, or open with the [file browser](frame-loop#figure-s-file-browser). Dropped text is not reported, only
   files and folders.
-- **Untested:** drops and the system clipboard in a window on macOS and Windows have not been tried (no window is
-  opened there yet, see [Platforms](#platforms)); the tests check the remote clipboard's messages with a client of
-  their own, not a browser's permissions.
+- **Untested:** drops and the system clipboard in a window on macOS and Windows have not been tried (CI opens a window
+  there, see [Platforms](#platforms), but drops nothing on it); the tests check the remote clipboard's messages with a
+  client of their own, not a browser's permissions.
 
 ## A name shared with fortplot
 
@@ -65,9 +65,28 @@ module `figure` and that procedure under the same name in one scope: rename one 
 ## Platforms
 
 Linux is built and tested locally; macOS (arm64) and Windows (MSYS2 UCRT64) are built and tested by CI (the
-`Platforms` workflow), where the headless tests pass with FoBiS and fpm. No window has been opened on either yet: the
-tests need no display, and the windowed path (SDL video, the OpenGL context, the GL loader) is unverified there. On WSL2, set `GALLIUM_DRIVER=d3d12`, or Mesa renders in
-software ([Installation](install#wsl2-wslg)).
+`Platforms` workflow), where the headless tests pass with FoBiS and fpm and `figure_hello` is opened in a real window,
+its frames captured and checked ([Verified platforms](install#verified-platforms-and-compilers)). What CI does not
+show:
+
+- **Input in a window:** the checked frames are drawn with the capture's scripted input, not the system's mouse and
+  keyboard; typing, the clipboard and drops in a window are untried on macOS and Windows.
+- **Windows' OpenGL:** the runner has no GPU, so CI renders with Mesa's software `opengl32.dll`; a vendor's driver
+  is not exercised.
+
+On WSL2, set `GALLIUM_DRIVER=d3d12`, or Mesa renders in software ([Installation](install#wsl2-wslg)).
+
+## Intel ifx
+
+Built and tested with ifx 2026.2 locally and with ifx 2026.1 in CI (`setup-fortran`'s newest Intel release, from
+Intel's apt repository), on Linux only: ifx on Windows is untested (FIGURE's Windows build is MSYS2's MinGW, ifx
+works with MSVC), and Intel ships no ifx for macOS.
+
+- **`-fpscomp logicals`:** FIGURE's ifx modes compile with it, so that `.true.` passed to C is 1
+  ([Intel ifx](install#intel-ifx)). fpm does not add it for ifx: pass `--flag "-fpscomp logicals"` to `fpm build`,
+  `fpm test` or `fpm run`, also for a project that depends on FIGURE; without it ifx warns (#5472) and passes
+  `.true.` as -1 to Dear ImGui.
+- **The installer** does not take ifx ([below](#the-one-line-installer)): build with FoBiS (`figure-static-ifx`) or fpm.
 
 ## The window's frame drawn by FIGURE
 
@@ -76,8 +95,8 @@ frame does beyond moving, resizing and the three buttons is lost:
 
 - **Windows 11's snap layouts** (the layout menu shown when the pointer rests on the maximize button) do not appear:
   Windows shows them only for a system frame or a maximize button it can identify (`HTMAXBUTTON`), and SDL's hit test
-  cannot report one. Whether snapping by dragging the window to a screen edge still works is to be checked on
-  Windows (S11).
+  cannot report one. Whether snapping by dragging the window to a screen edge still works is unchecked: CI does not
+  drag windows.
 - **macOS's full-screen button:** the bar's buttons are close, minimize and maximize (zoom); there is no green
   full-screen button, and the traffic-light colours are not used (the palette's are).
 - **Window menu:** the system's window menu (right-click on the title bar, Alt + Space on Windows) is not shown.
@@ -87,7 +106,8 @@ frame does beyond moving, resizing and the three buttons is lost:
 - **A window over the bar:** a floating Dear ImGui window dragged over the title bar is drawn above it, but the hit
   test still treats the bar's empty part as the drag area. Dock spaces and side bars start below the bar.
 
-The windowed path on each platform is to be verified by the windowed CI runs (issue #3, S11).
+CI draws the bar in a real window on Linux, macOS and Windows and checks its pixels; moving, resizing, snapping and
+the buttons' actions there are driven by the system and are not exercised by CI.
 
 ## The file browser
 

@@ -281,7 +281,9 @@ icon is `FIG_ERR_ARGUMENT`; an image of the wrong shape too.
 
 **Modes.**
 
-- **Window:** as above.
+- **Window:** as above. The Platforms workflow opens `figure_hello --frame` (the example with this frame) in a real
+  window on Linux, macOS and Windows and checks its bar in the captured frame
+  ([verified platforms](install#verified-platforms-and-compilers)).
 - **Headless:** `init_headless(..., decorations='figure')` draws the bar the same way, for tests; the buttons'
   actions are recorded as state (`test_frame_state(minimized, maximized)`), close is a quit request as in a window.
   `set_icon` is refused with `FIG_ERR_STATE` ("set_icon: there is no window in headless mode").

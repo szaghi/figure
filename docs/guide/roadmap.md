@@ -181,6 +181,11 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
 - **A one-line installer** ([Installation](install#the-one-line-installer)): `install.sh --gnu|--nvidia|--fc`, the
   missing packages printed (`--deps` runs them), installs per compiler with a pkg-config file and a manifest,
   `--uninstall`: done.
+- **The windowed path verified in CI; Intel ifx** ([Installation](install#verified-platforms-and-compilers)): the
+  Platforms workflow runs `figure_hello` in a real window on macOS, Windows (Mesa's software OpenGL) and Linux (Xvfb),
+  with the system's frame and with `decorations='figure'`, and checks the captured frames (`scripts/window_check.py`:
+  the size, not blank, known widgets' pixels; the frames kept as artifacts); FoBiS modes `tests-ifx`,
+  `examples-ifx`, `figure-static-ifx` and an ifx job with the fpm test and the fpm dependency: done.
 - **A colormap registry and scientific colormaps** ([Colormaps](colormaps)): `ip_colormap` by name, reversed
   (`<name>_r`) and in discrete bands (`levels`); bundled cividis, inferno, magma, turbo, cmocean's thermal, haline,
   deep, balance and curl, ParaView's Cool to Warm, Crameri's batlow, vik, roma and romaO, each after a licence check;
@@ -189,4 +194,4 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
 ## Next
 
 Candidates, to be driven by what applications need: colour pickers; more of ImPlot (error
-bars, annotations); the windowed path verified on macOS and Windows.
+bars, annotations).

@@ -16,8 +16,8 @@
 
 Interactive windows, widgets and plots for Fortran programs: [Dear ImGui](https://github.com/ocornut/imgui) and
 [ImPlot](https://github.com/epezent/implot) on [SDL3](https://github.com/libsdl-org/SDL) and OpenGL 3, on Linux, macOS
-and Windows, with gfortran and nvfortran. Immediate mode: no widget objects, handles or callbacks; the interface is
-declared every frame, and its state is the program's own variables.
+and Windows, with gfortran, nvfortran and Intel ifx. Immediate mode: no widget objects, handles or callbacks; the
+interface is declared every frame, and its state is the program's own variables.
 
 <p align="center"><img src="docs/public/media/hello.gif" alt="figure_hello: a window with a button, a frequency slider dragged by the mouse, and a sine wave that follows it" width="640"></p>
 
