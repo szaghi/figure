@@ -215,3 +215,11 @@ to its next safe point: a task with no safe point is waited for until its end.
   stays alive.
 
 Several tasks may run at once, each with its own object. Tasks do not start tasks.
+
+## Feedback
+
+The program shows what runs with a [progress bar](widgets#progress-bars) (`ig_progress_bar(fraction)`, indeterminate
+for work with no known length, such as a tool that prints no progress), often in a status bar along the bottom
+([cookbook](/manual/cookbook#a-status-bar)), and tells the user that something ended with a
+[notification](frame-loop#notifications) (`app%notify`): the program notifies when it sees a process no longer running
+or a task done, since a task does not draw.

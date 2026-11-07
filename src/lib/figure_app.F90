@@ -26,7 +26,9 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_conte
                             fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
                             fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title, fig_save_image, &
                             fig_image_result, fig_save_layout, fig_load_layout, fig_set_style_parts, fig_palette_color, &
-                            fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph
+                            fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_notify,              &
+                            fig_notification_count, fig_notification_get
+use figure_icons, only : ICON_CIRCLE_CHECK, ICON_CIRCLE_X, ICON_INFO, ICON_TRIANGLE_ALERT
 
 implicit none
 private
@@ -64,6 +66,8 @@ type :: app_object
       procedure, pass(self) :: image_result   !< The outcome of save_image, once.
       procedure, pass(self) :: save_layout    !< The arrangement of the windows (docking included) to a file.
       procedure, pass(self) :: load_layout    !< An arrangement from a file, applied before the next frame.
+      procedure, pass(self) :: notify         !< Tell the user something, in a notification.
+      procedure, pass(self) :: notifications  !< The notifications kept (the last 100).
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
       procedure, pass(self), private :: set_icon_image !< The window's icon from an image.
@@ -379,6 +383,82 @@ contains
    call figure_check(fig_palette_color(role, len(role, c_int), c), stat)
    rgba = real(c, real64)
    endsubroutine palette_color
+
+   subroutine notify(self, text, kind, seconds, stat)
+   !< Tell the user something without a dialog: a notification drawn by FIGURE after the program's windows, in the
+   !< bottom-right corner (above a bottom side bar), the newest at the bottom, older ones stacked above. `kind`:
+   !< `'info'` (default), `'success'`, `'warning'` or `'error'`, drawn with its palette role (accent, success, warning,
+   !< error) and its icon (`ICON_INFO`, `ICON_CIRCLE_CHECK`, `ICON_TRIANGLE_ALERT`, `ICON_CIRCLE_X`). It stays
+   !< `seconds` (default 5; 0 or less: until clicked), fading out in its last half second, timed by the frame time
+   !< (the fixed one in headless mode and in recordings); a click dismisses it. The last 100 are kept
+   !< (`notifications`). Statuses: `FIG_ERR_STATE` before `init*` or from a task, `FIG_ERR_ARGUMENT` for an unknown
+   !< kind. The same in every mode.
+   class(app_object), intent(inout)         :: self    !< Application.
+   character(len=*),  intent(in)            :: text    !< What to tell (UTF-8; wrapped).
+   character(len=*),  intent(in),  optional :: kind    !< 'info', 'success', 'warning' or 'error'.
+   real(real64),      intent(in),  optional :: seconds !< Time shown [s] (default 5; <= 0: until clicked).
+   integer(int32),    intent(out), optional :: stat    !< Status.
+   integer(c_int)                           :: k       !< Kind code.
+   real(c_double)                           :: s       !< Seconds.
+   character(len=:), allocatable            :: icon    !< Its icon.
+
+   if (figure_refused('app%notify', stat)) return ! a task does not draw
+   k = 0_c_int
+   icon = ICON_INFO
+   if (present(kind)) then
+      select case (kind)
+      case ('info')
+         k = 0_c_int
+      case ('success')
+         k = 1_c_int
+         icon = ICON_CIRCLE_CHECK
+      case ('warning')
+         k = 2_c_int
+         icon = ICON_TRIANGLE_ALERT
+      case ('error')
+         k = 3_c_int
+         icon = ICON_CIRCLE_X
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, "app%notify: kind is 'info', 'success', 'warning' or 'error', not '"// &
+                          kind//"'", stat)
+         return
+      endselect
+   endif
+   s = 5.0_c_double
+   if (present(seconds)) s = real(seconds, c_double)
+   call figure_check(fig_notify(text, len(text, c_int), k, icon, len(icon, c_int), s), stat)
+   endsubroutine notify
+
+   subroutine notifications(self, list, kinds, shown)
+   !< The notifications kept, the last 100, oldest first: their texts (`list`, padded with blanks to the longest),
+   !< their kinds (`'info'`, ...) and whether each is still shown (not yet timed out or dismissed). None before
+   !< `init*`.
+   class(app_object),             intent(in)            :: self     !< Application.
+   character(len=:), allocatable, intent(out)           :: list(:)  !< Texts.
+   character(len=7), allocatable, intent(out), optional :: kinds(:) !< Kinds.
+   logical,          allocatable, intent(out), optional :: shown(:) !< Still shown.
+   character(len=7), parameter                          :: NAMES(0:3) = ['info   ', 'success', 'warning', 'error  ']
+   character(kind=c_char, len=4096)                     :: buf      !< A text.
+   integer(c_int)                                       :: n, i, l, k, sh, longest !< Counters, state.
+
+   if (fig_notification_count(n) /= FIG_OK) n = 0_c_int
+   longest = 0_c_int
+   do i = 1_c_int, n
+      if (fig_notification_get(i, buf, 0_c_int, l, k, sh) == FIG_OK) longest = max(longest, min(l, len(buf, c_int)))
+   enddo
+   allocate(character(len=longest) :: list(n))
+   if (present(kinds)) allocate(kinds(n))
+   if (present(shown)) allocate(shown(n))
+   do i = 1_c_int, n
+      l = 0_c_int
+      k = 0_c_int
+      sh = 0_c_int
+      if (fig_notification_get(i, buf, len(buf, c_int), l, k, sh) /= FIG_OK) cycle
+      list(i) = buf(1:min(l, len(buf, c_int)))
+      if (present(kinds)) kinds(i) = NAMES(k)
+      if (present(shown)) shown(i) = sh == 1_c_int
+   enddo
+   endsubroutine notifications
 
    subroutine set_font(self, font, size, stat)
    !< The default font of the interface, after `init*`: `'plex-sans'` (IBM Plex Sans, bundled: the default, at 15

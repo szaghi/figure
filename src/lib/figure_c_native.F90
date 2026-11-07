@@ -30,6 +30,7 @@ public :: fig_process_start, fig_process_pending, fig_process_take, fig_process_
 public :: fig_process_release
 public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_task_cancel, fig_task_cancelled
 public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
+public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -254,6 +255,62 @@ interface
    implicit none
    integer(c_int), value :: id !< Handle.
    endsubroutine fig_process_release
+
+   function fig_notify(text, text_len, kind, icon, icon_len, seconds) result(status) bind(C, name='fig_notify')
+   !< Queue a notification.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: text(*)  !< Text (UTF-8).
+   integer(c_int),         value      :: text_len !< Its length [bytes].
+   integer(c_int),         value      :: kind     !< 0 info, 1 success, 2 warning, 3 error.
+   character(kind=c_char), intent(in) :: icon(*)  !< Icon glyph (UTF-8).
+   integer(c_int),         value      :: icon_len !< Its length [bytes].
+   real(c_double),         value      :: seconds  !< Time shown [s] (<= 0: until clicked).
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_notify
+
+   function fig_notification_count(count) result(status) bind(C, name='fig_notification_count')
+   !< Notifications kept.
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: count  !< Kept (at most 100).
+   integer(c_int)              :: status !< Status.
+   endfunction fig_notification_count
+
+   function fig_notification_get(idx, buf, buf_len, length, kind, shown) result(status) &
+            bind(C, name='fig_notification_get')
+   !< A kept notification, 1 the oldest.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int),         value       :: idx     !< Index.
+   character(kind=c_char), intent(out) :: buf(*)  !< Text buffer.
+   integer(c_int),         value       :: buf_len !< Its size [bytes].
+   integer(c_int),         intent(out) :: length  !< Text length [bytes].
+   integer(c_int),         intent(out) :: kind    !< 0 info, 1 success, 2 warning, 3 error.
+   integer(c_int),         intent(out) :: shown   !< 1 while shown.
+   integer(c_int)                      :: status  !< Status.
+   endfunction fig_notification_get
+
+   function fig_notification_rect(idx, rect, found) result(status) bind(C, name='fig_notification_rect')
+   !< A shown notification's rectangle in the last frame, 1 the newest.
+   import :: c_float, c_int
+   implicit none
+   integer(c_int), value       :: idx     !< Index.
+   real(c_float),  intent(out) :: rect(4) !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out) :: found   !< 1 if shown.
+   integer(c_int)              :: status  !< Status.
+   endfunction fig_notification_rect
+
+   function fig_drawn_extent(color, color_len, rect, found) result(status) bind(C, name='fig_drawn_extent')
+   !< The extent drawn in the current window in a style colour.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: color(*)  !< Dear ImGui's colour name.
+   integer(c_int),         value       :: color_len !< Its length [bytes].
+   real(c_float),          intent(out) :: rect(4)   !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int),         intent(out) :: found     !< 1 if anything.
+   integer(c_int)                      :: status    !< Status.
+   endfunction fig_drawn_extent
 
    function fig_task_start(fn, arg, id) result(status) bind(C, name='fig_task_start')
    !< Run fn(arg) on a worker thread.

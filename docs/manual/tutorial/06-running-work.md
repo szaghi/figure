@@ -10,7 +10,7 @@ a tool from a button and shows what it prints, then runs a computation of the pr
 
 <<< @/examples/snippets/tut06_work.F90{fortran}
 
-<Media name="tut06_work" alt="A window with two buttons: Smooth the field, then Check the grid; the smoothing's progress shows beside its button and ends with the smoothed value, the tool's lines fill the log view below and end with grid check: 24 blocks, no error" caption="docs/examples/src/tut06_work.F90" />
+<Media name="tut06_work" alt="A window with two buttons: Smooth the field, then Check the grid; a progress bar beside the first fills while the task runs and gives way to the smoothed value, and a notification in the corner says the field is smoothed; the tool's lines fill the log view and end with grid check: 24 blocks, no error" caption="docs/examples/src/tut06_work.F90" />
 
 ## A tool from a button
 
@@ -41,13 +41,17 @@ module procedure with a fixed interface; its data is any type, here a field to s
   own `field` is not touched while the task runs.
 - Inside the task, `h%report(fraction, message)` posts the progress and wakes the frame loop; `h%cancelled()` is the
   safe point where the task returns if the program asked it to stop (`smoother%cancel()`).
-- Every frame the program reads the progress (`smoother%progress`); once `smoother%done()`, it takes the field back
-  with `smoother%result(data)`, without a copy, and `select type` gives it its type again.
+- Every frame the program reads the progress (`smoother%progress`) and draws it with `ig_progress_bar(fraction,
+  label=msg)`: before the task's first report `fraction` is negative, and the bar is indeterminate (a sliding band).
+- Once `smoother%done()`, it takes the field back with `smoother%result(data)`, without a copy, and `select type`
+  gives it its type again; `app%notify('The field is smoothed', kind='success')` tells the user, in the corner of the
+  window, even if they were looking at the log.
 - **A task never draws:** no `ig_*` or `ip_*` call inside `smooth_field`. Only the main thread draws; FIGURE refuses a
   drawing call from a task ([the threading rule](/guide/processes#tasks)).
 
 ::: tip What you learned
-A program started from the program, its output followed in a log view; a computation run as a task, with its
-progress; and why the window does not freeze.
-Reference: [Processes and tasks](/guide/processes).
+A program started from the program, its output followed in a log view; a computation run as a task, its progress
+in a progress bar and its end in a notification; and why the window does not freeze. Reference:
+[Processes and tasks](/guide/processes), [Progress bars](/guide/widgets#progress-bars),
+[Notifications](/guide/frame-loop#notifications).
 :::

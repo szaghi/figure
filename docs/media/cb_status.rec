@@ -1,0 +1,14 @@
+#! program build/docs-examples/bin/cb_status
+#! frames  300
+#! poster  230
+# Run clicked: the status bar shows the iteration and a progress bar; Check input warns in a notification; the run's
+# end is told in a second notification, under the first
+0   move 360 200
+5   move 45 42 10
+15  down
+17  up
+60  move 360 200 15
+180 move 140 42 15
+200 down
+202 up
+220 move 360 200 15

@@ -105,6 +105,27 @@ if (ig_tool_button('Monitor', ICON_ACTIVITY, selected=tool == 2)) tool = 2
 | `ig_item_rect(xmin, ymin, xmax, ymax)` | Screen rectangle of the last item, in pixels: for tests and custom layout. |
 | `ig_show_demo_window([open])` | The Dear ImGui demo, a live catalogue of every Dear ImGui widget (most are not bound yet). |
 
+## Progress bars
+
+| Procedure | Notes |
+|---|---|
+| `ig_progress_bar(fraction [, label] [, width])` | A bar (`ProgressBar`) filled to `fraction`, in [0, 1] (clamped). |
+
+- `label` is written over the bar (default: the percentage); `width` in pixels (default: the width left, negative:
+  up to that distance from the right edge); the height is a field's.
+- **Indeterminate:** `fraction` < 0 draws a band sliding along the bar, for work whose length is not known (a tool
+  that prints no progress, a task before its first report). FIGURE animates it with the frame clock (Dear ImGui's
+  `GetTime`), so it moves only while frames are drawn: request frames while it shows (`app%request_frames`), or show it
+  while something else keeps the loop busy (a task's reports wake it).
+- The fill is in the style's `PlotHistogram` colour, the bar in `FrameBg`.
+- The same in window, headless and remote modes; no failure status.
+
+A status bar with a progress bar, along the bottom of the window ([bar along a side](docking#a-bar-along-a-side)):
+
+<<< @/examples/snippets/cb_status-status.F90{fortran}
+
+<Media name="cb_status" alt="A run in progress: the status bar along the bottom reads running, iteration 213 of 240, beside a progress bar filled to 89 percent; above it, a warning notification: levels is 0, it must be at least 1" caption="docs/examples/src/cb_status.F90" />
+
 ## Labels and identifiers
 
 Dear ImGui identifies a widget by a hash of its label within its window. Two widgets with the same label in the same

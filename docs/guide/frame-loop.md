@@ -228,6 +228,38 @@ icon is `FIG_ERR_ARGUMENT`; an image of the wrong shape too.
 An unknown `decorations` or `buttons` value is `FIG_ERR_ARGUMENT` from `init`. What the system's frame does that this
 one does not: [Known issues](known-issues#the-window-s-frame-drawn-by-figure).
 
+## Notifications
+
+| Procedure | Notes |
+|---|---|
+| `app%notify(text [, kind] [, seconds] [, stat])` | Tell the user something without a dialog: a notification drawn by FIGURE. |
+| `app%notifications(list [, kinds] [, shown])` | The notifications kept, the last 100, oldest first. |
+
+A notification tells the user what happened while they looked elsewhere: a run that ended, a check that failed, a
+file written. FIGURE draws the notifications after the program's windows, above them:
+
+- in the bottom-right corner of the work area (above a bottom [side bar](docking#a-bar-along-a-side), so a status bar
+  stays visible), the newest at the bottom, the older ones stacked above it, 22 times the font size wide, the text
+  wrapped;
+- each in its kind's [palette role](styles#palette-roles) with its icon, so that the colour is not the only carrier:
+  `'info'` (default) the accent and `ICON_INFO`, `'success'` the success colour and `ICON_CIRCLE_CHECK`,
+  `'warning'` the warning colour and `ICON_TRIANGLE_ALERT`, `'error'` the error colour and `ICON_CIRCLE_X`;
+- for `seconds` (default 5; 0 or less: until clicked), fading out in their last half second; the time is the frame
+  time, so in headless mode and in recordings (a fixed frame time) a notification lasts a fixed number of frames;
+- a click dismisses one; they take no keyboard focus and do not move.
+
+The last 100 are kept, shown or not: `app%notifications(list, kinds, shown)` gives their texts (padded with blanks to
+the longest), their kinds and whether each is still shown, for a "messages" panel or a log. `notify` asks for the
+frames that draw it, even with lazy redraw, and for the frames of the fade.
+
+<<< @/examples/snippets/cb_status-notify.F90{fortran}
+
+<Media name="cb_status_end" alt="The run has ended: the status bar reads done, residual 9.88E-08; in the bottom-right corner two notifications are stacked, the warning levels is 0 above and, under it, the newest, Run finished: 240 iterations, residual 9.88E-08, with a check mark" caption="docs/examples/src/cb_status.F90" />
+
+Statuses: `FIG_ERR_STATE` before `init*` and from a [task](processes#tasks) (a task does not draw: the program
+notifies when it sees the task done), `FIG_ERR_ARGUMENT` for an unknown kind; `stat` is optional (absent: `error
+stop` with the message). The same in window, headless and remote modes.
+
 ## Content scale
 
 `content_scale()` returns the display content scale FIGURE read at `init` (1 on standard displays, 2 on most high-DPI

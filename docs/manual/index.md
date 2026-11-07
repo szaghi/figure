@@ -15,7 +15,7 @@ by `docs/examples/build.sh`.
 | [3. Plots](./tutorial/03-plots) | ImPlot line plots of Fortran arrays |
 | [4. A live computation](./tutorial/04-live) | advancing a computation inside the loop; `request_frames` |
 | [5. Testing without a display](./tutorial/05-headless) | `init_headless`, synthetic mouse input, a testable panel |
-| [6. Running work](./tutorial/06-running-work) | a tool started from a button, its output in a log view; a computation run as a task |
+| [6. Running work](./tutorial/06-running-work) | a tool started from a button, its output in a log view; a task with a progress bar; a notification |
 
 ```mermaid
 flowchart LR

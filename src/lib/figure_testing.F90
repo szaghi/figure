@@ -25,14 +25,14 @@ use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
-                            fig_frame_state
+                            fig_frame_state, fig_notification_rect, fig_drawn_extent
 use figure_imgui, only : ig_item_rect
 
 implicit none
 private
 public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel, test_key, test_type
 public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick, test_system_theme
-public :: test_frame_hit, test_frame_rect, test_frame_state
+public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_rect, test_drawn_extent
 
 contains
    subroutine test_next_frame(stat)
@@ -168,6 +168,51 @@ contains
    minimized = mn /= 0_c_int
    maximized = mx /= 0_c_int
    endsubroutine test_frame_state
+
+   subroutine test_notification_rect(index, xmin, ymin, xmax, ymax, found)
+   !< The rectangle [pixels] of a notification shown in the last frame (`app%notify`): `index` 1 is the newest, at the
+   !< bottom, 2 the one above it, ...; `found` is false past the last shown.
+   integer(int32), intent(in)            :: index !< 1: the newest shown.
+   real(real64),   intent(out)           :: xmin  !< Left.
+   real(real64),   intent(out)           :: ymin  !< Top.
+   real(real64),   intent(out)           :: xmax  !< Right.
+   real(real64),   intent(out)           :: ymax  !< Bottom.
+   logical,        intent(out), optional :: found !< It was shown.
+   real(c_float)                         :: r(4)  !< Native rectangle.
+   integer(c_int)                        :: f     !< Found flag.
+
+   r = 0.0_c_float
+   if (fig_notification_rect(int(index, c_int), r, f) /= 0_c_int) f = 0_c_int
+   xmin = real(r(1), real64)
+   ymin = real(r(2), real64)
+   xmax = real(r(3), real64)
+   ymax = real(r(4), real64)
+   if (present(found)) found = f == 1_c_int
+   endsubroutine test_notification_rect
+
+   subroutine test_drawn_extent(color, xmin, ymin, xmax, ymax, found, stat)
+   !< The extent [pixels] of what was drawn so far in the current window in Dear ImGui's style colour `color`, by
+   !< its name (`'PlotHistogram'`: the fill of a progress bar): call it inside the window, after the widget.
+   character(len=*), intent(in)            :: color !< Dear ImGui's colour name.
+   real(real64),     intent(out)           :: xmin  !< Left.
+   real(real64),     intent(out)           :: ymin  !< Top.
+   real(real64),     intent(out)           :: xmax  !< Right.
+   real(real64),     intent(out)           :: ymax  !< Bottom.
+   logical,          intent(out), optional :: found !< Something was drawn in it.
+   integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown colour,
+                                                    !< `FIG_ERR_STATE` outside a window.
+   real(c_float)                           :: r(4)  !< Native rectangle.
+   integer(c_int)                          :: f     !< Found flag.
+
+   r = 0.0_c_float
+   f = 0_c_int
+   call figure_check(fig_drawn_extent(color, len(color, c_int), r, f), stat)
+   xmin = real(r(1), real64)
+   ymin = real(r(2), real64)
+   xmax = real(r(3), real64)
+   ymax = real(r(4), real64)
+   if (present(found)) found = f == 1_c_int
+   endsubroutine test_drawn_extent
 
    subroutine test_mouse_move(x, y, stat)
    !< Queue a move of the mouse to (x, y).

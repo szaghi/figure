@@ -8,19 +8,22 @@ program figure_test_tools
 !< lowered to its text by `ig_align_text_to_frame_padding` (and not without it). Two overlapping windows: the one
 !< behind brought forward by `ig_focus_window`; with a popup open, the request is refused and the popup stays open.
 !< A text's size (`ig_text_size`): twice the text, twice the width; a label measured without its `##` part.
+!< Progress bars (`ig_progress_bar`): the filled width at known fractions, an indeterminate band that moves.
+!< Notifications (`app%notify`): shown in the bottom-right corner, the newest under the older, gone after their time
+!< (the fixed frame time), dismissed by a click, the kept list (the last 100), an unknown kind refused.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ICON_ACTIVITY, ICON_HOUSE, ig_align_text_to_frame_padding, ig_begin, ig_begin_child, &
                    ig_begin_popup, ig_button, ig_end, ig_end_child, ig_end_popup, ig_focus_window, ig_item_rect, &
                    ig_open_popup, ig_same_line, ig_selectable, ig_set_next_window, ig_text, ig_tool_button, &
-                   ig_text_size, list_clipper_object
+                   ig_text_size, list_clipper_object, ig_progress_bar, FIG_ERR_ARGUMENT, FIG_OK, ig_get_style_var
 use figure_cimgui, only : igIsWindowFocused
-use figure_testing, only : test_click
+use figure_testing, only : test_click, test_drawn_extent, test_notification_rect
 
 implicit none
 integer(int32), parameter :: MAX_FRAMES = 60_int32 !< Frames run.
 type(app_object)          :: app                   !< Application (headless).
 type(list_clipper_object) :: clip                  !< Clipper.
-logical                   :: test_passed(9)        !< Per-check outcome.
+logical                   :: test_passed(16)       !< Per-check outcome.
 real(real64)              :: size1(2), size2(2), size3(2) !< Text sizes.
 integer(int32)            :: frame, i, shown       !< Frame, row, the tool shown.
 integer(int32)            :: clicks(2)             !< Clicks per tool button.
@@ -134,15 +137,118 @@ if (.not. all(test_passed)) then
    write(output_unit, '(A,2I8)') 'first drawn, steps: ', first_drawn, steps
    write(output_unit, '(A,2F8.2)') 'dy aligned, plain: ', aligned_dy, plain_dy
 endif
+call progress_bars(test_passed(10:11))
+call notifications(test_passed(12:16))
+write(output_unit, '(A,*(L2))') 'figure_test_tools checks:', test_passed
 do i = 1_int32, size(test_passed, kind=int32)
    if (.not. test_passed(i)) write(output_unit, '(A,I0,A)') 'figure_test_tools: check ', i, ' FAILED'
 enddo
-write(output_unit, '(A,*(L2))') 'figure_test_tools checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 call app%destroy()
 if (.not. all(test_passed)) error stop 1
 
 contains
+   subroutine progress_bars(ok)
+   !< Bars 400 pixels wide at 0, 0.25, 0.75 and 1: the fill (PlotHistogram) grows in proportion, empty at 0, full at 1
+   !< (inside the frame's border); an indeterminate bar's band is narrower than the bar and moves between frames.
+   logical, intent(out)  :: ok(2)       !< Outcomes.
+   real(real64)          :: fill(4, 5)  !< (xmin, ymin, xmax, ymax) of each bar's fill; 5: indeterminate, frame 10.
+   real(real64)          :: band0(4)    !< The indeterminate band at frame 5.
+   real(real64)          :: bar(4)      !< The bar's rectangle.
+   real(real64)          :: v(2)        !< FrameBorderSize.
+   real(real64)          :: w(4)        !< Fill widths.
+   real(real64), parameter :: F(4) = [0.0_real64, 0.25_real64, 0.75_real64, 1.0_real64] !< Fractions.
+   logical               :: found(5)    !< Something filled.
+   logical               :: found0      !< The band at frame 5.
+   integer(int32)        :: k, fr, n    !< Bar, frame, values.
+
+   found = .false.
+   found0 = .false.
+   do fr = 1_int32, 10_int32
+      if (.not. app%next_frame()) exit
+      do k = 1_int32, 5_int32
+         call ig_set_next_window(10.0_real64, 10.0_real64 + 70.0_real64 * k, 460.0_real64, 60.0_real64, always=.true.)
+         if (ig_begin('bar '//itoa(k))) then
+            if (k <= 4_int32) then
+               call ig_progress_bar(F(k), width=400.0_real64)
+            else
+               call ig_progress_bar(-1.0_real64, width=400.0_real64)
+            endif
+            if (k == 2_int32) call ig_item_rect(bar(1), bar(2), bar(3), bar(4))
+            call test_drawn_extent('PlotHistogram', fill(1, k), fill(2, k), fill(3, k), fill(4, k), found(k))
+            if (k == 5_int32 .and. fr == 5_int32) then
+               band0 = fill(:, 5)
+               found0 = found(5)
+            endif
+         endif
+         call ig_end()
+      enddo
+   enddo
+   call ig_get_style_var('FrameBorderSize', v, n)
+   w = fill(3, 1:4) - fill(1, 1:4)
+   ok(1) = .not. found(1) .and. all(found(2:4)) .and. abs(w(2) - 0.25_real64 * (400.0_real64 - 2.0_real64 * v(1))) &
+           < 1.0_real64 .and. abs(w(3) - 3.0_real64 * w(2)) < 1.5_real64 .and.                                 &
+           abs(fill(1, 4) - bar(1) - v(1)) < 0.5_real64 .and. abs(bar(3) - v(1) - fill(3, 4)) < 0.5_real64
+   ok(2) = found0 .and. found(5) .and. fill(3, 5) - fill(1, 5) < 0.9_real64 * 400.0_real64 .and. &
+           abs(fill(1, 5) - band0(1)) > 0.5_real64
+   if (.not. all(ok)) write(output_unit, '(A,4F8.2,A,4L2,A,2F8.2)') 'progress: widths ', w, ', found ', found(1:4), &
+                                                                  ', band x0 ', band0(1), fill(1, 5)
+   endsubroutine progress_bars
+
+   subroutine notifications(ok)
+   !< Two notifications stacked in the bottom-right corner, the newest under; the first gone after its second (60
+   !< frames of 1/60 s), the second dismissed by a click; the kept list; 105 notified, the last 100 kept; a wrong kind.
+   logical, intent(out)          :: ok(5)     !< Outcomes.
+   character(len=:), allocatable :: list(:)   !< Texts kept.
+   character(len=7), allocatable :: kinds(:)  !< Their kinds.
+   logical,          allocatable :: shown(:)  !< Still shown.
+   real(real64)                  :: r1(4), r2(4) !< The newest, the one above it.
+   logical                       :: f1, f2    !< Found.
+   logical                       :: after_time(2) !< Found after the first's time: newest, second.
+   logical                       :: after_click   !< Anything shown after the click.
+   integer(int32)                :: fr, stat  !< Frame, status.
+
+   after_time = .false.
+   after_click = .true.
+   call app%notify('first: the grid is read', seconds=1.0_real64)
+   do fr = 1_int32, 140_int32
+      if (.not. app%next_frame()) exit
+      if (fr == 2_int32) call app%notify('second: residual above tolerance', kind='warning', seconds=0.0_real64)
+      select case (fr)
+      case (5_int32)
+         call test_notification_rect(1_int32, r1(1), r1(2), r1(3), r1(4), f1)
+         call test_notification_rect(2_int32, r2(1), r2(2), r2(3), r2(4), f2)
+      case (75_int32)                               ! 'first' is past its second
+         call test_notification_rect(2_int32, a(1), a(2), a(3), a(4), after_time(2))
+         call test_notification_rect(1_int32, a(1), a(2), a(3), a(4), after_time(1))
+         call test_click(0.5_real64 * (a(1) + a(3)), 0.5_real64 * (a(2) + a(4)))  ! on the one left
+      case (90_int32)
+         call test_notification_rect(1_int32, a(1), a(2), a(3), a(4), after_click)
+      endselect
+   enddo
+   ok(1) = f1 .and. f2 .and. r1(2) > r2(4) .and. r1(4) > 600.0_real64 .and. r1(3) > 850.0_real64 .and. &
+           r1(3) <= 900.0_real64 .and. r1(4) <= 700.0_real64              ! bottom-right, the newest under
+   ok(2) = after_time(1) .and. .not. after_time(2)                       ! the first gone after its time
+   ok(3) = .not. after_click                                              ! the second dismissed by a click
+   call app%notifications(list, kinds, shown)
+   ok(4) = size(list) == 2
+   if (ok(4)) ok(4) = list(1) == 'first: the grid is read' .and. trim(list(2)) == 'second: residual above tolerance' &
+                      .and. kinds(1) == 'info' .and. kinds(2) == 'warning' .and. .not. any(shown)
+   do fr = 1_int32, 105_int32
+      call app%notify('note '//itoa(fr), seconds=0.0_real64)
+   enddo
+   call app%notifications(list)
+   call app%notify('?', kind='fatal', stat=stat)
+   ok(5) = size(list) == 100 .and. trim(list(1)) == 'note 6' .and. trim(list(100)) == 'note 105' .and. &
+           stat == FIG_ERR_ARGUMENT
+   if (.not. all(ok)) then
+      write(output_unit, '(A,8F8.1,2L2)') 'notifications: rects ', r1, r2, f1, f2
+      write(output_unit, '(A,3L2,A,I0)') 'notifications: after time, after click ', after_time, after_click, &
+                                         ', kept ', size(list)
+   endif
+   if (stat == FIG_OK) continue
+   endsubroutine notifications
+
    pure function itoa(n) result(s)
    !< An integer as text.
    integer(int32), intent(in)    :: n   !< Integer.

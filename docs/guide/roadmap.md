@@ -160,6 +160,10 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   native thread with its own copy of the data, progress and its message posted to the frame loop, cooperative
   cancel, failures reported, the result moved back without a copy; the threading rule enforced at FIGURE's drawing
   entry points (`FIG_ERR_STATE`): done.
+- **Feedback** ([Progress bars](widgets#progress-bars), [Notifications](frame-loop#notifications)): `ig_progress_bar`,
+  determinate or indeterminate; `app%notify`, notifications drawn by FIGURE in the palette's roles with an icon per
+  kind, stacked, fading at the end of their time, dismissed by a click, the last 100 kept (`app%notifications`); the
+  status bar as a recipe on the bottom side bar: done.
 
 ## Next
 

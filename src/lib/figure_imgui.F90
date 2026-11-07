@@ -12,7 +12,8 @@ use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_base, only : cstr, figure_refused
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text
 use figure_texture, only : texture_object, texture_ref
-use figure_cimgui, only : im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
+use figure_cimgui, only : igGetTime, igProgressBar, &
+                          im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
                           igPushID_Int, igSelectable_Bool, igSetItemDefaultFocus, igButton, igCheckbox, igEnd, &
                           igGetItemRectMax, igGetItemRectMin, igImage, igInputDouble, igInputInt, igSameLine, &
                           igSeparator, igSetNextItemWidth, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
@@ -28,6 +29,7 @@ public :: ig_begin, ig_begin_side_bar, ig_end, ig_button, ig_checkbox, ig_slider
 public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_input_text, ig_set_next_item_width
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
+public :: ig_progress_bar
 
 interface ig_slider
    !< Slider for an integer or a real value.
@@ -441,6 +443,31 @@ contains
    call igTextUnformatted(cstr(text), c_null_ptr)
    call igPopStyleColor(1_c_int)
    endsubroutine ig_text_colored
+
+   subroutine ig_progress_bar(fraction, label, width)
+   !< A progress bar (`ProgressBar`), `fraction` of it filled, in [0, 1] (clamped); `fraction` < 0 gives an
+   !< indeterminate bar, a band sliding along it (animated by FIGURE with the frame clock: draw it every frame).
+   !< `label` is written over it (default: the percentage; none for an indeterminate bar); `width` [pixels] (default:
+   !< the width left; negative: up to that distance from the right edge). The same in every mode.
+   real(real64),     intent(in)           :: fraction !< Done, in [0, 1]; < 0: indeterminate.
+   character(len=*), intent(in), optional :: label    !< Text over the bar.
+   real(real64),     intent(in), optional :: width    !< Width [pixels].
+   character(kind=c_char, len=:), allocatable, target :: text !< C copy of `label`.
+   real(c_float)                          :: f        !< Fraction.
+   real(c_float)                          :: w        !< Width.
+   type(c_ptr)                            :: overlay  !< Label or null.
+
+   f = real(fraction, c_float)
+   if (fraction < 0.0_real64) f = -real(igGetTime(), c_float) ! Dear ImGui's indeterminate form: a moving negative
+   w = -tiny(1.0_c_float)                                      ! -FLT_MIN: the width left
+   if (present(width)) w = real(width, c_float)
+   overlay = c_null_ptr
+   if (present(label)) then
+      text = cstr(label)
+      overlay = c_loc(text)
+   endif
+   call igProgressBar(f, im_vec2(w, 0.0_c_float), overlay)
+   endsubroutine ig_progress_bar
 
    subroutine ig_separator()
    !< Horizontal separator.

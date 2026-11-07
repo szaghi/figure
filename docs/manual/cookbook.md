@@ -266,6 +266,26 @@ receiving frames. The task opens its own unit, reports after each block and chec
 stops it between two blocks with consistent statistics. Every frame the program shows the progress; once the task is
 done it takes the result, once. The task never draws: [the threading rule](/guide/processes#tasks).
 
+### A status bar
+
+<<< @/examples/snippets/cb_status-status.F90{fortran}
+
+<Media name="cb_status" video alt="Run is clicked: the status bar along the bottom counts the iterations beside a progress bar; Check input shows a warning notification; at the end of the run a success notification appears under it" caption="docs/examples/src/cb_status.F90" />
+
+A status bar is a [bar along the bottom](/guide/docking#a-bar-along-a-side) (`ig_begin_side_bar`), not a widget of its
+own: a line of text, and a progress bar beside it (`ig_same_line(offset=...)` puts it at a fixed place). The work area
+leaves the bar out, so dock spaces, windows placed with the work area and notifications stay above it.
+
+### Tell the user a run has finished
+
+<<< @/examples/snippets/cb_status-notify.F90{fortran}
+
+<Media name="cb_status_end" alt="Two notifications in the bottom-right corner: a warning, levels is 0, above; the newest, Run finished, with a check mark, under it" caption="docs/examples/src/cb_status.F90" />
+
+The user may be looking at another window, or another program: a notification stays in the corner for its time
+(here the default 5 s; `seconds=0` until clicked), in the colour and with the icon of its kind, and the last 100 are
+kept (`app%notifications`). [Notifications](/guide/frame-loop#notifications) has the details.
+
 ## Errors
 
 ### Handle a failure instead of stopping

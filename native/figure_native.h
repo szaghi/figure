@@ -187,6 +187,18 @@ int    fig_process_kill(int id, int force);
 void   fig_process_release(int id);
 void   fig_process_shutdown(void);
 
+/* Notifications: kind 0 info, 1 success, 2 warning, 3 error, an icon (UTF-8 glyph), seconds shown (<= 0: until
+ * clicked); drawn by FIGURE after the program's windows. The kept ones (the last 100, oldest first): count, and each
+ * one's text (up to buf_len bytes, len its length), kind and whether it is still shown. rect: the shown ones in the last
+ * frame, 1 the newest (bottom); found 0 past the last. */
+int    fig_notify(const char *text, int text_len, int kind, const char *icon, int icon_len, double seconds);
+int    fig_notification_count(int *count);
+int    fig_notification_get(int index, char *buf, int buf_len, int *len, int *kind, int *shown);
+int    fig_notification_rect(int index, float *rect, int *found);
+/* Tests: the extent (xmin, ymin, xmax, ymax) of the vertices drawn so far in the current window in a style colour of
+ * Dear ImGui, by name (PlotHistogram: a progress bar's fill); found 0 if none. */
+int    fig_drawn_extent(const char *color, int color_len, float *rect, int *found);
+
 /* Tasks (figure_task.cpp): fn(arg) run on an SDL thread (64 MiB of stack). state: done, the last progress (fraction
  * in [0, 1], negative before the first report) and message (copied into msg, up to msg_len bytes; len its length),
  * and the failure's status. report and fail are called by the task (keep_message 1: the message stays); cancel and

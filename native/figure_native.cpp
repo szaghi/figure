@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
+#include <deque>
 #include <algorithm>
 #include <filesystem>
 #include <cmath>
@@ -1373,6 +1374,80 @@ void roles_in_effect(color_t roles[ROLE_COUNT]) {
    else infer_roles(ImGui::GetStyle().Colors, roles);
 }
 
+// Notifications (app%notify): kept, the last 100, oldest first; those still shown are drawn by FIGURE after the
+// program's windows, newest at the bottom-right corner of the work area, stacked upwards, each in its kind's palette
+// role with its icon. Their age grows by Dear ImGui's frame time (fixed in headless mode and in captures: no wall
+// clock); in the last NOTE_FADE seconds of their time they fade out; a click dismisses one.
+struct note_t {
+   int         id = 0;
+   int         kind = 0; // 0 info, 1 success, 2 warning, 3 error
+   std::string text, icon;
+   float       seconds = 5.0f; // <= 0: until dismissed
+   float       age = 0.0f;
+   bool        shown = true;
+};
+constexpr size_t NOTE_KEEP = 100;
+constexpr float  NOTE_FADE = 0.5f;
+std::deque<note_t>        notes;
+int                       next_note = 1;
+std::vector<frame_rect_t> note_rects; // last frame's shown notifications, newest first
+
+void draw_notifications() {
+   note_rects.clear();
+   if (notes.empty()) return;
+   const float dt = ImGui::GetIO().DeltaTime;
+   color_t roles[ROLE_COUNT];
+   roles_in_effect(roles);
+   const int   role_of[4] = {figure_theme::ROLE_ACCENT, figure_theme::ROLE_SUCCESS, figure_theme::ROLE_WARNING,
+                             figure_theme::ROLE_ERROR};
+   const ImGuiViewport *vp = ImGui::GetMainViewport();
+   const float fs = ImGui::GetFontSize();
+   const float width = 22.0f * fs, margin = 0.75f * fs, gap = 0.5f * fs;
+   float       bottom = vp->WorkPos.y + vp->WorkSize.y - margin;
+   bool        animate = false;
+   for (auto it = notes.rbegin(); it != notes.rend(); ++it) {
+      note_t &n = *it;
+      if (!n.shown) continue;
+      n.age += dt;
+      if (n.seconds > 0.0f && n.age >= n.seconds) {
+         n.shown = false;
+         continue;
+      }
+      float alpha = 1.0f;
+      if (n.seconds > 0.0f && n.seconds - n.age < NOTE_FADE) {
+         alpha = std::max(0.0f, (n.seconds - n.age) / NOTE_FADE);
+         animate = true;
+      }
+      const color_t c = roles[role_of[n.kind]];
+      const ImVec4  kc(c.r, c.g, c.b, 1.0f);
+      ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x - margin, bottom), ImGuiCond_Always,
+                              ImVec2(1.0f, 1.0f));
+      ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, vp->WorkSize.y));
+      ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+      ImGui::PushStyleColor(ImGuiCol_Border, kc);
+      const std::string name = "##figure notification " + std::to_string(n.id);
+      ImGui::Begin(name.c_str(), nullptr,
+                   ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNav |
+                      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings |
+                      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove);
+      ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+      ImGui::TextColored(kc, "%s", n.icon.c_str());
+      ImGui::SameLine();
+      ImGui::PushTextWrapPos(width - ImGui::GetStyle().WindowPadding.x);
+      ImGui::TextUnformatted(n.text.c_str());
+      ImGui::PopTextWrapPos();
+      if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) n.shown = false;
+      const ImVec2 pos = ImGui::GetWindowPos(), size = ImGui::GetWindowSize();
+      ImGui::End();
+      ImGui::PopStyleColor();
+      ImGui::PopStyleVar(2);
+      note_rects.push_back(frame_rect_t{pos.x, pos.y, pos.x + size.x, pos.y + size.y});
+      bottom = pos.y - gap;
+   }
+   if (animate) st.frames_left = std::max(st.frames_left, 2); // the fade is drawn frame by frame
+}
+
 bool frame_maximized() {
    if (st.m == mode::window && st.window) return (SDL_GetWindowFlags(st.window) & SDL_WINDOW_MAXIMIZED) != 0;
    return st.frame.maximized;
@@ -2299,6 +2374,7 @@ int fig_end_frame(void) {
    if (fig_task_refuse("app%next_frame", 14)) return FIG_ERR_STATE; // a task does not draw
    if (!st.in_frame) return fail(FIG_ERR_STATE, "end_frame without begin_frame");
    frame_bar_close();
+   draw_notifications(); // after the program's windows, above them
    st.in_frame = false;
    ImGui::Render();
    if (st.m == mode::headless) {
@@ -2368,6 +2444,8 @@ void fig_shutdown(void) {
    }
    st = state_t{};
    cap = capture_t{};
+   notes.clear();
+   note_rects.clear();
 }
 
 int fig_texture_create(int width, int height, int smooth, unsigned long long *id) {
@@ -3007,3 +3085,78 @@ extern "C" void fig_wake(void) {
 }
 
 extern "C" void fig_background(int delta) { background += delta; }
+
+extern "C" int fig_notify(const char *text, int text_len, int kind, const char *icon, int icon_len, double seconds) {
+   FIG_TRY
+   if (fig_task_refuse("app%notify", 10)) return FIG_ERR_STATE; // a task does not draw
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "notify: figure is not initialized");
+   if (kind < 0 || kind > 3) return fail(FIG_ERR_ARGUMENT, "notify: kind is 'info', 'success', 'warning' or 'error'");
+   note_t n;
+   n.id = next_note++;
+   n.kind = kind;
+   n.text.assign(text, text_len > 0 ? static_cast<size_t>(text_len) : 0);
+   n.icon.assign(icon, icon_len > 0 ? static_cast<size_t>(icon_len) : 0);
+   n.seconds = static_cast<float>(seconds);
+   notes.push_back(n);
+   while (notes.size() > NOTE_KEEP) notes.pop_front();
+   st.frames_left = std::max(st.frames_left, 3); // drawn at once, even with lazy redraw
+   fig_wake();
+   return FIG_OK;
+   FIG_CATCH
+}
+
+extern "C" int fig_notification_count(int *count) {
+   *count = static_cast<int>(notes.size());
+   return FIG_OK;
+}
+
+extern "C" int fig_notification_get(int index, char *buf, int buf_len, int *len, int *kind, int *shown) {
+   *len = 0;
+   *kind = 0;
+   *shown = 0;
+   if (index < 1 || index > static_cast<int>(notes.size())) return fail(FIG_ERR_ARGUMENT, "notification: no such index");
+   const note_t &n = notes[static_cast<size_t>(index - 1)];
+   *len = static_cast<int>(n.text.size());
+   if (buf && buf_len > 0) std::memcpy(buf, n.text.data(), static_cast<size_t>(std::min(*len, buf_len)));
+   *kind = n.kind;
+   *shown = n.shown ? 1 : 0;
+   return FIG_OK;
+}
+
+extern "C" int fig_notification_rect(int index, float *rect, int *found) {
+   *found = 0;
+   if (index < 1 || index > static_cast<int>(note_rects.size())) return FIG_OK;
+   const frame_rect_t &r = note_rects[static_cast<size_t>(index - 1)];
+   rect[0] = r.x0;
+   rect[1] = r.y0;
+   rect[2] = r.x1;
+   rect[3] = r.y1;
+   *found = 1;
+   return FIG_OK;
+}
+
+extern "C" int fig_drawn_extent(const char *color, int color_len, float *rect, int *found) {
+   *found = 0;
+   if (!ImGui::GetCurrentContext() || !ImGui::GetCurrentWindowRead())
+      return fail(FIG_ERR_STATE, "test_drawn_extent: call it inside a window, in a frame");
+   const std::string name(color, color_len > 0 ? static_cast<size_t>(color_len) : 0);
+   int col = -1;
+   for (int i = 0; i < ImGuiCol_COUNT; ++i)
+      if (name == ImGui::GetStyleColorName(i)) col = i;
+   if (col < 0) return fail(FIG_ERR_ARGUMENT, "test_drawn_extent: unknown colour \"" + name + "\" (Dear ImGui's names)");
+   const ImU32 c = ImGui::GetColorU32(col);
+   const ImDrawList *dl = ImGui::GetWindowDrawList();
+   for (const ImDrawVert &v : dl->VtxBuffer) {
+      if (v.col != c) continue;
+      if (!*found) {
+         rect[0] = rect[2] = v.pos.x;
+         rect[1] = rect[3] = v.pos.y;
+         *found = 1;
+      }
+      rect[0] = std::min(rect[0], v.pos.x);
+      rect[1] = std::min(rect[1], v.pos.y);
+      rect[2] = std::max(rect[2], v.pos.x);
+      rect[3] = std::max(rect[3], v.pos.y);
+   }
+   return FIG_OK;
+}

@@ -1,6 +1,6 @@
 #! program build/docs-examples/bin/tut06_work
-#! frames  300
-#! poster  290
+#! frames  160
+#! poster  140
 # the field smoothed by a task, its progress on the right; then the tool's lines fill the log view
 0   move 300 250
 5   move 70 42 15
