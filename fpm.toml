@@ -53,6 +53,11 @@ source-dir = "src/tests"
 main = "figure_test_remote.F90"
 
 [[test]]
+name = "figure_test_frame"
+source-dir = "src/tests"
+main = "figure_test_frame.F90"
+
+[[test]]
 name = "figure_test_themes"
 source-dir = "src/tests"
 main = "figure_test_themes.F90"

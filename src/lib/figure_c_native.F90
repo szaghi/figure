@@ -25,6 +25,7 @@ public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fi
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
 public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_input_system_theme
+public :: fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_frame_hit, fig_frame_rect, fig_frame_state
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -148,6 +149,63 @@ interface
    integer(c_int), value :: theme  !< 0, 1 or 2.
    integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_input_system_theme
+
+   function fig_frame_options(decorations, buttons) result(status) bind(C, name='fig_frame_options')
+   !< The window's frame of the next init: decorations 0 native, 1 figure; buttons 0 the platform's side, 1 right, 2 left.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: decorations !< 0 native, 1 figure.
+   integer(c_int), value :: buttons     !< 0 the platform's side, 1 right, 2 left.
+   integer(c_int)        :: status      !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_frame_options
+
+   function fig_set_icon_rgba(rgba, width, height) result(status) bind(C, name='fig_set_icon_rgba')
+   !< The window's icon from RGBA pixels, rows from the top (window mode).
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: rgba   !< Pixels, 4 bytes each.
+   integer(c_int), value :: width  !< Width [pixels].
+   integer(c_int), value :: height !< Height [pixels].
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_icon_rgba
+
+   function fig_set_icon_glyph(icon, icon_len) result(status) bind(C, name='fig_set_icon_glyph')
+   !< The window's icon from one ICON_* glyph (window mode).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: icon(*)  !< UTF-8 glyph (not NUL-terminated).
+   integer(c_int), value              :: icon_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_icon_glyph
+
+   function fig_frame_hit(x, y, hit) result(status) bind(C, name='fig_frame_hit')
+   !< The frame's hit-test class at (x, y), from the last frame.
+   import :: c_float, c_int
+   implicit none
+   real(c_float),  value       :: x      !< Abscissa [pixels].
+   real(c_float),  value       :: y      !< Ordinate [pixels].
+   integer(c_int), intent(out) :: hit    !< 0 client, 1 drag, 2..9 resize (SDL_HitTestResult).
+   integer(c_int)              :: status !< Status: FIG_OK.
+   endfunction fig_frame_hit
+
+   function fig_frame_rect(part, rect, found) result(status) bind(C, name='fig_frame_rect')
+   !< A part of the frame's title bar in the last frame.
+   import :: c_float, c_int
+   implicit none
+   integer(c_int), value       :: part    !< 0 bar, 1 icon, 2 menus, 3 title, 4 minimize, 5 maximize, 6 close.
+   real(c_float),  intent(out) :: rect(4) !< x0, y0, x1, y1 [pixels].
+   integer(c_int), intent(out) :: found   !< 1 if drawn.
+   integer(c_int)              :: status  !< Status: FIG_OK or FIG_ERR_ARGUMENT.
+   endfunction fig_frame_rect
+
+   function fig_frame_state(minimized, maximized) result(status) bind(C, name='fig_frame_state')
+   !< The window minimized, maximized (headless: as the frame's buttons recorded it).
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: minimized !< 1 if minimized.
+   integer(c_int), intent(out) :: maximized !< 1 if maximized.
+   integer(c_int)              :: status    !< Status: FIG_OK or FIG_ERR_STATE.
+   endfunction fig_frame_state
 
    subroutine fig_set_lazy(enabled, max_wait_s) bind(C, name='fig_set_lazy')
    !< Lazy redraw: sleep until an event or `max_wait_s` seconds once the UI has settled.

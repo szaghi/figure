@@ -43,6 +43,19 @@ int    fig_set_style(const char *name, int name_len, const char *lines, int line
  * Button, PlotBg, ...), rgba in [0, 1]. Variables: every plain field of ImGuiStyle/ImPlotStyle (WindowRounding,
  * FramePadding, PlotPadding, ...): count values (1, or 2 for an ImVec2; bools as 0/1, enumerations as integers),
  * returned in count when reading. */
+/* The window's frame (decorations), given before fig_init or fig_init_headless: decorations 0 native, 1 figure
+ * (borderless, the title bar drawn by FIGURE with the main menu bar in it); buttons 0 the platform's side (left on
+ * macOS), 1 right, 2 left. Headless: the bar is drawn and its buttons' actions are recorded as state; remote: none. */
+int    fig_frame_options(int decorations, int buttons);
+/* The window's icon (window mode): RGBA pixels, rows from the top; or one ICON_* glyph rendered with the icon font. */
+int    fig_set_icon_rgba(const unsigned char *rgba, int width, int height);
+int    fig_set_icon_glyph(const char *icon, int icon_len);
+/* The frame's hit test at (x, y), from the last frame (0 client, 1 drag, 2..9 resize: top-left, top, top-right,
+ * right, bottom-right, bottom, bottom-left, left: SDL_HitTestResult); a part's rectangle (0 bar, 1 icon, 2 menus,
+ * 3 title, 4 minimize, 5 maximize, 6 close) and whether it was drawn; minimized and maximized (headless: as recorded). */
+int    fig_frame_hit(float x, float y, int *hit);
+int    fig_frame_rect(int part, float *rect, int *found);
+int    fig_frame_state(int *minimized, int *maximized);
 /* The style by parts, at once (nothing changes on an error): a built-in style by name, then a look, then a palette (a
  * bundled name or "auto", choosing between auto_dark and auto_light), then a line palette; an empty part is kept. */
 int    fig_set_style_parts(const char *name, int name_len, const char *look, int look_len, const char *palette,

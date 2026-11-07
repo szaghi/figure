@@ -43,6 +43,9 @@ And to aim and to check:
 | `test_item_center(x, y)` | the centre of the last widget drawn (call it right after the widget) |
 | `test_quit([stat])` | a quit request, as the window's close button makes it |
 | `test_plot_tick(axis, index, label [, count] [, stat])` | the label of tick `index` on `'x'` or `'y'` of the plot being declared (between `ip_begin_plot` and `ip_end_plot`, after an item), and the number of ticks |
+| `test_frame_hit(x, y)` → `character` | the hit test of the window's frame (`decorations='figure'`) at (x, y), from the last frame: `'client'`, `'drag'`, or a resize edge or corner (`'resize-top-left'`, `'resize-top'`, ..., `'resize-left'`) |
+| `test_frame_rect(part, x0, y0, x1, y1 [, found] [, stat])` | a part of the title bar in the last frame (`'bar'`, `'icon'`, `'menus'`, `'title'`, `'minimize'`, `'maximize'`, `'close'`), to click its buttons |
+| `test_frame_state(minimized, maximized [, stat])` | minimized and maximized: the window's, or in headless mode what the bar's buttons recorded |
 | `test_system_theme(theme [, stat])` | the system's light or dark setting changes at the next frame, as SDL's event reports it: `'light'`, `'dark'`, or `'system'` (the real setting again); for [`palette='auto'`](styles#follow-the-system-s-light-or-dark-setting) |
 | `test_window_rect(name, xmin, ymin, xmax, ymax [, found] [, stat])` | a window's rectangle, by its name, as drawn in the last frame |
 

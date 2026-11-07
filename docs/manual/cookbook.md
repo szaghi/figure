@@ -119,6 +119,16 @@ before its windows. The user can rearrange everything afterwards. [Docking](/gui
 The menu item shows the shortcut; `ig_shortcut`, called every frame outside the menu, reads the keys (cmd+s on
 macOS). [Menus and shortcuts](/guide/menus) has the rules.
 
+### A window whose frame FIGURE draws
+
+<<< @/examples/snippets/cb_frame-frame.F90{fortran}
+
+<Media name="frame" video :width="600" alt="A window with FIGURE's title bar: the icon, the File and View menus, the title centred and three buttons; the File menu opens from the bar, then the buttons are hovered, close in red" caption="docs/examples/src/cb_frame.F90" />
+
+The main menu bar moves into the title bar; the bar drags the window, its edges resize it, close asks first with
+`app%set_confirm_quit(.true.)`. Under WSLg, where the system's frame cannot be styled, this gives the window a frame
+that matches the program. [The window's frame](/guide/frame-loop#the-window-s-frame) has the details.
+
 ### Open a file
 
 <<< @/examples/snippets/cb_open-open.F90{fortran}

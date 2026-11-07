@@ -10,6 +10,13 @@
 #include "imgui_impl_sdl3.h"
 #include "implot.h"
 #include "implot_internal.h" // GetStyleColorVec4: ImPlot's automatic colours resolved
+// stb_truetype, as Dear ImGui bundles it, private to this file: an ICON_* rendered as the window's icon (set_icon)
+#define STBRP_STATIC
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "imstb_rectpack.h"
+#define STBTT_STATIC
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "imstb_truetype.h"
 
 #include <SDL3/SDL.h>
 // The program's main is the Fortran one, not SDL_main: SDL_MAIN_HANDLED keeps SDL_main.h from redefining main, and
@@ -52,6 +59,50 @@ int fail(int status, const std::string &msg) {
 
 enum class mode { none, window, headless, remote };
 
+// The window's frame drawn by FIGURE (decorations='figure'): the rectangles of its title bar in the last frame, in
+// window coordinates (Dear ImGui's display coordinates), and the hit test answered from them.
+struct frame_rect_t {
+   float x0 = 0.0f, y0 = 0.0f, x1 = 0.0f, y1 = 0.0f;
+   bool  contains(float x, float y) const { return x >= x0 && x < x1 && y >= y0 && y < y1; }
+};
+enum frame_part { FRAME_BAR, FRAME_ICON, FRAME_MENUS, FRAME_TITLE, FRAME_MINIMIZE, FRAME_MAXIMIZE, FRAME_CLOSE, FRAME_PARTS };
+struct frame_geom_t {
+   bool         valid = false;     // a bar was drawn
+   float        width = 0.0f, height = 0.0f; // the window [window coordinates]
+   float        border = 6.0f;     // the resize edges' thickness
+   bool         maximized = false; // no resize edges
+   frame_rect_t parts[FRAME_PARTS];
+};
+// Hit-test classes, the values of SDL_HitTestResult.
+enum frame_hit_t {
+   HIT_CLIENT, HIT_DRAG, HIT_RESIZE_TOPLEFT, HIT_RESIZE_TOP, HIT_RESIZE_TOPRIGHT, HIT_RESIZE_RIGHT,
+   HIT_RESIZE_BOTTOMRIGHT, HIT_RESIZE_BOTTOM, HIT_RESIZE_BOTTOMLEFT, HIT_RESIZE_LEFT
+};
+
+// The class of the point (x, y): the edges and corners resize (none when maximized; a corner takes twice the edge's
+// thickness along each side), the buttons and the menus are the program's (client), the rest of the bar (the icon,
+// the title, the empty space) drags the window, everything else is the program's. A pure function of the geometry.
+int frame_hit(const frame_geom_t &g, float x, float y) {
+   if (!g.valid) return HIT_CLIENT;
+   if (!g.maximized) {
+      const float b = g.border, c = 2.0f * g.border;
+      const bool l = x < b, r = x >= g.width - b, t = y < b, d = y >= g.height - b;
+      const bool lc = x < c, rc = x >= g.width - c, tc = y < c, dc = y >= g.height - c;
+      if ((t && lc) || (l && tc)) return HIT_RESIZE_TOPLEFT;
+      if ((t && rc) || (r && tc)) return HIT_RESIZE_TOPRIGHT;
+      if ((d && lc) || (l && dc)) return HIT_RESIZE_BOTTOMLEFT;
+      if ((d && rc) || (r && dc)) return HIT_RESIZE_BOTTOMRIGHT;
+      if (t) return HIT_RESIZE_TOP;
+      if (d) return HIT_RESIZE_BOTTOM;
+      if (l) return HIT_RESIZE_LEFT;
+      if (r) return HIT_RESIZE_RIGHT;
+   }
+   for (int p : {FRAME_MINIMIZE, FRAME_MAXIMIZE, FRAME_CLOSE, FRAME_MENUS})
+      if (g.parts[p].contains(x, y)) return HIT_CLIENT;
+   if (g.parts[FRAME_BAR].contains(x, y)) return HIT_DRAG;
+   return HIT_CLIENT;
+}
+
 struct state_t {
    mode          m = mode::none;
    SDL_Window   *window = nullptr;
@@ -75,6 +126,15 @@ struct state_t {
    std::string   lines_name;                       // the line palette of the last set_style (kept by "auto")
    bool          has_roles = false;                // roles: those of the palette in effect
    figure_theme::color_t roles[figure_theme::ROLE_COUNT];
+   struct frame_t {                                // decorations='figure': the window's frame drawn by FIGURE
+      bool        on = false;                      // the title bar is drawn (window and headless modes)
+      bool        buttons_left = false;            // the buttons on the left (macOS), else on the right
+      bool        minimized = false, maximized = false; // headless: the actions recorded as state
+      std::string icon_glyph;                      // set_icon(ICON_*): drawn in the bar
+      unsigned int icon_tex = 0;                   // set_icon(image), window mode: the bar's texture
+      int         icon_w = 0, icon_h = 0;
+      frame_geom_t geom;                           // the last frame's rectangles: the hit test's answers
+   } frame;
    int           system_theme = -1;                // the system's light (1) or dark (2) setting given by a test; -1: SDL's
    bool          system_theme_changed = false;     // a change to handle at the next frame (fig_input_system_theme)
    std::string   font = "plex-sans";               // the default font: plex-sans (bundled), proggy, or a TTF file
@@ -102,6 +162,12 @@ struct state_t {
    std::map<unsigned long long, texture_t> textures; // user textures by ImTextureID (the GL name in window mode)
    unsigned long long next_headless_texture = 1;     // headless mode: ids without GL objects
 } st;
+
+// The frame options of the next init (fig_frame_options, called before fig_init and fig_init_headless).
+struct frame_options_t {
+   int decorations = 0; // 0 native, 1 figure
+   int buttons = 0;     // 0 the platform's side, 1 right, 2 left
+} frame_options;
 
 // Redraw diagnostics, enabled by the environment variable FIGURE_DEBUG_REDRAW (any value): once per second, print to
 // stderr the frames drawn, the wakeups by timeout, the events by SDL type, and the time spent waiting, building the
@@ -1277,6 +1343,252 @@ void apply_initial_style() {
                    err.empty() ? ("unknown style (" + builtin_style_names() + ")").c_str() : err.c_str());
 }
 
+// ---- The window's frame drawn by FIGURE ----------------------------------------------------------------------------
+// decorations='figure': the window is borderless and FIGURE draws its title bar, which is Dear ImGui's main menu bar
+// ("##MainMenuBar"): opened at the start of the frame with the icon (fig_begin_frame), appended to by the program's own
+// main menu bar (ig_begin_main_menu_bar appends to the same window), and closed at the end of the frame with the title
+// and the buttons (fig_end_frame). The rectangles drawn are kept for the hit test (SDL_SetWindowHitTest), which
+// answers from the last frame's.
+
+// The side of the buttons by default: left on macOS, right elsewhere.
+bool frame_buttons_left_default() {
+#if defined(__APPLE__)
+   return true;
+#else
+   return false;
+#endif
+}
+
+// The roles in effect: the palette's, or read from Dear ImGui's colours.
+void roles_in_effect(color_t roles[ROLE_COUNT]) {
+   if (st.has_roles) std::copy(st.roles, st.roles + ROLE_COUNT, roles);
+   else infer_roles(ImGui::GetStyle().Colors, roles);
+}
+
+bool frame_maximized() {
+   if (st.m == mode::window && st.window) return (SDL_GetWindowFlags(st.window) & SDL_WINDOW_MAXIMIZED) != 0;
+   return st.frame.maximized;
+}
+
+bool frame_minimized() {
+   if (st.m == mode::window && st.window) return (SDL_GetWindowFlags(st.window) & SDL_WINDOW_MINIMIZED) != 0;
+   return st.frame.minimized;
+}
+
+// The buttons' actions: the window's in window mode, recorded as state in headless mode; close takes the quit path of
+// the window's close button (a request with confirm_quit, else the end of the loop).
+void frame_minimize() {
+   if (st.m == mode::window && st.window) SDL_MinimizeWindow(st.window);
+   else st.frame.minimized = true;
+}
+
+void frame_toggle_maximize() {
+   if (st.m == mode::window && st.window) {
+      if (frame_maximized()) SDL_RestoreWindow(st.window);
+      else SDL_MaximizeWindow(st.window);
+   } else {
+      st.frame.maximized = !st.frame.maximized;
+   }
+   st.frames_left = 3;
+}
+
+void frame_close() {
+   if (st.confirm_quit) st.quit_requested = true;
+   else st.quit_now = true;
+}
+
+SDL_HitTestResult SDLCALL frame_hit_test(SDL_Window *, const SDL_Point *p, void *) {
+   return static_cast<SDL_HitTestResult>(frame_hit(st.frame.geom, static_cast<float>(p->x), static_cast<float>(p->y)));
+}
+
+// The start of the bar: Dear ImGui's main menu bar in the palette's surface colour, the space of the buttons when
+// they are on the left, and the icon.
+void frame_bar_open() {
+   if (!st.frame.on) return;
+   color_t r[ROLE_COUNT];
+   roles_in_effect(r);
+   ImGui::PushStyleColor(ImGuiCol_MenuBarBg, vec4(r[figure_theme::ROLE_SURFACE]));
+   ImGui::PushStyleColor(ImGuiCol_WindowBg, vec4(r[figure_theme::ROLE_SURFACE]));
+   const bool open = ImGui::BeginMainMenuBar();
+   ImGui::PopStyleColor(2);
+   if (!open) return;
+   const float h = ImGui::GetFrameHeight();
+   if (st.frame.buttons_left) ImGui::Dummy(ImVec2(3.0f * 1.6f * h, h));
+   frame_rect_t icon;
+   if (!st.frame.icon_glyph.empty()) {
+      ImGui::TextColored(vec4(r[figure_theme::ROLE_ACCENT]), "%s", st.frame.icon_glyph.c_str());
+   } else if (st.frame.icon_tex != 0) {
+      const float side = ImGui::GetFontSize();
+      ImGui::Image(ImTextureRef(static_cast<ImTextureID>(st.frame.icon_tex)), ImVec2(side, side));
+   }
+   if (!st.frame.icon_glyph.empty() || st.frame.icon_tex != 0) {
+      const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+      icon = frame_rect_t{a.x, a.y, b.x, b.y};
+   }
+   st.frame.geom.parts[FRAME_ICON] = icon;
+   ImGui::EndMainMenuBar();
+}
+
+// The end of the bar, after the program's menus: the title, centred in the bar where it does not cover the menus or
+// the buttons, and the minimize, maximize (restore) and close buttons; a double-click on the empty bar toggles
+// maximize. Then the geometry for the hit test.
+void frame_bar_close() {
+   if (!st.frame.on) return;
+   color_t r[ROLE_COUNT];
+   roles_in_effect(r);
+   using namespace figure_theme;
+   if (!ImGui::BeginMainMenuBar()) return;
+   ImGuiWindow *bar = ImGui::GetCurrentWindow();
+   const ImVec2 pos = bar->Pos, size = bar->Size;
+   const float h = size.y, bw = 1.6f * h;
+   const float menus_end = ImGui::GetCursorScreenPos().x; // where the next menu would go: after the program's
+   frame_geom_t g;
+   g.valid = true;
+   g.width = ImGui::GetIO().DisplaySize.x;
+   g.height = ImGui::GetIO().DisplaySize.y;
+   g.border = 6.0f * st.scale;
+   g.maximized = frame_maximized();
+   g.parts[FRAME_BAR] = frame_rect_t{pos.x, pos.y, pos.x + size.x, pos.y + size.y};
+   g.parts[FRAME_ICON] = st.frame.geom.parts[FRAME_ICON];
+   const float b0 = st.frame.buttons_left ? pos.x : pos.x + size.x - 3.0f * bw; // the buttons' left edge
+   const int order[3] = {FRAME_MINIMIZE, FRAME_MAXIMIZE, FRAME_CLOSE};
+   const int left_order[3] = {FRAME_CLOSE, FRAME_MINIMIZE, FRAME_MAXIMIZE}; // macOS order: close first
+   for (int k = 0; k < 3; ++k) {
+      const int p = st.frame.buttons_left ? left_order[k] : order[k];
+      g.parts[p] = frame_rect_t{b0 + k * bw, pos.y, b0 + (k + 1) * bw, pos.y + h};
+   }
+   const float menus_start = st.frame.buttons_left ? b0 + 3.0f * bw : pos.x;
+   g.parts[FRAME_MENUS] = frame_rect_t{std::max(menus_start, g.parts[FRAME_ICON].x1), pos.y, menus_end, pos.y + h};
+   // the title, centred in the bar; moved right of the menus or clipped before the buttons when they are in the way
+   const bool focused = st.m != mode::window || cap.on || (SDL_GetWindowFlags(st.window) & SDL_WINDOW_INPUT_FOCUS);
+   const ImVec2 ts = ImGui::CalcTextSize(st.title.c_str());
+   const float free0 = menus_end + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+   const float free1 = st.frame.buttons_left ? pos.x + size.x - ImGui::GetStyle().ItemSpacing.x : b0;
+   float tx = pos.x + 0.5f * (size.x - ts.x);
+   if (tx < free0) tx = free0;
+   const float ty = pos.y + 0.5f * (h - ts.y);
+   ImDrawList *dl = ImGui::GetWindowDrawList();
+   if (free1 > tx) {
+      const ImVec4 clip(tx, pos.y, free1, pos.y + h);
+      dl->AddText(nullptr, 0.0f, ImVec2(tx, ty),
+                  ImGui::GetColorU32(vec4(r[focused ? ROLE_TEXT : ROLE_DIMMED_TEXT])), st.title.c_str(), nullptr,
+                  0.0f, &clip);
+      g.parts[FRAME_TITLE] = frame_rect_t{tx, pos.y, std::min(tx + ts.x, free1), pos.y + h};
+   }
+   // the buttons: drawn shapes, hovered in a mix of the surface toward the text, close in the error colour
+   const color_t &sf = r[ROLE_SURFACE], &tx_c = r[ROLE_TEXT], &er = r[ROLE_ERROR];
+   const color_t on_error = contrast(tx_c, er) >= contrast(r[ROLE_BACKGROUND], er) ? tx_c : r[ROLE_BACKGROUND];
+   const float t = std::max(1.0f, std::round(st.scale));
+   for (int p : {FRAME_MINIMIZE, FRAME_MAXIMIZE, FRAME_CLOSE}) {
+      const frame_rect_t &rc = g.parts[p];
+      ImGui::SetCursorScreenPos(ImVec2(rc.x0, rc.y0));
+      ImGui::PushID(p);
+      const bool clicked = ImGui::InvisibleButton("##frame_button", ImVec2(rc.x1 - rc.x0, rc.y1 - rc.y0));
+      const bool hovered = ImGui::IsItemHovered(), held = ImGui::IsItemActive();
+      ImGui::PopID();
+      color_t ink = tx_c;
+      if (hovered || held) {
+         const color_t fill = p == FRAME_CLOSE ? er : mix_color(sf, tx_c, held ? 0.24f : 0.14f);
+         dl->AddRectFilled(ImVec2(rc.x0, rc.y0), ImVec2(rc.x1, rc.y1), ImGui::GetColorU32(vec4(fill)));
+         if (p == FRAME_CLOSE) ink = on_error;
+      }
+      const ImU32 col = ImGui::GetColorU32(vec4(ink));
+      const ImVec2 c(std::round(0.5f * (rc.x0 + rc.x1)) + 0.5f, std::round(0.5f * (rc.y0 + rc.y1)) + 0.5f);
+      const float s = std::round(0.22f * h);
+      if (p == FRAME_MINIMIZE) {
+         dl->AddLine(ImVec2(c.x - s, c.y), ImVec2(c.x + s, c.y), col, t);
+      } else if (p == FRAME_MAXIMIZE) {
+         if (g.maximized) { // restore: two overlapping squares
+            const float q = std::round(0.3f * s);
+            dl->AddRect(ImVec2(c.x - s, c.y - s + q), ImVec2(c.x + s - q, c.y + s), col, 0.0f, t);
+            dl->AddLine(ImVec2(c.x - s + q, c.y - s + q), ImVec2(c.x - s + q, c.y - s), col, t);
+            dl->AddLine(ImVec2(c.x - s + q, c.y - s), ImVec2(c.x + s, c.y - s), col, t);
+            dl->AddLine(ImVec2(c.x + s, c.y - s), ImVec2(c.x + s, c.y + s - q), col, t);
+            dl->AddLine(ImVec2(c.x + s, c.y + s - q), ImVec2(c.x + s - q, c.y + s - q), col, t);
+         } else {
+            dl->AddRect(ImVec2(c.x - s, c.y - s), ImVec2(c.x + s, c.y + s), col, 0.0f, t);
+         }
+      } else {
+         dl->AddLine(ImVec2(c.x - s, c.y - s), ImVec2(c.x + s, c.y + s), col, t);
+         dl->AddLine(ImVec2(c.x - s, c.y + s), ImVec2(c.x + s, c.y - s), col, t);
+      }
+      if (clicked) {
+         if (p == FRAME_MINIMIZE) frame_minimize();
+         else if (p == FRAME_MAXIMIZE) frame_toggle_maximize();
+         else frame_close();
+      }
+   }
+   // a double-click on the bar where it drags the window toggles maximize (Windows does it itself for its caption
+   // area, which then sends no click to the program)
+   const ImVec2 m = ImGui::GetIO().MousePos;
+   if (ImGui::IsWindowHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+       frame_hit(g, m.x, m.y) == HIT_DRAG)
+      frame_toggle_maximize();
+   ImGui::EndMainMenuBar();
+   st.frame.geom = g;
+}
+
+// A Lucide icon (UTF-8, one code point) rendered with the bundled icon font, size x size RGBA pixels: the glyph in the
+// palette's text on accent colour on a rounded square of its accent, so it reads on any task bar or dock.
+bool render_icon_glyph(const std::string &utf8, int size, std::vector<unsigned char> &rgba, std::string &err) {
+   unsigned int cp = 0;
+   if (utf8.empty() || ImTextCharFromUtf8(&cp, utf8.c_str(), utf8.c_str() + utf8.size()) != static_cast<int>(utf8.size())) {
+      err = "set_icon: the icon is one ICON_* character";
+      return false;
+   }
+   stbtt_fontinfo font;
+   if (!stbtt_InitFont(&font, lucide_ttf, stbtt_GetFontOffsetForIndex(lucide_ttf, 0))) {
+      err = "set_icon: the icon font cannot be read";
+      return false;
+   }
+   const int glyph = stbtt_FindGlyphIndex(&font, static_cast<int>(cp));
+   if (glyph == 0) {
+      err = "set_icon: no icon has this code point (an ICON_* constant is expected)";
+      return false;
+   }
+   const float scale = stbtt_ScaleForPixelHeight(&font, 0.72f * size);
+   int x0, y0, x1, y1;
+   stbtt_GetGlyphBitmapBox(&font, glyph, scale, scale, &x0, &y0, &x1, &y1);
+   const int gw = x1 - x0, gh = y1 - y0;
+   std::vector<unsigned char> alpha(static_cast<size_t>(std::max(gw, 1) * std::max(gh, 1)), 0);
+   if (gw > 0 && gh > 0) stbtt_MakeGlyphBitmap(&font, alpha.data(), gw, gh, gw, scale, scale, glyph);
+   color_t r[ROLE_COUNT];
+   roles_in_effect(r);
+   const color_t &bg = r[figure_theme::ROLE_ACCENT], &fg = r[figure_theme::ROLE_TEXT_ON_ACCENT];
+   rgba.assign(static_cast<size_t>(4 * size * size), 0);
+   const float radius = 0.2f * size, ox = 0.5f * (size - gw), oy = 0.5f * (size - gh);
+   for (int j = 0; j < size; ++j)
+      for (int i = 0; i < size; ++i) {
+         // coverage of the rounded square (one pixel of anti-aliasing at the corners)
+         const float cx = std::min(std::max(i + 0.5f, radius), size - radius);
+         const float cy = std::min(std::max(j + 0.5f, radius), size - radius);
+         const float d = std::sqrt((i + 0.5f - cx) * (i + 0.5f - cx) + (j + 0.5f - cy) * (j + 0.5f - cy));
+         const float cover = std::min(1.0f, std::max(0.0f, radius - d + 0.5f));
+         const int gi = i - static_cast<int>(std::round(ox)), gj = j - static_cast<int>(std::round(oy));
+         const float a = gi >= 0 && gi < gw && gj >= 0 && gj < gh ? alpha[static_cast<size_t>(gj * gw + gi)] / 255.0f : 0.0f;
+         unsigned char *px = &rgba[static_cast<size_t>(4 * (j * size + i))];
+         px[0] = static_cast<unsigned char>(std::lround(255.0f * (bg.r + (fg.r - bg.r) * a)));
+         px[1] = static_cast<unsigned char>(std::lround(255.0f * (bg.g + (fg.g - bg.g) * a)));
+         px[2] = static_cast<unsigned char>(std::lround(255.0f * (bg.b + (fg.b - bg.b) * a)));
+         px[3] = static_cast<unsigned char>(std::lround(255.0f * cover));
+      }
+   return true;
+}
+
+// The window's icon (SDL_SetWindowIcon) from RGBA pixels, rows from the top.
+bool set_window_icon(const unsigned char *rgba, int width, int height, std::string &err) {
+   SDL_Surface *surface = SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_RGBA32,
+                                                const_cast<unsigned char *>(rgba), 4 * width);
+   if (!surface) {
+      err = std::string("set_icon: SDL_CreateSurfaceFrom: ") + SDL_GetError();
+      return false;
+   }
+   const bool ok = SDL_SetWindowIcon(st.window, surface);
+   SDL_DestroySurface(surface);
+   if (!ok) err = std::string("set_icon: SDL_SetWindowIcon: ") + SDL_GetError();
+   return ok;
+}
+
 // Headless renderer: acknowledge texture requests (font atlas pages) without a GPU, as a real backend would.
 void headless_textures() {
    for (ImTextureData *t : ImGui::GetPlatformIO().Textures) {
@@ -1333,8 +1645,10 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    if (st.scale <= 0.0f || cap.on) st.scale = 1.0f; // capture: pixel sizes independent of the display
    const std::string t(title, title_len > 0 ? static_cast<size_t>(title_len) : 0);
    st.title = t;
-   const SDL_WindowFlags flags =
-      SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+   const frame_options_t fo = frame_options;
+   frame_options = frame_options_t{};
+   SDL_WindowFlags flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+   if (fo.decorations == 1) flags |= SDL_WINDOW_BORDERLESS; // the frame is FIGURE's: frame_bar_open/close
    st.window = SDL_CreateWindow(t.c_str(), static_cast<int>(width * st.scale), static_cast<int>(height * st.scale), flags);
    if (!st.window) {
       SDL_Quit();
@@ -1360,6 +1674,11 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    p_glPixelStorei = reinterpret_cast<gl_pixel_storei_t>(SDL_GL_GetProcAddress("glPixelStorei"));
    p_glReadPixels = reinterpret_cast<gl_read_pixels_t>(SDL_GL_GetProcAddress("glReadPixels"));
    SDL_SetWindowPosition(st.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+   if (fo.decorations == 1) {
+      st.frame.on = true;
+      st.frame.buttons_left = fo.buttons == 2 || (fo.buttons == 0 && frame_buttons_left_default());
+      SDL_SetWindowHitTest(st.window, frame_hit_test, nullptr);
+   }
    SDL_ShowWindow(st.window);
 
    create_contexts();
@@ -1389,6 +1708,9 @@ int fig_init_headless(int width, int height) {
    // draw lists over 65536 vertices are split into ranges, each command carrying its VtxOffset (16-bit indices)
    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
    st.m = mode::headless;
+   st.frame.on = frame_options.decorations == 1; // the bar drawn, its actions recorded as state (tests)
+   st.frame.buttons_left = frame_options.buttons == 2 || (frame_options.buttons == 0 && frame_buttons_left_default());
+   frame_options = frame_options_t{};
    apply_initial_style();
    return FIG_OK;
    FIG_CATCH
@@ -1402,6 +1724,7 @@ int fig_init_remote(int width, int height, const char *host, int host_len, int p
    if (port < 0 || port > 65535) return fail(FIG_ERR_ARGUMENT, "port must be in 0..65535");
    std::string err;
    const std::string h(host, host_len > 0 ? static_cast<size_t>(host_len) : 0);
+   frame_options = frame_options_t{}; // remote mode: the browser's page has no window frame to draw
    if (!figure_remote::start(h.empty() ? "127.0.0.1" : h, port, *bound_port, err)) return fail(FIG_ERR_FAILED, err);
    create_contexts();
    ImGuiIO &io = ImGui::GetIO();
@@ -1459,8 +1782,7 @@ int fig_palette_color(const char *role, int role_len, float *rgba) {
       return fail(FIG_ERR_ARGUMENT, "palette_color: unknown role \"" + r + "\" (" + names + ")");
    }
    color_t roles[ROLE_COUNT];
-   if (st.has_roles) std::copy(st.roles, st.roles + ROLE_COUNT, roles);
-   else infer_roles(ImGui::GetStyle().Colors, roles);
+   roles_in_effect(roles);
    rgba[0] = roles[k].r;
    rgba[1] = roles[k].g;
    rgba[2] = roles[k].b;
@@ -1477,6 +1799,85 @@ int fig_input_system_theme(int theme) {
    st.system_theme_changed = true;
    return FIG_OK;
    FIG_CATCH
+}
+
+int fig_frame_options(int decorations, int buttons) {
+   FIG_TRY
+   if (decorations < 0 || decorations > 1) return fail(FIG_ERR_ARGUMENT, "init: decorations is 'native' or 'figure'");
+   if (buttons < 0 || buttons > 2) return fail(FIG_ERR_ARGUMENT, "init: buttons is 'right' or 'left'");
+   if (st.m != mode::none) return FIG_OK; // the init that follows fails: "figure is already initialized"
+   frame_options.decorations = decorations;
+   frame_options.buttons = buttons;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_set_icon_rgba(const unsigned char *rgba, int width, int height) {
+   FIG_TRY
+   if (st.m != mode::window) return fail(FIG_ERR_STATE, std::string("set_icon: there is no window in ") +
+                                                         (st.m == mode::none ? "no mode (before init)"
+                                                          : st.m == mode::headless ? "headless mode" : "remote mode"));
+   if (width <= 0 || height <= 0 || width > 1024 || height > 1024)
+      return fail(FIG_ERR_ARGUMENT, "set_icon: the image is rgba(4, width, height), 1 to 1024 pixels a side");
+   std::string err;
+   if (!set_window_icon(rgba, width, height, err)) return fail(FIG_ERR_FAILED, err);
+   if (st.frame.on) { // the bar's icon: a texture of the image
+      if (st.frame.icon_tex == 0) p_glGenTextures(1, &st.frame.icon_tex);
+      p_glBindTexture(GL_TEXTURE_2D_, st.frame.icon_tex);
+      p_glTexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, static_cast<int>(GL_LINEAR_));
+      p_glTexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, static_cast<int>(GL_LINEAR_));
+      p_glPixelStorei(GL_UNPACK_ROW_LENGTH_, 0);
+      p_glPixelStorei(GL_UNPACK_ALIGNMENT_, 1);
+      p_glTexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), width, height, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba);
+      st.frame.icon_w = width;
+      st.frame.icon_h = height;
+   }
+   st.frame.icon_glyph.clear();
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_set_icon_glyph(const char *icon, int icon_len) {
+   FIG_TRY
+   if (st.m != mode::window) return fail(FIG_ERR_STATE, std::string("set_icon: there is no window in ") +
+                                                         (st.m == mode::none ? "no mode (before init)"
+                                                          : st.m == mode::headless ? "headless mode" : "remote mode"));
+   const std::string g(icon, icon_len > 0 ? static_cast<size_t>(icon_len) : 0);
+   std::vector<unsigned char> rgba;
+   std::string err;
+   const int side = 64;
+   if (!render_icon_glyph(g, side, rgba, err)) return fail(FIG_ERR_ARGUMENT, err);
+   if (!set_window_icon(rgba.data(), side, side, err)) return fail(FIG_ERR_FAILED, err);
+   if (st.frame.icon_tex != 0) {
+      p_glDeleteTextures(1, &st.frame.icon_tex);
+      st.frame.icon_tex = 0;
+   }
+   st.frame.icon_glyph = g;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_frame_hit(float x, float y, int *hit) {
+   *hit = frame_hit(st.frame.geom, x, y);
+   return FIG_OK;
+}
+
+int fig_frame_rect(int part, float *rect, int *found) {
+   if (part < 0 || part >= FRAME_PARTS) return fail(FIG_ERR_ARGUMENT, "frame rectangle: unknown part");
+   const frame_rect_t &r = st.frame.geom.parts[part];
+   *found = st.frame.geom.valid && r.x1 > r.x0 ? 1 : 0;
+   rect[0] = r.x0;
+   rect[1] = r.y0;
+   rect[2] = r.x1;
+   rect[3] = r.y1;
+   return FIG_OK;
+}
+
+int fig_frame_state(int *minimized, int *maximized) {
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   *minimized = frame_minimized() ? 1 : 0;
+   *maximized = frame_maximized() ? 1 : 0;
+   return FIG_OK;
 }
 
 int fig_load_style(const char *path, int path_len) {
@@ -1783,6 +2184,7 @@ int fig_begin_frame(int *running) {
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
       ImGui::NewFrame();
       st.in_frame = true;
+      frame_bar_open();
       return FIG_OK;
    }
    if (st.m == mode::remote) {
@@ -1810,6 +2212,7 @@ int fig_begin_frame(int *running) {
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
       ImGui::NewFrame();
       st.in_frame = true;
+      frame_bar_open();
       return FIG_OK;
    }
    SDL_Event ev;
@@ -1867,6 +2270,7 @@ int fig_begin_frame(int *running) {
    apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
    ImGui::NewFrame();
    st.in_frame = true;
+   frame_bar_open();
    return FIG_OK;
    FIG_CATCH
 }
@@ -1874,6 +2278,7 @@ int fig_begin_frame(int *running) {
 int fig_end_frame(void) {
    FIG_TRY
    if (!st.in_frame) return fail(FIG_ERR_STATE, "end_frame without begin_frame");
+   frame_bar_close();
    st.in_frame = false;
    ImGui::Render();
    if (st.m == mode::headless) {
@@ -1922,6 +2327,7 @@ void fig_shutdown(void) {
          st.in_frame = false;
       }
       if (st.m == mode::window) {
+         if (st.frame.icon_tex != 0) p_glDeleteTextures(1, &st.frame.icon_tex);
          for (const auto &t : st.textures) {
             const unsigned int name = static_cast<unsigned int>(t.first);
             p_glDeleteTextures(1, &name);

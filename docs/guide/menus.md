@@ -12,7 +12,7 @@ title: Menus, popups and shortcuts
 
 | Procedure | Notes |
 |---|---|
-| `ig_begin_main_menu_bar()` → `logical`, `ig_end_main_menu_bar()` | The bar along the top of the display. |
+| `ig_begin_main_menu_bar()` → `logical`, `ig_end_main_menu_bar()` | The bar along the top of the display; with `decorations='figure'`, inside the window's title bar ([Frame loop](frame-loop#the-window-s-frame)). |
 | `ig_begin_menu_bar()` → `logical`, `ig_end_menu_bar()` | A window's own bar: the window needs `ImGuiWindowFlags_MenuBar` in its `ig_begin`. |
 | `ig_begin_menu(label [, enabled])` → `logical`, `ig_end_menu()` | A menu of a bar, or a submenu of a menu; `.true.` while open. |
 | `ig_menu_item(label [, shortcut] [, selected] [, enabled])` → `logical` | `.true.` on the frame the item is picked; the menu closes. |

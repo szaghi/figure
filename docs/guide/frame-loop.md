@@ -10,12 +10,13 @@ A program has one `app_object`. Its life is one loop:
 
 <<< @/examples/snippets/tut01_window-loop.F90{fortran}
 
-- `init(title, width, height [, vsync] [, stat])` opens a resizable window and creates the Dear ImGui and ImPlot
-  contexts, with the `seal` style, docking and keyboard navigation enabled. `vsync` (default `.true.`) synchronizes the buffer
+- `init(title, width, height [, vsync] [, stat] [, ini_file] [, decorations] [, buttons])` opens a resizable window
+  (with `decorations='figure'`, a window whose frame FIGURE draws: [below](#the-window-s-frame)) and creates the Dear
+  ImGui and ImPlot contexts, with the `seal` style, docking and keyboard navigation enabled. `vsync` (default `.true.`) synchronizes the buffer
   swap with the display refresh. A second `init` without `destroy` fails with `FIG_ERR_STATE`; a non-positive size
   with `FIG_ERR_ARGUMENT`.
-- `init_headless(width, height [, stat])` creates the contexts on a virtual display, without window or GPU: see
-  [Headless testing](testing).
+- `init_headless(width, height [, stat] [, decorations] [, buttons])` creates the contexts on a virtual display,
+  without window or GPU: see [Headless testing](testing).
 - `destroy()` closes the window and destroys the contexts. It is safe in any state, also without a previous `init`
   and inside an open frame.
 
@@ -161,6 +162,71 @@ The system's own dialogs, to choose a file to open, where to save, or a folder:
 - **Platforms.** SDL3 shows the platform's dialog: Windows' and macOS' own; on Linux the desktop portal or `zenity`
   ([run-time needs](install#linux-packages)). A dialog that cannot be shown answers `done` with `FIG_ERR_FAILED` and
   the reason.
+
+## The window's frame
+
+`app%init(..., decorations='figure')` opens the window without the system's frame (borderless and resizable) and
+FIGURE draws one, in the back buffer with everything else: a title bar on top with the window's icon, the program's
+**main menu bar inside it**, the title centred, and the minimize, maximize (restore) and close buttons. The system's
+frame stays the default (`decorations='native'`).
+
+<Media name="frame" video alt="A window with FIGURE's title bar: on the left a chart icon in vermilion, then the File and View menus, the title FIGURE: frame centred, and three buttons on the right. The File menu is opened from the bar and its Save item hovered; then the pointer moves along the bar and rests on minimize and on maximize, each lighter when hovered, and on close, which turns red" caption="docs/examples/src/cb_frame.F90: the menus in the bar, the buttons hovered" />
+
+<<< @/examples/snippets/cb_frame-frame.F90{fortran}
+
+| Procedure | Does |
+|---|---|
+| `app%init(title, width, height [, ...] [, decorations] [, buttons])` | `decorations`: `'native'` (default) or `'figure'`; `buttons`: `'right'` or `'left'` (default: left on macOS, right elsewhere) |
+| `app%set_icon(image [, stat])` | the window's icon from an image, `integer(int8) :: image(4, width, height)` (R, G, B, A of pixel (i, j), j = 1 the top row), 1 to 1024 pixels a side |
+| `app%set_icon(icon [, stat])` | the window's icon from one `ICON_*` constant |
+
+**The bar** is Dear ImGui's main menu bar: FIGURE opens it at the start of each frame (with the icon), the program's
+`ig_begin_main_menu_bar` / `ig_end_main_menu_bar` append its menus to it, and FIGURE closes it at the end of the frame
+(with the title and the buttons). A program written for the system's frame needs no change: its menus move into the
+title bar, and a dock space or a side bar starts below it. The title (`app%set_title`) is centred in the bar, moved
+right of the menus when they reach the centre, and clipped before the buttons; it is dimmed while the window does not
+have the keyboard focus.
+
+**The colours** are the [palette's roles](styles#palette-roles) in effect: the bar in the surface colour, the title
+and the buttons' marks in the text colour, a hovered button in a mix of the surface toward the text, the close button
+in the error colour when hovered. With a style that has no palette, the roles are read from Dear ImGui's colours.
+
+<<< @/examples/snippets/cb_frame-menus.F90{fortran}
+
+**Hit testing.** The system asks the program what each point of a borderless window does
+(`SDL_SetWindowHitTest`); FIGURE answers from the rectangles of the last frame drawn:
+
+- the empty part of the bar, the title and the icon drag the window;
+- the edges and the corners (6 pixels, times the content scale; a corner takes twice that along each side) resize it;
+- the buttons, the menus and everything below the bar are the program's (clicks go to Dear ImGui).
+
+`test_frame_hit(x, y)` (from `figure_testing`) gives the same answer, so a test checks it point by point.
+
+**Interactions.**
+
+- A double-click on the part of the bar that drags toggles maximize. On Windows the system handles the drag area as
+  a caption and maximizes on a double-click itself, without sending the clicks to the program, so the window is not
+  toggled twice (to be verified on Windows, S11).
+- A maximized window has no resize edges.
+- Close takes the quit path of the system's close button: the loop ends, or, after `app%set_confirm_quit(.true.)`,
+  `app%quit_requested()` returns `.true.` and the program asks first ([Ask before quitting](menus#ask-before-quitting)).
+- Minimize and maximize are the window's (`SDL_MinimizeWindow`, `SDL_MaximizeWindow`, `SDL_RestoreWindow`).
+
+**The icon.** `set_icon` sets the window's icon for the task bar or the dock (`SDL_SetWindowIcon`) and the bar's: an
+image as given, or an `ICON_*` rendered at 64 x 64 pixels with the bundled icon font, in the palette's text on accent
+colour on a rounded square of its accent (the bar shows the glyph in the accent colour). Something other than one
+icon is `FIG_ERR_ARGUMENT`; an image of the wrong shape too.
+
+**Modes.**
+
+- **Window:** as above.
+- **Headless:** `init_headless(..., decorations='figure')` draws the bar the same way, for tests; the buttons'
+  actions are recorded as state (`test_frame_state(minimized, maximized)`), close is a quit request as in a window.
+  `set_icon` is refused with `FIG_ERR_STATE` ("set_icon: there is no window in headless mode").
+- **Remote:** no frame (the browser's page is the window); `set_icon` is refused with `FIG_ERR_STATE`.
+
+An unknown `decorations` or `buttons` value is `FIG_ERR_ARGUMENT` from `init`. What the system's frame does that this
+one does not: [Known issues](known-issues#the-window-s-frame-drawn-by-figure).
 
 ## Content scale
 

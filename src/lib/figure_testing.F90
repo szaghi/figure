@@ -24,13 +24,15 @@ use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
-                            fig_input_wheel, fig_window_rect, fig_plot_tick_label
+                            fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
+                            fig_frame_state
 use figure_imgui, only : ig_item_rect
 
 implicit none
 private
 public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel, test_key, test_type
 public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick, test_system_theme
+public :: test_frame_hit, test_frame_rect, test_frame_state
 
 contains
    subroutine test_next_frame(stat)
@@ -90,6 +92,82 @@ contains
       call figure_fail(FIG_ERR_ARGUMENT, "test_system_theme: theme is 'light', 'dark' or 'system'", stat)
    endselect
    endsubroutine test_system_theme
+
+   function test_frame_hit(x, y) result(hit)
+   !< What the window's frame (`decorations='figure'`) does with the point (x, y), as its hit test answers the system,
+   !< from the last frame drawn: `'client'` (the program's: the buttons, the menus, everything below the bar),
+   !< `'drag'` (the bar's empty space, the icon, the title), or a resize edge or corner, `'resize-top-left'`,
+   !< `'resize-top'`, `'resize-top-right'`, `'resize-right'`, `'resize-bottom-right'`, `'resize-bottom'`,
+   !< `'resize-bottom-left'`, `'resize-left'` (none when maximized). `'client'` everywhere without the frame.
+   real(real64), intent(in)      :: x   !< Abscissa [pixels].
+   real(real64), intent(in)      :: y   !< Ordinate [pixels].
+   character(len=:), allocatable :: hit !< Class.
+   character(len=19), parameter  :: NAMES(0:9) = [character(len=19) :: 'client', 'drag', 'resize-top-left', &
+      'resize-top', 'resize-top-right', 'resize-right', 'resize-bottom-right', 'resize-bottom', 'resize-bottom-left', &
+      'resize-left'] !< Class names, by SDL_HitTestResult.
+   integer(c_int)                :: h   !< Native class.
+
+   call figure_check(fig_frame_hit(real(x, c_float), real(y, c_float), h))
+   hit = trim(NAMES(max(0_c_int, min(9_c_int, h))))
+   endfunction test_frame_hit
+
+   subroutine test_frame_rect(part, x0, y0, x1, y1, found, stat)
+   !< A part of the title bar of `decorations='figure'` in the last frame: `'bar'`, `'icon'`, `'menus'` (the program's
+   !< main menu bar inside it), `'title'`, `'minimize'`, `'maximize'`, `'close'`; `found` is false when not drawn.
+   character(len=*), intent(in)            :: part  !< Part.
+   real(real64),     intent(out)           :: x0    !< Left [pixels].
+   real(real64),     intent(out)           :: y0    !< Top [pixels].
+   real(real64),     intent(out)           :: x1    !< Right [pixels].
+   real(real64),     intent(out)           :: y1    !< Bottom [pixels].
+   logical,          intent(out), optional :: found !< Drawn in the last frame.
+   integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown part.
+   real(c_float)                           :: r(4)  !< Rectangle.
+   integer(c_int)                          :: f     !< Found.
+   integer(c_int)                          :: p     !< Part code.
+
+   r = 0.0_c_float
+   f = 0_c_int
+   select case (part)
+   case ('bar')
+      p = 0_c_int
+   case ('icon')
+      p = 1_c_int
+   case ('menus')
+      p = 2_c_int
+   case ('title')
+      p = 3_c_int
+   case ('minimize')
+      p = 4_c_int
+   case ('maximize')
+      p = 5_c_int
+   case ('close')
+      p = 6_c_int
+   case default
+      p = -1_c_int
+   endselect
+   call figure_check(fig_frame_rect(p, r, f), stat)
+   x0 = real(r(1), real64)
+   y0 = real(r(2), real64)
+   x1 = real(r(3), real64)
+   y1 = real(r(4), real64)
+   if (present(found)) found = f /= 0_c_int
+   endsubroutine test_frame_rect
+
+   subroutine test_frame_state(minimized, maximized, stat)
+   !< The window minimized, maximized: the system's in window mode; in headless mode, as the buttons of
+   !< `decorations='figure'` recorded them.
+   logical,        intent(out)           :: minimized !< Minimized.
+   logical,        intent(out)           :: maximized !< Maximized.
+   integer(int32), intent(out), optional :: stat      !< Status: `FIG_ERR_STATE` before `init*`.
+   integer(c_int)                        :: mn        !< Minimized flag.
+   integer(c_int)                        :: mx        !< Maximized flag.
+
+   mn = 0_c_int
+   mx = 0_c_int
+   call figure_check(fig_frame_state(mn, mx), stat)
+   minimized = mn /= 0_c_int
+   maximized = mx /= 0_c_int
+   endsubroutine test_frame_state
 
    subroutine test_mouse_move(x, y, stat)
    !< Queue a move of the mouse to (x, y).

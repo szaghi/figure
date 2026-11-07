@@ -15,8 +15,9 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 
 | Procedure | Purpose | Details |
 |---|---|---|
-| `app%init(title, width, height [, vsync] [, stat] [, ini_file])` | open the window, create the ImGui and ImPlot contexts | [frame loop](frame-loop#the-application) |
-| `app%init_headless(width, height [, stat])` | contexts only, on a virtual display: no window, no GPU | [headless testing](testing) |
+| `app%init(title, width, height [, vsync] [, stat] [, ini_file] [, decorations] [, buttons])` | open the window (`decorations='figure'`: its frame drawn by FIGURE, the menus in the title bar), create the ImGui and ImPlot contexts | [frame loop](frame-loop#the-application), [the window's frame](frame-loop#the-window-s-frame) |
+| `app%init_headless(width, height [, stat] [, decorations] [, buttons])` | contexts only, on a virtual display: no window, no GPU (`decorations='figure'`: the title bar drawn, for tests) | [headless testing](testing) |
+| `app%set_icon(image [, stat])`, `app%set_icon(icon [, stat])` | the window's icon: an RGBA image `integer(int8) :: image(4, width, height)`, or an `ICON_*` (window mode) | [the window's frame](frame-loop#the-window-s-frame) |
 | `app%init_remote([port] [, host] ...)` | the interface in a web browser: no window, display or GPU on the program's side | [remote UI](remote) |
 | `app%next_frame([stat])` → `logical` | render the open frame, wait for input, open the next; `.false.` on quit | [frame loop](frame-loop#next-frame) |
 | `app%set_lazy(enabled [, max_wait])` | lazy redraw on/off, longest sleep (default 0.5 s) | [lazy redraw](frame-loop#lazy-redraw) |
@@ -162,6 +163,9 @@ Details: [Heatmaps and images](images).
 | `test_item_center(x, y)`, `test_window_rect(name, ...)` | where a widget or a window is |
 | `test_quit()` | a quit request, as the window's close button makes it |
 | `test_plot_tick(axis, index, label [, count])` | a tick label of the plot being declared (tests of axis formats) |
+| `test_frame_hit(x, y)` → `character` | what the frame of `decorations='figure'` does at a point: `'client'`, `'drag'`, `'resize-top-left'`, ... ([the window's frame](frame-loop#the-window-s-frame)) |
+| `test_frame_rect(part, x0, y0, x1, y1 [, found] [, stat])` | a part of its title bar in the last frame: `'bar'`, `'icon'`, `'menus'`, `'title'`, `'minimize'`, `'maximize'`, `'close'` |
+| `test_frame_state(minimized, maximized [, stat])` | the window minimized, maximized (headless: as the bar's buttons recorded it) |
 | `test_system_theme(theme [, stat])` | the system's light or dark setting changes (`'light'`, `'dark'`, `'system'`), at the next frame: tests of `palette='auto'` ([styles](styles#follow-the-system-s-light-or-dark-setting)) |
 
 Details: [Headless testing](testing#synthetic-input).

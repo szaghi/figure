@@ -145,6 +145,10 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   FIGURE's four, Nord, Solarized, Gruvbox, Dracula, Catppuccin, Tokyo Night, One Dark), chosen separately with
   `app%set_style(look=, palette=)`; `palette='auto'` following the system's light or dark setting; the roles for the
   program's own messages (`app%palette_color`); theme files with `look`, `palette` and `[palette]`: done.
+- **The window's frame drawn by FIGURE; the window's icon** ([Frame loop](frame-loop#the-window-s-frame)):
+  `decorations='figure'`, a borderless window with a title bar drawn by FIGURE in the palette's colours, the main menu
+  bar inside it, the buttons on the right (left on macOS), the system's hit test answered from the last frame,
+  double-click to maximize, close through the quit path; `app%set_icon` from an image or an `ICON_*`: done.
 
 ## Next
 

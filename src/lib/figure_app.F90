@@ -16,8 +16,8 @@ module figure_app
 !< settles it sleeps until input or `max_wait`, so an idle window costs a fraction of a percent of one core); it
 !< returns `.false.` when the user closes the window. There are no widget objects, handles or callbacks: the state is
 !< the application's own variables.
-use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int
-use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc
+use, intrinsic :: iso_fortran_env, only : int8, int32, output_unit, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
@@ -25,7 +25,8 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_conte
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
                             fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
                             fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title, fig_save_image, &
-                            fig_image_result, fig_save_layout, fig_load_layout, fig_set_style_parts, fig_palette_color
+                            fig_image_result, fig_save_layout, fig_load_layout, fig_set_style_parts, fig_palette_color, &
+                            fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph
 
 implicit none
 private
@@ -65,24 +66,42 @@ type :: app_object
       procedure, pass(self) :: load_layout    !< An arrangement from a file, applied before the next frame.
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
+      procedure, pass(self), private :: set_icon_image !< The window's icon from an image.
+      procedure, pass(self), private :: set_icon_glyph !< The window's icon from an ICON_*.
+      generic :: set_icon => set_icon_image, set_icon_glyph !< The window's icon: an image or an ICON_*.
 endtype app_object
 
 contains
-   subroutine init(self, title, width, height, vsync, stat, ini_file)
+   subroutine init(self, title, width, height, vsync, stat, ini_file, decorations, buttons)
    !< Open the window (`width` x `height` logical pixels) and create the ImGui/ImPlot contexts.
    !<
    !< Window positions and sizes are not saved by default: with `ini_file`, Dear ImGui keeps them in that file, read
    !< at the first frame and written while the program runs (its `imgui.ini`).
-   class(app_object), intent(inout)         :: self     !< Application.
-   character(len=*),  intent(in)            :: title    !< Window title.
-   integer(int32),    intent(in)            :: width    !< Width [logical pixels].
-   integer(int32),    intent(in)            :: height   !< Height [logical pixels].
-   logical,           intent(in),  optional :: vsync    !< Synchronize with the display (default true).
-   integer(int32),    intent(out), optional :: stat     !< Status.
-   character(len=*),  intent(in),  optional :: ini_file !< File keeping the window layout (default: none).
-   integer(c_int)                           :: status   !< Native status.
-   integer(c_int)                           :: v        !< vsync flag.
+   !<
+   !< `decorations='figure'` opens the window without the system's frame and draws one: a title bar with the icon
+   !< (`set_icon`), the program's main menu bar (`ig_begin_main_menu_bar`) inside it, the title centred, and the
+   !< minimize, maximize (restore) and close buttons, in the colours of the palette's roles. The bar drags the window,
+   !< its edges resize it, a double-click on it maximizes; close takes the quit path of the system's close button
+   !< (`set_confirm_quit`). `buttons` puts them on the `'right'` (the default) or the `'left'` (the default on macOS).
+   class(app_object), intent(inout)         :: self        !< Application.
+   character(len=*),  intent(in)            :: title       !< Window title.
+   integer(int32),    intent(in)            :: width       !< Width [logical pixels].
+   integer(int32),    intent(in)            :: height      !< Height [logical pixels].
+   logical,           intent(in),  optional :: vsync       !< Synchronize with the display (default true).
+   integer(int32),    intent(out), optional :: stat        !< Status: `FIG_ERR_FAILED` without a display or OpenGL 3,
+                                                           !< `FIG_ERR_ARGUMENT` for a wrong size or option.
+   character(len=*),  intent(in),  optional :: ini_file    !< File keeping the window layout (default: none).
+   character(len=*),  intent(in),  optional :: decorations !< The window's frame: `'native'` (default) or `'figure'`.
+   character(len=*),  intent(in),  optional :: buttons     !< With `'figure'`: `'right'` or `'left'` (default: the
+                                                           !< platform's side, left on macOS).
+   integer(c_int)                           :: status      !< Native status.
+   integer(c_int)                           :: v           !< vsync flag.
 
+   status = frame_options(decorations, buttons)
+   if (status /= FIG_OK) then
+      call figure_check(status, stat)
+      return
+   endif
    v = 1_c_int
    if (present(vsync)) v = merge(1_c_int, 0_c_int, vsync)
    status = fig_init(title, len(title, c_int), int(width, c_int), int(height, c_int), v)
@@ -90,17 +109,84 @@ contains
    call figure_check(status, stat)
    endsubroutine init
 
-   subroutine init_headless(self, width, height, stat)
+   subroutine init_headless(self, width, height, stat, decorations, buttons)
    !< Create the contexts on a virtual `width` x `height` display, without window or GPU.
-   class(app_object), intent(inout)        :: self   !< Application.
-   integer(int32),    intent(in)           :: width  !< Width [pixels].
-   integer(int32),    intent(in)           :: height !< Height [pixels].
-   integer(int32),    intent(out), optional :: stat  !< Status.
-   integer(c_int)                          :: status !< Native status.
+   !<
+   !< `decorations='figure'` draws the title bar of `init`'s `decorations='figure'` as in a window, for tests: its
+   !< buttons' actions are recorded as state (`test_frame_state`), close takes the quit path.
+   class(app_object), intent(inout)         :: self        !< Application.
+   integer(int32),    intent(in)            :: width       !< Width [pixels].
+   integer(int32),    intent(in)            :: height      !< Height [pixels].
+   integer(int32),    intent(out), optional :: stat        !< Status: `FIG_ERR_ARGUMENT` for a wrong size or option.
+   character(len=*),  intent(in),  optional :: decorations !< `'native'` (default: no bar) or `'figure'`.
+   character(len=*),  intent(in),  optional :: buttons     !< With `'figure'`: `'right'` or `'left'`.
+   integer(c_int)                           :: status      !< Native status.
 
-   status = fig_init_headless(int(width, c_int), int(height, c_int))
+   status = frame_options(decorations, buttons)
+   if (status == FIG_OK) status = fig_init_headless(int(width, c_int), int(height, c_int))
    call figure_check(status, stat)
    endsubroutine init_headless
+
+   function frame_options(decorations, buttons) result(status)
+   !< Give the frame options to the native layer, before init: `FIG_ERR_ARGUMENT` for an unknown value.
+   character(len=*), intent(in), optional :: decorations !< `'native'` or `'figure'`.
+   character(len=*), intent(in), optional :: buttons     !< `'right'` or `'left'`.
+   integer(c_int)                         :: status      !< Native status.
+   integer(c_int)                         :: d           !< Decorations code.
+   integer(c_int)                         :: b           !< Buttons code.
+
+   d = 0_c_int
+   b = 0_c_int
+   if (present(decorations)) then
+      select case (decorations)
+      case ('native')
+         d = 0_c_int
+      case ('figure')
+         d = 1_c_int
+      case default
+         d = -1_c_int
+      endselect
+   endif
+   if (present(buttons)) then
+      select case (buttons)
+      case ('right')
+         b = 1_c_int
+      case ('left')
+         b = 2_c_int
+      case default
+         b = -1_c_int
+      endselect
+   endif
+   status = fig_frame_options(d, b)
+   endfunction frame_options
+
+   subroutine set_icon_image(self, image, stat)
+   !< The window's icon (task bar, dock, the title bar of `decorations='figure'`) from an image, `image(4, width,
+   !< height)`: `image(:, i, j)` = R, G, B, A of pixel (i, j), j = 1 the top row. Window mode only; 1 to 1024 pixels a
+   !< side (64 x 64 or 256 x 256 are usual).
+   class(app_object), intent(inout)                     :: self        !< Application.
+   integer(int8),     intent(in), contiguous, target    :: image(:,:,:) !< Pixels.
+   integer(int32),    intent(out), optional             :: stat        !< Status: `FIG_ERR_STATE` in headless and remote
+                                                                       !< modes, `FIG_ERR_ARGUMENT` for a wrong shape.
+
+   if (size(image, 1) /= 4) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'set_icon: the image is rgba(4, width, height)', stat)
+      return
+   endif
+   call figure_check(fig_set_icon_rgba(c_loc(image), int(size(image, 2), c_int), int(size(image, 3), c_int)), stat)
+   endsubroutine set_icon_image
+
+   subroutine set_icon_glyph(self, icon, stat)
+   !< The window's icon from one of the bundled icons, `ICON_*`: rendered at 64 x 64 pixels in the palette's text on
+   !< accent colour on a rounded square of its accent; the title bar of `decorations='figure'` shows the glyph in the
+   !< accent colour. Window mode only.
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: icon !< One `ICON_*` constant.
+   integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_STATE` in headless and remote modes,
+                                                    !< `FIG_ERR_ARGUMENT` if `icon` is not one icon.
+
+   call figure_check(fig_set_icon_glyph(icon, len(icon, c_int)), stat)
+   endsubroutine set_icon_glyph
 
    subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, token, url, stat)
    !< Create the contexts and serve the UI to a web browser on `http://host:port/` instead of opening a window: the

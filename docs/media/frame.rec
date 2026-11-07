@@ -1,0 +1,17 @@
+#! program build/docs-examples/bin/cb_frame
+#! frames  210
+#! poster  66
+# the bar drawn by FIGURE: open the File menu from it, look along it, then hover minimize, maximize and close
+0   move 450 300
+10  move 45 10 14
+30  down
+32  up
+40  move 70 56 12
+80  move 450 300 10
+92  down
+94  up
+100 move 300 10 14
+120 move 816 10 14
+140 move 850 10 10
+160 move 883 10 10
+185 move 600 300 15
