@@ -41,6 +41,7 @@ graph LR
 - [init_remote](#init-remote)
 - [set_lazy](#set-lazy)
 - [set_style](#set-style)
+- [palette_color](#palette-color)
 - [set_font](#set-font)
 - [load_style](#load-style)
 - [save_style](#save-style)
@@ -63,6 +64,8 @@ graph LR
 - [quit_requested](#quit-requested)
 - [title](#title)
 - [content_scale](#content-scale)
+- [opt](#opt)
+- [opt_len](#opt-len)
 
 ## Derived Types
 
@@ -88,7 +91,8 @@ A FIGURE application (one per program).
 | `init_remote` | pass(self) | The UI in a web browser (no window, display or GPU). |
 | `next_frame` | pass(self) | Close the current frame, open the next; false on quit. |
 | `set_lazy` | pass(self) | Lazy redraw on/off, longest sleep. |
-| `set_style` | pass(self) | Colours of the interface, the plots and the background. |
+| `set_style` | pass(self) | The style: a name, or a look and a palette. |
+| `palette_color` | pass(self) | The colour of a palette role in effect. |
 | `set_docking` | pass(self) | Docking on (the default) or off. |
 | `set_font` | pass(self) | The default font and its size. |
 | `load_style` | pass(self) | A theme file. |
@@ -247,7 +251,10 @@ flowchart TD
 
 ### set_style
 
-Colours of the interface, the plots and the window background, by name, after `init*`:
+The style of the interface, the plots and the window's background, after `init*`: by name, or by its two parts,
+ a look (the geometry) and a palette (the colours). Changing one part keeps the other.
+
+ Names (each a theme file, `themes/<name>.toml`, embedded):
 
  - `'seal'` (the default), `'seal-light'`: FIGURE's, from its mark: ink (or paper) and one vermilion, spent on
    what the user touches and on the first plotted line; square corners;
@@ -255,13 +262,20 @@ Colours of the interface, the plots and the window background, by name, after `i
  - `'high-contrast'`: white on black with yellow accents, text at 7:1 or more (WCAG AAA);
  - `'dark'`, `'light'`, `'classic'`: Dear ImGui's own styles, with ImPlot's default line colours.
 
- `lines='okabe-ito'` replaces the style's line colours with Okabe and Ito's colour-blind-safe set. Each style is
- a theme file (`themes/<name>.toml`, embedded). The environment variable `FIGURE_STYLE` picks the style at
- initialisation; this call overrides it. The font and its size are kept; every other colour and variable comes from
- the style (base and theme file), so changes made by name are reset.
+ Looks: `'seal'`, `'fusion'`, `'adwaita'`, `'fluent'`. Palettes: `'seal'`, `'seal-light'`, `'paper'`,
+ `'high-contrast'`, `'nord'`, `'solarized-dark'`, `'solarized-light'`, `'gruvbox-dark'`, `'gruvbox-light'`,
+ `'dracula'`, `'catppuccin-mocha'`, `'catppuccin-latte'`, `'tokyo-night'`, `'one-dark'`, and `'auto'`, which
+ follows the system's light or dark setting (`auto_dark`, default `'seal'`; `auto_light`, default `'seal-light'`)
+ and changes with it while the program runs; in headless and remote modes the setting is unknown and counts as
+ dark. A palette's colours are derived from twelve roles and checked for contrast (docs, Styles, Palettes).
+
+ The parts are applied in order, all or none: `name`, then `look`, then `palette`, then `lines` (`'okabe-ito'`
+ replaces the line colours with Okabe and Ito's colour-blind-safe set). The environment variable `FIGURE_STYLE`
+ picks the style at initialisation; this call overrides it. The font and its size are kept; colours and variables
+ changed by name are reset by the part that sets them.
 
 ```fortran
-subroutine set_style(self, name, lines, stat)
+subroutine set_style(self, name, lines, stat, look, palette, auto_dark, auto_light)
 ```
 
 **Arguments**
@@ -269,17 +283,54 @@ subroutine set_style(self, name, lines, stat)
 | Name | Type | Intent | Attributes | Description |
 |------|------|--------|------------|-------------|
 | `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
-| `name` | character(len=*) | in |  | Style name. |
+| `name` | character(len=*) | in | optional | Style name. |
 | `lines` | character(len=*) | in | optional | Line palette: `'okabe-ito'` (default: the style's own). |
-| `stat` | integer(kind=int32) | out | optional |  |
+| `stat` | integer(kind=int32) | out | optional | palette, a palette below the contrast rule, or no argument. |
+| `look` | character(len=*) | in | optional | Look: the geometry (rounding, padding, spacing, borders). |
+| `palette` | character(len=*) | in | optional | Palette: the colours, or `'auto'`. |
+| `auto_dark` | character(len=*) | in | optional | Palette of `'auto'` on a dark system (default `'seal'`). |
+| `auto_light` | character(len=*) | in | optional | Palette of `'auto'` on a light system (default |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
-  set_style["set_style"] --> fig_set_style["fig_set_style"]
+  set_style["set_style"] --> fig_set_style_parts["fig_set_style_parts"]
   set_style["set_style"] --> figure_check["figure_check"]
+  set_style["set_style"] --> opt["opt"]
+  set_style["set_style"] --> opt_len["opt_len"]
   style set_style fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### palette_color
+
+The colour of a palette role in effect, as `[r, g, b, a]` in [0, 1]: `'background'`, `'surface'`,
+ `'raised_surface'`, `'border'`, `'text'`, `'dimmed_text'`, `'accent'`, `'text_on_accent'`, `'selection'`,
+ `'success'`, `'warning'`, `'error'`. With a style that has no palette (`'dark'`, `'light'`, `'classic'`, a theme
+ file without one), the roles are read from Dear ImGui's colours (`WindowBg`, `FrameBg`, `Button`, `Border`,
+ `Text`, `TextDisabled`, `CheckMark`, `Header`), and success, warning and error are Okabe and Ito's bluish green,
+ orange and vermilion. After `init*`; the same in every mode.
+
+```fortran
+subroutine palette_color(self, role, rgba, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
+| `role` | character(len=*) | in |  | Role name. |
+| `rgba` | real(kind=real64) | out |  | Colour, components in [0, 1]. |
+| `stat` | integer(kind=int32) | out | optional | Status: `FIG_ERR_ARGUMENT` for an unknown role. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  palette_color["palette_color"] --> fig_palette_color["fig_palette_color"]
+  palette_color["palette_color"] --> figure_check["figure_check"]
+  style palette_color fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### set_font
@@ -869,4 +920,56 @@ function content_scale(self) result(scale)
 flowchart TD
   content_scale["content_scale"] --> fig_content_scale["fig_content_scale"]
   style content_scale fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### opt
+
+An optional string, or '' when absent (the native layer takes a length of 0 as not given).
+
+**Attributes**: pure
+
+**Returns**: `character(len=:)`
+
+```fortran
+function opt(s) result(v)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `s` | character(len=*) | in | optional | String. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_style["set_style"] --> opt["opt"]
+  style opt fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### opt_len
+
+The length of an optional string, 0 when absent.
+
+**Attributes**: pure
+
+**Returns**: `integer(kind=c_int)`
+
+```fortran
+function opt_len(s) result(n)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `s` | character(len=*) | in | optional | String. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  set_style["set_style"] --> opt_len["opt_len"]
+  style opt_len fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

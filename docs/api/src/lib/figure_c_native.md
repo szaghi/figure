@@ -29,6 +29,9 @@ graph LR
 - [fig_end_frame](#fig-end-frame)
 - [fig_set_ini_file](#fig-set-ini-file)
 - [fig_set_style](#fig-set-style)
+- [fig_set_style_parts](#fig-set-style-parts)
+- [fig_palette_color](#fig-palette-color)
+- [fig_input_system_theme](#fig-input-system-theme)
 - [fig_remote_token](#fig-remote-token)
 - [fig_file_dialog](#fig-file-dialog)
 - [fig_file_dialog_result](#fig-file-dialog-result)
@@ -117,6 +120,12 @@ graph LR
 ### fig_set_ini_file
 
 ### fig_set_style
+
+### fig_set_style_parts
+
+### fig_palette_color
+
+### fig_input_system_theme
 
 ### fig_remote_token
 

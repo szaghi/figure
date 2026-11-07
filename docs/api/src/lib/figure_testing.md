@@ -42,6 +42,7 @@ graph LR
 - [test_next_frame](#test-next-frame)
 - [test_plot_tick](#test-plot-tick)
 - [test_quit](#test-quit)
+- [test_system_theme](#test-system-theme)
 - [test_mouse_move](#test-mouse-move)
 - [test_mouse_button](#test-mouse-button)
 - [test_click](#test-click)
@@ -130,6 +131,33 @@ flowchart TD
   test_quit["test_quit"] --> fig_input_quit["fig_input_quit"]
   test_quit["test_quit"] --> figure_check["figure_check"]
   style test_quit fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### test_system_theme
+
+The system's light or dark setting changes, as SDL's theme-changed event reports it, at the next frame:
+ `palette='auto'` (`app%set_style`) is chosen again. `theme` is `'light'`, `'dark'`, or `'system'` (the real
+ setting again, read from SDL in window mode; unknown, so dark, in headless and remote modes). Works in every mode.
+
+```fortran
+subroutine test_system_theme(theme, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `theme` | character(len=*) | in |  | `'light'`, `'dark'` or `'system'`. |
+| `stat` | integer(kind=int32) | out | optional | before `init*`. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  test_system_theme["test_system_theme"] --> fig_input_system_theme["fig_input_system_theme"]
+  test_system_theme["test_system_theme"] --> figure_check["figure_check"]
+  test_system_theme["test_system_theme"] --> figure_fail["figure_fail"]
+  style test_system_theme fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### test_mouse_move
