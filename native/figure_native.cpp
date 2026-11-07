@@ -1772,6 +1772,7 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    ImGui_ImplSDL3_InitForOpenGL(st.window, st.gl);
    ImGui_ImplOpenGL3_Init(glsl);
    st.m = mode::window;
+   fig_file_browser_reset(1, cap.on ? 0 : 1); // a capture reads nothing of the user's: no recent folders
    apply_initial_style();
    st.frames_left = 3;
    rs = redraw_stats_t{};
@@ -1802,6 +1803,7 @@ int fig_init_headless(int width, int height) {
    pio.Platform_SetClipboardTextFn = headless_set_clipboard;
    pio.Platform_GetClipboardTextFn = headless_get_clipboard;
    st.m = mode::headless;
+   fig_file_browser_reset(1, 0); // tests: the recent folders in memory, or in the file a test names
    st.frame.on = frame_options.decorations == 1; // the bar drawn, its actions recorded as state (tests)
    st.frame.buttons_left = frame_options.buttons == 2 || (frame_options.buttons == 0 && frame_buttons_left_default());
    frame_options = frame_options_t{};
@@ -1828,6 +1830,7 @@ int fig_init_remote(int width, int height, const char *host, int host_len, int p
    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
    io.BackendPlatformName = "figure_remote";
    st.m = mode::remote;
+   fig_file_browser_reset(1, 1);
    apply_initial_style();
    st.frames_left = 3;
    st.last_frame = std::chrono::steady_clock::now();
@@ -2384,7 +2387,8 @@ int fig_end_frame(void) {
    if (fig_task_refuse("app%next_frame", 14)) return FIG_ERR_STATE; // a task does not draw
    if (!st.in_frame) return fail(FIG_ERR_STATE, "end_frame without begin_frame");
    frame_bar_close();
-   draw_notifications(); // after the program's windows, above them
+   fig_file_browser_draw(); // FIGURE's file browser, a modal over the program's windows
+   draw_notifications();    // after the program's windows, above them
    st.in_frame = false;
    ImGui::Render();
    if (st.m == mode::headless) {
@@ -2456,6 +2460,7 @@ void fig_shutdown(void) {
    cap = capture_t{};
    notes.clear();
    note_rects.clear();
+   fig_file_browser_reset(0, 0);
 }
 
 int fig_texture_create(int width, int height, int smooth, unsigned long long *id) {
@@ -2824,6 +2829,7 @@ int fig_file_dialog(int kind, const char *id, int id_len, const char *filters, i
       return fail(FIG_ERR_STATE, "file dialogs need a window: in remote and headless modes ask for the path in a field");
    if (kind < 0 || kind > 2) return fail(FIG_ERR_ARGUMENT, "file dialog: unknown kind");
    const std::string key(id, id_len > 0 ? static_cast<size_t>(id_len) : 0);
+   if (fig_file_browser_pending(id, id_len)) return fail(FIG_ERR_STATE, "file browser \"" + key + "\" is already open");
    auto d = std::make_unique<file_dialog_t>();
    const std::string f(filters, filters_len > 0 ? static_cast<size_t>(filters_len) : 0);
    for (size_t start = 0; start < f.size();) {
@@ -2878,7 +2884,8 @@ int fig_file_dialog_result(const char *id, int id_len, char *buf, int buf_len, i
    {
       std::lock_guard<std::mutex> lock(dialogs_mutex);
       auto it = dialogs.find(key);
-      if (it == dialogs.end()) return FIG_OK; // no dialog with this id: nothing to report (state 0)
+      if (it == dialogs.end()) // no system dialog with this id: FIGURE's browser, if any (else state 0)
+         return fig_file_browser_result(id, id_len, buf, buf_len, state, path_len);
       *state = it->second->state;
       if (*state == 0) return FIG_OK;
       done = std::move(it->second);
@@ -2898,6 +2905,13 @@ int fig_file_dialog_result(const char *id, int id_len, char *buf, int buf_len, i
 #endif
    }
    return FIG_OK;
+}
+
+int fig_file_dialog_pending(const char *id, int id_len) {
+   const std::string           key(id, id_len > 0 ? static_cast<size_t>(id_len) : 0);
+   std::lock_guard<std::mutex> lock(dialogs_mutex);
+   const auto                  it = dialogs.find(key);
+   return it != dialogs.end() && it->second->state == 0 ? 1 : 0;
 }
 
 int fig_save_layout(const char *path, int path_len, const char *comment, int comment_len) {

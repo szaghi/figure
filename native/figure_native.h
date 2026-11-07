@@ -144,6 +144,29 @@ int    fig_input_system_theme(int theme);
 int    fig_file_dialog(int kind, const char *id, int id_len, const char *filters, int filters_len, const char *path,
                        int path_len);
 int    fig_file_dialog_result(const char *id, int id_len, char *buf, int buf_len, int *state, int *path_len);
+/* 1 while the system's dialog `id` is open (no answer yet). */
+int    fig_file_dialog_pending(const char *id, int id_len);
+/* File browser (figure_files.cpp): FIGURE's own dialog, a modal drawn in Dear ImGui at the end of each frame, in every
+ * mode; kind 0 open a file, 1 save a file, 2 choose a folder; filters and path as fig_file_dialog. Answered through
+ * fig_file_dialog_result (state 1 chosen, 2 cancelled). An id open in either kind of dialog is refused. The recent
+ * folders are kept in the settings file: SDL_GetPrefPath("", "figure")/settings.ini in window and remote modes, none
+ * (memory only) in headless mode and during a capture; fig_file_browser_settings names another (empty: none) until the
+ * program ends. Tests: get(what, index) copies into buf (len its length; count: the list's length, or 1) 0 the folder,
+ * 1 entry `index` shown (folders end in '/'), 2 the error shown, 3 "1" while a replace is asked, 4 the path field, 5
+ * recent folder `index`, 6 the name field; nothing (count 0) without a browser, but for 5. rect: a part of the browser
+ * drawn in the last frame (names in figure_testing's test_file_browser_rect). */
+int    fig_file_browser(int kind, const char *id, int id_len, const char *filters, int filters_len, const char *path,
+                        int path_len);
+int    fig_file_browser_settings(const char *path, int path_len);
+int    fig_file_browser_get(int what, int index, char *buf, int buf_len, int *len, int *count);
+int    fig_file_browser_rect(const char *part, int part_len, float *rect, int *found);
+/* Internal (figure_native.cpp): a browser open with this id; its answer, as fig_file_dialog_result; draw the front
+ * browser (in fig_end_frame); forget every browser and answer, at init (init 1; keep 1: the settings file of SDL's
+ * pref path) and at shutdown (0, 0). */
+int    fig_file_browser_pending(const char *id, int id_len);
+int    fig_file_browser_result(const char *id, int id_len, char *buf, int buf_len, int *state, int *path_len);
+void   fig_file_browser_draw(void);
+void   fig_file_browser_reset(int init, int keep);
 int    fig_save_image(const char *path, int path_len, double x0, double y0, double x1, double y1);
 int    fig_image_result(char *buf, int buf_len, int *state, int *path_len);
 int    fig_save_layout(const char *path, int path_len, const char *comment, int comment_len);

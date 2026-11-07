@@ -25,7 +25,8 @@ use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
-                            fig_frame_state, fig_notification_rect, fig_drawn_extent
+                            fig_frame_state, fig_notification_rect, fig_drawn_extent, fig_file_browser_get, &
+                            fig_file_browser_rect, fig_file_browser_settings
 use figure_imgui, only : ig_item_rect
 
 implicit none
@@ -33,6 +34,7 @@ private
 public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel, test_key, test_type
 public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick, test_system_theme
 public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_rect, test_drawn_extent
+public :: test_file_browser, test_file_browser_rect, test_settings_file
 
 contains
    subroutine test_next_frame(stat)
@@ -213,6 +215,103 @@ contains
    ymax = real(r(4), real64)
    if (present(found)) found = f == 1_c_int
    endsubroutine test_drawn_extent
+
+   subroutine test_file_browser(shown, folder, entries, error, asking, path_field, name_field, recent)
+   !< The file browser in front (`app%open_file_browser`, `app%save_file_browser`), as it stands after the last frame:
+   !< `shown` false without one (then the texts are '' and the lists empty, but `recent`). `folder`: the folder listed
+   !< (absolute); `entries`: the entries shown, in the order shown, folders ending in `/` (blank-padded to the longest);
+   !< `error`: the error shown ('' none); `asking`: a save over an existing file is being asked; `path_field`,
+   !< `name_field`: the texts of the path and name fields; `recent`: the recent folders, newest first (also without a
+   !< browser). Texts are UTF-8.
+   logical,                       intent(out)           :: shown      !< A browser is open.
+   character(len=:), allocatable, intent(out), optional :: folder     !< Folder listed.
+   character(len=:), allocatable, intent(out), optional :: entries(:) !< Entries shown.
+   character(len=:), allocatable, intent(out), optional :: error      !< Error shown.
+   logical,                       intent(out), optional :: asking     !< Replacing a file is asked.
+   character(len=:), allocatable, intent(out), optional :: path_field !< Path field.
+   character(len=:), allocatable, intent(out), optional :: name_field !< Name field.
+   character(len=:), allocatable, intent(out), optional :: recent(:)  !< Recent folders.
+   character(len=:), allocatable                        :: text       !< A text.
+   integer(c_int)                                       :: n          !< Count.
+
+   text = browser_text(0_c_int, 1_c_int, n)
+   shown = n > 0_c_int
+   if (present(folder)) folder = text
+   if (present(entries)) call browser_list(1_c_int, entries)
+   if (present(error)) error = browser_text(2_c_int, 1_c_int, n)
+   if (present(asking)) asking = browser_text(3_c_int, 1_c_int, n) == '1'
+   if (present(path_field)) path_field = browser_text(4_c_int, 1_c_int, n)
+   if (present(name_field)) name_field = browser_text(6_c_int, 1_c_int, n)
+   if (present(recent)) call browser_list(5_c_int, recent)
+   endsubroutine test_file_browser
+
+   subroutine test_file_browser_rect(part, xmin, ymin, xmax, ymax, found)
+   !< The rectangle [pixels] of a part of the file browser in front, as drawn in the last frame: `'entry:NAME'` (an
+   !< entry's row, by its name; rows out of view are not drawn), `'parent'`, `'refresh'`, `'path'`, `'new folder'`,
+   !< `'new folder name'`, `'create'`, `'sort:name'`, `'sort:size'`, `'sort:modified'` (the columns' headers),
+   !< `'place:home'`, `'place:cwd'`, `'place:root:N'`, `'place:recent:N'`, `'name'`, `'filter'` and, while its list is
+   !< open, `'filter:N'`, `'hidden'`, `'cancel'`, `'ok'` (Open, Save or Choose), and, while a replace is asked,
+   !< `'replace'` and `'keep'`. `found` is false for a part not drawn.
+   character(len=*), intent(in)            :: part  !< Part.
+   real(real64),     intent(out)           :: xmin  !< Left.
+   real(real64),     intent(out)           :: ymin  !< Top.
+   real(real64),     intent(out)           :: xmax  !< Right.
+   real(real64),     intent(out)           :: ymax  !< Bottom.
+   logical,          intent(out), optional :: found !< It was drawn.
+   real(c_float)                           :: r(4)  !< Native rectangle.
+   integer(c_int)                          :: f     !< Found flag.
+
+   r = 0.0_c_float
+   if (fig_file_browser_rect(part, len(part, c_int), r, f) /= 0_c_int) f = 0_c_int
+   xmin = real(r(1), real64)
+   ymin = real(r(2), real64)
+   xmax = real(r(3), real64)
+   ymax = real(r(4), real64)
+   if (present(found)) found = f == 1_c_int
+   endsubroutine test_file_browser_rect
+
+   subroutine test_settings_file(path, stat)
+   !< The settings file that keeps the file browser's recent folders, instead of FIGURE's own, until the program ends:
+   !< read when a browser opens, written when one is answered. `''`: none, the recent folders are kept in memory only
+   !< (the default in headless mode). Before or after `init*`.
+   character(len=*), intent(in)            :: path !< File.
+   integer(int32),   intent(out), optional :: stat !< Status.
+
+   call figure_check(fig_file_browser_settings(path, len(path, c_int)), stat)
+   endsubroutine test_settings_file
+
+   function browser_text(what, index, count) result(text)
+   !< A text of the browser in front (fig_file_browser_get).
+   integer(c_int), intent(in)       :: what  !< Query.
+   integer(c_int), intent(in)       :: index !< Index, from 1.
+   integer(c_int), intent(out)      :: count !< The list's length (0: no browser).
+   character(len=:), allocatable    :: text  !< Text.
+   character(kind=c_char, len=4096) :: buf   !< Buffer.
+   integer(c_int)                   :: l     !< Length.
+
+   text = ''
+   if (fig_file_browser_get(what, index, buf, len(buf, c_int), l, count) /= 0_c_int) count = 0_c_int
+   if (l > 0_c_int) text = buf(1:min(l, len(buf, c_int)))
+   endfunction browser_text
+
+   subroutine browser_list(what, list)
+   !< A list of the browser in front (fig_file_browser_get), blank-padded to the longest.
+   integer(c_int),                intent(in)  :: what    !< Query.
+   character(len=:), allocatable, intent(out) :: list(:) !< Texts.
+   character(len=:), allocatable              :: text    !< A text.
+   integer(c_int)                             :: n, i, longest, m !< Counts.
+
+   text = browser_text(what, 1_c_int, n)
+   longest = 0_c_int
+   do i = 1_c_int, n
+      text = browser_text(what, i, m)
+      longest = max(longest, len(text, c_int))
+   enddo
+   allocate(character(len=longest) :: list(n))
+   do i = 1_c_int, n
+      list(i) = browser_text(what, i, m)
+   enddo
+   endsubroutine browser_list
 
    subroutine test_mouse_move(x, y, stat)
    !< Queue a move of the mouse to (x, y).

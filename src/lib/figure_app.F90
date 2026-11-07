@@ -27,7 +27,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_conte
                             fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title, fig_save_image, &
                             fig_image_result, fig_save_layout, fig_load_layout, fig_set_style_parts, fig_palette_color, &
                             fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_notify,              &
-                            fig_notification_count, fig_notification_get
+                            fig_notification_count, fig_notification_get, fig_file_browser
 use figure_icons, only : ICON_CIRCLE_CHECK, ICON_CIRCLE_X, ICON_INFO, ICON_TRIANGLE_ALERT
 
 implicit none
@@ -61,7 +61,9 @@ type :: app_object
       procedure, pass(self) :: open_file_dialog   !< The system's dialog to choose a file to open.
       procedure, pass(self) :: save_file_dialog   !< The system's dialog to choose where to save.
       procedure, pass(self) :: open_folder_dialog !< The system's dialog to choose a folder.
-      procedure, pass(self) :: file_dialog_result !< The answer to a dialog, once given.
+      procedure, pass(self) :: open_file_browser  !< FIGURE's browser to choose a file (or a folder) to open.
+      procedure, pass(self) :: save_file_browser  !< FIGURE's browser to choose where to save.
+      procedure, pass(self) :: file_dialog_result !< The answer to a dialog or a browser, once given.
       procedure, pass(self) :: save_image     !< A rectangle of the window as a PNG file, after this frame.
       procedure, pass(self) :: image_result   !< The outcome of save_image, once.
       procedure, pass(self) :: save_layout    !< The arrangement of the windows (docking included) to a file.
@@ -290,7 +292,7 @@ contains
    call figure_check(status, stat)
    endsubroutine init_remote
 
-   function next_frame(self, stat) result(running)
+   recursive function next_frame(self, stat) result(running)
    !< Render the open frame (if any), then process input and open the next; `.false.` when the user quits.
    class(app_object), intent(inout)        :: self    !< Application.
    integer(int32),    intent(out), optional :: stat   !< Status.
@@ -384,7 +386,7 @@ contains
    rgba = real(c, real64)
    endsubroutine palette_color
 
-   subroutine notify(self, text, kind, seconds, stat)
+   recursive subroutine notify(self, text, kind, seconds, stat)
    !< Tell the user something without a dialog: a notification drawn by FIGURE after the program's windows, in the
    !< bottom-right corner (above a bottom side bar), the newest at the bottom, older ones stacked above. `kind`:
    !< `'info'` (default), `'success'`, `'warning'` or `'error'`, drawn with its palette role (accent, success, warning,
@@ -574,7 +576,7 @@ contains
    !< Show the system's dialog to choose a file to open. It does not block: the interface keeps drawing, and the answer
    !< is read with `file_dialog_result(id, ...)` on the following frames. `filters`: entries `'name|pattern'`, the
    !< pattern being extensions separated by `;` (`'Input files|input;inp'`, `'All files|*'`). Window mode only:
-   !< `FIG_ERR_STATE` in remote and headless modes (ask for the path in a text field there).
+   !< `FIG_ERR_STATE` in remote and headless modes (FIGURE's own browser, `open_file_browser`, works there).
    class(app_object), intent(inout)         :: self         !< Application.
    character(len=*),  intent(in)            :: id           !< Dialog id (any text, used to read the answer).
    character(len=*),  intent(in),  optional :: filters(:)   !< File type filters.
@@ -608,11 +610,52 @@ contains
    call show_file_dialog(2_c_int, id, default_path=default_path, stat=stat)
    endsubroutine open_folder_dialog
 
+   recursive subroutine open_file_browser(self, id, filters, default_path, folders, stat)
+   !< Show FIGURE's file browser to choose a file to open (or, with `folders`, a folder): a modal drawn by FIGURE in
+   !< Dear ImGui, in the palette's colours, the same in window, remote and headless modes (in remote mode it lists the
+   !< files of the machine the program runs on). It does not block: the answer is read with `file_dialog_result(id,
+   !< ...)`, as a system dialog's, so a program switches between the two by changing this call. The browser lists the
+   !< folder's entries (folders first, sizes, modification times; sorted by a click on a column's header), filtered by
+   !< `filters` (as `open_file_dialog`'s, chosen in a list) with hidden files on request; a path field (Enter goes
+   !< there, Tab completes), the parent folder, places (home, the working directory, the file systems' roots, the
+   !< recent folders kept between runs in FIGURE's settings file) and a new folder. Escape or Cancel cancels. A folder
+   !< that cannot be read is reported in the browser. Statuses: `FIG_ERR_STATE` before `init*`, from a task, or for an
+   !< id with a dialog or a browser still open; `FIG_ERR_ARGUMENT` for a malformed filter.
+   class(app_object), intent(inout)         :: self         !< Application.
+   character(len=*),  intent(in)            :: id           !< Dialog id (any text, used to read the answer).
+   character(len=*),  intent(in),  optional :: filters(:)   !< File type filters, `'name|pattern'` (the first in effect).
+   character(len=*),  intent(in),  optional :: default_path !< Folder to start in, or a file (its folder; the file
+                                                            !< selected); relative: to the working directory (absent:
+                                                            !< that directory).
+   logical,           intent(in),  optional :: folders      !< Choose a folder instead of a file (default false).
+   integer(int32),    intent(out), optional :: stat         !< Status.
+   integer(c_int)                           :: kind         !< 0 open a file, 2 choose a folder.
+
+   if (figure_refused('app%open_file_browser', stat)) return ! a task does not draw
+   kind = 0_c_int
+   if (present(folders)) kind = merge(2_c_int, 0_c_int, folders)
+   call show_file_browser(kind, id, filters, default_path, stat)
+   endsubroutine open_file_browser
+
+   recursive subroutine save_file_browser(self, id, filters, default_path, stat)
+   !< Show FIGURE's file browser to choose where to save: a name typed in the folder shown, or an existing file; a file
+   !< that exists is replaced only after the user says so. As `open_file_browser`; `default_path` may name the file
+   !< to propose (its folder need exist, the file need not).
+   class(app_object), intent(inout)         :: self         !< Application.
+   character(len=*),  intent(in)            :: id           !< Dialog id.
+   character(len=*),  intent(in),  optional :: filters(:)   !< File type filters, `'name|pattern'`.
+   character(len=*),  intent(in),  optional :: default_path !< Folder to start in, or the file to propose.
+   integer(int32),    intent(out), optional :: stat         !< Status.
+
+   if (figure_refused('app%save_file_browser', stat)) return ! a task does not draw
+   call show_file_browser(1_c_int, id, filters, default_path, stat)
+   endsubroutine save_file_browser
+
    subroutine file_dialog_result(self, id, path, done, cancelled, stat)
-   !< The answer to the dialog `id`: `done` false while it is open; once answered, `done` true and either `path` (the
-   !< file or folder chosen) or `cancelled` true. The answer is given once; then the id is free again, and until the
-   !< next dialog `done` is false: poll it every frame. A dialog that failed (Linux without a portal or zenity) gives
-   !< `done` true and `FIG_ERR_FAILED` with the reason.
+   !< The answer to the dialog or the browser `id`: `done` false while it is open; once answered, `done` true and
+   !< either `path` (the file or folder chosen, absolute for the browser) or `cancelled` true. The answer is given once;
+   !< then the id is free again, and until the next dialog `done` is false: poll it every frame. A dialog that failed
+   !< (Linux without a portal or zenity) gives `done` true and `FIG_ERR_FAILED` with the reason.
    class(app_object),             intent(inout)         :: self      !< Application.
    character(len=*),              intent(in)            :: id        !< Dialog id.
    character(len=:), allocatable, intent(out)           :: path      !< Chosen path ('' while open or if cancelled).
@@ -739,6 +782,30 @@ contains
       call figure_check(fig_file_dialog(kind, id, len(id, c_int), joined, len(joined, c_int), '', 0_c_int), stat)
    endif
    endsubroutine show_file_dialog
+
+   subroutine show_file_browser(kind, id, filters, default_path, stat)
+   !< Open FIGURE's file browser of `kind` (0 open, 1 save, 2 folder).
+   integer(c_int),   intent(in)            :: kind         !< Kind.
+   character(len=*), intent(in)            :: id           !< Dialog id.
+   character(len=*), intent(in), optional  :: filters(:)   !< 'name|pattern' entries.
+   character(len=*), intent(in), optional  :: default_path !< Where to start.
+   integer(int32),   intent(out), optional :: stat         !< Status.
+   character(len=:), allocatable           :: joined       !< Filters joined by newlines.
+   integer(int32)                          :: k            !< Counter.
+
+   joined = ''
+   if (present(filters)) then
+      do k = 1_int32, size(filters, kind=int32)
+         joined = joined//trim(filters(k))//new_line('a')
+      enddo
+   endif
+   if (present(default_path)) then
+      call figure_check(fig_file_browser(kind, id, len(id, c_int), joined, len(joined, c_int), default_path, &
+                                         len_trim(default_path, c_int)), stat)
+   else
+      call figure_check(fig_file_browser(kind, id, len(id, c_int), joined, len(joined, c_int), '', 0_c_int), stat)
+   endif
+   endsubroutine show_file_browser
 
    pure function opt(s) result(v)
    !< An optional string, or '' when absent (the native layer takes a length of 0 as not given).

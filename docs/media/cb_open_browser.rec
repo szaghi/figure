@@ -1,0 +1,25 @@
+#! program build/docs-examples/bin/cb_open_browser
+#! args    /tmp/figure-cases
+#! frames  230
+#! poster  85
+# Open shows the browser on the example cases (written by the program, fixed sizes and times); a click on Size sorts
+# the files by size, a double-click enters "cylinder Re100", a click chooses overset.input and Open answers
+0   move 300 300
+5   move 40 50 10
+15  down
+17  up
+35  move 565 148 15
+55  down
+57  up
+90  move 360 167 15
+110 down
+112 up
+116 down
+118 up
+135 move 380 168 10
+150 down
+152 up
+165 move 727 452 15
+185 down
+187 up
+200 move 450 320 15

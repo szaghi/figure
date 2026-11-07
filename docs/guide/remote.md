@@ -87,6 +87,15 @@ shared machine: the token would then travel unencrypted over the network.
   as ctrl, so the program's `ig_shortcut('ctrl+s')` is cmd+s there, as in a window on macOS
   ([Menus and shortcuts](menus#shortcuts)).
 
+## Opening and saving files
+
+The program's files are on the machine it runs on, which the browser's computer cannot see; and there is no desktop
+to show the system's file dialog (`app%open_file_dialog` is refused with `FIG_ERR_STATE`). FIGURE's file browser,
+`app%open_file_browser` and `app%save_file_browser`, is drawn by the program like the rest of its interface: it lists
+the server's folders and returns the server's paths, answered through `app%file_dialog_result` as the system's dialog
+is ([File dialogs](frame-loop#file-dialogs)). Nothing is uploaded or downloaded: the program reads and writes its own
+files.
+
 ## Bandwidth
 
 How the cost of what you draw carries over to the network, and what to do about it:

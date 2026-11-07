@@ -164,6 +164,11 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   determinate or indeterminate; `app%notify`, notifications drawn by FIGURE in the palette's roles with an icon per
   kind, stacked, fading at the end of their time, dismissed by a click, the last 100 kept (`app%notifications`); the
   status bar as a recipe on the bottom side bar: done.
+- **A file browser drawn by FIGURE** ([File dialogs](frame-loop#figure-s-file-browser)): `app%open_file_browser`
+  and `app%save_file_browser`, answered through `app%file_dialog_result` as the system's dialogs, the same in window,
+  remote and headless modes: folders first with sizes and dates, sorting, filters, hidden files on request, a path
+  field with Tab completion, the parent, places (home, working directory, roots, recent folders kept between runs in
+  FIGURE's settings file), a new folder, a question before a save replaces a file, errors shown in the browser: done.
 
 ## Next
 

@@ -138,30 +138,92 @@ one core, with its resolution. The kernel counts CPU time in clock ticks, usuall
 
 ## File dialogs
 
-The system's own dialogs, to choose a file to open, where to save, or a folder:
+Two kinds of dialog choose a file to open, where to save, or a folder: the **system's own** (window mode only), and
+**FIGURE's file browser**, drawn by FIGURE in Dear ImGui, the same in every mode. Both are answered through
+`app%file_dialog_result`, so a program switches from one to the other by changing one call:
 
 <<< @/examples/snippets/cb_open-open.F90{fortran}
 
 | Procedure | Notes |
 |---|---|
-| `app%open_file_dialog(id [, filters] [, default_path] [, stat])` | Choose an existing file. |
-| `app%save_file_dialog(id [, filters] [, default_path] [, stat])` | Choose where to save: a new or an existing file. |
-| `app%open_folder_dialog(id [, default_path] [, stat])` | Choose a folder. |
-| `app%file_dialog_result(id, path, done [, cancelled] [, stat])` | The answer: `done` once the user answered, then `path`, or `cancelled`. |
+| `app%open_file_dialog(id [, filters] [, default_path] [, stat])` | The system's dialog: choose an existing file. |
+| `app%save_file_dialog(id [, filters] [, default_path] [, stat])` | The system's dialog: choose where to save, a new or an existing file. |
+| `app%open_folder_dialog(id [, default_path] [, stat])` | The system's dialog: choose a folder. |
+| `app%open_file_browser(id [, filters] [, default_path] [, folders] [, stat])` | FIGURE's browser: choose an existing file, or with `folders=.true.` a folder. |
+| `app%save_file_browser(id [, filters] [, default_path] [, stat])` | FIGURE's browser: choose where to save; replacing a file is asked first. |
+| `app%file_dialog_result(id, path, done [, cancelled] [, stat])` | The answer to either kind: `done` once the user answered, then `path`, or `cancelled`. |
 
-- **Asynchronous.** The dialog does not block the program: the interface keeps drawing, and the answer arrives on a
-  later frame. Poll `file_dialog_result` every frame; it is `done` once per answer, with nothing to report before or
-  after. `id` is any text: it names the dialog whose answer is read.
+**Which one.** The system's dialog looks like the rest of the desktop and knows its bookmarks, but needs a desktop:
+in remote and headless modes it is refused. The browser works everywhere: in [remote mode](remote) it is the way to
+choose a file on the machine the program runs on, and in headless tests it is driven like any other part of the
+interface ([Testing](testing)). A program that runs in both modes asks for the system's dialog and opens the
+browser when it is refused, as above.
+
+**Common rules.**
+- **Asynchronous.** Neither blocks the program: the interface keeps drawing, and the answer arrives on a later frame.
+  Poll `file_dialog_result` every frame; it is `done` once per answer, with nothing to report before or after. `id`
+  is any text: it names the dialog whose answer is read. An `id` whose dialog or browser is still open is refused with
+  `FIG_ERR_STATE`.
 - **Filters** are entries `'name|pattern'`, the pattern being extensions separated by `;`: `'Input files|input;inp'`,
-  `'All files|*'`. Platforms may let the user ignore them.
-- **Where it starts.** `default_path` is a folder, or a file (a save dialog proposes its name); a relative one is taken
-  from the program's working directory, and without one the dialog starts there. (On Linux the dialog is shown by
-  another process, the desktop portal or `zenity`, which would otherwise start from its own directory, the home.)
+  `'All files|*'`. The first is in effect when the dialog opens. The system's dialogs may let the user ignore them.
+- **Where it starts.** `default_path` is a folder, or a file (a save dialog proposes its name, the browser's open
+  selects it); a relative one is taken from the program's working directory, and without one the dialog starts there.
+  (On Linux the system's dialog is shown by another process, the desktop portal or `zenity`, which would otherwise
+  start from its own directory, the home.)
+- **Statuses.** `FIG_ERR_STATE` before `init*`, from a [task](processes#tasks), or for an `id` already open;
+  `FIG_ERR_ARGUMENT` for a filter without `|`. The `stat` argument is optional (absent: `error stop` with the
+  message).
+
+### The system's dialogs
+
 - **Window mode only.** In remote and headless modes there is no desktop to show a dialog on: the calls return
-  `FIG_ERR_STATE`, and the program asks for the path in a text field instead, as above.
+  `FIG_ERR_STATE`.
 - **Platforms.** SDL3 shows the platform's dialog: Windows' and macOS' own; on Linux the desktop portal or `zenity`
   ([run-time needs](install#linux-packages)). A dialog that cannot be shown answers `done` with `FIG_ERR_FAILED` and
   the reason.
+
+### FIGURE's file browser
+
+<Media name="cb_open_browser" alt="A window with Open and Save as buttons. Open shows the file browser over it: on the left the places Home, Working folder and the root; on the right the folder's entries, three case folders first, then the files with their sizes and modification times; the filter shows Xall files, so notes.txt is not listed. A click on the Size header sorts the files by size, a double-click enters the folder cylinder Re100, a click on overset.input and on Open closes the browser, and the window shows the file opened." caption="docs/examples/src/cb_open_browser.F90" />
+
+<<< @/examples/snippets/cb_open_browser-browser.F90{fortran}
+
+A modal drawn by FIGURE (Dear ImGui's popup modal) over the program's windows, in the colours of the
+[palette's roles](styles#looks-and-palettes): the accent for folders, the error role for what went wrong.
+
+- **The folder's entries**, folders first, with their sizes (bytes, KiB, MiB, ...) and modification times (local
+  time, `YYYY-MM-DD hh:mm`). A click on a column's header sorts by it (again: the other way); folders stay first. Only
+  the rows in view are drawn ([list clipper](widgets#lists-and-regions)), so a folder of many thousand files scrolls as fast
+  as a short one.
+- **A click** selects an entry (a file's name goes into the name field); **a double-click** enters a folder or chooses
+  a file. **Open** (**Save**, **Choose**) or Enter in the name field confirms; **Cancel**, the modal's close button or
+  Escape cancels.
+- **The path field** shows the folder. Type a path and press Enter to go there (a file's path chooses it); **Tab**
+  completes the last part of the path to the longest prefix common to the names that start with it, and a single
+  folder gets its separator. The arrow goes to the parent folder; the second button reads the folder again.
+- **Places** on the left: the home folder, the working directory, the file systems' roots (`/`; the drives on
+  Windows) and up to eight **recent folders**, those of the last answers, newest first. The recent folders are kept
+  between runs in FIGURE's settings file, `settings.ini` in the folder SDL gives programs for their settings
+  (`SDL_GetPrefPath`): `~/.local/share/figure/` on Linux, `~/Library/Application Support/figure/` on macOS,
+  `%APPDATA%\figure\` on Windows. The file is shared by every program built with FIGURE. In headless mode and while
+  [capturing](capture) the recent folders are kept in memory only: nothing of the user's is read, nothing written.
+- **Filters** in a list beside the name field; **hidden files** (names starting with a dot, and on Windows the hidden
+  attribute) on request; **a new folder** made in the folder shown (the third button).
+- **Saving** takes the name typed (as typed: no extension is added) in the folder shown; an existing file is replaced
+  only after the user answers **Replace** to the question; a name that is a folder enters it.
+- **Folders** (`folders=.true.`): the files are shown dimmed and cannot be chosen; **Choose** takes the selected folder,
+  or the one shown.
+- **Errors are shown in the browser,** under the path field, never fatal: a folder that cannot be read (permissions),
+  one that vanished meanwhile, a path that does not exist, a folder that cannot be made. The browser stays open.
+- **The answer** is an absolute path, in UTF-8, with the platform's separators. Names with spaces and non-ASCII
+  characters are listed and returned as they are ([known issues](known-issues#file-names-on-windows) for Fortran's own
+  `open` on Windows).
+- **One at a time.** Browsers opened together are shown one after the other, in the order opened. Opening one closes
+  the program's popups and menus open at that moment, as Dear ImGui does for any modal opened at the top level.
+
+**Modes.** Window and remote: the same browser, listing the files of the machine the program runs on (in remote
+mode, the server's, not the browser's computer). Headless: the same, driven by [`figure_testing`](testing); the recent
+folders in memory, or in a file a test names (`test_settings_file`).
 
 ## The window's frame
 

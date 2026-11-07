@@ -31,6 +31,7 @@ public :: fig_process_release
 public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_task_cancel, fig_task_cancelled
 public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
+public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig_file_browser_rect
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -502,6 +503,55 @@ interface
    integer(c_int), intent(out)         :: path_len !< Full length of the path.
    integer(c_int)                      :: status   !< Status.
    endfunction fig_file_dialog_result
+
+   function fig_file_browser(kind, id, id_len, filters, filters_len, path, path_len) result(status) &
+      bind(C, name='fig_file_browser')
+   !< Open FIGURE's file browser (every mode): kind 0 open a file, 1 save a file, 2 choose a folder.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value              :: kind        !< 0 open, 1 save, 2 folder.
+   character(kind=c_char), intent(in) :: id(*)       !< Dialog id (not NUL-terminated).
+   integer(c_int), value              :: id_len      !< Its length.
+   character(kind=c_char), intent(in) :: filters(*)  !< "name|pattern" entries separated by newlines.
+   integer(c_int), value              :: filters_len !< Their length.
+   character(kind=c_char), intent(in) :: path(*)     !< Where to start.
+   integer(c_int), value              :: path_len    !< Its length (0: the working directory).
+   integer(c_int)                     :: status      !< Status.
+   endfunction fig_file_browser
+
+   function fig_file_browser_settings(path, path_len) result(status) bind(C, name='fig_file_browser_settings')
+   !< The settings file keeping the recent folders, until the program ends ('': none, memory only).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File.
+   integer(c_int), value              :: path_len !< Its length.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_file_browser_settings
+
+   function fig_file_browser_get(what, idx, buf, buf_len, length, count) result(status) &
+      bind(C, name='fig_file_browser_get')
+   !< A text of the browser in front: 0 folder, 1 entry, 2 error, 3 asking, 4 path field, 5 recent folder, 6 name field.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value                :: what    !< Query.
+   integer(c_int), value                :: idx     !< Index in a list, from 1.
+   character(kind=c_char), intent(out)  :: buf(*)  !< Text.
+   integer(c_int), value                :: buf_len !< Buffer length.
+   integer(c_int), intent(out)          :: length  !< Full length of the text.
+   integer(c_int), intent(out)          :: count   !< Length of the list (1 for a text, 0 without a browser).
+   integer(c_int)                       :: status  !< Status.
+   endfunction fig_file_browser_get
+
+   function fig_file_browser_rect(part, part_len, rect, found) result(status) bind(C, name='fig_file_browser_rect')
+   !< A part of the browser in front, as drawn in the last frame.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: part(*)  !< Part name.
+   integer(c_int), value              :: part_len !< Its length.
+   real(c_float), intent(out)         :: rect(4)  !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out)        :: found    !< 1 if drawn.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_file_browser_rect
 
    function fig_save_image(path, path_len, x0, y0, x1, y1) result(status) bind(C, name='fig_save_image')
    !< Ask for the rectangle (x0, y0)-(x1, y1) [logical pixels] of the window as a PNG file, written when this frame is

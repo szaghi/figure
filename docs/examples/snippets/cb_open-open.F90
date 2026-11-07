@@ -1,9 +1,6 @@
 if (ig_button('Open...')) then
-   call app%open_file_dialog('open', [character(len=24) :: 'Input files|input;inp', 'All files|*'], stat=stat)
-   typed = stat /= FIG_OK                          ! remote or headless: no dialog, a path field
+   call app%open_file_dialog('open', FILTERS, stat=stat)
+   if (stat /= FIG_OK) call app%open_file_browser('open', FILTERS) ! remote: no system dialog, FIGURE's browser
 endif
-call app%file_dialog_result('open', chosen, done, cancelled, stat=stat)
+call app%file_dialog_result('open', chosen, done, cancelled, stat=stat) ! either one answers here
 if (done .and. .not. cancelled .and. stat == FIG_OK) path = chosen
-if (typed) then
-   if (ig_input_text('path', path, hint='CASE/overset.input')) continue
-endif

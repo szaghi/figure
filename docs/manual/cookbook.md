@@ -133,9 +133,17 @@ that matches the program. [The window's frame](/guide/frame-loop#the-window-s-fr
 
 <<< @/examples/snippets/cb_open-open.F90{fortran}
 
-The system's dialog in a window; a path field where there is none (remote mode: `cb_open --remote PORT`). The answer
-arrives on a later frame: poll it every frame. [File dialogs](/guide/frame-loop#file-dialogs) has the details. (No
-recording: the system's dialog is drawn outside the program's frame.)
+The system's dialog in a window; FIGURE's file browser where there is none (remote mode: `cb_open --remote PORT`).
+Both answer through `app%file_dialog_result`, on a later frame: poll it every frame. To use the browser everywhere,
+the same in a window and in a web browser, open it directly:
+
+<<< @/examples/snippets/cb_open_browser-browser.F90{fortran}
+
+<Media name="cb_open_browser" alt="The file browser over the program's window: places on the left, the folder's case folders and files with sizes and dates on the right; the files are sorted by size, a case folder is entered and its input file opened, which the window then shows" caption="docs/examples/src/cb_open_browser.F90" />
+
+The browser lists folders first, sorts by a click on a column's header, filters by type, completes paths with Tab,
+keeps the recent folders between runs, makes folders and asks before a save replaces a file.
+[File dialogs](/guide/frame-loop#file-dialogs) has the details.
 
 ### Ask before discarding changes
 

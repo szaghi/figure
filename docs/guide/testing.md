@@ -49,6 +49,9 @@ And to aim and to check:
 | `test_system_theme(theme [, stat])` | the system's light or dark setting changes at the next frame, as SDL's event reports it: `'light'`, `'dark'`, or `'system'` (the real setting again); for [`palette='auto'`](styles#follow-the-system-s-light-or-dark-setting) |
 | `test_notification_rect(index, x0, y0, x1, y1 [, found])` | the rectangle of a [notification](frame-loop#notifications) shown in the last frame: 1 the newest (at the bottom), 2 the one above; `found` false past the last |
 | `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat])` | the extent of what was drawn so far in the current window in Dear ImGui's style colour `color`, by name: call it right after a widget (`'PlotHistogram'` measures a progress bar's fill) |
+| `test_file_browser(shown [, folder] [, entries] [, error] [, asking] [, path_field] [, name_field] [, recent])` | the [file browser](frame-loop#figure-s-file-browser) in front, after the last frame: the folder listed, the entries in the order shown (folders ending in `/`), the error shown (`''` none), whether a replace is asked, the texts of the path and name fields, the recent folders (newest first; also without a browser) |
+| `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser as drawn in the last frame, to click it: `'entry:NAME'` (a row in view), `'parent'`, `'refresh'`, `'path'`, `'new folder'`, `'new folder name'`, `'create'`, `'sort:name'`, `'sort:size'`, `'sort:modified'`, `'place:home'`, `'place:cwd'`, `'place:root:N'`, `'place:recent:N'`, `'name'`, `'filter'`, `'filter:N'` (its list open), `'hidden'`, `'cancel'`, `'ok'`, and while a replace is asked `'replace'`, `'keep'` |
+| `test_settings_file(path [, stat])` | the file that keeps the browser's recent folders, until the program ends: a test reads and writes its own (`''`: memory only, the default in headless mode) |
 | `test_window_rect(name, xmin, ymin, xmax, ymax [, found] [, stat])` | a window's rectangle, by its name, as drawn in the last frame |
 
 **Timing.** Everything queued reaches Dear ImGui at the next frame, up to a `test_next_frame` boundary; Dear ImGui then
@@ -92,8 +95,9 @@ chapter 5 of the [tutorial](/manual/tutorial/05-headless) does this with a modul
 `src/tests/figure_test_headless.F90` drives every widget and plot type through `figure_testing` (clicks, a drag, typing
 into a field), checks docking, styles, themes and fonts, headless; `src/tests/figure_test_themes.F90` measures the
 contrast of every built-in style; `figure_test_layout` checks that the Fortran mirrors of Dear ImGui's structures
-match the C++ ones, and `figure_test_remote` drives the remote mode end to end through a WebSocket client
-([Remote UI](remote#how-it-works)):
+match the C++ ones, `figure_test_remote` drives the remote mode end to end through a WebSocket client
+([Remote UI](remote#how-it-works)), and `figure_test_files` drives the file browser on a folder it writes (clicks,
+double-clicks, typed names and paths, Tab, Escape):
 
 ```bash
 fobis build --mode tests-gnu && exe/figure_test_headless

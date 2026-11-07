@@ -27,7 +27,8 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%quit()` | the next `next_frame` returns `.false.` | [next_frame](frame-loop#next-frame) |
 | `app%set_title(text [, stat])`, `app%title()` → `character` | the window's title after `init` (window mode shows it; every mode keeps it) | [the window's title](menus#the-window-s-title) |
 | `app%open_file_dialog(id [, filters] [, default_path])`, `app%save_file_dialog(...)`, `app%open_folder_dialog(id [, default_path])` | the system's file dialogs (window mode), answered on a later frame | [file dialogs](frame-loop#file-dialogs) |
-| `app%file_dialog_result(id, path, done [, cancelled])` | the answer to a dialog, once | [file dialogs](frame-loop#file-dialogs) |
+| `app%open_file_browser(id [, filters] [, default_path] [, folders])`, `app%save_file_browser(id [, filters] [, default_path])` | FIGURE's file browser, drawn in Dear ImGui, the same in every mode (remote included): a file to open, a folder, where to save | [file browser](frame-loop#figure-s-file-browser) |
+| `app%file_dialog_result(id, path, done [, cancelled])` | the answer to a dialog or a browser, once | [file dialogs](frame-loop#file-dialogs) |
 | `app%save_image(path, xmin, ymin, xmax, ymax)` | a rectangle of the window as a PNG file (window mode) | [save an image](capture#save-an-image-from-the-program) |
 | `app%image_result(path, done)` | the outcome of `save_image`, once | [save an image](capture#save-an-image-from-the-program) |
 | `app%save_layout(path [, comment])` | the arrangement of the windows (docking included) to a file | [layouts](docking#save-and-load-a-layout) |
@@ -200,6 +201,9 @@ Details: [Processes and tasks](processes#tasks).
 | `test_system_theme(theme [, stat])` | the system's light or dark setting changes (`'light'`, `'dark'`, `'system'`), at the next frame: tests of `palette='auto'` ([styles](styles#follow-the-system-s-light-or-dark-setting)) |
 | `test_notification_rect(index, x0, y0, x1, y1 [, found])` | a notification shown in the last frame, 1 the newest ([notifications](frame-loop#notifications)) |
 | `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat])` | the extent drawn so far in the current window in a style colour (`'PlotHistogram'`: a progress bar's fill) |
+| `test_file_browser(shown [, folder] [, entries] [, error] [, asking] [, path_field] [, name_field] [, recent])` | the file browser in front: its folder, the entries in the order shown, the error shown, the replace question, the fields, the recent folders ([file browser](frame-loop#figure-s-file-browser)) |
+| `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser in the last frame (`'entry:NAME'`, `'ok'`, `'cancel'`, `'path'`, ...), to click it |
+| `test_settings_file(path [, stat])` | the file keeping the browser's recent folders, instead of FIGURE's own (`''`: memory only) |
 
 Details: [Headless testing](testing#synthetic-input).
 

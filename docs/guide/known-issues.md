@@ -61,6 +61,24 @@ frame does beyond moving, resizing and the three buttons is lost:
 
 The windowed path on each platform is to be verified by the windowed CI runs (issue #3, S11).
 
+## The file browser
+
+FIGURE's file browser ([File dialogs](frame-loop#figure-s-file-browser)) is drawn by FIGURE, not by the system:
+
+- **No desktop integration:** the system's bookmarks, network locations, thumbnails and search are not shown; the
+  places are the home folder, the working directory, the roots and FIGURE's own recent folders.
+- **A folder is read on the main thread** when it is entered or read again: a folder of very many entries on a slow
+  network file system pauses the interface while it is read. It is not watched: a file written meanwhile appears
+  after Refresh.
+- **One settings file for every program:** the recent folders are shared by all the programs built with FIGURE.
+- **Tab completion** is case-sensitive on every platform.
+
+### File names on Windows
+
+The browser lists and returns names in UTF-8 on every platform (it reads Windows' folders with the wide-character
+API). gfortran's `open` on Windows passes the name to the C library in the system's code page, so a path with
+non-ASCII characters returned by the browser may not open there; names in ASCII are not affected.
+
 ## Processes
 
 [Processes](processes) are started without a shell, through SDL3's process API (captured) or a double fork (detached,
@@ -90,7 +108,8 @@ POSIX):
   [Tasks](processes#tasks)); a lone widget called from a task outside any container is not caught.
 - **`recursive` procedures:** two tasks may run the same procedure at the same time; a procedure not declared
   `recursive` then stops a program built with gfortran's `-fcheck=recursion` (in `-fcheck=all`): declare the task's
-  procedures `recursive`. In such a build, a drawing call from a task may also stop there, before FIGURE refuses it.
+  procedures `recursive`. FIGURE's entry points that refuse a task's drawing calls are `recursive` themselves, so the
+  refusal happens in such a build too.
 - **No preemption:** a task with no safe point (`h%cancelled()`) cannot be stopped; its object's end waits for it.
 
 ## First build needs the network
