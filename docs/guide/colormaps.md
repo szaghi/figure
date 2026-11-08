@@ -117,6 +117,12 @@ Reversed and discrete maps are registered under derived names: `'<name>_r'` and 
 - **Sizes** [pixels]: positive, given; negative, the space left in the window; absent, the default: vertical, 300
   long and as wide as the bar (a field's height) and the longest label; horizontal, the space left and as tall as the
   bar and a line of labels. `label_format` is a C `printf` format (default `'%g'`).
+- **Band edges are labelled with their values.** With `levels`, an edge's label takes the digits it needs to show
+  the edge's value: `label_format`'s precision is raised until the number printed is the edge (to 6 decimals for
+  `%f`, as a contour line's label of `ip_contour`; 7 significant digits for `%e` and `%g`). With `'%.0f'` and bands
+  of 87.5, the edges read 87.5 beside contour lines labelled 87.5, not 88; round edges keep the format's digits
+  (`'%.0f'`: 100). The text around the number is kept (`'%.0f K'`). A format with no `f`, `e` or `g` conversion is
+  used as it is. The continuous bar's ticks, at round values, use `label_format` unchanged.
 - Bands and the bar sit on whole pixels, so neighbouring bands share their edge with no seam.
 - Unlike `ip_colormap_scale` (ImPlot's `ColormapScale`, vertical only, continuous colours), the legend is horizontal
   or vertical and shows discrete levels as bands.

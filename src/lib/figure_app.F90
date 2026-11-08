@@ -19,7 +19,7 @@ module figure_app
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc
 use, intrinsic :: iso_fortran_env, only : int8, int32, output_unit, real64
 use figure_base, only : figure_check, figure_fail, figure_refused
-use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
@@ -243,6 +243,7 @@ contains
          return
       endif
    endif
+   address = ''
    zmode = 0_c_int
    if (present(compress)) then ! checked before anything starts
       select case (compress)
@@ -387,7 +388,7 @@ contains
    real(c_float)                            :: c(4)    !< Native colour.
 
    c = 0.0_c_float
-   call figure_check(fig_palette_color(role, len(role, c_int), c), stat)
+   call figure_check(fig_palette_color(role, len_trim(role, c_int), c), stat)
    rgba = real(c, real64)
    endsubroutine palette_color
 
@@ -487,7 +488,7 @@ contains
       endif
       s = real(size, c_double)
    endif
-   call figure_check(fig_set_font(font, len(font, c_int), s), stat)
+   call figure_check(fig_set_font(font, len_trim(font, c_int), s), stat)
    endsubroutine set_font
 
    subroutine load_style(self, file, stat)
@@ -498,7 +499,7 @@ contains
    integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_FAILED` if unreadable, `FIG_ERR_ARGUMENT` if
                                                     !< malformed (the message gives the line).
 
-   call figure_check(fig_load_style(file, len(file, c_int)), stat)
+   call figure_check(fig_load_style(file, len_trim(file, c_int)), stat)
    endsubroutine load_style
 
    subroutine save_style(self, file, stat)
@@ -509,7 +510,7 @@ contains
    character(len=*),  intent(in)            :: file !< Theme file to write.
    integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_FAILED` if it cannot be written.
 
-   call figure_check(fig_save_style(file, len(file, c_int)), stat)
+   call figure_check(fig_save_style(file, len_trim(file, c_int)), stat)
    endsubroutine save_style
 
    subroutine set_docking(self, enabled, stat)
@@ -548,7 +549,7 @@ contains
    requested = fig_quit_requested() == 1_c_int
    endfunction quit_requested
 
-   recursive function dropped(self, paths, x, y) result(any_dropped)
+   recursive function dropped(self, paths, x, y, stat) result(any_dropped)
    !< The files and folders dropped on the window since the last frame (SDL's drop events), and where: true on the
    !< frame after the drop only, with `paths` the absolute paths (UTF-8, blank-padded to the longest; folders as
    !< folders, without a trailing separator) and (`x`, `y`) the point of the drop [pixels], the coordinates of
@@ -556,11 +557,13 @@ contains
    !< dropped at once come together, at one point. False, with `paths` empty, on every other frame; also before
    !< `init*` and from a task. Window mode: the system's drag and drop; headless mode: only the drops of `test_drop`;
    !< remote mode: none (a browser gives a page the dropped files' contents, not paths on the server: the page refuses
-   !< them), but those of `test_drop`.
+   !< them), but those of `test_drop`. Status: `FIG_ERR_STATE` before `init*` and from a task (a task does not draw:
+   !< the task's status becomes `FIG_ERR_STATE` too); without `stat`, the result is `.false.` and nothing stops.
    class(app_object),             intent(in)            :: self        !< Application.
    character(len=:), allocatable, intent(out)           :: paths(:)    !< Paths dropped.
    real(real64),                  intent(out), optional :: x           !< Abscissa of the drop [pixels].
    real(real64),                  intent(out), optional :: y           !< Ordinate of the drop [pixels].
+   integer(int32),                intent(out), optional :: stat        !< Status.
    logical                                              :: any_dropped !< Something was dropped.
    integer(c_int)                                       :: n           !< Paths.
    integer(c_int)                                       :: i           !< Counter.
@@ -572,8 +575,13 @@ contains
    n = 0_c_int
    px = 0.0_c_float
    py = 0.0_c_float
-   if (.not. figure_refused('app%dropped')) then
-      if (fig_dropped(n, px, py) /= FIG_OK) n = 0_c_int
+   if (.not. figure_refused('app%dropped', stat)) then
+      if (fig_dropped(n, px, py) /= FIG_OK) then
+         n = 0_c_int
+         if (present(stat)) stat = int(FIG_ERR_STATE, int32)
+      elseif (present(stat)) then
+         stat = int(FIG_OK, int32)
+      endif
    endif
    longest = 0_c_int
    do i = 1_c_int, n
@@ -864,11 +872,11 @@ contains
    endfunction opt
 
    pure function opt_len(s) result(n)
-   !< The length of an optional string, 0 when absent.
+   !< The length of an optional name without its trailing blanks (a padded array's element), 0 when absent.
    character(len=*), intent(in), optional :: s !< String.
    integer(c_int)                         :: n !< Length [bytes].
 
    n = 0_c_int
-   if (present(s)) n = len(s, c_int)
+   if (present(s)) n = len_trim(s, c_int)
    endfunction opt_len
 endmodule figure_app

@@ -139,6 +139,15 @@ The browser lists and returns names in UTF-8 on every platform (it reads Windows
 API). gfortran's `open` on Windows passes the name to the C library in the system's code page, so a path with
 non-ASCII characters returned by the browser may not open there; names in ASCII are not affected.
 
+## The system's file dialogs on Linux
+
+The system's dialogs (`app%open_file_dialog`, `save_file_dialog`, `open_folder_dialog`) are shown on Linux by the
+desktop portal, another process reached over D-Bus, or by `zenity`. The portal draws on the user's desktop, not on the
+program's display: a program in window mode with no display of its own (`DISPLAY` and `WAYLAND_DISPLAY` unset, SDL's
+`offscreen` driver, a [capture](capture)) can still open a dialog on the desktop of the session it runs in. Tests and
+recordings never click the system's dialogs; they drive [FIGURE's file browser](frame-loop#figure-s-file-browser),
+which is drawn into the program's own frames.
+
 ## Processes
 
 [Processes](processes) are started without a shell, through SDL3's process API (captured) or a double fork (detached,

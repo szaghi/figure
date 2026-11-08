@@ -42,6 +42,13 @@ The layout is the starting point: the user then rearranges it freely. With `app%
 keeps the user's arrangement across runs, and `ig_dock_layout_begin` returns `.false.` when a saved layout exists.
 Without an ini file (the default) every run starts from the program's layout.
 
+**Which tab is in front.** When a layout puts several windows into one node, as tabs, the tab in front is Dear
+ImGui's choice: it depends on how the windows took the focus as they first appeared, and follows neither the order of
+the `ig_dock_window` calls nor that of the `ig_begin` calls. To choose it, call `ig_focus_window(name)` on the frame
+after the layout was built (the window must have been drawn once, with `ig_begin`): its tab comes to the front. The
+[tutorial's shell](/manual/tutorial/08-shell#docked-panels-kept-between-runs) does so for its Input tab
+(`docs/examples/src/tut08_shell.F90`, region `layout`).
+
 ## A window that appears later
 
 A layout is built once, on the first frame. A window that appears afterwards (a file found while the program runs,

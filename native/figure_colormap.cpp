@@ -531,6 +531,47 @@ rgb_t lerp(const table_t &c, double t) {
            (1.0 - w) * c[i][2] + w * c[i + 1][2]};
 }
 
+// A printf format of one number split for raising its precision: the text before and after the conversion, its
+// flags and width, the conversion (f, e or g, either case) and its precision (6 when not given); ok false for anything
+// else (no conversion, two, %a, an integer one), which is then used as it is.
+struct band_format {
+   bool ok = false;
+   std::string prefix, flags, suffix;
+   int precision = 6, max_precision = 6;
+   char conversion = 'g';
+};
+
+band_format parse_band_format(const std::string &f) {
+   band_format b;
+   size_t i = 0, start = std::string::npos;
+   for (; i < f.size(); ++i) {
+      if (f[i] != '%') continue;
+      if (i + 1 < f.size() && f[i + 1] == '%') { ++i; continue; }
+      if (start != std::string::npos) return band_format(); // two conversions
+      start = i;
+      size_t j = i + 1;
+      while (j < f.size() && std::strchr("-+ #0123456789", f[j])) ++j;
+      b.flags = f.substr(i + 1, j - i - 1);
+      if (j < f.size() && f[j] == '.') {
+         size_t k = j + 1;
+         while (k < f.size() && std::isdigit(static_cast<unsigned char>(f[k]))) ++k;
+         b.precision = k > j + 1 ? std::atoi(f.substr(j + 1, k - j - 1).c_str()) : 0;
+         j = k;
+      }
+      if (j >= f.size() || !std::strchr("fFeEgG", f[j])) return band_format();
+      b.conversion = f[j];
+      b.prefix = f.substr(0, start);
+      b.suffix = f.substr(j + 1);
+      i = j;
+   }
+   if (start == std::string::npos) return band_format();
+   for (std::string *t : {&b.prefix, &b.suffix}) // the text as printf prints it: %% is %
+      for (size_t k = t->find("%%"); k != std::string::npos; k = t->find("%%", k + 1)) t->erase(k, 1);
+   b.max_precision = std::max(b.precision, (b.conversion == 'g' || b.conversion == 'G') ? 7 : 6);
+   b.ok = true;
+   return b;
+}
+
 } // namespace
 
 int fig_colormap(const char *name, int name_len, int levels, int *id) {
@@ -674,6 +715,24 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
          std::snprintf(buf, sizeof(buf), format.c_str(), v);
          return std::string(buf);
       };
+      // a band edge's label: the format's precision raised until the number it prints is the edge (to 6 decimals, as
+      // a contour line's label; e and g: to 7 significant digits), so 87.5 does not read 88 beside a line of 87.5
+      const band_format edge_format = parse_band_format(format);
+      auto edge_label = [&](double v) {
+         if (!edge_format.ok) return label(v);
+         std::string best;
+         for (int p = edge_format.precision; p <= edge_format.max_precision; ++p) {
+            char spec[48], buf[64];
+            std::snprintf(spec, sizeof(spec), "%%%s.%d%c", edge_format.flags.c_str(), p, edge_format.conversion);
+            std::snprintf(buf, sizeof(buf), spec, v);
+            const double shown = std::strtod(buf, nullptr);
+            best = edge_format.prefix + buf + edge_format.suffix;
+            const bool fixed = edge_format.conversion == 'f' || edge_format.conversion == 'F';
+            if (std::fabs(shown - v) <= 0.5e-6 * (fixed ? 1.0 : std::fabs(v))) break;
+         }
+         return best;
+      };
+      auto tick_label = [&](double v) { return levels > 0 ? edge_label(v) : label(v); };
       const ImVec2 avail = ImGui::GetContentRegionAvail();
       auto extent = [](float v, float left, float fallback) { return v > 0 ? v : (v < 0 ? std::max(left, 1.0f) : fallback); };
       // ticks: the bands' edges, or round values (a step of 1, 2, 2.5 or 5 times a power of ten) about every
@@ -694,7 +753,7 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
             ticks.push_back(std::fabs(q) < 0.5 ? 0.0 : q * step);
       }
       float label_w = 0.0f;
-      for (double t : ticks) label_w = std::max(label_w, ImGui::CalcTextSize(label(t).c_str()).x);
+      for (double t : ticks) label_w = std::max(label_w, ImGui::CalcTextSize(tick_label(t).c_str()).x);
       const ImVec2 size = horizontal ? ImVec2(length0, extent(height, avail.y, bar + tick + style.ItemInnerSpacing.y + text_h))
                                : ImVec2(extent(width, avail.x, bar + tick + style.ItemInnerSpacing.x + label_w), length0);
       const ImVec2 pos = window->DC.CursorPos;
@@ -736,7 +795,7 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
       const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
       for (double v : ticks) {
          const float p = at((v - vmin) / (vmax - vmin));
-         const std::string s = label(v);
+         const std::string s = tick_label(v);
          const ImVec2 ts = ImGui::CalcTextSize(s.c_str());
          if (horizontal) {
             dl->AddLine(ImVec2(p, r.Max.y), ImVec2(p, r.Max.y + tick), text);

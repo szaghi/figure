@@ -93,6 +93,11 @@ A style has two parts, chosen separately:
 - **All or none:** the arguments are checked before anything changes; an unknown name, look or palette, or a palette
   below the [contrast rule](#the-contrast-rule), is `FIG_ERR_ARGUMENT` (or a stop, without `stat`) and leaves the
   style in effect as it was. A call with no argument is `FIG_ERR_ARGUMENT` too.
+- **Names without their trailing blanks:** a name, look, palette or line palette is taken without its trailing blanks,
+  so an element of a blank-padded array (`looks(k)`) needs no `trim`. The same holds for every name FIGURE takes: a
+  font or its file (`set_font`, `ig_push_font`), a theme file (`load_style`, `save_style`), a palette role
+  (`palette_color`), a colour or variable [by name](#colours-and-variables-by-name), a colormap and its file
+  (`ip_colormap`, `ip_load_colormap`).
 - Colours and variables changed [by name](#colours-and-variables-by-name) are reset by the part that sets them: a
   new palette resets the colours, a new look the variables. The font and its size are never changed.
 - **Modes:** the same in window, headless and remote mode (in remote mode the browser takes the palette's

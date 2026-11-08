@@ -18,7 +18,9 @@ program figure_test_plots
 !<
 !< Colour-scale legends: a continuous vertical one has the map's first colour at the bottom, its last at the top and its
 !< middle colour half-way; a horizontal one of 5 levels has 5 bands of equal width in order, each the map's colour at
-!< its centre, and the value 0.3 of [-1, 1] falls in the fourth; bad arguments refused.
+!< its centre, and the value 0.3 of [-1, 1] falls in the fourth; bad arguments refused. Labels, by the legends' widths:
+!< with levels, a band edge of 87.5 reads 87.5 under '%.0f' (and 87.5% under '%.0f%%'); a continuous bar's ticks keep
+!< the format ('%.0f': 0.25 reads 0).
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
@@ -29,7 +31,7 @@ use figure, only : app_object, ig_begin, ig_dock_id, ig_dock_layout_begin, ig_do
                    FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK
 use figure, only : ig_set_next_window, ip_annotation, ip_contour, ip_contour_levels, ip_contour_lines, ip_drag_line_x, &
                    ip_drag_line_y, ip_drag_point, ip_error_bars, ip_setup_axes_limits, ip_spec
-use figure, only : ig_item_rect, ip_colormap_legend
+use figure, only : ig_item_rect, ig_same_line, ig_text_size, ip_colormap_legend
 use figure_cimgui, only : im_vec4
 use figure_cimgui, only : im_vec2
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapCount, ImPlot_GetColormapSize, &
@@ -39,7 +41,7 @@ use figure_testing, only : test_drag, test_drawn_extent, test_plot_tick
 implicit none
 integer(int32), parameter     :: FRAMES = 40_int32 !< Frames run.
 type(app_object)              :: app               !< Application.
-logical                       :: test_passed(27)   !< Per-check outcome.
+logical                       :: test_passed(28)   !< Per-check outcome.
 character(len=:), allocatable :: label             !< A tick label.
 integer(int32)                :: nticks(2)         !< Ticks: formatted axis, default axis.
 logical                       :: all_formatted     !< Every tick of the formatted axis starts with 'T='.
@@ -98,8 +100,10 @@ logical                       :: leg_found(3)      !< ... those colours found.
 real(real64)                  :: band(4, 5)        !< Horizontal legend: each band's extent.
 logical                       :: band_found(5)     !< ... found.
 integer(int32)                :: s_legend(5)       !< Statuses of the legends.
+real(real64)                  :: label_w(4)        !< Label legends: widths less their labels' expected width.
 
 late_node = 0_int32
+label_w = -1.0_real64
 late_docked = .false.
 call write_files()
 call check_contours(test_passed(14:17))
@@ -200,6 +204,7 @@ test_passed(26) = all(band_found) .and. all(abs(band(1, 2:5) - band(3, 1:4)) < 1
                   band(1, 4) < band(1, 1) + 0.65_real64 * (band(3, 5) - band(1, 1)) .and.                    &
                   band(3, 4) > band(1, 1) + 0.65_real64 * (band(3, 5) - band(1, 1)) ! 0.3 of [-1, 1]: band 4
 test_passed(27) = all(s_legend(3:5) == FIG_ERR_ARGUMENT)
+test_passed(28) = label_w(1) > 0.0_real64 .and. all(abs(label_w(2:4) - label_w(1)) < 0.01_real64) ! labels expected
 test_passed(23) = moved(3) .and. all(abs(point - [8.0_real64, 7.0_real64]) < 0.15_real64)
 
 write(output_unit, '(A,*(L2))') 'figure_test_plots checks:', test_passed
@@ -208,6 +213,7 @@ if (.not. all(test_passed)) write(output_unit, '(A,2I3,A,2L2,A,4F9.3,A,2I12,L2)'
    unlinked(1)%X%Max, unlinked(2)%X%Max, ', late node/right/docked', late_node, right, late_docked
 if (.not. all(test_passed(18:23))) write(output_unit, '(A,12F8.1,A,12F8.1,A,3L2,A,4F8.3,A,4I3)') 'pixels', pix, &
    ', extents', ext, ', drawn', drawn, ', drags', drag_x, drag_y, point, ', statuses', s_extra
+if (.not. test_passed(28)) write(output_unit, '(A,4F9.3)') 'legend labels: widths less labels', label_w
 if (.not. all(test_passed(25:27))) write(output_unit, '(A,3F8.1,A,4F8.1,A,3L2,A,20F8.1,A,5L2,A,5I3)') 'legend rows', &
    leg_y, ', item', leg_item, ', found', leg_found, ', bands', band, ', found', band_found, ', statuses', s_legend
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
@@ -409,7 +415,48 @@ contains
       call ip_colormap_legend('##bad3', magma, 0.0_real64, 1.0_real64, levels=1_int32, stat=s_legend(5))
    endif
    call ig_end()
+   call ig_set_next_window(20.0_real64, 560.0_real64, 480.0_real64, 200.0_real64, always=.true.)
+   if (ig_begin('Legend labels')) then  ! each width less its widest expected label: the bar, tick and spacing alike
+      call ip_colormap_legend('##ref', magma, 0.0_real64, 350.0_real64, levels=2_int32, height=80.0_real64, &
+                              label_format='%.0f')
+      label_w(1) = item_width() - widest([character(len=6) :: '0', '175', '350'])
+      call ig_same_line()
+      call ip_colormap_legend('##edges', magma, 0.0_real64, 350.0_real64, levels=4_int32, height=80.0_real64, &
+                              label_format='%.0f')
+      label_w(2) = item_width() - widest([character(len=6) :: '0', '87.5', '175', '262.5', '350'])
+      call ig_same_line()
+      call ip_colormap_legend('##percent', magma, 0.0_real64, 350.0_real64, levels=4_int32, height=80.0_real64, &
+                              label_format='%.0f%%')
+      label_w(3) = item_width() - widest([character(len=6) :: '0%', '87.5%', '175%', '262.5%', '350%'])
+      call ig_same_line()
+      call ip_colormap_legend('##round', magma, 0.0_real64, 0.5_real64, height=80.0_real64, label_format='%.0f')
+      label_w(4) = item_width() - widest([character(len=6) :: '0'])   ! ticks 0, 0.25, 0.5: each reads 0
+   endif
+   call ig_end()
    endsubroutine draw_legends
+
+   function item_width() result(w)
+   !< The width of the last item [pixels].
+   real(real64) :: w              !< Width.
+   real(real64) :: x0, y0, x1, y1 !< Its rectangle.
+
+   call ig_item_rect(x0, y0, x1, y1)
+   w = x1 - x0
+   endfunction item_width
+
+   function widest(texts) result(w)
+   !< The width of the widest of `texts`, trimmed [pixels].
+   character(len=*), intent(in) :: texts(:) !< Texts.
+   real(real64)                 :: w        !< Width.
+   real(real64)                 :: s(2)     !< A text's size.
+   integer(int32)               :: k        !< Counter.
+
+   w = 0.0_real64
+   do k = 1_int32, size(texts, kind=int32)
+      s = ig_text_size(trim(texts(k)))
+      w = max(w, s(1))
+   enddo
+   endfunction widest
 
    subroutine draw_extras(frame)
    !< A plot with error bars, an annotation, contours and drag tools, the drags queued on frames 5, 15 and 25.

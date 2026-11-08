@@ -24,7 +24,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |
 | `app%set_confirm_quit(enabled)` | the close button reports a request instead of ending the loop | [ask before quitting](menus#ask-before-quitting) |
 | `app%quit_requested()` → `logical` | the user asked to quit, once per request | [ask before quitting](menus#ask-before-quitting) |
-| `app%dropped(paths [, x] [, y])` → `logical` | the files and folders dropped on the window since the last frame, and the point of the drop; `.true.` on that frame only | [drops](frame-loop#drops) |
+| `app%dropped(paths [, x] [, y] [, stat])` → `logical` | the files and folders dropped on the window since the last frame, and the point of the drop; `.true.` on that frame only | [drops](frame-loop#drops) |
 | `app%quit()` | the next `next_frame` returns `.false.` | [next_frame](frame-loop#next-frame) |
 | `app%set_title(text [, stat])`, `app%title()` → `character` | the window's title after `init` (window mode shows it; every mode keeps it) | [the window's title](menus#the-window-s-title) |
 | `app%open_file_dialog(id [, filters] [, default_path])`, `app%save_file_dialog(...)`, `app%open_folder_dialog(id [, default_path])` | the system's file dialogs (window mode), answered on a later frame | [file dialogs](frame-loop#file-dialogs) |

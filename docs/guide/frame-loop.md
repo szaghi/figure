@@ -180,7 +180,8 @@ browser when it is refused, as above.
   `FIG_ERR_STATE`.
 - **Platforms.** SDL3 shows the platform's dialog: Windows' and macOS' own; on Linux the desktop portal or `zenity`
   ([run-time needs](install#linux-packages)). A dialog that cannot be shown answers `done` with `FIG_ERR_FAILED` and
-  the reason.
+  the reason. The portal draws on the session's desktop, even for a program with no display of its own
+  ([known issues](known-issues#the-system-s-file-dialogs-on-linux)).
 
 ### FIGURE's file browser
 
@@ -330,7 +331,7 @@ stop` with the message). The same in window, headless and remote modes.
 
 | Procedure | Notes |
 |---|---|
-| `app%dropped(paths [, x] [, y])` → `logical` | The files and folders dropped on the window since the last frame, and where; `.true.` on that frame only. |
+| `app%dropped(paths [, x] [, y] [, stat])` → `logical` | The files and folders dropped on the window since the last frame, and where; `.true.` on that frame only. |
 
 Dropping a case folder or a file on the window is the shortest way to open it. FIGURE collects SDL's drop events while
 it waits for the next frame and hands them to that frame: `app%dropped` is `.true.` on the frame after the drop, and
@@ -351,8 +352,9 @@ it waits for the next frame and hands them to that frame: `app%dropped` is `.tru
 **headless** mode has none of its own: `test_drop(paths, x, y)` of [figure_testing](testing#synthetic-input) queues
 one, in every mode; **remote** mode has none: a browser gives a page the contents of the files dropped on it, never a
 path on the server, and the page refuses them (dropped files would otherwise replace the page). The server's files
-are opened with [FIGURE's file browser](remote#opening-and-saving-files). No failure status: before `init*` and from
-a [task](processes#tasks) the result is `.false.`.
+are opened with [FIGURE's file browser](remote#opening-and-saving-files). Status: `FIG_ERR_STATE` before `init*` and
+from a [task](processes#tasks) (a task does not draw: the task's status becomes `FIG_ERR_STATE` too), with the result
+`.false.`; without `stat`, nothing stops: the result is `.false.`, as on a frame with no drop.
 
 <<< @/examples/snippets/cb_drop-drop.F90{fortran}
 

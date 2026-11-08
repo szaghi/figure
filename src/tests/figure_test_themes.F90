@@ -7,6 +7,8 @@ program figure_test_themes
 !< a palette the colours and keeps the geometry; a look and palette pair saved and loaded back is the same style; a
 !< palette with poor contrast or an unknown name is refused, with its message, and changes nothing; `palette='auto'`
 !< follows a synthetic change of the system's light or dark setting; `app%palette_color` reads the roles in effect.
+!< Names with trailing blanks (the elements of a padded array) are taken as the names: a style, a look, a palette,
+!< a role, a colour and a variable by name, a font, a colormap and a theme file.
 !<
 !< Golden: every colour of Dear ImGui and ImPlot, every style variable of both, the line colours and the window's
 !< background of the seven built-in themes, compared bit for bit with the values recorded before themes were split into
@@ -23,7 +25,8 @@ program figure_test_themes
 use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_f_pointer, c_int, c_null_char, c_ptr
 use, intrinsic :: iso_fortran_env, only : error_unit, int32, output_unit, real32, real64
 use figure, only : app_object, FIG_ERR_ARGUMENT, figure_last_error, ig_get_style_color, ig_get_style_var, &
-                   ig_set_style_color, ig_set_style_var, ip_get_style_color, ip_get_style_var, ip_set_style_var
+                   ig_set_style_color, ig_set_style_var, ip_colormap, ip_get_style_color, ip_get_style_var, &
+                   ip_set_style_var
 use figure_testing, only : test_system_theme
 use figure_cimgui, only : im_vec4, igGetStyleColorName
 use figure_cimgui_enums, only : ImGuiCol_COUNT
@@ -92,7 +95,7 @@ logical                     :: golden_passed(NT)                   !< Per-theme 
 logical                     :: contrast_passed(NT)                 !< Per-theme outcome, contrast.
 logical                     :: palette_passed(NP)                  !< Per-palette outcome.
 logical                     :: look_passed(NL)                     !< Per-look outcome.
-logical                     :: other_passed(4)                     !< Round trips, refusals, auto, roles.
+logical                     :: other_passed(5)                     !< Round trips, refusals, auto, roles, padded names.
 integer(int32)              :: t                                   !< Theme.
 integer(int32)              :: stat                                !< Status.
 
@@ -131,13 +134,14 @@ other_passed(1) = round_trip_check()
 other_passed(2) = refusal_check()
 other_passed(3) = auto_check()
 other_passed(4) = roles_check()
+other_passed(5) = padded_names_check()
 call app%destroy()
 
 write(output_unit, '(A,7L2)') 'figure_test_themes golden:  ', golden_passed
 write(output_unit, '(A,7L2)') 'figure_test_themes contrast:', contrast_passed
 write(output_unit, '(A,14L2)') 'figure_test_themes palettes:', palette_passed
 write(output_unit, '(A,4L2)') 'figure_test_themes looks:   ', look_passed
-write(output_unit, '(A,4L2)') 'figure_test_themes save/load, refusals, auto, roles:', other_passed
+write(output_unit, '(A,5L2)') 'figure_test_themes save/load, refusals, auto, roles, padded names:', other_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(golden_passed) .and. all(contrast_passed) .and. &
                              all(palette_passed) .and. all(look_passed) .and. all(other_passed)
 if (.not. (all(golden_passed) .and. all(contrast_passed) .and. all(palette_passed) .and. all(look_passed) .and. &
@@ -410,6 +414,43 @@ contains
    passed = passed .and. v(1) == LOOK_ROUNDING(l)
    write(output_unit, '(A,A8,A,F4.1,A,L1)') 'look ', LOOKS(l), ' FrameRounding ', v(1), '  ', passed
    endfunction look_check
+
+   function padded_names_check() result(passed)
+   !< Every name taken with its trailing blanks, as an element of a padded array is: the same as the name.
+   logical                     :: passed     !< Outcome.
+   character(len=40)           :: names(9)   !< Names, blank-padded.
+   integer(int32)              :: stat(11)   !< Statuses.
+   integer(int32)              :: id(2)      !< Colormap ids: padded, trimmed.
+   real(real64)                :: rgba(4)    !< A colour.
+   real(real64)                :: v(2)       !< A variable.
+   integer(int32)              :: n          !< Values of a variable.
+   integer(int32)              :: u          !< Unit.
+   logical                     :: saved      !< The theme file exists under its trimmed name.
+   character(len=*), parameter :: FILE = 'figure_test_themes.padded.toml' !< Theme file.
+
+   names = [character(len=40) :: 'paper', 'fluent', 'nord', 'accent', 'Text', 'FrameRounding', 'plex-mono', &
+            'cividis_r', FILE]
+   stat = -1_int32
+   call app%set_style(names(1), stat=stat(1))
+   call app%set_style(look=names(2), palette=names(3), stat=stat(2))
+   call app%palette_color(names(4), rgba, stat=stat(3))
+   call ig_get_style_color(names(5), rgba, stat=stat(4))
+   call ig_set_style_var(names(6), 3.0_real64, stat=stat(5))
+   call ig_get_style_var(names(6), v, n, stat=stat(6))
+   call app%set_font(names(7), stat=stat(7))
+   id(1) = ip_colormap(names(8), stat=stat(8))
+   id(2) = ip_colormap(trim(names(8)), stat=stat(9))
+   call app%save_style(names(9), stat=stat(10))
+   inquire(file=FILE, exist=saved)
+   call app%load_style(names(9), stat=stat(11))
+   passed = all(stat == 0_int32) .and. v(1) == 3.0_real64 .and. id(1) == id(2) .and. id(1) >= 0_int32 .and. saved
+   if (saved) then
+      open(newunit=u, file=FILE, status='old')
+      close(u, status='delete')
+   endif
+   call app%set_font('plex-sans')
+   if (.not. passed) write(error_unit, '(A,11(I0,1X),A,L1)') 'padded names: statuses ', stat, 'saved ', saved
+   endfunction padded_names_check
 
    function round_trip_check() result(passed)
    !< A look and palette pair, with a colour and a variable changed by name, saved and loaded back: the same style;

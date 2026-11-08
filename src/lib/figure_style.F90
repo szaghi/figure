@@ -87,7 +87,7 @@ contains
    endif
    c = 1.0_c_float
    c(1:size(rgba)) = real(rgba, c_float)
-   call figure_check(fig_push_style_color(lib, name, len(name, c_int), c), stat)
+   call figure_check(fig_push_style_color(lib, name, len_trim(name, c_int), c), stat)
    endsubroutine push_color
 
    subroutine push_color_hex(lib, who, name, color, stat)
@@ -116,7 +116,7 @@ contains
    integer(c_int),   intent(in)            :: n         !< How many.
    integer(int32),   intent(out), optional :: stat      !< Status.
 
-   call figure_check(fig_push_style_var(lib, name, len(name, c_int), real(values, c_double), n), stat)
+   call figure_check(fig_push_style_var(lib, name, len_trim(name, c_int), real(values, c_double), n), stat)
    endsubroutine push_var
 
    subroutine pop(vars, n, stat)
@@ -297,7 +297,7 @@ contains
       endif
       s = real(size, c_double)
    endif
-   call figure_check(fig_push_font(font, len(font, c_int), s), stat)
+   call figure_check(fig_push_font(font, len_trim(font, c_int), s), stat)
    endsubroutine ig_push_font
 
    subroutine ig_pop_font(stat)
@@ -360,7 +360,7 @@ contains
    endif
    c = 1.0_c_float
    c(1:size(rgba)) = real(rgba, c_float)
-   call figure_check(fig_style_color(lib, name, len(name, c_int), 1_c_int, c), stat)
+   call figure_check(fig_style_color(lib, name, len_trim(name, c_int), 1_c_int, c), stat)
    endsubroutine set_color
 
    subroutine set_color_hex(lib, who, name, color, stat)
@@ -390,7 +390,7 @@ contains
    real(c_float)                           :: c(4)    !< C components.
 
    c = 0.0_c_float
-   call figure_check(fig_style_color(lib, name, len(name, c_int), 0_c_int, c), stat)
+   call figure_check(fig_style_color(lib, name, len_trim(name, c_int), 0_c_int, c), stat)
    rgba = real(c, real64)
    endsubroutine get_color
 
@@ -462,7 +462,7 @@ contains
 
    v = real(values, c_double)
    count = n
-   call figure_check(fig_style_var(lib, name, len(name, c_int), 1_c_int, v, count), stat)
+   call figure_check(fig_style_var(lib, name, len_trim(name, c_int), 1_c_int, v, count), stat)
    endsubroutine set_var
 
    subroutine get_var(lib, name, values, n, stat)
@@ -477,7 +477,7 @@ contains
 
    v = 0.0_c_double
    count = 0_c_int
-   call figure_check(fig_style_var(lib, name, len(name, c_int), 0_c_int, v, count), stat)
+   call figure_check(fig_style_var(lib, name, len_trim(name, c_int), 0_c_int, v, count), stat)
    values = real(v, real64)
    n = int(count, int32)
    endsubroutine get_var

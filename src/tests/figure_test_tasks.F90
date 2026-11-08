@@ -6,7 +6,7 @@ use figure, only : app_object, ig_begin, ig_end, ip_begin_plot, task_handle_obje
 
 implicit none
 private
-public :: sum_job, sum_work, forever_work, draw_work, fail_work, pause, ended_by_object
+public :: sum_job, sum_work, forever_work, draw_work, drop_work, fail_work, pause, ended_by_object
 
 type :: sum_job
    !< A sum of the integers first..last, in 10 chunks, with a pause after each [s].
@@ -16,6 +16,7 @@ type :: sum_job
    real(real64)   :: seconds = 0.0_real64 !< Pause after each chunk [s].
    integer(int32) :: chunks = 0_int32  !< Chunks done.
    logical        :: drawn(3) = .true. !< Drawing calls that returned true (they must not).
+   integer(int32) :: stat = -1_int32   !< Status of a call that must refuse.
 endtype sum_job
 
 logical :: ended_by_object = .false. !< forever_work saw the cancel of its object's end.
@@ -91,6 +92,21 @@ contains
    endselect
    endsubroutine draw_work
 
+   recursive subroutine drop_work(h, data)
+   !< Breaks the threading rule: asks for the frame's drops, which must refuse with FIG_ERR_STATE.
+   type(task_handle_object), intent(inout) :: h        !< Handle.
+   class(*),                 intent(inout) :: data     !< A sum_job.
+   type(app_object)                        :: app      !< An application object (not initialized here).
+   character(len=:), allocatable           :: paths(:) !< Paths dropped.
+
+   select type (data)
+   type is (sum_job)
+      data%drawn(1) = app%dropped(paths, stat=data%stat)
+      data%drawn(2) = size(paths) > 0
+      data%chunks = merge(1_int32, 0_int32, h%cancelled())  ! the refusal asked the task to stop
+   endselect
+   endsubroutine drop_work
+
    recursive subroutine fail_work(h, data)
    !< Reports a failure.
    type(task_handle_object), intent(inout) :: h    !< Handle.
@@ -110,11 +126,12 @@ program figure_test_tasks
 !< figure_test_tasks, background tasks: progress, result, cancel, the threading rule, several at once, headless.
 use, intrinsic :: iso_fortran_env, only : error_unit, int32, int64, output_unit, real64
 use figure, only : app_object, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, figure_last_error, task_object
-use figure_test_tasks_work, only : draw_work, ended_by_object, fail_work, forever_work, pause, sum_job, sum_work
+use figure_test_tasks_work, only : draw_work, drop_work, ended_by_object, fail_work, forever_work, pause, sum_job, &
+                                  sum_work
 
 implicit none
 type(app_object)              :: app             !< Application.
-logical                       :: test_passed(9)  !< Per-check outcome.
+logical                       :: test_passed(10) !< Per-check outcome.
 
 call app%init_headless(400_int32, 300_int32)
 test_passed = .false.
@@ -126,6 +143,7 @@ call failing(test_passed(6))
 call refused_while_running(test_passed(7))
 call object_end(test_passed(8))
 call progress_before(test_passed(9))
+call drop_refused(test_passed(10))
 call app%destroy()
 
 write(output_unit, '(A,*(L2))') 'figure_test_tasks checks:', test_passed
@@ -233,6 +251,34 @@ contains
    endselect
    if (.not. ok) write(error_unit, '(A,I0,A,A)') 'drawing refused: stat ', stat, ', ', msg
    endsubroutine drawing_refused
+
+   subroutine drop_refused(ok)
+   !< app%dropped from a task refuses: its stat and the task's status are FIG_ERR_STATE, named in the message; it
+   !< reports no drop. On the main thread, the same call is FIG_OK.
+   logical, intent(out)          :: ok     !< Outcome.
+   type(task_object)             :: t      !< Task.
+   class(*), allocatable         :: data   !< Result.
+   character(len=:), allocatable :: msg    !< Message.
+   character(len=:), allocatable :: paths(:) !< Paths dropped, main thread.
+   integer(int32)                :: frames !< Frames.
+   integer(int32)                :: stat   !< Status.
+   logical                       :: main   !< The main thread sees the drop.
+
+   call t%start(drop_work, sum_job())
+   frames = frames_until_done(t, 10.0_real64)
+   call t%result(data, stat)
+   msg = figure_last_error()
+   ok = stat == FIG_ERR_STATE .and. index(msg, 'app%dropped') > 0
+   select type (data)
+   type is (sum_job)
+      ok = ok .and. .not. any(data%drawn(1:2)) .and. data%stat == FIG_ERR_STATE .and. data%chunks == 1_int32
+   class default
+      ok = .false.
+   endselect
+   main = app%dropped(paths, stat=stat)
+   ok = ok .and. stat == FIG_OK .and. .not. main
+   if (.not. ok) write(error_unit, '(A,I0,A,A)') 'drop refused: stat ', stat, ', ', msg
+   endsubroutine drop_refused
 
    subroutine eight_at_once(ok)
    !< Eight tasks at once, each summing its own range: all finish with the right sums.

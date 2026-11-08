@@ -44,6 +44,7 @@ requests = 0_int32
 options_presses = 0_int32
 presses_in_modal = 0_int32
 modal_frames = 0_int32
+modal_open = .false.
 alive_after_cancel = .false.
 frame = 0_int32
 call app%init_headless(800_int32, 600_int32)

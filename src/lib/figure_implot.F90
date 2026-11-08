@@ -711,12 +711,14 @@ contains
    !< `horizontal=.true.`), with ticks and their values on its right (or below). An item of the current window, outside
    !< a plot: beside any plot (`ig_same_line`), above or below it, or in any window. With `levels`: that many bands of
    !< equal width, each the map's colour at its centre (as `ip_colormap(name, levels)` colours a field), the ticks at the
-   !< bands' edges; without: a continuous bar, ticks at round values (a step of 1, 2, 2.5 or 5 times a power of ten)
-   !< about every 40 pixels (100 horizontal). `vmin > vmax` turns the scale over. Sizes [pixels]: positive given,
-   !< negative the space left in the window, absent the default (vertical: 300 long, as wide as the bar and the labels;
-   !< horizontal: the space left, as tall as the bar and a line of labels). Statuses: `FIG_ERR_ARGUMENT` for a colormap
-   !< that is not registered, equal or non-finite `vmin`/`vmax`, `levels` outside [2, 256]; `FIG_ERR_STATE` outside a
-   !< window and from a task. The same in every mode.
+   !< bands' edges, labelled with the digits they need to show the edge (`label_format`'s precision raised, up to 6
+   !< decimals for `%f` or 7 significant digits for `%e` and `%g`: 87.5 with `'%.0f'`, as `ip_contour` labels it);
+   !< without: a continuous bar, ticks at round values (a step of 1, 2, 2.5 or 5 times a power of ten) about every 40
+   !< pixels (100 horizontal), labelled with `label_format` as it is. `vmin > vmax` turns the scale over. Sizes
+   !< [pixels]: positive given, negative the space left in the window, absent the default (vertical: 300 long, as wide
+   !< as the bar and the labels; horizontal: the space left, as tall as the bar and a line of labels). Statuses:
+   !< `FIG_ERR_ARGUMENT` for a colormap that is not registered, equal or non-finite `vmin`/`vmax`, `levels` outside
+   !< [2, 256]; `FIG_ERR_STATE` outside a window and from a task. The same in every mode.
    character(len=*), intent(in)            :: id           !< Widget id, unique in the window (not shown).
    integer(int32),   intent(in)            :: colormap     !< Colormap (`ip_colormap`).
    real(real64),     intent(in)            :: vmin         !< Value at the bottom (left).
@@ -760,12 +762,12 @@ contains
    recursive function ip_colormap(name, levels, stat) result(id)
    !< The colormap `name` as an ImPlot id, for the `colormap` argument of `ip_heatmap` and `ip_colormap_scale`: a
    !< bundled map (`'cividis'`, `'batlow'`, `'cool-warm'`, ...), one of ImPlot's own (`'Viridis'`, `'Jet'`, ...) or a
-   !< map loaded with `ip_load_colormap`; names are case-sensitive (`ip_colormap_names` lists them). `<name>_r` is the
-   !< map reversed; `levels` gives that many discrete bands of equal width, each coloured as the map at its centre. A
-   !< map is registered with ImPlot (`AddColormap`) at its first use, and the same id is returned after; ids hold for
-   !< the application's life (a new `init` registers the maps again). Statuses: `FIG_ERR_ARGUMENT` for an unknown name
-   !< or `levels` outside [2, 256], `FIG_ERR_STATE` before `init*` and from a task; the id is then -1 (and `ip_heatmap`
-   !< refuses it). The same in every mode.
+   !< map loaded with `ip_load_colormap`; names are case-sensitive, their trailing blanks ignored (`ip_colormap_names`
+   !< lists them). `<name>_r` is the map reversed; `levels` gives that many discrete bands of equal width, each
+   !< coloured as the map at its centre. A map is registered with ImPlot (`AddColormap`) at its first use, and the same
+   !< id is returned after; ids hold for the application's life (a new `init` registers the maps again). Statuses:
+   !< `FIG_ERR_ARGUMENT` for an unknown name or `levels` outside [2, 256], `FIG_ERR_STATE` before `init*` and from a
+   !< task; the id is then -1 (and `ip_heatmap` refuses it). The same in every mode.
    character(len=*), intent(in)            :: name   !< Colormap name; `<name>_r`: reversed.
    integer(int32),   intent(in),  optional :: levels !< Discrete bands, in [2, 256] (default: continuous).
    integer(int32),   intent(out), optional :: stat   !< Status.
@@ -786,7 +788,7 @@ contains
       n = int(levels, c_int)
    endif
    c_id = -1_c_int
-   call figure_check(fig_colormap(name, len(name, c_int), n, c_id), stat)
+   call figure_check(fig_colormap(name, len_trim(name, c_int), n, c_id), stat)
    id = int(c_id, int32)
    endfunction ip_colormap
 
@@ -805,7 +807,7 @@ contains
    integer(int32),   intent(out), optional :: stat !< Status.
 
    if (figure_refused('ip_load_colormap', stat)) return ! the registry belongs to the main thread
-   call figure_check(fig_load_colormap(name, len(name, c_int), file, len(file, c_int)), stat)
+   call figure_check(fig_load_colormap(name, len_trim(name, c_int), file, len_trim(file, c_int)), stat)
    endsubroutine ip_load_colormap
 
    recursive subroutine ip_colormap_names(names)

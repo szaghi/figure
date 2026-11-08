@@ -177,6 +177,8 @@ contains
    if (status == FIG_OK .and. length > 0_c_long_long) then
       allocate(character(kind=c_char, len=length) :: buf)
       status = fig_process_take(self%id, buf, length, got)
+   else
+      buf = ''
    endif
    if (got > 0_c_long_long) then
       call split_lines(buf(1:got), lines)
