@@ -1,0 +1,6 @@
+#! program build/docs-examples/bin/tut17_remote
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  1
+#! remote  1100 700
+# the studio served to a web browser: started with --remote PORT on the plate case (solved by --examples); a headless
+# Chromium draws the page

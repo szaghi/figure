@@ -15,9 +15,10 @@ replays (see FIGURE_CAPTURE_INPUT in native/figure_native.cpp):
     #! style   seal                                    the program's style, through FIGURE_STYLE (default seal)
     #! gif     640                                     also an animated GIF of the video, this wide (for the README:
                                                        GitHub plays no repository video there)
-    #! remote  1100 700                                remote mode: the program is started with "--remote PORT" and
-                                                       a headless Chromium (CHROME, or puppeteer's) draws the page
-                                                       at this size; the still gets a browser bar (no input script)
+    #! remote  1100 700                                remote mode: the program is started with its args, then
+                                                       "--remote PORT", and a headless Chromium (CHROME, or
+                                                       puppeteer's) draws the page at this size; the still gets a
+                                                       browser bar (no input script)
     0 move 300 120
     ...
 
@@ -127,7 +128,7 @@ def record_remote(name: str, header: dict[str, str]) -> None:
     port = 18765
     program = ROOT / header["program"]
     server = subprocess.Popen(
-        [str(program), "--remote", str(port)],
+        [str(program), *shlex.split(header.get("args", "")), "--remote", str(port)],
         cwd=program.parent,
         env=dict(os.environ, FIGURE_STYLE=header.get("style", STYLE)),
         stdout=subprocess.PIPE,

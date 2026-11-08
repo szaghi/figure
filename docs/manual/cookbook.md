@@ -73,6 +73,8 @@ or dark setting, and to colour the program's own messages with the palette:
 
 [Styles](/guide/styles#looks-and-palettes) lists the looks, the palettes and their roles.
 
+Used in context: [chapter 8](./tutorial/08-shell) of the tutorial.
+
 ### Change one colour of the whole interface
 
 <<< @/examples/snippets/cb_style-style.F90{fortran}
@@ -110,6 +112,8 @@ theme file, which `app%load_style` (or `FIGURE_STYLE=my-theme.toml`) applies in 
 The layout is built on the first frame only (`ig_dock_layout_begin`); the dock space is declared every frame,
 before its windows. The user can rearrange everything afterwards. [Docking](/guide/docking) has the details.
 
+Used in context: [chapter 8](./tutorial/08-shell) of the tutorial.
+
 ### A File menu and its shortcut
 
 <<< @/examples/snippets/cb_menu-menu.F90{fortran}
@@ -118,6 +122,8 @@ before its windows. The user can rearrange everything afterwards. [Docking](/gui
 
 The menu item shows the shortcut; `ig_shortcut`, called every frame outside the menu, reads the keys (cmd+s on
 macOS). [Menus and shortcuts](/guide/menus) has the rules.
+
+Used in context: [chapter 8](./tutorial/08-shell) of the tutorial.
 
 ### A window whose frame FIGURE draws
 
@@ -128,6 +134,8 @@ macOS). [Menus and shortcuts](/guide/menus) has the rules.
 The main menu bar moves into the title bar; the bar drags the window, its edges resize it, close asks first with
 `app%set_confirm_quit(.true.)`. Under WSLg, where the system's frame cannot be styled, this gives the window a frame
 that matches the program. [The window's frame](/guide/frame-loop#the-window-s-frame) has the details.
+
+Used in context: [chapter 7](./tutorial/07-window) of the tutorial.
 
 ### Open a file
 
@@ -145,6 +153,8 @@ The browser lists folders first, sorts by a click on a column's header, filters 
 keeps the recent folders between runs, makes folders and asks before a save replaces a file.
 [File dialogs](/guide/frame-loop#file-dialogs) has the details.
 
+Used in context: [chapter 9](./tutorial/09-case) of the tutorial.
+
 ### Open what the user drops
 
 <<< @/examples/snippets/cb_drop-drop.F90{fortran}
@@ -161,6 +171,8 @@ In remote mode nothing can be dropped (the files are on the browser's computer):
 file browser, as in the recipe above.
 [Drops](/guide/frame-loop#drops) and [Clipboard](/guide/widgets#clipboard) have the details.
 
+Used in context: [chapter 9](./tutorial/09-case) of the tutorial.
+
 ### Ask before discarding changes
 
 <<< @/examples/snippets/cb_quit-quit.F90{fortran}
@@ -169,6 +181,8 @@ file browser, as in the recipe above.
 
 `app%set_confirm_quit(.true.)` makes the close button a request; the program opens a modal when there is something to
 lose, and quits at once otherwise. [Menus, popups and shortcuts](/guide/menus#ask-before-quitting) has the details.
+
+Used in context: [chapter 9](./tutorial/09-case) of the tutorial.
 
 ### A list and a help panel
 
@@ -190,6 +204,8 @@ node and `ig_tree_pop`. A click on a label chooses the block (`clicked`), the ar
 The node of 20000 blocks clips its children with a `list_clipper_object`. [Trees](/guide/widgets#trees) has the
 rules.
 
+Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
+
 ### An input-file editor: fields, a list, tabs and a table
 
 <<< @/examples/snippets/cb_form-table.F90{fortran}
@@ -200,6 +216,8 @@ Each field edits a Fortran variable in place: a `character` for text (its length
 a drop-down list. The rows of the table repeat the same widgets, each in its own id scope (`ig_push_id(r)`). Tabs and
 tables end only when their begin returned `.true.`. [Widgets](/guide/widgets#groups-headers-tabs-tables) has the
 rules.
+
+Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
 
 ### Edit a text file
 
@@ -213,6 +231,8 @@ The file's bytes go into a `text_buffer_object` once; the field edits them in pl
 types or pastes, and `buffer%text()` copies them out to save. IBM Plex Mono (`'plex-mono'`), pushed around the
 field, keeps the columns of the input file aligned; `tab_input` lets Tab insert a tab. The program reads and writes the
 file in stream access, so line ends stay LF. [Multi-line text](/guide/widgets#multi-line-text) has the rules.
+
+Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
 
 ## Plots
 
@@ -244,6 +264,8 @@ The `x(::5)` sections are not contiguous: the compiler copies them (see
 cells. Fix the scale (`scale_min`, `scale_max`) when the field changes over time, or the colours rescale every frame.
 [Heatmaps and images](/guide/images) has every argument.
 
+Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
+
 ### Contour lines over a field
 
 <<< @/examples/snippets/cb_contour-contour.F90{fortran}
@@ -255,6 +277,8 @@ half a spacing more on each side, and the lines fall on the colours they bound. 
 round values inside the field's range are chosen. Where the field is NaN (a body, cells outside the domain) the lines
 stop: a hole, not a line to a meaningless value. [Contour lines](/guide/plots#contour-lines) has every argument.
 
+Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
+
 ### A colour-scale legend beside a plot
 
 <<< @/examples/snippets/cb_legend-legend.F90{fortran}
@@ -264,6 +288,8 @@ stop: a hole, not a line to a meaningless value. [Contour lines](/guide/plots#co
 `ig_same_line` puts the legend beside the plot. Give it the continuous map and the heatmap's `levels`: its bands are
 then the heatmap's, labelled at their edges. [A colour-scale legend](/guide/colormaps#a-colour-scale-legend) has
 every argument.
+
+Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
 
 ### Let the user choose a colour
 
@@ -282,6 +308,8 @@ The drag tools update `probe_x`, `px` and `py` in place and return `.true.` whil
 The profile is the row `i` of `g`, read in place with a stride (`ip_line(label, g, i)`); a NaN in it draws a gap.
 [Error bars, annotations and drag tools](/guide/plots#error-bars-annotations-and-drag-tools) has the details.
 
+Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
+
 ### Show a surface coloured by a field
 
 <<< @/examples/snippets/cb_view3d-setup.F90{fortran}
@@ -294,6 +322,8 @@ The arrays are read in place at every render: give them the `target` attribute a
 mesh exists; after changing their values, call `view%changed(hull)`. The view is rendered only when something
 changed, so a still view costs nothing per frame. A click on the surface gives the cell `i + (j - 1) * (ni - 1)` and
 the point hit. [3-D views](/guide/view3d) has the camera, clipping planes and the cost per mode.
+
+Used in context: [chapter 13](./tutorial/13-view3d) of the tutorial.
 
 ### Show an image computed by the program
 
@@ -341,6 +371,8 @@ keeps answering and the tool never waits for the program; every frame the progra
 the bottom. Stop asks the tool to end; a tool still running when the program ends is stopped. A run that must outlive
 the program is started `detached=.true.` with a `log_file`. [Processes and tasks](/guide/processes) has the details.
 
+Used in context: [chapter 11](./tutorial/11-run) of the tutorial.
+
 ### Read a large file without freezing the window
 
 <<< @/examples/snippets/cb_task-work.F90{fortran}
@@ -354,6 +386,8 @@ receiving frames. The task opens its own unit, reports after each block and chec
 stops it between two blocks with consistent statistics. Every frame the program shows the progress; once the task is
 done it takes the result, once. The task never draws: [the threading rule](/guide/processes#tasks).
 
+Used in context: [chapter 14](./tutorial/14-task) of the tutorial.
+
 ### A status bar
 
 <<< @/examples/snippets/cb_status-status.F90{fortran}
@@ -364,6 +398,8 @@ A status bar is a [bar along the bottom](/guide/docking#a-bar-along-a-side) (`ig
 own: a line of text, and a progress bar beside it (`ig_same_line(offset=...)` puts it at a fixed place). The work area
 leaves the bar out, so dock spaces, windows placed with the work area and notifications stay above it.
 
+Used in context: [chapter 11](./tutorial/11-run) of the tutorial.
+
 ### Tell the user a run has finished
 
 <<< @/examples/snippets/cb_status-notify.F90{fortran}
@@ -373,6 +409,8 @@ leaves the bar out, so dock spaces, windows placed with the work area and notifi
 The user may be looking at another window, or another program: a notification stays in the corner for its time
 (here the default 5 s; `seconds=0` until clicked), in the colour and with the icon of its kind, and the last 100 are
 kept (`app%notifications`). [Notifications](/guide/frame-loop#notifications) has the details.
+
+Used in context: [chapter 11](./tutorial/11-run) of the tutorial.
 
 ## Errors
 
@@ -386,6 +424,8 @@ With `stat`, nothing stops: check it against `FIG_OK` and read `figure_last_erro
 `ip_line`:
 
 <<< @/examples/snippets/cb_stat-line.F90{fortran}
+
+Used in context: [chapter 15](./tutorial/15-robust) of the tutorial.
 
 ### Let a failure stop the program
 
@@ -403,3 +443,5 @@ Without `stat`, the message goes to standard error and the program ends with `er
 See [tutorial chapter 5](./tutorial/05-headless): `init_headless`, `ig_item_rect` (or `test_item_center`) to find the
 button, `test_click` from `figure_testing`, then a few frames before checking. [Headless
 testing](/guide/testing#synthetic-input) has drags, keys and typing.
+
+Used in context: [chapter 16](./tutorial/16-tested) of the tutorial.

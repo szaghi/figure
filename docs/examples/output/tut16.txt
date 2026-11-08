@@ -1,0 +1,14 @@
+$ ./tut16_tested --test tut16-cases
+[ok]     the title bar holds the studio's menus
+[ok]     the title drags the window
+[ok]     ctrl+o shows the file browser on the example cases
+[ok]     Choose opens the case, the window's title says which
+[ok]     typing edits the title, and the window's title marks it unsaved
+[ok]     a drop asks before discarding the edit
+[ok]     Discard opens the dropped case
+[ok]     F5 runs the solver to convergence
+[ok]     the task reads the field the solver wrote
+[ok]     an input with the body out of the plate is refused
+[ok]     and accepted once corrected
+[ok]     the title bar's close button ends the studio
+12 of 12 checks passed

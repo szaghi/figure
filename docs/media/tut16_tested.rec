@@ -1,0 +1,27 @@
+#! program build/docs-examples/bin/tut16_tested
+#! args    --examples /tmp/figure-studio
+#! frames  420
+#! poster  330
+# the studio's tour, as a user: ctrl+o, a double-click on plate, Choose; F5 runs the solver, the Result panel comes
+# forward with the field; the 3-D button, Fit (the solver runs in real time: the frames after F5 wait for it)
+0   move 600 300
+5   key ctrl down
+6   key o
+7   key ctrl up
+20  move 481 280 15
+40  down
+42  up
+44  down
+46  up
+60  move 864 507 15
+78  down
+80  up
+100 key f5
+300 move 1000 640 15
+340 move 37 300 15
+355 down
+357 up
+375 move 446 61 15
+390 down
+392 up
+405 move 800 400 10

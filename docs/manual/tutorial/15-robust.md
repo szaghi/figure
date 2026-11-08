@@ -98,4 +98,4 @@ sentences; a history of the notifications, docked where the program chooses the 
 [Docking](/guide/docking), [Known issues](/guide/known-issues).
 :::
 
-**Next:** 16. The studio tested (part two continues).
+**Next:** [16. The studio tested](./16-tested): the studio driven headless by its users' gestures.

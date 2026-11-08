@@ -12,7 +12,7 @@ const docs = [
     ],
   },
   {
-    text: 'Tutorial',
+    text: 'Tutorial, part one: the basics',
     items: [
       { text: 'Overview',                     link: '/manual/' },
       { text: '1. A first window',            link: '/manual/tutorial/01-first-window' },
@@ -21,6 +21,22 @@ const docs = [
       { text: '4. A live computation',        link: '/manual/tutorial/04-live' },
       { text: '5. Testing without a display', link: '/manual/tutorial/05-headless' },
       { text: '6. Running work',              link: '/manual/tutorial/06-running-work' },
+    ],
+  },
+  {
+    text: 'Tutorial, part two: a solver studio',
+    items: [
+      { text: '7. The studio\'s own window',   link: '/manual/tutorial/07-window' },
+      { text: '8. The application\'s shell',   link: '/manual/tutorial/08-shell' },
+      { text: '9. The case',                  link: '/manual/tutorial/09-case' },
+      { text: '10. The input editor',         link: '/manual/tutorial/10-input' },
+      { text: '11. Running the solver',       link: '/manual/tutorial/11-run' },
+      { text: '12. The result field',         link: '/manual/tutorial/12-field' },
+      { text: '13. The field in 3-D',         link: '/manual/tutorial/13-view3d' },
+      { text: '14. Heavy work off the frame', link: '/manual/tutorial/14-task' },
+      { text: '15. Robustness',               link: '/manual/tutorial/15-robust' },
+      { text: '16. The studio tested',        link: '/manual/tutorial/16-tested' },
+      { text: '17. The studio on a cluster',  link: '/manual/tutorial/17-remote' },
     ],
   },
   {

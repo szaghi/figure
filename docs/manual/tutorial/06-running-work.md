@@ -55,3 +55,5 @@ in a progress bar and its end in a notification; and why the window does not fre
 [Processes and tasks](/guide/processes), [Progress bars](/guide/widgets#progress-bars),
 [Notifications](/guide/frame-loop#notifications).
 :::
+
+**Next:** part two, [7. The studio's own window](./07-window): one application, a solver studio, grown chapter by chapter.
