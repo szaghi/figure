@@ -97,14 +97,15 @@ What the browser allows decides what crosses between the page and the program:
 - **Copy, from the program to the browser:** a copy in a field, or `ig_set_clipboard`, goes to the page, which writes
   it to the browser's clipboard. Browsers allow it only in a secure context: a page at `http://localhost:...` (an
   SSH tunnel, as above) or `https`; at `http://node:port` they do not, and some browsers (Safari) allow it only within
-  a click or a key. When the browser refuses, the page's status line says "copied in the program only": the program
-  keeps the text, and a paste inside the interface still gets it.
+  a click or a key. When the browser refuses, the page's status line (bottom right) says "copied in the program
+  only" and why, for 8 seconds, beside the frame counter: the program keeps the text, and a paste inside the
+  interface still gets it.
 - **Paste, from the browser to the program:** a page reads the browser's clipboard only when the user pastes. On
   ctrl+v (cmd+v) the page takes the text from the browser's paste event and sends it to the program before the key,
   so the field pastes what the user copied on their computer; `ig_get_clipboard` returns it from then on. The program
   cannot read the browser's clipboard at any other time.
 - **Drops:** files dropped on the page are on the browser's computer, and a browser gives the page their contents,
-  not a path: the page refuses them (its status line says so) and `app%dropped` stays `.false.`. Open the server's
+  not a path: the page refuses them (its status line says so, for 8 seconds) and `app%dropped` stays `.false.`. Open the server's
   files with the file browser (below).
 
 [Clipboard](widgets#clipboard) and [Drops](frame-loop#drops) have the rest.

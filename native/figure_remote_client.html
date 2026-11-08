@@ -7,18 +7,28 @@
 <style>
   html, body { margin: 0; height: 100%; background: #1a1a1c; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; outline: none; }
-  #status { position: fixed; right: 8px; bottom: 6px; font: 12px monospace; color: #888; pointer-events: none; }
+  #bar { position: fixed; right: 8px; bottom: 6px; font: 12px monospace; color: #888; pointer-events: none; }
+  #notice { color: #e8b04a; margin-right: 1.5em; }
+  #notice:empty { display: none; }
 </style>
 </head>
 <body>
 <canvas id="ui" tabindex="0"></canvas>
-<div id="status">connecting</div>
+<div id="bar"><span id="notice"></span><span id="status">connecting</span></div>
 <script>
 // FIGURE remote client: draws the Dear ImGui draw lists the program streams over a WebSocket, sends input back.
 // Protocol: see native/figure_remote.cpp.
 "use strict";
 const canvas = document.getElementById("ui");
-const status = document.getElementById("status");
+const status = document.getElementById("status"); // the connection and the frame counter, updated every frame
+const notice = document.getElementById("notice"); // what the user must read: kept beside the counter, not overwritten
+let noticeTimer = 0;
+// Show a notice for `ms` milliseconds (0: until the next notice).
+function notify(text, ms = 8000) {
+  notice.textContent = text;
+  clearTimeout(noticeTimer);
+  if (ms > 0) noticeTimer = setTimeout(() => { notice.textContent = ""; }, ms);
+}
 const gl = canvas.getContext("webgl", { alpha: false, antialias: false, premultipliedAlpha: false });
 const textures = new Map();
 let ws = null, frames = 0, lastFrame = null, background = [0.10, 0.10, 0.11];
@@ -123,7 +133,7 @@ function onMessage(ev) {
     if (kind !== 6) return handle(ev.data);
     const inflated = new Blob([new Uint8Array(ev.data, 1)]).stream().pipeThrough(new DecompressionStream("deflate"));
     return new Response(inflated).arrayBuffer().then(handle);
-  }).catch(err => { status.textContent = "error: " + err; });
+  }).catch(err => { notify("error: " + err, 0); });
 }
 
 function handle(buf) {
@@ -153,8 +163,8 @@ function handle(buf) {
     const text = new TextDecoder().decode(new Uint8Array(buf, 1));
     const kept = "copied in the program only: ";
     if (navigator.clipboard && navigator.clipboard.writeText)
-      navigator.clipboard.writeText(text).catch(() => { status.textContent = kept + "the browser refused its clipboard"; });
-    else status.textContent = kept + "the browser's clipboard needs https or localhost";
+      navigator.clipboard.writeText(text).catch(() => { notify(kept + "the browser refused its clipboard"); });
+    else notify(kept + "the browser's clipboard needs https or localhost");
   }
 }
 
@@ -198,7 +208,7 @@ document.addEventListener("paste", e => {
 // Files dropped on the page stay on this computer, not on the server: the page refuses them (a dropped file would
 // otherwise replace the page).
 window.addEventListener("dragover", e => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "none"; });
-window.addEventListener("drop", e => { e.preventDefault(); status.textContent = "files cannot be dropped in remote mode"; });
+window.addEventListener("drop", e => { e.preventDefault(); notify("files cannot be dropped in remote mode"); });
 canvas.addEventListener("keydown", e => {
   if (e.code === "KeyV" && (e.ctrlKey || e.metaKey) && !e.repeat) {
     heldPaste = { up: false };

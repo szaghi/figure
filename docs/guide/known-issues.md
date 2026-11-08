@@ -69,7 +69,8 @@ search, and Dear ImGui goes through the whole text on every frame (a log that gr
 
 - **Remote mode, copy:** the browser's clipboard is written only where the browser allows it: a secure context
   (`localhost`, `https`), and in some browsers (Safari) only within a click or a key. Elsewhere the copy stays in the
-  program on the server, and the page's status line says so ([Remote UI](remote#the-clipboard-and-drops)).
+  program on the server, and the page's status line says so for 8 seconds, beside the frame counter
+  ([Remote UI](remote#the-clipboard-and-drops)).
 - **Remote mode, paste:** the program sees the browser's clipboard only through a paste (ctrl+v, cmd+v) in the page;
   a button that pastes reads the program's own clipboard. If a browser sends no paste event within 200 ms of the
   key, the key goes alone and pastes the program's own clipboard.
