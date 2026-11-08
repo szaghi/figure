@@ -139,7 +139,7 @@ A FIGURE application (one per program).
 Open the window (`width` x `height` logical pixels) and create the ImGui/ImPlot contexts.
 
  Window positions and sizes are not saved by default: with `ini_file`, Dear ImGui keeps them in that file, read
- at the first frame and written while the program runs (its `imgui.ini`).
+ at the first frame and written while the program runs (its `imgui.ini`); not while `FIGURE_CAPTURE` records.
 
  `decorations='figure'` opens the window without the system's frame and draws one: a title bar with the icon
  (`set_icon`), the program's main menu bar (`ig_begin_main_menu_bar`) inside it, the title centred, and the
@@ -224,7 +224,7 @@ subroutine set_icon_image(self, image, stat)
 |------|------|--------|------------|-------------|
 | `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
 | `image` | integer(kind=int8) | in | contiguous, target | Pixels. |
-| `stat` | integer(kind=int32) | out | optional | modes, `FIG_ERR_ARGUMENT` for a wrong shape. |
+| `stat` | integer(kind=int32) | out | optional | modes, `FIG_ERR_ARGUMENT` for a wrong shape, |
 
 **Call graph**
 
@@ -252,7 +252,7 @@ subroutine set_icon_glyph(self, icon, stat)
 |------|------|--------|------------|-------------|
 | `self` | class([app_object](/api/src/lib/figure_app#app-object)) | inout |  | Application. |
 | `icon` | character(len=*) | in |  | One `ICON_*` constant. |
-| `stat` | integer(kind=int32) | out | optional | `FIG_ERR_ARGUMENT` if `icon` is not one icon. |
+| `stat` | integer(kind=int32) | out | optional | `FIG_ERR_ARGUMENT` if `icon` is not one icon, `FIG_ERR_FAILED` |
 
 **Call graph**
 
