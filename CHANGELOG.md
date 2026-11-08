@@ -4,6 +4,103 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] — 2026-11-08
+### Added
+- **style**: Looks and palettes, colours derived from twelve roles
+
+- **app**: The window's frame drawn by FIGURE, with the menus in its title bar; the window's icon
+
+- **imgui**: Trees, with a click on the label told apart from the arrow
+
+- **process**: Programs started from the program, captured or detached, and a log view of their output
+
+- **task**: Background tasks with progress and cancel, and the rule that only the main thread draws
+
+- **app**: Progress bars, notifications drawn by FIGURE, and a status bar recipe
+
+- **files**: A file browser drawn by FIGURE, the same in a window, in remote mode and in tests
+
+- **imgui**: Multi-line text in a buffer of any length, and the monospace font plex-mono
+
+- **install**: A one-line installer for FIGURE, per compiler, with pkg-config and uninstall
+
+- **app**: Files and folders dropped on the window, and the clipboard
+
+- **implot**: A colormap registry, with scientific colormaps bundled
+
+- **implot**: Error bars, annotations, drag lines and points, and contour lines with holes where the field is NaN
+
+- **imgui**: Colour editing with a picker, and colour-scale legends with discrete levels as bands
+
+- **view3d**: A 3-D view of meshes coloured by a field, drawn by a software rasterizer in every mode
+
+- **app**: Prefer='figure' for the file dialogs, a title bar height in looks, the notification fade tested
+
+- **remote**: An image changing frame after frame travels as JPEG, exact once it is still
+
+
+### Documentation
+- **api**: The API pages regenerated for looks and palettes
+
+- **api**: The API pages regenerated for the window's frame and icon
+
+- **api**: The API pages regenerated for trees
+
+- **api**: The API pages regenerated for processes and the log view
+
+- **api**: The API pages regenerated for background tasks
+
+- **api**: The API pages regenerated for progress bars and notifications
+
+- **api**: The API pages regenerated for the file browser
+
+- **api**: The API pages regenerated for multi-line text, drops and the clipboard
+
+- **api**: The API pages regenerated for the colormap registry
+
+- **api**: The API pages regenerated for contours, legends, colour editing and the 3-D view
+
+- **tutorial**: Part two begins: the studio's own window, its shell, its case
+
+- **tutorial**: The studio edits its input, runs its solver and shows the result
+
+- **tutorial**: The studio shows the field in 3-D, reads large results off the frame, and fails well
+
+- **tutorial**: The studio tested headless and served to a browser; the tutorial in two parts
+
+- **api**: The API pages regenerated for set_icon and the ini file during a capture
+
+- **task**: Why Dear ImGui's context is not made thread-local, measured
+
+- **api**: The API pages regenerated for the open questions closed before v0.3.0
+
+
+### Fixed
+- The fpm package embeds looks and palettes; two tests portable to macOS
+
+- **task**: Task procedures recursive; headless keeps its own clipboard
+
+- **test**: The log view's copy pressed with the platform's shortcut key
+
+- **task**: The entry points that refuse a task's drawing are recursive
+
+- **process**: The captured lines no longer overwrite the heap
+
+- **ci**: The window check accepts a window clamped by a small display, and the close button on macOS's side
+
+- **app**: The bar's icon is set where the system has no window icons; a capture ignores the ini file
+
+- Names taken without trailing blanks, band edges labelled exactly, drops refused from a task
+
+- **remote**: The page's notices stay readable beside the frame counter
+
+- **style**: FIGURE's palettes derive every colour from their roles; paper's MinorAlpha in effect
+
+- **task**: Every drawing procedure FIGURE wraps refuses a call from a task
+
+- **app**: The app procedures that drive Dear ImGui or the window refuse a call from a task
+
+
 ## [0.2.0] — 2026-11-06
 ### Added
 - **implot**: Logarithmic axes in ip_setup_axes (xlog, ylog)
