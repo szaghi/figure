@@ -1,0 +1,52 @@
+#! program build/docs-examples/bin/tut10_input
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  470
+#! poster  335
+# east in the tree: the boundaries' table; east becomes fixed at 40; Solver: omega dragged to 1.59; the heat.inp tab
+# shows the file's text in the monospace font; max_iter edited there, Apply; the form shows 3000; ctrl+z takes it back
+0   move 600 300
+10  move 444 142 15
+30  down
+32  up
+45  move 690 131 15
+60  down
+62  up
+75  move 680 156 10
+88  down
+90  up
+105 move 925 131 15
+120 down
+122 up
+125 key ctrl down
+126 key a
+127 key ctrl up
+130 text 40
+140 key enter
+160 move 428 218 15
+178 down
+180 up
+195 move 840 86 15
+210 down
+212 move 765 86 20
+236 up
+250 move 604 61 15
+265 down
+267 up
+290 move 1080 200 15
+305 down
+307 up
+310 key backspace
+312 key backspace
+314 key backspace
+316 key backspace
+320 text 3000
+345 move 580 86 15
+360 down
+362 up
+380 move 555 61 15
+395 down
+397 up
+420 key ctrl down
+421 key z
+422 key ctrl up
+445 move 700 300 15

@@ -31,6 +31,15 @@ A section of a deferred-length allocatable character array (`character(len=:), a
 26.9 passes the section right, and so does gfortran for a fixed-length array. Copy the section into a fixed-length
 array first (`own = names(k:k + 15)`, as `docs/examples/src/gallery.F90` does), or pass the elements one by one.
 
+## gfortran: an array constructor of deferred-length strings
+
+An array constructor with a type-spec whose values are deferred-length character variables,
+`[character(len=512) :: path, dir, '--pace']` with `character(len=:), allocatable :: path, dir`, is given too little
+memory and written past its end: the program crashes later, in an unrelated allocation (`corrupted size vs.
+prev_size`). Seen with gfortran 16.2 (valgrind reports the write in the constructor). The arguments of
+`process_object%start` are the usual victim: fill a fixed-length array element by element instead, as
+`docs/examples/src/tut11_run.F90` does.
+
 ## Text input
 
 `ig_input_text` edits a `character` variable, whose length is the field's capacity: a longer text is cut at it. Text

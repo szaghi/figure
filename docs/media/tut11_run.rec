@@ -1,0 +1,13 @@
+#! program build/docs-examples/bin/tut11_run
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  330
+#! poster  300
+# Run: the solver's lines fill the log, the residual plot grows on a logarithmic axis, the status bar shows the
+# iteration and the progress towards the tolerance; at the end a notification says the solver converged
+# (the solver runs in real time while the frames are drawn at the capture's pace: the video's timing depends on the
+# machine, the poster is the end of the run)
+0   move 600 300
+10  move 384 384 15
+30  down
+32  up
+50  move 700 250 30

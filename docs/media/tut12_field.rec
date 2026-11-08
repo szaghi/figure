@@ -1,0 +1,33 @@
+#! program build/docs-examples/bin/tut12_field
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  560
+#! poster  470
+# F5 runs the solver; the Result panel comes forward with the field in cividis, its legend and contour lines; the
+# probe line is dragged towards the hot side (the profile follows), the probe point moved; batlow, in 8 bands; jet,
+# with its warning (the solver runs in real time: the frames start once it has surely ended)
+0   move 600 300
+5   key f5
+280 move 594 180 15
+300 down
+302 move 512 180 20
+325 up
+335 move 526 150 10
+350 down
+352 move 560 230 20
+375 up
+390 move 425 62 15
+405 down
+407 up
+420 move 380 106 10
+432 down
+434 up
+445 move 635 62 15
+458 down
+460 up
+490 move 425 62 15
+505 down
+507 up
+520 move 380 182 10
+532 down
+534 up
+545 move 800 250 10

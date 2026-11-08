@@ -100,4 +100,4 @@ one question before an open or a quit discards them. Reference: [File dialogs](/
 [Ask before quitting](/guide/menus#ask-before-quitting), [Notifications](/guide/frame-loop#notifications).
 :::
 
-**Next:** 10. The input editor (part two continues).
+**Next:** [10. The input editor](./10-input): a tree of the input's sections, forms, a table, the input as text, undo.
