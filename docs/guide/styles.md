@@ -38,8 +38,8 @@ Dear ImGui's own styles are measured, not held to one: `dark` reaches only 3:1 o
 
 Each of FIGURE's four styles is a look and a palette: the look `seal` with the palette of the same name (`paper` and
 `high-contrast` add borders to it). Dear ImGui's three are its own geometry with its own colours, no palette. The
-same test holds every built-in style to the colours and sizes it had before styles were split into looks and
-palettes, bit for bit.
+same test holds every built-in style to recorded colours and sizes, bit for bit: those it had before styles were split
+into looks and palettes, but for the two changes of v0.3.0 below ([palettes](#palettes)), recorded again with them.
 
 The environment variable `FIGURE_STYLE` picks the style at initialisation, without changing the program
 (`FIGURE_STYLE=paper exe/examples/figure_hello`); a `set_style` call in the program comes later and wins. An unknown
@@ -149,8 +149,27 @@ projects' own, named after each role in the file; where an upstream colour fails
 rule](#the-contrast-rule) in its role, another colour of the same palette takes its place, and the file's comment
 says which (Nord's comment grey is too dark for dimmed text, so its `nord4` is used; Solarized's blue is too weak
 under text, so its cyan is the accent). Their licences are in
-[THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md). FIGURE's four palettes give every Dear
-ImGui colour by hand (the colours of the styles of the same name), so none of theirs is derived.
+[THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md). FIGURE's four palettes give most Dear
+ImGui colours by hand (the colours of the styles of the same name); the others are derived from their roles, as every
+colour of the other palettes is.
+
+**Changed in v0.3.0.** Until v0.3.0 the colours FIGURE's four styles did not set were Dear ImGui's dark or light
+style's: a bluish `CheckboxSelectedBg` in `seal`, a blue `DragDropTarget` in `paper`, a grey dimming behind modals.
+They are now derived from the palette's roles:
+
+| Colour | seal, seal-light | paper | high-contrast |
+|---|---|---|---|
+| `CheckboxSelectedBg` | surface | surface | surface |
+| `TableRowBg`, `TableRowBgAlt` | background (transparent); text at 4 % | the same | the same |
+| `NavWindowingHighlight` | text at 70 % | text at 70 % | (unchanged) |
+| `NavWindowingDimBg`, `ModalWindowDimBg` | black at 30 % and 45 % | the same | the same |
+| `PlotLinesHovered`, `PlotHistogramHovered` | (unchanged) | accent, accent toward text | the same |
+| `TreeLines` | (unchanged) | border | border |
+| `DragDropTarget`, `DragDropTargetBg` | (unchanged) | accent, accent at 10 % | the same |
+
+`paper` also has `MinorAlpha = 0.5` in effect (ImPlot's default is 0.25): the minor grid lines are drawn at half the
+alpha of the major ones, so they show on white, under the major ones. The line was in the theme before but never took
+effect.
 
 ### Palette roles
 

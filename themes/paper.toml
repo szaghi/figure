@@ -14,5 +14,4 @@ FrameBorderSize = 1
 
 [implot.vars]
 PlotBorderSize = 1
-# MinorAlpha = 0.5 was here, never in effect: ImPlot reset it to 0.25 when the theme was applied. Left out, so the
-# theme stays as it was (FIGURE now applies [implot.vars] after ImPlot's colours, so the line would take effect).
+MinorAlpha = 0.5                               # the minor grid lines at half the major ones' alpha (ImPlot: 0.25)

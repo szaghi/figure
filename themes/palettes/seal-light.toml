@@ -1,7 +1,8 @@
 # FIGURE palette "seal-light": the seal on paper: paper windows, ink text, the same vermilion.
 # Paper windows, ink text, the same vermilion accents.
-# The roles are what FIGURE draws its own widgets with and what the contrast rule checks; the Dear ImGui colours
-# are all given below, hand-tuned (the theme "seal-light" before looks and palettes, unchanged), so none is derived.
+# The roles are what FIGURE draws its own widgets with and what the contrast rule checks. The Dear ImGui colours
+# given below are hand-tuned (the theme "seal-light" before looks and palettes); the others are derived from the roles
+# (until v0.3.0 they were Dear ImGui's own style's, which the theme had never set).
 # Format: docs/guide/styles.md#palettes.
 
 background = "#e6e0d4"
@@ -79,10 +80,4 @@ UnsavedMarker = "#16130f"
 NavCursor = "#b42d1a"
 DockingPreview = ["#c8321e", 0.55]
 DockingEmptyBg = "#e6e0d4"
-# not set by the theme before: Dear ImGui's light style's, kept as they were
-CheckboxSelectedBg = [0.95, 0.97, 1, 1]
-TableRowBg = ["#000000", 0]
-TableRowBgAlt = [0.3, 0.3, 0.3, 0.09]
-NavWindowingHighlight = [0.7, 0.7, 0.7, 0.7]
-NavWindowingDimBg = ["#333333", 0.2]
-ModalWindowDimBg = ["#333333", 0.35]
+

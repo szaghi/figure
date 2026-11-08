@@ -12,7 +12,10 @@ program figure_test_themes
 !<
 !< Golden: every colour of Dear ImGui and ImPlot, every style variable of both, the line colours and the window's
 !< background of the seven built-in themes, compared bit for bit with the values recorded before themes were split into
-!< looks and palettes (`figure_test_themes_golden.inc`; `FIGURE_GOLDEN_RECORD=<file>` writes them again).
+!< looks and palettes (`figure_test_themes_golden.inc`; `FIGURE_GOLDEN_RECORD=<file>` writes them again). Recorded
+!< again in v0.3.0 for two intended changes: the Dear ImGui colours FIGURE's four palettes had inherited from Dear
+!< ImGui's dark or light style (CheckboxSelectedBg, TableRowBg, the dimming of modals, ...) derived from their roles;
+!< paper's MinorAlpha 0.5 in effect. Dear ImGui's three styles are unchanged.
 !<
 !< Contrast: each theme is applied headless and its colours read back as Dear ImGui and ImPlot hold them (what a theme
 !< file does not set comes from its base). Checked against the theme's promise:
@@ -51,7 +54,7 @@ character(len=16), parameter :: PALETTES(NP) = [character(len=16) :: 'seal', 'se
    'catppuccin-latte', 'tokyo-night', 'one-dark'] !< Every bundled palette.
 logical,          parameter :: DERIVED(NP) = [.false., .false., .false., .false., .true., .true., .true., .true., &
                                               .true., .true., .true., .true., .true., .true.] !< Colours derived
-                                                                   !< from the roles (FIGURE's own four give theirs).
+                                                                   !< from the roles (FIGURE's own four give most).
 integer(int32),   parameter :: NL = 4_int32                        !< Bundled looks.
 character(len=8), parameter :: LOOKS(NL) = [character(len=8) :: 'seal', 'fusion', 'adwaita', 'fluent'] !< Looks.
 real(real64),     parameter :: LOOK_ROUNDING(NL) = [0.0_real64, 2.0_real64, 6.0_real64, 4.0_real64] !< FrameRounding.
@@ -294,7 +297,7 @@ contains
 
    open(newunit=u, file=file, status='replace', action='write')
    write(u, '(A)') '! golden values of the seven built-in themes, written by figure_test_themes (FIGURE_GOLDEN_RECORD)'
-   write(u, '(A)') '! from the themes as they were before looks and palettes: the bits of every colour and variable'
+   write(u, '(A)') '! the bits of every colour and variable; recorded again only for an intended change of a built-in style'
    write(u, '(A,I0,A)') 'integer(int32), parameter :: GOLDEN_N = ', size(fps, 1), '_int32 !< Values per theme.'
    do t = 1_int32, size(fps, 2, kind=int32)
       write(u, '(A,I0,A)') 'integer(int32), parameter :: GOLDEN_', t, '(GOLDEN_N) = [ &'

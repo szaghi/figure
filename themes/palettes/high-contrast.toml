@@ -1,8 +1,9 @@
 # FIGURE palette "high-contrast": white on black, yellow accents.
 # For low vision and bright rooms: text at 7:1 or more against every background it sits on (WCAG AAA), borders on
 # every frame, a yellow that reads on black for what the user touches, and colour-blind-safe lines.
-# The roles are what FIGURE draws its own widgets with and what the contrast rule checks; the Dear ImGui colours
-# are all given below, hand-tuned (the theme "high-contrast" before looks and palettes, unchanged), so none is derived.
+# The roles are what FIGURE draws its own widgets with and what the contrast rule checks. The Dear ImGui colours
+# given below are hand-tuned (the theme "high-contrast" before looks and palettes); the others are derived from the roles
+# (until v0.3.0 they were Dear ImGui's own style's, which the theme had never set).
 # Format: docs/guide/styles.md#palettes.
 
 background = "#000000"
@@ -73,20 +74,6 @@ TextSelectedBg = ["#ffd400", 0.35]
 NavCursor = "#ffd400"
 DockingPreview = ["#ffd400", 0.45]
 DockingEmptyBg = "#000000"
-# not set by the theme before: Dear ImGui's dark style's, kept as they were
-CheckboxSelectedBg = [0.1585, 0.1975, 0.2365, 1]
-InputTextCursor = "#ffffff"
-PlotLinesHovered = [1, 0.43, 0.35, 1]
-PlotHistogramHovered = "#ff9900"
-TableRowBg = ["#000000", 0]
-TableRowBgAlt = ["#ffffff", 0.06]
-TreeLines = [0.43, 0.43, 0.5, 0.5]
-DragDropTarget = ["#ffff00", 0.9]
-DragDropTargetBg = ["#000000", 0]
-UnsavedMarker = "#ffffff"
-NavWindowingHighlight = ["#ffffff", 0.7]
-NavWindowingDimBg = ["#cccccc", 0.2]
-ModalWindowDimBg = ["#cccccc", 0.35]
 
 [implot.colors]
 FrameBg = "#000000"

@@ -1,7 +1,8 @@
 # FIGURE palette "seal": ink windows, paper text, one vermilion.
 # Vermilion is spent on what the user touches (slider grabs, check marks, pressed buttons) and on the first line.
-# The roles are what FIGURE draws its own widgets with and what the contrast rule checks; the Dear ImGui colours
-# are all given below, hand-tuned (the theme "seal" before looks and palettes, unchanged), so none is derived.
+# The roles are what FIGURE draws its own widgets with and what the contrast rule checks. The Dear ImGui colours
+# given below are hand-tuned (the theme "seal" before looks and palettes); the others are derived from the roles
+# (until v0.3.0 they were Dear ImGui's own style's, which the theme had never set).
 # Format: docs/guide/styles.md#palettes.
 
 background = "#14120f"
@@ -79,10 +80,4 @@ UnsavedMarker = "#f6f2ea"
 NavCursor = "#f08a72"
 DockingPreview = ["#d9442c", 0.55]
 DockingEmptyBg = "#14120f"
-# not set by the theme before: Dear ImGui's dark style's, kept as they were
-CheckboxSelectedBg = [0.1585, 0.1975, 0.2365, 1]
-TableRowBg = ["#000000", 0]
-TableRowBgAlt = ["#ffffff", 0.06]
-NavWindowingHighlight = ["#ffffff", 0.7]
-NavWindowingDimBg = ["#cccccc", 0.2]
-ModalWindowDimBg = ["#cccccc", 0.35]
+
