@@ -17,7 +17,8 @@ enddo
 call app%destroy()
 ```
 
-Try it with the example: `exe/figure_hello --remote 8080`, then open the address it prints (with its `?token=...`).
+Try it with the example: `exe/examples/figure_hello --remote 8080`, then open the address it prints (with its
+`?token=...`).
 
 <Media name="remote" alt="The interface of figure_hello drawn by a web browser at localhost:8080" caption="figure_hello --remote, drawn by Chromium: the same pixels as the native window" />
 

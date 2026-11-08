@@ -19,7 +19,7 @@ The state of the interface is the program's own variables: a slider is bound to 
 the slider writes the new value into it when the user drags. See [Why immediate mode](why) for what this changes with
 respect to retained-mode toolkits.
 
-<Media name="hello" video alt="figure_hello: a check box starts the animation, a slider changes the frequency of the plotted wave, a button counts clicks" caption="exe/figure_hello, the example of the repository" />
+<Media name="hello" video alt="figure_hello: a check box starts the animation, a slider changes the frequency of the plotted wave, a button counts clicks" caption="exe/examples/figure_hello, the example of the repository" />
 
 ## Status
 

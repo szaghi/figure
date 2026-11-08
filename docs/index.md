@@ -71,7 +71,7 @@ features:
 
 ## See it running
 
-<Media name="hello" video alt="figure_hello: a check box starts the animation, a slider changes the frequency of the plotted wave, a button counts clicks" caption="exe/figure_hello: a check box, a slider and a button bound to Fortran variables, and a plot of a Fortran array" />
+<Media name="hello" video alt="figure_hello: a check box starts the animation, a slider changes the frequency of the plotted wave, a button counts clicks" caption="exe/examples/figure_hello: a check box, a slider and a button bound to Fortran variables, and a plot of a Fortran array" />
 
 <div class="fig-gallery">
 <Media name="mandelbrot" video alt="The Mandelbrot explorer zooming about 175 times into the seahorse valley" caption="An explorer: ImPlot zooms, Fortran computes the image, a texture shows it" />
@@ -99,9 +99,9 @@ is released under the MIT licence.
 <<< @/examples/snippets/tut01_window-loop.F90{fortran}
 
 ```bash
-scripts/build_native.sh                                   # native layer into lib/ (once)
-fobis build --mode examples-gnu && exe/figure_hello       # the example program
-fobis build --mode tests-gnu && exe/figure_test_headless  # the headless test: no display needed
+scripts/build_native.sh                                       # native layer into lib/ (once)
+fobis build --mode examples-gnu && exe/examples/figure_hello  # the example program
+fobis build --mode tests-gnu && exe/figure_test_headless      # the headless test: no display needed
 ```
 
 ## Authors

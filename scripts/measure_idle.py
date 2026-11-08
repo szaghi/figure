@@ -10,7 +10,7 @@ Usage::
 
 Example (WSLg, GPU rendering)::
 
-    python3 scripts/measure_idle.py --seconds 60 --env GALLIUM_DRIVER=d3d12 -- exe/figure_hello
+    python3 scripts/measure_idle.py --seconds 60 --env GALLIUM_DRIVER=d3d12 -- exe/examples/figure_hello
 
 Resolution: the kernel counts CPU time in clock ticks (usually 10 ms), i.e. 0.1% of one core over a 10 s window;
 use 60 s or more to resolve the sub-percent costs of an idle lazy loop. The report also tells whether the process

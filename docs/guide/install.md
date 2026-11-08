@@ -183,7 +183,7 @@ layer is built.
 
 ```bash
 fobis build --mode tests-gnu && exe/figure_test_headless      # gfortran
-fobis build --mode examples-gnu && exe/figure_hello
+fobis build --mode examples-gnu && exe/examples/figure_hello  # the examples, in exe/examples/
 fobis build --mode tests-nvf                                  # nvfortran
 fobis build --mode tests-ifx                                  # Intel ifx (after: source /opt/intel/oneapi/setvars.sh)
 fobis rule --ex sync                                          # fobos and fpm.toml describe the same build
@@ -195,15 +195,18 @@ fobis rule --ex sync                                          # fobos and fpm.to
 |---|---|
 | `tests-gnu`, `tests-nvf`, `tests-ifx` | the tests: `exe/figure_test_headless`, `figure_test_layout`, `figure_test_remote`, `figure_test_themes` |
 | `tests-gnu-debug` | the same with runtime checks and floating-point traps |
-| `examples-gnu`, `examples-nvf`, `examples-ifx` | the example programs (`exe/figure_hello`, `exe/figure_mandelbrot`, `exe/figure_bench_texture`, `exe/figure_bench_redraw`), with OpenMP |
+| `examples-gnu`, `examples-nvf`, `examples-ifx` | the example programs in `exe/examples/` (`figure_hello`, `figure_mandelbrot`, `figure_bench_texture`, `figure_bench_redraw`), with OpenMP |
 | `figure-static-gnu`, `figure-static-nvf`, `figure-static-ifx` | the static library `lib/libfigure.a` (`figure` and `figure_testing`), modules in `lib/mod` |
 
 Two rules matter here: `fobis rule --ex native` builds the native layer, `fobis rule --ex sync` checks fobos against
 `fpm.toml`.
 
+The tests and the examples are kept apart: `scripts/run_tests.sh` runs every program in `exe/` (not in its
+subfolders), so an example, which waits on its window, is never run as a test.
+
 ::: warning Switching compilers
-Test and example modes of every compiler write into `exe/`. Run `rm -rf exe` before trusting a run after a switch:
-a stale binary of the other compiler can still be there.
+Test modes of every compiler write into `exe/`, example modes into `exe/examples/`. Run `rm -rf exe` before trusting
+a run after a switch: a stale binary of the other compiler can still be there.
 :::
 
 ## The Fortran library with fpm
@@ -216,15 +219,25 @@ runtime and Windows' import libraries) would resolve nothing. On macOS, where th
 is an empty archive from the native build and the libraries and frameworks go in `--link-flag`. `fpm.sh` stops if
 `lib/libfigure_native.a` is missing.
 
+fpm links a program again only when its own objects change, not when a library on its link line does. So `fpm.sh`
+removes the test, example and app binaries under `build/` that are older than `lib/libfigure_native.a`, `libSDL3.a`
+or `libfigure_platform.a`, and says how many: fpm then links them again with the native layer just rebuilt. A native
+build run by FoBiS (`pre_build`) writes `libfigure_native.a` again, so the next `fpm.sh` relinks; nothing is
+recompiled.
+
 ```bash
 scripts/fpm.sh test
 scripts/fpm.sh run --example figure_hello
 FPM_FC=gfortran scripts/fpm.sh test
 scripts/fpm.sh test --compiler ifx --flag "-fpscomp logicals"
+scripts/fpm.sh test --compiler nvfortran --flag "-Mbackslash -Munixlogical -mp"
 ```
 
 With ifx, pass `--flag "-fpscomp logicals"` (here and to an fpm project depending on FIGURE), as fobos does:
-[Intel ifx](#intel-ifx).
+[Intel ifx](#intel-ifx). With nvfortran, pass `--flag "-Mbackslash -Munixlogical -mp"`: `--flag` replaces fpm's own
+nvfortran flags, `-Mbackslash` among them; `-Munixlogical` makes `.true.` the value of a C `bool`, and fpm passes it
+to the link too, where it is needed ([Known issues](known-issues#nvfortran-munixlogical)); `-mp` makes nvfortran's
+I/O thread-safe, for [tasks](known-issues#tasks).
 
 ## FIGURE as an fpm dependency
 
@@ -319,13 +332,13 @@ with fpm, builds the examples and builds FIGURE as an fpm dependency (`scripts/f
 | macOS (arm64) | gfortran 14 (Homebrew) | Apple clang | `macos` | the runner's display |
 | Windows (MSYS2 UCRT64) | gfortran | g++ | `windows` | the runner's display, Mesa's software OpenGL |
 
-**A real window:** `scripts/window_check.py` runs `exe/figure_hello` in a window twice, with the system's frame and
-with FIGURE's (`--frame`, [`decorations='figure'`](frame-loop#the-window-s-frame)), captures its frames ([Screenshots
-and videos](capture)) and checks the last one: the window's size (or less, down to 1000 x 600, when the system clamps
-the window to a small display, as on the macOS runner's 1024 x 768), not blank, and known widgets' pixels (the
-background, the "Click me" button, the slider's grab, and FIGURE's title bar with its title and close button, on the
-left on macOS). The frames are kept as the workflow's `window-frames-linux`, `-macos` and `-windows` artifacts. Run it
-on your own display after `fobis build --mode examples-gnu`:
+**A real window:** `scripts/window_check.py` runs `exe/examples/figure_hello` in a window twice, with the system's frame
+and with FIGURE's (`--frame`, [`decorations='figure'`](frame-loop#the-window-s-frame)), captures its frames
+([Screenshots and videos](capture)) and checks the last one: the window's size (or less, down to 1000 x 600, when the
+system clamps the window to a small display, as on the macOS runner's 1024 x 768), not blank, and known widgets' pixels
+(the background, the "Click me" button, the slider's grab, and FIGURE's title bar with its title and close button, on
+the left on macOS). The frames are kept as the workflow's `window-frames-linux`, `-macos` and `-windows` artifacts. Run
+it on your own display after `fobis build --mode examples-gnu`:
 
 ```bash
 python3 scripts/window_check.py --out window-frames   # writes window-frames/native.png and figure.png
@@ -333,6 +346,17 @@ python3 scripts/window_check.py --out window-frames   # writes window-frames/nat
 
 The Windows runner has no GPU and its own OpenGL is version 1.1: the job places Mesa's `opengl32.dll` (MSYS2's
 `mesa` package, software rendering) beside the program. On a Windows machine with a GPU driver nothing is needed.
+
+### nvfortran
+
+The nvfortran modes (`tests-nvf`, `examples-nvf`, `figure-static-nvf`) compile with `-Mstandard -Mfree
+-Munixlogical` and link with `-Munixlogical`; the native layer is built with `gcc` and `g++`
+(`CC=gcc CXX=g++ scripts/build_native.sh`): nvfortran links `libstdc++`.
+
+- **`-Munixlogical`:** by default nvfortran stores `.true.` as -1, also in a `logical(c_bool)`, which C and C++ do not
+  accept as a `bool`. With the option `.true.` is 1 and any non-zero value is true. It must be given at the link too:
+  [Known issues](known-issues#nvfortran-munixlogical). A program compiled and linked without it may use a FIGURE
+  built with it.
 
 ### Intel ifx
 

@@ -1,8 +1,9 @@
 """Check FIGURE's windowed path: run an example in a real window, capture its frames, check the pixels.
 
-The program (default ``exe/figure_hello``) is run twice in a window on the display, with the frame capture of the
-native layer (``FIGURE_CAPTURE``, see docs/guide/capture.md): once with the system's frame, once with the frame drawn
-by FIGURE (``--frame``: ``decorations='figure'``). Each run must write the frames asked for, and its last frame must
+The program (default ``exe/examples/figure_hello``, built by ``fobis build --mode examples-gnu``) is run twice in a
+window on the display, with the frame capture of the native layer (``FIGURE_CAPTURE``, see docs/guide/capture.md):
+once with the system's frame, once with the frame drawn by FIGURE (``--frame``: ``decorations='figure'``). Each run
+must write the frames asked for, and its last frame must
 
   - have the window's size, 1100 x 700 pixels (or an integer multiple of it, on a display of higher pixel density),
     or less, down to 1000 x 600, when the system clamps the window to a small display (a CI runner's 1024 x 768):
@@ -241,7 +242,9 @@ def main(argv: list[str]) -> int:
         Exit status: 0 when every case passes, 1 otherwise.
     """
     parser = argparse.ArgumentParser(description="Run figure_hello in a window, capture and check its frames.")
-    parser.add_argument("--program", default=str(ROOT / "exe" / "figure_hello"), help="the example to run")
+    parser.add_argument(
+        "--program", default=str(ROOT / "exe" / "examples" / "figure_hello"), help="the example to run"
+    )
     parser.add_argument("--out", default="window-frames", help="directory of the PNG frames (created)")
     parser.add_argument("--timeout", type=float, default=120.0, help="time allowed to each run [s]")
     args = parser.parse_args(argv)

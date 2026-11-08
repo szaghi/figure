@@ -152,7 +152,7 @@ jobs:
       env:
         GALLIUM_DRIVER: llvmpipe
       run: |
-        cp /ucrt64/bin/opengl32.dll exe/
+        cp /ucrt64/bin/opengl32.dll exe/examples/
         python scripts/window_check.py --out window-frames
 
     - name: Upload the frames of the windowed run
@@ -239,6 +239,11 @@ jobs:
       with:
         fpm-version: v0.12.0
         github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    # with --flag fpm drops its own nvfortran flags, -Mbackslash among them: given back, with fobos' -Munixlogical
+    # (.true. is 1, the value of a C bool; also passed to the link by fpm) and -mp (thread-safe I/O, for the tasks)
+    - name: Tests (fpm)
+      run: scripts/fpm.sh test --compiler nvfortran --flag "-Mbackslash -Munixlogical -mp"
 
     # FIGURE as a plain fpm dependency of another project, with gfortran: Ubuntu 24.04 has no SDL3 package, so the
     # static SDL3 the native build installed (lib/, include/) stands in for it

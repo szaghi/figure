@@ -1,4 +1,4 @@
-#! program exe/figure_hello
+#! program exe/examples/figure_hello
 #! frames  1
 #! remote  1100 700
 # the UI of figure_hello --remote, drawn by a web browser

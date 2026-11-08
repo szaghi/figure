@@ -12,7 +12,7 @@ Runs ``figure_bench_redraw`` (src/examples) through a list of cases. For each ca
 
 Usage::
 
-    python3 scripts/measure_redraw.py [--program exe/figure_bench_redraw] [--seconds 10] [--only NAME ...]
+    python3 scripts/measure_redraw.py [--program exe/examples/figure_bench_redraw] [--seconds 10] [--only NAME ...]
                                       [--json results.json] [--port PORT] [--connect HOST:PORT]
 
 ``--connect`` measures a program already running elsewhere (for example on a cluster node, through an SSH tunnel):
@@ -478,7 +478,7 @@ def table(results: list[dict]) -> str:
 def main(argv: list[str]) -> int:
     """Run the cases, print the table, optionally write JSON."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("--program", default="exe/figure_bench_redraw")
+    ap.add_argument("--program", default="exe/examples/figure_bench_redraw")
     ap.add_argument("--seconds", type=float, default=10.0)
     ap.add_argument("--only", nargs="*", default=None, help="case names (or prefixes) to run")
     ap.add_argument("--json", type=Path, default=None)

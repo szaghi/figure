@@ -103,10 +103,10 @@ CMake, and the **Fortran library**, built by [FoBiS](https://github.com/szaghi/F
 
 ```sh
 git clone https://github.com/szaghi/figure && cd figure
-scripts/build_native.sh                              # once: the native layer, into lib/
-fobis build --mode figure-static-gnu                 # lib/libfigure.a and lib/mod/ (or figure-static-nvf)
-fobis build --mode tests-gnu && scripts/run_tests.sh # the tests, headless
-fobis build --mode examples-gnu && exe/figure_hello  # the examples (also figure_mandelbrot)
+scripts/build_native.sh                                       # once: the native layer, into lib/
+fobis build --mode figure-static-gnu                          # lib/libfigure.a and lib/mod/ (or figure-static-nvf)
+fobis build --mode tests-gnu && scripts/run_tests.sh          # the tests, headless
+fobis build --mode examples-gnu && exe/examples/figure_hello  # the examples, in exe/examples/ (also figure_mandelbrot)
 ```
 
 **fpm**, as a dependency of your project: each release publishes a self-contained package as the tag

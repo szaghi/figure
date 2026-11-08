@@ -1,4 +1,4 @@
-#! program exe/figure_hello
+#! program exe/examples/figure_hello
 #! frames  210
 #! poster  185
 #! gif     640

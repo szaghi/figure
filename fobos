@@ -38,10 +38,11 @@ $NATIVE_LFLAGS =
 [common-variables]
 $CGNU        = -c -std=f2018 -ffree-line-length-132 -fimplicit-none
 $CGNU_DEBUG  = -Og -g3 -fcheck=all -fbacktrace -Wall -Wimplicit-interface -Wimplicit-procedure -finit-real=nan -ffpe-trap=invalid,zero,overflow
-$CNVF        = -c -Mstandard -Mfree
+$CNVF        = -c -Mstandard -Mfree -Munixlogical
 $CIFX        = -c -stand f18 -free -fpscomp logicals
 
-# main modes
+# main modes: the tests build into exe/ (scripts/run_tests.sh runs every program there), the examples into exe/examples/
+# (with their own mod/ and obj/), which run_tests.sh does not enter
 [tests-gnu]
 template  = template-gnu
 cflags    = $CGNU -O2
@@ -58,9 +59,12 @@ src       = src/lib/ src/tests/
 template  = template-gnu
 cflags    = $CGNU -O2
 openmp    = True
-build_dir = exe
+build_dir = exe/examples
 src       = src/lib/ src/examples/
 
+# nvfortran: -Munixlogical ($CNVF) makes .true. the C value 1 (the default is -1, not a C bool), as ifx's -fpscomp logicals;
+# it is also a link flag (template-nvf's lflags): it selects the run-time library's logical values, and code compiled
+# with it but linked without it (or the reverse) gets `select type` wrong
 # tests-nvf: -mp (openmp) also makes nvfortran's I/O runtime thread-safe, which the tasks' test needs
 [tests-nvf]
 template  = template-nvf
@@ -73,7 +77,7 @@ src       = src/lib/ src/tests/
 template  = template-nvf
 cflags    = $CNVF -O2
 openmp    = True
-build_dir = exe
+build_dir = exe/examples
 src       = src/lib/ src/examples/
 
 # ifx (Intel oneAPI): -fpscomp logicals makes .true. the C value 1 (the default is -1, which is not a C bool); its
@@ -88,7 +92,7 @@ src       = src/lib/ src/tests/
 template  = template-ifx
 cflags    = $CIFX -O2
 openmp    = True
-build_dir = exe
+build_dir = exe/examples
 src       = src/lib/ src/examples/
 
 [figure-static-gnu]
@@ -137,7 +141,7 @@ mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib
 ext_libs  = $NATIVE_LIBS
-lflags    = $NATIVE_LFLAGS
+lflags    = $NATIVE_LFLAGS -Munixlogical
 pre_build = native
 colors    = True
 quiet     = False

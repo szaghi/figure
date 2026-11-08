@@ -42,10 +42,10 @@ same test holds every built-in style to the colours and sizes it had before styl
 palettes, bit for bit.
 
 The environment variable `FIGURE_STYLE` picks the style at initialisation, without changing the program
-(`FIGURE_STYLE=paper exe/figure_hello`); a `set_style` call in the program comes later and wins. An unknown name or
-palette is `FIG_ERR_ARGUMENT` (or a stop, without `stat`). The font and its size are kept; every other colour and variable
-comes from the style (its base and its theme file), so changes made by name (below) or through the raw bindings are
-reset. Heatmaps are unaffected: their colormap is the one
+(`FIGURE_STYLE=paper exe/examples/figure_hello`); a `set_style` call in the program comes later and wins. An unknown
+name or palette is `FIG_ERR_ARGUMENT` (or a stop, without `stat`). The font and its size are kept; every other colour
+and variable comes from the style (its base and its theme file), so changes made by name (below) or through the raw
+bindings are reset. Heatmaps are unaffected: their colormap is the one
 passed to `ip_heatmap` (the line colours of a style are a qualitative colormap, not meant for fields). In remote mode
 the browser takes the style's background too. Every picture of this documentation is recorded in the default style,
 `'seal'`; the [gallery](#gallery) shows the others.
@@ -399,7 +399,7 @@ The built-in themes: [`seal`](https://github.com/szaghi/figure/blob/main/themes/
 | `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's own style editors in a window, "Style editor": every colour and size, live |
 
 `FIGURE_STYLE` also takes a file: a value with a `/` or ending in `.toml` is loaded as a theme
-(`FIGURE_STYLE=./my-theme.toml exe/figure_hello`).
+(`FIGURE_STYLE=./my-theme.toml exe/examples/figure_hello`).
 
 <Media name="cb_tune" video alt="In the style editor, the frame rounding is dragged up, frame borders ticked, the frame padding widened, then Save theme is pressed" caption="docs/examples/src/cb_tune.F90: the sample window follows the editor live; Save theme writes my-theme.toml" />
 

@@ -23,6 +23,23 @@ module make nvfortran 26.9 fail with "ILM file: can't find intrinsic size" (an i
 legal Fortran. FIGURE names such locals `extent`; avoid naming a local `size` in modules of your own built with
 nvfortran 26.9 if you hit the same error.
 
+## nvfortran: `-Munixlogical`
+
+FIGURE's nvfortran modes compile and link with `-Munixlogical`, so that `.true.` passed to C is 1, the value of a C
+`bool` (nvfortran's default is -1); the counterpart of ifx's `-fpscomp logicals`. Measured with nvfortran 26.9:
+
+- **Compile and link with it, or neither:** besides the logical values of the code it compiles, the option selects
+  at the link the run-time library's own (it adds `f90alt.o`). Code compiled with it but linked without it, or the
+  reverse, gets `select type` wrong: no `type is` matches, while `same_type_as` says the type is the same. fobos
+  passes it to both (`$CNVF` and the nvfortran modes' `lflags`); fpm passes `--flag` to both.
+- **A program of yours** need not use it: FIGURE built with it works in a program compiled and linked without it
+  (each side reads the other's `.true.` as true). If you use it, use it for the whole program, at the link too.
+- **`execute_command_line(..., wait=.true.)`** in code compiled with it does not wait: the command runs
+  asynchronously. Leave `wait` out (waiting is its default).
+- **fpm:** `--flag` replaces fpm's own nvfortran flags, `-Mbackslash` among them: pass
+  `--flag "-Mbackslash -Munixlogical -mp"` (`-mp` for [tasks](#tasks)), as in
+  [Installation](install#the-fortran-library-with-fpm).
+
 ## gfortran: a section of a deferred-length character array
 
 A section of a deferred-length allocatable character array (`character(len=:), allocatable :: names(:)`, as

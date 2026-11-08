@@ -11,8 +11,8 @@ reproducible: during a capture the real mouse and keyboard are ignored, the fram
 input comes from a script. Every picture of this documentation is made this way.
 
 ```bash
-FIGURE_CAPTURE=shot_ FIGURE_CAPTURE_FROM=10 FIGURE_CAPTURE_FRAMES=1 exe/figure_hello   # one screenshot: shot_00000.ppm
-convert shot_00000.ppm hello.png                                                    # ImageMagick, to PNG
+FIGURE_CAPTURE=shot_ FIGURE_CAPTURE_FROM=10 FIGURE_CAPTURE_FRAMES=1 exe/examples/figure_hello  # shot_00000.ppm
+convert shot_00000.ppm hello.png                                                                 # ImageMagick, to PNG
 ```
 
 ## Variables
@@ -62,7 +62,7 @@ This script ticks the "animate" check box of `figure_hello` and drags its freque
 ```
 
 ```bash
-FIGURE_CAPTURE=f_ FIGURE_CAPTURE_INPUT=hello.input FIGURE_CAPTURE_FRAMES=150 exe/figure_hello
+FIGURE_CAPTURE=f_ FIGURE_CAPTURE_INPUT=hello.input FIGURE_CAPTURE_FRAMES=150 exe/examples/figure_hello
 ffmpeg -framerate 30 -i f_%05d.ppm -c:v libx264 -pix_fmt yuv420p -crf 24 hello.mp4
 ```
 

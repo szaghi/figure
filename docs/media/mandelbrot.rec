@@ -1,4 +1,4 @@
-#! program exe/figure_mandelbrot
+#! program exe/examples/figure_mandelbrot
 #! frames  290
 #! poster  285
 #! scale   960

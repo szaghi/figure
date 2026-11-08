@@ -86,7 +86,7 @@ window idle.
 <Media name="mandelbrot" video alt="Zooming about 175 times into the seahorse valley of the Mandelbrot set, then raising the iterations" caption="figure_mandelbrot: 60 wheel steps into the spiral at -0.743644 + 0.131826 i, every frame recomputed at the plot's resolution" />
 
 ```bash
-fobis build --mode examples-gnu && exe/figure_mandelbrot      # the example modes build with OpenMP
+fobis build --mode examples-gnu && exe/examples/figure_mandelbrot  # the example modes build with OpenMP
 ```
 
 On the development machine (WSL2, RTX 4070 through `GALLIUM_DRIVER=d3d12`, 16 threads) the initial 1210 x 669 view
@@ -109,4 +109,4 @@ Measured on one machine (WSL2/WSLg, x86-64 with 16 hardware threads, RTX 4070 th
 absolute numbers are that machine's. The hand-off is one `glTexSubImage2D` reading the Fortran array in place: no
 conversion and no temporary copy.
 
-To reproduce: `fobis build --mode examples-gnu && GALLIUM_DRIVER=d3d12 exe/figure_bench_texture 120`.
+To reproduce: `fobis build --mode examples-gnu && GALLIUM_DRIVER=d3d12 exe/examples/figure_bench_texture 120`.
