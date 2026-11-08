@@ -15,7 +15,7 @@ module figure_style
 !< pixels hold the values Dear ImGui uses, already multiplied by the display's content scale (`app%content_scale()`).
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int, c_loc, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real64
-use figure_base, only : figure_check, figure_fail
+use figure_base, only : figure_check, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_pop_font, fig_pop_style, fig_push_font, fig_push_style_color,      &
                             fig_push_style_var, fig_show_style_editor, fig_style_color, fig_style_var
 
@@ -131,146 +131,162 @@ contains
    call figure_check(fig_pop_style(vars, k), stat)
    endsubroutine pop
 
-   subroutine ig_push_style_color_hex(name, color, stat)
+   recursive subroutine ig_push_style_color_hex(name, color, stat)
    !< Change the Dear ImGui colour `name` (`'#rrggbb'` or `'#rrggbbaa'`) until `ig_pop_style_color`.
    character(len=*), intent(in)            :: name  !< Colour name (`ImGuiCol_*` without the prefix).
    character(len=*), intent(in)            :: color !< Hex colour.
    integer(int32),   intent(out), optional :: stat  !< Status.
 
+   if (figure_refused('ig_push_style_color', stat)) return ! a task does not draw
    call push_color_hex(LIB_IMGUI, 'ig_push_style_color', name, color, stat)
    endsubroutine ig_push_style_color_hex
 
-   subroutine ig_push_style_color_rgba(name, rgba, stat)
+   recursive subroutine ig_push_style_color_rgba(name, rgba, stat)
    !< Change the Dear ImGui colour `name` (`[r, g, b(, a)]` in [0, 1]) until `ig_pop_style_color`.
    character(len=*), intent(in)            :: name    !< Colour name.
    real(real64),     intent(in)            :: rgba(:) !< Components.
    integer(int32),   intent(out), optional :: stat    !< Status.
 
+   if (figure_refused('ig_push_style_color', stat)) return ! a task does not draw
    call push_color(LIB_IMGUI, 'ig_push_style_color', name, rgba, stat)
    endsubroutine ig_push_style_color_rgba
 
-   subroutine ig_pop_style_color(n, stat)
+   recursive subroutine ig_pop_style_color(n, stat)
    !< Undo the `n` newest colour pushes (default 1); colours pushed by `ig_push_style_color` and `ip_push_style_color`
    !< share one stack.
    integer(int32), intent(in),  optional :: n    !< How many.
    integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
 
+   if (figure_refused('ig_pop_style_color', stat)) return ! a task does not draw
    call pop(0_c_int, n, stat)
    endsubroutine ig_pop_style_color
 
-   subroutine ig_push_style_var_r64(name, value, stat)
+   recursive subroutine ig_push_style_var_r64(name, value, stat)
    !< Change a Dear ImGui style variable holding one number until `ig_pop_style_var`.
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
    real(real64),     intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
 
+   if (figure_refused('ig_push_style_var', stat)) return ! a task does not draw
    call push_var(LIB_IMGUI, name, [value, 0.0_real64], 1_c_int, stat)
    endsubroutine ig_push_style_var_r64
 
-   subroutine ig_push_style_var_vec2(name, value, stat)
+   recursive subroutine ig_push_style_var_vec2(name, value, stat)
    !< Change a Dear ImGui style variable holding a pair until `ig_pop_style_var`.
    character(len=*), intent(in)            :: name     !< Variable name (a field of `ImGuiStyle`).
    real(real64),     intent(in)            :: value(2) !< Values (x, y).
    integer(int32),   intent(out), optional :: stat     !< Status.
 
+   if (figure_refused('ig_push_style_var', stat)) return ! a task does not draw
    call push_var(LIB_IMGUI, name, value, 2_c_int, stat)
    endsubroutine ig_push_style_var_vec2
 
-   subroutine ig_push_style_var_logical(name, value, stat)
+   recursive subroutine ig_push_style_var_logical(name, value, stat)
    !< Change a Dear ImGui style variable holding a logical until `ig_pop_style_var`.
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
    logical,          intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
 
+   if (figure_refused('ig_push_style_var', stat)) return ! a task does not draw
    call push_var(LIB_IMGUI, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, stat)
    endsubroutine ig_push_style_var_logical
 
-   subroutine ig_push_style_var_i32(name, value, stat)
+   recursive subroutine ig_push_style_var_i32(name, value, stat)
    !< Change a Dear ImGui style variable holding an enumeration until `ig_pop_style_var`.
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
    integer(int32),   intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
 
+   if (figure_refused('ig_push_style_var', stat)) return ! a task does not draw
    call push_var(LIB_IMGUI, name, [real(value, real64), 0.0_real64], 1_c_int, stat)
    endsubroutine ig_push_style_var_i32
 
-   subroutine ig_pop_style_var(n, stat)
+   recursive subroutine ig_pop_style_var(n, stat)
    !< Undo the `n` newest variable pushes (default 1); variables pushed by `ig_push_style_var` and
    !< `ip_push_style_var` share one stack.
    integer(int32), intent(in),  optional :: n    !< How many.
    integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
 
+   if (figure_refused('ig_pop_style_var', stat)) return ! a task does not draw
    call pop(1_c_int, n, stat)
    endsubroutine ig_pop_style_var
 
-   subroutine ip_push_style_color_hex(name, color, stat)
+   recursive subroutine ip_push_style_color_hex(name, color, stat)
    !< Change the ImPlot colour `name` (`'#rrggbb'` or `'#rrggbbaa'`) until `ip_pop_style_color`.
    character(len=*), intent(in)            :: name  !< Colour name (`ImPlotCol_*` without the prefix).
    character(len=*), intent(in)            :: color !< Hex colour.
    integer(int32),   intent(out), optional :: stat  !< Status.
 
+   if (figure_refused('ip_push_style_color', stat)) return ! a task does not draw
    call push_color_hex(LIB_IMPLOT, 'ip_push_style_color', name, color, stat)
    endsubroutine ip_push_style_color_hex
 
-   subroutine ip_push_style_color_rgba(name, rgba, stat)
+   recursive subroutine ip_push_style_color_rgba(name, rgba, stat)
    !< Change the ImPlot colour `name` (`[r, g, b(, a)]` in [0, 1]) until `ip_pop_style_color`.
    character(len=*), intent(in)            :: name    !< Colour name.
    real(real64),     intent(in)            :: rgba(:) !< Components.
    integer(int32),   intent(out), optional :: stat    !< Status.
 
+   if (figure_refused('ip_push_style_color', stat)) return ! a task does not draw
    call push_color(LIB_IMPLOT, 'ip_push_style_color', name, rgba, stat)
    endsubroutine ip_push_style_color_rgba
 
-   subroutine ip_pop_style_color(n, stat)
+   recursive subroutine ip_pop_style_color(n, stat)
    !< Undo the `n` newest colour pushes (default 1): the same stack as `ig_pop_style_color`.
    integer(int32), intent(in),  optional :: n    !< How many.
    integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
 
+   if (figure_refused('ip_pop_style_color', stat)) return ! a task does not draw
    call pop(0_c_int, n, stat)
    endsubroutine ip_pop_style_color
 
-   subroutine ip_push_style_var_r64(name, value, stat)
+   recursive subroutine ip_push_style_var_r64(name, value, stat)
    !< Change an ImPlot style variable holding one number until `ip_pop_style_var`.
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImPlotStyle`).
    real(real64),     intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
 
+   if (figure_refused('ip_push_style_var', stat)) return ! a task does not draw
    call push_var(LIB_IMPLOT, name, [value, 0.0_real64], 1_c_int, stat)
    endsubroutine ip_push_style_var_r64
 
-   subroutine ip_push_style_var_vec2(name, value, stat)
+   recursive subroutine ip_push_style_var_vec2(name, value, stat)
    !< Change an ImPlot style variable holding a pair until `ip_pop_style_var`.
    character(len=*), intent(in)            :: name     !< Variable name (a field of `ImPlotStyle`).
    real(real64),     intent(in)            :: value(2) !< Values (x, y).
    integer(int32),   intent(out), optional :: stat     !< Status.
 
+   if (figure_refused('ip_push_style_var', stat)) return ! a task does not draw
    call push_var(LIB_IMPLOT, name, value, 2_c_int, stat)
    endsubroutine ip_push_style_var_vec2
 
-   subroutine ip_push_style_var_logical(name, value, stat)
+   recursive subroutine ip_push_style_var_logical(name, value, stat)
    !< Change an ImPlot style variable holding a logical until `ip_pop_style_var`.
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImPlotStyle`).
    logical,          intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
 
+   if (figure_refused('ip_push_style_var', stat)) return ! a task does not draw
    call push_var(LIB_IMPLOT, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, stat)
    endsubroutine ip_push_style_var_logical
 
-   subroutine ip_pop_style_var(n, stat)
+   recursive subroutine ip_pop_style_var(n, stat)
    !< Undo the `n` newest variable pushes (default 1): the same stack as `ig_pop_style_var`.
    integer(int32), intent(in),  optional :: n    !< How many.
    integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
 
+   if (figure_refused('ip_pop_style_var', stat)) return ! a task does not draw
    call pop(1_c_int, n, stat)
    endsubroutine ip_pop_style_var
 
-   subroutine ig_show_style_editor(open, stat)
+   recursive subroutine ig_show_style_editor(open, stat)
    !< Dear ImGui's and ImPlot's style editors, in a window titled "Style editor": every colour and size, live; with
    !< `open`, the window has a close button that sets it false. Keep a look with `app%save_style`.
    logical,        intent(inout), optional :: open !< Window open.
    integer(int32), intent(out),   optional :: stat !< Status: `FIG_ERR_STATE` outside a frame.
    integer(c_int), target                  :: o    !< C copy of `open`.
 
+   if (figure_refused('ig_show_style_editor', stat)) return ! a task does not draw
    if (present(open)) then
       if (.not. open) return
       o = merge(1_c_int, 0_c_int, open)
@@ -281,7 +297,7 @@ contains
    endif
    endsubroutine ig_show_style_editor
 
-   subroutine ig_push_font(font, size, stat)
+   recursive subroutine ig_push_font(font, size, stat)
    !< Switch the font and/or its size for the widgets that follow, until `ig_pop_font`: `font` as `app%set_font`
    !< (`''` keeps the current one), `size` in logical pixels (absent: keep). Pair every push with a pop.
    character(len=*), intent(in)            :: font !< Font (`'plex-sans'`, `'plex-mono'`, `'proggy'`, a file), or `''`.
@@ -289,6 +305,7 @@ contains
    integer(int32),   intent(out), optional :: stat !< Status.
    real(c_double)                          :: s    !< Size; 0: keep.
 
+   if (figure_refused('ig_push_font', stat)) return ! a task does not draw
    s = 0.0_c_double
    if (present(size)) then
       if (.not. (size > 0.0_real64)) then
@@ -300,10 +317,11 @@ contains
    call figure_check(fig_push_font(font, len_trim(font, c_int), s), stat)
    endsubroutine ig_push_font
 
-   subroutine ig_pop_font(stat)
+   recursive subroutine ig_pop_font(stat)
    !< Back to the font before the last `ig_push_font`.
    integer(int32), intent(out), optional :: stat !< Status.
 
+   if (figure_refused('ig_pop_font', stat)) return ! a task does not draw
    call figure_check(fig_pop_font(), stat)
    endsubroutine ig_pop_font
 
@@ -394,58 +412,66 @@ contains
    rgba = real(c, real64)
    endsubroutine get_color
 
-   subroutine ig_set_style_color_hex(name, color, stat)
+   recursive subroutine ig_set_style_color_hex(name, color, stat)
    !< Set the Dear ImGui colour `name` (`Text`, `WindowBg`, `Button`, ...) from `'#rrggbb'` or `'#rrggbbaa'`.
    character(len=*), intent(in)            :: name  !< Colour name (`ImGuiCol_*` without the prefix).
    character(len=*), intent(in)            :: color !< Hex colour.
    integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown name or a bad colour.
 
+   if (figure_refused('ig_set_style_color', stat)) return ! a task does not draw
    call set_color_hex(LIB_IMGUI, 'ig_set_style_color', name, color, stat)
    endsubroutine ig_set_style_color_hex
 
-   subroutine ig_set_style_color_rgba(name, rgba, stat)
+   recursive subroutine ig_set_style_color_rgba(name, rgba, stat)
    !< Set the Dear ImGui colour `name` from `[r, g, b]` or `[r, g, b, a]` in [0, 1].
    character(len=*), intent(in)            :: name    !< Colour name (`ImGuiCol_*` without the prefix).
    real(real64),     intent(in)            :: rgba(:) !< Components.
    integer(int32),   intent(out), optional :: stat    !< Status: `FIG_ERR_ARGUMENT` for an unknown name or a bad colour.
 
+   if (figure_refused('ig_set_style_color', stat)) return ! a task does not draw
    call set_color(LIB_IMGUI, 'ig_set_style_color', name, rgba, stat)
    endsubroutine ig_set_style_color_rgba
 
-   subroutine ig_get_style_color(name, rgba, stat)
+   recursive subroutine ig_get_style_color(name, rgba, stat)
    !< The Dear ImGui colour `name`, as `[r, g, b, a]` in [0, 1].
    character(len=*), intent(in)            :: name    !< Colour name.
    real(real64),     intent(out)           :: rgba(4) !< Components.
    integer(int32),   intent(out), optional :: stat    !< Status: `FIG_ERR_ARGUMENT` for an unknown name.
 
+   rgba = 0.0_real64
+   if (figure_refused('ig_get_style_color', stat)) return ! a task does not draw
    call get_color(LIB_IMGUI, name, rgba, stat)
    endsubroutine ig_get_style_color
 
-   subroutine ip_set_style_color_hex(name, color, stat)
+   recursive subroutine ip_set_style_color_hex(name, color, stat)
    !< Set the ImPlot colour `name` (`PlotBg`, `AxisGrid`, `LegendBg`, ...) from `'#rrggbb'` or `'#rrggbbaa'`.
    character(len=*), intent(in)            :: name  !< Colour name (`ImPlotCol_*` without the prefix).
    character(len=*), intent(in)            :: color !< Hex colour.
    integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown name or a bad colour.
 
+   if (figure_refused('ip_set_style_color', stat)) return ! a task does not draw
    call set_color_hex(LIB_IMPLOT, 'ip_set_style_color', name, color, stat)
    endsubroutine ip_set_style_color_hex
 
-   subroutine ip_set_style_color_rgba(name, rgba, stat)
+   recursive subroutine ip_set_style_color_rgba(name, rgba, stat)
    !< Set the ImPlot colour `name` from `[r, g, b]` or `[r, g, b, a]` in [0, 1].
    character(len=*), intent(in)            :: name    !< Colour name (`ImPlotCol_*` without the prefix).
    real(real64),     intent(in)            :: rgba(:) !< Components.
    integer(int32),   intent(out), optional :: stat    !< Status: `FIG_ERR_ARGUMENT` for an unknown name or a bad colour.
 
+   if (figure_refused('ip_set_style_color', stat)) return ! a task does not draw
    call set_color(LIB_IMPLOT, 'ip_set_style_color', name, rgba, stat)
    endsubroutine ip_set_style_color_rgba
 
-   subroutine ip_get_style_color(name, rgba, stat)
+   recursive subroutine ip_get_style_color(name, rgba, stat)
    !< The ImPlot colour `name`, as `[r, g, b, a]` in [0, 1]; ImPlot's automatic colours (derived from Dear ImGui's)
    !< are returned as ImPlot draws them.
    character(len=*), intent(in)            :: name    !< Colour name.
    real(real64),     intent(out)           :: rgba(4) !< Components.
    integer(int32),   intent(out), optional :: stat    !< Status: `FIG_ERR_ARGUMENT` for an unknown name.
 
+   rgba = 0.0_real64
+   if (figure_refused('ip_get_style_color', stat)) return ! a task does not draw
    call get_color(LIB_IMPLOT, name, rgba, stat)
    endsubroutine ip_get_style_color
 
@@ -482,86 +508,99 @@ contains
    n = int(count, int32)
    endsubroutine get_var
 
-   subroutine ig_set_style_var_r64(name, value, stat)
+   recursive subroutine ig_set_style_var_r64(name, value, stat)
    !< Set a Dear ImGui style variable holding one number (`WindowRounding`, `Alpha`, `IndentSpacing`, ...).
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
    real(real64),     intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown name or arity.
 
+   if (figure_refused('ig_set_style_var', stat)) return ! a task does not draw
    call set_var(LIB_IMGUI, name, [value, 0.0_real64], 1_c_int, stat)
    endsubroutine ig_set_style_var_r64
 
-   subroutine ig_set_style_var_vec2(name, value, stat)
+   recursive subroutine ig_set_style_var_vec2(name, value, stat)
    !< Set a Dear ImGui style variable holding a pair (`WindowPadding`, `FramePadding`, `ItemSpacing`, ...).
    character(len=*), intent(in)            :: name     !< Variable name (a field of `ImGuiStyle`).
    real(real64),     intent(in)            :: value(2) !< Values (x, y).
    integer(int32),   intent(out), optional :: stat     !< Status: `FIG_ERR_ARGUMENT` for an unknown name or arity.
 
+   if (figure_refused('ig_set_style_var', stat)) return ! a task does not draw
    call set_var(LIB_IMGUI, name, value, 2_c_int, stat)
    endsubroutine ig_set_style_var_vec2
 
-   subroutine ig_set_style_var_logical(name, value, stat)
+   recursive subroutine ig_set_style_var_logical(name, value, stat)
    !< Set a Dear ImGui style variable holding a logical (`AntiAliasedLines`, ...).
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
    logical,          intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown name.
 
+   if (figure_refused('ig_set_style_var', stat)) return ! a task does not draw
    call set_var(LIB_IMGUI, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, stat)
    endsubroutine ig_set_style_var_logical
 
-   subroutine ig_set_style_var_i32(name, value, stat)
+   recursive subroutine ig_set_style_var_i32(name, value, stat)
    !< Set a Dear ImGui style variable holding an enumeration (`WindowMenuButtonPosition`, ...).
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
    integer(int32),   intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown name.
 
+   if (figure_refused('ig_set_style_var', stat)) return ! a task does not draw
    call set_var(LIB_IMGUI, name, [real(value, real64), 0.0_real64], 1_c_int, stat)
    endsubroutine ig_set_style_var_i32
 
-   subroutine ig_get_style_var(name, values, n, stat)
+   recursive subroutine ig_get_style_var(name, values, n, stat)
    !< A Dear ImGui style variable: its value(s) and how many it has (1, or 2 for a pair); a logical reads 0 or 1.
    character(len=*), intent(in)            :: name      !< Variable name.
    real(real64),     intent(out)           :: values(2) !< Values.
    integer(int32),   intent(out)           :: n         !< 1 or 2.
    integer(int32),   intent(out), optional :: stat      !< Status: `FIG_ERR_ARGUMENT` for an unknown name.
 
+   values = 0.0_real64
+   n = 0_int32
+   if (figure_refused('ig_get_style_var', stat)) return ! a task does not draw
    call get_var(LIB_IMGUI, name, values, n, stat)
    endsubroutine ig_get_style_var
 
-   subroutine ip_set_style_var_r64(name, value, stat)
+   recursive subroutine ip_set_style_var_r64(name, value, stat)
    !< Set an ImPlot style variable holding one number (`PlotBorderSize`, `MinorAlpha`, ...).
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImPlotStyle`).
    real(real64),     intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown name or arity.
 
+   if (figure_refused('ip_set_style_var', stat)) return ! a task does not draw
    call set_var(LIB_IMPLOT, name, [value, 0.0_real64], 1_c_int, stat)
    endsubroutine ip_set_style_var_r64
 
-   subroutine ip_set_style_var_vec2(name, value, stat)
+   recursive subroutine ip_set_style_var_vec2(name, value, stat)
    !< Set an ImPlot style variable holding a pair (`PlotPadding`, `MajorGridSize`, `LegendPadding`, ...).
    character(len=*), intent(in)            :: name     !< Variable name (a field of `ImPlotStyle`).
    real(real64),     intent(in)            :: value(2) !< Values (x, y).
    integer(int32),   intent(out), optional :: stat     !< Status: `FIG_ERR_ARGUMENT` for an unknown name or arity.
 
+   if (figure_refused('ip_set_style_var', stat)) return ! a task does not draw
    call set_var(LIB_IMPLOT, name, value, 2_c_int, stat)
    endsubroutine ip_set_style_var_vec2
 
-   subroutine ip_set_style_var_logical(name, value, stat)
+   recursive subroutine ip_set_style_var_logical(name, value, stat)
    !< Set an ImPlot style variable holding a logical (`UseLocalTime`, `UseISO8601`, `Use24HourClock`).
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImPlotStyle`).
    logical,          intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for an unknown name.
 
+   if (figure_refused('ip_set_style_var', stat)) return ! a task does not draw
    call set_var(LIB_IMPLOT, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, stat)
    endsubroutine ip_set_style_var_logical
 
-   subroutine ip_get_style_var(name, values, n, stat)
+   recursive subroutine ip_get_style_var(name, values, n, stat)
    !< An ImPlot style variable: its value(s) and how many it has (1, or 2 for a pair); a logical reads 0 or 1.
    character(len=*), intent(in)            :: name      !< Variable name.
    real(real64),     intent(out)           :: values(2) !< Values.
    integer(int32),   intent(out)           :: n         !< 1 or 2.
    integer(int32),   intent(out), optional :: stat      !< Status: `FIG_ERR_ARGUMENT` for an unknown name.
 
+   values = 0.0_real64
+   n = 0_int32
+   if (figure_refused('ip_get_style_var', stat)) return ! a task does not draw
    call get_var(LIB_IMPLOT, name, values, n, stat)
    endsubroutine ip_get_style_var
 endmodule figure_style

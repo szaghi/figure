@@ -35,8 +35,9 @@ contains
    visible = logical(igBeginMainMenuBar())
    endfunction ig_begin_main_menu_bar
 
-   subroutine ig_end_main_menu_bar()
+   recursive subroutine ig_end_main_menu_bar()
    !< End the main menu bar (only after `ig_begin_main_menu_bar` returned true).
+   if (figure_refused('ig_end_main_menu_bar')) return ! a task does not draw
    call igEndMainMenuBar()
    endsubroutine ig_end_main_menu_bar
 
@@ -49,29 +50,33 @@ contains
    visible = logical(igBeginMenuBar())
    endfunction ig_begin_menu_bar
 
-   subroutine ig_end_menu_bar()
+   recursive subroutine ig_end_menu_bar()
    !< End the window's menu bar (only after `ig_begin_menu_bar` returned true).
+   if (figure_refused('ig_end_menu_bar')) return ! a task does not draw
    call igEndMenuBar()
    endsubroutine ig_end_menu_bar
 
-   function ig_begin_menu(label, enabled) result(open)
+   recursive function ig_begin_menu(label, enabled) result(open)
    !< A menu of a menu bar (or a submenu of a menu); true while it is open: declare its items, then `ig_end_menu`.
    character(len=*), intent(in)           :: label   !< Label (also its id).
    logical,          intent(in), optional :: enabled !< The menu can be opened (default true).
    logical                                :: open    !< The menu is open.
    logical(c_bool)                        :: e       !< C copy of `enabled`.
 
+   open = .false.
+   if (figure_refused('ig_begin_menu')) return ! a task does not draw
    e = .true._c_bool
    if (present(enabled)) e = logical(enabled, c_bool)
    open = logical(igBeginMenu(cstr(label), e))
    endfunction ig_begin_menu
 
-   subroutine ig_end_menu()
+   recursive subroutine ig_end_menu()
    !< End a menu (only after `ig_begin_menu` returned true).
+   if (figure_refused('ig_end_menu')) return ! a task does not draw
    call igEndMenu()
    endsubroutine ig_end_menu
 
-   function ig_menu_item(label, shortcut, selected, enabled) result(picked)
+   recursive function ig_menu_item(label, shortcut, selected, enabled) result(picked)
    !< An item of an open menu; true on the frame it is picked (the menu then closes). `shortcut` is shown on the right
    !< (the keys themselves are read with `ig_shortcut`); with `selected`, the item shows a check mark and a pick toggles
    !< it; a disabled item (`enabled=.false.`) is greyed out and cannot be picked.
@@ -84,6 +89,8 @@ contains
    logical(c_bool), target                   :: s        !< C copy of `selected`.
    character(len=:), allocatable             :: keys     !< Shortcut text, NUL-terminated (empty when absent).
 
+   picked = .false.
+   if (figure_refused('ig_menu_item')) return ! a task does not draw
    e = .true._c_bool
    if (present(enabled)) e = logical(enabled, c_bool)
    keys = cstr('')
@@ -97,7 +104,7 @@ contains
    endif
    endfunction ig_menu_item
 
-   function ig_shortcut(keys, stat) result(pressed)
+   recursive function ig_shortcut(keys, stat) result(pressed)
    !< True on the frame the key chord `keys` is pressed, e.g. `'ctrl+s'`, `'ctrl+shift+z'`, `'f5'`, `'escape'`:
    !< modifiers (`ctrl`, `shift`, `alt`, `super`) and one key, by the names of `test_key`, joined by `+`. Once per
    !< press, not repeated while held. On macOS `ctrl` is the cmd key (Dear ImGui follows the platform), so `'ctrl+s'`
@@ -110,6 +117,8 @@ contains
    integer(c_int)                          :: status  !< Status of the parse.
 
    pressed = .false.
+   if (figure_refused('ig_shortcut', stat)) return ! a task does not draw
+   pressed = .false.
    chord = 0_c_int
    status = fig_key_chord(keys, len(keys, c_int), chord)
    call figure_check(status, stat)
@@ -117,10 +126,11 @@ contains
    pressed = logical(igIsKeyChordPressed_Nil(chord))
    endfunction ig_shortcut
 
-   subroutine ig_open_popup(id)
+   recursive subroutine ig_open_popup(id)
    !< Open the popup `id` (call once, on the event that opens it: a click, a quit request; not every frame).
    character(len=*), intent(in) :: id !< Popup id, as given to `ig_begin_popup` or `ig_begin_popup_modal`.
 
+   if (figure_refused('ig_open_popup')) return ! a task does not draw
    if (igOpenPopup_Str(cstr(id), 0_c_int)) continue
    endsubroutine ig_open_popup
 
@@ -155,13 +165,15 @@ contains
    endif
    endfunction ig_begin_popup_modal
 
-   subroutine ig_end_popup()
+   recursive subroutine ig_end_popup()
    !< End a popup or modal (only after its begin returned true).
+   if (figure_refused('ig_end_popup')) return ! a task does not draw
    call igEndPopup()
    endsubroutine ig_end_popup
 
-   subroutine ig_close_current_popup()
+   recursive subroutine ig_close_current_popup()
    !< Close the popup or modal being declared (call it inside, e.g. when its OK button is pressed).
+   if (figure_refused('ig_close_current_popup')) return ! a task does not draw
    call igCloseCurrentPopup()
    endsubroutine ig_close_current_popup
 endmodule figure_menu

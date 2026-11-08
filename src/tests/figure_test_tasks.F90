@@ -2,7 +2,9 @@
 module figure_test_tasks_work
 !< figure_test_tasks_work, the work procedures of figure_test_tasks (module procedures: they run on other threads).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64
-use figure, only : app_object, ig_begin, ig_end, ip_begin_plot, task_handle_object
+use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_color_edit, ig_end, ig_input, ig_push_style_color, &
+                   ig_same_line, ig_separator, ig_slider, ig_text, ip_begin_plot, ip_colormap_legend, ip_line, &
+                   ip_setup_axes, list_clipper_object, task_handle_object
 
 implicit none
 private
@@ -16,6 +18,8 @@ type :: sum_job
    real(real64)   :: seconds = 0.0_real64 !< Pause after each chunk [s].
    integer(int32) :: chunks = 0_int32  !< Chunks done.
    logical        :: drawn(3) = .true. !< Drawing calls that returned true (they must not).
+   logical        :: widgets(6) = .true. !< Widgets called from the task that returned true (they must not).
+   integer(int32) :: stats(4) = -1_int32 !< Statuses of the widgets called from the task.
    integer(int32) :: stat = -1_int32   !< Status of a call that must refuse.
 endtype sum_job
 
@@ -77,10 +81,16 @@ contains
    endsubroutine forever_work
 
    recursive subroutine draw_work(h, data)
-   !< Breaks the threading rule: calls drawing procedures, which must refuse.
-   type(task_handle_object), intent(inout) :: h    !< Handle.
-   class(*),                 intent(inout) :: data !< A sum_job.
-   type(app_object)                        :: app  !< An application object (not initialized here).
+   !< Breaks the threading rule: calls drawing procedures, which must refuse: containers, then widgets, plot items,
+   !< a legend, a colour editor, a list clipper and a style colour outside any container.
+   type(task_handle_object), intent(inout) :: h       !< Handle.
+   class(*),                 intent(inout) :: data    !< A sum_job.
+   type(app_object)                        :: app     !< An application object (not initialized here).
+   type(list_clipper_object)               :: clip    !< A clipper (not begun).
+   integer(int32)                          :: ival    !< A slider's value.
+   real(real64)                            :: rval    !< A field's value.
+   real(real64)                            :: rgba(4) !< A colour.
+   logical                                 :: flag    !< A check box's value.
 
    select type (data)
    type is (sum_job)
@@ -89,6 +99,26 @@ contains
       data%drawn(2) = ip_begin_plot('##from a task')
       data%drawn(3) = app%next_frame()
       data%chunks = merge(1_int32, 0_int32, h%cancelled())  ! the refusal asked the task to stop
+      ! widgets outside any container: each refuses too (nothing is drawn, nothing changes, no crash)
+      ival = 3_int32
+      rval = 0.5_real64
+      flag = .false.
+      rgba = [0.1_real64, 0.2_real64, 0.3_real64, 1.0_real64]
+      call ig_text('from a task')
+      call ig_same_line()
+      call ig_separator()
+      data%widgets(1) = ig_button('task button')
+      data%widgets(2) = ig_slider('task slider', ival, 0_int32, 10_int32)
+      data%widgets(3) = ig_input('task input', rval)
+      data%widgets(4) = ig_checkbox('task box', flag)
+      data%widgets(5) = ig_color_edit('task colour', rgba, stat=data%stats(1))
+      call clip%begin(100_int32)
+      data%widgets(6) = clip%step()
+      call ip_setup_axes('x', 'y')
+      call ip_line('task line', [0.0_real64, 1.0_real64], [0.0_real64, 1.0_real64], stat=data%stats(2))
+      call ip_colormap_legend('task legend', 0_int32, 0.0_real64, 1.0_real64, stat=data%stats(3))
+      call ig_push_style_color('Text', '#ff0000', stat=data%stats(4))
+      data%widgets = data%widgets .or. ival /= 3_int32 .or. rval /= 0.5_real64 .or. flag
    endselect
    endsubroutine draw_work
 
@@ -230,7 +260,8 @@ contains
    endsubroutine cancelled
 
    subroutine drawing_refused(ok)
-   !< Drawing calls from a task return at once; the task's status is FIG_ERR_STATE, named in the message.
+   !< Drawing calls from a task return at once, containers and widgets outside any container alike (false, values
+   !< unchanged, statuses FIG_ERR_STATE); the task's status is FIG_ERR_STATE, named in the message of the first.
    logical, intent(out)          :: ok     !< Outcome.
    type(task_object)             :: t      !< Task.
    class(*), allocatable         :: data   !< Result.
@@ -245,7 +276,10 @@ contains
    ok = stat == FIG_ERR_STATE .and. index(msg, 'ig_begin') > 0
    select type (data)
    type is (sum_job)
-      ok = ok .and. .not. any(data%drawn) .and. data%chunks == 1_int32
+      ok = ok .and. .not. any(data%drawn) .and. data%chunks == 1_int32 .and. .not. any(data%widgets) .and. &
+           all(data%stats == FIG_ERR_STATE)
+      if (.not. ok) write(error_unit, '(A,6L2,A,4(I0,1X))') 'drawing refused: widgets ', data%widgets, ', statuses ', &
+                                                           data%stats
    class default
       ok = .false.
    endselect

@@ -192,10 +192,12 @@ POSIX):
   parentheses in format string`) or crashes; compile the code a task runs, and the program, with `-mp` (OpenMP: FoBiS
   `openmp = True`). Measured with nvfortran 26.9: 8 tasks writing to strings fail in most runs without `-mp`, in none
   with it. gfortran's I/O is thread-safe with no flag.
-- **Drawing from a task** is refused at FIGURE's container entry points only (the list is in
-  [Tasks](processes#tasks)); a lone widget called from a task outside any container is not caught. It races with the
-  main thread: in a test of v0.3.0 (`ig_text` from a task, gfortran 16.2, Linux), the worker failed an assertion of
-  Dear ImGui's font rasterizer (SIGABRT) in four runs of five and hit a segmentation fault in the fifth.
+- **Drawing from a task** is refused at every drawing procedure of FIGURE: containers, widgets, plot items, styles,
+  menus, tables, the 3-D view (the rule and its statuses are in [Tasks](processes#tasks)). The raw bindings
+  (`figure_cimgui`, `figure_cimplot`: Dear ImGui's and ImPlot's own functions) are not checked: one called from a
+  task races with the main thread. Before v0.3.0 a widget outside any container was not checked either: in a test
+  (`ig_text` from a task, gfortran 16.2, Linux) the worker failed an assertion of Dear ImGui's font rasterizer
+  (SIGABRT) in four runs of five and hit a segmentation fault in the fifth.
 - **Why Dear ImGui's context is not thread-local** (studied for v0.3.0, not adopted). Dear ImGui and ImPlot reach
   their context through one global pointer each (`GImGui`, `GImPlot`); both can be made `thread_local` through
   Dear ImGui's configuration header, so that a worker thread has no context at all. Measured on Linux (gfortran 16.2,
@@ -214,8 +216,9 @@ POSIX):
     call, `__emutls_get_address`, at each access), and Apple's clang through a thread-local variable thunk; FIGURE's
     CI builds there but cannot be measured from Linux.
 
-  The way to a clean refusal of every widget is the check in each widget procedure (a call per widget), not a
-  thread-local context.
+  FIGURE therefore checks in each of its drawing procedures (since v0.3.0): a call that reads a thread-local marker
+  of the worker threads, about 1.5 ns on the main thread (gfortran 16.2, Linux); a frame of 300 text lines and a plot
+  takes 0.128 to 0.130 ms with the checks, as without them.
 - **`recursive` procedures:** two tasks may run the same procedure at the same time; a procedure not declared
   `recursive` then stops a program built with gfortran's `-fcheck=recursion` (in `-fcheck=all`): declare the task's
   procedures `recursive`. FIGURE's entry points that refuse a task's drawing calls are `recursive` themselves, so the

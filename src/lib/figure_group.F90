@@ -57,13 +57,14 @@ interface ig_push_id
 endinterface ig_push_id
 
 contains
-   subroutine clipper_begin(self, count, item_height)
+   recursive subroutine clipper_begin(self, count, item_height)
    !< Start clipping `count` rows; `item_height` [pixels] (default: measured on the first row drawn).
    class(list_clipper_object), intent(inout)        :: self        !< Clipper.
    integer(int32),             intent(in)           :: count       !< Rows.
    real(real64),               intent(in), optional :: item_height !< Row height.
    real(c_double)                                   :: h           !< C copy.
 
+   if (figure_refused('list_clipper_object%begin')) return ! a task does not draw
    if (c_associated(self%p)) call fig_clipper_delete(self%p)
    self%p = fig_clipper_new()
    h = -1.0_c_double
@@ -73,12 +74,14 @@ contains
    self%last = 0_int32
    endsubroutine clipper_begin
 
-   function clipper_step(self) result(more)
+   recursive function clipper_step(self) result(more)
    !< The next rows to draw, `self%first` to `self%last`: true while there are some (false: the clipper ended).
    class(list_clipper_object), intent(inout) :: self  !< Clipper.
    logical                                   :: more  !< Draw first..last.
    integer(c_int)                            :: f, l  !< C copies.
 
+   more = .false.
+   if (figure_refused('list_clipper_object%step')) return ! a task does not draw
    more = .false.
    if (.not. c_associated(self%p)) return
    more = fig_clipper_step(self%p, f, l) == 1_c_int
@@ -179,18 +182,20 @@ contains
    if (present(clicked)) clicked = logical(igIsItemClicked(0_c_int)) .and. .not. logical(igIsItemToggledOpen())
    endfunction ig_tree_node
 
-   subroutine ig_tree_pop()
+   recursive subroutine ig_tree_pop()
    !< Close the children of a node (only after `ig_tree_node` returned true).
+   if (figure_refused('ig_tree_pop')) return ! a task does not draw
    call igTreePop()
    endsubroutine ig_tree_pop
 
-   subroutine ig_set_next_item_open(open, always)
+   recursive subroutine ig_set_next_item_open(open, always)
    !< Open or close the next tree node (or collapsing header) from the program: the first time it is shown, or, with
    !< `always`, on this frame whatever its state (an "expand all" button calls it with `always` once per node).
    logical, intent(in)           :: open   !< Open (true) or closed.
    logical, intent(in), optional :: always !< Enforce on this frame (default: only when the node has no state yet).
    integer(c_int)                :: cond   !< ImGuiCond.
 
+   if (figure_refused('ig_set_next_item_open')) return ! a task does not draw
    cond = ImGuiCond_Once
    if (present(always)) then
       if (always) cond = ImGuiCond_Always
@@ -208,12 +213,13 @@ contains
    visible = logical(igBeginTabBar(cstr(id), 0_c_int))
    endfunction ig_begin_tab_bar
 
-   subroutine ig_end_tab_bar()
+   recursive subroutine ig_end_tab_bar()
    !< End a bar of tabs (only after `ig_begin_tab_bar` returned true).
+   if (figure_refused('ig_end_tab_bar')) return ! a task does not draw
    call igEndTabBar()
    endsubroutine ig_end_tab_bar
 
-   function ig_begin_tab(label, open) result(selected)
+   recursive function ig_begin_tab(label, open) result(selected)
    !< A tab of the current bar; true when it is the selected one: draw its content, then `ig_end_tab`. With `open`,
    !< the tab has a close button that sets it false.
    character(len=*), intent(in)              :: label    !< Label (also its id).
@@ -222,6 +228,8 @@ contains
    logical(c_bool), target                   :: o        !< C copy of `open`.
    type(c_ptr)                               :: p        !< bool* or null.
 
+   selected = .false.
+   if (figure_refused('ig_begin_tab')) return ! a task does not draw
    p = c_null_ptr
    if (present(open)) then
       o = logical(open, c_bool)
@@ -231,8 +239,9 @@ contains
    if (present(open)) open = logical(o)
    endfunction ig_begin_tab
 
-   subroutine ig_end_tab()
+   recursive subroutine ig_end_tab()
    !< End the content of a tab (only after `ig_begin_tab` returned true).
+   if (figure_refused('ig_end_tab')) return ! a task does not draw
    call igEndTabItem()
    endsubroutine ig_end_tab
 
@@ -257,17 +266,19 @@ contains
    visible = logical(igBeginTable(cstr(id), int(columns, c_int), f, outer, 0.0_c_float))
    endfunction ig_begin_table
 
-   subroutine ig_end_table()
+   recursive subroutine ig_end_table()
    !< End a table (only after `ig_begin_table` returned true).
+   if (figure_refused('ig_end_table')) return ! a task does not draw
    call igEndTable()
    endsubroutine ig_end_table
 
-   subroutine ig_table_setup_column(label, width)
+   recursive subroutine ig_table_setup_column(label, width)
    !< Declare the next column (before the first row): its header label and, with `width` [pixels], a fixed width
    !< (default: the columns share the width left).
    character(len=*), intent(in)           :: label !< Header label.
    real(real64),     intent(in), optional :: width !< Fixed width [pixels].
 
+   if (figure_refused('ig_table_setup_column')) return ! a task does not draw
    if (present(width)) then
       call igTableSetupColumn(cstr(label), ImGuiTableColumnFlags_WidthFixed, real(width, c_float), 0_c_int)
    else
@@ -275,59 +286,68 @@ contains
    endif
    endsubroutine ig_table_setup_column
 
-   subroutine ig_table_headers_row()
+   recursive subroutine ig_table_headers_row()
    !< A row with the labels of the columns declared by `ig_table_setup_column` (click a header to resize, ...).
+   if (figure_refused('ig_table_headers_row')) return ! a task does not draw
    call igTableHeadersRow()
    endsubroutine ig_table_headers_row
 
-   subroutine ig_table_next_row()
+   recursive subroutine ig_table_next_row()
    !< Start a new row.
+   if (figure_refused('ig_table_next_row')) return ! a task does not draw
    call igTableNextRow(0_c_int, 0.0_c_float)
    endsubroutine ig_table_next_row
 
-   subroutine ig_table_next_column()
+   recursive subroutine ig_table_next_column()
    !< Move to the next cell of the row (the first after `ig_table_next_row`); the widgets that follow go in it.
+   if (figure_refused('ig_table_next_column')) return ! a task does not draw
    if (igTableNextColumn()) continue
    endsubroutine ig_table_next_column
 
-   subroutine ig_table_set_column(column)
+   recursive subroutine ig_table_set_column(column)
    !< Move to cell `column` (1 to the number of columns) of the current row.
    integer(int32), intent(in) :: column !< Column, 1-based.
 
+   if (figure_refused('ig_table_set_column')) return ! a task does not draw
    if (igTableSetColumnIndex(int(column - 1_int32, c_int))) continue
    endsubroutine ig_table_set_column
 
-   subroutine ig_push_id_str(id)
+   recursive subroutine ig_push_id_str(id)
    !< Open an id scope named `id`: widgets with the same label in different scopes are different widgets.
    character(len=*), intent(in) :: id !< Scope name.
 
+   if (figure_refused('ig_push_id')) return ! a task does not draw
    call igPushID_Str(cstr(id))
    endsubroutine ig_push_id_str
 
-   subroutine ig_push_id_i32(id)
+   recursive subroutine ig_push_id_i32(id)
    !< Open an id scope numbered `id` (rows of a table, items of a loop).
    integer(int32), intent(in) :: id !< Scope number.
 
+   if (figure_refused('ig_push_id')) return ! a task does not draw
    call igPushID_Int(int(id, c_int))
    endsubroutine ig_push_id_i32
 
-   subroutine ig_pop_id()
+   recursive subroutine ig_pop_id()
    !< Close the id scope opened by the last `ig_push_id`.
+   if (figure_refused('ig_pop_id')) return ! a task does not draw
    call igPopID()
    endsubroutine ig_pop_id
 
-   subroutine ig_begin_disabled(disabled)
+   recursive subroutine ig_begin_disabled(disabled)
    !< Widgets up to `ig_end_disabled` are greyed out and ignore input (when `disabled`, default true).
    logical, intent(in), optional :: disabled !< Disable (default true).
    logical(c_bool)               :: d        !< C copy.
 
+   if (figure_refused('ig_begin_disabled')) return ! a task does not draw
    d = .true._c_bool
    if (present(disabled)) d = logical(disabled, c_bool)
    call igBeginDisabled(d)
    endsubroutine ig_begin_disabled
 
-   subroutine ig_end_disabled()
+   recursive subroutine ig_end_disabled()
    !< End the block opened by `ig_begin_disabled`.
+   if (figure_refused('ig_end_disabled')) return ! a task does not draw
    call igEndDisabled()
    endsubroutine ig_end_disabled
 endmodule figure_group

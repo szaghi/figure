@@ -60,7 +60,7 @@ contains
    call figure_check(fig_dock_space(int(id, c_int), f), stat)
    endsubroutine ig_dock_space
 
-   function ig_dock_layout_begin(id, stat) result(needed)
+   recursive function ig_dock_layout_begin(id, stat) result(needed)
    !< True when the dock space `id` has no layout yet (its first frame, without an ini file keeping one): then lay it
    !< out with `ig_dock_split` and `ig_dock_window`, and close with `ig_dock_layout_end`. Call it before `ig_dock_space`.
    integer(int32), intent(in)            :: id     !< Dock id.
@@ -68,12 +68,14 @@ contains
    logical                               :: needed !< Build the layout now.
    integer(c_int)                        :: n      !< 1: needed.
 
+   needed = .false.
+   if (figure_refused('ig_dock_layout_begin', stat)) return ! a task does not draw
    n = 0_c_int
    call figure_check(fig_dock_layout_begin(int(id, c_int), n), stat)
    needed = n == 1_c_int
    endfunction ig_dock_layout_begin
 
-   subroutine ig_dock_split(id, direction, fraction, id_at_dir, id_other, stat)
+   recursive subroutine ig_dock_split(id, direction, fraction, id_at_dir, id_other, stat)
    !< Split the node `id` in two: `id_at_dir` takes `fraction` of it on the side `direction` (`'left'`, `'right'`,
    !< `'up'`, `'down'`), `id_other` the rest. Split the new nodes again for more areas.
    integer(int32),   intent(in)            :: id        !< Node to split.
@@ -86,6 +88,9 @@ contains
    integer(c_int)                          :: a         !< Node at `direction`.
    integer(c_int)                          :: b         !< Other node.
 
+   id_at_dir = 0_int32
+   id_other = 0_int32
+   if (figure_refused('ig_dock_split', stat)) return ! a task does not draw
    id_at_dir = 0_int32
    id_other = 0_int32
    select case (trim(direction))
@@ -108,30 +113,35 @@ contains
    id_other = int(b, int32)
    endsubroutine ig_dock_split
 
-   subroutine ig_dock_window(name, id, stat)
+   recursive subroutine ig_dock_window(name, id, stat)
    !< Dock the window `name` (as passed to `ig_begin`) into the node `id` of a layout being built.
    character(len=*), intent(in)            :: name !< Window name.
    integer(int32),   intent(in)            :: id   !< Dock node.
    integer(int32),   intent(out), optional :: stat !< Status.
 
+   if (figure_refused('ig_dock_window', stat)) return ! a task does not draw
    call figure_check(fig_dock_window(name, len(name, c_int), int(id, c_int)), stat)
    endsubroutine ig_dock_window
 
-   subroutine ig_dock_layout_end(id, stat)
+   recursive subroutine ig_dock_layout_end(id, stat)
    !< Finish the layout started by `ig_dock_layout_begin`.
    integer(int32), intent(in)            :: id   !< Dock id.
    integer(int32), intent(out), optional :: stat !< Status.
 
+   if (figure_refused('ig_dock_layout_end', stat)) return ! a task does not draw
    call figure_check(fig_dock_layout_end(int(id, c_int)), stat)
    endsubroutine ig_dock_layout_end
 
-   subroutine ig_window_dock(id, docked)
+   recursive subroutine ig_window_dock(id, docked)
    !< Inside a window (between `ig_begin` and `ig_end`): the dock node it is in (0 if none) and whether it is docked.
    integer(int32), intent(out) :: id     !< Dock node.
    logical,        intent(out) :: docked !< The window is docked.
    integer(c_int)              :: i      !< Node.
    integer(c_int)              :: d      !< 1: docked.
 
+   id = 0_int32
+   docked = .false.
+   if (figure_refused('ig_window_dock')) return ! a task does not draw
    i = 0_c_int
    d = 0_c_int
    if (fig_window_dock(i, d) /= FIG_OK) continue ! cannot fail inside a window
@@ -139,13 +149,14 @@ contains
    docked = d == 1_c_int
    endsubroutine ig_window_dock
 
-   subroutine ig_set_next_window_dock(id, always)
+   recursive subroutine ig_set_next_window_dock(id, always)
    !< Dock the next window (the next `ig_begin`) into the node `id`: the first time it appears (a window created after
    !< the layout was built), or every frame with `always`.
    integer(int32), intent(in)           :: id     !< Dock node (from the layout, or `ig_window_dock` of a docked window).
    logical,        intent(in), optional :: always !< Every frame (default: first use only, then the user decides).
    integer(c_int)                       :: cond   !< ImGuiCond.
 
+   if (figure_refused('ig_set_next_window_dock')) return ! a task does not draw
    cond = ImGuiCond_FirstUseEver
    if (present(always)) then
       if (always) cond = ImGuiCond_Always

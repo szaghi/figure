@@ -167,18 +167,17 @@ single-threaded, and only the main thread draws. FIGURE refuses such a call from
 procedure, and the task is asked to stop (`h%cancelled()` becomes `.true.`).
 :::
 
-The entry points that check are: `app%next_frame`; `ig_begin` and `ig_end`; `ig_begin_child` and `ig_end_child`;
-`ig_begin_side_bar`; `ig_begin_main_menu_bar` and `ig_begin_menu_bar`; `ig_begin_popup` and `ig_begin_popup_modal`;
-`ig_begin_tab_bar`; `ig_begin_table`; `ig_tree_node` and `ig_collapsing_header`; `ip_begin_plot` and
-`ip_begin_subplots`; `ig_dock_space`; `texture_object%init` and `texture_object%update`; `log%draw`; and the calls
-that read or change the GUI's state: `app%dropped` (its `stat` too), `app%notify`, `app%open_file_browser` and
-`app%save_file_browser`, `ig_get_clipboard` and `ig_set_clipboard`, `ig_color_edit`, `ig_input_text_multiline`,
-`ip_annotation`, `ip_contour`, the colormaps (`ip_colormap`, `ip_load_colormap`, `ip_colormap_names`,
-`ip_colormap_legend`) and every procedure of a `view3d_object`. Every widget
-lives inside one of them, so a task that opens nothing is refused at its first container. A widget called from a task
-**outside** any container (an `ig_button` with no `ig_begin` of its own) is not checked: it would draw into the
-window the main thread has open at that moment, a data race with an undefined result. Why a thread-local Dear ImGui
-context would not make it fail cleanly is in the [known issues](known-issues#tasks).
+Every drawing procedure of FIGURE checks: `app%next_frame`, the containers (`ig_begin`, `ig_begin_child`, menus,
+popups, tab bars, tables, trees, `ip_begin_plot`, ...), the widgets (`ig_text`, `ig_button`, `ig_slider`,
+`ig_input_text`, ...), the plot items (`ip_line`, `ip_heatmap`, `ip_contour`, ...), the layout calls
+(`ig_same_line`, `ig_set_next_window`, `ig_push_id`, ...), the style calls (`ig_push_style_color`,
+`ig_set_style_var`, `ig_push_font`, ...), the list clipper, the textures, `log%draw`, every procedure of a
+`view3d_object`, and the calls that read or change the GUI's state (`app%dropped`, `app%notify`, the file browsers,
+the clipboard, the colormaps). A widget called from a task outside any container is refused like a container: it
+returns at once (`.false.`, its values unchanged), with `FIG_ERR_STATE` in `stat` where it has one. The check
+costs the main thread one call, about 1.5 ns. Not checked: the raw bindings (`figure_cimgui`, `figure_cimplot`),
+Dear ImGui's and ImPlot's own functions, and the application's style calls (`app%set_style`, `app%set_font`,
+`app%load_style`), which a task must not call either ([known issues](known-issues#tasks)).
 
 ### Cancelling
 

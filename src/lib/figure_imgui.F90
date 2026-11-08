@@ -115,13 +115,15 @@ contains
    visible = fig_begin_side_bar(name, len(name, c_int), s, real(size, c_double)) == 1_c_int
    endfunction ig_begin_side_bar
 
-   function ig_focus_window(name) result(focused)
+   recursive function ig_focus_window(name) result(focused)
    !< Bring window `name` forward and give it the keyboard (a docked window: its tab is shown). Not while a popup or a
    !< modal is open, since focusing another window would close it: then nothing happens and the result is false; ask
    !< again on a later frame. A window not drawn yet (this frame or before) is not found: ask after its `ig_begin`.
    character(len=*), intent(in) :: name    !< Window name (as given to `ig_begin`, or its `###id` part).
    logical                      :: focused !< Focused (false: a popup is open, ask again later).
 
+   focused = .false.
+   if (figure_refused('ig_focus_window')) return ! a task does not draw
    focused = .not. logical(igIsPopupOpen_Str(c_null_char, ImGuiPopupFlags_AnyPopup))
    if (focused) call igSetWindowFocus_Str(cstr(name))
    endfunction ig_focus_window
@@ -132,7 +134,7 @@ contains
    call igEnd()
    endsubroutine ig_end
 
-   subroutine ig_set_next_window(x, y, width, height, always)
+   recursive subroutine ig_set_next_window(x, y, width, height, always)
    !< Position (and size) of the next window [pixels]: on first use only, or every frame if `always`.
    real(real64), intent(in)           :: x      !< Left [pixels].
    real(real64), intent(in)           :: y      !< Top [pixels].
@@ -141,6 +143,7 @@ contains
    logical,      intent(in), optional :: always !< Enforce every frame (default: first use only).
    integer(c_int)                     :: cond   !< ImGuiCond.
 
+   if (figure_refused('ig_set_next_window')) return ! a task does not draw
    cond = ImGuiCond_FirstUseEver
    if (present(always)) then
       if (always) cond = ImGuiCond_Always
@@ -150,7 +153,7 @@ contains
       call igSetNextWindowSize(im_vec2(real(width, c_float), real(height, c_float)), cond)
    endsubroutine ig_set_next_window
 
-   function ig_button(label, width, height) result(pressed)
+   recursive function ig_button(label, width, height) result(pressed)
    !< A button; true on the frame it is clicked.
    character(len=*), intent(in)           :: label   !< Label.
    real(real64),     intent(in), optional :: width   !< Width [pixels] (default: fit the label).
@@ -158,13 +161,15 @@ contains
    logical                                :: pressed !< Clicked this frame.
    type(im_vec2)                          :: extent   !< Size (not `size`: see docs/guide/known-issues.md).
 
+   pressed = .false.
+   if (figure_refused('ig_button')) return ! a task does not draw
    extent = im_vec2(0.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
    pressed = logical(igButton(cstr(label), extent))
    endfunction ig_button
 
-   function ig_tool_button(label, icon, width, height, selected, accent) result(clicked)
+   recursive function ig_tool_button(label, icon, width, height, selected, accent) result(clicked)
    !< A workspace button, as Fusion 360's: `icon` (an `ICON_*`) above `label`, larger than it, on a framed, rounded button
    !< that shades under the pointer. `selected`: framed and tinted in the accent colour, the icon drawn in it (`accent`
    !< `[r, g, b]` in [0, 1]; default: the style's CheckMark colour). `width`, `height` [pixels]: default as wide as the
@@ -181,6 +186,8 @@ contains
    real(c_double)                         :: w, h, acc(4) !< C copies.
    integer(c_int)                         :: sel      !< C copy of `selected`.
 
+   clicked = .false.
+   if (figure_refused('ig_tool_button')) return ! a task does not draw
    w = 0.0_c_double
    h = 0.0_c_double
    if (present(width)) w = real(width, c_double)
@@ -192,36 +199,41 @@ contains
    clicked = fig_tool_button(label, len(label, c_int), icon, len(icon, c_int), w, h, sel, acc) == 1_c_int
    endfunction ig_tool_button
 
-   function ig_text_size(text) result(extent)
+   recursive function ig_text_size(text) result(extent)
    !< The size a text takes in the current font [pixels]: width and height (the text before `##` when it is a label):
    !< buttons of one width, a column as wide as its longest value.
    character(len=*), intent(in) :: text    !< Text (UTF-8).
    real(real64)                 :: extent(2) !< Width, height.
    type(im_vec2)                :: ext     !< Its extent.
 
+   extent = 0.0_real64
+   if (figure_refused('ig_text_size')) return ! a task does not draw
    ext = igCalcTextSize(cstr(text), c_null_ptr, .true._c_bool, -1.0_c_float)
    extent = [real(ext%x, real64), real(ext%y, real64)]
    endfunction ig_text_size
 
-   subroutine ig_align_text_to_frame_padding()
+   recursive subroutine ig_align_text_to_frame_padding()
    !< The text that follows on this line is lowered to the text of framed widgets (fields, buttons): a label or a value
    !< beside fields, in a table row of fields.
+   if (figure_refused('ig_align_text_to_frame_padding')) return ! a task does not draw
    call igAlignTextToFramePadding()
    endsubroutine ig_align_text_to_frame_padding
 
-   function ig_checkbox(label, value) result(changed)
+   recursive function ig_checkbox(label, value) result(changed)
    !< A check box bound to `value`; true when the user toggled it.
    character(len=*), intent(in)    :: label   !< Label.
    logical,          intent(inout) :: value   !< Value.
    logical                         :: changed !< Toggled this frame.
    logical(c_bool), target         :: v       !< C copy of `value`.
 
+   changed = .false.
+   if (figure_refused('ig_checkbox')) return ! a task does not draw
    v = logical(value, c_bool)
    changed = logical(igCheckbox(cstr(label), c_loc(v)))
    value = logical(v)
    endfunction ig_checkbox
 
-   function ig_slider_i32(label, value, vmin, vmax) result(changed)
+   recursive function ig_slider_i32(label, value, vmin, vmax) result(changed)
    !< Integer slider; true when the user changed `value`.
    character(len=*), intent(in)    :: label   !< Label.
    integer(int32),   intent(inout) :: value   !< Value.
@@ -232,6 +244,8 @@ contains
    integer(c_int), target          :: lo      !< C copy of `vmin`.
    integer(c_int), target          :: hi      !< C copy of `vmax`.
 
+   changed = .false.
+   if (figure_refused('ig_slider')) return ! a task does not draw
    v = int(value, c_int)
    lo = int(vmin, c_int)
    hi = int(vmax, c_int)
@@ -239,7 +253,7 @@ contains
    value = int(v, int32)
    endfunction ig_slider_i32
 
-   function ig_slider_r32(label, value, vmin, vmax) result(changed)
+   recursive function ig_slider_r32(label, value, vmin, vmax) result(changed)
    !< Single-precision slider; true when the user changed `value`.
    character(len=*), intent(in)    :: label   !< Label.
    real(real32),     intent(inout) :: value   !< Value.
@@ -250,6 +264,8 @@ contains
    real(c_float), target           :: lo      !< C copy of `vmin`.
    real(c_float), target           :: hi      !< C copy of `vmax`.
 
+   changed = .false.
+   if (figure_refused('ig_slider')) return ! a task does not draw
    v = real(value, c_float)
    lo = real(vmin, c_float)
    hi = real(vmax, c_float)
@@ -258,7 +274,7 @@ contains
    value = real(v, real32)
    endfunction ig_slider_r32
 
-   function ig_slider_r64(label, value, vmin, vmax) result(changed)
+   recursive function ig_slider_r64(label, value, vmin, vmax) result(changed)
    !< Double-precision slider; true when the user changed `value`.
    character(len=*), intent(in)    :: label   !< Label.
    real(real64),     intent(inout) :: value   !< Value.
@@ -269,6 +285,8 @@ contains
    real(c_double), target          :: lo      !< C copy of `vmin`.
    real(c_double), target          :: hi      !< C copy of `vmax`.
 
+   changed = .false.
+   if (figure_refused('ig_slider')) return ! a task does not draw
    v = real(value, c_double)
    lo = real(vmin, c_double)
    hi = real(vmax, c_double)
@@ -277,7 +295,7 @@ contains
    value = real(v, real64)
    endfunction ig_slider_r64
 
-   function ig_input_r64(label, value, step, format) result(changed)
+   recursive function ig_input_r64(label, value, step, format) result(changed)
    !< Numeric input field for a real value; true when the user changed it.
    character(len=*), intent(in)           :: label   !< Label.
    real(real64),     intent(inout)        :: value   !< Value.
@@ -287,6 +305,8 @@ contains
    real(c_double), target                 :: v       !< C copy of `value`.
    real(c_double)                         :: s       !< Step.
 
+   changed = .false.
+   if (figure_refused('ig_input')) return ! a task does not draw
    v = real(value, c_double)
    s = 0.0_c_double
    if (present(step)) s = real(step, c_double)
@@ -298,7 +318,7 @@ contains
    value = real(v, real64)
    endfunction ig_input_r64
 
-   function ig_input_i32(label, value, step) result(changed)
+   recursive function ig_input_i32(label, value, step) result(changed)
    !< Numeric input field for an integer value; true when the user changed it.
    character(len=*), intent(in)           :: label   !< Label.
    integer(int32),   intent(inout)        :: value   !< Value.
@@ -307,6 +327,8 @@ contains
    integer(c_int), target                 :: v       !< C copy of `value`.
    integer(c_int)                         :: s       !< Step.
 
+   changed = .false.
+   if (figure_refused('ig_input')) return ! a task does not draw
    v = int(value, c_int)
    s = 0_c_int
    if (present(step)) s = int(step, c_int)
@@ -314,7 +336,7 @@ contains
    value = int(v, int32)
    endfunction ig_input_i32
 
-   function ig_input_text(label, value, hint, flags) result(changed)
+   recursive function ig_input_text(label, value, hint, flags) result(changed)
    !< A text field bound to `value`; true when the user edited it. The text can be as long as `value` (its length is
    !< the field's capacity); trailing blanks are not part of the text (Fortran pads with them). `hint` is shown while
    !< the field is empty; `flags` combine `ImGuiInputTextFlags_*` with `ior` (`CharsNoBlank`, `CharsDecimal`,
@@ -329,6 +351,8 @@ contains
    integer(int32)                             :: n       !< Length of the text.
    integer(int32)                             :: i       !< Counter.
 
+   changed = .false.
+   if (figure_refused('ig_input_text')) return ! a task does not draw
    n = len_trim(value)
    do i = 1_int32, n
       buf(i) = value(i:i)
@@ -513,7 +537,7 @@ contains
    call figure_check(FIG_OK, stat)
    endfunction ig_color_edit
 
-   function ig_combo(label, current, items) result(changed)
+   recursive function ig_combo(label, current, items) result(changed)
    !< A drop-down list of `items`; `current` is the index of the one chosen (1 to `size(items)`; any other value shows
    !< none chosen). True on the frame the user picks an item (`current` is then its index).
    character(len=*), intent(in)    :: label    !< Label.
@@ -523,6 +547,8 @@ contains
    integer(int32)                  :: i        !< Item.
    logical                         :: chosen   !< Item i is the current one.
 
+   changed = .false.
+   if (figure_refused('ig_combo')) return ! a task does not draw
    changed = .false.
    if (current >= 1_int32 .and. current <= size(items, kind=int32)) then
       if (.not. logical(igBeginCombo(cstr(label), cstr(trim(items(current))), 0_c_int))) return
@@ -543,34 +569,38 @@ contains
    call igEndCombo()
    endfunction ig_combo
 
-   subroutine ig_tooltip(text)
+   recursive subroutine ig_tooltip(text)
    !< A tooltip on the previous widget: `text` shows while the pointer rests on it (after Dear ImGui's usual delay).
    character(len=*), intent(in) :: text !< Text.
 
+   if (figure_refused('ig_tooltip')) return ! a task does not draw
    if (.not. logical(igBeginItemTooltip())) return
    call igTextUnformatted(cstr(text), c_null_ptr)
    call igEndTooltip()
    endsubroutine ig_tooltip
 
-   subroutine ig_set_next_item_width(width)
+   recursive subroutine ig_set_next_item_width(width)
    !< Width of the next widget's field [pixels]; negative: up to that distance from the window's right edge.
    real(real64), intent(in) :: width !< Width [pixels].
 
+   if (figure_refused('ig_set_next_item_width')) return ! a task does not draw
    call igSetNextItemWidth(real(width, c_float))
    endsubroutine ig_set_next_item_width
 
-   subroutine ig_text(text)
+   recursive subroutine ig_text(text)
    !< Plain text (no formatting: compose it with Fortran internal writes).
    character(len=*), intent(in) :: text !< Text.
 
+   if (figure_refused('ig_text')) return ! a task does not draw
    call igTextUnformatted(cstr(text), c_null_ptr)
    endsubroutine ig_text
 
-   subroutine ig_same_line(offset)
+   recursive subroutine ig_same_line(offset)
    !< Put the next item on the same line as the previous one; with `offset`, at that distance [pixels] from the
    !< window's left edge (aligned columns of labels and fields).
    real(real64), intent(in), optional :: offset !< Distance from the window's left edge [pixels].
 
+   if (figure_refused('ig_same_line')) return ! a task does not draw
    if (present(offset)) then
       call igSameLine(real(offset, c_float), -1.0_c_float)
    else
@@ -578,44 +608,49 @@ contains
    endif
    endsubroutine ig_same_line
 
-   function ig_selectable(label, selected) result(clicked)
+   recursive function ig_selectable(label, selected) result(clicked)
    !< A line of a list, highlighted when `selected`; true on the frame it is clicked (the program then updates what is
    !< selected: the line does not change `selected` itself).
    character(len=*), intent(in) :: label    !< Label (also its id).
    logical,          intent(in) :: selected !< Highlighted.
    logical                      :: clicked  !< Clicked this frame.
 
+   clicked = .false.
+   if (figure_refused('ig_selectable')) return ! a task does not draw
    clicked = logical(igSelectable_Bool(cstr(label), logical(selected, c_bool), 0_c_int, &
                                        im_vec2(0.0_c_float, 0.0_c_float)))
    endfunction ig_selectable
 
-   subroutine ig_text_wrapped(text)
+   recursive subroutine ig_text_wrapped(text)
    !< Text wrapped at the right edge of the window or region (help text, long messages).
    character(len=*), intent(in) :: text !< Text.
 
+   if (figure_refused('ig_text_wrapped')) return ! a task does not draw
    call igPushTextWrapPos(0.0_c_float)
    call igTextUnformatted(cstr(text), c_null_ptr)
    call igPopTextWrapPos()
    endsubroutine ig_text_wrapped
 
-   subroutine ig_text_disabled(text)
+   recursive subroutine ig_text_disabled(text)
    !< Text in the style's disabled colour (a default value, a hint, something that does not apply).
    character(len=*), intent(in) :: text  !< Text.
    type(im_vec4), pointer       :: muted !< The style's TextDisabled colour.
 
+   if (figure_refused('ig_text_disabled')) return ! a task does not draw
    call c_f_pointer(igGetStyleColorVec4(ImGuiCol_TextDisabled), muted)
    call igPushStyleColor_Vec4(ImGuiCol_Text, muted)
    call igTextUnformatted(cstr(text), c_null_ptr)
    call igPopStyleColor(1_c_int)
    endsubroutine ig_text_disabled
 
-   subroutine ig_text_colored(text, color)
+   recursive subroutine ig_text_colored(text, color)
    !< Text in `color` ([r, g, b] or [r, g, b, a] in [0, 1]); pair a colour with a mark or a word (an error marker), so
    !< that it does not rest on colour alone.
    character(len=*), intent(in) :: text     !< Text.
    real(real64),     intent(in) :: color(:) !< [r, g, b] or [r, g, b, a].
    type(im_vec4)                :: c        !< Colour.
 
+   if (figure_refused('ig_text_colored')) return ! a task does not draw
    c = im_vec4(1.0_c_float, 1.0_c_float, 1.0_c_float, 1.0_c_float)
    if (size(color) >= 3) then
       c%x = real(color(1), c_float)
@@ -628,7 +663,7 @@ contains
    call igPopStyleColor(1_c_int)
    endsubroutine ig_text_colored
 
-   subroutine ig_progress_bar(fraction, label, width)
+   recursive subroutine ig_progress_bar(fraction, label, width)
    !< A progress bar (`ProgressBar`), `fraction` of it filled, in [0, 1] (clamped); `fraction` < 0 gives an
    !< indeterminate bar, a band sliding along it (animated by FIGURE with the frame clock: draw it every frame).
    !< `label` is written over it (default: the percentage; none for an indeterminate bar); `width` [pixels] (default:
@@ -641,6 +676,7 @@ contains
    real(c_float)                          :: w        !< Width.
    type(c_ptr)                            :: overlay  !< Label or null.
 
+   if (figure_refused('ig_progress_bar')) return ! a task does not draw
    f = real(fraction, c_float)
    if (fraction < 0.0_real64) f = -real(igGetTime(), c_float) ! Dear ImGui's indeterminate form: a moving negative
    w = -tiny(1.0_c_float)                                      ! -FLT_MIN: the width left
@@ -653,16 +689,18 @@ contains
    call igProgressBar(f, im_vec2(w, 0.0_c_float), overlay)
    endsubroutine ig_progress_bar
 
-   subroutine ig_separator()
+   recursive subroutine ig_separator()
    !< Horizontal separator.
+   if (figure_refused('ig_separator')) return ! a task does not draw
    call igSeparator()
    endsubroutine ig_separator
 
-   subroutine ig_show_demo_window(open)
+   recursive subroutine ig_show_demo_window(open)
    !< The Dear ImGui demo window (a live catalogue of every widget).
    logical, intent(inout), optional :: open !< Window open (close button).
    logical(c_bool), target          :: o    !< C copy of `open`.
 
+   if (figure_refused('ig_show_demo_window')) return ! a task does not draw
    if (present(open)) then
       o = logical(open, c_bool)
       call igShowDemoWindow(c_loc(o))
@@ -672,7 +710,7 @@ contains
    endif
    endsubroutine ig_show_demo_window
 
-   subroutine ig_item_rect(xmin, ymin, xmax, ymax)
+   recursive subroutine ig_item_rect(xmin, ymin, xmax, ymax)
    !< Screen rectangle of the last item [pixels] (tests, custom layout).
    real(real64), intent(out) :: xmin !< Left.
    real(real64), intent(out) :: ymin !< Top.
@@ -680,6 +718,11 @@ contains
    real(real64), intent(out) :: ymax !< Bottom.
    type(im_vec2)             :: v    !< Corner.
 
+   xmin = 0.0_real64
+   ymin = 0.0_real64
+   xmax = 0.0_real64
+   ymax = 0.0_real64
+   if (figure_refused('ig_item_rect')) return ! a task does not draw
    v = igGetItemRectMin()
    xmin = real(v%x, real64)
    ymin = real(v%y, real64)
@@ -688,7 +731,7 @@ contains
    ymax = real(v%y, real64)
    endsubroutine ig_item_rect
 
-   subroutine ig_image(tex, width, height)
+   recursive subroutine ig_image(tex, width, height)
    !< A texture, pixel row 1 at the top (screen and image-file convention), `width` x `height` pixels (default: the
    !< texture's size).
    type(texture_object), intent(in)           :: tex    !< Texture.
@@ -696,6 +739,7 @@ contains
    real(real64),         intent(in), optional :: height !< Height [pixels].
    type(im_vec2)                              :: extent !< Size (named so: a local `size` crashes nvfortran 26.9).
 
+   if (figure_refused('ig_image')) return ! a task does not draw
    extent = im_vec2(real(tex%width(), c_float), real(tex%height(), c_float))
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)

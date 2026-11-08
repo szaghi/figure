@@ -210,17 +210,19 @@ contains
    endif
    endfunction ip_begin_subplots
 
-   subroutine ip_end_subplots()
+   recursive subroutine ip_end_subplots()
    !< End the grid of plots (only after `ip_begin_subplots` returned true).
+   if (figure_refused('ip_end_subplots')) return ! a task does not draw
    call ImPlot_EndSubplots()
    endsubroutine ip_end_subplots
 
-   subroutine ip_end_plot()
+   recursive subroutine ip_end_plot()
    !< End the plot (only after `ip_begin_plot` returned true).
+   if (figure_refused('ip_end_plot')) return ! a task does not draw
    call ImPlot_EndPlot()
    endsubroutine ip_end_plot
 
-   subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat)
+   recursive subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat)
    !< Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes fit the data every frame (data
    !< that grows while the user watches), instead of once on first use. `xlog`/`ylog`: a base-10 logarithmic axis
    !< (values <= 0 are not shown on it). `xformat`/`yformat`: a C printf format of the tick labels (`'%.6f'`,
@@ -234,6 +236,7 @@ contains
    character(len=*), intent(in), optional :: yformat  !< printf format of the y tick labels.
    integer(c_int)                         :: flags    !< ImPlotAxisFlags of both axes.
 
+   if (figure_refused('ip_setup_axes')) return ! a task does not draw
    flags = ImPlotAxisFlags_None
    if (present(auto_fit)) then
       if (auto_fit) flags = ImPlotAxisFlags_AutoFit
@@ -249,7 +252,7 @@ contains
    if (present(yformat)) call ImPlot_SetupAxisFormat_Str(ImAxis_Y1, cstr(yformat))
    endsubroutine ip_setup_axes
 
-   subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)
+   recursive subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)
    !< Initial axis ranges (call right after `ip_begin_plot`): applied on first use only, so the user can pan and zoom
    !< afterwards, or every frame with `always=.true.`.
    real(real64), intent(in)           :: xmin   !< Left end of the x axis.
@@ -259,6 +262,7 @@ contains
    logical,      intent(in), optional :: always !< Enforce every frame (default: first use only).
    integer(c_int)                     :: cond   !< ImPlotCond.
 
+   if (figure_refused('ip_setup_axes_limits')) return ! a task does not draw
    cond = ImPlotCond_Once
    if (present(always)) then
       if (always) cond = ImPlotCond_Always
@@ -267,7 +271,7 @@ contains
                                cond)
    endsubroutine ip_setup_axes_limits
 
-   subroutine ip_plot_limits(xmin, xmax, ymin, ymax)
+   recursive subroutine ip_plot_limits(xmin, xmax, ymin, ymax)
    !< Axis ranges of the current plot, as the user has panned and zoomed them (between `ip_begin_plot` and
    !< `ip_end_plot`; ends the setup phase: call `ip_setup_axes*` before).
    real(real64), intent(out) :: xmin   !< Left end of the x axis.
@@ -276,6 +280,11 @@ contains
    real(real64), intent(out) :: ymax   !< Top end of the y axis.
    type(im_plot_rect)        :: limits !< Limits.
 
+   xmin = 0.0_real64
+   xmax = 0.0_real64
+   ymin = 0.0_real64
+   ymax = 0.0_real64
+   if (figure_refused('ip_plot_limits')) return ! a task does not draw
    call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, limits) ! IMPLOT_AUTO: the current axes
    xmin = real(limits%X%Min, real64)
    xmax = real(limits%X%Max, real64)
@@ -283,12 +292,15 @@ contains
    ymax = real(limits%Y%Max, real64)
    endsubroutine ip_plot_limits
 
-   subroutine ip_plot_size(width, height)
+   recursive subroutine ip_plot_size(width, height)
    !< Size of the current plot's data area [pixels] (between `ip_begin_plot` and `ip_end_plot`).
    real(real64), intent(out) :: width  !< Width [pixels].
    real(real64), intent(out) :: height !< Height [pixels].
    type(im_vec2)             :: extent !< Size.
 
+   width = 0.0_real64
+   height = 0.0_real64
+   if (figure_refused('ip_plot_size')) return ! a task does not draw
    extent = ImPlot_GetPlotSize()
    width = real(extent%x, real64)
    height = real(extent%y, real64)
@@ -334,7 +346,7 @@ contains
 
    ! items, single precision
 
-   subroutine ip_line_r32(label, x, y, spec, stat)
+   recursive subroutine ip_line_r32(label, x, y, spec, stat)
    !< Line through the points (x(i), y(i)), single precision.
    character(len=*),       intent(in)                     :: label !< Legend label.
    real(real32),           intent(in), contiguous, target :: x(:)  !< Abscissae.
@@ -342,12 +354,13 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
+   if (figure_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), addr_r32(x), addr_r32(y), int(size(x), c_int), spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_r32
 
-   subroutine ip_scatter_r32(label, x, y, spec, stat)
+   recursive subroutine ip_scatter_r32(label, x, y, spec, stat)
    !< Markers at the points (x(i), y(i)), single precision.
    character(len=*),       intent(in)                     :: label !< Legend label.
    real(real32),           intent(in), contiguous, target :: x(:)  !< Abscissae.
@@ -355,12 +368,13 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
+   if (figure_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call ImPlot_PlotScatter_FloatPtrFloatPtr(cstr(label), addr_r32(x), addr_r32(y), int(size(x), c_int), spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_scatter_r32
 
-   subroutine ip_bars_r32(label, x, y, bar_size, spec, stat)
+   recursive subroutine ip_bars_r32(label, x, y, bar_size, spec, stat)
    !< Bars of height y(i) centred at x(i), `bar_size` wide (in x units), single precision.
    character(len=*),       intent(in)                     :: label    !< Legend label.
    real(real32),           intent(in), contiguous, target :: x(:)     !< Bar positions.
@@ -369,13 +383,14 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec     !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat     !< Status.
 
+   if (figure_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call ImPlot_PlotBars_FloatPtrFloatPtr(cstr(label), addr_r32(x), addr_r32(y), int(size(x), c_int), &
                                          real(bar_size, c_double), spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_bars_r32
 
-   subroutine ip_shaded_r32(label, x, y1, y2, spec, stat)
+   recursive subroutine ip_shaded_r32(label, x, y1, y2, spec, stat)
    !< Area between the curves y1(x) and y2(x), single precision.
    character(len=*),       intent(in)                     :: label !< Legend label.
    real(real32),           intent(in), contiguous, target :: x(:)  !< Abscissae.
@@ -384,6 +399,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
+   if (figure_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
    if (.not. series_ok(size(x, kind=int64), size(y2, kind=int64), 'ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), addr_r32(x), addr_r32(y1), addr_r32(y2), &
@@ -391,7 +407,7 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_r32
 
-   subroutine ip_shaded_ref_r32(label, x, y, yref, spec, stat)
+   recursive subroutine ip_shaded_ref_r32(label, x, y, yref, spec, stat)
    !< Area between the curve y(x) and the line y = yref, single precision.
    character(len=*),       intent(in)                     :: label !< Legend label.
    real(real32),           intent(in), contiguous, target :: x(:)  !< Abscissae.
@@ -400,13 +416,14 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
+   if (figure_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), addr_r32(x), addr_r32(y), int(size(x), c_int), &
                                               real(yref, c_double), spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_ref_r32
 
-   subroutine ip_line_values_r32(label, y, xscale, xstart, spec, stat)
+   recursive subroutine ip_line_values_r32(label, y, xscale, xstart, spec, stat)
    !< Line through y(i) at x = xstart + (i - 1) xscale, single precision.
    character(len=*),       intent(in)                     :: label  !< Legend label.
    real(real32),           intent(in), contiguous, target :: y(:)   !< Ordinates.
@@ -415,13 +432,14 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec   !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat   !< Status.
 
+   if (figure_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call ImPlot_PlotLine_FloatPtrInt(cstr(label), addr_r32(y), int(size(y), c_int), uniform(xscale, 1.0_real64), &
                                     uniform(xstart, 0.0_real64), spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_values_r32
 
-   subroutine ip_line_row_r32(label, y, row, xscale, xstart, spec, stat)
+   recursive subroutine ip_line_row_r32(label, y, row, xscale, xstart, spec, stat)
    !< Line through the row `row` of `y`, y(row, j) at x = xstart + (j - 1) xscale, read in place (no copy),
    !< single precision.
    character(len=*),       intent(in)                     :: label  !< Legend label.
@@ -434,6 +452,7 @@ contains
    type(im_plot_spec)                                     :: c      !< Spec with the row stride.
    type(c_ptr)                                            :: p      !< Address of y(row, 1), or null.
 
+   if (figure_refused('ip_line', stat)) return ! a task does not draw
    if (.not. row_ok(size(y, 1, kind=int64), size(y, 2, kind=int64), storage_size(y, kind=int64), row, stat)) return
    c = spec_c(spec)
    c%Offset = 0_c_int
@@ -445,7 +464,7 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_row_r32
 
-   subroutine ip_heatmap_r32(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, &
+   recursive subroutine ip_heatmap_r32(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, &
                              stat)
    !< The field f(i, j) as coloured cells over [xmin, xmax] x [ymin, ymax], read in place (no copy, no transpose):
    !< cell (i, j) spans the i-th of size(f, 1) columns along x and the j-th of size(f, 2) rows along y, j = 1 at the
@@ -469,6 +488,7 @@ contains
    type(c_ptr)                                            :: p            !< Field address, or null when empty.
    integer(c_int)                                         :: cmap         !< The colormap's id.
 
+   if (figure_refused('ip_heatmap', stat)) return ! a task does not draw
    if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
    if (.not. colormap_ok('ip_heatmap', colormap, cmap, stat)) return
    smin = 0.0_c_double
@@ -493,7 +513,7 @@ contains
 
    ! items, double precision
 
-   subroutine ip_line_r64(label, x, y, spec, stat)
+   recursive subroutine ip_line_r64(label, x, y, spec, stat)
    !< Line through the points (x(i), y(i)), double precision.
    character(len=*),       intent(in)                     :: label !< Legend label.
    real(real64),           intent(in), contiguous, target :: x(:)  !< Abscissae.
@@ -501,12 +521,13 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
+   if (figure_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), addr_r64(x), addr_r64(y), int(size(x), c_int), spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_r64
 
-   subroutine ip_scatter_r64(label, x, y, spec, stat)
+   recursive subroutine ip_scatter_r64(label, x, y, spec, stat)
    !< Markers at the points (x(i), y(i)), double precision.
    character(len=*),       intent(in)                     :: label !< Legend label.
    real(real64),           intent(in), contiguous, target :: x(:)  !< Abscissae.
@@ -514,13 +535,14 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
+   if (figure_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call ImPlot_PlotScatter_doublePtrdoublePtr(cstr(label), addr_r64(x), addr_r64(y), int(size(x), c_int), &
                                               spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_scatter_r64
 
-   subroutine ip_bars_r64(label, x, y, bar_size, spec, stat)
+   recursive subroutine ip_bars_r64(label, x, y, bar_size, spec, stat)
    !< Bars of height y(i) centred at x(i), `bar_size` wide (in x units), double precision.
    character(len=*),       intent(in)                     :: label    !< Legend label.
    real(real64),           intent(in), contiguous, target :: x(:)     !< Bar positions.
@@ -529,13 +551,14 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec     !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat     !< Status.
 
+   if (figure_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call ImPlot_PlotBars_doublePtrdoublePtr(cstr(label), addr_r64(x), addr_r64(y), int(size(x), c_int), &
                                            real(bar_size, c_double), spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_bars_r64
 
-   subroutine ip_shaded_r64(label, x, y1, y2, spec, stat)
+   recursive subroutine ip_shaded_r64(label, x, y1, y2, spec, stat)
    !< Area between the curves y1(x) and y2(x), double precision.
    character(len=*),       intent(in)                     :: label !< Legend label.
    real(real64),           intent(in), contiguous, target :: x(:)  !< Abscissae.
@@ -544,6 +567,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
+   if (figure_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
    if (.not. series_ok(size(x, kind=int64), size(y2, kind=int64), 'ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), addr_r64(x), addr_r64(y1), addr_r64(y2), &
@@ -551,7 +575,7 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_r64
 
-   subroutine ip_shaded_ref_r64(label, x, y, yref, spec, stat)
+   recursive subroutine ip_shaded_ref_r64(label, x, y, yref, spec, stat)
    !< Area between the curve y(x) and the line y = yref, double precision.
    character(len=*),       intent(in)                     :: label !< Legend label.
    real(real64),           intent(in), contiguous, target :: x(:)  !< Abscissae.
@@ -560,13 +584,14 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
+   if (figure_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), addr_r64(x), addr_r64(y), int(size(x), c_int), &
                                                 real(yref, c_double), spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_ref_r64
 
-   subroutine ip_line_values_r64(label, y, xscale, xstart, spec, stat)
+   recursive subroutine ip_line_values_r64(label, y, xscale, xstart, spec, stat)
    !< Line through y(i) at x = xstart + (i - 1) xscale, double precision.
    character(len=*),       intent(in)                     :: label  !< Legend label.
    real(real64),           intent(in), contiguous, target :: y(:)   !< Ordinates.
@@ -575,13 +600,14 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec   !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat   !< Status.
 
+   if (figure_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call ImPlot_PlotLine_doublePtrInt(cstr(label), addr_r64(y), int(size(y), c_int), uniform(xscale, 1.0_real64), &
                                      uniform(xstart, 0.0_real64), spec_c(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_values_r64
 
-   subroutine ip_line_row_r64(label, y, row, xscale, xstart, spec, stat)
+   recursive subroutine ip_line_row_r64(label, y, row, xscale, xstart, spec, stat)
    !< Line through the row `row` of `y`, y(row, j) at x = xstart + (j - 1) xscale, read in place (no copy),
    !< double precision.
    character(len=*),       intent(in)                     :: label  !< Legend label.
@@ -594,6 +620,7 @@ contains
    type(im_plot_spec)                                     :: c      !< Spec with the row stride.
    type(c_ptr)                                            :: p      !< Address of y(row, 1), or null.
 
+   if (figure_refused('ip_line', stat)) return ! a task does not draw
    if (.not. row_ok(size(y, 1, kind=int64), size(y, 2, kind=int64), storage_size(y, kind=int64), row, stat)) return
    c = spec_c(spec)
    c%Offset = 0_c_int
@@ -605,7 +632,7 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_row_r64
 
-   subroutine ip_heatmap_r64(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, &
+   recursive subroutine ip_heatmap_r64(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, &
                              stat)
    !< The field f(i, j) as coloured cells over [xmin, xmax] x [ymin, ymax], read in place (no copy, no transpose):
    !< cell (i, j) spans the i-th of size(f, 1) columns along x and the j-th of size(f, 2) rows along y, j = 1 at the
@@ -629,6 +656,7 @@ contains
    type(c_ptr)                                            :: p            !< Field address, or null when empty.
    integer(c_int)                                         :: cmap         !< The colormap's id.
 
+   if (figure_refused('ip_heatmap', stat)) return ! a task does not draw
    if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
    if (.not. colormap_ok('ip_heatmap', colormap, cmap, stat)) return
    smin = 0.0_c_double
@@ -653,7 +681,7 @@ contains
 
    ! images and colour scales
 
-   subroutine ip_image(label, tex, xmin, xmax, ymin, ymax, spec, stat)
+   recursive subroutine ip_image(label, tex, xmin, xmax, ymin, ymax, spec, stat)
    !< A texture over [xmin, xmax] x [ymin, ymax], pixel row 1 at ymin (plot convention: y up).
    character(len=*),       intent(in)            :: label !< Legend label.
    type(texture_object),   intent(in)            :: tex   !< Texture.
@@ -664,6 +692,7 @@ contains
    type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional :: stat  !< Status.
 
+   if (figure_refused('ip_image', stat)) return ! a task does not draw
    if (.not. tex%is_initialized()) then
       call figure_fail(FIG_ERR_STATE, 'ip_image: the texture is not initialized', stat)
       return
@@ -677,7 +706,7 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_image
 
-   subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap, stat)
+   recursive subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap, stat)
    !< A colour bar for [scale_min, scale_max], next to a heatmap (outside `ip_begin_plot`/`ip_end_plot`). Statuses:
    !< `FIG_ERR_ARGUMENT` for a colormap id that is not registered.
    character(len=*), intent(in)            :: label        !< Label (also the widget id).
@@ -691,6 +720,7 @@ contains
    type(im_vec2)                           :: extent       !< Size (0: ImPlot's default).
    integer(c_int)                          :: cmap         !< The colormap's id.
 
+   if (figure_refused('ip_colormap_scale', stat)) return ! a task does not draw
    if (.not. colormap_ok('ip_colormap_scale', colormap, cmap, stat)) return
    extent = im_vec2(0.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
@@ -835,7 +865,7 @@ contains
 
    ! error bars
 
-   subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, stat)
+   recursive subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, stat)
    !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to
    !< y(i) + err_high(i) (asymmetric). Read in place. Single precision.
    character(len=*),       intent(in)                               :: label       !< Legend label.
@@ -846,6 +876,7 @@ contains
    type(plot_spec_object), intent(in), optional                     :: spec        !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional                    :: stat        !< Status.
 
+   if (figure_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
    if (.not. series_ok(size(x, kind=int64), size(err, kind=int64), 'ip_error_bars', stat)) return
    if (present(err_high)) then
@@ -859,7 +890,7 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_error_bars_r32
 
-   subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, stat)
+   recursive subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, stat)
    !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to
    !< y(i) + err_high(i) (asymmetric). Read in place. Double precision.
    character(len=*),       intent(in)                               :: label       !< Legend label.
@@ -870,6 +901,7 @@ contains
    type(plot_spec_object), intent(in), optional                     :: spec        !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional                    :: stat        !< Status.
 
+   if (figure_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
    if (.not. series_ok(size(x, kind=int64), size(err, kind=int64), 'ip_error_bars', stat)) return
    if (present(err_high)) then
@@ -934,6 +966,8 @@ contains
    logical                                 :: moved     !< Moved by the user in this frame.
 
    moved = .false.
+   if (figure_refused('ip_drag_line_x', stat)) return ! a task does not draw
+   moved = .false.
    if (.not. drag_ok('ip_drag_line_x', color, stat)) return
    moved = logical(ImPlot_DragLineX(int(id, c_int), c_loc(x), drag_color(color),                                &
                                     real(uniform(thickness, 1.0_real64), c_float), 0_c_int, c_null_ptr, c_null_ptr, c_null_ptr))
@@ -949,6 +983,8 @@ contains
    integer(int32),   intent(out), optional :: stat      !< Status.
    logical                                 :: moved     !< Moved by the user in this frame.
 
+   moved = .false.
+   if (figure_refused('ip_drag_line_y', stat)) return ! a task does not draw
    moved = .false.
    if (.not. drag_ok('ip_drag_line_y', color, stat)) return
    moved = logical(ImPlot_DragLineY(int(id, c_int), c_loc(y), drag_color(color),                                &
@@ -966,6 +1002,8 @@ contains
    integer(int32),   intent(out), optional :: stat     !< Status.
    logical                                 :: moved    !< Moved by the user in this frame.
 
+   moved = .false.
+   if (figure_refused('ip_drag_point', stat)) return ! a task does not draw
    moved = .false.
    if (.not. drag_ok('ip_drag_point', color, stat)) return
    moved = logical(ImPlot_DragPoint(int(id, c_int), c_loc(x), c_loc(y), drag_color(color),                         &
