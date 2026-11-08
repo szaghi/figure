@@ -242,10 +242,12 @@ flowchart TD
 ### test_notification_rect
 
 The rectangle [pixels] of a notification shown in the last frame (`app%notify`): `index` 1 is the newest, at the
- bottom, 2 the one above it, ...; `found` is false past the last shown.
+ bottom, 2 the one above it, ...; `found` is false past the last shown. `alpha`: the largest alpha of the
+ vertices it was drawn with (the draw data), in [0, 1]: 1 while it is shown in full, falling to 0 as it fades
+ out in the last half second of its time; 0 past the last shown.
 
 ```fortran
-subroutine test_notification_rect(index, xmin, ymin, xmax, ymax, found)
+subroutine test_notification_rect(index, xmin, ymin, xmax, ymax, found, alpha)
 ```
 
 **Arguments**
@@ -258,11 +260,13 @@ subroutine test_notification_rect(index, xmin, ymin, xmax, ymax, found)
 | `xmax` | real(kind=real64) | out |  | Right. |
 | `ymax` | real(kind=real64) | out |  | Bottom. |
 | `found` | logical | out | optional | It was shown. |
+| `alpha` | real(kind=real64) | out | optional | Largest alpha drawn, in [0, 1]. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
+  test_notification_rect["test_notification_rect"] --> fig_notification_alpha["fig_notification_alpha"]
   test_notification_rect["test_notification_rect"] --> fig_notification_rect["fig_notification_rect"]
   style test_notification_rect fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

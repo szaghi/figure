@@ -44,6 +44,7 @@ graph LR
 - [fig_notification_count](#fig-notification-count)
 - [fig_notification_get](#fig-notification-get)
 - [fig_notification_rect](#fig-notification-rect)
+- [fig_notification_alpha](#fig-notification-alpha)
 - [fig_drawn_extent](#fig-drawn-extent)
 - [fig_drawn_extent_rgba](#fig-drawn-extent-rgba)
 - [fig_popup_rect](#fig-popup-rect)
@@ -132,6 +133,7 @@ graph LR
 - [fig_set_lazy](#fig-set-lazy)
 - [fig_set_remote_fps](#fig-set-remote-fps)
 - [fig_set_remote_compress](#fig-set-remote-compress)
+- [fig_set_remote_lossy](#fig-set-remote-lossy)
 - [fig_set_remote_token](#fig-set-remote-token)
 - [fig_clipper_begin](#fig-clipper-begin)
 - [fig_clipper_delete](#fig-clipper-delete)
@@ -199,6 +201,8 @@ graph LR
 ### fig_notification_get
 
 ### fig_notification_rect
+
+### fig_notification_alpha
 
 ### fig_drawn_extent
 
@@ -375,6 +379,8 @@ graph LR
 ### fig_set_remote_fps
 
 ### fig_set_remote_compress
+
+### fig_set_remote_lossy
 
 ### fig_set_remote_token
 

@@ -6,6 +6,8 @@ title: figure_implot
 
 > figure_implot, ImPlot plots with Fortran arrays.
 
+ Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+
  `ip_begin_plot` returns true when the plot is visible: then declare its axes and items and close it with
  `ip_end_plot` (only in that case). Items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`) take `real(real32)` or
  `real(real64)` arrays, read in place, without copies, during the call: they go straight to ImPlot's `float*` or
@@ -196,6 +198,8 @@ Area between two curves y1(x) and y2(x), or between a curve y(x) and the line y 
 
 End the grid of plots (only after `ip_begin_subplots` returned true).
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ip_end_subplots()
 ```
@@ -205,12 +209,15 @@ subroutine ip_end_subplots()
 ```mermaid
 flowchart TD
   ip_end_subplots["ip_end_subplots"] --> ImPlot_EndSubplots["ImPlot_EndSubplots"]
+  ip_end_subplots["ip_end_subplots"] --> figure_refused["figure_refused"]
   style ip_end_subplots fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ip_end_plot
 
 End the plot (only after `ip_begin_plot` returned true).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_end_plot()
@@ -221,6 +228,7 @@ subroutine ip_end_plot()
 ```mermaid
 flowchart TD
   ip_end_plot["ip_end_plot"] --> ImPlot_EndPlot["ImPlot_EndPlot"]
+  ip_end_plot["ip_end_plot"] --> figure_refused["figure_refused"]
   style ip_end_plot fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -230,6 +238,8 @@ Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes
  that grows while the user watches), instead of once on first use. `xlog`/`ylog`: a base-10 logarithmic axis
  (values <= 0 are not shown on it). `xformat`/`yformat`: a C printf format of the tick labels (`'%.6f'`,
  `'%.2e'`, `'%g s'`), for values whose default labels look alike (-3781.31, -3781.31, ...).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat)
@@ -255,6 +265,7 @@ flowchart TD
   ip_setup_axes["ip_setup_axes"] --> ImPlot_SetupAxisFormat_Str["ImPlot_SetupAxisFormat_Str"]
   ip_setup_axes["ip_setup_axes"] --> ImPlot_SetupAxisScale_PlotScale["ImPlot_SetupAxisScale_PlotScale"]
   ip_setup_axes["ip_setup_axes"] --> cstr["cstr"]
+  ip_setup_axes["ip_setup_axes"] --> figure_refused["figure_refused"]
   style ip_setup_axes fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -262,6 +273,8 @@ flowchart TD
 
 Initial axis ranges (call right after `ip_begin_plot`): applied on first use only, so the user can pan and zoom
  afterwards, or every frame with `always=.true.`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)
@@ -282,6 +295,7 @@ subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)
 ```mermaid
 flowchart TD
   ip_setup_axes_limits["ip_setup_axes_limits"] --> ImPlot_SetupAxesLimits["ImPlot_SetupAxesLimits"]
+  ip_setup_axes_limits["ip_setup_axes_limits"] --> figure_refused["figure_refused"]
   style ip_setup_axes_limits fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -289,6 +303,8 @@ flowchart TD
 
 Axis ranges of the current plot, as the user has panned and zoomed them (between `ip_begin_plot` and
  `ip_end_plot`; ends the setup phase: call `ip_setup_axes*` before).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_plot_limits(xmin, xmax, ymin, ymax)
@@ -308,12 +324,15 @@ subroutine ip_plot_limits(xmin, xmax, ymin, ymax)
 ```mermaid
 flowchart TD
   ip_plot_limits["ip_plot_limits"] --> ImPlot_GetPlotLimits["ImPlot_GetPlotLimits"]
+  ip_plot_limits["ip_plot_limits"] --> figure_refused["figure_refused"]
   style ip_plot_limits fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ip_plot_size
 
 Size of the current plot's data area [pixels] (between `ip_begin_plot` and `ip_end_plot`).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_plot_size(width, height)
@@ -331,12 +350,15 @@ subroutine ip_plot_size(width, height)
 ```mermaid
 flowchart TD
   ip_plot_size["ip_plot_size"] --> ImPlot_GetPlotSize["ImPlot_GetPlotSize"]
+  ip_plot_size["ip_plot_size"] --> figure_refused["figure_refused"]
   style ip_plot_size fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ip_line_r32
 
 Line through the points (x(i), y(i)), single precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_line_r32(label, x, y, spec, stat)
@@ -360,6 +382,7 @@ flowchart TD
   ip_line_r32["ip_line_r32"] --> addr_r32["addr_r32"]
   ip_line_r32["ip_line_r32"] --> cstr["cstr"]
   ip_line_r32["ip_line_r32"] --> figure_check["figure_check"]
+  ip_line_r32["ip_line_r32"] --> figure_refused["figure_refused"]
   ip_line_r32["ip_line_r32"] --> series_ok["series_ok"]
   ip_line_r32["ip_line_r32"] --> spec_c["spec_c"]
   style ip_line_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -368,6 +391,8 @@ flowchart TD
 ### ip_scatter_r32
 
 Markers at the points (x(i), y(i)), single precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_scatter_r32(label, x, y, spec, stat)
@@ -391,6 +416,7 @@ flowchart TD
   ip_scatter_r32["ip_scatter_r32"] --> addr_r32["addr_r32"]
   ip_scatter_r32["ip_scatter_r32"] --> cstr["cstr"]
   ip_scatter_r32["ip_scatter_r32"] --> figure_check["figure_check"]
+  ip_scatter_r32["ip_scatter_r32"] --> figure_refused["figure_refused"]
   ip_scatter_r32["ip_scatter_r32"] --> series_ok["series_ok"]
   ip_scatter_r32["ip_scatter_r32"] --> spec_c["spec_c"]
   style ip_scatter_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -399,6 +425,8 @@ flowchart TD
 ### ip_bars_r32
 
 Bars of height y(i) centred at x(i), `bar_size` wide (in x units), single precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_bars_r32(label, x, y, bar_size, spec, stat)
@@ -423,6 +451,7 @@ flowchart TD
   ip_bars_r32["ip_bars_r32"] --> addr_r32["addr_r32"]
   ip_bars_r32["ip_bars_r32"] --> cstr["cstr"]
   ip_bars_r32["ip_bars_r32"] --> figure_check["figure_check"]
+  ip_bars_r32["ip_bars_r32"] --> figure_refused["figure_refused"]
   ip_bars_r32["ip_bars_r32"] --> series_ok["series_ok"]
   ip_bars_r32["ip_bars_r32"] --> spec_c["spec_c"]
   style ip_bars_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -431,6 +460,8 @@ flowchart TD
 ### ip_shaded_r32
 
 Area between the curves y1(x) and y2(x), single precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_shaded_r32(label, x, y1, y2, spec, stat)
@@ -455,6 +486,7 @@ flowchart TD
   ip_shaded_r32["ip_shaded_r32"] --> addr_r32["addr_r32"]
   ip_shaded_r32["ip_shaded_r32"] --> cstr["cstr"]
   ip_shaded_r32["ip_shaded_r32"] --> figure_check["figure_check"]
+  ip_shaded_r32["ip_shaded_r32"] --> figure_refused["figure_refused"]
   ip_shaded_r32["ip_shaded_r32"] --> series_ok["series_ok"]
   ip_shaded_r32["ip_shaded_r32"] --> spec_c["spec_c"]
   style ip_shaded_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -463,6 +495,8 @@ flowchart TD
 ### ip_shaded_ref_r32
 
 Area between the curve y(x) and the line y = yref, single precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_shaded_ref_r32(label, x, y, yref, spec, stat)
@@ -487,6 +521,7 @@ flowchart TD
   ip_shaded_ref_r32["ip_shaded_ref_r32"] --> addr_r32["addr_r32"]
   ip_shaded_ref_r32["ip_shaded_ref_r32"] --> cstr["cstr"]
   ip_shaded_ref_r32["ip_shaded_ref_r32"] --> figure_check["figure_check"]
+  ip_shaded_ref_r32["ip_shaded_ref_r32"] --> figure_refused["figure_refused"]
   ip_shaded_ref_r32["ip_shaded_ref_r32"] --> series_ok["series_ok"]
   ip_shaded_ref_r32["ip_shaded_ref_r32"] --> spec_c["spec_c"]
   style ip_shaded_ref_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -495,6 +530,8 @@ flowchart TD
 ### ip_line_values_r32
 
 Line through y(i) at x = xstart + (i - 1) xscale, single precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_line_values_r32(label, y, xscale, xstart, spec, stat)
@@ -519,6 +556,7 @@ flowchart TD
   ip_line_values_r32["ip_line_values_r32"] --> addr_r32["addr_r32"]
   ip_line_values_r32["ip_line_values_r32"] --> cstr["cstr"]
   ip_line_values_r32["ip_line_values_r32"] --> figure_check["figure_check"]
+  ip_line_values_r32["ip_line_values_r32"] --> figure_refused["figure_refused"]
   ip_line_values_r32["ip_line_values_r32"] --> series_ok["series_ok"]
   ip_line_values_r32["ip_line_values_r32"] --> spec_c["spec_c"]
   ip_line_values_r32["ip_line_values_r32"] --> uniform["uniform"]
@@ -529,6 +567,8 @@ flowchart TD
 
 Line through the row `row` of `y`, y(row, j) at x = xstart + (j - 1) xscale, read in place (no copy),
  single precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_line_row_r32(label, y, row, xscale, xstart, spec, stat)
@@ -553,6 +593,7 @@ flowchart TD
   ip_line_row_r32["ip_line_row_r32"] --> ImPlot_PlotLine_FloatPtrInt["ImPlot_PlotLine_FloatPtrInt"]
   ip_line_row_r32["ip_line_row_r32"] --> cstr["cstr"]
   ip_line_row_r32["ip_line_row_r32"] --> figure_check["figure_check"]
+  ip_line_row_r32["ip_line_row_r32"] --> figure_refused["figure_refused"]
   ip_line_row_r32["ip_line_row_r32"] --> row_ok["row_ok"]
   ip_line_row_r32["ip_line_row_r32"] --> spec_c["spec_c"]
   ip_line_row_r32["ip_line_row_r32"] --> uniform["uniform"]
@@ -564,6 +605,8 @@ flowchart TD
 The field f(i, j) as coloured cells over [xmin, xmax] x [ymin, ymax], read in place (no copy, no transpose):
  cell (i, j) spans the i-th of size(f, 1) columns along x and the j-th of size(f, 2) rows along y, j = 1 at the
  bottom. Single precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_heatmap_r32(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, stat)
@@ -597,6 +640,7 @@ flowchart TD
   ip_heatmap_r32["ip_heatmap_r32"] --> cstr["cstr"]
   ip_heatmap_r32["ip_heatmap_r32"] --> field_ok["field_ok"]
   ip_heatmap_r32["ip_heatmap_r32"] --> figure_check["figure_check"]
+  ip_heatmap_r32["ip_heatmap_r32"] --> figure_refused["figure_refused"]
   ip_heatmap_r32["ip_heatmap_r32"] --> spec_c["spec_c"]
   style ip_heatmap_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -604,6 +648,8 @@ flowchart TD
 ### ip_line_r64
 
 Line through the points (x(i), y(i)), double precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_line_r64(label, x, y, spec, stat)
@@ -627,6 +673,7 @@ flowchart TD
   ip_line_r64["ip_line_r64"] --> addr_r64["addr_r64"]
   ip_line_r64["ip_line_r64"] --> cstr["cstr"]
   ip_line_r64["ip_line_r64"] --> figure_check["figure_check"]
+  ip_line_r64["ip_line_r64"] --> figure_refused["figure_refused"]
   ip_line_r64["ip_line_r64"] --> series_ok["series_ok"]
   ip_line_r64["ip_line_r64"] --> spec_c["spec_c"]
   style ip_line_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -635,6 +682,8 @@ flowchart TD
 ### ip_scatter_r64
 
 Markers at the points (x(i), y(i)), double precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_scatter_r64(label, x, y, spec, stat)
@@ -658,6 +707,7 @@ flowchart TD
   ip_scatter_r64["ip_scatter_r64"] --> addr_r64["addr_r64"]
   ip_scatter_r64["ip_scatter_r64"] --> cstr["cstr"]
   ip_scatter_r64["ip_scatter_r64"] --> figure_check["figure_check"]
+  ip_scatter_r64["ip_scatter_r64"] --> figure_refused["figure_refused"]
   ip_scatter_r64["ip_scatter_r64"] --> series_ok["series_ok"]
   ip_scatter_r64["ip_scatter_r64"] --> spec_c["spec_c"]
   style ip_scatter_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -666,6 +716,8 @@ flowchart TD
 ### ip_bars_r64
 
 Bars of height y(i) centred at x(i), `bar_size` wide (in x units), double precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_bars_r64(label, x, y, bar_size, spec, stat)
@@ -690,6 +742,7 @@ flowchart TD
   ip_bars_r64["ip_bars_r64"] --> addr_r64["addr_r64"]
   ip_bars_r64["ip_bars_r64"] --> cstr["cstr"]
   ip_bars_r64["ip_bars_r64"] --> figure_check["figure_check"]
+  ip_bars_r64["ip_bars_r64"] --> figure_refused["figure_refused"]
   ip_bars_r64["ip_bars_r64"] --> series_ok["series_ok"]
   ip_bars_r64["ip_bars_r64"] --> spec_c["spec_c"]
   style ip_bars_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -698,6 +751,8 @@ flowchart TD
 ### ip_shaded_r64
 
 Area between the curves y1(x) and y2(x), double precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_shaded_r64(label, x, y1, y2, spec, stat)
@@ -722,6 +777,7 @@ flowchart TD
   ip_shaded_r64["ip_shaded_r64"] --> addr_r64["addr_r64"]
   ip_shaded_r64["ip_shaded_r64"] --> cstr["cstr"]
   ip_shaded_r64["ip_shaded_r64"] --> figure_check["figure_check"]
+  ip_shaded_r64["ip_shaded_r64"] --> figure_refused["figure_refused"]
   ip_shaded_r64["ip_shaded_r64"] --> series_ok["series_ok"]
   ip_shaded_r64["ip_shaded_r64"] --> spec_c["spec_c"]
   style ip_shaded_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -730,6 +786,8 @@ flowchart TD
 ### ip_shaded_ref_r64
 
 Area between the curve y(x) and the line y = yref, double precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_shaded_ref_r64(label, x, y, yref, spec, stat)
@@ -754,6 +812,7 @@ flowchart TD
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> addr_r64["addr_r64"]
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> cstr["cstr"]
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> figure_check["figure_check"]
+  ip_shaded_ref_r64["ip_shaded_ref_r64"] --> figure_refused["figure_refused"]
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> series_ok["series_ok"]
   ip_shaded_ref_r64["ip_shaded_ref_r64"] --> spec_c["spec_c"]
   style ip_shaded_ref_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -762,6 +821,8 @@ flowchart TD
 ### ip_line_values_r64
 
 Line through y(i) at x = xstart + (i - 1) xscale, double precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_line_values_r64(label, y, xscale, xstart, spec, stat)
@@ -786,6 +847,7 @@ flowchart TD
   ip_line_values_r64["ip_line_values_r64"] --> addr_r64["addr_r64"]
   ip_line_values_r64["ip_line_values_r64"] --> cstr["cstr"]
   ip_line_values_r64["ip_line_values_r64"] --> figure_check["figure_check"]
+  ip_line_values_r64["ip_line_values_r64"] --> figure_refused["figure_refused"]
   ip_line_values_r64["ip_line_values_r64"] --> series_ok["series_ok"]
   ip_line_values_r64["ip_line_values_r64"] --> spec_c["spec_c"]
   ip_line_values_r64["ip_line_values_r64"] --> uniform["uniform"]
@@ -796,6 +858,8 @@ flowchart TD
 
 Line through the row `row` of `y`, y(row, j) at x = xstart + (j - 1) xscale, read in place (no copy),
  double precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_line_row_r64(label, y, row, xscale, xstart, spec, stat)
@@ -820,6 +884,7 @@ flowchart TD
   ip_line_row_r64["ip_line_row_r64"] --> ImPlot_PlotLine_doublePtrInt["ImPlot_PlotLine_doublePtrInt"]
   ip_line_row_r64["ip_line_row_r64"] --> cstr["cstr"]
   ip_line_row_r64["ip_line_row_r64"] --> figure_check["figure_check"]
+  ip_line_row_r64["ip_line_row_r64"] --> figure_refused["figure_refused"]
   ip_line_row_r64["ip_line_row_r64"] --> row_ok["row_ok"]
   ip_line_row_r64["ip_line_row_r64"] --> spec_c["spec_c"]
   ip_line_row_r64["ip_line_row_r64"] --> uniform["uniform"]
@@ -831,6 +896,8 @@ flowchart TD
 The field f(i, j) as coloured cells over [xmin, xmax] x [ymin, ymax], read in place (no copy, no transpose):
  cell (i, j) spans the i-th of size(f, 1) columns along x and the j-th of size(f, 2) rows along y, j = 1 at the
  bottom. Double precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_heatmap_r64(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec, stat)
@@ -864,6 +931,7 @@ flowchart TD
   ip_heatmap_r64["ip_heatmap_r64"] --> cstr["cstr"]
   ip_heatmap_r64["ip_heatmap_r64"] --> field_ok["field_ok"]
   ip_heatmap_r64["ip_heatmap_r64"] --> figure_check["figure_check"]
+  ip_heatmap_r64["ip_heatmap_r64"] --> figure_refused["figure_refused"]
   ip_heatmap_r64["ip_heatmap_r64"] --> spec_c["spec_c"]
   style ip_heatmap_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -871,6 +939,8 @@ flowchart TD
 ### ip_image
 
 A texture over [xmin, xmax] x [ymin, ymax], pixel row 1 at ymin (plot convention: y up).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_image(label, tex, xmin, xmax, ymin, ymax, spec, stat)
@@ -898,6 +968,7 @@ flowchart TD
   ip_image["ip_image"] --> fig_texture_sampling["fig_texture_sampling"]
   ip_image["ip_image"] --> figure_check["figure_check"]
   ip_image["ip_image"] --> figure_fail["figure_fail"]
+  ip_image["ip_image"] --> figure_refused["figure_refused"]
   ip_image["ip_image"] --> is_initialized["is_initialized"]
   ip_image["ip_image"] --> spec_c["spec_c"]
   ip_image["ip_image"] --> texture_ref["texture_ref"]
@@ -908,6 +979,8 @@ flowchart TD
 
 A colour bar for [scale_min, scale_max], next to a heatmap (outside `ip_begin_plot`/`ip_end_plot`). Statuses:
  `FIG_ERR_ARGUMENT` for a colormap id that is not registered.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap, stat)
@@ -934,6 +1007,7 @@ flowchart TD
   ip_colormap_scale["ip_colormap_scale"] --> colormap_ok["colormap_ok"]
   ip_colormap_scale["ip_colormap_scale"] --> cstr["cstr"]
   ip_colormap_scale["ip_colormap_scale"] --> figure_check["figure_check"]
+  ip_colormap_scale["ip_colormap_scale"] --> figure_refused["figure_refused"]
   style ip_colormap_scale fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -943,12 +1017,14 @@ A colour-scale legend: a bar coloured by `colormap` from `vmin` to `vmax` (botto
  `horizontal=.true.`), with ticks and their values on its right (or below). An item of the current window, outside
  a plot: beside any plot (`ig_same_line`), above or below it, or in any window. With `levels`: that many bands of
  equal width, each the map's colour at its centre (as `ip_colormap(name, levels)` colours a field), the ticks at the
- bands' edges; without: a continuous bar, ticks at round values (a step of 1, 2, 2.5 or 5 times a power of ten)
- about every 40 pixels (100 horizontal). `vmin > vmax` turns the scale over. Sizes [pixels]: positive given,
- negative the space left in the window, absent the default (vertical: 300 long, as wide as the bar and the labels;
- horizontal: the space left, as tall as the bar and a line of labels). Statuses: `FIG_ERR_ARGUMENT` for a colormap
- that is not registered, equal or non-finite `vmin`/`vmax`, `levels` outside [2, 256]; `FIG_ERR_STATE` outside a
- window and from a task. The same in every mode.
+ bands' edges, labelled with the digits they need to show the edge (`label_format`'s precision raised, up to 6
+ decimals for `%f` or 7 significant digits for `%e` and `%g`: 87.5 with `'%.0f'`, as `ip_contour` labels it);
+ without: a continuous bar, ticks at round values (a step of 1, 2, 2.5 or 5 times a power of ten) about every 40
+ pixels (100 horizontal), labelled with `label_format` as it is. `vmin > vmax` turns the scale over. Sizes
+ [pixels]: positive given, negative the space left in the window, absent the default (vertical: 300 long, as wide
+ as the bar and the labels; horizontal: the space left, as tall as the bar and a line of labels). Statuses:
+ `FIG_ERR_ARGUMENT` for a colormap that is not registered, equal or non-finite `vmin`/`vmax`, `levels` outside
+ [2, 256]; `FIG_ERR_STATE` outside a window and from a task. The same in every mode.
 
 **Attributes**: recursive
 
@@ -1051,6 +1127,8 @@ flowchart TD
 Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to
  y(i) + err_high(i) (asymmetric). Read in place. Single precision.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, stat)
 ```
@@ -1076,6 +1154,7 @@ flowchart TD
   ip_error_bars_r32["ip_error_bars_r32"] --> addr_r32["addr_r32"]
   ip_error_bars_r32["ip_error_bars_r32"] --> cstr["cstr"]
   ip_error_bars_r32["ip_error_bars_r32"] --> figure_check["figure_check"]
+  ip_error_bars_r32["ip_error_bars_r32"] --> figure_refused["figure_refused"]
   ip_error_bars_r32["ip_error_bars_r32"] --> series_ok["series_ok"]
   ip_error_bars_r32["ip_error_bars_r32"] --> spec_c["spec_c"]
   style ip_error_bars_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -1085,6 +1164,8 @@ flowchart TD
 
 Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to
  y(i) + err_high(i) (asymmetric). Read in place. Double precision.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, stat)
@@ -1111,6 +1192,7 @@ flowchart TD
   ip_error_bars_r64["ip_error_bars_r64"] --> addr_r64["addr_r64"]
   ip_error_bars_r64["ip_error_bars_r64"] --> cstr["cstr"]
   ip_error_bars_r64["ip_error_bars_r64"] --> figure_check["figure_check"]
+  ip_error_bars_r64["ip_error_bars_r64"] --> figure_refused["figure_refused"]
   ip_error_bars_r64["ip_error_bars_r64"] --> series_ok["series_ok"]
   ip_error_bars_r64["ip_error_bars_r64"] --> spec_c["spec_c"]
   style ip_error_bars_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -1571,12 +1653,12 @@ flowchart TD
 
 The colormap `name` as an ImPlot id, for the `colormap` argument of `ip_heatmap` and `ip_colormap_scale`: a
  bundled map (`'cividis'`, `'batlow'`, `'cool-warm'`, ...), one of ImPlot's own (`'Viridis'`, `'Jet'`, ...) or a
- map loaded with `ip_load_colormap`; names are case-sensitive (`ip_colormap_names` lists them). `<name>_r` is the
- map reversed; `levels` gives that many discrete bands of equal width, each coloured as the map at its centre. A
- map is registered with ImPlot (`AddColormap`) at its first use, and the same id is returned after; ids hold for
- the application's life (a new `init` registers the maps again). Statuses: `FIG_ERR_ARGUMENT` for an unknown name
- or `levels` outside [2, 256], `FIG_ERR_STATE` before `init*` and from a task; the id is then -1 (and `ip_heatmap`
- refuses it). The same in every mode.
+ map loaded with `ip_load_colormap`; names are case-sensitive, their trailing blanks ignored (`ip_colormap_names`
+ lists them). `<name>_r` is the map reversed; `levels` gives that many discrete bands of equal width, each
+ coloured as the map at its centre. A map is registered with ImPlot (`AddColormap`) at its first use, and the same
+ id is returned after; ids hold for the application's life (a new `init` registers the maps again). Statuses:
+ `FIG_ERR_ARGUMENT` for an unknown name or `levels` outside [2, 256], `FIG_ERR_STATE` before `init*` and from a
+ task; the id is then -1 (and `ip_heatmap` refuses it). The same in every mode.
 
 **Attributes**: recursive
 
@@ -1638,6 +1720,7 @@ flowchart TD
   ip_drag_line_x["ip_drag_line_x"] --> drag_color["drag_color"]
   ip_drag_line_x["ip_drag_line_x"] --> drag_ok["drag_ok"]
   ip_drag_line_x["ip_drag_line_x"] --> figure_check["figure_check"]
+  ip_drag_line_x["ip_drag_line_x"] --> figure_refused["figure_refused"]
   ip_drag_line_x["ip_drag_line_x"] --> uniform["uniform"]
   style ip_drag_line_x fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1672,6 +1755,7 @@ flowchart TD
   ip_drag_line_y["ip_drag_line_y"] --> drag_color["drag_color"]
   ip_drag_line_y["ip_drag_line_y"] --> drag_ok["drag_ok"]
   ip_drag_line_y["ip_drag_line_y"] --> figure_check["figure_check"]
+  ip_drag_line_y["ip_drag_line_y"] --> figure_refused["figure_refused"]
   ip_drag_line_y["ip_drag_line_y"] --> uniform["uniform"]
   style ip_drag_line_y fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1707,6 +1791,7 @@ flowchart TD
   ip_drag_point["ip_drag_point"] --> drag_color["drag_color"]
   ip_drag_point["ip_drag_point"] --> drag_ok["drag_ok"]
   ip_drag_point["ip_drag_point"] --> figure_check["figure_check"]
+  ip_drag_point["ip_drag_point"] --> figure_refused["figure_refused"]
   ip_drag_point["ip_drag_point"] --> uniform["uniform"]
   style ip_drag_point fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

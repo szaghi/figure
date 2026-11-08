@@ -6,6 +6,8 @@ title: figure_group
 
 > figure_group, widgets that group other widgets: child regions, headers, tabs, tables, trees, id scopes, disabled blocks.
 
+ Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+
  Pairing rules (Dear ImGui's): `ig_end_tab_bar` only when `ig_begin_tab_bar` returned true, `ig_end_tab` only when
  `ig_begin_tab` returned true, `ig_end_table` only when `ig_begin_table` returned true, `ig_tree_pop` only when
  `ig_tree_node` returned true (unlike `ig_begin`/`ig_end`,
@@ -98,6 +100,8 @@ Open an id scope, by a string or an integer.
 
 Start clipping `count` rows; `item_height` [pixels] (default: measured on the first row drawn).
 
+**Attributes**: recursive
+
 ```fortran
 subroutine clipper_begin(self, count, item_height)
 ```
@@ -117,6 +121,7 @@ flowchart TD
   clipper_begin["clipper_begin"] --> fig_clipper_begin["fig_clipper_begin"]
   clipper_begin["clipper_begin"] --> fig_clipper_delete["fig_clipper_delete"]
   clipper_begin["clipper_begin"] --> fig_clipper_new["fig_clipper_new"]
+  clipper_begin["clipper_begin"] --> figure_refused["figure_refused"]
   style clipper_begin fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -165,6 +170,8 @@ flowchart TD
 
 Close the children of a node (only after `ig_tree_node` returned true).
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_tree_pop()
 ```
@@ -173,6 +180,7 @@ subroutine ig_tree_pop()
 
 ```mermaid
 flowchart TD
+  ig_tree_pop["ig_tree_pop"] --> figure_refused["figure_refused"]
   ig_tree_pop["ig_tree_pop"] --> igTreePop["igTreePop"]
   style ig_tree_pop fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -181,6 +189,8 @@ flowchart TD
 
 Open or close the next tree node (or collapsing header) from the program: the first time it is shown, or, with
  `always`, on this frame whatever its state (an "expand all" button calls it with `always` once per node).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_set_next_item_open(open, always)
@@ -197,6 +207,7 @@ subroutine ig_set_next_item_open(open, always)
 
 ```mermaid
 flowchart TD
+  ig_set_next_item_open["ig_set_next_item_open"] --> figure_refused["figure_refused"]
   ig_set_next_item_open["ig_set_next_item_open"] --> igSetNextItemOpen["igSetNextItemOpen"]
   style ig_set_next_item_open fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -204,6 +215,8 @@ flowchart TD
 ### ig_end_tab_bar
 
 End a bar of tabs (only after `ig_begin_tab_bar` returned true).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_end_tab_bar()
@@ -213,6 +226,7 @@ subroutine ig_end_tab_bar()
 
 ```mermaid
 flowchart TD
+  ig_end_tab_bar["ig_end_tab_bar"] --> figure_refused["figure_refused"]
   ig_end_tab_bar["ig_end_tab_bar"] --> igEndTabBar["igEndTabBar"]
   style ig_end_tab_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -220,6 +234,8 @@ flowchart TD
 ### ig_end_tab
 
 End the content of a tab (only after `ig_begin_tab` returned true).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_end_tab()
@@ -229,6 +245,7 @@ subroutine ig_end_tab()
 
 ```mermaid
 flowchart TD
+  ig_end_tab["ig_end_tab"] --> figure_refused["figure_refused"]
   ig_end_tab["ig_end_tab"] --> igEndTabItem["igEndTabItem"]
   style ig_end_tab fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -236,6 +253,8 @@ flowchart TD
 ### ig_end_table
 
 End a table (only after `ig_begin_table` returned true).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_end_table()
@@ -245,6 +264,7 @@ subroutine ig_end_table()
 
 ```mermaid
 flowchart TD
+  ig_end_table["ig_end_table"] --> figure_refused["figure_refused"]
   ig_end_table["ig_end_table"] --> igEndTable["igEndTable"]
   style ig_end_table fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -253,6 +273,8 @@ flowchart TD
 
 Declare the next column (before the first row): its header label and, with `width` [pixels], a fixed width
  (default: the columns share the width left).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_table_setup_column(label, width)
@@ -270,6 +292,7 @@ subroutine ig_table_setup_column(label, width)
 ```mermaid
 flowchart TD
   ig_table_setup_column["ig_table_setup_column"] --> cstr["cstr"]
+  ig_table_setup_column["ig_table_setup_column"] --> figure_refused["figure_refused"]
   ig_table_setup_column["ig_table_setup_column"] --> igTableSetupColumn["igTableSetupColumn"]
   style ig_table_setup_column fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -277,6 +300,8 @@ flowchart TD
 ### ig_table_headers_row
 
 A row with the labels of the columns declared by `ig_table_setup_column` (click a header to resize, ...).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_table_headers_row()
@@ -286,6 +311,7 @@ subroutine ig_table_headers_row()
 
 ```mermaid
 flowchart TD
+  ig_table_headers_row["ig_table_headers_row"] --> figure_refused["figure_refused"]
   ig_table_headers_row["ig_table_headers_row"] --> igTableHeadersRow["igTableHeadersRow"]
   style ig_table_headers_row fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -293,6 +319,8 @@ flowchart TD
 ### ig_table_next_row
 
 Start a new row.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_table_next_row()
@@ -302,6 +330,7 @@ subroutine ig_table_next_row()
 
 ```mermaid
 flowchart TD
+  ig_table_next_row["ig_table_next_row"] --> figure_refused["figure_refused"]
   ig_table_next_row["ig_table_next_row"] --> igTableNextRow["igTableNextRow"]
   style ig_table_next_row fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -309,6 +338,8 @@ flowchart TD
 ### ig_table_next_column
 
 Move to the next cell of the row (the first after `ig_table_next_row`); the widgets that follow go in it.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_table_next_column()
@@ -318,6 +349,7 @@ subroutine ig_table_next_column()
 
 ```mermaid
 flowchart TD
+  ig_table_next_column["ig_table_next_column"] --> figure_refused["figure_refused"]
   ig_table_next_column["ig_table_next_column"] --> igTableNextColumn["igTableNextColumn"]
   style ig_table_next_column fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -325,6 +357,8 @@ flowchart TD
 ### ig_table_set_column
 
 Move to cell `column` (1 to the number of columns) of the current row.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_table_set_column(column)
@@ -340,6 +374,7 @@ subroutine ig_table_set_column(column)
 
 ```mermaid
 flowchart TD
+  ig_table_set_column["ig_table_set_column"] --> figure_refused["figure_refused"]
   ig_table_set_column["ig_table_set_column"] --> igTableSetColumnIndex["igTableSetColumnIndex"]
   style ig_table_set_column fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -347,6 +382,8 @@ flowchart TD
 ### ig_push_id_str
 
 Open an id scope named `id`: widgets with the same label in different scopes are different widgets.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_push_id_str(id)
@@ -363,6 +400,7 @@ subroutine ig_push_id_str(id)
 ```mermaid
 flowchart TD
   ig_push_id_str["ig_push_id_str"] --> cstr["cstr"]
+  ig_push_id_str["ig_push_id_str"] --> figure_refused["figure_refused"]
   ig_push_id_str["ig_push_id_str"] --> igPushID_Str["igPushID_Str"]
   style ig_push_id_str fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -370,6 +408,8 @@ flowchart TD
 ### ig_push_id_i32
 
 Open an id scope numbered `id` (rows of a table, items of a loop).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_push_id_i32(id)
@@ -385,6 +425,7 @@ subroutine ig_push_id_i32(id)
 
 ```mermaid
 flowchart TD
+  ig_push_id_i32["ig_push_id_i32"] --> figure_refused["figure_refused"]
   ig_push_id_i32["ig_push_id_i32"] --> igPushID_Int["igPushID_Int"]
   style ig_push_id_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -392,6 +433,8 @@ flowchart TD
 ### ig_pop_id
 
 Close the id scope opened by the last `ig_push_id`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_pop_id()
@@ -401,6 +444,7 @@ subroutine ig_pop_id()
 
 ```mermaid
 flowchart TD
+  ig_pop_id["ig_pop_id"] --> figure_refused["figure_refused"]
   ig_pop_id["ig_pop_id"] --> igPopID["igPopID"]
   style ig_pop_id fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -408,6 +452,8 @@ flowchart TD
 ### ig_begin_disabled
 
 Widgets up to `ig_end_disabled` are greyed out and ignore input (when `disabled`, default true).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_begin_disabled(disabled)
@@ -423,6 +469,7 @@ subroutine ig_begin_disabled(disabled)
 
 ```mermaid
 flowchart TD
+  ig_begin_disabled["ig_begin_disabled"] --> figure_refused["figure_refused"]
   ig_begin_disabled["ig_begin_disabled"] --> igBeginDisabled["igBeginDisabled"]
   style ig_begin_disabled fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -430,6 +477,8 @@ flowchart TD
 ### ig_end_disabled
 
 End the block opened by `ig_begin_disabled`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_end_disabled()
@@ -439,6 +488,7 @@ subroutine ig_end_disabled()
 
 ```mermaid
 flowchart TD
+  ig_end_disabled["ig_end_disabled"] --> figure_refused["figure_refused"]
   ig_end_disabled["ig_end_disabled"] --> igEndDisabled["igEndDisabled"]
   style ig_end_disabled fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -448,6 +498,8 @@ flowchart TD
 ### clipper_step
 
 The next rows to draw, `self%first` to `self%last`: true while there are some (false: the clipper ended).
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -467,6 +519,7 @@ function clipper_step(self) result(more)
 flowchart TD
   clipper_step["clipper_step"] --> fig_clipper_delete["fig_clipper_delete"]
   clipper_step["clipper_step"] --> fig_clipper_step["fig_clipper_step"]
+  clipper_step["clipper_step"] --> figure_refused["figure_refused"]
   style clipper_step fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -603,6 +656,8 @@ flowchart TD
 A tab of the current bar; true when it is the selected one: draw its content, then `ig_end_tab`. With `open`,
  the tab has a close button that sets it false.
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -621,6 +676,7 @@ function ig_begin_tab(label, open) result(selected)
 ```mermaid
 flowchart TD
   ig_begin_tab["ig_begin_tab"] --> cstr["cstr"]
+  ig_begin_tab["ig_begin_tab"] --> figure_refused["figure_refused"]
   ig_begin_tab["ig_begin_tab"] --> igBeginTabItem["igBeginTabItem"]
   style ig_begin_tab fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

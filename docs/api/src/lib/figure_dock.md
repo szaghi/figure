@@ -6,6 +6,8 @@ title: figure_dock
 
 > figure_dock, docking: windows docked into one another or into a dock space, and layouts set by the program.
 
+ Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+
  Docking is on by default (`app%set_docking` turns it off): the user drags a window by its title bar onto another
  window, or onto a dock space, and drops it as a tab or a split. A dock space over the whole display is declared
  every frame with `ig_dock_space`, before the windows that dock into it. A program lays out a dock space once, the
@@ -89,6 +91,8 @@ flowchart TD
 Split the node `id` in two: `id_at_dir` takes `fraction` of it on the side `direction` (`'left'`, `'right'`,
  `'up'`, `'down'`), `id_other` the rest. Split the new nodes again for more areas.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_dock_split(id, direction, fraction, id_at_dir, id_other, stat)
 ```
@@ -111,12 +115,15 @@ flowchart TD
   ig_dock_split["ig_dock_split"] --> fig_dock_split["fig_dock_split"]
   ig_dock_split["ig_dock_split"] --> figure_check["figure_check"]
   ig_dock_split["ig_dock_split"] --> figure_fail["figure_fail"]
+  ig_dock_split["ig_dock_split"] --> figure_refused["figure_refused"]
   style ig_dock_split fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_dock_window
 
 Dock the window `name` (as passed to `ig_begin`) into the node `id` of a layout being built.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_dock_window(name, id, stat)
@@ -136,12 +143,15 @@ subroutine ig_dock_window(name, id, stat)
 flowchart TD
   ig_dock_window["ig_dock_window"] --> fig_dock_window["fig_dock_window"]
   ig_dock_window["ig_dock_window"] --> figure_check["figure_check"]
+  ig_dock_window["ig_dock_window"] --> figure_refused["figure_refused"]
   style ig_dock_window fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_dock_layout_end
 
 Finish the layout started by `ig_dock_layout_begin`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_dock_layout_end(id, stat)
@@ -160,12 +170,15 @@ subroutine ig_dock_layout_end(id, stat)
 flowchart TD
   ig_dock_layout_end["ig_dock_layout_end"] --> fig_dock_layout_end["fig_dock_layout_end"]
   ig_dock_layout_end["ig_dock_layout_end"] --> figure_check["figure_check"]
+  ig_dock_layout_end["ig_dock_layout_end"] --> figure_refused["figure_refused"]
   style ig_dock_layout_end fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_window_dock
 
 Inside a window (between `ig_begin` and `ig_end`): the dock node it is in (0 if none) and whether it is docked.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_window_dock(id, docked)
@@ -183,6 +196,7 @@ subroutine ig_window_dock(id, docked)
 ```mermaid
 flowchart TD
   ig_window_dock["ig_window_dock"] --> fig_window_dock["fig_window_dock"]
+  ig_window_dock["ig_window_dock"] --> figure_refused["figure_refused"]
   style ig_window_dock fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -190,6 +204,8 @@ flowchart TD
 
 Dock the next window (the next `ig_begin`) into the node `id`: the first time it appears (a window created after
  the layout was built), or every frame with `always`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_set_next_window_dock(id, always)
@@ -206,6 +222,7 @@ subroutine ig_set_next_window_dock(id, always)
 
 ```mermaid
 flowchart TD
+  ig_set_next_window_dock["ig_set_next_window_dock"] --> figure_refused["figure_refused"]
   ig_set_next_window_dock["ig_set_next_window_dock"] --> igSetNextWindowDockID["igSetNextWindowDockID"]
   style ig_set_next_window_dock fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -241,6 +258,8 @@ flowchart TD
 True when the dock space `id` has no layout yet (its first frame, without an ini file keeping one): then lay it
  out with `ig_dock_split` and `ig_dock_window`, and close with `ig_dock_layout_end`. Call it before `ig_dock_space`.
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -260,5 +279,6 @@ function ig_dock_layout_begin(id, stat) result(needed)
 flowchart TD
   ig_dock_layout_begin["ig_dock_layout_begin"] --> fig_dock_layout_begin["fig_dock_layout_begin"]
   ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_check["figure_check"]
+  ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_refused["figure_refused"]
   style ig_dock_layout_begin fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

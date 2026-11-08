@@ -6,6 +6,8 @@ title: figure_menu
 
 > figure_menu, menus, popups and keyboard shortcuts.
 
+ Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+
  Pairing (Dear ImGui's): each `ig_end_*` only after its `ig_begin_*` returned true. A window's own menu bar needs the
  window flag `ImGuiWindowFlags_MenuBar` in its `ig_begin`. A menu item's shortcut text is only shown: the program
  reacts to the keys with `ig_shortcut`, every frame, outside the menu (the menu is closed most of the time).
@@ -51,6 +53,8 @@ graph LR
 
 End the main menu bar (only after `ig_begin_main_menu_bar` returned true).
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_end_main_menu_bar()
 ```
@@ -59,6 +63,7 @@ subroutine ig_end_main_menu_bar()
 
 ```mermaid
 flowchart TD
+  ig_end_main_menu_bar["ig_end_main_menu_bar"] --> figure_refused["figure_refused"]
   ig_end_main_menu_bar["ig_end_main_menu_bar"] --> igEndMainMenuBar["igEndMainMenuBar"]
   style ig_end_main_menu_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -66,6 +71,8 @@ flowchart TD
 ### ig_end_menu_bar
 
 End the window's menu bar (only after `ig_begin_menu_bar` returned true).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_end_menu_bar()
@@ -75,6 +82,7 @@ subroutine ig_end_menu_bar()
 
 ```mermaid
 flowchart TD
+  ig_end_menu_bar["ig_end_menu_bar"] --> figure_refused["figure_refused"]
   ig_end_menu_bar["ig_end_menu_bar"] --> igEndMenuBar["igEndMenuBar"]
   style ig_end_menu_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -82,6 +90,8 @@ flowchart TD
 ### ig_end_menu
 
 End a menu (only after `ig_begin_menu` returned true).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_end_menu()
@@ -91,6 +101,7 @@ subroutine ig_end_menu()
 
 ```mermaid
 flowchart TD
+  ig_end_menu["ig_end_menu"] --> figure_refused["figure_refused"]
   ig_end_menu["ig_end_menu"] --> igEndMenu["igEndMenu"]
   style ig_end_menu fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -98,6 +109,8 @@ flowchart TD
 ### ig_open_popup
 
 Open the popup `id` (call once, on the event that opens it: a click, a quit request; not every frame).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_open_popup(id)
@@ -114,6 +127,7 @@ subroutine ig_open_popup(id)
 ```mermaid
 flowchart TD
   ig_open_popup["ig_open_popup"] --> cstr["cstr"]
+  ig_open_popup["ig_open_popup"] --> figure_refused["figure_refused"]
   ig_open_popup["ig_open_popup"] --> igOpenPopup_Str["igOpenPopup_Str"]
   style ig_open_popup fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -121,6 +135,8 @@ flowchart TD
 ### ig_end_popup
 
 End a popup or modal (only after its begin returned true).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_end_popup()
@@ -130,6 +146,7 @@ subroutine ig_end_popup()
 
 ```mermaid
 flowchart TD
+  ig_end_popup["ig_end_popup"] --> figure_refused["figure_refused"]
   ig_end_popup["ig_end_popup"] --> igEndPopup["igEndPopup"]
   style ig_end_popup fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -137,6 +154,8 @@ flowchart TD
 ### ig_close_current_popup
 
 Close the popup or modal being declared (call it inside, e.g. when its OK button is pressed).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_close_current_popup()
@@ -146,6 +165,7 @@ subroutine ig_close_current_popup()
 
 ```mermaid
 flowchart TD
+  ig_close_current_popup["ig_close_current_popup"] --> figure_refused["figure_refused"]
   ig_close_current_popup["ig_close_current_popup"] --> igCloseCurrentPopup["igCloseCurrentPopup"]
   style ig_close_current_popup fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -198,6 +218,8 @@ flowchart TD
 
 A menu of a menu bar (or a submenu of a menu); true while it is open: declare its items, then `ig_end_menu`.
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -216,6 +238,7 @@ function ig_begin_menu(label, enabled) result(open)
 ```mermaid
 flowchart TD
   ig_begin_menu["ig_begin_menu"] --> cstr["cstr"]
+  ig_begin_menu["ig_begin_menu"] --> figure_refused["figure_refused"]
   ig_begin_menu["ig_begin_menu"] --> igBeginMenu["igBeginMenu"]
   style ig_begin_menu fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -225,6 +248,8 @@ flowchart TD
 An item of an open menu; true on the frame it is picked (the menu then closes). `shortcut` is shown on the right
  (the keys themselves are read with `ig_shortcut`); with `selected`, the item shows a check mark and a pick toggles
  it; a disabled item (`enabled=.false.`) is greyed out and cannot be picked.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -246,6 +271,7 @@ function ig_menu_item(label, shortcut, selected, enabled) result(picked)
 ```mermaid
 flowchart TD
   ig_menu_item["ig_menu_item"] --> cstr["cstr"]
+  ig_menu_item["ig_menu_item"] --> figure_refused["figure_refused"]
   ig_menu_item["ig_menu_item"] --> igMenuItem_BoolPtr["igMenuItem_BoolPtr"]
   style ig_menu_item fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -257,6 +283,8 @@ True on the frame the key chord `keys` is pressed, e.g. `'ctrl+s'`, `'ctrl+shift
  press, not repeated while held. On macOS `ctrl` is the cmd key (Dear ImGui follows the platform), so `'ctrl+s'`
  is cmd+s there. Call it every frame, outside menus. An unknown name: false, and `FIG_ERR_ARGUMENT` in `stat` (or
  `error stop` without it).
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -277,6 +305,7 @@ function ig_shortcut(keys, stat) result(pressed)
 flowchart TD
   ig_shortcut["ig_shortcut"] --> fig_key_chord["fig_key_chord"]
   ig_shortcut["ig_shortcut"] --> figure_check["figure_check"]
+  ig_shortcut["ig_shortcut"] --> figure_refused["figure_refused"]
   ig_shortcut["ig_shortcut"] --> igIsKeyChordPressed_Nil["igIsKeyChordPressed_Nil"]
   style ig_shortcut fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

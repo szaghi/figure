@@ -667,9 +667,9 @@ Draw the view as a widget at the cursor, inside a window: `width` x `height` pix
  negative: up to that distance from its edge). It is rendered only when something changed since the last draw.
  The mouse in the view: left drag orbits, right or middle drag (or shift and left) pans, the wheel zooms, a double
  click fits. While the user moves the camera, the view is rendered at half resolution (unless `init`'s
- `fast_moves=.false.`). Modes: the same pixels in every mode; in remote mode each render is sent to the browser
- as a raw RGBA texture (`4 * width * height` bytes; a quarter of that while moving). Statuses: `FIG_ERR_STATE`
- before `init` and from a task.
+ `fast_moves=.false.`), until the button is released or a frame has no wheel step. Modes: the same pixels in every
+ mode; in remote mode each render is sent to the browser as a texture: JPEG while the camera moves, exact once it
+ is still (`init_remote`'s `lossy`). Statuses: `FIG_ERR_STATE` before `init` and from a task.
 
 **Attributes**: recursive
 

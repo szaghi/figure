@@ -6,6 +6,8 @@ title: figure_style
 
 > figure_style, every colour and variable of the Dear ImGui and ImPlot styles, by name.
 
+ Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+
  The style is global: a change applies to everything drawn afterwards, until it is changed again (or a new style is
  chosen with `app%set_style`, which resets every colour and variable). Names are the libraries' own:
 
@@ -271,6 +273,8 @@ flowchart TD
 
 Change the Dear ImGui colour `name` (`'#rrggbb'` or `'#rrggbbaa'`) until `ig_pop_style_color`.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_push_style_color_hex(name, color, stat)
 ```
@@ -287,6 +291,7 @@ subroutine ig_push_style_color_hex(name, color, stat)
 
 ```mermaid
 flowchart TD
+  ig_push_style_color_hex["ig_push_style_color_hex"] --> figure_refused["figure_refused"]
   ig_push_style_color_hex["ig_push_style_color_hex"] --> push_color_hex["push_color_hex"]
   style ig_push_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -294,6 +299,8 @@ flowchart TD
 ### ig_push_style_color_rgba
 
 Change the Dear ImGui colour `name` (`[r, g, b(, a)]` in [0, 1]) until `ig_pop_style_color`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_push_style_color_rgba(name, rgba, stat)
@@ -311,6 +318,7 @@ subroutine ig_push_style_color_rgba(name, rgba, stat)
 
 ```mermaid
 flowchart TD
+  ig_push_style_color_rgba["ig_push_style_color_rgba"] --> figure_refused["figure_refused"]
   ig_push_style_color_rgba["ig_push_style_color_rgba"] --> push_color["push_color"]
   style ig_push_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -319,6 +327,8 @@ flowchart TD
 
 Undo the `n` newest colour pushes (default 1); colours pushed by `ig_push_style_color` and `ip_push_style_color`
  share one stack.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_pop_style_color(n, stat)
@@ -335,6 +345,7 @@ subroutine ig_pop_style_color(n, stat)
 
 ```mermaid
 flowchart TD
+  ig_pop_style_color["ig_pop_style_color"] --> figure_refused["figure_refused"]
   ig_pop_style_color["ig_pop_style_color"] --> pop["pop"]
   style ig_pop_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -342,6 +353,8 @@ flowchart TD
 ### ig_push_style_var_r64
 
 Change a Dear ImGui style variable holding one number until `ig_pop_style_var`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_push_style_var_r64(name, value, stat)
@@ -359,6 +372,7 @@ subroutine ig_push_style_var_r64(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ig_push_style_var_r64["ig_push_style_var_r64"] --> figure_refused["figure_refused"]
   ig_push_style_var_r64["ig_push_style_var_r64"] --> push_var["push_var"]
   style ig_push_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -366,6 +380,8 @@ flowchart TD
 ### ig_push_style_var_vec2
 
 Change a Dear ImGui style variable holding a pair until `ig_pop_style_var`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_push_style_var_vec2(name, value, stat)
@@ -383,6 +399,7 @@ subroutine ig_push_style_var_vec2(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ig_push_style_var_vec2["ig_push_style_var_vec2"] --> figure_refused["figure_refused"]
   ig_push_style_var_vec2["ig_push_style_var_vec2"] --> push_var["push_var"]
   style ig_push_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -390,6 +407,8 @@ flowchart TD
 ### ig_push_style_var_logical
 
 Change a Dear ImGui style variable holding a logical until `ig_pop_style_var`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_push_style_var_logical(name, value, stat)
@@ -407,6 +426,7 @@ subroutine ig_push_style_var_logical(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ig_push_style_var_logical["ig_push_style_var_logical"] --> figure_refused["figure_refused"]
   ig_push_style_var_logical["ig_push_style_var_logical"] --> push_var["push_var"]
   style ig_push_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -414,6 +434,8 @@ flowchart TD
 ### ig_push_style_var_i32
 
 Change a Dear ImGui style variable holding an enumeration until `ig_pop_style_var`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_push_style_var_i32(name, value, stat)
@@ -431,6 +453,7 @@ subroutine ig_push_style_var_i32(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ig_push_style_var_i32["ig_push_style_var_i32"] --> figure_refused["figure_refused"]
   ig_push_style_var_i32["ig_push_style_var_i32"] --> push_var["push_var"]
   style ig_push_style_var_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -439,6 +462,8 @@ flowchart TD
 
 Undo the `n` newest variable pushes (default 1); variables pushed by `ig_push_style_var` and
  `ip_push_style_var` share one stack.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_pop_style_var(n, stat)
@@ -455,6 +480,7 @@ subroutine ig_pop_style_var(n, stat)
 
 ```mermaid
 flowchart TD
+  ig_pop_style_var["ig_pop_style_var"] --> figure_refused["figure_refused"]
   ig_pop_style_var["ig_pop_style_var"] --> pop["pop"]
   style ig_pop_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -462,6 +488,8 @@ flowchart TD
 ### ip_push_style_color_hex
 
 Change the ImPlot colour `name` (`'#rrggbb'` or `'#rrggbbaa'`) until `ip_pop_style_color`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_push_style_color_hex(name, color, stat)
@@ -479,6 +507,7 @@ subroutine ip_push_style_color_hex(name, color, stat)
 
 ```mermaid
 flowchart TD
+  ip_push_style_color_hex["ip_push_style_color_hex"] --> figure_refused["figure_refused"]
   ip_push_style_color_hex["ip_push_style_color_hex"] --> push_color_hex["push_color_hex"]
   style ip_push_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -486,6 +515,8 @@ flowchart TD
 ### ip_push_style_color_rgba
 
 Change the ImPlot colour `name` (`[r, g, b(, a)]` in [0, 1]) until `ip_pop_style_color`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_push_style_color_rgba(name, rgba, stat)
@@ -503,6 +534,7 @@ subroutine ip_push_style_color_rgba(name, rgba, stat)
 
 ```mermaid
 flowchart TD
+  ip_push_style_color_rgba["ip_push_style_color_rgba"] --> figure_refused["figure_refused"]
   ip_push_style_color_rgba["ip_push_style_color_rgba"] --> push_color["push_color"]
   style ip_push_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -510,6 +542,8 @@ flowchart TD
 ### ip_pop_style_color
 
 Undo the `n` newest colour pushes (default 1): the same stack as `ig_pop_style_color`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_pop_style_color(n, stat)
@@ -526,6 +560,7 @@ subroutine ip_pop_style_color(n, stat)
 
 ```mermaid
 flowchart TD
+  ip_pop_style_color["ip_pop_style_color"] --> figure_refused["figure_refused"]
   ip_pop_style_color["ip_pop_style_color"] --> pop["pop"]
   style ip_pop_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -533,6 +568,8 @@ flowchart TD
 ### ip_push_style_var_r64
 
 Change an ImPlot style variable holding one number until `ip_pop_style_var`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_push_style_var_r64(name, value, stat)
@@ -550,6 +587,7 @@ subroutine ip_push_style_var_r64(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ip_push_style_var_r64["ip_push_style_var_r64"] --> figure_refused["figure_refused"]
   ip_push_style_var_r64["ip_push_style_var_r64"] --> push_var["push_var"]
   style ip_push_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -557,6 +595,8 @@ flowchart TD
 ### ip_push_style_var_vec2
 
 Change an ImPlot style variable holding a pair until `ip_pop_style_var`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_push_style_var_vec2(name, value, stat)
@@ -574,6 +614,7 @@ subroutine ip_push_style_var_vec2(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ip_push_style_var_vec2["ip_push_style_var_vec2"] --> figure_refused["figure_refused"]
   ip_push_style_var_vec2["ip_push_style_var_vec2"] --> push_var["push_var"]
   style ip_push_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -581,6 +622,8 @@ flowchart TD
 ### ip_push_style_var_logical
 
 Change an ImPlot style variable holding a logical until `ip_pop_style_var`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_push_style_var_logical(name, value, stat)
@@ -598,6 +641,7 @@ subroutine ip_push_style_var_logical(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ip_push_style_var_logical["ip_push_style_var_logical"] --> figure_refused["figure_refused"]
   ip_push_style_var_logical["ip_push_style_var_logical"] --> push_var["push_var"]
   style ip_push_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -605,6 +649,8 @@ flowchart TD
 ### ip_pop_style_var
 
 Undo the `n` newest variable pushes (default 1): the same stack as `ig_pop_style_var`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_pop_style_var(n, stat)
@@ -621,6 +667,7 @@ subroutine ip_pop_style_var(n, stat)
 
 ```mermaid
 flowchart TD
+  ip_pop_style_var["ip_pop_style_var"] --> figure_refused["figure_refused"]
   ip_pop_style_var["ip_pop_style_var"] --> pop["pop"]
   style ip_pop_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -629,6 +676,8 @@ flowchart TD
 
 Dear ImGui's and ImPlot's style editors, in a window titled "Style editor": every colour and size, live; with
  `open`, the window has a close button that sets it false. Keep a look with `app%save_style`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_show_style_editor(open, stat)
@@ -647,6 +696,7 @@ subroutine ig_show_style_editor(open, stat)
 flowchart TD
   ig_show_style_editor["ig_show_style_editor"] --> fig_show_style_editor["fig_show_style_editor"]
   ig_show_style_editor["ig_show_style_editor"] --> figure_check["figure_check"]
+  ig_show_style_editor["ig_show_style_editor"] --> figure_refused["figure_refused"]
   style ig_show_style_editor fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -654,6 +704,8 @@ flowchart TD
 
 Switch the font and/or its size for the widgets that follow, until `ig_pop_font`: `font` as `app%set_font`
  (`''` keeps the current one), `size` in logical pixels (absent: keep). Pair every push with a pop.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_push_font(font, size, stat)
@@ -674,12 +726,15 @@ flowchart TD
   ig_push_font["ig_push_font"] --> fig_push_font["fig_push_font"]
   ig_push_font["ig_push_font"] --> figure_check["figure_check"]
   ig_push_font["ig_push_font"] --> figure_fail["figure_fail"]
+  ig_push_font["ig_push_font"] --> figure_refused["figure_refused"]
   style ig_push_font fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### ig_pop_font
 
 Back to the font before the last `ig_push_font`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_pop_font(stat)
@@ -697,6 +752,7 @@ subroutine ig_pop_font(stat)
 flowchart TD
   ig_pop_font["ig_pop_font"] --> fig_pop_font["fig_pop_font"]
   ig_pop_font["ig_pop_font"] --> figure_check["figure_check"]
+  ig_pop_font["ig_pop_font"] --> figure_refused["figure_refused"]
   style ig_pop_font fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -821,6 +877,8 @@ flowchart TD
 
 Set the Dear ImGui colour `name` (`Text`, `WindowBg`, `Button`, ...) from `'#rrggbb'` or `'#rrggbbaa'`.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_set_style_color_hex(name, color, stat)
 ```
@@ -837,6 +895,7 @@ subroutine ig_set_style_color_hex(name, color, stat)
 
 ```mermaid
 flowchart TD
+  ig_set_style_color_hex["ig_set_style_color_hex"] --> figure_refused["figure_refused"]
   ig_set_style_color_hex["ig_set_style_color_hex"] --> set_color_hex["set_color_hex"]
   style ig_set_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -844,6 +903,8 @@ flowchart TD
 ### ig_set_style_color_rgba
 
 Set the Dear ImGui colour `name` from `[r, g, b]` or `[r, g, b, a]` in [0, 1].
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_set_style_color_rgba(name, rgba, stat)
@@ -861,6 +922,7 @@ subroutine ig_set_style_color_rgba(name, rgba, stat)
 
 ```mermaid
 flowchart TD
+  ig_set_style_color_rgba["ig_set_style_color_rgba"] --> figure_refused["figure_refused"]
   ig_set_style_color_rgba["ig_set_style_color_rgba"] --> set_color["set_color"]
   style ig_set_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -868,6 +930,8 @@ flowchart TD
 ### ig_get_style_color
 
 The Dear ImGui colour `name`, as `[r, g, b, a]` in [0, 1].
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_get_style_color(name, rgba, stat)
@@ -885,6 +949,7 @@ subroutine ig_get_style_color(name, rgba, stat)
 
 ```mermaid
 flowchart TD
+  ig_get_style_color["ig_get_style_color"] --> figure_refused["figure_refused"]
   ig_get_style_color["ig_get_style_color"] --> get_color["get_color"]
   style ig_get_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -892,6 +957,8 @@ flowchart TD
 ### ip_set_style_color_hex
 
 Set the ImPlot colour `name` (`PlotBg`, `AxisGrid`, `LegendBg`, ...) from `'#rrggbb'` or `'#rrggbbaa'`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_set_style_color_hex(name, color, stat)
@@ -909,6 +976,7 @@ subroutine ip_set_style_color_hex(name, color, stat)
 
 ```mermaid
 flowchart TD
+  ip_set_style_color_hex["ip_set_style_color_hex"] --> figure_refused["figure_refused"]
   ip_set_style_color_hex["ip_set_style_color_hex"] --> set_color_hex["set_color_hex"]
   style ip_set_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -916,6 +984,8 @@ flowchart TD
 ### ip_set_style_color_rgba
 
 Set the ImPlot colour `name` from `[r, g, b]` or `[r, g, b, a]` in [0, 1].
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_set_style_color_rgba(name, rgba, stat)
@@ -933,6 +1003,7 @@ subroutine ip_set_style_color_rgba(name, rgba, stat)
 
 ```mermaid
 flowchart TD
+  ip_set_style_color_rgba["ip_set_style_color_rgba"] --> figure_refused["figure_refused"]
   ip_set_style_color_rgba["ip_set_style_color_rgba"] --> set_color["set_color"]
   style ip_set_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -941,6 +1012,8 @@ flowchart TD
 
 The ImPlot colour `name`, as `[r, g, b, a]` in [0, 1]; ImPlot's automatic colours (derived from Dear ImGui's)
  are returned as ImPlot draws them.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_get_style_color(name, rgba, stat)
@@ -958,6 +1031,7 @@ subroutine ip_get_style_color(name, rgba, stat)
 
 ```mermaid
 flowchart TD
+  ip_get_style_color["ip_get_style_color"] --> figure_refused["figure_refused"]
   ip_get_style_color["ip_get_style_color"] --> get_color["get_color"]
   style ip_get_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1029,6 +1103,8 @@ flowchart TD
 
 Set a Dear ImGui style variable holding one number (`WindowRounding`, `Alpha`, `IndentSpacing`, ...).
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_set_style_var_r64(name, value, stat)
 ```
@@ -1045,6 +1121,7 @@ subroutine ig_set_style_var_r64(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ig_set_style_var_r64["ig_set_style_var_r64"] --> figure_refused["figure_refused"]
   ig_set_style_var_r64["ig_set_style_var_r64"] --> set_var["set_var"]
   style ig_set_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1052,6 +1129,8 @@ flowchart TD
 ### ig_set_style_var_vec2
 
 Set a Dear ImGui style variable holding a pair (`WindowPadding`, `FramePadding`, `ItemSpacing`, ...).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_set_style_var_vec2(name, value, stat)
@@ -1069,6 +1148,7 @@ subroutine ig_set_style_var_vec2(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ig_set_style_var_vec2["ig_set_style_var_vec2"] --> figure_refused["figure_refused"]
   ig_set_style_var_vec2["ig_set_style_var_vec2"] --> set_var["set_var"]
   style ig_set_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1076,6 +1156,8 @@ flowchart TD
 ### ig_set_style_var_logical
 
 Set a Dear ImGui style variable holding a logical (`AntiAliasedLines`, ...).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_set_style_var_logical(name, value, stat)
@@ -1093,6 +1175,7 @@ subroutine ig_set_style_var_logical(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ig_set_style_var_logical["ig_set_style_var_logical"] --> figure_refused["figure_refused"]
   ig_set_style_var_logical["ig_set_style_var_logical"] --> set_var["set_var"]
   style ig_set_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1100,6 +1183,8 @@ flowchart TD
 ### ig_set_style_var_i32
 
 Set a Dear ImGui style variable holding an enumeration (`WindowMenuButtonPosition`, ...).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_set_style_var_i32(name, value, stat)
@@ -1117,6 +1202,7 @@ subroutine ig_set_style_var_i32(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ig_set_style_var_i32["ig_set_style_var_i32"] --> figure_refused["figure_refused"]
   ig_set_style_var_i32["ig_set_style_var_i32"] --> set_var["set_var"]
   style ig_set_style_var_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1124,6 +1210,8 @@ flowchart TD
 ### ig_get_style_var
 
 A Dear ImGui style variable: its value(s) and how many it has (1, or 2 for a pair); a logical reads 0 or 1.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_get_style_var(name, values, n, stat)
@@ -1142,6 +1230,7 @@ subroutine ig_get_style_var(name, values, n, stat)
 
 ```mermaid
 flowchart TD
+  ig_get_style_var["ig_get_style_var"] --> figure_refused["figure_refused"]
   ig_get_style_var["ig_get_style_var"] --> get_var["get_var"]
   style ig_get_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1149,6 +1238,8 @@ flowchart TD
 ### ip_set_style_var_r64
 
 Set an ImPlot style variable holding one number (`PlotBorderSize`, `MinorAlpha`, ...).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_set_style_var_r64(name, value, stat)
@@ -1166,6 +1257,7 @@ subroutine ip_set_style_var_r64(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ip_set_style_var_r64["ip_set_style_var_r64"] --> figure_refused["figure_refused"]
   ip_set_style_var_r64["ip_set_style_var_r64"] --> set_var["set_var"]
   style ip_set_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1173,6 +1265,8 @@ flowchart TD
 ### ip_set_style_var_vec2
 
 Set an ImPlot style variable holding a pair (`PlotPadding`, `MajorGridSize`, `LegendPadding`, ...).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_set_style_var_vec2(name, value, stat)
@@ -1190,6 +1284,7 @@ subroutine ip_set_style_var_vec2(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ip_set_style_var_vec2["ip_set_style_var_vec2"] --> figure_refused["figure_refused"]
   ip_set_style_var_vec2["ip_set_style_var_vec2"] --> set_var["set_var"]
   style ip_set_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1197,6 +1292,8 @@ flowchart TD
 ### ip_set_style_var_logical
 
 Set an ImPlot style variable holding a logical (`UseLocalTime`, `UseISO8601`, `Use24HourClock`).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_set_style_var_logical(name, value, stat)
@@ -1214,6 +1311,7 @@ subroutine ip_set_style_var_logical(name, value, stat)
 
 ```mermaid
 flowchart TD
+  ip_set_style_var_logical["ip_set_style_var_logical"] --> figure_refused["figure_refused"]
   ip_set_style_var_logical["ip_set_style_var_logical"] --> set_var["set_var"]
   style ip_set_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -1221,6 +1319,8 @@ flowchart TD
 ### ip_get_style_var
 
 An ImPlot style variable: its value(s) and how many it has (1, or 2 for a pair); a logical reads 0 or 1.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ip_get_style_var(name, values, n, stat)
@@ -1239,6 +1339,7 @@ subroutine ip_get_style_var(name, values, n, stat)
 
 ```mermaid
 flowchart TD
+  ip_get_style_var["ip_get_style_var"] --> figure_refused["figure_refused"]
   ip_get_style_var["ip_get_style_var"] --> get_var["get_var"]
   style ip_get_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

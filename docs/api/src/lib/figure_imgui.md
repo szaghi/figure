@@ -6,6 +6,8 @@ title: figure_imgui
 
 > figure_imgui, Dear ImGui widgets with Fortran arguments.
 
+ Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+
  Immediate mode: call the widgets every frame; each returns what happened this frame (`ig_button` is true on the
  frame it is clicked, `ig_checkbox`/`ig_slider` are true when they changed the value). Values are ordinary Fortran
  variables, updated in place: no handles, no callbacks, no `target` requirements (the C `bool*` of a checkbox is a
@@ -133,6 +135,8 @@ flowchart TD
 
 Position (and size) of the next window [pixels]: on first use only, or every frame if `always`.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_set_next_window(x, y, width, height, always)
 ```
@@ -151,6 +155,7 @@ subroutine ig_set_next_window(x, y, width, height, always)
 
 ```mermaid
 flowchart TD
+  ig_set_next_window["ig_set_next_window"] --> figure_refused["figure_refused"]
   ig_set_next_window["ig_set_next_window"] --> igSetNextWindowPos["igSetNextWindowPos"]
   ig_set_next_window["ig_set_next_window"] --> igSetNextWindowSize["igSetNextWindowSize"]
   style ig_set_next_window fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -161,6 +166,8 @@ flowchart TD
 The text that follows on this line is lowered to the text of framed widgets (fields, buttons): a label or a value
  beside fields, in a table row of fields.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_align_text_to_frame_padding()
 ```
@@ -169,6 +176,7 @@ subroutine ig_align_text_to_frame_padding()
 
 ```mermaid
 flowchart TD
+  ig_align_text_to_frame_padding["ig_align_text_to_frame_padding"] --> figure_refused["figure_refused"]
   ig_align_text_to_frame_padding["ig_align_text_to_frame_padding"] --> igAlignTextToFramePadding["igAlignTextToFramePadding"]
   style ig_align_text_to_frame_padding fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -261,6 +269,8 @@ flowchart TD
 
 A tooltip on the previous widget: `text` shows while the pointer rests on it (after Dear ImGui's usual delay).
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_tooltip(text)
 ```
@@ -276,6 +286,7 @@ subroutine ig_tooltip(text)
 ```mermaid
 flowchart TD
   ig_tooltip["ig_tooltip"] --> cstr["cstr"]
+  ig_tooltip["ig_tooltip"] --> figure_refused["figure_refused"]
   ig_tooltip["ig_tooltip"] --> igBeginItemTooltip["igBeginItemTooltip"]
   ig_tooltip["ig_tooltip"] --> igEndTooltip["igEndTooltip"]
   ig_tooltip["ig_tooltip"] --> igTextUnformatted["igTextUnformatted"]
@@ -285,6 +296,8 @@ flowchart TD
 ### ig_set_next_item_width
 
 Width of the next widget's field [pixels]; negative: up to that distance from the window's right edge.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_set_next_item_width(width)
@@ -300,6 +313,7 @@ subroutine ig_set_next_item_width(width)
 
 ```mermaid
 flowchart TD
+  ig_set_next_item_width["ig_set_next_item_width"] --> figure_refused["figure_refused"]
   ig_set_next_item_width["ig_set_next_item_width"] --> igSetNextItemWidth["igSetNextItemWidth"]
   style ig_set_next_item_width fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -307,6 +321,8 @@ flowchart TD
 ### ig_text
 
 Plain text (no formatting: compose it with Fortran internal writes).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_text(text)
@@ -323,6 +339,7 @@ subroutine ig_text(text)
 ```mermaid
 flowchart TD
   ig_text["ig_text"] --> cstr["cstr"]
+  ig_text["ig_text"] --> figure_refused["figure_refused"]
   ig_text["ig_text"] --> igTextUnformatted["igTextUnformatted"]
   style ig_text fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -331,6 +348,8 @@ flowchart TD
 
 Put the next item on the same line as the previous one; with `offset`, at that distance [pixels] from the
  window's left edge (aligned columns of labels and fields).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_same_line(offset)
@@ -346,6 +365,7 @@ subroutine ig_same_line(offset)
 
 ```mermaid
 flowchart TD
+  ig_same_line["ig_same_line"] --> figure_refused["figure_refused"]
   ig_same_line["ig_same_line"] --> igSameLine["igSameLine"]
   style ig_same_line fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -353,6 +373,8 @@ flowchart TD
 ### ig_text_wrapped
 
 Text wrapped at the right edge of the window or region (help text, long messages).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_text_wrapped(text)
@@ -369,6 +391,7 @@ subroutine ig_text_wrapped(text)
 ```mermaid
 flowchart TD
   ig_text_wrapped["ig_text_wrapped"] --> cstr["cstr"]
+  ig_text_wrapped["ig_text_wrapped"] --> figure_refused["figure_refused"]
   ig_text_wrapped["ig_text_wrapped"] --> igPopTextWrapPos["igPopTextWrapPos"]
   ig_text_wrapped["ig_text_wrapped"] --> igPushTextWrapPos["igPushTextWrapPos"]
   ig_text_wrapped["ig_text_wrapped"] --> igTextUnformatted["igTextUnformatted"]
@@ -378,6 +401,8 @@ flowchart TD
 ### ig_text_disabled
 
 Text in the style's disabled colour (a default value, a hint, something that does not apply).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_text_disabled(text)
@@ -394,6 +419,7 @@ subroutine ig_text_disabled(text)
 ```mermaid
 flowchart TD
   ig_text_disabled["ig_text_disabled"] --> cstr["cstr"]
+  ig_text_disabled["ig_text_disabled"] --> figure_refused["figure_refused"]
   ig_text_disabled["ig_text_disabled"] --> igGetStyleColorVec4["igGetStyleColorVec4"]
   ig_text_disabled["ig_text_disabled"] --> igPopStyleColor["igPopStyleColor"]
   ig_text_disabled["ig_text_disabled"] --> igPushStyleColor_Vec4["igPushStyleColor_Vec4"]
@@ -405,6 +431,8 @@ flowchart TD
 
 Text in `color` ([r, g, b] or [r, g, b, a] in [0, 1]); pair a colour with a mark or a word (an error marker), so
  that it does not rest on colour alone.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_text_colored(text, color)
@@ -422,6 +450,7 @@ subroutine ig_text_colored(text, color)
 ```mermaid
 flowchart TD
   ig_text_colored["ig_text_colored"] --> cstr["cstr"]
+  ig_text_colored["ig_text_colored"] --> figure_refused["figure_refused"]
   ig_text_colored["ig_text_colored"] --> igPopStyleColor["igPopStyleColor"]
   ig_text_colored["ig_text_colored"] --> igPushStyleColor_Vec4["igPushStyleColor_Vec4"]
   ig_text_colored["ig_text_colored"] --> igTextUnformatted["igTextUnformatted"]
@@ -434,6 +463,8 @@ A progress bar (`ProgressBar`), `fraction` of it filled, in [0, 1] (clamped); `f
  indeterminate bar, a band sliding along it (animated by FIGURE with the frame clock: draw it every frame).
  `label` is written over it (default: the percentage; none for an indeterminate bar); `width` [pixels] (default:
  the width left; negative: up to that distance from the right edge). The same in every mode.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_progress_bar(fraction, label, width)
@@ -452,6 +483,7 @@ subroutine ig_progress_bar(fraction, label, width)
 ```mermaid
 flowchart TD
   ig_progress_bar["ig_progress_bar"] --> cstr["cstr"]
+  ig_progress_bar["ig_progress_bar"] --> figure_refused["figure_refused"]
   ig_progress_bar["ig_progress_bar"] --> igGetTime["igGetTime"]
   ig_progress_bar["ig_progress_bar"] --> igProgressBar["igProgressBar"]
   style ig_progress_bar fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -461,6 +493,8 @@ flowchart TD
 
 Horizontal separator.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine ig_separator()
 ```
@@ -469,6 +503,7 @@ subroutine ig_separator()
 
 ```mermaid
 flowchart TD
+  ig_separator["ig_separator"] --> figure_refused["figure_refused"]
   ig_separator["ig_separator"] --> igSeparator["igSeparator"]
   style ig_separator fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -476,6 +511,8 @@ flowchart TD
 ### ig_show_demo_window
 
 The Dear ImGui demo window (a live catalogue of every widget).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_show_demo_window(open)
@@ -491,6 +528,7 @@ subroutine ig_show_demo_window(open)
 
 ```mermaid
 flowchart TD
+  ig_show_demo_window["ig_show_demo_window"] --> figure_refused["figure_refused"]
   ig_show_demo_window["ig_show_demo_window"] --> igShowDemoWindow["igShowDemoWindow"]
   style ig_show_demo_window fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -498,6 +536,8 @@ flowchart TD
 ### ig_item_rect
 
 Screen rectangle of the last item [pixels] (tests, custom layout).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_item_rect(xmin, ymin, xmax, ymax)
@@ -517,6 +557,7 @@ subroutine ig_item_rect(xmin, ymin, xmax, ymax)
 ```mermaid
 flowchart TD
   test_item_center["test_item_center"] --> ig_item_rect["ig_item_rect"]
+  ig_item_rect["ig_item_rect"] --> figure_refused["figure_refused"]
   ig_item_rect["ig_item_rect"] --> igGetItemRectMax["igGetItemRectMax"]
   ig_item_rect["ig_item_rect"] --> igGetItemRectMin["igGetItemRectMin"]
   style ig_item_rect fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -526,6 +567,8 @@ flowchart TD
 
 A texture, pixel row 1 at the top (screen and image-file convention), `width` x `height` pixels (default: the
  texture's size).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine ig_image(tex, width, height)
@@ -544,6 +587,7 @@ subroutine ig_image(tex, width, height)
 ```mermaid
 flowchart TD
   ig_image["ig_image"] --> fig_texture_sampling["fig_texture_sampling"]
+  ig_image["ig_image"] --> figure_refused["figure_refused"]
   ig_image["ig_image"] --> height["height"]
   ig_image["ig_image"] --> igImage["igImage"]
   ig_image["ig_image"] --> texture_ref["texture_ref"]
@@ -624,6 +668,8 @@ Bring window `name` forward and give it the keyboard (a docked window: its tab i
  modal is open, since focusing another window would close it: then nothing happens and the result is false; ask
  again on a later frame. A window not drawn yet (this frame or before) is not found: ask after its `ig_begin`.
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -641,6 +687,7 @@ function ig_focus_window(name) result(focused)
 ```mermaid
 flowchart TD
   ig_focus_window["ig_focus_window"] --> cstr["cstr"]
+  ig_focus_window["ig_focus_window"] --> figure_refused["figure_refused"]
   ig_focus_window["ig_focus_window"] --> igIsPopupOpen_Str["igIsPopupOpen_Str"]
   ig_focus_window["ig_focus_window"] --> igSetWindowFocus_Str["igSetWindowFocus_Str"]
   style ig_focus_window fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -649,6 +696,8 @@ flowchart TD
 ### ig_button
 
 A button; true on the frame it is clicked.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -669,6 +718,7 @@ function ig_button(label, width, height) result(pressed)
 ```mermaid
 flowchart TD
   ig_button["ig_button"] --> cstr["cstr"]
+  ig_button["ig_button"] --> figure_refused["figure_refused"]
   ig_button["ig_button"] --> igButton["igButton"]
   style ig_button fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -681,6 +731,8 @@ A workspace button, as Fusion 360's: `icon` (an `ICON_*`) above `label`, larger 
  label (at least 4.6 font sizes) and tall enough for the icon (1.8 font sizes) above the label. The text before
  `##` is shown, all of `label` is the id. True on the frame it is clicked; `ig_tooltip` and `ig_item_rect` apply to
  it as to any widget.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -704,6 +756,7 @@ function ig_tool_button(label, icon, width, height, selected, accent) result(cli
 ```mermaid
 flowchart TD
   ig_tool_button["ig_tool_button"] --> fig_tool_button["fig_tool_button"]
+  ig_tool_button["ig_tool_button"] --> figure_refused["figure_refused"]
   style ig_tool_button fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -711,6 +764,8 @@ flowchart TD
 
 The size a text takes in the current font [pixels]: width and height (the text before `##` when it is a label):
  buttons of one width, a column as wide as its longest value.
+
+**Attributes**: recursive
 
 **Returns**: `real(kind=real64)`
 
@@ -729,6 +784,7 @@ function ig_text_size(text) result(extent)
 ```mermaid
 flowchart TD
   ig_text_size["ig_text_size"] --> cstr["cstr"]
+  ig_text_size["ig_text_size"] --> figure_refused["figure_refused"]
   ig_text_size["ig_text_size"] --> igCalcTextSize["igCalcTextSize"]
   style ig_text_size fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -736,6 +792,8 @@ flowchart TD
 ### ig_checkbox
 
 A check box bound to `value`; true when the user toggled it.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -755,6 +813,7 @@ function ig_checkbox(label, value) result(changed)
 ```mermaid
 flowchart TD
   ig_checkbox["ig_checkbox"] --> cstr["cstr"]
+  ig_checkbox["ig_checkbox"] --> figure_refused["figure_refused"]
   ig_checkbox["ig_checkbox"] --> igCheckbox["igCheckbox"]
   style ig_checkbox fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -762,6 +821,8 @@ flowchart TD
 ### ig_slider_i32
 
 Integer slider; true when the user changed `value`.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -783,6 +844,7 @@ function ig_slider_i32(label, value, vmin, vmax) result(changed)
 ```mermaid
 flowchart TD
   ig_slider_i32["ig_slider_i32"] --> cstr["cstr"]
+  ig_slider_i32["ig_slider_i32"] --> figure_refused["figure_refused"]
   ig_slider_i32["ig_slider_i32"] --> igSliderScalar["igSliderScalar"]
   style ig_slider_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -790,6 +852,8 @@ flowchart TD
 ### ig_slider_r32
 
 Single-precision slider; true when the user changed `value`.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -811,6 +875,7 @@ function ig_slider_r32(label, value, vmin, vmax) result(changed)
 ```mermaid
 flowchart TD
   ig_slider_r32["ig_slider_r32"] --> cstr["cstr"]
+  ig_slider_r32["ig_slider_r32"] --> figure_refused["figure_refused"]
   ig_slider_r32["ig_slider_r32"] --> igSliderScalar["igSliderScalar"]
   style ig_slider_r32 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -818,6 +883,8 @@ flowchart TD
 ### ig_slider_r64
 
 Double-precision slider; true when the user changed `value`.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -839,6 +906,7 @@ function ig_slider_r64(label, value, vmin, vmax) result(changed)
 ```mermaid
 flowchart TD
   ig_slider_r64["ig_slider_r64"] --> cstr["cstr"]
+  ig_slider_r64["ig_slider_r64"] --> figure_refused["figure_refused"]
   ig_slider_r64["ig_slider_r64"] --> igSliderScalar["igSliderScalar"]
   style ig_slider_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -846,6 +914,8 @@ flowchart TD
 ### ig_input_r64
 
 Numeric input field for a real value; true when the user changed it.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -867,6 +937,7 @@ function ig_input_r64(label, value, step, format) result(changed)
 ```mermaid
 flowchart TD
   ig_input_r64["ig_input_r64"] --> cstr["cstr"]
+  ig_input_r64["ig_input_r64"] --> figure_refused["figure_refused"]
   ig_input_r64["ig_input_r64"] --> igInputDouble["igInputDouble"]
   style ig_input_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -874,6 +945,8 @@ flowchart TD
 ### ig_input_i32
 
 Numeric input field for an integer value; true when the user changed it.
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -894,6 +967,7 @@ function ig_input_i32(label, value, step) result(changed)
 ```mermaid
 flowchart TD
   ig_input_i32["ig_input_i32"] --> cstr["cstr"]
+  ig_input_i32["ig_input_i32"] --> figure_refused["figure_refused"]
   ig_input_i32["ig_input_i32"] --> igInputInt["igInputInt"]
   style ig_input_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -904,6 +978,8 @@ A text field bound to `value`; true when the user edited it. The text can be as 
  the field's capacity); trailing blanks are not part of the text (Fortran pads with them). `hint` is shown while
  the field is empty; `flags` combine `ImGuiInputTextFlags_*` with `ior` (`CharsNoBlank`, `CharsDecimal`,
  `CharsScientific`, `ReadOnly`, `EnterReturnsTrue`, ...).
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -925,6 +1001,7 @@ function ig_input_text(label, value, hint, flags) result(changed)
 ```mermaid
 flowchart TD
   ig_input_text["ig_input_text"] --> fig_widget_input_text["fig_widget_input_text"]
+  ig_input_text["ig_input_text"] --> figure_refused["figure_refused"]
   style ig_input_text fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -1088,6 +1165,8 @@ flowchart TD
 A drop-down list of `items`; `current` is the index of the one chosen (1 to `size(items)`; any other value shows
  none chosen). True on the frame the user picks an item (`current` is then its index).
 
+**Attributes**: recursive
+
 **Returns**: `logical`
 
 ```fortran
@@ -1107,6 +1186,7 @@ function ig_combo(label, current, items) result(changed)
 ```mermaid
 flowchart TD
   ig_combo["ig_combo"] --> cstr["cstr"]
+  ig_combo["ig_combo"] --> figure_refused["figure_refused"]
   ig_combo["ig_combo"] --> igBeginCombo["igBeginCombo"]
   ig_combo["ig_combo"] --> igEndCombo["igEndCombo"]
   ig_combo["ig_combo"] --> igPopID["igPopID"]
@@ -1120,6 +1200,8 @@ flowchart TD
 
 A line of a list, highlighted when `selected`; true on the frame it is clicked (the program then updates what is
  selected: the line does not change `selected` itself).
+
+**Attributes**: recursive
 
 **Returns**: `logical`
 
@@ -1139,6 +1221,7 @@ function ig_selectable(label, selected) result(clicked)
 ```mermaid
 flowchart TD
   ig_selectable["ig_selectable"] --> cstr["cstr"]
+  ig_selectable["ig_selectable"] --> figure_refused["figure_refused"]
   ig_selectable["ig_selectable"] --> igSelectable_Bool["igSelectable_Bool"]
   style ig_selectable fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```

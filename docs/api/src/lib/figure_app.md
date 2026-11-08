@@ -66,6 +66,7 @@ graph LR
 - [save_layout](#save-layout)
 - [load_layout](#load-layout)
 - [destroy](#destroy)
+- [show_dialog](#show-dialog)
 - [show_file_dialog](#show-file-dialog)
 - [show_file_browser](#show-file-browser)
 - [frame_options](#frame-options)
@@ -147,6 +148,8 @@ Open the window (`width` x `height` logical pixels) and create the ImGui/ImPlot 
  its edges resize it, a double-click on it maximizes; close takes the quit path of the system's close button
  (`set_confirm_quit`). `buttons` puts them on the `'right'` (the default) or the `'left'` (the default on macOS).
 
+**Attributes**: recursive
+
 ```fortran
 subroutine init(self, title, width, height, vsync, stat, ini_file, decorations, buttons)
 ```
@@ -172,6 +175,7 @@ flowchart TD
   init["init"] --> fig_init["fig_init"]
   init["init"] --> fig_set_ini_file["fig_set_ini_file"]
   init["init"] --> figure_check["figure_check"]
+  init["init"] --> figure_refused["figure_refused"]
   init["init"] --> frame_options["frame_options"]
   style init fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -182,6 +186,8 @@ Create the contexts on a virtual `width` x `height` display, without window or G
 
  `decorations='figure'` draws the title bar of `init`'s `decorations='figure'` as in a window, for tests: its
  buttons' actions are recorded as state (`test_frame_state`), close takes the quit path.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine init_headless(self, width, height, stat, decorations, buttons)
@@ -204,6 +210,7 @@ subroutine init_headless(self, width, height, stat, decorations, buttons)
 flowchart TD
   init_headless["init_headless"] --> fig_init_headless["fig_init_headless"]
   init_headless["init_headless"] --> figure_check["figure_check"]
+  init_headless["init_headless"] --> figure_refused["figure_refused"]
   init_headless["init_headless"] --> frame_options["frame_options"]
   style init_headless fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
@@ -213,6 +220,8 @@ flowchart TD
 The window's icon (task bar, dock, the title bar of `decorations='figure'`) from an image, `image(4, width,
  height)`: `image(:, i, j)` = R, G, B, A of pixel (i, j), j = 1 the top row. Window mode only; 1 to 1024 pixels a
  side (64 x 64 or 256 x 256 are usual).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine set_icon_image(self, image, stat)
@@ -233,6 +242,7 @@ flowchart TD
   set_icon_image["set_icon_image"] --> fig_set_icon_rgba["fig_set_icon_rgba"]
   set_icon_image["set_icon_image"] --> figure_check["figure_check"]
   set_icon_image["set_icon_image"] --> figure_fail["figure_fail"]
+  set_icon_image["set_icon_image"] --> figure_refused["figure_refused"]
   style set_icon_image fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -241,6 +251,8 @@ flowchart TD
 The window's icon from one of the bundled icons, `ICON_*`: rendered at 64 x 64 pixels in the palette's text on
  accent colour on a rounded square of its accent; the title bar of `decorations='figure'` shows the glyph in the
  accent colour. Window mode only.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine set_icon_glyph(self, icon, stat)
@@ -260,6 +272,7 @@ subroutine set_icon_glyph(self, icon, stat)
 flowchart TD
   set_icon_glyph["set_icon_glyph"] --> fig_set_icon_glyph["fig_set_icon_glyph"]
   set_icon_glyph["set_icon_glyph"] --> figure_check["figure_check"]
+  set_icon_glyph["set_icon_glyph"] --> figure_refused["figure_refused"]
   style set_icon_glyph fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -277,9 +290,14 @@ Create the contexts and serve the UI to a web browser on `http://host:port/` ins
  are skipped. A frame equal to the last one sent is not sent again. Vertices travel in 12 bytes instead of 20, and
  `compress` deflates frames and textures: `'auto'` (default) while the client is the bottleneck (frames are being
  skipped), `'always'`, or `'never'`; deflate costs about 7 ms of CPU per MB and shrinks frames 2.5 to 3.5 times.
+ With `lossy` (default true) an image updated in consecutive frames (a 3-D view while the camera moves) travels as
+ JPEG at quality 75 while it changes, 30 to 190 times smaller than raw, and exact once it has not changed for
+ 150 ms; `lossy=.false.` always sends exact pixels. Images with transparent pixels always go exact.
+
+**Attributes**: recursive
 
 ```fortran
-subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, token, url, stat)
+subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, lossy, token, url, stat)
 ```
 
 **Arguments**
@@ -295,6 +313,7 @@ subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fp
 | `quiet` | logical | in | optional | Do not print the address to open (default false). |
 | `max_fps` | real(kind=real64) | in | optional | Most frames per second (default 60; 0: no cap). |
 | `compress` | character(len=*) | in | optional | Deflate frames and textures: 'auto', 'always', 'never'. |
+| `lossy` | logical | in | optional | Changing images as JPEG, exact when still (default true). |
 | `token` | character(len=*) | in | optional | Access token (default: random; '': none). |
 | `url` | character(len=*) | out | optional | The address to open, with the token (blank-padded). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
@@ -307,9 +326,11 @@ flowchart TD
   init_remote["init_remote"] --> fig_remote_token["fig_remote_token"]
   init_remote["init_remote"] --> fig_set_remote_compress["fig_set_remote_compress"]
   init_remote["init_remote"] --> fig_set_remote_fps["fig_set_remote_fps"]
+  init_remote["init_remote"] --> fig_set_remote_lossy["fig_set_remote_lossy"]
   init_remote["init_remote"] --> fig_set_remote_token["fig_set_remote_token"]
   init_remote["init_remote"] --> figure_check["figure_check"]
   init_remote["init_remote"] --> figure_fail["figure_fail"]
+  init_remote["init_remote"] --> figure_refused["figure_refused"]
   style init_remote fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -362,6 +383,8 @@ The style of the interface, the plots and the window's background, after `init*`
  picks the style at initialisation; this call overrides it. The font and its size are kept; colours and variables
  changed by name are reset by the part that sets them.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine set_style(self, name, lines, stat, look, palette, auto_dark, auto_light)
 ```
@@ -385,6 +408,7 @@ subroutine set_style(self, name, lines, stat, look, palette, auto_dark, auto_lig
 flowchart TD
   set_style["set_style"] --> fig_set_style_parts["fig_set_style_parts"]
   set_style["set_style"] --> figure_check["figure_check"]
+  set_style["set_style"] --> figure_refused["figure_refused"]
   set_style["set_style"] --> opt["opt"]
   set_style["set_style"] --> opt_len["opt_len"]
   style set_style fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -398,6 +422,8 @@ The colour of a palette role in effect, as `[r, g, b, a]` in [0, 1]: `'backgroun
  file without one), the roles are read from Dear ImGui's colours (`WindowBg`, `FrameBg`, `Button`, `Border`,
  `Text`, `TextDisabled`, `CheckMark`, `Header`), and success, warning and error are Okabe and Ito's bluish green,
  orange and vermilion. After `init*`; the same in every mode.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine palette_color(self, role, rgba, stat)
@@ -418,6 +444,7 @@ subroutine palette_color(self, role, rgba, stat)
 flowchart TD
   palette_color["palette_color"] --> fig_palette_color["fig_palette_color"]
   palette_color["palette_color"] --> figure_check["figure_check"]
+  palette_color["palette_color"] --> figure_refused["figure_refused"]
   style palette_color fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -465,6 +492,8 @@ The notifications kept, the last 100, oldest first: their texts (`list`, padded 
  their kinds (`'info'`, ...) and whether each is still shown (not yet timed out or dismissed). None before
  `init*`.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine notifications(self, list, kinds, shown)
 ```
@@ -484,6 +513,7 @@ subroutine notifications(self, list, kinds, shown)
 flowchart TD
   notifications["notifications"] --> fig_notification_count["fig_notification_count"]
   notifications["notifications"] --> fig_notification_get["fig_notification_get"]
+  notifications["notifications"] --> figure_refused["figure_refused"]
   style notifications fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -493,6 +523,8 @@ The default font of the interface, after `init*`: `'plex-sans'` (IBM Plex Sans, 
  logical pixels), `'plex-mono'` (IBM Plex Mono, bundled: monospace, every character as wide), `'proggy'` (Dear
  ImGui's own 13-pixel bitmap font), or the path of a TrueType/OpenType file; `size` in logical pixels (multiplied
  by the display's content scale), kept if absent.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine set_font(self, font, size, stat)
@@ -514,6 +546,7 @@ flowchart TD
   set_font["set_font"] --> fig_set_font["fig_set_font"]
   set_font["set_font"] --> figure_check["figure_check"]
   set_font["set_font"] --> figure_fail["figure_fail"]
+  set_font["set_font"] --> figure_refused["figure_refused"]
   style set_font fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -521,6 +554,8 @@ flowchart TD
 
 Apply a theme file (the format of the files in `themes/`: docs, Styles, Theme files), after `init*`. Sizes in the
  file are logical pixels; what the file does not set comes from its `base`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine load_style(self, file, stat)
@@ -540,6 +575,7 @@ subroutine load_style(self, file, stat)
 flowchart TD
   load_style["load_style"] --> fig_load_style["fig_load_style"]
   load_style["load_style"] --> figure_check["figure_check"]
+  load_style["load_style"] --> figure_refused["figure_refused"]
   style load_style fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -548,6 +584,8 @@ flowchart TD
 Write the style in effect as a theme file: its base, background, line colours, and every colour and variable
  that differs from the base (sizes in logical pixels; colours as 8-bit hex, alphas exact). Changes made by name
  or in the style editor (`ig_show_style_editor`) are kept; `load_style` reads the file back.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine save_style(self, file, stat)
@@ -567,6 +605,7 @@ subroutine save_style(self, file, stat)
 flowchart TD
   save_style["save_style"] --> fig_save_style["fig_save_style"]
   save_style["save_style"] --> figure_check["figure_check"]
+  save_style["save_style"] --> figure_refused["figure_refused"]
   style save_style fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -574,6 +613,8 @@ flowchart TD
 
 Docking on (the default since `init*`) or off: with docking on, a window dragged by its title bar docks into
  another window or into a dock space (`ig_dock_space`). After `init*`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine set_docking(self, enabled, stat)
@@ -593,6 +634,7 @@ subroutine set_docking(self, enabled, stat)
 flowchart TD
   set_docking["set_docking"] --> fig_set_docking["fig_set_docking"]
   set_docking["set_docking"] --> figure_check["figure_check"]
+  set_docking["set_docking"] --> figure_refused["figure_refused"]
   style set_docking fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -670,6 +712,8 @@ flowchart TD
 The window's title, after `init`: the document being edited and a mark when it has changes, for example. Shown in
  window mode; in remote and headless modes it is kept (read back by `title`) and nothing shows it.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine set_title(self, text, stat)
 ```
@@ -688,6 +732,7 @@ subroutine set_title(self, text, stat)
 flowchart TD
   set_title["set_title"] --> fig_set_title["fig_set_title"]
   set_title["set_title"] --> figure_check["figure_check"]
+  set_title["set_title"] --> figure_refused["figure_refused"]
   style set_title fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -697,9 +742,14 @@ Show the system's dialog to choose a file to open. It does not block: the interf
  is read with `file_dialog_result(id, ...)` on the following frames. `filters`: entries `'name|pattern'`, the
  pattern being extensions separated by `;` (`'Input files|input;inp'`, `'All files|*'`). Window mode only:
  `FIG_ERR_STATE` in remote and headless modes (FIGURE's own browser, `open_file_browser`, works there).
+ `prefer='figure'` opens FIGURE's browser instead (`open_file_browser`), in every mode, answered the same way;
+ `'system'` (default) the system's dialog. Statuses: as the dialog or the browser opened; `FIG_ERR_ARGUMENT` for
+ another `prefer`.
+
+**Attributes**: recursive
 
 ```fortran
-subroutine open_file_dialog(self, id, filters, default_path, stat)
+subroutine open_file_dialog(self, id, filters, default_path, stat, prefer)
 ```
 
 **Arguments**
@@ -711,21 +761,25 @@ subroutine open_file_dialog(self, id, filters, default_path, stat)
 | `filters` | character(len=*) | in | optional | File type filters. |
 | `default_path` | character(len=*) | in | optional | Folder or file to start from (relative: to the |
 | `stat` | integer(kind=int32) | out | optional | Status. |
+| `prefer` | character(len=*) | in | optional | `'system'` (default) or `'figure'`: FIGURE's browser. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
-  open_file_dialog["open_file_dialog"] --> show_file_dialog["show_file_dialog"]
+  open_file_dialog["open_file_dialog"] --> show_dialog["show_dialog"]
   style open_file_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### save_file_dialog
 
-Show the system's dialog to choose where to save (a new or an existing file); as `open_file_dialog`.
+Show the system's dialog to choose where to save (a new or an existing file); as `open_file_dialog`
+ (`prefer='figure'`: FIGURE's browser, `save_file_browser`).
+
+**Attributes**: recursive
 
 ```fortran
-subroutine save_file_dialog(self, id, filters, default_path, stat)
+subroutine save_file_dialog(self, id, filters, default_path, stat, prefer)
 ```
 
 **Arguments**
@@ -737,21 +791,25 @@ subroutine save_file_dialog(self, id, filters, default_path, stat)
 | `filters` | character(len=*) | in | optional | File type filters. |
 | `default_path` | character(len=*) | in | optional | Folder or file to start from (relative: to the |
 | `stat` | integer(kind=int32) | out | optional | Status. |
+| `prefer` | character(len=*) | in | optional | `'system'` (default) or `'figure'`: FIGURE's browser. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
-  save_file_dialog["save_file_dialog"] --> show_file_dialog["show_file_dialog"]
+  save_file_dialog["save_file_dialog"] --> show_dialog["show_dialog"]
   style save_file_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### open_folder_dialog
 
-Show the system's dialog to choose a folder; as `open_file_dialog`.
+Show the system's dialog to choose a folder; as `open_file_dialog` (`prefer='figure'`: FIGURE's browser,
+ `open_file_browser` with `folders=.true.`).
+
+**Attributes**: recursive
 
 ```fortran
-subroutine open_folder_dialog(self, id, default_path, stat)
+subroutine open_folder_dialog(self, id, default_path, stat, prefer)
 ```
 
 **Arguments**
@@ -762,12 +820,13 @@ subroutine open_folder_dialog(self, id, default_path, stat)
 | `id` | character(len=*) | in |  | Dialog id. |
 | `default_path` | character(len=*) | in | optional | Folder to start from (relative: to the working |
 | `stat` | integer(kind=int32) | out | optional | Status. |
+| `prefer` | character(len=*) | in | optional | `'system'` (default) or `'figure'`: FIGURE's browser. |
 
 **Call graph**
 
 ```mermaid
 flowchart TD
-  open_folder_dialog["open_folder_dialog"] --> show_file_dialog["show_file_dialog"]
+  open_folder_dialog["open_folder_dialog"] --> show_dialog["show_dialog"]
   style open_folder_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -848,6 +907,8 @@ The answer to the dialog or the browser `id`: `done` false while it is open; onc
  then the id is free again, and until the next dialog `done` is false: poll it every frame. A dialog that failed
  (Linux without a portal or zenity) gives `done` true and `FIG_ERR_FAILED` with the reason.
 
+**Attributes**: recursive
+
 ```fortran
 subroutine file_dialog_result(self, id, path, done, cancelled, stat)
 ```
@@ -869,6 +930,7 @@ subroutine file_dialog_result(self, id, path, done, cancelled, stat)
 flowchart TD
   file_dialog_result["file_dialog_result"] --> fig_file_dialog_result["fig_file_dialog_result"]
   file_dialog_result["file_dialog_result"] --> figure_check["figure_check"]
+  file_dialog_result["file_dialog_result"] --> figure_refused["figure_refused"]
   style file_dialog_result fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -879,6 +941,8 @@ Write the rectangle (xmin, ymin)-(xmax, ymax) of the window [logical pixels, as 
  Ask for it outside the frame in which a menu or popup covers the rectangle (they would be in the picture).
  The outcome comes once, from `image_result`. Window mode only: in remote and headless modes there are no
  pixels on the program's side, `FIG_ERR_STATE`; an empty rectangle or file name, `FIG_ERR_ARGUMENT`.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine save_image(self, path, xmin, ymin, xmax, ymax, stat)
@@ -902,6 +966,7 @@ subroutine save_image(self, path, xmin, ymin, xmax, ymax, stat)
 flowchart TD
   save_image["save_image"] --> fig_save_image["fig_save_image"]
   save_image["save_image"] --> figure_check["figure_check"]
+  save_image["save_image"] --> figure_refused["figure_refused"]
   style save_image fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -909,6 +974,8 @@ flowchart TD
 
 The outcome of `save_image`, once, after the frame that wrote it: `done` true and the file `path`, or
  `FIG_ERR_FAILED` with the reason (the file cannot be written). `done` false before and after: poll it every frame.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine image_result(self, path, done, stat)
@@ -929,6 +996,7 @@ subroutine image_result(self, path, done, stat)
 flowchart TD
   image_result["image_result"] --> fig_image_result["fig_image_result"]
   image_result["image_result"] --> figure_check["figure_check"]
+  image_result["image_result"] --> figure_refused["figure_refused"]
   style image_result fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -939,6 +1007,8 @@ Write the layout to `path`: the windows' positions, sizes and docking (the dock 
  those read before. `comment` (lines separated by `new_line('a')`) is written first, each line led by '; ', which
  `load_layout` skips: the program's own state (the windows it opens on demand, say) for itself to read back.
  Any mode. `FIG_ERR_FAILED` if the file cannot be written.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine save_layout(self, path, comment, stat)
@@ -959,6 +1029,7 @@ subroutine save_layout(self, path, comment, stat)
 flowchart TD
   save_layout["save_layout"] --> fig_save_layout["fig_save_layout"]
   save_layout["save_layout"] --> figure_check["figure_check"]
+  save_layout["save_layout"] --> figure_refused["figure_refused"]
   style save_layout fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -969,6 +1040,8 @@ Read a layout written by `save_layout` (or an ini file of Dear ImGui), applied b
  their saved position, size and dock; the others take theirs when they appear. A program that lays out its dock
  space with `ig_dock_layout_begin` should not lay it out again: the dock space has a layout again (the same id as
  when saved). `FIG_ERR_FAILED` if the file cannot be read, `FIG_ERR_ARGUMENT` if it holds no layout.
+
+**Attributes**: recursive
 
 ```fortran
 subroutine load_layout(self, path, stat)
@@ -988,12 +1061,15 @@ subroutine load_layout(self, path, stat)
 flowchart TD
   load_layout["load_layout"] --> fig_load_layout["fig_load_layout"]
   load_layout["load_layout"] --> figure_check["figure_check"]
+  load_layout["load_layout"] --> figure_refused["figure_refused"]
   style load_layout fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### destroy
 
 Close the window and destroy the contexts (safe in any state).
+
+**Attributes**: recursive
 
 ```fortran
 subroutine destroy(self)
@@ -1012,7 +1088,44 @@ flowchart TD
   init["init"] --> destroy["destroy"]
   init["init"] --> destroy["destroy"]
   destroy["destroy"] --> fig_shutdown["fig_shutdown"]
+  destroy["destroy"] --> figure_refused["figure_refused"]
   style destroy fill:#3e63dd,stroke:#99b,stroke-width:2px
+```
+
+### show_dialog
+
+The system's dialog of `kind` (0 open, 1 save, 2 folder) or, with `prefer='figure'`, FIGURE's browser of that kind.
+
+**Attributes**: recursive
+
+```fortran
+subroutine show_dialog(kind, who, id, filters, default_path, prefer, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `kind` | integer(kind=c_int) | in |  | Kind. |
+| `who` | character(len=*) | in |  | The entry point, for messages. |
+| `id` | character(len=*) | in |  | Dialog id. |
+| `filters` | character(len=*) | in | optional | 'name\|pattern' entries. |
+| `default_path` | character(len=*) | in | optional | Where to start. |
+| `prefer` | character(len=*) | in | optional | 'system' or 'figure'. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart TD
+  open_file_dialog["open_file_dialog"] --> show_dialog["show_dialog"]
+  open_folder_dialog["open_folder_dialog"] --> show_dialog["show_dialog"]
+  save_file_dialog["save_file_dialog"] --> show_dialog["show_dialog"]
+  show_dialog["show_dialog"] --> figure_fail["figure_fail"]
+  show_dialog["show_dialog"] --> figure_refused["figure_refused"]
+  show_dialog["show_dialog"] --> show_file_browser["show_file_browser"]
+  show_dialog["show_dialog"] --> show_file_dialog["show_file_dialog"]
+  style show_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
 ### show_file_dialog
@@ -1037,9 +1150,7 @@ subroutine show_file_dialog(kind, id, filters, default_path, stat)
 
 ```mermaid
 flowchart TD
-  open_file_dialog["open_file_dialog"] --> show_file_dialog["show_file_dialog"]
-  open_folder_dialog["open_folder_dialog"] --> show_file_dialog["show_file_dialog"]
-  save_file_dialog["save_file_dialog"] --> show_file_dialog["show_file_dialog"]
+  show_dialog["show_dialog"] --> show_file_dialog["show_file_dialog"]
   show_file_dialog["show_file_dialog"] --> fig_file_dialog["fig_file_dialog"]
   show_file_dialog["show_file_dialog"] --> figure_check["figure_check"]
   style show_file_dialog fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -1069,6 +1180,7 @@ subroutine show_file_browser(kind, id, filters, default_path, stat)
 flowchart TD
   open_file_browser["open_file_browser"] --> show_file_browser["show_file_browser"]
   save_file_browser["save_file_browser"] --> show_file_browser["show_file_browser"]
+  show_dialog["show_dialog"] --> show_file_browser["show_file_browser"]
   show_file_browser["show_file_browser"] --> fig_file_browser["fig_file_browser"]
   show_file_browser["show_file_browser"] --> figure_check["figure_check"]
   style show_file_browser fill:#3e63dd,stroke:#99b,stroke-width:2px
@@ -1167,14 +1279,15 @@ The files and folders dropped on the window since the last frame (SDL's drop eve
  dropped at once come together, at one point. False, with `paths` empty, on every other frame; also before
  `init*` and from a task. Window mode: the system's drag and drop; headless mode: only the drops of `test_drop`;
  remote mode: none (a browser gives a page the dropped files' contents, not paths on the server: the page refuses
- them), but those of `test_drop`.
+ them), but those of `test_drop`. Status: `FIG_ERR_STATE` before `init*` and from a task (a task does not draw:
+ the task's status becomes `FIG_ERR_STATE` too); without `stat`, the result is `.false.` and nothing stops.
 
 **Attributes**: recursive
 
 **Returns**: `logical`
 
 ```fortran
-function dropped(self, paths, x, y) result(any_dropped)
+function dropped(self, paths, x, y, stat) result(any_dropped)
 ```
 
 **Arguments**
@@ -1185,6 +1298,7 @@ function dropped(self, paths, x, y) result(any_dropped)
 | `paths` | character(len=:) | out | allocatable | Paths dropped. |
 | `x` | real(kind=real64) | out | optional | Abscissa of the drop [pixels]. |
 | `y` | real(kind=real64) | out | optional | Ordinate of the drop [pixels]. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
 
@@ -1200,6 +1314,8 @@ flowchart TD
 
 The window's title: the one given to `init` or the last `set_title` ('' before `init`, and in headless and remote
  modes until `set_title`).
+
+**Attributes**: recursive
 
 **Returns**: `character(len=:)`
 
@@ -1218,6 +1334,7 @@ function title(self) result(text)
 ```mermaid
 flowchart TD
   title["title"] --> fig_title["fig_title"]
+  title["title"] --> figure_refused["figure_refused"]
   style title fill:#3e63dd,stroke:#99b,stroke-width:2px
 ```
 
@@ -1273,7 +1390,7 @@ flowchart TD
 
 ### opt_len
 
-The length of an optional string, 0 when absent.
+The length of an optional name without its trailing blanks (a padded array's element), 0 when absent.
 
 **Attributes**: pure
 
