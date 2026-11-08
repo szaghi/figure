@@ -193,7 +193,29 @@ POSIX):
   `openmp = True`). Measured with nvfortran 26.9: 8 tasks writing to strings fail in most runs without `-mp`, in none
   with it. gfortran's I/O is thread-safe with no flag.
 - **Drawing from a task** is refused at FIGURE's container entry points only (the list is in
-  [Tasks](processes#tasks)); a lone widget called from a task outside any container is not caught.
+  [Tasks](processes#tasks)); a lone widget called from a task outside any container is not caught. It races with the
+  main thread: in a test of v0.3.0 (`ig_text` from a task, gfortran 16.2, Linux), the worker failed an assertion of
+  Dear ImGui's font rasterizer (SIGABRT) in four runs of five and hit a segmentation fault in the fifth.
+- **Why Dear ImGui's context is not thread-local** (studied for v0.3.0, not adopted). Dear ImGui and ImPlot reach
+  their context through one global pointer each (`GImGui`, `GImPlot`); both can be made `thread_local` through
+  Dear ImGui's configuration header, so that a worker thread has no context at all. Measured on Linux (gfortran 16.2,
+  GCC's C++, the native layer rebuilt so): the test suite passes, and a frame of 300 text lines and a plot of 4000
+  points costs 0.130 to 0.134 ms against 0.129 to 0.131 ms (within the noise; every access becomes a TLS access,
+  `__tls_get_addr` at 579 call sites of `imgui.cpp` alone in the static library). It does not make the failure
+  clean:
+  - Dear ImGui dereferences the context without a check in 642 places (`ImGuiContext& g = *GImGui`) and ImPlot in
+    113; only a few entry points assert it (`GetIO`, `GetStyle`, `NewFrame`). A widget called from a worker is then
+    a null-pointer access: in the same test, a segmentation fault in the worker in five runs of five, after which the
+    task never ended. A crash in place of a race, not FIGURE's refusal with `FIG_ERR_STATE`.
+  - FIGURE cannot turn it into its refusal where it matters: its widget procedures call cimgui directly, and so do
+    the raw bindings (`figure_cimgui`, `figure_cimplot`). A refusal needs a check in every one of them, which FIGURE
+    can do without a thread-local context: it already knows a worker thread (the check of its container entry points).
+  - The cost on the other platforms is not measured: MinGW's GCC implements `thread_local` by emulation (a function
+    call, `__emutls_get_address`, at each access), and Apple's clang through a thread-local variable thunk; FIGURE's
+    CI builds there but cannot be measured from Linux.
+
+  The way to a clean refusal of every widget is the check in each widget procedure (a call per widget), not a
+  thread-local context.
 - **`recursive` procedures:** two tasks may run the same procedure at the same time; a procedure not declared
   `recursive` then stops a program built with gfortran's `-fcheck=recursion` (in `-fcheck=all`): declare the task's
   procedures `recursive`. FIGURE's entry points that refuse a task's drawing calls are `recursive` themselves, so the

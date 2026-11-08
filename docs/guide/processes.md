@@ -177,7 +177,8 @@ that read or change the GUI's state: `app%dropped` (its `stat` too), `app%notify
 `ip_colormap_legend`) and every procedure of a `view3d_object`. Every widget
 lives inside one of them, so a task that opens nothing is refused at its first container. A widget called from a task
 **outside** any container (an `ig_button` with no `ig_begin` of its own) is not checked: it would draw into the
-window the main thread has open at that moment, a data race with an undefined result.
+window the main thread has open at that moment, a data race with an undefined result. Why a thread-local Dear ImGui
+context would not make it fail cleanly is in the [known issues](known-issues#tasks).
 
 ### Cancelling
 
