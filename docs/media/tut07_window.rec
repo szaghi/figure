@@ -1,0 +1,25 @@
+#! program build/docs-examples/bin/tut07_window
+#! frames  290
+#! poster  95
+# the bar drawn by FIGURE: along the title, then minimize, maximize and close (red when hovered); close asks first,
+# Cancel; File > Quit asks the same question, Cancel
+0   move 480 330
+10  move 480 11 20
+40  move 876 11 15
+60  move 910 11 10
+80  move 943 11 10
+100 down
+102 up
+120 move 494 320 15
+140 down
+142 up
+160 move 45 11 15
+175 down
+177 up
+190 move 62 37 10
+205 down
+207 up
+225 move 494 320 15
+245 down
+247 up
+265 move 480 330 15

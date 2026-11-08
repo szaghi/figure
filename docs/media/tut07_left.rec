@@ -1,0 +1,8 @@
+#! program build/docs-examples/bin/tut07_window
+#! args    --left
+#! frames  12
+#! poster  11
+#! video   no
+#! crop    0 0 960 40
+# buttons='left', as on macOS: close, minimize and maximize first, then the icon and the menus; close hovered
+0   move 17 11

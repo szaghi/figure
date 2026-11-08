@@ -1,0 +1,32 @@
+#! program build/docs-examples/bin/tut09_case
+#! args    --examples /tmp/figure-studio
+#! frames  330
+#! poster  248
+# File > Open case shows FIGURE's file browser on the example cases; a double-click enters plate, Choose opens it;
+# the title edited (the window's title gets a *); the folder channel dropped on the window: Discard changes?, Discard
+0   move 500 300
+5   move 45 11 10
+20  down
+22  up
+30  move 85 37 10
+45  down
+47  up
+60  move 481 255 15
+80  down
+82  up
+84  down
+86  up
+100 move 864 526 15
+118 down
+120 up
+150 move 200 80 15
+168 down
+170 up
+175 key end
+180 text  (draft)
+200 move 700 250 25
+230 drop 700 250 /tmp/figure-studio/channel
+260 move 517 360 15
+280 down
+282 up
+300 move 700 250 20

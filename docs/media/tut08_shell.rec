@@ -1,0 +1,37 @@
+#! program build/docs-examples/bin/tut08_shell
+#! frames  420
+#! poster  180
+# View > Look > fluent; View > Palette > seal-light; the Result button brings its tab forward; F1 opens About, Close;
+# ctrl+q asks the quit question, Cancel
+0   move 600 300
+10  move 83 11 15
+30  down
+32  up
+45  move 100 118 12
+65  move 200 118 8
+75  move 200 175 10
+90  down
+92  up
+110 move 83 11 15
+125 down
+127 up
+140 move 106 154 12
+160 move 220 154 8
+170 move 220 175 8
+185 down
+187 up
+210 move 37 240 20
+235 down
+237 up
+260 key f1
+285 move 432 355 15
+305 down
+307 up
+330 move 600 300 15
+340 key ctrl down
+341 key q
+342 key ctrl up
+360 move 566 358 15
+380 down
+382 up
+395 move 600 300 15
