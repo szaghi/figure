@@ -1,0 +1,36 @@
+#! program build/docs-examples/bin/tut15_robust
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  400
+#! poster  390
+# a case with a typo dropped: a warning with the run time's message; max_iter set to 20 and F5: not converged, an
+# error; Help > Messages docks the history beside Run; the body's radius dragged until the body leaves the plate: the
+# Input panel marks the problem and Run is refused
+0   move 600 300
+10  move 700 250 10
+25  drop 700 250 /tmp/figure-studio/broken
+50  move 428 218 15
+65  down
+67  up
+80  move 650 136 15
+95  down
+97  up
+100 key ctrl down
+101 key a
+102 key ctrl up
+105 text 20
+110 key enter
+130 key f5
+200 move 199 11 15
+215 down
+217 up
+230 move 240 37 10
+245 down
+247 up
+265 move 425 199 15
+280 down
+282 up
+300 move 700 136 15
+315 down
+317 move 890 136 25
+345 up
+360 move 384 384 15

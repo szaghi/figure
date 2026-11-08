@@ -1,0 +1,35 @@
+#! program build/docs-examples/bin/tut13_view3d
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  500
+#! poster  432
+# F5 runs the solver; View > Run hides the Run panel; the 3-D button shows the field as a surface with the body; a drag
+# orbits the camera; the grid; the cut along the probe line; the pointer reads the temperature, a click moves the
+# Result panel's probe point there, and the Result tab shows it (the frames start once the run has surely ended)
+0   move 600 300
+5   key f5
+200 move 157 11 10
+212 down
+214 up
+225 move 185 75 10
+237 down
+239 up
+250 move 37 300 10
+262 down
+264 up
+280 move 700 420 15
+300 down
+302 move 820 380 30
+340 up
+355 move 476 61 15
+370 down
+372 up
+385 move 528 61 10
+397 down
+399 up
+410 move 650 420 15
+435 down
+437 up
+455 move 456 31 15
+470 down
+472 up
+485 move 800 560 10

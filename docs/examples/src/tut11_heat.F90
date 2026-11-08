@@ -44,12 +44,12 @@ open(newunit=u, file=trim(case_dir)//'/heat.inp', status='old', action='read', i
 if (ios == 0) read(u, nml=heat, iostat=ios, iomsg=iomsg)
 if (ios /= 0) then
    write(error_unit, '(A)') 'heat: '//trim(case_dir)//'/heat.inp: '//trim(iomsg)
-   error stop 1
+   stop 1, quiet=.true.                              ! the exit code, without a message
 endif
 close(u)
 if (nx < 3_int32 .or. ny < 3_int32 .or. lx <= 0.0_real64 .or. ly <= 0.0_real64) then
    write(error_unit, '(A)') 'heat: the grid needs nx, ny >= 3 and lx, ly > 0'
-   error stop 1
+   stop 1, quiet=.true.                              ! the exit code, without a message
 endif
 write(output_unit, '(A,I0,A,I0,A,F4.2)') 'heat: '//trim(title)//', grid ', nx, ' x ', ny, ', omega ', omega
 
@@ -93,7 +93,7 @@ do it = 1_int32, max_iter
 enddo
 if (residual >= tolerance) then
    write(output_unit, '(A,I0,A,ES8.2)') 'heat: not converged in ', max_iter, ' iterations, residual ', residual
-   error stop 2
+   stop 2, quiet=.true.
 endif
 write(output_unit, '(A,I0,A,ES8.2)') 'heat: converged in ', it, ' iterations, residual ', residual
 open(newunit=u, file=trim(case_dir)//'/field.dat', status='replace', action='write')

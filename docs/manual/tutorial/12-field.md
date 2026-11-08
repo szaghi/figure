@@ -72,4 +72,4 @@ column of the field, with asymmetric error bars. Reference: [Heatmaps](/guide/im
 [Colormaps](/guide/colormaps), [Plots](/guide/plots), [Contour lines](/guide/plots#contour-lines).
 :::
 
-**Next:** 13. The body in 3-D (part two continues).
+**Next:** [13. The field in 3-D](./13-view3d): the temperature as a surface, the camera, a cut, picking.
