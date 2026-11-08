@@ -1101,7 +1101,9 @@ int fig_view3d_draw(int handle, const char *id, int id_len, double width, double
       fit(*v, static_cast<double>(iw) / ih);
       v->dirty = true;
    }
-   const bool fast = moved && v->fast_moves && iw >= 2 && ih >= 2;
+   // a drag held still for a frame stays at half resolution (no render) until it moves again or is released: a full
+   // render per pause would cost a render, and in remote mode an exact image, between two moves
+   const bool fast = (moved || (active && v->half)) && v->fast_moves && iw >= 2 && ih >= 2;
    v->moving = fast;
    if (v->dirty || (v->half && !fast)) {
       const int rw = fast ? iw / 2 : iw, rh = fast ? ih / 2 : ih;

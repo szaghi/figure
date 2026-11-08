@@ -10,6 +10,8 @@
 #                            Dear ImGui 1.93 API (docking only adds to it)
 #   SDL     release-3.4.20
 #   miniz   3.0.2         -> deflate for the remote mode's compressed messages (MIT)
+#   stb_image_write v1.16 -> JPEG for the remote mode's changing images (MIT or public domain), vendored unmodified in
+#                            third_party/stb (one header)
 cmake_minimum_required(VERSION 3.24)
 project(figure_native LANGUAGES C CXX)
 
@@ -104,6 +106,8 @@ add_library(figure_native STATIC
 target_compile_definitions(figure_native PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
                                                  MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
 target_include_directories(figure_native PRIVATE ${miniz_SOURCE_DIR})
+# stb_image_write: the JPEG encoder of figure_remote.cpp (implementation compiled there, its functions static)
+target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb)
 # The browser client page, embedded in figure_remote.cpp as a C++ raw string (reconfigured when the page changes).
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote_client.html)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote_client.html FIGURE_REMOTE_CLIENT)
@@ -207,6 +211,7 @@ install(FILES "${cimplot_SOURCE_DIR}/implot/LICENSE" DESTINATION share/licenses/
 install(FILES "${cimgui_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimgui)
 install(FILES "${cimplot_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimplot)
 install(FILES "${miniz_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/miniz)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb/LICENSE-stb.txt" DESTINATION share/licenses/stb)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.mit.md" DESTINATION share/licenses/figure)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexSans.txt" DESTINATION share/licenses/ibm-plex)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexMono.txt" DESTINATION share/licenses/ibm-plex)

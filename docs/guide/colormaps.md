@@ -40,6 +40,13 @@ possibly under other ids. Ask `ip_colormap` every frame (the lookup is cheap) ra
 not ImPlot's current colormap, which holds the style's line colours. An id that is not registered (-1, a stale one)
 is refused with `FIG_ERR_ARGUMENT`.
 
+::: warning Changed in v0.3.0
+Up to v0.2.0, heatmaps and the colour scale without `colormap` took ImPlot's current colormap: with FIGURE's
+[styles](styles), the style's line colours, a few distinct hues that do not order values. From v0.3.0 they default
+to Viridis, so a heatmap drawn by v0.2.0 code changes colours. Code that wants a given map passes it:
+`colormap=ip_colormap('Viridis')`, or any other name.
+:::
+
 ## The bundled maps
 
 Each is a table of 256 RGB samples, embedded in the library at build time.

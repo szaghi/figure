@@ -31,6 +31,9 @@ void   fig_set_lazy(int enabled, double max_wait_s);
 void   fig_set_remote_fps(double max_fps);
 // Remote mode: deflate frames and textures, 0 auto (while the client is the bottleneck), 1 always, 2 never.
 void   fig_set_remote_compress(int mode);
+// Remote mode: a user texture updated in consecutive frames goes as JPEG, then exact when it stops (1, default); 0:
+// always exact. Defined in figure_remote.cpp.
+void   fig_set_remote_lossy(int on);
 // Remote mode: the access token (empty: none, anyone reaching the port is let in). Set after fig_init_remote, which
 // makes a random one; fig_remote_token copies it into buf (up to buf_len bytes) and returns its length.
 void   fig_set_remote_token(const char *token, int token_len);

@@ -24,7 +24,8 @@ Try it with the example: `exe/examples/figure_hello --remote 8080`, then open th
 
 ## init_remote
 
-`app%init_remote([port] [, host] [, width, height] [, port_used] [, quiet] [, max_fps] [, compress] [, token] [, url] [, stat])`:
+`app%init_remote([port] [, host] [, width, height] [, port_used] [, quiet] [, max_fps] [, compress] [, lossy]
+[, token] [, url] [, stat])`:
 
 | Argument | Meaning |
 |---|---|
@@ -37,6 +38,7 @@ Try it with the example: `exe/examples/figure_hello --remote 8080`, then open th
 | `token` | the access token the address must carry (default: 32 random hex digits; `''`: none) |
 | `url` | the address to open, with the token: `http://localhost:8080/?token=...` |
 | `compress` | deflate frames and textures: `'auto'` (default) only while the browser cannot keep up, `'always'`, `'never'` |
+| `lossy` | an image that changes in consecutive frames goes as JPEG while it changes, exact once it is still (default `.true.`); `.false.`: always exact ([Changing images](#changing-images)) |
 | `stat` | `FIG_ERR_FAILED` if the port cannot be opened (in use, not permitted); `FIG_ERR_ARGUMENT` for a bad `port`, size, `compress` or `token`; `FIG_ERR_STATE` if FIGURE is already initialized |
 
 Everything else is unchanged: widgets, plots, heatmaps, textures (sent to the browser when they change), lazy redraw
@@ -132,7 +134,9 @@ font atlas (256 KB) goes once per connection. What keeps the traffic down:
   frame, never a backlog.
 - **Deflate**, when the link is the bottleneck (`compress='auto'`): frames shrink 2.5 to 3.5 times more, for about
   7 ms of CPU per MB (0.4 ms for that 71 KB frame). On a fast link it stays off, since it would only cost CPU.
-- Textures (`texture_object`) are sent only when `tex%update` changes them.
+- Textures (`texture_object`) are sent only when `tex%update` changes them, with the next frame that goes out: on a
+  slow link the newest pixels go, the updates in between are skipped with their frames.
+- **JPEG while an image changes** (`lossy`, on by default): see below.
 
 Measured with `scripts/measure_redraw.py` (the program `figure_bench_redraw`, remote mode on the same machine, 8–10 s
 per case), from the first version of remote mode to now:
@@ -152,18 +156,56 @@ second; the 100 000-point line at 5 frames per second, deflated (1 frame per sec
 newest. Large data stays large on the wire: on a slow link, decimate what you plot, or show a big field as a texture
 at the size it is displayed (a 3840 × 2160 texture is 33 MB per update before deflate).
 
+## Changing images
+
+A [3-D view](view3d) while the user turns it, or any texture the program updates frame after frame, would send its
+whole image at every frame: `4 * width * height` bytes, 1.6 MB for an 800 x 500 image, 96 MB/s at 60 frames per
+second. So a texture updated in **two consecutive frames** goes as a **JPEG** (quality 75) for as long as it keeps
+changing, and once it has been **still for 150 ms** its exact pixels replace it, with the next frame or on their own.
+A still picture, a capture and a texture updated now and then are always exact; the browser shows a JPEG only while
+the image moves.
+
+- **Exact when:** `lossy=.false.`; an image with transparent pixels (JPEG has no alpha); a JPEG that would not be
+  smaller; the first update after a still period (a change is not yet a motion).
+- **Cost:** encoding with `stb_image_write` (bundled, [Third-party](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)),
+  2 to 5 ms per 800 x 600 image on one core (7 to 16 ms at 1600 x 1000); the browser decodes it natively.
+- **The page:** decodes the JPEG (`createImageBitmap`) before the next message, so the order of textures and frames
+  is kept.
+
+Measured with `scripts/remote_client.py --measure`, which drags the left button across the view for 5 s (60 moves per
+second) and counts the bytes per message kind: the program `cb_view3d` ([3-D views](view3d)) served by
+`init_remote`, on the same machine, the view rendered at half resolution while the camera moves (its default). The
+fitted body leaves most of the view background; zoomed in, its grid lines fill it, JPEG's worst case:
+
+| The view (the image while moving) | exact, `compress='never'` | exact, deflated | JPEG (the default) |
+|---|---|---|---|
+| 964 x 553, fitted (482 x 276) | 520 KB per frame, 30 MB/s | 6.6 KB, 0.38 MB/s | 5.0 KB, 0.29 MB/s |
+| 1604 x 1013, fitted (802 x 506) | 1585 KB, 91 MB/s | 29 KB, 1.7 MB/s | 14 KB, 0.81 MB/s |
+| 1604 x 1013, zoomed in on the grid (802 x 506) | 1585 KB, 91 MB/s | 267 KB, 15 MB/s | 118 KB, 6.8 MB/s |
+
+KB and MB are of 1024 bytes; 59 frames per second in every case. Besides the JPEGs, a drag sends its first image
+exact (it is not yet a motion) and, once it ends, the view rendered at full size, exact: 2.0 MB raw for the first
+row, 36 KB deflated. Deflate (`compress='auto'`, the default) starts only once the browser falls behind, so before
+JPEG a moving view went raw until then. On these images JPEG is 1.3 to 2.3 times smaller than deflate, and costs
+less CPU: deflate takes 8 to 56 ms per 1600 x 1000 image ([3-D views](view3d#performance)). Busier images deflate
+worse: in the spike of [issue #3](https://github.com/szaghi/figure/issues/3), on an OverSet grid's faces coloured by
+a field, JPEG was 6 to 18 times smaller than deflate.
+
 ## How it works
 
-The native layer contains a minimal HTTP and WebSocket server (RFC 6455, one client, non-blocking sockets on POSIX and
-Winsock). `GET /?token=...` answers the client page, embedded in the library; `GET /ws?token=...` upgrades to a WebSocket;
-both answer `403` without the token. After each
-frame the server sends, as binary messages, the textures Dear ImGui created or changed (RGBA, with their filtering)
-and the draw lists (12-byte vertices, or 20-byte ones for a list reaching beyond ±8191 pixels; 16-bit indices;
-commands with clip rectangle, texture, index range and vertex offset, so a window may hold more than 65 536
-vertices, as a long plotted line does), unless they equal the last ones sent, deflated when compression is on; on
-connection, and when the [style](styles) changes, it also sends the background colour. The page draws
-them with WebGL, exactly as the OpenGL backend draws a window, and sends input events back as short text messages. The protocol is described at the top of `native/figure_remote.cpp`.
+The native layer contains a minimal HTTP and WebSocket server (RFC 6455, one client, non-blocking sockets on POSIX
+and Winsock). `GET /?token=...` answers the client page, embedded in the library; `GET /ws?token=...` upgrades to a
+WebSocket; both answer `403` without the token. After each frame the server sends, as binary messages, the textures
+Dear ImGui or the program created or changed (RGBA, with their filtering, or JPEG while they change) and the draw
+lists (12-byte vertices, or 20-byte ones for a list reaching beyond ±8191 pixels; 16-bit indices; commands with clip
+rectangle, texture, index range and vertex offset, so a window may hold more than 65 536 vertices, as a long plotted
+line does), unless they equal the last ones sent, deflated when compression is on; on connection, and when the
+[style](styles) changes, it also sends the background colour. The page draws them with WebGL, exactly as the OpenGL
+backend draws a window, and sends input events back as short text messages. The protocol is described at the top of
+`native/figure_remote.cpp`.
 
 `src/tests/figure_test_remote.F90` tests it end to end without a browser: it serves on a free port and runs
-`scripts/remote_client.py`, a WebSocket client that checks the page and the refusal of a missing or wrong token, the handshake, every message byte by byte (including a draw
-list over 65 536 vertices), a resize, that an idle interface sends no frame (only "unchanged"), then clicks a button the program must see clicked once. It needs `python3` (3.11+).
+`scripts/remote_client.py`, a WebSocket client that checks the page and the refusal of a missing or wrong token, the
+handshake, every message byte by byte (including a draw list over 65 536 vertices), a resize, that an image changing
+in consecutive frames arrives as JPEG of its size and then exact, that an idle interface sends no frame (only
+"unchanged"), then clicks a button the program must see clicked once. It needs `python3` (3.11+).

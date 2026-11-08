@@ -205,8 +205,13 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   pan, zoom, fit, the six standard views) driven by the mouse or the program, picking of the element under a pixel,
   hovered or clicked, up to six clipping planes; drawn by a software rasterizer, the same pixels in window, remote and
   headless modes, rendered only when something changed, at half resolution while the camera moves, on up to 4
-  threads: done. GPU rendering in a window (design B) and WebGL in remote mode (C) stay open, with compressed images
-  for remote mode.
+  threads: done. The design is settled for v0.3.0 ([why](view3d#why-a-software-renderer)): the software rasterizer
+  (A) in every mode; GPU rendering in a window (B) only when an application draws more than about 10⁶ triangles in a
+  window, behind a check of the OpenGL renderer; no WebGL renderer in the browser (C).
+- **Changing images in remote mode** ([Changing images](remote#changing-images)): a texture updated in consecutive
+  frames, the 3-D view while the camera moves, goes as JPEG (`stb_image_write`, bundled), then exact once it is still;
+  `init_remote(lossy=.false.)` keeps every image exact. A moving 1600x1000 view: from 91 MB/s raw to 0.8 to 7 MB/s:
+  done.
 
 ## Next
 

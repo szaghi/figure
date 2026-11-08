@@ -20,6 +20,13 @@
 //               client knows the program is alive (an idle interface sends nothing else)
 //   7 clipboard: u8 7, then UTF-8 text: the program copied it (Dear ImGui's copy, ig_set_clipboard); the page writes it
 //               to the browser's clipboard where the browser allows it (a secure context, such as localhost)
+//   8 JPEG texture: u8 8, u32 id, width, height, flags (as kind 2), then a baseline JPEG (JFIF) of width x height
+//               pixels, alpha 255: a user texture that is changing (updated in two consecutive frames, the 3-D view
+//               while the camera moves), sent lossy at quality 75 while it changes; a lossless texture (kind 2)
+//               replaces it once it is still (not updated for 150 ms) and drawn, with a frame or on its own. Never
+//               deflated
+// Textures go out with the frames, before the frame that draws them: an update kept while frames are skipped for a
+// slow client is sent once, its latest pixels, with the next frame that goes.
 // Access: unless the token is disabled, GET / and GET /ws need "?token=<token>" in their target, else 403. The token is
 // 32 hex digits (128 bits from the system's cryptographic generator) made at start, or the program's own.
 // Client to server: text messages, one event each: "m:x,y" mouse position, "b:button,down", "w:dx,dy" wheel,
@@ -46,6 +53,20 @@
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES
 #endif
 #include "miniz.h"
+// stb_image_write (third_party/stb, unmodified): its JPEG encoder only, its functions static to this file (a program
+// may link its own copy), no file output
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_STATIC
+#define STBI_WRITE_NO_STDIO
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function" // the PNG, BMP, TGA and HDR writers, unused
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers" // its "= { 0 }" (with -Wextra)
+#endif
+#include "stb_image_write.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -56,6 +77,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -202,6 +224,12 @@ struct connection_t {
 struct texture_t {
    int                        width = 0, height = 0;
    bool                       linear = false;
+   bool                       user = false;    // a program's texture (texture_object, a 3-D view), not Dear ImGui's
+   bool                       dirty = false;   // updated since it was last sent
+   bool                       moving = false;  // its last two updates came in consecutive frames
+   bool                       lossy = false;   // the client holds a JPEG of it, to be replaced by the exact pixels
+   std::uint64_t              updated = 0;     // the frame of its last update (server_t::frame)
+   std::chrono::steady_clock::time_point changed; // the time of its last update
    std::vector<unsigned char> rgba;
 };
 
@@ -216,6 +244,9 @@ struct server_t {
    size_t                                  unsent_frame = 0; // bytes of the last frame still in the client's queue
    bool                                    pending = false;  // a frame was skipped while the queue was busy
    int                                     compress = 0;     // 0 auto, 1 always, 2 never
+   bool                                    lossy = true;     // changing user textures as JPEG (kind 8)
+   std::uint64_t                           frame = 1;        // the frame being drawn: send_frame calls so far, + 1
+   std::set<std::uint64_t>                 drawn;            // the textures the last frame sent draws
    std::chrono::steady_clock::time_point   last_skip;        // when a frame was last skipped for a busy queue
    std::chrono::steady_clock::time_point   last_sent;      // when a message last went to the client
    float                                   background[3] = {0.10f, 0.10f, 0.11f}; // behind the windows
@@ -320,10 +351,58 @@ bool compact_vertices(const ImDrawList *l, std::string &out) {
    return true;
 }
 
-void send_texture(std::uint64_t id) {
-   connection_t *c = client();
-   const auto t = sv.textures.find(id);
-   if (c && t != sv.textures.end()) ws_append(*c, 2, wire(texture_message(id, t->second)));
+// A texture as a JPEG message (kind 8), at quality 75; empty if it has transparent pixels (JPEG has no alpha), if the
+// encoder fails, or if the JPEG is not smaller than the raw pixels.
+std::string jpeg_message(std::uint64_t id, const texture_t &t) {
+   const size_t n = static_cast<size_t>(t.width) * static_cast<size_t>(t.height);
+   for (size_t i = 0; i < n; ++i)
+      if (t.rgba[4 * i + 3] != 255) return "";
+   std::string m;
+   m.reserve(17 + n / 8);
+   put<std::uint8_t>(m, 8);
+   put<std::uint32_t>(m, static_cast<std::uint32_t>(id));
+   put<std::uint32_t>(m, static_cast<std::uint32_t>(t.width));
+   put<std::uint32_t>(m, static_cast<std::uint32_t>(t.height));
+   put<std::uint32_t>(m, t.linear ? 1u : 0u);
+   auto append = [](void *context, void *data, int size) {
+      static_cast<std::string *>(context)->append(static_cast<const char *>(data), static_cast<size_t>(size));
+   };
+   if (!stbi_write_jpg_to_func(append, &m, t.width, t.height, 4, t.rgba.data(), 75) || m.size() >= 17 + 4 * n) return "";
+   return m;
+}
+
+// Send a texture: as JPEG while it changes (a user texture updated in this frame and in the previous one, or one the
+// client holds as JPEG already), else its exact pixels (kind 2, deflated when compression is on).
+void send_texture(connection_t &c, std::uint64_t id, texture_t &t) {
+   if (sv.lossy && t.user && t.updated == sv.frame && (t.moving || t.lossy)) {
+      const std::string m = jpeg_message(id, t);
+      if (!m.empty()) {
+         ws_append(c, 2, m);
+         t.lossy = true;
+         t.dirty = false;
+         return;
+      }
+   }
+   ws_append(c, 2, wire(texture_message(id, t)));
+   t.lossy = false;
+   t.dirty = false;
+}
+
+// A texture is still once it has not changed for this long: a drag that misses a frame or two is still moving.
+const std::chrono::milliseconds STILL(150);
+
+// The exact pixels of every texture the client holds as JPEG, that `drawn` draws and that is still. Returns the time
+// left until the next such texture is still (a negative count: none).
+std::chrono::milliseconds send_still(connection_t &c, const std::set<std::uint64_t> &drawn) {
+   const auto now = std::chrono::steady_clock::now();
+   std::chrono::milliseconds next(-1);
+   for (auto &t : sv.textures) {
+      if (!t.second.lossy || t.second.updated == sv.frame || !drawn.count(t.first)) continue;
+      const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(t.second.changed + STILL - now);
+      if (left.count() <= 0) send_texture(c, t.first, t.second);
+      else if (next.count() < 0 || left < next) next = left;
+   }
+   return next;
 }
 
 void flush(connection_t &c) {
@@ -688,10 +767,17 @@ bool serve(int timeout_ms) {
    // became writable (queued output draining) must not end the wait early
    const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
    for (;;) {
-      const bool was_busy = sv.unsent_frame > 0;
+      // a texture the client holds as JPEG became still while the program waits (no frame follows its last change):
+      // the page gets its exact pixels, and redraws its last frame with them; the wait ends when the next one is still
+      int still = -1;
+      if (connection_t *c = client(); c && sv.unsent_frame == 0) {
+         still = static_cast<int>(send_still(*c, sv.drawn).count());
+         flush(*c);
+      }
       const int left = static_cast<int>(
          std::chrono::duration_cast<std::chrono::milliseconds>(end - std::chrono::steady_clock::now()).count());
-      if (serve_once(std::max(left, 0))) return true;
+      const bool was_busy = sv.unsent_frame > 0;
+      if (serve_once(std::max(still >= 0 ? std::min(left, still + 1) : left, 0))) return true;
       if (sv.pending && was_busy && sv.unsent_frame == 0) return true; // the latest frame can be sent now
       if (left <= 0) return false;
    }
@@ -702,6 +788,8 @@ bool frame_pending() { return sv.pending; }
 bool queue_busy() { return sv.unsent_frame > 0; }
 
 void set_compression(int mode) { sv.compress = mode; }
+
+void set_lossy(bool on) { sv.lossy = on; }
 
 void set_token(const std::string &token) { sv.token = token; }
 
@@ -727,13 +815,26 @@ void set_background(float r, float g, float b) {
    if (connection_t *c = client()) ws_append(*c, 2, background_message());
 }
 
-void texture_update(std::uint64_t id, int width, int height, const unsigned char *rgba, bool linear) {
+namespace {
+
+// Keep a texture's pixels, to be sent with the next frame that goes out (send_frame).
+void keep_texture(std::uint64_t id, int width, int height, const unsigned char *rgba, bool linear, bool user) {
    texture_t &t = sv.textures[id];
+   t.moving = !t.rgba.empty() && t.updated + 1 >= sv.frame; // updated in this frame or the previous one too
    t.width = width;
    t.height = height;
    t.linear = linear;
+   t.user = user;
+   t.dirty = true;
+   t.updated = sv.frame;
+   t.changed = std::chrono::steady_clock::now();
    t.rgba.assign(rgba, rgba + static_cast<size_t>(width) * static_cast<size_t>(height) * 4u);
-   send_texture(id);
+}
+
+} // namespace
+
+void texture_update(std::uint64_t id, int width, int height, const unsigned char *rgba, bool linear) {
+   keep_texture(id, width, height, rgba, linear, true);
 }
 
 void texture_destroy(std::uint64_t id) {
@@ -746,7 +847,10 @@ void texture_destroy(std::uint64_t id) {
    }
 }
 
-void send_frame(ImDrawData *dd) {
+namespace {
+
+// The frame's textures, then the frame (send_frame without the frame count).
+void send_frame_body(ImDrawData *dd) {
    // Dear ImGui's own textures (font atlas): keep RGBA copies, whether or not a client is connected
    for (ImTextureData *t : ImGui::GetPlatformIO().Textures) {
       if (t->Status == ImTextureStatus_WantCreate || t->Status == ImTextureStatus_WantUpdates) {
@@ -761,7 +865,7 @@ void send_frame(ImDrawData *dd) {
          } else {
             std::memcpy(rgba.data(), px, rgba.size());
          }
-         texture_update(static_cast<std::uint64_t>(t->TexID), t->Width, t->Height, rgba.data(), true); // font atlas
+         keep_texture(static_cast<std::uint64_t>(t->TexID), t->Width, t->Height, rgba.data(), true, false); // atlas
          t->SetStatus(ImTextureStatus_OK);
       } else if (t->Status == ImTextureStatus_WantDestroy) {
          texture_destroy(static_cast<std::uint64_t>(t->TexID));
@@ -771,9 +875,12 @@ void send_frame(ImDrawData *dd) {
    }
    connection_t *c = client();
    if (!c) return;
-   if (sv.resend) { // a new client: the background and every live texture first
+   if (sv.resend) { // a new client: the background and every live texture first, exact
       ws_append(*c, 2, background_message());
-      for (const auto &t : sv.textures) ws_append(*c, 2, wire(texture_message(t.first, t.second)));
+      for (auto &t : sv.textures) {
+         ws_append(*c, 2, wire(texture_message(t.first, t.second)));
+         t.second.dirty = t.second.lossy = false;
+      }
       sv.resend = false;
       sv.last_frame.clear(); // the new client has no frame yet
       sv.unsent_frame = 0;
@@ -785,6 +892,16 @@ void send_frame(ImDrawData *dd) {
       flush(*c);
       return;
    }
+   // the textures this frame draws; then the ones updated since the last frame sent (their latest pixels), and the
+   // exact pixels of those the client holds as JPEG that this frame draws without updating them
+   std::set<std::uint64_t> drawn;
+   for (const ImDrawList *l : dd->CmdLists)
+      for (const ImDrawCmd &cmd : l->CmdBuffer)
+         if (cmd.UserCallback == nullptr) drawn.insert(static_cast<std::uint64_t>(cmd.GetTexID()));
+   for (auto &t : sv.textures)
+      if (t.second.dirty) send_texture(*c, t.first, t.second);
+   send_still(*c, drawn);
+   sv.drawn = std::move(drawn);
    std::string m;
    put<std::uint8_t>(m, 1);
    put<float>(m, dd->DisplaySize.x);
@@ -837,4 +954,14 @@ void send_frame(ImDrawData *dd) {
    flush(*c);
 }
 
+} // namespace
+
+void send_frame(ImDrawData *dd) {
+   send_frame_body(dd);
+   ++sv.frame; // updates from now on belong to the next frame
+}
+
 } // namespace figure_remote
+
+// The C ABI of set_lossy (figure_native.h), beside the server it sets.
+extern "C" void fig_set_remote_lossy(int on) { figure_remote::set_lossy(on != 0); }

@@ -10,6 +10,7 @@ native layer itself, next to the Fortran library:
   copied from CMake's fetched tree (build/native/_deps, so run scripts/build_native.sh first), only the files FIGURE
   compiles; Dear ImGui's ``imconfig.h`` carries the two settings CMake passes as definitions, so no compiler flag is
   needed; miniz is compiled through a small wrapper that sets its options;
+- ``src/stb/``: ``stb_image_write.h``, vendored in the repository (third_party/stb), included by figure_remote.cpp;
 - the licences of everything copied (``LICENSES/``), and ``fpm.toml``.
 
 SDL3 comes from the system (a package: libsdl3-dev, Homebrew's sdl3, MSYS2's SDL3), found by the compiler and linker
@@ -104,7 +105,7 @@ include-dir = [{include_dirs}]
 
 INCLUDE_DIRS = [
     "src/native", "src/cimgui", "src/cimgui/imgui", "src/cimgui/imgui/backends", "src/cimplot", "src/cimplot/implot",
-    "src/miniz",
+    "src/miniz", "src/stb",
 ]  # fmt: skip
 
 
@@ -254,6 +255,7 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(miniz / "miniz.c", src / "miniz" / "miniz.c.inc")
     copy(miniz / "miniz.h", src / "miniz" / "miniz.h")
     (src / "miniz" / "miniz_figure.c").write_text(MINIZ_WRAPPER)
+    copy(ROOT / "third_party" / "stb" / "stb_image_write.h", src / "stb" / "stb_image_write.h")
     licences = out / "LICENSES"
     copy(ROOT / "LICENSE.mit.md", licences / "figure.md")
     copy(ROOT / "THIRD_PARTY.md", licences / "THIRD_PARTY.md")
@@ -262,6 +264,7 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(cimplot / "implot" / "LICENSE", licences / "implot.txt")
     copy(cimplot / "LICENSE", licences / "cimplot.txt")
     copy(miniz / "LICENSE", licences / "miniz.txt")
+    copy(ROOT / "third_party" / "stb" / "LICENSE-stb.txt", licences / "stb.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexSans.txt", licences / "ibm-plex.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexMono.txt", licences / "ibm-plex-mono.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-Lucide.txt", licences / "lucide.txt")

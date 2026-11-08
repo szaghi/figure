@@ -5,15 +5,16 @@ program figure_test_remote
 !< Serves the UI on a free port (no window, display or GPU), launches scripts/remote_client.py in the background, and
 !< draws frames until the client's click arrives (or 30 s pass). The client checks the page, the handshake, every
 !< message byte by byte (with a draw list over 65536 vertices: a 100000-point line, until the client presses Z), the
-!< resize event, the skipping of unchanged frames and the frame-rate cap, the clipboard message; this program checks
-!< that the click arrived once, that the browser's paste reached its clipboard (it answers with a copy, which the
-!< client checks), and the client's verdict. Needs python3 (3.11+) on the PATH; run from the repository root, as
-!< scripts/run_tests.sh does.
-use, intrinsic :: iso_fortran_env, only : error_unit, int32, int64, output_unit, real64
-use figure, only : app_object, ig_begin, ig_button, ig_end, ig_get_clipboard, ig_item_rect, ig_set_clipboard, &
-                   ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line
+!< resize event, the skipping of unchanged frames and the frame-rate cap, the clipboard message, and an image updated
+!< in consecutive frames (12 frames, once the client holds A down) arriving as JPEG, then exact once it stops; this
+!< program checks that the click arrived once, that the browser's paste reached its clipboard (it answers with a copy,
+!< which the client checks), and the client's verdict. Needs python3 (3.11+) on the PATH; run from the repository
+!< root, as scripts/run_tests.sh does.
+use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, int64, output_unit, real64
+use figure, only : app_object, ig_begin, ig_button, ig_end, ig_get_clipboard, ig_image, ig_item_rect, ig_set_clipboard, &
+                   ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, texture_object
 use figure_cimgui, only : igIsKeyDown_Nil
-use figure_cimgui_enums, only : ImGuiKey_Z
+use figure_cimgui_enums, only : ImGuiKey_A, ImGuiKey_Z
 
 implicit none
 character(len=*), parameter :: CLICK_FILE = 'figure_test_remote.click' !< Where the click point is written.
@@ -45,6 +46,13 @@ integer(int32)              :: i                                        !< Count
 character(len=128)          :: url                                      !< The address to open, with the token.
 character(len=64)           :: token                                    !< The access token.
 logical                     :: long_shown                               !< The long line is drawn (until Z is down).
+integer(int32), parameter   :: TW = 64_int32                            !< The changing image's width [pixels].
+integer(int32), parameter   :: TH = 48_int32                            !< Its height [pixels].
+type(texture_object)        :: tex                                      !< An image updated in consecutive frames.
+integer(int8), target       :: rgba(4, TW, TH)                          !< Its pixels (opaque).
+integer(int32)              :: moves                                    !< Frames of change left (-1: not started).
+logical                     :: asked                                    !< The client asked for the change (A down).
+integer(int32)              :: j                                        !< Counter.
 
 call remove_file(CLICK_FILE)
 call remove_file(OK_FILE)
@@ -60,7 +68,12 @@ verdict = 'no verdict'
 call app%init_remote(port=0_int32, port_used=port, quiet=.true., compress='always', url=url, stat=stat) ! deflate all
 token = url(index(url, '?token=') + 7:)                                 ! the random token, 32 hex digits
 test_passed(1) = stat == 0_int32 .and. port > 0_int32 .and. len_trim(token) == 32 .and. verify(trim(token), '0123456789abcdef') == 0
+moves = -1_int32
+asked = .false.
 if (test_passed(1)) then
+   call tex%init(TW, TH, smooth=.true.)
+   call paint(0_int32)
+   call tex%update(rgba) ! once: sent exact
    call get_environment_variable('OS', os)
    if (trim(os) == 'Windows_NT') then ! cmd.exe: start /b runs the client without waiting for it
       write(command, '(A,I0,A)') 'start "" /b python3 scripts/remote_client.py ', port, ' '//CLICK_FILE//' '//OK_FILE//' '// &
@@ -86,6 +99,17 @@ if (test_passed(1)) then
          endif
       endif
       if (igIsKeyDown_Nil(ImGuiKey_Z)) long_shown = .false. ! the client has seen it: small frames from now on
+      if (igIsKeyDown_Nil(ImGuiKey_A)) asked = .true. ! the client asks for a changing image
+      if (moves < 0_int32 .and. asked .and. frames >= 4_int32) moves = 12_int32 ! not next to its first update (frame 1)
+      if (moves > 0_int32) then ! updated in 12 consecutive frames: JPEG from the second; exact once it stops
+         call paint(moves)
+         call tex%update(rgba)
+         moves = moves - 1_int32
+         call app%request_frames(2_int32)
+      endif
+      call ig_set_next_window(20.0_real64, 160.0_real64, 120.0_real64, 100.0_real64, always=.true.)
+      if (ig_begin('Image')) call ig_image(tex)
+      call ig_end()
       if (long_shown) then
          call ig_set_next_window(340.0_real64, 20.0_real64, 280.0_real64, 220.0_real64, always=.true.)
          if (ig_begin('Long line')) then ! one draw list over 65536 vertices: indices relative to each command's offset
@@ -105,6 +129,7 @@ if (test_passed(1)) then
       call system_clock(t)
       if (clicks > 0_int32 .or. real(t - t0, real64) / real(rate, real64) > 30.0_real64) exit
    enddo
+   call tex%destroy()
    call app%destroy() ! closes the connection: the client finishes and writes its verdict
    call system_clock(t0)
    do ! wait for the verdict, at most 10 s
@@ -143,6 +168,20 @@ if (.not. all(test_passed)) then
 endif
 
 contains
+   subroutine paint(step)
+   !< The image's pixels at a step of its change: a diagonal gradient moving with `step`, opaque.
+   integer(int32), intent(in) :: step !< Step.
+
+   do j = 1_int32, TH
+      do i = 1_int32, TW
+         rgba(1, i, j) = int(mod(4 * (i + j) + 16 * step, 256) - 128, int8)
+         rgba(2, i, j) = int(mod(5 * j + 9 * step, 256) - 128, int8)
+         rgba(3, i, j) = int(mod(3 * i, 256) - 128, int8)
+         rgba(4, i, j) = -1_int8
+      enddo
+   enddo
+   endsubroutine paint
+
    subroutine remove_file(name)
    !< Delete a file if it exists.
    character(len=*), intent(in) :: name   !< File name.

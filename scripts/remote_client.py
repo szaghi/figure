@@ -14,6 +14,10 @@ Run by src/tests/figure_test_remote.F90 against the program's server. Checks, in
   - a size event ("s:640,480") comes back as the display size of a later frame;
   - a paste ("p:" with the browser's clipboard) reaches the program's clipboard, whose answer, a copy, comes back as
     one clipboard message (kind 7);
+  - an image updated in consecutive frames (the client presses A: the program changes it in 12 frames) arrives as
+    JPEG (kind 8) from its second change: a baseline JPEG whose size, read from its header, is the texture's (and,
+    where Pillow is installed, decodes to that size), of a texture received exact before; once it stops, its exact
+    pixels (kind 2) replace it: no texture is left as JPEG;
   - then, nothing changing, no frame is sent again for 2.5 s, only "unchanged" messages (at least one);
   - then the pointer toggles the button's hover 200 times per second: frames keep coming, at most 75 per second
     (the program caps them at 60);
@@ -23,6 +27,14 @@ Writes "ok" to OK_FILE when every check passed, else the first failure; exits 0 
 
 Usage: python3 scripts/remote_client.py PORT CLICK_FILE OK_FILE [TOKEN]
 Standard library only (Python >= 3.11).
+
+It also measures what a program sends while the user drags in it (no checks; the bytes per message kind, during the
+drag and in the second after it), for the numbers in docs/guide/remote.md and view3d.md:
+
+    python3 scripts/remote_client.py --measure PORT TOKEN X Y [SECONDS [WIDTH HEIGHT]]
+
+drags from (X, Y) [pixels] to the right and back, 4 pixels per event, 60 events per second, for SECONDS (default 5),
+with the browser's display WIDTH x HEIGHT [pixels] (default 1280 x 800).
 """
 
 from __future__ import annotations
@@ -168,6 +180,46 @@ class WebSocket:
 big_lists: set[bool] = set()  # whether a draw list over 65536 vertices was seen (True), one at most (False)
 compact_lists: set[bool] = set()  # whether a list with 12-byte vertices was seen
 deflated: list[int] = [0]  # deflated messages received
+JPEG_CHANGES = 12  # the frames in which the test program changes its image, after A
+
+
+def jpeg_size(data: bytes) -> tuple[int, int]:
+    """The width and height of a baseline JPEG, from its SOF0 marker; ProtocolError if it is not one."""
+    if data[:2] != b"\xff\xd8" or data[-2:] != b"\xff\xd9":
+        msg = "JPEG texture: no start or end of image marker"
+        raise ProtocolError(msg)
+    p = 2
+    while p + 4 <= len(data) and data[p] == 0xFF:
+        marker, length = data[p + 1], struct.unpack_from(">H", data, p + 2)[0]
+        if marker == 0xC0:  # baseline DCT: precision, height, width
+            h, w = struct.unpack_from(">HH", data, p + 5)
+            return w, h
+        p += 2 + length
+    msg = "JPEG texture: no baseline frame header (SOF0)"
+    raise ProtocolError(msg)
+
+
+def check_jpeg(m: bytes, textures: set[int]) -> int:
+    """Check a JPEG texture message (kind 8); return its texture id."""
+    tid, tw, th, _ = struct.unpack_from("<IIII", m, 1)
+    if tid not in textures:
+        msg = f"JPEG texture {tid}: never received exact first"
+        raise ProtocolError(msg)
+    if jpeg_size(m[17:]) != (tw, th):
+        msg = f"JPEG texture {tid}: {jpeg_size(m[17:])} pixels in a {tw} x {th} texture"
+        raise ProtocolError(msg)
+    try:  # a full decode where Pillow is installed (optional: the test needs the standard library only)
+        import io  # noqa: PLC0415
+
+        from PIL import Image  # noqa: PLC0415
+    except ImportError:
+        return tid
+    with Image.open(io.BytesIO(m[17:])) as im:
+        im.load()
+        if im.size != (tw, th) or im.mode != "RGB":
+            msg = f"JPEG texture {tid}: decodes to {im.mode} {im.size}, expected RGB ({tw}, {th})"
+            raise ProtocolError(msg)
+    return tid
 
 
 def parse_frame(m: bytes, textures: set[int]) -> tuple[float, float]:
@@ -225,6 +277,9 @@ def run(port: int, click_file: Path, token: str) -> None:
     paced_frames = 0  # frames received in the PACE window
     z_pressed = False  # Z sent: the program stops drawing its long line
     copies: list[bytes] = []  # the clipboard messages (kind 7)
+    jpegs: dict[int, int] = {}  # JPEG messages (kind 8) per texture
+    lossy: set[int] = set()  # textures whose last message was a JPEG
+    replaced = 0  # exact textures replacing a JPEG
     end = time.monotonic() + TIMEOUT
     try:
         while time.monotonic() < end:
@@ -241,6 +296,13 @@ def run(port: int, click_file: Path, token: str) -> None:
                     msg = f"texture {tid}: {len(m)} bytes for {tw} x {th}"
                     raise ProtocolError(msg)
                 textures.add(tid)
+                if tid in lossy:
+                    lossy.discard(tid)
+                    replaced += 1
+            elif m[0] == 8:
+                tid = check_jpeg(m, textures)
+                jpegs[tid] = jpegs.get(tid, 0) + 1
+                lossy.add(tid)
             elif m[0] == 4:
                 if len(m) != 13:
                     msg = f"background message of {len(m)} bytes"
@@ -276,6 +338,8 @@ def run(port: int, click_file: Path, token: str) -> None:
                 if frames == 1:
                     ws.send("s:640,480")
                     ws.send("p:" + PASTE)  # a paste in the page: the browser's clipboard, for the program
+                    ws.send("k:1,KeyA")  # the program changes its image in the next 12 frames
+                    ws.send("k:0,KeyA")
                 elif (w, h) == (640.0, 480.0) and not sized:
                     sized = True
                     sized_at = time.monotonic()
@@ -332,6 +396,63 @@ def run(port: int, click_file: Path, token: str) -> None:
     if copies != [COPY.encode()]:
         msg = f"clipboard messages {copies!r}, expected one, {COPY!r} (the answer to the paste)"
         raise ProtocolError(msg)
+    if len(jpegs) != 1 or not 2 <= max(jpegs.values()) <= JPEG_CHANGES - 1:
+        msg = f"JPEG messages per texture {jpegs}: expected one texture, 2 to {JPEG_CHANGES - 1} (its changes but the first)"
+        raise ProtocolError(msg)
+    if lossy or replaced != 1:
+        msg = f"textures left as JPEG {sorted(lossy)}, {replaced} replaced exact (expected none left, one replaced)"
+        raise ProtocolError(msg)
+
+
+KINDS = {1: "frame", 2: "texture", 3: "destroy", 4: "background", 5: "unchanged", 7: "clipboard", 8: "jpeg"}
+
+
+def drag(ws: WebSocket, x: float, y: float, seconds: float) -> None:
+    """Press the left button at (x, y), move right and back 4 pixels per event at 60 events per second, release."""
+    ws.send(f"m:{x},{y}")
+    ws.send("b:0,1")
+    t0 = time.monotonic()
+    k = 0
+    while time.monotonic() - t0 < seconds:
+        k += 1
+        ws.send(f"m:{x + 4 * (k % 100 if (k // 100) % 2 == 0 else 100 - k % 100)},{y}")
+        time.sleep(1.0 / 60.0)
+    ws.send("b:0,0")
+
+
+def measure(port: int, token: str, x: float, y: float, seconds: float, size: tuple[int, int]) -> None:
+    """Print the bytes per message kind during a drag and in the second after it (what goes over the network)."""
+    ws = WebSocket(port, token)
+    ws.s.settimeout(0.2)
+    ws.send(f"s:{size[0]},{size[1]}")
+    phases: dict[str, dict[str, list[int]]] = {"drag": {}, "after": {}}
+    start = time.monotonic() + 1.0  # one second to settle, not counted
+    thread = threading.Thread(target=lambda: (time.sleep(1.0), drag(ws, x, y, seconds)), daemon=True)
+    thread.start()
+    while time.monotonic() < start + seconds + 1.0:
+        try:
+            m = ws.recv()
+        except (TimeoutError, socket.timeout):
+            continue
+        except EOFError:
+            break
+        now = time.monotonic()
+        if now < start:
+            continue
+        wire = len(m)
+        kind = m[0]
+        if kind == 6:
+            kind = zlib.decompress(m[1:])[0]
+            name = KINDS.get(kind, str(kind)) + " (deflated)"
+        else:
+            name = KINDS.get(kind, str(kind))
+        phase = phases["drag" if now < start + seconds else "after"]
+        phase.setdefault(name, []).append(wire)
+    for phase, length in (("drag", seconds), ("after", 1.0)):
+        total = sum(sum(v) for v in phases[phase].values())
+        print(f"{phase}: {length:.1f} s, {total / 1024:.0f} KiB, {total / length / 1024 / 1024:.2f} MiB/s")
+        for name, sizes in sorted(phases[phase].items()):
+            print(f"  {name:22s} {len(sizes):5d} messages, {sum(sizes) / 1024:9.0f} KiB, {sum(sizes) / len(sizes) / 1024:8.1f} KiB each")
 
 
 def write_verdict(path: Path, text: str) -> None:
@@ -342,7 +463,11 @@ def write_verdict(path: Path, text: str) -> None:
 
 
 def main(argv: list[str]) -> int:
-    """Run the client; write the verdict to OK_FILE."""
+    """Run the client; write the verdict to OK_FILE. With --measure, measure instead."""
+    if argv and argv[0] == "--measure":
+        size = (int(argv[6]), int(argv[7])) if len(argv) > 7 else (1280, 800)
+        measure(int(argv[1]), argv[2], float(argv[3]), float(argv[4]), float(argv[5]) if len(argv) > 5 else 5.0, size)
+        return 0
     port, click_file, ok_file = int(argv[0]), Path(argv[1]), Path(argv[2])
     token = argv[3] if len(argv) > 3 else ""
     try:

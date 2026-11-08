@@ -13,6 +13,7 @@ private
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
 public :: fig_set_remote_fps, fig_set_remote_compress, fig_set_remote_token, fig_remote_token
+public :: fig_set_remote_lossy
 public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, fig_texture_destroy, fig_texture_sampling
 public :: fig_texture_update
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
@@ -491,6 +492,13 @@ interface
    implicit none
    integer(c_int), value :: mode !< Mode.
    endsubroutine fig_set_remote_compress
+
+   subroutine fig_set_remote_lossy(on) bind(C, name='fig_set_remote_lossy')
+   !< Remote mode: a user texture updated in consecutive frames goes as JPEG, then exact when it stops (1); 0: exact.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: on !< JPEG while changing (1) or not (0).
+   endsubroutine fig_set_remote_lossy
 
    subroutine fig_set_remote_token(token, token_len) bind(C, name='fig_set_remote_token')
    !< Remote mode: the access token (empty: none).

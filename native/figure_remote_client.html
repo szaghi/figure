@@ -42,12 +42,16 @@ const loc = { pos: gl.getAttribLocation(prog, "pos"), uv: gl.getAttribLocation(p
               unit: gl.getUniformLocation(prog, "unit") };
 const vbo = gl.createBuffer(), ibo = gl.createBuffer();
 
+// pixels: w x h RGBA bytes, or an ImageBitmap (a decoded JPEG, kind 8: w and h unused)
 function setTexture(id, w, h, linear, pixels) {
   let t = textures.get(id);
   if (!t) { t = gl.createTexture(); textures.set(id, t); }
   gl.bindTexture(gl.TEXTURE_2D, t);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  if (pixels instanceof Uint8Array)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  else
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
   const filter = linear ? gl.LINEAR : gl.NEAREST; // the font atlas is linear; user images keep sharp pixels
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
@@ -110,7 +114,8 @@ function draw(buf) {
   }
 }
 
-// Messages are handled in arrival order; a deflated one (kind 6) is inflated first, asynchronously.
+// Messages are handled in arrival order; a deflated one (kind 6) is inflated first, and a JPEG texture (kind 8)
+// decoded, asynchronously: the next message waits for it.
 let queue = Promise.resolve();
 function onMessage(ev) {
   queue = queue.then(() => {
@@ -128,6 +133,14 @@ function handle(buf) {
     setTexture(dv.getUint32(1, true), dv.getUint32(5, true), dv.getUint32(9, true),
                (dv.getUint32(13, true) & 1) !== 0, new Uint8Array(buf, 17));
     if (lastFrame) draw(lastFrame);
+  }
+  else if (kind === 8) { // a changing texture as JPEG: decoded by the browser, then as kind 2
+    const jpeg = new Blob([new Uint8Array(buf, 17)], { type: "image/jpeg" });
+    return createImageBitmap(jpeg, { premultiplyAlpha: "none", colorSpaceConversion: "none" }).then(bitmap => {
+      setTexture(dv.getUint32(1, true), 0, 0, (dv.getUint32(13, true) & 1) !== 0, bitmap);
+      bitmap.close();
+      if (lastFrame) draw(lastFrame);
+    });
   }
   else if (kind === 5) status.textContent = "frame " + frames + " (unchanged)"; // the program is alive
   else if (kind === 4) {

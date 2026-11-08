@@ -203,11 +203,13 @@ POSIX):
 
 [3-D views](view3d) are rendered on the CPU, into an image:
 
-- **Remote mode sends every render as raw RGBA:** `4 * width * height` bytes per render, a quarter of that while the
-  camera moves (fast moves). Turning a 1600x1000 view at 30 renders a second sends about 48 MB/s: fine on the same
-  machine; through an SSH tunnel the browser gets a few renders a second (FIGURE drops what it cannot take). Make the
-  view smaller, or turn it from the program in steps. Compressed images (JPEG while moving) are an open step of the
-  plan.
+- **Remote mode, while the camera moves, shows JPEG images:** an image changing frame after frame goes as a JPEG
+  (quality 75), so the browser shows its artefacts (blur around edges and grid lines, banding in smooth gradients)
+  until the camera has been still for 150 ms, when the exact image replaces it. `init_remote(lossy=.false.)` sends
+  every render exact: `4 * width * height` bytes, a quarter of that while moving, which an SSH tunnel to a cluster
+  node cannot carry at more than a few renders a second ([Changing images](remote#changing-images)).
+- **A slow link still limits the frame rate:** a 1600x1000 view zoomed in on a grid sends about 118 KB per JPEG, 7
+  MB/s at 60 frames a second; below that FIGURE sends only the newest frame and image, fewer per second.
 - **Large meshes:** above a million triangles a render takes tens of milliseconds (`threads=4` halves it), and the
   camera moves at that rate.
 - **The image has the view's size in logical pixels:** on a display scaled 2x it is magnified.

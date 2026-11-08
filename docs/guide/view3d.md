@@ -145,8 +145,9 @@ A render runs in three steps:
 The image is uploaded into a texture and drawn by Dear ImGui as any image.
 
 **Fast moves.** While the user drags or turns the wheel, the view is rendered at half its width and height: a quarter
-of the pixels to fill, and to send in remote mode. It renders at full size again in the frame where the move ends.
-`fast_moves=.false.` at `init` keeps full size.
+of the pixels to fill, and to send in remote mode. It renders at full size again in the frame where the move ends:
+the button released, or a frame without a wheel step. A drag held still keeps the half-size image, without
+rendering, until it moves again or ends. `fast_moves=.false.` at `init` keeps full size.
 
 **Threads.** `threads` (at most 4) splits each render over that many threads: bands of rows, each walking every
 triangle. It pays for large views and many triangles; beyond 4 it gains nothing with this split (see below).
@@ -174,13 +175,24 @@ time going into the pixels. Fast moves divide that part by four.
 |---|---|---|
 | window | as the table | uploaded to the GPU: about 1 ms at 1600x1000, at most |
 | headless | as the table | not uploaded; `v%image` reads it |
-| remote | as the table | sent to the browser as raw RGBA: `4 * width * height` bytes per render (6.4 MB at 1600x1000, 1.6 MB while moving with fast moves) |
+| remote | as the table, plus 2 to 5 ms per 800x600 image to encode it as JPEG while the camera moves | sent to the browser: as JPEG while the camera moves, then exact (`4 * width * height` bytes, 6.4 MB at 1600x1000, or deflated) once it is still |
 
-**Remote mode while the camera moves is limited by the network.** At 30 renders a second a 1600x1000 view sends 190
-MB/s, 48 MB/s with fast moves. That is fine on the same machine, but an SSH tunnel to a cluster node carries a few
-MB/s. FIGURE then drops the frames the browser cannot take (the [remote UI](remote) sends only the latest), so
-orbiting becomes a few renders a second. Remote mode's deflate compression helps smooth images (17 to 32 times
-smaller in the spike), busy ones 2 to 9 times. A still view costs nothing. See [Known issues](known-issues#_3-d-views).
+**Remote mode while the camera moves.** The view's image changes at every frame, and would go as raw RGBA: 1.6 MB
+per frame at 1600x1000 with fast moves, 91 MB/s at 59 frames a second, fine on the same machine but not through an
+SSH tunnel to a cluster node, which carries a few MB/s. So the [remote UI](remote#changing-images) sends an image
+updated in consecutive frames as a JPEG, and the exact image once the camera has been still for 150 ms. Turning
+`cb_view3d` for 5 s, measured with `scripts/remote_client.py --measure`:
+
+| The view (the image while moving) | before: raw | deflated (`compress='always'`) | now: JPEG |
+|---|---|---|---|
+| 964 x 553, fitted (482 x 276) | 520 KB per frame, 30 MB/s | 6.6 KB, 0.38 MB/s | 5.0 KB, 0.29 MB/s |
+| 1604 x 1013, fitted (802 x 506) | 1585 KB, 91 MB/s | 29 KB, 1.7 MB/s | 14 KB, 0.81 MB/s |
+| 1604 x 1013, zoomed in on the grid (802 x 506) | 1585 KB, 91 MB/s | 267 KB, 15 MB/s | 118 KB, 6.8 MB/s |
+
+KB and MB are of 1024 bytes. The fitted body leaves most of the view background, which deflates well; grid lines
+filling the view are JPEG's worst case. On the spike's OverSet grid coloured by a field, JPEG was 6 to 18 times
+smaller than deflate, and 30 to 190 times smaller than raw. A still view costs nothing; when a move ends, one exact
+image goes. `init_remote(lossy=.false.)` sends every image exact. See [Known issues](known-issues#_3-d-views).
 
 ## Statuses and modes
 
@@ -207,8 +219,8 @@ A failed `v%triangles` (or the other kinds) adds nothing and returns 0.
 - **window:** drawn as above, the image on the GPU.
 - **headless:** the same pixels, read with `v%image`. Synthetic input ([Headless testing](testing)) turns and picks as
   the mouse does.
-- **remote:** the same pixels, sent to the browser as a texture at each render (above). The mouse in the browser
-  turns and picks as in a window.
+- **remote:** the same pixels, sent to the browser as a texture at each render: as JPEG while the camera moves,
+  exact once it is still (above). The mouse in the browser turns and picks as in a window.
 
 ## Limits
 
@@ -233,7 +245,11 @@ OpenGL context. Three designs were weighed ([issue #3](https://github.com/szaghi
 | C | OpenGL in a window and WebGL in the browser, the geometry sent once | remote orbiting without sending images; a third renderer, in the browser, and no pixels on the program's side |
 
 The spike measured A's costs (the table above) against B's on this machine: on the GPU, B stays near 1 ms where A
-takes 5 to 50; under Mesa's llvmpipe, B is two to four times slower than A. **A is what FIGURE has.** B (GPU
-acceleration in a window) and C (WebGL in remote mode) are the owner's open choice for a later release. Compressed
-images in remote mode (JPEG while the camera moves, lossless when it stops) are a separate, smaller step, also open:
-they would take a moving 1600x1000 view from 190 MB/s to about 1 to 6 MB/s.
+takes 5 to 50; under Mesa's llvmpipe, B is two to four times slower than A. The decision (S15, closed for v0.3.0):
+
+- **A is FIGURE's renderer** in every mode.
+- **B only when an application needs it:** when one draws more than about 10⁶ triangles in a window, where A falls
+  under 30 renders a second. It would then render on the GPU only behind a check of the OpenGL renderer (not Mesa's
+  llvmpipe or softpipe, where A is faster), with A everywhere else.
+- **No C.** It would add a third renderer and take the pixels away from tests and captures; JPEG images while the
+  camera moves (above) answer its bandwidth argument.

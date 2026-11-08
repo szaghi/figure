@@ -1,11 +1,12 @@
 # Third-party software
 
 FIGURE is released under the [MIT licence](LICENSE.mit.md). Its native layer (`scripts/build_native.sh`) downloads
-and compiles the projects below into `lib/libfigure_native.a` and `lib/libSDL3.a`, and embeds the fonts kept in
-`third_party/fonts/`, the palettes of `themes/palettes/`, whose colours are those of the projects named below
-(their licence files in `third_party/palettes/`), and the colormaps of `third_party/colormaps/` (256 RGB samples
-each, with their licence files): a program linked with FIGURE contains them. Their licences are all permissive and
-compatible with FIGURE's. The native build installs each licence file under `share/licenses/<project>/`.
+and compiles the projects below into `lib/libfigure_native.a` and `lib/libSDL3.a` (stb_image_write is kept in
+`third_party/stb/`, not downloaded), and embeds the fonts kept in `third_party/fonts/`, the palettes of
+`themes/palettes/`, whose colours are those of the projects named below (their licence files in
+`third_party/palettes/`), and the colormaps of `third_party/colormaps/` (256 RGB samples each, with their licence
+files): a program linked with FIGURE contains them. Their licences are all permissive and compatible with FIGURE's.
+The native build installs each licence file under `share/licenses/<project>/`.
 
 | Project | Version (pinned in `native/CMakeLists.txt`) | Licence | Copyright | In FIGURE |
 |---|---|---|---|---|
@@ -14,6 +15,7 @@ compatible with FIGURE's. The native build installs each licence file under `sha
 | [cimgui](https://github.com/cimgui/cimgui) | `1.93.1WIPdock` | MIT | Stephan Dilly | the C API of Dear ImGui, and its metadata used by `scripts/gen_bindings.py` |
 | [cimplot](https://github.com/cimgui/cimplot) | `v1.1` | MIT | Victor Bombí | the C API of ImPlot, and its metadata used by `scripts/gen_bindings.py` |
 | [miniz](https://github.com/richgel999/miniz) | `3.0.2` (release archive, SHA-256 pinned) | MIT | Rich Geldreich, RAD Game Tools, Valve Software | deflate for the remote mode's compressed messages |
+| [stb_image_write](https://github.com/nothings/stb) | v1.16, `stb_image_write.h` at commit `4e9b368` (its last change: `1ee679c`), vendored unmodified in `third_party/stb/`, its licence (from the end of the file) in `LICENSE-stb.txt` | MIT or public domain (Unlicense), at the user's choice; FIGURE takes MIT | Sean Barrett | the JPEG encoder of the remote mode's changing images |
 | [SDL](https://github.com/libsdl-org/SDL) | `release-3.4.20` | zlib | Sam Lantinga | window, input, OpenGL context, file dialogs |
 | [IBM Plex Sans](https://github.com/IBM/plex) | Regular 3.005, `third_party/fonts/IBMPlexSans-Regular.ttf` (unmodified) | OFL-1.1 | IBM Corp. (Reserved Font Name "Plex") | the default font of the interface, embedded |
 | [IBM Plex Mono](https://github.com/IBM/plex) | Regular 2.005, release `@ibm/plex-mono@2.5.0`, `third_party/fonts/IBMPlexMono-Regular.ttf` (unmodified) | OFL-1.1 | IBM Corp. (Reserved Font Name "Plex") | the monospace font (`'plex-mono'`), embedded |
@@ -34,11 +36,12 @@ compatible with FIGURE's. The native build installs each licence file under `sha
 
 ## Distributing a program built with FIGURE
 
-- **MIT** (FIGURE, Dear ImGui, ImPlot, cimgui, cimplot, miniz, the Lucide icons derived from Feather, the palettes
-  Nord, Solarized, Gruvbox, Dracula, Catppuccin, Tokyo Night and One Dark) and **ISC** (Lucide): the copyright notice
-  and the permission notice must be included in all copies or substantial portions of the software. For a binary,
-  ship the licence files with it (the `share/licenses/` tree, where the Lucide one is `share/licenses/lucide/` and the
-  palettes' are `share/licenses/<palette>/`, or the texts in your documentation or "About" box).
+- **MIT** (FIGURE, Dear ImGui, ImPlot, cimgui, cimplot, miniz, stb_image_write, the Lucide icons derived from
+  Feather, the palettes Nord, Solarized, Gruvbox, Dracula, Catppuccin, Tokyo Night and One Dark) and **ISC**
+  (Lucide): the copyright notice and the permission notice must be included in all copies or substantial portions of
+  the software. For a binary, ship the licence files with it (the `share/licenses/` tree, where the Lucide one is
+  `share/licenses/lucide/` and the palettes' are `share/licenses/<palette>/`, or the texts in your documentation or
+  "About" box).
 - **The colormaps** (`share/licenses/<project>/`, `<project>` one of `matplotlib`, `mpl-colormaps`, `turbo`,
   `cmocean`, `paraview`, `crameri`): MIT (cmocean, Crameri's), as above; **BSD-3-Clause** (ParaView's Cool to Warm):
   reproduce the copyright notice, the conditions and the disclaimer in the documentation of a binary, and do not use

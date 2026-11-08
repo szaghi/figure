@@ -24,16 +24,22 @@ bool serve(int timeout_ms);
 bool frame_pending();
 // The last frame sent is still (partly) in the client's queue.
 bool queue_busy();
-// Send a rendered frame to the client, if any: the textures Dear ImGui asks for (created, updated, destroyed), then
-// the draw lists. Also answers Dear ImGui's texture requests when no client is connected.
+// Send a rendered frame to the client, if any: the textures Dear ImGui asks for (created, updated, destroyed) and the
+// user textures updated since the last frame sent (as JPEG while they change, see set_lossy), then the draw lists.
+// Also answers Dear ImGui's texture requests when no client is connected.
 void send_frame(ImDrawData *draw_data);
-// User textures (texture_object): RGBA pixels, kept to be sent again to a client that connects later.
+// User textures (texture_object): RGBA pixels, kept to be sent with the next frame that goes out, and again to a
+// client that connects later.
 void texture_update(std::uint64_t id, int width, int height, const unsigned char *rgba, bool linear);
 void texture_destroy(std::uint64_t id);
 // The background behind the windows (the style's), sent to the client now and to every client that connects.
 void set_background(float r, float g, float b);
 // Deflate frames and textures: 0 auto (while the client has been the bottleneck in the last 5 s), 1 always, 2 never.
 void set_compression(int mode);
+// Send a user texture updated in two consecutive frames (the 3-D view while the camera moves) as JPEG at quality 75
+// while it keeps changing, and its exact pixels once it is still (not updated for 150 ms) (true, default); false:
+// always exact. Textures with transparent pixels are always sent exact.
+void set_lossy(bool on);
 // The access token the page and the WebSocket need in their address (?token=...): made at start (32 hex digits from the
 // system's cryptographic generator), replaced by the program's own, or disabled (empty).
 void set_token(const std::string &token);

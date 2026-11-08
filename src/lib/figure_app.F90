@@ -22,6 +22,7 @@ use figure_base, only : figure_check, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
+                            fig_set_remote_lossy,                                                                       &
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
                             fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
                             fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title, fig_save_image, &
@@ -199,7 +200,7 @@ contains
    call figure_check(fig_set_icon_glyph(icon, len(icon, c_int)), stat)
    endsubroutine set_icon_glyph
 
-   subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, token, url, stat)
+   subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, lossy, token, url, stat)
    !< Create the contexts and serve the UI to a web browser on `http://host:port/` instead of opening a window: the
    !< program needs no display or GPU (a cluster node will do). One browser at a time, which can come and go while the
    !< program runs. The page and its connection need an access token in the address (`http://localhost:8080/?token=...`,
@@ -212,6 +213,9 @@ contains
    !< are skipped. A frame equal to the last one sent is not sent again. Vertices travel in 12 bytes instead of 20, and
    !< `compress` deflates frames and textures: `'auto'` (default) while the client is the bottleneck (frames are being
    !< skipped), `'always'`, or `'never'`; deflate costs about 7 ms of CPU per MB and shrinks frames 2.5 to 3.5 times.
+   !< With `lossy` (default true) an image updated in consecutive frames (a 3-D view while the camera moves) travels as
+   !< JPEG at quality 75 while it changes, 30 to 190 times smaller than raw, and exact once it has not changed for
+   !< 150 ms; `lossy=.false.` always sends exact pixels. Images with transparent pixels always go exact.
    class(app_object), intent(inout)         :: self      !< Application.
    integer(int32),    intent(in),  optional :: port      !< Port (default 8080; 0: any free port).
    character(len=*),  intent(in),  optional :: host      !< Address to listen on (default 127.0.0.1).
@@ -221,6 +225,7 @@ contains
    logical,           intent(in),  optional :: quiet     !< Do not print the address to open (default false).
    real(real64),      intent(in),  optional :: max_fps   !< Most frames per second (default 60; 0: no cap).
    character(len=*),  intent(in),  optional :: compress  !< Deflate frames and textures: 'auto', 'always', 'never'.
+   logical,           intent(in),  optional :: lossy     !< Changing images as JPEG, exact when still (default true).
    character(len=*),  intent(in),  optional :: token     !< Access token (default: random; '': none).
    character(len=*),  intent(out), optional :: url       !< The address to open, with the token (blank-padded).
    integer(int32),    intent(out), optional :: stat      !< Status.
@@ -277,6 +282,8 @@ contains
          call fig_set_remote_fps(60.0_c_double)
       endif
       call fig_set_remote_compress(zmode)
+      call fig_set_remote_lossy(1_c_int)
+      if (present(lossy)) call fig_set_remote_lossy(merge(1_c_int, 0_c_int, lossy))
       if (present(token)) call fig_set_remote_token(token, len(token, c_int))
       ntok = fig_remote_token(tok, len(tok, c_int))
       if (present(host)) then
