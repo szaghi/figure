@@ -84,7 +84,7 @@ contains
    !< Open the window (`width` x `height` logical pixels) and create the ImGui/ImPlot contexts.
    !<
    !< Window positions and sizes are not saved by default: with `ini_file`, Dear ImGui keeps them in that file, read
-   !< at the first frame and written while the program runs (its `imgui.ini`).
+   !< at the first frame and written while the program runs (its `imgui.ini`); not while `FIGURE_CAPTURE` records.
    !<
    !< `decorations='figure'` opens the window without the system's frame and draws one: a title bar with the icon
    !< (`set_icon`), the program's main menu bar (`ig_begin_main_menu_bar`) inside it, the title centred, and the
@@ -175,7 +175,9 @@ contains
    class(app_object), intent(inout)                     :: self        !< Application.
    integer(int8),     intent(in), contiguous, target    :: image(:,:,:) !< Pixels.
    integer(int32),    intent(out), optional             :: stat        !< Status: `FIG_ERR_STATE` in headless and remote
-                                                                       !< modes, `FIG_ERR_ARGUMENT` for a wrong shape.
+                                                                       !< modes, `FIG_ERR_ARGUMENT` for a wrong shape,
+                                                                       !< `FIG_ERR_FAILED` where the system has no
+                                                                       !< window icons (the title bar's is set).
 
    if (size(image, 1) /= 4) then
       call figure_fail(FIG_ERR_ARGUMENT, 'set_icon: the image is rgba(4, width, height)', stat)
@@ -191,7 +193,8 @@ contains
    class(app_object), intent(inout)         :: self !< Application.
    character(len=*),  intent(in)            :: icon !< One `ICON_*` constant.
    integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_STATE` in headless and remote modes,
-                                                    !< `FIG_ERR_ARGUMENT` if `icon` is not one icon.
+                                                    !< `FIG_ERR_ARGUMENT` if `icon` is not one icon, `FIG_ERR_FAILED`
+                                                    !< where the system has no window icons (the title bar's is set).
 
    call figure_check(fig_set_icon_glyph(icon, len(icon, c_int)), stat)
    endsubroutine set_icon_glyph

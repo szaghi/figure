@@ -1956,9 +1956,7 @@ int fig_set_icon_rgba(const unsigned char *rgba, int width, int height) {
                                                           : st.m == mode::headless ? "headless mode" : "remote mode"));
    if (width <= 0 || height <= 0 || width > 1024 || height > 1024)
       return fail(FIG_ERR_ARGUMENT, "set_icon: the image is rgba(4, width, height), 1 to 1024 pixels a side");
-   std::string err;
-   if (!set_window_icon(rgba, width, height, err)) return fail(FIG_ERR_FAILED, err);
-   if (st.frame.on) { // the bar's icon: a texture of the image
+   if (st.frame.on) { // the bar's icon: a texture of the image (even where the system refuses the window's)
       if (st.frame.icon_tex == 0) p_glGenTextures(1, &st.frame.icon_tex);
       p_glBindTexture(GL_TEXTURE_2D_, st.frame.icon_tex);
       p_glTexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, static_cast<int>(GL_LINEAR_));
@@ -1970,6 +1968,8 @@ int fig_set_icon_rgba(const unsigned char *rgba, int width, int height) {
       st.frame.icon_h = height;
    }
    st.frame.icon_glyph.clear();
+   std::string err;
+   if (!set_window_icon(rgba, width, height, err)) return fail(FIG_ERR_FAILED, err);
    return FIG_OK;
    FIG_CATCH
 }
@@ -1984,12 +1984,12 @@ int fig_set_icon_glyph(const char *icon, int icon_len) {
    std::string err;
    const int side = 64;
    if (!render_icon_glyph(g, side, rgba, err)) return fail(FIG_ERR_ARGUMENT, err);
-   if (!set_window_icon(rgba.data(), side, side, err)) return fail(FIG_ERR_FAILED, err);
-   if (st.frame.icon_tex != 0) {
+   if (st.frame.icon_tex != 0) { // the bar's icon first: kept even where the system refuses the window's
       p_glDeleteTextures(1, &st.frame.icon_tex);
       st.frame.icon_tex = 0;
    }
    st.frame.icon_glyph = g;
+   if (!set_window_icon(rgba.data(), side, side, err)) return fail(FIG_ERR_FAILED, err);
    return FIG_OK;
    FIG_CATCH
 }
@@ -2229,7 +2229,8 @@ int fig_set_ini_file(const char *path, int path_len) {
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if (ImGui::GetFrameCount() > 0) return fail(FIG_ERR_STATE, "the ini file must be set before the first frame");
    st.ini_file.assign(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
-   ImGui::GetIO().IniFilename = st.ini_file.empty() ? nullptr : st.ini_file.c_str();
+   // while capturing, nothing of the user's is read or written: the recordings do not depend on earlier runs
+   ImGui::GetIO().IniFilename = st.ini_file.empty() || cap.on ? nullptr : st.ini_file.c_str();
    return FIG_OK;
    FIG_CATCH
 }

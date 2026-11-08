@@ -103,6 +103,9 @@ frame does beyond moving, resizing and the three buttons is lost:
 - **Linux:** under X11 and Wayland the window manager moves and resizes the window through SDL; a double-click on the
   bar is FIGURE's own, at Dear ImGui's double-click time. Under WSLg the frame is FIGURE's alone, which is the point
   of the option there.
+- **No window icon on some systems:** a Wayland compositor without the `xdg-toplevel-icon` protocol and SDL's
+  offscreen driver have no window icons: `app%set_icon` returns `FIG_ERR_FAILED` there (a stop without `stat`), and
+  the icon shows in the bar only. Pass `stat` to `set_icon`.
 - **A window over the bar:** a floating Dear ImGui window dragged over the title bar is drawn above it, but the hit
   test still treats the bar's empty part as the drag area. Dock spaces and side bars start below the bar.
 

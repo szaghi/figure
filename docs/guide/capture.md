@@ -29,7 +29,8 @@ Window mode only (`app%init`); headless and remote modes ignore them.
 
 While capturing, lazy redraw is off (every frame is drawn), the content scale is 1 (sizes in pixels do not depend on
 the display), and the events of the real mouse and keyboard do not reach Dear ImGui; closing the window still ends the
-program.
+program. Nothing of the user's is read or written, so a recording does not depend on earlier runs: the `ini_file` of
+`app%init` is ignored and the [file browser](frame-loop#figure-s-file-browser) keeps its recent folders in memory.
 
 ## Input scripts
 

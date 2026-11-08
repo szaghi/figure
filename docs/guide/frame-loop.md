@@ -23,7 +23,7 @@ A program has one `app_object`. Its life is one loop:
 Window positions and sizes are not saved between runs: FIGURE turns off Dear ImGui's `imgui.ini`, so a layout left in
 the working directory by an earlier run never overrides what the program sets with `ig_set_next_window`. To keep the
 layout, name the file: `app%init(title, width, height, ini_file='my_tool.ini')`. Dear ImGui reads it at the first
-frame and rewrites it while the program runs. Headless mode never uses one.
+frame and rewrites it while the program runs. Headless mode never uses one, nor does a [capture](capture).
 
 ## next_frame
 
@@ -277,7 +277,9 @@ in the error colour when hovered. With a style that has no palette, the roles ar
 **The icon.** `set_icon` sets the window's icon for the task bar or the dock (`SDL_SetWindowIcon`) and the bar's: an
 image as given, or an `ICON_*` rendered at 64 x 64 pixels with the bundled icon font, in the palette's text on accent
 colour on a rounded square of its accent (the bar shows the glyph in the accent colour). Something other than one
-icon is `FIG_ERR_ARGUMENT`; an image of the wrong shape too.
+icon is `FIG_ERR_ARGUMENT`; an image of the wrong shape too. A system without window icons (a Wayland compositor
+without the `xdg-toplevel-icon` protocol, SDL's offscreen driver) refuses the window's with `FIG_ERR_FAILED` and
+SDL's reason; the bar's icon is set all the same, so a program that passes `stat` keeps its bar.
 
 **Modes.**
 

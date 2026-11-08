@@ -16,13 +16,14 @@ logical                   :: viscous       !< A flag.
 logical                   :: running       !< False once Quit is picked.
 integer(int32)            :: i             !< Counter.
 integer(int32)            :: root          !< Dock space, below the bar.
+integer(int32)            :: stat          !< Status of the icon: refused where the system has none.
 
 x = [(real(i - 1, real64) / real(N - 1, real64), i = 1_int32, N)]
 cfl = 0.8_real64
 viscous = .true.
 running = .true.
 call app%init('FIGURE: frame', 900_int32, 520_int32, decorations='figure') ! no system frame: FIGURE draws it
-call app%set_icon(ICON_CHART_LINE)                                         ! the task bar's icon, and the bar's
+call app%set_icon(ICON_CHART_LINE, stat=stat)                              ! the task bar's icon, and the bar's
 call app%set_confirm_quit(.true.)                                          ! the bar's close button asks too
 do while (running)
    if (.not. app%next_frame()) exit
