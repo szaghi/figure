@@ -1,0 +1,25 @@
+# FIGURE as a self-contained fpm package, written by scripts/fpm_package.py from the repository at 632d47ca06dc.
+# Do not edit: regenerate. fpm compiles the native layer itself (Dear ImGui, ImPlot, cimgui, cimplot, miniz and
+# FIGURE's glue, all in src/); SDL3 comes from the system.
+name = "figure"
+version = "0.3.0"
+license = "MIT"
+author = "Stefano Zaghi"
+maintainer = "stefano.zaghi@cnr.it"
+description = "FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration"
+homepage = "https://github.com/szaghi/figure"
+
+[build]
+auto-executables = false
+auto-examples = false
+auto-tests = false
+link = ["SDL3"]
+
+[fortran]
+implicit-typing = false
+implicit-external = false
+source-form = "free"
+
+[library]
+source-dir = "src"
+include-dir = ["src/native", "src/cimgui", "src/cimgui/imgui", "src/cimgui/imgui/backends", "src/cimplot", "src/cimplot/implot", "src/miniz", "src/stb"]
