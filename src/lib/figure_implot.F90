@@ -2,6 +2,8 @@
 module figure_implot
 !< figure_implot, ImPlot plots with Fortran arrays.
 !<
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!<
 !< `ip_begin_plot` returns true when the plot is visible: then declare its axes and items and close it with
 !< `ip_end_plot` (only in that case). Items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`) take `real(real32)` or
 !< `real(real64)` arrays, read in place, without copies, during the call: they go straight to ImPlot's `float*` or

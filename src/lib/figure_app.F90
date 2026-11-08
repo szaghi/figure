@@ -81,7 +81,7 @@ type :: app_object
 endtype app_object
 
 contains
-   subroutine init(self, title, width, height, vsync, stat, ini_file, decorations, buttons)
+   recursive subroutine init(self, title, width, height, vsync, stat, ini_file, decorations, buttons)
    !< Open the window (`width` x `height` logical pixels) and create the ImGui/ImPlot contexts.
    !<
    !< Window positions and sizes are not saved by default: with `ini_file`, Dear ImGui keeps them in that file, read
@@ -106,6 +106,7 @@ contains
    integer(c_int)                           :: status      !< Native status.
    integer(c_int)                           :: v           !< vsync flag.
 
+   if (figure_refused('app%init', stat)) return ! a task does not draw
    status = frame_options(decorations, buttons)
    if (status /= FIG_OK) then
       call figure_check(status, stat)
@@ -118,7 +119,7 @@ contains
    call figure_check(status, stat)
    endsubroutine init
 
-   subroutine init_headless(self, width, height, stat, decorations, buttons)
+   recursive subroutine init_headless(self, width, height, stat, decorations, buttons)
    !< Create the contexts on a virtual `width` x `height` display, without window or GPU.
    !<
    !< `decorations='figure'` draws the title bar of `init`'s `decorations='figure'` as in a window, for tests: its
@@ -131,6 +132,7 @@ contains
    character(len=*),  intent(in),  optional :: buttons     !< With `'figure'`: `'right'` or `'left'`.
    integer(c_int)                           :: status      !< Native status.
 
+   if (figure_refused('app%init_headless', stat)) return ! a task does not draw
    status = frame_options(decorations, buttons)
    if (status == FIG_OK) status = fig_init_headless(int(width, c_int), int(height, c_int))
    call figure_check(status, stat)
@@ -169,7 +171,7 @@ contains
    status = fig_frame_options(d, b)
    endfunction frame_options
 
-   subroutine set_icon_image(self, image, stat)
+   recursive subroutine set_icon_image(self, image, stat)
    !< The window's icon (task bar, dock, the title bar of `decorations='figure'`) from an image, `image(4, width,
    !< height)`: `image(:, i, j)` = R, G, B, A of pixel (i, j), j = 1 the top row. Window mode only; 1 to 1024 pixels a
    !< side (64 x 64 or 256 x 256 are usual).
@@ -180,6 +182,7 @@ contains
                                                                        !< `FIG_ERR_FAILED` where the system has no
                                                                        !< window icons (the title bar's is set).
 
+   if (figure_refused('app%set_icon', stat)) return ! a task does not draw
    if (size(image, 1) /= 4) then
       call figure_fail(FIG_ERR_ARGUMENT, 'set_icon: the image is rgba(4, width, height)', stat)
       return
@@ -187,7 +190,7 @@ contains
    call figure_check(fig_set_icon_rgba(c_loc(image), int(size(image, 2), c_int), int(size(image, 3), c_int)), stat)
    endsubroutine set_icon_image
 
-   subroutine set_icon_glyph(self, icon, stat)
+   recursive subroutine set_icon_glyph(self, icon, stat)
    !< The window's icon from one of the bundled icons, `ICON_*`: rendered at 64 x 64 pixels in the palette's text on
    !< accent colour on a rounded square of its accent; the title bar of `decorations='figure'` shows the glyph in the
    !< accent colour. Window mode only.
@@ -197,10 +200,11 @@ contains
                                                     !< `FIG_ERR_ARGUMENT` if `icon` is not one icon, `FIG_ERR_FAILED`
                                                     !< where the system has no window icons (the title bar's is set).
 
+   if (figure_refused('app%set_icon', stat)) return ! a task does not draw
    call figure_check(fig_set_icon_glyph(icon, len(icon, c_int)), stat)
    endsubroutine set_icon_glyph
 
-   subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, lossy, token, url, stat)
+   recursive subroutine init_remote(self, port, host, width, height, port_used, quiet, max_fps, compress, lossy, token, url, stat)
    !< Create the contexts and serve the UI to a web browser on `http://host:port/` instead of opening a window: the
    !< program needs no display or GPU (a cluster node will do). One browser at a time, which can come and go while the
    !< program runs. The page and its connection need an access token in the address (`http://localhost:8080/?token=...`,
@@ -241,6 +245,9 @@ contains
    integer(c_int)                           :: ntok      !< Its length.
    character(len=:), allocatable            :: address   !< The address to open.
 
+   if (present(port_used)) port_used = 0_int32
+   if (present(url)) url = ''
+   if (figure_refused('app%init_remote', stat)) return ! a task does not draw
    if (present(token)) then
       if (len(token) > len(tok) .or. verify(token, &
           'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~') /= 0) then ! safe in an address as it is
@@ -342,7 +349,7 @@ contains
    call fig_set_lazy(merge(1_c_int, 0_c_int, enabled), w)
    endsubroutine set_lazy
 
-   subroutine set_style(self, name, lines, stat, look, palette, auto_dark, auto_light)
+   recursive subroutine set_style(self, name, lines, stat, look, palette, auto_dark, auto_light)
    !< The style of the interface, the plots and the window's background, after `init*`: by name, or by its two parts,
    !< a look (the geometry) and a palette (the colours). Changing one part keeps the other.
    !<
@@ -376,12 +383,13 @@ contains
    character(len=*),  intent(in),  optional :: auto_light !< Palette of `'auto'` on a light system (default
                                                           !< `'seal-light'`).
 
+   if (figure_refused('app%set_style', stat)) return ! a task does not draw
    call figure_check(fig_set_style_parts(opt(name), opt_len(name), opt(look), opt_len(look), opt(palette),      &
                                          opt_len(palette), opt(auto_dark), opt_len(auto_dark), opt(auto_light), &
                                          opt_len(auto_light), opt(lines), opt_len(lines)), stat)
    endsubroutine set_style
 
-   subroutine palette_color(self, role, rgba, stat)
+   recursive subroutine palette_color(self, role, rgba, stat)
    !< The colour of a palette role in effect, as `[r, g, b, a]` in [0, 1]: `'background'`, `'surface'`,
    !< `'raised_surface'`, `'border'`, `'text'`, `'dimmed_text'`, `'accent'`, `'text_on_accent'`, `'selection'`,
    !< `'success'`, `'warning'`, `'error'`. With a style that has no palette (`'dark'`, `'light'`, `'classic'`, a theme
@@ -394,6 +402,8 @@ contains
    integer(int32),    intent(out), optional :: stat    !< Status: `FIG_ERR_ARGUMENT` for an unknown role.
    real(c_float)                            :: c(4)    !< Native colour.
 
+   rgba = 0.0_real64
+   if (figure_refused('app%palette_color', stat)) return ! a task does not draw
    c = 0.0_c_float
    call figure_check(fig_palette_color(role, len_trim(role, c_int), c), stat)
    rgba = real(c, real64)
@@ -444,7 +454,7 @@ contains
    call figure_check(fig_notify(text, len(text, c_int), k, icon, len(icon, c_int), s), stat)
    endsubroutine notify
 
-   subroutine notifications(self, list, kinds, shown)
+   recursive subroutine notifications(self, list, kinds, shown)
    !< The notifications kept, the last 100, oldest first: their texts (`list`, padded with blanks to the longest),
    !< their kinds (`'info'`, ...) and whether each is still shown (not yet timed out or dismissed). None before
    !< `init*`.
@@ -456,6 +466,12 @@ contains
    character(kind=c_char, len=4096)                     :: buf      !< A text.
    integer(c_int)                                       :: n, i, l, k, sh, longest !< Counters, state.
 
+   if (figure_refused('app%notifications')) then ! a task does not draw: empty lists
+      allocate(character(len=0) :: list(0))
+      if (present(kinds)) allocate(kinds(0))
+      if (present(shown)) allocate(shown(0))
+      return
+   endif
    if (fig_notification_count(n) /= FIG_OK) n = 0_c_int
    longest = 0_c_int
    do i = 1_c_int, n
@@ -475,7 +491,7 @@ contains
    enddo
    endsubroutine notifications
 
-   subroutine set_font(self, font, size, stat)
+   recursive subroutine set_font(self, font, size, stat)
    !< The default font of the interface, after `init*`: `'plex-sans'` (IBM Plex Sans, bundled: the default, at 15
    !< logical pixels), `'plex-mono'` (IBM Plex Mono, bundled: monospace, every character as wide), `'proggy'` (Dear
    !< ImGui's own 13-pixel bitmap font), or the path of a TrueType/OpenType file; `size` in logical pixels (multiplied
@@ -487,6 +503,7 @@ contains
                                                     !< `FIG_ERR_ARGUMENT` if it is not a font or the size is wrong.
    real(c_double)                           :: s    !< Size; 0: keep.
 
+   if (figure_refused('app%set_font', stat)) return ! a task does not draw
    s = 0.0_c_double
    if (present(size)) then
       if (.not. (size > 0.0_real64)) then
@@ -498,7 +515,7 @@ contains
    call figure_check(fig_set_font(font, len_trim(font, c_int), s), stat)
    endsubroutine set_font
 
-   subroutine load_style(self, file, stat)
+   recursive subroutine load_style(self, file, stat)
    !< Apply a theme file (the format of the files in `themes/`: docs, Styles, Theme files), after `init*`. Sizes in the
    !< file are logical pixels; what the file does not set comes from its `base`.
    class(app_object), intent(inout)         :: self !< Application.
@@ -506,10 +523,11 @@ contains
    integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_FAILED` if unreadable, `FIG_ERR_ARGUMENT` if
                                                     !< malformed (the message gives the line).
 
+   if (figure_refused('app%load_style', stat)) return ! a task does not draw
    call figure_check(fig_load_style(file, len_trim(file, c_int)), stat)
    endsubroutine load_style
 
-   subroutine save_style(self, file, stat)
+   recursive subroutine save_style(self, file, stat)
    !< Write the style in effect as a theme file: its base, background, line colours, and every colour and variable
    !< that differs from the base (sizes in logical pixels; colours as 8-bit hex, alphas exact). Changes made by name
    !< or in the style editor (`ig_show_style_editor`) are kept; `load_style` reads the file back.
@@ -517,16 +535,18 @@ contains
    character(len=*),  intent(in)            :: file !< Theme file to write.
    integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_FAILED` if it cannot be written.
 
+   if (figure_refused('app%save_style', stat)) return ! a task does not draw
    call figure_check(fig_save_style(file, len_trim(file, c_int)), stat)
    endsubroutine save_style
 
-   subroutine set_docking(self, enabled, stat)
+   recursive subroutine set_docking(self, enabled, stat)
    !< Docking on (the default since `init*`) or off: with docking on, a window dragged by its title bar docks into
    !< another window or into a dock space (`ig_dock_space`). After `init*`.
    class(app_object), intent(inout)         :: self    !< Application.
    logical,           intent(in)            :: enabled !< Docking on.
    integer(int32),    intent(out), optional :: stat    !< Status: `FIG_ERR_STATE` before `init*`.
 
+   if (figure_refused('app%set_docking', stat)) return ! a task does not draw
    call figure_check(fig_set_docking(merge(1_c_int, 0_c_int, enabled)), stat)
    endsubroutine set_docking
 
@@ -611,17 +631,18 @@ contains
    call fig_quit()
    endsubroutine quit
 
-   subroutine set_title(self, text, stat)
+   recursive subroutine set_title(self, text, stat)
    !< The window's title, after `init`: the document being edited and a mark when it has changes, for example. Shown in
    !< window mode; in remote and headless modes it is kept (read back by `title`) and nothing shows it.
    class(app_object), intent(inout)         :: self !< Application.
    character(len=*),  intent(in)            :: text !< Title.
    integer(int32),    intent(out), optional :: stat !< Status.
 
+   if (figure_refused('app%set_title', stat)) return ! a task does not draw
    call figure_check(fig_set_title(text, len(text, c_int)), stat)
    endsubroutine set_title
 
-   function title(self) result(text)
+   recursive function title(self) result(text)
    !< The window's title: the one given to `init` or the last `set_title` ('' before `init`, and in headless and remote
    !< modes until `set_title`).
    class(app_object), intent(in) :: self !< Application.
@@ -629,6 +650,10 @@ contains
    character(kind=c_char)        :: none(1) !< No buffer (the length only).
    integer(c_int)                :: n    !< Length.
 
+   if (figure_refused('app%title')) then ! a task does not draw
+      text = ''
+      return
+   endif
    n = fig_title(none, 0_c_int)
    allocate(character(len=n) :: text)
    if (n > 0_c_int) n = fig_title(text, n)
@@ -721,7 +746,7 @@ contains
    call show_file_browser(1_c_int, id, filters, default_path, stat)
    endsubroutine save_file_browser
 
-   subroutine file_dialog_result(self, id, path, done, cancelled, stat)
+   recursive subroutine file_dialog_result(self, id, path, done, cancelled, stat)
    !< The answer to the dialog or the browser `id`: `done` false while it is open; once answered, `done` true and
    !< either `path` (the file or folder chosen, absolute for the browser) or `cancelled` true. The answer is given once;
    !< then the id is free again, and until the next dialog `done` is false: poll it every frame. A dialog that failed
@@ -737,7 +762,10 @@ contains
    integer(c_int)                                       :: n         !< Path length.
    integer(c_int)                                       :: status    !< Status.
 
+   done = .false.
+   if (present(cancelled)) cancelled = .false.
    path = ''
+   if (figure_refused('app%file_dialog_result', stat)) return ! a task does not draw
    status = fig_file_dialog_result(id, len(id, c_int), buf, len(buf, c_int), state, n)
    done = state /= 0_c_int
    if (present(cancelled)) cancelled = state == 2_c_int
@@ -745,7 +773,7 @@ contains
    call figure_check(status, stat)
    endsubroutine file_dialog_result
 
-   subroutine save_image(self, path, xmin, ymin, xmax, ymax, stat)
+   recursive subroutine save_image(self, path, xmin, ymin, xmax, ymax, stat)
    !< Write the rectangle (xmin, ymin)-(xmax, ymax) of the window [logical pixels, as `ig_item_rect` and
    !< `test_window_rect` give them] as a PNG file, at the screen's resolution, when the current frame is rendered.
    !< Ask for it outside the frame in which a menu or popup covers the rectangle (they would be in the picture).
@@ -759,11 +787,12 @@ contains
    real(real64),      intent(in)            :: ymax !< Bottom.
    integer(int32),    intent(out), optional :: stat !< Status.
 
+   if (figure_refused('app%save_image', stat)) return ! a task does not draw
    call figure_check(fig_save_image(path, len(path, c_int), real(xmin, c_double), real(ymin, c_double), &
                                     real(xmax, c_double), real(ymax, c_double)), stat)
    endsubroutine save_image
 
-   subroutine image_result(self, path, done, stat)
+   recursive subroutine image_result(self, path, done, stat)
    !< The outcome of `save_image`, once, after the frame that wrote it: `done` true and the file `path`, or
    !< `FIG_ERR_FAILED` with the reason (the file cannot be written). `done` false before and after: poll it every frame.
    class(app_object),             intent(inout)         :: self !< Application.
@@ -775,14 +804,16 @@ contains
    integer(c_int)                                       :: n    !< Path length.
    integer(c_int)                                       :: status !< Status.
 
+   done = .false.
    path = ''
+   if (figure_refused('app%image_result', stat)) return ! a task does not draw
    status = fig_image_result(buf, len(buf, c_int), state, n)
    done = state /= 0_c_int
    if (done) path = buf(1:min(n, len(buf, c_int)))
    call figure_check(status, stat)
    endsubroutine image_result
 
-   subroutine save_layout(self, path, comment, stat)
+   recursive subroutine save_layout(self, path, comment, stat)
    !< Write the layout to `path`: the windows' positions, sizes and docking (the dock nodes and which window is in
    !< which), the tables' columns: Dear ImGui's settings, as its ini text, for every window shown in this session and
    !< those read before. `comment` (lines separated by `new_line('a')`) is written first, each line led by '; ', which
@@ -793,6 +824,7 @@ contains
    character(len=*),  intent(in),  optional :: comment !< Lines to keep with it.
    integer(int32),    intent(out), optional :: stat    !< Status.
 
+   if (figure_refused('app%save_layout', stat)) return ! a task does not draw
    if (present(comment)) then
       call figure_check(fig_save_layout(path, len(path, c_int), comment, len(comment, c_int)), stat)
    else
@@ -800,7 +832,7 @@ contains
    endif
    endsubroutine save_layout
 
-   subroutine load_layout(self, path, stat)
+   recursive subroutine load_layout(self, path, stat)
    !< Read a layout written by `save_layout` (or an ini file of Dear ImGui), applied before the next frame: the
    !< settings in effect are cleared, the file's are read, the dock nodes are rebuilt and the windows that exist take
    !< their saved position, size and dock; the others take theirs when they appear. A program that lays out its dock
@@ -810,6 +842,7 @@ contains
    character(len=*),  intent(in)            :: path !< File.
    integer(int32),    intent(out), optional :: stat !< Status.
 
+   if (figure_refused('app%load_layout', stat)) return ! a task does not draw
    call figure_check(fig_load_layout(path, len(path, c_int)), stat)
    endsubroutine load_layout
 
@@ -821,10 +854,11 @@ contains
    scale = real(fig_content_scale(), real64)
    endfunction content_scale
 
-   subroutine destroy(self)
+   recursive subroutine destroy(self)
    !< Close the window and destroy the contexts (safe in any state).
    class(app_object), intent(inout) :: self !< Application.
 
+   if (figure_refused('app%destroy')) return ! a task does not draw
    call fig_shutdown()
    self%in_frame = .false.
    endsubroutine destroy
@@ -846,7 +880,7 @@ contains
    case ('system')
       call show_file_dialog(kind, id, filters, default_path, stat)
    case ('figure')
-      if (figure_refused(who, stat)) return ! a task does not draw
+   if (figure_refused(who, stat)) return ! a task does not draw
       call show_file_browser(kind, id, filters, default_path, stat)
    case default
       call figure_fail(FIG_ERR_ARGUMENT, who//": prefer is 'system' or 'figure', got '"//which//"'", stat)

@@ -2,6 +2,8 @@
 module figure_imgui
 !< figure_imgui, Dear ImGui widgets with Fortran arguments.
 !<
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!<
 !< Immediate mode: call the widgets every frame; each returns what happened this frame (`ig_button` is true on the
 !< frame it is clicked, `ig_checkbox`/`ig_slider` are true when they changed the value). Values are ordinary Fortran
 !< variables, updated in place: no handles, no callbacks, no `target` requirements (the C `bool*` of a checkbox is a

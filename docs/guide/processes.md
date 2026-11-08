@@ -175,9 +175,13 @@ popups, tab bars, tables, trees, `ip_begin_plot`, ...), the widgets (`ig_text`, 
 `view3d_object`, and the calls that read or change the GUI's state (`app%dropped`, `app%notify`, the file browsers,
 the clipboard, the colormaps). A widget called from a task outside any container is refused like a container: it
 returns at once (`.false.`, its values unchanged), with `FIG_ERR_STATE` in `stat` where it has one. The check
-costs the main thread one call, about 1.5 ns. Not checked: the raw bindings (`figure_cimgui`, `figure_cimplot`),
-Dear ImGui's and ImPlot's own functions, and the application's style calls (`app%set_style`, `app%set_font`,
-`app%load_style`), which a task must not call either ([known issues](known-issues#tasks)).
+costs the main thread one call, about 1.5 ns. The application's procedures that change or read the GUI's state
+refuse too: `app%init*` and `app%destroy`, the style (`set_style`, `set_font`, `load_style`, `save_style`,
+`palette_color`), `set_docking`, `set_icon`, `set_title` and `title`, the layouts, `save_image` and
+`image_result`, `file_dialog_result` and `notifications`. A task may call the ones that only set or read a flag:
+`quit`, `quit_requested`, `request_frames`, `set_lazy`, `set_confirm_quit`, `content_scale`. Not checked: the raw
+bindings (`figure_cimgui`, `figure_cimplot`), Dear ImGui's and ImPlot's own functions, which a task must not call
+([known issues](known-issues#tasks)).
 
 ### Cancelling
 

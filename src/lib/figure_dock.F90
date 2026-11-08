@@ -2,6 +2,8 @@
 module figure_dock
 !< figure_dock, docking: windows docked into one another or into a dock space, and layouts set by the program.
 !<
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!<
 !< Docking is on by default (`app%set_docking` turns it off): the user drags a window by its title bar onto another
 !< window, or onto a dock space, and drops it as a tab or a split. A dock space over the whole display is declared
 !< every frame with `ig_dock_space`, before the windows that dock into it. A program lays out a dock space once, the

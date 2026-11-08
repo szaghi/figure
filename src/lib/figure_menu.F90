@@ -2,6 +2,8 @@
 module figure_menu
 !< figure_menu, menus, popups and keyboard shortcuts.
 !<
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!<
 !< Pairing (Dear ImGui's): each `ig_end_*` only after its `ig_begin_*` returned true. A window's own menu bar needs the
 !< window flag `ImGuiWindowFlags_MenuBar` in its `ig_begin`. A menu item's shortcut text is only shown: the program
 !< reacts to the keys with `ig_shortcut`, every frame, outside the menu (the menu is closed most of the time).

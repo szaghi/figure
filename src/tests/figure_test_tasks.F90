@@ -19,7 +19,7 @@ type :: sum_job
    integer(int32) :: chunks = 0_int32  !< Chunks done.
    logical        :: drawn(3) = .true. !< Drawing calls that returned true (they must not).
    logical        :: widgets(6) = .true. !< Widgets called from the task that returned true (they must not).
-   integer(int32) :: stats(4) = -1_int32 !< Statuses of the widgets called from the task.
+   integer(int32) :: stats(6) = -1_int32 !< Statuses of the widgets and style calls made from the task.
    integer(int32) :: stat = -1_int32   !< Status of a call that must refuse.
 endtype sum_job
 
@@ -82,7 +82,7 @@ contains
 
    recursive subroutine draw_work(h, data)
    !< Breaks the threading rule: calls drawing procedures, which must refuse: containers, then widgets, plot items,
-   !< a legend, a colour editor, a list clipper and a style colour outside any container.
+   !< a legend, a colour editor, a list clipper and a style colour outside any container; the application's style.
    type(task_handle_object), intent(inout) :: h       !< Handle.
    class(*),                 intent(inout) :: data    !< A sum_job.
    type(app_object)                        :: app     !< An application object (not initialized here).
@@ -118,6 +118,8 @@ contains
       call ip_line('task line', [0.0_real64, 1.0_real64], [0.0_real64, 1.0_real64], stat=data%stats(2))
       call ip_colormap_legend('task legend', 0_int32, 0.0_real64, 1.0_real64, stat=data%stats(3))
       call ig_push_style_color('Text', '#ff0000', stat=data%stats(4))
+      call app%set_style('paper', stat=data%stats(5))                ! the application's style calls too
+      call app%set_font('plex-mono', stat=data%stats(6))
       data%widgets = data%widgets .or. ival /= 3_int32 .or. rval /= 0.5_real64 .or. flag
    endselect
    endsubroutine draw_work
@@ -278,7 +280,7 @@ contains
    type is (sum_job)
       ok = ok .and. .not. any(data%drawn) .and. data%chunks == 1_int32 .and. .not. any(data%widgets) .and. &
            all(data%stats == FIG_ERR_STATE)
-      if (.not. ok) write(error_unit, '(A,6L2,A,4(I0,1X))') 'drawing refused: widgets ', data%widgets, ', statuses ', &
+      if (.not. ok) write(error_unit, '(A,6L2,A,6(I0,1X))') 'drawing refused: widgets ', data%widgets, ', statuses ', &
                                                            data%stats
    class default
       ok = .false.

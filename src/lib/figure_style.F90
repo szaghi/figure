@@ -2,6 +2,8 @@
 module figure_style
 !< figure_style, every colour and variable of the Dear ImGui and ImPlot styles, by name.
 !<
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!<
 !< The style is global: a change applies to everything drawn afterwards, until it is changed again (or a new style is
 !< chosen with `app%set_style`, which resets every colour and variable). Names are the libraries' own:
 !<

@@ -2,6 +2,8 @@
 module figure_group
 !< figure_group, widgets that group other widgets: child regions, headers, tabs, tables, trees, id scopes, disabled blocks.
 !<
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!<
 !< Pairing rules (Dear ImGui's): `ig_end_tab_bar` only when `ig_begin_tab_bar` returned true, `ig_end_tab` only when
 !< `ig_begin_tab` returned true, `ig_end_table` only when `ig_begin_table` returned true, `ig_tree_pop` only when
 !< `ig_tree_node` returned true (unlike `ig_begin`/`ig_end`,
