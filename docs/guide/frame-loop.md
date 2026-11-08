@@ -146,9 +146,9 @@ Two kinds of dialog choose a file to open, where to save, or a folder: the **sys
 
 | Procedure | Notes |
 |---|---|
-| `app%open_file_dialog(id [, filters] [, default_path] [, stat])` | The system's dialog: choose an existing file. |
-| `app%save_file_dialog(id [, filters] [, default_path] [, stat])` | The system's dialog: choose where to save, a new or an existing file. |
-| `app%open_folder_dialog(id [, default_path] [, stat])` | The system's dialog: choose a folder. |
+| `app%open_file_dialog(id [, filters] [, default_path] [, stat] [, prefer])` | The system's dialog: choose an existing file. |
+| `app%save_file_dialog(id [, filters] [, default_path] [, stat] [, prefer])` | The system's dialog: choose where to save, a new or an existing file. |
+| `app%open_folder_dialog(id [, default_path] [, stat] [, prefer])` | The system's dialog: choose a folder. |
 | `app%open_file_browser(id [, filters] [, default_path] [, folders] [, stat])` | FIGURE's browser: choose an existing file, or with `folders=.true.` a folder. |
 | `app%save_file_browser(id [, filters] [, default_path] [, stat])` | FIGURE's browser: choose where to save; replacing a file is asked first. |
 | `app%file_dialog_result(id, path, done [, cancelled] [, stat])` | The answer to either kind: `done` once the user answered, then `path`, or `cancelled`. |
@@ -158,6 +158,16 @@ in remote and headless modes it is refused. The browser works everywhere: in [re
 choose a file on the machine the program runs on, and in headless tests it is driven like any other part of the
 interface ([Testing](testing)). A program that runs in both modes asks for the system's dialog and opens the
 browser when it is refused, as above.
+
+**`prefer='figure'`.** The three system's dialogs take `prefer`: `'system'` (the default) or `'figure'`, which opens
+FIGURE's browser of the same kind instead (`open_file_browser`, `save_file_browser`, `open_file_browser` with
+`folders=.true.`), in every mode, answered by `file_dialog_result` as before. A program, or a setting of its own,
+then chooses the browser everywhere with one argument, keeping the system's dialog as the default:
+
+<<< @/examples/snippets/cb_open-prefer.F90{fortran}
+
+Another value of `prefer` is `FIG_ERR_ARGUMENT`; with `'figure'` the statuses are the browser's (`FIG_ERR_STATE` from
+a task too).
 
 **Common rules.**
 - **Asynchronous.** Neither blocks the program: the interface keeps drawing, and the answer arrives on a later frame.
@@ -249,6 +259,11 @@ frame stays the default (`decorations='native'`).
 title bar, and a dock space or a side bar starts below it. The title (`app%set_title`) is centred in the bar, moved
 right of the menus when they reach the centre, and clipped before the buttons; it is dimmed while the window does not
 have the keyboard focus.
+
+**The bar's height** is the menu bar's by default (Dear ImGui's frame height). A look or a theme file makes it taller
+with `TitleBarHeight` in `[figure.vars]` ([styles](styles#looks)): the bar takes that height (logical pixels, times
+the content scale), the icon, the menus and the title stay centred in it, the buttons are as tall as the bar, and a
+dock space or a side bar starts below it. The bar never gets shorter than the menu bar.
 
 **The colours** are the [palette's roles](styles#palette-roles) in effect: the bar in the surface colour, the title
 and the buttons' marks in the text colour, a hovered button in a mix of the surface toward the text, the close button

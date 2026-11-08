@@ -247,6 +247,7 @@ int    fig_notify(const char *text, int text_len, int kind, const char *icon, in
 int    fig_notification_count(int *count);
 int    fig_notification_get(int index, char *buf, int buf_len, int *len, int *kind, int *shown);
 int    fig_notification_rect(int index, float *rect, int *found);
+int    fig_notification_alpha(int index, float *alpha);
 /* Tests: the extent (xmin, ymin, xmax, ymax) of the vertices drawn so far in the current window in a style colour of
  * Dear ImGui, by name (PlotHistogram: a progress bar's fill); found 0 if none. */
 int    fig_drawn_extent(const char *color, int color_len, float *rect, int *found);

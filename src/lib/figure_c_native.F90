@@ -31,6 +31,7 @@ public :: fig_process_release
 public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_task_cancel, fig_task_cancelled
 public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
+public :: fig_notification_alpha
 public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig_file_browser_rect
 public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_widget_input_text_multiline
 public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
@@ -306,6 +307,15 @@ interface
    integer(c_int), intent(out) :: found   !< 1 if shown.
    integer(c_int)              :: status  !< Status.
    endfunction fig_notification_rect
+
+   function fig_notification_alpha(idx, alpha) result(status) bind(C, name='fig_notification_alpha')
+   !< A shown notification's largest vertex alpha in the last frame, 1 the newest (0 past the last).
+   import :: c_float, c_int
+   implicit none
+   integer(c_int), value       :: idx     !< Index.
+   real(c_float),  intent(out) :: alpha   !< Alpha, in [0, 1].
+   integer(c_int)              :: status  !< Status.
+   endfunction fig_notification_alpha
 
    function fig_drawn_extent(color, color_len, rect, found) result(status) bind(C, name='fig_drawn_extent')
    !< The extent drawn in the current window in a style colour.

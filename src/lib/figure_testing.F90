@@ -25,8 +25,8 @@ use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
-                            fig_frame_state, fig_notification_rect, fig_drawn_extent, fig_file_browser_get, &
-                            fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
+                            fig_frame_state, fig_notification_rect, fig_notification_alpha, fig_drawn_extent, &
+                            fig_file_browser_get, fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
                             fig_drawn_extent_rgba, fig_popup_rect
 use figure_imgui, only : ig_item_rect
 
@@ -179,20 +179,29 @@ contains
    maximized = mx /= 0_c_int
    endsubroutine test_frame_state
 
-   subroutine test_notification_rect(index, xmin, ymin, xmax, ymax, found)
+   subroutine test_notification_rect(index, xmin, ymin, xmax, ymax, found, alpha)
    !< The rectangle [pixels] of a notification shown in the last frame (`app%notify`): `index` 1 is the newest, at the
-   !< bottom, 2 the one above it, ...; `found` is false past the last shown.
+   !< bottom, 2 the one above it, ...; `found` is false past the last shown. `alpha`: the largest alpha of the
+   !< vertices it was drawn with (the draw data), in [0, 1]: 1 while it is shown in full, falling to 0 as it fades
+   !< out in the last half second of its time; 0 past the last shown.
    integer(int32), intent(in)            :: index !< 1: the newest shown.
    real(real64),   intent(out)           :: xmin  !< Left.
    real(real64),   intent(out)           :: ymin  !< Top.
    real(real64),   intent(out)           :: xmax  !< Right.
    real(real64),   intent(out)           :: ymax  !< Bottom.
    logical,        intent(out), optional :: found !< It was shown.
+   real(real64),   intent(out), optional :: alpha !< Largest alpha drawn, in [0, 1].
    real(c_float)                         :: r(4)  !< Native rectangle.
+   real(c_float)                         :: a     !< Native alpha.
    integer(c_int)                        :: f     !< Found flag.
 
    r = 0.0_c_float
    if (fig_notification_rect(int(index, c_int), r, f) /= 0_c_int) f = 0_c_int
+   if (present(alpha)) then
+      a = 0.0_c_float
+      if (fig_notification_alpha(int(index, c_int), a) /= 0_c_int) a = 0.0_c_float
+      alpha = real(a, real64)
+   endif
    xmin = real(r(1), real64)
    ymin = real(r(2), real64)
    xmax = real(r(3), real64)

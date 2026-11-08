@@ -143,7 +143,11 @@ Used in context: [chapter 7](./tutorial/07-window) of the tutorial.
 
 The system's dialog in a window; FIGURE's file browser where there is none (remote mode: `cb_open --remote PORT`).
 Both answer through `app%file_dialog_result`, on a later frame: poll it every frame. To use the browser everywhere,
-the same in a window and in a web browser, open it directly:
+the same in a window and in a web browser, ask the same call for it (`prefer='figure'`):
+
+<<< @/examples/snippets/cb_open-prefer.F90{fortran}
+
+or open it directly:
 
 <<< @/examples/snippets/cb_open_browser-browser.F90{fortran}
 

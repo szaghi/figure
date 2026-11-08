@@ -129,6 +129,8 @@ struct state_t {
    float         clear[3] = {0.10f, 0.10f, 0.11f}; // the window's background, behind the ImGui windows (the style's)
    std::string   style_base = "dark";              // base of the style in effect (what save_style writes against)
    std::string   look;                             // the look in effect (themes/looks); empty: Dear ImGui's geometry
+   float         title_bar = 0.0f;                 // the height of FIGURE's title bar [logical pixels]; 0: the menu
+                                                   // bar's (a look's or theme's [figure.vars] TitleBarHeight)
    std::string   palette;                          // the palette in effect: a bundled name, "auto", "custom" (a
                                                    // [palette] table) or empty (the colours of a base)
    std::string   palette_resolved;                 // the bundled palette "auto" chose
@@ -804,8 +806,8 @@ bool load_look(const std::string &name, figure_theme::theme_t &look, std::string
    const std::string where = "themes/looks/" + name + ".toml";
    if (!figure_theme::parse(text, where, look, err)) return false;
    for (const std::string &k : look.keys)
-      if (k != "[imgui.vars]" && k != "[implot.vars]") {
-         err = where + ": a look holds [imgui.vars] and [implot.vars] only, not " + k;
+      if (k != "[imgui.vars]" && k != "[implot.vars]" && k != "[figure.vars]") {
+         err = where + ": a look holds [imgui.vars], [implot.vars] and [figure.vars] only, not " + k;
          return false;
       }
    return true;
@@ -850,6 +852,7 @@ struct style_build_t {
    ImFont              *font = nullptr;
    std::string          font_name;
    float                font_size = 0.0f; // 0: keep
+   float                title_bar = 0.0f; // FIGURE's title bar [logical pixels]; 0: the menu bar's height
 };
 
 // The style in effect, as a build to change parts of.
@@ -860,6 +863,7 @@ style_build_t current_build() {
    for (int i = 0; i < 3; ++i) b.clear[i] = st.clear[i];
    b.base = st.style_base;
    b.look = st.look;
+   b.title_bar = st.title_bar;
    b.palette = st.palette;
    b.palette_resolved = st.palette_resolved;
    b.has_roles = st.has_roles;
@@ -935,10 +939,12 @@ bool palette_colors(const figure_theme::theme_t &t, const std::string &where, st
    return true;
 }
 
-// The variables of a look (`name`) into fresh styles: Dear ImGui's and ImPlot's defaults, then the look's.
-bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, std::string &err) {
+// The variables of a look (`name`) into fresh styles: Dear ImGui's and ImPlot's defaults, then the look's; its title
+// bar's height [logical pixels] (0: the menu bar's).
+bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, float &title_bar, std::string &err) {
    figure_theme::theme_t look;
    if (!load_look(name, look, err)) return false;
+   title_bar = look.title_bar_height > 0.0 ? static_cast<float>(look.title_bar_height) : 0.0f;
    const std::string where = "themes/looks/" + name + ".toml";
    for (const auto &e : look.imgui_vars) {
       const figure_style::field *f = style_field(0, e.name);
@@ -961,7 +967,8 @@ bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, std::str
 bool apply_look(const std::string &name, style_build_t &b, std::string &err) {
    ImGuiStyle  s;
    ImPlotStyle ps;
-   if (!look_vars(name, s, ps, err)) return false;
+   float       title_bar = 0.0f;
+   if (!look_vars(name, s, ps, title_bar, err)) return false;
    s.ScaleAllSizes(st.scale);
    std::memcpy(s.Colors, b.s.Colors, sizeof(s.Colors));
    s.FontSizeBase = b.s.FontSizeBase;
@@ -972,6 +979,7 @@ bool apply_look(const std::string &name, style_build_t &b, std::string &err) {
    b.s = s;
    b.ps = ps;
    b.look = name;
+   b.title_bar = title_bar;
    return true;
 }
 
@@ -994,13 +1002,14 @@ bool build_theme(const figure_theme::theme_t &t, const std::string &where, const
    if (!t.look.empty()) {
       ImGuiStyle  s;
       ImPlotStyle ps;
-      if (!look_vars(t.look, s, ps, err)) return false;
+      if (!look_vars(t.look, s, ps, b.title_bar, err)) return false;
       std::memcpy(s.Colors, b.s.Colors, sizeof(s.Colors));
       std::memcpy(ps.Colors, b.ps.Colors, sizeof(ps.Colors));
       b.s = s;
       b.ps = ps;
       b.look = t.look;
    }
+   if (t.title_bar_height >= 0.0) b.title_bar = static_cast<float>(t.title_bar_height);
    for (const auto &e : t.imgui_vars) {
       const figure_style::field *f = style_field(0, e.name);
       if (!f) return bad(e, "unknown Dear ImGui style variable");
@@ -1074,6 +1083,7 @@ void commit_style(style_build_t &b, const figure_theme::theme_t *t = nullptr) {
    for (int i = 0; i < 3; ++i) st.clear[i] = b.clear[i];
    st.style_base = b.base;
    st.look = b.look;
+   st.title_bar = b.title_bar;
    st.palette = b.palette;
    st.palette_resolved = b.palette_resolved;
    st.has_roles = b.has_roles;
@@ -1359,6 +1369,7 @@ bool save_style_file(const std::string &path, std::string &err) {
       colors += std::string(ImPlot::GetStyleColorName(i)) + " = " + theme_color(c) + "\n";
    }
    if (!colors.empty()) out += "\n[implot.colors]\n" + colors;
+   if (st.title_bar != ref.title_bar) out += "\n[figure.vars]\nTitleBarHeight = " + short_float(st.title_bar) + "\n";
    FILE *f = std::fopen(path.c_str(), "wb");
    if (!f) {
       err = "cannot write " + path;
@@ -1426,9 +1437,11 @@ constexpr float  NOTE_FADE = 0.5f;
 std::deque<note_t>        notes;
 int                       next_note = 1;
 std::vector<frame_rect_t> note_rects; // last frame's shown notifications, newest first
+std::vector<float>        note_alphas; // ... the largest alpha of their vertices (the draw data: tests of the fade)
 
 void draw_notifications() {
    note_rects.clear();
+   note_alphas.clear();
    if (notes.empty()) return;
    const float dt = ImGui::GetIO().DeltaTime;
    color_t roles[ROLE_COUNT];
@@ -1474,6 +1487,9 @@ void draw_notifications() {
       ImGui::PopTextWrapPos();
       if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) n.shown = false;
       const ImVec2 pos = ImGui::GetWindowPos(), size = ImGui::GetWindowSize();
+      unsigned int top = 0; // the largest alpha drawn: the window's opaque colours times the fade
+      for (const ImDrawVert &v : ImGui::GetWindowDrawList()->VtxBuffer) top = std::max(top, (v.col >> IM_COL32_A_SHIFT) & 0xFFu);
+      note_alphas.push_back(static_cast<float>(top) / 255.0f);
       ImGui::End();
       ImGui::PopStyleColor();
       ImGui::PopStyleVar(2);
@@ -1519,6 +1535,41 @@ SDL_HitTestResult SDLCALL frame_hit_test(SDL_Window *, const SDL_Point *p, void 
    return static_cast<SDL_HitTestResult>(frame_hit(st.frame.geom, static_cast<float>(p->x), static_cast<float>(p->y)));
 }
 
+// The bar's height [pixels]: the look's title bar height (scaled), or the menu bar's (Dear ImGui's frame height).
+float frame_bar_height() {
+   const float menu = ImGui::GetFrameHeight();
+   return st.title_bar > 0.0f ? std::max(menu, std::round(st.title_bar * st.scale)) : menu;
+}
+
+// Dear ImGui's main menu bar (BeginMainMenuBar), opened first in the frame at the bar's height: the window's height and
+// its menu-bar rectangle are fixed by this first Begin of the frame, and the menus (FIGURE's icon, the program's own
+// menus appended later) start half the extra height down, so that they stay centred in a taller bar.
+bool frame_bar_begin() {
+   const float menu = ImGui::GetFrameHeight(), h = frame_bar_height();
+   if (h <= menu) return ImGui::BeginMainMenuBar();
+   ImGuiContext &g = *ImGui::GetCurrentContext();
+   ImGuiViewportP *vp = static_cast<ImGuiViewportP *>(ImGui::GetMainViewport());
+   ImGui::SetCurrentViewport(nullptr, vp);
+   const float extra = std::floor(0.5f * (h - menu));
+   g.NextWindowData.MenuBarOffsetMinVal =
+      ImVec2(g.Style.DisplaySafeAreaPadding.x, std::max(g.Style.DisplaySafeAreaPadding.y - g.Style.FramePadding.y, 0.0f) + extra);
+   // the menu bar's rectangle is the whole bar: its height is the offset plus the font plus twice the frame padding
+   const float pad = std::max(0.0f, 0.5f * (h - g.NextWindowData.MenuBarOffsetMinVal.y - g.FontSize));
+   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(g.Style.FramePadding.x, pad));
+   const bool open = ImGui::BeginViewportSideBar("##MainMenuBar", vp, ImGuiDir_Up, h,
+                                                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
+                                                    ImGuiWindowFlags_MenuBar);
+   ImGui::PopStyleVar();
+   g.NextWindowData.MenuBarOffsetMinVal = ImVec2(0.0f, 0.0f);
+   if (!open) {
+      ImGui::End();
+      return false;
+   }
+   g.CurrentWindow->Flags &= ~ImGuiWindowFlags_NoSavedSettings; // as BeginMainMenuBar
+   ImGui::BeginMenuBar();
+   return true;
+}
+
 // The start of the bar: Dear ImGui's main menu bar in the palette's surface colour, the space of the buttons when
 // they are on the left, and the icon.
 void frame_bar_open() {
@@ -1527,10 +1578,10 @@ void frame_bar_open() {
    roles_in_effect(r);
    ImGui::PushStyleColor(ImGuiCol_MenuBarBg, vec4(r[figure_theme::ROLE_SURFACE]));
    ImGui::PushStyleColor(ImGuiCol_WindowBg, vec4(r[figure_theme::ROLE_SURFACE]));
-   const bool open = ImGui::BeginMainMenuBar();
+   const bool open = frame_bar_begin();
    ImGui::PopStyleColor(2);
    if (!open) return;
-   const float h = ImGui::GetFrameHeight();
+   const float h = ImGui::GetCurrentWindow()->Size.y;
    if (st.frame.buttons_left) ImGui::Dummy(ImVec2(3.0f * 1.6f * h, h));
    frame_rect_t icon;
    if (!st.frame.icon_glyph.empty()) {
@@ -3359,6 +3410,12 @@ extern "C" int fig_notification_get(int index, char *buf, int buf_len, int *len,
    if (buf && buf_len > 0) std::memcpy(buf, n.text.data(), static_cast<size_t>(std::min(*len, buf_len)));
    *kind = n.kind;
    *shown = n.shown ? 1 : 0;
+   return FIG_OK;
+}
+
+extern "C" int fig_notification_alpha(int index, float *alpha) {
+   *alpha = 0.0f;
+   if (index >= 1 && index <= static_cast<int>(note_alphas.size())) *alpha = note_alphas[static_cast<size_t>(index - 1)];
    return FIG_OK;
 }
 

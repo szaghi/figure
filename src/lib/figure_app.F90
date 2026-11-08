@@ -627,42 +627,50 @@ contains
    if (n > 0_c_int) n = fig_title(text, n)
    endfunction title
 
-   subroutine open_file_dialog(self, id, filters, default_path, stat)
+   recursive subroutine open_file_dialog(self, id, filters, default_path, stat, prefer)
    !< Show the system's dialog to choose a file to open. It does not block: the interface keeps drawing, and the answer
    !< is read with `file_dialog_result(id, ...)` on the following frames. `filters`: entries `'name|pattern'`, the
    !< pattern being extensions separated by `;` (`'Input files|input;inp'`, `'All files|*'`). Window mode only:
    !< `FIG_ERR_STATE` in remote and headless modes (FIGURE's own browser, `open_file_browser`, works there).
+   !< `prefer='figure'` opens FIGURE's browser instead (`open_file_browser`), in every mode, answered the same way;
+   !< `'system'` (default) the system's dialog. Statuses: as the dialog or the browser opened; `FIG_ERR_ARGUMENT` for
+   !< another `prefer`.
    class(app_object), intent(inout)         :: self         !< Application.
    character(len=*),  intent(in)            :: id           !< Dialog id (any text, used to read the answer).
    character(len=*),  intent(in),  optional :: filters(:)   !< File type filters.
    character(len=*),  intent(in),  optional :: default_path !< Folder or file to start from (relative: to the
                                                                     !< working directory; absent: that directory).
    integer(int32),    intent(out), optional :: stat         !< Status.
+   character(len=*),  intent(in),  optional :: prefer       !< `'system'` (default) or `'figure'`: FIGURE's browser.
 
-   call show_file_dialog(0_c_int, id, filters, default_path, stat)
+   call show_dialog(0_c_int, 'app%open_file_dialog', id, filters, default_path, prefer, stat)
    endsubroutine open_file_dialog
 
-   subroutine save_file_dialog(self, id, filters, default_path, stat)
-   !< Show the system's dialog to choose where to save (a new or an existing file); as `open_file_dialog`.
+   recursive subroutine save_file_dialog(self, id, filters, default_path, stat, prefer)
+   !< Show the system's dialog to choose where to save (a new or an existing file); as `open_file_dialog`
+   !< (`prefer='figure'`: FIGURE's browser, `save_file_browser`).
    class(app_object), intent(inout)         :: self         !< Application.
    character(len=*),  intent(in)            :: id           !< Dialog id.
    character(len=*),  intent(in),  optional :: filters(:)   !< File type filters.
    character(len=*),  intent(in),  optional :: default_path !< Folder or file to start from (relative: to the
                                                                     !< working directory; absent: that directory).
    integer(int32),    intent(out), optional :: stat         !< Status.
+   character(len=*),  intent(in),  optional :: prefer       !< `'system'` (default) or `'figure'`: FIGURE's browser.
 
-   call show_file_dialog(1_c_int, id, filters, default_path, stat)
+   call show_dialog(1_c_int, 'app%save_file_dialog', id, filters, default_path, prefer, stat)
    endsubroutine save_file_dialog
 
-   subroutine open_folder_dialog(self, id, default_path, stat)
-   !< Show the system's dialog to choose a folder; as `open_file_dialog`.
+   recursive subroutine open_folder_dialog(self, id, default_path, stat, prefer)
+   !< Show the system's dialog to choose a folder; as `open_file_dialog` (`prefer='figure'`: FIGURE's browser,
+   !< `open_file_browser` with `folders=.true.`).
    class(app_object), intent(inout)         :: self         !< Application.
    character(len=*),  intent(in)            :: id           !< Dialog id.
    character(len=*),  intent(in),  optional :: default_path !< Folder to start from (relative: to the working
                                                                     !< directory; absent: that directory).
    integer(int32),    intent(out), optional :: stat         !< Status.
+   character(len=*),  intent(in),  optional :: prefer       !< `'system'` (default) or `'figure'`: FIGURE's browser.
 
-   call show_file_dialog(2_c_int, id, default_path=default_path, stat=stat)
+   call show_dialog(2_c_int, 'app%open_folder_dialog', id, default_path=default_path, prefer=prefer, stat=stat)
    endsubroutine open_folder_dialog
 
    recursive subroutine open_file_browser(self, id, filters, default_path, folders, stat)
@@ -813,6 +821,30 @@ contains
    call fig_shutdown()
    self%in_frame = .false.
    endsubroutine destroy
+
+   recursive subroutine show_dialog(kind, who, id, filters, default_path, prefer, stat)
+   !< The system's dialog of `kind` (0 open, 1 save, 2 folder) or, with `prefer='figure'`, FIGURE's browser of that kind.
+   integer(c_int),   intent(in)            :: kind         !< Kind.
+   character(len=*), intent(in)            :: who          !< The entry point, for messages.
+   character(len=*), intent(in)            :: id           !< Dialog id.
+   character(len=*), intent(in), optional  :: filters(:)   !< 'name|pattern' entries.
+   character(len=*), intent(in), optional  :: default_path !< Where to start.
+   character(len=*), intent(in), optional  :: prefer       !< 'system' or 'figure'.
+   integer(int32),   intent(out), optional :: stat         !< Status.
+   character(len=:), allocatable           :: which        !< The choice, trimmed.
+
+   which = 'system'
+   if (present(prefer)) which = trim(prefer)
+   select case (which)
+   case ('system')
+      call show_file_dialog(kind, id, filters, default_path, stat)
+   case ('figure')
+      if (figure_refused(who, stat)) return ! a task does not draw
+      call show_file_browser(kind, id, filters, default_path, stat)
+   case default
+      call figure_fail(FIG_ERR_ARGUMENT, who//": prefer is 'system' or 'figure', got '"//which//"'", stat)
+   endselect
+   endsubroutine show_dialog
 
    subroutine show_file_dialog(kind, id, filters, default_path, stat)
    !< Open a native file dialog of `kind` (0 open, 1 save, 2 folder).

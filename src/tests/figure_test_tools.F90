@@ -10,7 +10,8 @@ program figure_test_tools
 !< A text's size (`ig_text_size`): twice the text, twice the width; a label measured without its `##` part.
 !< Progress bars (`ig_progress_bar`): the filled width at known fractions, an indeterminate band that moves.
 !< Notifications (`app%notify`): shown in the bottom-right corner, the newest under the older, gone after their time
-!< (the fixed frame time), dismissed by a click, the kept list (the last 100), an unknown kind refused.
+!< (the fixed frame time), dismissed by a click, the kept list (the last 100), an unknown kind refused; the fade: the
+!< alpha of the draw data 1 until the last half second, then falling by a frame's share each frame, to about 0.
 !< Drops (`app%dropped`, `test_drop`): two paths dropped at once reported together on the next frame, once, with the
 !< point of the drop; nothing on the other frames. The clipboard (`ig_set_clipboard`, `ig_get_clipboard`): a text of
 !< two lines set and read back, an empty one, and a field's copy (ctrl+a, ctrl+c) read by the program.
@@ -27,7 +28,7 @@ implicit none
 integer(int32), parameter :: MAX_FRAMES = 60_int32 !< Frames run.
 type(app_object)          :: app                   !< Application (headless).
 type(list_clipper_object) :: clip                  !< Clipper.
-logical                   :: test_passed(21)       !< Per-check outcome.
+logical                   :: test_passed(22)       !< Per-check outcome.
 real(real64)              :: size1(2), size2(2), size3(2) !< Text sizes.
 integer(int32)            :: frame, i, shown       !< Frame, row, the tool shown.
 integer(int32)            :: clicks(2)             !< Clicks per tool button.
@@ -144,6 +145,7 @@ endif
 call progress_bars(test_passed(10:11))
 call notifications(test_passed(12:16))
 call drops_and_clipboard(test_passed(17:21))
+call notification_fade(test_passed(22))
 write(output_unit, '(A,*(L2))') 'figure_test_tools checks:', test_passed
 do i = 1_int32, size(test_passed, kind=int32)
    if (.not. test_passed(i)) write(output_unit, '(A,I0,A)') 'figure_test_tools: check ', i, ' FAILED'
@@ -153,6 +155,43 @@ call app%destroy()
 if (.not. all(test_passed)) error stop 1
 
 contains
+   subroutine notification_fade(ok)
+   !< A notification of 1 s, its alpha read from the draw data every frame (frames of 1/60 s): 1 while it is shown in
+   !< full, then falling by 1/30 a frame (a frame over the fade's half second) for the last 30 frames, to below 0.05;
+   !< then it is gone (the notifications kept shown by the check before, until dismissed, then come first: an alpha
+   !< rising again ends the samples).
+   logical, intent(out) :: ok          !< Outcome.
+   real(real64)         :: alpha(90)   !< The alpha, per frame (-1: not shown).
+   real(real64)         :: r(4)        !< Its rectangle.
+   logical              :: found       !< Shown.
+   logical              :: gone        !< Another notification is the newest shown.
+   integer(int32)       :: fr          !< Frame.
+   integer(int32)       :: full        !< Frames shown in full.
+   integer(int32)       :: fading      !< Frames fading.
+   integer(int32)       :: last        !< The last frame shown.
+
+   alpha = -1.0_real64
+   gone = .false.
+   call app%notify('fading out', seconds=1.0_real64)
+   do fr = 1_int32, size(alpha, kind=int32)
+      if (.not. app%next_frame()) exit
+      call test_notification_rect(1_int32, r(1), r(2), r(3), r(4), found, alpha=alpha(fr))
+      if (fr > 1_int32) gone = gone .or. alpha(fr) > alpha(fr - 1_int32) + 0.01_real64
+      if (.not. found .or. gone) alpha(fr) = -1.0_real64
+   enddo
+   full = count(alpha >= 254.0_real64 / 255.0_real64)
+   fading = count(alpha >= 0.0_real64 .and. alpha < 254.0_real64 / 255.0_real64)
+   last = 0_int32
+   do fr = 1_int32, size(alpha, kind=int32)
+      if (alpha(fr) >= 0.0_real64) last = fr
+   enddo
+   ok = full >= 25_int32 .and. fading >= 28_int32 .and. fading <= 31_int32 .and. last == full + fading
+   if (ok) ok = all(alpha(1:full) >= 254.0_real64 / 255.0_real64) .and. alpha(last) < 0.05_real64 .and. &
+                all(abs(alpha(full + 1:last) - alpha(full:last - 1) + 1.0_real64 / 30.0_real64) < 0.01_real64)
+   if (.not. ok) write(output_unit, '(A,2(I0,1X),A,90F6.3)') 'notification fade: full, fading ', full, fading, &
+                                                             ', alpha ', alpha
+   endsubroutine notification_fade
+
    subroutine drops_and_clipboard(ok)
    !< A drop of two paths (one with a space and a non-ASCII letter) at (123, 45): reported on the next frame only, the
    !< paths in order, at that point; no drop before it. The clipboard: two lines set and read back, then an empty one;

@@ -10,6 +10,8 @@
 //    [imgui.colors]   Name = "#rrggbb" | "#rrggbbaa" | ["#rrggbb", alpha]     Dear ImGui colours (ImGuiCol_*)
 //    [imgui.vars]     Name = number | [x, y] | true | false                   ImGuiStyle fields
 //    [implot.colors], [implot.vars]                                           the same for ImPlot
+//    [figure.vars]    TitleBarHeight = number                                 FIGURE's own: the height of the title
+//                                         bar drawn by FIGURE (decorations='figure'); 0: the menu bar's (default)
 //    look = "fusion"                      a bundled look (themes/looks): its geometry, before [imgui.vars]
 //    palette = "nord"                     a bundled palette (themes/palettes), or "auto" (the system's light or dark)
 //    auto_dark = "seal", auto_light = "seal-light"     the palettes "auto" chooses between
@@ -18,7 +20,7 @@
 // A colour is "#rrggbb", "#rrggbbaa", ["#rrggbb", alpha] or [r, g, b, a] (four numbers in [0, 1]).
 // With a palette (a name, or a [palette] table, which then overrides single roles of the named one) every Dear ImGui
 // colour is derived from the roles (figure_native.cpp, derive_colors) and `base` gives none; [imgui.colors] still
-// override. A look file holds [imgui.vars] and [implot.vars] only; a palette file a complete [palette] table and,
+// override. A look file holds [imgui.vars], [implot.vars] and [figure.vars] only; a palette file a complete [palette] table and,
 // optionally, background, lines, [imgui.colors] and [implot.colors].
 //
 // '#' starts a comment outside strings. Every entry not given comes from `base`, so a newer Dear ImGui adding style
@@ -59,6 +61,7 @@ struct theme_t {
    std::string          font;            // empty: keep the font in effect
    double               font_size = 0.0; // 0: keep the size in effect
    std::vector<entry_t> imgui_colors, imgui_vars, implot_colors, implot_vars;
+   double               title_bar_height = -1.0;  // [figure.vars] TitleBarHeight [logical pixels]; < 0: not given
    std::string          look;                    // a bundled look; empty: Dear ImGui's geometry
    std::string          palette;                 // a bundled palette or "auto"; empty: none (unless a [palette] table)
    std::string          auto_dark, auto_light;   // empty: not given

@@ -133,9 +133,9 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
       if (line.front() == '[' && line.back() == ']' && line.find('=') == std::string::npos) {
          section = trim(line.substr(1, line.size() - 2));
          if (section != "imgui.colors" && section != "imgui.vars" && section != "implot.colors" &&
-             section != "implot.vars" && section != "palette")
+             section != "implot.vars" && section != "palette" && section != "figure.vars")
             return fail("unknown section [" + section + "] (palette, imgui.colors, imgui.vars, implot.colors, "
-                        "implot.vars)");
+                        "implot.vars, figure.vars)");
          if (section == "palette") theme.has_palette_table = true;
          theme.keys.push_back("[" + section + "]");
          continue;
@@ -192,6 +192,13 @@ bool parse(const std::string &text, const std::string &where, theme_t &theme, st
          if (!color_value(v, theme.roles[r]) || theme.roles[r].a != 1.0f)
             return fail(key + ": a palette role is an opaque colour \"#rrggbb\"");
          theme.role_given[r] = true;
+         continue;
+      }
+      if (section == "figure.vars") {
+         if (key != "TitleBarHeight") return fail("unknown FIGURE variable \"" + key + "\" (TitleBarHeight)");
+         if (v.kind != value_t::NUMBER || !(v.num >= 0.0 && v.num <= 200.0))
+            return fail("TitleBarHeight is a height in [0, 200] pixels (0: the menu bar's)");
+         theme.title_bar_height = v.num;
          continue;
       }
       entry_t e;

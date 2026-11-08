@@ -115,9 +115,16 @@ A style has two parts, chosen separately:
 | `'fluent'` | Windows 11 (Fluent 2) | corners of 4 pixels on controls and 8 on windows, framed fields, round slider grabs |
 
 Dear ImGui draws no gradients, shadows or translucency effects: a look reproduces the proportions of its model, not
-its rendering. Each look is a file, `themes/looks/<name>.toml`, with `[imgui.vars]` and `[implot.vars]` only (sizes
-in logical pixels), embedded in the library; a style without a look (`'dark'`, `'light'`, `'classic'`) has Dear
-ImGui's own geometry.
+its rendering. Each look is a file, `themes/looks/<name>.toml`, with `[imgui.vars]`, `[implot.vars]` and
+`[figure.vars]` only (sizes in logical pixels), embedded in the library; a style without a look (`'dark'`, `'light'`,
+`'classic'`) has Dear ImGui's own geometry.
+
+**FIGURE's own variables** (`[figure.vars]` of a look or a theme file): `TitleBarHeight`, the height of the title bar
+FIGURE draws with `decorations='figure'` ([the window's frame](frame-loop#the-window-s-frame)), in logical pixels in
+[0, 200]; 0, or absent, is the default: the menu bar's height (Dear ImGui's frame height, the font plus twice
+`FramePadding`'s height). A height below the menu bar's is the menu bar's. The bundled looks set none. A new look
+sets it again (to the look's, or the default), as it does every other variable; `app%save_style` writes it when it
+differs from the look's.
 
 ### Palettes
 
@@ -363,6 +370,9 @@ PopupBg = ["#1c1915", 0.97]
 
 [implot.vars]                                  # ImPlotStyle fields
 [implot.colors]                                # ImPlotCol_* names
+
+[figure.vars]                                  # FIGURE's own variables
+TitleBarHeight = 40                            # the title bar of decorations='figure' (0: the menu bar's)
 ```
 
 - Names are those of [colours and variables by name](#colours-and-variables-by-name); `#` starts a comment.
@@ -378,7 +388,7 @@ PopupBg = ["#1c1915", 0.97]
   Dear ImGui colours gives matching plots.
 - A malformed file is reported with its line: `themes/x.toml:12: unknown Dear ImGui colour "Buton"`.
 
-A look file (`themes/looks/`) holds `[imgui.vars]` and `[implot.vars]` only; a palette file (`themes/palettes/`) holds
+A look file (`themes/looks/`) holds `[imgui.vars]`, `[implot.vars]` and `[figure.vars]` only; a palette file (`themes/palettes/`) holds
 a complete `[palette]` table and, optionally, `background`, `lines`, `[imgui.colors]` and `[implot.colors]`. Adding a
 file there and rebuilding the native layer adds a look or a palette.
 

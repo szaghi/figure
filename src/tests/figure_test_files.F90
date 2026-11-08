@@ -19,7 +19,9 @@ program figure_test_files
 !< - a new folder with a non-ASCII name, entered, and a non-ASCII file name typed and returned;
 !< - the path field completed by Tab and entered by Enter;
 !< - a folder that vanished, and (POSIX) one that cannot be read, reported in the browser;
-!< - an id already open, a malformed filter and a browser before `init*` refused.
+!< - an id already open, a malformed filter and a browser before `init*` refused;
+!< - the system's dialogs with `prefer='figure'`: FIGURE's browser of the same kind (open, save, folder), answered
+!<   through `file_dialog_result`; without it, refused headless; an unknown `prefer` refused.
 use, intrinsic :: iso_c_binding, only : c_char, c_int, c_null_char
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit, error_unit
 use figure, only : app_object, FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
@@ -88,7 +90,7 @@ character(len=*), parameter   :: RESUME = 'R'//char(195)//char(169)//'sum'//char
                                           char(195)//char(188)            !< "Résumé ü" (UTF-8).
 character(len=*), parameter   :: NAIVE = 'na'//char(195)//char(175)//'ve file.inp' !< "naïve file.inp" (UTF-8).
 type(app_object)              :: app                 !< Application (headless).
-logical                       :: test_passed(17)     !< Per-check outcome.
+logical                       :: test_passed(18)     !< Per-check outcome.
 logical                       :: answered            !< The browser was answered (polled every frame).
 logical                       :: was_cancelled       !< ... by a cancel.
 character(len=:), allocatable :: answer              !< ... with this path.
@@ -99,6 +101,7 @@ character(len=:), allocatable :: folder, err, field  !< Browser state.
 character(len=:), allocatable :: entries(:), recent(:) !< Browser lists.
 logical                       :: shown, asking, ok   !< Browser state, outcomes.
 integer(int32)                :: stat(4)             !< Statuses.
+integer(int32)                :: pstat(5)            !< Statuses, prefer.
 integer(int32)                :: k                   !< Counter.
 
 test_passed = .false.
@@ -261,6 +264,37 @@ endif
 k = c_chmod(BASE//'/locked'//c_null_char, int(o'755', c_int))
 call click('cancel')
 #endif
+
+! 18: the system's dialogs with prefer='figure' open FIGURE's browser of their kind; without it, refused headless
+call close_any()
+call app%open_file_dialog('f', default_path=BASE, stat=pstat(1), prefer='figure')
+call frames(3)
+call test_file_browser(shown, folder=folder)
+test_passed(18) = shown .and. folder == base_abs
+call double_click('entry:a.inp')
+test_passed(18) = test_passed(18) .and. answered .and. answer == base_abs//sep//'a.inp'
+call close_any()
+call app%open_folder_dialog('f', default_path=BASE, stat=pstat(2), prefer='figure')
+call frames(3)
+call click('entry:alpha')
+call click('ok')
+test_passed(18) = test_passed(18) .and. answered .and. answer == alpha_abs
+call close_any()
+call app%save_file_dialog('f', default_path=BASE, stat=pstat(3), prefer='figure ')  ! trailing blank: the same
+call frames(3)
+call test_file_browser(shown, asking=asking)
+call click('name')
+call test_type('new.dat')
+call test_key('enter')
+call frames(4)
+test_passed(18) = test_passed(18) .and. shown .and. answered .and. answer == base_abs//sep//'new.dat'
+call close_any()
+call app%open_file_dialog('g', stat=pstat(4))                          ! the system's: no desktop headless
+call app%open_file_dialog('g', stat=pstat(5), prefer='native')
+test_passed(18) = test_passed(18) .and. all(pstat(1:3) == FIG_OK) .and. pstat(4) == FIG_ERR_STATE .and. &
+                  pstat(5) == FIG_ERR_ARGUMENT
+if (.not. test_passed(18)) write(error_unit, '(A,5(1X,I0),A,A)') 'figure_test_files: prefer statuses', pstat, &
+                                                                ', answer ', answer
 
 ! 16: refusals: before init, an id open twice, a malformed filter
 call close_any()
@@ -451,10 +485,10 @@ contains
    logical        :: there  !< The settings file exists.
 
 #ifdef _WIN32
-   call execute_command_line('if exist '//BASE//' rmdir /s /q '//BASE, wait=.true., exitstat=ios)
+   call execute_command_line('if exist '//BASE//' rmdir /s /q '//BASE, exitstat=ios)
 #else
    ios = c_chmod(BASE//'/locked'//c_null_char, int(o'755', c_int))
-   call execute_command_line('rm -rf '//BASE, wait=.true., exitstat=ios)
+   call execute_command_line('rm -rf '//BASE, exitstat=ios)
 #endif
    inquire(file=SETTINGS, exist=there)
    if (there) then

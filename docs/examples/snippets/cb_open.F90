@@ -4,9 +4,9 @@ program cb_open
 !<
 !< `cb_open --remote PORT` serves the interface to a web browser, where the program has no window and therefore no
 !< system dialog: the same button then opens FIGURE's file browser, which lists the files of the machine the program
-!< runs on.
+!< runs on. The second button asks for FIGURE's browser in every mode, through the same call (`prefer='figure'`).
 use, intrinsic :: iso_fortran_env, only : int32, real64
-use figure, only : app_object, FIG_OK, ig_begin, ig_button, ig_end, ig_set_next_window, ig_text
+use figure, only : app_object, FIG_OK, ig_begin, ig_button, ig_end, ig_same_line, ig_set_next_window, ig_text
 
 implicit none
 character(len=*), parameter   :: FILTERS(2) = [character(len=24) :: 'Input files|input;inp', 'All files|*'] !< Types.
@@ -37,6 +37,8 @@ do while (app%next_frame())
       endif
       call app%file_dialog_result('open', chosen, done, cancelled, stat=stat) ! either one answers here
       if (done .and. .not. cancelled .and. stat == FIG_OK) path = chosen
+      call ig_same_line()
+      if (ig_button('Open with FIGURE''s browser...')) call app%open_file_dialog('open', FILTERS, prefer='figure')
       call ig_text('file: '//path)
    endif
    call ig_end()

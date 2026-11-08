@@ -163,7 +163,8 @@ desktop portal, another process reached over D-Bus, or by `zenity`. The portal d
 program's display: a program in window mode with no display of its own (`DISPLAY` and `WAYLAND_DISPLAY` unset, SDL's
 `offscreen` driver, a [capture](capture)) can still open a dialog on the desktop of the session it runs in. Tests and
 recordings never click the system's dialogs; they drive [FIGURE's file browser](frame-loop#figure-s-file-browser),
-which is drawn into the program's own frames.
+which is drawn into the program's own frames. A program can ask for the browser through the same calls with
+`prefer='figure'`.
 
 ## Processes
 
