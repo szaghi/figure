@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.1] — 2026-11-09
+### Documentation
+- **showcase**: Xall_gui's grid in the 3-D view, overset legacy's editor and the solvers run from the window
+
+
+### Fixed
+- **task**: Quit and request_frames safe from a task, and app%wake to start the next frame from any thread
+
+- **implot**: Printf formats checked against the value's kind before Dear ImGui or ImPlot uses them
+
+- **view3d**: The 3-D view owns the mouse wheel while the pointer is over it
+
+- **testing**: The tsan check runs on a fresh clone; wake latency allowed 1 s on CI runners
+
+
 ## [0.3.0] — 2026-11-08
 ### Added
 - **style**: Looks and palettes, colours derived from twelve roles
