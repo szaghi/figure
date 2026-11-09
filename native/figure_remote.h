@@ -19,6 +19,8 @@ void stop();
 // messages and feed them to Dear ImGui's IO. Returns early, true, when input arrived (or a client connected) or a
 // skipped frame can now be sent: the UI must be redrawn.
 bool serve(int timeout_ms);
+// From any thread: end serve's wait at once (serve returns true), or the next one's if none is under way.
+void wake();
 // A frame was skipped because the previous one was still queued (a slow client): the program should draw again, so
 // that the latest state goes out as soon as the queue drains (serve returns true then).
 bool frame_pending();

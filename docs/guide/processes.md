@@ -91,8 +91,8 @@ gives otherwise ([Error handling](errors)). `kill` on a process that has ended d
 - **Window:** as above; the reader wakes the frame loop with an event.
 - **Headless:** the same (the loop does not wait, nothing to wake).
 - **Remote:** the same: the processes run on the machine the program runs on (the server, a cluster node), not on the
-  browser's. While a reader is alive the remote loop waits on the network in slices of 10 ms, so that new output is
-  sent at once.
+  browser's. The reader ends the remote loop's wait on the network at once (a datagram to a socket the loop waits
+  on), so that new output is sent at once.
 
 ### Limits
 
@@ -179,9 +179,36 @@ costs the main thread one call, about 1.5 ns. The application's procedures that 
 refuse too: `app%init*` and `app%destroy`, the style (`set_style`, `set_font`, `load_style`, `save_style`,
 `palette_color`), `set_docking`, `set_icon`, `set_title` and `title`, the layouts, `save_image` and
 `image_result`, `file_dialog_result` and `notifications`. A task may call the ones that only set or read a flag:
-`quit`, `quit_requested`, `request_frames`, `set_lazy`, `set_confirm_quit`, `content_scale`. Not checked: the raw
-bindings (`figure_cimgui`, `figure_cimplot`), Dear ImGui's and ImPlot's own functions, which a task must not call
-([known issues](known-issues#tasks)).
+[below](#calling-the-application-from-a-task). Not checked: the raw bindings (`figure_cimgui`, `figure_cimplot`), Dear
+ImGui's and ImPlot's own functions, which a task must not call ([known issues](known-issues#tasks)).
+
+### Calling the application from a task
+
+These calls of the application are thread-safe: a task, an OpenMP thread or an MPI progress thread may make them
+while the main thread runs the frame loop. Each sets or reads one flag of the native layer, which is atomic; none is
+refused.
+
+| Call | From another thread than the loop's |
+|---|---|
+| `app%wake()` | the next frame starts without waiting for input or `max_wait` |
+| `app%request_frames(n)` | at least `n` more frames, the first at once; concurrent requests keep the largest |
+| `app%quit()` | the next `next_frame` returns `.false.`, at once |
+| `app%quit_requested()` → `logical` | the user asked to quit; one caller gets each request |
+| `app%set_lazy(enabled [, max_wait])` | lazy redraw on or off, from the next frame |
+| `app%set_confirm_quit(enabled)` | the window's close button reported instead of ending the loop |
+| `app%content_scale()` → `real64` | the display's content scale |
+
+`wake`, `request_frames` and `quit` called from another thread than the loop's wake a [lazy loop](frame-loop#waking-the-loop)
+that is waiting: in window mode with an event, in remote mode with a datagram to a socket the loop waits on; headless
+mode never waits. Called from the loop's own thread they do not wake anything, there is nothing to wake: the next
+`next_frame` does not wait. A task's progress report (`h%report`) and its end wake the loop too: `wake` is for news
+that does not go through the report, such as a file the task has written
+([cookbook](/manual/cookbook#redraw-when-a-worker-has-news)).
+
+Before v0.3.1 these flags were plain fields: `quit` and `request_frames` from a task raced with the main thread
+(undefined behaviour in C++: `scripts/tsan_check.sh` gave 16 ThreadSanitizer reports, at 8 lines of the native layer;
+none since), and a request
+from a task waited for the loop's next input or `max_wait` (0.5 s by default) before its frame.
 
 ### Cancelling
 
@@ -221,9 +248,9 @@ to its next safe point: a task with no safe point is waited for until its end.
 - **Window:** the task's reports and its end wake the frame loop with an event: the progress is drawn at once, even
   with lazy redraw.
 - **Headless:** the same (the loop does not wait).
-- **Remote:** the same: the task runs on the server; while a task is alive the remote loop waits on the network in
-  slices of 10 ms, so that its progress is sent at once. A long read no longer stops the streaming, so the browser
-  stays alive.
+- **Remote:** the same: the task runs on the server; its reports and its end end the remote loop's wait on the
+  network at once (a datagram to a socket the loop waits on), so that its progress is sent at once. A long read no
+  longer stops the streaming, so the browser stays alive.
 
 Several tasks may run at once, each with its own object. Tasks do not start tasks.
 

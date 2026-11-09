@@ -64,7 +64,6 @@ int SDLCALL task_main(void *data) {
    t->fn(t->arg);
    current = nullptr;
    SDL_SetAtomicInt(&t->done, 1);
-   fig_background(-1);
    fig_wake();
    return 0;
 }
@@ -97,13 +96,11 @@ int fig_task_start(void (*fn)(void *), void *arg, int *id) {
    SDL_SetStringProperty(props, SDL_PROP_THREAD_CREATE_NAME_STRING, "figure task");
    SDL_SetPointerProperty(props, SDL_PROP_THREAD_CREATE_USERDATA_POINTER, t.get());
    SDL_SetNumberProperty(props, SDL_PROP_THREAD_CREATE_STACKSIZE_NUMBER, STACK);
-   fig_background(1);
    *id = t->id; // before the thread starts: the task's handle holds it from its first line
    t->thread = SDL_CreateThreadWithProperties(props);
    SDL_DestroyProperties(props);
    if (!t->thread) {
       *id = 0;
-      fig_background(-1);
       const std::string err = SDL_GetError();
       SDL_LockMutex(reg_m);
       reg->erase(t->id);

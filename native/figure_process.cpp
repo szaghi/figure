@@ -166,7 +166,6 @@ void reader_main(std::shared_ptr<process_t> q, SDL_IOStream *io) {
       SDL_Delay(5);
    }
    fig_wake();
-   fig_background(-1);
 }
 
 // Kill a captured child and wait for its end (100 ms after a polite request, then by force); join the reader;
@@ -462,7 +461,6 @@ int fig_process_start(int *id, const char *args, const int *arg_lens, int nargs,
                SDL_DestroyProcess(p);
                return fail(FIG_ERR_FAILED, std::string("process: no output stream: ") + SDL_GetError());
             }
-            fig_background(1);
             q->reader = std::thread(reader_main, q, io);
          }
       }

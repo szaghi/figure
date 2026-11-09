@@ -392,6 +392,22 @@ done it takes the result, once. The task never draws: [the threading rule](/guid
 
 Used in context: [chapter 14](./tutorial/14-task) of the tutorial.
 
+### Redraw when a worker has news
+
+<<< @/examples/snippets/cb_wake-work.F90{fortran}
+
+<<< @/examples/snippets/cb_wake-loop.F90{fortran}
+
+<<< @/examples/output/cb_wake.txt{text}
+
+The loop is lazy with a long `max_wait`: idle, it draws one frame a minute. The solver runs as a task and leaves a
+snapshot file after each block of steps, then a mark that the snapshot is complete, then calls `app%wake()`: the loop
+starts its next frame at once and shows the snapshot. News sent with the task's progress report (`h%report`) wakes the
+loop by itself; `wake` is for news left elsewhere, such as a file, and for threads FIGURE did not start (OpenMP, MPI).
+`app%request_frames(n)` does the same and asks for `n` frames. The output above is from headless mode, which never
+waits; in a window and in remote mode each snapshot is drawn when it is written.
+[Waking the loop](/guide/frame-loop#waking-the-loop) has the details.
+
 ### A status bar
 
 <<< @/examples/snippets/cb_status-status.F90{fortran}

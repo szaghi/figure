@@ -22,6 +22,7 @@ public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, 
 public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord, fig_plot_tick_label
+public :: fig_app_wake
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
@@ -713,8 +714,12 @@ interface
    endfunction fig_quit_requested
 
    subroutine fig_quit() bind(C, name='fig_quit')
-   !< End the loop at the next begin_frame.
+   !< End the loop at the next begin_frame (from any thread; from another than the loop's, it wakes the loop).
    endsubroutine fig_quit
+
+   subroutine fig_app_wake() bind(C, name='fig_app_wake')
+   !< From any thread: the next frame starts without waiting for input or max_wait.
+   endsubroutine fig_app_wake
 
    function fig_set_title(title, title_len) result(status) bind(C, name='fig_set_title')
    !< The window's title (window mode: shown; every mode: kept).

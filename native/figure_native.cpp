@@ -39,17 +39,26 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
 
 std::string last_error;
 
-// Work off the frame loop (process readers, tasks) wakes it: window mode pushes an SDL event (SDL_PushEvent is safe
-// from any thread); remote mode, which waits on its sockets, waits in slices of 10 ms while such work exists and
-// ends the wait when woken; headless mode never waits.
-std::atomic<bool> woken{false};       // fig_wake since the last frame began
-std::atomic<int>  background{0};      // readers and workers alive
+// Work off the frame loop (process readers, tasks, any thread calling app%wake, request_frames or quit) wakes it:
+// window mode pushes an SDL event (SDL_PushEvent is safe from any thread); remote mode, which waits on its sockets,
+// sends a datagram to its wake socket, one of those it waits on; headless mode never waits.
+std::atomic<bool> woken{false};       // fig_wake since the last frame began to wait: its wake-up is on its way
+std::atomic<std::thread::id> main_thread{}; // the thread that called fig_init*: the one that runs the frame loop
+
+bool on_main_thread() { return std::this_thread::get_id() == main_thread.load(); }
+
+// fig_init*: this thread runs the frame loop; no wake-up is pending.
+void loop_starts() {
+   main_thread = std::this_thread::get_id();
+   woken = false;
+}
 std::atomic<bool> sdl_events{false};  // window mode: SDL's event queue is up
 
 int fail(int status, const std::string &msg) {
@@ -113,19 +122,33 @@ int frame_hit(const frame_geom_t &g, float x, float y) {
    return HIT_CLIENT;
 }
 
+// A field of the state that another thread may write or read while the main thread uses it (the calls processes.md
+// lets a task make: quit, quit_requested, request_frames, set_lazy, set_confirm_quit, content_scale): atomic, and still
+// copied, so that st = state_t{} resets it (fig_shutdown, no other thread calling then).
+template <class T> struct shared : std::atomic<T> {
+   using std::atomic<T>::atomic;
+   using std::atomic<T>::operator=;
+   shared(const shared &o) : std::atomic<T>(o.load()) {}
+   shared &operator=(const shared &o) {
+      this->store(o.load());
+      return *this;
+   }
+};
+
 struct state_t {
    mode          m = mode::none;
    SDL_Window   *window = nullptr;
    SDL_GLContext gl = nullptr;
    bool          in_frame = false;
-   bool          lazy = true;     // wait for events instead of redrawing continuously
-   bool          confirm_quit = false;   // a quit request is reported (fig_quit_requested) instead of ending the loop
-   bool          quit_requested = false; // a request not yet read by fig_quit_requested
-   bool          quit_now = false;       // fig_quit: the next fig_begin_frame ends the loop
+   shared<bool>  lazy{true};      // wait for events instead of redrawing continuously
+   shared<bool>  confirm_quit{false};   // a quit request is reported (fig_quit_requested) instead of ending the loop
+   shared<bool>  quit_requested{false}; // a request not yet read by fig_quit_requested
+   shared<bool>  quit_now{false};       // fig_quit: the next fig_begin_frame ends the loop
    std::string   title;                  // the window's title (kept in every mode: fig_title)
-   int           max_wait_ms = 500;
-   int           frames_left = 3; // frames still to draw after the last event (ImGui settles in a few)
-   float         scale = 1.0f;
+   shared<int>   max_wait_ms{500};
+   shared<int>   frames_left{3}; // frames still to draw after the last event (ImGui settles in a few): raised by
+                                 // frames_at_least, lowered by the loop alone (frame_drawn)
+   shared<float> scale{1.0f};
    float         clear[3] = {0.10f, 0.10f, 0.11f}; // the window's background, behind the ImGui windows (the style's)
    std::string   style_base = "dark";              // base of the style in effect (what save_style writes against)
    std::string   look;                             // the look in effect (themes/looks); empty: Dear ImGui's geometry
@@ -179,6 +202,22 @@ struct state_t {
    std::map<unsigned long long, texture_t> textures; // user textures by ImTextureID (the GL name in window mode)
    unsigned long long next_headless_texture = 1;     // headless mode: ids without GL objects
 } st;
+
+// At least n more frames, from any thread: a compare-and-swap maximum, so that concurrent requests keep the largest
+// and an event never lowers a request.
+void frames_at_least(int n) {
+   int cur = st.frames_left.load();
+   while (n > cur && !st.frames_left.compare_exchange_weak(cur, n)) {
+   }
+}
+
+// A frame begun without an event (the loop, on the main thread): one frame fewer to draw, never below 0, a request
+// raised meanwhile by another thread kept.
+void frame_without_event() {
+   int cur = st.frames_left.load();
+   while (cur > 0 && !st.frames_left.compare_exchange_weak(cur, cur - 1)) {
+   }
+}
 
 // The frame options of the next init (fig_frame_options, called before fig_init and fig_init_headless).
 struct frame_options_t {
@@ -1201,7 +1240,7 @@ void system_theme_changed() {
       return;
    }
    commit_style(b);
-   st.frames_left = 3;
+   frames_at_least(3);
 }
 
 // Apply a theme file read at run time; false with err. Its line colours get a colormap named by the colours themselves,
@@ -1281,7 +1320,7 @@ bool save_style_file(const std::string &path, std::string &err) {
    }
    probe.ScaleAllSizes(2.0f);
    const ImGuiStyle &cur = ImGui::GetStyle();
-   const float scale = st.scale > 0.0f ? st.scale : 1.0f;
+   const float scale = st.scale > 0.0f ? st.scale.load() : 1.0f;
    std::string out = "# FIGURE theme, written by app%save_style\n\n";
    if (st.palette.empty()) out += "base = \"" + st.style_base + "\"\n";
    if (!st.look.empty()) out += "look = \"" + st.look + "\"\n";
@@ -1496,7 +1535,7 @@ void draw_notifications() {
       note_rects.push_back(frame_rect_t{pos.x, pos.y, pos.x + size.x, pos.y + size.y});
       bottom = pos.y - gap;
    }
-   if (animate) st.frames_left = std::max(st.frames_left, 2); // the fade is drawn frame by frame
+   if (animate) frames_at_least(2); // the fade is drawn frame by frame
 }
 
 bool frame_maximized() {
@@ -1523,7 +1562,7 @@ void frame_toggle_maximize() {
    } else {
       st.frame.maximized = !st.frame.maximized;
    }
-   st.frames_left = 3;
+   frames_at_least(3);
 }
 
 void frame_close() {
@@ -1859,6 +1898,7 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    ImGui_ImplSDL3_InitForOpenGL(st.window, st.gl);
    ImGui_ImplOpenGL3_Init(glsl);
    st.m = mode::window;
+   loop_starts();
    fig_file_browser_reset(1, cap.on ? 0 : 1); // a capture reads nothing of the user's: no recent folders
    apply_initial_style();
    st.frames_left = 3;
@@ -1890,6 +1930,7 @@ int fig_init_headless(int width, int height) {
    pio.Platform_SetClipboardTextFn = headless_set_clipboard;
    pio.Platform_GetClipboardTextFn = headless_get_clipboard;
    st.m = mode::headless;
+   loop_starts();
    fig_file_browser_reset(1, 0); // tests: the recent folders in memory, or in the file a test names
    st.frame.on = frame_options.decorations == 1; // the bar drawn, its actions recorded as state (tests)
    st.frame.buttons_left = frame_options.buttons == 2 || (frame_options.buttons == 0 && frame_buttons_left_default());
@@ -1921,6 +1962,7 @@ int fig_init_remote(int width, int height, const char *host, int host_len, int p
    pio.Platform_SetClipboardTextFn = [](ImGuiContext *, const char *text) { figure_remote::set_clipboard(text); };
    pio.Platform_GetClipboardTextFn = [](ImGuiContext *) { return figure_remote::clipboard(); };
    st.m = mode::remote;
+   loop_starts();
    fig_file_browser_reset(1, 1);
    apply_initial_style();
    st.frames_left = 3;
@@ -2287,8 +2329,8 @@ int fig_set_ini_file(const char *path, int path_len) {
 }
 
 void fig_set_lazy(int enabled, double max_wait_s) {
-   st.lazy = enabled != 0;
    st.max_wait_ms = max_wait_s > 0.0 ? static_cast<int>(max_wait_s * 1000.0) : 0;
+   st.lazy = enabled != 0;
 }
 
 void fig_set_remote_fps(double max_fps) { st.remote_min_dt = max_fps > 0.0 ? 1.0 / max_fps : 0.0; }
@@ -2312,13 +2354,17 @@ void fig_set_confirm_quit(int on) {
 }
 
 int fig_quit_requested(void) {
-   const bool r = st.quit_requested;
-   st.quit_requested = false;
-   if (r) st.frames_left = 3; // a request is an event: the frames that answer it are drawn
+   const bool r = st.quit_requested.exchange(false);
+   if (r) frames_at_least(3); // a request is an event: the frames that answer it are drawn
    return r ? 1 : 0;
 }
 
-void fig_quit(void) { st.quit_now = true; }
+// From any thread: the next fig_begin_frame ends the loop; from a thread other than the loop's, a lazy loop waiting
+// for input stops waiting.
+void fig_quit(void) {
+   st.quit_now = true;
+   if (!on_main_thread()) fig_wake();
+}
 
 // The window's title after fig_init (the file being edited, a mark when it has changes): shown in window mode, kept
 // in every mode (fig_title).
@@ -2344,8 +2390,17 @@ int fig_input_quit(void) {
    return FIG_OK;
 }
 
+// From any thread: at least n more frames (concurrent requests keep the largest), the first at once: from the loop's
+// thread the next fig_begin_frame does not wait; from another, a lazy loop waiting for input stops waiting.
 void fig_request_frames(int n) {
-   if (n > st.frames_left) st.frames_left = n;
+   frames_at_least(n);
+   if (!on_main_thread()) fig_wake();
+}
+
+// app%wake, from any thread: the next frame starts without waiting for input or max_wait.
+void fig_app_wake(void) {
+   if (on_main_thread()) frames_at_least(1); // the loop is not waiting now: its next fig_begin_frame will not
+   else fig_wake();
 }
 
 double fig_content_scale(void) { return st.scale; }
@@ -2359,8 +2414,7 @@ int fig_begin_frame(int *running) {
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if (st.in_frame) return fail(FIG_ERR_STATE, "begin_frame called twice without end_frame");
    *running = 1;
-   if (st.quit_now) { // fig_quit, in every mode
-      st.quit_now = false;
+   if (st.quit_now.exchange(false)) { // fig_quit, in every mode
       *running = 0;
       return FIG_OK;
    }
@@ -2368,7 +2422,8 @@ int fig_begin_frame(int *running) {
       st.system_theme_changed = false;
       system_theme_changed();
    }
-   if (st.m == mode::headless) {
+   if (st.m == mode::headless) { // never waits: a wake-up has nothing to end
+      woken = false;
       ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
       apply_test_input();
       take_drops();
@@ -2384,25 +2439,24 @@ int fig_begin_frame(int *running) {
       using clock = std::chrono::steady_clock;
       // wait for input up to max_wait when idle, or, when a frame was skipped for a slow client, until the queue
       // drains (serve returns early then); otherwise go on at once
+      // (fig_wake ends the wait: its datagram to the wake socket is input to serve; reset before the wait, so that a
+      // wake-up during it is never lost)
+      woken = false;
       const bool pending = figure_remote::frame_pending(), busy = figure_remote::queue_busy();
       const bool wait = pending ? busy : st.lazy && st.frames_left <= 0;
-      bool got = false;
-      if (wait && background.load() > 0) { // in slices, so that a reader or a task can end the wait
-         const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(st.max_wait_ms);
-         while (!got && !woken.load() && std::chrono::steady_clock::now() < until) got = figure_remote::serve(10);
-         got = got || woken.load();
-      } else {
-         got = figure_remote::serve(wait ? st.max_wait_ms : 0);
-      }
-      woken = false;
+      bool got = figure_remote::serve(wait ? st.max_wait_ms.load() : 0);
       const auto next = st.last_frame + std::chrono::duration_cast<clock::duration>(
                                            std::chrono::duration<double>(st.remote_min_dt));
       for (auto t = clock::now(); t < next; t = clock::now())
          got = figure_remote::serve(static_cast<int>(
                   std::chrono::duration_cast<std::chrono::milliseconds>(next - t).count()) + 1) || got;
       while (figure_remote::serve(0)) got = true; // drain what else arrived
-      if (got) st.frames_left = 3;
-      else if (st.frames_left > 0) --st.frames_left;
+      if (st.quit_now.exchange(false)) { // fig_quit from another thread during the wait (which it ended)
+         *running = 0;
+         return FIG_OK;
+      }
+      if (got) frames_at_least(3);
+      else frame_without_event();
       const auto now = clock::now();
       const float dt = std::chrono::duration<float>(now - st.last_frame).count();
       st.last_frame = now;
@@ -2437,6 +2491,8 @@ int fig_begin_frame(int *running) {
    // Lazy redraw: once ImGui has settled, sleep until an event arrives or max_wait elapses (a periodic refresh that
    // lets live data from the application appear); never spin at the display rate while idle.
    if (cap.on && cap.count >= 0 && cap.written >= cap.count) *running = 0; // capture: enough frames written
+   // a fig_wake from now on pushes its event, which ends the wait or is polled below; one before is already queued
+   woken = false;
    if (st.lazy && st.frames_left <= 0 && !cap.on) {
       if (SDL_WaitEventTimeout(&ev, st.max_wait_ms))
          handle(ev);
@@ -2444,10 +2500,10 @@ int fig_begin_frame(int *running) {
          ++rs.timeouts;
    }
    while (SDL_PollEvent(&ev)) handle(ev);
-   woken = false;
+   if (st.quit_now.exchange(false)) *running = 0; // fig_quit from another thread during the wait (which it ended)
    if (!*running) return FIG_OK; // quitting: no frame is opened
-   if (got) st.frames_left = 3;
-   else if (st.frames_left > 0) --st.frames_left;
+   if (got) frames_at_least(3);
+   else frame_without_event();
    if (SDL_GetWindowFlags(st.window) & SDL_WINDOW_MINIMIZED) SDL_Delay(10);
    if (rs.on) {
       const Uint64 now = SDL_GetTicksNS();
@@ -3049,7 +3105,7 @@ int fig_load_layout(const char *path, int path_len) {
       return fail(FIG_ERR_ARGUMENT, "load_layout: " + p + " is not a layout (no [Window] or [Docking] section)");
    layout_pending = data;
    layout_due = true;
-   st.frames_left = std::max(st.frames_left, 3);
+   frames_at_least(3);
    return FIG_OK;
    FIG_CATCH
 }
@@ -3067,7 +3123,7 @@ int fig_save_image(const char *path, int path_len, double x0, double y0, double 
    img.x1 = static_cast<float>(x1);
    img.y1 = static_cast<float>(y1);
    img.state = 1;
-   st.frames_left = std::max(st.frames_left, 2); // the frame that renders it, even in lazy mode
+   frames_at_least(2); // the frame that renders it, even in lazy mode
    return FIG_OK;
    FIG_CATCH
 }
@@ -3365,16 +3421,16 @@ void fig_input_mouse(float x, float y, int left_down) {
 } // extern "C"
 
 extern "C" void fig_wake(void) {
-   if (woken.exchange(true)) return; // one wake-up per frame is enough
+   if (woken.exchange(true)) return; // one wake-up per wait is enough
    if (sdl_events.load()) {
       SDL_Event e;
       SDL_zero(e);
       e.type = SDL_EVENT_USER;
       SDL_PushEvent(&e);
+   } else {
+      figure_remote::wake(); // nothing without a remote server (headless mode never waits)
    }
 }
-
-extern "C" void fig_background(int delta) { background += delta; }
 
 extern "C" int fig_notify(const char *text, int text_len, int kind, const char *icon, int icon_len, double seconds) {
    FIG_TRY
@@ -3389,7 +3445,7 @@ extern "C" int fig_notify(const char *text, int text_len, int kind, const char *
    n.seconds = static_cast<float>(seconds);
    notes.push_back(n);
    while (notes.size() > NOTE_KEEP) notes.pop_front();
-   st.frames_left = std::max(st.frames_left, 3); // drawn at once, even with lazy redraw
+   frames_at_least(3); // drawn at once, even with lazy redraw
    fig_wake();
    return FIG_OK;
    FIG_CATCH

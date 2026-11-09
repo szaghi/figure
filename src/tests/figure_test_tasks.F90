@@ -9,6 +9,7 @@ use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_color_edit, 
 implicit none
 private
 public :: sum_job, sum_work, forever_work, draw_work, drop_work, fail_work, pause, ended_by_object
+public :: wake_job, waker_work, WAKE_BY_REQUEST, WAKE_BY_WAKE, WAKE_BY_QUIT
 
 type :: sum_job
    !< A sum of the integers first..last, in 10 chunks, with a pause after each [s].
@@ -22,6 +23,19 @@ type :: sum_job
    integer(int32) :: stats(6) = -1_int32 !< Statuses of the widgets and style calls made from the task.
    integer(int32) :: stat = -1_int32   !< Status of a call that must refuse.
 endtype sum_job
+
+type :: wake_job
+   !< A call from a task to the application at a given time (`at`), then a hold until cancelled (or `hold` seconds).
+   integer(int32) :: action = 0_int32    !< WAKE_BY_REQUEST, WAKE_BY_WAKE or WAKE_BY_QUIT.
+   integer(int32) :: n = 1_int32         !< Frames requested (WAKE_BY_REQUEST).
+   integer(int64) :: at = 0_int64        !< When to call (system_clock count).
+   real(real64)   :: hold = 0.0_real64   !< Time alive after the call, unless cancelled [s].
+   integer(int64) :: called = -1_int64   !< When it called (system_clock count).
+endtype wake_job
+
+integer(int32), parameter :: WAKE_BY_REQUEST = 1_int32 !< app%request_frames(n).
+integer(int32), parameter :: WAKE_BY_WAKE = 2_int32    !< app%wake().
+integer(int32), parameter :: WAKE_BY_QUIT = 3_int32    !< app%quit().
 
 logical :: ended_by_object = .false. !< forever_work saw the cancel of its object's end.
 
@@ -139,6 +153,38 @@ contains
    endselect
    endsubroutine drop_work
 
+   recursive subroutine waker_work(h, data)
+   !< At the job's time, calls the application (request_frames, wake or quit) and records when; then stays alive (so
+   !< that its end, which wakes the loop too, comes later) until cancelled or for the job's hold.
+   type(task_handle_object), intent(inout) :: h       !< Handle.
+   class(*),                 intent(inout) :: data    !< A wake_job.
+   type(app_object)                        :: app     !< The application (its calls act on the one loop).
+   integer(int64)                          :: t, rate !< Clock.
+
+   select type (data)
+   type is (wake_job)
+      do
+         call system_clock(t, rate)
+         if (t >= data%at) exit
+      enddo
+      call system_clock(data%called)
+      select case (data%action)
+      case (WAKE_BY_REQUEST)
+         call app%request_frames(data%n)
+      case (WAKE_BY_WAKE)
+         call app%wake()
+      case (WAKE_BY_QUIT)
+         call app%quit()
+      endselect
+      do
+         if (h%cancelled()) exit
+         call system_clock(t)
+         if (real(t - data%called, real64) / real(rate, real64) >= data%hold) exit
+         call pause(0.001_real64)
+      enddo
+   endselect
+   endsubroutine waker_work
+
    recursive subroutine fail_work(h, data)
    !< Reports a failure.
    type(task_handle_object), intent(inout) :: h    !< Handle.
@@ -159,11 +205,12 @@ program figure_test_tasks
 use, intrinsic :: iso_fortran_env, only : error_unit, int32, int64, output_unit, real64
 use figure, only : app_object, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, figure_last_error, task_object
 use figure_test_tasks_work, only : draw_work, drop_work, ended_by_object, fail_work, forever_work, pause, sum_job, &
-                                  sum_work
+                                  sum_work, wake_job, waker_work, WAKE_BY_QUIT, WAKE_BY_REQUEST, WAKE_BY_WAKE
 
 implicit none
 type(app_object)              :: app             !< Application.
-logical                       :: test_passed(10) !< Per-check outcome.
+logical                       :: test_passed(15) !< Per-check outcome.
+integer(int32)                :: port            !< Remote mode's port.
 
 call app%init_headless(400_int32, 300_int32)
 test_passed = .false.
@@ -176,6 +223,15 @@ call refused_while_running(test_passed(7))
 call object_end(test_passed(8))
 call progress_before(test_passed(9))
 call drop_refused(test_passed(10))
+call app%destroy()
+! the waits of a lazy loop, which headless mode never makes: remote mode, no browser connected (a frame begins after
+! input, a wake-up or max_wait)
+call app%init_remote(port=0_int32, port_used=port, quiet=.true.)
+call woken_by_task(WAKE_BY_REQUEST, test_passed(11))
+call woken_by_task(WAKE_BY_WAKE, test_passed(12))
+call largest_request_kept(test_passed(13))
+call woken_by_main(test_passed(14))
+call woken_by_task(WAKE_BY_QUIT, test_passed(15))
 call app%destroy()
 
 write(output_unit, '(A,*(L2))') 'figure_test_tasks checks:', test_passed
@@ -406,6 +462,98 @@ contains
    ok = ended_by_object
    if (.not. ok) write(error_unit, '(A)') 'object end: the task did not see its cancel'
    endsubroutine object_end
+
+   subroutine settle()
+   !< Lazy redraw off for a few frames: the frames still to draw run out, so that the next lazy frame waits.
+   integer(int32) :: k !< Frame.
+
+   call app%set_lazy(.false.)
+   do k = 1_int32, 6_int32
+      if (.not. app%next_frame()) exit
+   enddo
+   endsubroutine settle
+
+   subroutine woken_by_task(action, ok)
+   !< A lazy loop with max_wait 10 s, idle: a task's request_frames, wake or quit starts the next frame (ends the loop,
+   !< for quit) in under 0.1 s. The task stays alive meanwhile: its end, which wakes the loop too, comes 2 s later.
+   integer(int32), intent(in)  :: action  !< WAKE_BY_*.
+   logical,        intent(out) :: ok      !< Outcome.
+   type(task_object)           :: t       !< Task.
+   class(*), allocatable       :: data    !< Result.
+   integer(int64)              :: t0, t1, rate !< Clock.
+   integer(int32)              :: frames  !< Frames.
+   integer(int32)              :: stat    !< Status.
+   real(real64)                :: latency !< From the task's call to the frame [s].
+   logical                     :: running !< next_frame's result.
+   character(len=*), parameter :: names(3) = ['request_frames', 'wake          ', 'quit          '] !< Calls.
+
+   call settle()
+   call app%set_lazy(.true., max_wait=10.0_real64)
+   call system_clock(t0, rate)
+   call t%start(waker_work, wake_job(action=action, n=2_int32, at=t0 + rate / 5_int64, hold=2.0_real64))
+   running = app%next_frame()
+   call system_clock(t1)
+   call t%cancel()
+   frames = frames_until_done(t, 10.0_real64)
+   call t%result(data, stat)
+   ok = .false.
+   latency = -1.0_real64
+   select type (data)
+   type is (wake_job)
+      latency = real(t1 - data%called, real64) / real(rate, real64)
+      ok = data%called > 0_int64 .and. latency >= 0.0_real64 .and. latency < 0.1_real64 .and. stat == FIG_OK
+   endselect
+   ok = ok .and. (running .neqv. action == WAKE_BY_QUIT)
+   if (.not. ok) write(error_unit, '(A,A,A,F8.4,A,L1)') 'woken by a task''s ', trim(names(action)), ': latency ', &
+                                                       latency, ' s, next_frame ', running
+   endsubroutine woken_by_task
+
+   subroutine largest_request_kept(ok)
+   !< Eight tasks call request_frames(10 k), k = 1..8, at the same instant: the loop draws at least 80 frames before it
+   !< waits again (max_wait 1 s): concurrent requests keep the largest, and the event of the wake-up does not lower it.
+   logical, intent(out)  :: ok      !< Outcome.
+   type(task_object)     :: t(8)    !< Tasks.
+   integer(int64)        :: t0, ta, tb, rate !< Clock.
+   integer(int32)        :: k       !< Task.
+   integer(int32)        :: frames  !< Frames drawn before the loop waited.
+
+   call settle()
+   call app%set_lazy(.true., max_wait=1.0_real64)
+   call system_clock(t0, rate)
+   do k = 1_int32, 8_int32
+      call t(k)%start(waker_work, wake_job(action=WAKE_BY_REQUEST, n=10_int32 * k, at=t0 + rate / 5_int64))
+   enddo
+   do while (any([(t(k)%running(), k = 1_int32, 8_int32)]))
+      call pause(0.005_real64)
+   enddo
+   frames = 0_int32
+   do while (frames < 1000_int32)
+      call system_clock(ta)
+      if (.not. app%next_frame()) exit
+      call system_clock(tb)
+      if (real(tb - ta, real64) / real(rate, real64) > 0.5_real64) exit ! a wait: the frames requested ran out
+      frames = frames + 1_int32
+   enddo
+   ok = frames >= 80_int32 .and. frames <= 90_int32
+   if (.not. ok) write(error_unit, '(A,I0,A)') 'largest request kept: ', frames, ' frames before the wait (80 expected)'
+   endsubroutine largest_request_kept
+
+   subroutine woken_by_main(ok)
+   !< app%wake from the loop's own thread: the next frame does not wait (max_wait 10 s).
+   logical, intent(out) :: ok      !< Outcome.
+   integer(int64)       :: t0, t1, rate !< Clock.
+   real(real64)         :: elapsed !< next_frame's time [s].
+
+   call settle()
+   call app%set_lazy(.true., max_wait=10.0_real64)
+   call app%wake()
+   call system_clock(t0, rate)
+   ok = app%next_frame()
+   call system_clock(t1)
+   elapsed = real(t1 - t0, real64) / real(rate, real64)
+   ok = ok .and. elapsed < 0.1_real64
+   if (.not. ok) write(error_unit, '(A,F8.4,A)') 'woken by the main thread: next_frame took ', elapsed, ' s'
+   endsubroutine woken_by_main
 
    subroutine progress_before(ok)
    !< Before start: no progress, not running, not done.

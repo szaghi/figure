@@ -58,9 +58,10 @@ appear without input.
 | `app%set_lazy(.true., max_wait=s)` | sleep at most `s` seconds once the UI settles (default 0.5 s) |
 | `app%set_lazy(.false.)` | never sleep: draw continuously, at the display rate with vsync |
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input |
+| `app%wake()` | the next frame starts without waiting for input or `max_wait`, from any thread |
 
 `set_lazy` without `max_wait` sets it back to 0.5 s. `request_frames(n)` raises the count of frames still to draw to
-`n` (it never lowers it): call `request_frames(1)` in every frame in which something is changing, such as an
+`n` (it never lowers it; an input event does not lower it either): call `request_frames(1)` in every frame in which something is changing, such as an
 animation or a computation that advances inside the loop, and the loop keeps drawing; stop calling it and the next
 `next_frame` sleeps again (the three-frame tail follows input events, not `request_frames`).
 
@@ -74,6 +75,30 @@ Choose between them by who changes the data:
   ([cookbook](/manual/cookbook#refresh-data-that-changes-on-its-own));
 - continuous animation regardless of input: `set_lazy(.false.)`
   ([cookbook](/manual/cookbook#redraw-continuously)).
+
+### Waking the loop
+
+A lazy loop that waits ends its wait at the first of:
+
+- **input:** a mouse or keyboard event, the window resized or closed (in remote mode, a message from the browser);
+- **`max_wait`:** the periodic refresh;
+- **`app%request_frames(n)` or `app%wake()`** from another thread than the loop's (a FIGURE task, an OpenMP thread, an
+  MPI progress thread); `app%quit()` too, and the loop then ends;
+- **a task's progress report and its end** ([Tasks](processes#tasks));
+- **a process's output and its end** ([Processes](processes#processes)).
+
+From another thread these calls take effect at once: measured in `figure_test_tasks`, a lazy loop with `max_wait`
+10 s starts its next frame within 0.1 s of a task's `request_frames`, `wake` or `quit`. From the loop's own thread
+nothing is waiting: `request_frames(n)` and `wake()` make the next `next_frame` go on without waiting. Every one of
+these calls is thread-safe ([Calling the application from a task](processes#calling-the-application-from-a-task)).
+
+- **Window:** a wake-up is an event pushed to SDL's queue (the event ends the wait; it counts as input for the frames
+  that follow, as a task's report does).
+- **Headless:** the loop never waits; a wake-up changes nothing.
+- **Remote:** a wake-up is a datagram to a socket of the loopback that the loop waits on with the network's.
+
+Before v0.3.1, `request_frames` and `quit` from a task did not wake the loop: their frame came at the next input or
+after `max_wait`. Redraw on a worker's news: [cookbook](/manual/cookbook#redraw-when-a-worker-has-news).
 
 ### What idle costs
 

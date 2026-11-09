@@ -54,3 +54,24 @@ jobs:
         path: coverage-docs.tgz
         if-no-files-found: error
         retention-days: 1
+
+  # ThreadSanitizer on the calls a task may make (quit, request_frames, wake, ...): scripts/tsan_check.sh
+  tsan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup build environment
+      uses: ./.github/actions/setup-build-env
+
+    # ThreadSanitizer's shadow memory does not fit the randomized layout of the runners' kernels (32 bits)
+    - name: Narrow address space randomization
+      run: sudo sysctl vm.mmap_rnd_bits=28
+
+    - name: ThreadSanitizer check
+      run: CC=gcc CXX=g++-14 scripts/tsan_check.sh

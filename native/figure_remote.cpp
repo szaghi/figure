@@ -77,6 +77,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <mutex>
 #include <set>
 #include <string>
 #include <vector>
@@ -90,7 +91,8 @@
 // for (decltype keeps the calling convention); the names below are redirected to them.
 namespace winsock {
 #define FIGURE_WINSOCK(X) X(WSAStartup) X(WSAGetLastError) X(socket) X(setsockopt) X(bind) X(listen) X(accept) \
-   X(getaddrinfo) X(freeaddrinfo) X(getsockname) X(recv) X(send) X(select) X(closesocket) X(ioctlsocket) X(__WSAFDIsSet)
+   X(getaddrinfo) X(freeaddrinfo) X(getsockname) X(recv) X(send) X(select) X(closesocket) X(ioctlsocket) X(__WSAFDIsSet) \
+   X(connect)
 #define FIGURE_WINSOCK_POINTER(f) static decltype(&::f) p_##f = nullptr;
 FIGURE_WINSOCK(FIGURE_WINSOCK_POINTER)
 static bool load() {
@@ -121,6 +123,7 @@ static bool load() {
 #define closesocket winsock::p_closesocket
 #define ioctlsocket winsock::p_ioctlsocket
 #define __WSAFDIsSet winsock::p___WSAFDIsSet
+#define connect winsock::p_connect
 typedef SOCKET socket_t;
 static const socket_t NO_SOCKET = INVALID_SOCKET;
 static int close_socket(socket_t s) { return closesocket(s); }
@@ -255,6 +258,44 @@ struct server_t {
    bool                                    wsa = false;
 #endif
 } sv;
+
+// The wake socket: a UDP socket on the loopback, connected to itself. wake() sends it a byte, from any thread; serve
+// waits on it with the others, so that a wake-up ends the wait at once. The mutex keeps a wake from sending to a
+// socket that stop closes meanwhile.
+std::mutex wake_mutex;
+socket_t   wake_socket = NO_SOCKET;
+
+bool open_wake(std::string &err) {
+   addrinfo hints{}, *res = nullptr;
+   hints.ai_family = AF_INET;
+   hints.ai_socktype = SOCK_DGRAM;
+   if (getaddrinfo("127.0.0.1", "0", &hints, &res) != 0 || !res) {
+      err = "cannot resolve the loopback address for the wake socket";
+      return false;
+   }
+   const socket_t s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+   bool ok = s != NO_SOCKET && bind(s, res->ai_addr, static_cast<int>(res->ai_addrlen)) == 0;
+   freeaddrinfo(res);
+   sockaddr_in addr{};
+   socklen_t len = sizeof(addr);
+   ok = ok && getsockname(s, reinterpret_cast<sockaddr *>(&addr), &len) == 0 &&
+        connect(s, reinterpret_cast<sockaddr *>(&addr), static_cast<int>(len)) == 0;
+   if (!ok) {
+      if (s != NO_SOCKET) close_socket(s);
+      err = "cannot open the wake socket on the loopback";
+      return false;
+   }
+   set_nonblocking(s);
+   std::lock_guard<std::mutex> lock(wake_mutex);
+   wake_socket = s;
+   return true;
+}
+
+void close_wake() {
+   std::lock_guard<std::mutex> lock(wake_mutex);
+   if (wake_socket != NO_SOCKET) close_socket(wake_socket);
+   wake_socket = NO_SOCKET;
+}
 
 connection_t *client() {
    for (auto &c : sv.conns)
@@ -675,6 +716,11 @@ bool start(const std::string &host, int port, int &bound_port, std::string &err)
       return false;
    }
    set_nonblocking(sv.listener);
+   if (!open_wake(err)) {
+      close_socket(sv.listener);
+      sv.listener = NO_SOCKET;
+      return false;
+   }
    sockaddr_in addr{};
    socklen_t len = sizeof(addr);
    getsockname(sv.listener, reinterpret_cast<sockaddr *>(&addr), &len);
@@ -699,6 +745,7 @@ void stop() {
    for (auto &c : sv.conns)
       if (c.s != NO_SOCKET) close_socket(c.s);
    if (sv.listener != NO_SOCKET) close_socket(sv.listener);
+   close_wake();
    sv = server_t{};
 }
 
@@ -709,6 +756,11 @@ bool serve_once(int timeout_ms) {
    FD_ZERO(&wr);
    FD_SET(sv.listener, &rd);
    socket_t maxfd = sv.listener;
+   const socket_t wk = wake_socket; // set and closed by start and stop, on this thread
+   if (wk != NO_SOCKET) {
+      FD_SET(wk, &rd);
+      maxfd = std::max(maxfd, wk);
+   }
    for (auto &c : sv.conns) {
       if (c.s == NO_SOCKET) continue;
       FD_SET(c.s, &rd);
@@ -718,6 +770,12 @@ bool serve_once(int timeout_ms) {
    timeval tv{timeout_ms / 1000, (timeout_ms % 1000) * 1000};
    if (select(static_cast<int>(maxfd + 1), &rd, &wr, nullptr, &tv) <= 0) return false;
    bool got = false;
+   if (wk != NO_SOCKET && FD_ISSET(wk, &rd)) { // woken: drain the datagrams, draw a frame
+      char buf[64];
+      while (recv(wk, buf, sizeof(buf), 0) > 0) {
+      }
+      got = true;
+   }
    if (FD_ISSET(sv.listener, &rd)) {
       for (;;) {
          const socket_t s = accept(sv.listener, nullptr, nullptr);
@@ -781,6 +839,11 @@ bool serve(int timeout_ms) {
       if (sv.pending && was_busy && sv.unsent_frame == 0) return true; // the latest frame can be sent now
       if (left <= 0) return false;
    }
+}
+
+void wake() {
+   std::lock_guard<std::mutex> lock(wake_mutex);
+   if (wake_socket != NO_SOCKET) send(wake_socket, "w", 1, SEND_FLAGS);
 }
 
 bool frame_pending() { return sv.pending; }

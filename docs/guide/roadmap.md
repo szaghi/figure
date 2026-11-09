@@ -213,6 +213,16 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   `init_remote(lossy=.false.)` keeps every image exact. A moving 1600x1000 view: from 91 MB/s raw to 0.8 to 7 MB/s:
   done.
 
+## v0.3.1 — in progress
+
+A patch of three defects of v0.3.0, tracked in [issue #5](https://github.com/szaghi/figure/issues/5):
+
+- **`quit` and `request_frames` safe from a task; `app%wake`:** the flags a task may set or read are atomic, a
+  request from another thread wakes a lazy loop at once, and `app%wake()` starts the next frame from any thread
+  ([Waking the loop](frame-loop#waking-the-loop)): done.
+- **printf formats checked against the value's kind:** to do.
+- **The 3-D view owns the mouse wheel while hovered:** to do.
+
 ## Next
 
 Candidates, to be driven by what applications need.

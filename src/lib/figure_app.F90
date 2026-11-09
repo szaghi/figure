@@ -24,7 +24,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_begin_f
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
                             fig_set_remote_lossy,                                                                       &
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
-                            fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, &
+                            fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_app_wake, &
                             fig_file_dialog, fig_file_dialog_result, fig_set_title, fig_title, fig_save_image, &
                             fig_image_result, fig_save_layout, fig_load_layout, fig_set_style_parts, fig_palette_color, &
                             fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_notify,              &
@@ -55,6 +55,7 @@ type :: app_object
       procedure, pass(self) :: load_style     !< A theme file.
       procedure, pass(self) :: save_style     !< The style in effect, as a theme file.
       procedure, pass(self) :: request_frames !< Redraw without waiting for input.
+      procedure, pass(self) :: wake           !< Start the next frame at once (from any thread).
       procedure, pass(self) :: set_confirm_quit !< Report a quit request instead of quitting.
       procedure, pass(self) :: quit_requested !< The user asked to quit (once per request).
       procedure, pass(self) :: dropped        !< The files and folders dropped on the window this frame.
@@ -337,8 +338,9 @@ contains
    call figure_check(status, stat)
    endfunction next_frame
 
-   subroutine set_lazy(self, enabled, max_wait)
-   !< Lazy redraw (default on): once the UI settles, sleep until input or `max_wait` seconds (default 0.5).
+   recursive subroutine set_lazy(self, enabled, max_wait)
+   !< Lazy redraw (default on): once the UI settles, sleep until input or `max_wait` seconds (default 0.5). Callable
+   !< from any thread (a task included).
    class(app_object), intent(inout)      :: self     !< Application.
    logical,           intent(in)         :: enabled  !< Lazy redraw on.
    real(real64),      intent(in), optional :: max_wait !< Longest sleep [s]: the refresh period of live data.
@@ -550,26 +552,41 @@ contains
    call figure_check(fig_set_docking(merge(1_c_int, 0_c_int, enabled)), stat)
    endsubroutine set_docking
 
-   subroutine request_frames(self, n)
-   !< Draw at least `n` more frames without waiting for input (e.g. after new data arrived).
+   recursive subroutine request_frames(self, n)
+   !< Draw at least `n` more frames without waiting for input (e.g. after new data arrived). It raises the count of
+   !< frames still to draw, never lowers it: concurrent requests keep the largest. Callable from any thread (a task, an
+   !< OpenMP thread): from another thread than the loop's it also wakes a lazy loop that is waiting, so the first of
+   !< the frames starts at once.
    class(app_object), intent(inout) :: self !< Application.
    integer(int32),    intent(in)    :: n    !< Frames.
 
    call fig_request_frames(int(n, c_int))
    endsubroutine request_frames
 
-   subroutine set_confirm_quit(self, enabled)
+   recursive subroutine wake(self)
+   !< The next frame starts without waiting for input or `max_wait`, from any thread (a FIGURE task, an OpenMP thread,
+   !< an MPI progress thread): a lazy loop that is waiting stops waiting, in every mode (window: an event; remote: the
+   !< wait on the network ends; headless: the loop never waits). From the loop's own thread, the next `next_frame` does
+   !< not wait. Never refused: a task may call it. Before `init*` it does nothing.
+   class(app_object), intent(in) :: self !< Application.
+
+   call fig_app_wake()
+   endsubroutine wake
+
+   recursive subroutine set_confirm_quit(self, enabled)
    !< With `enabled`, the window's close button (and the system's quit) no longer ends `next_frame`: the request is
-   !< reported by `quit_requested`, and the program quits with `quit` (after asking to save, for example).
+   !< reported by `quit_requested`, and the program quits with `quit` (after asking to save, for example). Callable
+   !< from any thread (a task included).
    class(app_object), intent(inout) :: self    !< Application.
    logical,           intent(in)    :: enabled !< Ask first.
 
    call fig_set_confirm_quit(merge(1_c_int, 0_c_int, enabled))
    endsubroutine set_confirm_quit
 
-   function quit_requested(self) result(requested)
+   recursive function quit_requested(self) result(requested)
    !< The user asked to quit (the window's close button) since the last call: true once per request. Only with
-   !< `set_confirm_quit(.true.)`; otherwise the request ends `next_frame` at once.
+   !< `set_confirm_quit(.true.)`; otherwise the request ends `next_frame` at once. Callable from any thread (a task
+   !< included): one caller gets each request.
    class(app_object), intent(inout) :: self      !< Application.
    logical                          :: requested !< Requested.
 
@@ -624,8 +641,10 @@ contains
    any_dropped = n > 0_c_int
    endfunction dropped
 
-   subroutine quit(self)
-   !< End the loop: the next `next_frame` returns `.false.` (in every mode).
+   recursive subroutine quit(self)
+   !< End the loop: the next `next_frame` returns `.false.` (in every mode). Callable from any thread (a task
+   !< included): from another thread than the loop's it also wakes a lazy loop that is waiting, so the loop ends at
+   !< once.
    class(app_object), intent(inout) :: self !< Application.
 
    call fig_quit()
@@ -846,8 +865,8 @@ contains
    call figure_check(fig_load_layout(path, len(path, c_int)), stat)
    endsubroutine load_layout
 
-   function content_scale(self) result(scale)
-   !< Display content scale (1 standard, 2 on most high-DPI displays).
+   recursive function content_scale(self) result(scale)
+   !< Display content scale (1 standard, 2 on most high-DPI displays). Callable from any thread (a task included).
    class(app_object), intent(in) :: self  !< Application.
    real(real64)                  :: scale !< Scale.
 

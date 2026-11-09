@@ -1,0 +1,6 @@
+$ ./cb_wake
+step 100: residual  1.000E-01
+step 200: residual  1.000E-02
+step 300: residual  1.000E-03
+step 400: residual  1.000E-04
+step 500: residual  1.000E-05

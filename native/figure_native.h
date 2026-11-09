@@ -220,10 +220,11 @@ long long fig_get_clipboard(char *buf, long long cap);
 void   fig_input_mouse(float x, float y, int left_down);
 
 /* Work off the frame loop: fig_wake, from any thread, makes a lazy frame loop draw the next frame at once (window:
- * an SDL event; remote: the wait on the sockets ends; headless: nothing waits); fig_background(+1/-1) counts the
- * readers and workers alive (remote mode waits in slices of 10 ms while there are some). */
+ * an SDL event; remote: a datagram to the wake socket ends the wait on the sockets; headless: nothing waits).
+ * fig_app_wake is app%wake: from the loop's thread, the next fig_begin_frame does not wait; from any other, fig_wake.
+ * fig_quit and fig_request_frames may be called from any thread too: from another thread than the loop's they wake it. */
 void   fig_wake(void);
-void   fig_background(int delta);
+void   fig_app_wake(void);
 
 /* Processes (figure_process.cpp). args, env: packed strings (one buffer, the byte length of each); env entries are
  * NAME=value, added to (or replacing in) the program's environment. Captured (detached 0): standard output piped to
