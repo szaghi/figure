@@ -1,0 +1,1284 @@
+!< figure_c_native, the raw C interfaces of FIGURE's native glue (native/figure_native.h).
+module figure_c_native
+!< figure_c_native, the raw C interfaces of FIGURE's native glue (native/figure_native.h).
+!<
+!< Private to the library: applications use figure_app, figure_imgui and figure_implot. The glue owns the platform
+!< (window, OpenGL context) and calls the cimgui/cimplot functions Fortran cannot call directly (structs larger than
+!< `ImVec2` passed by value); the direct ones are generated in figure_cimgui and figure_cimplot. Strings passed to
+!< the glue are (pointer, length), not NUL-terminated.
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_funptr, c_int, c_long_long, c_ptr
+
+implicit none
+private
+public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
+public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutdown, fig_set_lazy, fig_request_frames
+public :: fig_set_remote_fps, fig_set_remote_compress, fig_set_remote_token, fig_remote_token
+public :: fig_set_remote_lossy
+public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, fig_texture_destroy, fig_texture_sampling
+public :: fig_texture_update
+public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
+public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
+public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
+public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
+public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
+public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord, fig_plot_tick_label
+public :: fig_app_wake
+public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
+public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
+public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
+public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_input_system_theme
+public :: fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_frame_hit, fig_frame_rect, fig_frame_state
+public :: fig_process_start, fig_process_pending, fig_process_take, fig_process_info, fig_process_kill
+public :: fig_process_release
+public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_task_cancel, fig_task_cancelled
+public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
+public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
+public :: fig_notification_alpha
+public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig_file_browser_rect
+public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_widget_input_text_multiline
+public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
+public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
+public :: fig_plot_annotation, fig_drawn_extent_rgba
+public :: fig_colormap_legend, fig_popup_rect
+
+! Status codes: must match native/figure_native.h.
+integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
+integer(c_int), parameter :: FIG_ERR_STATE     = 1_c_int !< Call not allowed in the current state.
+integer(c_int), parameter :: FIG_ERR_ARGUMENT  = 2_c_int !< Invalid argument.
+integer(c_int), parameter :: FIG_ERR_FAILED    = 3_c_int !< The platform (SDL, OpenGL) reported a failure.
+integer(c_int), parameter :: FIG_ERR_EXCEPTION = 4_c_int !< A C++ exception was caught at the boundary.
+
+interface
+   ! ---- FIGURE glue ---------------------------------------------------------------------------------------------------
+   function fig_init(title, title_len, width, height, vsync) result(status) bind(C, name='fig_init')
+   !< Open the window and create the ImGui/ImPlot contexts.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: title(*)  !< Window title (UTF-8, not NUL-terminated).
+   integer(c_int), value              :: title_len !< Title length [bytes].
+   integer(c_int), value              :: width     !< Window width [logical pixels].
+   integer(c_int), value              :: height    !< Window height [logical pixels].
+   integer(c_int), value              :: vsync     !< 1: synchronize swaps with the display.
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_init
+
+   function fig_init_headless(width, height) result(status) bind(C, name='fig_init_headless')
+   !< Create the ImGui/ImPlot contexts without a window or GPU (tests).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: width  !< Virtual display width [pixels].
+   integer(c_int), value :: height !< Virtual display height [pixels].
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_init_headless
+
+   function fig_init_remote(width, height, host, host_len, port, bound_port) result(status) &
+      bind(C, name='fig_init_remote')
+   !< Create the contexts and serve the UI to a web browser on http://host:port/ (no window, display or GPU).
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value              :: width      !< Initial display width [pixels], until the browser's.
+   integer(c_int), value              :: height     !< Initial display height [pixels].
+   character(kind=c_char), intent(in) :: host(*)    !< Address to listen on (not NUL-terminated); empty: 127.0.0.1.
+   integer(c_int), value              :: host_len   !< Host length [bytes].
+   integer(c_int), value              :: port       !< Port; 0: any free port.
+   integer(c_int), intent(out)        :: bound_port !< The port listened on.
+   integer(c_int)                     :: status     !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_init_remote
+
+   function fig_begin_frame(running) result(status) bind(C, name='fig_begin_frame')
+   !< Process events (waiting if lazy) and open a frame; `running` is 0 when the user closed the window.
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: running !< 1 while the application should keep running.
+   integer(c_int)              :: status  !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_begin_frame
+
+   function fig_end_frame() result(status) bind(C, name='fig_end_frame')
+   !< Render the frame and present it.
+   import :: c_int
+   implicit none
+   integer(c_int) :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_end_frame
+
+   subroutine fig_shutdown() bind(C, name='fig_shutdown')
+   !< Destroy contexts, window and platform; safe to call in any state.
+   implicit none
+   endsubroutine fig_shutdown
+
+   function fig_set_ini_file(path, path_len) result(status) bind(C, name='fig_set_ini_file')
+   !< Keep window positions and sizes in this file (Dear ImGui's imgui.ini); off by default. Before the first frame.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File path (not NUL-terminated); empty: no file.
+   integer(c_int), value              :: path_len !< Path length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_ini_file
+
+   function fig_set_style(name, name_len, lines, lines_len) result(status) bind(C, name='fig_set_style')
+   !< Apply a built-in style (themes/<name>.toml), with its own line colours or a named palette.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)   !< Style name (not NUL-terminated).
+   integer(c_int), value              :: name_len  !< Name length [bytes].
+   character(kind=c_char), intent(in) :: lines(*)  !< Line palette (okabe-ito), or empty for the theme's own.
+   integer(c_int), value              :: lines_len !< Palette name length [bytes].
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_style
+
+   function fig_set_style_parts(name, name_len, look, look_len, palette, palette_len, auto_dark, auto_dark_len, &
+                                auto_light, auto_light_len, lines, lines_len) result(status) &
+                                bind(C, name='fig_set_style_parts')
+   !< The style by parts, at once: a built-in style, then a look, a palette, a line palette (empty: kept).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)        !< Style name (not NUL-terminated).
+   integer(c_int), value              :: name_len       !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: look(*)        !< Look name.
+   integer(c_int), value              :: look_len       !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: palette(*)     !< Palette name, or auto.
+   integer(c_int), value              :: palette_len    !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: auto_dark(*)   !< Palette of auto on a dark system.
+   integer(c_int), value              :: auto_dark_len  !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: auto_light(*)  !< Palette of auto on a light system.
+   integer(c_int), value              :: auto_light_len !< Its length [bytes]; 0: not given.
+   character(kind=c_char), intent(in) :: lines(*)       !< Line palette (okabe-ito).
+   integer(c_int), value              :: lines_len      !< Its length [bytes]; 0: not given.
+   integer(c_int)                     :: status         !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_style_parts
+
+   function fig_palette_color(role, role_len, rgba) result(status) bind(C, name='fig_palette_color')
+   !< The colour of a palette role in effect.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: role(*)  !< Role name (not NUL-terminated).
+   integer(c_int), value               :: role_len !< Its length [bytes].
+   real(c_float),          intent(out) :: rgba(4)  !< Colour, components in [0, 1].
+   integer(c_int)                      :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_palette_color
+
+   function fig_input_system_theme(theme) result(status) bind(C, name='fig_input_system_theme')
+   !< The system's light (1) or dark (2) setting, handled at the next frame as SDL's event; 0: the system's again.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: theme  !< 0, 1 or 2.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_input_system_theme
+
+   function fig_frame_options(decorations, buttons) result(status) bind(C, name='fig_frame_options')
+   !< The window's frame of the next init: decorations 0 native, 1 figure; buttons 0 the platform's side, 1 right, 2 left.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: decorations !< 0 native, 1 figure.
+   integer(c_int), value :: buttons     !< 0 the platform's side, 1 right, 2 left.
+   integer(c_int)        :: status      !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_frame_options
+
+   function fig_set_icon_rgba(rgba, width, height) result(status) bind(C, name='fig_set_icon_rgba')
+   !< The window's icon from RGBA pixels, rows from the top (window mode).
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: rgba   !< Pixels, 4 bytes each.
+   integer(c_int), value :: width  !< Width [pixels].
+   integer(c_int), value :: height !< Height [pixels].
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_icon_rgba
+
+   function fig_set_icon_glyph(icon, icon_len) result(status) bind(C, name='fig_set_icon_glyph')
+   !< The window's icon from one ICON_* glyph (window mode).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: icon(*)  !< UTF-8 glyph (not NUL-terminated).
+   integer(c_int), value              :: icon_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_icon_glyph
+
+   function fig_process_start(id, args, arg_lens, nargs, cwd, cwd_len, env, env_lens, nenv, merge_stderr, detached, &
+                              log, log_len) result(status) bind(C, name='fig_process_start')
+   !< Start a process: captured (output piped, a reader thread drains it) or detached (output to `log`).
+   import :: c_char, c_int
+   implicit none
+   integer(c_int),         intent(out) :: id           !< Its handle.
+   character(kind=c_char), intent(in)  :: args(*)      !< The arguments, packed (program first).
+   integer(c_int),         intent(in)  :: arg_lens(*)  !< Length of each argument [bytes].
+   integer(c_int),         value       :: nargs        !< Arguments.
+   character(kind=c_char), intent(in)  :: cwd(*)       !< Working directory (empty: the program's).
+   integer(c_int),         value       :: cwd_len      !< Its length [bytes].
+   character(kind=c_char), intent(in)  :: env(*)       !< NAME=value entries, packed.
+   integer(c_int),         intent(in)  :: env_lens(*)  !< Length of each entry [bytes].
+   integer(c_int),         value       :: nenv         !< Entries.
+   integer(c_int),         value       :: merge_stderr !< 1: standard error into standard output.
+   integer(c_int),         value       :: detached     !< 1: detached, output to `log`.
+   character(kind=c_char), intent(in)  :: log(*)       !< Log file (detached).
+   integer(c_int),         value       :: log_len      !< Its length [bytes].
+   integer(c_int)                      :: status       !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_process_start
+
+   function fig_process_pending(id, length, running) result(status) bind(C, name='fig_process_pending')
+   !< Bytes ready to take (complete lines; all of them once it ended) and whether it runs.
+   import :: c_int, c_long_long
+   implicit none
+   integer(c_int),       value       :: id      !< Handle.
+   integer(c_long_long), intent(out) :: length  !< Bytes ready [bytes].
+   integer(c_int),       intent(out) :: running !< 1 while running.
+   integer(c_int)                    :: status  !< Status: FIG_OK or FIG_ERR_STATE.
+   endfunction fig_process_pending
+
+   function fig_process_take(id, buf, length, got) result(status) bind(C, name='fig_process_take')
+   !< Copy out up to `length` bytes of output (as given by fig_process_pending).
+   import :: c_char, c_int, c_long_long
+   implicit none
+   integer(c_int),         value       :: id     !< Handle.
+   character(kind=c_char), intent(out) :: buf(*) !< Buffer.
+   integer(c_long_long),   value       :: length !< Its size [bytes].
+   integer(c_long_long),   intent(out) :: got    !< Bytes copied [bytes].
+   integer(c_int)                      :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_process_take
+
+   function fig_process_info(id, running, exited, code, killed, pid, detached) result(status) &
+            bind(C, name='fig_process_info')
+   !< The state of a process.
+   import :: c_int, c_long_long
+   implicit none
+   integer(c_int),       value       :: id       !< Handle.
+   integer(c_int),       intent(out) :: running  !< 1 while running (captured: until its output is all read).
+   integer(c_int),       intent(out) :: exited   !< 1 once it ended.
+   integer(c_int),       intent(out) :: code     !< Exit code (captured).
+   integer(c_int),       intent(out) :: killed   !< 1 when it ended after a kill.
+   integer(c_long_long), intent(out) :: pid      !< Process id.
+   integer(c_int),       intent(out) :: detached !< 1 if detached.
+   integer(c_int)                    :: status   !< Status: FIG_OK or FIG_ERR_STATE.
+   endfunction fig_process_info
+
+   function fig_process_kill(id, force) result(status) bind(C, name='fig_process_kill')
+   !< Ask a process to end (force: at once).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Handle.
+   integer(c_int), value :: force  !< 1: SIGKILL / TerminateProcess.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_process_kill
+
+   subroutine fig_process_release(id) bind(C, name='fig_process_release')
+   !< Forget a process: a captured one still running is killed, a detached one goes on.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id !< Handle.
+   endsubroutine fig_process_release
+
+   function fig_notify(text, text_len, kind, icon, icon_len, seconds) result(status) bind(C, name='fig_notify')
+   !< Queue a notification.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: text(*)  !< Text (UTF-8).
+   integer(c_int),         value      :: text_len !< Its length [bytes].
+   integer(c_int),         value      :: kind     !< 0 info, 1 success, 2 warning, 3 error.
+   character(kind=c_char), intent(in) :: icon(*)  !< Icon glyph (UTF-8).
+   integer(c_int),         value      :: icon_len !< Its length [bytes].
+   real(c_double),         value      :: seconds  !< Time shown [s] (<= 0: until clicked).
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_notify
+
+   function fig_notification_count(count) result(status) bind(C, name='fig_notification_count')
+   !< Notifications kept.
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: count  !< Kept (at most 100).
+   integer(c_int)              :: status !< Status.
+   endfunction fig_notification_count
+
+   function fig_notification_get(idx, buf, buf_len, length, kind, shown) result(status) &
+            bind(C, name='fig_notification_get')
+   !< A kept notification, 1 the oldest.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int),         value       :: idx     !< Index.
+   character(kind=c_char), intent(out) :: buf(*)  !< Text buffer.
+   integer(c_int),         value       :: buf_len !< Its size [bytes].
+   integer(c_int),         intent(out) :: length  !< Text length [bytes].
+   integer(c_int),         intent(out) :: kind    !< 0 info, 1 success, 2 warning, 3 error.
+   integer(c_int),         intent(out) :: shown   !< 1 while shown.
+   integer(c_int)                      :: status  !< Status.
+   endfunction fig_notification_get
+
+   function fig_notification_rect(idx, rect, found) result(status) bind(C, name='fig_notification_rect')
+   !< A shown notification's rectangle in the last frame, 1 the newest.
+   import :: c_float, c_int
+   implicit none
+   integer(c_int), value       :: idx     !< Index.
+   real(c_float),  intent(out) :: rect(4) !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out) :: found   !< 1 if shown.
+   integer(c_int)              :: status  !< Status.
+   endfunction fig_notification_rect
+
+   function fig_notification_alpha(idx, alpha) result(status) bind(C, name='fig_notification_alpha')
+   !< A shown notification's largest vertex alpha in the last frame, 1 the newest (0 past the last).
+   import :: c_float, c_int
+   implicit none
+   integer(c_int), value       :: idx     !< Index.
+   real(c_float),  intent(out) :: alpha   !< Alpha, in [0, 1].
+   integer(c_int)              :: status  !< Status.
+   endfunction fig_notification_alpha
+
+   function fig_drawn_extent(color, color_len, rect, found) result(status) bind(C, name='fig_drawn_extent')
+   !< The extent drawn in the current window in a style colour.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: color(*)  !< Dear ImGui's colour name.
+   integer(c_int),         value       :: color_len !< Its length [bytes].
+   real(c_float),          intent(out) :: rect(4)   !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int),         intent(out) :: found     !< 1 if anything.
+   integer(c_int)                      :: status    !< Status.
+   endfunction fig_drawn_extent
+
+   function fig_drawn_extent_rgba(rgba, rect, found) result(status) bind(C, name='fig_drawn_extent_rgba')
+   !< The extent of the vertices drawn so far in the current window in an RGBA colour.
+   import :: c_float, c_int
+   implicit none
+   real(c_float),  intent(in)  :: rgba(4) !< Colour, RGBA in [0, 1].
+   real(c_float),  intent(out) :: rect(4) !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out) :: found   !< 1: something was drawn in it.
+   integer(c_int)              :: status  !< Status.
+   endfunction fig_drawn_extent_rgba
+
+   function fig_popup_rect(rect, found) result(status) bind(C, name='fig_popup_rect')
+   !< The rectangle of the innermost open popup, as in the last frame.
+   import :: c_float, c_int
+   implicit none
+   real(c_float),  intent(out) :: rect(4) !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out) :: found   !< 1: a popup is open.
+   integer(c_int)              :: status  !< Status.
+   endfunction fig_popup_rect
+
+   function fig_task_start(fn, arg, id) result(status) bind(C, name='fig_task_start')
+   !< Run fn(arg) on a worker thread.
+   import :: c_funptr, c_int, c_ptr
+   implicit none
+   type(c_funptr), value       :: fn     !< The bind(C) trampoline.
+   type(c_ptr),    value       :: arg    !< Its argument.
+   integer(c_int), intent(out) :: id     !< Handle.
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_task_start
+
+   function fig_task_state(id, done, fraction, msg, msg_len, length, task_status) result(status) &
+            bind(C, name='fig_task_state')
+   !< A task's end, last progress and message, and its failure's status.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int),         value       :: id          !< Handle.
+   integer(c_int),         intent(out) :: done        !< 1 once ended.
+   real(c_double),         intent(out) :: fraction    !< Last progress (negative: none yet).
+   character(kind=c_char), intent(out) :: msg(*)      !< Its message (up to msg_len bytes).
+   integer(c_int),         value       :: msg_len     !< Buffer size [bytes].
+   integer(c_int),         intent(out) :: length      !< Message length [bytes].
+   integer(c_int),         intent(out) :: task_status !< FIG_OK or the failure's status.
+   integer(c_int)                      :: status      !< Status: FIG_OK or FIG_ERR_STATE.
+   endfunction fig_task_state
+
+   function fig_task_report(id, fraction, msg, msg_len, keep_message) result(status) bind(C, name='fig_task_report')
+   !< Progress from the task.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int),         value      :: id           !< Handle.
+   real(c_double),         value      :: fraction     !< Done [0, 1].
+   character(kind=c_char), intent(in) :: msg(*)       !< Message.
+   integer(c_int),         value      :: msg_len      !< Its length [bytes].
+   integer(c_int),         value      :: keep_message !< 1: keep the previous message.
+   integer(c_int)                     :: status       !< Status.
+   endfunction fig_task_report
+
+   function fig_task_fail(id, msg, msg_len) result(status) bind(C, name='fig_task_fail')
+   !< A failure reported by the task.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int),         value      :: id      !< Handle.
+   character(kind=c_char), intent(in) :: msg(*)  !< Message.
+   integer(c_int),         value      :: msg_len !< Its length [bytes].
+   integer(c_int)                     :: status  !< Status.
+   endfunction fig_task_fail
+
+   function fig_task_cancel(id) result(status) bind(C, name='fig_task_cancel')
+   !< Ask a task to stop.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Handle.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_task_cancel
+
+   function fig_task_cancelled(id) result(cancelled) bind(C, name='fig_task_cancelled')
+   !< 1 once the task was asked to stop.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id        !< Handle.
+   integer(c_int)        :: cancelled !< 1: asked to stop.
+   endfunction fig_task_cancelled
+
+   function fig_task_finish(id) result(status) bind(C, name='fig_task_finish')
+   !< Wait for an ended task's thread; its failure's status (message in fig_last_error).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Handle.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_task_finish
+
+   subroutine fig_task_release(id) bind(C, name='fig_task_release')
+   !< Forget a task (a running one is asked to stop and waited for).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id !< Handle.
+   endsubroutine fig_task_release
+
+   function fig_task_on_worker() result(on) bind(C, name='fig_task_on_worker')
+   !< 1 on a task's thread.
+   import :: c_int
+   implicit none
+   integer(c_int) :: on !< 1 on a worker.
+   endfunction fig_task_on_worker
+
+   function fig_task_refuse(name, name_len) result(refused) bind(C, name='fig_task_refuse')
+   !< At a drawing entry point: 1 on a worker (the refusal recorded in its task), 0 on the main thread.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< The entry point.
+   integer(c_int),         value      :: name_len !< Its length [bytes].
+   integer(c_int)                     :: refused  !< 1: refused.
+   endfunction fig_task_refuse
+
+   function fig_frame_hit(x, y, hit) result(status) bind(C, name='fig_frame_hit')
+   !< The frame's hit-test class at (x, y), from the last frame.
+   import :: c_float, c_int
+   implicit none
+   real(c_float),  value       :: x      !< Abscissa [pixels].
+   real(c_float),  value       :: y      !< Ordinate [pixels].
+   integer(c_int), intent(out) :: hit    !< 0 client, 1 drag, 2..9 resize (SDL_HitTestResult).
+   integer(c_int)              :: status !< Status: FIG_OK.
+   endfunction fig_frame_hit
+
+   function fig_frame_rect(part, rect, found) result(status) bind(C, name='fig_frame_rect')
+   !< A part of the frame's title bar in the last frame.
+   import :: c_float, c_int
+   implicit none
+   integer(c_int), value       :: part    !< 0 bar, 1 icon, 2 menus, 3 title, 4 minimize, 5 maximize, 6 close.
+   real(c_float),  intent(out) :: rect(4) !< x0, y0, x1, y1 [pixels].
+   integer(c_int), intent(out) :: found   !< 1 if drawn.
+   integer(c_int)              :: status  !< Status: FIG_OK or FIG_ERR_ARGUMENT.
+   endfunction fig_frame_rect
+
+   function fig_frame_state(minimized, maximized) result(status) bind(C, name='fig_frame_state')
+   !< The window minimized, maximized (headless: as the frame's buttons recorded it).
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: minimized !< 1 if minimized.
+   integer(c_int), intent(out) :: maximized !< 1 if maximized.
+   integer(c_int)              :: status    !< Status: FIG_OK or FIG_ERR_STATE.
+   endfunction fig_frame_state
+
+   subroutine fig_set_lazy(enabled, max_wait_s) bind(C, name='fig_set_lazy')
+   !< Lazy redraw: sleep until an event or `max_wait_s` seconds once the UI has settled.
+   import :: c_double, c_int
+   implicit none
+   integer(c_int), value :: enabled    !< 1: lazy redraw on.
+   real(c_double), value :: max_wait_s !< Longest sleep [s].
+   endsubroutine fig_set_lazy
+
+   subroutine fig_set_remote_fps(max_fps) bind(C, name='fig_set_remote_fps')
+   !< Remote mode: at most `max_fps` frames per second (0 or less: no cap).
+   import :: c_double
+   implicit none
+   real(c_double), value :: max_fps !< Frames per second.
+   endsubroutine fig_set_remote_fps
+
+   subroutine fig_set_remote_compress(mode) bind(C, name='fig_set_remote_compress')
+   !< Remote mode: deflate frames and textures, 0 auto (while the client is the bottleneck), 1 always, 2 never.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: mode !< Mode.
+   endsubroutine fig_set_remote_compress
+
+   subroutine fig_set_remote_lossy(on) bind(C, name='fig_set_remote_lossy')
+   !< Remote mode: a user texture updated in consecutive frames goes as JPEG, then exact when it stops (1); 0: exact.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: on !< JPEG while changing (1) or not (0).
+   endsubroutine fig_set_remote_lossy
+
+   subroutine fig_set_remote_token(token, token_len) bind(C, name='fig_set_remote_token')
+   !< Remote mode: the access token (empty: none).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: token(*)  !< Token (not NUL-terminated).
+   integer(c_int), value              :: token_len !< Its length.
+   endsubroutine fig_set_remote_token
+
+   function fig_remote_token(buf, buf_len) result(n) bind(C, name='fig_remote_token')
+   !< Remote mode: copy the access token into `buf` (up to `buf_len` characters); its length.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its length.
+   integer(c_int)                      :: n       !< Token length.
+   endfunction fig_remote_token
+
+   function fig_file_dialog(kind, id, id_len, filters, filters_len, path, path_len) result(status) &
+      bind(C, name='fig_file_dialog')
+   !< Open a native file dialog (window mode): kind 0 open, 1 save, 2 folder.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value              :: kind        !< 0 open, 1 save, 2 folder.
+   character(kind=c_char), intent(in) :: id(*)       !< Dialog id (not NUL-terminated).
+   integer(c_int), value              :: id_len      !< Its length.
+   character(kind=c_char), intent(in) :: filters(*)  !< "name|pattern" entries separated by newlines.
+   integer(c_int), value              :: filters_len !< Their length.
+   character(kind=c_char), intent(in) :: path(*)     !< Default location.
+   integer(c_int), value              :: path_len    !< Its length (0: none).
+   integer(c_int)                     :: status      !< Status.
+   endfunction fig_file_dialog
+
+   function fig_file_dialog_result(id, id_len, buf, buf_len, state, path_len) result(status) &
+      bind(C, name='fig_file_dialog_result')
+   !< The result of a dialog: state 0 open, 1 chosen, 2 cancelled, 3 failed.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: id(*)    !< Dialog id.
+   integer(c_int), value               :: id_len   !< Its length.
+   character(kind=c_char), intent(out) :: buf(*)   !< Path chosen.
+   integer(c_int), value               :: buf_len  !< Buffer length.
+   integer(c_int), intent(out)         :: state    !< State.
+   integer(c_int), intent(out)         :: path_len !< Full length of the path.
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_file_dialog_result
+
+   function fig_file_browser(kind, id, id_len, filters, filters_len, path, path_len) result(status) &
+      bind(C, name='fig_file_browser')
+   !< Open FIGURE's file browser (every mode): kind 0 open a file, 1 save a file, 2 choose a folder.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value              :: kind        !< 0 open, 1 save, 2 folder.
+   character(kind=c_char), intent(in) :: id(*)       !< Dialog id (not NUL-terminated).
+   integer(c_int), value              :: id_len      !< Its length.
+   character(kind=c_char), intent(in) :: filters(*)  !< "name|pattern" entries separated by newlines.
+   integer(c_int), value              :: filters_len !< Their length.
+   character(kind=c_char), intent(in) :: path(*)     !< Where to start.
+   integer(c_int), value              :: path_len    !< Its length (0: the working directory).
+   integer(c_int)                     :: status      !< Status.
+   endfunction fig_file_browser
+
+   function fig_file_browser_settings(path, path_len) result(status) bind(C, name='fig_file_browser_settings')
+   !< The settings file keeping the recent folders, until the program ends ('': none, memory only).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File.
+   integer(c_int), value              :: path_len !< Its length.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_file_browser_settings
+
+   function fig_file_browser_get(what, idx, buf, buf_len, length, count) result(status) &
+      bind(C, name='fig_file_browser_get')
+   !< A text of the browser in front: 0 folder, 1 entry, 2 error, 3 asking, 4 path field, 5 recent folder, 6 name field.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value                :: what    !< Query.
+   integer(c_int), value                :: idx     !< Index in a list, from 1.
+   character(kind=c_char), intent(out)  :: buf(*)  !< Text.
+   integer(c_int), value                :: buf_len !< Buffer length.
+   integer(c_int), intent(out)          :: length  !< Full length of the text.
+   integer(c_int), intent(out)          :: count   !< Length of the list (1 for a text, 0 without a browser).
+   integer(c_int)                       :: status  !< Status.
+   endfunction fig_file_browser_get
+
+   function fig_file_browser_rect(part, part_len, rect, found) result(status) bind(C, name='fig_file_browser_rect')
+   !< A part of the browser in front, as drawn in the last frame.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: part(*)  !< Part name.
+   integer(c_int), value              :: part_len !< Its length.
+   real(c_float), intent(out)         :: rect(4)  !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out)        :: found    !< 1 if drawn.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_file_browser_rect
+
+   function fig_save_image(path, path_len, x0, y0, x1, y1) result(status) bind(C, name='fig_save_image')
+   !< Ask for the rectangle (x0, y0)-(x1, y1) [logical pixels] of the window as a PNG file, written when this frame is
+   !< rendered.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File.
+   integer(c_int), value              :: path_len !< Its length.
+   real(c_double), value              :: x0, y0   !< Top left.
+   real(c_double), value              :: x1, y1   !< Bottom right.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_save_image
+
+   function fig_image_result(buf, buf_len, state, path_len) result(status) bind(C, name='fig_image_result')
+   !< The outcome of the last save_image, once: state 0 none yet, 2 written, 3 failed.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*)   !< File.
+   integer(c_int), value               :: buf_len  !< Buffer length.
+   integer(c_int), intent(out)         :: state    !< State.
+   integer(c_int), intent(out)         :: path_len !< Full length of the path.
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_image_result
+
+   function fig_save_layout(path, path_len, comment, comment_len) result(status) bind(C, name='fig_save_layout')
+   !< Write the layout (Dear ImGui's settings) to `path`, after the `comment` lines (newline-separated) as comments.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)     !< File.
+   integer(c_int), value              :: path_len    !< Its length.
+   character(kind=c_char), intent(in) :: comment(*)  !< Comment lines.
+   integer(c_int), value              :: comment_len !< Their length.
+   integer(c_int)                     :: status      !< Status.
+   endfunction fig_save_layout
+
+   function fig_begin_side_bar(name, name_len, side, size) result(visible) bind(C, name='fig_begin_side_bar')
+   !< Begin a bar along one side of the display (0 left, 1 right, 2 top, 3 bottom): 1 when its content is drawn.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Window name.
+   integer(c_int), value              :: name_len !< Its length.
+   integer(c_int), value              :: side     !< Side.
+   real(c_double), value              :: size     !< Width (left, right) or height (top, bottom) [pixels].
+   integer(c_int)                     :: visible  !< 1: drawn.
+   endfunction fig_begin_side_bar
+
+   function fig_tool_button(label, label_len, icon, icon_len, width, height, selected, accent) result(clicked) &
+      bind(C, name='fig_tool_button')
+   !< A workspace button, an icon above its label: 1 on the frame it is clicked.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: label(*)   !< Label (text before '##' shown; all of it the id).
+   integer(c_int), value              :: label_len  !< Its length.
+   character(kind=c_char), intent(in) :: icon(*)    !< Icon (UTF-8).
+   integer(c_int), value              :: icon_len   !< Its length.
+   real(c_double), value              :: width      !< Width [pixels] (<= 0: default).
+   real(c_double), value              :: height     !< Height [pixels] (<= 0: default).
+   integer(c_int), value              :: selected   !< 1: framed and tinted in the accent.
+   real(c_double), intent(in)         :: accent(4)  !< Accent [r, g, b, _] (accent(4) < 0: the style's).
+   integer(c_int)                     :: clicked    !< 1: clicked.
+   endfunction fig_tool_button
+
+   function fig_clipper_new() result(clipper) bind(C, name='fig_clipper_new')
+   !< A list clipper.
+   import :: c_ptr
+   implicit none
+   type(c_ptr) :: clipper !< Clipper.
+   endfunction fig_clipper_new
+
+   subroutine fig_clipper_begin(clipper, count, item_height) bind(C, name='fig_clipper_begin')
+   !< Start clipping `count` rows (item_height <= 0: measured on the first row).
+   import :: c_double, c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: clipper     !< Clipper.
+   integer(c_int), value :: count       !< Rows.
+   real(c_double), value :: item_height !< Row height [pixels].
+   endsubroutine fig_clipper_begin
+
+   function fig_clipper_step(clipper, first, last) result(more) bind(C, name='fig_clipper_step')
+   !< The next range of rows to draw (1-based): 1 while there is one.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value       :: clipper !< Clipper.
+   integer(c_int), intent(out) :: first   !< First row.
+   integer(c_int), intent(out) :: last    !< Last row.
+   integer(c_int)              :: more    !< 1: draw first..last.
+   endfunction fig_clipper_step
+
+   subroutine fig_clipper_delete(clipper) bind(C, name='fig_clipper_delete')
+   !< Free a clipper (ended first when left before its end).
+   import :: c_ptr
+   implicit none
+   type(c_ptr), value :: clipper !< Clipper.
+   endsubroutine fig_clipper_delete
+
+   function fig_load_layout(path, path_len) result(status) bind(C, name='fig_load_layout')
+   !< Read a layout from `path`, applied before the next frame.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File.
+   integer(c_int), value              :: path_len !< Its length.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_load_layout
+
+   subroutine fig_set_confirm_quit(on) bind(C, name='fig_set_confirm_quit')
+   !< A quit request (the window's close button) is reported instead of ending the loop (1) or ends it (0).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: on !< 1: confirm first.
+   endsubroutine fig_set_confirm_quit
+
+   function fig_quit_requested() result(requested) bind(C, name='fig_quit_requested')
+   !< 1 once per quit request (then cleared).
+   import :: c_int
+   implicit none
+   integer(c_int) :: requested !< 1: requested.
+   endfunction fig_quit_requested
+
+   subroutine fig_quit() bind(C, name='fig_quit')
+   !< End the loop at the next begin_frame (from any thread; from another than the loop's, it wakes the loop).
+   endsubroutine fig_quit
+
+   subroutine fig_app_wake() bind(C, name='fig_app_wake')
+   !< From any thread: the next frame starts without waiting for input or max_wait.
+   endsubroutine fig_app_wake
+
+   function fig_set_title(title, title_len) result(status) bind(C, name='fig_set_title')
+   !< The window's title (window mode: shown; every mode: kept).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: title(*)  !< Title (not NUL-terminated).
+   integer(c_int), value              :: title_len !< Its length.
+   integer(c_int)                     :: status    !< Status.
+   endfunction fig_set_title
+
+   function fig_title(buf, buf_len) result(n) bind(C, name='fig_title')
+   !< Copy the window's title into `buf` (up to `buf_len` characters); its length.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its length.
+   integer(c_int)                      :: n       !< Title length.
+   endfunction fig_title
+
+   function fig_input_quit() result(status) bind(C, name='fig_input_quit')
+   !< A quit request, as the window's close button makes it.
+   import :: c_int
+   implicit none
+   integer(c_int) :: status !< Status.
+   endfunction fig_input_quit
+
+   subroutine fig_request_frames(n) bind(C, name='fig_request_frames')
+   !< Draw at least `n` more frames without waiting (animations, data that changed).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: n !< Frames.
+   endsubroutine fig_request_frames
+
+   function fig_content_scale() result(scale) bind(C, name='fig_content_scale')
+   !< Display content scale (1 on standard displays, 2 on most high-DPI ones).
+   import :: c_double
+   implicit none
+   real(c_double) :: scale !< Content scale.
+   endfunction fig_content_scale
+
+   function fig_last_error(len) result(msg) bind(C, name='fig_last_error')
+   !< Message of the last failure (borrowed: copy it).
+   import :: c_int, c_ptr
+   implicit none
+   integer(c_int), intent(out) :: len !< Message length [bytes].
+   type(c_ptr)                 :: msg !< First byte of the message (borrowed).
+   endfunction fig_last_error
+
+   subroutine fig_set_last_error(msg, msg_len) bind(C, name='fig_set_last_error')
+   !< Set the message `fig_last_error` returns (failures detected on the Fortran side).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: msg(*)  !< Message (not NUL-terminated).
+   integer(c_int), value              :: msg_len !< Message length [bytes].
+   endsubroutine fig_set_last_error
+
+   function fig_texture_create(width, height, smooth, id) result(status) bind(C, name='fig_texture_create')
+   !< Create an RGBA texture (contents undefined until updated).
+   import :: c_int, c_long_long
+   implicit none
+   integer(c_int), value             :: width  !< Width [pixels].
+   integer(c_int), value             :: height !< Height [pixels].
+   integer(c_int), value             :: smooth !< 1: linear filtering, 0: nearest (pixels stay sharp).
+   integer(c_long_long), intent(out) :: id     !< ImTextureID (C `unsigned long long`).
+   integer(c_int)                    :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_texture_create
+
+   function fig_texture_update(id, width, height, rgba) result(status) bind(C, name='fig_texture_update')
+   !< Upload all the pixels of a texture: `width` x `height` RGBA, 8 bits per channel, rows of `width` pixels.
+   import :: c_int, c_long_long, c_ptr
+   implicit none
+   integer(c_long_long), value :: id     !< Texture.
+   integer(c_int), value       :: width  !< Width [pixels]: must equal the texture's.
+   integer(c_int), value       :: height !< Height [pixels]: must equal the texture's.
+   type(c_ptr), value          :: rgba   !< First byte of the pixels (read during the call only).
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_texture_update
+
+   subroutine fig_texture_destroy(id) bind(C, name='fig_texture_destroy')
+   !< Destroy a texture; an unknown id (already destroyed, or after shutdown) is ignored.
+   import :: c_long_long
+   implicit none
+   integer(c_long_long), value :: id !< Texture.
+   endsubroutine fig_texture_destroy
+
+   subroutine fig_texture_sampling(plot, from_texture) bind(C, name='fig_texture_sampling')
+   !< Around a user image: 1 = sample with the texture's own filter, 0 = restore the backend's render state.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: plot         !< 1: the current plot's draw list; 0: the current window's.
+   integer(c_int), value :: from_texture !< 1: before the image; 0: after it.
+   endsubroutine fig_texture_sampling
+
+   function fig_load_style(path, path_len) result(status) bind(C, name='fig_load_style')
+   !< Apply a theme file.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File path (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Path length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_load_style
+
+   function fig_save_style(path, path_len) result(status) bind(C, name='fig_save_style')
+   !< Write the style in effect as a theme file.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File path (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Path length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_save_style
+
+   function fig_push_style_color(lib, name, name_len, rgba) result(status) bind(C, name='fig_push_style_color')
+   !< Change a style colour until fig_pop_style(0, n): lib 0 Dear ImGui, 1 ImPlot.
+   import :: c_char, c_float, c_int
+   implicit none
+   integer(c_int), value              :: lib      !< 0: Dear ImGui, 1: ImPlot.
+   character(kind=c_char), intent(in) :: name(*)  !< Colour name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   real(c_float), intent(in)          :: rgba(4)  !< Colour, components in [0, 1].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_push_style_color
+
+   function fig_push_style_var(lib, name, name_len, values, count) result(status) bind(C, name='fig_push_style_var')
+   !< Change a style variable until fig_pop_style(1, n): lib 0 Dear ImGui, 1 ImPlot.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int), value              :: lib       !< 0: Dear ImGui, 1: ImPlot.
+   character(kind=c_char), intent(in) :: name(*)   !< Variable name (not NUL-terminated).
+   integer(c_int), value              :: name_len  !< Name length [bytes].
+   real(c_double), intent(in)         :: values(2) !< Value(s).
+   integer(c_int), value              :: count     !< Values given: 1 or 2.
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_push_style_var
+
+   function fig_pop_style(vars, n) result(status) bind(C, name='fig_pop_style')
+   !< Undo the n newest pushes of colours (vars = 0) or variables (vars = 1).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: vars   !< 0: colours, 1: variables.
+   integer(c_int), value :: n      !< How many.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_pop_style
+
+   function fig_set_font(name, name_len, size) result(status) bind(C, name='fig_set_font')
+   !< The default font (plex-sans, proggy or a TTF/OTF file) and, if size > 0, its size [logical pixels].
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Font (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   real(c_double), value              :: size     !< Size [logical pixels]; 0: keep.
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_font
+
+   function fig_push_font(name, name_len, size) result(status) bind(C, name='fig_push_font')
+   !< Switch the font (name empty: keep) and/or its size (0: keep) until fig_pop_font.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Font (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   real(c_double), value              :: size     !< Size [logical pixels]; 0: keep.
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_push_font
+
+   function fig_pop_font() result(status) bind(C, name='fig_pop_font')
+   !< Back to the font before the last fig_push_font.
+   import :: c_int
+   implicit none
+   integer(c_int) :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_pop_font
+
+   function fig_show_style_editor(open) result(status) bind(C, name='fig_show_style_editor')
+   !< Dear ImGui's and ImPlot's style editors in a window.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr), value :: open   !< int* (1: open), or null for no close button.
+   integer(c_int)     :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_show_style_editor
+
+   function fig_style_color(lib, name, name_len, set, rgba) result(status) bind(C, name='fig_style_color')
+   !< Read (set = 0) or write (set = 1) a style colour by name: lib 0 Dear ImGui, 1 ImPlot.
+   import :: c_char, c_float, c_int
+   implicit none
+   integer(c_int), value              :: lib      !< 0: Dear ImGui, 1: ImPlot.
+   character(kind=c_char), intent(in) :: name(*)  !< Colour name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   integer(c_int), value              :: set      !< 1: write, 0: read.
+   real(c_float), intent(inout)       :: rgba(4)  !< Colour, components in [0, 1].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_style_color
+
+   function fig_style_var(lib, name, name_len, set, values, count) result(status) bind(C, name='fig_style_var')
+   !< Read (set = 0) or write (set = 1) a style variable by name: lib 0 Dear ImGui, 1 ImPlot.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int), value              :: lib       !< 0: Dear ImGui, 1: ImPlot.
+   character(kind=c_char), intent(in) :: name(*)   !< Variable name (not NUL-terminated).
+   integer(c_int), value              :: name_len  !< Name length [bytes].
+   integer(c_int), value              :: set       !< 1: write, 0: read.
+   real(c_double), intent(inout)      :: values(2) !< Value(s).
+   integer(c_int), intent(inout)      :: count     !< Values given (write) or returned (read): 1 or 2.
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_style_var
+
+   function fig_set_docking(enabled) result(status) bind(C, name='fig_set_docking')
+   !< Docking on (1) or off (0).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: enabled !< 1: docking on.
+   integer(c_int)        :: status  !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_set_docking
+
+   function fig_dock_id(name, name_len) result(id) bind(C, name='fig_dock_id')
+   !< Dock id (an ImGuiID, unsigned 32-bit, carried as c_int) of a name.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   integer(c_int)                     :: id       !< Dock id.
+   endfunction fig_dock_id
+
+   function fig_dock_space(id, flags) result(status) bind(C, name='fig_dock_space')
+   !< A dock space over the whole display, every frame, before the windows docked into it.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Dock id.
+   integer(c_int), value :: flags  !< ImGuiDockNodeFlags.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_space
+
+   function fig_dock_layout_begin(id, needed) result(status) bind(C, name='fig_dock_layout_begin')
+   !< Start a layout if the dock node does not exist yet (needed = 1).
+   import :: c_int
+   implicit none
+   integer(c_int), value       :: id     !< Dock id.
+   integer(c_int), intent(out) :: needed !< 1: build the layout now.
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_layout_begin
+
+   function fig_dock_split(id, direction, fraction, id_at_dir, id_other) result(status) bind(C, name='fig_dock_split')
+   !< Split a dock node in two.
+   import :: c_double, c_int
+   implicit none
+   integer(c_int), value       :: id        !< Node to split.
+   integer(c_int), value       :: direction !< ImGuiDir: 0 left, 1 right, 2 up, 3 down.
+   real(c_double), value       :: fraction  !< Part of the node given to the side at `direction`.
+   integer(c_int), intent(out) :: id_at_dir !< The new node at `direction`.
+   integer(c_int), intent(out) :: id_other  !< The new node on the other side.
+   integer(c_int)              :: status    !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_split
+
+   function fig_dock_window(name, name_len, id) result(status) bind(C, name='fig_dock_window')
+   !< Dock a window (by its name) into a node of a layout.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Window name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   integer(c_int), value              :: id       !< Dock node.
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_window
+
+   function fig_dock_layout_end(id) result(status) bind(C, name='fig_dock_layout_end')
+   !< Finish a layout.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id     !< Dock id.
+   integer(c_int)        :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_dock_layout_end
+
+   function fig_window_dock(id, docked) result(status) bind(C, name='fig_window_dock')
+   !< Inside a window: its dock node (0 if none) and whether it is docked.
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: id     !< Dock node.
+   integer(c_int), intent(out) :: docked !< 1: docked.
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_window_dock
+
+   function fig_input_next_frame() result(status) bind(C, name='fig_input_next_frame')
+   !< A frame boundary in the queued input: what follows reaches Dear ImGui one frame later.
+   import :: c_int
+   implicit none
+   integer(c_int) :: status !< Status.
+   endfunction fig_input_next_frame
+
+   function fig_input_mouse_pos(x, y) result(status) bind(C, name='fig_input_mouse_pos')
+   !< Queue a mouse position [pixels].
+   import :: c_float, c_int
+   implicit none
+   real(c_float), value :: x      !< Abscissa.
+   real(c_float), value :: y      !< Ordinate.
+   integer(c_int)       :: status !< Status.
+   endfunction fig_input_mouse_pos
+
+   function fig_input_mouse_button(button, down) result(status) bind(C, name='fig_input_mouse_button')
+   !< Queue a mouse button change: 0 left, 1 right, 2 middle.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: button !< Button.
+   integer(c_int), value :: down   !< 1: pressed.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_input_mouse_button
+
+   function fig_input_wheel(dx, dy) result(status) bind(C, name='fig_input_wheel')
+   !< Queue a wheel turn.
+   import :: c_float, c_int
+   implicit none
+   real(c_float), value :: dx     !< Horizontal.
+   real(c_float), value :: dy     !< Vertical (positive: away from the user).
+   integer(c_int)       :: status !< Status.
+   endfunction fig_input_wheel
+
+   function fig_input_key(name, name_len, down) result(status) bind(C, name='fig_input_key')
+   !< Queue a key change, by name.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Key name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   integer(c_int), value              :: down     !< 1: pressed.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_input_key
+
+   function fig_input_text(text, text_len) result(status) bind(C, name='fig_input_text')
+   !< Queue typed characters (UTF-8).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: text(*)  !< Text (not NUL-terminated).
+   integer(c_int), value              :: text_len !< Text length [bytes].
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_input_text
+
+   function fig_plot_tick_label(axis, index, buf, buf_len, count, label_len) result(status) &
+      bind(C, name='fig_plot_tick_label')
+   !< A tick label of the plot being declared.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value               :: axis      !< 0 x, 1 y.
+   integer(c_int), value               :: index     !< Tick, from 1.
+   character(kind=c_char), intent(out) :: buf(*)    !< Label.
+   integer(c_int), value               :: buf_len   !< Buffer length.
+   integer(c_int), intent(out)         :: count     !< Ticks on the axis.
+   integer(c_int), intent(out)         :: label_len !< Length of the label.
+   integer(c_int)                      :: status    !< Status.
+   endfunction fig_plot_tick_label
+
+   function fig_plot_annotation(x, y, rgba, dx, dy, clamp, text, text_len) result(status) &
+      bind(C, name='fig_plot_annotation')
+   !< An annotation of the plot being declared (drawn at its end).
+   import :: c_char, c_double, c_float, c_int
+   implicit none
+   real(c_double), value              :: x        !< Abscissa [plot units].
+   real(c_double), value              :: y        !< Ordinate [plot units].
+   real(c_float),          intent(in) :: rgba(4)  !< Box colour (alpha 0: no box).
+   real(c_float), value               :: dx       !< Offset along x [pixels] (0: centred).
+   real(c_float), value               :: dy       !< Offset along y [pixels], down (0: centred).
+   integer(c_int), value              :: clamp    !< 1: kept inside the plot.
+   character(kind=c_char), intent(in) :: text(*)  !< Text (not NUL-terminated).
+   integer(c_int), value              :: text_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_plot_annotation
+
+   function fig_key_chord(keys, keys_len, chord) result(status) bind(C, name='fig_key_chord')
+   !< A key chord from its name ("ctrl+s").
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: keys(*)  !< Chord name (not NUL-terminated).
+   integer(c_int), value              :: keys_len !< Name length [bytes].
+   integer(c_int), intent(out)        :: chord    !< ImGuiKeyChord.
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_ARGUMENT.
+   endfunction fig_key_chord
+
+   function fig_widget_input_text(label, label_len, hint, hint_len, buf, buf_size, flags) result(edited) &
+      bind(C, name='fig_widget_input_text')
+   !< A text field over a NUL-terminated buffer of `buf_size` bytes; 1 when the user edited it this frame.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)    :: label(*)  !< Label (not NUL-terminated).
+   integer(c_int), value                 :: label_len !< Label length [bytes].
+   character(kind=c_char), intent(in)    :: hint(*)   !< Hint shown while empty (not NUL-terminated).
+   integer(c_int), value                 :: hint_len  !< Hint length [bytes] (0: no hint).
+   character(kind=c_char), intent(inout) :: buf(*)    !< Text, NUL-terminated.
+   integer(c_int), value                 :: buf_size  !< Buffer size [bytes], NUL included.
+   integer(c_int), value                 :: flags     !< ImGuiInputTextFlags.
+   integer(c_int)                        :: edited    !< 1: edited this frame.
+   endfunction fig_widget_input_text
+
+   function fig_text_set(id, text, length) result(status) bind(C, name='fig_text_set')
+   !< Set the text of a text buffer, CRLF turned into LF; `id` 0 (or unknown): a new buffer, its handle returned.
+   import :: c_char, c_int, c_long_long
+   implicit none
+   integer(c_int),         intent(inout) :: id      !< Handle (0: new).
+   character(kind=c_char), intent(in)    :: text(*) !< Text (not NUL-terminated).
+   integer(c_long_long),   value         :: length  !< Its length [bytes].
+   integer(c_int)                        :: status  !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_text_set
+
+   function fig_text_get(id, buf, cap) result(length) bind(C, name='fig_text_get')
+   !< Copy at most `cap` bytes of a text buffer's text; its whole length (an unknown handle: 0).
+   import :: c_char, c_int, c_long_long
+   implicit none
+   integer(c_int),         value       :: id     !< Handle.
+   character(kind=c_char), intent(out) :: buf(*) !< Buffer.
+   integer(c_long_long),   value       :: cap    !< Its size [bytes].
+   integer(c_long_long)                :: length !< The text's length [bytes].
+   endfunction fig_text_get
+
+   function fig_text_length(id) result(length) bind(C, name='fig_text_length')
+   !< The length of a text buffer's text (an unknown handle: 0).
+   import :: c_int, c_long_long
+   implicit none
+   integer(c_int), value :: id     !< Handle.
+   integer(c_long_long)  :: length !< Length [bytes].
+   endfunction fig_text_length
+
+   subroutine fig_text_release(id) bind(C, name='fig_text_release')
+   !< Forget a text buffer (an unknown handle: nothing).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: id !< Handle.
+   endsubroutine fig_text_release
+
+   function fig_widget_input_text_multiline(id, label, label_len, width, height, flags) result(edited) &
+      bind(C, name='fig_widget_input_text_multiline')
+   !< A multi-line text field over a text buffer (`id` 0: a new, empty one); 1 when the user edited it this frame.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int),         intent(inout) :: id        !< Handle (0: new).
+   character(kind=c_char), intent(in)    :: label(*)  !< Label (not NUL-terminated).
+   integer(c_int),         value         :: label_len !< Label length [bytes].
+   real(c_double),         value         :: width     !< Width [pixels] (0: default).
+   real(c_double),         value         :: height    !< Height [pixels] (0: default).
+   integer(c_int),         value         :: flags     !< ImGuiInputTextFlags.
+   integer(c_int)                        :: edited    !< 1: edited this frame.
+   endfunction fig_widget_input_text_multiline
+
+   function fig_input_drop(path, path_len, x, y) result(status) bind(C, name='fig_input_drop')
+   !< Queue a synthetic drop of one path at (x, y) (tests).
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< Path (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Its length [bytes].
+   real(c_float), value               :: x        !< Abscissa [pixels].
+   real(c_float), value               :: y        !< Ordinate [pixels].
+   integer(c_int)                     :: status   !< Status: FIG_OK, FIG_ERR_ARGUMENT (empty), FIG_ERR_STATE.
+   endfunction fig_input_drop
+
+   function fig_dropped(count, x, y) result(status) bind(C, name='fig_dropped')
+   !< The paths dropped for this frame: how many, and where the last one was dropped.
+   import :: c_float, c_int
+   implicit none
+   integer(c_int), intent(out) :: count  !< Paths.
+   real(c_float),  intent(out) :: x      !< Abscissa [pixels].
+   real(c_float),  intent(out) :: y      !< Ordinate [pixels].
+   integer(c_int)              :: status !< Status: FIG_OK or FIG_ERR_STATE before init.
+   endfunction fig_dropped
+
+   function fig_dropped_path(index, buf, buf_len) result(length) bind(C, name='fig_dropped_path')
+   !< A path dropped for this frame (index from 1): up to `buf_len` bytes copied; its length.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value               :: index   !< Index, from 1.
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its size [bytes].
+   integer(c_int)                      :: length  !< The path's length [bytes] (0: no such path).
+   endfunction fig_dropped_path
+
+   function fig_set_clipboard(text, text_len) result(status) bind(C, name='fig_set_clipboard')
+   !< Put a text on the clipboard.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: text(*)  !< Text (not NUL-terminated).
+   integer(c_int), value              :: text_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_STATE before init.
+   endfunction fig_set_clipboard
+
+   function fig_get_clipboard(buf, cap) result(length) bind(C, name='fig_get_clipboard')
+   !< Copy at most `cap` bytes of the clipboard's text; its whole length (0 before init).
+   import :: c_char, c_long_long
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*) !< Buffer.
+   integer(c_long_long),   value       :: cap    !< Its size [bytes].
+   integer(c_long_long)                :: length !< The text's length [bytes].
+   endfunction fig_get_clipboard
+
+   function fig_window_rect(name, name_len, rect, found) result(status) bind(C, name='fig_window_rect')
+   !< A window's rectangle by name, as in the last frame.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Window name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Name length [bytes].
+   real(c_float), intent(out)         :: rect(4)  !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out)        :: found    !< 1: the window exists.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_window_rect
+
+   subroutine fig_input_mouse(x, y, left_down) bind(C, name='fig_input_mouse')
+   !< Queue a synthetic mouse state (tests).
+   import :: c_float, c_int
+   implicit none
+   real(c_float), value  :: x         !< Abscissa [pixels].
+   real(c_float), value  :: y         !< Ordinate [pixels].
+   integer(c_int), value :: left_down !< 1: left button pressed.
+   endsubroutine fig_input_mouse
+
+   function fig_colormap(name, name_len, levels, id) result(status) bind(C, name='fig_colormap')
+   !< The ImPlot id of a colormap by name (`<name>_r` reversed, levels > 0 discrete), registered at its first use.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: name(*)  !< Name (not NUL-terminated).
+   integer(c_int), value               :: name_len !< Its length [bytes].
+   integer(c_int), value               :: levels   !< Discrete bands, in [2, 256]; 0: continuous.
+   integer(c_int),         intent(out) :: id       !< ImPlot colormap id (-1 on a failure).
+   integer(c_int)                      :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_colormap
+
+   function fig_colormap_legend(id, id_len, cmap, vmin, vmax, levels, horizontal, width, height, fmt, fmt_len) &
+      result(status) bind(C, name='fig_colormap_legend')
+   !< A colour-scale legend of a colormap, as an item of the current window.
+   import :: c_char, c_double, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: id(*)      !< Widget id (not NUL-terminated).
+   integer(c_int), value              :: id_len     !< Its length [bytes].
+   integer(c_int), value              :: cmap       !< ImPlot colormap id.
+   real(c_double), value              :: vmin       !< Value at the bottom (left).
+   real(c_double), value              :: vmax       !< Value at the top (right).
+   integer(c_int), value              :: levels     !< Bands (0: continuous).
+   integer(c_int), value              :: horizontal !< 1: horizontal.
+   real(c_float), value               :: width      !< Width [pixels] (0: default, < 0: the space left).
+   real(c_float), value               :: height     !< Height [pixels] (0: default, < 0: the space left).
+   character(kind=c_char), intent(in) :: fmt(*)     !< printf format of the values (not NUL-terminated; empty: %g).
+   integer(c_int), value              :: fmt_len    !< Its length [bytes].
+   integer(c_int)                     :: status     !< Status.
+   endfunction fig_colormap_legend
+
+   function fig_load_colormap(name, name_len, path, path_len) result(status) bind(C, name='fig_load_colormap')
+   !< Read a user colormap (CSV table of RGB rows, or a ParaView JSON preset) under a new name.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Name (not NUL-terminated).
+   integer(c_int), value              :: name_len !< Its length [bytes].
+   character(kind=c_char), intent(in) :: path(*)  !< File (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_load_colormap
+
+   function fig_colormap_count() result(count) bind(C, name='fig_colormap_count')
+   !< The number of colormap names: bundled, ImPlot's own, the user's.
+   import :: c_int
+   implicit none
+   integer(c_int) :: count !< Names.
+   endfunction fig_colormap_count
+
+   function fig_colormap_name(index, buf, buf_len) result(length) bind(C, name='fig_colormap_name')
+   !< The index-th colormap name (from 1): up to `buf_len` bytes copied; its length.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value               :: index   !< Index, from 1.
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its size [bytes].
+   integer(c_int)                      :: length  !< The name's length [bytes] (0: no such name).
+   endfunction fig_colormap_name
+endinterface
+endmodule figure_c_native
