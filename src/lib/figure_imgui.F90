@@ -11,7 +11,7 @@ module figure_imgui
 use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_loc, c_long_long, &
                                         c_null_char, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_base, only : cstr, figure_check, figure_fail, figure_refused
+use figure_base, only : cstr, figure_check, figure_fail, figure_refused, format_refused, FORMAT_REAL
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, FIG_ERR_ARGUMENT, FIG_OK
@@ -297,18 +297,25 @@ contains
    value = real(v, real64)
    endfunction ig_slider_r64
 
-   recursive function ig_input_r64(label, value, step, format) result(changed)
-   !< Numeric input field for a real value; true when the user changed it.
-   character(len=*), intent(in)           :: label   !< Label.
-   real(real64),     intent(inout)        :: value   !< Value.
-   real(real64),     intent(in), optional :: step    !< +/- buttons step (default: none).
-   character(len=*), intent(in), optional :: format  !< printf format (default '%.6g').
-   logical                                :: changed !< Changed this frame.
-   real(c_double), target                 :: v       !< C copy of `value`.
-   real(c_double)                         :: s       !< Step.
+   recursive function ig_input_r64(label, value, step, format, stat) result(changed)
+   !< Numeric input field for a real value; true when the user changed it. `format`: a C printf format of one real
+   !< value (`'%.3f'`, `'%8.2e'`, `'x = %.4g m'`), checked: one conversion `f`, `e`, `g` or `a`, with optional flags,
+   !< width and precision, and any `%%`. Statuses: `FIG_ERR_ARGUMENT` for any other format (nothing is drawn, `value`
+   !< is unchanged), `FIG_ERR_STATE` from a task; `stat` absent: `error stop` with the message.
+   character(len=*), intent(in)            :: label   !< Label.
+   real(real64),     intent(inout)         :: value   !< Value.
+   real(real64),     intent(in),  optional :: step    !< +/- buttons step (default: none).
+   character(len=*), intent(in),  optional :: format  !< printf format of one real (default '%.6g').
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   logical                                 :: changed !< Changed this frame.
+   real(c_double), target                  :: v       !< C copy of `value`.
+   real(c_double)                          :: s       !< Step.
 
    changed = .false.
-   if (figure_refused('ig_input')) return ! a task does not draw
+   if (figure_refused('ig_input', stat)) return ! a task does not draw
+   if (present(format)) then
+      if (format_refused('ig_input', 'format', format, FORMAT_REAL, stat)) return
+   endif
    v = real(value, c_double)
    s = 0.0_c_double
    if (present(step)) s = real(step, c_double)
@@ -318,6 +325,7 @@ contains
       changed = logical(igInputDouble(cstr(label), c_loc(v), s, 10.0_c_double * s, cstr('%.6g'), 0_c_int))
    endif
    value = real(v, real64)
+   call figure_check(FIG_OK, stat)
    endfunction ig_input_r64
 
    recursive function ig_input_i32(label, value, step) result(changed)

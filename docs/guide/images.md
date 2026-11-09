@@ -29,7 +29,8 @@ draws `f(:, :)` (`real(real32)` or `real(real64)`, contiguous) over the rectangl
   `(ymax - ymin) / size(f, 2)`: the bounds are the outer edges of the cells, not the centres of the first and last;
 - **colour scale**: `scale_min` maps to the bottom of the colormap, `scale_max` to the top. Give both or neither
   (`FIG_ERR_ARGUMENT` otherwise); with neither, the range of the data, computed by ImPlot every frame;
-- **labels**: `label_format` (a printf format, e.g. `'%.2f'`) prints each value in its cell. Off by default: on a
+- **labels**: `label_format` (a printf format of one real, e.g. `'%.2f'`, checked: [Formats](plots#formats)) prints
+  each value in its cell. Off by default: on a
   large field, formatting a string per cell every frame costs far more than drawing the cells;
 - **colormap**: an id from [`ip_colormap`](colormaps), by name (`colormap=ip_colormap('batlow')`, reversed
   `'batlow_r'`, in discrete bands with `levels`), or one of ImPlot's constants (`ImPlotColormap_Viridis`, ...), for

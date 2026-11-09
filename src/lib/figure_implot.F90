@@ -19,7 +19,7 @@ module figure_implot
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
-use figure_base, only : cstr, figure_check, figure_fail, figure_refused
+use figure_base, only : cstr, figure_check, figure_fail, figure_refused, format_refused, FORMAT_REAL
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
                             fig_colormap_legend
@@ -224,21 +224,31 @@ contains
    call ImPlot_EndPlot()
    endsubroutine ip_end_plot
 
-   recursive subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat)
+   recursive subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat, stat)
    !< Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes fit the data every frame (data
    !< that grows while the user watches), instead of once on first use. `xlog`/`ylog`: a base-10 logarithmic axis
    !< (values <= 0 are not shown on it). `xformat`/`yformat`: a C printf format of the tick labels (`'%.6f'`,
-   !< `'%.2e'`, `'%g s'`), for values whose default labels look alike (-3781.31, -3781.31, ...).
-   character(len=*), intent(in)           :: xlabel   !< X label.
-   character(len=*), intent(in)           :: ylabel   !< Y label.
-   logical,          intent(in), optional :: auto_fit !< Fit the axes to the data every frame (default: first use only).
-   logical,          intent(in), optional :: xlog     !< Logarithmic x axis (default: linear).
-   logical,          intent(in), optional :: ylog     !< Logarithmic y axis (default: linear).
-   character(len=*), intent(in), optional :: xformat  !< printf format of the x tick labels.
-   character(len=*), intent(in), optional :: yformat  !< printf format of the y tick labels.
-   integer(c_int)                         :: flags    !< ImPlotAxisFlags of both axes.
+   !< `'%.2e'`, `'%g s'`), for values whose default labels look alike (-3781.31, -3781.31, ...), checked: one
+   !< conversion `f`, `e`, `g` or `a`, with optional flags, width and precision, and any `%%`. Statuses:
+   !< `FIG_ERR_ARGUMENT` for any other format (nothing is set up), `FIG_ERR_STATE` from a task; `stat` absent:
+   !< `error stop` with the message.
+   character(len=*), intent(in)            :: xlabel   !< X label.
+   character(len=*), intent(in)            :: ylabel   !< Y label.
+   logical,          intent(in),  optional :: auto_fit !< Fit the axes to the data every frame (default: first use only).
+   logical,          intent(in),  optional :: xlog     !< Logarithmic x axis (default: linear).
+   logical,          intent(in),  optional :: ylog     !< Logarithmic y axis (default: linear).
+   character(len=*), intent(in),  optional :: xformat  !< printf format of the x tick labels (one real).
+   character(len=*), intent(in),  optional :: yformat  !< printf format of the y tick labels (one real).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   integer(c_int)                          :: flags    !< ImPlotAxisFlags of both axes.
 
-   if (figure_refused('ip_setup_axes')) return ! a task does not draw
+   if (figure_refused('ip_setup_axes', stat)) return ! a task does not draw
+   if (present(xformat)) then
+      if (format_refused('ip_setup_axes', 'xformat', xformat, FORMAT_REAL, stat)) return
+   endif
+   if (present(yformat)) then
+      if (format_refused('ip_setup_axes', 'yformat', yformat, FORMAT_REAL, stat)) return
+   endif
    flags = ImPlotAxisFlags_None
    if (present(auto_fit)) then
       if (auto_fit) flags = ImPlotAxisFlags_AutoFit
@@ -252,6 +262,7 @@ contains
    endif
    if (present(xformat)) call ImPlot_SetupAxisFormat_Str(ImAxis_X1, cstr(xformat))
    if (present(yformat)) call ImPlot_SetupAxisFormat_Str(ImAxis_Y1, cstr(yformat))
+   call figure_check(FIG_OK, stat)
    endsubroutine ip_setup_axes
 
    recursive subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)
@@ -479,7 +490,8 @@ contains
    real(real64),           intent(in)                     :: ymax         !< Top edge of the last row.
    real(real64),           intent(in), optional           :: scale_min    !< Value at the bottom of the colormap.
    real(real64),           intent(in), optional           :: scale_max    !< Value at the top (both or none; none: data).
-   character(len=*),       intent(in), optional           :: label_format !< printf format printing each value in its cell.
+   character(len=*),       intent(in), optional           :: label_format !< printf format of one real, printing each value in
+                                                                           !< its cell (checked: FIG_ERR_ARGUMENT).
    integer(int32),         intent(in), optional           :: colormap     !< Colormap (`ip_colormap`; default: Viridis).
    type(plot_spec_object), intent(in), optional           :: spec         !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat         !< Status.
@@ -493,6 +505,9 @@ contains
    if (figure_refused('ip_heatmap', stat)) return ! a task does not draw
    if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
    if (.not. colormap_ok('ip_heatmap', colormap, cmap, stat)) return
+   if (present(label_format)) then
+      if (format_refused('ip_heatmap', 'label_format', label_format, FORMAT_REAL, stat)) return
+   endif
    smin = 0.0_c_double
    smax = 0.0_c_double
    if (present(scale_min)) smin = real(scale_min, c_double)
@@ -647,7 +662,8 @@ contains
    real(real64),           intent(in)                     :: ymax         !< Top edge of the last row.
    real(real64),           intent(in), optional           :: scale_min    !< Value at the bottom of the colormap.
    real(real64),           intent(in), optional           :: scale_max    !< Value at the top (both or none; none: data).
-   character(len=*),       intent(in), optional           :: label_format !< printf format printing each value in its cell.
+   character(len=*),       intent(in), optional           :: label_format !< printf format of one real, printing each value in
+                                                                           !< its cell (checked: FIG_ERR_ARGUMENT).
    integer(int32),         intent(in), optional           :: colormap     !< Colormap (`ip_colormap`; default: Viridis).
    type(plot_spec_object), intent(in), optional           :: spec         !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat         !< Status.
@@ -661,6 +677,9 @@ contains
    if (figure_refused('ip_heatmap', stat)) return ! a task does not draw
    if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
    if (.not. colormap_ok('ip_heatmap', colormap, cmap, stat)) return
+   if (present(label_format)) then
+      if (format_refused('ip_heatmap', 'label_format', label_format, FORMAT_REAL, stat)) return
+   endif
    smin = 0.0_c_double
    smax = 0.0_c_double
    if (present(scale_min)) smin = real(scale_min, c_double)
@@ -710,13 +729,14 @@ contains
 
    recursive subroutine ip_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap, stat)
    !< A colour bar for [scale_min, scale_max], next to a heatmap (outside `ip_begin_plot`/`ip_end_plot`). Statuses:
-   !< `FIG_ERR_ARGUMENT` for a colormap id that is not registered.
+   !< `FIG_ERR_ARGUMENT` for a colormap id that is not registered, or a `label_format` that is not a printf format of
+   !< one real.
    character(len=*), intent(in)            :: label        !< Label (also the widget id).
    real(real64),     intent(in)            :: scale_min    !< Value at the bottom.
    real(real64),     intent(in)            :: scale_max    !< Value at the top.
    real(real64),     intent(in),  optional :: width        !< Width [pixels] (default: ImPlot's).
    real(real64),     intent(in),  optional :: height       !< Height [pixels] (default: ImPlot's).
-   character(len=*), intent(in),  optional :: label_format !< printf format of the tick labels (default '%g', ImPlot's).
+   character(len=*), intent(in),  optional :: label_format !< printf format of one real, the tick labels (default '%g').
    integer(int32),   intent(in),  optional :: colormap     !< Colormap (`ip_colormap`; default: Viridis).
    integer(int32),   intent(out), optional :: stat         !< Status.
    type(im_vec2)                           :: extent       !< Size (0: ImPlot's default).
@@ -724,6 +744,9 @@ contains
 
    if (figure_refused('ip_colormap_scale', stat)) return ! a task does not draw
    if (.not. colormap_ok('ip_colormap_scale', colormap, cmap, stat)) return
+   if (present(label_format)) then
+      if (format_refused('ip_colormap_scale', 'label_format', label_format, FORMAT_REAL, stat)) return
+   endif
    extent = im_vec2(0.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
@@ -750,7 +773,8 @@ contains
    !< [pixels]: positive given, negative the space left in the window, absent the default (vertical: 300 long, as wide
    !< as the bar and the labels; horizontal: the space left, as tall as the bar and a line of labels). Statuses:
    !< `FIG_ERR_ARGUMENT` for a colormap that is not registered, equal or non-finite `vmin`/`vmax`, `levels` outside
-   !< [2, 256]; `FIG_ERR_STATE` outside a window and from a task. The same in every mode.
+   !< [2, 256], a `label_format` with a conversion that is not one of a real (a format without conversion is text,
+   !< printed as it is; `''` is the default); `FIG_ERR_STATE` outside a window and from a task. The same in every mode.
    character(len=*), intent(in)            :: id           !< Widget id, unique in the window (not shown).
    integer(int32),   intent(in)            :: colormap     !< Colormap (`ip_colormap`).
    real(real64),     intent(in)            :: vmin         !< Value at the bottom (left).
@@ -759,12 +783,17 @@ contains
    logical,          intent(in), optional  :: horizontal   !< Horizontal bar (default: vertical).
    real(real64),     intent(in), optional  :: width        !< Width [pixels].
    real(real64),     intent(in), optional  :: height       !< Height [pixels].
-   character(len=*), intent(in), optional  :: label_format !< printf format of the values (default '%g').
+   character(len=*), intent(in), optional  :: label_format !< printf format of one real, the values, or text
+                                                           !< (default, and '': '%g').
    integer(int32),   intent(out), optional :: stat         !< Status.
    integer(c_int)                          :: n            !< Bands.
    integer(c_int)                          :: h            !< Horizontal flag.
 
    if (figure_refused('ip_colormap_legend', stat)) return ! a task does not draw
+   if (present(label_format)) then
+      ! as documented since v0.3.0: '' is the default format, a text without conversion is printed as it is
+      if (format_refused('ip_colormap_legend', 'label_format', label_format, FORMAT_REAL, stat, text=.true.)) return
+   endif
    n = 0_c_int
    if (present(levels)) then
       if (levels < 2_int32 .or. levels > 256_int32) then

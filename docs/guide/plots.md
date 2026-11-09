@@ -14,7 +14,7 @@ title: Plots
 | Procedure | Notes |
 |---|---|
 | `ip_begin_plot(title [, width] [, height] [, equal]) → logical` | `.true.` when the plot is visible. `title` is also the identifier: unique within the window. Default size: full width, ImPlot's default height. A negative `height` fills the space left in the window. `equal=.true.`: one unit spans as many pixels on x as on y (maps, the complex plane). |
-| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat])` | Axis labels. Call it right after `ip_begin_plot`, before any item. The axes fit the data on first use, then follow the user's pan and zoom; with `auto_fit=.true.` they refit to the data every frame (a history that grows while the program runs) and the user cannot pan or zoom them. `xlog=.true.`/`ylog=.true.`: a base-10 logarithmic axis (residual histories, spectra); values <= 0 are not shown on it. `xformat`/`yformat`: a C `printf` format of the tick labels (`'%.4f'`, `'%.2e'`, `'%g s'`), for values whose default labels look alike. |
+| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat] [, stat])` | Axis labels. Call it right after `ip_begin_plot`, before any item. The axes fit the data on first use, then follow the user's pan and zoom; with `auto_fit=.true.` they refit to the data every frame (a history that grows while the program runs) and the user cannot pan or zoom them. `xlog=.true.`/`ylog=.true.`: a base-10 logarithmic axis (residual histories, spectra); values <= 0 are not shown on it. `xformat`/`yformat`: a C `printf` format of the tick labels (`'%.4f'`, `'%.2e'`, `'%g s'`), for values whose default labels look alike; checked ([Formats](#formats)). |
 | `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | Initial axis ranges, applied on first use (the user pans and zooms afterwards), or every frame with `always=.true.`. Right after `ip_begin_plot`. |
 | `ip_plot_limits(xmin, xmax, ymin, ymax)` | The axis ranges as the user has panned and zoomed them, this frame. After the `ip_setup_*` calls (it ends the setup phase). |
 | `ip_plot_size(width, height)` | The size of the plot's data area [pixels], e.g. to compute an image at the screen's resolution. |
@@ -54,6 +54,41 @@ drawn in the order they are called, each above the previous ones.
 Fields are items too: `ip_heatmap` colours the cells of a 2D array through a colormap, and `ip_colormap_scale` draws
 its colour bar ([Heatmaps](images#heatmaps)); the colormap is chosen by name with `ip_colormap`, among the bundled
 scientific maps, ImPlot's own and the user's ([Colormaps](colormaps)).
+
+### Formats
+
+Labels of numbers take a C `printf` format: the tick labels (`ip_setup_axes`' `xformat` and `yformat`), the values in
+a heatmap's cells and on its colour bar (`label_format` of `ip_heatmap`, `ip_colormap_scale`,
+`ip_colormap_legend`), and the numeric field `ig_input` ([Widgets](widgets#controls)). Every value printed is a real,
+and FIGURE checks the format before Dear ImGui or ImPlot uses it:
+
+- **exactly one conversion of a real:** `f` or `F` (fixed point), `e` or `E` (exponent), `g` or `G` (the shorter of
+  the two), `a` or `A` (hexadecimal);
+- before the conversion letter, optional **flags** (`-` left-justified, `+` sign always, a blank for a positive
+  sign, `#`, `0` zero-padded), a **width** and a **precision** (`.` and digits), all as digits, never `*`;
+- **any other text** around it, and any number of `%%` (a percent sign).
+
+| Format | Prints 1234.5678 as | Resembles Fortran's |
+|---|---|---|
+| `'%.2f'` | `1234.57` | `F0.2` |
+| `'%10.3f'` | `  1234.568` | `F10.3` |
+| `'%.3e'` | `1.235e+03` | `ES10.3` |
+| `'%g'` | `1234.57` | `G0` (6 significant digits) |
+| `'T = %.1f K'` | `T = 1234.6 K` | `'T = ', F0.1, ' K'` |
+| `'%.0f%%'` | `1235%` | `F0.0, '%'` |
+
+Refused with `FIG_ERR_ARGUMENT` (`stat` absent: `error stop`), nothing drawn: a conversion of an integer or of
+text (`'%d'`, `'%i'`, `'%s'`), `%n`, `*` (`'%*f'`, `'%.*f'`), a length modifier (`'%lf'`, `'%Lg'`), no conversion
+(`'no conversion'`, `''`) or more than one (`'%f %f'`), a `%` at the end. One exception, kept from v0.3.0:
+`ip_colormap_legend` takes a `label_format` without conversion as text, printed as it is, and `''` as its default
+([Colormaps](colormaps#a-colour-scale-legend)). The message names the procedure, the
+argument and the format: `ip_setup_axes: xformat '%s' is not a format of a real: one conversion %f, %e, %g or %a (or
+%F, %E, %G, %A) expected, with optional flags, width and precision` ([Errors](errors)).
+
+C's formatter reads the value as the format says, and a format that does not match it is undefined behaviour: before
+v0.3.1 a `'%d'` given for a real printed a wrong label, and a `'%n'` for a heatmap's labels stopped the program
+(`%n in writable segment detected`, glibc on Linux). The same in every mode: **window**,
+**headless** and **remote**.
 
 ## Item style
 

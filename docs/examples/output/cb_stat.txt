@@ -2,3 +2,4 @@ $ ./cb_stat
 init_headless: stat = 2, "display size must be positive"
 init_headless: stat = 1, "figure is already initialized"
 ip_line: stat = 2, "ip_line: the series have different sizes"
+ig_input: stat = 2, "ig_input: format '%d' is not a format of a real: one conversion %f, %e, %g or %a (or %F, %E, %G, %A) expected, with optional flags, width and precision"

@@ -51,7 +51,7 @@ as long as `ig_begin` is called for it, so guard the call with the same variable
 | `ig_tool_button(label, icon [, width] [, height] [, selected] [, accent])` | none | on the frame it is clicked |
 | `ig_checkbox(label, value)` | `logical` | when toggled |
 | `ig_slider(label, value, vmin, vmax)` | `integer(int32)`, `real(real32)` or `real(real64)`; `vmin`, `vmax` of the same kind | when changed |
-| `ig_input(label, value [, step] [, format])` | `integer(int32)` or `real(real64)` (`format` for reals) | when changed |
+| `ig_input(label, value [, step] [, format] [, stat])` | `integer(int32)` or `real(real64)` (`format` and `stat` for reals) | when changed |
 | `ig_input_text(label, value [, hint] [, flags])` | `character(len=*)` | when edited |
 | `ig_combo(label, current, items)` | `integer(int32)`: index into the `character` array `items` | when an item is picked |
 
@@ -59,7 +59,11 @@ as long as `ig_begin` is called for it, so guard the call with the same variable
 - `ig_slider` is generic: the kind of `value` selects the specific procedure. The user can also ctrl-click it to type
   a value.
 - `ig_input` shows `-` and `+` buttons when `step` is given (ctrl-click steps by `10 * step`); `format` is a C
-  `printf` format, default `'%.6g'`.
+  `printf` format of one real, default `'%.6g'`: `'%.3f'` (as Fortran's `F0.3`), `'%8.2e'` (`ES8.2`),
+  `'x = %.4g m'`. It is checked: one conversion `f`, `e`, `g` or `a` (or `F`, `E`, `G`, `A`), with optional flags,
+  width and precision, and any `%%`; another (`'%d'`, `'%s'`, `'%f %f'`, `'%lf'`) is refused with
+  `FIG_ERR_ARGUMENT`, the field not drawn and the value unchanged (`stat` absent: `error stop`). The full rule:
+  [Formats](plots#formats).
 - `ig_input_text` edits a `character` variable in place. **Its length is the field's capacity**: a
   `character(len=64)` holds at most 64 characters, and typing stops there. Trailing blanks are not part of the text
   (Fortran pads with them), so the field starts with `trim(value)`. `hint` is grey text shown while the field is empty

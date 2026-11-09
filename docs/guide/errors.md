@@ -32,7 +32,7 @@ Without `stat`:
 |---|---|---|
 | `FIG_OK` | 0 | success |
 | `FIG_ERR_STATE` | 1 | call not allowed in the current state: `init` twice, `next_frame` before `init`, a process started again while it runs ([Processes](processes#statuses)), a drawing procedure called from a task ([Tasks](processes#tasks)), a file dialog or browser whose id is still open ([File dialogs](frame-loop#file-dialogs)), `ip_annotation` outside a plot |
-| `FIG_ERR_ARGUMENT` | 2 | invalid argument: non-positive window size, `ip_line` arrays of different sizes, a palette below the [contrast rule](styles#the-contrast-rule), a text of 2 GiB or more for a [text buffer](widgets#multi-line-text), an unknown colormap name or a malformed colormap file ([Colormaps](colormaps#statuses-and-modes)), a colour without 4 components or `nlevels` < 1 for the [plot extras and contours](plots#error-bars-annotations-and-drag-tools), a mesh array not contiguous or a connectivity index out of range for a [3-D view](view3d#statuses-and-modes) |
+| `FIG_ERR_ARGUMENT` | 2 | invalid argument: non-positive window size, `ip_line` arrays of different sizes, a palette below the [contrast rule](styles#the-contrast-rule), a text of 2 GiB or more for a [text buffer](widgets#multi-line-text), an unknown colormap name or a malformed colormap file ([Colormaps](colormaps#statuses-and-modes)), a colour without 4 components or `nlevels` < 1 for the [plot extras and contours](plots#error-bars-annotations-and-drag-tools), a mesh array not contiguous or a connectivity index out of range for a [3-D view](view3d#statuses-and-modes), a `printf` format that is not a format of one real for `ig_input`, `ip_setup_axes`, `ip_heatmap`, `ip_colormap_scale` or `ip_colormap_legend` ([Formats](plots#formats)) |
 | `FIG_ERR_FAILED` | 3 | the platform (SDL, OpenGL) reported a failure: no display, no OpenGL 3 context, a program that cannot be started |
 | `FIG_ERR_EXCEPTION` | 4 | a C++ exception was caught at the C boundary |
 
@@ -48,6 +48,18 @@ character. The message is not cleared by a successful call: read it right after 
 `FIG_ERR_ARGUMENT` with the message `ip_line: the series have different sizes` (each item names itself).
 
 <<< @/examples/snippets/cb_stat-line.F90{fortran}
+
+A `printf` format is checked the same way, on the Fortran side, before Dear ImGui or ImPlot formats a value with it
+([Formats](plots#formats)): a format that is not one of a real gives `FIG_ERR_ARGUMENT` with a message naming the
+procedure, the argument and the format, and nothing is drawn. The full program checks `ig_input`; its output is above:
+
+<<< @/examples/snippets/cb_stat-format.F90{fortran}
+
+| Procedure and argument | Message |
+|---|---|
+| `ig_input`, `format` | `ig_input: format '<format>' is not a format of a real: one conversion %f, %e, %g or %a (or %F, %E, %G, %A) expected, with optional flags, width and precision` |
+| `ip_setup_axes`, `xformat` / `yformat` | the same, starting `ip_setup_axes: xformat` (or `yformat`) |
+| `ip_heatmap`, `ip_colormap_scale`, `ip_colormap_legend`, `label_format` | the same, starting `<procedure>: label_format` (`ip_colormap_legend` refuses only a format with a conversion: one without is text) |
 
 ## What is not checked
 

@@ -220,7 +220,8 @@ A patch of three defects of v0.3.0, tracked in [issue #5](https://github.com/sza
 - **`quit` and `request_frames` safe from a task; `app%wake`:** the flags a task may set or read are atomic, a
   request from another thread wakes a lazy loop at once, and `app%wake()` starts the next frame from any thread
   ([Waking the loop](frame-loop#waking-the-loop)): done.
-- **printf formats checked against the value's kind:** to do.
+- **printf formats checked against the value's kind:** every format FIGURE passes to Dear ImGui or ImPlot is
+  checked first, a bad one refused with `FIG_ERR_ARGUMENT` ([Formats](plots#formats)): done.
 - **The 3-D view owns the mouse wheel while hovered:** to do.
 
 ## Next

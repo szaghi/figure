@@ -123,7 +123,9 @@ Reversed and discrete maps are registered under derived names: `'<name>_r'` and 
   ends; `vmin > vmax` turns it over.
 - **Sizes** [pixels]: positive, given; negative, the space left in the window; absent, the default: vertical, 300
   long and as wide as the bar (a field's height) and the longest label; horizontal, the space left and as tall as the
-  bar and a line of labels. `label_format` is a C `printf` format (default `'%g'`).
+  bar and a line of labels. `label_format` is a C `printf` format (default `'%g'`; `''` is the default too). A
+  format with a conversion is checked: it must be one of a real ([Formats](plots#formats)); a format without one is
+  text, printed as it is on every tick.
 - **Band edges are labelled with their values.** With `levels`, an edge's label takes the digits it needs to show
   the edge's value: `label_format`'s precision is raised until the number printed is the edge (to 6 decimals for
   `%f`, as a contour line's label of `ip_contour`; 7 significant digits for `%e` and `%g`). With `'%.0f'` and bands
@@ -134,7 +136,8 @@ Reversed and discrete maps are registered under derived names: `'<name>_r'` and 
 - Unlike `ip_colormap_scale` (ImPlot's `ColormapScale`, vertical only, continuous colours), the legend is horizontal
   or vertical and shows discrete levels as bands.
 - Statuses: `FIG_ERR_ARGUMENT` for a colormap that is not registered, `vmin` equal to `vmax` or either not finite,
-  `levels` outside [2, 256]; `FIG_ERR_STATE` outside a frame and from a [task](processes#tasks).
+  `levels` outside [2, 256], a `label_format` with a conversion that is not one of a real (`'%d'`, `'%s'`, `'%*f'`,
+  `'%lf'`, `'%n'`, `'%f %f'`); `FIG_ERR_STATE` outside a frame and from a [task](processes#tasks).
 - Modes: the same in **window**, **headless** and **remote** mode.
 
 ## User maps

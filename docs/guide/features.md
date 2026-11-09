@@ -58,7 +58,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_tool_button(label, icon [, width] [, height] [, selected] [, accent])` → `logical` | a workspace button: an icon above the label, framed; `selected` tinted in the accent |
 | `ig_checkbox(label, value)` → `logical` | a check box bound to a `logical`; `.true.` when toggled |
 | `ig_slider(label, value, vmin, vmax)` → `logical` | a slider for `int32`, `real32` or `real64`; `.true.` when changed |
-| `ig_input(label, value [, step] [, format])` → `logical` | a numeric field for an `int32` or a `real64` (`format` for reals only); `.true.` when changed |
+| `ig_input(label, value [, step] [, format] [, stat])` → `logical` | a numeric field for an `int32` or a `real64` (`format`, checked, and `stat` for reals only); `.true.` when changed |
 | `ig_input_text(label, value [, hint] [, flags])` → `logical` | a text field bound to a `character` variable, whose length is the field's capacity; `.true.` when edited |
 | `ig_input_text_multiline(label, buffer [, width] [, height] [, read_only] [, tab_input] [, flags])` → `logical` | a field of several lines over a `text_buffer_object`, of any length; Enter a newline, undo and redo; `.true.` when edited ([Multi-line text](widgets#multi-line-text)) |
 | `text_buffer_object`: `buf%set(text [, stat])`, `buf%text()` → `character`, `buf%length()` → `int64` | the text of a multi-line field, kept by the native layer and grown as needed: replace it (CRLF becomes LF), copy it out, its length in bytes |
@@ -137,7 +137,7 @@ Details: [Styles](styles), [Icons](styles#icons).
 | Procedure | Purpose |
 |---|---|
 | `ip_begin_plot(title [, width] [, height] [, equal])` → `logical` | begin a plot; `.true.` when visible |
-| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat])` | axis labels; the axes fit the data on first use, every frame with `auto_fit=.true.`; `xlog`/`ylog`: logarithmic axes; `xformat`/`yformat`: tick label formats |
+| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat] [, stat])` | axis labels; the axes fit the data on first use, every frame with `auto_fit=.true.`; `xlog`/`ylog`: logarithmic axes; `xformat`/`yformat`: tick label formats ([checked](plots#formats)) |
 | `ip_begin_subplots(title, rows, cols [, width] [, height] [, link_x] [, link_y])` → `logical`, `ip_end_subplots()` | a grid of plots, optionally sharing the x or y range |
 | `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | initial axis ranges |
 | `ip_plot_limits(...)`, `ip_plot_size(...)` | the ranges the user panned and zoomed to; the plot's size in pixels |
