@@ -10,6 +10,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_dir="$root/build/tsan"
+mkdir -p "$root/build" # a fresh clone has no build/: the configure log goes beside build/tsan
 cxx="${CXX:-c++}"
 fetched=()
 for dep in sdl3 cimgui cimplot miniz; do

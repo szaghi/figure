@@ -88,7 +88,8 @@ A lazy loop that waits ends its wait at the first of:
 - **a process's output and its end** ([Processes](processes#processes)).
 
 From another thread these calls take effect at once: measured in `figure_test_tasks`, a lazy loop with `max_wait`
-10 s starts its next frame within 0.1 s of a task's `request_frames`, `wake` or `quit`. From the loop's own thread
+10 s starts its next frame within 0.1 s of a task's `request_frames`, `wake` or `quit` on a desktop (the test
+allows 1 s, for loaded CI runners). From the loop's own thread
 nothing is waiting: `request_frames(n)` and `wake()` make the next `next_frame` go on without waiting. Every one of
 these calls is thread-safe ([Calling the application from a task](processes#calling-the-application-from-a-task)).
 

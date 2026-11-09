@@ -475,7 +475,8 @@ contains
 
    subroutine woken_by_task(action, ok)
    !< A lazy loop with max_wait 10 s, idle: a task's request_frames, wake or quit starts the next frame (ends the loop,
-   !< for quit) in under 0.1 s. The task stays alive meanwhile: its end, which wakes the loop too, comes 2 s later.
+   !< for quit) in under 1 s (0.1 s on a desktop; CI runners are slower), against 10 s unwoken. The task stays alive
+   !< meanwhile: its end, which wakes the loop too, comes 2 s later.
    integer(int32), intent(in)  :: action  !< WAKE_BY_*.
    logical,        intent(out) :: ok      !< Outcome.
    type(task_object)           :: t       !< Task.
@@ -501,7 +502,7 @@ contains
    select type (data)
    type is (wake_job)
       latency = real(t1 - data%called, real64) / real(rate, real64)
-      ok = data%called > 0_int64 .and. latency >= 0.0_real64 .and. latency < 0.1_real64 .and. stat == FIG_OK
+      ok = data%called > 0_int64 .and. latency >= 0.0_real64 .and. latency < 1.0_real64 .and. stat == FIG_OK
    endselect
    ok = ok .and. (running .neqv. action == WAKE_BY_QUIT)
    if (.not. ok) write(error_unit, '(A,A,A,F8.4,A,L1)') 'woken by a task''s ', trim(names(action)), ': latency ', &
@@ -551,7 +552,7 @@ contains
    ok = app%next_frame()
    call system_clock(t1)
    elapsed = real(t1 - t0, real64) / real(rate, real64)
-   ok = ok .and. elapsed < 0.1_real64
+   ok = ok .and. elapsed < 1.0_real64 ! a frame's own cost, not a 10 s wait (0.125 s seen on a macOS runner)
    if (.not. ok) write(error_unit, '(A,F8.4,A)') 'woken by the main thread: next_frame took ', elapsed, ' s'
    endsubroutine woken_by_main
 
