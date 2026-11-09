@@ -62,9 +62,9 @@ redraw](frame-loop#lazy-redraw)).
 
 ## A case in one window
 
-`xall_gui` puts the Xall input editor and the run checker of a case in one window, as workspaces picked on a toolbar
-(left, top, right or bottom): each keeps its menu bar, its windows and its state while the other is shown, and the
-run is followed meanwhile. Opening a case opens its input file and follows the history files it names. The toolbar's
+`xall_gui` puts the mesh phase, the Xall input editor and the run checker of a case in one window, as three
+workspaces (Mesh, Input, Monitor) picked on a toolbar (left, top, right or bottom): each keeps its menu bar, its
+windows and its state while another is shown, and the run is followed meanwhile. Opening a case opens its input file and follows the history files it names. The toolbar's
 buttons carry a mark each: the input edited or with errors, the run's worst finding.
 
 <Media name="showcase_xall_gui" video alt="One window for a case: the input editor shows a section; the Monitor button of the toolbar shows the run checker and a force group; the Input button goes back" caption="xall_gui: the input and the run of a case, picked on the toolbar (synthetic run files)" />
@@ -84,6 +84,47 @@ needs.
 Built from: tables of input fields with a row's finding beside it (`ig_begin_table`, `ig_input_text`), windows docked
 under and beside the editor's in its layout (`ig_dock_window`), and a confirmation before quitting that asks about
 each kind of unsaved file in turn.
+
+### The mesh phase and its grid in 3-D
+
+The Mesh workspace holds the mesh phase's tool, chosen by the case's files: OverSet's editor, or the editor of
+`cc.par`, the input of the older Xnavis overset preprocessor ("overset legacy"). `cc.par` is positional: values are
+read by position, its comments and layout must survive, so its editor is a table per list with a field per value,
+and an edit changes only that value, in its columns, in the file.
+
+Its **Grid** tab is a real application of the [3-D view](view3d): the six faces of every block of the case's grid, each
+a structured surface (`v%surface`), with a tree of the grid's groups, bodies and blocks beside it. The faces are
+coloured by block, group, body, process or boundary condition, each colouring a stepped map registered with
+`ip_load_colormap` ([User maps](colormaps#user-maps)); a click on a face gives the block, the face, the cell and the
+condition there (`v%clicked`, [Picking](view3d#picking)); a clipping plane cuts the grid to show the blocks inside
+([Clipping planes](view3d#clipping-planes)). The grid files are read in a [task](processes#tasks), with a progress
+bar and Cancel, the window answering meanwhile: on a grid of 28.3 M cells (753 MB) the read takes 0.38 to 0.45 s and no
+frame drawn during it takes more than 1.6 ms.
+
+<Media name="showcase_xall_gui_legacy" video alt="A case of cc.par, three blocks around a cylinder: its header, patches and box in the editor; Run overset legacy in the Run solver panel, its output and the notification that it finished; the Grid tab draws the grid it wrote, coloured by block, with the background block hidden in the tree" caption="xall_gui: overset legacy's editor, its run, and its grid in the 3-D view (a synthetic case; a test program stands in for the preprocessor)" />
+
+The same tab shows the chimera **connectivity** the preprocessor computes: each face cell coloured by the type of
+the cell along it (active, chimera, damping, ...), a plane of cells drawn through a block instead of its faces, and,
+for a chimera cell clicked, its donor cells with their weights. Its files are read in a task of their own.
+
+Built from: `view3d_object` with structured surfaces and lines for the boxes ([3-D views](view3d)), stepped colormaps
+from a file ([Colormaps](colormaps#user-maps)), a tree of blocks with check boxes in table columns
+([Trees](widgets#trees)), `task_object` for every read and a progress bar while it runs
+([Tasks](processes#tasks), [Progress bars](widgets#progress-bars)).
+
+### Running the solvers
+
+Each workspace runs its solver from the window: the preprocessor in Mesh, Xall in Input and Monitor; OverSet and
+Xall through `mpirun -np N` and, when set, an environment script, overset legacy serially. The Run solver panel shows the command, the output as it comes,
+and the state; a status bar along the bottom says that a run goes on, and a notification tells how it ended. A run is
+refused, with the reason, while its input has unsaved changes or errors. Stop asks the run to end, then ends it by
+force after 5 s.
+
+<Media name="showcase_xall_gui_run_tools" video alt="The Mesh workspace: OverSet run on 2 processes from the Run solver panel, its output scrolling, the status bar and a notification when it finished, the Grid tab reading the new grid; then the Input workspace: Xall run on 2 processes, its EVOL lines, finished" caption="xall_gui: OverSet, then Xall, run from the window (a test program stands in for both solvers)" />
+
+Built from: `process_object`, its arguments passed with no shell, and `log_view_object` for the output
+([Processes](processes#processes), [The log view](processes#the-log-view)); `p%kill` and `p%kill(force=.true.)` for
+Stop; a status bar and `app%notify` ([Feedback](processes#feedback), [Notifications](frame-loop#notifications)).
 
 ## Shared by the three tools
 
