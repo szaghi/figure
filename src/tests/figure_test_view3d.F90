@@ -13,13 +13,17 @@ program figure_test_view3d
 !< - a lit wavy surface rendered with 1 and with 4 threads: the same pixels;
 !< - lines over a surface with edges: the line and the edges in their colours, the cells in theirs;
 !< - the camera: set and read back, orbits, pans and zooms undone, the standard views, a drag (rendered at half
-!<   resolution while it moves, at full size when it ends) and the wheel; no render when nothing changed.
+!<   resolution while it moves, at full size when it ends) and the wheel; no render when nothing changed;
+!< - the wheel inside a scrolling child: over the view it zooms the view and does not scroll the child; beside the view
+!<   it scrolls the child and does not zoom.
 !< Then the refusals with their statuses, and the time of a 3.2e5-triangle render (printed, not checked).
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
 use figure, only : app_object, ig_begin, ig_end, ig_item_rect, ig_set_next_window, ip_colormap, view3d_object, &
                    ImGuiWindowFlags_NoDecoration, FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
+use figure, only : ig_begin_child, ig_end_child
 use figure_cimgui, only : im_vec4
+use figure_cimgui, only : igDummy, igGetScrollY, im_vec2
 use figure_cimplot, only : ImPlot_SampleColormap
 use figure_testing, only : test_mouse_button, test_mouse_move, test_wheel
 
@@ -31,7 +35,7 @@ real(real64), parameter   :: PI = acos(-1.0_real64)       !< Pi.
 type(app_object)          :: app                          !< Application.
 type(view3d_object)       :: v(NV)                        !< The views.
 real(real64)              :: origin(2, NV)                !< Each view's top-left on the display [pixels].
-logical                   :: test_passed(14)              !< Per-check outcome.
+logical                   :: test_passed(16)              !< Per-check outcome.
 ! the data, kept by address: target
 real(real64), target      :: cube_xyz(3, 8)               !< Cube's vertices.
 integer(int32), target    :: cube_quads(4, 6)             !< Cube's faces.
@@ -89,6 +93,7 @@ test_passed(10) = check_drag()
 test_passed(11) = check_mouse_picks()
 test_passed(12) = check_cache()
 test_passed(13) = check_refusals()
+call check_wheel_in_child(test_passed(15:16))
 call perf_log()
 
 write(output_unit, '(A,*(L2))') 'figure_test_view3d checks:', test_passed
@@ -362,6 +367,62 @@ contains
    check_camera = ok .and. abs(e2 + 90.0_real64) < 1.0e-12_real64
    if (.not. check_camera) write(output_unit, '(A,L2,10F10.4)') 'camera', ok, t2, d2, a2, e2
    endfunction check_camera
+
+   subroutine scroll_frame(view, rect, scroll)
+   !< One frame of a window holding a scrolling child: the view at its top, then 800 pixels of empty content.
+   type(view3d_object), intent(inout) :: view    !< The view.
+   real(real64),        intent(out)   :: rect(4) !< The view's rectangle [pixels].
+   real(real64),        intent(out)   :: scroll  !< The child's vertical scroll [pixels].
+
+   if (.not. app%next_frame()) error stop 'figure_test_view3d: next_frame returned false'
+   call ig_set_next_window(0.0_real64, 0.0_real64, 400.0_real64, 400.0_real64, always=.true.)
+   if (ig_begin('scroller', flags=ImGuiWindowFlags_NoDecoration)) then
+      if (ig_begin_child('child', 380.0_real64, 300.0_real64)) then
+         call view%draw('view', real(N, real64), real(N, real64))
+         call ig_item_rect(rect(1), rect(2), rect(3), rect(4))
+         call igDummy(im_vec2(10.0_c_float, 800.0_c_float))
+         scroll = real(igGetScrollY(), real64)
+      endif
+      call ig_end_child()
+   endif
+   call ig_end()
+   endsubroutine scroll_frame
+
+   subroutine check_wheel_in_child(passed)
+   !< A view inside a child taller than its window: the wheel over the view zooms it, the child does not scroll; the
+   !< wheel over the child beside the view scrolls the child, the view does not zoom.
+   logical, intent(out) :: passed(2)          !< Over the view; beside it.
+   type(view3d_object)  :: view               !< The view.
+   real(real64)         :: rect(4)            !< Its rectangle.
+   real(real64)         :: s0, s1, s2         !< The child's scroll.
+   real(real64)         :: d0, d1, d2         !< The camera's distance.
+   integer(int32)       :: q                  !< Frame.
+
+   call view%init(lighting=.false.)
+   q = view%quads(cube_xyz, cube_quads, color=[1.0_real64, 0.0_real64, 0.0_real64])
+   do q = 1_int32, 3_int32
+      call scroll_frame(view, rect, s0)
+   enddo
+   call test_mouse_move(0.5_real64 * (rect(1) + rect(3)), 0.5_real64 * (rect(2) + rect(4))) ! over the view
+   call scroll_frame(view, rect, s0)
+   call scroll_frame(view, rect, s0)
+   call view%get_camera(distance=d0)
+   call test_wheel(-2.0_real64)                                                              ! towards the user
+   call scroll_frame(view, rect, s1)
+   call scroll_frame(view, rect, s1)
+   call view%get_camera(distance=d1)
+   passed(1) = abs(d1 - d0 * 1.1_real64**2) < 1.0e-9_real64 * d0 .and. s1 == s0
+   call test_mouse_move(0.5_real64 * (rect(1) + rect(3)), rect(4) + 30.0_real64)              ! beside the view
+   call scroll_frame(view, rect, s1)
+   call test_wheel(-2.0_real64)
+   call scroll_frame(view, rect, s2)
+   call scroll_frame(view, rect, s2)
+   call view%get_camera(distance=d2)
+   passed(2) = s2 > s1 .and. d2 == d1
+   if (.not. all(passed)) write(output_unit, '(A,3F10.4,A,3F8.1,A,4F8.1)') 'wheel in a child: distance', d0, d1, d2, &
+                                                                         ', scroll', s0, s1, s2, ', view', rect
+   call view%destroy()
+   endsubroutine check_wheel_in_child
 
    logical function check_drag()
    !< A left drag of 50 pixels right and 25 down turns the camera by -20 and +10 degrees, at half resolution while it

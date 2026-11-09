@@ -91,12 +91,21 @@ The camera looks at a **target** from a **distance**, from a direction given by 
 toward +y) and **elevation** (above the x-y plane), with a vertical field of view `fov` (default 30°). z is up. A
 view never given a camera is fitted to its meshes at its first draw, from azimuth -60° and elevation 25°.
 
+### Mouse
+
 | The mouse in the view | Moves |
 |---|---|
 | left drag | orbit: 0.4° per pixel |
 | right or middle drag, or shift + left drag | pan |
 | wheel | zoom: the distance divided by 1.1 per step |
 | double click | fit |
+
+While the pointer is over the view, the wheel zooms the view and nothing else: the view claims the wheel (Dear ImGui's
+key ownership, `SetItemKeyOwner` of `ImGuiKey_MouseWheelY` and `ImGuiKey_MouseWheelX`), so a window or child that
+holds the view and scrolls does not scroll on the same turn. Beside the view, the wheel scrolls its container as
+usual. Before v0.3.1 the container scrolled instead: in a scrolling child, the wheel over the view moved the view
+from under the pointer and did not zoom it (`figure_test_view3d`). The same in every mode: **window**, **headless**
+(the wheel of `test_wheel`) and **remote** (the browser's wheel).
 
 <<< @/examples/snippets/cb_view3d-controls.F90{fortran}
 

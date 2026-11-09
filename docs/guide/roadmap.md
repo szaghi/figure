@@ -222,7 +222,8 @@ A patch of three defects of v0.3.0, tracked in [issue #5](https://github.com/sza
   ([Waking the loop](frame-loop#waking-the-loop)): done.
 - **printf formats checked against the value's kind:** every format FIGURE passes to Dear ImGui or ImPlot is
   checked first, a bad one refused with `FIG_ERR_ARGUMENT` ([Formats](plots#formats)): done.
-- **The 3-D view owns the mouse wheel while hovered:** to do.
+- **The 3-D view owns the mouse wheel while hovered:** inside a scrolling window or child, the wheel over the view
+  zooms it and no longer scrolls the container ([Mouse](view3d#mouse)): done.
 
 ## Next
 

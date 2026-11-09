@@ -1073,6 +1073,10 @@ int fig_view3d_draw(int handle, const char *id, int id_len, double width, double
    ImGui::InvisibleButton(label.c_str(), ImVec2(static_cast<float>(iw), static_cast<float>(ih)),
                           ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
                               ImGuiButtonFlags_MouseButtonMiddle);
+   // the wheel is the view's while the pointer is over it: claimed for the next frame, so that a scrolling window or
+   // child holding the view does not scroll on the same turn of the wheel (Dear ImGui's key ownership)
+   ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+   ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
    const ImGuiIO &io = ImGui::GetIO();
    const bool hovered = ImGui::IsItemHovered();
    const bool active = ImGui::IsItemActive();
