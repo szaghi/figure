@@ -114,8 +114,33 @@ FIGURE 20 %, the compiler's temporaries of `runs%t` and `runs%cl` 55 % ([Data in
 **Fields: a texture beats a heatmap past a few hundred cells a side.** A heatmap draws each cell as a rectangle of
 vertices, which ImPlot rebuilds every frame; a texture is one image the GPU scales. At 512 × 512 the heatmap costs
 9.1 ms of CPU per frame against 2.5 ms for the texture, and in remote mode 13.5 MB per frame against 1 MB per update.
-Keep heatmaps for small fields, where cell hover and exact cell boundaries matter; above about 256 × 256 colour the
-field into an RGBA array in Fortran and show it as a [texture](images#textures), at the size it is displayed.
+Keep heatmaps for small fields, where cell labels and exact cell boundaries matter; above about 256 × 256 draw the
+field with [`ip_field_image`](plots#fields): one call colours it through the colormap into a texture, on a linear,
+log or symlog scale, and colours it again only when it changes (`changed=.true.`, a new range, colormap or scale).
+
+**Colouring a field.** `ip_field_image` colours a 1024 × 1024 field in about 3 ms (`figure_test_fields`, headless:
+the colouring without the GPU upload; linear and log, `real32` and `real64` alike). The upload is that of a
+[texture](images#speed-a-new-4k-image-every-frame), about 0.3 ms for a million pixels here (2.2 ms for 3840 × 2160). The colours come from
+the colormap's own table, as a heatmap's do. On a log or symlog scale the transform (`log10`, `asinh`) is the cost:
+FIGURE colours such fields through a second table, indexed by the value's single-precision bits (the trick of
+Julia's ImPlotExtra.jl) and restricted to the range, so the transform runs 65 536 times instead of once per value.
+Measured on 1024 × 1024 values (gcc -O2, x86-64), against the same colours computed value by value:
+
+| Scale, range | Per value | Bit table | Largest difference |
+|---|---|---|---|
+| linear [0, 1] | 1.6 ms | 1.1 ms | 1/255 |
+| linear [300, 301] | 1.6 ms | 1.0 ms | 1/255 (ImPlotExtra's unrestricted table: 255/255) |
+| log [1e-3, 1e3] | 6.8 ms | 1.4 ms | 1/255 |
+| log [1, 2] | 6.8 ms | 1.4 ms | 1/255 (unrestricted: 5/255) |
+| symlog [-1e3, 1e3] | 10.4 ms | 1.1 ms | 1/255 |
+| symlog [10, 11] | 7.6 ms | 1.2 ms | 1/255 (unrestricted: 26/255) |
+
+The largest difference is per channel, one step of the colormap's own 8-bit table. ImPlotExtra indexes its table by
+the top 16 bits of any float, which spreads its 65 536 bins over every float from -inf to +inf: a range far from 0
+(300 to 301 K) falls into a few bins. FIGURE's table covers only the range's own floats, so a narrow range gets as
+many bins as it has floats. Linear fields stay per value: the table gains 1.2 to 1.6 times there, not worth an
+approximation. Fields under 131 072 values are coloured per value on every scale (the table costs 65 536
+transforms to build).
 
 ## Remote mode
 

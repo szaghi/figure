@@ -290,6 +290,12 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   `ip_text`; the items `ip_stairs`, `ip_stems`, `ip_histogram` and `ip_histogram2d` (NaNs left out, binning rules
   counted by FIGURE); calls outside a plot, the drag tools included, are usage errors
   ([Reading a plot](plots#reading-a-plot), [Marks in a plot](plots#marks-in-a-plot), [Histograms](plots#histograms)): done.
+- **A field through a colormap in one call:** `ip_field_image(label, f, x0, x1, y0, y1 ...)` colours a `real32` or
+  `real64` field into a texture kept between frames, on a `'linear'`, `'log'` or `'symlog'` scale with a NaN colour
+  (values <= 0 on log masked to it), and colours it again only when `changed` or its range, colormap, scale or array
+  change; log and symlog through a table indexed by the values' bits, restricted to the range (5 to 9 times faster,
+  within 1/255); `ip_colormap_legend`'s `scale`, and `ip_colormap_legend_edit`, the legend whose range the user drags
+  and zooms; `test_field_uploads`, `test_field_textures`, `test_field_time`, `test_field_pixel` ([Fields](plots#fields)): done.
 
 ## Next
 

@@ -4,8 +4,8 @@ title: Colormaps
 
 # Colormaps
 
-A **colormap** turns a value into a colour: a [heatmap](images#heatmaps) colours each cell of a field with it, and
-its colour bar (`ip_colormap_scale`) shows the scale. FIGURE bundles the maps that scientific plotting has settled on
+A **colormap** turns a value into a colour: a [heatmap](images#heatmaps) colours each cell of a field with it, a
+[field image](plots#fields) a whole field on a linear, log or symlog [scale](#scales), and its colour bar (`ip_colormap_scale`) shows the scale. FIGURE bundles the maps that scientific plotting has settled on
 (matplotlib's, cmocean's, ParaView's Cool to Warm, Fabio Crameri's), knows ImPlot's own, and loads the user's from a
 CSV table or a ParaView preset. All of them are chosen **by name**, reversed or cut into discrete bands.
 [Contour lines](plots#contour-lines) take their colours from a colormap too, each level the colour of its value.
@@ -16,7 +16,7 @@ CSV table or a ParaView preset. All of them are chosen **by name**, reversed or 
 
 | Procedure | Notes |
 |---|---|
-| `ip_colormap(name [, levels] [, stat])` → `integer(int32)` | the ImPlot id of the map `name`, for the `colormap` argument of `ip_heatmap` and `ip_colormap_scale`; `<name>_r` reversed, `levels` discrete bands; -1 on a failure |
+| `ip_colormap(name [, levels] [, stat])` → `integer(int32)` | the ImPlot id of the map `name`, for the `colormap` argument of `ip_heatmap`, `ip_field_image`, `ip_colormap_scale` and the legends; `<name>_r` reversed, `levels` discrete bands; -1 on a failure |
 | `ip_load_colormap(name, file [, stat])` | read a map from a CSV table or a ParaView JSON preset and register it as `name` |
 | `ip_colormap_names(names)` | the names `ip_colormap` knows, `character(len=:), allocatable :: names(:)` |
 
@@ -106,7 +106,8 @@ Reversed and discrete maps are registered under derived names: `'<name>_r'` and 
 
 | Procedure | Notes |
 |---|---|
-| `ip_colormap_legend(id, colormap, vmin, vmax [, levels] [, horizontal] [, width] [, height] [, label_format] [, stat])` | A bar coloured by `colormap` from `vmin` to `vmax`, with ticks and their values: vertical (`vmin` at the bottom, values on the right) or `horizontal=.true.` (`vmin` at the left, values below). |
+| `ip_colormap_legend(id, colormap, vmin, vmax [, levels] [, horizontal] [, width] [, height] [, label_format] [, scale] [, stat])` | A bar coloured by `colormap` from `vmin` to `vmax`, with ticks and their values: vertical (`vmin` at the bottom, values on the right) or `horizontal=.true.` (`vmin` at the left, values below); the ticks on `scale` ([Scales](#scales)). |
+| `ip_colormap_legend_edit(id, colormap, vmin, vmax [, ...as above]) → logical` | The same legend, whose range the user changes: dragged along the bar, zoomed by the wheel; `vmin` and `vmax` updated in place, `.true.` on the frame they change ([Fields](plots#fields)). |
 
 <<< @/examples/snippets/cb_legend-legend.F90{fortran}
 
@@ -133,12 +134,36 @@ Reversed and discrete maps are registered under derived names: `'<name>_r'` and 
   (`'%.0f'`: 100). The text around the number is kept (`'%.0f K'`). A format with no `f`, `e` or `g` conversion is
   used as it is. The continuous bar's ticks, at round values, use `label_format` unchanged.
 - Bands and the bar sit on whole pixels, so neighbouring bands share their edge with no seam.
+- **The scale** (`scale`, `'linear'` by default, `'log'`, `'symlog'`) places the ticks where a field drawn by
+  [`ip_field_image`](plots#fields) with the same scale puts the values' colours ([Scales](#scales)). The bar's colours
+  do not change: the colormap runs evenly along it, its values do not.
 - Unlike `ip_colormap_scale` (ImPlot's `ColormapScale`, vertical only, continuous colours), the legend is horizontal
   or vertical and shows discrete levels as bands.
 - Statuses: `FIG_ERR_ARGUMENT` for a colormap that is not registered, `vmin` equal to `vmax` or either not finite,
-  `levels` outside [2, 256], a `label_format` with a conversion that is not one of a real (`'%d'`, `'%s'`, `'%*f'`,
+  either <= 0 on `'log'`, an unknown scale, `levels` outside [2, 256], a `label_format` with a conversion that is not one of a real (`'%d'`, `'%s'`, `'%*f'`,
   `'%lf'`, `'%n'`, `'%f %f'`); `FIG_ERR_STATE` outside a frame and from a [task](processes#tasks).
 - Modes: the same in **window**, **headless** and **remote** mode.
+
+## Scales
+
+A colormap orders colours from 0 to 1; a **scale** says which value goes where. [`ip_field_image`](plots#fields) and
+the legends take the same three, those of a [plot axis](plots#axes):
+
+| Scale | A value v goes to the fraction | For |
+|---|---|---|
+| `'linear'` | `(v - vmin) / (vmax - vmin)` | most quantities |
+| `'log'` | `(log10 v - log10 vmin) / (log10 vmax - log10 vmin)` | positive quantities over decades: a density, a residual, a spectrum's power. Values <= 0 have no place: a field shows them in its NaN colour; `vmin` and `vmax` must be above 0 |
+| `'symlog'` | the same with `s(v) = 2 asinh(v/2)` (ImPlot's symmetric log): linear near 0, logarithmic beyond about ±2 | signed quantities over decades: vorticity, a pressure coefficient, a difference between two runs. With a diverging map and `vmin = -vmax`, 0 sits in the middle |
+
+On the legend, a log scale has its ticks at the decades (1, 10, 100; 2 and 5 times them too when the range holds
+fewer than two decades), a symlog scale at 0 and the signed decades; ticks too close for their labels are thinned
+(0 kept first, then the decades of largest magnitude, then the others). With `levels`, the band edges are equally spaced in the scale: on `'log'` from 1 to 1000 in
+three bands, 1, 10, 100, 1000. The scale is in the units of the values: data spanning 1e-12 to 1e-9 on `'symlog'`
+looks linear, since symlog's linear part reaches ±2 (scale the data first).
+
+<<< @/examples/snippets/cb_field_scale-field.F90{fortran}
+
+<Media name="field_scales" alt="Four fields, each with its legend on the same scale: linear, two Gaussian bumps in cividis from 0 to 1.2; log, a density from 0.1 to 100 in inferno, the legend at the decades; symlog, a signed vorticity from -100 to 100 in balance, the legend at 0 and the signed decades; and a flow past a disc in vik, the disc of NaN values in grey." caption="docs/examples/src/gallery.F90 (run with field_scales)" />
 
 ## User maps
 

@@ -2583,6 +2583,7 @@ int fig_end_frame(void) {
    fig_file_browser_draw(); // FIGURE's file browser, a modal over the program's windows
    draw_notifications();    // after the program's windows, above them
    st.in_frame = false;
+   fig_field_sweep(); // field textures not drawn for a while released
    ImGui::Render();
    if (st.m == mode::headless) {
       headless_textures();
@@ -2625,6 +2626,7 @@ int fig_end_frame(void) {
 
 void fig_shutdown(void) {
    try {
+      fig_field_reset(); // the field cache forgotten: its textures go with the others below
       fig_process_shutdown(); // the captured children end with the program (before SDL_Quit)
       if (st.in_frame) {
          fig_scope_frame_end(); // what the program left open, closed

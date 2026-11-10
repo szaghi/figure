@@ -1,0 +1,3 @@
+$ ./cb_field_scale --check
+before the drag: range  1.000E-01 to  1.000E+02, colourings since the start of the check 0
+after the drag: range  3.771E-02 to  3.771E+01, colourings since the start of the check 1

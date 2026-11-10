@@ -2,7 +2,7 @@
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet"), the layout
 !< metrics (run with "layout_metrics"), the numbers and choices (run with "numbers_and_choices") and the canvas's
 !< drawing primitives (run with "canvas_primitives"), the axis layouts of a plot (run with "plot_axes") and the marks and
-!< items of a plot (run with "plot_marks").
+!< items of a plot (run with "plot_marks") and the scales of a field (run with "field_scales").
 program gallery
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet").
@@ -26,7 +26,11 @@ program gallery
 !<
 !< "plot_marks" draws eight plots in a grid, each a mark or an item with its call in its title: tags, infinite lines,
 !< text, a rectangle the user drags, stairs, stems, a histogram and a 2-D histogram; the samples are deterministic.
+!<
+!< "field_scales" draws four fields through a colormap (`ip_field_image`), each with its legend on the same scale and its
+!< call in its title: linear, log over three decades, symlog of a signed field, and a body of NaN values in a NaN colour.
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real32, real64
+use, intrinsic :: ieee_arithmetic, only : ieee_value, ieee_quiet_nan
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, &
                    ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_input, ig_same_line, ig_selectable,          &
                    ig_separator, ig_set_next_window, ig_slider, ig_text, ig_text_colored, ig_text_disabled,              &
@@ -44,6 +48,7 @@ use figure, only : ip_begin_subplots, ip_end_subplots, ip_set_axes, ip_setup_axi
                    ip_setup_axis_ticks, ip_setup_legend
 use figure, only : ip_tag, ip_inf_lines, ip_text, ip_drag_rect, ip_stairs, ip_stems, ip_histogram, ip_histogram2d, &
                    ip_annotation, ip_spec, ImPlotStairsFlags_Shaded
+use figure, only : ip_field_image, ip_colormap_legend
 
 implicit none
 integer(int32),    parameter :: N = 200_int32                    !< Points per line.
@@ -114,6 +119,14 @@ if (trim(arg) == 'plot_marks') then
    call app%init('FIGURE: plot marks', 1200_int32, 640_int32)
    do while (app%next_frame())
       call plot_marks()
+   enddo
+   call app%destroy()
+   stop
+endif
+if (trim(arg) == 'field_scales') then
+   call app%init('FIGURE: field scales', 1100_int32, 700_int32)
+   do while (app%next_frame())
+      call field_scales()
    enddo
    call app%destroy()
    stop
@@ -483,6 +496,73 @@ contains
    endif
    call ig_end()
    endsubroutine plot_marks
+
+   subroutine field_scales()
+   !< Four fields through a colormap, each with its legend on its scale and its call in its title.
+   integer(int32), parameter :: MX = 200_int32                       !< Values along x.
+   integer(int32), parameter :: MY = 150_int32                       !< Values along y.
+   real(real64), save        :: lin(MX, MY), dens(MX, MY), vort(MX, MY), flow(MX, MY) !< The fields.
+   logical, save             :: made = .false.                       !< Fields computed.
+   real(real64)              :: xx, yy, r2                           !< A point, its squared distance from the centre.
+   real(real64)              :: nan                                  !< A NaN.
+
+   if (.not. made) then
+      nan = ieee_value(1.0_real64, ieee_quiet_nan)
+      do j = 1_int32, MY
+         do i = 1_int32, MX
+            xx = (real(i, real64) - 0.5_real64) / real(MX, real64)
+            yy = (real(j, real64) - 0.5_real64) / real(MY, real64)
+            r2 = (xx - 0.5_real64)**2 + (yy - 0.5_real64)**2
+            lin(i, j) = exp(-((xx - 0.4_real64)**2 + (yy - 0.6_real64)**2) / 0.05_real64) + &
+                        0.5_real64 * exp(-((xx - 0.72_real64)**2 + (yy - 0.3_real64)**2) / 0.02_real64)
+            dens(i, j) = 0.1_real64 * 10.0_real64**(3.0_real64 * exp(-r2 / 0.06_real64))      ! 0.1 to 100
+            vort(i, j) = 100.0_real64 * sin(9.0_real64 * xx) * cos(7.0_real64 * yy) * exp(-r2 / 0.03_real64) ! +-100
+            flow(i, j) = yy - 0.5_real64 + 0.04_real64 * (yy - 0.5_real64) / max(r2, 0.01_real64) ! flow past a body
+            if (r2 < 0.012_real64) flow(i, j) = nan                                        ! the body
+         enddo
+      enddo
+      made = .true.
+   endif
+   call ig_set_next_window(10.0_real64, 10.0_real64, 1080.0_real64, 680.0_real64)
+   if (ig_begin('Field scales')) then
+      call field_cell("scale='linear'", lin, 'linear', 'cividis', 0.0_real64, 1.2_real64, .false.)
+      call ig_same_line()
+      call field_cell("scale='log'", dens, 'log', 'inferno', 0.1_real64, 100.0_real64, .false.)
+      call field_cell("scale='symlog'", vort, 'symlog', 'balance', -100.0_real64, 100.0_real64, .false.)
+      call ig_same_line()
+      call field_cell('nan_color: the body (NaN) in grey', flow, 'linear', 'vik', -0.5_real64, 0.5_real64, .true.)
+   endif
+   call ig_end()
+
+   endsubroutine field_scales
+
+   subroutine field_cell(title, g, scale, map, vmin, vmax, body)
+   !< One field of "field_scales", its legend beside it.
+   character(len=*), intent(in) :: title    !< Plot title.
+   real(real64),     intent(in), contiguous :: g(:,:) !< Field.
+   character(len=*), intent(in) :: scale    !< Scale.
+   character(len=*), intent(in) :: map      !< Colormap name.
+   real(real64),     intent(in) :: vmin     !< Colormap bottom.
+   real(real64),     intent(in) :: vmax     !< Colormap top.
+   logical,          intent(in) :: body     !< The field has a NaN body.
+   real(real64), parameter      :: GREY(4) = [0.55_real64, 0.55_real64, 0.55_real64, 1.0_real64] !< NaN colour.
+
+   call ig_begin_group()
+   if (ip_begin_plot(title, 420.0_real64, 310.0_real64, equal=.true.)) then
+      call ip_setup_axes('x', 'y')
+      if (body) then
+         call ip_field_image('field', g, 0.0_real64, 1.0_real64, 0.0_real64, 0.75_real64, colormap=ip_colormap(map), &
+                             vmin=vmin, vmax=vmax, scale=scale, nan_color=GREY)
+      else
+         call ip_field_image('field', g, 0.0_real64, 1.0_real64, 0.0_real64, 0.75_real64, colormap=ip_colormap(map), &
+                             vmin=vmin, vmax=vmax, scale=scale)
+      endif
+      call ip_end_plot()
+   endif
+   call ig_same_line()
+   call ip_colormap_legend('legend', ip_colormap(map), vmin, vmax, height=310.0_real64, scale=scale)
+   call ig_end_group()
+   endsubroutine field_cell
 
    subroutine canvas_primitives()
    !< Each drawing primitive in a cell of its own, its call below it; then the plot layer, inside a plot.

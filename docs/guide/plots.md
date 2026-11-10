@@ -409,6 +409,77 @@ bars' area is 1), `_NoOutliers` (values outside the range do not count in a dens
 - Not done: integer values (convert them to real), weights, bins of unequal width, the counts themselves (ImPlot
   keeps them; `max_count` is the one it returns).
 
+## Fields
+
+A field of a solver, `f(i, j)` on a grid, drawn through a colormap as one image: coloured into a texture once and
+drawn every frame for nothing, at any size. Up to a few hundred values a side a [heatmap](images#heatmaps) does the
+same with cells it rebuilds every frame (cell labels, cell edges); above that, and on a log or symlog scale, this is
+the call ([Performance](performance#large-data)).
+
+| Procedure | Notes |
+|---|---|
+| `ip_field_image(label, f, x0, x1, y0, y1 [, colormap] [, vmin] [, vmax] [, scale] [, nan_color] [, changed] [, range] [, stat])` | The field `f` (`real(real32)` or `real(real64)`, rank 2, contiguous) over [`x0`, `x1`] x [`y0`, `y1`] of the current plot, `f(i, j)` the pixel in column `i` (along x) and row `j` (along y, `j = 1` at `y0`): read in place, column-major as Fortran stores it. `vmin`, `vmax`: the values at the colormap's ends (default: the finite data's smallest and largest, positive ones on `'log'`); `scale`: `'linear'` (default), `'log'`, `'symlog'`; `nan_color`: RGBA in [0, 1] of NaN and infinite values (default transparent); `changed=.true.`: the values changed since the last frame; `range` (out): the [vmin, vmax] the colours were computed for. |
+| `ip_colormap_legend(id, colormap, vmin, vmax [, levels] [, horizontal] [, width] [, height] [, label_format] [, scale] [, stat])` | The [colour-scale legend](colormaps#a-colour-scale-legend), its ticks on `scale`: an item of the window, beside the plot. |
+| `ip_colormap_legend_edit(id, colormap, vmin, vmax [, ...as above]) → logical` | The same legend whose range the user changes: drag along the bar to move it, the wheel to zoom it; `vmin` and `vmax` updated in place, `.true.` on the frame they change. |
+
+Upstream: ImPlot draws the image (`PlotImage`); the colouring, the cache and the editable legend are FIGURE's, after
+ImPlotExtra.jl's `image!` and `colorbar!`.
+
+<<< @/examples/snippets/cb_field_scale-field.F90{fortran}
+
+<Media name="cb_field_scale" video alt="A density field over three decades, a bright blob on dark ground, drawn in the inferno colormap on a log scale, with a vertical legend beside it labelled 0.1, 1, 10 and 100 kg/m3. The pointer drags the legend upwards: the labels slide up, the range moves towards smaller values and the field brightens; then the wheel turned over the legend narrows the range about the pointer and the blob's rings sharpen; the reset button puts the range back." caption="docs/examples/src/cb_field_scale.F90: a field on a log scale, its range dragged on the legend" />
+
+<Media name="field_scales" alt="Four fields, each with its legend on the same scale. Top left, scale='linear': two Gaussian bumps in cividis, legend 0 to 1.2. Top right, scale='log': a density from 0.1 to 100 in inferno, legend at the decades 0.1, 1, 10, 100. Bottom left, scale='symlog': a signed vorticity from -100 to 100 in balance, blue for negative and red for positive, legend at 0 and the signed decades. Bottom right, nan_color: a flow past a disc in vik, the disc of NaN values drawn in grey." caption="docs/examples/src/gallery.F90 (run with field_scales): the scales of a field and the NaN colour" />
+
+- **When it is coloured.** The texture is kept between frames, cached by the label in its plot (two fields of one
+  plot need two labels). It is coloured again only when `changed` is `.true.`, or the array (its address, shape or
+  kind), `vmin`, `vmax`, `colormap`, `scale` or `nan_color` differ from the last colouring; otherwise the frame draws
+  the texture it has. **FIGURE cannot see a change made in place**: a time step that rewrites `f` passes
+  `changed=.true.` on that frame ([Known issues](known-issues#a-field-changed-in-place)). A texture not drawn for 10 s is released; one
+  drawn on every frame is kept, however long the program waits between frames (lazy redraw).
+- **Colouring.** A value maps to the fraction `t = (s(v) - s(vmin)) / (s(vmax) - s(vmin))` of the colormap, `s` the
+  scale (`log10`, or ImPlot's symlog `2 asinh(v/2)`, the same as a [plot axis's](#axes)), values beyond `vmin` or
+  `vmax` clamped to the ends; the colour at `t` is the one ImPlot samples (`SampleColormap`), the colours of a heatmap
+  and of the legend. `vmin > vmax` turns the map over. A field with no finite value is coloured over [0, 1] (log:
+  [1, 10]); a constant field takes the colormap's middle.
+- **Log scale and values <= 0.** They are masked: drawn in `nan_color`, as NaN is, not refused; the default range is
+  that of the positive values. A `vmin` or `vmax` <= 0 given with `'log'` is refused (`FIG_ERR_ARGUMENT`). Symlog
+  takes every value: linear near 0, logarithmic beyond about ±2.
+- **Speed.** A 1024 x 1024 field is coloured in about 3 ms (linear, either kind; measured by `figure_test_fields`,
+  headless, on the development machine), plus the upload. Linear is coloured per pixel, exactly. Log and symlog,
+  from 131 072 values up, go through a table indexed by the value's single-precision bits (ImPlotExtra.jl's trick,
+  restricted to the range: at most 65 536 bins, each the colour of its centre), so `log10` and `asinh` run 65 536
+  times instead of once per value: 4.7 to 9 times faster than per pixel, and the colours differ from the per-pixel
+  ones by at most one step of the colormap's own table (1/255 per channel). Details: [Performance](performance#large-data).
+- **Sizes.** At most 16 384 values a side (a texture; GPUs commonly allow no more). A field drawn smaller than its
+  values on the screen shows one of several values per pixel (nearest filtering): colour a field at the resolution it
+  is shown, or reduce it first. An empty field draws nothing.
+- **The legend the user edits.** `ip_colormap_legend_edit` moves the range by the drag (the value under the pointer
+  stays under it) and zooms it by 10% a wheel step about the value under the pointer, in the scale's space: on
+  `'log'` by factors, so the range stays positive. It takes the wheel while the pointer is over it, so a scrolling
+  window does not scroll. The new `vmin` and `vmax`, passed to `ip_field_image`, colour the field again on that
+  frame. The program keeps its own reset (the button above).
+- **Order and frames.** `ip_field_image` between `ip_begin_plot` and `ip_end_plot`, after the setup (it ends it, as
+  any item), on every frame the field is to be seen; it is an item, with a legend entry, and fits the axes to its
+  rectangle. The legends are items of the window, outside the plot (`ig_same_line` puts them beside it).
+- **Arguments.** Edges in plot units, finite, `x0 /= x1`, `y0 /= y1` (`x0 > x1` mirrors the image); `vmin`, `vmax`
+  finite and different; `nan_color` four components in [0, 1]; `colormap` an id from [`ip_colormap`](colormaps)
+  (default Viridis).
+- Statuses: `FIG_ERR_ARGUMENT` for an unknown scale (`'time'` included), a `vmin` or `vmax` not finite, equal, or <= 0
+  on `'log'`, edges not finite or equal, a `nan_color` without 4 components or outside [0, 1], a colormap not
+  registered, more than 16 384 values a side; `FIG_ERR_STATE` outside a plot (`ip_field_image: no plot is being
+  declared (...)`) and from a [task](processes#tasks). `stat` is optional ([Errors](errors#fields)).
+- Modes: **window**, the texture on the GPU; **headless**, coloured and checked (the colours can be read back with
+  `test_field_pixel`, the colourings counted with `test_field_uploads`: [Testing](testing#synthetic-input)) but not drawn;
+  **remote**, the texture goes to the browser through FIGURE's texture path ([Remote](remote)): exact when coloured
+  once, as JPEG while it is coloured on consecutive frames (a range dragged on the legend, a field changing every
+  frame), exact again when it stops. Threads: a task does not draw.
+- What it does not do: see a change in place (`changed`); interpolate between values (each value is a square of
+  colour); non-uniform grids (the rectangle is divided evenly: map a stretched grid to its index space, or draw a
+  [heatmap](images#heatmaps)); strided arrays (`f` is contiguous: the compiler copies a section into a temporary
+  on every call, which also makes the address change, so such a field is coloured on every frame); a reset of the
+  legend's range (the program's button); a time scale.
+
 ## Reading a plot
 
 A program reads where the user points in plot units, converts between plot units and display pixels, and takes the

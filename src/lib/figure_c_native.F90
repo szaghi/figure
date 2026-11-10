@@ -45,6 +45,7 @@ public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_
 public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
 public :: fig_plot_annotation, fig_drawn_extent_rgba, fig_plot_tag
 public :: fig_colormap_legend, fig_popup_rect, fig_opened_url
+public :: fig_field_image, fig_field_uploads, fig_field_count, fig_field_time, fig_field_pixel
 public :: fig_canvas_event, fig_canvas, fig_draw, fig_cursor_screen_pos, fig_invisible_button, fig_drawn_extent_layer
 
 ! Status codes: must match native/figure_native.h.
@@ -1511,8 +1512,8 @@ interface
    integer(c_int)                      :: status   !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_colormap
 
-   function fig_colormap_legend(id, id_len, cmap, vmin, vmax, levels, horizontal, width, height, fmt, fmt_len) &
-      result(status) bind(C, name='fig_colormap_legend')
+   function fig_colormap_legend(id, id_len, cmap, vmin, vmax, levels, horizontal, width, height, fmt, fmt_len, scale, &
+                                interactive, range, changed) result(status) bind(C, name='fig_colormap_legend')
    !< A colour-scale legend of a colormap, as an item of the current window.
    import :: c_char, c_double, c_float, c_int
    implicit none
@@ -1527,8 +1528,72 @@ interface
    real(c_float), value               :: height     !< Height [pixels] (0: default, < 0: the space left).
    character(kind=c_char), intent(in) :: fmt(*)     !< printf format of the values (not NUL-terminated; empty: %g).
    integer(c_int), value              :: fmt_len    !< Its length [bytes].
+   integer(c_int), value              :: scale      !< 0 linear, 1 log, 2 symlog.
+   integer(c_int), value              :: interactive !< 1: dragged and scrolled by the user.
+   real(c_double),         intent(out) :: range(2)  !< The range after this frame's input.
+   integer(c_int),         intent(out) :: changed   !< 1 when the user changed it.
    integer(c_int)                     :: status     !< Status.
    endfunction fig_colormap_legend
+
+   function fig_field_image(label, label_len, data, kind, nx, ny, x0, x1, y0, y1, cmap, has_vmin, vmin, has_vmax, &
+                            vmax, scale, nan_rgba, changed, range) result(status) bind(C, name='fig_field_image')
+   !< A field through a colormap, as a texture cached by its label's id, drawn in the current plot.
+   import :: c_char, c_double, c_float, c_int, c_ptr
+   implicit none
+   character(kind=c_char), intent(in)  :: label(*)    !< Label (not NUL-terminated).
+   integer(c_int), value               :: label_len   !< Its length [bytes].
+   type(c_ptr), value                  :: data        !< The values, column-major.
+   integer(c_int), value               :: kind        !< 4 float, 8 double.
+   integer(c_int), value               :: nx          !< Values along x.
+   integer(c_int), value               :: ny          !< Values along y.
+   real(c_double), value               :: x0          !< Left edge.
+   real(c_double), value               :: x1          !< Right edge.
+   real(c_double), value               :: y0          !< Bottom edge.
+   real(c_double), value               :: y1          !< Top edge.
+   integer(c_int), value               :: cmap        !< ImPlot colormap id.
+   integer(c_int), value               :: has_vmin    !< 1: vmin given.
+   real(c_double), value               :: vmin        !< Value at the colormap's bottom.
+   integer(c_int), value               :: has_vmax    !< 1: vmax given.
+   real(c_double), value               :: vmax        !< Value at its top.
+   integer(c_int), value               :: scale       !< 0 linear, 1 log, 2 symlog.
+   real(c_float),          intent(in)  :: nan_rgba(4) !< NaN colour, RGBA in [0, 1].
+   integer(c_int), value               :: changed     !< 1: the values changed.
+   real(c_double),         intent(out) :: range(2)    !< The range applied.
+   integer(c_int)                      :: status      !< Status.
+   endfunction fig_field_image
+
+   function fig_field_uploads() result(n) bind(C, name='fig_field_uploads')
+   !< Field colourings uploaded since the start (tests).
+   import :: c_long_long
+   implicit none
+   integer(c_long_long) :: n !< Uploads.
+   endfunction fig_field_uploads
+
+   function fig_field_count() result(n) bind(C, name='fig_field_count')
+   !< Field textures cached (tests).
+   import :: c_int
+   implicit none
+   integer(c_int) :: n !< Entries.
+   endfunction fig_field_count
+
+   function fig_field_time() result(ms) bind(C, name='fig_field_time')
+   !< The last field colouring's time, upload included [ms] (tests).
+   import :: c_double
+   implicit none
+   real(c_double) :: ms !< Time [ms].
+   endfunction fig_field_time
+
+   function fig_field_pixel(label, label_len, i, j, rgba) result(status) bind(C, name='fig_field_pixel')
+   !< The colour of the field `label`'s value (i, j), as uploaded last (tests).
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: label(*)  !< Label (not NUL-terminated).
+   integer(c_int), value               :: label_len !< Its length [bytes].
+   integer(c_int), value               :: i         !< Index along x (1-based).
+   integer(c_int), value               :: j         !< Index along y (1-based).
+   real(c_float),          intent(out) :: rgba(4)   !< Colour, RGBA in [0, 1].
+   integer(c_int)                      :: status    !< Status.
+   endfunction fig_field_pixel
 
    function fig_load_colormap(name, name_len, path, path_len) result(status) bind(C, name='fig_load_colormap')
    !< Read a user colormap (CSV table of RGB rows, or a ParaView JSON preset) under a new name.

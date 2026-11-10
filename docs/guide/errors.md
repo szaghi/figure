@@ -184,6 +184,26 @@ up, no plot being declared give the messages there). `<p>` is the procedure.
 | series of different sizes | `FIG_ERR_ARGUMENT` | `<p>: the series have different sizes` |
 | a colormap not registered | `FIG_ERR_ARGUMENT` | `ip_histogram2d: the colormap <id> is not registered (see ip_colormap)` |
 
+### Fields
+
+`ip_field_image`, `ip_colormap_legend` and `ip_colormap_legend_edit` ([Fields](plots#fields)) check their arguments
+on the Fortran side; a field outside a plot is a usage error, as the [plot queries](#plot-queries-and-marks). `<p>` is
+the procedure.
+
+| Failure | Status | Message |
+|---|---|---|
+| no plot being declared (`ip_field_image`) | `FIG_ERR_STATE` | `ip_field_image: no plot is being declared (call it between a true ip_begin_plot and ip_end_plot)` |
+| an unknown scale (`'time'` included) | `FIG_ERR_ARGUMENT` | `<p>: unknown scale '<scale>' ('linear', 'log' or 'symlog')` |
+| `vmin` or `vmax` not finite; equal | `FIG_ERR_ARGUMENT` | `ip_field_image: vmin must be finite` (`vmax`); `vmin and vmax must differ` |
+| `vmin` or `vmax` <= 0 on `'log'` | `FIG_ERR_ARGUMENT` | `ip_field_image: a log scale needs vmin above 0` (`vmax`); `<p>: a log scale needs vmin and vmax above 0` (legends) |
+| edges not finite, or `x0 == x1`, `y0 == y1` | `FIG_ERR_ARGUMENT` | `ip_field_image: the edges must be finite, x0 /= x1 and y0 /= y1` |
+| `nan_color` without 4 components; outside [0, 1] | `FIG_ERR_ARGUMENT` | `ip_field_image: nan_color needs 4 components (RGBA)`; `nan_color components must be in [0, 1]` |
+| more than 16 384 values a side | `FIG_ERR_ARGUMENT` | `ip_field_image: a field of at most 16384 values a side (a texture)` |
+| a colormap not registered | `FIG_ERR_ARGUMENT` | `<p>: the colormap <id> is not registered (see ip_colormap)` |
+
+The legends' other failures (`levels`, formats, equal ends) are those of
+[`ip_colormap_legend`](colormaps#a-colour-scale-legend).
+
 ## Pairing and frames
 
 Dear ImGui's begin/end pairs are the likeliest bug of a FIGURE program: an `ig_end_table` where an `ig_tree_pop`

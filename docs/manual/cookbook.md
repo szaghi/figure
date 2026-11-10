@@ -464,14 +464,35 @@ The `x(::5)` sections are not contiguous: ImPlot reads them in place with a stri
 ([Data in place](/guide/plots#data-in-place)).
 [Plots](/guide/plots#item-style) lists every `ip_spec` argument.
 
-### Show a field and its colour scale
+### Show a 2-D field with its colour scale
+
+<<< @/examples/snippets/cb_field_scale-field.F90{fortran}
+
+<Media name="cb_field_scale" video alt="A density field over three decades, a bright blob on dark ground, in the inferno colormap on a log scale, with a vertical legend beside it labelled at 0.1, 1, 10 and 100 kg/m3. The pointer drags the legend upwards: the labels slide up, the range moves towards smaller values and the field brightens; the wheel over the legend narrows the range about the pointer; the reset button puts the range back." caption="docs/examples/src/cb_field_scale.F90" />
+
+`ip_field_image` colours the field through the colormap into a texture and draws it as one image: the colours are
+computed when something changes, not every frame, so a field of a million values costs a frame no more than a
+picture. `f(i, j)` is read in place, `i` along x and `j` along y, `j = 1` at the bottom; the edges are the outer
+edges of the values. The scale is logarithmic: the legend beside it, on the same scale, has its ticks at the
+decades. `ip_colormap_legend_edit` lets the user move the range (drag) and zoom it (wheel): `vmin` and `vmax` change
+in place and the next `ip_field_image` colours the field again. A time step that rewrites `rho` in place says so
+with `changed=.true.`: FIGURE cannot see it. `cb_field_scale --check` drags the legend 60 pixels up with
+`test_drag` and prints the range before and after, and how many times the field was coloured:
+
+<<< @/examples/output/cb_field_scale.txt{text}
+
+[Fields](/guide/plots#fields) has every argument, the speed and the remote mode; [Colormaps](/guide/colormaps#scales)
+the scales.
+
+### Show a small field cell by cell
 
 <<< @/examples/snippets/cb_field-heatmap.F90{fortran}
 
 <Media name="cb_field" alt="A heatmap of a Gaussian bump with a colour bar, an image drawn inside the plot and the same image as a widget" caption="docs/examples/src/cb_field.F90: a heatmap with its colour scale, and an image as a plot item and as a widget" />
 
-`f(i, j)` is read in place, `i` along x and `j` along y, `j = 1` at the bottom; the bounds are the outer edges of the
-cells. Fix the scale (`scale_min`, `scale_max`) when the field changes over time, or the colours rescale every frame.
+A heatmap draws each cell, and can print its value in it (`label_format`): for fields of up to a few hundred cells a
+side; larger ones are [the recipe above](#show-a-2-d-field-with-its-colour-scale). `f(i, j)` is read in place, `i`
+along x and `j` along y, `j = 1` at the bottom; the bounds are the outer edges of the cells. Fix the scale (`scale_min`, `scale_max`) when the field changes over time, or the colours rescale every frame.
 [Heatmaps and images](/guide/images) has every argument.
 
 Used in context: [chapter 12](./tutorial/12-field) of the tutorial.

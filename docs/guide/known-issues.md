@@ -69,6 +69,15 @@ ifx 2025.3 passes both in place. The plot is the same; the copy costs time (at a
 place on every compiler; series stored as columns or contiguous arrays are never copied; a buffer the program fills
 once per update and reuses avoids the allocation of the compiler's temporaries.
 
+## A field changed in place
+
+`ip_field_image` colours a field again when its arguments change (the array's address or shape, the range, the
+colormap, the scale, the NaN colour), not when its values do: FIGURE does not read the whole array every frame to
+find out. A program that rewrites the array in place (a time step) passes `changed=.true.` on that frame
+([Fields](plots#fields)); without it the plot keeps the old colours. A strided section passed as the field is copied
+by the compiler into a temporary at every call: its address may change from call to call, and the field is then
+coloured on every frame (correct, but slower): pass a contiguous array.
+
 ## Text input
 
 `ig_input_text` edits a `character` variable, whose length is the field's capacity: a longer text is cut at it. Text

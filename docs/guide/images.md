@@ -11,7 +11,8 @@ a plot (`ip_image`). Both read Fortran's column-major arrays as they are: no cop
 ## Heatmaps
 
 A heatmap draws each cell as vertices, rebuilt every frame; past a few hundred cells a side a [texture](#textures)
-costs a fraction of it, in a window and over the network ([Performance](performance#large-data)).
+costs a fraction of it, in a window and over the network ([Performance](performance#large-data)), and
+[`ip_field_image`](plots#fields) colours a field into one in a single call, on a linear, log or symlog scale.
 
 
 <<< @/examples/snippets/cb_field-field.F90{fortran}

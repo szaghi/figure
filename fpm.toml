@@ -156,3 +156,8 @@ main = "figure_test_plot_axes.F90"
 name = "figure_test_plot_marks"
 source-dir = "src/tests"
 main = "figure_test_plot_marks.F90"
+
+[[test]]
+name = "figure_test_fields"
+source-dir = "src/tests"
+main = "figure_test_fields.F90"

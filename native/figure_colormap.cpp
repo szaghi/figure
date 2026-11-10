@@ -689,10 +689,17 @@ int fig_colormap_name(int index, char *buf, int buf_len) {
 // levels > 0: that many bands of equal width, each the map's colour at its centre (as ip_colormap(name, levels)
 // colours them), the ticks at the bands' edges; 0: a continuous bar, the ticks at round values. width, height: the
 // item's size [pixels]; > 0 given, < 0 the space left in the window, 0 the default (vertical: the bar's thickness plus
-// the labels by 300 pixels; horizontal: the space left by the bar plus a line of labels).
+// the labels by 300 pixels; horizontal: the space left by the bar plus a line of labels). scale 0 linear, 1 log, 2
+// symlog: the ticks where the field's colours put the values (decades; 0 and signed decades), band edges equally
+// spaced in the scale. interactive: dragging along the bar moves the range, the wheel zooms it about the pointer;
+// range receives the range after this frame's input, changed 1 when it differs.
 int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, double vmax, int levels, int horizontal,
-                        float width, float height, const char *fmt, int fmt_len) {
+                        float width, float height, const char *fmt, int fmt_len, int scale, int interactive,
+                        double *range, int *changed) {
    try {
+      range[0] = vmin;
+      range[1] = vmax;
+      *changed = 0;
       if (!ImGui::GetCurrentContext() || !ImPlot::GetCurrentContext() || !ImGui::GetCurrentWindowRead())
          return fail(FIG_ERR_STATE, "ip_colormap_legend: call it inside a window, in a frame");
       if (cmap < 0 || cmap >= ImPlot::GetColormapCount())
@@ -703,6 +710,12 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
       if (levels != 0 && (levels < 2 || levels > MAX_LEVELS))
          return fail(FIG_ERR_ARGUMENT, "ip_colormap_legend: levels must be in [2, " + std::to_string(MAX_LEVELS) +
                                            "], got " + std::to_string(levels));
+      if (scale == 1 && (vmin <= 0.0 || vmax <= 0.0))
+         return fail(FIG_ERR_ARGUMENT, "ip_colormap_legend: a log scale needs vmin and vmax above 0");
+      // the scale's transform (ImPlot's: log10, and symlog 2 asinh(v/2)) and its inverse
+      auto fwd = [scale](double v) { return scale == 1 ? std::log10(v) : scale == 2 ? 2.0 * std::asinh(v / 2.0) : v; };
+      auto inv = [scale](double s) { return scale == 1 ? std::pow(10.0, s) : scale == 2 ? 2.0 * std::sinh(s / 2.0) : s; };
+      const double s0 = fwd(vmin), s1 = fwd(vmax);
       ImGuiWindow *window = ImGui::GetCurrentWindow();
       if (window->SkipItems) return FIG_OK;
       const std::string format = fmt_len > 0 ? str(fmt, fmt_len) : std::string("%g");
@@ -740,9 +753,8 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
       const float length0 = horizontal ? extent(width, avail.x, avail.x) : extent(height, avail.y, 300.0f);
       std::vector<double> ticks;
       const double lo = std::min(vmin, vmax), hi = std::max(vmin, vmax);
-      if (levels > 0) {
-         for (int k = 0; k <= levels; ++k) ticks.push_back(vmin + (vmax - vmin) * k / levels);
-      } else {
+      auto round_ticks = [&]() { // round values, linear in the value
+         std::vector<double> out;
          const double count = std::max(2.0, std::floor(length0 / (horizontal ? 100.0 : 40.0)));
          const double raw = (hi - lo) / count;
          const double p = std::pow(10.0, std::floor(std::log10(raw)));
@@ -750,7 +762,30 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
          for (double s : {5.0, 2.5, 2.0, 1.0})
             if (raw <= s * p * (1.0 + 1e-12)) step = s * p;
          for (double q = std::ceil(lo / step - 1e-9); q * step <= hi * (1.0 + 1e-12) + 1e-300; q += 1.0)
-            ticks.push_back(std::fabs(q) < 0.5 ? 0.0 : q * step);
+            out.push_back(std::fabs(q) < 0.5 ? 0.0 : q * step);
+         return out;
+      };
+      auto inside = [&](double v) { return v >= lo - 1e-12 * std::fabs(lo) && v <= hi + 1e-12 * std::fabs(hi); };
+      if (levels > 0) { // band edges, equally spaced in the scale
+         for (int k = 0; k <= levels; ++k) ticks.push_back(k == 0 ? vmin : k == levels ? vmax : inv(s0 + (s1 - s0) * k / levels));
+      } else if (scale == 0) {
+         ticks = round_ticks();
+      } else { // decades (log), and 0 and the signed decades (symlog); with fewer than two in the range, 2 and 5
+               // times them too; then round values
+         const double m = std::max(std::fabs(lo), std::fabs(hi));
+         const int kmax = static_cast<int>(std::ceil(std::log10(m))) + 1;
+         const int kmin = scale == 1 ? static_cast<int>(std::floor(std::log10(lo))) - 1 : kmax - 14;
+         for (int pass = 0; pass < 2 && ticks.size() < 2; ++pass) {
+            ticks.clear();
+            if (scale == 2 && inside(0.0)) ticks.push_back(0.0);
+            for (int k = kmin; k <= kmax; ++k)
+               for (double f : pass == 0 ? std::vector<double>{1.0} : std::vector<double>{1.0, 2.0, 5.0}) {
+                  const double v = f * std::pow(10.0, k);
+                  if (inside(v)) ticks.push_back(v);
+                  if (scale == 2 && inside(-v)) ticks.push_back(-v);
+               }
+         }
+         if (ticks.size() < 2) ticks = round_ticks();
       }
       float label_w = 0.0f;
       for (double t : ticks) label_w = std::max(label_w, ImGui::CalcTextSize(tick_label(t).c_str()).x);
@@ -758,8 +793,9 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
                                : ImVec2(extent(width, avail.x, bar + tick + style.ItemInnerSpacing.x + label_w), length0);
       const ImVec2 pos = window->DC.CursorPos;
       const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
+      const ImGuiID item = window->GetID(str(id, id_len).c_str());
       ImGui::ItemSize(bb);
-      if (!ImGui::ItemAdd(bb, window->GetID(str(id, id_len).c_str()))) return FIG_OK;
+      if (!ImGui::ItemAdd(bb, item)) return FIG_OK;
       // the bar, with room for the end labels (half a label beyond each end)
       ImRect r = horizontal ? ImRect(bb.Min.x + label_w * 0.5f, bb.Min.y, bb.Max.x - label_w * 0.5f, bb.Min.y + bar)
                             : ImRect(bb.Min.x, bb.Min.y + text_h * 0.5f, bb.Min.x + bar, bb.Max.y - text_h * 0.5f);
@@ -771,6 +807,60 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
          return horizontal ? r.Min.x + static_cast<float>(t) * (r.Max.x - r.Min.x)
                            : r.Max.y - static_cast<float>(t) * (r.Max.y - r.Min.y);
       };
+      const float length = horizontal ? r.Max.x - r.Min.x : r.Max.y - r.Min.y;
+      auto frac = [&](double v) { return (fwd(v) - s0) / (s1 - s0); }; // the value's fraction along the bar
+      if (interactive) { // dragged along the bar: the range moves with the pointer; the wheel: zoomed about the
+                         // value under the pointer (10% a step), both in the scale's space
+         bool hovered = false, held = false;
+         ImGui::ButtonBehavior(bb, item, &hovered, &held);
+         ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY); // the wheel is the legend's while the pointer is over it
+         const ImGuiIO &io = ImGui::GetIO();
+         double n0 = s0, n1 = s1;
+         if (held && ImGui::IsMousePosValid()) {
+            const float along = horizontal ? io.MouseDelta.x : -io.MouseDelta.y;
+            if (along != 0.0f) {
+               const double d = static_cast<double>(along) / length * (s1 - s0);
+               n0 -= d;
+               n1 -= d;
+            }
+         }
+         if (hovered && io.MouseWheel != 0.0f && ImGui::IsMousePosValid()) {
+            const float p = horizontal ? (io.MousePos.x - r.Min.x) / length : (r.Max.y - io.MousePos.y) / length;
+            const double sp = n0 + (n1 - n0) * std::clamp(static_cast<double>(p), 0.0, 1.0);
+            const double f = std::pow(1.1, -static_cast<double>(io.MouseWheel));
+            n0 = sp + (n0 - sp) * f;
+            n1 = sp + (n1 - sp) * f;
+         }
+         if (n0 != s0 || n1 != s1) {
+            const double a = inv(n0), b = inv(n1);
+            if (std::isfinite(a) && std::isfinite(b) && a != b && (scale != 1 || (a > 0.0 && b > 0.0))) {
+               range[0] = a;
+               range[1] = b;
+               *changed = 1;
+            }
+         }
+      }
+      if (scale != 0 && levels == 0) { // ticks too close along the bar for their labels: thinned, keeping 0 first,
+                                       // then the decades from the largest magnitude, then 2 and 5 times them
+         auto rank = [](double v) {
+            if (v == 0.0) return 0.0;
+            const double e = std::log10(std::fabs(v));
+            const bool decade = std::fabs(e - std::round(e)) < 1e-9;
+            return (decade ? 1.0 : 2.0) * 1e3 - e; // decades before the others, larger magnitudes first
+         };
+         std::vector<double> order = ticks;
+         std::stable_sort(order.begin(), order.end(), [&](double a, double b) { return rank(a) < rank(b); });
+         const float gap = horizontal ? label_w + style.ItemSpacing.x : text_h * 1.2f;
+         std::vector<double> kept;
+         for (double t : order) {
+            const float p = static_cast<float>(frac(t)) * length;
+            bool room = true;
+            for (double k : kept)
+               if (std::fabs(static_cast<float>(frac(k)) * length - p) < gap) room = false;
+            if (room) kept.push_back(t);
+         }
+         ticks = kept;
+      }
       auto colour = [&](double t) { return ImGui::GetColorU32(ImPlot::SampleColormap(static_cast<float>(t), cmap)); };
       ImDrawList *dl = window->DrawList;
       if (levels > 0) {
@@ -794,7 +884,7 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
       dl->AddRect(r.Min, r.Max, ImGui::GetColorU32(ImGuiCol_Border));
       const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
       for (double v : ticks) {
-         const float p = at((v - vmin) / (vmax - vmin));
+         const float p = at(frac(v));
          const std::string s = tick_label(v);
          const ImVec2 ts = ImGui::CalcTextSize(s.c_str());
          if (horizontal) {

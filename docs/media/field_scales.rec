@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    field_scales
+#! from    10
+#! frames  1
+# four fields through a colormap, each with its legend on its scale: linear, log, symlog, and a NaN body in grey

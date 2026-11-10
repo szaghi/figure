@@ -371,7 +371,23 @@ int    fig_colormap_name(int index, char *buf, int buf_len);
  * ticks and their values (fmt, printf; empty: %g); levels > 0: that many bands; width, height [pixels]: > 0 given,
  * < 0 the space left, 0 the default. An ImGui item of the current window. */
 int    fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, double vmax, int levels, int horizontal,
-                           float width, float height, const char *fmt, int fmt_len);
+                           float width, float height, const char *fmt, int fmt_len, int scale, int interactive,
+                           double *range, int *changed);
+/* A field through a colormap (figure_field.cpp, ip_field_image): data, kind 4 (float) or 8 (double), nx x ny values
+ * column-major (first index along x), coloured into a texture cached by the label's ImGui id and drawn over
+ * [x0, x1] x [y0, y1] in the current plot; coloured again only when changed, or the array, range, colormap, scale
+ * (0 linear, 1 log, 2 symlog) or NaN colour differ; range receives the range applied. fig_field_sweep (end of a frame)
+ * releases the entries not drawn for 10 s, fig_field_reset (shutdown) forgets them all. Tests: uploads so far, entries
+ * cached, the last colouring's time [ms], a pixel's colour by label. */
+int    fig_field_image(const char *label, int label_len, const void *data, int kind, int nx, int ny, double x0,
+                       double x1, double y0, double y1, int cmap, int has_vmin, double vmin, int has_vmax, double vmax,
+                       int scale, const float *nan_rgba, int changed, double *range);
+void   fig_field_sweep(void);
+void   fig_field_reset(void);
+long long fig_field_uploads(void);
+int    fig_field_count(void);
+double fig_field_time(void);
+int    fig_field_pixel(const char *label, int label_len, int i, int j, float *rgba);
 
 /* The canvas (figure_canvas.cpp, src/lib/figure_canvas.F90). fig_canvas: an invisible button of width x height
  * pixels (<= 0: the space left plus that) taking the three mouse buttons, owning the wheel while hovered, with the

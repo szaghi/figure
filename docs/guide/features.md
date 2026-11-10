@@ -189,7 +189,9 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_spec(...)` → `plot_spec_object` | item style: colours, line weight, markers, flags (`ImPlotMarker_*`, `ImPlot*Flags_*`) |
 | `ip_heatmap(label, f, xmin, xmax, ymin, ymax ...)` | a field `f(i, j)` as coloured cells, read in place, j = 1 at the bottom |
 | `ip_colormap_scale(label, scale_min, scale_max ... [, colormap] [, stat])` | the colour bar of a heatmap (default colormap: Viridis) |
-| `ip_colormap_legend(id, colormap, vmin, vmax [, levels] [, horizontal] [, width] [, height] [, label_format] [, stat])` | a colour-scale legend, vertical or horizontal, continuous or in bands ([legend](colormaps#a-colour-scale-legend)) |
+| `ip_colormap_legend(id, colormap, vmin, vmax [, levels] [, horizontal] [, width] [, height] [, label_format] [, scale] [, stat])` | a colour-scale legend, vertical or horizontal, continuous or in bands, ticks on a linear, log or symlog scale ([legend](colormaps#a-colour-scale-legend)) |
+| `ip_colormap_legend_edit(id, colormap, vmin, vmax [, levels] [, horizontal] [, width] [, height] [, label_format] [, scale] [, stat])` → `logical` | the same legend whose range the user drags and zooms with the wheel; `vmin`, `vmax` updated in place ([fields](plots#fields)) |
+| `ip_field_image(label, f, x0, x1, y0, y1 [, colormap] [, vmin] [, vmax] [, scale] [, nan_color] [, changed] [, range] [, stat])` | a field through a colormap in one call: a texture coloured when it changes, linear, log or symlog, NaN colour ([fields](plots#fields)) |
 | `ip_colormap(name [, levels] [, stat])` → `integer(int32)` | a colormap's id by name: bundled (`'cividis'`, `'batlow'`, `'cool-warm'`, ...), ImPlot's own or loaded; `<name>_r` reversed, `levels` discrete bands ([colormaps](colormaps)) |
 | `ip_load_colormap(name, file [, stat])` | a user colormap from a CSV table of RGB rows or a ParaView JSON preset ([user maps](colormaps#user-maps)) |
 | `ip_colormap_names(names)` | the names `ip_colormap` knows ([colormaps](colormaps)) |
@@ -302,6 +304,10 @@ Details: [3-D views](view3d).
 | `test_plot_tick(axis, index, label [, count] [, stat])` | a tick label of any of the six axes of the plot being declared (`'x1'`..`'y3'`; `'x'`, `'y'`) ([plots](plots#axes)) |
 | `test_plot_copies()` → `int64` | the arrays the plot items copied so far (a stride differing from the ordinates', integer abscissae) ([plots](plots#data-in-place)) |
 | `test_plot_stride()` → `int64` | the byte stride the last plot item gave ImPlot ([plots](plots#data-in-place)) |
+| `test_field_uploads()` → `int64` | the colourings `ip_field_image` uploaded so far ([fields](plots#fields)) |
+| `test_field_textures()` → `int32` | the field textures kept ([fields](plots#fields)) |
+| `test_field_time()` → `real64` | the last colouring's time [ms] ([fields](plots#fields)) |
+| `test_field_pixel(label, i, j, rgba [, stat])` | the colour a field's value got ([fields](plots#fields)) |
 | `test_frame_hit(x, y)` → `character` | what the frame of `decorations='figure'` does at a point: `'client'`, `'drag'`, `'resize-top-left'`, ... ([the window's frame](frame-loop#the-window-s-frame)) |
 | `test_frame_rect(part, x0, y0, x1, y1 [, found] [, stat])` | a part of its title bar in the last frame: `'bar'`, `'icon'`, `'menus'`, `'title'`, `'minimize'`, `'maximize'`, `'close'` |
 | `test_frame_state(minimized, maximized [, stat])` | the window minimized, maximized (headless: as the bar's buttons recorded it) |

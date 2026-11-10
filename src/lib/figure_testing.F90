@@ -27,7 +27,8 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_but
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
                             fig_frame_state, fig_notification_rect, fig_notification_alpha, fig_drawn_extent, &
                             fig_file_browser_get, fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
-                            fig_popup_rect, fig_opened_url, fig_drawn_extent_layer
+                            fig_popup_rect, fig_opened_url, fig_drawn_extent_layer, fig_field_uploads, &
+                            fig_field_count, fig_field_time, fig_field_pixel
 use figure_imgui, only : ig_item_rect
 use figure_implot, only : plot_copies, plot_stride
 
@@ -38,6 +39,7 @@ public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_p
 public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_rect, test_drawn_extent
 public :: test_file_browser, test_file_browser_rect, test_settings_file, test_drop
 public :: test_popup_rect, test_opened_url, test_plot_copies, test_plot_stride
+public :: test_field_uploads, test_field_textures, test_field_time, test_field_pixel
 
 interface test_drawn_extent
    !< The extent [pixels] of what was drawn so far in the current window in a colour: Dear ImGui's style colour by its
@@ -584,6 +586,43 @@ contains
 
    bytes = plot_stride
    endfunction test_plot_stride
+
+   function test_field_uploads() result(uploads)
+   !< How many times `ip_field_image` coloured a field and uploaded it since the program started: a test reads it
+   !< before and after frames to check that a field is not coloured again when nothing changed (plots.md, "Fields").
+   integer(int64) :: uploads !< Colourings uploaded.
+
+   uploads = int(fig_field_uploads(), int64)
+   endfunction test_field_uploads
+
+   function test_field_textures() result(count)
+   !< How many field textures `ip_field_image` keeps: one per field drawn in the last 10 s (plots.md, "Fields").
+   integer(int32) :: count !< Textures kept.
+
+   count = int(fig_field_count(), int32)
+   endfunction test_field_textures
+
+   function test_field_time() result(ms)
+   !< The time the last colouring of `ip_field_image` took, range, colours and upload [ms] (plots.md, "Fields").
+   real(real64) :: ms !< Time [ms].
+
+   ms = real(fig_field_time(), real64)
+   endfunction test_field_time
+
+   subroutine test_field_pixel(label, i, j, rgba, stat)
+   !< The colour `ip_field_image` gave the value (i, j) of the field `label` in its last colouring, RGBA in [0, 1] (in
+   !< steps of 1/255). Status `FIG_ERR_ARGUMENT` for a label not drawn in the last 10 s or (i, j) outside the field.
+   character(len=*), intent(in)            :: label   !< The field's label.
+   integer(int32),   intent(in)            :: i       !< Index along x.
+   integer(int32),   intent(in)            :: j       !< Index along y.
+   real(real64),     intent(out)           :: rgba(4) !< Colour, RGBA in [0, 1].
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   real(c_float)                           :: c(4)    !< C copy.
+
+   c = 0.0_c_float
+   call figure_check(fig_field_pixel(label, len(label, c_int), int(i, c_int), int(j, c_int), c), stat)
+   rgba = real(c, real64)
+   endsubroutine test_field_pixel
 
    subroutine test_item_center(x, y)
    !< The centre of the last item drawn (call it right after the widget): where `test_click` should aim.

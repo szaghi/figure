@@ -1,0 +1,18 @@
+#! program build/docs-examples/bin/cb_field_scale
+#! from    10
+#! frames  175
+#! poster  80
+# drag the legend upwards (the log range moves to smaller values, the field brightens), zoom the range with the
+# wheel over the legend, then press "reset range"
+0   move 860 300
+5   move 735 330 15
+25  down
+27  move 735 230 45
+75  up
+85  wheel 0 1
+92  wheel 0 1
+99  wheel 0 1
+115 move 60 492 20
+140 down
+142 up
+160 move 860 300 10

@@ -29,7 +29,8 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, fi
                         figure_scope_refused, figure_usage_error, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
-                            fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag
+                            fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag, &
+                            fig_field_image
 use figure_cimgui, only : im_vec2, im_vec4, igIsMousePosValid
 use figure_texture, only : texture_object, texture_ref
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot,             &
@@ -103,7 +104,7 @@ public :: ip_colormap_scale, ip_heatmap, ip_image, ip_plot_limits, ip_plot_size,
 public :: ip_colormap, ip_colormap_names, ip_load_colormap
 public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point
 public :: ip_contour, ip_contour_lines, ip_contour_levels
-public :: ip_colormap_legend
+public :: ip_colormap_legend, ip_colormap_legend_edit, ip_field_image
 public :: ip_spec, plot_spec_object
 public :: ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_setup_axis_ticks, ip_setup_axis_constraints
 public :: ip_setup_legend
@@ -153,6 +154,11 @@ interface ip_bars
    module procedure ip_bars_r32, ip_bars_r64
    module procedure ip_bars_i32_r32, ip_bars_i64_r32, ip_bars_i32_r64, ip_bars_i64_r64
 endinterface ip_bars
+
+interface ip_field_image
+   !< A field through a colormap, kept as a texture: `real32` or `real64`.
+   module procedure ip_field_image_r32, ip_field_image_r64
+endinterface ip_field_image
 
 interface ip_heatmap
    !< A 2D field f(i, j) as coloured cells: i along x, j along y, j = 1 at the bottom.
@@ -1838,7 +1844,7 @@ contains
    endsubroutine ip_colormap_scale
 
    recursive subroutine ip_colormap_legend(id, colormap, vmin, vmax, levels, horizontal, width, height, label_format, &
-                                           stat)
+                                           scale, stat)
    !< A colour-scale legend: a bar coloured by `colormap` from `vmin` to `vmax` (bottom to top, or left to right with
    !< `horizontal=.true.`), with ticks and their values on its right (or below). An item of the current window, outside
    !< a plot: beside any plot (`ig_same_line`), above or below it, or in any window. With `levels`: that many bands of
@@ -1846,12 +1852,16 @@ contains
    !< bands' edges, labelled with the digits they need to show the edge (`label_format`'s precision raised, up to 6
    !< decimals for `%f` or 7 significant digits for `%e` and `%g`: 87.5 with `'%.0f'`, as `ip_contour` labels it);
    !< without: a continuous bar, ticks at round values (a step of 1, 2, 2.5 or 5 times a power of ten) about every 40
-   !< pixels (100 horizontal), labelled with `label_format` as it is. `vmin > vmax` turns the scale over. Sizes
-   !< [pixels]: positive given, negative the space left in the window, absent the default (vertical: 300 long, as wide
-   !< as the bar and the labels; horizontal: the space left, as tall as the bar and a line of labels). Statuses:
-   !< `FIG_ERR_ARGUMENT` for a colormap that is not registered, equal or non-finite `vmin`/`vmax`, `levels` outside
-   !< [2, 256], a `label_format` with a conversion that is not one of a real (a format without conversion is text,
-   !< printed as it is; `''` is the default); `FIG_ERR_STATE` outside a window and from a task. The same in every mode.
+   !< pixels (100 horizontal), labelled with `label_format` as it is. `scale` (`'linear'`, `'log'`, `'symlog'`) puts
+   !< the ticks where `ip_field_image` with that scale puts the values' colours: decades on `'log'`, 0 and the signed
+   !< decades on `'symlog'` (thinned to the room their labels need), band edges equally spaced in the scale.
+   !< `vmin > vmax` turns the scale over. Sizes [pixels]: positive given, negative the space left in the window, absent
+   !< the default (vertical: 300 long, as wide as the bar and the labels; horizontal: the space left, as tall as the bar
+   !< and a line of labels). The user cannot change the range: `ip_colormap_legend_edit` is the same legend, dragged
+   !< and scrolled. Statuses: `FIG_ERR_ARGUMENT` for a colormap that is not registered, equal or non-finite
+   !< `vmin`/`vmax`, ends not above 0 on `'log'`, an unknown scale, `levels` outside [2, 256], a `label_format` with
+   !< a conversion that is not one of a real (a format without conversion is text, printed as it is; `''` is the
+   !< default); `FIG_ERR_STATE` outside a window and from a task. The same in every mode.
    character(len=*), intent(in)            :: id           !< Widget id, unique in the window (not shown).
    integer(int32),   intent(in)            :: colormap     !< Colormap (`ip_colormap`).
    real(real64),     intent(in)            :: vmin         !< Value at the bottom (left).
@@ -1862,19 +1872,83 @@ contains
    real(real64),     intent(in), optional  :: height       !< Height [pixels].
    character(len=*), intent(in), optional  :: label_format !< printf format of one real, the values, or text
                                                            !< (default, and '': '%g').
+   character(len=*), intent(in), optional  :: scale        !< 'linear' (default), 'log', 'symlog'.
+   integer(int32),   intent(out), optional :: stat         !< Status.
+   real(real64)                            :: range(2)     !< The range (unchanged: not interactive).
+   logical                                 :: changed      !< Unused.
+
+   call legend('ip_colormap_legend', id, colormap, vmin, vmax, levels, horizontal, width, height, label_format, scale, &
+               .false., range, changed, stat)
+   endsubroutine ip_colormap_legend
+
+   recursive function ip_colormap_legend_edit(id, colormap, vmin, vmax, levels, horizontal, width, height, label_format, &
+                                              scale, stat) result(changed)
+   !< `ip_colormap_legend` whose range the user changes (ImPlotExtra.jl's `colorbar!`): dragging along the bar moves
+   !< [vmin, vmax] with the pointer, the mouse wheel over it zooms the range about the value under the pointer (10% a
+   !< step; wheel up narrows it), both in the scale's space (on `'log'` the range moves by factors and stays positive).
+   !< `vmin` and `vmax` are updated in place; true on the frame they changed: pass them to `ip_field_image`, which
+   !< colours the field again. The wheel is the legend's while the pointer is over it (a scrolling window does not
+   !< scroll). The program keeps its own reset (a button setting vmin and vmax back). Arguments, statuses and modes as
+   !< `ip_colormap_legend`; on a failure the range is unchanged and the result false.
+   character(len=*), intent(in)            :: id           !< Widget id, unique in the window (not shown).
+   integer(int32),   intent(in)            :: colormap     !< Colormap (`ip_colormap`).
+   real(real64),     intent(inout)         :: vmin         !< Value at the bottom (left); updated by the user.
+   real(real64),     intent(inout)         :: vmax         !< Value at the top (right); updated by the user.
+   integer(int32),   intent(in), optional  :: levels       !< Discrete bands, in [2, 256] (default: continuous).
+   logical,          intent(in), optional  :: horizontal   !< Horizontal bar (default: vertical).
+   real(real64),     intent(in), optional  :: width        !< Width [pixels].
+   real(real64),     intent(in), optional  :: height       !< Height [pixels].
+   character(len=*), intent(in), optional  :: label_format !< printf format of one real, the values, or text
+                                                           !< (default, and '': '%g').
+   character(len=*), intent(in), optional  :: scale        !< 'linear' (default), 'log', 'symlog'.
+   integer(int32),   intent(out), optional :: stat         !< Status.
+   logical                                 :: changed      !< The user changed the range on this frame.
+   real(real64)                            :: range(2)     !< The range after this frame's input.
+
+   call legend('ip_colormap_legend_edit', id, colormap, vmin, vmax, levels, horizontal, width, height, label_format, &
+               scale, .true., range, changed, stat)
+   if (changed) then
+      vmin = range(1)
+      vmax = range(2)
+   endif
+   endfunction ip_colormap_legend_edit
+
+   recursive subroutine legend(caller, id, colormap, vmin, vmax, levels, horizontal, width, height, label_format, scale, &
+                               interactive, range, changed, stat)
+   !< The legend of `ip_colormap_legend` and `ip_colormap_legend_edit`: arguments checked, then drawn natively.
+   character(len=*), intent(in)            :: caller       !< The procedure, for the messages.
+   character(len=*), intent(in)            :: id           !< Widget id.
+   integer(int32),   intent(in)            :: colormap     !< Colormap.
+   real(real64),     intent(in)            :: vmin         !< Value at the bottom (left).
+   real(real64),     intent(in)            :: vmax         !< Value at the top (right).
+   integer(int32),   intent(in), optional  :: levels       !< Bands.
+   logical,          intent(in), optional  :: horizontal   !< Horizontal bar.
+   real(real64),     intent(in), optional  :: width        !< Width [pixels].
+   real(real64),     intent(in), optional  :: height       !< Height [pixels].
+   character(len=*), intent(in), optional  :: label_format !< printf format, or text.
+   character(len=*), intent(in), optional  :: scale        !< Scale name.
+   logical,          intent(in)            :: interactive  !< Dragged and scrolled by the user.
+   real(real64),     intent(out)           :: range(2)     !< The range after this frame's input.
+   logical,          intent(out)           :: changed      !< The user changed it.
    integer(int32),   intent(out), optional :: stat         !< Status.
    integer(c_int)                          :: n            !< Bands.
    integer(c_int)                          :: h            !< Horizontal flag.
+   integer(c_int)                          :: code         !< Scale: 0 linear, 1 log, 2 symlog.
+   integer(c_int)                          :: moved        !< C flag of `changed`.
+   real(c_double)                          :: r(2)         !< C copy of `range`.
 
-   if (figure_draw_refused('ip_colormap_legend', stat)) return ! a task does not draw
+   range = [vmin, vmax]
+   changed = .false.
+   if (figure_draw_refused(caller, stat)) return ! a task does not draw
    if (present(label_format)) then
       ! as documented since v0.3.0: '' is the default format, a text without conversion is printed as it is
-      if (format_refused('ip_colormap_legend', 'label_format', label_format, FORMAT_REAL, stat, text=.true.)) return
+      if (format_refused(caller, 'label_format', label_format, FORMAT_REAL, stat, text=.true.)) return
    endif
+   if (.not. field_scale_ok(caller, scale, code, stat)) return
    n = 0_c_int
    if (present(levels)) then
       if (levels < 2_int32 .or. levels > 256_int32) then
-         call figure_fail(FIG_ERR_ARGUMENT, 'ip_colormap_legend: levels must be in [2, 256]', stat)
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': levels must be in [2, 256]', stat)
          return
       endif
       n = int(levels, c_int)
@@ -1887,13 +1961,209 @@ contains
       call figure_check(fig_colormap_legend(id, len(id, c_int), int(colormap, c_int), real(vmin, c_double),             &
                                             real(vmax, c_double), n, h, real(uniform(width, 0.0_real64), c_float),      &
                                             real(uniform(height, 0.0_real64), c_float), label_format,                  &
-                                            len(label_format, c_int)), stat)
+                                            len(label_format, c_int), code, merge(1_c_int, 0_c_int, interactive), r,   &
+                                            moved), stat)
    else
       call figure_check(fig_colormap_legend(id, len(id, c_int), int(colormap, c_int), real(vmin, c_double),             &
                                             real(vmax, c_double), n, h, real(uniform(width, 0.0_real64), c_float),      &
-                                            real(uniform(height, 0.0_real64), c_float), '', 0_c_int), stat)
+                                            real(uniform(height, 0.0_real64), c_float), '', 0_c_int, code,              &
+                                            merge(1_c_int, 0_c_int, interactive), r, moved), stat)
    endif
-   endsubroutine ip_colormap_legend
+   if (moved == 1_c_int) then
+      range = real(r, real64)
+      changed = .true.
+   endif
+   endsubroutine legend
+
+   ! fields through a colormap
+
+   recursive subroutine ip_field_image_r32(label, f, x0, x1, y0, y1, colormap, vmin, vmax, scale, nan_color, changed, &
+                                           range, stat)
+   !< The field f(i, j) through a colormap, as one image over [x0, x1] x [y0, y1] of the current plot: value (i, j) is
+   !< the pixel in the i-th of size(f, 1) columns along x and the j-th of size(f, 2) rows along y, j = 1 at y0 (read
+   !< in place, column-major as Fortran stores it). Coloured into a texture kept between frames (cached by the label's
+   !< id) and coloured again only when `changed` is true or the array (address, shape), `vmin`, `vmax`, `colormap`,
+   !< `scale` or `nan_color` differ from the last colouring; a texture not drawn for 10 s is released. Single
+   !< precision. See plots.md, "Fields".
+   character(len=*), intent(in)                     :: label        !< Legend label (also the cache's id).
+   real(real32),     intent(in), contiguous, target :: f(:,:)       !< Field: f(i, j), i along x, j along y.
+   real(real64),     intent(in)                     :: x0           !< Left edge of the first column [plot units].
+   real(real64),     intent(in)                     :: x1           !< Right edge of the last column [plot units].
+   real(real64),     intent(in)                     :: y0           !< Bottom edge of row 1 [plot units].
+   real(real64),     intent(in)                     :: y1           !< Top edge of the last row [plot units].
+   integer(int32),   intent(in), optional           :: colormap     !< Colormap (`ip_colormap`; default: Viridis).
+   real(real64),     intent(in), optional           :: vmin         !< Value at the colormap's bottom (default: the
+                                                                    !< smallest finite value, positive on 'log').
+   real(real64),     intent(in), optional           :: vmax         !< Value at its top (default: the largest).
+   character(len=*), intent(in), optional           :: scale        !< 'linear' (default), 'log', 'symlog'.
+   real(real64),     intent(in), optional           :: nan_color(:) !< Colour of NaN and infinite values (and of values
+                                                                    !< <= 0 on 'log'), RGBA in [0, 1] (default:
+                                                                    !< transparent).
+   logical,          intent(in), optional           :: changed      !< The values changed since the last frame
+                                                                    !< (default: false; FIGURE cannot see a change in
+                                                                    !< place).
+   real(real64),     intent(out), optional          :: range(2)     !< The range the colours were computed for.
+   integer(int32),   intent(out), optional          :: stat         !< Status.
+   type(c_ptr)                                      :: p            !< Field address.
+
+   p = c_null_ptr
+   if (size(f) > 0) p = c_loc(f)
+   call field_image('ip_field_image', label, p, 4_c_int, size(f, 1, kind=int64), size(f, 2, kind=int64), x0, x1, y0, y1, &
+                    colormap, vmin, vmax, scale, nan_color, changed, range, stat)
+   endsubroutine ip_field_image_r32
+
+   recursive subroutine ip_field_image_r64(label, f, x0, x1, y0, y1, colormap, vmin, vmax, scale, nan_color, changed, &
+                                           range, stat)
+   !< The field f(i, j) through a colormap, as `ip_field_image_r32`; double precision.
+   character(len=*), intent(in)                     :: label        !< Legend label (also the cache's id).
+   real(real64),     intent(in), contiguous, target :: f(:,:)       !< Field: f(i, j), i along x, j along y.
+   real(real64),     intent(in)                     :: x0           !< Left edge of the first column [plot units].
+   real(real64),     intent(in)                     :: x1           !< Right edge of the last column [plot units].
+   real(real64),     intent(in)                     :: y0           !< Bottom edge of row 1 [plot units].
+   real(real64),     intent(in)                     :: y1           !< Top edge of the last row [plot units].
+   integer(int32),   intent(in), optional           :: colormap     !< Colormap (`ip_colormap`; default: Viridis).
+   real(real64),     intent(in), optional           :: vmin         !< Value at the colormap's bottom (default: the
+                                                                    !< smallest finite value, positive on 'log').
+   real(real64),     intent(in), optional           :: vmax         !< Value at its top (default: the largest).
+   character(len=*), intent(in), optional           :: scale        !< 'linear' (default), 'log', 'symlog'.
+   real(real64),     intent(in), optional           :: nan_color(:) !< Colour of NaN and infinite values (and of values
+                                                                    !< <= 0 on 'log'), RGBA in [0, 1] (default:
+                                                                    !< transparent).
+   logical,          intent(in), optional           :: changed      !< The values changed since the last frame
+                                                                    !< (default: false).
+   real(real64),     intent(out), optional          :: range(2)     !< The range the colours were computed for.
+   integer(int32),   intent(out), optional          :: stat         !< Status.
+   type(c_ptr)                                      :: p            !< Field address.
+
+   p = c_null_ptr
+   if (size(f) > 0) p = c_loc(f)
+   call field_image('ip_field_image', label, p, 8_c_int, size(f, 1, kind=int64), size(f, 2, kind=int64), x0, x1, y0, y1, &
+                    colormap, vmin, vmax, scale, nan_color, changed, range, stat)
+   endsubroutine ip_field_image_r64
+
+   recursive subroutine field_image(caller, label, p, kind, nx, ny, x0, x1, y0, y1, colormap, vmin, vmax, scale, &
+                                    nan_color, changed, range, stat)
+   !< `ip_field_image` of either kind: arguments checked, then coloured and drawn natively.
+   character(len=*), intent(in)            :: caller       !< The procedure, for the messages.
+   character(len=*), intent(in)            :: label        !< Legend label.
+   type(c_ptr),      intent(in)            :: p            !< Field address (null when empty).
+   integer(c_int),   intent(in)            :: kind         !< 4 or 8.
+   integer(int64),   intent(in)            :: nx           !< size(f, 1).
+   integer(int64),   intent(in)            :: ny           !< size(f, 2).
+   real(real64),     intent(in)            :: x0           !< Left edge.
+   real(real64),     intent(in)            :: x1           !< Right edge.
+   real(real64),     intent(in)            :: y0           !< Bottom edge.
+   real(real64),     intent(in)            :: y1           !< Top edge.
+   integer(int32),   intent(in), optional  :: colormap     !< Colormap.
+   real(real64),     intent(in), optional  :: vmin         !< Colormap bottom.
+   real(real64),     intent(in), optional  :: vmax         !< Colormap top.
+   character(len=*), intent(in), optional  :: scale        !< Scale name.
+   real(real64),     intent(in), optional  :: nan_color(:) !< NaN colour.
+   logical,          intent(in), optional  :: changed      !< Values changed.
+   real(real64),     intent(out), optional :: range(2)     !< The range applied.
+   integer(int32),   intent(out), optional :: stat         !< Status.
+   integer(c_int)                          :: cmap         !< Colormap id.
+   integer(c_int)                          :: code         !< Scale code.
+   real(c_float)                           :: nanc(4)      !< NaN colour.
+   real(c_double)                          :: r(2)         !< Range applied.
+   integer(c_int)                          :: again        !< C flag of `changed`.
+
+   if (present(range)) range = 0.0_real64
+   if (figure_draw_refused(caller, stat)) return ! a task does not draw
+   if (plot_refused(caller, .false., stat)) return
+   if (.not. colormap_ok(caller, colormap, cmap, stat)) return
+   if (.not. field_scale_ok(caller, scale, code, stat)) return
+   if (.not. ieee_is_finite(x0) .or. .not. ieee_is_finite(x1) .or. .not. ieee_is_finite(y0) .or. &
+       .not. ieee_is_finite(y1) .or. x0 == x1 .or. y0 == y1) then
+      call figure_fail(FIG_ERR_ARGUMENT, caller//': the edges must be finite, x0 /= x1 and y0 /= y1', stat)
+      return
+   endif
+   if (nx > 16384_int64 .or. ny > 16384_int64) then
+      call figure_fail(FIG_ERR_ARGUMENT, caller//': a field of at most 16384 values a side (a texture)', stat)
+      return
+   endif
+   if (present(vmin)) then
+      if (.not. ieee_is_finite(vmin)) then
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': vmin must be finite', stat)
+         return
+      endif
+   endif
+   if (present(vmax)) then
+      if (.not. ieee_is_finite(vmax)) then
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': vmax must be finite', stat)
+         return
+      endif
+   endif
+   if (present(vmin) .and. present(vmax)) then
+      if (vmin == vmax) then
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': vmin and vmax must differ', stat)
+         return
+      endif
+   endif
+   if (code == 1_c_int) then
+      if (present(vmin)) then
+         if (vmin <= 0.0_real64) then
+            call figure_fail(FIG_ERR_ARGUMENT, caller//": a log scale needs vmin above 0", stat)
+            return
+         endif
+      endif
+      if (present(vmax)) then
+         if (vmax <= 0.0_real64) then
+            call figure_fail(FIG_ERR_ARGUMENT, caller//": a log scale needs vmax above 0", stat)
+            return
+         endif
+      endif
+   endif
+   nanc = 0.0_c_float
+   if (present(nan_color)) then
+      if (size(nan_color) /= 4) then
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': nan_color needs 4 components (RGBA)', stat)
+         return
+      endif
+      if (any(.not. (nan_color >= 0.0_real64 .and. nan_color <= 1.0_real64))) then
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': nan_color components must be in [0, 1]', stat)
+         return
+      endif
+      nanc = real(nan_color, c_float)
+   endif
+   if (nx == 0_int64 .or. ny == 0_int64) then ! nothing to draw
+      call figure_check(FIG_OK, stat)
+      return
+   endif
+   again = 0_c_int
+   if (present(changed)) again = merge(1_c_int, 0_c_int, changed)
+   call figure_check(fig_field_image(label, len(label, c_int), p, kind, int(nx, c_int), int(ny, c_int),            &
+                                     real(x0, c_double), real(x1, c_double), real(y0, c_double), real(y1, c_double), &
+                                     cmap, merge(1_c_int, 0_c_int, present(vmin)), real(uniform(vmin, 0.0_real64),  &
+                                     c_double), merge(1_c_int, 0_c_int, present(vmax)),                             &
+                                     real(uniform(vmax, 0.0_real64), c_double), code, nanc, again, r), stat)
+   if (present(range)) range = real(r, real64)
+   endsubroutine field_image
+
+   function field_scale_ok(caller, scale, code, stat) result(ok)
+   !< The scale of a field or a legend: 0 linear (also when absent), 1 log, 2 symlog; false (reported,
+   !< `FIG_ERR_ARGUMENT`) for any other name ('time' included: a field has no time scale).
+   character(len=*), intent(in)            :: caller !< The procedure.
+   character(len=*), intent(in),  optional :: scale  !< 'linear', 'log', 'symlog'.
+   integer(c_int),   intent(out)           :: code   !< Scale code.
+   integer(int32),   intent(out), optional :: stat   !< Status, on a refusal.
+   logical                                 :: ok     !< Not refused.
+
+   ok = .true.
+   code = 0_c_int
+   if (.not. present(scale)) return
+   select case (trim(scale))
+   case ('linear')
+      code = 0_c_int
+   case ('log')
+      code = 1_c_int
+   case ('symlog')
+      code = 2_c_int
+   case default
+      ok = .false.
+      call figure_fail(FIG_ERR_ARGUMENT, caller//": unknown scale '"//scale//"' ('linear', 'log' or 'symlog')", stat)
+   endselect
+   endfunction field_scale_ok
 
    ! colormaps by name
 

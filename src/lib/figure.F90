@@ -95,7 +95,8 @@ use figure_implot, only : ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_s
                           ImPlotColormap_Pink, ImPlotColormap_Jet, ImPlotColormap_Twilight, ImPlotColormap_RdBu,      &
                           ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral, ImPlotColormap_Greys
 use figure_implot, only : ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_contour, &
-                          ip_contour_lines, ip_contour_levels, ip_colormap_legend
+                          ip_contour_lines, ip_contour_levels, ip_colormap_legend, &
+                          ip_colormap_legend_edit, ip_field_image
 use figure_implot, only : ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, &
                           ip_cancel_selection, ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems,     &
                           ip_histogram, ip_histogram2d, ImPlotStairsFlags_PreStep, ImPlotStairsFlags_Shaded,         &
@@ -187,7 +188,7 @@ public :: ip_colormap_scale, ip_heatmap, ip_image, texture_object
 public :: ip_colormap, ip_colormap_names, ip_load_colormap
 public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point
 public :: ip_contour, ip_contour_lines, ip_contour_levels
-public :: ip_colormap_legend
+public :: ip_colormap_legend, ip_colormap_legend_edit, ip_field_image
 public :: ig_color_edit
 public :: process_object, log_view_object, task_object, task_handle_object, task_work
 public :: view3d_object
