@@ -67,8 +67,10 @@ contains
    endsubroutine ig_dock_space
 
    recursive function ig_dock_layout_begin(id, stat) result(needed)
-   !< True when the dock space `id` has no layout yet (its first frame, without an ini file keeping one): then lay it
-   !< out with `ig_dock_split` and `ig_dock_window`, and close with `ig_dock_layout_end`. Call it before `ig_dock_space`.
+   !< True when the dock space `id` has no layout yet (its first frame, without an ini file keeping one), or must be
+   !< laid out again (`app%switch_layout` to a layout not arranged yet, `app%reset_layout`): then lay it out (the
+   !< layout `app%layout()`, if the program has several) with `ig_dock_split` and `ig_dock_window`, and close with
+   !< `ig_dock_layout_end`. Call it before `ig_dock_space`.
    integer(int32), intent(in)            :: id     !< Dock id.
    integer(int32), intent(out), optional :: stat   !< Status.
    logical                               :: needed !< Build the layout now.

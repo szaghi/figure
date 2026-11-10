@@ -1,0 +1,4 @@
+$ ./cb_message_box
+save first
+saved: OK
+quit

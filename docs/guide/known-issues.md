@@ -103,6 +103,15 @@ found only through a widget with a label. Items with the same label in one id sc
 from the first path call or `test_record_items(.true.)` on, so that first call finds nothing. A value is read from the
 glyphs drawn: a character cut by a clip rectangle is not read ([Finding items by path](testing#finding-items-by-path)).
 
+## Preferences and the window's place
+
+`app%open_prefs` restores the window's size and maximized state everywhere, its position only where the system lets a
+program place its window: Wayland does not (the compositor places it), and a position off every display (a monitor
+unplugged since) is skipped. The preferences keep the style set by `set_style`, not a theme file, the style editor's
+changes or the fonts; a program that ends without `destroy` loses what changed after the last 30-second save
+([Preferences](frame-loop#preferences)). A message box waits, not drawn, while one of the program's popups is open
+(Dear ImGui keeps one popup per level): ask it after the popup closes ([Message boxes](menus#message-boxes)).
+
 ## Text input
 
 `ig_input_text` edits a `character` variable, whose length is the field's capacity: a longer text is cut at it. Text

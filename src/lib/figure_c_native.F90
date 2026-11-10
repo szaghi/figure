@@ -50,6 +50,9 @@ public :: fig_item_click, fig_item_type, fig_menu_click, fig_test_run
 public :: fig_field_image, fig_field_uploads, fig_field_count, fig_field_time, fig_field_pixel
 public :: fig_canvas_event, fig_canvas, fig_draw, fig_cursor_screen_pos, fig_invisible_button, fig_drawn_extent_layer
 
+public :: fig_window_add, fig_window_visible, fig_window_set_visible, fig_window_open_flag, fig_view_menu
+public :: fig_layout_add, fig_layout_switch, fig_layout_reset, fig_layout_current
+public :: fig_prefs_open, fig_prefs_file, fig_pref_set, fig_pref_get, fig_message_box, fig_splitter, fig_set_size_limits
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
 integer(c_int), parameter :: FIG_ERR_STATE     = 1_c_int !< Call not allowed in the current state.
@@ -1867,5 +1870,180 @@ interface
    integer(c_int), intent(out) :: vertices !< Vertices in it.
    integer(c_int)              :: status   !< Status.
    endfunction fig_drawn_extent_layer
+   ! Application layer (native/figure_app.cpp).
+
+   function fig_window_add(name, name_len, visible, closable, in_view_menu, remember) result(status) &
+      bind(C, name='fig_window_add')
+   !< Register a window by its `ig_begin` name; the flags are 0 or 1.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)      !< Window name.
+   integer(c_int), value              :: name_len     !< Its length.
+   integer(c_int), value              :: visible      !< Shown at first.
+   integer(c_int), value              :: closable     !< A close button.
+   integer(c_int), value              :: in_view_menu !< Listed in the View menu.
+   integer(c_int), value              :: remember     !< Its visibility kept by the preferences.
+   integer(c_int)                     :: status       !< Status.
+   endfunction fig_window_add
+
+   function fig_window_visible(name, name_len, visible) result(status) bind(C, name='fig_window_visible')
+   !< Whether a registered window is shown (1) or hidden (0).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: name(*)  !< Window name.
+   integer(c_int), value               :: name_len !< Its length.
+   integer(c_int),         intent(out) :: visible  !< 1: shown.
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_window_visible
+
+   function fig_window_set_visible(name, name_len, visible) result(status) bind(C, name='fig_window_set_visible')
+   !< Show (1) or hide (0) a registered window.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Window name.
+   integer(c_int), value              :: name_len !< Its length.
+   integer(c_int), value              :: visible  !< 1: shown.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_window_set_visible
+
+   function fig_window_open_flag(name, name_len) result(flag) bind(C, name='fig_window_open_flag')
+   !< The `bool*` of a registered closable window, for `igBegin`'s close button (null otherwise).
+   import :: c_char, c_int, c_ptr
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Window name.
+   integer(c_int), value              :: name_len !< Its length.
+   type(c_ptr)                        :: flag     !< The flag, or null.
+   endfunction fig_window_open_flag
+
+   function fig_view_menu(label, label_len) result(status) bind(C, name='fig_view_menu')
+   !< The View menu (label empty: 'View'), inside a menu bar.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: label(*)  !< Menu label.
+   integer(c_int), value              :: label_len !< Its length.
+   integer(c_int)                     :: status    !< Status.
+   endfunction fig_view_menu
+
+   function fig_layout_add(name, name_len, names, names_len, has_windows) result(status) bind(C, name='fig_layout_add')
+   !< Declare a layout; `names`: the registered windows it shows, newline-separated (with `has_windows` 1).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)     !< Layout name.
+   integer(c_int), value              :: name_len    !< Its length.
+   character(kind=c_char), intent(in) :: names(*)    !< Window names.
+   integer(c_int), value              :: names_len   !< Their length.
+   integer(c_int), value              :: has_windows !< 1: the layout says which windows it shows.
+   integer(c_int)                     :: status      !< Status.
+   endfunction fig_layout_add
+
+   function fig_layout_switch(name, name_len) result(status) bind(C, name='fig_layout_switch')
+   !< Make a layout current.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Layout name.
+   integer(c_int), value              :: name_len !< Its length.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_layout_switch
+
+   function fig_layout_reset() result(status) bind(C, name='fig_layout_reset')
+   !< Lay the current layout out again, the user's changes to it forgotten.
+   import :: c_int
+   implicit none
+   integer(c_int) :: status !< Status.
+   endfunction fig_layout_reset
+
+   function fig_layout_current(buf, buf_len) result(n) bind(C, name='fig_layout_current')
+   !< The current layout's name copied into `buf` (up to `buf_len` bytes); its length.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its size.
+   integer(c_int)                      :: n       !< Length.
+   endfunction fig_layout_current
+
+   function fig_prefs_open(name, name_len, file, file_len) result(status) bind(C, name='fig_prefs_open')
+   !< Name the preferences' file (empty: the platform's folder for `name`) and read it.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< The program's name.
+   integer(c_int), value              :: name_len !< Its length.
+   character(kind=c_char), intent(in) :: file(*)  !< File.
+   integer(c_int), value              :: file_len !< Its length (0: the default).
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_prefs_open
+
+   function fig_prefs_file(buf, buf_len) result(n) bind(C, name='fig_prefs_file')
+   !< The preferences' file copied into `buf` (up to `buf_len` bytes); its length (0: none).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its size.
+   integer(c_int)                      :: n       !< Length.
+   endfunction fig_prefs_file
+
+   function fig_pref_set(key, key_len, value, value_len) result(status) bind(C, name='fig_pref_set')
+   !< Keep a preference, as text.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: key(*)    !< Key.
+   integer(c_int), value              :: key_len   !< Its length.
+   character(kind=c_char), intent(in) :: value(*)  !< Value.
+   integer(c_int), value              :: value_len !< Its length.
+   integer(c_int)                     :: status    !< Status.
+   endfunction fig_pref_set
+
+   function fig_pref_get(key, key_len, buf, buf_len, n, found) result(status) bind(C, name='fig_pref_get')
+   !< A preference's text copied into `buf` (up to `buf_len` bytes), its length `n`; `found` 0 or 1.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: key(*)  !< Key.
+   integer(c_int), value               :: key_len !< Its length.
+   character(kind=c_char), intent(out) :: buf(*)  !< Buffer.
+   integer(c_int), value               :: buf_len !< Its size.
+   integer(c_int),         intent(out) :: n       !< The value's length.
+   integer(c_int),         intent(out) :: found   !< 1: kept.
+   integer(c_int)                      :: status  !< Status.
+   endfunction fig_pref_get
+
+   function fig_message_box(id, id_len, title, title_len, text, text_len, buttons, buttons_len, answer) result(status) &
+      bind(C, name='fig_message_box')
+   !< A message box: `answer` 0 while open, then the button chosen (from 1), once.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: id(*)       !< Id.
+   integer(c_int), value               :: id_len      !< Its length.
+   character(kind=c_char), intent(in)  :: title(*)    !< Title.
+   integer(c_int), value               :: title_len   !< Its length.
+   character(kind=c_char), intent(in)  :: text(*)     !< Text.
+   integer(c_int), value               :: text_len    !< Its length.
+   character(kind=c_char), intent(in)  :: buttons(*)  !< Button labels, newline-separated.
+   integer(c_int), value               :: buttons_len !< Their length (< 0: one button, OK).
+   integer(c_int),         intent(out) :: answer      !< The button chosen, 0 while open.
+   integer(c_int)                      :: status      !< Status.
+   endfunction fig_message_box
+
+   function fig_splitter(id, id_len, vertical, sizes, min_size, changed) result(status) bind(C, name='fig_splitter')
+   !< A splitter bar at the cursor between two panes; `changed` 1 when dragged.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in)    :: id(*)    !< Id (and its label for paths).
+   integer(c_int), value                 :: id_len   !< Its length.
+   integer(c_int), value                 :: vertical !< 1: the panes one above the other.
+   real(c_double),         intent(inout) :: sizes(2) !< The panes' sizes [pixels].
+   real(c_double), value                 :: min_size !< A pane's least size [pixels] (< 0: the frame height).
+   integer(c_int),         intent(out)   :: changed  !< 1: dragged.
+   integer(c_int)                        :: status   !< Status.
+   endfunction fig_splitter
+
+   function fig_set_size_limits(min_w, min_h, max_w, max_h) result(status) bind(C, name='fig_set_size_limits')
+   !< The window's least and greatest size [logical pixels] (0: none); window mode only.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: min_w  !< Least width.
+   integer(c_int), value :: min_h  !< Least height.
+   integer(c_int), value :: max_w  !< Greatest width (0: none).
+   integer(c_int), value :: max_h  !< Greatest height (0: none).
+   integer(c_int)        :: status !< Status.
+   endfunction fig_set_size_limits
 endinterface
 endmodule figure_c_native

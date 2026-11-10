@@ -17,8 +17,9 @@ module figure_app
 !< returns `.false.` when the user closes the window. There are no widget objects, handles or callbacks: the state is
 !< the application's own variables.
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc
-use, intrinsic :: iso_fortran_env, only : int8, int32, output_unit, real64
-use figure_base, only : figure_check, figure_fail, figure_last_error, figure_refused
+use, intrinsic :: ieee_exceptions, only : ieee_all, ieee_get_flag, ieee_set_flag
+use, intrinsic :: iso_fortran_env, only : int8, int32, int64, output_unit, real32, real64
+use figure_base, only : figure_check, figure_draw_refused, figure_fail, figure_last_error, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
@@ -30,7 +31,10 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_begin_f
                             fig_image_result, fig_save_layout, fig_load_layout, fig_set_style_parts, fig_palette_color, &
                             fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_notify,              &
                             fig_notification_count, fig_notification_get, fig_file_browser, fig_dropped, &
-                            fig_dropped_path, fig_set_checks, fig_scope_report
+                            fig_dropped_path, fig_set_checks, fig_scope_report, fig_window_add, fig_window_visible, &
+                            fig_window_set_visible, fig_view_menu, fig_layout_add, fig_layout_switch, fig_layout_reset, &
+                            fig_layout_current, fig_prefs_open, fig_prefs_file, fig_pref_set, fig_pref_get,         &
+                            fig_message_box, fig_set_size_limits
 use figure_icons, only : ICON_CIRCLE_CHECK, ICON_CIRCLE_X, ICON_INFO, ICON_TRIANGLE_ALERT
 
 implicit none
@@ -77,6 +81,26 @@ type :: app_object
       procedure, pass(self) :: load_layout    !< An arrangement from a file, applied before the next frame.
       procedure, pass(self) :: notify         !< Tell the user something, in a notification.
       procedure, pass(self) :: notifications  !< The notifications kept (the last 100).
+      procedure, pass(self) :: add_window     !< Register a window: the View menu, its close button, kept hidden.
+      procedure, pass(self) :: window_visible !< A registered window is shown.
+      procedure, pass(self) :: set_window_visible !< Show or hide a registered window.
+      procedure, pass(self) :: view_menu      !< The View menu: the windows, the layouts, Reset layout.
+      procedure, pass(self) :: add_layout     !< Declare a named layout.
+      procedure, pass(self) :: switch_layout  !< Make a layout current: laid out again, or as the user left it.
+      procedure, pass(self) :: reset_layout   !< Lay the current layout out again.
+      procedure, pass(self) :: layout         !< The current layout's name: the one to build.
+      procedure, pass(self) :: open_prefs     !< Read the preferences from the program's file, kept there from now on.
+      procedure, pass(self) :: prefs_file     !< The preferences' file.
+      procedure, pass(self), private :: save_pref_text, save_pref_int32, save_pref_int64, save_pref_real32, &
+                                        save_pref_real64, save_pref_logical
+      generic :: save_pref => save_pref_text, save_pref_int32, save_pref_int64 !< Keep a preference.
+      generic :: save_pref => save_pref_real32, save_pref_real64, save_pref_logical !< Keep a preference.
+      procedure, pass(self), private :: load_pref_text, load_pref_int32, load_pref_int64, load_pref_real32, &
+                                        load_pref_real64, load_pref_logical
+      generic :: load_pref => load_pref_text, load_pref_int32, load_pref_int64 !< A preference kept, or a default.
+      generic :: load_pref => load_pref_real32, load_pref_real64, load_pref_logical !< A preference kept, or a default.
+      procedure, pass(self) :: message_box    !< A question in a box: 0 while open, then the button chosen.
+      procedure, pass(self) :: set_size_limits !< The window's least and greatest size.
       procedure, pass(self) :: content_scale  !< Display content scale.
       procedure, pass(self) :: destroy        !< Close everything.
       procedure, pass(self), private :: set_icon_image !< The window's icon from an image.
@@ -933,6 +957,521 @@ contains
    call figure_check(fig_load_layout(path, len(path, c_int)), stat)
    endsubroutine load_layout
 
+   recursive subroutine add_window(self, name, visible, closable, in_view_menu, remember, stat)
+   !< Register the window `name` (the name given to `ig_begin`) with FIGURE's window registry: `view_menu` lists it as a
+   !< check item that shows and hides it, `ig_begin(name)` (without `open`) gives it a close button that hides it, and
+   !< the preferences (`open_prefs`) keep whether it is shown from one run to the next. The program draws it only while
+   !< `window_visible(name)` is true. After `init*`, before or after `open_prefs` (a window added after takes its kept
+   !< visibility when added). Statuses: `FIG_ERR_ARGUMENT` for an empty name or one added already, `FIG_ERR_STATE`
+   !< before `init*` or from a task. The same in every mode.
+   class(app_object), intent(inout)         :: self         !< Application.
+   character(len=*),  intent(in)            :: name         !< Window name, as given to `ig_begin`.
+   logical,           intent(in),  optional :: visible      !< Shown at the first run (default true).
+   logical,           intent(in),  optional :: closable     !< A close button (default true).
+   logical,           intent(in),  optional :: in_view_menu !< Listed in the View menu (default true).
+   logical,           intent(in),  optional :: remember     !< Shown or hidden as at the end of the last run (default true).
+   integer(int32),    intent(out), optional :: stat         !< Status.
+
+   if (figure_refused('app%add_window', stat)) return ! a task does not draw
+   call figure_check(fig_window_add(name, len(name, c_int), flag(visible, .true.), flag(closable, .true.), &
+                                    flag(in_view_menu, .true.), flag(remember, .true.)), stat)
+   endsubroutine add_window
+
+   recursive function window_visible(self, name, stat) result(visible)
+   !< True while the registered window `name` is shown: draw it (`ig_begin`/`ig_end`) only then. Hidden by its close
+   !< button, by the View menu, by a layout that does not show it, or by `set_window_visible`. Statuses:
+   !< `FIG_ERR_ARGUMENT` for a name not added (`.false.`), `FIG_ERR_STATE` from a task.
+   class(app_object), intent(in)            :: self    !< Application.
+   character(len=*),  intent(in)            :: name    !< Window name.
+   integer(int32),    intent(out), optional :: stat    !< Status.
+   logical                                  :: visible !< Shown.
+   integer(c_int)                           :: v       !< 1: shown.
+
+   visible = .false.
+   if (figure_refused('app%window_visible', stat)) return ! a task does not draw
+   v = 0_c_int
+   call figure_check(fig_window_visible(name, len(name, c_int), v), stat)
+   visible = v == 1_c_int
+   endfunction window_visible
+
+   recursive subroutine set_window_visible(self, name, visible, stat)
+   !< Show or hide the registered window `name` from the program (a Log window shown when an error arrives). Statuses:
+   !< `FIG_ERR_ARGUMENT` for a name not added, `FIG_ERR_STATE` from a task.
+   class(app_object), intent(inout)         :: self    !< Application.
+   character(len=*),  intent(in)            :: name    !< Window name.
+   logical,           intent(in)            :: visible !< Shown.
+   integer(int32),    intent(out), optional :: stat    !< Status.
+
+   if (figure_refused('app%set_window_visible', stat)) return ! a task does not draw
+   call figure_check(fig_window_set_visible(name, len(name, c_int), merge(1_c_int, 0_c_int, visible)), stat)
+   endsubroutine set_window_visible
+
+   recursive subroutine view_menu(self, label, stat)
+   !< The View menu, inside a menu bar (`ig_begin_main_menu_bar` or `ig_begin_menu_bar`): a check item per registered
+   !< window listed in it (its name without the `##` part), in the order added; then, with layouts, one item per layout
+   !< (the current one checked: a click switches to it); then "Reset layout" (`reset_layout`), shown with layouts or
+   !< once a dock space was laid out with `ig_dock_layout_begin`. Each frame, where the menu goes. Statuses:
+   !< `FIG_ERR_STATE` with no frame open or from a task. The same in every mode.
+   class(app_object), intent(inout)         :: self  !< Application.
+   character(len=*),  intent(in),  optional :: label !< The menu's label (default 'View').
+   integer(int32),    intent(out), optional :: stat  !< Status.
+
+   if (figure_draw_refused('app%view_menu', stat)) return ! a task does not draw; a frame is open
+   call figure_check(fig_view_menu(opt(label), opt_len(label)), stat)
+   endsubroutine view_menu
+
+   recursive subroutine add_layout(self, name, windows, stat)
+   !< Declare the layout `name`: an arrangement of the dock space the program builds when `ig_dock_layout_begin` returns
+   !< true and `layout()` is `name` (FIGURE calls nothing of the program's: the builder is the program's code under
+   !< that test). The first added is current, unless the preferences kept another. `windows`, the registered windows
+   !< the layout shows (the other registered ones are hidden when it becomes current); absent, switching to it leaves
+   !< them as they are. Statuses: `FIG_ERR_ARGUMENT` for an empty name or one added already, `FIG_ERR_STATE` before
+   !< `init*` or from a task.
+   class(app_object), intent(inout)         :: self       !< Application.
+   character(len=*),  intent(in)            :: name       !< Layout name (shown in the View menu).
+   character(len=*),  intent(in),  optional :: windows(:) !< The registered windows it shows (blank-padded).
+   integer(int32),    intent(out), optional :: stat       !< Status.
+   character(len=:), allocatable            :: joined     !< Window names, newline-separated.
+   integer(int32)                           :: k          !< Counter.
+
+   if (figure_refused('app%add_layout', stat)) return ! a task does not draw
+   joined = ''
+   if (present(windows)) then
+      do k = 1_int32, size(windows, kind=int32)
+         joined = joined//trim(windows(k))//new_line('a')
+      enddo
+   endif
+   call figure_check(fig_layout_add(name, len(name, c_int), joined, len(joined, c_int), &
+                                    merge(1_c_int, 0_c_int, present(windows))), stat)
+   endsubroutine add_layout
+
+   recursive subroutine switch_layout(self, name, stat)
+   !< Make the layout `name` current (the View menu does it on a click). The arrangement the user left the current one
+   !< in is kept; then, if `name` was arranged by the user earlier in this run (or in the last, by the preferences),
+   !< that arrangement comes back before the next frame; otherwise each dock space laid out with `ig_dock_layout_begin`
+   !< is laid out again: `ig_dock_layout_begin` returns true on its next call and the program builds `layout()`. A
+   !< layout with `windows` shows those and hides the other registered windows. Statuses: `FIG_ERR_ARGUMENT` for a
+   !< layout not added, `FIG_ERR_STATE` from a task. Between frames or inside one; the same in every mode.
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: name !< Layout name.
+   integer(int32),    intent(out), optional :: stat !< Status.
+
+   if (figure_refused('app%switch_layout', stat)) return ! a task does not draw
+   call figure_check(fig_layout_switch(name, len(name, c_int)), stat)
+   endsubroutine switch_layout
+
+   recursive subroutine reset_layout(self, stat)
+   !< Lay the current layout out again (the View menu's "Reset layout"): the user's changes to it are forgotten, each
+   !< dock space laid out with `ig_dock_layout_begin` is laid out again on the next frame, and a layout with `windows`
+   !< shows those again. Without layouts, the dock spaces are laid out again all the same. Status: `FIG_ERR_STATE`
+   !< from a task.
+   class(app_object), intent(inout)         :: self !< Application.
+   integer(int32),    intent(out), optional :: stat !< Status.
+
+   if (figure_refused('app%reset_layout', stat)) return ! a task does not draw
+   call figure_check(fig_layout_reset(), stat)
+   endsubroutine reset_layout
+
+   recursive function layout(self) result(name)
+   !< The current layout's name ('' before the first `add_layout`): the one to build when `ig_dock_layout_begin`
+   !< returns true. '' from a task.
+   class(app_object), intent(in) :: self    !< Application.
+   character(len=:), allocatable :: name    !< Layout name.
+   character(kind=c_char)        :: none(1) !< No buffer (the length only).
+   integer(c_int)                :: n       !< Length.
+
+   name = ''
+   if (figure_refused('app%layout')) return ! a task does not draw
+   n = fig_layout_current(none, 0_c_int)
+   deallocate(name)
+   allocate(character(len=n) :: name)
+   if (n > 0_c_int) n = fig_layout_current(name, n)
+   endfunction layout
+
+   recursive subroutine open_prefs(self, name, file, stat)
+   !< Keep the program's preferences in a file from now on, and read those of the last run: the values of `save_pref`,
+   !< the registered windows' visibility, the current layout and the arrangement of each layout, the style set by
+   !< `set_style` and, in window mode, the window's position, size and maximized state. Read now: the style and the
+   !< window's geometry are applied at once, the arrangement before the next frame; so call it after `init*` and after
+   !< the program's own defaults (`set_style`), before the first frame. Written when something changed, every 30 s of
+   !< frame time and at `destroy`, to `<file>.tmp` first and then renamed over the file: a crash leaves the file of
+   !< the last save whole. The file: `file`, or `preferences.ini` in the platform's folder for the program `name`
+   !< (SDL's `SDL_GetPrefPath`: `~/.local/share/<name>/` on Linux, `%APPDATA%\<name>\` on Windows,
+   !< `~/Library/Application Support/<name>/` on macOS); in headless mode without `file` none (kept in memory: tests
+   !< name a file), and during a capture (`FIGURE_CAPTURE`) nothing is read or written. A file that does not exist yet
+   !< is not an error. Not kept: a theme file (`load_style`), the style editor's changes, the colours and variables
+   !< set by name, the fonts. Statuses: `FIG_ERR_ARGUMENT` for a name that is not a folder's name (letters, digits,
+   !< blanks, `.`, `_`, `-`), `FIG_ERR_STATE` before `init*`, a second time, or from a task.
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: name !< The program's name: its folder of preferences.
+   character(len=*),  intent(in),  optional :: file !< The file instead (relative: to the working directory).
+   integer(int32),    intent(out), optional :: stat !< Status.
+
+   if (figure_refused('app%open_prefs', stat)) return ! a task does not draw
+   call figure_check(fig_prefs_open(name, len_trim(name, c_int), opt(file), opt_len(file)), stat)
+   endsubroutine open_prefs
+
+   recursive function prefs_file(self) result(path)
+   !< The file `open_prefs` keeps the preferences in ('' before it, in memory only, or from a task).
+   class(app_object), intent(in) :: self    !< Application.
+   character(len=:), allocatable :: path    !< File.
+   character(kind=c_char)        :: none(1) !< No buffer (the length only).
+   integer(c_int)                :: n       !< Length.
+
+   path = ''
+   if (figure_refused('app%prefs_file')) return ! the loop's thread only
+   n = fig_prefs_file(none, 0_c_int)
+   deallocate(path)
+   allocate(character(len=n) :: path)
+   if (n > 0_c_int) n = fig_prefs_file(path, n)
+   endfunction prefs_file
+
+   recursive subroutine save_pref_text(self, key, value, stat)
+   !< Keep the preference `key`: a text (every character kept, trailing blanks too). In memory until the next save
+   !< of the file (`open_prefs`); without `open_prefs`, for this run. Statuses: `FIG_ERR_ARGUMENT` for a key that is
+   !< empty, has a newline or a blank at an end, or starts with `[`, `#` or `;`; `FIG_ERR_STATE` before `init*` or
+   !< from a task.
+   class(app_object), intent(inout)         :: self  !< Application.
+   character(len=*),  intent(in)            :: key   !< Key.
+   character(len=*),  intent(in)            :: value !< Value.
+   integer(int32),    intent(out), optional :: stat  !< Status.
+
+   if (figure_refused('app%save_pref', stat)) return ! the loop's thread only
+   call figure_check(fig_pref_set(key, len_trim(key, c_int), value, len(value, c_int)), stat)
+   endsubroutine save_pref_text
+
+   recursive subroutine save_pref_int32(self, key, value, stat)
+   !< Keep the preference `key`: an integer (as save_pref of a text, written in decimal).
+   class(app_object), intent(inout)         :: self  !< Application.
+   character(len=*),  intent(in)            :: key   !< Key.
+   integer(int32),    intent(in)            :: value !< Value.
+   integer(int32),    intent(out), optional :: stat  !< Status.
+   character(len=24)                        :: t     !< Its text.
+
+   write(t, '(I0)') value
+   call self%save_pref_text(key, trim(t), stat)
+   endsubroutine save_pref_int32
+
+   recursive subroutine save_pref_int64(self, key, value, stat)
+   !< Keep the preference `key`: a 64-bit integer (as save_pref of a text, written in decimal).
+   class(app_object), intent(inout)         :: self  !< Application.
+   character(len=*),  intent(in)            :: key   !< Key.
+   integer(int64),    intent(in)            :: value !< Value.
+   integer(int32),    intent(out), optional :: stat  !< Status.
+   character(len=24)                        :: t     !< Its text.
+
+   write(t, '(I0)') value
+   call self%save_pref_text(key, trim(t), stat)
+   endsubroutine save_pref_int64
+
+   recursive subroutine save_pref_real32(self, key, value, stat)
+   !< Keep the preference `key`: a real (as save_pref of a text, written with 9 significant digits: read back exactly).
+   class(app_object), intent(inout)         :: self  !< Application.
+   character(len=*),  intent(in)            :: key   !< Key.
+   real(real32),      intent(in)            :: value !< Value.
+   integer(int32),    intent(out), optional :: stat  !< Status.
+
+   call self%save_pref_text(key, real_text(real(value, real64), 8_int32, value_32=value), stat)
+   endsubroutine save_pref_real32
+
+   recursive subroutine save_pref_real64(self, key, value, stat)
+   !< Keep the preference `key`: a real (as save_pref of a text, written with 17 significant digits: read back exactly).
+   class(app_object), intent(inout)         :: self  !< Application.
+   character(len=*),  intent(in)            :: key   !< Key.
+   real(real64),      intent(in)            :: value !< Value.
+   integer(int32),    intent(out), optional :: stat  !< Status.
+
+   call self%save_pref_text(key, real_text(value, 16_int32), stat)
+   endsubroutine save_pref_real64
+
+   recursive function real_text(value, digits, value_32) result(text)
+   !< The shortest text of `value` that reads back to it: scientific notation with 1 to `digits` + 1 significant
+   !< digits, its exponent without padding (`7.0E-1`, `1.0000000000000001E-1`); `Infinity`, `NaN` as written. With
+   !< `value_32`, read back as a 32-bit real.
+   real(real64),     intent(in)           :: value    !< Value.
+   integer(int32),   intent(in)           :: digits   !< Most digits after the point.
+   real(real32),     intent(in), optional :: value_32 !< The 32-bit value, when it is one.
+   character(len=:), allocatable          :: text     !< Its text.
+   character(len=48)                      :: buf      !< A trial.
+   character(len=16)                      :: fmt      !< Its format.
+   real(real64)                           :: back     !< Read back.
+   real(real32)                           :: back_32  !< Read back, 32 bits.
+   integer(int32)                         :: d, e, ios, ex !< Digits, the exponent's place, I/O status, exponent.
+   logical                                :: flags(size(ieee_all)) !< The floating-point flags on entry.
+
+   call ieee_get_flag(ieee_all, flags) ! the trials' flags (an underflow, say) do not reach the caller
+   d = 1_int32
+   if (present(value_32)) then         ! within 10 % of huge() a shorter trial may round past it: all the digits
+      if (.not. (abs(value_32) < 0.9_real32 * huge(value_32))) d = digits
+   elseif (.not. (abs(value) < 0.9_real64 * huge(value))) then
+      d = digits
+   endif
+   do d = d, digits
+      write(fmt, '(A,I0,A,I0,A)') '(ES', d + 12_int32, '.', d, 'E4)'
+      write(buf, fmt) value
+      if (present(value_32)) then
+         read(buf, '(F48.0)', iostat=ios) back_32
+         if (ios == 0 .and. back_32 == value_32) exit
+      else
+         read(buf, '(F48.0)', iostat=ios) back
+         if (ios == 0 .and. back == value) exit
+      endif
+   enddo
+   call ieee_set_flag(ieee_all, flags)
+   text = trim(adjustl(buf))
+   e = index(text, 'E')
+   if (e > 0) then
+      read(text(e + 1:), '(I8)', iostat=ios) ex
+      if (ios == 0) then
+         write(buf, '(I0)') ex
+         text = text(1:e)//trim(buf)
+      endif
+   endif
+   endfunction real_text
+
+   recursive subroutine save_pref_logical(self, key, value, stat)
+   !< Keep the preference `key`: a logical (as save_pref of a text, written `true` or `false`).
+   class(app_object), intent(inout)         :: self  !< Application.
+   character(len=*),  intent(in)            :: key   !< Key.
+   logical,           intent(in)            :: value !< Value.
+   integer(int32),    intent(out), optional :: stat  !< Status.
+
+   if (value) then
+      call self%save_pref_text(key, 'true', stat)
+   else
+      call self%save_pref_text(key, 'false', stat)
+   endif
+   endsubroutine save_pref_logical
+
+   recursive function pref_text(key, found, stat) result(text)
+   !< The text of the preference `key`, and whether it is kept.
+   character(len=*), intent(in)            :: key   !< Key.
+   logical,          intent(out)           :: found !< Kept.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   character(len=:), allocatable           :: text  !< Its text ('' if not kept).
+   character(kind=c_char)                  :: none(1) !< No buffer (the length only).
+   integer(c_int)                          :: n, m, f !< Length, length copied, found flag.
+   integer(c_int)                          :: status !< Native status.
+
+   text = ''
+   found = .false.
+   n = 0_c_int
+   f = 0_c_int
+   status = fig_pref_get(key, len_trim(key, c_int), none, 0_c_int, n, f)
+   if (status == FIG_OK .and. f == 1_c_int) then
+      deallocate(text)
+      allocate(character(len=n) :: text)
+      if (n > 0_c_int) status = fig_pref_get(key, len_trim(key, c_int), text, n, m, f)
+      found = .true.
+   endif
+   call figure_check(status, stat)
+   endfunction pref_text
+
+   recursive function load_pref_text(self, key, value, default, stat) result(found)
+   !< The preference `key` into `value`: true when it is kept (`value` takes it, blank-padded or cut to its length);
+   !< false when it is not, and `value` takes `default` if present, else stays as it is. Statuses: as `save_pref`'s.
+   class(app_object), intent(in)            :: self    !< Application.
+   character(len=*),  intent(in)            :: key     !< Key.
+   character(len=*),  intent(inout)         :: value   !< Value.
+   character(len=*),  intent(in),  optional :: default !< Value when not kept.
+   integer(int32),    intent(out), optional :: stat    !< Status.
+   logical                                  :: found   !< Kept.
+   character(len=:), allocatable            :: t       !< Its text.
+
+   found = .false.
+   if (figure_refused('app%load_pref', stat)) return ! the loop's thread only
+   t = pref_text(key, found, stat)
+   if (found) then
+      value = t
+   elseif (present(default)) then
+      value = default
+   endif
+   endfunction load_pref_text
+
+   recursive function load_pref_int32(self, key, value, default, stat) result(found)
+   !< The preference `key` into `value` as an integer: true when it is kept and is one; otherwise false, and `value`
+   !< takes `default` if present, else stays as it is (a text edited into something else counts as not kept).
+   class(app_object), intent(in)            :: self    !< Application.
+   character(len=*),  intent(in)            :: key     !< Key.
+   integer(int32),    intent(inout)         :: value   !< Value.
+   integer(int32),    intent(in),  optional :: default !< Value when not kept.
+   integer(int32),    intent(out), optional :: stat    !< Status.
+   logical                                  :: found   !< Kept.
+   character(len=:), allocatable            :: t       !< Its text.
+   integer(int32)                           :: v, ios  !< Value read, I/O status.
+
+   found = .false.
+   if (figure_refused('app%load_pref', stat)) return ! the loop's thread only
+   t = pref_text(key, found, stat)
+   if (found) then
+      read(t, '(I40)', iostat=ios) v
+      found = ios == 0 .and. len_trim(t) > 0
+   endif
+   if (found) then
+      value = v
+   elseif (present(default)) then
+      value = default
+   endif
+   endfunction load_pref_int32
+
+   recursive function load_pref_int64(self, key, value, default, stat) result(found)
+   !< The preference `key` into `value` as a 64-bit integer: as `load_pref` of an integer.
+   class(app_object), intent(in)            :: self    !< Application.
+   character(len=*),  intent(in)            :: key     !< Key.
+   integer(int64),    intent(inout)         :: value   !< Value.
+   integer(int64),    intent(in),  optional :: default !< Value when not kept.
+   integer(int32),    intent(out), optional :: stat    !< Status.
+   logical                                  :: found   !< Kept.
+   character(len=:), allocatable            :: t       !< Its text.
+   integer(int64)                           :: v       !< Value read.
+   integer(int32)                           :: ios     !< I/O status.
+
+   found = .false.
+   if (figure_refused('app%load_pref', stat)) return ! the loop's thread only
+   t = pref_text(key, found, stat)
+   if (found) then
+      read(t, '(I40)', iostat=ios) v
+      found = ios == 0 .and. len_trim(t) > 0
+   endif
+   if (found) then
+      value = v
+   elseif (present(default)) then
+      value = default
+   endif
+   endfunction load_pref_int64
+
+   recursive function load_pref_real32(self, key, value, default, stat) result(found)
+   !< The preference `key` into `value` as a real: as `load_pref` of an integer.
+   class(app_object), intent(in)            :: self    !< Application.
+   character(len=*),  intent(in)            :: key     !< Key.
+   real(real32),      intent(inout)         :: value   !< Value.
+   real(real32),      intent(in),  optional :: default !< Value when not kept.
+   integer(int32),    intent(out), optional :: stat    !< Status.
+   logical                                  :: found   !< Kept.
+   character(len=:), allocatable            :: t       !< Its text.
+   real(real32)                             :: v       !< Value read.
+   integer(int32)                           :: ios     !< I/O status.
+
+   found = .false.
+   if (figure_refused('app%load_pref', stat)) return ! the loop's thread only
+   t = pref_text(key, found, stat)
+   if (found) then
+      read(t, '(F40.0)', iostat=ios) v
+      found = ios == 0 .and. len_trim(t) > 0
+   endif
+   if (found) then
+      value = v
+   elseif (present(default)) then
+      value = default
+   endif
+   endfunction load_pref_real32
+
+   recursive function load_pref_real64(self, key, value, default, stat) result(found)
+   !< The preference `key` into `value` as a real: as `load_pref` of an integer.
+   class(app_object), intent(in)            :: self    !< Application.
+   character(len=*),  intent(in)            :: key     !< Key.
+   real(real64),      intent(inout)         :: value   !< Value.
+   real(real64),      intent(in),  optional :: default !< Value when not kept.
+   integer(int32),    intent(out), optional :: stat    !< Status.
+   logical                                  :: found   !< Kept.
+   character(len=:), allocatable            :: t       !< Its text.
+   real(real64)                             :: v       !< Value read.
+   integer(int32)                           :: ios     !< I/O status.
+
+   found = .false.
+   if (figure_refused('app%load_pref', stat)) return ! the loop's thread only
+   t = pref_text(key, found, stat)
+   if (found) then
+      read(t, '(F40.0)', iostat=ios) v
+      found = ios == 0 .and. len_trim(t) > 0
+   endif
+   if (found) then
+      value = v
+   elseif (present(default)) then
+      value = default
+   endif
+   endfunction load_pref_real64
+
+   recursive function load_pref_logical(self, key, value, default, stat) result(found)
+   !< The preference `key` into `value` as a logical (`true` or `false`): as `load_pref` of an integer.
+   class(app_object), intent(in)            :: self    !< Application.
+   character(len=*),  intent(in)            :: key     !< Key.
+   logical,           intent(inout)         :: value   !< Value.
+   logical,           intent(in),  optional :: default !< Value when not kept.
+   integer(int32),    intent(out), optional :: stat    !< Status.
+   logical                                  :: found   !< Kept.
+   character(len=:), allocatable            :: t       !< Its text.
+
+   found = .false.
+   if (figure_refused('app%load_pref', stat)) return ! the loop's thread only
+   t = pref_text(key, found, stat)
+   if (found) found = trim(adjustl(t)) == 'true' .or. trim(adjustl(t)) == 'false'
+   if (found) then
+      value = trim(adjustl(t)) == 'true'
+   elseif (present(default)) then
+      value = default
+   endif
+   endfunction load_pref_logical
+
+   recursive function message_box(self, id, title, text, buttons, stat) result(answer)
+   !< Ask the user in a box: a modal drawn by FIGURE after the program's windows, centred, with `title`, `text`
+   !< (wrapped) and a row of `buttons` (default `'OK'`). Polled: call it every frame while waiting (a call opens the
+   !< box `id` if it is not open; the texts of later calls replace its own): 0 while the box is open, then once the
+   !< number of the button chosen (from 1), after which the box is gone and the id free. The box stays open until
+   !< answered, called or not. Enter chooses the first button, Escape the last. Several boxes at once: each opened
+   !< over the ones before, the newest on top, answered from the top down. A box waits, not drawn, while a popup of the
+   !< program's (a menu, a modal, a file browser) is open: Dear ImGui keeps one popup per level. Statuses:
+   !< `FIG_ERR_ARGUMENT` for an empty id or every button label empty, `FIG_ERR_STATE` before `init*` or from a task.
+   !< The same in every mode.
+   class(app_object), intent(inout)         :: self       !< Application.
+   character(len=*),  intent(in)            :: id         !< Id (any text: the box's own).
+   character(len=*),  intent(in)            :: title      !< Title.
+   character(len=*),  intent(in)            :: text       !< Text (UTF-8).
+   character(len=*),  intent(in),  optional :: buttons(:) !< Button labels (blank-padded; default `'OK'`).
+   integer(int32),    intent(out), optional :: stat       !< Status.
+   integer(int32)                           :: answer     !< 0 while open, then the button chosen (from 1).
+   character(len=:), allocatable            :: joined     !< Labels, newline-separated.
+   integer(int32)                           :: k          !< Counter.
+   integer(c_int)                           :: a          !< Answer.
+
+   answer = 0_int32
+   if (figure_refused('app%message_box', stat)) return ! a task does not draw
+   a = 0_c_int
+   if (present(buttons)) then
+      joined = ''
+      do k = 1_int32, size(buttons, kind=int32)
+         joined = joined//trim(buttons(k))//new_line('a')
+      enddo
+      call figure_check(fig_message_box(id, len(id, c_int), title, len(title, c_int), text, len(text, c_int), joined, &
+                                        len(joined, c_int), a), stat)
+   else
+      call figure_check(fig_message_box(id, len(id, c_int), title, len(title, c_int), text, len(text, c_int), '', &
+                                        -1_c_int, a), stat)
+   endif
+   answer = int(a, int32)
+   endfunction message_box
+
+   recursive subroutine set_size_limits(self, min_width, min_height, max_width, max_height, stat)
+   !< The least and the greatest size the user can give the window [logical pixels, as `init`'s]; 0, or an absent
+   !< maximum: no limit. Window mode; in headless and remote modes it does nothing (the display is the test's or the
+   !< browser's). Statuses: `FIG_ERR_ARGUMENT` for a negative size or a maximum below its minimum, `FIG_ERR_FAILED`
+   !< if the system refuses, `FIG_ERR_STATE` before `init*` or from a task.
+   class(app_object), intent(inout)         :: self       !< Application.
+   integer(int32),    intent(in)            :: min_width  !< Least width [logical pixels].
+   integer(int32),    intent(in)            :: min_height !< Least height [logical pixels].
+   integer(int32),    intent(in),  optional :: max_width  !< Greatest width [logical pixels] (default: none).
+   integer(int32),    intent(in),  optional :: max_height !< Greatest height [logical pixels] (default: none).
+   integer(int32),    intent(out), optional :: stat       !< Status.
+   integer(c_int)                           :: mw, mh     !< Maxima (0: none).
+
+   if (figure_refused('app%set_size_limits', stat)) return ! a task does not draw
+   mw = 0_c_int
+   if (present(max_width)) mw = int(max_width, c_int)
+   mh = 0_c_int
+   if (present(max_height)) mh = int(max_height, c_int)
+   call figure_check(fig_set_size_limits(int(min_width, c_int), int(min_height, c_int), mw, mh), stat)
+   endsubroutine set_size_limits
+
    recursive function content_scale(self) result(scale)
    !< Display content scale (1 standard, 2 on most high-DPI displays). Callable from any thread (a task included).
    class(app_object), intent(in) :: self  !< Application.
@@ -1030,6 +1569,16 @@ contains
    v = ''
    if (present(s)) v = s
    endfunction opt
+
+   pure function flag(value, default) result(f)
+   !< An optional logical as 0 or 1, `default` when absent.
+   logical, intent(in), optional :: value   !< Value.
+   logical, intent(in)           :: default !< Value when absent.
+   integer(c_int)                :: f       !< 0 or 1.
+
+   f = merge(1_c_int, 0_c_int, default)
+   if (present(value)) f = merge(1_c_int, 0_c_int, value)
+   endfunction flag
 
    pure function opt_len(s) result(n)
    !< The length of an optional name without its trailing blanks (a padded array's element), 0 when absent.

@@ -741,6 +741,44 @@ beside it. Each region scrolls under the wheel on its own; the window does not m
 
 <Media name="cb_help" alt="A list of three sections on the left; picking one shows its values and its help text on the right" caption="docs/examples/src/cb_help.F90" />
 
+### Splitters
+
+Two regions side by side (a tree and a file, a list and its plot) or one above the other share the space through a
+bar between them that the user drags:
+
+<<< @/examples/snippets/cb_splitter-panes.F90{fortran}
+
+| Procedure | Notes |
+|---|---|
+| `ig_splitter(id, sizes [, vertical] [, min_size] [, stat])` → `logical` | A bar between two panes; `.true.` on the frames a drag changes `sizes`. |
+
+- `sizes(2)`, `real(real64)` [pixels]: the panes' widths (side by side, the default) or heights (`vertical=.true.`:
+  one above the other), the program's variables, which the drag changes: their sum is kept and neither goes below
+  `min_size` (default: the frame height, `ig_frame_height()`). The program sizes the panes with them
+  (`ig_begin_child(id, sizes(1), 0.0_real64)`).
+- **Where.** At the cursor, between the panes: side by side, after the first pane and `ig_same_line()`, then
+  `ig_same_line()` again before the second; one above the other, between the two. The bar is the style's item spacing
+  thick and runs to the end of the region in the other direction (give the panes the region's other extent: 0 for a
+  child fills it). It is drawn in the separator's colours; the pointer becomes a resize arrow over it.
+- **Three panes or more:** a splitter between each pair, each with its two sizes (`sizes(1:2)`, `sizes(2:3)`).
+- `id` names the bar in its window: a [path](testing#finding-items-by-path) finds it (`'Files/split'`), so a test
+  drags it with `test_drag` from the centre of `test_item_rect`'s rectangle.
+
+(Dear ImGui's `SplitterBehavior`, internal to Dear ImGui: FIGURE's glue calls it.)
+
+`docs/examples/src/cb_splitter.F90` drags its bar 60 pixels, headless:
+
+<<< @/examples/output/cb_splitter.txt{text}
+
+**Status.** `stat` is optional (absent: `error stop` with the message). `FIG_ERR_ARGUMENT`: `ig_splitter: sizes has
+two values, the panes on either side`; with no frame open, a usage error (`FIG_ERR_STATE`, `ig_splitter: no frame
+open`); from a task, refused (`FIG_ERR_STATE`). **Modes:** the same in window, headless and remote modes. **Threads:**
+the frame loop's thread.
+
+**What it does not do.** The window's size is not followed: when the window shrinks, the second pane is what gets
+narrower (the program rescales `sizes` if it wants proportions kept). The panes' sizes are not kept between runs (save
+them with [`app%save_pref`](frame-loop#preferences)).
+
 ## Scrolling and focus
 
 <Media name="cb_reveal" video alt="Three windows: a bar of pick buttons standing for a 3-D view, a list of 30 bodies and a list of 2000 blocks. A click on pick block 1240 selects block 1240: on the next frame the Blocks list has scrolled so that block 1240 is highlighted in its middle, and the Bodies list shows body 19 highlighted in its middle. pick block 1873 does the same further down. Go to... opens a dialog whose field already has the text cursor; 333 is typed and enter pressed without a click: the dialog closes and both lists scroll to block 333 and body 5." caption="docs/examples/src/cb_reveal.F90: the lists scroll to a block picked elsewhere; the dialog's field takes the keys at once" />

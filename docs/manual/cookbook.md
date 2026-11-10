@@ -53,6 +53,22 @@ The program checks itself headless (`cb_time --check`):
 program passes are not scaled. Multiplying them by `content_scale()` keeps their proportion to the window on high-DPI
 displays.
 
+### Remember the user's settings
+
+<<< @/examples/snippets/cb_prefs-open.F90{fortran}
+
+<<< @/examples/snippets/cb_prefs-load.F90{fortran}
+
+<<< @/examples/snippets/cb_prefs-save.F90{fortran}
+
+`app%open_prefs` names the program's file (by default in the platform's folder of preferences) and reads the last
+run's: the style, the window's place and size, the registered windows and the layouts come back by themselves, the
+program's own values with `load_pref` and a default for the first run. `save_pref` keeps a value; FIGURE writes the
+file every 30 s when something changed and at `destroy`, through a temporary file, so a crash never leaves half of it.
+[Preferences](/guide/frame-loop#preferences) has the details.
+
+<<< @/examples/output/cb_prefs.txt{text}
+
 ## Windows
 
 ### Pair begin and end, skip what is hidden
@@ -129,6 +145,30 @@ The layout is built on the first frame only (`ig_dock_layout_begin`); the dock s
 before its windows. The user can rearrange everything afterwards. [Docking](/guide/docking) has the details.
 
 Used in context: [chapter 8](./tutorial/08-shell) of the tutorial.
+
+### A View menu and a reset layout
+
+<<< @/examples/snippets/cb_view_menu-register.F90{fortran}
+
+<<< @/examples/snippets/cb_view_menu-layouts.F90{fortran}
+
+<<< @/examples/snippets/cb_view_menu-menu.F90{fortran}
+
+Register the windows once, after `init*`, and draw each while `app%window_visible` says it is shown; `app%view_menu()`
+in the menu bar lists them as check items, the layouts as choices, and `Reset layout`. The program builds the current
+layout (`app%layout()`) when `ig_dock_layout_begin` is `.true.`: on the first frame, after a switch to a layout the
+user has not arranged yet, and after a reset. A window's close button hides it, and the View menu shows it again.
+[Windows and layouts](/guide/docking#windows-and-layouts) has the details; with
+[preferences](#remember-the-user-s-settings) the hidden windows and the layouts are kept between runs.
+
+<<< @/examples/output/cb_view_menu.txt{text}
+
+### Split a window in two panes
+
+<<< @/examples/snippets/cb_splitter-panes.F90{fortran}
+
+The bar between the two regions changes `sizes` when the user drags it; the regions take their widths from it.
+[Splitters](/guide/widgets#splitters) has the details.
 
 ### A File menu and its shortcut
 
@@ -236,6 +276,16 @@ Used in context: [chapter 9](./tutorial/09-case) of the tutorial.
 lose, and quits at once otherwise. [Menus, popups and shortcuts](/guide/menus#ask-before-quitting) has the details.
 
 Used in context: [chapter 9](./tutorial/09-case) of the tutorial.
+
+### Ask a question in a box
+
+<<< @/examples/snippets/cb_message_box-ask.F90{fortran}
+
+Call `app%message_box` every frame while the question is open: 0 until the user answers, then the button's number,
+once. Boxes asked while one is open stack over it, each answering its own question; one id is one box at a time.
+[Message boxes](/guide/menus#message-boxes) has the details.
+
+<<< @/examples/output/cb_message_box.txt{text}
 
 ### A list and a help panel
 

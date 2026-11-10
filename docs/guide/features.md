@@ -38,6 +38,15 @@ A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) 
 | `app%image_result(path, done)` | the outcome of `save_image`, once | [save an image](capture#save-an-image-from-the-program) |
 | `app%save_layout(path [, comment])` | the arrangement of the windows (docking included) to a file | [layouts](docking#save-and-load-a-layout) |
 | `app%load_layout(path)` | an arrangement from a file, before the next frame | [layouts](docking#save-and-load-a-layout) |
+| `app%add_window(name [, visible] [, closable] [, in_view_menu] [, remember] [, stat])` | register a window (its `ig_begin` name): listed in the View menu, a close button that hides it, its visibility kept between runs | [windows and layouts](docking#windows-and-layouts) |
+| `app%window_visible(name [, stat])` → `logical`, `app%set_window_visible(name, visible [, stat])` | a registered window is shown (draw it then); show or hide it | [windows and layouts](docking#windows-and-layouts) |
+| `app%view_menu([label] [, stat])` | the View menu, in a menu bar: the registered windows, the layouts, Reset layout | [windows and layouts](docking#windows-and-layouts) |
+| `app%add_layout(name [, windows] [, stat])`, `app%layout()` → `character` | declare a layout of the dock space (and the windows it shows); the current one, which the program builds when `ig_dock_layout_begin` is true | [windows and layouts](docking#windows-and-layouts) |
+| `app%switch_layout(name [, stat])`, `app%reset_layout([stat])` | make a layout current (as the user left it, or built again); lay the current one out again | [windows and layouts](docking#windows-and-layouts) |
+| `app%open_prefs(name [, file] [, stat])`, `app%prefs_file()` → `character` | keep the preferences in the program's file (the platform's folder for `name`): read now, written every 30 s when changed and at `destroy`, through a temporary file | [preferences](frame-loop#preferences) |
+| `app%save_pref(key, value [, stat])`, `app%load_pref(key, value [, default] [, stat])` → `logical` | keep a text, an integer, a real or a logical by key; read it back, or the default | [preferences](frame-loop#preferences) |
+| `app%set_size_limits(min_width, min_height [, max_width] [, max_height] [, stat])` | the window's least and greatest size (window mode) | [preferences](frame-loop#preferences) |
+| `app%message_box(id, title, text [, buttons] [, stat])` → `integer(int32)` | a question in a modal box drawn by FIGURE: 0 while open, then the button chosen; several at once | [message boxes](menus#message-boxes) |
 | `app%notify(text [, kind] [, seconds] [, stat])` | tell the user something in a notification drawn by FIGURE (bottom-right, stacked): `'info'`, `'success'`, `'warning'`, `'error'`; it fades after `seconds` (default 5; 0: until clicked) | [notifications](frame-loop#notifications) <!-- visual --> |
 | `app%notifications(list [, kinds] [, shown])` | the notifications kept (the last 100), oldest first | [notifications](frame-loop#notifications) <!-- visual --> |
 | `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
@@ -57,6 +66,7 @@ A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) 
 | `ig_begin(name [, open] [, flags])` → `logical` | begin a window (`ImGuiWindowFlags_*`); `.false.` when collapsed or clipped ([Windows](widgets#windows)) |
 | `ig_begin_side_bar(name, side, size)` | a bar along one side of the display (a toolbar), left out of the dock space | [Docking](docking#a-bar-along-a-side) |
 | `ig_end()` | end the window (always, whatever `ig_begin` returned) ([Windows](widgets#windows)) |
+| `ig_splitter(id, sizes [, vertical] [, min_size] [, stat])` → `logical` | a bar between two panes the user drags: their sizes [pixels] change ([Splitters](widgets#splitters)) |
 | `ig_set_next_window(x, y [, width, height] [, always])` | place (and size) the next window ([Windows](widgets#windows)) |
 | `ig_focus_window(name)` → `logical` | bring a window forward (a docked one: its tab); refused (`.false.`) while a popup is open ([Windows](widgets#windows)) |
 | `ig_button(label [, width] [, height])` → `logical` | a button; `.true.` on the frame it is clicked ([Controls](widgets#controls)) |

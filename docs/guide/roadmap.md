@@ -359,6 +359,16 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   `test_id_conflicts` finds the ids two items share without the pointer over them, `test_unnamed_items` the icon-only
   buttons without a tooltip. Recording is on in headless mode, and costs 0.02 µs per item and frame
   ([Finding items by path](testing#finding-items-by-path)): done.
+- **An application layer** (S3): a window registry (`app%add_window`, `window_visible`, `set_window_visible`), its
+  View menu (`app%view_menu`: the windows, the layouts, Reset layout) and its close buttons; named layouts of the
+  dock space (`add_layout`, `switch_layout`, `reset_layout`), built by the program when `ig_dock_layout_begin` is
+  true for the current one (`app%layout()`: no callback), each keeping the arrangement the user leaves it in;
+  preferences in one text file per program (`open_prefs`, `save_pref`, `load_pref` of texts, integers, reals and
+  logicals), with the windows' visibility, the layouts, the style and the window's geometry, written every 30 s when
+  changed and at `destroy` through a temporary file and a rename (a crash leaves the last save whole); message boxes
+  drawn by FIGURE, any number at once (`app%message_box`, polled); `ig_splitter` between two panes; the window's size
+  limits (`app%set_size_limits`) ([Windows and layouts](docking#windows-and-layouts),
+  [Preferences](frame-loop#preferences), [Message boxes](menus#message-boxes), [Splitters](widgets#splitters)): done.
 
 ## Next
 

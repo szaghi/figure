@@ -203,6 +203,47 @@ The program checks itself headless (`cb_context_menu --check`):
 
 <<< @/examples/output/cb_context_menu.txt{text}
 
+## Message boxes
+
+A question the user answers with a button (quit or not, overwrite or not), or a message to acknowledge, in one call:
+
+<<< @/examples/snippets/cb_message_box-ask.F90{fortran}
+
+| Procedure | Notes |
+|---|---|
+| `app%message_box(id, title, text [, buttons] [, stat])` → `integer(int32)` | 0 while the box `id` is open, then the button chosen (from 1), once. |
+
+- **Polled.** Call it every frame while waiting for the answer. The first call opens the box; later calls return 0
+  (their `title`, `text` and `buttons` replace the box's, so a count can change while it is shown); once the user
+  chooses, the next call returns the button's number and the box is gone: the id is free for another question. The
+  box stays open until answered, whether it is called again or not.
+- **Drawn by FIGURE** after the program's windows, as the [notifications](frame-loop#notifications) are: a modal
+  centred in the work area, titled `title`, its text wrapped at 28 times the font size, its buttons (default `'OK'`)
+  in a row, each at least 5 em wide. While it is open the rest of the interface takes no input. Enter chooses the first
+  button, Escape the last.
+- **Several at once.** Each new box opens over the ones before it, two font sizes lower and to the right, the newest on
+  top and answered first; each returns its own button. (A single global box, as giu has, cannot ask a second
+  question while the first is open.)
+- **A popup of the program's** (an open menu, its own modal, the [file browser](frame-loop#figure-s-file-browser)):
+  the box waits for it to close, not drawn, since Dear ImGui keeps one popup per level and opening the box would
+  close the program's.
+
+`docs/examples/src/cb_message_box.F90` answers the question with `Save first`, acknowledges the message that follows, then quits, headless (`figure_test_app` answers two boxes open at once):
+
+<<< @/examples/output/cb_message_box.txt{text}
+
+A test answers a box by clicking its button by [path](testing#finding-items-by-path): `'<title>/<button>'`
+(`test_item_click('Quit?/Save first')`).
+
+**Status.** `stat` is optional (absent: `error stop` with the message). `FIG_ERR_ARGUMENT`: `app%message_box: the id
+is empty`, `app%message_box: every button label is empty`; `FIG_ERR_STATE`: `app%message_box: figure is not
+initialized`, and from a [task](processes#tasks) (a task does not draw). **Modes:** the same in window, headless and
+remote modes. **Threads:** the frame loop's thread.
+
+**What it does not do.** No icon, no text field, no check box ("do not ask again": keep that in a
+[preference](frame-loop#preferences) and skip the call). The box's buttons are labels only: give them the words of
+the answer (`'Overwrite'`, not `'Yes'`).
+
 ## Ask before quitting
 
 <Media name="cb_quit" video alt="A title edited and an option ticked in a popup; the window closed: a modal asks Save, Discard or Cancel; Cancel; closed again" caption="docs/examples/src/cb_quit.F90" />

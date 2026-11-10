@@ -24,6 +24,8 @@ Window positions and sizes are not saved between runs: FIGURE turns off Dear ImG
 the working directory by an earlier run never overrides what the program sets with `ig_set_next_window`. To keep the
 layout, name the file: `app%init(title, width, height, ini_file='my_tool.ini')`. Dear ImGui reads it at the first
 frame and rewrites it while the program runs. Headless mode never uses one, nor does a [capture](capture).
+The [preferences](#preferences) (`app%open_prefs`) keep the arrangement too, with the window's own place and size
+and the user's settings: a program uses one or the other.
 
 ## next_frame
 
@@ -492,6 +494,85 @@ from a [task](processes#tasks) (a task does not draw: the task's status becomes 
 <<< @/examples/snippets/cb_drop-drop.F90{fortran}
 
 <Media name="cb_drop" video alt="Two panes: a case folder dropped on the left one becomes the case; two files dropped on the right one are listed there; then Copy the case path puts the folder's path on the clipboard and the window reads copied, with the path" caption="docs/examples/src/cb_drop.F90" />
+
+## Preferences
+
+A tool remembers what the user set: the case last opened, a tolerance, a palette, where the window was, which panels
+were closed. FIGURE keeps these in one file per program, read at the start and written while the program runs.
+
+<<< @/examples/snippets/cb_prefs-open.F90{fortran}
+
+<<< @/examples/snippets/cb_prefs-load.F90{fortran}
+
+<<< @/examples/snippets/cb_prefs-save.F90{fortran}
+
+| Procedure | Notes |
+|---|---|
+| `app%open_prefs(name [, file] [, stat])` | Keep the preferences in the program's file from now on; read those of the last run. |
+| `app%prefs_file()` → `character(len=:), allocatable` | The file in use (`''`: none, kept in memory). |
+| `app%save_pref(key, value [, stat])` | Keep a value: `character`, `integer(int32)`, `integer(int64)`, `real(real32)`, `real(real64)`, `logical`. |
+| `app%load_pref(key, value [, default] [, stat])` → `logical` | `.true.` when `key` is kept and is of `value`'s kind: `value` takes it; otherwise `value` takes `default` if given. |
+| `app%set_size_limits(min_width, min_height [, max_width] [, max_height] [, stat])` | The least and greatest size of the window [logical pixels]. |
+
+**What is kept.** The values of `save_pref`; the [registered windows](docking#windows-and-layouts)' visibility
+(those with `remember`); the current layout and each layout's arrangement (Dear ImGui's settings, as `save_layout`
+writes them: the docking, the floating windows' places, the tables' columns); the style set by `set_style` (its name,
+look, palette, line colours); in window mode the window's position, size and maximized state (the position only when
+it falls on a display that exists: a monitor unplugged since). The style and the window are applied by `open_prefs`,
+the arrangement before the next frame: call `open_prefs` after `init*` and after the program's own defaults
+(`set_style`), before the first frame, and `load_pref` after it. A value saved before `open_prefs` is kept over the
+file's.
+
+**When it is written.** When something changed, every 30 s of frame time (the frame time of
+[notifications](#notifications): fixed in headless mode) and at `destroy`. Each write goes to `<file>.tmp`, which is
+then renamed over the file, so a crash leaves the file of the last save whole, never a half-written one;
+`figure_test_app` checks it with a run that stops after its save without `destroy`. A save that fails (a full disk,
+a folder without write permission) is printed once on standard error and the program goes on.
+
+**Where.** `file`, or `preferences.ini` in the platform's folder for the program `name` (SDL's
+`SDL_GetPrefPath("", name)`, created if missing): `~/.local/share/<name>/` on Linux (`$XDG_DATA_HOME`),
+`%APPDATA%\<name>\` on Windows, `~/Library/Application Support/<name>/` on macOS. `name` is a folder's name: letters,
+digits, blanks, `.`, `_`, `-`, not starting with `.`. Headless mode without `file` keeps the preferences in memory
+only, and a [capture](capture) reads and writes nothing (a recording does not depend on earlier runs).
+
+**The file** is text, one `key = value` a line, in sections, with `#` comments; the escapes `\n`, `\t`, `\\` (and `\=`
+in a key) keep any text on one line. Numbers are written in the shortest form that reads back exactly (`7.0E-1`,
+`1.0000000000000001E-1`), logicals as `true` and `false`. Edit it with the program closed: the program rewrites it.
+
+<<< @/examples/output/cb_prefs.txt{text}
+
+**Keys.** Any text without a newline, without a blank at either end, not starting with `[`, `#` or `;`: dotted names
+(`mesh.cells`) group them. A key holds one value; saving it again replaces it, of whatever kind.
+
+**Size limits.** `set_size_limits` stops the user from making the window smaller (or larger) than the program's
+layout can take; 0, or an absent maximum, is no limit. Window mode; in headless and remote modes it does nothing (the
+display is the test's or the browser's).
+
+<<< @/examples/snippets/cb_prefs-limits.F90{fortran}
+
+**Status.** `stat` is optional (absent: `error stop` with the message).
+
+| Failure | Status | Message |
+|---|---|---|
+| `open_prefs` with a name that is not a folder's | `FIG_ERR_ARGUMENT` | `app%open_prefs: the name '<name>' is a folder's name: letters, digits, blanks and . _ - (not first a .)` |
+| `open_prefs` a second time | `FIG_ERR_STATE` | `app%open_prefs: the preferences are open already (<file>)` |
+| a malformed key | `FIG_ERR_ARGUMENT` | `app%save_pref: the key '<key>' is empty, has a newline, a blank at an end, or starts with [ # ;` (`app%load_pref: ...`) |
+| a negative size, a maximum below its minimum | `FIG_ERR_ARGUMENT` | `app%set_size_limits: a negative size`, `... a maximum below its minimum` |
+| the system refuses the limits | `FIG_ERR_FAILED` | `app%set_size_limits: <SDL's message>` |
+| before `init*`, from a task | `FIG_ERR_STATE` | `app%open_prefs: figure is not initialized` (and the others'); a task: as every drawing call |
+
+A value that is not of the kind asked (a text read as an integer, a number edited into a word) is not an error:
+`load_pref` returns `.false.` and gives the default.
+
+**Modes.** The same in window, headless and remote modes, but for the window's geometry and the size limits (window
+mode) and the file of headless mode (none unless named). **Threads:** the frame loop's thread; a task's call is refused
+(`FIG_ERR_STATE`).
+
+**What the preferences do not keep.** A theme file (`load_style`: the program loads it again), the style editor's
+changes, colours and variables set by name, the fonts (`set_font`); a value's kind (an integer saved is read back as
+any kind that parses); the program's own state that is not saved with `save_pref` (the windows it opens on demand
+that are not registered). A program that ends without `destroy` (a crash, `error stop`) loses what changed since the
+last 30-second save.
 
 ## Content scale
 

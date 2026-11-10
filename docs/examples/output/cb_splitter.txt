@@ -1,0 +1,2 @@
+$ ./cb_splitter
+panes after a drag of 60 pixels:  300.0  400.0

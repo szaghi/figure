@@ -2108,6 +2108,8 @@ int fig_set_style_parts(const char *name, int name_len, const char *look, int lo
       return fail(FIG_ERR_ARGUMENT, "set_style: give a name, a look, a palette or line colours");
    std::string err;
    if (!apply_style_parts(n, lk, pal, ad, al, l, err)) return fail(FIG_ERR_ARGUMENT, "set_style: " + err);
+   fig_app_style_parts(name, name_len, look, look_len, palette, palette_len, auto_dark, auto_dark_len, auto_light,
+                       auto_light_len, lines, lines_len); // what the preferences keep
    return FIG_OK;
    FIG_CATCH
 }
@@ -2230,6 +2232,7 @@ int fig_load_style(const char *path, int path_len) {
       if (err.rfind("cannot read", 0) == 0) return fail(FIG_ERR_FAILED, "load_style: " + err);
       return fail(FIG_ERR_ARGUMENT, "load_style: " + err);
    }
+   fig_app_style_forget(); // a theme file is not kept by the preferences: the program loads it again
    return FIG_OK;
    FIG_CATCH
 }
@@ -2574,6 +2577,7 @@ int fig_begin_frame(int *running) {
       figure_items::frame_begin(); // the items of the frame that ended: what paths find now
       apply_test_input();
       take_drops();
+      fig_app_frame_begin(); // the application layer: the preferences saved every 30 s
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
       apply_fallbacks(); // the fallback fonts added inside the last frame
       ImGui::NewFrame();
@@ -2613,6 +2617,7 @@ int fig_begin_frame(int *running) {
       figure_items::frame_begin(); // the items of the frame that ended: what paths find now
       apply_test_input();
       take_drops();
+      fig_app_frame_begin(); // the application layer: the preferences saved every 30 s
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
       apply_fallbacks(); // the fallback fonts added inside the last frame
       ImGui::NewFrame();
@@ -2679,6 +2684,7 @@ int fig_begin_frame(int *running) {
    figure_items::frame_begin(); // the items of the frame that ended: what paths find now
    apply_test_input();
    take_drops();
+   fig_app_frame_begin(); // the application layer: the preferences saved every 30 s
    apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
    apply_fallbacks(); // the fallback fonts added inside the last frame
    ImGui::NewFrame();
@@ -2696,6 +2702,7 @@ int fig_end_frame(void) {
    fig_scope_frame_end(); // what the program left open, closed (and reported by the next fig_scope_report)
    frame_bar_close();
    fig_file_browser_draw(); // FIGURE's file browser, a modal over the program's windows
+   fig_app_draw();          // the message boxes, modals over the program's windows
    draw_notifications();    // after the program's windows, above them
    st.in_frame = false;
    fig_field_sweep(); // field textures not drawn for a while released
@@ -2741,6 +2748,7 @@ int fig_end_frame(void) {
 
 void fig_shutdown(void) {
    try {
+      fig_app_shutdown(); // the preferences saved while the window and the contexts exist, then forgotten
       fig_field_reset(); // the field cache forgotten: its textures go with the others below
       fig_process_shutdown(); // the captured children end with the program (before SDL_Quit)
       if (st.in_frame) {
@@ -3024,7 +3032,8 @@ int fig_dock_layout_begin(unsigned int id, int *needed) {
    FIG_TRY
    *needed = 0;
    if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_dock_layout_begin: no frame is open");
-   if (ImGui::DockBuilderGetNode(id) != nullptr) return FIG_OK; // laid out already (this run, or an ini file)
+   const bool again = fig_app_layout_rebuild(id) == 1; // switch_layout, reset_layout: lay it out again
+   if (!again && ImGui::DockBuilderGetNode(id) != nullptr) return FIG_OK; // laid out already (this run, an ini file)
    const ImGuiViewport *vp = ImGui::GetMainViewport();
    ImGui::DockBuilderRemoveNode(id);
    ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
@@ -4357,4 +4366,25 @@ double fig_time(void) {
    // whole seconds and the remainder apart: a double holds the count exactly only up to 2^53 ticks (104 days in ns)
    return static_cast<double>(ticks / frequency) +
           static_cast<double>(ticks % frequency) / static_cast<double>(frequency);
+}
+
+// ---- the application layer's view of the state (figure_app.cpp) ----------------------------------------------------
+
+int fig_mode(void) {
+   switch (st.m) {
+   case mode::window: return 1;
+   case mode::headless: return 2;
+   case mode::remote: return 3;
+   default: return 0;
+   }
+}
+
+void *fig_window_handle(void) { return st.window; }
+
+int fig_capture_on(void) { return cap.on ? 1 : 0; }
+
+void fig_layout_text(const char *text, long long len) {
+   layout_pending.assign(text, len > 0 ? static_cast<size_t>(len) : 0);
+   layout_due = true;
+   frames_at_least(3);
 }

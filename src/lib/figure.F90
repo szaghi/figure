@@ -66,7 +66,7 @@ use figure_menu, only : ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar
                         ig_end_menu_bar, ig_menu_item, ig_set_next_item_shortcut, ig_shortcut, ig_open_popup, &
                         ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup, &
                         ig_begin_popup_context
-use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_image, &
+use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_splitter, ig_button, ig_checkbox, ig_end, ig_image, &
                          ig_item_rect, ig_same_line, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_text, ig_input_text,  &
                          ig_set_next_item_width, ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped,      &
@@ -125,6 +125,7 @@ implicit none
 private
 public :: app_object, fig_read_image, figure_last_error, figure_time
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
+public :: ig_splitter
 public :: ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
 public :: ig_drag, ig_slider_angle, ig_drag_range, ig_radio, ig_list_box

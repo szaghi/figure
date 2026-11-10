@@ -20,7 +20,7 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, fi
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, fig_item_status, fig_last_item, fig_mark_last_item_edited, &
-                            fig_items_tooltip, FIG_ERR_ARGUMENT, FIG_OK
+                            fig_items_tooltip, fig_splitter, fig_window_open_flag, FIG_ERR_ARGUMENT, FIG_OK
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : igGetTime, igProgressBar, &
                           im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
@@ -49,7 +49,7 @@ public :: ig_begin, ig_begin_side_bar, ig_end, ig_button, ig_checkbox, ig_text, 
 public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_input_text, ig_set_next_item_width
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
-public :: ig_progress_bar
+public :: ig_progress_bar, ig_splitter
 public :: ig_color_edit
 public :: ig_input_text_multiline, text_buffer_object
 public :: ig_set_clipboard, ig_get_clipboard
@@ -102,8 +102,9 @@ endinterface ig_em
 contains
    recursive function ig_begin(name, open, flags) result(visible)
    !< Begin a window; always pair with `ig_end`. With `open`, the window has a close button that sets it false.
-   !< `flags` combine `ImGuiWindowFlags_*` with `ior` (`NoTitleBar`, `NoResize`, `NoMove`, `AlwaysAutoResize`,
-   !< `NoBackground`, `NoDecoration`, `NoDocking`, ...).
+   !< Without `open`, a window registered with `app%add_window` (closable, the default) has the close button, which
+   !< hides it: `app%window_visible(name)` turns false. `flags` combine `ImGuiWindowFlags_*` with `ior`
+   !< (`NoTitleBar`, `NoResize`, `NoMove`, `AlwaysAutoResize`, `NoBackground`, `NoDecoration`, `NoDocking`, ...).
    character(len=*), intent(in)              :: name    !< Window name (unique id and title).
    logical,          intent(inout), optional :: open    !< Window open.
    integer(int32),   intent(in),    optional :: flags   !< `ImGuiWindowFlags_*` (default none).
@@ -114,10 +115,11 @@ contains
 
    visible = .false.
    if (figure_draw_refused('ig_begin')) return ! a task does not draw
-   p = c_null_ptr
    if (present(open)) then
       o = logical(open, c_bool)
       p = c_loc(o)
+   else
+      p = fig_window_open_flag(name, len(name, c_int)) ! a registered window's visibility, or null
    endif
    f = 0_c_int
    if (present(flags)) f = int(flags, c_int)
@@ -834,6 +836,44 @@ contains
    if (figure_draw_refused('ig_dummy')) return ! a task does not draw
    call igDummy(im_vec2(real(width, c_float), real(height, c_float)))
    endsubroutine ig_dummy
+
+   recursive function ig_splitter(id, sizes, vertical, min_size, stat) result(changed)
+   !< A bar between two panes that the user drags to share the space between them: `sizes(1)` and `sizes(2)` are the
+   !< panes' widths (side by side, the default) or heights (`vertical`: one above the other) [pixels], changed by the
+   !< drag (their sum kept, neither below `min_size`); true on the frames they change. Call it between the two panes,
+   !< at the cursor: side by side, after the first pane and `ig_same_line()`, then `ig_same_line()` again before the
+   !< second; one above the other, between them. The bar is the style's item spacing thick (Dear ImGui's
+   !< `SplitterBehavior`) and runs to the end of the region (give the panes the region's other extent: 0 for a child
+   !< fills it). `id` names it in the window (a path finds it by it). Three panes: two
+   !< splitters, each with its pair (`sizes(1:2)`, `sizes(2:3)`). Statuses: `FIG_ERR_ARGUMENT` when `sizes` is not
+   !< two values, `FIG_ERR_STATE` with no frame open or from a task. The same in every mode.
+   character(len=*), intent(in)            :: id       !< Id, unique in the window.
+   real(real64),     intent(inout)         :: sizes(:) !< The two panes' sizes [pixels].
+   logical,          intent(in),  optional :: vertical !< The panes one above the other (default: side by side).
+   real(real64),     intent(in),  optional :: min_size !< A pane's least size [pixels] (default: the frame height).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   logical                                 :: changed  !< The sizes changed this frame.
+   real(c_double)                          :: s(2)     !< C copy of the sizes.
+   real(c_double)                          :: m        !< Least size.
+   integer(c_int)                          :: v        !< 1: vertical.
+   integer(c_int)                          :: c        !< 1: changed.
+
+   changed = .false.
+   if (figure_draw_refused('ig_splitter', stat)) return ! a task does not draw
+   if (size(sizes) /= 2) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ig_splitter: sizes has two values, the panes on either side', stat)
+      return
+   endif
+   v = 0_c_int
+   if (present(vertical)) v = merge(1_c_int, 0_c_int, vertical)
+   m = -1.0_c_double
+   if (present(min_size)) m = real(max(0.0_real64, min_size), c_double)
+   s = real(sizes, c_double)
+   c = 0_c_int
+   call figure_check(fig_splitter(id, len(id, c_int), v, s, m, c), stat)
+   changed = c == 1_c_int
+   if (changed) sizes(1:2) = real(s, real64)
+   endfunction ig_splitter
 
    recursive subroutine ig_new_line()
    !< End the line (after `ig_same_line`), or add an empty line of text's height (Dear ImGui's `NewLine`).

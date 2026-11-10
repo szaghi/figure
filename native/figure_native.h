@@ -464,6 +464,52 @@ int    fig_test_glyph(const char *text, int text_len, const char *font, int font
 /* Seconds since the first call of fig_time, on the system's monotonic clock; any thread, any time. */
 double fig_time(void);
 
+/* Application layer (figure_app.cpp, figure_app.F90): see the comment at the top of figure_app.cpp.
+ * Window registry: fig_window_add registers a window by its ig_begin name (visible, closable, listed in the View menu,
+ * remembered by the preferences: 0 or 1 each); fig_window_open_flag gives ig_begin the bool* of a registered closable
+ * window (NULL otherwise), which its close button clears; fig_view_menu draws the View menu (label empty: "View")
+ * inside a menu bar: the windows, the layouts, "Reset layout". Layouts: names, with the registered windows each shows
+ * (newline-separated; has_windows 0: it changes none); fig_layout_current copies the current one's name (returns its
+ * length). Preferences: fig_prefs_open (file empty: SDL_GetPrefPath("", name)/preferences.ini; in headless mode none)
+ * reads the file; values are text; fig_pref_get: found 0 or 1, the value's length in len, copied up to buf_len.
+ * fig_message_box: answer 0 while open, then the button (from 1) once; buttons newline-separated (buttons_len < 0:
+ * "OK"). fig_splitter: a bar at the cursor between two panes of sizes[0], sizes[1] [pixels] (vertical 1: one above
+ * the other), changed 1 when dragged; min_size < 0: the frame height. fig_set_size_limits: the window's limits
+ * [logical pixels] (0: none), window mode only. */
+int    fig_window_add(const char *name, int name_len, int visible, int closable, int in_view_menu, int remember);
+int    fig_window_visible(const char *name, int name_len, int *visible);
+int    fig_window_set_visible(const char *name, int name_len, int visible);
+void  *fig_window_open_flag(const char *name, int name_len);
+int    fig_view_menu(const char *label, int label_len);
+int    fig_layout_add(const char *name, int name_len, const char *names, int names_len, int has_windows);
+int    fig_layout_switch(const char *name, int name_len);
+int    fig_layout_reset(void);
+int    fig_layout_current(char *buf, int buf_len);
+int    fig_prefs_open(const char *name, int name_len, const char *file, int file_len);
+int    fig_prefs_file(char *buf, int buf_len);
+int    fig_pref_set(const char *key, int key_len, const char *value, int value_len);
+int    fig_pref_get(const char *key, int key_len, char *buf, int buf_len, int *len, int *found);
+int    fig_message_box(const char *id, int id_len, const char *title, int title_len, const char *text, int text_len,
+                       const char *buttons, int buttons_len, int *answer);
+int    fig_splitter(const char *id, int id_len, int vertical, double *sizes, double min_size, int *changed);
+int    fig_set_size_limits(int min_w, int min_h, int max_w, int max_h);
+/* Internal: figure_native.cpp calls the layer at each frame's start (before NewFrame), to draw (fig_end_frame, after
+ * the file browser), at a dock space's layout (1: lay it out again), when a style is set or a theme file loaded, and
+ * first at shutdown; the layer reads the mode (0 none, 1 window, 2 headless, 3 remote), the SDL window, whether a
+ * capture runs, and queues a layout's text to apply before the next frame. */
+void   fig_app_frame_begin(void);
+void   fig_app_draw(void);
+int    fig_app_layout_rebuild(unsigned int id);
+void   fig_app_style_parts(const char *name, int name_len, const char *look, int look_len, const char *palette,
+                           int palette_len, const char *auto_dark, int auto_dark_len, const char *auto_light,
+                           int auto_light_len, const char *lines, int lines_len);
+void   fig_app_style_forget(void);
+void   fig_app_shutdown(void);
+int    fig_mode(void);
+void  *fig_window_handle(void);
+int    fig_capture_on(void);
+void   fig_layout_text(const char *text, long long len);
+
 #ifdef __cplusplus
 }
 #endif
