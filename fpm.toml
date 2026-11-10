@@ -141,3 +141,8 @@ main = "figure_test_numbers.F90"
 name = "figure_test_canvas"
 source-dir = "src/tests"
 main = "figure_test_canvas.F90"
+
+[[test]]
+name = "figure_test_plot_data"
+source-dir = "src/tests"
+main = "figure_test_plot_data.F90"

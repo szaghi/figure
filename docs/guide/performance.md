@@ -94,7 +94,7 @@ which computes its view in parallel between two frames.
 
 Give the user the slice size (iterations per frame, as `tut04_live`'s slider does) or measure it: the frame's cost is
 the slice plus the 1–2 ms of the interface. Plots read your arrays each frame without copying them
-([zero-copy contract](plots#arrays-the-zero-copy-contract)), so publishing the state every frame costs nothing extra;
+([Data in place](plots#data-in-place)), so publishing the state every frame costs nothing extra;
 what costs is how many points the plots draw.
 
 ## Large data
@@ -103,6 +103,13 @@ what costs is how many points the plots draw.
 a frame, a million 24 ms. A plot is at most a few thousand pixels wide, so draw at most a few points per pixel: keep
 one sample in N, or, to keep spikes visible, the minimum and maximum of each group of N consecutive samples (two
 points per group). A million samples shown 1000 pixels wide need 2000 points, not a million.
+
+**Strided data.** Decimating in place costs no copy: `ip_line(label, y(::10), xscale=10 * dx)` reads every tenth
+sample with ImPlot's stride. Components of an array of derived types, matrix rows and integer abscissae are read in
+place too, with two exceptions: an item copies `x` when its stride differs from the ordinates' (or converts it when it
+is an integer), and some compilers copy a strided actual argument before the call (gfortran a derived type's
+component, nvfortran every strided section). At a million points a stride costs about 7 % of the item, a copy by
+FIGURE 20 %, the compiler's temporaries of `runs%t` and `runs%cl` 55 % ([Data in place](plots#data-in-place)).
 
 **Fields: a texture beats a heatmap past a few hundred cells a side.** A heatmap draws each cell as a rectangle of
 vertices, which ImPlot rebuilds every frame; a texture is one image the GPU scales. At 512 × 512 the heatmap costs

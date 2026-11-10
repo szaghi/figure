@@ -32,8 +32,9 @@ by clicking its legend entry; these are ImPlot's interactions, kept by ImPlot fr
 
 ## Items
 
-Every item is generic over `real(real32)` and `real(real64)` (all its arrays of the same kind), takes a legend
-`label`, an optional [`spec`](#item-style) and an optional [`stat`](errors).
+Every item is generic over `real(real32)` and `real(real64)` (all its arrays of the same kind; the abscissae may also
+be `integer(int32)` or `integer(int64)`), reads arrays of any stride in place ([Data in place](#data-in-place)), takes
+a legend `label`, an optional [`spec`](#item-style) and an optional [`stat`](errors).
 
 | Procedure | Draws |
 |---|---|
@@ -121,24 +122,77 @@ The constants are ImPlot's own names, exported by `figure`; their values are gen
 `plot_spec_object` has no public components: a spec always starts from ImPlot's defaults, never from zeros (a
 zero line weight would draw nothing).
 
-## Arrays: the zero-copy contract
+## Data in place
 
-`ip_line` is generic: `x` and `y` are `real(real32)` or `real(real64)` (both of the same kind), declared
-`contiguous, intent(in)`, and passed to ImPlot's `float*` or `double*` item through the generated glue
-([Raw bindings](raw-bindings)). The arrays are read in place during the call, and nothing keeps a pointer to them
-afterwards:
+The items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`) read the program's arrays where they are,
+during the call, and keep no pointer to them afterwards. They go to ImPlot's `float*` or `double*` items with ImPlot's
+byte stride (`ImPlotSpec::Stride`), so an array does not have to be contiguous:
 
-- a contiguous array or array section (a whole array, `a(1:n)`, a matrix column `a(:, j)`) is passed without any
-  copy;
-- a non-contiguous section (a matrix row `a(i, :)`, `a(1:n:2)`) is copied by the compiler into a contiguous
-  temporary, every call. A matrix row with uniform abscissae is better passed whole, `ip_line(label, a, i)`: ImPlot
-  reads it in place with a stride ([cookbook](/manual/cookbook#plot-the-rows-of-a-matrix)).
+| What the program passes | Stride ImPlot reads with | Copied by FIGURE |
+|---|---|---|
+| a whole array, `a(1:n)`, a matrix column `a(:, j)` | the element size | nothing |
+| `a(::2)`, a matrix row `a(i, :)`, `q(1, :, k)`, `runs%cl` (a component of an array of derived types) | the distance between two elements [bytes] | nothing, when `x` and the ordinates have the same stride |
+| `x` and `y` with different strides (`ip_line(label, t, history(i, :))`) | the stride of `y` | `x`, laid out at the stride of `y` |
+| integer abscissae, `integer(int32)` or `integer(int64)` (`ip_line(label, runs%iter, runs%cl)`) | the stride of `y` | `x`, converted to the kind of `y` |
+| a reversed section, `a(n:1:-1)` (negative stride) | the element size | every array of the item |
+
+The ordinates (`y`, `y1`, `err` ...) set the stride: ImPlot has one stride for all the arrays of an item, so an array
+whose stride differs is copied, once per call, into a temporary laid out at the ordinates' stride (as large as the
+ordinates' span: `n` times the stride). An item copies at most its abscissae when the ordinates share a stride. Integer
+abscissae are always converted (ImPlot reads `x` and `y` of one type); the ordinates stay in place. `test_plot_copies()`
+counts the arrays FIGURE copied and `test_plot_stride()` gives the stride of the last item ([Testing](testing)).
+
+**What arrives is the compiler's choice.** A Fortran compiler may copy a non-contiguous actual argument into a
+contiguous temporary before the call, and then FIGURE reads that copy (contiguous, nothing more to copy):
+
+| Actual argument | gfortran 16.2 | nvfortran 26.9 | ifx 2025.3 |
+|---|---|---|---|
+| `a(::2)`, `a(i, :)`, `q(1, :, k)`, `a(n:1:-1)` | in place | copied by the compiler | in place |
+| `runs%cl` (a component of an array of derived types) | copied by the compiler | copied by the compiler | in place |
+
+(measured with `figure_test_plot_data`, which probes the compiler and prints what it passed in place). The plot is
+the same in every case; the cost is not.
+
+**Measured cost** of one `ip_line` per frame, headless, gfortran 16.2 `-O2`, i9-13900KF (`ip_setup_axes_limits` fixed,
+so ImPlot draws every point):
+
+| Data | 100 000 points [ms/frame] | 1 000 000 points [ms/frame] |
+|---|---|---|
+| contiguous `x`, `y` | 0.60 | 7.3 |
+| `x(::2)`, `y(::2)`, read in place with a stride | 0.69 | 7.8–8.2 |
+| integer `x` (converted), contiguous `y` | 0.62 | 7.8–8.3 |
+| contiguous `x`, `y(::2)` (`x` copied at the stride of `y`) | 0.77 | 8.9–9.5 |
+| `runs%t`, `runs%cl` (both copied by gfortran into temporaries) | 0.76 | 11.4–11.7 |
+| `x(::2)`, `y(::2)` packed by the program into buffers allocated once | 0.71 | 9.6–10.0 |
+
+ImPlot's own work dominates: a stride costs about 7 % over contiguous data, a copy made by FIGURE 20 %, the compiler's
+temporaries of a derived type's components 55 % (allocated and freed at every call). Over a few hundred thousand
+points, decimate before plotting ([Performance](performance#large-data)).
+
+::: warning Changed in v0.4.0
+Until v0.3.1 the items' arrays were `contiguous` dummies: every non-contiguous actual argument (`a(i, :)`, `a(::2)`,
+`runs%cl`) was copied by the compiler at every call, and integer abscissae did not compile. From v0.4.0 the dummies
+are assumed-shape without `contiguous` and `target`, the stride goes to ImPlot, and `ip_line`, `ip_scatter`,
+`ip_bars`, `ip_shaded` and `ip_error_bars` accept `integer(int32)` and `integer(int64)` abscissae. Every v0.3.1 call
+compiles and draws as before. `ip_line(label, y, row)` stays: it reads a row of a contiguous matrix in place on every
+compiler, where `ip_line(label, y(row, :))` depends on the compiler.
+:::
+
+What it does not do:
+- integer ordinates: `y` is `real(real32)` or `real(real64)`;
+- abscissae of one real kind and ordinates of the other: both `real(real32)` or both `real(real64)`;
+- the fields (`ip_heatmap`, `ip_contour`) are rank-2 and keep their contract: a contiguous field is read in place, a
+  section of one is copied by the compiler.
 
 `real(real32)`/`real(real64)` passed as `float`/`double` rely on being the same types as `real(c_float)`/
-`real(c_double)`, true on every compiler FIGURE supports; their addresses are passed with `c_loc`.
+`real(c_double)`, true on every compiler FIGURE supports; their addresses are passed with `c_loc` of their first
+element, the stride from the addresses of the first two.
 
 Series of different sizes are an error (`FIG_ERR_ARGUMENT`, message `<item>: the series have different sizes`, see
 [Error handling](errors)): nothing is drawn. Empty series draw nothing and are not an error.
+
+Modes: the same in window, headless and remote mode (the data become vertices on the CPU). Threads: a task does not
+draw (`FIG_ERR_STATE`, see [processes](processes)). Example: [Plot the history a solver keeps, in place](/manual/cookbook#plot-the-history-a-solver-keeps-in-place).
 
 ## Several plots in one figure
 
@@ -228,6 +282,4 @@ segments.
 ## Not bound yet
 
 Other items (stems, stairs, histograms, text, ...) and axis setup beyond labels, limits, log scales and
-tick formats (time and symmetric-log scales, tick positions) are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)),
-([roadmap](roadmap)). In-place rows exist for `ip_line` only; the same `ImPlotSpec` stride serves the other items when
-they need it.
+tick formats (time and symmetric-log scales, tick positions) are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)); see the [roadmap](roadmap).

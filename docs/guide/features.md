@@ -175,7 +175,7 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_begin_subplots(title, rows, cols [, width] [, height] [, link_x] [, link_y])` → `logical`, `ip_end_subplots()` | a grid of plots, optionally sharing the x or y range |
 | `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | initial axis ranges |
 | `ip_plot_limits(...)`, `ip_plot_size(...)` | the ranges the user panned and zoomed to; the plot's size in pixels |
-| `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))` |
+| `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))`; arrays of any stride read in place, `x` may be `int32`/`int64` ([plots](plots#data-in-place)) |
 | `ip_line(label, y [, xscale, xstart] ...)`, `ip_line(label, y, row ...)` | uniform x; a matrix row read in place |
 | `ip_scatter(label, x, y [, spec] [, stat])` | markers at `(x(i), y(i))` |
 | `ip_bars(label, x, y, bar_size [, spec] [, stat])` | bars of height `y(i)` at `x(i)` |
@@ -282,6 +282,8 @@ Details: [3-D views](view3d).
 | `test_opened_url()` → `character` | the URL the last click on an `ig_text_link_url` asked to open (headless mode opens nothing) ([Links](widgets#links)) |
 | `test_quit()` | a quit request, as the window's close button makes it |
 | `test_plot_tick(axis, index, label [, count])` | a tick label of the plot being declared (tests of axis formats) |
+| `test_plot_copies()` → `int64` | the arrays the plot items copied so far (a stride differing from the ordinates', integer abscissae) ([plots](plots#data-in-place)) |
+| `test_plot_stride()` → `int64` | the byte stride the last plot item gave ImPlot ([plots](plots#data-in-place)) |
 | `test_frame_hit(x, y)` → `character` | what the frame of `decorations='figure'` does at a point: `'client'`, `'drag'`, `'resize-top-left'`, ... ([the window's frame](frame-loop#the-window-s-frame)) |
 | `test_frame_rect(part, x0, y0, x1, y1 [, found] [, stat])` | a part of its title bar in the last frame: `'bar'`, `'icon'`, `'menus'`, `'title'`, `'minimize'`, `'maximize'`, `'close'` |
 | `test_frame_state(minimized, maximized [, stat])` | the window minimized, maximized (headless: as the bar's buttons recorded it) |

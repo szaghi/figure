@@ -273,6 +273,11 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   `ig_draw_image` draw on the window, the foreground, the background or inside a plot in plot units;
   `ig_cursor_screen_pos`, `ig_invisible_button`; `test_drawn_extent` looks on a layer and counts vertices
   ([Canvas](canvas)): done.
+- **Plot data passed in place:** the items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`) take
+  arrays of any stride (`runs%cl`, `q(1, :, k)`, `y(::2)`) and give ImPlot their byte stride; an array whose stride
+  differs from the ordinates' is copied at their stride; `integer(int32)`/`integer(int64)` abscissae, converted;
+  `test_plot_copies`, `test_plot_stride`. What a compiler copies before the call is measured and documented
+  ([Data in place](plots#data-in-place)): done.
 
 ## Next
 

@@ -20,7 +20,7 @@ module figure_testing
 !< Coordinates are display pixels, as `ig_item_rect` and `test_window_rect` give them. Works in every mode; with
 !< `app%init_headless` no window, display or GPU is needed, so tests run in CI as is.
 use, intrinsic :: iso_c_binding, only : c_char, c_float, c_int, c_long_long
-use, intrinsic :: iso_fortran_env, only : int32, real64
+use, intrinsic :: iso_fortran_env, only : int32, int64, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
@@ -29,6 +29,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_but
                             fig_file_browser_get, fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
                             fig_popup_rect, fig_opened_url, fig_drawn_extent_layer
 use figure_imgui, only : ig_item_rect
+use figure_implot, only : plot_copies, plot_stride
 
 implicit none
 private
@@ -36,7 +37,7 @@ public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel,
 public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick, test_system_theme
 public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_rect, test_drawn_extent
 public :: test_file_browser, test_file_browser_rect, test_settings_file, test_drop
-public :: test_popup_rect, test_opened_url
+public :: test_popup_rect, test_opened_url, test_plot_copies, test_plot_stride
 
 interface test_drawn_extent
    !< The extent [pixels] of what was drawn so far in the current window in a colour: Dear ImGui's style colour by its
@@ -545,6 +546,25 @@ contains
    allocate(character(len=n) :: url)
    if (n > 0_c_long_long) n = fig_opened_url(url, n)
    endfunction test_opened_url
+
+   function test_plot_copies() result(copies)
+   !< How many arrays the plot items copied since the program started, because ImPlot could not read them in place: an
+   !< array whose stride differs from the ordinates' (or is negative), and integer abscissae (converted). A test reads
+   !< it before and after an item to check that the item read its data in place (plots.md, "Data in place").
+   integer(int64) :: copies !< Arrays copied.
+
+   copies = plot_copies
+   endfunction test_plot_copies
+
+   function test_plot_stride() result(bytes)
+   !< The byte stride the last plot item (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`) gave ImPlot
+   !< for its arrays: the element size for contiguous data, larger for data read in place from a strided section; 0
+   !< before any item. What the item received depends on the compiler: some copy a strided actual argument into a
+   !< contiguous temporary before the call (plots.md, "Data in place").
+   integer(int64) :: bytes !< Stride [bytes].
+
+   bytes = plot_stride
+   endfunction test_plot_stride
 
    subroutine test_item_center(x, y)
    !< The centre of the last item drawn (call it right after the widget): where `test_click` should aim.

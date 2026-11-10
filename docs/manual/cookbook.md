@@ -460,8 +460,8 @@ A column of a Fortran array is contiguous: ImPlot reads it in place.
 
 Items are drawn in call order: put shaded areas first so the lines stay visible. A spec built once outside the loop
 costs nothing per frame; one built inline (`spec=ip_spec(...)`) is rebuilt every frame, which is cheap but not free.
-The `x(::5)` sections are not contiguous: the compiler copies them (see
-[Plot the rows of a matrix](#plot-the-rows-of-a-matrix)).
+The `x(::5)` sections are not contiguous: ImPlot reads them in place with a stride, or reads the compiler's copy
+([Data in place](/guide/plots#data-in-place)).
 [Plots](/guide/plots#item-style) lists every `ip_spec` argument.
 
 ### Show a field and its colour scale
@@ -558,14 +558,34 @@ A row of a column-major matrix is strided. When its abscissae are uniform, `ip_l
 
 <<< @/examples/snippets/cb_rows-rows.F90{fortran}
 
-With arbitrary abscissae there is no in-place form: ImPlot applies one stride to both `x` and `y`, so a contiguous
-`x` and a strided row cannot be read together. Passing the section `history(i, :)` makes the compiler copy it into a
-temporary at every call (allocated and freed each frame); copying it yourself into a buffer allocated once costs the
-same copy without the allocation. Storing series as columns avoids the question.
+With arbitrary abscissae, `ip_line(label, t, history(i, :))` reads the row in place and copies `t` at the row's
+stride (ImPlot applies one stride to both `x` and `y`), on compilers that pass the section in place (gfortran, ifx);
+nvfortran copies the row into a temporary before the call. Copying the row yourself into a buffer allocated once is
+the same on every compiler. Storing series as columns avoids the question ([Data in place](/guide/plots#data-in-place)).
 
 <<< @/examples/snippets/cb_rows-rows-copied.F90{fortran}
 
 <Media name="cb_rows" :width="620" alt="Three plots of the same two probes: columns read in place, rows read in place with a stride, rows copied" caption="docs/examples/src/cb_rows.F90: the three ways give the same plot" />
+
+### Plot the history a solver keeps, in place
+
+<<< @/examples/snippets/cb_in_place-records.F90{fortran}
+
+A solver keeps one record per iteration: `runs%cl` is a component of an array of derived types, strided by the size of
+a record, and `runs%iter` is an integer. The item reads the coefficients where they are, with ImPlot's stride, and
+converts the iterations into one temporary (ImPlot reads `x` and `y` of one type).
+
+<<< @/examples/snippets/cb_in_place-rows.F90{fortran}
+
+A row of a matrix is read with the matrix's stride; `time` is contiguous, so it is copied at that stride (one stride
+per item). With uniform abscissae nothing is copied, and `probes(3, ::10)` plots every tenth sample in place.
+`cb_in_place --check` prints what was copied, built with gfortran:
+
+<<< @/examples/output/cb_in_place.txt{text}
+
+gfortran copies a component of an array of derived types into a temporary before the call: the first item reads that
+copy (stride 8 bytes); ifx passes it in place (stride of a record), nvfortran copies every strided section
+([Data in place](/guide/plots#data-in-place) has the table and the measured costs).
 
 ## Running work
 

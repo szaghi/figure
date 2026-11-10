@@ -44,6 +44,8 @@ And to aim and to check:
 | `test_item_center(x, y)` | the centre of the last widget drawn (call it right after the widget) |
 | `test_quit([stat])` | a quit request, as the window's close button makes it |
 | `test_plot_tick(axis, index, label [, count] [, stat])` | the label of tick `index` on `'x'` or `'y'` of the plot being declared (between `ip_begin_plot` and `ip_end_plot`, after an item), and the number of ticks |
+| `test_plot_copies()` → `int64` | how many arrays the plot items copied since the program started because ImPlot could not read them in place: an array whose stride differs from the ordinates' (or is negative), integer abscissae (converted); read it before and after an item ([Data in place](plots#data-in-place)) |
+| `test_plot_stride()` → `int64` | the byte stride the last plot item gave ImPlot: the element size for contiguous data, more for data read in place from a strided section, 0 before any item. It reports what the item received: a compiler that copies a strided actual argument into a temporary gives a contiguous one ([Data in place](plots#data-in-place)) |
 | `test_frame_hit(x, y)` → `character` | the hit test of the window's frame (`decorations='figure'`) at (x, y), from the last frame: `'client'`, `'drag'`, or a resize edge or corner (`'resize-top-left'`, `'resize-top'`, ..., `'resize-left'`) |
 | `test_frame_rect(part, x0, y0, x1, y1 [, found] [, stat])` | a part of the title bar in the last frame (`'bar'`, `'icon'`, `'menus'`, `'title'`, `'minimize'`, `'maximize'`, `'close'`), to click its buttons |
 | `test_frame_state(minimized, maximized [, stat])` | minimized and maximized: the window's, or in headless mode what the bar's buttons recorded |

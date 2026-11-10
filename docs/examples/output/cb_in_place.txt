@@ -1,0 +1,5 @@
+$ ./cb_in_place --check
+runs%iter, runs%cl:       1 copied, stride 8 bytes
+time, probes(1, :):       1 copied, stride 24 bytes
+probes(2, :), uniform x:  0 copied, stride 24 bytes
+probes(3, ::10), uniform: 0 copied, stride 240 bytes

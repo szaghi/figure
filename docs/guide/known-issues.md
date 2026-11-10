@@ -59,6 +59,16 @@ prev_size`). Seen with gfortran 16.2 (valgrind reports the write in the construc
 `process_object%start` are the usual victim: fill a fixed-length array element by element instead, as
 `docs/examples/src/tut11_run.F90` does.
 
+## Strided plot data copied by the compiler
+
+The plot items read strided arrays in place ([Data in place](plots#data-in-place)), but a compiler may copy a
+non-contiguous actual argument into a temporary before the call, at every call: gfortran 16.2 does it for a component
+of an array of derived types (`runs%cl`), nvfortran 26.9 for every strided section (`a(::2)`, `a(i, :)`, `runs%cl`);
+ifx 2025.3 passes both in place. The plot is the same; the copy costs time (at a million points, `runs%t` and
+`runs%cl` add about 55 % to the item with gfortran). Workarounds: `ip_line(label, y, row)` reads a row of a matrix in
+place on every compiler; series stored as columns or contiguous arrays are never copied; a buffer the program fills
+once per update and reuses avoids the allocation of the compiler's temporaries.
+
 ## Text input
 
 `ig_input_text` edits a `character` variable, whose length is the field's capacity: a longer text is cut at it. Text

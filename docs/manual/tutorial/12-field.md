@@ -58,7 +58,7 @@ studio reads it after a converged run and when a case with a result is opened, t
 <<< @/examples/snippets/tut12_field-profile.F90{fortran}
 
 - `ip_line('T', field, i, xscale=dy)` plots the column `i` of the field, `field(i, :)`, against y, read in place:
-  no copy of the column is made ([Arrays: the zero-copy contract](/guide/plots#arrays-the-zero-copy-contract)).
+  no copy of the column is made ([Data in place](/guide/plots#data-in-place)).
 - `ip_error_bars(label, y, mean, below, above)` draws asymmetric error bars: at every fourth node, the mean of the
   five columns around the probe line, down to their least and up to their greatest value. Close to the hot side the
   bars are long: the temperature changes fast across the line.
