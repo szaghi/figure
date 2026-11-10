@@ -26,6 +26,14 @@ program figure_test_forms
 !< `ig_scroll_to_pos` and drawn at the centre on the next frame; `ig_set_scroll(y=0)` goes back to the top; a bad
 !< ratio, axis or offset is refused; `ig_focus_here` makes the next field take typed keys without a click; a modal's
 !< `ig_default_focus` button has the focus when the modal appears and enter presses it.
+!<
+!< Layout: the font size is the size set times the content scale; `ig_em(2)` and the line and frame heights follow it
+!< when the font changes; a group of two buttons is one item, their bounding rectangle, and `ig_same_line` puts the
+!< next item beside it; `ig_available` shrinks by the width of a region drawn beside (and the spacing); a centred
+!< group's centre is the window's within a pixel on the second frame (not on the first), and again two frames after the
+!< font changed; a right-aligned group and an item placed by `ig_align_next` end at the content's right edge; a
+!< pushed item width sets a field's width until popped; `ig_indent` and `ig_dummy` move and size as asked; an unknown
+!< `where` or a negative width is refused.
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, ig_input_text, ig_item_rect,   &
@@ -40,6 +48,10 @@ use figure, only : ig_any_item_active, ig_any_item_hovered, ig_begin_child, ig_e
 use figure, only : ig_begin_popup_modal, ig_close_current_popup, ig_default_focus, ig_end_popup, ig_focus_here,   &
                    ig_get_scroll, ig_open_popup, ig_scroll_here, ig_scroll_to_pos, ig_selectable, ig_set_scroll, &
                    list_clipper_object
+use figure, only : ig_align_begin, ig_align_end, ig_align_next, ig_available, ig_begin_group, ig_dummy, &
+                   ig_em, ig_end_group, ig_font_size, ig_frame_height, ig_get_style_var, ig_indent, ig_line_height, &
+                   ig_new_line, ig_pop_item_width, ig_push_item_width, ig_same_line, ig_separator_text,             &
+                   ig_spacing, ig_unindent
 use figure_testing, only : test_click, test_drag, test_item_center, test_key, test_mouse_button, test_mouse_move, &
                            test_next_frame, test_popup_rect, test_type, test_wheel, test_window_rect
 
@@ -47,7 +59,7 @@ implicit none
 integer(int32), parameter :: FRAMES = 400_int32 !< Frames run.
 integer(int32), parameter :: TIP_FRAME = 230_int32 !< Frame on which the tooltip is looked for.
 type(app_object)          :: app                !< Application.
-logical                   :: test_passed(60)    !< Per-check outcome.
+logical                   :: test_passed(68)    !< Per-check outcome.
 character(len=16)         :: grid_file          !< A text field.
 character(len=4)          :: short              !< A text field of capacity 4.
 character(len=12)         :: no_blank           !< A text field that refuses blanks.
@@ -138,6 +150,19 @@ logical                   :: row_visible(2, 2)  !< (row 1, row 30) of a child vi
 integer(int32)            :: s_hover(2)         !< Statuses of ig_item_hovered: 'normal', an unknown delay.
 integer(int32)            :: picked             !< The combo's choice after the pick.
 integer(int32)            :: normal_at          !< First frame the button was hovered with the 'normal' delay.
+real(real64)              :: fsize(3)           !< ig_font_size: at 15, at 24 (set), the content scale.
+real(real64)              :: ems(2)             !< ig_em(2) at 15 and at 24 [pixels].
+real(real64)              :: heights(4, 2)      !< Line, line + spacing, frame, frame + spacing, at 15 and at 24.
+real(real64)              :: pad(2)             !< The style's window padding [pixels].
+real(real64)              :: gap(2)             !< The style's item spacing [pixels].
+real(real64)              :: fpad(2)            !< The style's frame padding [pixels].
+real(real64)              :: grp(4, 4)          !< Rectangles: button A, button B, the group, the button after it.
+real(real64)              :: avail(2)           !< ig_available's width: before and beside a 100-pixel region.
+real(real64)              :: centred(4)         !< The centred group's centre minus the window's: frames 1, 2, 11, 13.
+real(real64)              :: righted(2)         !< Right edges: the right-aligned group's, ig_align_next's button.
+real(real64)              :: field_w(2)         !< A field's width: with the pushed width, after the pop.
+real(real64)              :: moved(4)           !< x of a text indented by 30, after the unindent; dummy w, h.
+integer(int32)            :: s_align(3)         !< Statuses: a good align, an unknown where, a negative width.
 real(real64)              :: here_off(2)        !< Row 150's centre minus the child's centre: same frame, next frame.
 logical                   :: here_vis(2)        !< Row 150 visible: on the frame of ig_scroll_here, on the next.
 real(real64)              :: scroll_seen(4, 2)  !< ig_get_scroll (y, ymax, x, xmax): before, after the scroll.
@@ -380,6 +405,7 @@ call colour_frames()
 call shortcut_frames()
 call item_frames()
 call scroll_frames()
+call layout_frames()
 call app%destroy()
 
 test_passed(1) = grid_file == 'MESH/grid' .and. edits(1) > 0_int32            ! typed text, written back
@@ -454,6 +480,28 @@ test_passed(58) = all(s_scroll(1:2) == FIG_OK) .and. all(s_scroll(3:6) == FIG_ER
 test_passed(59) = fields(1) == 'one' .and. fields(2) == 'abc'                ! typed keys go to the focused field
 test_passed(60) = .not. modal_focus(1) .and. modal_focus(2) .and. &          ! a modal's default focus: Keep, and
                   all(modal_press == [0_int32, 1_int32])                     ! enter presses it
+test_passed(61) = abs(fsize(1) - 15.0_real64 * fsize(3)) < 1.0e-6_real64 .and. &   ! the font size: the size set
+                  abs(fsize(2) - 24.0_real64 * fsize(3)) < 1.0e-6_real64          ! times the content scale
+test_passed(62) = abs(ems(1) - 2.0_real64 * fsize(1)) < 1.0e-6_real64 .and. &      ! ig_em(2) follows the font
+                  abs(ems(2) - 2.0_real64 * fsize(2)) < 1.0e-6_real64 .and. &
+                  all(abs(heights(1, :) - fsize(1:2)) < 1.0e-6_real64) .and. &      ! line, frame heights
+                  all(abs(heights(2, :) - heights(1, :) - gap(2)) < 1.0e-6_real64) .and. &
+                  all(abs(heights(3, :) - heights(1, :) - 2.0_real64 * fpad(2)) < 1.0e-6_real64) .and. &
+                  all(abs(heights(4, :) - heights(3, :) - gap(2)) < 1.0e-6_real64)
+test_passed(63) = abs(grp(1, 3) - grp(1, 1)) < 0.5_real64 .and. abs(grp(2, 3) - grp(2, 1)) < 0.5_real64 .and. & ! one
+                  abs(grp(1, 3) + grp(3, 3) - grp(1, 2) - grp(3, 2)) < 0.5_real64 .and. &       ! rectangle: A to B
+                  abs(grp(4, 3) - (max(grp(4, 1), grp(4, 2)) + gap(2) + 50.0_real64)) < 0.5_real64 .and. & ! dummy
+                  abs(grp(1, 4) - (grp(1, 3) + grp(3, 3) + gap(1))) < 0.5_real64 .and. &        ! beside the group
+                  abs(grp(2, 4) - grp(2, 3)) < 0.5_real64
+test_passed(64) = abs(avail(1) - avail(2) - (100.0_real64 + gap(1))) < 0.5_real64 ! ig_available beside a region
+test_passed(65) = abs(centred(1)) > 50.0_real64 .and. abs(centred(2)) <= 1.0_real64 .and. & ! centred on the second
+                  abs(centred(3)) > 1.0_real64 .and. abs(centred(4)) <= 1.0_real64           ! frame, again after a font
+test_passed(66) = all(abs(righted - (20.0_real64 + 600.0_real64 - pad(1))) <= 1.0_real64)  ! right edges
+test_passed(67) = abs(field_w(1) - 100.0_real64) < 0.5_real64 .and. abs(field_w(2) - 100.0_real64) > 10.0_real64 .and. &
+                  abs(moved(1) - grp(1, 1) - 30.0_real64) < 0.5_real64 .and. &              ! push/pop width, indent,
+                  abs(moved(2) - grp(1, 1)) < 0.5_real64 .and. &                             ! unindent,
+                  abs(moved(3) - 40.0_real64) < 0.5_real64 .and. abs(moved(4) - 25.0_real64) < 0.5_real64 ! dummy
+test_passed(68) = s_align(1) == FIG_OK .and. all(s_align(2:3) == FIG_ERR_ARGUMENT)  ! bad where, width refused
 
 write(output_unit, '(A,*(L2))') 'figure_test_forms checks:', test_passed
 if (.not. all(test_passed)) then
@@ -484,6 +532,11 @@ if (.not. all(test_passed)) then
          clip_off, ', top ', top_scroll, ', stats ', s_scroll, s_focus
    write(output_unit, '(A,2L2,A,2(I0,1X))') 'focus: fields "'//trim(fields(1))//'" "'//trim(fields(2))// &
          '", modal focus', modal_focus, ', presses ', modal_press
+   write(output_unit, '(A,3F8.2,A,2F8.2,A,8F8.2,A,2F6.1,A,2F6.1)') 'layout: font', fsize, ', em', ems, ', heights', &
+         heights, ', gap', gap, ', frame pad', fpad
+   write(output_unit, '(A,16F8.1,A,2F8.1,A,4F8.1,A,2F8.1,A,2F8.1,A,4F8.1,A,3(I0,1X))') 'layout: group', grp, &
+         ', avail', avail, ', centred', centred, ', righted', righted, ', field', field_w, ', moved', moved, &
+         ', stats ', s_align
 endif
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
@@ -942,6 +995,120 @@ contains
       endselect
    enddo
    endsubroutine scroll_frames
+
+   subroutine layout_frames()
+   !< One window, Layout (600 x 570 at 20, 20): metrics at the default font (15) and at 24; a group of two buttons and
+   !< a button beside it; ig_available before and beside a 100-pixel region; a centred group, a right-aligned one, a
+   !< button placed by ig_align_next; a pushed item width; an indent; a dummy; the refused arguments.
+   type(item_status_object) :: s      !< Status of an item.
+   real(real64)             :: v(2)   !< A style variable.
+   real(real64)             :: h      !< ig_available's height, not kept.
+   integer(int32)           :: n      !< Its count.
+   integer(int32)           :: f      !< Frame.
+   character(len=8)         :: text   !< A field.
+   integer(int32)           :: k      !< Font state: 1 at 15, 2 at 24.
+
+   centred = huge(1.0_real64)
+   righted = huge(1.0_real64)
+   s_align = -1_int32
+   fsize(3) = app%content_scale()
+   text = 'abc'
+   do f = 1_int32, 14_int32
+      if (.not. app%next_frame()) exit
+      k = merge(2_int32, 1_int32, f > 10_int32)
+      call ig_get_style_var('WindowPadding', v, n)
+      pad = v
+      call ig_get_style_var('ItemSpacing', v, n)
+      gap = v
+      call ig_get_style_var('FramePadding', v, n)
+      fpad = v
+      call ig_set_next_window(20.0_real64, 20.0_real64, 600.0_real64, 570.0_real64, always=.true.) ! no scroll bar,
+      if (ig_begin('Layout')) then                                                                   ! at 15 and 24
+         if (f == 3_int32 .or. f == 12_int32) then
+            fsize(k) = ig_font_size()
+            ems(k) = ig_em(2_int32)
+            heights(:, k) = [ig_line_height(), ig_line_height(spacing=.true.), ig_frame_height(), &
+                             ig_frame_height(spacing=.true.)]
+         endif
+         call ig_separator_text('metrics')
+         call ig_align_begin('mid', 'centre', stat=s_align(1))    ! two buttons centred
+         if (ig_button('Cancel')) continue
+         call ig_same_line()
+         if (ig_button('Apply')) continue
+         call ig_align_end()
+         s = ig_last_item()
+         select case (f)
+         case (1_int32)
+            centred(1) = s%rect(1) + 0.5_real64 * s%rect(3) - 320.0_real64
+         case (2_int32)
+            centred(2) = s%rect(1) + 0.5_real64 * s%rect(3) - 320.0_real64
+         case (11_int32)
+            centred(3) = s%rect(1) + 0.5_real64 * s%rect(3) - 320.0_real64
+         case (13_int32)
+            centred(4) = s%rect(1) + 0.5_real64 * s%rect(3) - 320.0_real64
+         endselect
+         call ig_align_begin('end', 'right')                      ! one button at the right
+         if (ig_button('OK')) continue
+         call ig_align_end()
+         s = ig_last_item()
+         if (f == 2_int32) righted(1) = s%rect(1) + s%rect(3)
+         call ig_align_next(80.0_real64, 'right')                 ! a known width: right at once
+         if (ig_button('Close', width=80.0_real64)) continue
+         s = ig_last_item()
+         if (f == 1_int32) righted(2) = s%rect(1) + s%rect(3)
+         call ig_begin_group()                                    ! a group: one item
+         if (ig_button('A')) continue
+         s = ig_last_item()
+         grp(:, 1) = s%rect
+         call ig_same_line()
+         if (ig_button('Bee')) continue
+         s = ig_last_item()
+         grp(:, 2) = s%rect
+         call ig_dummy(10.0_real64, 50.0_real64)                  ! below A and Bee: the group is taller
+         call ig_end_group()
+         s = ig_last_item()
+         grp(:, 3) = s%rect
+         call ig_same_line()
+         if (ig_button('C')) continue
+         s = ig_last_item()
+         grp(:, 4) = s%rect
+         call ig_available(avail(1), h)                           ! the full width
+         if (ig_begin_child('side', width=100.0_real64, height=40.0_real64, border=.true.)) continue
+         call ig_end_child()
+         call ig_same_line()
+         call ig_available(avail(2), h)                           ! beside the region
+         call ig_new_line()
+         call ig_push_item_width(100.0_real64)
+         if (ig_input_text('##pushed', text)) continue
+         s = ig_last_item()
+         field_w(1) = s%rect(3)
+         call ig_pop_item_width()
+         if (ig_input_text('##popped', text)) continue
+         s = ig_last_item()
+         field_w(2) = s%rect(3)
+         call ig_spacing()
+         call ig_indent(30.0_real64)
+         call ig_text('in')
+         s = ig_last_item()
+         moved(1) = s%rect(1)
+         call ig_unindent(30.0_real64)
+         call ig_text('out')
+         s = ig_last_item()
+         moved(2) = s%rect(1)
+         call ig_dummy(40.0_real64, 25.0_real64)
+         s = ig_last_item()
+         moved(3:4) = s%rect(3:4)
+         if (f == 5_int32) then                                   ! refused: the group still begun, not moved
+            call ig_align_begin('bad', 'center', stat=s_align(2))
+            call ig_align_end()
+            call ig_align_next(-1.0_real64, 'right', stat=s_align(3))
+         endif
+      endif
+      call ig_end()
+      if (f == 10_int32) call app%set_font('plex-sans', size=24.0_real64) ! from frame 11
+   enddo
+   call app%set_font('plex-sans', size=15.0_real64)
+   endsubroutine layout_frames
 
    subroutine replace(k, text)
    !< Click field k, select its text, type `text`, confirm with enter. The text is selected with end, then shift+home,

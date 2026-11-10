@@ -20,7 +20,7 @@ public :: FORMAT_INTEGER, FORMAT_REAL, format_ok, format_refused
 public :: figure_draw_refused, figure_scope_open, figure_scope_refused
 public :: SCOPE_WINDOW, SCOPE_CHILD, SCOPE_TAB_BAR, SCOPE_TAB, SCOPE_TABLE, SCOPE_TREE, SCOPE_MAIN_MENU_BAR, SCOPE_MENU_BAR
 public :: SCOPE_MENU, SCOPE_POPUP, SCOPE_PLOT, SCOPE_SUBPLOTS, SCOPE_DOCK_LAYOUT, SCOPE_ID, SCOPE_DISABLED, SCOPE_FONT
-public :: SCOPE_STYLE_COLOR, SCOPE_STYLE_VAR
+public :: SCOPE_STYLE_COLOR, SCOPE_STYLE_VAR, SCOPE_GROUP, SCOPE_ALIGN, SCOPE_ITEM_WIDTH
 
 integer(int32), parameter :: FORMAT_INTEGER = 1_int32 !< A printf format of an integer value: d, i, u.
 integer(int32), parameter :: FORMAT_REAL = 2_int32    !< A printf format of a real value: f, F, e, E, g, G, a, A.
@@ -43,6 +43,9 @@ integer(c_int), parameter :: SCOPE_DISABLED = 15_c_int      !< ig_begin_disabled
 integer(c_int), parameter :: SCOPE_FONT = 16_c_int          !< ig_push_font / ig_pop_font.
 integer(c_int), parameter :: SCOPE_STYLE_COLOR = 17_c_int   !< ig_/ip_push_style_color / ig_/ip_pop_style_color.
 integer(c_int), parameter :: SCOPE_STYLE_VAR = 18_c_int     !< ig_/ip_push_style_var / ig_/ip_pop_style_var.
+integer(c_int), parameter :: SCOPE_GROUP = 19_c_int         !< ig_begin_group / ig_end_group (always paired).
+integer(c_int), parameter :: SCOPE_ALIGN = 20_c_int         !< ig_align_begin / ig_align_end (always paired).
+integer(c_int), parameter :: SCOPE_ITEM_WIDTH = 21_c_int    !< ig_push_item_width / ig_pop_item_width (always paired).
 
 contains
    function figure_last_error() result(msg)

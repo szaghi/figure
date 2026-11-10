@@ -1,0 +1,7 @@
+#! program build/docs-examples/bin/gallery
+#! args    layout_metrics
+#! from    10
+#! frames  1
+# the lengths of FIGURE's layout calls as dimension lines over a form: the font size (1 em), the line and frame heights
+# with and without spacing, a width in em, a column offset, the window padding, the item spacing, an indent, the space
+# left on a line and a right-aligned group

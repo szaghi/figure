@@ -23,6 +23,7 @@ public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_shortcut, fig_plot_tick_label
 public :: fig_app_wake, fig_set_next_item_shortcut, fig_last_item, fig_item_status, fig_mark_last_item_edited
+public :: fig_align_begin, fig_align_end, fig_align_next, fig_plot_end
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
@@ -1194,6 +1195,35 @@ interface
    !< The item drawn last changed its value on this frame (Dear ImGui's MarkItemEdited).
    implicit none
    endsubroutine fig_mark_last_item_edited
+
+   subroutine fig_plot_end() bind(C, name='fig_plot_end')
+   !< End the current plot (ImPlot's EndPlot) without fitting an axis that has no data (an FPE under traps).
+   implicit none
+   endsubroutine fig_plot_end
+
+   function fig_align_begin(id, id_len, where) result(status) bind(C, name='fig_align_begin')
+   !< Begin an aligned group: moved by the space left on the line (`where` 1 centre, 2 right, 0 not moved), its width
+   !< remembered from the previous frame under `id`.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: id(*)  !< Id (not NUL-terminated).
+   integer(c_int),         value      :: id_len !< Its length [bytes].
+   integer(c_int),         value      :: where  !< 1 centre, 2 right, 0 not moved.
+   integer(c_int)                     :: status !< FIG_OK or a FIG_ERR_* code.
+   endfunction fig_align_begin
+
+   subroutine fig_align_end() bind(C, name='fig_align_end')
+   !< End the aligned group begun last; its width kept for the next frame (one more frame asked when it changed).
+   implicit none
+   endsubroutine fig_align_end
+
+   subroutine fig_align_next(width, where) bind(C, name='fig_align_next')
+   !< Move the cursor so that an item `width` pixels wide is centred (`where` 1) or right-aligned (2) on the line.
+   import :: c_double, c_int
+   implicit none
+   real(c_double), value :: width !< The item's width [pixels].
+   integer(c_int), value :: where !< 1 centre, 2 right.
+   endsubroutine fig_align_next
 
    function fig_widget_input_text(label, label_len, hint, hint_len, buf, buf_size, flags) result(edited) &
       bind(C, name='fig_widget_input_text')

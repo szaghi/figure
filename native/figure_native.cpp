@@ -3260,6 +3260,75 @@ void fig_mark_last_item_edited(void) {
    if (ImGui::GetCurrentContext() && GImGui->LastItemData.ID != 0) ImGui::MarkItemEdited(GImGui->LastItemData.ID);
 }
 
+// Aligned groups: the cursor moved right by the space left on the line (all of it, or half for the centre), the
+// width being the group's on the previous frame (Dear ImGui's storage of the window, keyed by the id). The cursor is
+// moved as Indent moves it (not SetCursorPos, which an empty group would report as extending its parent).
+namespace {
+struct align_t {
+   ImGuiStorage *storage; // the window's storage at the begin
+   ImGuiID       key;
+   int           frame;   // Dear ImGui's frame count at the begin
+};
+std::vector<align_t> aligns; // the open aligned groups, innermost last (the scope record keeps them paired)
+
+void align_shift(float width, int where) {
+   if (where != 1 && where != 2) return;
+   const float avail = ImGui::GetContentRegionAvail().x;
+   const float off = where == 1 ? (avail - width) * 0.5f : avail - width;
+   if (off > 0.0f) GImGui->CurrentWindow->DC.CursorPos.x += IM_TRUNC(off);
+}
+} // namespace
+
+// ImPlot's EndPlot fits the axes asked to fit this frame (every axis of a plot on its first frame, an auto-fitting
+// axis, a double click): an axis that received no data has empty extents (+inf, -inf), and ImPlotAxis::ApplyFit
+// computes (-inf) * padding, NaN with the default padding 0: an invalid operation, which stops a program built with
+// -ffpe-trap=invalid (gfortran's debug flags) at a plot that has no data yet. Without traps ImPlot then ignores the
+// NaN and keeps the axis's range, so not fitting such an axis draws the same plot.
+void fig_plot_end(void) {
+   if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot) return;
+   ImPlot::SetupLock(); // as EndPlot would: a plot without items finishes its setup there, which asks for the fits
+   ImPlotPlot &p = *GImPlot->CurrentPlot;
+   for (int i = 0; i < ImAxis_COUNT; ++i) {
+      ImPlotAxis &a = p.Axes[i];
+      if (a.FitThisFrame && a.FitExtents.Min > a.FitExtents.Max) a.FitThisFrame = false; // no data: nothing to fit
+   }
+   ImPlot::EndPlot();
+}
+
+int fig_align_begin(const char *id, int id_len, int where) {
+   FIG_TRY
+   if (!ImGui::GetCurrentContext() || !GImGui->WithinFrameScope) return fail(FIG_ERR_STATE, "no frame open");
+   const int frame = ImGui::GetFrameCount();
+   while (!aligns.empty() && aligns.back().frame != frame) aligns.pop_back(); // left by an earlier frame
+   ImGuiStorage *storage = ImGui::GetStateStorage();
+   const ImGuiID key = ImGui::GetID(id, id + (id_len > 0 ? id_len : 0));
+   const float   width = storage->GetFloat(key, -1.0f);
+   if (width >= 0.0f) align_shift(width, where);
+   ImGui::BeginGroup();
+   aligns.push_back({storage, key, frame});
+   return FIG_OK;
+   FIG_CATCH
+}
+
+void fig_align_end(void) {
+   if (!ImGui::GetCurrentContext()) return;
+   ImGui::EndGroup();
+   if (aligns.empty()) return;
+   const align_t a = aligns.back();
+   aligns.pop_back();
+   if (a.frame != ImGui::GetFrameCount()) return;
+   const float w = ImGui::GetItemRectSize().x;
+   if (std::fabs(a.storage->GetFloat(a.key, -1.0f) - w) > 0.5f) { // first frame, or the width changed: one more
+      a.storage->SetFloat(a.key, w);                                // frame draws it where it belongs (lazy redraw)
+      frames_at_least(1);
+   }
+}
+
+void fig_align_next(double width, int where) {
+   if (!ImGui::GetCurrentContext() || !GImGui->WithinFrameScope) return;
+   align_shift(static_cast<float>(width), where);
+}
+
 int fig_last_item(fig_item_status *s) {
    FIG_TRY
    *s = fig_item_status{};

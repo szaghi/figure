@@ -96,6 +96,17 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_align_text_to_frame_padding()` | the text that follows on the line is level with the text of fields and buttons |
 | `ig_text_size(text)` → `real(real64)(2)` | width and height of a text in the current font [pixels] (a label: the part before `##`) |
 | `ig_separator()` | horizontal separator |
+| `ig_separator_text(label)` | a separator with a title at its left ([Layout](widgets#layout)) |
+| `ig_font_size()` → `real(real64)` | the current font size [pixels]: one em |
+| `ig_em(x)` → `real(real64)` | `x` em [pixels] (`x` `real64` or `int32`): a size that follows the font |
+| `ig_line_height([spacing])` → `real(real64)`, `ig_frame_height([spacing])` → `real(real64)` | a line of text's height, a framed widget's height [pixels]; with `spacing`, the distance between two lines, two rows of fields |
+| `ig_available(w, h)` | the space left in the window or region from where the next item goes [pixels] |
+| `ig_spacing()`, `ig_dummy(w, h)`, `ig_new_line()` | a gap of the item spacing; an empty item `w` x `h` [pixels]; end the line |
+| `ig_indent([w])`, `ig_unindent([w])` | move the lines that follow right by `w` [pixels] (default: the style's indent), and back |
+| `ig_begin_group()`, `ig_end_group()` | always paired: the items in between count as one item, their bounding rectangle |
+| `ig_align_begin(id, where [, stat])`, `ig_align_end()` | always paired: a group centred (`'centre'`) or right-aligned (`'right'`) on the line; its width from the previous frame |
+| `ig_align_next(width, where [, stat])` | centre or right-align the next item, `width` [pixels] wide |
+| `ig_push_item_width(w)`, `ig_pop_item_width()` | always paired: the fields' width [pixels] up to the pop |
 | `ig_show_demo_window([open])` | the Dear ImGui demo window |
 | `ig_item_rect(xmin, ymin, xmax, ymax)` | screen rectangle of the last item |
 | `ig_last_item()` → `item_status_object` | what happened to the item drawn last, in one snapshot: `hovered`, `active`, `focused`, `visible`, `activated`, `edited`, `deactivated`, `deactivated_after_edit`, `toggled_open`, `clicked(3)`, `double_clicked(3)`, `rect(4)` ([What happened to an item](widgets#what-happened-to-an-item)) |

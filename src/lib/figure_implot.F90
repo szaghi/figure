@@ -26,10 +26,10 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, fi
                         figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
-                            fig_colormap_legend
+                            fig_colormap_legend, fig_plot_end
 use figure_cimgui, only : im_vec2, im_vec4
 use figure_texture, only : texture_object, texture_ref
-use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot, ImPlot_EndPlot,             &
+use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot,             &
                            ImPlot_PlotBars_doublePtrdoublePtr, ImPlot_PlotBars_FloatPtrFloatPtr,                   &
                            ImPlot_PlotLine_doublePtrdoublePtr, ImPlot_PlotLine_FloatPtrFloatPtr,                   &
                            ImPlot_PlotLine_doublePtrInt, ImPlot_PlotLine_FloatPtrInt,                               &
@@ -227,7 +227,7 @@ contains
    recursive subroutine ip_end_plot()
    !< End the plot (only after `ip_begin_plot` returned true).
    if (figure_scope_refused(SCOPE_PLOT, 'ip_end_plot')) return ! a task, no frame, or not the innermost scope
-   call ImPlot_EndPlot()
+   call fig_plot_end() ! ImPlot's EndPlot, without fitting an axis that has no data (an FPE under traps)
    endsubroutine ip_end_plot
 
    recursive subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat, stat)

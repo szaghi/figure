@@ -1,6 +1,8 @@
-!< figure_group, widgets that group other widgets: child regions, headers, tabs, tables, trees, id scopes, disabled blocks.
+!< figure_group, widgets that group other widgets: child regions, headers, tabs, tables, trees, id scopes, disabled blocks,
+!< layout groups and aligned groups.
 module figure_group
-!< figure_group, widgets that group other widgets: child regions, headers, tabs, tables, trees, id scopes, disabled blocks.
+!< figure_group, widgets that group other widgets: child regions, headers, tabs, tables, trees, id scopes, disabled blocks,
+!< layout groups and aligned groups.
 !<
 !< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md; and a call
 !< with no frame open, a usage error (`FIG_ERR_STATE`, `<procedure>: no frame open`). Every begin/end and push/pop
@@ -11,17 +13,22 @@ module figure_group
 !< `ig_begin_tab` returned true, `ig_end_table` only when `ig_begin_table` returned true, `ig_tree_pop` only when
 !< `ig_tree_node` returned true (unlike `ig_begin`/`ig_end`,
 !< always paired); `ig_pop_id` after every `ig_push_id`, `ig_end_disabled` after every `ig_begin_disabled`,
-!< `ig_end_child` after every `ig_begin_child`. A collapsing header needs no end call.
+!< `ig_end_child` after every `ig_begin_child`, `ig_end_group` after every `ig_begin_group`, `ig_align_end` after every
+!< `ig_align_begin`. A collapsing header needs no end call.
 !<
 !< A table: `ig_begin_table`, then optionally one `ig_table_setup_column` per column and `ig_table_headers_row`, then
 !< per row `ig_table_next_row` and per cell `ig_table_next_column` (or `ig_table_set_column`) before its widgets.
 !< Widgets repeated on every row need an id scope per row (`ig_push_id(row)`) or distinct labels.
 use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
+use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, real64
-use figure_base, only : cstr, figure_draw_refused, figure_scope_open, figure_scope_refused, SCOPE_CHILD, SCOPE_DISABLED, &
-                        SCOPE_ID, SCOPE_TAB, SCOPE_TAB_BAR, SCOPE_TABLE, SCOPE_TREE
-use figure_c_native, only : fig_clipper_begin, fig_clipper_delete, fig_clipper_new, fig_clipper_step
-use figure_cimgui, only : igBeginChild_Str, igEndChild, im_vec2, igBeginDisabled, igBeginTabBar, igBeginTabItem, &
+use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_scope_open, figure_scope_refused, &
+                        SCOPE_ALIGN, SCOPE_CHILD, SCOPE_DISABLED, SCOPE_GROUP, SCOPE_ID, SCOPE_TAB, SCOPE_TAB_BAR,      &
+                        SCOPE_TABLE, SCOPE_TREE
+use figure_c_native, only : fig_align_begin, fig_align_end, fig_align_next, fig_clipper_begin, fig_clipper_delete, &
+                            fig_clipper_new, fig_clipper_step, FIG_ERR_ARGUMENT, FIG_OK
+use figure_cimgui, only : igBeginGroup, igEndGroup, &
+                          igBeginChild_Str, igEndChild, im_vec2, igBeginDisabled, igBeginTabBar, igBeginTabItem, &
                           igBeginTable,                                                                         &
                           igCollapsingHeader_TreeNodeFlags, igEndDisabled, igEndTabBar, igEndTabItem, igEndTable, &
                           igPopID, igPushID_Int, igPushID_Str, igTableHeadersRow, igTableNextColumn, igTableNextRow, &
@@ -41,6 +48,7 @@ public :: ig_begin_disabled, ig_end_disabled
 public :: ig_begin_table, ig_end_table, ig_table_setup_column, ig_table_headers_row, ig_table_next_row
 public :: ig_table_next_column, ig_table_set_column, ig_begin_child, ig_end_child
 public :: ig_tree_node, ig_tree_pop, ig_set_next_item_open
+public :: ig_begin_group, ig_end_group, ig_align_begin, ig_align_end, ig_align_next
 public :: list_clipper_object
 
 type :: list_clipper_object
@@ -354,6 +362,106 @@ contains
    if (figure_scope_refused(SCOPE_ID, 'ig_pop_id')) return ! a task, no frame, or not the innermost scope
    call igPopID()
    endsubroutine ig_pop_id
+
+   recursive subroutine ig_begin_group()
+   !< Begin a group (Dear ImGui's `BeginGroup`): the items up to `ig_end_group` are laid out as usual, then count as
+   !< one item, their bounding rectangle: `ig_same_line` after `ig_end_group` puts the next item beside the whole group,
+   !< `ig_last_item` reports its rectangle (hovered when one of its items is, edited when one of them changed). Always
+   !< paired with `ig_end_group`, in the same window; a group nests and closes innermost first. No frame open or a task:
+   !< nothing done (a usage error, reported by `app%next_frame`). The same in window, headless and remote mode.
+   if (figure_draw_refused('ig_begin_group')) return ! a task does not draw
+   call igBeginGroup()
+   call figure_scope_open(SCOPE_GROUP, 'ig_begin_group', '')
+   endsubroutine ig_begin_group
+
+   recursive subroutine ig_end_group()
+   !< End the group begun by the last `ig_begin_group`.
+   if (figure_scope_refused(SCOPE_GROUP, 'ig_end_group')) return ! a task, no frame, or not the innermost scope
+   call igEndGroup()
+   endsubroutine ig_end_group
+
+   recursive subroutine ig_align_begin(id, where, stat)
+   !< Begin a group centred (`where='centre'`) or right-aligned (`'right'`) in the space left on the line of the current
+   !< window or region: buttons at the right of a dialog, a title in the middle. The group's width is the one it had on
+   !< the previous frame, kept in Dear ImGui's storage of the window under `id` (a name unique in the window): on the
+   !< first frame it is drawn where a group starts (at the left), and FIGURE asks for one more frame (under lazy redraw
+   !< too), which draws it in place; so does a frame on which its width changed (a font size). Always paired with
+   !< `ig_align_end`, as `ig_begin_group`; the group counts as one item. An unknown `where`: the group is begun, not
+   !< moved, and `FIG_ERR_ARGUMENT` is returned in `stat` (or `error stop` without it). No frame open or a task:
+   !< nothing begun, `FIG_ERR_STATE` (end it neither). The same in window, headless and remote mode.
+   character(len=*), intent(in)            :: id    !< Name of the group, unique in its window.
+   character(len=*), intent(in)            :: where !< 'centre' or 'right'.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(c_int)                          :: w     !< 1 centre, 2 right, 0 unknown.
+   integer(c_int)                          :: s     !< Native status.
+
+   if (figure_draw_refused('ig_align_begin', stat)) return ! a task does not draw
+   w = align_where(where)
+   s = fig_align_begin(id, len(id, c_int), w)
+   if (s /= FIG_OK) then
+      call figure_check(s, stat)
+      return
+   endif
+   call figure_scope_open(SCOPE_ALIGN, 'ig_align_begin', id)
+   if (w == 0_c_int) then
+      call figure_fail(FIG_ERR_ARGUMENT, "ig_align_begin: where is 'centre' or 'right', not '"//where// &
+                       "' (the group is begun, not moved)", stat)
+      return
+   endif
+   if (present(stat)) stat = FIG_OK
+   endsubroutine ig_align_begin
+
+   recursive subroutine ig_align_end()
+   !< End the group begun by the last `ig_align_begin`; its width is kept for the next frame.
+   if (figure_scope_refused(SCOPE_ALIGN, 'ig_align_end')) return ! a task, no frame, or not the innermost scope
+   call fig_align_end()
+   endsubroutine ig_align_end
+
+   recursive subroutine ig_align_next(width, where, stat)
+   !< Centre (`where='centre'`) or right-align (`'right'`) the next item, `width` pixels wide, in the space left on the
+   !< line: for an item whose width the program knows (`ig_set_next_item_width`, a button of a given width,
+   !< `ig_text_size` of a text), right on the first frame. Nothing moves when the item is wider than the space. A
+   !< negative or NaN `width` or an unknown `where`: nothing done, `FIG_ERR_ARGUMENT` in `stat` (or `error stop`
+   !< without it); no frame open or a task: `FIG_ERR_STATE`. The same in window, headless and remote mode.
+   real(real64),     intent(in)            :: width !< Width of the next item [pixels].
+   character(len=*), intent(in)            :: where !< 'centre' or 'right'.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(c_int)                          :: w     !< 1 centre, 2 right, 0 unknown.
+   character(len=32)                       :: text  !< The width, written.
+
+   if (figure_draw_refused('ig_align_next', stat)) return ! a task does not draw
+   w = align_where(where)
+   if (w == 0_c_int) then
+      call figure_fail(FIG_ERR_ARGUMENT, "ig_align_next: where is 'centre' or 'right', not '"//where//"'", stat)
+      return
+   endif
+   if (ieee_is_nan(width)) then                     ! tested apart: a comparison would signal
+      call figure_fail(FIG_ERR_ARGUMENT, 'ig_align_next: width NaN is not a width', stat)
+      return
+   endif
+   if (width < 0.0_real64) then
+      write(text, '(G0)') width
+      call figure_fail(FIG_ERR_ARGUMENT, 'ig_align_next: width '//trim(text)//' is negative', stat)
+      return
+   endif
+   call fig_align_next(real(width, c_double), w)
+   if (present(stat)) stat = FIG_OK
+   endsubroutine ig_align_next
+
+   pure function align_where(where) result(w)
+   !< `where` of the alignment calls: 1 'centre', 2 'right', 0 anything else.
+   character(len=*), intent(in) :: where !< 'centre' or 'right'.
+   integer(c_int)               :: w     !< Code.
+
+   select case (where)
+   case ('centre')
+      w = 1_c_int
+   case ('right')
+      w = 2_c_int
+   case default
+      w = 0_c_int
+   endselect
+   endfunction align_where
 
    recursive subroutine ig_begin_disabled(disabled)
    !< Widgets up to `ig_end_disabled` are greyed out and ignore input (when `disabled`, default true).

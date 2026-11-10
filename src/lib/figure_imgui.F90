@@ -16,7 +16,7 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
-                        figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_WINDOW
+                        figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_ITEM_WIDTH, SCOPE_WINDOW
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, fig_item_status, fig_last_item, fig_mark_last_item_edited, &
@@ -33,7 +33,9 @@ use figure_cimgui, only : igGetTime, igProgressBar, &
                           igIsAnyItemHovered, igIsItemHovered, igGetCursorStartPos, igGetScrollMaxX, igGetScrollMaxY, &
                           igGetScrollX, igGetScrollY, igSetKeyboardFocusHere, igSetScrollFromPosX_Float,           &
                           igSetScrollFromPosY_Float, igSetScrollHereX, igSetScrollHereY, igSetScrollX_Float,       &
-                          igSetScrollY_Float
+                          igSetScrollY_Float, igDummy, igGetContentRegionAvail, igGetFontSize, igGetFrameHeight, &
+                          igGetFrameHeightWithSpacing, igGetTextLineHeight, igGetTextLineHeightWithSpacing,          &
+                          igIndent, igNewLine, igPopItemWidth, igPushItemWidth, igSeparatorText, igSpacing, igUnindent
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
                                 ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup, &
                                 ImGuiInputTextFlags_AllowTabInput, ImGuiInputTextFlags_ReadOnly, &
@@ -52,6 +54,8 @@ public :: ig_input_text_multiline, text_buffer_object
 public :: ig_set_clipboard, ig_get_clipboard
 public :: item_status_object, ig_last_item, ig_item_hovered, ig_any_item_hovered, ig_any_item_active
 public :: ig_scroll_here, ig_get_scroll, ig_set_scroll, ig_scroll_to_pos, ig_focus_here, ig_default_focus
+public :: ig_font_size, ig_line_height, ig_frame_height, ig_em, ig_available, ig_spacing, ig_dummy, ig_new_line
+public :: ig_indent, ig_unindent, ig_separator_text, ig_push_item_width, ig_pop_item_width
 
 type :: text_buffer_object
    !< Text of any length, edited by `ig_input_text_multiline`: a file shown or edited as text, notes, a read-only view.
@@ -96,6 +100,12 @@ interface ig_input
    !< Numeric field for an integer or a real value.
    module procedure ig_input_i32, ig_input_r64
 endinterface ig_input
+
+interface ig_em
+   !< A length of `x` em [pixels]: `x` times the current font size, so that a size given in lines of text follows the
+   !< font and the display's scale.
+   module procedure ig_em_r64, ig_em_i32
+endinterface ig_em
 
 contains
    recursive function ig_begin(name, open, flags) result(visible)
@@ -634,6 +644,25 @@ contains
    call igSetNextItemWidth(real(width, c_float))
    endsubroutine ig_set_next_item_width
 
+   recursive subroutine ig_push_item_width(width)
+   !< Width of the fields of every widget that follows in the current window [pixels] (Dear ImGui's `PushItemWidth`),
+   !< until `ig_pop_item_width`; always paired, the pop in the same window and scope (a pop closes the innermost scope,
+   !< as `ig_pop_id`). Negative: up to that distance from the right edge of the window or region; 0: the window's
+   !< default. `ig_set_next_item_width` still sets the next widget's alone. No frame open or a task: nothing done (a
+   !< usage error, reported by `app%next_frame`). The same in window, headless and remote mode.
+   real(real64), intent(in) :: width !< Width [pixels]; < 0: up to that distance from the right edge; 0: the default.
+
+   if (figure_draw_refused('ig_push_item_width')) return ! a task does not draw
+   call igPushItemWidth(real(width, c_float))
+   call figure_scope_open(SCOPE_ITEM_WIDTH, 'ig_push_item_width', '')
+   endsubroutine ig_push_item_width
+
+   recursive subroutine ig_pop_item_width()
+   !< Back to the width of the fields before the last `ig_push_item_width` (Dear ImGui's `PopItemWidth`).
+   if (figure_scope_refused(SCOPE_ITEM_WIDTH, 'ig_pop_item_width')) return ! a task, no frame, or not innermost
+   call igPopItemWidth()
+   endsubroutine ig_pop_item_width
+
    recursive subroutine ig_text(text)
    !< Plain text (no formatting: compose it with Fortran internal writes).
    character(len=*), intent(in) :: text !< Text.
@@ -741,6 +770,152 @@ contains
    if (figure_draw_refused('ig_separator')) return ! a task does not draw
    call igSeparator()
    endsubroutine ig_separator
+
+   recursive subroutine ig_separator_text(label)
+   !< A horizontal separator with `label` written in it, at its left (Dear ImGui's `SeparatorText`): the title of a
+   !< part of a form. The text before `##` is shown. No frame open or a task: nothing drawn (a usage error, reported
+   !< by `app%next_frame`). The same in window, headless and remote mode.
+   character(len=*), intent(in) :: label !< Text of the separator.
+
+   if (figure_draw_refused('ig_separator_text')) return ! a task does not draw
+   call igSeparatorText(cstr(label))
+   endsubroutine ig_separator_text
+
+   recursive function ig_font_size() result(size_px)
+   !< The size of the current font [pixels] (Dear ImGui's `GetFontSize`): the size set by `app%set_font` (or pushed by
+   !< `ig_push_font`) times the display's content scale (`app%content_scale()`), the height of a line of text without
+   !< spacing. The unit of `ig_em`. No frame open or a task: 0 (a usage error, reported by `app%next_frame`). The same
+   !< in window, headless and remote mode (headless and remote: content scale 1).
+   real(real64) :: size_px !< Font size [pixels].
+
+   size_px = 0.0_real64
+   if (figure_draw_refused('ig_font_size')) return ! a task does not draw
+   size_px = real(igGetFontSize(), real64)
+   endfunction ig_font_size
+
+   recursive function ig_line_height(spacing) result(height)
+   !< The height of a line of text [pixels] (Dear ImGui's `GetTextLineHeight`): the font size; with `spacing`, plus
+   !< the style's vertical item spacing, the distance between two lines of text (`GetTextLineHeightWithSpacing`). No
+   !< frame open or a task: 0 (a usage error, reported by `app%next_frame`).
+   logical, intent(in), optional :: spacing !< Add the spacing below the line (default false).
+   real(real64)                  :: height  !< Height [pixels].
+   logical                       :: sp      !< Spacing.
+
+   height = 0.0_real64
+   if (figure_draw_refused('ig_line_height')) return ! a task does not draw
+   sp = .false.
+   if (present(spacing)) sp = spacing
+   if (sp) then
+      height = real(igGetTextLineHeightWithSpacing(), real64)
+   else
+      height = real(igGetTextLineHeight(), real64)
+   endif
+   endfunction ig_line_height
+
+   recursive function ig_frame_height(spacing) result(height)
+   !< The height of a framed widget (a button, a field, a combo) [pixels] (Dear ImGui's `GetFrameHeight`): the font
+   !< size plus twice the style's vertical frame padding; with `spacing`, plus the vertical item spacing, the distance
+   !< between two rows of fields (`GetFrameHeightWithSpacing`). No frame open or a task: 0 (a usage error).
+   logical, intent(in), optional :: spacing !< Add the spacing below the widget (default false).
+   real(real64)                  :: height  !< Height [pixels].
+   logical                       :: sp      !< Spacing.
+
+   height = 0.0_real64
+   if (figure_draw_refused('ig_frame_height')) return ! a task does not draw
+   sp = .false.
+   if (present(spacing)) sp = spacing
+   if (sp) then
+      height = real(igGetFrameHeightWithSpacing(), real64)
+   else
+      height = real(igGetFrameHeight(), real64)
+   endif
+   endfunction ig_frame_height
+
+   recursive function ig_em_r64(x) result(length)
+   !< `x` em [pixels]: `x` times the current font size (`ig_font_size`). No frame open or a task: 0 (a usage error).
+   real(real64), intent(in) :: x      !< Length [em].
+   real(real64)             :: length !< Length [pixels].
+
+   length = 0.0_real64
+   if (figure_draw_refused('ig_em')) return ! a task does not draw
+   length = x * real(igGetFontSize(), real64)
+   endfunction ig_em_r64
+
+   recursive function ig_em_i32(x) result(length)
+   !< `x` em [pixels], `x` an integer: `x` times the current font size. No frame open or a task: 0 (a usage error).
+   integer(int32), intent(in) :: x      !< Length [em].
+   real(real64)               :: length !< Length [pixels].
+
+   length = 0.0_real64
+   if (figure_draw_refused('ig_em')) return ! a task does not draw
+   length = real(x, real64) * real(igGetFontSize(), real64)
+   endfunction ig_em_i32
+
+   recursive subroutine ig_available(width, height)
+   !< The space left in the current window or region from where the next item goes [pixels] (Dear ImGui's
+   !< `GetContentRegionAvail`): to the right edge of its content (`width`) and to its bottom (`height`); in a table
+   !< cell, to the cell's right edge. A side bar or a child region drawn beside takes its width out of it. No frame
+   !< open or a task: zeros (a usage error, reported by `app%next_frame`).
+   real(real64), intent(out) :: width  !< Width left [pixels].
+   real(real64), intent(out) :: height !< Height left [pixels].
+   type(im_vec2)             :: avail  !< Dear ImGui's answer.
+
+   width = 0.0_real64
+   height = 0.0_real64
+   if (figure_draw_refused('ig_available')) return ! a task does not draw
+   avail = igGetContentRegionAvail()
+   width = real(avail%x, real64)
+   height = real(avail%y, real64)
+   endsubroutine ig_available
+
+   recursive subroutine ig_spacing()
+   !< A vertical gap of the style's item spacing before the next item (Dear ImGui's `Spacing`).
+   if (figure_draw_refused('ig_spacing')) return ! a task does not draw
+   call igSpacing()
+   endsubroutine ig_spacing
+
+   recursive subroutine ig_dummy(width, height)
+   !< An empty item `width` x `height` pixels (Dear ImGui's `Dummy`): a gap of a given size, a place kept for something
+   !< drawn later; it counts for `ig_same_line`, groups and the window's size like any item.
+   real(real64), intent(in) :: width  !< Width [pixels].
+   real(real64), intent(in) :: height !< Height [pixels].
+
+   if (figure_draw_refused('ig_dummy')) return ! a task does not draw
+   call igDummy(im_vec2(real(width, c_float), real(height, c_float)))
+   endsubroutine ig_dummy
+
+   recursive subroutine ig_new_line()
+   !< End the line (after `ig_same_line`), or add an empty line of text's height (Dear ImGui's `NewLine`).
+   if (figure_draw_refused('ig_new_line')) return ! a task does not draw
+   call igNewLine()
+   endsubroutine ig_new_line
+
+   recursive subroutine ig_indent(width)
+   !< Move the left edge of the lines that follow right by `width` pixels (default, or 0: the style's indent spacing),
+   !< until `ig_unindent` with the same width (Dear ImGui's `Indent`). Not a scope: the program keeps the two balanced
+   !< (a window's indent is reset when it begins).
+   real(real64), intent(in), optional :: width !< Indent [pixels] (default: the style's indent spacing).
+
+   if (figure_draw_refused('ig_indent')) return ! a task does not draw
+   if (present(width)) then
+      call igIndent(real(width, c_float))
+   else
+      call igIndent(0.0_c_float)
+   endif
+   endsubroutine ig_indent
+
+   recursive subroutine ig_unindent(width)
+   !< Move the left edge of the lines that follow back left by `width` pixels (default, or 0: the style's indent
+   !< spacing) (Dear ImGui's `Unindent`).
+   real(real64), intent(in), optional :: width !< Indent removed [pixels] (default: the style's indent spacing).
+
+   if (figure_draw_refused('ig_unindent')) return ! a task does not draw
+   if (present(width)) then
+      call igUnindent(real(width, c_float))
+   else
+      call igUnindent(0.0_c_float)
+   endif
+   endsubroutine ig_unindent
 
    recursive subroutine ig_show_demo_window(open)
    !< The Dear ImGui demo window (a live catalogue of every widget).
@@ -960,15 +1135,18 @@ contains
    r = 0.5_real64
    a = 2_int32
    if (present(ratio)) r = ratio
-   if (ieee_is_nan(r)) then                                  ! tested apart: a comparison would signal
+   ok = .not. ieee_is_nan(r)                                 ! tested apart: a comparison would signal (Fortran's
+   if (ok) ok = r >= 0.0_real64 .and. r <= 1.0_real64        ! .or. does not short-circuit)
+   if (ieee_is_nan(r)) then
       text = 'NaN'
    else
       write(text, '(G0)') r
    endif
-   if (ieee_is_nan(r) .or. r < 0.0_real64 .or. r > 1.0_real64) then
+   if (.not. ok) then
       call figure_fail(FIG_ERR_ARGUMENT, name//': ratio '//trim(text)//' is not in [0, 1]', stat)
       return
    endif
+   ok = .false.
    if (present(axis)) then
       select case (axis)
       case ('y')

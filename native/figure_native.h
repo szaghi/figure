@@ -202,6 +202,16 @@ typedef struct fig_item_status {
 int    fig_last_item(fig_item_status *s);
 /* The item drawn last changed its value on this frame (MarkItemEdited): for widgets FIGURE composes (ig_combo). */
 void   fig_mark_last_item_edited(void);
+/* An aligned group (ig_align_begin/ig_align_end): where 1 centre, 2 right of the space left on the line, 0 not moved.
+ * The group's width is remembered from the previous frame in the current window's storage, keyed by id (GetID); the
+ * first frame, or a frame on which the width changed, asks for one more frame. fig_align_next moves the cursor for an
+ * item of a known width [pixels]. */
+/* End the current ImPlot plot (EndPlot) without fitting an axis that has no data: ImPlot would compute
+ * -inf * padding there, NaN with the default padding 0, which traps under -ffpe-trap=invalid. */
+void   fig_plot_end(void);
+int    fig_align_begin(const char *id, int id_len, int where);
+void   fig_align_end(void);
+void   fig_align_next(double width, int where);
 /* A text field over a caller-owned NUL-terminated buffer of buf_size bytes (InputText without a callback); 1 when
  * edited this frame. hint_len 0: no hint. */
 int    fig_widget_input_text(const char *label, int label_len, const char *hint, int hint_len, char *buf, int buf_size,

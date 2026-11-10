@@ -247,6 +247,11 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   row a list clipper does not draw (`clip%item_height`, new, gives the rows' distance), `ig_get_scroll`,
   `ig_set_scroll`; `ig_focus_here([offset])` gives the next field the keys, `ig_default_focus` the item a modal
   starts from; the log view follows its end through `ig_scroll_here` ([Scrolling and focus](widgets#scrolling-and-focus)): done.
+- **Layout in em:** `ig_font_size`, `ig_em(x)`, `ig_line_height([spacing])`, `ig_frame_height([spacing])`,
+  `ig_available`; `ig_spacing`, `ig_dummy`, `ig_new_line`, `ig_indent`, `ig_unindent`, `ig_separator_text`;
+  `ig_begin_group`/`ig_end_group`; `ig_align_begin(id, where)`/`ig_align_end` (a group centred or right-aligned, its
+  width from the previous frame, one more frame asked when it changes) and `ig_align_next(width, where)`;
+  `ig_push_item_width`/`ig_pop_item_width`; the three new pairs in the scope record ([Layout](widgets#layout)): done.
 
 ## Next
 

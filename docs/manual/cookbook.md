@@ -312,6 +312,28 @@ only:
 [Scrolling and focus](/guide/widgets#scrolling-and-focus) has the rules: the one-frame delay, the clipper, focus and
 modals.
 
+### A form that keeps its proportions at any font size
+
+<<< @/examples/snippets/cb_layout-form.F90{fortran}
+
+<Media name="cb_layout" video alt="A form, Case, at 15 pixels: Grid and Run titles on separators, labels name, cells, CFL, end time and viscous in one column, their fields in another, Reset and Run buttons at the right edge. Ctrl+up three times: the text grows to 18, 21, 24 pixels and the window, the column of fields and the fields' width grow with it; the buttons stay at the right edge. Ctrl+down four times: down to 12 pixels, the form shrinks and keeps its shape; ctrl+up once: back to 15." caption="docs/examples/src/cb_layout.F90" />
+
+Every length that holds text is written in em, multiples of the font size: the fields start 7 em from the window's
+edge and are 12 em wide, the window is 24 em wide. When the user picks a larger font (`app%set_font`, here on
+ctrl+up), every em grows with it and the form keeps its shape; a form written in pixels would keep its pixels and its
+labels would run into the fields. The labels go through one helper, so that the column is set once:
+
+<<< @/examples/snippets/cb_layout-label.F90{fortran}
+
+The window is given its width in em and height 0, which fits it to its content: the gaps between rows are the style's
+spacing, in pixels, so a height in em would be too small at small fonts. The buttons are a right-aligned group
+(`ig_align_begin('buttons', 'right')`): their width changes with the font, and the group follows it one frame later.
+The program checks itself headless, at 15 and at 24 pixels:
+
+<<< @/examples/output/cb_layout.txt{text}
+
+[Layout](/guide/widgets#layout) has the rules: the em, groups, alignment and its first frame.
+
 ## Plots
 
 ### Plot the columns of a matrix

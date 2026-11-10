@@ -22,7 +22,8 @@ namespace {
 // Kinds: must match the SCOPE_* parameters of src/lib/figure_base.F90.
 enum kind_t {
    K_WINDOW = 1, K_CHILD, K_TAB_BAR, K_TAB, K_TABLE, K_TREE, K_MAIN_MENU_BAR, K_MENU_BAR, K_MENU, K_POPUP, K_PLOT,
-   K_SUBPLOTS, K_DOCK_LAYOUT, K_ID, K_DISABLED, K_FONT, K_STYLE_COLOR, K_STYLE_VAR, K_COUNT
+   K_SUBPLOTS, K_DOCK_LAYOUT, K_ID, K_DISABLED, K_FONT, K_STYLE_COLOR, K_STYLE_VAR, K_GROUP, K_ALIGN, K_ITEM_WIDTH,
+   K_COUNT
 };
 
 struct kind_info_t {
@@ -53,6 +54,9 @@ const kind_info_t KINDS[K_COUNT] = {
    {"ig_push_font", "ig_pop_font", false, false, false},
    {"ig_push_style_color", "ig_pop_style_color", false, false, false},
    {"ig_push_style_var", "ig_pop_style_var", false, false, false},
+   {"ig_begin_group", "ig_end_group", true, false, false},         // a group: closed in its window, innermost first
+   {"ig_align_begin", "ig_align_end", true, false, false},         // an aligned group: the same
+   {"ig_push_item_width", "ig_pop_item_width", true, false, false}, // the window's own stack of widths
 };
 
 constexpr int CHECKS_ABORT = 0, CHECKS_REPORT = 1, CHECKS_RECOVER = 2;
@@ -156,7 +160,7 @@ void recover_to(const sizes_t &then) {
    const bool asserts = io.ConfigErrorRecoveryEnableAssert; // FIGURE's own repair: no assertion ('abort' included)
    io.ConfigErrorRecoveryEnableAssert = false;
    sc.muted = true;
-   if (ImPlot::GetCurrentContext() && GImPlot->CurrentPlot && !then.plot) ImPlot::EndPlot();
+   if (ImPlot::GetCurrentContext() && GImPlot->CurrentPlot && !then.plot) fig_plot_end();
    if (ImPlot::GetCurrentContext() && GImPlot->CurrentSubplot && !then.subplot) ImPlot::EndSubplots();
    if (GImGui->CurrentWindowStack.Size > then.s.SizeOfWindowStack)
       ImGui::ErrorRecoveryTryToRecoverState(&then.s);
@@ -227,7 +231,7 @@ void close_entry(const entry_t &e) {
    case K_MENU_BAR: ImGui::EndMenuBar(); break;
    case K_MENU: ImGui::EndMenu(); break;
    case K_POPUP: ImGui::EndPopup(); break;
-   case K_PLOT: ImPlot::EndPlot(); break;
+   case K_PLOT: fig_plot_end(); break;
    case K_SUBPLOTS: ImPlot::EndSubplots(); break;
    case K_DOCK_LAYOUT: ImGui::DockBuilderFinish(static_cast<ImGuiID>(static_cast<unsigned int>(e.aux))); break;
    case K_ID: ImGui::PopID(); break;
@@ -235,6 +239,9 @@ void close_entry(const entry_t &e) {
    case K_FONT: ImGui::PopFont(); break;
    case K_STYLE_COLOR: fig_pop_style(0, 1); break;
    case K_STYLE_VAR: fig_pop_style(1, 1); break;
+   case K_GROUP: ImGui::EndGroup(); break;
+   case K_ALIGN: fig_align_end(); break;
+   case K_ITEM_WIDTH: ImGui::PopItemWidth(); break;
    default: break;
    }
 }

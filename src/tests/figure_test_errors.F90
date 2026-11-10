@@ -21,7 +21,8 @@ use figure, only : app_object, figure_last_error, FIG_ERR_ARGUMENT, FIG_ERR_STAT
                    ig_end_main_menu_bar, ig_end_menu, ig_end_menu_bar, ig_end_popup, ig_end_tab, ig_end_tab_bar,  &
                    ig_end_table, ig_item_rect, ig_open_popup, ig_pop_font, ig_pop_id, ig_pop_style_color,        &
                    ig_pop_style_var, ig_push_font, ig_push_id, ig_push_style_color, ig_push_style_var, ig_text,  &
-                   ig_tree_node, ig_tree_pop, ip_begin_plot, ip_begin_subplots, ip_end_plot, ip_end_subplots
+                   ig_tree_node, ig_tree_pop, ip_begin_plot, ip_begin_subplots, ip_end_plot, ip_end_subplots, &
+                   ig_align_begin, ig_align_end, ig_begin_group, ig_end_group, ig_pop_item_width, ig_push_item_width
 use figure_cimgui, only : igBegin, igPopID, igPushID_Int, igSetNextWindowCollapsed, igTextUnformatted
 use figure_cimgui_enums, only : ImGuiCond_Always
 
@@ -29,23 +30,27 @@ implicit none
 integer(int32), parameter :: K_WINDOW = 1, K_CHILD = 2, K_TAB_BAR = 3, K_TAB = 4, K_TABLE = 5, K_TREE = 6,    &
                              K_MAIN_MENU_BAR = 7, K_MENU_BAR = 8, K_MENU = 9, K_POPUP = 10, K_PLOT = 11,        &
                              K_SUBPLOTS = 12, K_DOCK_LAYOUT = 13, K_ID = 14, K_DISABLED = 15, K_FONT = 16,     &
-                             K_STYLE_COLOR = 17, K_STYLE_VAR = 18, NKIND = 18 !< The pairs (FIGURE's record's kinds).
+                             K_STYLE_COLOR = 17, K_STYLE_VAR = 18, K_GROUP = 19, K_ALIGN = 20, K_ITEM_WIDTH = 21, &
+                             NKIND = 21 !< The pairs (FIGURE's record's kinds).
 integer(int32), parameter :: F_MISSING = 1, F_EXTRA = 2, F_WRONG = 3, F_FALSE = 4 !< The faults.
 character(len=*), parameter :: OPENER(NKIND) = [character(len=22) ::                                          &
    'ig_begin', 'ig_begin_child', 'ig_begin_tab_bar', 'ig_begin_tab', 'ig_begin_table', 'ig_tree_node',        &
    'ig_begin_main_menu_bar', 'ig_begin_menu_bar', 'ig_begin_menu', 'ig_begin_popup', 'ip_begin_plot',         &
    'ip_begin_subplots', 'ig_dock_layout_begin', 'ig_push_id', 'ig_begin_disabled', 'ig_push_font',            &
-   'ig_push_style_color', 'ig_push_style_var'] !< The begin of each pair.
+   'ig_push_style_color', 'ig_push_style_var', 'ig_begin_group', 'ig_align_begin', 'ig_push_item_width'] !< The begin
+                                                                                                    !< of each pair.
 character(len=*), parameter :: CLOSER(NKIND) = [character(len=20) ::                                          &
    'ig_end', 'ig_end_child', 'ig_end_tab_bar', 'ig_end_tab', 'ig_end_table', 'ig_tree_pop',                   &
    'ig_end_main_menu_bar', 'ig_end_menu_bar', 'ig_end_menu', 'ig_end_popup', 'ip_end_plot', 'ip_end_subplots', &
    'ig_dock_layout_end', 'ig_pop_id', 'ig_end_disabled', 'ig_pop_font', 'ig_pop_style_color',                &
-   'ig_pop_style_var'] !< The end of each pair.
+   'ig_pop_style_var', 'ig_end_group', 'ig_align_end', 'ig_pop_item_width'] !< The end of each pair.
 logical, parameter :: TRUE_ONLY(NKIND) = [.false., .false., .true., .true., .true., .true., .true., .true.,   &
                                           .true., .true., .true., .true., .true., .false., .false., .false.,   &
-                                          .false., .false.] !< "End only after a true begin".
+                                          .false., .false., .false., .false., .false.] !< "End only after a true
+                                                                                       !< begin".
 logical, parameter :: NESTS(NKIND) = [.true., .true., .true., .true., .true., .true., .true., .true., .true.,      &
-                                      .true., .true., .true., .true., .true., .false., .false., .false., .false.]
+                                      .true., .true., .true., .true., .true., .false., .false., .false., .false., &
+                                      .true., .true., .true.]
                                       !< Containers and id scopes (an end closes the innermost); the others are pushes.
 type(app_object)              :: app          !< Application (headless).
 logical                       :: passed(NKIND, 4) !< Per pair and fault (true where not applicable).
@@ -288,6 +293,12 @@ contains
       call ig_push_style_color('Text', '#ff0000')
    case (K_STYLE_VAR)
       call ig_push_style_var('Alpha', 0.9_real64)
+   case (K_GROUP)
+      call ig_begin_group()
+   case (K_ALIGN)
+      call ig_align_begin(label, 'right')
+   case (K_ITEM_WIDTH)
+      call ig_push_item_width(120.0_real64)
    endselect
    if (.not. opened) error stop 'figure_test_errors: a begin returned false: '//OPENER(kind)
    endfunction open_scope
@@ -333,6 +344,12 @@ contains
       call ig_pop_style_color()
    case (K_STYLE_VAR)
       call ig_pop_style_var()
+   case (K_GROUP)
+      call ig_end_group()
+   case (K_ALIGN)
+      call ig_align_end()
+   case (K_ITEM_WIDTH)
+      call ig_pop_item_width()
    endselect
    endsubroutine close_scope
 
@@ -346,7 +363,7 @@ contains
 
    label = "('s"//trim(OPENER(kind))//"')"
    if (kind == K_MAIN_MENU_BAR .or. kind == K_MENU_BAR .or. kind == K_DISABLED) label = '()'
-   if (kind == K_FONT) label = '()'
+   if (kind == K_FONT .or. kind == K_GROUP .or. kind == K_ITEM_WIDTH) label = '()'
    if (kind == K_DOCK_LAYOUT) label = '('//itoa(dock + 1_int32)//')' ! the dock id of the next layout
    if (kind == K_STYLE_COLOR) label = "('Text')"
    if (kind == K_STYLE_VAR) label = "('Alpha')"

@@ -292,6 +292,86 @@ from a task.
 | `ig_item_rect(xmin, ymin, xmax, ymax)` | Screen rectangle of the last item, in pixels: for tests and custom layout. |
 | `ig_show_demo_window([open])` | The Dear ImGui demo, a live catalogue of every Dear ImGui widget (most are not bound yet). |
 
+Gaps, groups, alignment, widths and sizes that follow the font: [Layout](#layout).
+
+## Layout
+
+<Media name="layout_metrics" alt="A window with two lines of text, two labelled fields, two buttons, an indented text and two right-aligned buttons. Dimension lines drawn over it, each with its call: ig_font_size() = 1 em = 15 px is the height of a line of text; ig_line_height(spacing=.true.) = 19 px goes from one line's top to the next one's; ig_frame_height() = 21 px is a field's height and ig_frame_height(spacing=.true.) = 25 px the distance between two rows of fields; ig_same_line(ig_em(5)) runs from the window's edge to where the fields start; ig_push_item_width(ig_em(12)) = 180 px is a field's width; WindowPadding goes from the window's edge to the content; ItemSpacing is the gap between Apply and Cancel; ig_indent() moves the indented text right; ig_available(w, h) spans the content's width, 644 px; ig_align_begin('buttons', 'right') marks the two buttons at the right edge." caption="docs/examples/src/gallery.F90, run with layout_metrics: the lengths of the layout calls at the default font, 15 px" />
+
+| Procedure | Notes |
+|---|---|
+| `ig_font_size()` → `real(real64)` | The current font's size [pixels]: the size set by `app%set_font` (or pushed by `ig_push_font`) times the display's content scale. One **em**. |
+| `ig_em(x)` → `real(real64)` | `x` em [pixels], `x` `real64` or `int32`: `x * ig_font_size()`. |
+| `ig_line_height([spacing])` → `real(real64)` | A line of text's height [pixels] (the font size); with `spacing=.true.`, plus the vertical item spacing: from one line's top to the next one's. |
+| `ig_frame_height([spacing])` → `real(real64)` | A framed widget's height [pixels] (a button, a field: the font size and the frame padding above and below); with `spacing=.true.`, the distance between two rows of fields. |
+| `ig_available(w, h)` | The space left [pixels] from where the next item goes to the right edge (`w`) and the bottom (`h`) of the window or region's content; in a table cell, to the cell's edge. |
+| `ig_spacing()` | A gap of the vertical item spacing. |
+| `ig_dummy(w, h)` | An empty item `w` x `h` [pixels]: a gap of a given size, a place kept. |
+| `ig_new_line()` | End the line after `ig_same_line`, or an empty line. |
+| `ig_indent([w])`, `ig_unindent([w])` | Move the left edge of the lines that follow by `w` [pixels] (default, or 0: the style's `IndentSpacing`), and back. |
+| `ig_begin_group()`, `ig_end_group()` | Always paired: the items in between count as one item, their bounding rectangle. |
+| `ig_align_begin(id, where [, stat])`, `ig_align_end()` | Always paired: a group centred (`where='centre'`) or right-aligned (`'right'`) in the space left on the line. `id` names it in its window. |
+| `ig_align_next(width, where [, stat])` | Centre or right-align the next item, `width` [pixels] wide. |
+| `ig_separator_text(label)` | A separator with a title at its left. |
+| `ig_push_item_width(w)`, `ig_pop_item_width()` | Always paired: the fields' width [pixels] for every widget up to the pop (negative: up to that distance from the right edge; 0: the window's default). `ig_set_next_item_width` sets the next one's alone ([Tooltips and widths](#tooltips-and-widths)). |
+
+(Dear ImGui's `GetFontSize`, `GetTextLineHeight`/`GetTextLineHeightWithSpacing`, `GetFrameHeight`/`GetFrameHeightWithSpacing`,
+`GetContentRegionAvail`, `Spacing`, `Dummy`, `NewLine`, `Indent`/`Unindent`, `BeginGroup`/`EndGroup`, `SeparatorText`,
+`PushItemWidth`/`PopItemWidth`; `ig_em` and the alignment calls are FIGURE's, built on `BeginGroup` and Dear ImGui's
+storage of the window.)
+
+**Sizes in em.** A length written in pixels stays the same when the user picks a larger font, and the form's labels
+outgrow their column. A length written in em, `ig_em(12)`, is twelve times the current font size: it follows
+`app%set_font`, `ig_push_font` and the display's content scale. A form sized in em keeps its proportions at any font
+size: the column where the fields start (`ig_same_line(ig_em(7))`), the fields' width (`ig_push_item_width(ig_em(12))`),
+the window's width (`ig_set_next_window(..., ig_em(24), ...)`). The rule: lengths that hold text in em, gaps in the
+style's own spacing (`ig_spacing`, `ig_same_line()`), the window's height left to its content (0 to
+`ig_set_next_window`). The style's paddings and spacings are pixels scaled by the display's content scale, not by the
+font: a window whose height is given in em gets too small for its content at small fonts.
+
+<<< @/examples/snippets/cb_layout-label.F90{fortran}
+
+<<< @/examples/snippets/cb_layout-form.F90{fortran}
+
+<<< @/examples/output/cb_layout.txt{text}
+
+**Groups.** `ig_begin_group` ... `ig_end_group` lays its items out as usual and then makes them one item: `ig_same_line`
+after the end puts the next item beside the whole group (a column of labels, then a column of fields), and
+[`ig_last_item`](#what-happened-to-an-item) reports the group's rectangle, `rect`. A group may hold any items,
+groups included; it does not scroll or clip (that is a [region](#lists-and-regions)).
+
+**Alignment and its first frame.** A group's width is known only once it is drawn, and its place depends on it.
+`ig_align_begin` places the group with the width it had on the previous frame, kept in Dear ImGui's storage of the
+window under `id`: on the first frame the group appears at the left, where a group starts, and FIGURE asks for one more
+frame (with the [lazy redraw](frame-loop#lazy-redraw) too), which draws it in place. The same happens on the frame its
+width changes (a font size, a longer label): one frame drawn with the old width, corrected on the next. A program that
+draws only when asked sees the correct frame, since the correction is drawn at once; a [test](testing) that measures
+the group measures it from the second frame. `ig_align_next(width, where)` places one item of a width the program knows
+(a button given a width, a text measured with `ig_text_size`): right on the first frame. A group or an item wider than
+the space left is not moved.
+
+**Pairing.** `ig_begin_group`/`ig_end_group`, `ig_align_begin`/`ig_align_end` and
+`ig_push_item_width`/`ig_pop_item_width` are always paired, in the same window, and close innermost first, as
+`ig_push_id`/`ig_pop_id`: an end that is not the end of the innermost open scope is refused and reported, and one left
+open is closed by FIGURE at the end of the frame ([Pairing and frames](errors#pairing-and-frames)). `ig_indent` and
+`ig_unindent` are not a scope: the program keeps them balanced (each window's indent starts at 0 when it is begun).
+
+**Status:** an unknown `where` (`'center'`, `'left'`): `FIG_ERR_ARGUMENT`, `ig_align_begin: where is 'centre' or
+'right', not 'center' (the group is begun, not moved)`: the group is begun all the same, so `ig_align_end` still
+follows; for `ig_align_next`, a negative or NaN width too (`ig_align_next: width <w> is negative`,
+`ig_align_next: width NaN is not a width`), and nothing is done. `stat` is optional (absent: `error stop` with the message, [Error handling](errors)). With no frame open or from
+a [task](processes#tasks), every call is refused with `FIG_ERR_STATE` (`ig_em: no frame open`; the metrics give 0): a
+size computed before the first `next_frame` is 0, so compute sizes inside the loop.
+
+- **Window:** as described. **Headless:** the same, content scale 1. **Remote:** the same; the browser shows the
+  frames as drawn, content scale 1.
+- **Threads:** the frame loop's thread only; a task is refused (`FIG_ERR_STATE`), as every drawing call.
+- **What it does not do:** no layout engine: no columns or grids that share space by weight (a
+  [table](#groups-headers-tabs-tables) does that), no vertical alignment, no automatic wrapping of items onto the next
+  line. The style's paddings and spacings do not follow the font. An aligned group's first frame is drawn at the left
+  (see above). `ig_align_begin` aligns within the space left on the current line, not in the window: after
+  `ig_same_line` it aligns in what is left of that line.
+
 ## Progress bars
 
 | Procedure | Notes |
