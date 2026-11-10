@@ -2,7 +2,7 @@
 # every program under src/examples/ and src/tests/ is declared here.
 # Build the native layer first (scripts/build_native.sh), then use scripts/fpm.sh, which adds -L lib/ to fpm.
 name = "figure"
-version = "0.3.1"
+version = "0.4.0"
 license = "MIT"
 author = "Stefano Zaghi"
 maintainer = "stefano.zaghi@cnr.it"

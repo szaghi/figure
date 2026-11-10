@@ -4,6 +4,43 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] — 2026-11-10
+### Added
+- **app**: Usage errors reported, not aborted: scope record, frame check, app%set_checks
+
+- **imgui**: One snapshot of what happened to the last item
+
+- **imgui**: Scroll to an item and give the keyboard focus
+
+- **imgui**: Sizes in em, groups, alignment and the layout metrics
+
+- **imgui**: Context menus, tooltips with content and links
+
+- **imgui**: Tables with a frozen header, sorting, row colours and trees across columns
+
+- **imgui**: Numbers of every kind, vectors, drags, log sliders, angles, ranges, radio buttons and list boxes
+
+- **canvas**: An area that takes the mouse, and drawing primitives on the window, the foreground, the background or a plot
+
+- **implot**: Plot items read strided arrays in place and take integer abscissae
+
+- **implot**: Six plot axes with scales, fixed ticks, constraints and the legend's place
+
+- **implot**: Read a plot under the pointer, keep a box selection, tags, infinite lines, text, stairs, stems and histograms
+
+- **implot**: A field through a colormap in one call, and a legend the user drags
+
+- **imgui**: A player for snapshots: previous, play, next, a slider, a speed and a loop mode
+
+
+### Documentation
+- The documentation complete and checked: doc-comment and example checks, the Dear ImGui name map, tutorial part three
+
+
+### Fixed
+- **imgui**: Shortcuts routed to the focused window, not fired in text fields
+
+
 ## [0.3.1] — 2026-11-09
 ### Documentation
 - **showcase**: Xall_gui's grid in the 3-D view, overset legacy's editor and the solvers run from the window
