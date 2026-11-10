@@ -50,6 +50,9 @@ type :: list_clipper_object
    !< goes out of scope.
    integer(int32)          :: first = 1_int32  !< First row to draw (1-based).
    integer(int32)          :: last = 0_int32   !< Last row to draw.
+   real(real64)            :: item_height = 0.0_real64 !< Row pitch [pixels]: given to `begin` or measured on the
+                                                       !< first row (0 until known); row `i` starts `(i - 1) *
+                                                       !< item_height` below the list's top (`ig_scroll_to_pos`).
    type(c_ptr),    private :: p = c_null_ptr   !< Dear ImGui's clipper.
    contains
       procedure, pass(self) :: begin => clipper_begin !< Start: the number of rows.
@@ -74,7 +77,10 @@ contains
    if (c_associated(self%p)) call fig_clipper_delete(self%p)
    self%p = fig_clipper_new()
    h = -1.0_c_double
-   if (present(item_height)) h = real(item_height, c_double)
+   if (present(item_height)) then
+      h = real(item_height, c_double)
+      self%item_height = item_height
+   endif
    call fig_clipper_begin(self%p, int(max(count, 0_int32), c_int), h)
    self%first = 1_int32
    self%last = 0_int32
@@ -85,12 +91,14 @@ contains
    class(list_clipper_object), intent(inout) :: self  !< Clipper.
    logical                                   :: more  !< Draw first..last.
    integer(c_int)                            :: f, l  !< C copies.
+   real(c_double)                            :: h     !< C copy of the row height.
 
    more = .false.
    if (figure_draw_refused('list_clipper_object%step')) return ! a task does not draw
    more = .false.
    if (.not. c_associated(self%p)) return
-   more = fig_clipper_step(self%p, f, l) == 1_c_int
+   more = fig_clipper_step(self%p, f, l, h) == 1_c_int
+   if (h > 0.0_c_double) self%item_height = real(h, real64)
    if (more) then
       self%first = int(f, int32)
       self%last = int(l, int32)

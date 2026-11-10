@@ -243,6 +243,10 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   clicked and double-clicked per button, its rectangle), filled by one native call; `ig_item_hovered([delay])`,
   `ig_any_item_hovered`, `ig_any_item_active`; `ig_combo` reports its pick as an edit
   ([What happened to an item](widgets#what-happened-to-an-item)): done.
+- **Scrolling and keyboard focus:** `ig_scroll_here([ratio])` after an item, `ig_scroll_to_pos(pos [, ratio])` for a
+  row a list clipper does not draw (`clip%item_height`, new, gives the rows' distance), `ig_get_scroll`,
+  `ig_set_scroll`; `ig_focus_here([offset])` gives the next field the keys, `ig_default_focus` the item a modal
+  starts from; the log view follows its end through `ig_scroll_here` ([Scrolling and focus](widgets#scrolling-and-focus)): done.
 
 ## Next
 

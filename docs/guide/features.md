@@ -67,7 +67,7 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_selectable(label, selected)` → `logical` | a line of a list, highlighted when `selected`; `.true.` when clicked |
 | `ig_text_wrapped(text)`, `ig_text_disabled(text)`, `ig_text_colored(text, color)` | text wrapped at the region's edge, in the disabled colour, in a given colour |
 | `ig_begin_child(id [, width] [, height] [, border])` → `logical`, `ig_end_child()` | a region that scrolls on its own; always paired |
-| `list_clipper_object`: `clip%begin(count [, item_height])`, `clip%step()` → `logical`, `clip%first`, `clip%last` | a long list: only the rows in view are drawn |
+| `list_clipper_object`: `clip%begin(count [, item_height])`, `clip%step()` → `logical`, `clip%first`, `clip%last`, `clip%item_height` | a long list: only the rows in view are drawn; `item_height` the distance between rows [pixels] |
 | `ig_begin_main_menu_bar()` → `logical`, `ig_end_main_menu_bar()` | the menu bar along the top of the display; end only after a true begin |
 | `ig_begin_menu_bar()` → `logical`, `ig_end_menu_bar()` | a window's own menu bar (`ImGuiWindowFlags_MenuBar`) |
 | `ig_begin_menu(label [, enabled])` → `logical`, `ig_end_menu()` | a menu or submenu; `.true.` while open |
@@ -101,6 +101,12 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_last_item()` → `item_status_object` | what happened to the item drawn last, in one snapshot: `hovered`, `active`, `focused`, `visible`, `activated`, `edited`, `deactivated`, `deactivated_after_edit`, `toggled_open`, `clicked(3)`, `double_clicked(3)`, `rect(4)` ([What happened to an item](widgets#what-happened-to-an-item)) |
 | `ig_item_hovered([delay] [, stat])` → `logical` | the pointer is over the item drawn last; `delay` `'none'`, `'short'` (0.15 s) or `'normal'` (0.40 s) |
 | `ig_any_item_hovered()` → `logical`, `ig_any_item_active()` → `logical` | the pointer is over some item; some item is held or edited |
+| `ig_scroll_here([ratio] [, axis] [, stat])` | after an item: scroll its line to `ratio` of the visible height (0 top, 0.5 centre, 1 bottom), on the next frame ([Scrolling and focus](widgets#scrolling-and-focus)) |
+| `ig_scroll_to_pos(pos [, ratio] [, axis] [, stat])` | scroll the point `pos` [pixels] of the content to `ratio` of the visible height: a row a clipper does not draw |
+| `ig_get_scroll(y, ymax [, x] [, xmax])` | the scroll of the current window or region and its largest value [pixels] |
+| `ig_set_scroll([y] [, x])` | scroll the current window or region to `y`, `x` [pixels] |
+| `ig_focus_here([offset] [, stat])` | the next item takes the keyboard focus (a field is edited, as if clicked) |
+| `ig_default_focus()` | the item drawn last has the focus when its window (a modal, a popup) appears |
 
 Details: [Widgets](widgets).
 

@@ -185,7 +185,7 @@ int    fig_tool_button(const char *label, int label_len, const char *icon, int i
                        int selected, const double *accent);
 void  *fig_clipper_new(void);
 void   fig_clipper_begin(void *clipper, int count, double item_height);
-int    fig_clipper_step(void *clipper, int *first, int *last);
+int    fig_clipper_step(void *clipper, int *first, int *last, double *item_height);
 void   fig_clipper_delete(void *clipper);
 /* A routed shortcut: keys "ctrl+s" (modifiers and one key, by the names of fig_input_key, joined by '+'), scope
  * "focused", "global" or "item"; *pressed 1 on the frame it fires. */

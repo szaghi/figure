@@ -19,12 +19,13 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_process_info, fig_process_kill,            &
                             fig_process_pending, fig_process_release, fig_process_start, fig_process_take
 use figure_cimgui, only : igBeginChild_Str, igBeginPopupContextWindow, igEndChild, igEndPopup, igGetCursorPosX,     &
-                          igGetScrollMaxY, igGetScrollY, igGetTextLineHeightWithSpacing, igIsKeyChordPressed_Nil,  &
+                          igGetTextLineHeightWithSpacing, igIsKeyChordPressed_Nil,  &
                           igIsKeyDown_Nil, igIsWindowFocused, igMenuItem_Bool, igPopID, igPushID_Int, igSameLine,  &
-                          igSelectable_Bool, igSetClipboardText, igSetScrollHereY, igTextUnformatted, im_vec2
+                          igSelectable_Bool, igSetClipboardText, igTextUnformatted, im_vec2
 use figure_cimgui_enums, only : ImGuiChildFlags_Borders, ImGuiKey_C, ImGuiMod_Ctrl, ImGuiMod_Shift,                 &
                                 ImGuiWindowFlags_HorizontalScrollbar
 use figure_group, only : list_clipper_object
+use figure_imgui, only : ig_get_scroll, ig_scroll_here
 
 implicit none
 private
@@ -482,6 +483,8 @@ contains
    real(c_float)                                :: h       !< Height.
    real(c_float)                                :: x       !< Left of a line.
    logical                                      :: at_end  !< Scrolled to the bottom (last frame's layout).
+   real(real64)                                 :: scroll  !< Vertical scroll [pixels].
+   real(real64)                                 :: scroll_max !< Largest vertical scroll [pixels].
    integer(int32)                               :: i       !< Line.
    integer(int64)                               :: num     !< Its number.
    logical                                      :: chosen  !< It is chosen.
@@ -492,7 +495,8 @@ contains
    if (present(height)) h = real(height, c_float)
    if (igBeginChild_Str(cstr(id), im_vec2(0.0_c_float, h), ImGuiChildFlags_Borders,                                 &
                         ImGuiWindowFlags_HorizontalScrollbar)) then
-      at_end = igGetScrollY() >= igGetScrollMaxY() - 1.0_c_float
+      call ig_get_scroll(scroll, scroll_max)
+      at_end = scroll >= scroll_max - 1.0_real64
       self%view = [1_int32, 0_int32]
       widest = 0_int32
       call clip%begin(self%n, real(igGetTextLineHeightWithSpacing(), real64))
@@ -520,7 +524,7 @@ contains
             call igPopID()
          enddo
       enddo
-      if (at_end) call igSetScrollHereY(1.0_c_float) ! following: the newest line at the bottom
+      if (at_end) call ig_scroll_here(1.0_real64) ! following: the newest line at the bottom
       self%follow = at_end
       if (logical(igIsWindowFocused(0_c_int)) .and. logical(igIsKeyChordPressed_Nil(ior(ImGuiMod_Ctrl, ImGuiKey_C)))) &
          call clipboard(self%copy())

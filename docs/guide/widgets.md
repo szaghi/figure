@@ -355,7 +355,8 @@ Strings are passed verbatim, trailing blanks included: `'Run'` and `'Run   '` ar
 A list of thousands of rows draws only those in view with a `list_clipper_object`, rows of equal height (lines of
 text, selectables, a table's rows of fields): `call clip%begin(n)`, then `do while (clip%step())` draws rows
 `clip%first` to `clip%last`. The loop ends by itself (a few steps); left early, the clipper is closed by the next
-`begin` or when it goes out of scope.
+`begin` or when it goes out of scope. `clip%item_height` is the distance between rows [pixels], given to `begin` or
+measured on the first row: [Scrolling and focus](#scrolling-and-focus) reaches a row not drawn with it.
 
 ```fortran
 type(list_clipper_object) :: clip
@@ -377,6 +378,81 @@ beside it. Each region scrolls under the wheel on its own; the window does not m
 <<< @/examples/snippets/cb_help-list.F90{fortran}
 
 <Media name="cb_help" alt="A list of three sections on the left; picking one shows its values and its help text on the right" caption="docs/examples/src/cb_help.F90" />
+
+## Scrolling and focus
+
+<Media name="cb_reveal" video alt="Three windows: a bar of pick buttons standing for a 3-D view, a list of 30 bodies and a list of 2000 blocks. A click on pick block 1240 selects block 1240: on the next frame the Blocks list has scrolled so that block 1240 is highlighted in its middle, and the Bodies list shows body 19 highlighted in its middle. pick block 1873 does the same further down. Go to... opens a dialog whose field already has the text cursor; 333 is typed and enter pressed without a click: the dialog closes and both lists scroll to block 333 and body 5." caption="docs/examples/src/cb_reveal.F90: the lists scroll to a block picked elsewhere; the dialog's field takes the keys at once" />
+
+| Procedure | Notes |
+|---|---|
+| `ig_scroll_here([ratio] [, axis] [, stat])` | After an item: scroll its window or region so that the item's line is at `ratio` of the visible height (0 top, 0.5 centre, the default, 1 bottom). |
+| `ig_scroll_to_pos(pos [, ratio] [, axis] [, stat])` | Scroll so that the point `pos` [pixels] of the content, measured from where its first item starts, is at `ratio` of the visible height: reaches a row that is not drawn. |
+| `ig_get_scroll(y, ymax [, x] [, xmax])` | The scroll [pixels]: `y` from 0 (top) to `ymax` (bottom; 0 when nothing scrolls), `x` from 0 to `xmax`. |
+| `ig_set_scroll([y] [, x])` | Scroll to `y` and/or `x` [pixels], clamped to [0, the largest scroll]. |
+| `ig_focus_here([offset] [, stat])` | Before an item: give it the keyboard focus; a field is then edited as if clicked. `offset` 1 is the item after the next, -1 the item drawn last. |
+| `ig_default_focus()` | After an item: the item that has the focus when its window (a modal, a popup) appears. |
+
+(Dear ImGui's `SetScrollHereY`/`SetScrollHereX`, `SetScrollFromPosY`/`SetScrollFromPosX`, `GetScrollY`,
+`GetScrollMaxY`, `GetScrollX`, `GetScrollMaxX`, `SetScrollY`/`SetScrollX`, `SetKeyboardFocusHere`,
+`SetItemDefaultFocus`.) `axis` is `'y'` (the default) or `'x'`: with `'x'`, ratios are of the visible width and
+`pos` is measured from the content's left edge.
+
+Every one acts on the **current window or region**: call it between `ig_begin` and `ig_end`, or inside the
+[region](#lists-and-regions) (`ig_begin_child` ... `ig_end_child`) whose content scrolls, not after its end.
+
+**One frame late.** A scroll asked for is applied when its window or region is begun on the next frame, when its
+size is known: on the frame of the call nothing moves, `ig_get_scroll` still gives the old values, and an item's
+`visible` and `rect` ([What happened to an item](#what-happened-to-an-item)) are the old ones. One frame later the
+item is in place. `ig_focus_here` is one frame late too: typed keys go into the field from the next frame. Ask once,
+on the frame something happens (a pick, a button, a dialog that opens), not on every frame: a scroll asked on every
+frame holds the list still against the user's wheel.
+
+<<< @/examples/snippets/cb_reveal-here.F90{fortran}
+
+**A list clipper** draws only the rows in view (see [Lists and regions](#lists-and-regions)), so the row to reveal
+may not be drawn at all, and `ig_scroll_here` has no item to follow. `ig_scroll_to_pos` scrolls to a place of the
+content instead: rows of a clipper are `clip%item_height` pixels apart (the height of a row and the spacing below it,
+measured by the clipper on its first row; 0 before the first `step`), so row `i` starts at
+`(i - 1) * clip%item_height` and its middle is near `(i - 0.5) * clip%item_height`. Call it after the clipper's
+loop, inside the region; on the next frame the clipper draws the rows around it.
+
+<<< @/examples/snippets/cb_reveal-clipped.F90{fortran}
+
+**Focus and dialogs.** `ig_focus_here` before a field makes it the field being edited, as a click would, and scrolls
+its window to show it: the user types at once. Call it on one frame (a dialog's first frame, or the frame a button
+asks for it). `ig_default_focus` after an item marks the item a modal or a popup starts from: on the frame the
+window appears it gets the keyboard focus (on other frames the call does nothing, so it may be made on every frame).
+It is focused, not activated: enter or space presses a button (Dear ImGui's keyboard navigation, on in FIGURE), and a
+field is edited after enter. Put it on the safe choice of a dialog that destroys something ("Keep", not "Delete");
+without it, the first item of the window has the focus. A modal ignores the input of the windows behind it, so a
+field outside the modal cannot be focused while it is open. Shortcuts follow the focus: a chord with the default
+`'focused'` scope fires in the window that has it ([Shortcuts](menus#shortcuts)).
+
+<<< @/examples/snippets/cb_reveal-dialog.F90{fortran}
+
+The program checks itself headless (`cb_reveal --check` picks and types):
+
+<<< @/examples/output/cb_reveal.txt{text}
+
+Frame 9 is the frame of the pick: the selection is set and the scroll asked for, and block 1240 is not drawn; on
+frame 10 the clipper draws it in the middle of the list.
+
+**Status:** a `ratio` outside [0, 1] (NaN included), an unknown `axis`, or an `offset` below -1: nothing is done,
+`FIG_ERR_ARGUMENT` in `stat`, with the messages `ig_scroll_here: ratio 1.5 is not in [0, 1]`,
+`ig_scroll_to_pos: unknown axis "z" ('y' or 'x')`, `ig_focus_here: offset -2 is below -1`; `stat` is optional
+(absent: `error stop` with the message, [Error handling](errors)). With no frame open, or from a
+[task](processes#tasks), each is refused with `FIG_ERR_STATE` (`ig_scroll_here: no frame open`): `ig_get_scroll`
+gives zeros; without `stat` the error is reported by the next `app%next_frame`
+([Pairing and frames](errors#pairing-and-frames)). None of them opens a scope.
+
+- **Window:** as described. **Headless:** the same; the focus takes the keys of [`test_type`, `test_key`](testing#synthetic-input).
+  **Remote:** the same, the browser's keyboard.
+- **Threads:** the frame loop's thread only; a task is refused (`FIG_ERR_STATE`), as every drawing call.
+- **What it does not do:** no scroll to an item by its label, or to a row of a clipper by its index (the program
+  computes the place); no smooth scrolling (the list jumps); no scroll of a window other than the current one; no
+  focus of a window (that is `ig_focus_window`). `ig_scroll_here` follows the last line, not the last item: after
+  `ig_same_line`, the line of both. A table with `ImGuiTableFlags_ScrollY` scrolls inside itself: call these between
+  `ig_begin_table` and `ig_end_table` to scroll it.
 
 ## Groups: headers, tabs, tables
 

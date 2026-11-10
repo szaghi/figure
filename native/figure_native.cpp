@@ -2779,9 +2779,13 @@ void fig_clipper_begin(void *clipper, int count, double item_height) {
 }
 
 // The next range of rows to draw, 1-based [first, last]: 1 while there is one; 0 at the end (the clipper ended).
-int fig_clipper_step(void *clipper, int *first, int *last) {
+// *item_height: the height of a row with the spacing below it [pixels], given to Begin or measured on the first row
+// (0 until it is known).
+int fig_clipper_step(void *clipper, int *first, int *last, double *item_height) {
    ImGuiListClipper *c = static_cast<ImGuiListClipper *>(clipper);
-   if (!c->Step()) return 0;
+   const int more = c->Step() ? 1 : 0;
+   *item_height = c->ItemsHeight > 0.0f ? static_cast<double>(c->ItemsHeight) : 0.0;
+   if (!more) return 0;
    *first = c->DisplayStart + 1;
    *last = c->DisplayEnd;
    return 1;

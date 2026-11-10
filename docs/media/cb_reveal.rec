@@ -1,0 +1,23 @@
+#! program build/docs-examples/bin/cb_reveal
+#! frames  260
+#! poster  50
+# pick block 1240: the Blocks list scrolls to it (a row the clipper did not draw), Bodies to body 19; pick block
+# 1873: further down; Go to...: the dialog's field has the focus, 333 and enter are typed without a click, both lists
+# scroll to block 333; pick block 17: back near the top.
+0   move 600 250
+10  move 148 49 15
+28  down
+29  up
+60  move 247 49 15
+78  down
+79  up
+110 move 324 49 15
+128 down
+129 up
+145 text 3
+151 text 3
+157 text 3
+170 key enter
+200 move 56 49 15
+218 down
+219 up

@@ -20,6 +20,13 @@ program figure_test_forms
 !< (`ig_any_item_active`); a snapshot taken before a tooltip keeps the button's status after the tooltip and another
 !< item are drawn; a combo's pick is an edit; a tree node's arrow toggles it open; a row scrolled out of a child
 !< region is not visible.
+!<
+!< Scrolling and focus: in a 100-pixel child of 200 rows, `ig_scroll_here(0.5)` after row 150 puts it at the child's
+!< centre on the next frame (not on the same one); in a clipped list of 1000 rows, a row not drawn is reached by
+!< `ig_scroll_to_pos` and drawn at the centre on the next frame; `ig_set_scroll(y=0)` goes back to the top; a bad
+!< ratio, axis or offset is refused; `ig_focus_here` makes the next field take typed keys without a click; a modal's
+!< `ig_default_focus` button has the focus when the modal appears and enter presses it.
+use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, ig_input_text, ig_item_rect,   &
                    ig_set_next_item_width, ig_set_next_window, ig_tooltip, ImGuiInputTextFlags_CharsNoBlank,   &
@@ -30,6 +37,9 @@ use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, 
 use figure, only : ig_color_edit, ig_set_next_item_shortcut, ig_shortcut, FIG_ERR_ARGUMENT, FIG_OK
 use figure, only : ig_any_item_active, ig_any_item_hovered, ig_begin_child, ig_end_child, ig_item_hovered, ig_last_item, &
                    item_status_object
+use figure, only : ig_begin_popup_modal, ig_close_current_popup, ig_default_focus, ig_end_popup, ig_focus_here,   &
+                   ig_get_scroll, ig_open_popup, ig_scroll_here, ig_scroll_to_pos, ig_selectable, ig_set_scroll, &
+                   list_clipper_object
 use figure_testing, only : test_click, test_drag, test_item_center, test_key, test_mouse_button, test_mouse_move, &
                            test_next_frame, test_popup_rect, test_type, test_wheel, test_window_rect
 
@@ -37,7 +47,7 @@ implicit none
 integer(int32), parameter :: FRAMES = 400_int32 !< Frames run.
 integer(int32), parameter :: TIP_FRAME = 230_int32 !< Frame on which the tooltip is looked for.
 type(app_object)          :: app                !< Application.
-logical                   :: test_passed(53)    !< Per-check outcome.
+logical                   :: test_passed(60)    !< Per-check outcome.
 character(len=16)         :: grid_file          !< A text field.
 character(len=4)          :: short              !< A text field of capacity 4.
 character(len=12)         :: no_blank           !< A text field that refuses blanks.
@@ -128,6 +138,20 @@ logical                   :: row_visible(2, 2)  !< (row 1, row 30) of a child vi
 integer(int32)            :: s_hover(2)         !< Statuses of ig_item_hovered: 'normal', an unknown delay.
 integer(int32)            :: picked             !< The combo's choice after the pick.
 integer(int32)            :: normal_at          !< First frame the button was hovered with the 'normal' delay.
+real(real64)              :: here_off(2)        !< Row 150's centre minus the child's centre: same frame, next frame.
+logical                   :: here_vis(2)        !< Row 150 visible: on the frame of ig_scroll_here, on the next.
+real(real64)              :: scroll_seen(4, 2)  !< ig_get_scroll (y, ymax, x, xmax): before, after the scroll.
+real(real64)              :: pitch(2)           !< Row pitch: of the plain list (measured), of the clipper.
+integer(int32)            :: clip_drawn(4)      !< Row 700 drawn on the frame of ig_scroll_to_pos, on the next; then
+                                                !< row 300 (from a scrolled list), the same.
+real(real64)              :: clip_off(2)        !< Row 700's, then 300's, centre minus the child's centre.
+real(real64)              :: top_scroll         !< The plain list's scroll after ig_set_scroll(y=0).
+integer(int32)            :: s_scroll(6)        !< Statuses: good here, good to_pos, bad ratio, bad axis, NaN,
+                                                !< offset -2.
+integer(int32)            :: s_focus            !< Status of a good ig_focus_here.
+character(len=8)          :: fields(2)          !< Two fields: the second gets the focus from the program.
+logical                   :: modal_focus(2)     !< In the modal: Delete focused, Keep focused (after it appears).
+integer(int32)            :: modal_press(2)     !< Presses: Delete, Keep.
 
 grid_file = 'CC/cc'
 short = ''
@@ -355,6 +379,7 @@ enddo
 call colour_frames()
 call shortcut_frames()
 call item_frames()
+call scroll_frames()
 call app%destroy()
 
 test_passed(1) = grid_file == 'MESH/grid' .and. edits(1) > 0_int32            ! typed text, written back
@@ -417,6 +442,18 @@ test_passed(51) = combo_edits == 1_int32 .and. picked == 2_int32 .and. toggles =
 test_passed(52) = row_visible(1, 1) .and. .not. row_visible(2, 1) .and. &    ! a row scrolled out of the child:
                   .not. row_visible(1, 2) .and. row_visible(2, 2)            ! not visible
 test_passed(53) = s_hover(2) == FIG_ERR_ARGUMENT                             ! an unknown delay refused
+test_passed(54) = .not. here_vis(1) .and. here_vis(2) .and. &               ! ig_scroll_here: one frame later, row
+                  abs(here_off(2)) < 0.5_real64 * pitch(1)                  ! 150 at the child's centre
+test_passed(55) = scroll_seen(1, 1) == 0.0_real64 .and. scroll_seen(1, 2) > 0.0_real64 .and. & ! ig_get_scroll: 0,
+                  scroll_seen(1, 2) <= scroll_seen(2, 2) .and. scroll_seen(2, 1) == scroll_seen(2, 2) .and. & ! then
+                  scroll_seen(2, 2) > 190.0_real64 * pitch(1) .and. all(scroll_seen(3:4, :) == 0.0_real64) ! moved
+test_passed(56) = all(clip_drawn == [0_int32, 1_int32, 0_int32, 1_int32]) .and. & ! clipped rows reached by
+                  all(abs(clip_off) < 0.5_real64 * pitch(2)) .and. pitch(2) > 0.0_real64 ! ig_scroll_to_pos
+test_passed(57) = top_scroll == 0.0_real64                                   ! ig_set_scroll(y=0)
+test_passed(58) = all(s_scroll(1:2) == FIG_OK) .and. all(s_scroll(3:6) == FIG_ERR_ARGUMENT) .and. s_focus == FIG_OK
+test_passed(59) = fields(1) == 'one' .and. fields(2) == 'abc'                ! typed keys go to the focused field
+test_passed(60) = .not. modal_focus(1) .and. modal_focus(2) .and. &          ! a modal's default focus: Keep, and
+                  all(modal_press == [0_int32, 1_int32])                     ! enter presses it
 
 write(output_unit, '(A,*(L2))') 'figure_test_forms checks:', test_passed
 if (.not. all(test_passed)) then
@@ -442,6 +479,11 @@ if (.not. all(test_passed)) then
          ', hover', hover_seen, normal_at, ', clicks ', clicks, ', dbl ', dbl, ', held', held, ', snap', snap_ok, &
          ', combo/picked/toggles ', combo_edits, picked, toggles, ', rows', row_visible, ', hover stats ', s_hover
    write(output_unit, '(A)') 'committed "'//trim(committed)//'"'
+   write(output_unit, '(A,2L2,A,2F8.2,A,8F8.1,A,2F7.2,A,4(I0,1X),A,2F8.2,A,F7.1,A,6(I0,1X),I0)') 'scroll: here vis', &
+         here_vis, ', off', here_off, ', get', scroll_seen, ', pitch', pitch, ', clip drawn ', clip_drawn, ', off ', &
+         clip_off, ', top ', top_scroll, ', stats ', s_scroll, s_focus
+   write(output_unit, '(A,2L2,A,2(I0,1X))') 'focus: fields "'//trim(fields(1))//'" "'//trim(fields(2))// &
+         '", modal focus', modal_focus, ', presses ', modal_press
 endif
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
@@ -766,6 +808,140 @@ contains
    enddo
    picked = model
    endsubroutine item_frames
+
+   subroutine scroll_frames()
+   !< One window, Scroll: a child of 200 rows scrolled by `ig_scroll_here` and `ig_set_scroll`, a child of 1000
+   !< clipped rows scrolled by `ig_scroll_to_pos`, two fields (the second focused by `ig_focus_here`), and a modal
+   !< whose second button is its default focus.
+   type(item_status_object)  :: s           !< Status of an item.
+   type(list_clipper_object) :: clip        !< The clipped list.
+   real(real64)              :: row(4)      !< Row 150's (or 700's) rectangle this frame.
+   real(real64)              :: prev(4)     !< Row 1's rectangle (for the pitch).
+   real(real64)              :: dummy(2)    !< ig_get_scroll's values not kept.
+   character(len=12)         :: label       !< A row's label.
+   logical                   :: drawn       !< Row 700 drawn this frame.
+   logical                   :: shown       !< The modal is open.
+   integer(int32)            :: f           !< Frame.
+   integer(int32)            :: r           !< Row.
+   integer(int32)            :: goal        !< The clipped row to reach.
+
+   here_off = huge(1.0_real64)
+   here_vis = .true.
+   scroll_seen = -1.0_real64
+   pitch = 0.0_real64
+   clip_drawn = -1_int32
+   clip_off = huge(1.0_real64)
+   goal = 700_int32
+   top_scroll = -1.0_real64
+   s_scroll = -1_int32
+   s_focus = -1_int32
+   fields = ['one', '   ']
+   modal_focus = [.true., .false.]
+   modal_press = 0_int32
+   do f = 1_int32, 90_int32
+      if (.not. app%next_frame()) exit
+      call ig_set_next_window(20.0_real64, 20.0_real64, 500.0_real64, 520.0_real64, always=.true.)
+      if (ig_begin('Scroll')) then
+         row = 0.0_real64
+         prev = 0.0_real64
+         if (ig_begin_child('rows', height=100.0_real64, border=.true.)) then
+            if (f == 4_int32) call ig_get_scroll(scroll_seen(1, 1), scroll_seen(2, 1), scroll_seen(3, 1), &
+                                                 scroll_seen(4, 1))
+            if (f == 6_int32) call ig_get_scroll(scroll_seen(1, 2), scroll_seen(2, 2), scroll_seen(3, 2), &
+                                                 scroll_seen(4, 2))
+            if (f == 32_int32) call ig_get_scroll(top_scroll, dummy(1))
+            do r = 1_int32, 200_int32
+               write(label, '(A,I3.3)') 'item ', r
+               if (ig_selectable(trim(label), r == 150_int32)) continue
+               s = ig_last_item()
+               if (r == 1_int32) prev = s%rect
+               if (r == 2_int32) pitch(1) = s%rect(2) - prev(2)
+               if (r == 150_int32) then
+                  row = s%rect
+                  if (f == 5_int32) here_vis(1) = s%visible
+                  if (f == 6_int32) here_vis(2) = s%visible
+                  if (f == 5_int32) call ig_scroll_here(0.5_real64, stat=s_scroll(1)) ! centre row 150
+               endif
+            enddo
+            if (f == 30_int32) call ig_set_scroll(y=0.0_real64)                    ! back to the top
+            if (f == 8_int32) then                                                ! refused arguments
+               call ig_scroll_here(1.5_real64, stat=s_scroll(3))
+               call ig_scroll_to_pos(0.0_real64, axis='z', stat=s_scroll(4))
+               call ig_scroll_here(ieee_value(1.0_real64, ieee_quiet_nan), stat=s_scroll(5))
+               call ig_focus_here(-2_int32, stat=s_scroll(6))
+            endif
+         endif
+         call ig_end_child()
+         s = ig_last_item()
+         if (f == 5_int32 .or. f == 6_int32) here_off(f - 4_int32) = (row(2) + 0.5_real64 * row(4)) - &
+                                                                    (s%rect(2) + 0.5_real64 * s%rect(4))
+         drawn = .false.
+         row = 0.0_real64
+         if (ig_begin_child('clipped', height=100.0_real64, border=.true.)) then
+            call clip%begin(1000_int32)
+            do while (clip%step())
+               do r = clip%first, clip%last
+                  write(label, '(A,I4.4)') 'line ', r
+                  call ig_text(trim(label))
+                  if (r == goal) then
+                     drawn = .true.
+                     s = ig_last_item()
+                     row = s%rect
+                  endif
+               enddo
+            enddo
+            pitch(2) = clip%item_height
+            if (f == 20_int32 .or. f == 24_int32) &                               ! a row not drawn now
+               call ig_scroll_to_pos((real(goal, real64) - 0.5_real64) * clip%item_height, 0.5_real64, stat=s_scroll(2))
+         endif
+         call ig_end_child()
+         s = ig_last_item()
+         select case (f)
+         case (20_int32)                                                          ! row 700: asked, not drawn
+            clip_drawn(1) = merge(1_int32, 0_int32, drawn)
+         case (21_int32)                                                          ! drawn, at the centre
+            clip_drawn(2) = merge(1_int32, 0_int32, drawn)
+            clip_off(1) = (row(2) + 0.5_real64 * row(4)) - (s%rect(2) + 0.5_real64 * s%rect(4))
+         case (22_int32)
+            goal = 300_int32                                                      ! now from a scrolled list
+         case (24_int32)
+            clip_drawn(3) = merge(1_int32, 0_int32, drawn)
+         case (25_int32)
+            clip_drawn(4) = merge(1_int32, 0_int32, drawn)
+            clip_off(2) = (row(2) + 0.5_real64 * row(4)) - (s%rect(2) + 0.5_real64 * s%rect(4))
+         endselect
+         if (ig_input_text('first', fields(1))) continue
+         if (f == 40_int32) call ig_focus_here(stat=s_focus)                      ! the next field: 'second'
+         if (ig_input_text('second', fields(2))) continue
+         if (f == 60_int32) call ig_open_popup('Confirm')
+         shown = ig_begin_popup_modal('Confirm')
+         if (shown) then
+            call ig_text('delete the case?')
+            if (ig_button('Delete')) then
+               modal_press(1) = modal_press(1) + 1_int32
+               call ig_close_current_popup()
+            endif
+            s = ig_last_item()
+            if (f == 64_int32) modal_focus(1) = s%focused
+            if (ig_button('Keep')) then
+               modal_press(2) = modal_press(2) + 1_int32
+               call ig_close_current_popup()
+            endif
+            call ig_default_focus()                                               ! the safe choice
+            s = ig_last_item()
+            if (f == 64_int32) modal_focus(2) = s%focused
+            call ig_end_popup()
+         endif
+      endif
+      call ig_end()
+      select case (f)
+      case (44_int32)                                         ! no click: the keys go to 'second'
+         call test_type('abc')
+      case (66_int32)
+         call test_key('enter')
+      endselect
+   enddo
+   endsubroutine scroll_frames
 
    subroutine replace(k, text)
    !< Click field k, select its text, type `text`, confirm with enter. The text is selected with end, then shift+home,

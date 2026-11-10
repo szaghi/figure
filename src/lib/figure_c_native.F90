@@ -749,14 +749,15 @@ interface
    real(c_double), value :: item_height !< Row height [pixels].
    endsubroutine fig_clipper_begin
 
-   function fig_clipper_step(clipper, first, last) result(more) bind(C, name='fig_clipper_step')
-   !< The next range of rows to draw (1-based): 1 while there is one.
-   import :: c_int, c_ptr
+   function fig_clipper_step(clipper, first, last, item_height) result(more) bind(C, name='fig_clipper_step')
+   !< The next range of rows to draw (1-based): 1 while there is one; the row height once known (0 before).
+   import :: c_double, c_int, c_ptr
    implicit none
-   type(c_ptr),    value       :: clipper !< Clipper.
-   integer(c_int), intent(out) :: first   !< First row.
-   integer(c_int), intent(out) :: last    !< Last row.
-   integer(c_int)              :: more    !< 1: draw first..last.
+   type(c_ptr),    value       :: clipper     !< Clipper.
+   integer(c_int), intent(out) :: first       !< First row.
+   integer(c_int), intent(out) :: last        !< Last row.
+   real(c_double), intent(out) :: item_height !< Height of a row with its spacing [pixels] (0: not known yet).
+   integer(c_int)              :: more        !< 1: draw first..last.
    endfunction fig_clipper_step
 
    subroutine fig_clipper_delete(clipper) bind(C, name='fig_clipper_delete')

@@ -285,6 +285,33 @@ double click with the left button, opens it. The first click of the double click
 `clicked(2)` is a right click on the row. Take the status right after the row's widget, before the next row is
 drawn: [the snapshot rule](/guide/widgets#what-happened-to-an-item).
 
+### Reveal an item picked elsewhere
+
+<<< @/examples/snippets/cb_reveal-clipped.F90{fortran}
+
+<Media name="cb_reveal" video alt="A pick of block 1240 in a bar standing for a 3-D view scrolls the list of 2000 blocks so that block 1240 is highlighted in its middle, and the list of bodies to body 19; Go to... opens a dialog whose field takes 333 and enter without a click, and both lists scroll to block 333" caption="docs/examples/src/cb_reveal.F90" />
+
+The user picks a block somewhere else (a 3-D view, a search, a message), and the list must show it. The program sets
+the selection and a flag `reveal` for one frame. The list of blocks draws only the rows in view (a
+`list_clipper_object`), so the picked row may not be drawn: after the clipper's loop, inside the region,
+`ig_scroll_to_pos` scrolls to its place, `(block - 0.5) * clip%item_height` pixels below the top of the list, at the
+middle of the region (`ratio` 0.5). A list drawn whole (the bodies) needs no arithmetic: `ig_scroll_here(0.5)` right
+after the row.
+
+<<< @/examples/snippets/cb_reveal-here.F90{fortran}
+
+The scroll happens one frame later, when the region is begun again; the program checks itself headless:
+
+<<< @/examples/output/cb_reveal.txt{text}
+
+A dialog whose field takes the keys at once calls `ig_focus_here()` before the field, on the frame the dialog opens
+only:
+
+<<< @/examples/snippets/cb_reveal-dialog.F90{fortran}
+
+[Scrolling and focus](/guide/widgets#scrolling-and-focus) has the rules: the one-frame delay, the clipper, focus and
+modals.
+
 ## Plots
 
 ### Plot the columns of a matrix

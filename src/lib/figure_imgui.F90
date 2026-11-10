@@ -13,6 +13,7 @@ module figure_imgui
 !< local copy, written back).
 use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_loc, c_long_long, &
                                         c_null_char, c_null_ptr, c_ptr
+use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
                         figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_WINDOW
@@ -29,7 +30,10 @@ use figure_cimgui, only : igGetTime, igProgressBar, &
                           igSliderScalar, igTextUnformatted, im_vec4, igGetStyleColorVec4, igPopStyleColor, &
                           igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos, igAlignTextToFramePadding, &
                           igIsPopupOpen_Str, igSetWindowFocus_Str, igCalcTextSize, igColorEdit4, igIsAnyItemActive, &
-                          igIsAnyItemHovered, igIsItemHovered
+                          igIsAnyItemHovered, igIsItemHovered, igGetCursorStartPos, igGetScrollMaxX, igGetScrollMaxY, &
+                          igGetScrollX, igGetScrollY, igSetKeyboardFocusHere, igSetScrollFromPosX_Float,           &
+                          igSetScrollFromPosY_Float, igSetScrollHereX, igSetScrollHereY, igSetScrollX_Float,       &
+                          igSetScrollY_Float
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
                                 ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup, &
                                 ImGuiInputTextFlags_AllowTabInput, ImGuiInputTextFlags_ReadOnly, &
@@ -47,6 +51,7 @@ public :: ig_color_edit
 public :: ig_input_text_multiline, text_buffer_object
 public :: ig_set_clipboard, ig_get_clipboard
 public :: item_status_object, ig_last_item, ig_item_hovered, ig_any_item_hovered, ig_any_item_active
+public :: ig_scroll_here, ig_get_scroll, ig_set_scroll, ig_scroll_to_pos, ig_focus_here, ig_default_focus
 
 type :: text_buffer_object
    !< Text of any length, edited by `ig_input_text_multiline`: a file shown or edited as text, notes, a read-only view.
@@ -855,6 +860,163 @@ contains
    if (figure_draw_refused('ig_any_item_active')) return ! a task does not draw
    active = logical(igIsAnyItemActive())
    endfunction ig_any_item_active
+
+   recursive subroutine ig_scroll_here(ratio, axis, stat)
+   !< Scroll the current window or region so that the line drawn last (the last item's line) is at `ratio` of its
+   !< visible height: 0 top, 0.5 centre (default), 1 bottom (Dear ImGui's `SetScrollHereY`; `axis='x'`:
+   !< `SetScrollHereX`, the last item at `ratio` of the visible width). Call it after the item, inside the window or
+   !< region that scrolls. The scroll moves when that window or region is begun on the next frame: the item is in place
+   !< one frame later. A ratio outside [0, 1] or an unknown axis: nothing done, `FIG_ERR_ARGUMENT` in `stat` (or
+   !< `error stop` without it); no frame open or a task: `FIG_ERR_STATE`. The same in window, headless and remote mode.
+   real(real64),     intent(in),  optional :: ratio !< Where the line goes, in [0, 1] of the visible height (width).
+   character(len=*), intent(in),  optional :: axis  !< 'y' (default) or 'x'.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   real(real64)                            :: r     !< Ratio.
+   integer(int32)                          :: a     !< Axis: 1 x, 2 y.
+
+   if (figure_draw_refused('ig_scroll_here', stat)) return ! a task does not draw
+   if (.not. scroll_arguments('ig_scroll_here', ratio, axis, r, a, stat)) return
+   if (a == 1_int32) then
+      call igSetScrollHereX(real(r, c_float))
+   else
+      call igSetScrollHereY(real(r, c_float))
+   endif
+   if (present(stat)) stat = FIG_OK
+   endsubroutine ig_scroll_here
+
+   recursive subroutine ig_get_scroll(y, ymax, x, xmax)
+   !< The scroll of the current window or region [pixels] (Dear ImGui's `GetScrollY`, `GetScrollMaxY`, `GetScrollX`,
+   !< `GetScrollMaxX`): `y` from 0 (top) to `ymax` (bottom; 0: nothing to scroll), `x` from 0 (left) to `xmax`. The
+   !< values of the last layout: a scroll asked for on this frame is not in them yet. No frame open or a task: zeros
+   !< (a usage error, reported by `app%next_frame`). The same in window, headless and remote mode.
+   real(real64), intent(out)           :: y    !< Vertical scroll [pixels].
+   real(real64), intent(out)           :: ymax !< Largest vertical scroll [pixels].
+   real(real64), intent(out), optional :: x    !< Horizontal scroll [pixels].
+   real(real64), intent(out), optional :: xmax !< Largest horizontal scroll [pixels].
+
+   y = 0.0_real64
+   ymax = 0.0_real64
+   if (present(x)) x = 0.0_real64
+   if (present(xmax)) xmax = 0.0_real64
+   if (figure_draw_refused('ig_get_scroll')) return ! a task does not draw
+   y = real(igGetScrollY(), real64)
+   ymax = real(igGetScrollMaxY(), real64)
+   if (present(x)) x = real(igGetScrollX(), real64)
+   if (present(xmax)) xmax = real(igGetScrollMaxX(), real64)
+   endsubroutine ig_get_scroll
+
+   recursive subroutine ig_set_scroll(y, x)
+   !< Scroll the current window or region to `y` (and/or `x`) [pixels] (Dear ImGui's `SetScrollY`, `SetScrollX`):
+   !< clamped to [0, the largest scroll] when applied, on the next frame (one frame late, as `ig_scroll_here`). An
+   !< absent coordinate is left as it is. No frame open or a task: nothing done (a usage error, reported by
+   !< `app%next_frame`). The same in window, headless and remote mode.
+   real(real64), intent(in), optional :: y !< Vertical scroll [pixels].
+   real(real64), intent(in), optional :: x !< Horizontal scroll [pixels].
+
+   if (figure_draw_refused('ig_set_scroll')) return ! a task does not draw
+   if (present(y)) call igSetScrollY_Float(real(y, c_float))
+   if (present(x)) call igSetScrollX_Float(real(x, c_float))
+   endsubroutine ig_set_scroll
+
+   recursive subroutine ig_scroll_to_pos(pos, ratio, axis, stat)
+   !< Scroll the current window or region so that the point `pos` [pixels] of its content is at `ratio` of its visible
+   !< height: 0 top, 0.5 centre (default), 1 bottom (Dear ImGui's `SetScrollFromPosY`; `axis='x'`: `SetScrollFromPosX`
+   !< and the width). `pos` is measured from the top (left) of the content, where its first item starts, whatever the
+   !< scroll is now: row `i` of a list of rows `h` pixels apart starts at `(i - 1) * h`. It reaches a row that is not
+   !< drawn on this frame (a list clipper's). Applied on the next frame, as `ig_scroll_here`. A ratio outside [0, 1] or
+   !< an unknown axis: nothing done, `FIG_ERR_ARGUMENT` in `stat` (or `error stop` without it); no frame open or a
+   !< task: `FIG_ERR_STATE`. The same in window, headless and remote mode.
+   real(real64),     intent(in)            :: pos   !< Point of the content [pixels from its top (left)].
+   real(real64),     intent(in),  optional :: ratio !< Where it goes, in [0, 1] of the visible height (width).
+   character(len=*), intent(in),  optional :: axis  !< 'y' (default) or 'x'.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   real(real64)                            :: r     !< Ratio.
+   integer(int32)                          :: a     !< Axis: 1 x, 2 y.
+   type(im_vec2)                           :: start !< Where the content starts, in window coordinates.
+
+   if (figure_draw_refused('ig_scroll_to_pos', stat)) return ! a task does not draw
+   if (.not. scroll_arguments('ig_scroll_to_pos', ratio, axis, r, a, stat)) return
+   start = igGetCursorStartPos() ! the content's origin, relative to the window (it moves with the scroll)
+   if (a == 1_int32) then
+      call igSetScrollFromPosX_Float(start%x + real(pos, c_float), real(r, c_float))
+   else
+      call igSetScrollFromPosY_Float(start%y + real(pos, c_float), real(r, c_float))
+   endif
+   if (present(stat)) stat = FIG_OK
+   endsubroutine ig_scroll_to_pos
+
+   recursive function scroll_arguments(name, ratio, axis, r, a, stat) result(ok)
+   !< Check the ratio and axis of a scroll call: their values, or false with `FIG_ERR_ARGUMENT` reported.
+   character(len=*), intent(in)            :: name  !< The calling procedure.
+   real(real64),     intent(in),  optional :: ratio !< Ratio, in [0, 1] (default 0.5).
+   character(len=*), intent(in),  optional :: axis  !< 'y' (default) or 'x'.
+   real(real64),     intent(out)           :: r     !< The ratio.
+   integer(int32),   intent(out)           :: a     !< The axis: 1 x, 2 y.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   logical                                 :: ok    !< Both valid.
+   character(len=32)                       :: text  !< The ratio, written.
+
+   ok = .false.
+   r = 0.5_real64
+   a = 2_int32
+   if (present(ratio)) r = ratio
+   if (ieee_is_nan(r)) then                                  ! tested apart: a comparison would signal
+      text = 'NaN'
+   else
+      write(text, '(G0)') r
+   endif
+   if (ieee_is_nan(r) .or. r < 0.0_real64 .or. r > 1.0_real64) then
+      call figure_fail(FIG_ERR_ARGUMENT, name//': ratio '//trim(text)//' is not in [0, 1]', stat)
+      return
+   endif
+   if (present(axis)) then
+      select case (axis)
+      case ('y')
+         a = 2_int32
+      case ('x')
+         a = 1_int32
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, name//': unknown axis "'//axis//'" (''y'' or ''x'')', stat)
+         return
+      endselect
+   endif
+   ok = .true.
+   endfunction scroll_arguments
+
+   recursive subroutine ig_focus_here(offset, stat)
+   !< Give the keyboard focus to the next item (Dear ImGui's `SetKeyboardFocusHere`): call it before the item, on one
+   !< frame (the frame a dialog opens, a button asks for it), not on every frame. A text or number field is then edited
+   !< as if clicked: typed keys go into it, from the next frame. `offset` 1 is the item after the next, 2 the one after
+   !< that; -1 is the item drawn last. The window or region is scrolled to show the item. An offset below -1: nothing
+   !< done, `FIG_ERR_ARGUMENT` in `stat` (or `error stop` without it); no frame open or a task: `FIG_ERR_STATE`. The
+   !< same in window, headless and remote mode.
+   integer(int32), intent(in),  optional :: offset !< Which item: 0 the next (default), 1 the one after, -1 the last.
+   integer(int32), intent(out), optional :: stat   !< Status.
+   integer(int32)                        :: o      !< Offset.
+   character(len=16)                     :: text   !< The offset, written.
+
+   if (figure_draw_refused('ig_focus_here', stat)) return ! a task does not draw
+   o = 0_int32
+   if (present(offset)) o = offset
+   if (o < -1_int32) then
+      write(text, '(I0)') o
+      call figure_fail(FIG_ERR_ARGUMENT, 'ig_focus_here: offset '//trim(text)//' is below -1', stat)
+      return
+   endif
+   call igSetKeyboardFocusHere(int(o, c_int))
+   if (present(stat)) stat = FIG_OK
+   endsubroutine ig_focus_here
+
+   recursive subroutine ig_default_focus()
+   !< Make the item drawn last the one that has the keyboard focus when its window appears (Dear ImGui's
+   !< `SetItemDefaultFocus`): a dialog's safe button, the field a form starts from. Call it after the item; it acts on
+   !< the frame the window (a modal, a popup, a window opened by the program) appears, and does nothing on the others,
+   !< so it may be called on every frame. The item is focused, not activated: enter or space presses it (keyboard
+   !< navigation), a field is edited after enter. No frame open or a task: nothing done (a usage error, reported by
+   !< `app%next_frame`). The same in window, headless and remote mode.
+   if (figure_draw_refused('ig_default_focus')) return ! a task does not draw
+   call igSetItemDefaultFocus()
+   endsubroutine ig_default_focus
 
    recursive subroutine ig_image(tex, width, height)
    !< A texture, pixel row 1 at the top (screen and image-file convention), `width` x `height` pixels (default: the
