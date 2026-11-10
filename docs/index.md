@@ -88,7 +88,7 @@ are the program's own back buffer, captured with `FIGURE_CAPTURE` and driven by 
 
 ## Status
 
-FIGURE v0.2.0 is released (2026-11-06). It grew from its first application outside this repository, tools for a CFD
+FIGURE v0.4.0 is released (2026-11-10). It grew from its first application outside this repository, tools for a CFD
 solver ([showcase](./guide/showcase)): forms, menus and dialogs, docking layouts, icons and workspace toolbars, plots
 for live checks. CI runs on Linux, macOS and Windows with gfortran and on Linux with nvfortran and Intel ifx, and
 opens a real window on the three systems. The API can still change before v1.0 ([roadmap](./guide/roadmap)). FIGURE

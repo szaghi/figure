@@ -6,7 +6,8 @@ title: Roadmap
 
 The plan of each release is tracked step by step in an issue: v0.1.0 in
 [issue #1](https://github.com/szaghi/figure/issues/1), v0.2.0 in [issue #2](https://github.com/szaghi/figure/issues/2),
-v0.3.0 in [issue #3](https://github.com/szaghi/figure/issues/3),
+v0.3.0 in [issue #3](https://github.com/szaghi/figure/issues/3), v0.3.1 in [issue #5](https://github.com/szaghi/figure/issues/5),
+v0.4.0 in [issue #6](https://github.com/szaghi/figure/issues/6), v0.5.0 in [issue #7](https://github.com/szaghi/figure/issues/7),
 each step with its tasks, its checks, the documentation and the pictures it updates, and a log of the work. This page
 summarises them.
 
@@ -135,7 +136,7 @@ editors of its input files.
   in view only (`list_clipper_object`, [Widgets](widgets#lists-and-regions)): done.
 - **Release v0.2.0:** the tag, the GitHub release, the `v0.2.0-fpm` package: done.
 
-## v0.3.0 — in progress
+## v0.3.0 — released 2026-11-08
 
 The next application is one GUI for a case of the Xall solver, from the mesh to post-processing; the plan is
 [issue #3](https://github.com/szaghi/figure/issues/3).
@@ -213,7 +214,7 @@ The next application is one GUI for a case of the Xall solver, from the mesh to 
   `init_remote(lossy=.false.)` keeps every image exact. A moving 1600x1000 view: from 91 MB/s raw to 0.8 to 7 MB/s:
   done.
 
-## v0.3.1 — in progress
+## v0.3.1 — released 2026-11-09
 
 A patch of three defects of v0.3.0, tracked in [issue #5](https://github.com/szaghi/figure/issues/5):
 
@@ -225,7 +226,7 @@ A patch of three defects of v0.3.0, tracked in [issue #5](https://github.com/sza
 - **The 3-D view owns the mouse wheel while hovered:** inside a scrolling window or child, the wheel over the view
   zooms it and no longer scrolls the container ([Mouse](view3d#mouse)): done.
 
-## v0.4.0 — in progress
+## v0.4.0 — released 2026-11-10
 
 Widget control, errors a Fortran programmer can act on, and the plots a monitor and a post-processor need; the plan,
 step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
@@ -310,7 +311,14 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   recorded again with them. Tutorial [part three](/manual/tutorial/18-checks), chapters 18 to 22: the solver studio
   grows the v0.4.0 features, each chapter a compiled program tested headless by the documentation's build and
   recorded. A fresh reader's pass over the installation and part one; the [migration notes](changelog#migration-to-v0-4-0): done.
-- **A fallback font for symbols Plex lacks** (S10): waits for the owner's choice of font.
+- **A fallback font for symbols Plex lacks** (S10): moved to v0.5.0.
+
+## v0.5.0 — planned
+
+Pictures without a GPU, tests that find items by path, an application layer, images from files and four extensions
+(a code editor, gizmos for the 3-D view, ImPlot3D, Markdown); carried over from v0.4.0: the fallback font (Noto Sans
+Math), an unrouted shortcut scope, plot data through C descriptors and a monotonic clock. The plan, step by step, is
+[issue #7](https://github.com/szaghi/figure/issues/7).
 
 ## Next
 
