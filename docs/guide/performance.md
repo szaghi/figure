@@ -106,10 +106,13 @@ points per group). A million samples shown 1000 pixels wide need 2000 points, no
 
 **Strided data.** Decimating in place costs no copy: `ip_line(label, y(::10), xscale=10 * dx)` reads every tenth
 sample with ImPlot's stride. Components of an array of derived types, matrix rows and integer abscissae are read in
-place too, with two exceptions: an item copies `x` when its stride differs from the ordinates' (or converts it when it
-is an integer), and some compilers copy a strided actual argument before the call (gfortran a derived type's
-component, nvfortran every strided section). At a million points a stride costs about 7 % of the item, a copy by
-FIGURE 20 %, the compiler's temporaries of `runs%t` and `runs%cl` 55 % ([Data in place](plots#data-in-place)).
+place too, on gfortran, nvfortran and ifx alike (from v0.5.0: nvfortran copied every strided section before), with two
+exceptions: an item copies `x` when its stride differs from the ordinates' (or converts it when it is an integer), and
+gfortran and nvfortran copy a component of an array of derived types before the call. At a million points a stride
+costs about 7 % of the item, a copy by FIGURE 20 %, the compiler's temporaries of `runs%t` and `runs%cl` 40 to 60 %
+(double at ten million): keep a long series in its own contiguous array. With nvfortran 26.9 at ten million points,
+a matrix row went from 139 to 77 ms per item in v0.5.0, contiguous data take 70 ms
+([Data in place](plots#data-in-place)).
 
 **Fields: a texture beats a heatmap past a few hundred cells a side.** A heatmap draws each cell as a rectangle of
 vertices, which ImPlot rebuilds every frame; a texture is one image the GPU scales. At 512 × 512 the heatmap costs

@@ -14,6 +14,9 @@ module figure_implot
 !< ImPlot's byte stride (`ImPlotSpec::Stride`). ImPlot has one stride for all the arrays of an item: an array whose
 !< stride differs from the ordinates' is copied, laid out at their stride. Abscissae may be `integer(int32)` or
 !< `integer(int64)` (iteration counters): ImPlot reads x and y of one type, so they are converted into a temporary.
+!< The items' array dummies are ASYNCHRONOUS: nvfortran then passes strided sections in place instead of copying them
+!< before the call (what each compiler passes: plots.md, "Data in place"). The stride helpers' dummies are too:
+!< without it nvfortran copies at the inner call, and the address given to ImPlot is that of a freed temporary.
 !<
 !< Every item takes an optional `spec`, built by `ip_spec` from ImPlot's defaults (automatic colours, no markers):
 !<
@@ -21,8 +24,8 @@ module figure_implot
 !< call ip_line('residual', it, res, spec=ip_spec(line_color=[1.0_real64, 0.0_real64, 0.0_real64, 1.0_real64], &
 !<                                               line_weight=2.0_real64, marker=ImPlotMarker_Circle))
 !<```
-use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_int, c_intptr_t, c_loc, c_null_char, c_null_ptr, &
-                                         c_ptr
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_intptr_t, c_loc, c_null_char, &
+                                         c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
@@ -31,7 +34,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colorma
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
                             fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag, &
                             fig_field_image
-use figure_cimgui, only : im_vec2, im_vec4, igIsMousePosValid
+use figure_cimgui, only : im_vec2, im_vec4, igGetFrameCount, igIsMousePosValid
 use figure_texture, only : texture_object, texture_ref
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot,             &
                            ImPlot_PlotBars_doublePtrdoublePtr, ImPlot_PlotBars_FloatPtrFloatPtr,                   &
@@ -227,30 +230,34 @@ interface in_line
 endinterface in_line
 
 type :: buffer_r32
-   !< A temporary of an item's array (single precision), when it cannot be read in place.
+   !< A scratch array of the items (single precision): the temporary of an array ImPlot cannot read in place.
    real(real32), allocatable :: v(:) !< Values, at the item's stride.
 endtype buffer_r32
 
 type :: buffer_r64
-   !< A temporary of an item's array (double precision), when it cannot be read in place.
+   !< A scratch array of the items (double precision): the temporary of an array ImPlot cannot read in place.
    real(real64), allocatable :: v(:) !< Values, at the item's stride.
 endtype buffer_r64
 
 type :: series_r32
    !< Where ImPlot reads the arrays of one item (single precision): one address per array and the byte stride they
-   !< share (ImPlot applies one stride to all the arrays of an item), with the temporaries of the arrays copied.
-   type(c_ptr)      :: p(4) = c_null_ptr !< Addresses: 1 x, 2 y (sets the stride), 3-4 the other ordinates.
-   integer(int64)   :: stride = 4_int64  !< Stride of every array [bytes].
-   type(buffer_r32) :: b(4)              !< Temporaries, per slot.
+   !< share (ImPlot applies one stride to all the arrays of an item); an array copied is read from its slot's scratch.
+   type(c_ptr)    :: p(4) = c_null_ptr !< Addresses: 1 x, 2 y (sets the stride), 3-4 the other ordinates.
+   integer(int64) :: stride = 4_int64  !< Stride of every array [bytes].
 endtype series_r32
 
 type :: series_r64
    !< Where ImPlot reads the arrays of one item (double precision): one address per array and the byte stride they
-   !< share (ImPlot applies one stride to all the arrays of an item), with the temporaries of the arrays copied.
-   type(c_ptr)      :: p(4) = c_null_ptr !< Addresses: 1 x, 2 y (sets the stride), 3-4 the other ordinates.
-   integer(int64)   :: stride = 8_int64  !< Stride of every array [bytes].
-   type(buffer_r64) :: b(4)              !< Temporaries, per slot.
+   !< share (ImPlot applies one stride to all the arrays of an item); an array copied is read from its slot's scratch.
+   type(c_ptr)    :: p(4) = c_null_ptr !< Addresses: 1 x, 2 y (sets the stride), 3-4 the other ordinates.
+   integer(int64) :: stride = 8_int64  !< Stride of every array [bytes].
 endtype series_r64
+
+! The items' scratch, one array per slot and precision, kept from item to item (an item's arrays are read by ImPlot
+! during the call, and items are drawn by the main thread only): `scratch_reserve_*`, `scratch_age`.
+type(buffer_r32), target :: scratch_r32(4)          !< Single precision.
+type(buffer_r64), target :: scratch_r64(4)          !< Double precision.
+integer(int32)           :: scratch_frame = -1_int32 !< Dear ImGui frame of the last copy into the scratch; -1: none kept.
 
 interface series_lead
    !< Place the array that sets an item's stride.
@@ -266,6 +273,11 @@ interface series_spec
    !< The C spec of an item with its stride.
    module procedure spec_stride_r32, spec_stride_r64
 endinterface series_spec
+
+interface scratch_copy
+   !< Copy an item's array into its slot's scratch at the item's stride (integer abscissae converted).
+   module procedure copy_r32, copy_r64, copy_i32_r32, copy_i64_r32, copy_i32_r64, copy_i64_r64
+endinterface scratch_copy
 
 contains
    ! plots
@@ -804,12 +816,12 @@ contains
 
    recursive subroutine ip_line_r32(label, x, y, spec, stat)
    !< Line through the points (x(i), y(i)), single precision; read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real32),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
@@ -822,12 +834,12 @@ contains
    recursive subroutine ip_line_i32_r32(label, x, y, spec, stat)
    !< Line through the points (x(i), y(i)), single precision, abscissae `integer(int32)`: converted into one temporary,
    !< the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
@@ -840,12 +852,12 @@ contains
    recursive subroutine ip_line_i64_r32(label, x, y, spec, stat)
    !< Line through the points (x(i), y(i)), single precision, abscissae `integer(int64)`: converted into one temporary,
    !< the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
@@ -857,12 +869,12 @@ contains
 
    recursive subroutine ip_scatter_r32(label, x, y, spec, stat)
    !< Markers at the points (x(i), y(i)), single precision; read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real32),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
@@ -875,12 +887,12 @@ contains
    recursive subroutine ip_scatter_i32_r32(label, x, y, spec, stat)
    !< Markers at the points (x(i), y(i)), single precision, abscissae `integer(int32)`: converted into one temporary,
    !< the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
@@ -893,12 +905,12 @@ contains
    recursive subroutine ip_scatter_i64_r32(label, x, y, spec, stat)
    !< Markers at the points (x(i), y(i)), single precision, abscissae `integer(int64)`: converted into one temporary,
    !< the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
@@ -911,13 +923,13 @@ contains
    recursive subroutine ip_bars_r32(label, x, y, bar_size, spec, stat)
    !< Bars of height y(i) centred at x(i), `bar_size` wide (in x units), single precision; read in place with any stride
    !< (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label    !< Legend label.
-   real(real32),           intent(in), target    :: x(:)     !< Bar positions.
-   real(real32),           intent(in), target    :: y(:)     !< Bar heights.
-   real(real64),           intent(in)            :: bar_size !< Bar width [x units].
-   type(plot_spec_object), intent(in), optional  :: spec     !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat     !< Status.
-   type(series_r32), target                      :: d        !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label    !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real32),           intent(in), target, asynchronous :: y(:)     !< Bar heights.
+   real(real64),           intent(in)                       :: bar_size !< Bar width [x units].
+   type(plot_spec_object), intent(in), optional             :: spec     !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat     !< Status.
+   type(series_r32), target                                 :: d        !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
@@ -931,13 +943,13 @@ contains
    recursive subroutine ip_bars_i32_r32(label, x, y, bar_size, spec, stat)
    !< Bars of height y(i) centred at x(i), `bar_size` wide (in x units), single precision, abscissae `integer(int32)`:
    !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label    !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)     !< Bar positions.
-   real(real32),           intent(in), target    :: y(:)     !< Bar heights.
-   real(real64),           intent(in)            :: bar_size !< Bar width [x units].
-   type(plot_spec_object), intent(in), optional  :: spec     !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat     !< Status.
-   type(series_r32), target                      :: d        !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label    !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real32),           intent(in), target, asynchronous :: y(:)     !< Bar heights.
+   real(real64),           intent(in)                       :: bar_size !< Bar width [x units].
+   type(plot_spec_object), intent(in), optional             :: spec     !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat     !< Status.
+   type(series_r32), target                                 :: d        !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
@@ -951,13 +963,13 @@ contains
    recursive subroutine ip_bars_i64_r32(label, x, y, bar_size, spec, stat)
    !< Bars of height y(i) centred at x(i), `bar_size` wide (in x units), single precision, abscissae `integer(int64)`:
    !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label    !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)     !< Bar positions.
-   real(real32),           intent(in), target    :: y(:)     !< Bar heights.
-   real(real64),           intent(in)            :: bar_size !< Bar width [x units].
-   type(plot_spec_object), intent(in), optional  :: spec     !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat     !< Status.
-   type(series_r32), target                      :: d        !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label    !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real32),           intent(in), target, asynchronous :: y(:)     !< Bar heights.
+   real(real64),           intent(in)                       :: bar_size !< Bar width [x units].
+   type(plot_spec_object), intent(in), optional             :: spec     !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat     !< Status.
+   type(series_r32), target                                 :: d        !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
@@ -971,13 +983,13 @@ contains
    recursive subroutine ip_shaded_r32(label, x, y1, y2, spec, stat)
    !< Area between the curves y1(x) and y2(x), single precision; read in place with any stride (plots.md, "Data in
    !< place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real32),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y1(:) !< First curve.
-   real(real32),           intent(in), target    :: y2(:) !< Second curve.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real32),           intent(in), target, asynchronous :: y2(:) !< Second curve.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
@@ -993,13 +1005,13 @@ contains
    recursive subroutine ip_shaded_i32_r32(label, x, y1, y2, spec, stat)
    !< Area between the curves y1(x) and y2(x), single precision, abscissae `integer(int32)`: converted into one
    !< temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y1(:) !< First curve.
-   real(real32),           intent(in), target    :: y2(:) !< Second curve.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real32),           intent(in), target, asynchronous :: y2(:) !< Second curve.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
@@ -1015,13 +1027,13 @@ contains
    recursive subroutine ip_shaded_i64_r32(label, x, y1, y2, spec, stat)
    !< Area between the curves y1(x) and y2(x), single precision, abscissae `integer(int64)`: converted into one
    !< temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y1(:) !< First curve.
-   real(real32),           intent(in), target    :: y2(:) !< Second curve.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real32),           intent(in), target, asynchronous :: y2(:) !< Second curve.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
@@ -1037,13 +1049,13 @@ contains
    recursive subroutine ip_shaded_ref_r32(label, x, y, yref, spec, stat)
    !< Area between the curve y(x) and the line y = yref, single precision; read in place with any stride (plots.md,
    !< "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real32),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Curve.
-   real(real64),           intent(in)            :: yref  !< Reference line (-huge/+huge: to the plot edge).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Curve.
+   real(real64),           intent(in)                       :: yref  !< Reference line (-huge/+huge: to the plot edge).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
@@ -1057,13 +1069,13 @@ contains
    recursive subroutine ip_shaded_ref_i32_r32(label, x, y, yref, spec, stat)
    !< Area between the curve y(x) and the line y = yref, single precision, abscissae `integer(int32)`: converted into
    !< one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Curve.
-   real(real64),           intent(in)            :: yref  !< Reference line (-huge/+huge: to the plot edge).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Curve.
+   real(real64),           intent(in)                       :: yref  !< Reference line (-huge/+huge: to the plot edge).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
@@ -1077,13 +1089,13 @@ contains
    recursive subroutine ip_shaded_ref_i64_r32(label, x, y, yref, spec, stat)
    !< Area between the curve y(x) and the line y = yref, single precision, abscissae `integer(int64)`: converted into
    !< one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Curve.
-   real(real64),           intent(in)            :: yref  !< Reference line (-huge/+huge: to the plot edge).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Curve.
+   real(real64),           intent(in)                       :: yref  !< Reference line (-huge/+huge: to the plot edge).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
@@ -1097,14 +1109,14 @@ contains
    recursive subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, stat)
    !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
    !< err_high(i), single precision; read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)                   :: label       !< Legend label.
-   real(real32),           intent(in), target           :: x(:)        !< Abscissae.
-   real(real32),           intent(in), target           :: y(:)        !< Ordinates.
-   real(real32),           intent(in), target           :: err(:)      !< Error below (and above) [y units].
-   real(real32),           intent(in), target, optional :: err_high(:) !< Error above [y units].
-   type(plot_spec_object), intent(in), optional         :: spec        !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional        :: stat        !< Status.
-   type(series_r32), target                             :: d           !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                                 :: label       !< Legend label.
+   real(real32),           intent(in), target, asynchronous           :: x(:)        !< Abscissae.
+   real(real32),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
+   real(real32),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
+   real(real32),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional                      :: stat        !< Status.
+   type(series_r32), target                                           :: d           !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1131,14 +1143,14 @@ contains
    !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
    !< err_high(i), single precision, abscissae `integer(int32)`: converted into one temporary, the ordinates read in
    !< place (plots.md, "Data in place").
-   character(len=*),       intent(in)                   :: label       !< Legend label.
-   integer(int32),         intent(in), target           :: x(:)        !< Abscissae.
-   real(real32),           intent(in), target           :: y(:)        !< Ordinates.
-   real(real32),           intent(in), target           :: err(:)      !< Error below (and above) [y units].
-   real(real32),           intent(in), target, optional :: err_high(:) !< Error above [y units].
-   type(plot_spec_object), intent(in), optional         :: spec        !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional        :: stat        !< Status.
-   type(series_r32), target                             :: d           !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                                 :: label       !< Legend label.
+   integer(int32),         intent(in), target, asynchronous           :: x(:)        !< Abscissae.
+   real(real32),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
+   real(real32),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
+   real(real32),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional                      :: stat        !< Status.
+   type(series_r32), target                                           :: d           !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1165,14 +1177,14 @@ contains
    !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
    !< err_high(i), single precision, abscissae `integer(int64)`: converted into one temporary, the ordinates read in
    !< place (plots.md, "Data in place").
-   character(len=*),       intent(in)                   :: label       !< Legend label.
-   integer(int64),         intent(in), target           :: x(:)        !< Abscissae.
-   real(real32),           intent(in), target           :: y(:)        !< Ordinates.
-   real(real32),           intent(in), target           :: err(:)      !< Error below (and above) [y units].
-   real(real32),           intent(in), target, optional :: err_high(:) !< Error above [y units].
-   type(plot_spec_object), intent(in), optional         :: spec        !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional        :: stat        !< Status.
-   type(series_r32), target                             :: d           !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                                 :: label       !< Legend label.
+   integer(int64),         intent(in), target, asynchronous           :: x(:)        !< Abscissae.
+   real(real32),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
+   real(real32),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
+   real(real32),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional                      :: stat        !< Status.
+   type(series_r32), target                                           :: d           !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1197,12 +1209,12 @@ contains
 
    recursive subroutine ip_line_r64(label, x, y, spec, stat)
    !< Line through the points (x(i), y(i)), double precision; read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real64),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
@@ -1215,12 +1227,12 @@ contains
    recursive subroutine ip_line_i32_r64(label, x, y, spec, stat)
    !< Line through the points (x(i), y(i)), double precision, abscissae `integer(int32)`: converted into one temporary,
    !< the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
@@ -1233,12 +1245,12 @@ contains
    recursive subroutine ip_line_i64_r64(label, x, y, spec, stat)
    !< Line through the points (x(i), y(i)), double precision, abscissae `integer(int64)`: converted into one temporary,
    !< the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
@@ -1250,12 +1262,12 @@ contains
 
    recursive subroutine ip_scatter_r64(label, x, y, spec, stat)
    !< Markers at the points (x(i), y(i)), double precision; read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real64),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
@@ -1268,12 +1280,12 @@ contains
    recursive subroutine ip_scatter_i32_r64(label, x, y, spec, stat)
    !< Markers at the points (x(i), y(i)), double precision, abscissae `integer(int32)`: converted into one temporary,
    !< the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
@@ -1286,12 +1298,12 @@ contains
    recursive subroutine ip_scatter_i64_r64(label, x, y, spec, stat)
    !< Markers at the points (x(i), y(i)), double precision, abscissae `integer(int64)`: converted into one temporary,
    !< the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
@@ -1304,13 +1316,13 @@ contains
    recursive subroutine ip_bars_r64(label, x, y, bar_size, spec, stat)
    !< Bars of height y(i) centred at x(i), `bar_size` wide (in x units), double precision; read in place with any stride
    !< (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label    !< Legend label.
-   real(real64),           intent(in), target    :: x(:)     !< Bar positions.
-   real(real64),           intent(in), target    :: y(:)     !< Bar heights.
-   real(real64),           intent(in)            :: bar_size !< Bar width [x units].
-   type(plot_spec_object), intent(in), optional  :: spec     !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat     !< Status.
-   type(series_r64), target                      :: d        !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label    !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real64),           intent(in), target, asynchronous :: y(:)     !< Bar heights.
+   real(real64),           intent(in)                       :: bar_size !< Bar width [x units].
+   type(plot_spec_object), intent(in), optional             :: spec     !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat     !< Status.
+   type(series_r64), target                                 :: d        !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
@@ -1324,13 +1336,13 @@ contains
    recursive subroutine ip_bars_i32_r64(label, x, y, bar_size, spec, stat)
    !< Bars of height y(i) centred at x(i), `bar_size` wide (in x units), double precision, abscissae `integer(int32)`:
    !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label    !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)     !< Bar positions.
-   real(real64),           intent(in), target    :: y(:)     !< Bar heights.
-   real(real64),           intent(in)            :: bar_size !< Bar width [x units].
-   type(plot_spec_object), intent(in), optional  :: spec     !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat     !< Status.
-   type(series_r64), target                      :: d        !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label    !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real64),           intent(in), target, asynchronous :: y(:)     !< Bar heights.
+   real(real64),           intent(in)                       :: bar_size !< Bar width [x units].
+   type(plot_spec_object), intent(in), optional             :: spec     !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat     !< Status.
+   type(series_r64), target                                 :: d        !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
@@ -1344,13 +1356,13 @@ contains
    recursive subroutine ip_bars_i64_r64(label, x, y, bar_size, spec, stat)
    !< Bars of height y(i) centred at x(i), `bar_size` wide (in x units), double precision, abscissae `integer(int64)`:
    !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label    !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)     !< Bar positions.
-   real(real64),           intent(in), target    :: y(:)     !< Bar heights.
-   real(real64),           intent(in)            :: bar_size !< Bar width [x units].
-   type(plot_spec_object), intent(in), optional  :: spec     !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat     !< Status.
-   type(series_r64), target                      :: d        !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label    !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real64),           intent(in), target, asynchronous :: y(:)     !< Bar heights.
+   real(real64),           intent(in)                       :: bar_size !< Bar width [x units].
+   type(plot_spec_object), intent(in), optional             :: spec     !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat     !< Status.
+   type(series_r64), target                                 :: d        !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
@@ -1364,13 +1376,13 @@ contains
    recursive subroutine ip_shaded_r64(label, x, y1, y2, spec, stat)
    !< Area between the curves y1(x) and y2(x), double precision; read in place with any stride (plots.md, "Data in
    !< place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real64),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y1(:) !< First curve.
-   real(real64),           intent(in), target    :: y2(:) !< Second curve.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real64),           intent(in), target, asynchronous :: y2(:) !< Second curve.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
@@ -1386,13 +1398,13 @@ contains
    recursive subroutine ip_shaded_i32_r64(label, x, y1, y2, spec, stat)
    !< Area between the curves y1(x) and y2(x), double precision, abscissae `integer(int32)`: converted into one
    !< temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y1(:) !< First curve.
-   real(real64),           intent(in), target    :: y2(:) !< Second curve.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real64),           intent(in), target, asynchronous :: y2(:) !< Second curve.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
@@ -1408,13 +1420,13 @@ contains
    recursive subroutine ip_shaded_i64_r64(label, x, y1, y2, spec, stat)
    !< Area between the curves y1(x) and y2(x), double precision, abscissae `integer(int64)`: converted into one
    !< temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y1(:) !< First curve.
-   real(real64),           intent(in), target    :: y2(:) !< Second curve.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real64),           intent(in), target, asynchronous :: y2(:) !< Second curve.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
@@ -1430,13 +1442,13 @@ contains
    recursive subroutine ip_shaded_ref_r64(label, x, y, yref, spec, stat)
    !< Area between the curve y(x) and the line y = yref, double precision; read in place with any stride (plots.md,
    !< "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real64),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Curve.
-   real(real64),           intent(in)            :: yref  !< Reference line (-huge/+huge: to the plot edge).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Curve.
+   real(real64),           intent(in)                       :: yref  !< Reference line (-huge/+huge: to the plot edge).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
@@ -1451,13 +1463,13 @@ contains
    recursive subroutine ip_shaded_ref_i32_r64(label, x, y, yref, spec, stat)
    !< Area between the curve y(x) and the line y = yref, double precision, abscissae `integer(int32)`: converted into
    !< one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Curve.
-   real(real64),           intent(in)            :: yref  !< Reference line (-huge/+huge: to the plot edge).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Curve.
+   real(real64),           intent(in)                       :: yref  !< Reference line (-huge/+huge: to the plot edge).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
@@ -1472,13 +1484,13 @@ contains
    recursive subroutine ip_shaded_ref_i64_r64(label, x, y, yref, spec, stat)
    !< Area between the curve y(x) and the line y = yref, double precision, abscissae `integer(int64)`: converted into
    !< one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Curve.
-   real(real64),           intent(in)            :: yref  !< Reference line (-huge/+huge: to the plot edge).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Curve.
+   real(real64),           intent(in)                       :: yref  !< Reference line (-huge/+huge: to the plot edge).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
@@ -1493,14 +1505,14 @@ contains
    recursive subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, stat)
    !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
    !< err_high(i), double precision; read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)                   :: label       !< Legend label.
-   real(real64),           intent(in), target           :: x(:)        !< Abscissae.
-   real(real64),           intent(in), target           :: y(:)        !< Ordinates.
-   real(real64),           intent(in), target           :: err(:)      !< Error below (and above) [y units].
-   real(real64),           intent(in), target, optional :: err_high(:) !< Error above [y units].
-   type(plot_spec_object), intent(in), optional         :: spec        !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional        :: stat        !< Status.
-   type(series_r64), target                             :: d           !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                                 :: label       !< Legend label.
+   real(real64),           intent(in), target, asynchronous           :: x(:)        !< Abscissae.
+   real(real64),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
+   real(real64),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
+   real(real64),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional                      :: stat        !< Status.
+   type(series_r64), target                                           :: d           !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1527,14 +1539,14 @@ contains
    !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
    !< err_high(i), double precision, abscissae `integer(int32)`: converted into one temporary, the ordinates read in
    !< place (plots.md, "Data in place").
-   character(len=*),       intent(in)                   :: label       !< Legend label.
-   integer(int32),         intent(in), target           :: x(:)        !< Abscissae.
-   real(real64),           intent(in), target           :: y(:)        !< Ordinates.
-   real(real64),           intent(in), target           :: err(:)      !< Error below (and above) [y units].
-   real(real64),           intent(in), target, optional :: err_high(:) !< Error above [y units].
-   type(plot_spec_object), intent(in), optional         :: spec        !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional        :: stat        !< Status.
-   type(series_r64), target                             :: d           !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                                 :: label       !< Legend label.
+   integer(int32),         intent(in), target, asynchronous           :: x(:)        !< Abscissae.
+   real(real64),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
+   real(real64),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
+   real(real64),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional                      :: stat        !< Status.
+   type(series_r64), target                                           :: d           !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1561,14 +1573,14 @@ contains
    !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
    !< err_high(i), double precision, abscissae `integer(int64)`: converted into one temporary, the ordinates read in
    !< place (plots.md, "Data in place").
-   character(len=*),       intent(in)                   :: label       !< Legend label.
-   integer(int64),         intent(in), target           :: x(:)        !< Abscissae.
-   real(real64),           intent(in), target           :: y(:)        !< Ordinates.
-   real(real64),           intent(in), target           :: err(:)      !< Error below (and above) [y units].
-   real(real64),           intent(in), target, optional :: err_high(:) !< Error above [y units].
-   type(plot_spec_object), intent(in), optional         :: spec        !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional        :: stat        !< Status.
-   type(series_r64), target                             :: d           !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                                 :: label       !< Legend label.
+   integer(int64),         intent(in), target, asynchronous           :: x(:)        !< Abscissae.
+   real(real64),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
+   real(real64),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
+   real(real64),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional                      :: stat        !< Status.
+   type(series_r64), target                                           :: d           !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1596,13 +1608,13 @@ contains
    recursive subroutine ip_line_values_r32(label, y, xscale, xstart, spec, stat)
    !< Line through y(i) at x = xstart + (i - 1) xscale, single precision; read in place with any stride (plots.md,
    !< "Data in place").
-   character(len=*),       intent(in)            :: label  !< Legend label.
-   real(real32),           intent(in), target    :: y(:)   !< Ordinates.
-   real(real64),           intent(in), optional  :: xscale !< Spacing of the abscissae (default 1).
-   real(real64),           intent(in), optional  :: xstart !< First abscissa (default 0).
-   type(plot_spec_object), intent(in), optional  :: spec   !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat   !< Status.
-   type(series_r32), target                      :: d      !< Where ImPlot reads the array.
+   character(len=*),       intent(in)                       :: label  !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: y(:)   !< Ordinates.
+   real(real64),           intent(in), optional             :: xscale !< Spacing of the abscissae (default 1).
+   real(real64),           intent(in), optional             :: xstart !< First abscissa (default 0).
+   type(plot_spec_object), intent(in), optional             :: spec   !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat   !< Status.
+   type(series_r32), target                                 :: d      !< Where ImPlot reads the array.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
@@ -1691,13 +1703,13 @@ contains
    recursive subroutine ip_line_values_r64(label, y, xscale, xstart, spec, stat)
    !< Line through y(i) at x = xstart + (i - 1) xscale, double precision; read in place with any stride (plots.md,
    !< "Data in place").
-   character(len=*),       intent(in)            :: label  !< Legend label.
-   real(real64),           intent(in), target    :: y(:)   !< Ordinates.
-   real(real64),           intent(in), optional  :: xscale !< Spacing of the abscissae (default 1).
-   real(real64),           intent(in), optional  :: xstart !< First abscissa (default 0).
-   type(plot_spec_object), intent(in), optional  :: spec   !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat   !< Status.
-   type(series_r64), target                      :: d      !< Where ImPlot reads the array.
+   character(len=*),       intent(in)                       :: label  !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: y(:)   !< Ordinates.
+   real(real64),           intent(in), optional             :: xscale !< Spacing of the abscissae (default 1).
+   real(real64),           intent(in), optional             :: xstart !< First abscissa (default 0).
+   type(plot_spec_object), intent(in), optional             :: spec   !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat   !< Status.
+   type(series_r64), target                                 :: d      !< Where ImPlot reads the array.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
@@ -2614,12 +2626,12 @@ contains
    !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
    !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), single precision; read in place with any
    !< stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real32),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
    if (plot_refused('ip_stairs', .false., stat)) return
@@ -2634,12 +2646,12 @@ contains
    !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
    !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), single precision, abscissae `integer(int32)`:
    !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
    if (plot_refused('ip_stairs', .false., stat)) return
@@ -2654,12 +2666,12 @@ contains
    !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
    !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), single precision, abscissae `integer(int64)`:
    !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
    if (plot_refused('ip_stairs', .false., stat)) return
@@ -2674,12 +2686,12 @@ contains
    !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
    !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), double precision; read in place with any
    !< stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real64),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
    if (plot_refused('ip_stairs', .false., stat)) return
@@ -2694,12 +2706,12 @@ contains
    !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
    !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), double precision, abscissae `integer(int32)`:
    !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
    if (plot_refused('ip_stairs', .false., stat)) return
@@ -2714,12 +2726,12 @@ contains
    !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
    !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), double precision, abscissae `integer(int64)`:
    !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
    if (plot_refused('ip_stairs', .false., stat)) return
@@ -2733,13 +2745,13 @@ contains
    recursive subroutine ip_stems_r32(label, x, y, ref, spec, stat)
    !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), single precision;
    !< read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real32),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional             :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
    if (plot_refused('ip_stems', .false., stat)) return
@@ -2755,13 +2767,13 @@ contains
    !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), single precision,
    !< abscissae `integer(int32)`: converted into one temporary, the ordinates read in place (plots.md, "Data in
    !< place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional             :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
    if (plot_refused('ip_stems', .false., stat)) return
@@ -2777,13 +2789,13 @@ contains
    !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), single precision,
    !< abscissae `integer(int64)`: converted into one temporary, the ordinates read in place (plots.md, "Data in
    !< place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
-   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional             :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
    if (plot_refused('ip_stems', .false., stat)) return
@@ -2798,13 +2810,13 @@ contains
    recursive subroutine ip_stems_r64(label, x, y, ref, spec, stat)
    !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), double precision;
    !< read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   real(real64),           intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional             :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
    if (plot_refused('ip_stems', .false., stat)) return
@@ -2820,13 +2832,13 @@ contains
    !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), double precision,
    !< abscissae `integer(int32)`: converted into one temporary, the ordinates read in place (plots.md, "Data in
    !< place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional             :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
    if (plot_refused('ip_stems', .false., stat)) return
@@ -2842,13 +2854,13 @@ contains
    !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), double precision,
    !< abscissae `integer(int64)`: converted into one temporary, the ordinates read in place (plots.md, "Data in
    !< place").
-   character(len=*),       intent(in)            :: label !< Legend label.
-   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
-   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
-   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat  !< Status.
-   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   integer(int64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional             :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                 :: d     !< Where ImPlot reads the arrays.
 
    if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
    if (plot_refused('ip_stems', .false., stat)) return
@@ -2863,12 +2875,12 @@ contains
    recursive subroutine ip_inf_lines_r32(label, values, horizontal, spec, stat)
    !< Lines across the whole plot (`PlotInfLines`): vertical at x = values(i), or horizontal at y = values(i) with
    !< `horizontal=.true.`, single precision; read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label      !< Legend label.
-   real(real32),           intent(in), target    :: values(:)  !< Positions [x units; y units when horizontal].
-   logical,                intent(in), optional  :: horizontal !< Horizontal lines (default: vertical).
-   type(plot_spec_object), intent(in), optional  :: spec       !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat       !< Status.
-   type(series_r32), target                      :: d          !< Where ImPlot reads the array.
+   character(len=*),       intent(in)                       :: label      !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: values(:)  !< Positions [x units; y units when horizontal].
+   logical,                intent(in), optional             :: horizontal !< Horizontal lines (default: vertical).
+   type(plot_spec_object), intent(in), optional             :: spec       !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat       !< Status.
+   type(series_r32), target                                 :: d          !< Where ImPlot reads the array.
 
    if (figure_draw_refused('ip_inf_lines', stat)) return ! a task does not draw
    if (plot_refused('ip_inf_lines', .false., stat)) return
@@ -2882,12 +2894,12 @@ contains
    recursive subroutine ip_inf_lines_r64(label, values, horizontal, spec, stat)
    !< Lines across the whole plot (`PlotInfLines`): vertical at x = values(i), or horizontal at y = values(i) with
    !< `horizontal=.true.`, double precision; read in place with any stride (plots.md, "Data in place").
-   character(len=*),       intent(in)            :: label      !< Legend label.
-   real(real64),           intent(in), target    :: values(:)  !< Positions [x units; y units when horizontal].
-   logical,                intent(in), optional  :: horizontal !< Horizontal lines (default: vertical).
-   type(plot_spec_object), intent(in), optional  :: spec       !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat       !< Status.
-   type(series_r64), target                      :: d          !< Where ImPlot reads the array.
+   character(len=*),       intent(in)                       :: label      !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: values(:)  !< Positions [x units; y units when horizontal].
+   logical,                intent(in), optional             :: horizontal !< Horizontal lines (default: vertical).
+   type(plot_spec_object), intent(in), optional             :: spec       !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat       !< Status.
+   type(series_r64), target                                 :: d          !< Where ImPlot reads the array.
 
    if (figure_draw_refused('ip_inf_lines', stat)) return ! a task does not draw
    if (plot_refused('ip_inf_lines', .false., stat)) return
@@ -2901,12 +2913,12 @@ contains
    recursive subroutine ip_inf_lines_i32(label, values, horizontal, spec, stat)
    !< Lines across the whole plot (`PlotInfLines`) at integer positions (iterations): vertical at x = values(i), or
    !< horizontal with `horizontal=.true.`; converted to double precision into one temporary.
-   character(len=*),       intent(in)            :: label      !< Legend label.
-   integer(int32),         intent(in)            :: values(:)  !< Positions [x units; y units when horizontal].
-   logical,                intent(in), optional  :: horizontal !< Horizontal lines (default: vertical).
-   type(plot_spec_object), intent(in), optional  :: spec       !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat       !< Status.
-   type(series_r64), target                      :: d          !< Where ImPlot reads the array.
+   character(len=*),       intent(in)               :: label      !< Legend label.
+   integer(int32),         intent(in), asynchronous :: values(:)  !< Positions [x units; y units when horizontal].
+   logical,                intent(in), optional     :: horizontal !< Horizontal lines (default: vertical).
+   type(plot_spec_object), intent(in), optional     :: spec       !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional    :: stat       !< Status.
+   type(series_r64), target                         :: d          !< Where ImPlot reads the array.
 
    if (figure_draw_refused('ip_inf_lines', stat)) return ! a task does not draw
    if (plot_refused('ip_inf_lines', .false., stat)) return
@@ -2920,12 +2932,12 @@ contains
    recursive subroutine ip_inf_lines_i64(label, values, horizontal, spec, stat)
    !< Lines across the whole plot (`PlotInfLines`) at integer positions (iterations): vertical at x = values(i), or
    !< horizontal with `horizontal=.true.`; converted to double precision into one temporary.
-   character(len=*),       intent(in)            :: label      !< Legend label.
-   integer(int64),         intent(in)            :: values(:)  !< Positions [x units; y units when horizontal].
-   logical,                intent(in), optional  :: horizontal !< Horizontal lines (default: vertical).
-   type(plot_spec_object), intent(in), optional  :: spec       !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat       !< Status.
-   type(series_r64), target                      :: d          !< Where ImPlot reads the array.
+   character(len=*),       intent(in)               :: label      !< Legend label.
+   integer(int64),         intent(in), asynchronous :: values(:)  !< Positions [x units; y units when horizontal].
+   logical,                intent(in), optional     :: horizontal !< Horizontal lines (default: vertical).
+   type(plot_spec_object), intent(in), optional     :: spec       !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional    :: stat       !< Status.
+   type(series_r64), target                         :: d          !< Where ImPlot reads the array.
 
    if (figure_draw_refused('ip_inf_lines', stat)) return ! a task does not draw
    if (plot_refused('ip_inf_lines', .false., stat)) return
@@ -3014,33 +3026,33 @@ contains
    !< each, single precision; read in place with any stride (plots.md, "Data in place"). Points with a NaN or infinite
    !< coordinate are left out (temporaries of the finite ones). Flags in the spec: `ImPlotHistogramFlags_Density`,
    !< `_NoOutliers`.
-   character(len=*),       intent(in)            :: label     !< Legend label.
-   real(real32),           intent(in), target    :: x(:)      !< Abscissae.
-   real(real32),           intent(in), target    :: y(:)      !< Ordinates.
-   integer(int32),         intent(in),  optional :: xbins     !< Bins along x: a count > 0 or an `ImPlotBin_*` rule
-                                                              !< (default `ImPlotBin_Sturges`).
-   integer(int32),         intent(in),  optional :: ybins     !< Bins along y: the same.
-   real(real64),           intent(in),  optional :: xmin      !< Left end [x units] (with `xmax`).
-   real(real64),           intent(in),  optional :: xmax      !< Right end [x units] (with `xmin`).
-   real(real64),           intent(in),  optional :: ymin      !< Bottom end [y units] (with `ymax`).
-   real(real64),           intent(in),  optional :: ymax      !< Top end [y units] (with `ymin`).
-   integer(int32),         intent(in),  optional :: colormap  !< Colormap (`ip_colormap`; default: Viridis).
-   real(real64),           intent(out), optional :: max_count !< Points in the fullest cell (a count, or a density).
-   type(plot_spec_object), intent(in),  optional :: spec      !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat      !< Status.
-   type(series_r32), target                      :: d         !< Where ImPlot reads the arrays.
-   real(real32), allocatable, target               :: px(:)     !< The finite points' x, when copied.
-   real(real32), allocatable, target               :: py(:)     !< ... and y.
-   logical, allocatable                          :: fin(:)    !< Finite points.
-   type(im_plot_rect)                            :: r         !< Range.
-   type(im_plot_spec)                            :: c         !< Spec.
-   integer(c_int)                                :: nbx       !< Bins along x.
-   integer(c_int)                                :: nby       !< Bins along y.
-   integer(c_int)                                :: cmap      !< Colormap id.
-   integer(int64)                                :: n         !< Finite points.
-   real(c_double)                                :: top       !< Fullest cell.
-   real(real64)                                  :: sx        !< Standard deviation of x (Scott's rule).
-   real(real64)                                  :: sy        !< ... of y.
+   character(len=*),       intent(in)                       :: label     !< Legend label.
+   real(real32),           intent(in), target, asynchronous :: x(:)      !< Abscissae.
+   real(real32),           intent(in), target, asynchronous :: y(:)      !< Ordinates.
+   integer(int32),         intent(in),  optional            :: xbins     !< Bins along x: a count > 0 or an `ImPlotBin_*` rule
+                                                                         !< (default `ImPlotBin_Sturges`).
+   integer(int32),         intent(in),  optional            :: ybins     !< Bins along y: the same.
+   real(real64),           intent(in),  optional            :: xmin      !< Left end [x units] (with `xmax`).
+   real(real64),           intent(in),  optional            :: xmax      !< Right end [x units] (with `xmin`).
+   real(real64),           intent(in),  optional            :: ymin      !< Bottom end [y units] (with `ymax`).
+   real(real64),           intent(in),  optional            :: ymax      !< Top end [y units] (with `ymin`).
+   integer(int32),         intent(in),  optional            :: colormap  !< Colormap (`ip_colormap`; default: Viridis).
+   real(real64),           intent(out), optional            :: max_count !< Points in the fullest cell (a count, or a density).
+   type(plot_spec_object), intent(in),  optional            :: spec      !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat      !< Status.
+   type(series_r32), target                                 :: d         !< Where ImPlot reads the arrays.
+   real(real32), allocatable, target                        :: px(:)     !< The finite points' x, when copied.
+   real(real32), allocatable, target                        :: py(:)     !< ... and y.
+   logical, allocatable                                     :: fin(:)    !< Finite points.
+   type(im_plot_rect)                                       :: r         !< Range.
+   type(im_plot_spec)                                       :: c         !< Spec.
+   integer(c_int)                                           :: nbx       !< Bins along x.
+   integer(c_int)                                           :: nby       !< Bins along y.
+   integer(c_int)                                           :: cmap      !< Colormap id.
+   integer(int64)                                           :: n         !< Finite points.
+   real(c_double)                                           :: top       !< Fullest cell.
+   real(real64)                                             :: sx        !< Standard deviation of x (Scott's rule).
+   real(real64)                                             :: sy        !< ... of y.
 
    if (present(max_count)) max_count = 0.0_real64
    if (figure_draw_refused('ip_histogram2d', stat)) return ! a task does not draw
@@ -3177,33 +3189,33 @@ contains
    !< each, double precision; read in place with any stride (plots.md, "Data in place"). Points with a NaN or infinite
    !< coordinate are left out (temporaries of the finite ones). Flags in the spec: `ImPlotHistogramFlags_Density`,
    !< `_NoOutliers`.
-   character(len=*),       intent(in)            :: label     !< Legend label.
-   real(real64),           intent(in), target    :: x(:)      !< Abscissae.
-   real(real64),           intent(in), target    :: y(:)      !< Ordinates.
-   integer(int32),         intent(in),  optional :: xbins     !< Bins along x: a count > 0 or an `ImPlotBin_*` rule
-                                                              !< (default `ImPlotBin_Sturges`).
-   integer(int32),         intent(in),  optional :: ybins     !< Bins along y: the same.
-   real(real64),           intent(in),  optional :: xmin      !< Left end [x units] (with `xmax`).
-   real(real64),           intent(in),  optional :: xmax      !< Right end [x units] (with `xmin`).
-   real(real64),           intent(in),  optional :: ymin      !< Bottom end [y units] (with `ymax`).
-   real(real64),           intent(in),  optional :: ymax      !< Top end [y units] (with `ymin`).
-   integer(int32),         intent(in),  optional :: colormap  !< Colormap (`ip_colormap`; default: Viridis).
-   real(real64),           intent(out), optional :: max_count !< Points in the fullest cell (a count, or a density).
-   type(plot_spec_object), intent(in),  optional :: spec      !< Style (default: ImPlot's).
-   integer(int32),         intent(out), optional :: stat      !< Status.
-   type(series_r64), target                      :: d         !< Where ImPlot reads the arrays.
-   real(real64), allocatable, target               :: px(:)     !< The finite points' x, when copied.
-   real(real64), allocatable, target               :: py(:)     !< ... and y.
-   logical, allocatable                          :: fin(:)    !< Finite points.
-   type(im_plot_rect)                            :: r         !< Range.
-   type(im_plot_spec)                            :: c         !< Spec.
-   integer(c_int)                                :: nbx       !< Bins along x.
-   integer(c_int)                                :: nby       !< Bins along y.
-   integer(c_int)                                :: cmap      !< Colormap id.
-   integer(int64)                                :: n         !< Finite points.
-   real(c_double)                                :: top       !< Fullest cell.
-   real(real64)                                  :: sx        !< Standard deviation of x (Scott's rule).
-   real(real64)                                  :: sy        !< ... of y.
+   character(len=*),       intent(in)                       :: label     !< Legend label.
+   real(real64),           intent(in), target, asynchronous :: x(:)      !< Abscissae.
+   real(real64),           intent(in), target, asynchronous :: y(:)      !< Ordinates.
+   integer(int32),         intent(in),  optional            :: xbins     !< Bins along x: a count > 0 or an `ImPlotBin_*` rule
+                                                                         !< (default `ImPlotBin_Sturges`).
+   integer(int32),         intent(in),  optional            :: ybins     !< Bins along y: the same.
+   real(real64),           intent(in),  optional            :: xmin      !< Left end [x units] (with `xmax`).
+   real(real64),           intent(in),  optional            :: xmax      !< Right end [x units] (with `xmin`).
+   real(real64),           intent(in),  optional            :: ymin      !< Bottom end [y units] (with `ymax`).
+   real(real64),           intent(in),  optional            :: ymax      !< Top end [y units] (with `ymin`).
+   integer(int32),         intent(in),  optional            :: colormap  !< Colormap (`ip_colormap`; default: Viridis).
+   real(real64),           intent(out), optional            :: max_count !< Points in the fullest cell (a count, or a density).
+   type(plot_spec_object), intent(in),  optional            :: spec      !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat      !< Status.
+   type(series_r64), target                                 :: d         !< Where ImPlot reads the arrays.
+   real(real64), allocatable, target                        :: px(:)     !< The finite points' x, when copied.
+   real(real64), allocatable, target                        :: py(:)     !< ... and y.
+   logical, allocatable                                     :: fin(:)    !< Finite points.
+   type(im_plot_rect)                                       :: r         !< Range.
+   type(im_plot_spec)                                       :: c         !< Spec.
+   integer(c_int)                                           :: nbx       !< Bins along x.
+   integer(c_int)                                           :: nby       !< Bins along y.
+   integer(c_int)                                           :: cmap      !< Colormap id.
+   integer(int64)                                           :: n         !< Finite points.
+   real(c_double)                                           :: top       !< Fullest cell.
+   real(real64)                                             :: sx        !< Standard deviation of x (Scott's rule).
+   real(real64)                                             :: sy        !< ... of y.
 
    if (present(max_count)) max_count = 0.0_real64
    if (figure_draw_refused('ip_histogram2d', stat)) return ! a task does not draw
@@ -4205,13 +4217,15 @@ contains
 
    subroutine lead_r32(d, k, a)
    !< Place the array that sets an item's stride (its ordinates) in slot `k`: read in place with its own stride when
-   !< that is a positive multiple of the element size within a C int; otherwise copied, contiguous.
-   type(series_r32), intent(inout), target :: d    !< The item's arrays.
-   integer(int32),   intent(in)            :: k    !< Slot.
-   real(real32),     intent(in), target    :: a(:) !< Array.
-   integer(int64)                          :: es   !< Element size [bytes].
-   integer(int64)                          :: s    !< Its stride [bytes].
+   !< that is a positive multiple of the element size within a C int; otherwise (a reversed section, a stride beyond a
+   !< C int) copied, contiguous, into the slot's scratch.
+   type(series_r32), intent(inout)                    :: d    !< The item's arrays.
+   integer(int32),   intent(in)                       :: k    !< Slot.
+   real(real32),     intent(in), target, asynchronous :: a(:) !< Array.
+   integer(int64)                                     :: es   !< Element size [bytes].
+   integer(int64)                                     :: s    !< Its stride [bytes].
 
+   call scratch_age()
    es = storage_size(a, kind=int64) / 8_int64
    d%stride = es
    if (size(a) == 0) return
@@ -4221,20 +4235,20 @@ contains
       d%stride = s
       d%p(k) = c_loc(a(1))
    else
-      allocate(d%b(k)%v(size(a)))
-      d%b(k)%v = a
-      d%p(k) = c_loc(d%b(k)%v)
+      call scratch_reserve_r32(k, size(a, kind=int64))
+      call scratch_copy(a, scratch_r32(k)%v, 1_int64)
+      d%p(k) = c_loc(scratch_r32(k)%v)
       plot_copies = plot_copies + 1_int64
    endif
    endsubroutine lead_r32
 
    subroutine put_r32(d, k, a)
    !< Place an array of an item in slot `k`: read in place when its stride is the item's (set by `series_lead`, which
-   !< comes first); otherwise copied at the item's stride.
-   type(series_r32), intent(inout), target :: d    !< The item's arrays.
-   integer(int32),   intent(in)            :: k    !< Slot.
-   real(real32),     intent(in), target    :: a(:) !< Array.
-   integer(int64)                          :: m    !< The item's stride [elements].
+   !< comes first); otherwise copied at the item's stride into the slot's scratch.
+   type(series_r32), intent(inout)                    :: d    !< The item's arrays.
+   integer(int32),   intent(in)                       :: k    !< Slot.
+   real(real32),     intent(in), target, asynchronous :: a(:) !< Array.
+   integer(int64)                                     :: m    !< The item's stride [elements].
 
    if (size(a) == 0) return
    if (size(a) == 1) then
@@ -4246,41 +4260,41 @@ contains
       return
    endif
    m = d%stride / (storage_size(a, kind=int64) / 8_int64)
-   allocate(d%b(k)%v((size(a, kind=int64) - 1_int64) * m + 1_int64))
-   d%b(k)%v(1::m) = a
-   d%p(k) = c_loc(d%b(k)%v)
+   call scratch_reserve_r32(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
+   call scratch_copy(a, scratch_r32(k)%v, m)
+   d%p(k) = c_loc(scratch_r32(k)%v)
    plot_copies = plot_copies + 1_int64
    endsubroutine put_r32
 
    subroutine put_i32_r32(d, k, a)
    !< Place integer abscissae of an item in slot `k`: converted to `real(real32)` (ImPlot reads x and y of one type),
-   !< into a temporary laid out at the item's stride, so that the ordinates stay in place.
-   type(series_r32), intent(inout), target :: d    !< The item's arrays.
-   integer(int32),   intent(in)            :: k    !< Slot.
-   integer(int32),   intent(in)            :: a(:) !< Abscissae.
-   integer(int64)                          :: m    !< The item's stride [elements].
+   !< into the slot's scratch laid out at the item's stride, so that the ordinates stay in place.
+   type(series_r32), intent(inout)            :: d    !< The item's arrays.
+   integer(int32),   intent(in)               :: k    !< Slot.
+   integer(int32),   intent(in), asynchronous :: a(:) !< Abscissae.
+   integer(int64)                             :: m    !< The item's stride [elements].
 
    if (size(a) == 0) return
    m = d%stride / 4_int64
-   allocate(d%b(k)%v((size(a, kind=int64) - 1_int64) * m + 1_int64))
-   d%b(k)%v(1::m) = real(a, real32)
-   d%p(k) = c_loc(d%b(k)%v)
+   call scratch_reserve_r32(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
+   call scratch_copy(a, scratch_r32(k)%v, m)
+   d%p(k) = c_loc(scratch_r32(k)%v)
    plot_copies = plot_copies + 1_int64
    endsubroutine put_i32_r32
 
    subroutine put_i64_r32(d, k, a)
    !< Place integer abscissae of an item in slot `k`: converted to `real(real32)` (ImPlot reads x and y of one type),
-   !< into a temporary laid out at the item's stride, so that the ordinates stay in place.
-   type(series_r32), intent(inout), target :: d    !< The item's arrays.
-   integer(int32),   intent(in)            :: k    !< Slot.
-   integer(int64),   intent(in)            :: a(:) !< Abscissae.
-   integer(int64)                          :: m    !< The item's stride [elements].
+   !< into the slot's scratch laid out at the item's stride, so that the ordinates stay in place.
+   type(series_r32), intent(inout)            :: d    !< The item's arrays.
+   integer(int32),   intent(in)               :: k    !< Slot.
+   integer(int64),   intent(in), asynchronous :: a(:) !< Abscissae.
+   integer(int64)                             :: m    !< The item's stride [elements].
 
    if (size(a) == 0) return
    m = d%stride / 4_int64
-   allocate(d%b(k)%v((size(a, kind=int64) - 1_int64) * m + 1_int64))
-   d%b(k)%v(1::m) = real(a, real32)
-   d%p(k) = c_loc(d%b(k)%v)
+   call scratch_reserve_r32(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
+   call scratch_copy(a, scratch_r32(k)%v, m)
+   d%p(k) = c_loc(scratch_r32(k)%v)
    plot_copies = plot_copies + 1_int64
    endsubroutine put_i64_r32
 
@@ -4297,13 +4311,15 @@ contains
 
    subroutine lead_r64(d, k, a)
    !< Place the array that sets an item's stride (its ordinates) in slot `k`: read in place with its own stride when
-   !< that is a positive multiple of the element size within a C int; otherwise copied, contiguous.
-   type(series_r64), intent(inout), target :: d    !< The item's arrays.
-   integer(int32),   intent(in)            :: k    !< Slot.
-   real(real64),     intent(in), target    :: a(:) !< Array.
-   integer(int64)                          :: es   !< Element size [bytes].
-   integer(int64)                          :: s    !< Its stride [bytes].
+   !< that is a positive multiple of the element size within a C int; otherwise (a reversed section, a stride beyond a
+   !< C int) copied, contiguous, into the slot's scratch.
+   type(series_r64), intent(inout)                    :: d    !< The item's arrays.
+   integer(int32),   intent(in)                       :: k    !< Slot.
+   real(real64),     intent(in), target, asynchronous :: a(:) !< Array.
+   integer(int64)                                     :: es   !< Element size [bytes].
+   integer(int64)                                     :: s    !< Its stride [bytes].
 
+   call scratch_age()
    es = storage_size(a, kind=int64) / 8_int64
    d%stride = es
    if (size(a) == 0) return
@@ -4313,20 +4329,20 @@ contains
       d%stride = s
       d%p(k) = c_loc(a(1))
    else
-      allocate(d%b(k)%v(size(a)))
-      d%b(k)%v = a
-      d%p(k) = c_loc(d%b(k)%v)
+      call scratch_reserve_r64(k, size(a, kind=int64))
+      call scratch_copy(a, scratch_r64(k)%v, 1_int64)
+      d%p(k) = c_loc(scratch_r64(k)%v)
       plot_copies = plot_copies + 1_int64
    endif
    endsubroutine lead_r64
 
    subroutine put_r64(d, k, a)
    !< Place an array of an item in slot `k`: read in place when its stride is the item's (set by `series_lead`, which
-   !< comes first); otherwise copied at the item's stride.
-   type(series_r64), intent(inout), target :: d    !< The item's arrays.
-   integer(int32),   intent(in)            :: k    !< Slot.
-   real(real64),     intent(in), target    :: a(:) !< Array.
-   integer(int64)                          :: m    !< The item's stride [elements].
+   !< comes first); otherwise copied at the item's stride into the slot's scratch.
+   type(series_r64), intent(inout)                    :: d    !< The item's arrays.
+   integer(int32),   intent(in)                       :: k    !< Slot.
+   real(real64),     intent(in), target, asynchronous :: a(:) !< Array.
+   integer(int64)                                     :: m    !< The item's stride [elements].
 
    if (size(a) == 0) return
    if (size(a) == 1) then
@@ -4338,41 +4354,41 @@ contains
       return
    endif
    m = d%stride / (storage_size(a, kind=int64) / 8_int64)
-   allocate(d%b(k)%v((size(a, kind=int64) - 1_int64) * m + 1_int64))
-   d%b(k)%v(1::m) = a
-   d%p(k) = c_loc(d%b(k)%v)
+   call scratch_reserve_r64(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
+   call scratch_copy(a, scratch_r64(k)%v, m)
+   d%p(k) = c_loc(scratch_r64(k)%v)
    plot_copies = plot_copies + 1_int64
    endsubroutine put_r64
 
    subroutine put_i32_r64(d, k, a)
    !< Place integer abscissae of an item in slot `k`: converted to `real(real64)` (ImPlot reads x and y of one type),
-   !< into a temporary laid out at the item's stride, so that the ordinates stay in place.
-   type(series_r64), intent(inout), target :: d    !< The item's arrays.
-   integer(int32),   intent(in)            :: k    !< Slot.
-   integer(int32),   intent(in)            :: a(:) !< Abscissae.
-   integer(int64)                          :: m    !< The item's stride [elements].
+   !< into the slot's scratch laid out at the item's stride, so that the ordinates stay in place.
+   type(series_r64), intent(inout)            :: d    !< The item's arrays.
+   integer(int32),   intent(in)               :: k    !< Slot.
+   integer(int32),   intent(in), asynchronous :: a(:) !< Abscissae.
+   integer(int64)                             :: m    !< The item's stride [elements].
 
    if (size(a) == 0) return
    m = d%stride / 8_int64
-   allocate(d%b(k)%v((size(a, kind=int64) - 1_int64) * m + 1_int64))
-   d%b(k)%v(1::m) = real(a, real64)
-   d%p(k) = c_loc(d%b(k)%v)
+   call scratch_reserve_r64(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
+   call scratch_copy(a, scratch_r64(k)%v, m)
+   d%p(k) = c_loc(scratch_r64(k)%v)
    plot_copies = plot_copies + 1_int64
    endsubroutine put_i32_r64
 
    subroutine put_i64_r64(d, k, a)
    !< Place integer abscissae of an item in slot `k`: converted to `real(real64)` (ImPlot reads x and y of one type),
-   !< into a temporary laid out at the item's stride, so that the ordinates stay in place.
-   type(series_r64), intent(inout), target :: d    !< The item's arrays.
-   integer(int32),   intent(in)            :: k    !< Slot.
-   integer(int64),   intent(in)            :: a(:) !< Abscissae.
-   integer(int64)                          :: m    !< The item's stride [elements].
+   !< into the slot's scratch laid out at the item's stride, so that the ordinates stay in place.
+   type(series_r64), intent(inout)            :: d    !< The item's arrays.
+   integer(int32),   intent(in)               :: k    !< Slot.
+   integer(int64),   intent(in), asynchronous :: a(:) !< Abscissae.
+   integer(int64)                             :: m    !< The item's stride [elements].
 
    if (size(a) == 0) return
    m = d%stride / 8_int64
-   allocate(d%b(k)%v((size(a, kind=int64) - 1_int64) * m + 1_int64))
-   d%b(k)%v(1::m) = real(a, real64)
-   d%p(k) = c_loc(d%b(k)%v)
+   call scratch_reserve_r64(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
+   call scratch_copy(a, scratch_r64(k)%v, m)
+   d%p(k) = c_loc(scratch_r64(k)%v)
    plot_copies = plot_copies + 1_int64
    endsubroutine put_i64_r64
 
@@ -4386,6 +4402,157 @@ contains
    c%Stride = int(d%stride, c_int)
    plot_stride = d%stride
    endfunction spec_stride_r64
+
+   subroutine scratch_age()
+   !< Free the items' scratch (both precisions) when no item has copied into it in this frame or the one before: a
+   !< program that stops plotting reversed or converted data gives the memory back at its next item. A new Dear ImGui
+   !< context (its frame count restarted) frees it too.
+   integer(int32) :: k   !< Slot.
+   integer(int32) :: age !< Frames since the last copy.
+
+   if (scratch_frame < 0_int32) return
+   age = int(igGetFrameCount(), int32) - scratch_frame
+   if (age == 0_int32 .or. age == 1_int32) return
+   do k = 1_int32, 4_int32
+      if (allocated(scratch_r32(k)%v)) deallocate(scratch_r32(k)%v)
+      if (allocated(scratch_r64(k)%v)) deallocate(scratch_r64(k)%v)
+   enddo
+   scratch_frame = -1_int32
+   endsubroutine scratch_age
+
+   subroutine scratch_reserve_r32(k, n)
+   !< Make the scratch of slot `k` (single precision) at least `n` elements long: kept from item to item and from frame
+   !< to frame, grown by half again when too short (a series that grows by a point per frame is not reallocated every
+   !< frame), freed by `scratch_age`. A temporary allocated and freed by every item can cost the memory's first touch
+   !< every frame (nvfortran 26.9 with glibc: 2.4 ms against 1.0 ms to copy 10**6 doubles; plots.md, "Data in place").
+   integer(int32), intent(in) :: k !< Slot.
+   integer(int64), intent(in) :: n !< Elements needed.
+   integer(int64)             :: c !< Capacity [elements].
+
+   c = 0_int64
+   if (allocated(scratch_r32(k)%v)) c = size(scratch_r32(k)%v, kind=int64)
+   if (c < n) then
+      if (allocated(scratch_r32(k)%v)) deallocate(scratch_r32(k)%v)
+      allocate(scratch_r32(k)%v(max(n, c + c / 2_int64)))
+   endif
+   scratch_frame = int(igGetFrameCount(), int32)
+   endsubroutine scratch_reserve_r32
+
+   subroutine copy_r32(a, v, m)
+   !< Copy `a` into `v` at a stride of `m` elements, v(1), v(1 + m), ... (the elements between left as they are), single
+   !< precision. A reversed section of adjacent elements (`a(n:1:-1)`) is read through a contiguous view of its memory:
+   !< with the descending unit stride known to the compiler, the copy runs as fast as a contiguous one (nvfortran 26.9
+   !< takes twice as long through the section's descriptor).
+   real(real32),   intent(in), target, asynchronous :: a(:) !< Array, any stride.
+   real(real32),   intent(inout)                    :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
+   integer(int64), intent(in)                       :: m    !< Stride in v [elements].
+   real(real32),   pointer, contiguous              :: r(:) !< A reversed section's elements, in memory order.
+   integer(int64)                                   :: n    !< Elements.
+
+   n = size(a, kind=int64)
+   if (n == 0_int64) return
+   if (n > 1_int64) then
+      if (gap(c_loc(a(2)), c_loc(a(1))) == storage_size(a, kind=int64) / 8_int64) then
+         call c_f_pointer(c_loc(a(n)), r, [n])
+         if (m == 1_int64) then
+            v(1_int64:n) = r(n:1_int64:-1_int64)
+         else
+            v(1_int64:(n - 1_int64) * m + 1_int64:m) = r(n:1_int64:-1_int64)
+         endif
+         return
+      endif
+   endif
+   v(1_int64:(n - 1_int64) * m + 1_int64:m) = a
+   endsubroutine copy_r32
+
+   subroutine copy_i32_r32(a, v, m)
+   !< Convert `int32` values to `real(real32)` into `v` at a stride of `m` elements.
+   integer(int32), intent(in), asynchronous :: a(:) !< Values, any stride.
+   real(real32),   intent(inout)            :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
+   integer(int64), intent(in)               :: m    !< Stride in v [elements].
+   integer(int64)                           :: n    !< Elements.
+
+   n = size(a, kind=int64)
+   if (n > 0_int64) v(1_int64:(n - 1_int64) * m + 1_int64:m) = real(a, real32)
+   endsubroutine copy_i32_r32
+
+   subroutine copy_i64_r32(a, v, m)
+   !< Convert `int64` values to `real(real32)` into `v` at a stride of `m` elements.
+   integer(int64), intent(in), asynchronous :: a(:) !< Values, any stride.
+   real(real32),   intent(inout)            :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
+   integer(int64), intent(in)               :: m    !< Stride in v [elements].
+   integer(int64)                           :: n    !< Elements.
+
+   n = size(a, kind=int64)
+   if (n > 0_int64) v(1_int64:(n - 1_int64) * m + 1_int64:m) = real(a, real32)
+   endsubroutine copy_i64_r32
+
+   subroutine scratch_reserve_r64(k, n)
+   !< Make the scratch of slot `k` (double precision) at least `n` elements long: kept from item to item and from frame
+   !< to frame, grown by half again when too short (a series that grows by a point per frame is not reallocated every
+   !< frame), freed by `scratch_age`. A temporary allocated and freed by every item can cost the memory's first touch
+   !< every frame (nvfortran 26.9 with glibc: 2.4 ms against 1.0 ms to copy 10**6 doubles; plots.md, "Data in place").
+   integer(int32), intent(in) :: k !< Slot.
+   integer(int64), intent(in) :: n !< Elements needed.
+   integer(int64)             :: c !< Capacity [elements].
+
+   c = 0_int64
+   if (allocated(scratch_r64(k)%v)) c = size(scratch_r64(k)%v, kind=int64)
+   if (c < n) then
+      if (allocated(scratch_r64(k)%v)) deallocate(scratch_r64(k)%v)
+      allocate(scratch_r64(k)%v(max(n, c + c / 2_int64)))
+   endif
+   scratch_frame = int(igGetFrameCount(), int32)
+   endsubroutine scratch_reserve_r64
+
+   subroutine copy_r64(a, v, m)
+   !< Copy `a` into `v` at a stride of `m` elements, v(1), v(1 + m), ... (the elements between left as they are), double
+   !< precision. A reversed section of adjacent elements (`a(n:1:-1)`) is read through a contiguous view of its memory:
+   !< with the descending unit stride known to the compiler, the copy runs as fast as a contiguous one (nvfortran 26.9
+   !< takes twice as long through the section's descriptor).
+   real(real64),   intent(in), target, asynchronous :: a(:) !< Array, any stride.
+   real(real64),   intent(inout)                    :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
+   integer(int64), intent(in)                       :: m    !< Stride in v [elements].
+   real(real64),   pointer, contiguous              :: r(:) !< A reversed section's elements, in memory order.
+   integer(int64)                                   :: n    !< Elements.
+
+   n = size(a, kind=int64)
+   if (n == 0_int64) return
+   if (n > 1_int64) then
+      if (gap(c_loc(a(2)), c_loc(a(1))) == storage_size(a, kind=int64) / 8_int64) then
+         call c_f_pointer(c_loc(a(n)), r, [n])
+         if (m == 1_int64) then
+            v(1_int64:n) = r(n:1_int64:-1_int64)
+         else
+            v(1_int64:(n - 1_int64) * m + 1_int64:m) = r(n:1_int64:-1_int64)
+         endif
+         return
+      endif
+   endif
+   v(1_int64:(n - 1_int64) * m + 1_int64:m) = a
+   endsubroutine copy_r64
+
+   subroutine copy_i32_r64(a, v, m)
+   !< Convert `int32` values to `real(real64)` into `v` at a stride of `m` elements.
+   integer(int32), intent(in), asynchronous :: a(:) !< Values, any stride.
+   real(real64),   intent(inout)            :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
+   integer(int64), intent(in)               :: m    !< Stride in v [elements].
+   integer(int64)                           :: n    !< Elements.
+
+   n = size(a, kind=int64)
+   if (n > 0_int64) v(1_int64:(n - 1_int64) * m + 1_int64:m) = real(a, real64)
+   endsubroutine copy_i32_r64
+
+   subroutine copy_i64_r64(a, v, m)
+   !< Convert `int64` values to `real(real64)` into `v` at a stride of `m` elements.
+   integer(int64), intent(in), asynchronous :: a(:) !< Values, any stride.
+   real(real64),   intent(inout)            :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
+   integer(int64), intent(in)               :: m    !< Stride in v [elements].
+   integer(int64)                           :: n    !< Elements.
+
+   n = size(a, kind=int64)
+   if (n > 0_int64) v(1_int64:(n - 1_int64) * m + 1_int64:m) = real(a, real64)
+   endsubroutine copy_i64_r64
 
    function gap(first, second) result(bytes)
    !< Bytes from one address to the next one: the stride of an array, from the addresses of two consecutive elements.

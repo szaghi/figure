@@ -317,7 +317,7 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
 
 Pictures without a GPU, tests that find items by path, an application layer, images from files and four extensions
 (a code editor, gizmos for the 3-D view, ImPlot3D, Markdown); carried over from v0.4.0: the fallback font (Noto Sans
-Math), an unrouted shortcut scope, plot data through C descriptors and a monotonic clock. The plan, step by step, is
+Math), an unrouted shortcut scope, plot data in place under nvfortran and a monotonic clock. The plan, step by step, is
 [issue #7](https://github.com/szaghi/figure/issues/7).
 
 - **Shortcuts: an unrouted scope `'always'`** (S11): `ig_shortcut(keys, scope='always')` is Dear ImGui's
@@ -335,6 +335,12 @@ Math), an unrouted shortcut scope, plot data through C descriptors and a monoton
   and the super- and subscript digits, which both Plex fonts have, so STIX Two Math is not needed).
   `app%add_fallback_font(file [, stat])` for a program's own, after the bundled one; `test_glyph` tells which font
   draws a character ([The fallback fonts](styles#symbols-the-fallback-fonts)): done.
+- **Plot data in place under nvfortran** (S12): the 1-D items' array dummies are `asynchronous`, and nvfortran 26.9
+  then passes rows, strided and reversed sections in place, as gfortran and ifx do (C descriptors, the plan, were
+  measured and dropped: nvfortran copies before it builds one). A reversed section is copied by FIGURE as fast as
+  nvfortran copied it: into scratch arrays kept between calls, through a contiguous view of its memory. A component of
+  an array of derived types stays a compiler copy on gfortran and nvfortran (a documented limit).
+  `figure_test_plot_data` holds what each compiler passes in place ([Data in place](plots#data-in-place)): done.
 
 ## Next
 

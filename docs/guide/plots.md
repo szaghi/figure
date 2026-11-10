@@ -224,8 +224,9 @@ zero line weight would draw nothing).
 
 ## Data in place
 
-The items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`) read the program's arrays where they are,
-during the call, and keep no pointer to them afterwards. They go to ImPlot's `float*` or `double*` items with ImPlot's
+The 1-D items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`, `ip_stairs`, `ip_stems`,
+`ip_inf_lines`, `ip_histogram2d`) read the program's arrays where they are, during the call, and keep no pointer to
+them afterwards. They go to ImPlot's `float*` or `double*` items with ImPlot's
 byte stride (`ImPlotSpec::Stride`), so an array does not have to be contiguous:
 
 | What the program passes | Stride ImPlot reads with | Copied by FIGURE |
@@ -237,10 +238,18 @@ byte stride (`ImPlotSpec::Stride`), so an array does not have to be contiguous:
 | a reversed section, `a(n:1:-1)` (negative stride) | the element size | every array of the item |
 
 The ordinates (`y`, `y1`, `err` ...) set the stride: ImPlot has one stride for all the arrays of an item, so an array
-whose stride differs is copied, once per call, into a temporary laid out at the ordinates' stride (as large as the
-ordinates' span: `n` times the stride). An item copies at most its abscissae when the ordinates share a stride. Integer
-abscissae are always converted (ImPlot reads `x` and `y` of one type); the ordinates stay in place. `test_plot_copies()`
-counts the arrays FIGURE copied and `test_plot_stride()` gives the stride of the last item ([Testing](testing)).
+whose stride differs is copied, once per call, laid out at the ordinates' stride (as large as the ordinates' span: `n`
+times the stride). An item copies at most its abscissae when the ordinates share a stride. Integer abscissae are
+always converted (ImPlot reads `x` and `y` of one type); the ordinates stay in place. A reversed section is copied
+contiguous: ImPlot's indexer computes `(size_t)idx * stride`, which turns a negative stride into a wrapped-around
+unsigned offset, undefined behaviour in C++. `test_plot_copies()` counts the arrays FIGURE copied and `test_plot_stride()` gives the
+stride of the last item ([Testing](testing)).
+
+FIGURE copies into a scratch array per slot of the item (x, y and two more ordinates) and precision, kept from call to
+call and from frame to frame: grown by half again when too short, freed by the first item drawn after a frame in which
+no item copied. An item that allocated and freed its own temporary at every call paid the memory's first touch every
+frame (nvfortran 26.9 with glibc: 2.4 ms against 1.0 ms to copy 10⁶ doubles). The memory kept is that of the largest
+item copied, until a frame copies nothing.
 
 Records of a run (`runs%iter`, `runs%cl`: components of an array of derived types) and the rows of a matrix, plotted
 where they are, with the copies counted (`docs/examples/src/cb_in_place.F90`, run headless by the documentation's
@@ -253,15 +262,34 @@ build):
 <<< @/examples/output/cb_in_place.txt{text}
 
 **What arrives is the compiler's choice.** A Fortran compiler may copy a non-contiguous actual argument into a
-contiguous temporary before the call, and then FIGURE reads that copy (contiguous, nothing more to copy):
+contiguous temporary before the call, and then FIGURE reads that copy (contiguous, nothing more to copy). The items'
+array dummies are `asynchronous` (from v0.5.0), and nvfortran then passes sections in place:
 
-| Actual argument | gfortran 16.2 | nvfortran 26.9 | ifx 2025.3 |
+| Actual argument | gfortran 16.2 | nvfortran 26.9 | ifx 2026.2 |
 |---|---|---|---|
-| `a(::2)`, `a(i, :)`, `q(1, :, k)`, `a(n:1:-1)` | in place | copied by the compiler | in place |
+| `a(::2)`, `a(i, :)`, `q(1, :, k)` | in place | in place (v0.4.0: copied by the compiler) | in place |
+| `a(n:1:-1)` | in place, copied by FIGURE | in place, copied by FIGURE (v0.4.0: copied by the compiler) | in place, copied by FIGURE |
 | `runs%cl` (a component of an array of derived types) | copied by the compiler | copied by the compiler | in place |
 
-(measured with `figure_test_plot_data`, which probes the compiler and prints what it passed in place). The plot is
-the same in every case; the cost is not.
+(measured with `figure_test_plot_data`, which prints what each compiler passed). The plot is the same in every case;
+the cost is not.
+
+Why `asynchronous`: nvfortran 26.9 copies a strided section passed to an assumed-shape dummy, except when the dummy is
+`asynchronous` (an attribute that tells the compiler the array may be in use by something else during the call, which
+a copy would break). The attribute changes nothing else: the items still read the arrays during the call only, and
+gfortran and ifx compile the same code. Passing sections in place is nvfortran's behaviour, not a rule of the standard
+for an assumed-shape dummy, so `figure_test_plot_data` holds what each supported compiler passes and fails when it
+changes: its last frame draws every 1-D item specific (both precisions, real and integer abscissae) with strided
+ordinates and checks the stride each gave ImPlot. A compiler FIGURE does not know is probed instead.
+
+::: warning A component of an array of derived types is still copied
+`runs%cl`, where `runs` is an array of a derived type, is copied into a temporary by gfortran 16.2 and nvfortran 26.9
+at every call, whatever the dummy's attributes (C descriptors were measured too: nvfortran copies before it builds
+the descriptor, and gfortran 16.2 miscompiles a component passed to a `bind(C)` descriptor dummy). It costs 40 to
+60 % of the item at 10⁶ points and doubles it at 10⁷. To plot a long series every frame on those compilers, keep it in its own contiguous
+`real` array, or in a column of a matrix (`hist(:, j)`, contiguous). On nvfortran a pointer `p => runs%cl` is passed
+in place; gfortran 16.2 copies it too when `runs` is allocatable.
+:::
 
 **Measured cost** of one `ip_line` per frame, headless, gfortran 16.2 `-O2`, i9-13900KF (`ip_setup_axes_limits` fixed,
 so ImPlot draws every point):
@@ -274,6 +302,23 @@ so ImPlot draws every point):
 | contiguous `x`, `y(::2)` (`x` copied at the stride of `y`) | 0.77 | 8.9–9.5 |
 | `runs%t`, `runs%cl` (both copied by gfortran into temporaries) | 0.76 | 11.4–11.7 |
 | `x(::2)`, `y(::2)` packed by the program into buffers allocated once | 0.71 | 9.6–10.0 |
+
+**Per compiler, v0.4.0 against v0.5.0**: one `ip_line` call, the same headless program on each (median of 5 runs ×
+20 frames at 10⁶ points, 7 × 40 for the contiguous and reversed rows, 2 × 6 frames at 10⁷; the machine was shared,
+so the medians carry about ±0.5 ms at 10⁶):
+
+| Data | nvfortran 26.9, 10⁶ [ms] | nvfortran 26.9, 10⁷ [ms] | gfortran 16.2, 10⁷ [ms] | ifx 2026.2, 10⁷ [ms] |
+|---|---|---|---|---|
+| contiguous `x`, `y` | 8.5 → 8.5 | 73 → 70 | 70 → 69 | 75 → 72 |
+| `a(1, :)`, `a(2, :)` (rows of `a(4, n)`) | 13.1 → 9.8 | 139 → 77 | 78 → 77 | 81 → 80 |
+| `w(::2)`, `v(::2)` | 11.2 → 9.5 | 122 → 74 | 73 → 74 | 77 → 77 |
+| `t(n:1:-1)`, `c(n:1:-1)` | 10.0 → 10.0 | 114 → 85 | 118 → 85 | 123 → 88 |
+| integer `x` (converted), contiguous `y` | 12.0 → 10.9 | 97 → 95 | 94 → 76 | 95 → 79 |
+| `runs%t`, `runs%cl` (copied by the compiler) | 12.5 → 12.8 | 137 → 143 | 150 → 148 | 81 → 80 (in place) |
+
+nvfortran's rows and strided sections now cost what they cost on the other compilers. A reversed section costs what
+nvfortran's own copy cost at 10⁶ points (1.4 against 1.5 ms over contiguous data, 7 runs × 40 frames) and less at 10⁷,
+where the scratch saves the first touch of fresh memory on every compiler, as it does for integer abscissae.
 
 ImPlot's own work dominates: a stride costs about 7 % over contiguous data, a copy made by FIGURE 20 %, the compiler's
 temporaries of a derived type's components 55 % (allocated and freed at every call). Over a few hundred thousand
