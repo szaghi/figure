@@ -12,7 +12,9 @@ program figure_test_forms
 !< Shortcuts (routed): two windows bind ctrl+s, only the focused one's fires; a 'global' chord fires whichever has
 !< the focus; a text field being edited holds 'down' from its window and gives 'up' to its 'item' call; a chord with
 !< `repeat` fires again while held, one without fires once; a button owning ctrl+r is pressed by it in its window
-!< only; a call outside every window fires unless a focused window routes the same chord.
+!< only; a call outside every window fires unless a focused window routes the same chord. Not routed ('always'): two
+!< windows' calls of one chord both fire (two 'global' calls: only the first), and 'down' fires while the field is
+!< edited; 'always' refused for the next item.
 !<
 !< Item status (`ig_last_item`): a text field typed into on three frames and left by a click elsewhere reports edited
 !< on those three frames and deactivated_after_edit on one frame after them; a button hovered (at once, and after the
@@ -59,7 +61,7 @@ implicit none
 integer(int32), parameter :: FRAMES = 400_int32 !< Frames run.
 integer(int32), parameter :: TIP_FRAME = 230_int32 !< Frame on which the tooltip is looked for.
 type(app_object)          :: app                !< Application.
-logical                   :: test_passed(68)    !< Per-check outcome.
+logical                   :: test_passed(72)    !< Per-check outcome.
 character(len=16)         :: grid_file          !< A text field.
 character(len=4)          :: short              !< A text field of capacity 4.
 character(len=12)         :: no_blank           !< A text field that refuses blanks.
@@ -132,7 +134,10 @@ integer(int32)            :: downs(3)           !< 'down' (in Left) fired: no it
 integer(int32)            :: item_ups(2)        !< 'up' ('item', after the field): field edited, then not.
 integer(int32)            :: repeats(2)         !< f7 held with repeat, f8 held without.
 integer(int32)            :: runs(2)            !< The button owning ctrl+r pressed: Right focused, then Left.
-integer(int32)            :: s_short(2)         !< Statuses: an unknown scope, 'item' for the next item.
+integer(int32)            :: s_short(3)         !< Statuses: an unknown scope, 'item' and 'always' for the next item.
+integer(int32)            :: always(3)          !< f10 ('always') fired: in Left, in Right, disabled in Right.
+integer(int32)            :: globals2(2)        !< f11 ('global') fired: in Left, in Right.
+integer(int32)            :: always_downs(2)    !< 'down' ('always', in Left) fired: in all, while the field is edited.
 integer(int32)            :: leave_frames       !< Frames on which the field reported deactivated_after_edit.
 integer(int32)            :: leave_at           !< The last of them.
 integer(int32)            :: edit_frames        !< Frames on which the field reported edited.
@@ -502,6 +507,10 @@ test_passed(67) = abs(field_w(1) - 100.0_real64) < 0.5_real64 .and. abs(field_w(
                   abs(moved(2) - grp(1, 1)) < 0.5_real64 .and. &                             ! unindent,
                   abs(moved(3) - 40.0_real64) < 0.5_real64 .and. abs(moved(4) - 25.0_real64) < 0.5_real64 ! dummy
 test_passed(68) = s_align(1) == FIG_OK .and. all(s_align(2:3) == FIG_ERR_ARGUMENT)  ! bad where, width refused
+test_passed(69) = all(always == [1_int32, 1_int32, 0_int32])                 ! 'always': both windows' calls fire
+test_passed(70) = all(globals2 == [1_int32, 0_int32])                        ! 'global': only the first call fires
+test_passed(71) = all(always_downs == [2_int32, 1_int32])                    ! 'always': fires while a field is edited
+test_passed(72) = s_short(3) == FIG_ERR_ARGUMENT                             ! 'always' refused for the next item
 
 write(output_unit, '(A,*(L2))') 'figure_test_forms checks:', test_passed
 if (.not. all(test_passed)) then
@@ -519,9 +528,11 @@ if (.not. all(test_passed)) then
                                           tip_after
    write(output_unit, '(A,4F7.3,A,4F7.3,A,2L2,A,4F7.1,A,I0,A,3I3)') 'colour dragged', tint_dragged, ', picked', tint, &
          ', picker open', popup_open, ', picker', popup, ', changes ', colour_changes, ', statuses', s_colour
-   write(output_unit, '(A,9(I0,1X),A,I0,A,I0,A,3(I0,1X),A,2(I0,1X),A,2(I0,1X),A,2(I0,1X),A,2(I0,1X))') &
+   write(output_unit, '(A,9(I0,1X),A,I0,A,I0,A,3(I0,1X),A,2(I0,1X),A,2(I0,1X),A,2(I0,1X),A,3(I0,1X))') &
          'shortcuts: saves', saves_at, ', globals ', globals, ', tops ', tops, ', downs ', downs, ', item ups ', &
          item_ups, ', repeats ', repeats, ', runs ', runs, ', statuses ', s_short
+   write(output_unit, '(A,3(I0,1X),A,2(I0,1X),A,2(I0,1X))') 'shortcuts: always ', always, ', globals2 ', globals2, &
+         ', always downs ', always_downs
    write(output_unit, '(A,4(I0,1X),A,2(I0,1X),A,2L2,1X,I0,A,3(I0,1X),A,2(I0,1X),A,2L2,A,L2,A,3(I0,1X),A,4L2,A,2(I0,1X))') &
          'items: leave/at/edits/last ', leave_frames, leave_at, edit_frames, last_edit, ', act/deact ', active_seen, &
          ', hover', hover_seen, normal_at, ', clicks ', clicks, ', dbl ', dbl, ', held', held, ', snap', snap_ok, &
@@ -587,7 +598,8 @@ contains
 
    subroutine shortcut_frames()
    !< Two windows, Left and Right, both binding ctrl+s; Left also has a text field, 'down', 'up' for the field
-   !< ('item'), f6 ('global'), f7 (repeat), f8, and a button owning ctrl+r; f9 and ctrl+s outside every window.
+   !< ('item'), f6 ('global'), f7 (repeat), f8, and a button owning ctrl+r; f9 and ctrl+s outside every window. Both
+   !< windows bind f10 ('always', Right also in a disabled block) and f11 ('global'); Left also 'down' ('always').
    character(len=16) :: note     !< Left's text field.
    real(real64)      :: field(2) !< Centre of the field.
    integer(int32)    :: f        !< Frame.
@@ -603,6 +615,9 @@ contains
    repeats = 0_int32
    runs = 0_int32
    s_short = FIG_OK
+   always = 0_int32
+   globals2 = 0_int32
+   always_downs = 0_int32
    do f = 1_int32, 170_int32
       if (.not. app%next_frame()) exit
       call ig_set_next_window(20.0_real64, 20.0_real64, 300.0_real64, 200.0_real64, always=.true.)
@@ -615,11 +630,15 @@ contains
          if (ig_shortcut('f6', scope='global')) globals = globals + 1_int32
          if (ig_shortcut('f7', repeat=.true.)) repeats(1) = repeats(1) + 1_int32
          if (ig_shortcut('f8')) repeats(2) = repeats(2) + 1_int32
+         if (ig_shortcut('f10', scope='always')) always(1) = always(1) + 1_int32
+         if (ig_shortcut('f11', scope='global')) globals2(1) = globals2(1) + 1_int32
+         if (ig_shortcut('down', scope='always')) always_downs(1) = always_downs(1) + 1_int32
          call ig_set_next_item_shortcut('ctrl+r')
          if (ig_button('Run')) runs(2) = runs(2) + 1_int32
          if (f == 2_int32) then
             if (ig_shortcut('f8', scope='window', stat=s_short(1))) continue
             call ig_set_next_item_shortcut('ctrl+r', scope='item', stat=s_short(2))
+            call ig_set_next_item_shortcut('ctrl+r', scope='always', stat=s_short(3))
          endif
       endif
       call ig_end()
@@ -627,6 +646,11 @@ contains
       if (ig_begin('Right')) then
          call ig_text('right')
          if (ig_shortcut('ctrl+s')) saves(2) = saves(2) + 1_int32
+         if (ig_shortcut('f10', scope='always')) always(2) = always(2) + 1_int32
+         call ig_begin_disabled()
+         if (ig_shortcut('f10', scope='always')) always(3) = always(3) + 1_int32
+         call ig_end_disabled()
+         if (ig_shortcut('f11', scope='global')) globals2(2) = globals2(2) + 1_int32
       endif
       call ig_end()
       if (ig_shortcut('ctrl+s')) saves(3) = saves(3) + 1_int32 ! outside every window
@@ -649,6 +673,9 @@ contains
       case (48_int32)
          runs(1) = runs(2) - runs(1)     ! presses while Right had the focus
          runs(2) = 0_int32
+      case (53_int32)                    ! Left focused: f10 ('always') and f11 ('global') in both windows
+         call test_key('f10')
+         call test_key('f11')
       case (56_int32)                    ! Left focused: its button
          call ctrl('r')
       case (60_int32)                    ! Left focused, nothing edited: 'down' fires
@@ -660,10 +687,12 @@ contains
       case (76_int32)
          item_ups(2) = item_ups(1)
          downs(2) = downs(1)
+         always_downs(2) = always_downs(1)
       case (78_int32)                    ! 'down' is the field's: Left's call does not fire
          call test_key('down')
       case (84_int32)
          downs(2) = downs(1) - downs(2) + 1_int32 ! 1 when it did not fire
+         always_downs(2) = always_downs(1) - always_downs(2) ! 1 when it fired
          call test_key('escape')
       case (95_int32)                    ! the field no longer edited: 'item' does not fire
          call test_key('up')

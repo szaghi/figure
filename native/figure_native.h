@@ -204,7 +204,7 @@ int    fig_table_row_color(const double *rgba, int column);
 int    fig_table_column_enabled(int column, int enabled);
 int    fig_table_hovered_column(int *column);
 /* A routed shortcut: keys "ctrl+s" (modifiers and one key, by the names of fig_input_key, joined by '+'), scope
- * "focused", "global" or "item"; *pressed 1 on the frame it fires. */
+ * "focused", "global", "item" or "always" (no route: every call fires); *pressed 1 on the frame it fires. */
 int    fig_shortcut(const char *keys, int keys_len, const char *scope, int scope_len, int repeat, int *pressed);
 /* The next item owns the chord (scope "focused" or "global"): the chord presses it, and its tooltip shows it. */
 int    fig_set_next_item_shortcut(const char *keys, int keys_len, const char *scope, int scope_len);

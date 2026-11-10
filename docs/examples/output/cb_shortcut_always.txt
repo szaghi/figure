@@ -1,0 +1,4 @@
+$ ./cb_shortcut_always --check
+frame 11: Run: paused
+frame 11: Plot: frozen
+frame 21: Run: f12

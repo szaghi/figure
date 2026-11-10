@@ -41,17 +41,19 @@ differ: `ig_end` follows every `ig_begin`).
 `keys` is a chord: modifiers (`ctrl`, `shift`, `alt`, `super`) and one key, by the names of
 [`test_key`](testing#synthetic-input), joined by `+`: `'ctrl+s'`, `'ctrl+shift+z'`, `'f5'`, `'escape'`, `'down'`.
 
-**Routing.** A chord goes to one place. Every call asks for the chord with a scope; Dear ImGui gives the chord, on the
-next frame, to the window (or the item) whose call matches best where the user is, and only the calls made there
-return `.true.`. So the calls are made **every frame**, whether or not the program expects the key: a call made only
-now and then has no route on the frame the key arrives. The order of the calls in a frame does not matter, except
-between two `'global'` calls (below).
+**Routing.** A chord goes to one place. Every routed call (`'focused'`, `'global'`, `'item'`) asks for the chord with
+a scope; Dear ImGui gives the chord, on the next frame, to the window (or the item) whose call matches best where the
+user is, and only the calls made there return `.true.`. So the calls are made **every frame**, whether or not the
+program expects the key: a call made only now and then has no route on the frame the key arrives. The order of the
+calls in a frame does not matter, except between two `'global'` calls (below). `'always'` is not routed (Dear ImGui's
+`IsKeyChordPressed`): every call of the chord fires, wherever it is made and whatever has the focus.
 
-| `scope` | Fires when |
-|---|---|
-| `'focused'` (default) | The window the call is made in has the keyboard focus, or a window inside it (a child region) does and does not take the chord itself. Of two windows that ask for one chord, the focused one fires; the other does not. **Outside every window** (after the last `ig_end`, the place of an application's own keys), the call fires whatever window has the focus, unless the focused window asks for the same chord: a panel overrides the application's key while it has the focus. |
-| `'global'` | Wherever the focus is, and before the `'focused'` calls of the same chord. Of two `'global'` calls of one chord in different windows, the first of the frame fires. |
-| `'item'` | While the item drawn just before the call is active: a text field being edited, a button held down. Keys for one field: f1 for the field's own help while it is edited, before every other call of f1. |
+| `scope` | Who receives the chord | Two calls of one chord | While a text field is edited |
+|---|---|---|---|
+| `'focused'` (default) | The window the call is made in, while it has the keyboard focus, or a window inside it (a child region) does and does not take the chord itself. **Outside every window** (after the last `ig_end`, the place of an application's own keys): whatever window has the focus, unless the focused window asks for the same chord, so a panel overrides the application's key while it has the focus. | In two windows: the focused one's fires, the other does not. | A chord of one key alone or with shift, other than f1 to f24, does not fire (the field uses it); chords with ctrl, alt or super, and f1 to f24, fire. |
+| `'global'` | Wherever the focus is, before the `'focused'` calls of the same chord. | The first `'global'` call of the frame fires; the others do not. | Keys that type a character do not fire (Dear ImGui's rule); the others fire. |
+| `'item'` | The item drawn just before the call, while it is active: a text field being edited, a button held down; before every other call of the chord. | Only the active item's call fires. | Fires: keys for the field being edited, such as f1 for its own help. |
+| `'always'` | Every call, wherever it is made: no route, whatever has the focus (v0.3's `ig_shortcut`). | Every call fires. | Fires, the field's own keys included: the field acts on the key too. |
 
 - **Text fields keep their keys.** While a text field is edited, a `'focused'` chord of one key alone or with shift,
   such as `'down'`, `'enter'`, `'escape'`, `'home'` or `'shift+left'`, does not fire: the field uses them (left,
@@ -59,7 +61,9 @@ between two `'global'` calls (below).
   ImGui's keyboard navigation to the widget above or below, ending the edit). Chords with ctrl, alt or super, and the function keys f1 to f24, still fire. Keys that type a
   character (`'a'`, `'space'`, `'shift+1'`) do not fire for `'global'` calls either (Dear ImGui's own rule). The
   chords a field routes itself (enter, ctrl+enter, shift+enter, ctrl+a, ctrl+c, ctrl+v, ctrl+x, ctrl+z, ctrl+y)
-  stay the field's, for every scope. Keys for the field being edited go to an `'item'` call after it.
+  stay the field's, for every routed scope. Keys for the field being edited go to an `'item'` call after it. An
+  `'always'` call fires on all of these, as the field acts on them: it is for a key that must act everywhere, such
+  as an emergency stop, and for v0.3's behaviour.
 - **`repeat=.true.`** fires again while the chord is held, at the keyboard's repeat rate (Dear ImGui's
   `KeyRepeatDelay`, 0.275 s, then every `KeyRepeatRate`, 0.05 s); releasing or changing a modifier stops it. Without
   it, once per press.
@@ -71,13 +75,18 @@ between two `'global'` calls (below).
   elsewhere. `test_key('ctrl')` is the physical ctrl key, which on macOS is not the shortcut key. A window gets the
   focus from a click on it (its title bar, to touch no widget).
 
-::: warning Changed in v0.4.0
+::: warning Changed in v0.4.0, corrected in v0.5.0
 Until v0.3.1 `ig_shortcut` fired on every call, whatever had the focus (it called Dear ImGui's `IsKeyChordPressed`,
 which does no routing): xall_figure's up and down keys moved its list while the user typed in a text field, and two
 panels binding ctrl+s both saved. From v0.4.0 the default scope is `'focused'`. A call outside every window, the usual
-place of an application's ctrl+s, ctrl+q or f1, keeps firing whatever has the focus. A call inside a window now fires
-only while that window has the focus: for a key that must work everywhere, pass `scope='global'`, the old behaviour
-for a chord asked for once (two `'global'` calls of one chord in different windows no longer both fire).
+place of an application's ctrl+s, ctrl+q or f1, keeps firing whatever has the focus. A call inside a window fires only
+while that window has the focus.
+
+**v0.3's behaviour is `scope='always'`** (from v0.5.0): every call fires, whatever has the focus, a text field being
+edited included. v0.4.0's text of this box named `'global'` instead; it is not the same: `'global'` routes the chord
+to one call, so of two `'global'` calls of one chord only the first of the frame fires, and a key that types a
+character does not fire while a field is edited. For one key that must work everywhere, `'global'` is the routed
+choice; for two calls of one chord that must both fire, or for v0.3's behaviour exactly, `'always'`.
 :::
 
 ### A button that owns a key
@@ -86,7 +95,7 @@ for a chord asked for once (two `'global'` calls of one chord in different windo
 
 `ig_set_next_item_shortcut` is called right before the item, every frame. The chord presses the item as a click
 would (a button returns `.true.`, a checkbox toggles, a text field takes the keyboard), with the same scopes as
-`ig_shortcut`, except `'item'`: the item owns the chord already. The item's tooltip shows the chord when the pointer
+`ig_shortcut`, except `'item'` and `'always'`: the item owns the chord through a route. The item's tooltip shows the chord when the pointer
 rests on it. While a text field is edited, a `'focused'` item does not take a chord of one key alone or with shift,
 as above.
 
@@ -108,8 +117,8 @@ went from the field to the Run button below it). On frame 53 the Log panel had t
 ### Status, modes and threads
 
 - **Status:** an unknown key or scope is `FIG_ERR_ARGUMENT` in `stat`: `ig_shortcut: unknown key "nosuchkey" in
-  "ctrl+nosuchkey"`, `ig_shortcut: unknown scope "window" ('focused', 'global' or 'item')`,
-  `ig_set_next_item_shortcut: unknown scope "item" ('focused' or 'global')`; also `more than one key in "..."` and
+  "ctrl+nosuchkey"`, `ig_shortcut: unknown scope "window" ('focused', 'global', 'item' or 'always')`,
+  `ig_set_next_item_shortcut: unknown scope "item" ('focused' or 'global')` (and the same for `"always"`); also `more than one key in "..."` and
   `no key besides the modifiers in "..."`. `ig_shortcut` then returns `.false.`, and the next item has no chord.
   Without `stat`, the program stops with the message ([Error handling](errors)). With no frame open, or from a task:
   `FIG_ERR_STATE` ([Pairing and frames](errors#pairing-and-frames)). Neither procedure opens a scope.

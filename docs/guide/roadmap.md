@@ -320,6 +320,11 @@ Pictures without a GPU, tests that find items by path, an application layer, ima
 Math), an unrouted shortcut scope, plot data through C descriptors and a monotonic clock. The plan, step by step, is
 [issue #7](https://github.com/szaghi/figure/issues/7).
 
+- **Shortcuts: an unrouted scope `'always'`** (S11): `ig_shortcut(keys, scope='always')` is Dear ImGui's
+  `IsKeyChordPressed`, v0.3's behaviour: every call of the chord fires, whatever has the focus, a text field being
+  edited included; `ig_set_next_item_shortcut` refuses it. The four scopes in one table, and v0.4.0's migration note
+  corrected: v0.3's behaviour is `'always'`, not `'global'` ([Shortcuts](menus#shortcuts)): done.
+
 ## Next
 
 Candidates, to be driven by what applications need.

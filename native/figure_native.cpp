@@ -3273,14 +3273,16 @@ static int parse_chord(const std::string &s, const char *who, int *chord) {
    return FIG_OK;
 }
 
-// The scope of a shortcut: 0 'focused', 1 'global', 2 'item' (only where `item_allowed`).
-static int parse_shortcut_scope(const std::string &s, const char *who, bool item_allowed, int *scope) {
+// The scope of a shortcut: 0 'focused', 1 'global', 2 'item', 3 'always'; 'item' and 'always' only for a call of
+// ig_shortcut (`routed_only` false): the next item owns its chord through a route.
+static int parse_shortcut_scope(const std::string &s, const char *who, bool routed_only, int *scope) {
    if (s == "focused") *scope = 0;
    else if (s == "global") *scope = 1;
-   else if (s == "item" && item_allowed) *scope = 2;
+   else if (s == "item" && !routed_only) *scope = 2;
+   else if (s == "always" && !routed_only) *scope = 3;
    else
       return fail(FIG_ERR_ARGUMENT, std::string(who) + ": unknown scope \"" + s + "\" (" +
-                                       (item_allowed ? "'focused', 'global' or 'item')" : "'focused' or 'global')"));
+                                       (routed_only ? "'focused' or 'global')" : "'focused', 'global', 'item' or 'always')"));
    return FIG_OK;
 }
 
@@ -3314,8 +3316,17 @@ int fig_shortcut(const char *keys, int keys_len, const char *scope, int scope_le
    const std::string s(scope, scope_len > 0 ? static_cast<size_t>(scope_len) : 0);
    int status = parse_chord(k, "ig_shortcut", &chord);
    if (status != FIG_OK) return status;
-   status = parse_shortcut_scope(s, "ig_shortcut", true, &sc);
+   status = parse_shortcut_scope(s, "ig_shortcut", false, &sc);
    if (status != FIG_OK) return status;
+   if (sc == 3) {
+      // 'always': no route (Dear ImGui's IsKeyChordPressed, v0.3's ig_shortcut): every call of the chord fires,
+      // whatever has the focus, a text field being edited included; not inside a disabled block, as Shortcut.
+      if (GImGui->CurrentItemFlags & ImGuiItemFlags_Disabled) return FIG_OK;
+      const ImGuiInputFlags rep =
+         repeat ? (ImGuiInputFlags_Repeat | ImGuiInputFlags_RepeatUntilKeyModsChange) : ImGuiInputFlags_None;
+      *pressed = ImGui::IsKeyChordPressed(chord, rep, ImGuiKeyOwner_Any) ? 1 : 0;
+      return FIG_OK;
+   }
    if (sc == 0 && shortcut_held_by_text(chord)) return FIG_OK;
    ImGuiInputFlags flags = shortcut_route(sc);
    if (repeat) flags |= ImGuiInputFlags_Repeat;
@@ -3336,7 +3347,7 @@ int fig_set_next_item_shortcut(const char *keys, int keys_len, const char *scope
    const std::string s(scope, scope_len > 0 ? static_cast<size_t>(scope_len) : 0);
    int status = parse_chord(k, "ig_set_next_item_shortcut", &chord);
    if (status != FIG_OK) return status;
-   status = parse_shortcut_scope(s, "ig_set_next_item_shortcut", false, &sc);
+   status = parse_shortcut_scope(s, "ig_set_next_item_shortcut", true, &sc);
    if (status != FIG_OK) return status;
    if (sc == 0 && shortcut_held_by_text(chord)) return FIG_OK; // the next item is drawn without its chord
    ImGui::SetNextItemShortcut(chord, shortcut_route(sc) | ImGuiInputFlags_Tooltip);

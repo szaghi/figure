@@ -144,6 +144,20 @@ The program checks itself headless (`cb_shortcuts --check` presses the keys):
 
 [Shortcuts](/guide/menus#shortcuts) has the scopes and the rules for text fields.
 
+### One key that every panel acts on
+
+<<< @/examples/snippets/cb_shortcut_always-always.F90{fortran}
+
+Two panels both act on ctrl+p: the Run panel pauses the run, the Plot panel freezes its curve. A routed scope gives a
+chord to one call: with `'global'`, only the first call of the frame fires (f12 below reaches Run, not Plot). With
+`scope='always'` the chord is not routed: every call fires, wherever the focus is, a text field being edited
+included. The program checks itself headless (`cb_shortcut_always --check` presses ctrl+p while the note field is
+edited, then f12):
+
+<<< @/examples/output/cb_shortcut_always.txt{text}
+
+[Shortcuts](/guide/menus#shortcuts) compares the four scopes.
+
 ### A window whose frame FIGURE draws
 
 <<< @/examples/snippets/cb_frame-frame.F90{fortran}

@@ -12,8 +12,8 @@ module figure_menu
 !< reacts to the keys with `ig_shortcut`, every frame, outside the menu (the menu is closed most of the time).
 !<
 !< Shortcuts are routed (Dear ImGui's `Shortcut`): a chord goes to one place, by the call's scope: 'focused' (the
-!< default) to the focused window, 'global' wherever the focus is, 'item' to the item being edited or held; see
-!< menus.md, "Shortcuts".
+!< default) to the focused window, 'global' wherever the focus is, 'item' to the item being edited or held; 'always'
+!< is not routed (Dear ImGui's `IsKeyChordPressed`): every call fires; see menus.md, "Shortcuts".
 !<
 !< A popup is opened once, by an event (`ig_open_popup`, not every frame), and declared every frame
 !< (`ig_begin_popup`/`ig_begin_popup_modal`, then `ig_end_popup` only when the begin returned true); it closes when
@@ -133,12 +133,13 @@ contains
    !< While a text field is edited, a focused chord of a key alone or with shift (other than f1-f24) does not fire.
    !< `'global'` fires whatever window has the focus, before the focused ones. `'item'` fires while the item drawn
    !< just before the call is active (a text field being edited, a button held). Of two `'global'` calls of one chord
-   !< in different windows, the first of the frame fires.
+   !< in different windows, the first of the frame fires. `'always'` is not routed (v0.3's behaviour): every call of
+   !< the chord fires, whatever has the focus, a text field being edited included.
    !<
    !< An unknown key or scope: false, and `FIG_ERR_ARGUMENT` in `stat` (or `error stop` without it); no frame open or a
    !< task: `FIG_ERR_STATE`. The same in window, headless (keys of `test_key`) and remote mode (the browser's keys).
    character(len=*), intent(in)            :: keys    !< Key chord.
-   character(len=*), intent(in),  optional :: scope   !< 'focused' (default), 'global' or 'item'.
+   character(len=*), intent(in),  optional :: scope   !< 'focused' (default), 'global', 'item' or 'always'.
    logical,          intent(in),  optional :: repeat  !< Fire again while the chord is held (default false: once).
    integer(int32),   intent(out), optional :: stat    !< Status.
    logical                                 :: pressed !< Pressed this frame.
@@ -165,9 +166,9 @@ contains
    !< reports the press, a text field takes the keyboard), and its tooltip shows the chord. Call it just before the
    !< item, every frame. `scope` (Dear ImGui's `ImGuiInputFlags_Route*`): `'focused'` (default) while the item's window
    !< has the focus, `'global'` wherever the focus is; while a text field is edited, a focused chord of a key alone or
-   !< with shift (other than f1-f24) is not given. An unknown key or scope (`'item'` included: the item owns the chord
-   !< already) is refused with `FIG_ERR_ARGUMENT` in `stat` (or `error stop` without it), and the item has no chord;
-   !< no frame open or a task: `FIG_ERR_STATE`. The same in window, headless and remote mode.
+   !< with shift (other than f1-f24) is not given. An unknown key or scope (`'item'` and `'always'` included: the item
+   !< owns the chord through a route) is refused with `FIG_ERR_ARGUMENT` in `stat` (or `error stop` without it), and
+   !< the item has no chord; no frame open or a task: `FIG_ERR_STATE`. The same in window, headless and remote mode.
    character(len=*), intent(in)            :: keys   !< Key chord.
    character(len=*), intent(in),  optional :: scope  !< 'focused' (default) or 'global'.
    integer(int32),   intent(out), optional :: stat   !< Status.
