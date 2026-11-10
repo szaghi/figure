@@ -349,6 +349,16 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   access of its own; a missing file, a file of another format and a damaged one are refused with their messages.
   FIGURE's failure message is now kept per thread, so a task's failure no longer overwrites the main thread's
   ([Reading images](images#reading-images)): done. S1's picture comparisons will decode PNGs with it.
+- **Tests: items by path, a frame driver, id and label checks** (S2): Dear ImGui's own item hooks
+  (`IMGUI_ENABLE_TEST_ENGINE`, implemented by FIGURE: no imgui_test_engine code) fill a table of each frame's items:
+  role, label, id, window, rectangle, state (checkable, checked, openable, opened, takes text) and the text it shows,
+  shaped as an accessibility tree. `test_item_exists`, `test_item_rect`, `test_item_click`, `test_item_type_text`,
+  `test_item_checked`, `test_item_value` and `test_menu_click` take a path (`Window/Label`, `//Window`, `##id`, `*`,
+  `$$n`, as the test engine's references); a missing path names the nearest item; a menu path opens its submenus
+  over the next frames. `test_run(max_frames)` draws frames until no input is queued and no frame is asked for.
+  `test_id_conflicts` finds the ids two items share without the pointer over them, `test_unnamed_items` the icon-only
+  buttons without a tooltip. Recording is on in headless mode, and costs 0.02 µs per item and frame
+  ([Finding items by path](testing#finding-items-by-path)): done.
 
 ## Next
 

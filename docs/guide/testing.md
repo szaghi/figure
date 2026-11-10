@@ -72,7 +72,8 @@ And to aim and to check:
 **Timing.** Everything queued reaches Dear ImGui at the next frame, up to a `test_next_frame` boundary; Dear ImGui then
 applies one change of each kind per frame (its input trickling), so a click queued at once still takes the frames a
 real one takes. Draw a few frames after queuing (four for a click, more for a drag, which `test_drag` spreads with its
-own boundaries) before checking. Editing a numeric field, for example:
+own boundaries) before checking, or draw until the interface is idle with [`test_run`](#running-until-idle). Editing a
+numeric field, for example:
 
 <<< @/examples/snippets/cb_controls-edit_field.F90{fortran}
 
@@ -109,6 +110,126 @@ that cannot be read is `FIG_ERR_FAILED`. The same in every mode, on the frame lo
 
 <<< @/examples/snippets/cb_fallback_font-report.F90{fortran}
 
+## Finding items by path
+
+A test names an item by where it is, not by the frame it was drawn in or the pixels it covers: `'Solver/CFL'` is the
+item labelled `CFL` in the window `Solver`. FIGURE records the items of every frame with Dear ImGui's own item hooks
+(`ImGuiTestEngineHook_ItemAdd` and `ImGuiTestEngineHook_ItemInfo`, which Dear ImGui calls for every item it registers
+when built with `IMGUI_ENABLE_TEST_ENGINE`; FIGURE implements them, no code of Dear ImGui's test engine is used): each
+item's role, label, id, window, rectangle, state (checkable and checked, openable and opened, takes typed text) and the
+text it shows. The procedures read the last frame drawn.
+
+<<< @/examples/snippets/cb_paths-act.F90{fortran}
+
+| Procedure | Does |
+|---|---|
+| `test_item_exists(path [, stat])` → `logical` | true when `path` names an item or a window of the last frame (several items: true too) |
+| `test_item_rect(path, x, y, w, h [, stat])` → `logical` | the item's top-left corner and size [pixels]; false, and zeros, when no item matches |
+| `test_item_click(path [, button] [, stat])` | queues a click at the centre of the item's visible part, as `test_click` does (`button`: `'left'`, default, `'right'`, `'middle'`); a tree node is clicked on its arrow, which opens and closes it |
+| `test_item_type_text(path, text [, stat])` | queues a click with the shortcut key held (a slider or a drag takes typed text then, a field is focused), select all (shortcut+a), `text`, Enter |
+| `test_item_checked(path [, stat])` → `logical` | a checkbox, a menu item with a check mark, a selectable in a menu: checked in the last frame |
+| `test_item_value(path, text [, shown] [, stat])` → `logical` | true when the item showed `text` as its value: the text drawn inside its rectangle, its label taken out (a field's text, a slider's number as its format writes it, a combo's choice), blanks collapsed; `shown` gives what it showed |
+| `test_menu_click(path [, stat])` | queues a click through a menu path: the first menu now, each following level once its menu has opened, over the next frames; a menu already open is pointed at, not clicked again |
+| `test_record_items(on [, stat])` | records the items of each frame from the next frame on, or stops |
+
+(Dear ImGui's test engine has the like as `ItemExists`, `ItemClick`, `ItemInputValue` and `MenuClick`, run from a
+test coroutine; FIGURE's queue input that the program's own frame loop then draws, as every `test_*` procedure.)
+
+**Paths** follow the references of Dear ImGui's test engine where they are defined:
+
+| Path | Names |
+|---|---|
+| `Window/Label` | the item labelled `Label` in the window `Window` (its title, as passed to `ig_begin`) |
+| `//Window/Label` | the same, `Window` a window by its full name, never an item elsewhere |
+| `Label` | a relative path: the first segment is a window, or else an item anywhere |
+| `Window/Node/Leaf` | an item inside a tree node, a tab, a menu, a combo's list, a child region (`ig_begin_child`'s id) or an id scope (`ig_push_id`, a table's id, a tab bar's id) |
+| `Window/Leaf` | the same item: a level with no label of its own (an id scope, a table, a tab bar, a menu bar) may be left out |
+| `Save##file`, `##file` | a label with its id part, or the id part alone (a label with no visible text) |
+| `*` | any one level: `'Panel/grid/*/Edit'` |
+| `$$3` | an integer id: the scope of `ig_push_id(3)` |
+| `a\/b` | a slash inside a label |
+
+A segment matches a label in full (`Save##file`), its visible part (`Save`), its id part (`##file`), or the name a
+widget that draws its own label gives (`ig_tool_button`'s label). A context menu is found under the scope it was
+declared in, by its id (`'Panel/actions_menu/Delete'`), or relative (`'Delete'`); a menu's and a combo's items under
+the menu or the combo (`'File/Recent/notes.txt'`, `'Panel/Mode/Beta mode'`). Trailing blanks are not part of a path.
+
+**Frames.** The procedures read the last frame drawn: call them between frames or inside one, after the frame that
+drew the item. A window that sizes itself is placed from its second frame: its items are not visible before
+(`test_item_click` refuses them). An action is queued input: it lands over the next frames, as `test_click` does (four
+for a click); draw them with [`test_run`](#running-until-idle). A menu path takes the frames its menus need to open; a
+level that does not appear within 20 frames ends the queued input, and the next `test_run` reports it.
+
+**Status.** `stat` is optional; absent, a failure stops the program with the message.
+
+| Failure | Status | Message |
+|---|---|---|
+| no item matches | `FIG_ERR_ARGUMENT` | `<procedure>: no item '<path>' in the last frame: nothing named '<segment>' in '<where>'; nearest: '<path of the nearest item>'` (or `no window or item '<segment>'`) |
+| several items match | `FIG_ERR_ARGUMENT` | `<procedure>: '<path>' names <n> items: '<path>' '<path>' ... (a longer path tells them apart)` |
+| two items share the id | `FIG_ERR_ARGUMENT` | `<procedure>: '<path>' names <n> items with the same id (an id conflict, test_id_conflicts): '<path>'` |
+| an empty segment (`'a//b'`, `''`) | `FIG_ERR_ARGUMENT` | `<procedure>: '<path>' is not a path: an empty segment ('Window/Label', '//Window/Label', '##id', '*')` |
+| a level of ids only | `FIG_ERR_ARGUMENT` | `... '<path>' is a level of ids with no item of its own` |
+| not checkable (`test_item_checked`) | `FIG_ERR_ARGUMENT` | `test_item_checked: '<path>' is not checkable` |
+| takes no text (`test_item_type_text`) | `FIG_ERR_ARGUMENT` | `test_item_type_text: '<path>' takes no typed text (not a text field, a number field, a slider or a drag)` |
+| disabled, or not visible (clipped, scrolled out, a window not shown yet) | `FIG_ERR_STATE` | `<procedure>: '<path>' is disabled`, `... is not visible in the last frame (...)` |
+| a menu path names a window only | `FIG_ERR_ARGUMENT` | `test_menu_click: '<path>' names a window, no menu` |
+| no frame yet | `FIG_ERR_STATE` | `figure is not initialized` |
+
+`test_item_exists` fails only for a malformed path; `test_item_rect` returns `.false.` for a missing path and fails for
+several items.
+
+**Recording.** On from `app%init_headless`. In window and remote modes it starts with the first call of a path
+procedure, which finds nothing yet (the frame it reads was not recorded), or with `test_record_items(.true.)` before
+the frames. Recording costs about 0.02 µs per item and frame (1000 buttons, headless, gfortran -O2: 92 µs a frame
+without, 113 µs with; `figure_test_paths` measures it); a program that never records pays one test of a boolean per
+item, the hooks being off (measured against a native layer built without the hooks: 1 to 2 µs a frame for the same
+1000 buttons, within the run-to-run spread). Dear ImGui's behaviour does not change with recording: the hooks only read.
+
+**Modes.** The same in window, headless and remote modes. **Threads:** the frame loop's thread only (Dear ImGui's
+items); a task does not call them.
+
+**What a path cannot address:** an item drawn without an id: text (`ig_text`), a separator, a progress bar, an image,
+a plot item (a plot itself, by its title's id: `'Window/My plot'`); a path finds them only through a widget with a
+label. Glyphs cut by a clip rectangle are not read into a value. Several items with the same label in one scope are
+an id conflict, which no path can tell apart: give them `##` ids. Values are read from what was drawn: a field scrolled
+past its width shows part of its text.
+
+## Running until idle
+
+`test_run(max_frames [, stat])` → `logical` is the loop of a test: true while the interface is not idle, so the
+program draws one more frame; false once no input is queued (neither FIGURE's nor Dear ImGui's trickled events), no
+action waits (a menu level) and no frame is asked for (the three frames an input gives, as an event does in a window,
+and `app%request_frames`). Call it once per frame:
+
+<<< @/examples/snippets/cb_paths-settle.F90{fortran}
+
+Past `max_frames` frames of one run it returns `.false.` and fails with `FIG_ERR_STATE`, `test_run: the interface is
+not idle after <n> frames: <why>` (`<n> input events still queued`, `an action waits for '<path>'`, `frames are still
+asked for (...)`): an animation, a running process or a task that asks for frames keeps a program busy. A menu level
+that never appeared is reported here, `test_menu_click: no item ...`, with `FIG_ERR_STATE`. `max_frames` below 1 is
+`FIG_ERR_ARGUMENT`. The count restarts after each `.false.`. The same in every mode; in window mode a lazy loop does
+not wait for events while input is queued.
+
+## Checks
+
+| Procedure | Gives |
+|---|---|
+| `test_id_conflicts([list])` → `int32` | how many ids two items with different rectangles shared in the last frame; `list`, their paths |
+| `test_unnamed_items([list])` → `int32` | how many interactive items had no visible name and no tooltip; `list`, their paths |
+
+Dear ImGui reports an id conflict (two buttons `'OK'` in one scope: a click on the second acts on the first) only
+while the pointer is over one of them; `test_id_conflicts` finds every one in the frame. An item is unnamed when its
+label has no visible text (`'##save'`) or only icons (Lucide's private-use characters), and it has no tooltip
+(`ig_tooltip`, `ig_begin_item_tooltip`, a shortcut's tooltip): an icon-only button a screen reader, or a reader of
+the interface, cannot name. Interactive items only: text and separators are not items. `list` is blank-padded to the
+longest path.
+
+<<< @/examples/snippets/cb_paths-check.F90{fortran}
+
+<<< @/examples/output/cb_paths.txt{text}
+
+The same in every mode; recording must be on (the call turns it on, from the next frame).
+
 ## Test the interface you ship
 
 Put the interface in a procedure that the application calls every frame, and call the same procedure from the test:
@@ -126,7 +247,10 @@ contrast of every built-in style; `figure_test_layout` checks that the Fortran m
 match the C++ ones, `figure_test_remote` drives the remote mode end to end through a WebSocket client
 ([Remote UI](remote#how-it-works)), and `figure_test_files` drives the file browser on a folder it writes (clicks,
 double-clicks, typed names and paths, Tab, Escape); `figure_test_tables` scrolls a table with a frozen header by the
-wheel, sorts it by clicks on its headers, and checks hidden columns, row colours and tree rows spanning the table:
+wheel, sorts it by clicks on its headers, and checks hidden columns, row colours and tree rows spanning the table;
+`figure_test_paths` finds items by path in a tree, tabs, a table, a child region, a context menu and a combo's list,
+clicks through a menu, types into fields, checks `test_run`, the id conflicts and the unnamed items, and measures what
+recording costs per frame:
 
 ```bash
 fobis build --mode tests-gnu && exe/figure_test_headless

@@ -20,7 +20,7 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, fi
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, fig_item_status, fig_last_item, fig_mark_last_item_edited, &
-                            FIG_ERR_ARGUMENT, FIG_OK
+                            fig_items_tooltip, FIG_ERR_ARGUMENT, FIG_OK
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : igGetTime, igProgressBar, &
                           im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
@@ -512,6 +512,7 @@ contains
    character(len=*), intent(in) :: text !< Text.
 
    if (figure_draw_refused('ig_tooltip')) return ! a task does not draw
+   call fig_items_tooltip()                       ! the item has a tooltip (test_unnamed_items), hovered or not
    if (.not. logical(igBeginItemTooltip())) return
    call igTextUnformatted(cstr(text), c_null_ptr)
    call igEndTooltip()
@@ -540,6 +541,7 @@ contains
 
    shown = .false.
    if (figure_draw_refused('ig_begin_item_tooltip')) return ! a task does not draw
+   call fig_items_tooltip() ! the item has a tooltip (test_unnamed_items), hovered or not
    shown = logical(igBeginItemTooltip())
    call figure_scope_open(SCOPE_TOOLTIP, 'ig_begin_item_tooltip', '', shown)
    endfunction ig_begin_item_tooltip

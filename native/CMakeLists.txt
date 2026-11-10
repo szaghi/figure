@@ -107,6 +107,7 @@ add_library(figure_native STATIC
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_view3d.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_image.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/figure_items.cpp
    ${miniz_SOURCE_DIR}/miniz.c)
 # miniz: only its deflate and zlib-format functions, all under the mz_ prefix (no zlib names: a program may link zlib)
 target_compile_definitions(figure_native PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
@@ -186,9 +187,14 @@ if(WIN32)
    target_link_libraries(figure_native PUBLIC ws2_32)
 endif()
 # Same configuration cimgui/cimplot were generated with: their C structs must match the C++ ones bit for bit.
+# IMGUI_ENABLE_TEST_ENGINE compiles in Dear ImGui's item hooks, implemented by FIGURE (figure_items.cpp: no
+# imgui_test_engine code). It changes no structure (ImGuiContext has its TestEngineHookItems either way) and adds only
+# enum values; with the hooks off (g.TestEngineHookItems false: every program that does not record items) a registered
+# item costs one test of that boolean.
 target_compile_definitions(figure_native PUBLIC
    IMGUI_USER_CONFIG="${cimgui_SOURCE_DIR}/cimconfig.h"
-   IMGUI_DISABLE_OBSOLETE_FUNCTIONS=1)
+   IMGUI_DISABLE_OBSOLETE_FUNCTIONS=1
+   IMGUI_ENABLE_TEST_ENGINE)
 target_include_directories(figure_native PUBLIC
    ${CMAKE_CURRENT_SOURCE_DIR} ${cimgui_SOURCE_DIR} ${IMGUI_DIR} ${IMGUI_DIR}/backends ${cimplot_SOURCE_DIR} ${IMPLOT_DIR})
 target_link_libraries(figure_native PUBLIC SDL3::SDL3-static)

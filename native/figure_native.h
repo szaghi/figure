@@ -138,6 +138,32 @@ int    fig_input_mouse_button(int button, int down);
 int    fig_input_wheel(float dx, float dy);
 int    fig_input_key(const char *name, int name_len, int down);
 int    fig_input_text(const char *text, int text_len);
+/* Items by path (figure_items.cpp): Dear ImGui's test-engine hooks fill a table of the items of each frame; a path
+ * ("Window/Label", "//Window/Label", "##id", "*" for one level, "$$n" for an integer id) names one item of the last
+ * frame drawn. fig_items_record: recording on (1) or off (0) from the next frame (on from init_headless; the other
+ * calls turn it on). fig_item_find, with must 0: found 0 when no item matches, 2 when several do (FIG_OK; the message,
+ * naming the nearest match or the items, in fig_last_error); rect: xmin, ymin, xmax, ymax and the point to click; state: bits 1 visible, 2 checkable,
+ * 4 checked, 8 openable, 16 opened, 32 inputable, 64 disabled, 128 a window, the role from bit 16; label: its full
+ * path. fig_item_value: the text the item shows (its label taken out), equal 1 when it is `text` (blanks collapsed).
+ * fig_items_list: what 1 the id conflicts, 2 the unnamed items, of the last frame: index 0 makes the list (count),
+ * index >= 1 reads it. fig_items_name / fig_items_tooltip: the last item's accessible name, or a tooltip it has. */
+int    fig_items_record(int on);
+int    fig_item_find(const char *path, int path_len, int must, int *found, float *rect, int *state, char *label,
+                     int label_cap, int *label_len);
+int    fig_item_value(const char *path, int path_len, const char *text, int text_len, int *equal, char *buf, int cap,
+                      int *n);
+int    fig_items_list(int what, int index, char *buf, int cap, int *n, int *count);
+void   fig_items_name(const char *name, int name_len);
+void   fig_items_tooltip(void);
+/* Actions on the item a path names, queued as test_click's input: a click (button 0 left, 1 right, 2 middle); typed
+ * text (a click with the shortcut key, select all, the text, Enter); a menu path, each level clicked once it appears.
+ * FIG_ERR_ARGUMENT: no item (the nearest named), several, a malformed path; FIG_ERR_STATE: disabled, not visible. */
+int    fig_item_click(const char *path, int path_len, int button);
+int    fig_item_type(const char *path, int path_len, const char *text, int text_len);
+int    fig_menu_click(const char *path, int path_len);
+/* The frame driver of a test: more 1 while input is queued, an action waits or frames are asked for; 0 once idle.
+ * FIG_ERR_STATE past max_frames frames of one run, or for a queued action that failed. */
+int    fig_test_run(int max_frames, int *more);
 /* A tick label of the plot being declared: axis an ImAxis (0..2 X1..X3, 3..5 Y1..Y3), index from 1; count of
  * ticks (tests of axis formats). FIG_ERR_STATE outside a plot or for an axis not set up. */
 int    fig_plot_tick_label(int axis, int index, char *buf, int buf_len, int *count, int *len);

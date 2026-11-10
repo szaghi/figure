@@ -1,5 +1,6 @@
 // FIGURE native glue: SDL3 window + OpenGL3 renderer + Dear ImGui/ImPlot contexts, behind the C ABI of figure_native.h.
 #include "figure_native.h"
+#include "figure_items.h"
 #include "figure_remote.h"
 #include "figure_style.h"
 #include "figure_theme.h"
@@ -716,6 +717,7 @@ void create_contexts() {
    if (ImFont *f = get_font("plex-sans", err)) io.FontDefault = f;
    ImGui::GetStyle().FontSizeBase = DEFAULT_FONT_SIZE;
    st.font = "plex-sans";
+   figure_items::reset(); // no item recorded yet; recording as test_record_items last asked (off by default)
 }
 
 void destroy_contexts() {
@@ -2024,6 +2026,7 @@ int fig_init_headless(int width, int height) {
    if (st.m != mode::none) return fail(FIG_ERR_STATE, "figure is already initialized");
    if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "display size must be positive");
    create_contexts();
+   ImGui::GetCurrentContext()->TestEngineHookItems = true; // headless programs are tests: items found by path at once
    ImGuiIO &io = ImGui::GetIO();
    io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
@@ -2546,6 +2549,8 @@ void fig_app_wake(void) {
 double fig_content_scale(void) { return st.scale; }
 
 void apply_test_input(); // figure_testing's queued input (defined with the synthetic input below)
+static int         run_frames = 0; // frames of the current test_run (fig_test_run)
+static std::string test_failure; // a queued action that could not be done (test_menu_click): test_run reports it
 
 int fig_begin_frame(int *running) {
    FIG_TRY
@@ -2565,6 +2570,8 @@ int fig_begin_frame(int *running) {
    if (st.m == mode::headless) { // never waits: a wake-up has nothing to end
       woken = false;
       ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+      frame_without_event(); // the frames asked for (test_run waits for none), counted down as in window mode
+      figure_items::frame_begin(); // the items of the frame that ended: what paths find now
       apply_test_input();
       take_drops();
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
@@ -2585,7 +2592,7 @@ int fig_begin_frame(int *running) {
       // wake-up during it is never lost)
       woken = false;
       const bool pending = figure_remote::frame_pending(), busy = figure_remote::queue_busy();
-      const bool wait = pending ? busy : st.lazy && st.frames_left <= 0;
+      const bool wait = pending ? busy : st.lazy && st.frames_left <= 0 && st.test_input.empty();
       bool got = figure_remote::serve(wait ? st.max_wait_ms.load() : 0);
       const auto next = st.last_frame + std::chrono::duration_cast<clock::duration>(
                                            std::chrono::duration<double>(st.remote_min_dt));
@@ -2603,6 +2610,7 @@ int fig_begin_frame(int *running) {
       const float dt = std::chrono::duration<float>(now - st.last_frame).count();
       st.last_frame = now;
       ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0e-4f;
+      figure_items::frame_begin(); // the items of the frame that ended: what paths find now
       apply_test_input();
       take_drops();
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
@@ -2637,7 +2645,7 @@ int fig_begin_frame(int *running) {
    if (cap.on && cap.count >= 0 && cap.written >= cap.count) *running = 0; // capture: enough frames written
    // a fig_wake from now on pushes its event, which ends the wait or is polled below; one before is already queued
    woken = false;
-   if (st.lazy && st.frames_left <= 0 && !cap.on) {
+   if (st.lazy && st.frames_left <= 0 && !cap.on && st.test_input.empty()) {
       if (SDL_WaitEventTimeout(&ev, st.max_wait_ms))
          handle(ev);
       else if (rs.on)
@@ -2668,6 +2676,7 @@ int fig_begin_frame(int *running) {
    } else {
       ImGui_ImplSDL3_NewFrame();
    }
+   figure_items::frame_begin(); // the items of the frame that ended: what paths find now
    apply_test_input();
    take_drops();
    apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
@@ -2749,6 +2758,9 @@ void fig_shutdown(void) {
          ImGui_ImplSDL3_Shutdown();
       }
       destroy_contexts();
+      figure_items::reset();
+      test_failure.clear();
+      run_frames = 0;
       if (st.m == mode::remote) figure_remote::stop();
       if (st.m == mode::window) {
          sdl_events = false;
@@ -2903,6 +2915,7 @@ int fig_tool_button(const char *label, int label_len, const char *icon, int icon
       ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(ink.x, ink.y, ink.z, 0.18f));
    }
    const bool clicked = ImGui::Button(("##" + lab).c_str(), ImVec2(w, h));
+   figure_items::name_last(std::string(lab.c_str(), shown_end)); // its name for paths: the label it draws itself
    ImGui::PopStyleColor(selected ? 4 : 3);
    ImGui::PopStyleVar(2);
    const ImVec2 at = ImGui::GetItemRectMin();
@@ -3074,17 +3087,70 @@ int queue_input(const state_t::input_t &e) {
    return FIG_OK;
 }
 
-// At the start of a frame (before NewFrame): hand the queued events to Dear ImGui, up to the first boundary.
+
+// The events of a click at (x, y), as test_click queues them (a move, a frame resting there, a press, a release);
+// only the move and the rest with `hover`.
+static std::vector<state_t::input_t> click_events(float x, float y, int button, bool hover) {
+   std::vector<state_t::input_t> ev(hover ? 2 : 5);
+   ev[0].kind = 1;
+   ev[0].x = x;
+   ev[0].y = y;
+   ev[1].kind = 0;
+   if (!hover) {
+      ev[2].kind = 0;
+      ev[3].kind = 2;
+      ev[3].a = button;
+      ev[3].b = 1;
+      ev[4].kind = 2;
+      ev[4].a = button;
+      ev[4].b = 0;
+   }
+   return ev;
+}
+
+// A queued action on an item named by a path (kind 7: test_menu_click's later steps), done when the item is in the
+// last frame drawn: replaced by its click (a menu already open: by a move onto it), or waited for one frame more.
+// False: wait (nothing after it this frame). The queue is emptied, and the failure kept for test_run, once the item
+// has not appeared in the frames allowed.
+static bool resolve_action(size_t i) {
+   state_t::input_t &e = st.test_input[i];
+   figure_items::found_t f;
+   std::string           err;
+   bool                  missing = false;
+   const int             s = figure_items::find(e.text, f, err, missing);
+   const bool ready = s == FIG_OK && (f.state & figure_items::S_VISIBLE) && !(f.state & figure_items::S_DISABLED);
+   if (!ready) {
+      if (e.b-- > 0) return false;
+      if (s == FIG_OK) err = "'" + f.path + "' is " + ((f.state & figure_items::S_DISABLED) ? "disabled" : "not visible");
+      test_failure = "test_menu_click: " + err;
+      return false;
+   }
+   const bool hover = e.x > 0.0f && (f.state & figure_items::S_OPENED);
+   const std::vector<state_t::input_t> ev = click_events(f.cx, f.cy, e.a, hover);
+   st.test_input.erase(st.test_input.begin() + static_cast<long>(i));
+   st.test_input.insert(st.test_input.begin() + static_cast<long>(i), ev.begin(), ev.end());
+   return true;
+}
+
+// At the start of a frame (before NewFrame): hand the queued events to Dear ImGui, up to the first boundary. Events
+// handed: three frames more at least, as a real event gives (Dear ImGui settles in a few); events still queued: one.
 void apply_test_input() {
    if (st.test_input.empty()) return;
    ImGuiIO &io = ImGui::GetIO();
    size_t i = 0;
-   for (; i < st.test_input.size(); ++i) {
+   bool   handed = false;
+   while (i < st.test_input.size()) {
+      if (st.test_input[i].kind == 7) {
+         if (!resolve_action(i)) break;
+         if (!test_failure.empty()) break;
+         continue; // its events, from the same place
+      }
       const state_t::input_t &e = st.test_input[i];
       if (e.kind == 0) {
          ++i; // the boundary is consumed: what follows waits for the next frame
          break;
       }
+      handed = true;
       switch (e.kind) {
       case 1: io.AddMousePosEvent(e.x, e.y); break;
       case 2: io.AddMouseButtonEvent(e.a, e.b != 0); break;
@@ -3093,8 +3159,12 @@ void apply_test_input() {
       case 6: drop_path(e.text, e.x, e.y); break;
       default: io.AddInputCharactersUTF8(e.text.c_str()); break;
       }
+      ++i;
    }
-   st.test_input.erase(st.test_input.begin(), st.test_input.begin() + static_cast<long>(i));
+   if (!test_failure.empty()) st.test_input.clear();
+   else st.test_input.erase(st.test_input.begin(), st.test_input.begin() + static_cast<long>(i));
+   if (handed) frames_at_least(3);
+   else if (!st.test_input.empty()) frames_at_least(1);
 }
 
 int fig_input_next_frame(void) {
@@ -3669,6 +3739,166 @@ int fig_input_key(const char *name, int name_len, int down) {
    e.a = static_cast<int>(k);
    e.b = down != 0;
    return queue_input(e);
+}
+
+// ---- Items by path (figure_testing): actions on the items of the last frame drawn (figure_items.cpp) ------------------
+
+namespace {
+void queue_events(const std::vector<state_t::input_t> &ev) {
+   st.test_input.insert(st.test_input.end(), ev.begin(), ev.end());
+}
+
+void queue_key(const char *name, int down) { fig_input_key(name, static_cast<int>(std::strlen(name)), down); }
+
+// The item a path names, ready for input: found, shown and enabled. `who` starts the messages.
+int item_for_input(const char *who, const char *path, int path_len, figure_items::found_t &f) {
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (!figure_items::recording()) figure_items::record(true);
+   std::string err;
+   bool        missing = false;
+   const int   s = figure_items::find(std::string(path, path_len > 0 ? static_cast<size_t>(path_len) : 0), f, err,
+                                      missing);
+   if (s != FIG_OK) return fail(s, std::string(who) + ": " + err);
+   if (f.state & figure_items::S_DISABLED) return fail(FIG_ERR_STATE, std::string(who) + ": '" + f.path + "' is disabled");
+   if (!(f.state & figure_items::S_VISIBLE))
+      return fail(FIG_ERR_STATE, std::string(who) + ": '" + f.path + "' is not visible in the last frame (scrolled " +
+                                    "out of view, clipped, or in a window not shown yet)");
+   return FIG_OK;
+}
+} // namespace
+
+int fig_item_click(const char *path, int path_len, int button) {
+   FIG_TRY
+   if (button < 0 || button > 2) return fail(FIG_ERR_ARGUMENT, "test_item_click: button 0 left, 1 right, 2 middle");
+   figure_items::found_t f;
+   const int s = item_for_input("test_item_click", path, path_len, f);
+   if (s != FIG_OK) return s;
+   queue_events(click_events(f.cx, f.cy, button, false));
+   return FIG_OK;
+   FIG_CATCH
+}
+
+// Into a field: a click with the shortcut key held (a slider or a drag takes typed input then; a text field is
+// focused), everything selected, the text typed, Enter.
+int fig_item_type(const char *path, int path_len, const char *text, int text_len) {
+   FIG_TRY
+   figure_items::found_t f;
+   const int s = item_for_input("test_item_type_text", path, path_len, f);
+   if (s != FIG_OK) return s;
+   if (!(f.state & figure_items::S_INPUTABLE))
+      return fail(FIG_ERR_ARGUMENT, "test_item_type_text: '" + f.path + "' takes no typed text (not a text field, " +
+                                       "a number field, a slider or a drag)");
+   std::vector<state_t::input_t> ev = click_events(f.cx, f.cy, 0, false);
+   queue_events({ev[0], ev[1], ev[2]});
+   queue_key("shortcut", 1);
+   queue_events({ev[3], ev[4]});
+   queue_key("shortcut", 0);
+   queue_events({ev[1]});
+   queue_key("shortcut", 1);
+   queue_key("a", 1);
+   queue_key("a", 0);
+   queue_key("shortcut", 0);
+   queue_events({ev[1]});
+   state_t::input_t t;
+   t.kind = 5;
+   t.text.assign(text, text_len > 0 ? static_cast<size_t>(text_len) : 0);
+   queue_events({t, ev[1]});
+   queue_key("enter", 1);
+   queue_key("enter", 0);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+// A menu path: the first item it names is clicked now (or, already open, pointed at); each following level is clicked
+// once it appears, over the next frames (a menu opens a frame after its click).
+int fig_menu_click(const char *path, int path_len) {
+   FIG_TRY
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (!figure_items::recording()) figure_items::record(true);
+   const std::string        p(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
+   std::vector<std::string> segs;
+   bool                     absolute = false;
+   if (!figure_items::split(p, segs, absolute))
+      return fail(FIG_ERR_ARGUMENT, "test_menu_click: '" + p + "' is not a path: an empty segment");
+   std::vector<std::string> prefixes;
+   std::string              pre = absolute ? "//" : "";
+   for (size_t k = 0; k < segs.size(); ++k) {
+      std::string seg;
+      for (char c : segs[k]) {
+         if (c == '/') seg += '\\';
+         seg += c;
+      }
+      pre += (k > 0 ? "/" : "") + seg;
+      prefixes.push_back(pre);
+   }
+   size_t first = prefixes.size();
+   figure_items::found_t f;
+   for (size_t k = 0; k < prefixes.size(); ++k) {
+      std::string err;
+      bool        missing = false;
+      const int   s = figure_items::find(prefixes[k], f, err, missing);
+      if (s != FIG_OK) return fail(s, "test_menu_click: " + err);
+      if (!(f.state & figure_items::S_WINDOW)) {
+         first = k;
+         break;
+      }
+   }
+   if (first == prefixes.size()) return fail(FIG_ERR_ARGUMENT, "test_menu_click: '" + p + "' names a window, no menu");
+   if (f.state & figure_items::S_DISABLED) return fail(FIG_ERR_STATE, "test_menu_click: '" + f.path + "' is disabled");
+   if (!(f.state & figure_items::S_VISIBLE))
+      return fail(FIG_ERR_STATE, "test_menu_click: '" + f.path + "' is not visible in the last frame");
+   const bool last = first + 1 == prefixes.size();
+   queue_events(click_events(f.cx, f.cy, 0, !last && (f.state & figure_items::S_OPENED)));
+   for (size_t k = first + 1; k < prefixes.size(); ++k) {
+      state_t::input_t a;
+      a.kind = 7;
+      a.text = prefixes[k];
+      a.a = 0;
+      a.b = 20;                                     // frames it may take to appear
+      a.x = k + 1 < prefixes.size() ? 1.0f : 0.0f;  // a menu on the way: pointed at when already open
+      queue_events({a});
+   }
+   return FIG_OK;
+   FIG_CATCH
+}
+
+// The frame driver of a test: true while the interface is not idle (input queued, an action waiting, frames asked for),
+// so the program draws one more frame; false once idle. Past max_frames frames of one run: false, and a failure.
+int fig_test_run(int max_frames, int *more) {
+   FIG_TRY
+   *more = 0;
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (max_frames < 1) return fail(FIG_ERR_ARGUMENT, "test_run: max_frames must be positive");
+   if (!test_failure.empty()) {
+      const std::string msg = test_failure;
+      test_failure.clear();
+      run_frames = 0;
+      return fail(FIG_ERR_STATE, msg);
+   }
+   const ImGuiContext &g = *ImGui::GetCurrentContext();
+   const size_t queued = st.test_input.size() + static_cast<size_t>(g.InputEventsQueue.Size);
+   const int    requested = st.frames_left.load();
+   if (queued == 0 && requested <= 0) {
+      run_frames = 0;
+      return FIG_OK;
+   }
+   if (run_frames >= max_frames) {
+      run_frames = 0;
+      std::string why;
+      for (const state_t::input_t &e : st.test_input)
+         if (e.kind == 7) {
+            why = "an action waits for '" + e.text + "'";
+            break;
+         }
+      if (why.empty() && queued > 0) why = std::to_string(queued) + " input events still queued";
+      if (why.empty()) why = "frames are still asked for (app%request_frames, an animation, a process or a task)";
+      return fail(FIG_ERR_STATE, "test_run: the interface is not idle after " + std::to_string(max_frames) +
+                                    " frames: " + why);
+   }
+   ++run_frames;
+   *more = 1;
+   return FIG_OK;
+   FIG_CATCH
 }
 
 int fig_input_text(const char *text, int text_len) {

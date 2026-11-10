@@ -45,6 +45,8 @@ public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_
 public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
 public :: fig_plot_annotation, fig_drawn_extent_rgba, fig_plot_tag
 public :: fig_colormap_legend, fig_popup_rect, fig_opened_url
+public :: fig_items_record, fig_item_find, fig_item_value, fig_items_list, fig_items_name, fig_items_tooltip
+public :: fig_item_click, fig_item_type, fig_menu_click, fig_test_run
 public :: fig_field_image, fig_field_uploads, fig_field_count, fig_field_time, fig_field_pixel
 public :: fig_canvas_event, fig_canvas, fig_draw, fig_cursor_screen_pos, fig_invisible_button, fig_drawn_extent_layer
 
@@ -1549,6 +1551,112 @@ interface
    integer(c_long_long),   value       :: cap    !< Its size [bytes].
    integer(c_long_long)                :: length !< The URL's length [bytes].
    endfunction fig_opened_url
+
+   function fig_items_record(on) result(status) bind(C, name='fig_items_record')
+   !< Record the items of each frame (Dear ImGui's test-engine hooks) from the next frame on, or stop.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: on     !< 1: record, 0: stop.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_items_record
+
+   function fig_item_find(path, path_len, must, found, rect, state, label, label_cap, label_len) result(status) &
+      bind(C, name='fig_item_find')
+   !< The item a path names in the last frame: its rectangle, the point to click, its state and its full path.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: path(*)   !< Path (not NUL-terminated).
+   integer(c_int), value               :: path_len  !< Its length [bytes].
+   integer(c_int), value               :: must      !< 1: no item is a failure; 0: found 0.
+   integer(c_int), intent(out)         :: found     !< 1: found.
+   real(c_float), intent(out)          :: rect(6)   !< xmin, ymin, xmax, ymax, the point to click [pixels].
+   integer(c_int), intent(out)         :: state     !< State bits, the role from bit 16.
+   character(kind=c_char), intent(out) :: label(*)  !< Its full path.
+   integer(c_int), value               :: label_cap !< Buffer size [bytes].
+   integer(c_int), intent(out)         :: label_len !< Its length [bytes].
+   integer(c_int)                      :: status    !< Status.
+   endfunction fig_item_find
+
+   function fig_item_value(path, path_len, text, text_len, equal, buf, cap, n) result(status) &
+      bind(C, name='fig_item_value')
+   !< The text the item a path names shows in the last frame, its label taken out; equal 1 when it is `text`.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: path(*)  !< Path (not NUL-terminated).
+   integer(c_int), value               :: path_len !< Its length [bytes].
+   character(kind=c_char), intent(in)  :: text(*)  !< Expected text.
+   integer(c_int), value               :: text_len !< Its length [bytes].
+   integer(c_int), intent(out)         :: equal    !< 1: shown.
+   character(kind=c_char), intent(out) :: buf(*)   !< The text shown.
+   integer(c_int), value               :: cap      !< Buffer size [bytes].
+   integer(c_int), intent(out)         :: n        !< Its length [bytes].
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_item_value
+
+   function fig_items_list(what, index, buf, cap, n, count) result(status) bind(C, name='fig_items_list')
+   !< The id conflicts (what 1) or the unnamed items (2) of the last frame: index 0 lists, from 1 reads.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value               :: what   !< 1 conflicts, 2 unnamed.
+   integer(c_int), value               :: index  !< 0: list them; from 1: one of them.
+   character(kind=c_char), intent(out) :: buf(*) !< Its path.
+   integer(c_int), value               :: cap    !< Buffer size [bytes].
+   integer(c_int), intent(out)         :: n      !< Its length [bytes].
+   integer(c_int), intent(out)         :: count  !< How many.
+   integer(c_int)                      :: status !< Status.
+   endfunction fig_items_list
+
+   subroutine fig_items_name(name, name_len) bind(C, name='fig_items_name')
+   !< The accessible name of the last item (a widget that draws its label itself).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: name(*)  !< Name.
+   integer(c_int), value              :: name_len !< Its length [bytes].
+   endsubroutine fig_items_name
+
+   subroutine fig_items_tooltip() bind(C, name='fig_items_tooltip')
+   !< The last item has a tooltip.
+   implicit none
+   endsubroutine fig_items_tooltip
+
+   function fig_item_click(path, path_len, button) result(status) bind(C, name='fig_item_click')
+   !< Queue a click on the item a path names.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< Path (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Its length [bytes].
+   integer(c_int), value              :: button   !< 0 left, 1 right, 2 middle.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_item_click
+
+   function fig_item_type(path, path_len, text, text_len) result(status) bind(C, name='fig_item_type')
+   !< Queue typed text into the field a path names (click, select all, the text, Enter).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< Path (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Its length [bytes].
+   character(kind=c_char), intent(in) :: text(*)  !< Text (UTF-8).
+   integer(c_int), value              :: text_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_item_type
+
+   function fig_menu_click(path, path_len) result(status) bind(C, name='fig_menu_click')
+   !< Queue a menu path: each level clicked once it appears.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< Path (not NUL-terminated).
+   integer(c_int), value              :: path_len !< Its length [bytes].
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_menu_click
+
+   function fig_test_run(max_frames, more) result(status) bind(C, name='fig_test_run')
+   !< The frame driver of a test: more 1 while the interface is not idle.
+   import :: c_int
+   implicit none
+   integer(c_int), value       :: max_frames !< Frames allowed.
+   integer(c_int), intent(out) :: more       !< 1: draw one more frame.
+   integer(c_int)              :: status     !< Status.
+   endfunction fig_test_run
 
    function fig_window_rect(name, name_len, rect, found) result(status) bind(C, name='fig_window_rect')
    !< A window's rectangle by name, as in the last frame.

@@ -1,0 +1,7 @@
+$ ./cb_paths
+file: channel.toml
+Implicit checked: T
+CFL shows 0.80: T
+id conflicts: 0
+unnamed items: 0
+test_item_click: no item 'Solver/Options/Implcit' in the last frame: nothing named 'Implcit' in '//Solver/Options'; nearest: '//Solver/Options/Implicit'

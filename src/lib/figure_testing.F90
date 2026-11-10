@@ -21,14 +21,16 @@ module figure_testing
 !< `app%init_headless` no window, display or GPU is needed, so tests run in CI as is.
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_long_long
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64
-use figure_base, only : figure_check, figure_fail
-use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
+use figure_base, only : figure_check, figure_fail, figure_last_error
+use figure_c_native, only : FIG_OK, FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
                             fig_frame_state, fig_notification_rect, fig_notification_alpha, fig_drawn_extent, &
                             fig_file_browser_get, fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
                             fig_popup_rect, fig_opened_url, fig_drawn_extent_layer, fig_field_uploads, &
-                            fig_field_count, fig_field_time, fig_field_pixel, fig_test_glyph
+                            fig_field_count, fig_field_time, fig_field_pixel, fig_test_glyph, fig_items_record, &
+                            fig_item_find, fig_item_value, fig_items_list, fig_item_click, fig_item_type, &
+                            fig_menu_click, fig_test_run
 use figure_imgui, only : ig_item_rect
 use figure_implot, only : plot_copies, plot_stride
 
@@ -40,6 +42,12 @@ public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_r
 public :: test_file_browser, test_file_browser_rect, test_settings_file, test_drop
 public :: test_popup_rect, test_opened_url, test_plot_copies, test_plot_stride
 public :: test_field_uploads, test_field_textures, test_field_time, test_field_pixel, test_glyph
+public :: test_record_items, test_item_exists, test_item_rect, test_item_click, test_item_type_text, test_item_checked
+public :: test_item_value, test_menu_click, test_run, test_id_conflicts, test_unnamed_items
+
+! The state bits of an item found by a path: must match native/figure_items.h's state_t.
+integer(c_int), parameter :: ITEM_CHECKABLE = 2_c_int  !< A checkbox, a menu item, a selectable in a menu.
+integer(c_int), parameter :: ITEM_CHECKED   = 4_c_int  !< Checked.
 
 interface test_drawn_extent
    !< The extent [pixels] of what was drawn so far in the current window in a colour: Dear ImGui's style colour by its
@@ -675,6 +683,239 @@ contains
    x = 0.5_real64 * (x0 + x1)
    y = 0.5_real64 * (y0 + y1)
    endsubroutine test_item_center
+
+   subroutine test_record_items(on, stat)
+   !< Record the items of each frame, for the procedures that find an item by its path, from the next frame on (or
+   !< stop). On from `app%init_headless`; in window and remote modes from the first call of a path procedure (that
+   !< call finds nothing yet) or of this one. Recording costs a little per item and frame (testing.md, "Finding items
+   !< by path"); stopping it gives that back.
+   logical,        intent(in)            :: on   !< Record.
+   integer(int32), intent(out), optional :: stat !< Status.
+
+   call figure_check(fig_items_record(merge(1_c_int, 0_c_int, on)), stat)
+   endsubroutine test_record_items
+
+   function test_item_exists(path, stat) result(exists)
+   !< True when `path` names an item, or a window, in the last frame drawn (several items: true too). Paths:
+   !< `Window/Label`, `//Window/Label` (the window by its full name), a label's `##id`, `*` for any one level, `$$n` for
+   !< an integer id (testing.md, "Finding items by path"). Trailing blanks are not part of the path.
+   character(len=*), intent(in)            :: path   !< Path.
+   integer(int32),   intent(out), optional :: stat   !< Status: `FIG_ERR_ARGUMENT` for a malformed path.
+   logical                                 :: exists !< It exists.
+   integer(c_int)                          :: found  !< Found flag.
+   integer(c_int)                          :: state  !< State bits.
+   real(c_float)                           :: r(6)   !< Rectangle.
+   character(len=:), allocatable           :: full   !< Its full path.
+   integer(c_int)                          :: s      !< Native status.
+
+   s = item_query(path, 0_c_int, found, r, state, full)
+   call item_check(s, 'test_item_exists', stat)
+   exists = s == FIG_OK .and. found >= 1_c_int ! 2: several
+   endfunction test_item_exists
+
+   function test_item_rect(path, x, y, w, h, stat) result(found)
+   !< The rectangle of the item `path` names, as drawn in the last frame [pixels]: its top-left corner and its size
+   !< (zero when not found). False when no item matches.
+   character(len=*), intent(in)            :: path  !< Path.
+   real(real64),     intent(out)           :: x     !< Left.
+   real(real64),     intent(out)           :: y     !< Top.
+   real(real64),     intent(out)           :: w     !< Width.
+   real(real64),     intent(out)           :: h     !< Height.
+   integer(int32),   intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for a malformed path or several
+                                                    !< items.
+   logical                                 :: found !< An item matches.
+   integer(c_int)                          :: f     !< Found flag.
+   integer(c_int)                          :: state !< State bits.
+   real(c_float)                           :: r(6)  !< Rectangle.
+   character(len=:), allocatable           :: full  !< Its full path.
+
+   call item_check(item_query(path, 0_c_int, f, r, state, full), 'test_item_rect', stat)
+   if (f == 2_c_int) call figure_fail(FIG_ERR_ARGUMENT, 'test_item_rect: '//figure_last_error(), stat) ! several
+   found = f == 1_c_int
+   if (.not. found) r = 0.0_c_float
+   x = real(r(1), real64)
+   y = real(r(2), real64)
+   w = real(r(3) - r(1), real64)
+   h = real(r(4) - r(2), real64)
+   endfunction test_item_rect
+
+   subroutine test_item_click(path, button, stat)
+   !< Queue a click on the item `path` names in the last frame, at the centre of its visible part, as `test_click` does.
+   character(len=*), intent(in)            :: path   !< Path.
+   character(len=*), intent(in),  optional :: button !< `'left'` (default), `'right'` or `'middle'`.
+   integer(int32),   intent(out), optional :: stat   !< Status: `FIG_ERR_ARGUMENT` for no item (the message names
+                                                     !< the nearest match), several, a malformed path or an unknown
+                                                     !< button; `FIG_ERR_STATE` for an item disabled or not visible.
+   integer(c_int)                          :: b      !< Button.
+
+   if (.not. button_index(button, b)) then
+      call figure_fail(FIG_ERR_ARGUMENT, "test_item_click: button must be 'left', 'right' or 'middle'", stat)
+      return
+   endif
+   call figure_check(fig_item_click(path, len_trim(path, c_int), b), stat)
+   endsubroutine test_item_click
+
+   subroutine test_item_type_text(path, text, stat)
+   !< Queue typing `text` into the field `path` names: a click on it with the shortcut key held (a slider or a drag takes
+   !< typed text then, a text field is focused), all its text selected, `text` typed, Enter.
+   character(len=*), intent(in)            :: path !< Path.
+   character(len=*), intent(in)            :: text !< Text (UTF-8).
+   integer(int32),   intent(out), optional :: stat !< Status: as `test_item_click`'s, and `FIG_ERR_ARGUMENT` for an
+                                                   !< item that takes no typed text.
+
+   call figure_check(fig_item_type(path, len_trim(path, c_int), text, len(text, c_int)), stat)
+   endsubroutine test_item_type_text
+
+   function test_item_checked(path, stat) result(checked)
+   !< True when the item `path` names was checked in the last frame: a checkbox, a menu item with a check mark, a
+   !< selectable in a menu.
+   character(len=*), intent(in)            :: path    !< Path.
+   integer(int32),   intent(out), optional :: stat    !< Status: `FIG_ERR_ARGUMENT` for no item (the nearest match
+                                                      !< named), several, a malformed path, an item not checkable.
+   logical                                 :: checked !< Checked.
+   integer(c_int)                          :: f       !< Found flag.
+   integer(c_int)                          :: state   !< State bits.
+   real(c_float)                           :: r(6)    !< Rectangle.
+   character(len=:), allocatable           :: full    !< Its full path.
+   integer(c_int)                          :: s       !< Native status.
+
+   checked = .false.
+   s = item_query(path, 1_c_int, f, r, state, full)
+   call item_check(s, 'test_item_checked', stat)
+   if (s /= FIG_OK) return
+   if (iand(state, ITEM_CHECKABLE) == 0_c_int) then
+      call figure_fail(FIG_ERR_ARGUMENT, "test_item_checked: '"//full//"' is not checkable", stat)
+      return
+   endif
+   checked = iand(state, ITEM_CHECKED) /= 0_c_int
+   endfunction test_item_checked
+
+   function test_item_value(path, text, shown, stat) result(equal)
+   !< True when the item `path` names showed `text` as its value in the last frame: the text drawn inside its rectangle,
+   !< its label taken out (a field's text, a slider's number, a combo's choice), blanks collapsed. `shown` gives it.
+   character(len=*),              intent(in)            :: path  !< Path.
+   character(len=*),              intent(in)            :: text  !< The value expected (UTF-8).
+   character(len=:), allocatable, intent(out), optional :: shown !< The value shown.
+   integer(int32),                intent(out), optional :: stat  !< Status: `FIG_ERR_ARGUMENT` for no item (the
+                                                                 !< nearest match named), several, a malformed path.
+   logical                                              :: equal !< `text` is shown.
+   character(kind=c_char, len=4096)                     :: buf   !< Text shown.
+   integer(c_int)                                       :: n     !< Its length.
+   integer(c_int)                                       :: e     !< Equal flag.
+
+   n = 0_c_int
+   e = 0_c_int
+   call figure_check(fig_item_value(path, len_trim(path, c_int), text, len(text, c_int), e, buf, len(buf, c_int), n), &
+                     stat)
+   equal = e == 1_c_int
+   if (present(shown)) shown = buf(1:max(0_c_int, min(n, len(buf, c_int))))
+   endfunction test_item_value
+
+   subroutine test_menu_click(path, stat)
+   !< Queue a click through a menu path: `'File/Recent/notes.txt'` (or `'//Window/File/...'`) clicks the first menu now
+   !< and each following level once its menu has appeared, over the next frames; a menu already open is pointed at,
+   !< not clicked again. A level that does not appear within 20 frames ends the queued input: `test_run` reports it.
+   character(len=*), intent(in)            :: path !< Path.
+   integer(int32),   intent(out), optional :: stat !< Status: as `test_item_click`'s for the first menu.
+
+   call figure_check(fig_menu_click(path, len_trim(path, c_int)), stat)
+   endsubroutine test_menu_click
+
+   function test_run(max_frames, stat) result(more)
+   !< The frame driver of a test: true while the interface is not idle, so the program draws one more frame; false once
+   !< no input is queued (nor in Dear ImGui's queue), no action waits and no frame is asked for (the frames an event
+   !< gives, `app%request_frames`). Call it once per frame: `do while (test_run(60))`, a frame, `enddo`. After
+   !< `max_frames` frames of one run: false, and a failure.
+   integer(int32), intent(in)            :: max_frames !< Frames allowed.
+   integer(int32), intent(out), optional :: stat       !< Status: `FIG_ERR_STATE` past `max_frames`, or for a queued
+                                                       !< `test_menu_click` level that never appeared;
+                                                       !< `FIG_ERR_ARGUMENT` for `max_frames` < 1.
+   logical                               :: more       !< Draw one more frame.
+   integer(c_int)                        :: m          !< More flag.
+
+   m = 0_c_int
+   call figure_check(fig_test_run(int(max_frames, c_int), m), stat)
+   more = m == 1_c_int
+   endfunction test_run
+
+   function test_id_conflicts(list) result(count)
+   !< How many ids were shared by items with different rectangles in the last frame (Dear ImGui reports an id conflict
+   !< only under the mouse): `list`, their paths.
+   character(len=:), allocatable, intent(out), optional :: list(:) !< Paths.
+   integer(int32)                                       :: count   !< Conflicting ids.
+
+   call items_list(1_c_int, count, list)
+   endfunction test_id_conflicts
+
+   function test_unnamed_items(list) result(count)
+   !< How many interactive items had no name in the last frame: an empty visible label (`'##save'`) or icons only, and
+   !< no tooltip (an icon-only button without `ig_tooltip`): `list`, their paths.
+   character(len=:), allocatable, intent(out), optional :: list(:) !< Paths.
+   integer(int32)                                       :: count   !< Unnamed items.
+
+   call items_list(2_c_int, count, list)
+   endfunction test_unnamed_items
+
+   function item_query(path, must, found, rect, state, full) result(status)
+   !< fig_item_find of a path (trailing blanks dropped).
+   character(len=*),              intent(in)  :: path    !< Path.
+   integer(c_int),                intent(in)  :: must    !< 1: no item is a failure.
+   integer(c_int),                intent(out) :: found   !< 1: found.
+   real(c_float),                 intent(out) :: rect(6) !< Rectangle and the point to click.
+   integer(c_int),                intent(out) :: state   !< State bits.
+   character(len=:), allocatable, intent(out) :: full    !< Its full path.
+   integer(c_int)                             :: status  !< Status.
+   character(kind=c_char, len=1024)           :: buf     !< Full path.
+   integer(c_int)                             :: n       !< Its length.
+
+   found = 0_c_int
+   state = 0_c_int
+   rect = 0.0_c_float
+   n = 0_c_int
+   status = fig_item_find(path, len_trim(path, c_int), must, found, rect, state, buf, len(buf, c_int), n)
+   full = buf(1:max(0_c_int, min(n, len(buf, c_int))))
+   endfunction item_query
+
+   subroutine item_check(status, who, stat)
+   !< A failure of fig_item_find reported under the caller's name.
+   integer(c_int),   intent(in)            :: status !< Native status.
+   character(len=*), intent(in)            :: who    !< Caller.
+   integer(int32),   intent(out), optional :: stat   !< Status.
+
+   if (status == FIG_OK) then
+      if (present(stat)) stat = int(FIG_OK, int32)
+   else
+      call figure_fail(status, who//': '//figure_last_error(), stat)
+   endif
+   endsubroutine item_check
+
+   subroutine items_list(what, count, list)
+   !< A list of fig_items_list, blank-padded to the longest.
+   integer(c_int),                intent(in)            :: what    !< 1 conflicts, 2 unnamed.
+   integer(int32),                intent(out)           :: count   !< How many.
+   character(len=:), allocatable, intent(out), optional :: list(:) !< Paths.
+   character(kind=c_char, len=1024)                     :: buf     !< A path.
+   integer(c_int)                                       :: n       !< Its length.
+   integer(c_int)                                       :: c       !< Count.
+   integer(c_int)                                       :: i       !< Counter.
+   integer(c_int)                                       :: longest !< Longest path.
+
+   c = 0_c_int
+   n = 0_c_int
+   call figure_check(fig_items_list(what, 0_c_int, buf, len(buf, c_int), n, c))
+   count = int(c, int32)
+   if (.not. present(list)) return
+   longest = 0_c_int
+   do i = 1_c_int, c
+      call figure_check(fig_items_list(what, i, buf, len(buf, c_int), n, c))
+      longest = max(longest, min(n, len(buf, c_int)))
+   enddo
+   allocate(character(len=longest) :: list(c))
+   do i = 1_c_int, c
+      call figure_check(fig_items_list(what, i, buf, len(buf, c_int), n, c))
+      list(i) = buf(1:max(0_c_int, min(n, len(buf, c_int))))
+   enddo
+   endsubroutine items_list
 
    function button_index(button, b) result(ok)
    !< ImGuiMouseButton of a name (absent: left).

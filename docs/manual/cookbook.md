@@ -871,3 +871,25 @@ button, `test_click` from `figure_testing`, then a few frames before checking. [
 testing](/guide/testing#synthetic-input) has drags, keys and typing.
 
 Used in context: [chapter 16](./tutorial/16-tested) of the tutorial.
+
+### Click through a menu and type into a field by their paths
+
+Name the items by where they are instead of measuring them: `'File/Recent/channel.toml'` opens File, then Recent once
+it has opened, then picks the file; `'Solver/CFL'` is the field labelled CFL in the window Solver. `test_run` draws
+frames until the input has landed and the interface is idle, so the test counts no frames. The interface is the
+application's own procedure, `draw`:
+
+<<< @/examples/snippets/cb_paths-act.F90{fortran}
+
+<<< @/examples/snippets/cb_paths-settle.F90{fortran}
+
+Then check what the interface shows, the ids two items share and the items with no name; a typo in a path is refused
+with the nearest item named:
+
+<<< @/examples/snippets/cb_paths-check.F90{fortran}
+
+<<< @/examples/output/cb_paths.txt{text}
+
+[Finding items by path](/guide/testing#finding-items-by-path) has the path syntax and the statuses,
+[Running until idle](/guide/testing#running-until-idle) and [Checks](/guide/testing#checks) the rest
+(`docs/examples/src/cb_paths.F90`).

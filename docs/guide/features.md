@@ -325,6 +325,17 @@ Details: [3-D views](view3d).
 | `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat] [, layer] [, vertices])` | the extent drawn so far in the current window in a style colour by name (`'PlotHistogram'`: a progress bar's fill) or an RGBA colour (an item's `ip_spec` colour); with `layer`, the foreground or background layer; `vertices`, how many ([Canvas](canvas#testing-a-canvas)) |
 | `test_file_browser(shown [, folder] [, entries] [, error] [, asking] [, path_field] [, name_field] [, recent])` | the file browser in front: its folder, the entries in the order shown, the error shown, the replace question, the fields, the recent folders ([file browser](frame-loop#figure-s-file-browser)) <!-- visual --> |
 | `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser in the last frame (`'entry:NAME'`, `'ok'`, `'cancel'`, `'path'`, ...), to click it ([synthetic input](testing#synthetic-input)) |
+| `test_item_exists(path [, stat])` → `logical` | an item or a window of the last frame named by a path: `Window/Label`, `//Window`, `##id`, `*`, `$$n` ([finding items by path](testing#finding-items-by-path)) |
+| `test_item_rect(path, x, y, w, h [, stat])` → `logical` | the rectangle of the item a path names, in the last frame; false when there is none ([finding items by path](testing#finding-items-by-path)) |
+| `test_item_click(path [, button] [, stat])` | queue a click on the item a path names; a missing path names the nearest item ([finding items by path](testing#finding-items-by-path)) |
+| `test_item_type_text(path, text [, stat])` | queue typing into a field, a slider or a drag: a click with the shortcut key, select all, the text, Enter ([finding items by path](testing#finding-items-by-path)) |
+| `test_item_checked(path [, stat])` → `logical` | a checkbox or a menu item checked in the last frame ([finding items by path](testing#finding-items-by-path)) |
+| `test_item_value(path, text [, shown] [, stat])` → `logical` | the item showed `text` as its value (the text drawn in it, its label taken out) ([finding items by path](testing#finding-items-by-path)) |
+| `test_menu_click(path [, stat])` | queue a click through a menu path, each submenu clicked once it opens ([finding items by path](testing#finding-items-by-path)) |
+| `test_record_items(on [, stat])` | record the items of each frame, or stop (on from `init_headless`) ([finding items by path](testing#finding-items-by-path)) |
+| `test_run(max_frames [, stat])` → `logical` | true while input is queued or frames are asked for: the loop of a test, `do while (test_run(60))` ([running until idle](testing#running-until-idle)) |
+| `test_id_conflicts([list])` → `int32` | the ids two items shared in the last frame, found without the pointer over them, and their paths ([checks](testing#checks)) |
+| `test_unnamed_items([list])` → `int32` | the items with no visible name and no tooltip (icon-only buttons, `'##id'` labels), and their paths ([checks](testing#checks)) |
 | `test_settings_file(path [, stat])` | the file keeping the browser's recent folders, instead of FIGURE's own (`''`: memory only) ([synthetic input](testing#synthetic-input)) |
 
 Details: [Headless testing](testing#synthetic-input).
