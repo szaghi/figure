@@ -2,8 +2,9 @@
 # packages with apt, and macOS, with Homebrew. Each run builds FIGURE, installs it into a scratch prefix, compiles and
 # runs the installer's proof program (pkg-config, headless), then checks that --uninstall leaves the prefix empty.
 #   - push (when the installer changes) and a dispatch with no tag: this commit, with --source;
-#   - a dispatch with a tag, and release.yml after it publishes a release: the one-liner itself, the install.sh asset
-#     of releases/latest, building that tag.
+#   - a dispatch with a tag, and "Release figure" once it has published a release (workflow_run: a release made with
+#     GITHUB_TOKEN triggers no workflow, a completed run does): the one-liner itself, the install.sh asset of
+#     releases/latest, building that tag. release.yml stays the FoBiS scaffold's (`fobis scaffold status`).
 name: Installer
 
 on:
@@ -19,11 +20,9 @@ on:
         description: Release tag to install with the one-liner (empty, this commit with --source)
         type: string
         default: ""
-  workflow_call:
-    inputs:
-      tag:
-        type: string
-        required: true
+  workflow_run:
+    workflows: ["Release figure"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -43,18 +42,25 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    # after a release: only one that succeeded on a tag push (a dispatch of release.yml publishes nothing); the tag is
+    # the branch of that run
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     env:
-      TAG: ${{ inputs.tag }}
+      TAG: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || inputs.tag }}
       PREFIX: ${{ github.workspace }}/../figure-prefix
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TAG }}   # the release's tree (--uninstall runs its install.sh); empty: the event's commit
 
     - name: Install this commit (--source)
-      if: inputs.tag == ''
+      if: env.TAG == ''
       run: bash scripts/install.sh --gnu --deps --source "$GITHUB_WORKSPACE" --prefix "$PREFIX"
 
     - name: Install the release (the one-liner)
-      if: inputs.tag != ''
+      if: env.TAG != ''
       run: |
         curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/install.sh" \
           | bash -s -- --gnu --deps --tag "$TAG" --prefix "$PREFIX"
