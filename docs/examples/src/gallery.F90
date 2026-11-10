@@ -2,7 +2,8 @@
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet"), the layout
 !< metrics (run with "layout_metrics"), the numbers and choices (run with "numbers_and_choices") and the canvas's
 !< drawing primitives (run with "canvas_primitives"), the axis layouts of a plot (run with "plot_axes") and the marks and
-!< items of a plot (run with "plot_marks") and the scales of a field (run with "field_scales").
+!< items of a plot (run with "plot_marks") and the scales of a field (run with "field_scales"), and the symbols CFD
+!< writes in both text fonts (run with "glyphs").
 program gallery
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet").
@@ -29,6 +30,9 @@ program gallery
 !<
 !< "field_scales" draws four fields through a colormap (`ip_field_image`), each with its legend on the same scale and its
 !< call in its title: linear, log over three decades, symlog of a signed field, and a body of NaN values in a NaN colour.
+!<
+!< "glyphs" draws the symbols CFD writes (the Greek letters, the operators, the super- and subscript digits) in IBM
+!< Plex Sans and in IBM Plex Mono: the glyphs a font lacks come from the bundled fallback, Noto Sans Math.
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_value, ieee_quiet_nan
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, &
@@ -49,6 +53,7 @@ use figure, only : ip_begin_subplots, ip_end_subplots, ip_set_axes, ip_setup_axi
 use figure, only : ip_tag, ip_inf_lines, ip_text, ip_drag_rect, ip_stairs, ip_stems, ip_histogram, ip_histogram2d, &
                    ip_annotation, ip_spec, ImPlotStairsFlags_Shaded
 use figure, only : ip_field_image, ip_colormap_legend
+use figure, only : ig_pop_font, ig_push_font
 
 implicit none
 integer(int32),    parameter :: N = 200_int32                    !< Points per line.
@@ -127,6 +132,14 @@ if (trim(arg) == 'field_scales') then
    call app%init('FIGURE: field scales', 1100_int32, 700_int32)
    do while (app%next_frame())
       call field_scales()
+   enddo
+   call app%destroy()
+   stop
+endif
+if (trim(arg) == 'glyphs') then
+   call app%init('FIGURE: glyphs', 900_int32, 300_int32)
+   do while (app%next_frame())
+      call glyphs()
    enddo
    call app%destroy()
    stop
@@ -917,4 +930,76 @@ contains
    endif
    call ig_end()
    endsubroutine sample
+
+   subroutine glyphs()
+   !< The symbols CFD writes, one row per family, in both text fonts.
+   character(len=*), parameter   :: FAMILIES(5) = ['Greek, upper  ', 'Greek, lower  ', 'operators     ', &
+                                                   'superscripts  ', 'subscripts    '] !< The rows.
+   character(len=*), parameter   :: FONTS(2) = ['plex-sans', 'plex-mono'] !< The text fonts.
+   character(len=:), allocatable :: row     !< A row's symbols, UTF-8.
+   integer(int32)                :: m, r, c !< Font, row, code point.
+
+   call ig_set_next_window(10.0_real64, 10.0_real64, 880.0_real64, 280.0_real64)
+   if (ig_begin('Glyphs')) then
+      do m = 1_int32, size(FONTS, kind=int32)
+         call ig_separator_text(FONTS(m)//merge(' (IBM Plex Sans)', ' (IBM Plex Mono)', m == 1_int32))
+         do r = 1_int32, size(FAMILIES, kind=int32)
+            row = ''
+            select case (r)
+            case (1_int32)
+               do c = 913_int32, 937_int32
+                  if (c /= 930_int32) row = row//utf8(c)//' '
+               enddo
+            case (2_int32)
+               do c = 945_int32, 969_int32
+                  row = row//utf8(c)//' '
+               enddo
+            case (3_int32)
+               row = utf8(8711)//' '//utf8(8706)//' '//utf8(916)//' '//utf8(8734)//' '//utf8(8776)//' '// &
+                     utf8(8804)//' '//utf8(8805)//' '//utf8(177)//' '//utf8(215)//' '//utf8(183)//' '// &
+                     utf8(8730)//' '//utf8(8721)//' '//utf8(8747)
+            case (4_int32)
+               row = utf8(8304)//' '//utf8(185)//' '//utf8(178)//' '//utf8(179)
+               do c = 8308_int32, 8313_int32
+                  row = row//' '//utf8(c)
+               enddo
+            case default
+               do c = 8320_int32, 8329_int32
+                  row = row//utf8(c)//' '
+               enddo
+            endselect
+            call ig_text(FAMILIES(r))
+            call ig_same_line(offset=130.0_real64)
+            call ig_push_font(FONTS(m))
+            call ig_text(row)
+            call ig_pop_font()
+         enddo
+      enddo
+   endif
+   call ig_end()
+   endsubroutine glyphs
+
+   pure function utf8(cp) result(s)
+   !< A code point of the Basic Multilingual Plane as UTF-8. The bytes go through a fixed-length buffer: nvfortran
+   !< 26.9 gives `char(n)` of a non-constant `n` the length n when it is assigned to a deferred-length variable.
+   integer(int32), intent(in)    :: cp !< Code point.
+   character(len=:), allocatable :: s  !< Its UTF-8 bytes.
+   character(len=3)              :: b  !< The bytes.
+   integer(int32)                :: n  !< How many.
+
+   if (cp < 128_int32) then
+      b(1:1) = achar(cp)
+      n = 1_int32
+   elseif (cp < 2048_int32) then
+      b(1:1) = char(192 + cp / 64)
+      b(2:2) = char(128 + mod(cp, 64))
+      n = 2_int32
+   else
+      b(1:1) = char(224 + cp / 4096)
+      b(2:2) = char(128 + mod(cp / 64, 64))
+      b(3:3) = char(128 + mod(cp, 64))
+      n = 3_int32
+   endif
+   s = b(1:n)
+   endfunction utf8
 endprogram gallery

@@ -9,21 +9,28 @@ program figure_test_text
 !< Then a multi-line field: lines typed (Enter a newline, Tab a tab), undone and redone, 100 KB pasted past the
 !< buffer's first capacity, a text set while it is edited; a read-only one that refuses edits but lets its text be
 !< selected and copied, CRLF read as LF; and every character of plex-mono as wide as the others.
+!< Then the fallback fonts: every Greek letter, the operators CFD writes and the sub- and superscript digits have a
+!< glyph with a bitmap in both text fonts, from Plex or from Noto Sans Math; a text with a fallback glyph has a width;
+!< Plex's own glyphs ('A', '0') stay Plex's, their bitmaps unchanged by a program's fallback; Noto's letters as tall
+!< as Plex's; a program's own fallback gives only what the bundled fonts lack, also in a font loaded after it; the
+!< statuses of add_fallback_font.
 use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_f_pointer, c_float, c_null_char, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
+use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK
 use figure, only : app_object, ig_begin, ig_begin_child, ig_end, ig_end_child, ig_input_text_multiline, ig_item_rect, &
                    ig_pop_font, ig_push_font, ig_same_line, ig_selectable, ig_set_next_window, ig_text, &
                    ig_text_colored, ig_text_disabled, ig_text_size, ig_text_wrapped, text_buffer_object
 use figure_cimgui, only : im_vec4, igGetClipboardText, igGetScrollY, igGetStyleColorVec4, igGetTextLineHeight, &
                           igSetClipboardText
 use figure_cimgui_enums, only : ImGuiCol_Text
-use figure_testing, only : test_click, test_item_center, test_key, test_mouse_move, test_type, test_wheel
+use figure_testing, only : test_click, test_glyph, test_item_center, test_key, test_mouse_move, test_type, test_wheel
 
 implicit none
 integer(int32), parameter :: FRAMES = 60_int32  !< Frames run.
 type(app_object)          :: app                !< Application.
 logical                   :: test_passed(7)     !< Per-check outcome.
 logical                   :: text_passed(11)    !< Per-check outcome of the multi-line text.
+logical                   :: font_passed(9)     !< Per-check outcome of the fallback fonts.
 character(len=*), parameter :: SECTIONS(3) = ['files ', 'fluid ', 'output'] !< List lines.
 integer(int32)            :: current            !< Line selected.
 integer(int32)            :: clicks             !< Frames on which a line reported a click.
@@ -120,10 +127,152 @@ if (.not. all(test_passed)) write(output_unit, '(A,I0,A,I0,A,4F8.1,A,F8.1,A,2F8.
    window_scroll, ', column x ', col_x, win_x
 call check_multiline(text_passed)
 write(output_unit, '(A,*(L2))') 'figure_test_text multi-line checks:', text_passed
-write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed) .and. all(text_passed)
-if (.not. (all(test_passed) .and. all(text_passed))) error stop 1
+call check_fallback(font_passed)
+write(output_unit, '(A,*(L2))') 'figure_test_text fallback font checks:', font_passed
+write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed) .and. all(text_passed) .and. all(font_passed)
+if (.not. (all(test_passed) .and. all(text_passed) .and. all(font_passed))) error stop 1
 
 contains
+   subroutine check_fallback(passed)
+   !< The fallback fonts, in a headless application of their own.
+   logical, intent(out)          :: passed(:)        !< Per-check outcome.
+   character(len=*), parameter   :: FONTS(2) = ['plex-sans', 'plex-mono'] !< The text fonts.
+   character(len=*), parameter   :: OWN = 'third_party/fonts/IBMPlexSans-Regular.ttf' !< A program's fallback.
+   character(len=*), parameter   :: OWN_NAME = 'IBMPlexSans-Regular.ttf' !< Its source name.
+   integer(int32),   parameter   :: SET(82) = [                                      & !< The glyphs CFD writes:
+      (913 + [(k, k = 0, 16)]), (931 + [(k, k = 0, 6)]),                            & ! Greek upper (no U+03A2),
+      (945 + [(k, k = 0, 24)]),                                                     & ! lower with final sigma,
+      8711, 8706, 916, 8734, 8776, 8804, 8805, 177, 215, 183, 8730, 8721, 8747,     & ! the operators,
+      8304, 185, 178, 179, (8308 + [(k, k = 0, 5)]), (8320 + [(k, k = 0, 9)])]      ! super- and subscript digits
+   character(len=:), allocatable :: source           !< The font giving a glyph.
+   character(len=:), allocatable :: glyph            !< A glyph as UTF-8.
+   character(len=:), allocatable :: missing          !< Glyphs failing check 1.
+   integer(int64)                :: pixels           !< Pixels of its bitmap.
+   real(real64)                  :: width            !< Its advance [pixels].
+   real(real64)                  :: height(2)        !< Heights of capital alpha: plex-sans, plex-mono [pixels].
+   real(real64)                  :: extent(2)        !< A text's size [pixels].
+   real(real64)                  :: text_w(2)        !< Widths of 'rho' and 'rho infinity' in plex-mono [pixels].
+   integer(int64)                :: sums(2, 2, 2)    !< Checksums of 'A', '0' x fonts x before/after the own fallback.
+   character(len=32)             :: sources(2, 2, 2) !< Sources of 'A', '0' x fonts x before/after.
+   character(len=32)             :: alpha(4)         !< Sources of alpha: plex-sans, plex-mono, plex-mono after,
+                                                     !< proggy (loaded after).
+   character(len=32)             :: accented(4)      !< Sources of alpha with tonos: mono before, mono after,
+                                                     !< sans after, proggy (loaded after).
+   character(len=32)             :: nabla            !< Source of nabla in plex-sans.
+   integer(int32)                :: stats(5)         !< add_fallback_font: before init, no file, not a font, the
+                                                     !< program's (inside a frame: from the next), the same again.
+   integer(int32)                :: f, j, k          !< Counters.
+
+   passed = .false.
+   missing = ''
+   sums = 0_int64
+   sources = ''
+   call app%add_fallback_font(OWN, stat=stats(1)) ! before init: refused
+   call app%init_headless(400_int32, 300_int32)
+   do f = 1_int32, 2_int32 ! 1: the bundled fallback only (the program's added in it); 2: with the program's own
+      if (.not. app%next_frame()) error stop 'figure_test_text: next_frame returned false in headless mode'
+      if (ig_begin('Glyphs')) then
+         if (f == 1_int32) then
+            do j = 1_int32, size(FONTS, kind=int32)
+               do k = 1_int32, size(SET, kind=int32)
+                  glyph = utf8(SET(k))
+                  call test_glyph(glyph, FONTS(j), source, pixels, width=width)
+                  if (source == '' .or. pixels <= 0_int64 .or. width <= 0.0_real64) &
+                     missing = missing//' '//trim(FONTS(j))//':'//glyph
+               enddo
+            enddo
+            call test_glyph(utf8(945), 'plex-sans', source, pixels)
+            alpha(1) = source
+            call test_glyph(utf8(945), 'plex-mono', source, pixels)
+            alpha(2) = source
+            call test_glyph(utf8(8711), 'plex-sans', source, pixels)
+            nabla = source
+            call app%add_fallback_font('no/such/font.ttf', stat=stats(2))
+            call app%add_fallback_font('fpm.toml', stat=stats(3))
+            call app%add_fallback_font(OWN, stat=stats(4)) ! inside a frame: merged before the next
+            call app%add_fallback_font(OWN, stat=stats(5)) ! added already: nothing to do
+            call test_glyph(utf8(940), 'plex-mono', source, pixels)
+            accented(1) = source                           ! not yet
+            call test_glyph(utf8(913), 'plex-sans', source, pixels, height=height(1))
+            call test_glyph(utf8(913), 'plex-mono', source, pixels, height=height(2))
+            call ig_push_font('plex-mono')
+            extent = ig_text_size(utf8(961))
+            text_w(1) = extent(1)
+            extent = ig_text_size(utf8(961)//utf8(8734))
+            text_w(2) = extent(1)
+            call ig_pop_font()
+         else
+            call test_glyph(utf8(945), 'plex-mono', source, pixels)
+            alpha(3) = source
+            call test_glyph(utf8(940), 'plex-mono', source, pixels)
+            accented(2) = source
+            call test_glyph(utf8(940), 'plex-sans', source, pixels)
+            accented(3) = source
+            call test_glyph(utf8(940), 'proggy', source, pixels)
+            accented(4) = source
+            call test_glyph(utf8(945), 'proggy', source, pixels)
+            alpha(4) = source
+         endif
+         do j = 1_int32, size(FONTS, kind=int32)
+            call test_glyph('A', FONTS(j), source, pixels, checksum=sums(1, j, f))
+            sources(1, j, f) = source
+            call test_glyph('0', FONTS(j), source, pixels, checksum=sums(2, j, f))
+            sources(2, j, f) = source
+         enddo
+      endif
+      call ig_end()
+   enddo
+   call app%destroy()
+
+   passed(1) = missing == ''                                                           ! every glyph, both fonts
+   passed(2) = trim(alpha(1)) == 'IBM Plex Sans' .and. trim(alpha(2)) == 'Noto Sans Math' .and. &
+               trim(nabla) == 'Noto Sans Math'                                         ! Plex first, Noto after
+   passed(3) = text_w(1) > 0.0_real64 .and. text_w(2) > text_w(1)                      ! a width, the fallback's too
+   passed(4) = all(sources(:, 1, :) == 'IBM Plex Sans') .and. all(sources(:, 2, :) == 'IBM Plex Mono') ! Plex's own
+   passed(5) = all(sums(:, :, 1) == sums(:, :, 2)) .and. all(sums /= 0_int64)          ! ... bitmaps unchanged
+   passed(6) = abs(height(2) / max(height(1), 1.0_real64) - 1.0_real64) < 0.08_real64 ! Noto's capitals as tall
+   passed(7) = trim(accented(1)) == '' .and. trim(accented(2)) == OWN_NAME .and. &     ! the program's fallback:
+               trim(alpha(3)) == 'Noto Sans Math' .and. trim(accented(3)) == 'IBM Plex Sans' ! after the bundled
+   passed(8) = trim(accented(4)) == OWN_NAME .and. trim(alpha(4)) == 'Noto Sans Math' ! a font loaded after it
+   passed(9) = stats(1) == FIG_ERR_STATE .and. stats(2) == FIG_ERR_FAILED .and. stats(3) == FIG_ERR_ARGUMENT .and. &
+               stats(4) == FIG_OK .and. stats(5) == FIG_OK
+   if (.not. all(passed)) then
+      write(output_unit, '(A)') 'fallback: missing'//missing
+      write(output_unit, '(A)') 'fallback: alpha "'//trim(alpha(1))//'" "'//trim(alpha(2))//'" "'//trim(alpha(3))// &
+                                '" "'//trim(alpha(4))// &
+                                '", nabla "'//trim(nabla)//'", accented "'//trim(accented(1))//'" "'// &
+                                trim(accented(2))//'" "'//trim(accented(3))//'" "'//trim(accented(4))//'"'
+      write(output_unit, '(A,2F8.2,A,2F8.2,A,5(I0,1X))') 'fallback: alpha heights', height, ', widths', text_w, &
+                                                        ', statuses ', stats
+      write(output_unit, '(A,8(1X,A),A,8(1X,I0))') 'fallback: A/0 sources', &
+            (((trim(sources(k, j, f)), k = 1, 2), j = 1, 2), f = 1, 2), ', sums', sums
+   endif
+   endsubroutine check_fallback
+
+   pure function utf8(cp) result(s)
+   !< A code point of the Basic Multilingual Plane as UTF-8. The bytes go through a fixed-length buffer: nvfortran
+   !< 26.9 gives `char(n)` of a non-constant `n` the length n when it is assigned to a deferred-length variable.
+   integer(int32), intent(in)    :: cp !< Code point.
+   character(len=:), allocatable :: s  !< Its UTF-8 bytes.
+   character(len=3)              :: b  !< The bytes.
+   integer(int32)                :: n  !< How many.
+
+   if (cp < 128_int32) then
+      b(1:1) = achar(cp)
+      n = 1_int32
+   elseif (cp < 2048_int32) then
+      b(1:1) = char(192 + cp / 64)
+      b(2:2) = char(128 + mod(cp, 64))
+      n = 2_int32
+   else
+      b(1:1) = char(224 + cp / 4096)
+      b(2:2) = char(128 + mod(cp / 64, 64))
+      b(3:3) = char(128 + mod(cp, 64))
+      n = 3_int32
+   endif
+   s = b(1:n)
+   endfunction utf8
+
    subroutine check_multiline(passed)
    !< The multi-line field, the text buffer and the monospace font, in a headless application of their own.
    logical, intent(out)          :: passed(:)          !< Per-check outcome.

@@ -1,0 +1,8 @@
+$ ./cb_fallback_font --check ../../../third_party/fonts/IBMPlexSans-Regular.ttf
+symbol       plex-mono                plex-sans
+A            IBM Plex Mono            IBM Plex Sans
+rho          Noto Sans Math           IBM Plex Sans
+nabla        Noto Sans Math           Noto Sans Math
+infinity     IBM Plex Mono            IBM Plex Sans
+square       IBM Plex Mono            IBM Plex Sans
+alpha tonos  IBMPlexSans-Regular.ttf  IBM Plex Sans

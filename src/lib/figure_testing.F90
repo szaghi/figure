@@ -19,7 +19,7 @@ module figure_testing
 !<
 !< Coordinates are display pixels, as `ig_item_rect` and `test_window_rect` give them. Works in every mode; with
 !< `app%init_headless` no window, display or GPU is needed, so tests run in CI as is.
-use, intrinsic :: iso_c_binding, only : c_char, c_float, c_int, c_long_long
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_long_long
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
@@ -28,7 +28,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_but
                             fig_frame_state, fig_notification_rect, fig_notification_alpha, fig_drawn_extent, &
                             fig_file_browser_get, fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
                             fig_popup_rect, fig_opened_url, fig_drawn_extent_layer, fig_field_uploads, &
-                            fig_field_count, fig_field_time, fig_field_pixel
+                            fig_field_count, fig_field_time, fig_field_pixel, fig_test_glyph
 use figure_imgui, only : ig_item_rect
 use figure_implot, only : plot_copies, plot_stride
 
@@ -39,7 +39,7 @@ public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_p
 public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_rect, test_drawn_extent
 public :: test_file_browser, test_file_browser_rect, test_settings_file, test_drop
 public :: test_popup_rect, test_opened_url, test_plot_copies, test_plot_stride
-public :: test_field_uploads, test_field_textures, test_field_time, test_field_pixel
+public :: test_field_uploads, test_field_textures, test_field_time, test_field_pixel, test_glyph
 
 interface test_drawn_extent
    !< The extent [pixels] of what was drawn so far in the current window in a colour: Dear ImGui's style colour by its
@@ -532,6 +532,44 @@ contains
    ymax = real(r(4), real64)
    if (present(found)) found = f == 1_c_int
    endsubroutine test_window_rect
+
+   subroutine test_glyph(text, font, source, pixels, width, height, checksum, stat)
+   !< One glyph of a text font at the current font size, as Dear ImGui draws it: `source`, the name of the font that
+   !< gives it (`'IBM Plex Sans'`, `'IBM Plex Mono'`, `'Lucide'`, `'Noto Sans Math'`, a file's name; `''` when none
+   !< has it and the missing-glyph box is drawn), the pixels of its bitmap that are not empty (0 for a space), its
+   !< advance and height, and a checksum of its bitmap (equal for an equal bitmap). `font` is a name of `set_font`
+   !< (`'plex-sans'`, `'plex-mono'`, `'proggy'`) or a file. In a frame; the glyph is rasterized if it was not yet.
+   character(len=*),              intent(in)            :: text     !< One character, UTF-8.
+   character(len=*),              intent(in)            :: font     !< Font name or file.
+   character(len=:), allocatable, intent(out)           :: source   !< The font that gives it; '' when none.
+   integer(int64),                intent(out)           :: pixels   !< Pixels of its bitmap that are not empty.
+   real(real64),                  intent(out), optional :: width    !< Advance [pixels].
+   real(real64),                  intent(out), optional :: height   !< Height of the bitmap [pixels].
+   integer(int64),                intent(out), optional :: checksum !< Checksum of the bitmap.
+   integer(int32),                intent(out), optional :: stat     !< Status: `FIG_ERR_STATE` with no frame open,
+                                                                    !< `FIG_ERR_ARGUMENT` for not one character or
+                                                                    !< not a font, `FIG_ERR_FAILED` for a file that
+                                                                    !< cannot be read.
+   character(kind=c_char, len=64)                       :: buf      !< Source name.
+   integer(c_int)                                       :: n        !< Its length.
+   integer(c_long_long)                                 :: px       !< Pixels.
+   integer(c_long_long)                                 :: sum      !< Checksum.
+   real(c_double)                                       :: w        !< Advance.
+   real(c_double)                                       :: h        !< Height.
+
+   n = 0_c_int
+   px = 0_c_long_long
+   sum = 0_c_long_long
+   w = 0.0_c_double
+   h = 0.0_c_double
+   call figure_check(fig_test_glyph(text, len(text, c_int), font, len_trim(font, c_int), buf, len(buf, c_int), n, px, &
+                                    w, h, sum), stat)
+   source = buf(1:max(0_c_int, min(n, len(buf, c_int))))
+   pixels = int(px, int64)
+   if (present(width)) width = real(w, real64)
+   if (present(height)) height = real(h, real64)
+   if (present(checksum)) checksum = int(sum, int64)
+   endsubroutine test_glyph
 
    subroutine test_popup_rect(xmin, ymin, xmax, ymax, found, stat)
    !< The rectangle of the innermost open popup (a menu, a combo's list, `ig_color_edit`'s picker) as drawn in the last

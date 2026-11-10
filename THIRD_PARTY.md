@@ -32,6 +32,7 @@ The native build installs each licence file under `share/licenses/<project>/`.
 | [cmocean](https://github.com/matplotlib/cmocean) | v4.0.3, `cmocean/rgb/<name>-rgb.txt` | MIT | Kristen M. Thyng | the colormaps `thermal`, `haline`, `deep`, `balance` and `curl` (`curl`: 512 rows resampled linearly to 256, as cmocean does) |
 | [Cool to Warm](https://www.kennethmoreland.com/color-advice/) (Kenneth Moreland) | `smooth-cool-warm-table-float-0256.csv`, [kennethmoreland-com.github.io](https://github.com/kennethmoreland-com/kennethmoreland-com.github.io) commit `04f580e`; licence: ParaView's, as that page states, text from ParaView v6.2.0 `Copyright.txt` | BSD-3-Clause | Kitware Inc. | the colormap `cool-warm`, ParaView's "Cool to Warm" |
 | [Scientific colour maps](https://www.fabiocrameri.ch/colourmaps/) | 8.0.1, [Zenodo 10.5281/zenodo.8409685](https://doi.org/10.5281/zenodo.8409685), `ScientificColourMaps8.zip`, `<name>/<name>.txt`; licence from its `+LICENCE.pdf` | MIT | Fabio Crameri | the colormaps `batlow`, `vik`, `roma` and `romaO` |
+| [Noto Sans Math](https://github.com/notofonts/math) | Regular 3.000, release `NotoSansMath-v3.000` (tag commit `00e9941`), `third_party/fonts/NotoSansMath-Regular.ttf` (unmodified, the unhinted TTF of the release archive `NotoSansMath-v3.000.zip`, SHA-256 `ac351837b41f8a897f020b97fb0f075ad574c1e9669fb5839ada1f92fd748356`), its licence `OFL.txt` as `LICENSE-NotoSansMath.txt` | OFL-1.1 | The Noto Project Authors | the fallback merged into every text font after Plex and Lucide: Greek, `∇`, the mathematical operators; embedded |
 | [Lucide](https://lucide.dev) | `lucide-static` 1.61.0 (npm), `third_party/fonts/lucide.ttf` and its code point map `lucide-info.json` (both unmodified, from `font/`) | ISC, and MIT for the icons derived from Feather | Lucide Icons and Contributors; Cole Bemis (Feather) | the icons (`ICON_*`), embedded and merged into every text font |
 
 ## Distributing a program built with FIGURE
@@ -48,9 +49,10 @@ The native build installs each licence file under `share/licenses/<project>/`.
   Kitware's name to promote it; **Apache-2.0** (Turbo): ship the licence and Google's notice with it (`LICENSE-turbo.txt`
   holds both); the **matplotlib licence**: keep its copyright notice, and a derivative work states its changes (here:
   the tables are matplotlib's values written as CSV); **CC0** (mpl-colormaps): no condition.
-- **OFL-1.1** (IBM Plex Sans, IBM Plex Mono): the fonts may be bundled and embedded with any software; their
-  copyright and licence must accompany them (`share/licenses/ibm-plex/`, one file per font, the same text), and they
-  may not be sold by themselves. A modified version may not use the name "Plex".
+- **OFL-1.1** (IBM Plex Sans, IBM Plex Mono, Noto Sans Math): the fonts may be bundled and embedded with any
+  software; their copyright and licence must accompany them (`share/licenses/ibm-plex/`, one file per font, the same
+  text; `share/licenses/noto-sans-math/`), and they may not be sold by themselves. A modified version of Plex may not
+  use the name "Plex".
 - **zlib** (SDL): no notice is required in a binary distribution. Altered source versions must be marked as such, and
   the notice may not be removed from source distributions.
 

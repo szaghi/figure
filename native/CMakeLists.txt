@@ -159,19 +159,25 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/figure_colormaps.inc "${FIGURE_COLORMAPS_
 set(FIGURE_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexSans-Regular.ttf)
 set(FIGURE_MONO_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexMono-Regular.ttf)
 set(FIGURE_ICON_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/lucide.ttf)
+# Noto Sans Math (OFL-1.1): the fallback merged into every text font after Plex and Lucide (Greek, the operators)
+set(FIGURE_MATH_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/NotoSansMath-Regular.ttf)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${FIGURE_FONT_FILE} ${FIGURE_MONO_FONT_FILE}
-             ${FIGURE_ICON_FONT_FILE})
+             ${FIGURE_ICON_FONT_FILE} ${FIGURE_MATH_FONT_FILE})
 file(READ ${FIGURE_FONT_FILE} FIGURE_FONT_HEX HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_FONT_BYTES "${FIGURE_FONT_HEX}")
 file(READ ${FIGURE_MONO_FONT_FILE} FIGURE_MONO_FONT_HEX HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_MONO_FONT_BYTES "${FIGURE_MONO_FONT_HEX}")
 file(READ ${FIGURE_ICON_FONT_FILE} FIGURE_ICON_FONT_HEX HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_ICON_FONT_BYTES "${FIGURE_ICON_FONT_HEX}")
+file(READ ${FIGURE_MATH_FONT_FILE} FIGURE_MATH_FONT_HEX HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_MATH_FONT_BYTES "${FIGURE_MATH_FONT_HEX}")
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/figure_font.inc
-     "// generated from third_party/fonts/{IBMPlexSans-Regular,IBMPlexMono-Regular,lucide}.ttf by native/CMakeLists.txt\n"
+     "// generated from third_party/fonts/{IBMPlexSans-Regular,IBMPlexMono-Regular,lucide,NotoSansMath-Regular}.ttf\n"
+     "// by native/CMakeLists.txt\n"
      "static const unsigned char plex_sans_ttf[] = {${FIGURE_FONT_BYTES}};\n"
      "static const unsigned char plex_mono_ttf[] = {${FIGURE_MONO_FONT_BYTES}};\n"
-     "static const unsigned char lucide_ttf[] = {${FIGURE_ICON_FONT_BYTES}};\n")
+     "static const unsigned char lucide_ttf[] = {${FIGURE_ICON_FONT_BYTES}};\n"
+     "static const unsigned char noto_math_ttf[] = {${FIGURE_MATH_FONT_BYTES}};\n")
 target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 if(WIN32)
    target_link_libraries(figure_native PUBLIC ws2_32)
@@ -219,6 +225,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.mit.md" DESTINATION share/
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexSans.txt" DESTINATION share/licenses/ibm-plex)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexMono.txt" DESTINATION share/licenses/ibm-plex)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-Lucide.txt" DESTINATION share/licenses/lucide)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-NotoSansMath.txt" DESTINATION share/licenses/noto-sans-math)
 # The bundled palettes' licences (themes/palettes: their colours are the upstream projects' own, MIT)
 file(GLOB FIGURE_PALETTE_LICENSES ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/palettes/LICENSE-*.txt)
 foreach(palette_license ${FIGURE_PALETTE_LICENSES})

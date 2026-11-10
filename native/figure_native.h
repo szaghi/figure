@@ -414,6 +414,13 @@ int    fig_drawn_extent_layer(const float *rgba, int layer, float *rect, int *fo
 
 /* The cimgui/cimplot functions passing structs by value are wrapped in figure_glue_generated.cpp (generated). */
 
+/* A program's own fallback font (TTF or OTF file), merged into every text font after the bundled ones (called
+ * inside a frame: from the next one). */
+int    fig_add_fallback_font(const char *path, int path_len);
+/* One glyph of a font (test_glyph): the name of the source that has it (empty: none, the fallback glyph is drawn),
+ * the pixels of its bitmap that are not empty, its advance and height [pixels], a checksum of its bitmap. In a frame. */
+int    fig_test_glyph(const char *text, int text_len, const char *font, int font_len, char *source, int source_cap,
+                      int *source_len, long long *pixels, double *width, double *height, long long *checksum);
 /* Seconds since the first call of fig_time, on the system's monotonic clock; any thread, any time. */
 double fig_time(void);
 

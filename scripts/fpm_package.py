@@ -187,9 +187,12 @@ def cmake_embeds(out: Path) -> None:
         text += f'   {{"{t.stem}", R"FIGURECMAP({t.read_text()})FIGURECMAP"}},\n'
     text += "};\n"
     (out / "figure_colormaps.inc").write_text(text)
-    text = "// generated from third_party/fonts/{IBMPlexSans-Regular,IBMPlexMono-Regular,lucide}.ttf by scripts/fpm_package.py\n"
+    text = (
+        "// generated from third_party/fonts/{IBMPlexSans-Regular,IBMPlexMono-Regular,lucide,NotoSansMath-Regular}.ttf"
+        " by scripts/fpm_package.py\n"
+    )
     for array, ttf in (("plex_sans_ttf", "IBMPlexSans-Regular.ttf"), ("plex_mono_ttf", "IBMPlexMono-Regular.ttf"),
-                       ("lucide_ttf", "lucide.ttf")):
+                       ("lucide_ttf", "lucide.ttf"), ("noto_math_ttf", "NotoSansMath-Regular.ttf")):
         font = (ROOT / "third_party" / "fonts" / ttf).read_bytes()
         rows = [",".join(f"0x{b:02x}" for b in font[i : i + 32]) for i in range(0, len(font), 32)]
         text += f"static const unsigned char {array}[] = {{\n" + ",\n".join(rows) + "};\n"
@@ -269,6 +272,7 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexSans.txt", licences / "ibm-plex.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexMono.txt", licences / "ibm-plex-mono.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-Lucide.txt", licences / "lucide.txt")
+    copy(ROOT / "third_party" / "fonts" / "LICENSE-NotoSansMath.txt", licences / "noto-sans-math.txt")
     for lic in sorted((ROOT / "third_party" / "palettes").glob("LICENSE-*.txt")):  # the bundled palettes
         copy(lic, licences / f"palette-{lic.stem.removeprefix('LICENSE-')}.txt")
     for lic in sorted((ROOT / "third_party" / "colormaps").glob("LICENSE-*.txt")):  # the bundled colormaps

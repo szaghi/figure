@@ -329,6 +329,12 @@ Math), an unrouted shortcut scope, plot data through C descriptors and a monoton
   by the system (nvfortran's `system_clock` is the wall clock, which WSL2 steps); callable
   before `init*`, after `destroy` and from any thread, a task included. FIGURE's tests time with it, in place of
   their own clock and of `system_clock` ([Time](frame-loop#time)): done.
+- **A fallback font for symbols Plex lacks** (S10): Noto Sans Math 3.000 (OFL-1.1), vendored with its licence,
+  merged into every text font after Plex and Lucide and scaled to the text font's em: the Greek letters and `∇` in
+  Plex Mono, `∇` in Plex Sans (the glyphs CFD writes checked one by one with fontTools: Noto Sans Math lacks only `·`
+  and the super- and subscript digits, which both Plex fonts have, so STIX Two Math is not needed).
+  `app%add_fallback_font(file [, stat])` for a program's own, after the bundled one; `test_glyph` tells which font
+  draws a character ([The fallback fonts](styles#symbols-the-fallback-fonts)): done.
 
 ## Next
 

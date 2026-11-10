@@ -22,6 +22,7 @@ use figure_base, only : figure_check, figure_fail, figure_last_error, figure_ref
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
+                            fig_add_fallback_font,                                                                      &
                             fig_set_remote_lossy,                                                                       &
                             fig_set_remote_fps, fig_set_remote_token, fig_remote_token, &
                             fig_shutdown, fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_app_wake, &
@@ -53,6 +54,7 @@ type :: app_object
       procedure, pass(self) :: palette_color  !< The colour of a palette role in effect.
       procedure, pass(self) :: set_docking    !< Docking on (the default) or off.
       procedure, pass(self) :: set_font       !< The default font and its size.
+      procedure, pass(self) :: add_fallback_font !< A font for the glyphs the text fonts lack.
       procedure, pass(self) :: load_style     !< A theme file.
       procedure, pass(self) :: save_style     !< The style in effect, as a theme file.
       procedure, pass(self) :: request_frames !< Redraw without waiting for input.
@@ -565,6 +567,23 @@ contains
    endif
    call figure_check(fig_set_font(font, len_trim(font, c_int), s), stat)
    endsubroutine set_font
+
+   recursive subroutine add_fallback_font(self, file, stat)
+   !< A fallback font of the program's own, a TrueType/OpenType file: merged into every text font (the bundled ones,
+   !< `'proggy'` and the files of `set_font`/`ig_push_font`, loaded already or later) after IBM Plex, the Lucide icons
+   !< and the bundled fallback, Noto Sans Math, so it gives only the glyphs they all lack; several are asked in the
+   !< order they are added. Its letters are scaled to the text font's em and stand on its baseline. After `init*`,
+   !< between frames (not inside one); a file added already is not added again; it lasts until `destroy`. At most 13
+   !< (Dear ImGui's 16 sources per font). The same in every mode (in remote mode the browser receives the glyphs).
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: file !< TrueType/OpenType file.
+   integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_FAILED` if the file cannot be read,
+                                                    !< `FIG_ERR_ARGUMENT` if it is not a font or 13 are added already,
+                                                    !< `FIG_ERR_STATE` before `init*` or inside a frame.
+
+   if (figure_refused('app%add_fallback_font', stat)) return ! a task does not draw
+   call figure_check(fig_add_fallback_font(file, len_trim(file, c_int)), stat)
+   endsubroutine add_fallback_font
 
    recursive subroutine load_style(self, file, stat)
    !< Apply a theme file (the format of the files in `themes/`: docs, Styles, Theme files), after `init*`. Sizes in the

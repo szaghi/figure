@@ -67,6 +67,7 @@ And to aim and to check:
 | `test_window_rect(name, xmin, ymin, xmax, ymax [, found] [, stat])` | a window's rectangle, by its name, as drawn in the last frame |
 | `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | the rectangle of the innermost open popup (a menu, a [context menu](menus#context-menus), a combo's list, `ig_color_edit`'s picker), as drawn in the last frame; `found` false when none is open |
 | `test_opened_url()` → `character` | the URL the last click on an [`ig_text_link_url`](widgets#links) asked to open, in any mode (headless opens nothing); `''` before one |
+| `test_glyph(text, font, source, pixels [, width] [, height] [, checksum] [, stat])` | one character of a text font at the current size, as Dear ImGui draws it: the font that gives it, `source` (`'IBM Plex Mono'`, `'Noto Sans Math'`, a fallback file's name; `''` when none has it), the pixels of its bitmap that are not empty, its advance and height [pixels], a checksum of the bitmap ([Glyphs](#glyphs)) |
 
 **Timing.** Everything queued reaches Dear ImGui at the next frame, up to a `test_next_frame` boundary; Dear ImGui then
 applies one change of each kind per frame (its input trickling), so a click queued at once still takes the frames a
@@ -96,6 +97,17 @@ click therefore lands over the next four frames (move, rest, press, release), a 
 To press a shortcut, hold `'shortcut'`: the platform's shortcut key, cmd on macOS and ctrl elsewhere, the one that
 select-all (`a`) and `ig_shortcut('ctrl+s')` mean there. `'ctrl'` is the physical ctrl key, which macOS does not use for
 shortcuts: Dear ImGui swaps the two as the events arrive.
+
+### Glyphs
+
+`test_glyph` tells which font of a text font's stack ([the fallback fonts](styles#symbols-the-fallback-fonts)) draws a
+character, and what it draws: a test that a label's symbols are not missing-glyph boxes checks that `source` is not
+empty and `pixels` is positive. `font` is a name of `app%set_font` (`'plex-sans'`, `'plex-mono'`, `'proggy'`) or a
+file; the glyph is rasterised at the current font size if it was not yet. In a frame (`FIG_ERR_STATE` otherwise);
+`text` must be one character of the Basic Multilingual Plane in UTF-8, and `font` a font (`FIG_ERR_ARGUMENT`); a file
+that cannot be read is `FIG_ERR_FAILED`. The same in every mode, on the frame loop's thread.
+
+<<< @/examples/snippets/cb_fallback_font-report.F90{fortran}
 
 ## Test the interface you ship
 

@@ -176,6 +176,10 @@ struct state_t {
    std::string   font = "plex-sans";               // the default font: plex-sans, plex-mono, proggy, or a TTF file
    std::map<std::string, ImFont *> fonts;          // fonts loaded in this context, by name or path
    std::map<std::string, std::vector<unsigned char>> font_data; // TTF files read at run time (the atlas needs them)
+   std::map<const ImFont *, float> font_em;        // a text font's em per pixel of size (see em_per_size)
+   // The program's own fallback fonts (app%add_fallback_font), in order: path and bytes (a deque: the bytes stay put)
+   std::deque<std::pair<std::string, std::vector<unsigned char>>> fallbacks;
+   size_t fallbacks_merged = 0; // the first ones, merged into the fonts; the others wait for the next frame
    struct saved_t {                                // a style value changed by a push, and what it was
       unsigned char             *where = nullptr;
       std::vector<unsigned char> was;
@@ -566,8 +570,80 @@ bool merge_icons(ImFont *dst, float ref_size) {
                                                      static_cast<int>(sizeof(lucide_ttf)), ref_size, &cfg) != nullptr;
 }
 
-// A font by name ("plex-sans", "plex-mono", "proggy") or TTF path, loaded on first use into this context's atlas;
-// null with err.
+// A font's em in pixels per pixel of the size Dear ImGui draws it at: Dear ImGui sizes a font by its height from
+// ascent to descent (hhea, stbtt_ScaleForPixelHeight), so at one size two fonts' letters differ by the ratio of these.
+// 0 when the bytes are not a font stb_truetype reads.
+float em_per_size(const unsigned char *data) {
+   stbtt_fontinfo info;
+   if (!stbtt_InitFont(&info, data, stbtt_GetFontOffsetForIndex(data, 0))) return 0.0f;
+   const float per_em = stbtt_ScaleForMappingEmToPixels(&info, 1.0f); // 1 / unitsPerEm
+   const float per_height = stbtt_ScaleForPixelHeight(&info, 1.0f);    // 1 / (ascent - descent)
+   return per_em > 0.0f && per_height > 0.0f ? per_height / per_em : 0.0f;
+}
+
+// Merge a fallback font into a text font (after its sources): it gives the glyphs the text font and the sources
+// before it lack. Its reference size is scaled so that its em equals the text font's (Noto Sans Math's ascent and
+// descent are taller than Plex's: at the same size its letters would be 13 % smaller); its glyphs stand on the text
+// font's baseline (Dear ImGui places every source's glyphs on the first source's).
+bool merge_fallback(ImFont *dst, const unsigned char *data, int size, const char *name) {
+   if (dst->Sources.Size >= 16) return false; // ImFontGlyph::SourceIdx has 4 bits
+   const float ref_size = dst->Sources[0]->SizePixels;
+   const auto em = st.font_em.find(dst);
+   const float dst_em = em != st.font_em.end() ? em->second : 0.0f;
+   const float src_em = em_per_size(data);
+   ImFontConfig cfg;
+   cfg.MergeMode = true;
+   cfg.DstFont = dst;
+   cfg.FontDataOwnedByAtlas = false; // static bytes, or kept in st.fallbacks
+   cfg.GlyphMaxAdvanceX = 1.0e30f;   // finite, as for the text fonts (see get_font)
+   std::snprintf(cfg.Name, sizeof(cfg.Name), "%s", name);
+   const float scaled = dst_em > 0.0f && src_em > 0.0f ? ref_size * dst_em / src_em : ref_size;
+   return ImGui::GetIO().Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(data), size, scaled, &cfg) != nullptr;
+}
+
+// The fallbacks of a text font, in order: Noto Sans Math (bundled), then the program's own.
+bool merge_fallbacks(ImFont *dst, std::string &err) {
+   if (!merge_fallback(dst, noto_math_ttf, static_cast<int>(sizeof(noto_math_ttf)), "Noto Sans Math")) {
+      err = "cannot merge the fallback font Noto Sans Math";
+      return false;
+   }
+   for (size_t k = 0; k < st.fallbacks_merged; ++k) {
+      const auto &fb = st.fallbacks[k];
+      const std::string base = fb.first.substr(fb.first.find_last_of("/\\") + 1);
+      if (!merge_fallback(dst, fb.second.data(), static_cast<int>(fb.second.size()), base.c_str())) {
+         err = "cannot merge the fallback font " + fb.first;
+         return false;
+      }
+   }
+   return true;
+}
+
+// The bytes of a font file, checked to be TrueType or OpenType; false with err ("cannot read ..." or "... is not a
+// TrueType or OpenType font").
+bool read_font_file(const std::string &name, std::vector<unsigned char> &data, std::string &err) {
+   FILE *in = std::fopen(name.c_str(), "rb");
+   if (!in) {
+      err = "cannot read the font " + name;
+      return false;
+   }
+   data.clear();
+   unsigned char buf[65536];
+   size_t n;
+   while ((n = std::fread(buf, 1, sizeof(buf), in)) > 0) data.insert(data.end(), buf, buf + n);
+   std::fclose(in);
+   // TrueType (00 01 00 00, "true") or OpenType with TrueType or CFF outlines ("OTTO"): Dear ImGui reads them
+   const bool ttf = data.size() > 12 && ((data[0] == 0 && data[1] == 1 && data[2] == 0 && data[3] == 0) ||
+                                         std::memcmp(data.data(), "true", 4) == 0 ||
+                                         std::memcmp(data.data(), "OTTO", 4) == 0);
+   if (!ttf) {
+      err = name + " is not a TrueType or OpenType font";
+      return false;
+   }
+   return true;
+}
+
+// A font by name ("plex-sans", "plex-mono", "proggy") or TTF path, loaded on first use into this context's atlas,
+// with the icons and the fallbacks merged; null with err.
 ImFont *get_font(const std::string &name, std::string &err) {
    const auto found = st.fonts.find(name);
    if (found != st.fonts.end()) return found->second;
@@ -580,6 +656,7 @@ ImFont *get_font(const std::string &name, std::string &err) {
    cfg.GlyphMaxAdvanceX = 1.0e30f;
    ImFont *f = nullptr;
    float ref_size = DEFAULT_FONT_SIZE;
+   float em = em_per_size(plex_sans_ttf); // proggy, a bitmap font, takes Plex Sans's
    if (name == "plex-sans") {
       std::snprintf(cfg.Name, sizeof(cfg.Name), "IBM Plex Sans");
       f = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(plex_sans_ttf), static_cast<int>(sizeof(plex_sans_ttf)),
@@ -588,6 +665,7 @@ ImFont *get_font(const std::string &name, std::string &err) {
       std::snprintf(cfg.Name, sizeof(cfg.Name), "IBM Plex Mono");
       f = io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(plex_mono_ttf), static_cast<int>(sizeof(plex_mono_ttf)),
                                          DEFAULT_FONT_SIZE, &cfg);
+      em = em_per_size(plex_mono_ttf);
    } else if (name == "proggy") {
       ImFontConfig bitmap;
       bitmap.GlyphMaxAdvanceX = cfg.GlyphMaxAdvanceX;
@@ -597,28 +675,13 @@ ImFont *get_font(const std::string &name, std::string &err) {
       ref_size = PROGGY_FONT_SIZE;
       f = io.Fonts->AddFontDefaultBitmap(&bitmap);
    } else {
-      FILE *in = std::fopen(name.c_str(), "rb");
-      if (!in) {
-         err = "cannot read the font " + name;
-         return nullptr;
-      }
       std::vector<unsigned char> data;
-      unsigned char buf[65536];
-      size_t n;
-      while ((n = std::fread(buf, 1, sizeof(buf), in)) > 0) data.insert(data.end(), buf, buf + n);
-      std::fclose(in);
-      // TrueType (00 01 00 00, "true") or OpenType with TrueType or CFF outlines ("OTTO"): Dear ImGui reads them
-      const bool ttf = data.size() > 12 && ((data[0] == 0 && data[1] == 1 && data[2] == 0 && data[3] == 0) ||
-                                            std::memcmp(data.data(), "true", 4) == 0 ||
-                                            std::memcmp(data.data(), "OTTO", 4) == 0);
-      if (!ttf) {
-         err = name + " is not a TrueType or OpenType font";
-         return nullptr;
-      }
+      if (!read_font_file(name, data, err)) return nullptr;
       std::vector<unsigned char> &kept = st.font_data[name];
       kept = std::move(data);
       std::snprintf(cfg.Name, sizeof(cfg.Name), "%s", name.substr(name.find_last_of("/\\") + 1).c_str());
       f = io.Fonts->AddFontFromMemoryTTF(kept.data(), static_cast<int>(kept.size()), DEFAULT_FONT_SIZE, &cfg);
+      if (f) em = em_per_size(kept.data());
    }
    if (!f) {
       err = "cannot load the font " + name;
@@ -628,6 +691,8 @@ ImFont *get_font(const std::string &name, std::string &err) {
       err = "cannot merge the icons into the font " + name;
       return nullptr;
    }
+   st.font_em[f] = em;
+   if (!merge_fallbacks(f, err)) return nullptr;
    st.fonts[name] = f;
    return f;
 }
@@ -654,6 +719,9 @@ void create_contexts() {
 void destroy_contexts() {
    st.fonts.clear(); // the fonts belong to the context's atlas
    st.font_data.clear();
+   st.font_em.clear();
+   st.fallbacks.clear(); // a program's fallbacks belong to its application: a new init starts without them
+   st.fallbacks_merged = 0;
    if (ImPlot::GetCurrentContext()) ImPlot::DestroyContext();
    if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
 }
@@ -2266,6 +2334,38 @@ int fig_set_font(const char *name, int name_len, double size) {
    FIG_CATCH
 }
 
+// The fallbacks added since the last merge, into every font loaded so far (those loaded later get them in
+// get_font): between frames, as Dear ImGui wants a font changed (a merge discards the font's baked glyphs).
+static void apply_fallbacks() {
+   for (; st.fallbacks_merged < st.fallbacks.size(); ++st.fallbacks_merged) {
+      const auto &fb = st.fallbacks[st.fallbacks_merged];
+      const std::string base = fb.first.substr(fb.first.find_last_of("/\\") + 1);
+      for (const auto &f : st.fonts) // checked by fig_add_fallback_font: a font, and room for its source
+         merge_fallback(f.second, fb.second.data(), static_cast<int>(fb.second.size()), base.c_str());
+   }
+}
+
+int fig_add_fallback_font(const char *path, int path_len) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "app%add_fallback_font: figure is not initialized");
+   const std::string p(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
+   for (const auto &fb : st.fallbacks)
+      if (fb.first == p) return FIG_OK; // merged already
+   // 16 sources a font at most (ImFontGlyph::SourceIdx): the text font, Lucide, Noto Sans Math and 13 of the program's
+   if (st.fallbacks.size() >= 13)
+      return fail(FIG_ERR_ARGUMENT, "app%add_fallback_font: 13 fallback fonts already (Dear ImGui's 16 per font)");
+   std::vector<unsigned char> data;
+   std::string err;
+   if (!read_font_file(p, data, err))
+      return fail(err.rfind("cannot read", 0) == 0 ? FIG_ERR_FAILED : FIG_ERR_ARGUMENT, "app%add_fallback_font: " + err);
+   if (em_per_size(data.data()) <= 0.0f)
+      return fail(FIG_ERR_ARGUMENT, "app%add_fallback_font: " + p + " is not a font Dear ImGui reads");
+   st.fallbacks.emplace_back(p, std::move(data));
+   if (!st.in_frame) apply_fallbacks(); // inside a frame: before the next one
+   return FIG_OK;
+   FIG_CATCH
+}
+
 int fig_push_font(const char *name, int name_len, double size) {
    FIG_TRY
    if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_push_font: no frame is open");
@@ -2466,6 +2566,7 @@ int fig_begin_frame(int *running) {
       apply_test_input();
       take_drops();
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
+      apply_fallbacks(); // the fallback fonts added inside the last frame
       ImGui::NewFrame();
       st.in_frame = true;
       frame_bar_open();
@@ -2503,6 +2604,7 @@ int fig_begin_frame(int *running) {
       apply_test_input();
       take_drops();
       apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
+      apply_fallbacks(); // the fallback fonts added inside the last frame
       ImGui::NewFrame();
       st.in_frame = true;
       frame_bar_open();
@@ -2567,6 +2669,7 @@ int fig_begin_frame(int *running) {
    apply_test_input();
    take_drops();
    apply_layout(); // a layout asked for by fig_load_layout: between frames, as Dear ImGui wants it
+   apply_fallbacks(); // the fallback fonts added inside the last frame
    ImGui::NewFrame();
    st.in_frame = true;
    frame_bar_open();
@@ -3938,6 +4041,55 @@ extern "C" int fig_drawn_extent_rgba(const float *rgba, float *rect, int *found)
       return fail(FIG_ERR_STATE, "test_drawn_extent: call it inside a window, in a frame");
    drawn_extent(ImGui::GetColorU32(ImVec4(rgba[0], rgba[1], rgba[2], rgba[3])), rect, found);
    return FIG_OK;
+}
+
+// ---- Glyphs, for tests -----------------------------------------------------------------------------------------
+
+int fig_test_glyph(const char *text, int text_len, const char *font, int font_len, char *source, int source_cap,
+                   int *source_len, long long *pixels, double *width, double *height, long long *checksum) {
+   FIG_TRY
+   *source_len = 0;
+   *pixels = 0;
+   *width = 0.0;
+   *height = 0.0;
+   *checksum = 0;
+   if (!st.in_frame) return fail(FIG_ERR_STATE, "test_glyph: no frame is open");
+   const std::string n(font, font_len > 0 ? static_cast<size_t>(font_len) : 0);
+   std::string err;
+   ImFont *f = get_font(n, err);
+   if (!f) return fail(err.rfind("cannot read", 0) == 0 ? FIG_ERR_FAILED : FIG_ERR_ARGUMENT, "test_glyph: " + err);
+   unsigned int c = 0;
+   const int used = text_len > 0 ? ImTextCharFromUtf8(&c, text, text + text_len) : 0;
+   if (used <= 0 || used != text_len || c == IM_UNICODE_CODEPOINT_INVALID || c > IM_UNICODE_CODEPOINT_MAX)
+      return fail(FIG_ERR_ARGUMENT, "test_glyph: not one character (of the Basic Multilingual Plane) in UTF-8");
+   ImFontBaked *baked = f->GetFontBaked(ImGui::GetFontSize());
+   const ImFontGlyph *g = baked ? baked->FindGlyphNoFallback(static_cast<ImWchar>(c)) : nullptr;
+   if (!g) return FIG_OK; // no source has it: the fallback glyph is drawn
+   const char *name = g->SourceIdx < static_cast<unsigned>(f->Sources.Size) ? f->Sources[g->SourceIdx]->Name : "";
+   const int len = static_cast<int>(std::min(std::strlen(name), static_cast<size_t>(source_cap)));
+   std::memcpy(source, name, static_cast<size_t>(len));
+   *source_len = len;
+   *width = g->AdvanceX;
+   *height = g->Y1 - g->Y0;
+   if (!g->Visible || g->PackId < 0) return FIG_OK;
+   ImFontAtlas *atlas = ImGui::GetIO().Fonts;
+   const ImTextureRect *r = ImFontAtlasPackGetRect(atlas, g->PackId);
+   ImTextureData *tex = atlas->TexData;
+   if (!r || !tex || !tex->Pixels) return FIG_OK;
+   // the coverage of each pixel of the glyph's bitmap: counted where not 0, and hashed (FNV-1a, 64 bits)
+   unsigned long long hash = 1469598103934665603ULL;
+   long long count = 0;
+   for (int y = r->y; y < r->y + r->h; ++y)
+      for (int x = r->x; x < r->x + r->w; ++x) {
+         const unsigned char *px = static_cast<const unsigned char *>(tex->GetPixelsAt(x, y));
+         const unsigned char a = tex->Format == ImTextureFormat_Alpha8 ? px[0] : px[3];
+         if (a != 0) ++count;
+         hash = (hash ^ a) * 1099511628211ULL;
+      }
+   *pixels = count;
+   *checksum = static_cast<long long>(hash);
+   return FIG_OK;
+   FIG_CATCH
 }
 
 // ---- The monotonic clock -------------------------------------------------------------------------------------------

@@ -309,6 +309,22 @@ file in stream access, so line ends stay LF. [Multi-line text](/guide/widgets#mu
 
 Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
 
+### Greek letters and operators in a monospace table
+
+<<< @/examples/snippets/cb_fallback_font-table.F90{fortran}
+
+IBM Plex Mono has no Greek letters and no `∇`: FIGURE's bundled fallback, Noto Sans Math, gives them in every text
+font, with no call. A font of the program's own gives what both lack (a CJK font, a font of its own symbols):
+
+<<< @/examples/snippets/cb_fallback_font-own.F90{fortran}
+
+The program prints which font draws each symbol (`cb_fallback_font --check FILE`):
+
+<<< @/examples/output/cb_fallback_font.txt{text}
+
+A Greek letter from the fallback keeps its own width: in a monospace column it can shift what follows by a fraction
+of a character. [The fallback fonts](/guide/styles#symbols-the-fallback-fonts) has the order and the limits.
+
 ### Check a value when the user leaves the field
 
 <<< @/examples/snippets/cb_commit_on_leave-leave.F90{fortran}

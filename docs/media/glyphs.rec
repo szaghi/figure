@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    glyphs
+#! from    10
+#! frames  1
+# the Greek letters, the operators CFD writes and the super- and subscript digits, in IBM Plex Sans and IBM Plex Mono: the glyphs a font lacks come from Noto Sans Math

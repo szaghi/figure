@@ -309,7 +309,8 @@ Dear ImGui's own `PushStyleVar` covers. More pops than pushes are `FIG_ERR_STATE
 The interface is drawn in IBM Plex Sans at 15 logical pixels, a font made for technical interfaces, bundled with
 FIGURE (OFL-1.1, [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)) and embedded in the
 library: programs need no font file. Its monospace sibling, IBM Plex Mono, is bundled the same way, for text whose
-columns must line up: input files, tables of numbers, the output of a tool.
+columns must line up: input files, tables of numbers, the output of a tool. The symbols either lacks (Greek in Plex
+Mono, `∇` in both) come from a bundled fallback, Noto Sans Math ([below](#symbols-the-fallback-fonts)).
 
 | Procedure | Does |
 |---|---|
@@ -331,6 +332,60 @@ columns must line up: input files, tables of numbers, the output of a tool.
 Fonts are rasterised on demand at every size used (Dear ImGui's dynamic font atlas): any size stays sharp, and the
 display's content scale applies on top. A file that cannot be read is `FIG_ERR_FAILED`; one that is not a font, or a
 size outside (0, 200], is `FIG_ERR_ARGUMENT`. A theme file can name the font and its size (`font`, `font_size`).
+
+### Symbols: the fallback fonts
+
+| Procedure | Does |
+|---|---|
+| `app%add_fallback_font(file [, stat])` | a TrueType/OpenType file of the program's own, asked for the glyphs every other font of a text font lacks |
+
+(Dear ImGui's merged fonts: `ImFontConfig::MergeMode`, the sources of a font asked in order for each glyph.)
+
+A text font is a stack of fonts asked in order for each character; the first that has a glyph draws it:
+
+| Order | Font | Gives |
+|---|---|---|
+| 1 | the text font: IBM Plex Sans, IBM Plex Mono, Proggy or the file of `set_font`/`ig_push_font` | its own glyphs: Plex Sans has Latin, Greek and most operators; Plex Mono has Latin and the operators but no Greek, nor `∇`; both have the super- and subscript digits |
+| 2 | [Lucide](#icons) (bundled) | the icons, `ICON_*`, in the Private Use Area |
+| 3 | Noto Sans Math (bundled, OFL-1.1) | what the two before lack: the Greek letters and `∇` in Plex Mono, `∇` in Plex Sans, the mathematical operators and arrows |
+| 4, 5, ... | the program's own, in the order added | what all of the above lack |
+
+The symbols CFD writes were checked glyph by glyph (fontTools, on the bundled files) and have a glyph in both text
+fonts: the Greek letters, upper and lower case; `∇ ∂ Δ ∞ ≈ ≤ ≥ ± × · √ ∑ ∫`; the superscript and subscript digits
+`⁰ ¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹`, `₀ ₁ ₂ ₃ ₄ ₅ ₆ ₇ ₈ ₉`. Noto Sans Math has every one of them except `·` and the super- and
+subscript digits, which both Plex fonts have. `figure_test_text` checks each one's bitmap in both fonts.
+
+<<< @/examples/snippets/cb_fallback_font-table.F90{fortran}
+
+A program's own fallback, for a script Plex and Noto Sans Math lack (a CJK font, a font of its own symbols):
+
+<<< @/examples/snippets/cb_fallback_font-own.F90{fortran}
+
+The program prints, headless, which font gives each symbol (`test_glyph`, [Headless testing](testing#glyphs)): Plex
+Mono's own `A` and `²`, Noto Sans Math's `ρ` and `∇`, and the file's `ά` (alpha with tonos, in Plex Sans but in
+neither Plex Mono nor Noto Sans Math):
+
+<<< @/examples/output/cb_fallback_font.txt{text}
+
+- **Sizes:** a fallback's letters are scaled to the text font's em (Dear ImGui sizes a font by its height from ascent
+  to descent, which differs between fonts: Noto Sans Math's at the size of Plex would be 13 % smaller), and stand on
+  its baseline: Noto Sans Math's capitals are 2 % taller than Plex's (cap heights 714 and 698 per 1000 of the em).
+- **When:** after `init*`. Called between frames, it applies at once; inside a frame, from the next frame (a font
+  is changed between frames). It reaches every text font, those loaded already and those loaded later. A file added
+  already is not added again; the fallbacks last until `destroy`.
+- **Status:** a file that cannot be read is `FIG_ERR_FAILED`; one that is not a TrueType/OpenType font, or a
+  fourteenth fallback, `FIG_ERR_ARGUMENT` (Dear ImGui keeps 16 fonts in one: the text font, Lucide, Noto Sans Math
+  and 13 of the program's); before `init*`, `FIG_ERR_STATE`. Messages: `app%add_fallback_font: cannot read the font
+  FILE`, `app%add_fallback_font: FILE is not a TrueType or OpenType font`, `app%add_fallback_font: 13 fallback
+  fonts already (Dear ImGui's 16 per font)`, `app%add_fallback_font: figure is not initialized`. Without `stat`, the
+  program stops with the message ([Error handling](errors)).
+- **Modes:** the same in window, headless and remote mode.
+- **Threads:** the frame loop's thread; a task is refused (`FIG_ERR_STATE`).
+- **What it does not do:** a fallback's glyphs keep their own advance: inside a monospace text (Plex Mono) a Greek
+  letter or `∇` from Noto Sans Math is proportional, so a column after it can shift by a fraction of a character.
+  Code points beyond the Basic Multilingual Plane (U+10000 and up: the mathematical alphanumerics `𝑥 𝛼`, emoji) are
+  not drawn: FIGURE builds Dear ImGui with 16-bit characters. No font is looked up on the system: a program names its
+  files.
 
 ## Icons
 
