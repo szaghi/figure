@@ -1826,6 +1826,38 @@ void fig_set_last_error(const char *msg, int msg_len) {
    }
 }
 
+// Opening a link (Dear ImGui's Platform_OpenInShellFn, called by ig_text_link_url on a click): the URL is kept for
+// test_opened_url in every mode; then a window opens it with the platform's handler (SDL_OpenURL: the system's
+// browser), except while recording the documentation (the capture opens nothing on the desktop); headless mode opens
+// nothing; remote mode sends it to the page, which opens it in the browser (message 9).
+static std::string opened_url;
+static bool (*platform_open)(ImGuiContext *, const char *) = nullptr; // the backend's handler (window mode)
+static bool open_in_shell(ImGuiContext *ctx, const char *url) {
+   try {
+      opened_url = url ? url : "";
+   } catch (...) {
+      return false;
+   }
+   if (st.m == mode::remote) {
+      figure_remote::open_url(opened_url.c_str());
+      return true;
+   }
+   if (st.m != mode::window || cap.on) return true;
+   return platform_open ? platform_open(ctx, url) : false;
+}
+static void take_open_in_shell() {
+   ImGuiPlatformIO &pio = ImGui::GetPlatformIO();
+   platform_open = pio.Platform_OpenInShellFn == open_in_shell ? platform_open : pio.Platform_OpenInShellFn;
+   pio.Platform_OpenInShellFn = open_in_shell;
+   opened_url.clear();
+}
+
+long long fig_opened_url(char *buf, long long cap_bytes) {
+   const size_t n = std::min(opened_url.size(), static_cast<size_t>(cap_bytes > 0 ? cap_bytes : 0));
+   if (n > 0) std::memcpy(buf, opened_url.data(), n);
+   return static_cast<long long>(opened_url.size());
+}
+
 int fig_init(const char *title, int title_len, int width, int height, int vsync) {
    FIG_TRY
    if (st.m != mode::none) return fail(FIG_ERR_STATE, "figure is already initialized");
@@ -1897,6 +1929,7 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    style.FontScaleDpi = st.scale;
    ImGui_ImplSDL3_InitForOpenGL(st.window, st.gl);
    ImGui_ImplOpenGL3_Init(glsl);
+   take_open_in_shell(); // after the backend's: SDL_OpenURL kept as the handler of a window
    st.m = mode::window;
    loop_starts();
    fig_file_browser_reset(1, cap.on ? 0 : 1); // a capture reads nothing of the user's: no recent folders
@@ -1929,6 +1962,8 @@ int fig_init_headless(int width, int height) {
    headless_clipboard.clear();
    pio.Platform_SetClipboardTextFn = headless_set_clipboard;
    pio.Platform_GetClipboardTextFn = headless_get_clipboard;
+   platform_open = nullptr;
+   take_open_in_shell(); // a link opens nothing: Dear ImGui's default would run xdg-open and wait for it
    st.m = mode::headless;
    loop_starts();
    fig_file_browser_reset(1, 0); // tests: the recent folders in memory, or in the file a test names
@@ -1961,6 +1996,8 @@ int fig_init_remote(int width, int height, const char *host, int host_len, int p
    ImGuiPlatformIO &pio = ImGui::GetPlatformIO();
    pio.Platform_SetClipboardTextFn = [](ImGuiContext *, const char *text) { figure_remote::set_clipboard(text); };
    pio.Platform_GetClipboardTextFn = [](ImGuiContext *) { return figure_remote::clipboard(); };
+   platform_open = nullptr;
+   take_open_in_shell(); // a link is opened by the page, in the browser
    st.m = mode::remote;
    loop_starts();
    fig_file_browser_reset(1, 1);

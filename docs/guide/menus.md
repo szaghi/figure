@@ -137,8 +137,62 @@ A popup is opened once, by an event, and declared every frame:
 | `ig_close_current_popup()` | Close the popup or modal being declared: call it inside, on its OK or Cancel. |
 
 `ig_end_popup` follows only a begin that returned `.true.`. Open and begin use the same id, in the same window (the
-id is scoped like a widget's label). A wrong end (after a false begin, or with another scope innermost) is refused
+id is scoped like a widget's label). A menu that opens on a right click, with no `ig_open_popup`, is a
+[context menu](#context-menus). A wrong end (after a false begin, or with another scope innermost) is refused
 and reported: [Pairing and frames](errors#pairing-and-frames).
+
+## Context menus
+
+<Media name="cb_context_menu" video alt="A list of four patches, inlet, outlet, wall and symmetry, with their conditions. The pointer rests on outlet: a tooltip shows a table of its values. A right click on outlet opens a menu titled outlet with Insert below, Duplicate, Copy name and Delete; Duplicate adds outlet-copy below outlet. A right click on inlet, then Delete: inlet goes. A right click below the rows opens a menu with one entry, Add a row: patch-1 is appended. A click on the link 'What is a patch?' shows a line of help." caption="docs/examples/src/cb_context_menu.F90: a menu on each row, one on the list's empty space, a tooltip with a table" />
+
+| Procedure | Notes |
+|---|---|
+| `ig_begin_popup_context(id [, on] [, button] [, stat])` → `logical` | A menu that opens itself on a click of `button` (default `'right'`) over the place `on` names; `.true.` while open: declare its entries, then `ig_end_popup()`. |
+
+(Dear ImGui's `BeginPopupContextItem`, `BeginPopupContextWindow` with `ImGuiPopupFlags_NoOpenOverItems`, and
+`BeginPopupContextVoid`.)
+
+<<< @/examples/snippets/cb_context_menu-rows.F90{fortran}
+
+| `on` | Opens on a click |
+|---|---|
+| `'item'` (default) | over the item drawn just before the call: a selectable row, a tree node, a button, a text (any item, interactive or not) |
+| `'window'` | over the current window's empty space, not over its items: the items keep their own menus |
+| `'void'` | over the display's background, where no window is: call it outside every window |
+
+<<< @/examples/snippets/cb_context_menu-space.F90{fortran}
+
+- **Declared every frame.** Unlike `ig_begin_popup`, there is no `ig_open_popup` to call: the call itself opens the
+  menu when the button is released over its place (a click, as Dear ImGui's popups open on the release), and draws it
+  while it is open. Call it every frame, right after the item for `'item'`, anywhere in the window for `'window'`.
+- **The id** names the menu in the current id scope, as a widget's label: the rows of a list, which share one id
+  `'row'`, each get their own menu inside `ig_push_id(i)`. `ig_open_popup(id)`, in the same window and id scope,
+  opens the same menu from the program (a key, a button).
+- **It closes** on a pick of an `ig_menu_item` (or of an item of a submenu), on `ig_close_current_popup()` inside it,
+  on a click outside it, or on escape. Any widget can go in it, not only menu items: a check box, a field, a submenu
+  (`ig_begin_menu`).
+- **Act after the loop.** An entry that inserts or deletes rows is picked while the list is being drawn: change the
+  list after the loop that draws it (the example records the request and applies it after `enddo`), not inside it.
+- **Pairing:** `ig_end_popup` only after a true begin, as for every popup; a wrong end is refused and reported, the
+  message naming `ig_begin_popup_context('row')` ([Pairing and frames](errors#pairing-and-frames)). `button`:
+  `'right'`, `'left'` or `'middle'`.
+- **Status:** an unknown `on` or `button` returns `.false.` and gives `FIG_ERR_ARGUMENT` in `stat`:
+  `ig_begin_popup_context: unknown place "row" ('item', 'window' or 'void')`,
+  `ig_begin_popup_context: unknown button "back" ('right', 'left' or 'middle')`; `stat` is optional (absent:
+  `error stop` with the message, [Error handling](errors)). With no frame open, or from a task, it is refused with
+  `FIG_ERR_STATE`.
+- **Window:** the mouse. **Headless:** `test_click(x, y, button='right')` ([Synthetic input](testing#synthetic-input));
+  `test_popup_rect` tells where the menu is. **Remote:** the browser's right button (the page keeps the browser's
+  own context menu away from the canvas).
+- **Threads:** the frame loop's thread only; a task is refused (`FIG_ERR_STATE`), as every drawing call.
+- **What it does not do:** no menu on a keyboard key of its own (the menu key, shift+f10): open it with
+  `ig_open_popup(id)` from an `ig_shortcut`; no menu over a part of an item (a cell of a table is an item when it holds
+  a widget); `'void'` does not fire over a window, including a window that covers the whole display. A right click
+  does not select the row: do it in the menu's first frame if the list needs it.
+
+The program checks itself headless (`cb_context_menu --check`):
+
+<<< @/examples/output/cb_context_menu.txt{text}
 
 ## Ask before quitting
 

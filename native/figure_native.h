@@ -239,6 +239,9 @@ int    fig_dropped_path(int index, char *buf, int buf_len);
  * bytes and returns the text's length [bytes]; 0 before init. */
 int       fig_set_clipboard(const char *text, int text_len);
 long long fig_get_clipboard(char *buf, long long cap);
+/* The URL the last click on a link (ig_text_link_url) asked to open, in any mode (headless opens nothing, a window the
+ * system's browser, remote mode the browser's page): at most cap bytes copied; its length [bytes] returned. */
+long long fig_opened_url(char *buf, long long cap);
 /* Synthetic input, for tests (headless or not): mouse position in pixels and left-button state. */
 void   fig_input_mouse(float x, float y, int left_down);
 

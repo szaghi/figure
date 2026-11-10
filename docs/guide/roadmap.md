@@ -252,6 +252,11 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   `ig_begin_group`/`ig_end_group`; `ig_align_begin(id, where)`/`ig_align_end` (a group centred or right-aligned, its
   width from the previous frame, one more frame asked when it changes) and `ig_align_next(width, where)`;
   `ig_push_item_width`/`ig_pop_item_width`; the three new pairs in the scope record ([Layout](widgets#layout)): done.
+- **Context menus and tooltips with content:** `ig_begin_popup_context(id [, on] [, button])` opens a menu on a right
+  click over an item, a window's empty space or the background; `ig_begin_tooltip`/`ig_begin_item_tooltip` with
+  `ig_end_tooltip` hold any content (a table, a plot); `ig_text_link`, and `ig_text_link_url`, which opens a URL in
+  the browser (in remote mode through the page; headless, `test_opened_url` reads it); the new pairs in the scope
+  record ([Context menus](menus#context-menus), [Tooltips](widgets#tooltips)): done.
 
 ## Next
 

@@ -404,7 +404,8 @@ def run(port: int, click_file: Path, token: str) -> None:
         raise ProtocolError(msg)
 
 
-KINDS = {1: "frame", 2: "texture", 3: "destroy", 4: "background", 5: "unchanged", 7: "clipboard", 8: "jpeg"}
+KINDS = {1: "frame", 2: "texture", 3: "destroy", 4: "background", 5: "unchanged", 7: "clipboard", 8: "jpeg",
+         9: "open url"}
 
 
 def drag(ws: WebSocket, x: float, y: float, seconds: float) -> None:

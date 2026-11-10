@@ -74,9 +74,12 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_menu_item(label [, shortcut] [, selected] [, enabled])` → `logical` | a menu item; `.true.` when picked; a check mark with `selected` |
 | `ig_open_popup(id)`, `ig_close_current_popup()` | open a popup (once, on an event); close the one being declared |
 | `ig_begin_popup(id)` → `logical`, `ig_begin_popup_modal(title [, open])` → `logical`, `ig_end_popup()` | a popup, a modal dialog; end only after a true begin |
+| `ig_begin_popup_context(id [, on] [, button] [, stat])` → `logical` | a context menu, opened by a right click on the item just drawn (`on='item'`), a window's empty space (`'window'`) or the background (`'void'`); closed with `ig_end_popup` after a true begin ([Context menus](menus#context-menus)) |
 | `ig_shortcut(keys [, scope] [, repeat] [, stat])` → `logical` | a key chord such as `'ctrl+s'` pressed this frame (cmd on macOS), routed: `'focused'` (default) only in the focused window, `'global'`, `'item'` ([Shortcuts](menus#shortcuts)) |
 | `ig_set_next_item_shortcut(keys [, scope] [, stat])` | the next item owns a chord: the chord presses it, its tooltip shows it ([Shortcuts](menus#a-button-that-owns-a-key)) |
 | `ig_tooltip(text)` | a tooltip on the previous widget, shown while the pointer rests on it |
+| `ig_begin_item_tooltip()` → `logical`, `ig_begin_tooltip()` → `logical`, `ig_end_tooltip()` | a tooltip with any content (a table, a plot): on the item just drawn after the hover delay, or now wherever the pointer is; end only after a true begin ([Tooltips](widgets#tooltips)) |
+| `ig_text_link(label)` → `logical`, `ig_text_link_url(label, url)` | text drawn as a link, `.true.` when clicked; a link that opens `url` in the browser (remote mode: the page opens it) ([Links](widgets#links)) |
 | `ig_set_clipboard(text [, stat])`, `ig_get_clipboard()` → `character` | put a text on the clipboard; read it (window: the system's; headless: the program's own; remote: the program's, joined to the browser's where it allows it) ([Clipboard](widgets#clipboard)) |
 | `ig_collapsing_header(label [, default_open])` → `logical` | a header that shows or hides what follows; `.true.` while open (no end call) |
 | `ig_begin_tab_bar(id)` → `logical`, `ig_end_tab_bar()` | a bar of tabs; end it only when the begin returned `.true.` |
@@ -248,7 +251,8 @@ Details: [3-D views](view3d).
 | `test_drop(paths, x, y [, stat])` | queue a drop of files or folders at (x, y), reported by `app%dropped` on the next frame |
 | `test_next_frame()` | a frame boundary in the queued input |
 | `test_item_center(x, y)`, `test_window_rect(name, ...)` | where a widget or a window is |
-| `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | where the open popup is (a menu, a combo's list, a colour picker) |
+| `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | where the open popup is (a menu, a context menu, a combo's list, a colour picker) |
+| `test_opened_url()` → `character` | the URL the last click on an `ig_text_link_url` asked to open (headless mode opens nothing) ([Links](widgets#links)) |
 | `test_quit()` | a quit request, as the window's close button makes it |
 | `test_plot_tick(axis, index, label [, count])` | a tick label of the plot being declared (tests of axis formats) |
 | `test_frame_hit(x, y)` → `character` | what the frame of `decorations='figure'` does at a point: `'client'`, `'drag'`, `'resize-top-left'`, ... ([the window's frame](frame-loop#the-window-s-frame)) |

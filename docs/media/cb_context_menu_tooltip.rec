@@ -1,0 +1,7 @@
+#! program build/docs-examples/bin/cb_context_menu
+#! frames  40
+#! poster  39
+#! video   no
+# The pointer resting on the row 'wall': its tooltip holds a table of the patch's values.
+0   move 400 300
+5   move 160 84 10

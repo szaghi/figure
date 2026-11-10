@@ -81,6 +81,16 @@ In [remote mode](remote) the keys come from the browser, which keeps some chords
 - **The system's chords** (alt+tab, cmd+tab, cmd+space, the window manager's) never reach the browser, as in window
   mode.
 
+## Links in a browser
+
+In [remote mode](remote) a click on an `ig_text_link_url` reaches the program, which sends the URL back to the page;
+the page opens it with `window.open`, a new tab ([Links](widgets#links)). A browser lets a page open a tab only
+shortly after the user's click (a few seconds in Chrome and Firefox), so on a slow connection, or with a strict
+pop-up blocker, the tab is blocked: the page then shows "the browser blocked opening ...: allow pop-ups for this page".
+Allow pop-ups for the page's address once, or copy the link with a right click on it ("Copy Link", into the browser's
+clipboard where [the browser allows it](#the-clipboard-and-drops)). A `file://` URL names a file of the browser's
+machine, not of the machine the program runs on.
+
 ## The clipboard and drops
 
 - **Remote mode, copy:** the browser's clipboard is written only where the browser allows it: a secure context

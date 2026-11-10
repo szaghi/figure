@@ -1,0 +1,11 @@
+$ ./cb_context_menu --check
+frame 12: right click on outlet, its menu open: T
+frame 20: Duplicate: inlet, outlet, outlet-copy, wall, symmetry
+frame 36: Delete on inlet: outlet, outlet-copy, wall, symmetry
+frame 44: right click below the rows, the list's menu open: T
+frame 52: Add a row: outlet, outlet-copy, wall, symmetry, patch-1
+frame 53: pointer on outlet, tooltip shown: F
+frame 60: pointer on outlet, tooltip shown: F
+frame 75: pointer on outlet, tooltip shown: T
+frame 88: help link clicked, help shown: T
+frame 96: documentation link clicked, opened: https://szaghi.github.io/figure/

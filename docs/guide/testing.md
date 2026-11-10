@@ -54,7 +54,8 @@ And to aim and to check:
 | `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser as drawn in the last frame, to click it: `'entry:NAME'` (a row in view), `'parent'`, `'refresh'`, `'path'`, `'new folder'`, `'new folder name'`, `'create'`, `'sort:name'`, `'sort:size'`, `'sort:modified'`, `'place:home'`, `'place:cwd'`, `'place:root:N'`, `'place:recent:N'`, `'name'`, `'filter'`, `'filter:N'` (its list open), `'hidden'`, `'cancel'`, `'ok'`, and while a replace is asked `'replace'`, `'keep'` |
 | `test_settings_file(path [, stat])` | the file that keeps the browser's recent folders, until the program ends: a test reads and writes its own (`''`: memory only, the default in headless mode) |
 | `test_window_rect(name, xmin, ymin, xmax, ymax [, found] [, stat])` | a window's rectangle, by its name, as drawn in the last frame |
-| `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | the rectangle of the innermost open popup (a menu, a combo's list, `ig_color_edit`'s picker), as drawn in the last frame; `found` false when none is open |
+| `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | the rectangle of the innermost open popup (a menu, a [context menu](menus#context-menus), a combo's list, `ig_color_edit`'s picker), as drawn in the last frame; `found` false when none is open |
+| `test_opened_url()` → `character` | the URL the last click on an [`ig_text_link_url`](widgets#links) asked to open, in any mode (headless opens nothing); `''` before one |
 
 **Timing.** Everything queued reaches Dear ImGui at the next frame, up to a `test_next_frame` boundary; Dear ImGui then
 applies one change of each kind per frame (its input trickling), so a click queued at once still takes the frames a

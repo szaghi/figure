@@ -41,7 +41,7 @@ public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_wid
 public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
 public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
 public :: fig_plot_annotation, fig_drawn_extent_rgba
-public :: fig_colormap_legend, fig_popup_rect
+public :: fig_colormap_legend, fig_popup_rect, fig_opened_url
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -1337,6 +1337,15 @@ interface
    integer(c_long_long),   value       :: cap    !< Its size [bytes].
    integer(c_long_long)                :: length !< The text's length [bytes].
    endfunction fig_get_clipboard
+
+   function fig_opened_url(buf, cap) result(length) bind(C, name='fig_opened_url')
+   !< Copy at most `cap` bytes of the URL the last click on a link asked to open; its whole length ('' before any).
+   import :: c_char, c_long_long
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*) !< Buffer.
+   integer(c_long_long),   value       :: cap    !< Its size [bytes].
+   integer(c_long_long)                :: length !< The URL's length [bytes].
+   endfunction fig_opened_url
 
    function fig_window_rect(name, name_len, rect, found) result(status) bind(C, name='fig_window_rect')
    !< A window's rectangle by name, as in the last frame.

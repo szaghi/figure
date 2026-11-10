@@ -22,7 +22,9 @@ use figure, only : app_object, figure_last_error, FIG_ERR_ARGUMENT, FIG_ERR_STAT
                    ig_end_table, ig_item_rect, ig_open_popup, ig_pop_font, ig_pop_id, ig_pop_style_color,        &
                    ig_pop_style_var, ig_push_font, ig_push_id, ig_push_style_color, ig_push_style_var, ig_text,  &
                    ig_tree_node, ig_tree_pop, ip_begin_plot, ip_begin_subplots, ip_end_plot, ip_end_subplots, &
-                   ig_align_begin, ig_align_end, ig_begin_group, ig_end_group, ig_pop_item_width, ig_push_item_width
+                   ig_align_begin, ig_align_end, ig_begin_group, ig_end_group, ig_pop_item_width, ig_push_item_width, &
+                   ig_begin_item_tooltip, ig_begin_popup_context, ig_begin_tooltip, ig_end_tooltip
+use figure_testing, only : test_item_center, test_mouse_move
 use figure_cimgui, only : igBegin, igPopID, igPushID_Int, igSetNextWindowCollapsed, igTextUnformatted
 use figure_cimgui_enums, only : ImGuiCond_Always
 
@@ -31,27 +33,32 @@ integer(int32), parameter :: K_WINDOW = 1, K_CHILD = 2, K_TAB_BAR = 3, K_TAB = 4
                              K_MAIN_MENU_BAR = 7, K_MENU_BAR = 8, K_MENU = 9, K_POPUP = 10, K_PLOT = 11,        &
                              K_SUBPLOTS = 12, K_DOCK_LAYOUT = 13, K_ID = 14, K_DISABLED = 15, K_FONT = 16,     &
                              K_STYLE_COLOR = 17, K_STYLE_VAR = 18, K_GROUP = 19, K_ALIGN = 20, K_ITEM_WIDTH = 21, &
-                             NKIND = 21 !< The pairs (FIGURE's record's kinds).
+                             K_TOOLTIP = 22, P_POPUP_CONTEXT = 23, P_ITEM_TOOLTIP = 24,                         &
+                             NKIND = 24 !< The pairs: FIGURE's record's kinds (1-22), then other begins of a kind.
 integer(int32), parameter :: F_MISSING = 1, F_EXTRA = 2, F_WRONG = 3, F_FALSE = 4 !< The faults.
 character(len=*), parameter :: OPENER(NKIND) = [character(len=22) ::                                          &
    'ig_begin', 'ig_begin_child', 'ig_begin_tab_bar', 'ig_begin_tab', 'ig_begin_table', 'ig_tree_node',        &
    'ig_begin_main_menu_bar', 'ig_begin_menu_bar', 'ig_begin_menu', 'ig_begin_popup', 'ip_begin_plot',         &
    'ip_begin_subplots', 'ig_dock_layout_begin', 'ig_push_id', 'ig_begin_disabled', 'ig_push_font',            &
-   'ig_push_style_color', 'ig_push_style_var', 'ig_begin_group', 'ig_align_begin', 'ig_push_item_width'] !< The begin
-                                                                                                    !< of each pair.
+   'ig_push_style_color', 'ig_push_style_var', 'ig_begin_group', 'ig_align_begin', 'ig_push_item_width',      &
+   'ig_begin_tooltip', 'ig_begin_popup_context', 'ig_begin_item_tooltip'] !< The begin of each pair.
 character(len=*), parameter :: CLOSER(NKIND) = [character(len=20) ::                                          &
    'ig_end', 'ig_end_child', 'ig_end_tab_bar', 'ig_end_tab', 'ig_end_table', 'ig_tree_pop',                   &
    'ig_end_main_menu_bar', 'ig_end_menu_bar', 'ig_end_menu', 'ig_end_popup', 'ip_end_plot', 'ip_end_subplots', &
    'ig_dock_layout_end', 'ig_pop_id', 'ig_end_disabled', 'ig_pop_font', 'ig_pop_style_color',                &
-   'ig_pop_style_var', 'ig_end_group', 'ig_align_end', 'ig_pop_item_width'] !< The end of each pair.
+   'ig_pop_style_var', 'ig_end_group', 'ig_align_end', 'ig_pop_item_width', 'ig_end_tooltip', 'ig_end_popup',  &
+   'ig_end_tooltip'] !< The end of each pair.
 logical, parameter :: TRUE_ONLY(NKIND) = [.false., .false., .true., .true., .true., .true., .true., .true.,   &
                                           .true., .true., .true., .true., .true., .false., .false., .false.,   &
-                                          .false., .false., .false., .false., .false.] !< "End only after a true
-                                                                                       !< begin".
+                                          .false., .false., .false., .false., .false., .true., .true., .true.] !< "End
+                                                                                                   !< only after a true
+                                                                                                   !< begin".
 logical, parameter :: NESTS(NKIND) = [.true., .true., .true., .true., .true., .true., .true., .true., .true.,      &
                                       .true., .true., .true., .true., .true., .false., .false., .false., .false., &
-                                      .true., .true., .true.]
+                                      .true., .true., .true., .true., .true., .true.]
                                       !< Containers and id scopes (an end closes the innermost); the others are pushes.
+integer(int32), parameter :: KIND_OF(NKIND) = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, &
+                                                21, 22, K_POPUP, K_TOOLTIP] !< The record's kind of each pair.
 type(app_object)              :: app          !< Application (headless).
 logical                       :: passed(NKIND, 4) !< Per pair and fault (true where not applicable).
 logical                       :: test_passed(11) !< The other checks.
@@ -93,6 +100,7 @@ do k = 1_int32, NKIND
       if (f == F_WRONG .and. .not. NESTS(k)) cycle      ! pushes do not nest: no wrong kind
       if (f == F_FALSE .and. .not. TRUE_ONLY(k)) cycle  ! always paired: no "after a false begin"
       if (f == F_FALSE .and. k == K_MAIN_MENU_BAR) cycle ! its begin is true in every frame FIGURE draws
+      if (f == F_FALSE .and. k == K_TOOLTIP) cycle       ! the same (Dear ImGui's BeginTooltip is always true)
       call fault(k, f, expect)
       msg = report()
       passed(k, f) = index(msg, expect) > 0
@@ -299,6 +307,14 @@ contains
       call ig_align_begin(label, 'right')
    case (K_ITEM_WIDTH)
       call ig_push_item_width(120.0_real64)
+   case (K_TOOLTIP)
+      opened = ig_begin_tooltip()
+   case (P_POPUP_CONTEXT) ! opened by its id, as a right click on the item would
+      call ig_open_popup(label)
+      opened = ig_begin_popup_context(label)
+   case (P_ITEM_TOOLTIP) ! the pointer rests on the button (warm_item_tooltip)
+      if (ig_button('target')) continue
+      opened = ig_begin_item_tooltip()
    endselect
    if (.not. opened) error stop 'figure_test_errors: a begin returned false: '//OPENER(kind)
    endfunction open_scope
@@ -350,6 +366,10 @@ contains
       call ig_align_end()
    case (K_ITEM_WIDTH)
       call ig_pop_item_width()
+   case (K_TOOLTIP, P_ITEM_TOOLTIP)
+      call ig_end_tooltip()
+   case (P_POPUP_CONTEXT)
+      call ig_end_popup()
    endselect
    endsubroutine close_scope
 
@@ -364,6 +384,7 @@ contains
    label = "('s"//trim(OPENER(kind))//"')"
    if (kind == K_MAIN_MENU_BAR .or. kind == K_MENU_BAR .or. kind == K_DISABLED) label = '()'
    if (kind == K_FONT .or. kind == K_GROUP .or. kind == K_ITEM_WIDTH) label = '()'
+   if (kind == K_TOOLTIP .or. kind == P_ITEM_TOOLTIP) label = '()'
    if (kind == K_DOCK_LAYOUT) label = '('//itoa(dock + 1_int32)//')' ! the dock id of the next layout
    if (kind == K_STYLE_COLOR) label = "('Text')"
    if (kind == K_STYLE_VAR) label = "('Alpha')"
@@ -377,6 +398,13 @@ contains
    case default
       hosted = 'ig_end'
    endselect
+   if (kind == P_ITEM_TOOLTIP) then ! its begin is true only with the pointer resting on the item; false without
+      if (which == F_MISSING .or. which == F_WRONG) call warm_item_tooltip()
+      if (which == F_FALSE) then
+         call test_mouse_move(790.0_real64, 590.0_real64)
+         if (report() /= '') error stop 'figure_test_errors: the pointer moved away with an error'
+      endif
+   endif
    select case (which)
    case (F_MISSING) ! the scope's end forgotten: the end of what holds it finds it open, or the frame's end does
       call host_begin(kind)
@@ -393,7 +421,7 @@ contains
       call host_begin(kind)
       call close_scope(kind)
       call host_end(kind)
-      expected = trim(CLOSER(kind))//': no '//trim(OPENER(kind))
+      expected = trim(CLOSER(kind))//': no '//trim(OPENER(KIND_OF(kind))) ! the openers of the kind, listed
    case (F_WRONG) ! the end of another kind while this one is open
       call host_begin(kind)
       if (open_scope(kind, 's'//trim(OPENER(kind)))) continue
@@ -410,7 +438,7 @@ contains
    case (F_FALSE) ! the end called although the begin returned false
       if (kind == K_DOCK_LAYOUT) label = '('//itoa(dock)//')' ! laid out already: false
       if (kind /= K_DOCK_LAYOUT) label = "('f')"
-      if (kind == K_MENU_BAR) label = '()'
+      if (kind == K_MENU_BAR .or. kind == P_ITEM_TOOLTIP) label = '()'
       call false_begin(kind)
       expected = trim(CLOSER(kind))//': '//trim(OPENER(kind))//label//' returned false (end only after a true begin)'
    endselect
@@ -461,12 +489,47 @@ contains
       got = ig_begin_popup('f')
       call close_scope(kind)
       call host_end(kind)
+   case (P_POPUP_CONTEXT) ! a context menu not opened
+      call host_begin(kind)
+      got = ig_begin_popup_context('f')
+      call close_scope(kind)
+      call host_end(kind)
+   case (P_ITEM_TOOLTIP) ! the pointer away from the item
+      call host_begin(kind)
+      if (ig_button('target')) continue
+      got = ig_begin_item_tooltip()
+      call close_scope(kind)
+      call host_end(kind)
    case (K_DOCK_LAYOUT) ! laid out already
       got = ig_dock_layout_begin(dock)
       call close_scope(kind)
    endselect
    if (got) error stop 'figure_test_errors: a begin returned true: '//OPENER(kind)
    endsubroutine false_begin
+
+   subroutine warm_item_tooltip()
+   !< Rest the pointer on the button 'target' of the window 'Host' until its item tooltip shows (each frame clean): the
+   !< next frame's `ig_begin_item_tooltip` after it is true.
+   real(real64) :: at(2) !< The button's centre.
+   integer      :: i     !< Frame.
+   logical      :: shown !< The tooltip showed.
+
+   shown = .false.
+   do i = 1, 90
+      if (ig_begin('Host', flags=ImGuiWindowFlags_MenuBar)) continue
+      if (ig_button('target')) continue
+      call test_item_center(at(1), at(2))
+      if (i == 1) call test_mouse_move(at(1), at(2))
+      if (ig_begin_item_tooltip()) then
+         shown = .true.
+         call ig_end_tooltip()
+      endif
+      call ig_end()
+      if (report() /= '') error stop 'figure_test_errors: an error while the tooltip warms up'
+      if (shown) exit
+   enddo
+   if (.not. shown) error stop 'figure_test_errors: the item tooltip never showed'
+   endsubroutine warm_item_tooltip
 
    subroutine recover_frame()
    !< A frame with a missing inner end ('recover' repairs it) and the clean part of the UI.

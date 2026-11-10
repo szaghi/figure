@@ -46,7 +46,8 @@ use figure_cimgui_enums, only : ImGuiTableFlags_None, ImGuiTableFlags_Resizable,
                                 ImGuiTableFlags_SizingFixedFit, ImGuiTableFlags_SizingStretchSame
 use figure_menu, only : ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar, ig_end_main_menu_bar, ig_end_menu, &
                         ig_end_menu_bar, ig_menu_item, ig_set_next_item_shortcut, ig_shortcut, ig_open_popup, &
-                        ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
+                        ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup, &
+                        ig_begin_popup_context
 use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_image, ig_input, &
                          ig_item_rect, ig_same_line, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
@@ -57,7 +58,8 @@ use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig
                          ig_item_hovered, ig_any_item_hovered, ig_any_item_active, ig_scroll_here, ig_get_scroll, &
                          ig_set_scroll, ig_scroll_to_pos, ig_focus_here, ig_default_focus, ig_font_size,   &
                          ig_line_height, ig_frame_height, ig_em, ig_available, ig_spacing, ig_dummy, ig_new_line, &
-                         ig_indent, ig_unindent, ig_separator_text, ig_push_item_width, ig_pop_item_width
+                         ig_indent, ig_unindent, ig_separator_text, ig_push_item_width, ig_pop_item_width, &
+                         ig_begin_tooltip, ig_begin_item_tooltip, ig_end_tooltip, ig_text_link, ig_text_link_url
 use figure_implot, only : ip_begin_subplots, ip_end_subplots,                                              &
                           ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
                           ip_plot_limits, ip_plot_size, ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded,   &
@@ -107,6 +109,7 @@ public :: item_status_object, ig_last_item, ig_item_hovered, ig_any_item_hovered
 public :: ig_scroll_here, ig_get_scroll, ig_set_scroll, ig_scroll_to_pos, ig_focus_here, ig_default_focus
 public :: ig_font_size, ig_line_height, ig_frame_height, ig_em, ig_available, ig_spacing, ig_dummy, ig_new_line
 public :: ig_indent, ig_unindent, ig_separator_text, ig_push_item_width, ig_pop_item_width
+public :: ig_begin_tooltip, ig_begin_item_tooltip, ig_end_tooltip, ig_text_link, ig_text_link_url
 public :: ig_begin_group, ig_end_group, ig_align_begin, ig_align_end, ig_align_next
 public :: ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg, ImGuiTableFlags_Borders
 public :: ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, ImGuiTableFlags_SizingFixedFit
@@ -133,6 +136,7 @@ public :: ImGuiWindowFlags_MenuBar
 public :: ig_begin_main_menu_bar, ig_end_main_menu_bar, ig_begin_menu_bar, ig_end_menu_bar, ig_begin_menu, ig_end_menu
 public :: ig_menu_item, ig_set_next_item_shortcut, ig_shortcut
 public :: ig_open_popup, ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
+public :: ig_begin_popup_context
 public :: ip_get_style_color, ip_get_style_var, ip_set_style_color, ip_set_style_var
 public :: ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode, ImGuiDockNodeFlags_NoDockingSplit
 public :: ImGuiDockNodeFlags_NoResize, ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking

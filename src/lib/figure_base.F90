@@ -20,7 +20,7 @@ public :: FORMAT_INTEGER, FORMAT_REAL, format_ok, format_refused
 public :: figure_draw_refused, figure_scope_open, figure_scope_refused
 public :: SCOPE_WINDOW, SCOPE_CHILD, SCOPE_TAB_BAR, SCOPE_TAB, SCOPE_TABLE, SCOPE_TREE, SCOPE_MAIN_MENU_BAR, SCOPE_MENU_BAR
 public :: SCOPE_MENU, SCOPE_POPUP, SCOPE_PLOT, SCOPE_SUBPLOTS, SCOPE_DOCK_LAYOUT, SCOPE_ID, SCOPE_DISABLED, SCOPE_FONT
-public :: SCOPE_STYLE_COLOR, SCOPE_STYLE_VAR, SCOPE_GROUP, SCOPE_ALIGN, SCOPE_ITEM_WIDTH
+public :: SCOPE_STYLE_COLOR, SCOPE_STYLE_VAR, SCOPE_GROUP, SCOPE_ALIGN, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP
 
 integer(int32), parameter :: FORMAT_INTEGER = 1_int32 !< A printf format of an integer value: d, i, u.
 integer(int32), parameter :: FORMAT_REAL = 2_int32    !< A printf format of a real value: f, F, e, E, g, G, a, A.
@@ -34,7 +34,8 @@ integer(c_int), parameter :: SCOPE_TREE = 6_c_int           !< ig_tree_node / ig
 integer(c_int), parameter :: SCOPE_MAIN_MENU_BAR = 7_c_int  !< ig_begin_main_menu_bar / ig_end_main_menu_bar (after true).
 integer(c_int), parameter :: SCOPE_MENU_BAR = 8_c_int       !< ig_begin_menu_bar / ig_end_menu_bar (after true).
 integer(c_int), parameter :: SCOPE_MENU = 9_c_int           !< ig_begin_menu / ig_end_menu (after true).
-integer(c_int), parameter :: SCOPE_POPUP = 10_c_int         !< ig_begin_popup, ig_begin_popup_modal / ig_end_popup (after true).
+integer(c_int), parameter :: SCOPE_POPUP = 10_c_int         !< ig_begin_popup, ig_begin_popup_context,
+                                                             !< ig_begin_popup_modal / ig_end_popup (after true).
 integer(c_int), parameter :: SCOPE_PLOT = 11_c_int          !< ip_begin_plot / ip_end_plot (after true).
 integer(c_int), parameter :: SCOPE_SUBPLOTS = 12_c_int      !< ip_begin_subplots / ip_end_subplots (after true).
 integer(c_int), parameter :: SCOPE_DOCK_LAYOUT = 13_c_int   !< ig_dock_layout_begin / ig_dock_layout_end (after true).
@@ -46,6 +47,8 @@ integer(c_int), parameter :: SCOPE_STYLE_VAR = 18_c_int     !< ig_/ip_push_style
 integer(c_int), parameter :: SCOPE_GROUP = 19_c_int         !< ig_begin_group / ig_end_group (always paired).
 integer(c_int), parameter :: SCOPE_ALIGN = 20_c_int         !< ig_align_begin / ig_align_end (always paired).
 integer(c_int), parameter :: SCOPE_ITEM_WIDTH = 21_c_int    !< ig_push_item_width / ig_pop_item_width (always paired).
+integer(c_int), parameter :: SCOPE_TOOLTIP = 22_c_int       !< ig_begin_tooltip, ig_begin_item_tooltip / ig_end_tooltip
+                                                             !< (after true).
 
 contains
    function figure_last_error() result(msg)

@@ -1,0 +1,28 @@
+#! program build/docs-examples/bin/cb_context_menu
+#! frames  420
+#! poster  95
+# The pointer rests on 'outlet': its tooltip shows a table of the patch's values. A right click on 'outlet' opens its
+# menu: Duplicate inserts 'outlet-copy' below it. A right click on 'inlet', then Delete: the row goes. A right click
+# below the rows opens the list's menu: Add a row appends 'patch-1'. The link 'What is a patch?' shows a line of help.
+0   move 400 300
+10  move 160 65 15
+60  down right
+61  up right
+75  move 215 123 12
+100 down
+101 up
+130 move 160 46 15
+165 down right
+166 up right
+180 move 215 142 12
+205 down
+206 up
+235 move 150 230 15
+265 down right
+266 up right
+280 move 198 245 10
+300 down
+301 up
+330 move 60 146 15
+360 down
+361 up

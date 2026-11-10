@@ -19,7 +19,7 @@ module figure_testing
 !<
 !< Coordinates are display pixels, as `ig_item_rect` and `test_window_rect` give them. Works in every mode; with
 !< `app%init_headless` no window, display or GPU is needed, so tests run in CI as is.
-use, intrinsic :: iso_c_binding, only : c_char, c_float, c_int
+use, intrinsic :: iso_c_binding, only : c_char, c_float, c_int, c_long_long
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : figure_check, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
@@ -27,7 +27,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_but
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
                             fig_frame_state, fig_notification_rect, fig_notification_alpha, fig_drawn_extent, &
                             fig_file_browser_get, fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
-                            fig_drawn_extent_rgba, fig_popup_rect
+                            fig_drawn_extent_rgba, fig_popup_rect, fig_opened_url
 use figure_imgui, only : ig_item_rect
 
 implicit none
@@ -36,7 +36,7 @@ public :: test_mouse_move, test_mouse_button, test_click, test_drag, test_wheel,
 public :: test_window_rect, test_item_center, test_next_frame, test_quit, test_plot_tick, test_system_theme
 public :: test_frame_hit, test_frame_rect, test_frame_state, test_notification_rect, test_drawn_extent
 public :: test_file_browser, test_file_browser_rect, test_settings_file, test_drop
-public :: test_popup_rect
+public :: test_popup_rect, test_opened_url
 
 interface test_drawn_extent
    !< The extent [pixels] of what was drawn so far in the current window in a colour: Dear ImGui's style colour by its
@@ -520,6 +520,18 @@ contains
    ymax = real(r(4), real64)
    if (present(found)) found = f == 1_c_int
    endsubroutine test_popup_rect
+
+   function test_opened_url() result(url)
+   !< The URL the last click on a link (`ig_text_link_url`) asked to open, in any mode: headless mode opens nothing, so
+   !< a test reads here what a window would have opened; `''` before any such click (and after each `init*`).
+   character(len=:), allocatable :: url   !< The URL.
+   integer(c_long_long)          :: n     !< Its length [bytes].
+   character(len=1)              :: probe !< A buffer for the length alone.
+
+   n = fig_opened_url(probe, 0_c_long_long)
+   allocate(character(len=n) :: url)
+   if (n > 0_c_long_long) n = fig_opened_url(url, n)
+   endfunction test_opened_url
 
    subroutine test_item_center(x, y)
    !< The centre of the last item drawn (call it right after the widget): where `test_click` should aim.

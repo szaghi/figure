@@ -51,6 +51,8 @@ const std::string &token();
 // on a paste ("p:" event), before the key that pastes. clipboard is the last of the two.
 void set_clipboard(const char *text);
 const char *clipboard();
+// Ask the page to open `url` in the browser (message 9), a link the user clicked (ig_text_link_url).
+void open_url(const char *url);
 // A new texture id, shared by Dear ImGui's and the user's textures.
 std::uint64_t new_texture_id();
 

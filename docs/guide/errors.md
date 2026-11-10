@@ -83,15 +83,16 @@ stops. `app%set_checks('abort')` stops at the faulty call itself.
 | Rule | Pairs |
 |---|---|
 | **Always paired:** the end follows every begin, whatever it returned | `ig_begin`, `ig_begin_side_bar` / `ig_end`; `ig_begin_child` / `ig_end_child`; `ig_push_id` / `ig_pop_id`; `ig_begin_disabled` / `ig_end_disabled`; `ig_push_font` / `ig_pop_font`; `ig_push_style_color`, `ip_push_style_color` / `ig_pop_style_color`, `ip_pop_style_color`; `ig_push_style_var`, `ip_push_style_var` / `ig_pop_style_var`, `ip_pop_style_var`; `ig_begin_group` / `ig_end_group`; `ig_align_begin` / `ig_align_end`; `ig_push_item_width` / `ig_pop_item_width` |
-| **End only after a true begin** | `ig_begin_tab_bar` / `ig_end_tab_bar`; `ig_begin_tab` / `ig_end_tab`; `ig_begin_table` / `ig_end_table`; `ig_tree_node` / `ig_tree_pop`; `ig_begin_main_menu_bar` / `ig_end_main_menu_bar`; `ig_begin_menu_bar` / `ig_end_menu_bar`; `ig_begin_menu` / `ig_end_menu`; `ig_begin_popup`, `ig_begin_popup_modal` / `ig_end_popup`; `ip_begin_plot` / `ip_end_plot`; `ip_begin_subplots` / `ip_end_subplots`; `ig_dock_layout_begin` / `ig_dock_layout_end` |
+| **End only after a true begin** | `ig_begin_tab_bar` / `ig_end_tab_bar`; `ig_begin_tab` / `ig_end_tab`; `ig_begin_table` / `ig_end_table`; `ig_tree_node` / `ig_tree_pop`; `ig_begin_main_menu_bar` / `ig_end_main_menu_bar`; `ig_begin_menu_bar` / `ig_end_menu_bar`; `ig_begin_menu` / `ig_end_menu`; `ig_begin_popup`, `ig_begin_popup_context`, `ig_begin_popup_modal` / `ig_end_popup`; `ig_begin_tooltip`, `ig_begin_item_tooltip` / `ig_end_tooltip`; `ip_begin_plot` / `ip_end_plot`; `ip_begin_subplots` / `ip_end_subplots`; `ig_dock_layout_begin` / `ig_dock_layout_end` |
 
-- **Scopes nest.** Windows, child regions, tab bars, tabs, tables, tree nodes, menu bars, menus, popups, plots,
-  subplot figures, dock layouts, id scopes, groups, aligned groups and pushed item widths are closed innermost first:
+- **Scopes nest.** Windows, child regions, tab bars, tabs, tables, tree nodes, menu bars, menus, popups (context
+  menus included), tooltips, plots, subplot figures, dock layouts, id scopes, groups, aligned groups and pushed item
+  widths are closed innermost first:
   an end that is not the end of the innermost open one is wrong.
 - **Pushes do not nest.** A style colour, a style variable, a font and a disabled block are undone by the newest push
   of their own kind, wherever it was made (a colour pushed before `ig_begin` and popped right after it is right, as
-  in Dear ImGui). A font or a disabled block opened inside a window (a window, a child region, a popup, a menu, the
-  main menu bar) is closed before that window's end, as Dear ImGui's `End` requires.
+  in Dear ImGui). A font or a disabled block opened inside a window (a window, a child region, a popup, a menu, a
+  tooltip, the main menu bar) is closed before that window's end, as Dear ImGui's `End` requires.
 - **Everything is closed by the end of the frame**: what is still open when `next_frame` is called is an error.
 - **Drawing needs a frame.** A drawing procedure (a widget, a begin or an end, a plot item, a style push) called with
   no frame open, before the first `next_frame` or after the loop, is refused: "`ig_button: no frame open`". Calls

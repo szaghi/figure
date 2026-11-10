@@ -285,6 +285,36 @@ double click with the left button, opens it. The first click of the double click
 `clicked(2)` is a right click on the row. Take the status right after the row's widget, before the next row is
 drawn: [the snapshot rule](/guide/widgets#what-happened-to-an-item).
 
+### Act on a row with a right click
+
+<<< @/examples/snippets/cb_context_menu-rows.F90{fortran}
+
+<Media name="cb_context_menu" video alt="A right click on the row outlet opens its menu: Duplicate adds outlet-copy below it; a right click on inlet, then Delete removes it; a right click below the rows opens the list's menu: Add a row appends patch-1" caption="docs/examples/src/cb_context_menu.F90" />
+
+Each row is followed by `ig_begin_popup_context('row')`: a right click on the row opens the menu, and its entries act
+on that row. The rows share the menu's id, so each is drawn inside `ig_push_id(i)`. An entry does not change the list
+while the loop draws it: it records what to do (`ask`), and `apply` does it after the loop. The list's own menu (add a
+row) opens on the window's empty space, not over a row, with `on='window'`:
+
+<<< @/examples/snippets/cb_context_menu-space.F90{fortran}
+
+The program checks itself headless:
+
+<<< @/examples/output/cb_context_menu.txt{text}
+
+[Context menus](/guide/menus#context-menus) has the places a menu opens on and when it closes.
+
+### A tooltip with a table in it
+
+<<< @/examples/snippets/cb_context_menu-tooltip.F90{fortran}
+
+<Media name="cb_context_menu_tooltip" alt="The pointer rests on the row wall: a tooltip holds a table, patch wall, condition no-slip, value 0.0" caption="docs/examples/src/cb_context_menu.F90" />
+
+`ig_begin_item_tooltip()` right after the row is `.true.` while the pointer rests on it, after the tooltip delay;
+between it and `ig_end_tooltip()` goes any content, here a table of two columns. In the output above, the pointer
+arrived on frame 53 and the tooltip showed by frame 75. [Tooltips](/guide/widgets#tooltips) has the delay and
+`ig_begin_tooltip`, the tooltip without an item.
+
 ### Reveal an item picked elsewhere
 
 <<< @/examples/snippets/cb_reveal-clipped.F90{fortran}

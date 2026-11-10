@@ -81,7 +81,7 @@ as long as `ig_begin` is called for it, so guard the call with the same variable
 
 | Procedure | Notes |
 |---|---|
-| `ig_tooltip(text)` | On the widget just drawn: `text` shows while the pointer rests on it, after Dear ImGui's tooltip delay. |
+| `ig_tooltip(text)` | On the widget just drawn: `text` shows while the pointer rests on it, after Dear ImGui's tooltip delay. A tooltip with more than one line of text: [Tooltips](#tooltips). |
 | `ig_set_next_item_width(width)` | Width of the next widget's field, in pixels; negative: up to that distance from the window's right edge (`-1.0` fills a table cell). |
 
 `ig_tool_button` is a workspace button of a toolbar, as Fusion 360 draws them: `icon` (an `ICON_*`, see
@@ -198,6 +198,68 @@ false and `rect` zero, the others `.false.`; without `stat` the error is reporte
 - **What it does not do:** no callbacks: the program asks after each item it cares about. No state of an item drawn
   earlier in the frame (take its snapshot then) or of an item by its label. `ig_item_rect` remains for the corners
   `(xmin, ymin, xmax, ymax)`; `rect` gives the same rectangle as corner and size.
+
+## Tooltips
+
+<Media name="cb_context_menu_tooltip" alt="A list of patches; the pointer rests on the row wall, and a tooltip beside it holds a table of two columns: patch wall, condition no-slip, value 0.0" caption="docs/examples/src/cb_context_menu.F90: a tooltip with a table in it" />
+
+| Procedure | Notes |
+|---|---|
+| `ig_begin_item_tooltip()` → `logical` | On the item drawn just before: `.true.` while the pointer rests on it, after the tooltip delay; declare the content, then `ig_end_tooltip()`. |
+| `ig_begin_tooltip()` → `logical` | A tooltip now, at the pointer, whatever it is over: `.true.`; declare the content, then `ig_end_tooltip()`. |
+| `ig_end_tooltip()` | End the tooltip, only after a true begin. |
+
+(Dear ImGui's `BeginItemTooltip`, `BeginTooltip`, `EndTooltip`.) A tooltip is a small window that follows the pointer:
+anything a window holds goes in it, a table, a plot, an image, coloured text. `ig_tooltip(text)` is the one-line case.
+
+<<< @/examples/snippets/cb_context_menu-tooltip.F90{fortran}
+
+- **The delay.** `ig_begin_item_tooltip` is `.true.` once the pointer has been still for 0.15 s and over the item for
+  0.15 s (Dear ImGui's `HoverStationaryDelay` and `HoverDelayShort`, style fields): a pointer passing over a list
+  does not flash a tooltip on every row. At 60 frames a second that is about 18 frames after the pointer stops.
+- **`ig_begin_tooltip`** has no delay and no item: call it on the frames the tooltip must show, for instance when
+  `ig_last_item()` says the item is hovered with the delay of your choice
+  ([`ig_item_hovered(delay)`](#what-happened-to-an-item)), or over a plot while the program shows a value. Dear
+  ImGui's begin is `.true.` in every frame today, but the rule stays: end only after a true begin.
+- **Two tooltips in one frame** add to the same window, one below the other (Dear ImGui appends them).
+- **Pairing:** a wrong end, or a scope left open inside the tooltip, is refused and reported, naming
+  `ig_begin_item_tooltip()` ([Pairing and frames](errors#pairing-and-frames)). A font or a disabled block opened in
+  a tooltip is closed before `ig_end_tooltip`.
+- **Status:** no `stat`: with no frame open, or from a task, the begin returns `.false.` and the error is reported by
+  the next `app%next_frame` (`FIG_ERR_STATE`, `ig_begin_tooltip: no frame open`).
+- **Window, headless, remote:** the same; headless, `test_mouse_move` puts the pointer on the item and the frames
+  that follow give the delay.
+- **Threads:** the frame loop's thread only; a task is refused (`FIG_ERR_STATE`).
+- **What it does not do:** a tooltip takes no input (no button in it can be clicked: the pointer moves it away); no
+  tooltip of its own position (it follows the pointer); no delay per tooltip (the delay is the style's).
+
+## Links
+
+| Procedure | Notes |
+|---|---|
+| `ig_text_link(label)` → `logical` | Text drawn as a link (the style's `TextLink` colour, underlined, a hand pointer over it): `.true.` on the frame it is clicked. |
+| `ig_text_link_url(label, url)` | A link that opens `url` when clicked; the pointer resting on it shows the URL, a right click offers "Copy Link". |
+
+(Dear ImGui's `TextLink`, `TextLinkOpenURL`.) The text before `##` is shown; all of `label` is the id.
+
+<<< @/examples/snippets/cb_context_menu-links.F90{fortran}
+
+`ig_text_link` is a button that looks like a link: it shows a help line, opens a panel, jumps to a row.
+`ig_text_link_url` hands the URL to the platform:
+
+- **Window:** the system's handler opens it (SDL's `SDL_OpenURL`: the default browser for `https://`, the program a
+  file's type is given to for a `file://` path).
+- **Remote:** the page opens it in a new tab of the browser (the program sends it to the page as message 9). A browser
+  may block the tab as a pop-up: the page then says so, and the user allows pop-ups for the page
+  ([Known issues](known-issues#links-in-a-browser)). The browser is the user's: a `file://` URL names a file of the
+  user's machine, not of the machine the program runs on.
+- **Headless:** nothing is opened. `test_opened_url()` returns the URL the last click asked to open, in every mode, so
+  a test checks the link without a browser. The documentation's recordings open nothing either.
+
+`url` is passed as it is: give links the program owns, not text a user typed (`xdg-open` and the browser decide what
+a URL does). **Status:** no `stat`: with no frame open, or from a task, nothing is drawn and the error is reported by
+the next `app%next_frame`. **Threads:** the frame loop's thread only. **What it does not do:** no link inside a wrapped
+paragraph (a link is an item of its own: put text before it with `ig_same_line`); no visited state.
 
 ## Multi-line text
 

@@ -18,22 +18,27 @@ module figure_menu
 !< A popup is opened once, by an event (`ig_open_popup`, not every frame), and declared every frame
 !< (`ig_begin_popup`/`ig_begin_popup_modal`, then `ig_end_popup` only when the begin returned true); it closes when
 !< the user clicks outside it (a plain popup) or when the program calls `ig_close_current_popup` inside it. Open and
-!< begin must use the same id in the same id scope (the same window).
-use, intrinsic :: iso_c_binding, only : c_bool, c_int, c_loc, c_null_ptr
+!< begin must use the same id in the same id scope (the same window). A context menu (`ig_begin_popup_context`) opens
+!< itself, on a click of the right button over an item, a window's empty space or the display's background.
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_int, c_loc, c_null_char, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32
-use figure_base, only : cstr, figure_check, figure_draw_refused, figure_scope_open, figure_scope_refused, &
+use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_scope_open, figure_scope_refused, &
                         SCOPE_MAIN_MENU_BAR, SCOPE_MENU, SCOPE_MENU_BAR, SCOPE_POPUP
-use figure_c_native, only : fig_set_next_item_shortcut, fig_shortcut
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_set_next_item_shortcut, fig_shortcut
 use figure_cimgui, only : igBeginMainMenuBar, igBeginMenu, igBeginMenuBar, igEndMainMenuBar, igEndMenu, igEndMenuBar, &
                           igMenuItem_BoolPtr, igBeginPopup, igBeginPopupModal,         &
-                          igCloseCurrentPopup, igEndPopup, igOpenPopup_Str
-use figure_cimgui_enums, only : ImGuiWindowFlags_AlwaysAutoResize
+                          igCloseCurrentPopup, igEndPopup, igOpenPopup_Str, igBeginPopupContextItem,          &
+                          igBeginPopupContextVoid, igBeginPopupContextWindow
+use figure_cimgui_enums, only : ImGuiWindowFlags_AlwaysAutoResize, ImGuiPopupFlags_MouseButtonLeft,           &
+                                ImGuiPopupFlags_MouseButtonMiddle, ImGuiPopupFlags_MouseButtonRight,          &
+                                ImGuiPopupFlags_NoOpenOverItems
 
 implicit none
 private
 public :: ig_begin_main_menu_bar, ig_end_main_menu_bar, ig_begin_menu_bar, ig_end_menu_bar, ig_begin_menu, ig_end_menu
 public :: ig_menu_item, ig_set_next_item_shortcut, ig_shortcut
 public :: ig_open_popup, ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
+public :: ig_begin_popup_context
 
 contains
    recursive function ig_begin_main_menu_bar() result(visible)
@@ -218,8 +223,69 @@ contains
    call figure_scope_open(SCOPE_POPUP, 'ig_begin_popup_modal', title, shown)
    endfunction ig_begin_popup_modal
 
+   recursive function ig_begin_popup_context(id, on, button, stat) result(open)
+   !< A context menu (Dear ImGui's `BeginPopupContextItem`, `BeginPopupContextWindow`, `BeginPopupContextVoid`):
+   !< declared every frame, it opens itself when the user releases `button` over the place `on` says, and is true
+   !< while open: declare its entries (`ig_menu_item`, any widget), then `ig_end_popup` only after true. It closes on a
+   !< pick of an `ig_menu_item`, on `ig_close_current_popup`, or on a click outside it.
+   !<
+   !< `on`: `'item'` (default), the item drawn just before the call (a row, a node, a text: any item, interactive or
+   !< not); `'window'`, the current window's empty space, not over its items (so items keep their own menus); `'void'`,
+   !< the display's background, where no window is (call it outside every window). `id` names the menu in the current
+   !< id scope: `ig_open_popup(id)` in the same window opens it too (a key, a button). An unknown `on` or `button`:
+   !< false, `FIG_ERR_ARGUMENT` in `stat` (or `error stop` without it); no frame open or a task: false,
+   !< `FIG_ERR_STATE`. The same in window, headless (`test_click(..., button='right')`) and remote mode.
+   character(len=*), intent(in)            :: id     !< Menu id.
+   character(len=*), intent(in),  optional :: on     !< 'item' (default), 'window' or 'void'.
+   character(len=*), intent(in),  optional :: button !< Mouse button: 'right' (default), 'left' or 'middle'.
+   integer(int32),   intent(out), optional :: stat   !< Status.
+   logical                                 :: open   !< The menu is open.
+   integer(c_int)                          :: flags  !< Dear ImGui's popup flags.
+   character(len=:), allocatable           :: where  !< `on`, or its default.
+   character(kind=c_char, len=1), allocatable, target :: cid(:) !< `id`, NUL-terminated.
+   integer                                 :: i      !< Character.
+
+   open = .false.
+   if (figure_draw_refused('ig_begin_popup_context', stat)) return ! a task does not draw
+   flags = ImGuiPopupFlags_MouseButtonRight
+   if (present(button)) then
+      select case (button)
+      case ('right')
+      case ('left')
+         flags = ImGuiPopupFlags_MouseButtonLeft
+      case ('middle')
+         flags = ImGuiPopupFlags_MouseButtonMiddle
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, 'ig_begin_popup_context: unknown button "'//button// &
+                          '" (''right'', ''left'' or ''middle'')', stat)
+         return
+      endselect
+   endif
+   where = 'item'
+   if (present(on)) where = on
+   allocate(cid(len(id) + 1))
+   do i = 1, len(id)
+      cid(i) = id(i:i)
+   enddo
+   cid(len(id) + 1) = c_null_char
+   select case (where)
+   case ('item')
+      open = logical(igBeginPopupContextItem(c_loc(cid), flags))
+   case ('window')
+      open = logical(igBeginPopupContextWindow(c_loc(cid), ior(flags, ImGuiPopupFlags_NoOpenOverItems)))
+   case ('void')
+      open = logical(igBeginPopupContextVoid(c_loc(cid), flags))
+   case default
+      call figure_fail(FIG_ERR_ARGUMENT, 'ig_begin_popup_context: unknown place "'//where// &
+                       '" (''item'', ''window'' or ''void'')', stat)
+      return
+   endselect
+   if (present(stat)) stat = int(FIG_OK, int32)
+   call figure_scope_open(SCOPE_POPUP, 'ig_begin_popup_context', id, open)
+   endfunction ig_begin_popup_context
+
    recursive subroutine ig_end_popup()
-   !< End a popup or modal (only after its begin returned true).
+   !< End a popup, context menu or modal (only after its begin returned true).
    if (figure_scope_refused(SCOPE_POPUP, 'ig_end_popup')) return ! a task, no frame, or not the innermost scope
    call igEndPopup()
    endsubroutine ig_end_popup

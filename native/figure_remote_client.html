@@ -166,6 +166,11 @@ function handle(buf) {
       navigator.clipboard.writeText(text).catch(() => { notify(kept + "the browser refused its clipboard"); });
     else notify(kept + "the browser's clipboard needs https or localhost");
   }
+  else if (kind === 9) { // the user clicked a link (ig_text_link_url): a new tab, where the browser allows it
+    const url = new TextDecoder().decode(new Uint8Array(buf, 1));
+    const tab = window.open(url, "_blank", "noopener");
+    if (!tab) notify("the browser blocked opening " + url + ": allow pop-ups for this page", 0);
+  }
 }
 
 function send(s) { if (ws && ws.readyState === 1) ws.send(s); }

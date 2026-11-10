@@ -23,7 +23,7 @@ namespace {
 enum kind_t {
    K_WINDOW = 1, K_CHILD, K_TAB_BAR, K_TAB, K_TABLE, K_TREE, K_MAIN_MENU_BAR, K_MENU_BAR, K_MENU, K_POPUP, K_PLOT,
    K_SUBPLOTS, K_DOCK_LAYOUT, K_ID, K_DISABLED, K_FONT, K_STYLE_COLOR, K_STYLE_VAR, K_GROUP, K_ALIGN, K_ITEM_WIDTH,
-   K_COUNT
+   K_TOOLTIP, K_COUNT
 };
 
 struct kind_info_t {
@@ -57,6 +57,7 @@ const kind_info_t KINDS[K_COUNT] = {
    {"ig_begin_group", "ig_end_group", true, false, false},         // a group: closed in its window, innermost first
    {"ig_align_begin", "ig_align_end", true, false, false},         // an aligned group: the same
    {"ig_push_item_width", "ig_pop_item_width", true, false, false}, // the window's own stack of widths
+   {"ig_begin_tooltip", "ig_end_tooltip", true, true, true},       // a tooltip is a window of its own
 };
 
 constexpr int CHECKS_ABORT = 0, CHECKS_REPORT = 1, CHECKS_RECOVER = 2;
@@ -73,7 +74,8 @@ struct sizes_t {
 
 struct entry_t {
    int         kind = 0;
-   std::string who;      // the opener, when not the kind's usual one (ig_begin_side_bar, ig_begin_popup_modal, ip_*)
+   std::string who;      // the opener, when not the kind's usual one (ig_begin_side_bar, ig_begin_popup_modal,
+                         // ig_begin_popup_context, ig_begin_item_tooltip, ip_*)
    std::string label;
    bool        returned = true;
    int         aux = 0;  // an integer id (ig_push_id), the dock id of a dock layout: the label when it is empty
@@ -195,7 +197,8 @@ std::string kind_openers(int kind) {
    if (kind == K_STYLE_COLOR) return "ig_push_style_color or ip_push_style_color";
    if (kind == K_STYLE_VAR) return "ig_push_style_var or ip_push_style_var";
    if (kind == K_WINDOW) return "ig_begin or ig_begin_side_bar";
-   if (kind == K_POPUP) return "ig_begin_popup or ig_begin_popup_modal";
+   if (kind == K_POPUP) return "ig_begin_popup, ig_begin_popup_context or ig_begin_popup_modal";
+   if (kind == K_TOOLTIP) return "ig_begin_tooltip or ig_begin_item_tooltip";
    return KINDS[kind].opener;
 }
 
@@ -242,6 +245,7 @@ void close_entry(const entry_t &e) {
    case K_GROUP: ImGui::EndGroup(); break;
    case K_ALIGN: fig_align_end(); break;
    case K_ITEM_WIDTH: ImGui::PopItemWidth(); break;
+   case K_TOOLTIP: ImGui::EndTooltip(); break;
    default: break;
    }
 }

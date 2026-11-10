@@ -25,6 +25,7 @@
 //               while the camera moves), sent lossy at quality 75 while it changes; a lossless texture (kind 2)
 //               replaces it once it is still (not updated for 150 ms) and drawn, with a frame or on its own. Never
 //               deflated
+//   9 open URL: u8 9, then the UTF-8 URL of a link the user clicked (ig_text_link_url); the page opens it in a new tab
 // Textures go out with the frames, before the frame that draws them: an update kept while frames are skipped for a
 // slow client is sent once, its latest pixels, with the next frame that goes.
 // Access: unless the token is disabled, GET / and GET /ws need "?token=<token>" in their target, else 403. The token is
@@ -870,6 +871,14 @@ void set_clipboard(const char *text) {
 }
 
 const char *clipboard() { return sv.clipboard.c_str(); }
+
+void open_url(const char *url) {
+   if (connection_t *c = client()) { // the page opens it in a new tab, where the browser allows it
+      std::string m(1, '\x09');
+      m += url ? url : "";
+      ws_append(*c, 2, m);
+   }
+}
 
 void set_background(float r, float g, float b) {
    sv.background[0] = r;

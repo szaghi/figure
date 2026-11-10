@@ -16,7 +16,7 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
-                        figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_ITEM_WIDTH, SCOPE_WINDOW
+                        figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP, SCOPE_WINDOW
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, fig_item_status, fig_last_item, fig_mark_last_item_edited, &
@@ -35,7 +35,8 @@ use figure_cimgui, only : igGetTime, igProgressBar, &
                           igSetScrollFromPosY_Float, igSetScrollHereX, igSetScrollHereY, igSetScrollX_Float,       &
                           igSetScrollY_Float, igDummy, igGetContentRegionAvail, igGetFontSize, igGetFrameHeight, &
                           igGetFrameHeightWithSpacing, igGetTextLineHeight, igGetTextLineHeightWithSpacing,          &
-                          igIndent, igNewLine, igPopItemWidth, igPushItemWidth, igSeparatorText, igSpacing, igUnindent
+                          igIndent, igNewLine, igPopItemWidth, igPushItemWidth, igSeparatorText, igSpacing, igUnindent, &
+                          igBeginTooltip, igTextLink, igTextLinkOpenURL
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
                                 ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup, &
                                 ImGuiInputTextFlags_AllowTabInput, ImGuiInputTextFlags_ReadOnly, &
@@ -56,6 +57,7 @@ public :: item_status_object, ig_last_item, ig_item_hovered, ig_any_item_hovered
 public :: ig_scroll_here, ig_get_scroll, ig_set_scroll, ig_scroll_to_pos, ig_focus_here, ig_default_focus
 public :: ig_font_size, ig_line_height, ig_frame_height, ig_em, ig_available, ig_spacing, ig_dummy, ig_new_line
 public :: ig_indent, ig_unindent, ig_separator_text, ig_push_item_width, ig_pop_item_width
+public :: ig_begin_tooltip, ig_begin_item_tooltip, ig_end_tooltip, ig_text_link, ig_text_link_url
 
 type :: text_buffer_object
    !< Text of any length, edited by `ig_input_text_multiline`: a file shown or edited as text, notes, a read-only view.
@@ -635,6 +637,74 @@ contains
    call igTextUnformatted(cstr(text), c_null_ptr)
    call igEndTooltip()
    endsubroutine ig_tooltip
+
+   recursive function ig_begin_tooltip() result(shown)
+   !< Begin a tooltip with any content (Dear ImGui's `BeginTooltip`): a window that follows the pointer, drawn this
+   !< frame whatever is hovered; declare its content (text, a table, a plot), then `ig_end_tooltip`. Call it on the
+   !< frames it must show, e.g. after `ig_last_item()` reported the item hovered. True in every frame (Dear ImGui's
+   !< begin cannot fail today), but `ig_end_tooltip` only after true, as for every "after true" pair. No frame open or a
+   !< task: false, refused (`FIG_ERR_STATE`). The same in window, headless and remote mode.
+   logical :: shown !< The tooltip is being declared.
+
+   shown = .false.
+   if (figure_draw_refused('ig_begin_tooltip')) return ! a task does not draw
+   shown = logical(igBeginTooltip())
+   call figure_scope_open(SCOPE_TOOLTIP, 'ig_begin_tooltip', '', shown)
+   endfunction ig_begin_tooltip
+
+   recursive function ig_begin_item_tooltip() result(shown)
+   !< Begin a tooltip on the item drawn just before (Dear ImGui's `BeginItemTooltip`): true while the pointer rests on
+   !< it, after Dear ImGui's tooltip delay (`ig_tooltip`'s: still for 0.15 s, the style's `HoverStationaryDelay`, and
+   !< hovered for 0.15 s, `HoverDelayShort`); declare the content, then `ig_end_tooltip` only after true. No frame open
+   !< or a task: false, refused (`FIG_ERR_STATE`). The same in window, headless and remote mode.
+   logical :: shown !< The tooltip is being declared.
+
+   shown = .false.
+   if (figure_draw_refused('ig_begin_item_tooltip')) return ! a task does not draw
+   shown = logical(igBeginItemTooltip())
+   call figure_scope_open(SCOPE_TOOLTIP, 'ig_begin_item_tooltip', '', shown)
+   endfunction ig_begin_item_tooltip
+
+   recursive subroutine ig_end_tooltip()
+   !< End a tooltip (only after `ig_begin_tooltip` or `ig_begin_item_tooltip` returned true). A wrong end (after a false
+   !< begin, or with another scope innermost) is refused and reported (`FIG_ERR_STATE`; errors.md, "Pairing and
+   !< frames").
+   if (figure_scope_refused(SCOPE_TOOLTIP, 'ig_end_tooltip')) return ! a task, no frame, or not the innermost scope
+   call igEndTooltip()
+   endsubroutine ig_end_tooltip
+
+   recursive function ig_text_link(label) result(clicked)
+   !< Text drawn as a link (Dear ImGui's `TextLink`: the style's `TextLink` colour, underlined, a hand pointer over it);
+   !< true on the frame it is clicked. The text before `##` is shown, all of `label` is the id. No frame open or a
+   !< task: false, refused (`FIG_ERR_STATE`). The same in window, headless and remote mode.
+   character(len=*), intent(in) :: label   !< Label (also its id).
+   logical                      :: clicked !< Clicked this frame.
+
+   clicked = .false.
+   if (figure_draw_refused('ig_text_link')) return ! a task does not draw
+   clicked = logical(igTextLink(cstr(label)))
+   endfunction ig_text_link
+
+   recursive subroutine ig_text_link_url(label, url)
+   !< A link that opens `url` when clicked (Dear ImGui's `TextLinkOpenURL`): a window opens it with the system's
+   !< handler (SDL_OpenURL: the browser, or the program a file's type is given to); remote mode sends it to the page,
+   !< which opens it in a new tab of the browser (where the browser allows pop-ups); headless mode opens nothing
+   !< (`test_opened_url` reads it). The pointer resting on it shows the URL; a right click offers "Copy Link". FIGURE
+   !< does not check the URL: pass a link of your own, not text a user typed. No frame open or a task: refused
+   !< (`FIG_ERR_STATE`).
+   character(len=*), intent(in)                      :: label !< Label (also its id).
+   character(len=*), intent(in)                      :: url   !< The address, e.g. `'https://...'`.
+   character(kind=c_char, len=1), allocatable, target :: u(:)  !< `url`, NUL-terminated.
+   integer                                           :: i     !< Character.
+
+   if (figure_draw_refused('ig_text_link_url')) return ! a task does not draw
+   allocate(u(len(url) + 1))
+   do i = 1, len(url)
+      u(i) = url(i:i)
+   enddo
+   u(len(url) + 1) = c_null_char
+   if (igTextLinkOpenURL(cstr(label), c_loc(u))) continue
+   endsubroutine ig_text_link_url
 
    recursive subroutine ig_set_next_item_width(width)
    !< Width of the next widget's field [pixels]; negative: up to that distance from the window's right edge.
