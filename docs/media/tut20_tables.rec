@@ -1,0 +1,55 @@
+#! program build/docs-examples/bin/tut20_tables
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  890
+#! poster  515
+#! crop    0 0 1100 680
+#! keys
+# F5 runs the plate; Input > Solver, omega dragged from 1.8 to 1.5; F5 runs it again. The Runs tab: the pointer rests
+# on run 1 (a tooltip with its residuals); the iterations' header clicked twice (fewest first, then most); a right
+# click on a row opens its menu; escape. Input > Boundaries: radio buttons; a right click on west, "Every side as this
+# one". Body: the centre's x dragged
+0   move 600 300
+10  key f5
+40  move 393 31 12
+55  down
+56  up
+70  move 427 218 12
+85  down
+86  up
+100 move 843 86 12
+115 down
+116 move 729 86 15
+135 up
+165 key f5
+450 move 434 412 12
+465 down
+466 up
+480 move 380 452 12
+520 move 1028 435 10
+535 down
+536 up
+560 down
+561 up
+585 move 365 454 10
+600 down right
+601 up right
+640 key escape
+655 move 393 33 12
+670 down
+671 up
+685 move 442 106 12
+700 down
+701 up
+720 move 554 104 10
+735 down right
+736 up right
+755 move 600 124 8
+770 down
+771 up
+790 move 424 198 12
+805 down
+806 up
+825 move 630 86 12
+840 down
+841 move 690 86 20
+865 up

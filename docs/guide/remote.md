@@ -9,13 +9,10 @@ browser shows it and sends the input back. The program needs no display, no GPU 
 where computations run, a cluster node or a workstation without a screen, and keep everything native (OpenMP, MPI,
 GPUs); the browser only draws.
 
-```fortran
-call app%init_remote(port=8080_int32)   ! prints: FIGURE: open http://localhost:8080/?token=... in a web browser
-do while (app%next_frame())
-   ! the same widgets and plots as in a window
-enddo
-call app%destroy()
-```
+<<< @/examples/snippets/tut17_remote-open.F90{fortran}
+
+(The tutorial's studio with a `--remote PORT` option, [chapter 17](/manual/tutorial/17-remote): everything after this
+call is the program as it is in a window.)
 
 Try it with the example: `exe/examples/figure_hello --remote 8080`, then open the address it prints (with its
 `?token=...`).

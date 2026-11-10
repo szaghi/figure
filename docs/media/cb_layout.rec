@@ -1,6 +1,7 @@
 #! program build/docs-examples/bin/cb_layout
 #! frames  220
 #! poster  110
+#! keys
 # the form at 15 pixels; ctrl+up three times: 18, 21, 24, the form grows and keeps its shape, the buttons stay at the
 # right edge; ctrl+down four times: 21, 18, 15, 12; ctrl+up once: back to 15
 0   move 450 400

@@ -300,6 +300,17 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   `playing`, `speed` in snapshots per second, `mode` `'once'`, `'loop'` or `'bounce'`): previous, play/pause, next,
   a slider showing each snapshot's label, a right-click menu for the speed and the mode; it plays on the frame clock
   (1/60 s per headless frame) and asks for frames while playing, so lazy redraw keeps time ([Players](widgets#players)): done.
+- **The documentation, complete and checked:** `scripts/check_docs.py` fails on a public entity, a public component or
+  a dummy argument without a `!<` doc comment, a feature-map row whose section has no compiled example (and, for the
+  rows marked visual, no picture or video), and a hand-written Fortran block; `--names` checks the name map and
+  `--media` a page's media (under 5 MB); CI runs them with the examples' build. The [name map](imgui-names), generated
+  by `scripts/gen_names.py`: every Dear ImGui and ImPlot function, linked to its header line at the vendored commit,
+  with the FIGURE call that reaches it, or "raw only". The recorder draws the pointer in videos and, with `#! keys`,
+  captions each key chord ([Screenshots and videos](capture#the-documentation-s-recordings)); the v0.4.0 videos
+  recorded again with them. Tutorial [part three](/manual/tutorial/18-checks), chapters 18 to 22: the solver studio
+  grows the v0.4.0 features, each chapter a compiled program tested headless by the documentation's build and
+  recorded. A fresh reader's pass over the installation and part one; the [migration notes](changelog#migration-to-v0-4-0): done.
+- **A fallback font for symbols Plex lacks** (S10): waits for the owner's choice of font.
 
 ## Next
 

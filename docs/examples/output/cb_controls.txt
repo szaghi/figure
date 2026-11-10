@@ -1,0 +1,2 @@
+$ ./cb_controls
+workspace: 2, CFL: 0.800

@@ -1,0 +1,29 @@
+$ ./tut21_monitor --test tut21-cases
+[ok]     the title bar holds the studio's menus
+[ok]     the title drags the window
+[ok]     ctrl+o shows the file browser on the example cases
+[ok]     Choose opens the case, the window's title says which
+[ok]     escape leaves the title as it was, unedited
+[ok]     enter commits the title, one undo step, and the window's title marks it unsaved
+[ok]     a drop asks before discarding the edit
+[ok]     Discard opens the dropped case
+[ok]     F5 runs the solver to convergence
+[ok]     the task reads the field the solver wrote
+[ok]     right moves the probe line while Result has the focus
+[ok]     and not while the title field is edited
+[ok]     nor while another panel has the focus
+[ok]     the pointer over the monitor reads iteration 111: residual  3.91E-05, mean 20.615 C
+[ok]     the averaging window spans the run: its mean is the mean of every iteration
+[ok]     two runs in the table, sorted by iterations on a click of its header
+[ok]     a second click reverses the order
+[ok]     a right click on a run opens its menu
+[ok]     a click on a problem shows the Body section, the radius in keys
+[ok]     a click on the sketch's east side chooses it
+[ok]     an input with the body out of the plate is refused
+[ok]     and accepted once corrected
+[ok]     larger text: one em is 19 pixels, the bar 5 em
+[ok]     a stray ig_end_tab is reported by the next frame, naming the call
+         ig_end_tab: no ig_begin_tab is open (no scope is open)
+[ok]     no other frame of the test had a usage error
+[ok]     the title bar's close button ends the studio
+26 of 26 checks passed

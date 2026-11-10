@@ -1,6 +1,7 @@
 #! program build/docs-examples/bin/cb_reveal
 #! frames  260
 #! poster  50
+#! keys
 # pick block 1240: the Blocks list scrolls to it (a row the clipper did not draw), Bodies to body 19; pick block
 # 1873: further down; Go to...: the dialog's field has the focus, 333 and enter are typed without a click, both lists
 # scroll to block 333; pick block 17: back near the top.

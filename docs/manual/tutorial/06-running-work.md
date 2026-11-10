@@ -17,8 +17,10 @@ a tool from a button and shows what it prints, then runs a computation of the pr
 <<< @/examples/snippets/tut06_work-tool.F90{fortran}
 
 - `tool%start(args)` starts the program `args(1)` with its arguments: an array, passed as it is, without a shell. The
-  tool here is the program itself, started again with `--tool`, so that the chapter runs on every system; yours is
-  `['overset', '-i', 'grid.inp']` or `['sbatch', 'case.sh']`.
+  tool here is the program itself, started again with `--tool`, so that the chapter runs on every system: `me` is the
+  program's own path, from `get_command_argument(0, me)`, and the program runs its tool part when its first argument
+  is `--tool` (the whole program: [tut06_work.F90](https://github.com/szaghi/figure/blob/main/docs/examples/src/tut06_work.F90)). Yours is `['overset', '-i', 'grid.inp']` or
+  `['sbatch', 'case.sh']`.
 - `ig_begin_disabled(tool%running())` greys the button out while the tool runs: one object runs one process at a
   time.
 - FIGURE reads the tool's output on a thread of its own as the tool writes, and wakes the frame loop: the window does
@@ -48,6 +50,8 @@ module procedure with a fixed interface; its data is any type, here a field to s
   window, even if they were looking at the log.
 - **A task never draws:** no `ig_*` or `ip_*` call inside `smooth_field`. Only the main thread draws; FIGURE refuses a
   drawing call from a task ([the threading rule](/guide/processes#tasks)).
+- **nvfortran:** compile a program with tasks with `-mp`, which makes nvfortran's Fortran I/O thread-safe
+  ([Known issues](/guide/known-issues#tasks)); gfortran and ifx need nothing.
 
 ::: tip What you learned
 A program started from the program, its output followed in a log view; a computation run as a task, its progress

@@ -22,14 +22,24 @@ next input event or for at most 0.5 s ([lazy redraw](/guide/frame-loop#lazy-redr
 
 ## Building it
 
+Save the program above as `tut01_window.F90`. With FIGURE installed by the [one-line installer](/guide/install)
+(`PKG_CONFIG_PATH` set as the installer printed):
+
 ```bash
-fobis build --mode figure-static-gnu
-gfortran -I lib/mod tut01_window.F90 lib/libfigure.a -L lib -lfigure_native -lSDL3 -lstdc++ -ldl -lpthread -lm \
-         -o tut01_window
+gfortran tut01_window.F90 $(pkg-config --cflags --libs figure) -o tut01_window
 ./tut01_window
 ```
 
-On WSL2, set `GALLIUM_DRIVER=d3d12` first ([Installation](/guide/install#wsl2-wslg)).
+On WSL2, set `GALLIUM_DRIVER=d3d12` before running it ([Installation](/guide/install#wsl2-wslg)).
+
+In a clone of the repository, after `scripts/build_native.sh` and from its root (the chapter's source is
+`docs/examples/src/tut01_window.F90`):
+
+```bash
+fobis build --mode figure-static-gnu
+gfortran -I lib/mod docs/examples/src/tut01_window.F90 lib/libfigure.a -L lib -lfigure_native -lSDL3 -lstdc++ -ldl \
+         -lpthread -lm -o tut01_window
+```
 
 ::: tip What you learned
 The application, the frame loop, a window. Reference: [Frame loop and redraw](/guide/frame-loop).

@@ -1,0 +1,2 @@
+$ ./cb_canvas_test
+found: T, width: 300 pixels at level 1.0, 4 vertices (a filled rectangle)

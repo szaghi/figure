@@ -116,7 +116,15 @@ gives otherwise ([Error handling](errors)). `kill` on a process that has ended d
 | `log%copy([all])` → `character` | The chosen lines (with `all`, every line), joined by newlines. |
 
 `log` is a `log_view_object`: a ring buffer of lines with a cap, drawn with a
-[list clipper](widgets#lists-and-regions), so a view of 10000 lines costs what the 20 in view cost.
+[list clipper](widgets#lists-and-regions), so a view of 10000 lines costs what the 20 in view cost. 1200 lines into a
+view that keeps 1000, drawn for three frames, then read back (`docs/examples/src/cb_log_view.F90`, run headless by
+the documentation's build):
+
+<<< @/examples/snippets/cb_log_view-log.F90{fortran}
+
+<<< @/examples/snippets/cb_log_view-read.F90{fortran}
+
+<<< @/examples/output/cb_log_view.txt{text}
 
 - **Following the end:** while the view is scrolled to the bottom, new lines scroll it; scrolled up (wheel,
   scrollbar), it stays where it is, and following starts again when it is scrolled back to the bottom.

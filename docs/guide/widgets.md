@@ -85,11 +85,12 @@ default the style's CheckMark colour. The default size fits the label (at least 
 it; the text before `##` is shown, as for any label. Put the buttons in a bar along a side
 ([`ig_begin_side_bar`](docking#a-bar-along-a-side)), one per workspace, and keep which one is selected yourself.
 
-```fortran
-if (ig_tool_button('Input', ICON_FILE_PEN, selected=tool == 1)) tool = 1
-call ig_tooltip('the input files')
-if (ig_tool_button('Monitor', ICON_ACTIVITY, selected=tool == 2)) tool = 2
-```
+<<< @/examples/snippets/cb_controls-tools.F90{fortran}
+
+`docs/examples/src/cb_controls.F90` is a headless program: it clicks the Monitor button and edits a field as a user
+does ([Headless testing](testing#synthetic-input)), and the documentation's build runs it:
+
+<<< @/examples/output/cb_controls.txt{text}
 
 ## Numbers
 
@@ -503,6 +504,11 @@ from a task.
 | `ig_item_rect(xmin, ymin, xmax, ymax)` | Screen rectangle of the last item, in pixels: for tests and custom layout. |
 | `ig_show_demo_window([open])` | The Dear ImGui demo, a live catalogue of every Dear ImGui widget (most are not bound yet). |
 
+A label level with its field, a field at a fixed distance from the left edge, a hint, a warning that carries a mark
+besides its colour, two buttons of one width (the widest label's), and a paragraph of help:
+
+<<< @/examples/snippets/cb_controls-text.F90{fortran}
+
 Gaps, groups, alignment, widths and sizes that follow the font: [Layout](#layout).
 
 ## Layout
@@ -726,19 +732,7 @@ text, selectables, a table's rows of fields): `call clip%begin(n)`, then `do whi
 `begin` or when it goes out of scope. `clip%item_height` is the distance between rows [pixels], given to `begin` or
 measured on the first row: [Scrolling and focus](#scrolling-and-focus) reaches a row not drawn with it.
 
-```fortran
-type(list_clipper_object) :: clip
-
-if (ig_begin_child('rows', height=300.0_real64)) then
-   call clip%begin(size(names))
-   do while (clip%step())
-      do i = clip%first, clip%last
-         if (ig_selectable(names(i), i == current)) current = i
-      enddo
-   enddo
-endif
-call ig_end_child()
-```
+<<< @/examples/snippets/cb_controls-clipper.F90{fortran}
 
 An input-file editor's layout: a list of sections in a narrow region, the section's values and its help in the region
 beside it. Each region scrolls under the wheel on its own; the window does not move.

@@ -79,15 +79,16 @@ use figure, only : app_object, FIG_ERR_ARGUMENT, FIG_ERR_EXCEPTION, FIG_ERR_FAIL
                    ig_button, ig_checkbox, ig_close_current_popup, ig_combo, ig_dock_id, ig_dock_layout_begin, &
                    ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_end_child, &
                    ig_end_disabled, ig_end_main_menu_bar, ig_end_menu, ig_end_popup, ig_end_tab, ig_end_tab_bar, &
-                   ig_end_table, ig_focus_window, ig_input, ig_input_text, ig_input_text_multiline, ig_menu_item, &
-                   ig_open_popup, ig_pop_font, ig_pop_id, ig_progress_bar, ig_push_font, ig_push_id, ig_same_line, &
-                   ig_separator, ig_set_next_item_width, ig_set_next_window, ig_set_next_window_dock, ig_shortcut, &
-                   ig_slider, ig_table_headers_row, ig_table_next_column, ig_table_next_row, ig_table_setup_column, &
-                   ig_text, ig_text_colored, ig_text_disabled, ig_text_wrapped, ig_tool_button, ig_tooltip, &
-                   ig_tree_node, ig_tree_pop, ig_window_dock, ip_annotation, ip_begin_plot, ip_colormap, &
-                   ip_colormap_legend, ip_contour, ip_drag_line_x, ip_drag_point, ip_end_plot, ip_error_bars, &
-                   ip_heatmap, ip_line, ip_setup_axes, ip_setup_axes_limits, ip_spec, log_view_object, &
-                   process_object, task_object, text_buffer_object, view3d_object
+                   ig_end_table, ig_any_item_active, ig_focus_window, ig_input, ig_input_text, &
+                   ig_input_text_multiline, ig_menu_item, ig_open_popup, ig_pop_font, ig_pop_id, ig_progress_bar, &
+                   ig_push_font, ig_push_id, ig_same_line, ig_separator, ig_set_next_item_width, ig_set_next_window, &
+                   ig_set_next_window_dock, ig_shortcut, ig_slider, ig_table_headers_row, ig_table_next_column, &
+                   ig_table_next_row, ig_table_setup_column, ig_text, ig_text_colored, ig_text_disabled, &
+                   ig_text_wrapped, ig_tool_button, ig_tooltip, ig_tree_node, ig_tree_pop, ig_window_dock, &
+                   ip_annotation, ip_begin_plot, ip_colormap, ip_colormap_legend, ip_contour, ip_drag_line_x, &
+                   ip_drag_point, ip_end_plot, ip_error_bars, ip_heatmap, ip_line, ip_setup_axes, &
+                   ip_setup_axes_limits, ip_spec, log_view_object, process_object, task_object, text_buffer_object, &
+                   view3d_object
 use tut15_tasks, only : field_t, read_field
 
 implicit none
@@ -488,7 +489,8 @@ contains
    integer(int32) :: run   !< Run, below them.
    integer(int32) :: stat  !< Status of the layout's save.
 
-   if (show_result) show_result = .not. ig_focus_window('Result') ! (not while a popup is open: again later)
+   if (show_result .and. .not. ig_any_item_active()) & ! not while the user types in a field or drags
+      show_result = .not. ig_focus_window('Result') ! (not while a popup is open: again later)
    if (save_default) then
       call app%save_layout(DEFAULT_LAYOUT, comment='the studio as the program lays it out', stat=stat)
       if (ig_focus_window('Input')) continue                 ! of the two tabs, Input in front

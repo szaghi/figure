@@ -73,14 +73,12 @@ applies one change of each kind per frame (its input trickling), so a click queu
 real one takes. Draw a few frames after queuing (four for a click, more for a drag, which `test_drag` spreads with its
 own boundaries) before checking. Editing a numeric field, for example:
 
-```fortran
-call test_click(x, y)                  ! focus the field (its rectangle from ig_item_rect)
-call test_key('shortcut', down=.true.) ! select what is there: ctrl+a (cmd+a on macOS)
-call test_key('a')
-call test_key('shortcut', down=.false.)
-call test_type('2.5')                  ! replace it
-call test_key('enter')                 ! confirm: the field's variable becomes 2.5
-```
+<<< @/examples/snippets/cb_controls-edit_field.F90{fortran}
+
+`cfl_at` and `monitor_at` are the centres of the field and of a button, from `ig_item_rect` where the program drew
+them (`docs/examples/src/cb_controls.F90`); the run prints what the clicks and the keys changed:
+
+<<< @/examples/output/cb_controls.txt{text}
 
 **Aim from the second frame on.** A new window that sizes itself to its content is measured during its first frame
 and shown from the second: positions read in the first frame are not where the widgets end up (place windows with

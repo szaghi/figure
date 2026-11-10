@@ -74,15 +74,9 @@ as `ig_item_rect` gives it for the widget drawn last (after `ip_end_plot` or `ip
 `app%image_result(path, done)` reports the outcome once, on a later frame: `done` with the file written, or
 `FIG_ERR_FAILED` with the reason (the file cannot be written).
 
-```fortran
-if (ip_begin_plot('history')) then
-   call ip_line('x', t, x)
-   call ip_end_plot()
-endif
-call ig_item_rect(r(1), r(2), r(3), r(4))                     ! the plot just drawn
-if (save_now) call app%save_image('history.png', r(1), r(2), r(3), r(4), stat=stat)
-call app%image_result(written, done, stat=stat)               ! every frame: done once, after the write
-```
+<<< @/examples/snippets/cb_save_image-save.F90{fortran}
+
+The whole program, with its Save button: `docs/examples/src/cb_save_image.F90`.
 
 - Ask for it on a frame where no menu or popup covers the rectangle: they would be in the picture. A menu item that
   saves is picked on a frame where its menu is still drawn: ask on the next frame.
@@ -106,3 +100,10 @@ GALLIUM_DRIVER=d3d12 python3 scripts/docs_media.py                # all recordin
 
 A recording with `#! remote <width> <height>` starts the program with `--remote` and takes the picture with a
 headless Chromium instead ([Remote UI](remote)).
+
+A video shows what the user did, not only what the program drew: the program's back buffer has no pointer, so the
+recorder draws one where the script puts it (the glide of `move` replayed), ringed while a button is held; with
+`#! keys` it also captions each key chord at the bottom of the video for 1.5 s (`ctrl+s`, `down`, `f5`), so a viewer
+sees what was pressed (`#! pointer no` leaves the pointer out). The poster is the program's frame as drawn, without
+them. With `SDL_VIDEO_DRIVER=offscreen` in the environment SDL draws into memory and no window appears: the
+recordings of v0.4.0 were made so, in software.

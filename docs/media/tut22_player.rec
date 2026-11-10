@@ -1,0 +1,32 @@
+#! program build/docs-examples/bin/tut22_player
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  520
+#! poster  228
+#! crop    0 0 1100 680
+#! keys
+# F5 runs the plate, writing a snapshot every 4 iterations; the Result panel shows the converged field and the player
+# of the run's snapshots. Play: the field steps through iterations 4 to 112 and the converged one, again and again;
+# pause, then back one snapshot twice. The legend is dragged down (the range moves up) and zoomed with the wheel: the
+# field is coloured again; Reset range
+0   move 600 300
+10  key f5
+200 move 399 85 12
+215 down
+216 up
+305 down
+306 up
+320 move 370 85 8
+330 down
+331 up
+345 down
+346 up
+375 move 797 250 12
+390 down
+391 move 797 205 20
+415 up
+435 wheel 0 2
+445 wheel 0 2
+470 move 871 61 12
+485 down
+486 up
+500 move 600 300 15

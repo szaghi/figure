@@ -61,7 +61,6 @@ contains
    endsubroutine read_field
 endmodule tut17_tasks
 
-!< tut14_task, tutorial chapter 14: the studio reads a large result as a task, off the frame loop.
 program tut17_remote
 !< tut17_remote, tutorial chapter 17: the studio on a cluster node, its interface in a web browser.
 !<
@@ -71,15 +70,15 @@ program tut17_remote
 !< `tut17_remote --examples DIR` writes the example cases into DIR; `--case DIR` opens one; `--test DIR` tests it.
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, FIG_ERR_ARGUMENT, FIG_ERR_EXCEPTION, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, &
-                   figure_last_error, ICON_CHART_AREA, ICON_CHECK, ICON_COPY, ICON_FILE_PEN, ICON_FLAME, &
-                   ICON_FOLDER, ICON_FOLDER_OPEN, ICON_HISTORY, ICON_INFO, ICON_LAYOUT, ICON_MESSAGES_SQUARE, &
-                   ICON_PALETTE, ICON_PLAY, ICON_POWER_SQUARE, ICON_ROTATE_3D, ICON_SAVE, ICON_SQUARE, &
-                   ICON_TRIANGLE_ALERT, ICON_UNDO, ig_begin, ig_begin_child, ig_begin_disabled, &
-                   ig_begin_main_menu_bar, ig_begin_menu, ig_begin_popup_modal, ig_begin_side_bar, ig_begin_tab, &
-                   ig_begin_tab_bar, ig_begin_table, ig_button, ig_checkbox, ig_close_current_popup, ig_combo, &
-                   ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, &
-                   ig_dock_window, ig_end, ig_end_child, ig_end_disabled, ig_end_main_menu_bar, ig_end_menu, &
-                   ig_end_popup, ig_end_tab, ig_end_tab_bar, ig_end_table, ig_focus_window, ig_input, ig_input_text, &
+                   figure_last_error, ICON_CHART_AREA, ICON_CHECK, ICON_COPY, ICON_FILE_PEN, ICON_FLAME, ICON_FOLDER, &
+                   ICON_FOLDER_OPEN, ICON_HISTORY, ICON_INFO, ICON_LAYOUT, ICON_MESSAGES_SQUARE, ICON_PALETTE, &
+                   ICON_PLAY, ICON_POWER_SQUARE, ICON_ROTATE_3D, ICON_SAVE, ICON_SQUARE, ICON_TRIANGLE_ALERT, &
+                   ICON_UNDO, ig_begin, ig_begin_child, ig_begin_disabled, ig_begin_main_menu_bar, ig_begin_menu, &
+                   ig_begin_popup_modal, ig_begin_side_bar, ig_begin_tab, ig_begin_tab_bar, ig_begin_table, &
+                   ig_button, ig_checkbox, ig_close_current_popup, ig_combo, ig_dock_id, ig_dock_layout_begin, &
+                   ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_end_child, &
+                   ig_end_disabled, ig_end_main_menu_bar, ig_end_menu, ig_end_popup, ig_end_tab, ig_end_tab_bar, &
+                   ig_end_table, ig_any_item_active, ig_focus_window, ig_input, ig_input_text, &
                    ig_input_text_multiline, ig_item_rect, ig_menu_item, ig_open_popup, ig_pop_font, ig_pop_id, &
                    ig_progress_bar, ig_push_font, ig_push_id, ig_same_line, ig_separator, ig_set_clipboard, &
                    ig_set_next_item_width, ig_set_next_window, ig_set_next_window_dock, ig_shortcut, ig_slider, &
@@ -195,6 +194,7 @@ integer(int32)                :: a                !< Argument counter.
 
 case_dir = ''
 start_dir = '.'
+remote = .false.                                     ! a window, or a test, until --remote says otherwise
 pending_action = ''
 pending_dir = ''
 nrecent = 0_int32
@@ -546,8 +546,9 @@ contains
       if (ig_focus_window('Input')) continue                 ! of the two tabs, Input in front
       have_default = stat == FIG_OK                          ! a folder that cannot be written: no Reset layout
       save_default = .false.
-   elseif (show_result) then                                 ! after the layout's own focus: a result opened with
-      show_result = .not. ig_focus_window('Result')          ! the case is in front (not while a popup is open)
+   elseif (show_result .and. .not. ig_any_item_active()) then ! after the layout's own focus: a result opened with
+      show_result = .not. ig_focus_window('Result')          ! the case is in front (not while a popup is open, nor
+                                                             ! while the user types in a field or drags)
    endif
    root = ig_dock_id('studio')
    if (ig_dock_layout_begin(root)) then

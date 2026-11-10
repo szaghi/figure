@@ -18,7 +18,8 @@ The first three vibration modes of a string, one per column of a matrix.
   then are its items declared and `ip_end_plot` called.
 - `ip_setup_axes` labels the axes; it comes before the items.
 - `ip_line(label, x, y)` draws a line; `label` is its legend entry. `modes(:, k)` is a column, contiguous: ImPlot
-  reads it in place, without a copy.
+  reads it in place, without a copy. A row, `modes(k, :)`, is strided: its elements are a column's length apart in
+  memory, which the compiler may copy before the call ([Data in place](/guide/plots#data-in-place)).
 
 In the window, drag to pan, use the wheel to zoom, double-click to fit, click a legend entry to hide its line.
 

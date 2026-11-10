@@ -1,0 +1,47 @@
+#! program build/docs-examples/bin/tut19_layout
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  430
+#! poster  420
+#! crop    0 0 1100 680
+#! keys
+# commit on leave: the title edited and escape (the title as it was, no star), edited again and enter (committed: the
+# star); lx set to 0: two problems above the tree; Body picked; a click on the first problem shows Grid, its lx field
+# taking the keys; 1.5 typed; View > Larger text: every size in em grows with the font
+0   move 600 300
+15  move 170 111 12
+30  down
+31  up
+40  key end
+48  text  B
+70  key escape
+90  down
+91  up
+100 key end
+108 text  B
+125 key enter
+145 move 700 136 12
+160 down
+161 up
+170 key ctrl down
+171 key a
+172 key ctrl up
+180 text 0
+190 key enter
+210 move 424 240 12
+225 down
+226 up
+245 move 450 62 12
+262 down
+263 up
+275 key ctrl down
+276 key a
+277 key ctrl up
+283 text 1.5
+293 key enter
+315 move 157 11 12
+330 down
+331 up
+345 move 190 133 10
+360 down
+361 up
+375 move 700 300 15

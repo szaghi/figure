@@ -11,10 +11,14 @@ replays (see FIGURE_CAPTURE_INPUT in native/figure_native.cpp):
     #! video   no                                      a still image only (default: yes when frames > 1)
     #! crop    x y w h                                 a fixed crop [pixels] (default: the content's bounding box)
     #! scale   960                                     width of the video and poster [pixels] (default: the crop's)
-    #! crf     24                                      H.264 quality, lower is better and larger (default 24)
+    #! crf     26                                      H.264 quality, lower is better and larger (default 26)
     #! style   seal                                    the program's style, through FIGURE_STYLE (default seal)
     #! gif     640                                     also an animated GIF of the video, this wide (for the README:
                                                        GitHub plays no repository video there)
+    #! keys                                            a caption of each key chord pressed, at the bottom of the
+                                                       video, for 1.5 s (``ctrl+s``, ``down``, ``f5``)
+    #! pointer no                                      no pointer drawn (default: the pointer is drawn in a video
+                                                       once the script moves it, ringed while a button is held)
     #! remote  1100 700                                remote mode: the program is started with its args, then
                                                        "--remote PORT", and a headless Chromium (CHROME, or
                                                        puppeteer's) draws the page at this size; the still gets a
@@ -26,6 +30,9 @@ The program runs in a real window, on the GPU, with the capture of the native la
 are the program's own back buffer, at a fixed frame time, with only the scripted input. Each recording is cropped to
 the bounding box of everything that is not the window background (over all its frames, plus a margin), then written
 to docs/public/media/<name>.png (the poster) and, for animations, docs/public/media/<name>.mp4 (H.264, no audio).
+The program's back buffer has no pointer: in a video the recorder draws it where the script puts it (the native
+layer's glide replayed), with a ring while a button is held, and, with ``#! keys``, a caption of each key chord, so
+that a viewer sees what was pressed. The poster is the program's frame as it is, without them.
 
 Usage: python3 scripts/docs_media.py [name ...]          (default: every docs/media/*.rec)
 Needs: the programs built (bash docs/examples/build.sh; fobis build --mode examples-gnu), ffmpeg and ImageMagick.
@@ -40,6 +47,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -57,6 +65,12 @@ BACKGROUND = {  # the window background of each style (apply_style in native/fig
 }
 MARGIN = 12  # pixels around the content
 FPS = 30
+CAPTION_FRAMES = 45  # a key caption stays 1.5 s, or until the next one
+CAPTION_FONT = ROOT / "third_party" / "fonts" / "IBMPlexSans-Regular.ttf"
+MODIFIERS = ("ctrl", "shift", "alt", "super")
+KEY_NAMES = {"escape": "esc", "pageup": "page up", "pagedown": "page down", "backspace": "backspace"}
+# the pointer: an arrow, its tip at (0, 0) [pixels], white with a dark outline
+ARROW = [(0, 0), (0, 17), (4, 13), (7, 20), (10, 19), (7, 12), (12, 12)]
 
 
 class MediaError(Exception):
@@ -78,6 +92,75 @@ def parse(rec: Path) -> tuple[dict[str, str], str]:
             msg = f"{rec.name}: missing '#! {key}'"
             raise MediaError(msg)
     return header, "\n".join(script) + "\n"
+
+
+def overlays(script: str, frames: int, first: int) -> list[tuple[tuple[float, float] | None, bool, str]]:
+    """For each recorded frame: the pointer [pixels] (None before the script moves it), whether a button is held,
+    and the key caption shown ('' none). The pointer replays the native layer's glide (capture_apply_input in
+    native/figure_native.cpp): a move to (x, y) over n frames covers 1/n of the way left on each frame."""
+    events: list[tuple[int, list[str]]] = []
+    for line in script.splitlines():
+        words = line.split()
+        if len(words) >= 2 and not line.lstrip().startswith("#") and words[0].lstrip("-").isdigit():
+            events.append((int(words[0]), words[1:]))
+    events.sort(key=lambda e: e[0])
+    px = py = gx = gy = 0.0
+    glide = 0
+    moved = False
+    held: set[str] = set()  # mouse buttons
+    mods: list[str] = []  # modifier keys held, in the order pressed
+    caption, until = "", -1
+    out = []
+    k = 0
+    for frame in range(first + frames):
+        if glide > 0:
+            px += (gx - px) / glide
+            py += (gy - py) / glide
+            glide -= 1
+        while k < len(events) and events[k][0] <= frame:
+            what = events[k][1]
+            if what[0] == "move" and len(what) >= 3:
+                gx, gy = float(what[1]), float(what[2])
+                glide = max(1, int(what[3])) if len(what) >= 4 else 1
+                px += (gx - px) / glide
+                py += (gy - py) / glide
+                glide -= 1
+                moved = True
+            elif what[0] in ("down", "up"):
+                button = what[1] if len(what) >= 2 else "left"
+                (held.add if what[0] == "down" else held.discard)(button)
+            elif what[0] == "key" and len(what) >= 2:
+                name, state = what[1], (what[2] if len(what) >= 3 else "")
+                if name in MODIFIERS:
+                    if state == "down" and name not in mods:
+                        mods.append(name)
+                    elif state == "up" and name in mods:
+                        mods.remove(name)
+                elif state != "up":  # a key pressed (and released), or pressed and held
+                    caption = "+".join([*mods, KEY_NAMES.get(name, name)])
+                    until = frame + CAPTION_FRAMES
+            k += 1
+        if frame >= first:
+            out.append(((px, py) if moved else None, bool(held), caption if frame < until else ""))
+    return out
+
+
+def annotate(src: Path, dst: Path, crop: tuple[int, int, int, int], pointer: tuple[float, float] | None,
+             pressed: bool, caption: str) -> None:
+    """One video frame: cropped, with the pointer and the key caption drawn on it."""
+    x, y, w, h = crop
+    draw: list[str] = []
+    if pointer is not None:
+        ox, oy = pointer[0] - x, pointer[1] - y
+        if pressed:
+            draw += ["-fill", "none", "-stroke", "#e8553a", "-strokewidth", "2",
+                     "-draw", f"circle {ox:.1f},{oy:.1f} {ox + 11:.1f},{oy:.1f}"]
+        pts = " ".join(f"{ox + ax:.1f},{oy + ay:.1f}" for ax, ay in ARROW)
+        draw += ["-fill", "#ffffff", "-stroke", "#1a1a1a", "-strokewidth", "1.2", "-draw", f"polygon {pts}"]
+    if caption:
+        draw += ["-stroke", "none", "-fill", "#f4efe6", "-undercolor", "#000000c0", "-font", str(CAPTION_FONT),
+                 "-pointsize", "22", "-gravity", "south", "-annotate", "+0+18", f"  {caption}  "]
+    subprocess.run(["convert", str(src), "-crop", f"{w}x{h}+{x}+{y}", "+repage", *draw, str(dst)], check=True)
 
 
 def bbox(frame: Path, background: str) -> tuple[int, int, int, int] | None:
@@ -291,6 +374,18 @@ def record(name: str) -> None:
             check=True,
         )
         if video:
+            marks = overlays(script, frames, int(header.get("from", "0")))
+            if header.get("pointer", "yes") == "no":
+                marks = [(None, False, c) for _, _, c in marks]
+            if "keys" not in header or header["keys"] == "no":
+                marks = [(p, b, "") for p, b, _ in marks]
+            frames_in, crop_filter = str(work / "f_%05d.ppm"), f"crop={w}:{h}:{x}:{y},"
+            if any(p is not None or c for p, _, c in marks):  # drawn on the cropped frames, then encoded
+                crop = (x, y, w, h)
+                with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
+                    list(pool.map(lambda i: annotate(shots[i], work / shots[i].name.replace("f_", "a_", 1), crop,
+                                                     *marks[i]), range(frames)))
+                frames_in, crop_filter = str(work / "a_%05d.ppm"), ""
             subprocess.run(
                 [
                     "ffmpeg",
@@ -299,17 +394,18 @@ def record(name: str) -> None:
                     "-y",
                     "-framerate",
                     str(FPS),
+                    "-start_number",
+                    str(int(shots[0].stem.split("_")[-1])),
                     "-i",
-                    str(work / "f_%05d.ppm"),
+                    frames_in,
                     "-vf",
-                    f"crop={w}:{h}:{x}:{y}"
-                    + (f",scale={header['scale']}:-2" if "scale" in header else ""),
+                    (crop_filter + (f"scale={header['scale']}:-2" if "scale" in header else "null")).rstrip(","),
                     "-c:v",
                     "libx264",
                     "-preset",
                     "slow",
                     "-crf",
-                    header.get("crf", "24"),
+                    header.get("crf", "26"),
                     "-pix_fmt",
                     "yuv420p",
                     "-movflags",

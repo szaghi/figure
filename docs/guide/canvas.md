@@ -14,8 +14,6 @@ the program decides what is under it.
 The primitives draw on Dear ImGui's draw lists, which window, headless and remote mode all render, so a canvas works
 in every mode, and the headless tests find what it drew by its colours ([Testing a canvas](#testing-a-canvas)).
 
-<Media name="canvas_primitives" alt="A window Canvas primitives with eight cells in two rows, each a framed canvas with its call in grey below: a thick amber line (ig_draw_line(..., thickness=3)); an amber rectangle outline and a teal filled square (ig_draw_rect(..., filled=.true.)); an amber circle outline and a teal filled disc (ig_draw_circle(x, y, radius, ...)); an amber sine polyline (ig_draw_polyline(x(:), y(:), ...)); an amber heptagon outline and a teal filled arrow-head polygon (ig_draw_polygon(..., filled=.true.)); amber text 'inlet, u = 1 m/s' and teal text 'wall' over 'no slip' (ig_draw_text(x, y, text, ...)); a colour-gradient image twice, the second tinted red (ig_draw_image(tex, ..., color)); teal cross-hairs with an amber dot at the centre labelled ev%origin + [cx, cy] (ig_canvas(id, w, h, ev)). Below, under the heading layer='plot': plot units, clipped to the plot, a plot from 0 to 4 m with a red sine line, a teal rectangle from (0, 0) to (4, 1) and an amber disc at (1, 0.5) labelled probe at (1, 0.5) m" caption="docs/examples/src/gallery.F90, run with canvas_primitives" />
-
 ## The canvas
 
 | Procedure | Notes |
@@ -57,6 +55,8 @@ released over the canvas, as a button's, use `ig_invisible_button` or test `rele
 
 <<< @/examples/snippets/cb_canvas-canvas.F90{fortran}
 
+<Media name="cb_canvas" video alt="A window Domain: a grey channel, its inlet on the left in blue, its outlet on the right in orange, the bottom and top walls and a cylinder in grey, each named by a word in its colour. The pointer rests on the top wall: it is drawn thicker and a tooltip reads top: no-slip wall (click to change). A click on the cylinder's edge selects it, and a row of radio buttons appears under the sketch; a click on slip wall turns the cylinder and its word green. A click on the inlet selects it" caption="docs/examples/src/cb_canvas.F90" />
+
 - **Pairing and frame rules:** none opens a scope; call them in a window, between `next_frame` and the next one.
   Read `ev` on the frame `ig_canvas` filled it.
 - **Status:** `stat` is optional. A size NaN, infinite or beyond single precision, or a texture not initialized, is
@@ -81,7 +81,10 @@ A point (`cx`, `cy`) of a canvas is drawn at `ev%origin(1) + cx`, `ev%origin(2) 
 (metres, seconds) maps them to canvas pixels itself, and back for the pointer: the domain sketch above keeps y up by
 `py(y) = origin + ... - y * scale`. Lengths (`thickness`, `radius`) are pixels on every layer, also on the plot layer.
 `ig_cursor_screen_pos` gives where the next item goes, so a program can draw at that place and then reserve it with
-`ig_dummy` or an invisible button.
+`ig_dummy` or an invisible button: a gauge, its frame and its level drawn where the next item goes, then reserved by
+an invisible button that takes its clicks:
+
+<<< @/examples/snippets/cb_canvas_test-coordinates.F90{fortran}
 
 ## Layers
 
@@ -115,6 +118,8 @@ item does. Outside a plot it is a usage error, `FIG_ERR_STATE`.
 | `ig_draw_polygon(x, y, color [, thickness] [, filled] [, layer] [, stat])` | a closed polygon, outline or filled, convex or not (`AddPolyline` closed, `AddConcavePolyFilled`) |
 | `ig_draw_text(x, y, text, color [, layer] [, stat])` | `text` in the current font, its top-left at the point; a line per LF (`AddText`) |
 | `ig_draw_image(texture, x1, y1, x2, y2 [, color] [, layer] [, stat])` | a [texture](images) stretched over a rectangle, pixel row 1 at the top, multiplied by `color` (default white) (`AddImage`) |
+
+<Media name="canvas_primitives" alt="A window Canvas primitives with eight cells in two rows, each a framed canvas with its call in grey below: a thick amber line (ig_draw_line(..., thickness=3)); an amber rectangle outline and a teal filled square (ig_draw_rect(..., filled=.true.)); an amber circle outline and a teal filled disc (ig_draw_circle(x, y, radius, ...)); an amber sine polyline (ig_draw_polyline(x(:), y(:), ...)); an amber heptagon outline and a teal filled arrow-head polygon (ig_draw_polygon(..., filled=.true.)); amber text 'inlet, u = 1 m/s' and teal text 'wall' over 'no slip' (ig_draw_text(x, y, text, ...)); a colour-gradient image twice, the second tinted red (ig_draw_image(tex, ..., color)); teal cross-hairs with an amber dot at the centre labelled ev%origin + [cx, cy] (ig_canvas(id, w, h, ev)). Below, under the heading layer='plot': plot units, clipped to the plot, a plot from 0 to 4 m with a red sine line, a teal rectangle from (0, 0) to (4, 1) and an amber disc at (1, 0.5) labelled probe at (1, 0.5) m" caption="docs/examples/src/gallery.F90, run with canvas_primitives" />
 
 Coordinates are `real(real64)`: screen pixels, or plot units on the plot layer ([Coordinates](#coordinates)).
 `thickness` is in pixels, default 1; `filled` defaults to the outline. `x(:)` and `y(:)` of a polyline or a polygon are
@@ -151,6 +156,12 @@ colour: give each primitive a colour of its own. `layer='foreground'` or `'backg
 window and plot layers are the window's own list); `vertices` gives how many vertices have the colour, which tells a
 filled shape (a vertex per corner) from its outline. `src/tests/figure_test_canvas.F90` checks every primitive this
 way, a drag's delta, the wheel kept from a scrolling child, and a polyline in plot units that moves with the limits.
+The gauge above, after a click on it (`docs/examples/src/cb_canvas_test.F90`, run headless by the documentation's
+build):
+
+<<< @/examples/snippets/cb_canvas_test-test.F90{fortran}
+
+<<< @/examples/output/cb_canvas_test.txt{text}
 
 ## What it does not do
 

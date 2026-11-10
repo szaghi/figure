@@ -55,30 +55,18 @@ A layout is built once, on the first frame. A window that appears afterwards (a 
 a result computed later) is placed in a node with `ig_set_next_window_dock(node)`, right before its `ig_begin`: it
 lands there the first time it appears, then stays where the user moves it (`always=.true.`: every frame).
 
-```fortran
-call ig_set_next_window_dock(right)      ! the node from the layout
-if (ig_begin(trim(file_name))) then
-   ! ...
-endif
-call ig_end()
-```
+<<< @/examples/snippets/cb_workspace-later.F90{fortran}
+
+`docs/examples/src/cb_workspace.F90` builds the layout below, shows its Result window on the fifth frame and checks,
+headless, that it landed in the right node:
+
+<<< @/examples/output/cb_workspace.txt{text}
 
 ## A bar along a side
 
 A toolbar, an activity bar or a status bar is a bar along one side of the display that the dock space leaves free:
 
-```fortran
-if (ig_begin_main_menu_bar()) then
-   ! menus
-   call ig_end_main_menu_bar()
-endif
-if (ig_begin_side_bar('Tools', 'left', 64.0_real64)) then     ! 'left', 'right', 'top' or 'bottom'
-   if (ig_button('Input')) tool = 1
-   if (ig_button('Run')) tool = 2
-endif
-call ig_end()
-call ig_dock_space(root)                                      ! fills what the bars leave
-```
+<<< @/examples/snippets/cb_workspace-bars.F90{fortran}
 
 The bar is a window without title bar, not movable, resizable or dockable, at the side given and as wide (left,
 right) or as high (top, bottom) as `size`; the work area loses that strip, so the dock space and the windows placed in
@@ -90,10 +78,7 @@ end it with `ig_end`. Several bars stack (a toolbar and a status bar).
 How the user arranged the windows (where each is docked, the splits' sizes, the floating windows' places, the tables'
 columns) is saved to a file, and loaded back while the program runs:
 
-```fortran
-call app%save_layout('analysis.layout', comment='popped = ufor_03.dat ufor_07.dat')   ! any time
-call app%load_layout('analysis.layout', stat=stat)                                   ! applied before the next frame
-```
+<<< @/examples/snippets/cb_workspace-layout.F90{fortran}
 
 - The file is Dear ImGui's settings text (`[Window][...]`, `[Docking][Data]`, ...). `comment` lines come first, led
   by `; `: Dear ImGui skips them, the program reads them back itself (which windows it opens on demand, which panels

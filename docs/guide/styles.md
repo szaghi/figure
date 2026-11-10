@@ -25,10 +25,7 @@ the colours of the interface, of the plots and of the window's background:
 `lines='okabe-ito'` replaces the style's line colours with Okabe and Ito's colour-blind-safe set (orange, sky blue,
 bluish green, yellow, blue, vermilion, reddish purple), whatever the style:
 
-```fortran
-call app%init('FIGURE: paper', 900_int32, 600_int32)
-call app%set_style('paper')                     ! or: call app%set_style('seal', lines='okabe-ito')
-```
+<<< @/examples/snippets/cb_controls-style.F90{fortran}
 
 The contrast column is measured by `src/tests/figure_test_themes.F90` on the colours in effect, as WCAG 2 defines
 it: `Text` against every surface it is drawn on (window, popup, frames, buttons, title bar, header), the lowest
@@ -319,13 +316,12 @@ columns must line up: input files, tables of numbers, the output of a tool.
 | `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (the default), `'plex-mono'` (IBM Plex Mono, monospace), `'proggy'` (Dear ImGui's own 13-pixel bitmap font) or the path of a TrueType/OpenType file; `size` in logical pixels |
 | `ig_push_font(font [, size] [, stat])`, `ig_pop_font([stat])` | another font and/or size for the widgets in between (`font=''` keeps the current one): a title, a value shown large |
 
-```fortran
-call app%set_font('proggy')                       ! Dear ImGui's classic look
-call app%set_font('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16.0_real64)
-call ig_push_font('', 28.0_real64)                ! a big value, in the current font
-call ig_text('3.1416')
-call ig_pop_font()
-```
+<<< @/examples/snippets/cb_controls-font.F90{fortran}
+
+<<< @/examples/snippets/cb_controls-fonts.F90{fortran}
+
+`app%set_font('proggy')` gives Dear ImGui's classic look; a file is given by its path,
+`app%set_font('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16.0_real64)`.
 
 `'plex-mono'` gives every character the same advance, so the columns of a text line up; it is the font for a
 [multi-line field](widgets#multi-line-text) showing a file, pushed around it:
@@ -343,13 +339,7 @@ text font FIGURE loads: the two bundled ones, Proggy, and any font file given to
 is a UTF-8 string, `ICON_<NAME>`, exported by `use figure`: it goes in any label, before or after the text, and takes
 the size and colour of the text around it.
 
-```fortran
-if (ig_button(ICON_PLAY//' Run')) call start()
-call ig_text(ICON_TRIANGLE_ALERT//' 3 warnings')
-call ig_push_font('', 32.0_real64)                ! a big icon, alone
-call ig_text(ICON_CHART_LINE)
-call ig_pop_font()
-```
+<<< @/examples/snippets/cb_controls-icons.F90{fortran}
 
 The names are those of the [Lucide gallery](https://lucide.dev/icons/), upper-cased, with `-` turned into `_`, after
 `ICON_`: `file-pen` is `ICON_FILE_PEN`, `chart-line` is `ICON_CHART_LINE`. All 2171 names of the bundled Lucide

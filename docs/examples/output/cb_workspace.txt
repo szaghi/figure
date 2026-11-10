@@ -1,0 +1,4 @@
+$ ./cb_workspace
+Result docked: T, in the right node: T
+layout saved to workspace.layout
+layout loaded from workspace.layout

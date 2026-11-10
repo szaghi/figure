@@ -1,0 +1,20 @@
+$ ./tut18_checks --test tut18-cases
+[ok]     the title bar holds the studio's menus
+[ok]     the title drags the window
+[ok]     ctrl+o shows the file browser on the example cases
+[ok]     Choose opens the case, the window's title says which
+[ok]     typing edits the title, and the window's title marks it unsaved
+[ok]     a drop asks before discarding the edit
+[ok]     Discard opens the dropped case
+[ok]     F5 runs the solver to convergence
+[ok]     the task reads the field the solver wrote
+[ok]     right moves the probe line while Result has the focus
+[ok]     and not while the title field is edited
+[ok]     nor while another panel has the focus
+[ok]     an input with the body out of the plate is refused
+[ok]     and accepted once corrected
+[ok]     a stray ig_end_tab is reported by the next frame, naming the call
+         ig_end_tab: no ig_begin_tab is open (no scope is open)
+[ok]     no other frame of the test had a usage error
+[ok]     the title bar's close button ends the studio
+17 of 17 checks passed

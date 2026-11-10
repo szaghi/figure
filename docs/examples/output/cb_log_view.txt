@@ -1,0 +1,3 @@
+$ ./cb_log_view
+kept: 1000, the oldest: step 201 residual  9.89E-02
+following: T, in view: 987 to 1000, the newest: step 1200 residual  1.00E-06

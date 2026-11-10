@@ -87,5 +87,5 @@ what a browser allows of files, drops, the clipboard and shortcuts; and what kee
 [Remote UI](/guide/remote), [Performance: remote mode](/guide/performance#remote-mode).
 :::
 
-This is the end of part two. The [Cookbook](../cookbook) answers one task per recipe, and the
-[Reference](/guide/features) lists every procedure.
+This is the end of part two. **Next:** [18. Mistakes reported, keys that respect the focus](./18-checks), the first
+chapter of part three, where the studio grows the features of FIGURE v0.4.0.

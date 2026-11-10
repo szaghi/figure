@@ -85,6 +85,8 @@ edge-on a quarter of it. Both sides of a surface are lit the same (grid faces ar
 blended from the vertices' normals) or `flat` (one per triangle, showing the facets). `lighting=.false.` at `init`
 gives the colours exactly as mapped: use it when the colours must match a [legend](colormaps#a-colour-scale-legend).
 
+<<< @/examples/snippets/cb_view3d_render-colours.F90{fortran}
+
 ## The camera
 
 The camera looks at a **target** from a **distance**, from a direction given by its **azimuth** (around z, from +x
@@ -135,6 +137,8 @@ pixels from where it was pressed, so that a drag is not a click). Each gives:
 Surfaces are cut exactly, per pixel; lines per segment. The cut shows the inside of a surface, lit as its outside.
 `v%unclip()` removes every plane.
 
+<<< @/examples/snippets/cb_view3d_render-clip.F90{fortran}
+
 ## How a view is rendered
 
 A view is rendered again only when something changed since its last render:
@@ -144,7 +148,13 @@ A view is rendered again only when something changed since its last render:
 - the clipping planes;
 - the background.
 
-A frame drawn because another widget changed costs only the image's draw.
+A frame drawn because another widget changed costs only the image's draw. `v%render_info(count)` counts the renders:
+three idle frames add none, a clipping plane one, data changed in place and announced with `v%changed` one
+(`docs/examples/src/cb_view3d_render.F90`, run headless by the documentation's build):
+
+<<< @/examples/snippets/cb_view3d_render-renders.F90{fortran}
+
+<<< @/examples/output/cb_view3d_render.txt{text}
 
 A render runs in three steps:
 1. **Vertices:** the vertices are projected and coloured.

@@ -1,0 +1,28 @@
+#! program build/docs-examples/bin/tut21_monitor
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  420
+#! poster  250
+#! crop    0 0 1100 680
+#! keys
+# F5 runs the plate: the monitor draws the residual on the left axis (log) and the mean temperature on the right one;
+# the pointer over it reads the nearest iteration; the left end of the averaging window is dragged right, and the
+# window's mean, tagged on the right axis, follows. Input > Boundaries: the sketch of the plate; the pointer on the
+# north side draws it thicker; a click on the east side chooses its row in the table
+0   move 600 300
+10  key f5
+150 move 950 520 15
+200 move 820 500 10
+215 down
+216 move 880 500 20
+240 up
+265 move 393 33 12
+280 down
+281 up
+295 move 442 106 12
+310 down
+311 up
+330 move 683 100 12
+365 move 751 152 10
+380 down
+381 up
+400 move 600 600 15

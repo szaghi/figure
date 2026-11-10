@@ -1,6 +1,7 @@
 #! program build/docs-examples/bin/cb_commit_on_leave
 #! frames  330
 #! poster  300
+#! keys
 # A click on tail selects it; a double click on fuselage opens it. abc typed over the CFL is not checked while
 # typing; a click on the mesh field leaves the CFL: refused, the field shows 1.20 again. 1.5 and enter: set.
 # fuse.dat in the mesh field and tab: refused, the field shows fuselage.grd again.

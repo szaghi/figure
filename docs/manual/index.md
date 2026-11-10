@@ -4,10 +4,12 @@ title: Tutorial
 
 # Tutorial
 
-Two parts. **Part one**, six short programs, goes from an empty window to a tested panel and work run beside the
+Three parts. **Part one**, six short programs, goes from an empty window to a tested panel and work run beside the
 window. **Part two** grows one application, a small *solver studio*, chapter by chapter: it opens a case, edits its
 input, runs a solver, follows its residuals, shows the field it computed in 2-D and 3-D, and runs on a cluster with
-its interface in a browser. Each chapter is a complete program of
+its interface in a browser. **Part three** grows the same studio with what FIGURE v0.4.0 added: usage errors
+reported, keys routed by the focus, fields committed when left, sizes in em, tables that sort and have menus, a
+canvas, a monitor with two axes, a field coloured once and a player of snapshots. Each chapter is a complete program of
 [`docs/examples/src`](https://github.com/szaghi/figure/tree/main/docs/examples/src), compiled against the library by
 `docs/examples/build.sh`; in part two each chapter's program is the previous one with something added, and the page
 shows what is new.
@@ -39,6 +41,16 @@ shows what is new.
 | [16. The studio tested](./tutorial/16-tested) | a test | the studio driven headless: keys, the file browser, a drop, a popup, the title bar; scripted recordings |
 | [17. The studio on a cluster](./tutorial/17-remote) | remote mode | the interface in a web browser over SSH, the access token, what a browser allows, bandwidth |
 
+## Part three: the studio grows
+
+| Chapter | The studio gains | You learn |
+|---|---|---|
+| [18. Mistakes reported, keys that respect the focus](./tutorial/18-checks) | usage checks, routed keys | `next_frame(stat)` reporting a wrong end by the Fortran calls; a test failing on any; `ig_shortcut` scopes, a button that owns a key |
+| [19. Fields, lists and sizes](./tutorial/19-layout) | commit on leave, sizes in em | `ig_last_item`, `ig_focus_here`, `ig_scroll_here`, `ig_text_link`; `ig_em`, `ig_frame_height`, `ig_align_begin` |
+| [20. Tables that act](./tutorial/20-tables) | a list of runs | a sortable table with a frozen header, row colours, context menus, tooltips with a plot; radio buttons, drag boxes, a log slider |
+| [21. A sketch and a monitor](./tutorial/21-monitor) | a sketch, a monitor | a canvas and drawing primitives; a second y axis, integer abscissae, the pointer read in plot units, tags, drag lines |
+| [22. The field and its snapshots](./tutorial/22-player) | snapshots | `ip_field_image`, `ip_colormap_legend_edit`, `player_object` and `ig_player` |
+
 ```mermaid
 flowchart LR
   subgraph one [Part one]
@@ -48,23 +60,25 @@ flowchart LR
     G[7. window] --> H[8. shell] --> I[9. case] --> J[10. input] --> K[11. run] --> L[12. field]
     L --> M[13. 3-D] --> N[14. task] --> O[15. robustness] --> P[16. tested] --> Q[17. remote]
   end
+  subgraph three [Part three: the studio grows]
+    R[18. checks, keys] --> S[19. fields, sizes] --> T[20. tables] --> U[21. sketch, monitor] --> V[22. field, player]
+  end
   F --> G
+  Q --> R
 ```
 
 ## Building the chapters
 
-Every chapter builds the same way, against the static library (see [Installation](/guide/install#use-the-library)):
+Every chapter builds the same way, as chapter 1 shows: with FIGURE installed by the
+[one-line installer](/guide/install), `gfortran tut01_window.F90 $(pkg-config --cflags --libs figure) -o tut01_window`;
+the testing module of chapter 5 (`figure_testing`) is in the same library. In a clone of the repository, all of them
+at once, from its root, with `bash docs/examples/build.sh`: it needs FoBiS and the native layer
+(`scripts/build_native.sh` first), puts the programs in `build/docs-examples/bin`, runs the headless ones, and
+regenerates the snippets and outputs these pages include (`docs/examples/snippets`, `docs/examples/output`).
 
-```bash
-fobis build --mode figure-static-gnu
-gfortran -I lib/mod tut01_window.F90 lib/libfigure.a -L lib -lfigure_native -lSDL3 -lstdc++ -ldl -lpthread -lm \
-         -o tut01_window
-```
-
-or all at once, from the repository root, with `bash docs/examples/build.sh` (the programs land in
-`build/docs-examples/bin`). Part two's solver, `tut11_heat`, is a program of its own, built next to the studio; run
-a chapter's studio from that folder, with `--examples DIR` to write the example cases and `--case DIR/plate` to open
-one.
+Part two's solver, `tut11_heat`, and part three's, `tut21_heat`, are programs of their own, built next to the studio;
+run a chapter's studio from that folder, with `--examples DIR` to write the example cases and `--case DIR/plate` to
+open one.
 
 ## Then
 

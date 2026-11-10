@@ -101,6 +101,11 @@ conversion `d`, `i` or `u` under the same rules (`'%5d'`, `'%d cells'`); an `int
 and FIGURE adds the length modifier C needs (`'%lld'`). A conversion longer than 24 characters is refused too (Dear
 ImGui copies it into a buffer of 32 bytes).
 
+A format of the wrong family is refused before Dear ImGui sees it, and the program goes on
+(`docs/examples/src/cb_stat.F90`, run by the documentation's build, [Errors](errors#stat-or-error-stop)):
+
+<<< @/examples/snippets/cb_stat-format.F90{fortran}
+
 C's formatter reads the value as the format says, and a format that does not match it is undefined behaviour: before
 v0.3.1 a `'%d'` given for a real printed a wrong label, and a `'%n'` for a heatmap's labels stopped the program
 (`%n in writable segment detected`, glibc on Linux). The same in every mode: **window**,
@@ -236,6 +241,16 @@ whose stride differs is copied, once per call, into a temporary laid out at the 
 ordinates' span: `n` times the stride). An item copies at most its abscissae when the ordinates share a stride. Integer
 abscissae are always converted (ImPlot reads `x` and `y` of one type); the ordinates stay in place. `test_plot_copies()`
 counts the arrays FIGURE copied and `test_plot_stride()` gives the stride of the last item ([Testing](testing)).
+
+Records of a run (`runs%iter`, `runs%cl`: components of an array of derived types) and the rows of a matrix, plotted
+where they are, with the copies counted (`docs/examples/src/cb_in_place.F90`, run headless by the documentation's
+build):
+
+<<< @/examples/snippets/cb_in_place-records.F90{fortran}
+
+<<< @/examples/snippets/cb_in_place-rows.F90{fortran}
+
+<<< @/examples/output/cb_in_place.txt{text}
 
 **What arrives is the compiler's choice.** A Fortran compiler may copy a non-contiguous actual argument into a
 contiguous temporary before the call, and then FIGURE reads that copy (contiguous, nothing more to copy):
@@ -387,6 +402,10 @@ segments.
 |---|---|
 | `ip_histogram(label, values [, bins] [, vmin] [, vmax] [, bar_scale] [, max_count] [, spec] [, stat])` | Bars over `bins` equal bins of [`vmin`, `vmax`], each as high as the values falling in it (`PlotHistogram`). `values`: `real(real32)` or `real(real64)`. `bins`: a count > 0, or a rule, `ImPlotBin_Sqrt` (√n), `ImPlotBin_Sturges` (1 + log₂n, the default), `ImPlotBin_Rice` (2∛n), `ImPlotBin_Scott` (width 3.49 σ / ∛n). `vmin`/`vmax` (`real(real64)`, both or neither): default the range of the finite values. `bar_scale`: bar width over bin width (default 1). `max_count` (out): the height of the tallest bar. |
 | `ip_histogram2d(label, x, y [, xbins] [, ybins] [, xmin] [, xmax] [, ymin] [, ymax] [, colormap] [, max_count] [, spec] [, stat])` | Cells over [`xmin`, `xmax`] x [`ymin`, `ymax`] coloured through `colormap` (an id from [`ip_colormap`](colormaps), default Viridis) by the points falling in each (`PlotHistogram2D`); bins and ranges per axis as above; `max_count` (out): the fullest cell's count, the top of the colour scale ([`ip_colormap_scale`](images#heatmaps) draws it). |
+
+<<< @/examples/snippets/gallery-histograms.F90{fortran}
+
+(`g` holds near-normal samples, sums of twelve Weyl sequences, and `g2` a second set correlated with it: no random numbers, so the picture is the same on every run; `docs/examples/src/gallery.F90`.)
 
 Flags, in `ip_spec(flags=...)`: `ImPlotHistogramFlags_Horizontal` (bars along x, 1-D only), `_Cumulative` (each bar
 adds the ones before it, 1-D only), `_Density` (counts divided by the number of values and the bin width: the

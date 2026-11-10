@@ -15,8 +15,8 @@ the solution and the convergence history are plotted, and the panel stays respon
 
 <<< @/examples/snippets/tut04_live-advance.F90{fortran}
 
-The computation runs in the frame loop: `steps` iterations per frame, then the frame is drawn. With lazy redraw the
-loop would go to sleep three frames after the last input, and the computation with it; `request_frames(1)` in every
+The computation runs in the frame loop: `steps` iterations per frame, then the frame is drawn. With [lazy
+redraw](/guide/frame-loop#lazy-redraw) the loop would go to sleep a few frames after the last input, and the computation with it; `request_frames(1)` in every
 frame that advanced keeps it drawing. When `running` turns `.false.` (converged, history full, or unchecked by the
 user), the calls stop and the loop goes back to sleep.
 

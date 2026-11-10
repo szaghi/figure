@@ -26,6 +26,8 @@ them, so there are no prebuilt binaries. Four routes lead to a usable library:
 | FoBiS fetch | your program is a FoBiS project and should pin FIGURE's version in its own fobos | [FIGURE as a FoBiS dependency](#figure-as-a-fobis-dependency) |
 | Manual build | you work on FIGURE itself, run its tests and examples, or need a modified FIGURE | [Building from the repository](#building-from-the-repository) |
 
+For the [tutorial](/manual/), the one-line installer is enough.
+
 ## The one-line installer
 
 `scripts/install.sh`, attached to every release, works in five stages and stops at the first that fails:
@@ -91,7 +93,7 @@ clone's `lib/`:
 
 ```ini
 [dependencies]
-figure = https://github.com/szaghi/figure :: tag=v0.2.0 :: use=fobos :: mode=figure-static-gnu
+figure = https://github.com/szaghi/figure :: tag=v0.3.1 :: use=fobos :: mode=figure-static-gnu
 ```
 
 ```ini
@@ -245,7 +247,7 @@ Another fpm project depends on FIGURE through the package published for each rel
 
 ```toml
 [dependencies]
-figure = { git = "https://github.com/szaghi/figure", tag = "v0.2.0-fpm" }
+figure = { git = "https://github.com/szaghi/figure", tag = "v0.3.1-fpm" }
 ```
 
 A plain `fpm build` then compiles everything; only SDL3 comes from the system (on macOS fpm also needs
@@ -289,12 +291,13 @@ native build's. `scripts/check_sync.py` checks that the package compiles the sam
 
 ## Use the library
 
-Build the static library, then compile against its modules and link it together with the native layer:
+From the repository's root, build the static library, then compile against its modules and link it together with
+the native layer (a program elsewhere gives the paths of the clone: `-I ~/figure/lib/mod`, and so on):
 
 ```bash
 fobis build --mode figure-static-gnu
-gfortran -I figure/lib/mod my_program.F90 figure/lib/libfigure.a \
-         -L figure/lib $(python3 figure/scripts/check_sync.py --link-flags) -o my_program
+gfortran -I lib/mod my_program.F90 lib/libfigure.a -L lib $(python3 scripts/check_sync.py --link-flags) \
+         -o my_program
 ```
 
 `check_sync.py --link-flags` prints the native link line of the platform, in order: `figure_native SDL3` followed

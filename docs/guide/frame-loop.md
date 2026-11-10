@@ -137,6 +137,13 @@ these calls is thread-safe ([Calling the application from a task](processes#call
 - **Headless:** the loop never waits; a wake-up changes nothing.
 - **Remote:** a wake-up is a datagram to a socket of the loopback that the loop waits on with the network's.
 
+A worker that computes and wakes the loop when it has news, and the lazy loop that draws it
+(`docs/examples/src/cb_wake.F90`, run headless by the documentation's build):
+
+<<< @/examples/snippets/cb_wake-work.F90{fortran}
+
+<<< @/examples/snippets/cb_wake-loop.F90{fortran}
+
 Before v0.3.1, `request_frames` and `quit` from a task did not wake the loop: their frame came at the next input or
 after `max_wait`. Redraw on a worker's news: [cookbook](/manual/cookbook#redraw-when-a-worker-has-news).
 
@@ -446,7 +453,9 @@ from a [task](processes#tasks) (a task does not draw: the task's status becomes 
 ones; 1 in headless mode). FIGURE applies it at `init`: the window is created `width * scale` by `height * scale`,
 and the Dear ImGui style (spacing, fonts) is scaled by it. Positions and sizes the program passes
 (`ig_set_next_window`, button and plot sizes) are not scaled: multiply them by `content_scale()` to keep their
-proportion to the window ([cookbook](/manual/cookbook#size-in-proportion-to-the-display-scale)).
+proportion to the window ([cookbook](/manual/cookbook#size-in-proportion-to-the-display-scale)):
+
+<<< @/examples/snippets/cb_scale-scale.F90{fortran}
 
 ## Styles
 

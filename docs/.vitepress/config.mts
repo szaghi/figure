@@ -40,6 +40,16 @@ const docs = [
     ],
   },
   {
+    text: 'Tutorial, part three: the studio grows',
+    items: [
+      { text: '18. Mistakes and keys',        link: '/manual/tutorial/18-checks' },
+      { text: '19. Fields, lists and sizes',  link: '/manual/tutorial/19-layout' },
+      { text: '20. Tables that act',          link: '/manual/tutorial/20-tables' },
+      { text: '21. A sketch and a monitor',   link: '/manual/tutorial/21-monitor' },
+      { text: '22. The field and its snapshots', link: '/manual/tutorial/22-player' },
+    ],
+  },
+  {
     text: 'Recipes',
     items: [
       { text: 'Cookbook', link: '/manual/cookbook' },
@@ -67,6 +77,7 @@ const docs = [
       { text: 'Screenshots and videos',  link: '/guide/capture' },
       { text: 'Architecture',            link: '/guide/architecture' },
       { text: 'Raw bindings',            link: '/guide/raw-bindings' },
+      { text: 'Dear ImGui names',        link: '/guide/imgui-names' },
       { text: 'Known issues',            link: '/guide/known-issues' },
     ],
   },
@@ -112,7 +123,7 @@ export default withMermaid({
       {
         text: 'Reference',
         link: '/guide/features',
-        activeMatch: '^/guide/(features|frame-loop|widgets|menus|docking|styles|plots|images|view3d|canvas|remote|performance|errors|testing|capture|architecture|raw-bindings|known-issues)',
+        activeMatch: '^/guide/(features|frame-loop|widgets|menus|docking|styles|plots|images|view3d|canvas|remote|performance|errors|testing|capture|architecture|raw-bindings|imgui-names|known-issues)',
       },
       { text: 'API', link: '/api/' },
       {
