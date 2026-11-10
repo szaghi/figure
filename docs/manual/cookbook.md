@@ -29,6 +29,22 @@ the data is shown at most `max_wait` seconds late. The default is 0.5 s; a longe
 the display's; with `vsync=.false.` the loop runs as fast as the machine draws. Both cost CPU (and GPU) while idle: for
 an animation that runs only some of the time, prefer [`request_frames`](/manual/tutorial/04-live).
 
+### Time a piece of work, animate by the clock
+
+<<< @/examples/snippets/cb_time-time.F90{fortran}
+
+`figure_time()` is seconds since its first call, on a monotonic clock: under nvfortran `system_clock` reads the wall
+clock, which the system steps (by +2.56 s every 32 s on WSL2), and a timing across a step is wrong by the step. An
+animation takes its position from the clock, so it keeps its speed at any frame rate:
+
+<<< @/examples/snippets/cb_time-animate.F90{fortran}
+
+The program checks itself headless (`cb_time --check`):
+
+<<< @/examples/output/cb_time.txt{text}
+
+[Time](/guide/frame-loop#time) has the origin, the resolution and the threads.
+
 ### Size in proportion to the display scale
 
 <<< @/examples/snippets/cb_scale-scale.F90{fortran}

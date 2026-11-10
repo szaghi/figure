@@ -10,9 +10,9 @@ program figure_test_remote
 !< program checks that the click arrived once, that the browser's paste reached its clipboard (it answers with a copy,
 !< which the client checks), and the client's verdict. Needs python3 (3.11+) on the PATH; run from the repository
 !< root, as scripts/run_tests.sh does.
-use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, int64, output_unit, real64
+use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, real64
 use figure, only : app_object, ig_begin, ig_button, ig_end, ig_get_clipboard, ig_image, ig_item_rect, ig_set_clipboard, &
-                   ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, texture_object
+                   ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, texture_object, figure_time
 use figure_cimgui, only : igIsKeyDown_Nil
 use figure_cimgui_enums, only : ImGuiKey_A, ImGuiKey_Z
 
@@ -25,9 +25,8 @@ integer(int32)              :: clicks                                   !< Butto
 integer(int32)              :: frames                                   !< Frames drawn.
 integer(int32)              :: unit                                     !< File unit.
 integer(int32)              :: stat                                     !< Status.
-integer(int64)              :: rate                                     !< Clock ticks per second.
-integer(int64)              :: t0                                       !< Clock at the start.
-integer(int64)              :: t                                        !< Clock now.
+real(real64)                :: t0                                       !< figure_time at the start [s].
+real(real64)                :: t                                        !< figure_time now [s].
 real(real64)                :: x0                                       !< Button rectangle, left [pixels].
 real(real64)                :: y0                                       !< Button rectangle, top [pixels].
 real(real64)                :: x1                                       !< Button rectangle, right [pixels].
@@ -83,7 +82,7 @@ if (test_passed(1)) then
                                  trim(token)//' &'
    endif
    call execute_command_line(trim(command), wait=.true.)
-   call system_clock(t0, rate)
+   t0 = figure_time()
    do while (app%next_frame())
       frames = frames + 1_int32
       call ig_set_next_window(20.0_real64, 20.0_real64, 300.0_real64, 120.0_real64, always=.true.)
@@ -126,20 +125,20 @@ if (test_passed(1)) then
          close(unit)
          written = .true.
       endif
-      call system_clock(t)
-      if (clicks > 0_int32 .or. real(t - t0, real64) / real(rate, real64) > 30.0_real64) exit
+      t = figure_time()
+      if (clicks > 0_int32 .or. t - t0 > 30.0_real64) exit
    enddo
    call tex%destroy()
    call app%destroy() ! closes the connection: the client finishes and writes its verdict
-   call system_clock(t0)
+   t0 = figure_time()
    do ! wait for the verdict, at most 10 s
       inquire(file=OK_FILE, exist=exists)
-      call system_clock(t)
-      if (exists .or. real(t - t0, real64) / real(rate, real64) > 10.0_real64) exit
+      t = figure_time()
+      if (exists .or. t - t0 > 10.0_real64) exit
    enddo
    if (exists) then ! written atomically by the client (rename), so complete once it exists
       verdict = 'unreadable verdict file'
-      call system_clock(t0)
+      t0 = figure_time()
       do ! Windows may still hold the file just after the rename: retry the open for up to 5 s
          open(newunit=unit, file=OK_FILE, action='read', status='old', iostat=stat)
          if (stat == 0_int32) then
@@ -148,8 +147,8 @@ if (test_passed(1)) then
             close(unit)
             exit
          endif
-         call system_clock(t)
-         if (real(t - t0, real64) / real(rate, real64) > 5.0_real64) exit
+         t = figure_time()
+         if (t - t0 > 5.0_real64) exit
       enddo
    endif
 endif

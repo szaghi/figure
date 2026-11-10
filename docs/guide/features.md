@@ -47,6 +47,7 @@ A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) 
 | `app%set_style([name] [, lines] [, stat] [, look] [, palette] [, auto_dark] [, auto_light])` | the style by name (`'seal'`, default, `'seal-light'`, `'paper'`, `'high-contrast'`, `'dark'`, `'light'`, `'classic'`), or by parts: a look (geometry) and a palette (colours, or `'auto'`: the system's light or dark setting); `lines='okabe-ito'` | [styles](styles#looks-and-palettes) <!-- visual --> |
 | `app%palette_color(role, rgba [, stat])` | the colour of a palette role in effect (`'text'`, `'accent'`, `'error'`, ...) as `[r, g, b, a]` in [0, 1] | [palette roles](styles#palette-roles) |
 | `app%destroy()` | close the window, destroy the contexts | [frame loop](frame-loop#the-application) |
+| `figure_time()` → `real(real64)` | seconds since its first call on a monotonic clock (not stepped by the system, unlike nvfortran's `system_clock`); before `init*` and from any thread | [time](frame-loop#time) |
 
 ## Widgets: `ig_*`
 

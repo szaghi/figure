@@ -324,6 +324,11 @@ Math), an unrouted shortcut scope, plot data through C descriptors and a monoton
   `IsKeyChordPressed`, v0.3's behaviour: every call of the chord fires, whatever has the focus, a text field being
   edited included; `ig_set_next_item_shortcut` refuses it. The four scopes in one table, and v0.4.0's migration note
   corrected: v0.3's behaviour is `'always'`, not `'global'` ([Shortcuts](menus#shortcuts)): done.
+- **A monotonic clock** (S13): `figure_time()` → `real(real64)`, seconds since its first call on the system's
+  monotonic clock (`CLOCK_MONOTONIC` on Linux: SDL's `CLOCK_MONOTONIC_RAW` runs 7 to 11 % fast on WSL2), never stepped
+  by the system (nvfortran's `system_clock` is the wall clock, which WSL2 steps); callable
+  before `init*`, after `destroy` and from any thread, a task included. FIGURE's tests time with it, in place of
+  their own clock and of `system_clock` ([Time](frame-loop#time)): done.
 
 ## Next
 

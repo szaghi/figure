@@ -208,6 +208,52 @@ It reports the renderer (the WSL GPU through D3D12, or Mesa software rendering) 
 one core, with its resolution. The kernel counts CPU time in clock ticks, usually 10 ms: use windows of 60 s or more
 (the default is 10 s, after a 4 s warm-up) to resolve sub-percent costs.
 
+## Time
+
+| Procedure | Notes |
+|---|---|
+| `figure_time()` → `real(real64)` | Seconds since the first call of `figure_time` in the program, on a monotonic clock. |
+
+(The system's monotonic clock: Linux's `CLOCK_MONOTONIC`; on macOS and Windows SDL's `SDL_GetPerformanceCounter`.)
+
+<<< @/examples/snippets/cb_time-time.F90{fortran}
+
+- **Monotonic:** never decreasing, and not stepped when the system sets its time: on Linux
+  `clock_gettime(CLOCK_MONOTONIC)`, on macOS `mach_absolute_time`, on Windows `QueryPerformanceCounter`.
+- **Not SDL's clock on Linux:** SDL's counter (and `SDL_GetTicksNS`) reads `CLOCK_MONOTONIC_RAW`, the counter without
+  the kernel's rate correction. On WSL2 it runs fast: a sleep of 0.200 s lasted 0.2145 s to 0.2223 s by it, and
+  0.200 s by `CLOCK_MONOTONIC` (measured on 2026-11-10, against `usleep`).
+- **Why not `system_clock`:** nvfortran 26.9's `system_clock` (any integer kind) reads `gettimeofday`, the wall clock,
+  which the system steps: WSL2 steps it by +2.56 s every 32 s, so an interval measured across a step is 2.56 s too long
+  ([Known issues](known-issues#nvfortran-system-clock-is-the-wall-clock)). gfortran's `system_clock` with an `int64`
+  count is monotonic, but the program then times differently under each compiler. `figure_time` is the same clock
+  under every compiler.
+- **Origin:** the first call, wherever it is made: before `init*` (no window or context is needed), in a task, after
+  `destroy`. The first call returns (about) 0; `destroy` and a second `init` do not reset it (`SDL_GetTicksNS`'s
+  origin starts again from 0 after `SDL_Quit`, which `destroy` calls in window mode).
+- **Resolution:** the counter's tick: 1 ns on Linux, 1 ns (Intel) or about 42 ns (Apple silicon) on macOS, usually
+  100 ns on Windows. A `real64` keeps 1 ns over 100 days of seconds.
+- **Status:** none; it cannot fail.
+- **Modes:** the same in window, headless and remote mode. It is the real time, not the frame clock: headless frames
+  advance Dear ImGui's clock by 1/60 s each whatever the time ([Headless testing](testing)), and `figure_time` keeps
+  the real time between them.
+- **Threads:** any thread, a [task](processes#tasks) included: one clock, one origin for every thread.
+
+An animation that keeps its speed whatever the frame rate takes its position from the clock, not from a count of
+frames:
+
+<<< @/examples/snippets/cb_time-animate.F90{fortran}
+
+The program checks itself headless (it prints facts about the times, which change with every run):
+
+<<< @/examples/output/cb_time.txt{text}
+
+**What it does not do:** no date or time of day (the origin is the first call, not an epoch: for a time stamp use
+`date_and_time`); no timers or callbacks (FIGURE calls no Fortran: poll the clock, and keep the loop running with
+`app%set_lazy(.false.)` or `app%request_frames` while something moves, as [lazy redraw](#lazy-redraw) explains); no
+pause of the clock. A sleep or a frame wait measured with it is as long as the system made it, which on a loaded
+machine is longer than asked.
+
 ## File dialogs
 
 Two kinds of dialog choose a file to open, where to save, or a folder: the **system's own** (window mode only), and

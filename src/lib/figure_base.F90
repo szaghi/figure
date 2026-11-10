@@ -9,13 +9,13 @@ module figure_base
 !< begin/end and push/pop pair registers in the scope record of the frame (`figure_scope_open` after the begin,
 !< `figure_scope_refused` before the end): see errors.md, "Pairing and frames".
 use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_f_pointer, c_int, c_null_char, c_ptr
-use, intrinsic :: iso_fortran_env, only : error_unit, int32
+use, intrinsic :: iso_fortran_env, only : error_unit, int32, real64
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_last_error, fig_set_last_error, fig_task_refuse, &
-                            fig_draw_refuse, fig_scope_close, fig_scope_open, fig_usage_error
+                            fig_draw_refuse, fig_scope_close, fig_scope_open, fig_usage_error, fig_time
 
 implicit none
 private
-public :: figure_check, figure_fail, figure_last_error, cstr, figure_refused
+public :: figure_check, figure_fail, figure_last_error, cstr, figure_refused, figure_time
 public :: FORMAT_INTEGER, FORMAT_REAL, format_ok, format_refused
 public :: figure_draw_refused, figure_scope_open, figure_scope_refused, figure_usage_error
 public :: SCOPE_WINDOW, SCOPE_CHILD, SCOPE_TAB_BAR, SCOPE_TAB, SCOPE_TABLE, SCOPE_TREE, SCOPE_MAIN_MENU_BAR, SCOPE_MENU_BAR
@@ -51,6 +51,18 @@ integer(c_int), parameter :: SCOPE_TOOLTIP = 22_c_int       !< ig_begin_tooltip,
                                                              !< (after true).
 
 contains
+   recursive function figure_time() result(seconds)
+   !< Seconds since the first call of `figure_time` in the program, on a monotonic clock (`clock_gettime` of
+   !< `CLOCK_MONOTONIC` on Linux, `mach_absolute_time` on macOS, `QueryPerformanceCounter` on Windows): never
+   !< decreasing, not stepped when the system sets its time, as `system_clock` is under nvfortran.
+   !< Resolution: the counter's tick, 1 ns on Linux, 1 ns or 42 ns on macOS (Intel, Apple silicon), usually 100 ns on
+   !< Windows; the first call returns (about) 0. Callable at any time (before `init*`, after `destroy`) and from any
+   !< thread, a task included; the same in every mode.
+   real(real64) :: seconds !< Seconds since the first call [s].
+
+   seconds = real(fig_time(), real64)
+   endfunction figure_time
+
    function figure_last_error() result(msg)
    !< Message of the last failed call.
    character(len=:), allocatable          :: msg    !< Message.

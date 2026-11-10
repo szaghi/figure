@@ -414,6 +414,9 @@ int    fig_drawn_extent_layer(const float *rgba, int layer, float *rect, int *fo
 
 /* The cimgui/cimplot functions passing structs by value are wrapped in figure_glue_generated.cpp (generated). */
 
+/* Seconds since the first call of fig_time, on the system's monotonic clock; any thread, any time. */
+double fig_time(void);
+
 #ifdef __cplusplus
 }
 #endif

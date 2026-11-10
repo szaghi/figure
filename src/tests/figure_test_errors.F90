@@ -13,7 +13,8 @@ program figure_test_errors
 !< for a scope left open, with the message on standard error. An unknown mode is refused. The cost of the record is
 !< measured (a push/pop pair and a text, against the raw calls) and printed.
 use, intrinsic :: iso_c_binding, only : c_bool, c_float, c_int, c_null_char, c_null_ptr
-use, intrinsic :: iso_fortran_env, only : error_unit, int32, int64, output_unit, real64
+use, intrinsic :: iso_fortran_env, only : error_unit, int32, output_unit, real64
+use figure, only : figure_time
 use figure, only : app_object, figure_last_error, FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, ImGuiWindowFlags_MenuBar, &
                    ig_begin, ig_begin_child, ig_begin_disabled, ig_begin_main_menu_bar, ig_begin_menu,            &
                    ig_begin_menu_bar, ig_begin_popup, ig_begin_tab, ig_begin_tab_bar, ig_begin_table, ig_button,  &
@@ -604,36 +605,35 @@ contains
    logical                     :: ok       !< Small enough.
    integer(int32), parameter   :: N = 100000_int32 !< Pairs.
    integer(int32), parameter   :: M = 20000_int32  !< Texts.
-   integer(int64)              :: t(5)     !< Clock ticks.
-   integer(int64)              :: rate     !< Ticks per second.
+   real(real64)                :: t(5)     !< figure_time at each stage [s].
    integer(int32)              :: i        !< Counter.
    real(real64)                :: pair(2)  !< ns per pair: FIGURE, raw.
    real(real64)                :: text(2)  !< ns per text: FIGURE, raw.
 
    if (ig_begin('Cost')) continue
-   call system_clock(t(1), rate)
+   t(1) = figure_time()
    do i = 1_int32, N
       call ig_push_id(i)
       call ig_pop_id()
    enddo
-   call system_clock(t(2))
+   t(2) = figure_time()
    do i = 1_int32, N
       call igPushID_Int(int(i, c_int))
       call igPopID()
    enddo
-   call system_clock(t(3))
+   t(3) = figure_time()
    do i = 1_int32, M
       call ig_text('x')
    enddo
-   call system_clock(t(4))
+   t(4) = figure_time()
    do i = 1_int32, M
       call igTextUnformatted('x'//c_null_char, c_null_ptr)
    enddo
-   call system_clock(t(5))
+   t(5) = figure_time()
    call ig_end()
    msg = report()
-   pair = [real(t(2) - t(1), real64), real(t(3) - t(2), real64)] * 1.0e9_real64 / real(rate, real64) / real(N, real64)
-   text = [real(t(4) - t(3), real64), real(t(5) - t(4), real64)] * 1.0e9_real64 / real(rate, real64) / real(M, real64)
+   pair = [t(2) - t(1), t(3) - t(2)] * 1.0e9_real64 / real(N, real64)
+   text = [t(4) - t(3), t(5) - t(4)] * 1.0e9_real64 / real(M, real64)
    write(output_unit, '(A,F8.1,A,F8.1,A)') 'cost: ig_push_id + ig_pop_id ', pair(1), ' ns, raw ', pair(2), ' ns'
    write(output_unit, '(A,F8.1,A,F8.1,A)') 'cost: ig_text ', text(1), ' ns, raw igTextUnformatted ', text(2), ' ns'
    ok = msg == '' .and. pair(1) - pair(2) < 20000.0_real64

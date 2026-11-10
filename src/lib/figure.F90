@@ -14,7 +14,7 @@ module figure
 !< thread (figure_task: `task_object`, `task_handle_object`); 3-D views of meshes (figure_view3d: `view3d_object`);
 !< a player for snapshots (figure_player: `player_object`, `ig_player`).
 use figure_app, only : app_object
-use figure_base, only : figure_last_error
+use figure_base, only : figure_last_error, figure_time
 use figure_c_native, only : FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 use figure_cimgui_enums, only : ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode,         &
                                 ImGuiDockNodeFlags_NoDockingSplit, ImGuiDockNodeFlags_NoResize,               &
@@ -122,7 +122,7 @@ use figure_player, only : player_object, ig_player
 
 implicit none
 private
-public :: app_object, figure_last_error
+public :: app_object, figure_last_error, figure_time
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image

@@ -1,0 +1,5 @@
+$ ./cb_time --check
+the clock never went back over 30 frames: T
+a step takes more than 0 s: T
+the marker is in [0, 1): T
+the sum is right: T

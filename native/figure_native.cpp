@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
+#include <ctime>
 #include <deque>
 #include <algorithm>
 #include <filesystem>
@@ -3937,4 +3938,39 @@ extern "C" int fig_drawn_extent_rgba(const float *rgba, float *rect, int *found)
       return fail(FIG_ERR_STATE, "test_drawn_extent: call it inside a window, in a frame");
    drawn_extent(ImGui::GetColorU32(ImVec4(rgba[0], rgba[1], rgba[2], rgba[3])), rect, found);
    return FIG_OK;
+}
+
+// ---- The monotonic clock -------------------------------------------------------------------------------------------
+
+// Seconds since the first call. Linux and the other POSIX systems: clock_gettime(CLOCK_MONOTONIC), never stepped,
+// its rate kept to the real time. Not SDL's performance counter there: SDL reads CLOCK_MONOTONIC_RAW, the counter
+// without the kernel's rate correction, which on WSL2 runs 7 to 11 % fast (measured: a usleep of 0.200 s lasts
+// 0.200 s by CLOCK_MONOTONIC and 0.2145 to 0.2223 s by CLOCK_MONOTONIC_RAW, 2026-11-10). macOS and Windows: SDL's
+// counter (mach_absolute_time, QueryPerformanceCounter). Not SDL_GetTicksNS either: SDL_Quit resets its origin, and
+// its first call registers a hint callback (not safe from two threads). The origin and the frequency are read once,
+// under std::call_once, so any thread may call it, before init* and after destroy.
+#if defined(__unix__) && !defined(__APPLE__)
+static Uint64 fig_counter(void) {
+   struct timespec now;
+   clock_gettime(CLOCK_MONOTONIC, &now);
+   return static_cast<Uint64>(now.tv_sec) * 1000000000ULL + static_cast<Uint64>(now.tv_nsec);
+}
+static Uint64 fig_counter_frequency(void) { return 1000000000ULL; }
+#else
+static Uint64 fig_counter(void) { return SDL_GetPerformanceCounter(); }
+static Uint64 fig_counter_frequency(void) { return SDL_GetPerformanceFrequency(); }
+#endif
+
+double fig_time(void) {
+   static std::once_flag once;
+   static Uint64 origin = 0, frequency = 1;
+   std::call_once(once, [] {
+      frequency = fig_counter_frequency();
+      if (frequency == 0) frequency = 1;
+      origin = fig_counter();
+   });
+   const Uint64 ticks = fig_counter() - origin;
+   // whole seconds and the remainder apart: a double holds the count exactly only up to 2^53 ticks (104 days in ns)
+   return static_cast<double>(ticks / frequency) +
+          static_cast<double>(ticks % frequency) / static_cast<double>(frequency);
 }

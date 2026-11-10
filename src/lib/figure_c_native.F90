@@ -35,7 +35,7 @@ public :: fig_process_start, fig_process_pending, fig_process_take, fig_process_
 public :: fig_process_release
 public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_task_cancel, fig_task_cancelled
 public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
-public :: fig_usage_error
+public :: fig_usage_error, fig_time
 public :: fig_set_checks, fig_checks, fig_draw_refuse, fig_scope_open, fig_scope_close, fig_scope_report
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_notification_alpha
@@ -522,6 +522,13 @@ interface
    integer(c_int),         value      :: has_stat !< 1: the caller has a stat (the error is returned there).
    integer(c_int)                     :: action   !< 1 or 2.
    endfunction fig_usage_error
+
+   function fig_time() result(seconds) bind(C, name='fig_time')
+   !< Seconds since the first call, on the system's monotonic clock; any thread, any time.
+   import :: c_double
+   implicit none
+   real(c_double) :: seconds !< Seconds since the first call [s].
+   endfunction fig_time
 
    subroutine fig_scope_open(kind, who, who_len, label, label_len, returned, aux) bind(C, name='fig_scope_open')
    !< A begin or a push, after it: its scope in the record of the frame.
