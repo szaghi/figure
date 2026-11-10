@@ -15,7 +15,7 @@ public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutd
 public :: fig_set_remote_fps, fig_set_remote_compress, fig_set_remote_token, fig_remote_token
 public :: fig_set_remote_lossy
 public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, fig_texture_destroy, fig_texture_sampling
-public :: fig_texture_update
+public :: fig_texture_update, fig_image_read, fig_image_free, fig_image_write
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
 public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
@@ -990,6 +990,40 @@ interface
    implicit none
    integer(c_long_long), value :: id !< Texture.
    endsubroutine fig_texture_destroy
+
+   function fig_image_read(path, path_len, rgba, width, height) result(status) bind(C, name='fig_image_read')
+   !< Read a PNG or JPEG file into RGBA pixels, rows of `width` pixels from the top row down (any thread).
+   import :: c_char, c_int, c_ptr
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File name, UTF-8 (`path_len` bytes, no terminator).
+   integer(c_int), value              :: path_len !< Length of `path` [bytes].
+   type(c_ptr),            intent(out) :: rgba    !< The decoder's pixels, released with `fig_image_free`.
+   integer(c_int),         intent(out) :: width   !< Width [pixels].
+   integer(c_int),         intent(out) :: height  !< Height [pixels].
+   integer(c_int)                      :: status  !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_image_read
+
+   subroutine fig_image_free(rgba) bind(C, name='fig_image_free')
+   !< Release the pixels of `fig_image_read`.
+   import :: c_ptr
+   implicit none
+   type(c_ptr), value :: rgba !< The pixels.
+   endsubroutine fig_image_free
+
+   function fig_image_write(path, path_len, pixels, channels, width, height, quality) result(status) &
+      bind(C, name='fig_image_write')
+   !< Write pixels as a PNG (`quality` 0) or a JPEG (`quality` 1-100); rows of `width` pixels from the top (any thread).
+   import :: c_char, c_int, c_ptr
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File name, UTF-8 (`path_len` bytes, no terminator).
+   integer(c_int), value              :: path_len !< Length of `path` [bytes].
+   type(c_ptr), value                 :: pixels   !< First byte of the pixels.
+   integer(c_int), value              :: channels !< Bytes a pixel: 1 grey, 2 grey + alpha, 3 RGB, 4 RGBA.
+   integer(c_int), value              :: width    !< Width [pixels].
+   integer(c_int), value              :: height   !< Height [pixels].
+   integer(c_int), value              :: quality  !< 0: PNG; 1-100: JPEG of that quality.
+   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_image_write
 
    subroutine fig_texture_sampling(plot, from_texture) bind(C, name='fig_texture_sampling')
    !< Around a user image: 1 = sample with the texture's own filter, 0 = restore the backend's render state.

@@ -10,8 +10,10 @@
 #                            Dear ImGui 1.93 API (docking only adds to it)
 #   SDL     release-3.4.20
 #   miniz   3.0.2         -> deflate for the remote mode's compressed messages (MIT)
-#   stb_image_write v1.16 -> JPEG for the remote mode's changing images (MIT or public domain), vendored unmodified in
-#                            third_party/stb (one header)
+#   stb_image_write v1.16 -> JPEG for the remote mode's changing images, PNG and JPEG files (MIT or public domain),
+#                            vendored unmodified in third_party/stb (one header)
+#   stb_image v2.30       -> PNG and JPEG files read (fig_read_image, tex%load; MIT or public domain), vendored
+#                            unmodified in third_party/stb (one header), the same stb commit as stb_image_write
 cmake_minimum_required(VERSION 3.24)
 project(figure_native LANGUAGES C CXX)
 
@@ -104,12 +106,13 @@ add_library(figure_native STATIC
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_field.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_view3d.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/figure_image.cpp
    ${miniz_SOURCE_DIR}/miniz.c)
 # miniz: only its deflate and zlib-format functions, all under the mz_ prefix (no zlib names: a program may link zlib)
 target_compile_definitions(figure_native PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
                                                  MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
 target_include_directories(figure_native PRIVATE ${miniz_SOURCE_DIR})
-# stb_image_write: the JPEG encoder of figure_remote.cpp (implementation compiled there, its functions static)
+# stb_image and stb_image_write: PNG and JPEG, both compiled in figure_image.cpp only, their functions static
 target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb)
 # The browser client page, embedded in figure_remote.cpp as a C++ raw string (reconfigured when the page changes).
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote_client.html)

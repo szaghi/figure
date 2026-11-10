@@ -8,7 +8,8 @@ module figure
 !< menus, popups and shortcuts (figure_menu), groups of widgets (figure_group: child regions, collapsing headers, tabs,
 !< tables, trees, id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style),
 !< the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the
-!< GPU textures (figure_texture) that `ig_image` and `ip_image` draw, and the Lucide icons by name, `ICON_*`
+!< GPU textures (figure_texture) that `ig_image` and `ip_image` draw, PNG and JPEG files read (`fig_read_image`,
+!< `tex%load`), and the Lucide icons by name, `ICON_*`
 !< (figure_icons), UTF-8 strings for any label: `ig_button(ICON_PLAY//' Run')`; programs started from the program and
 !< a view of their output (figure_process: `process_object`, `log_view_object`); Fortran procedures run on a worker
 !< thread (figure_task: `task_object`, `task_handle_object`); 3-D views of meshes (figure_view3d: `view3d_object`);
@@ -114,7 +115,7 @@ use figure_style, only : ig_pop_style_color, ig_pop_style_var, ig_push_style_col
                          ig_get_style_color, ig_get_style_var, ig_pop_font, ig_push_font, ig_set_style_color,    &
                          ig_set_style_var, ig_show_style_editor, ip_get_style_color, ip_get_style_var,                 &
                          ip_set_style_color, ip_set_style_var
-use figure_texture, only : texture_object
+use figure_texture, only : fig_read_image, texture_object
 use figure_process, only : process_object, log_view_object
 use figure_task, only : task_object, task_handle_object, task_work
 use figure_view3d, only : view3d_object
@@ -122,7 +123,7 @@ use figure_player, only : player_object, ig_player
 
 implicit none
 private
-public :: app_object, figure_last_error, figure_time
+public :: app_object, fig_read_image, figure_last_error, figure_time
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image

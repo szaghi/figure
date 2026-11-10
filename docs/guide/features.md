@@ -232,6 +232,8 @@ Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots), [Co
 | `tex%init(width, height [, smooth] [, stat])`, `tex%update(rgba [, stat])`, `tex%destroy()` | an RGBA texture on the GPU, `integer(int8) :: rgba(4, width, height)` uploaded in place ([textures](images#textures)) |
 | `tex%width()`, `tex%height()` → `integer(int32)`, `tex%is_initialized()` → `logical` | its size (0 before `init`); whether it exists ([textures](images#textures)) |
 | `ig_image(tex [, width, height])` | the texture in a window, pixel row 1 at the top ([textures](images#textures)) |
+| `tex%load(path [, smooth] [, stat])` | a texture from a PNG or JPEG file, its size the image's (main thread) ([reading images](images#reading-images)) |
+| `fig_read_image(path, rgba [, stat])` | a PNG or JPEG file decoded into `integer(int8), allocatable :: rgba(:,:,:)`, `rgba(4, width, height)`, row 1 at the top; draws nothing: a task may call it ([reading images](images#reading-images)) |
 
 Details: [Heatmaps and images](images).
 

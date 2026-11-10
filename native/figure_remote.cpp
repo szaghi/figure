@@ -54,20 +54,7 @@
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES
 #endif
 #include "miniz.h"
-// stb_image_write (third_party/stb, unmodified): its JPEG encoder only, its functions static to this file (a program
-// may link its own copy), no file output
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_STATIC
-#define STBI_WRITE_NO_STDIO
-#if defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function" // the PNG, BMP, TGA and HDR writers, unused
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers" // its "= { 0 }" (with -Wextra)
-#endif
-#include "stb_image_write.h"
-#if defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
+#include "figure_image.h" // stb_image_write's JPEG encoder (compiled in figure_image.cpp)
 
 #include <algorithm>
 #include <chrono>
@@ -406,10 +393,7 @@ std::string jpeg_message(std::uint64_t id, const texture_t &t) {
    put<std::uint32_t>(m, static_cast<std::uint32_t>(t.width));
    put<std::uint32_t>(m, static_cast<std::uint32_t>(t.height));
    put<std::uint32_t>(m, t.linear ? 1u : 0u);
-   auto append = [](void *context, void *data, int size) {
-      static_cast<std::string *>(context)->append(static_cast<const char *>(data), static_cast<size_t>(size));
-   };
-   if (!stbi_write_jpg_to_func(append, &m, t.width, t.height, 4, t.rgba.data(), 75) || m.size() >= 17 + 4 * n) return "";
+   if (!figure_image::encode_jpeg(m, t.width, t.height, 4, t.rgba.data(), 75) || m.size() >= 17 + 4 * n) return "";
    return m;
 }
 

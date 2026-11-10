@@ -235,6 +235,8 @@ to its next safe point: a task with no safe point is waited for until its end.
   the main thread also uses. gfortran's I/O is thread-safe per unit; **nvfortran's only when compiled with `-mp`**
   (OpenMP): without it, concurrent formatted I/O, internal `write` to a string included, fails at random
   ([Known issues](known-issues#tasks)).
+- **Images read from files.** [`fig_read_image`](images#reading-images) draws nothing: a task decodes a PNG or a
+  JPEG and gives the pixels back; the main thread uploads them (`tex%init`, `tex%update`; `tex%load` is refused).
 - **A large stack.** Each worker has 64 MiB of stack (a secondary thread's default is 512 KiB on macOS): automatic
   arrays and temporaries of a few MiB fit.
 - **No drawing:** see the rule above.

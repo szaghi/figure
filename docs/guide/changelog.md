@@ -15,6 +15,7 @@ What a program written for v0.4.0 meets in v0.5.0, with a link to the section th
 | Change | What to do |
 |---|---|
 | [Plot data in place](plots#data-in-place): the 1-D items' array dummies are `asynchronous`, so nvfortran passes rows, strided and reversed sections in place instead of copying them; the plot is the same | nothing to change in a program; a test that checks `test_plot_stride()` or `test_plot_copies()` under nvfortran now sees the section's own stride, and FIGURE's copy of a reversed section counted |
+| [`figure_last_error`](errors#figure-last-error): the message is kept per thread; a failure in a task no longer overwrites the main thread's message | nothing; a program that read, on the main thread, a message set by a failure inside a task reads it from the task (`t%result` gives the task's own failure, as before) |
 | [Shortcuts](menus#shortcuts): a fourth scope, `'always'`, not routed: every call of the chord fires, whatever has the focus, a text field being edited included. v0.4.0's migration note said `'global'` gives v0.3's behaviour; it does not when two calls bind one chord (only the first `'global'` call of the frame fires) | for v0.3's behaviour exactly, `scope='always'`; a single key that must work everywhere keeps `scope='global'`; `ig_set_next_item_shortcut` refuses `'always'` (`FIG_ERR_ARGUMENT`) |
 
 ## Migration to v0.4.0

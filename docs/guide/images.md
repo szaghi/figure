@@ -5,8 +5,9 @@ title: Heatmaps and images
 # Heatmaps and images
 
 Two ways to show 2D data: a **heatmap** colours the cells of a field `f(i, j)` through a colormap, inside a plot; a
-**texture** is an RGBA image the program composes itself, uploaded to the GPU and drawn in a window (`ig_image`) or in
-a plot (`ip_image`). Both read Fortran's column-major arrays as they are: no copy, no transpose.
+**texture** is an RGBA image the program composes itself or [reads from a PNG or JPEG file](#reading-images),
+uploaded to the GPU and drawn in a window (`ig_image`) or in a plot (`ip_image`). Both read Fortran's column-major
+arrays as they are: no copy, no transpose.
 
 ## Heatmaps
 
@@ -53,6 +54,7 @@ pixels only when they change, and draws the texture every frame for nothing.
 |---|---|
 | `tex%init(width, height [, smooth] [, stat])` | create a `width` x `height` texture (after `app%init`); an existing one is destroyed first |
 | `tex%update(rgba [, stat])` | upload all the pixels, `integer(int8) :: rgba(4, width, height)`, in place: one GPU upload, no copy |
+| `tex%load(path [, smooth] [, stat])` | create the texture from a PNG or JPEG file, its size the image's, and upload it ([Reading images](#reading-images)) |
 | `tex%destroy()` | release it; safe in any state. `app%destroy` releases the textures left |
 | `tex%width()`, `tex%height()`, `tex%is_initialized()` | size and state |
 | `ig_image(tex [, width] [, height])` | the texture in the window, pixel row 1 at the **top** (default size: the texture's) |
@@ -75,6 +77,67 @@ instead (linear filtering), better for photographs.
 **Lifetime.** `texture_object` has no finaliser on purpose: an assignment or a function result would finalise a copy
 and destroy the texture the original still uses. Destroy textures explicitly, or let `app%destroy` release them. In
 headless mode textures are accepted and checked (sizes, state) but nothing is drawn.
+
+## Reading images
+
+A photograph beside a field (schlieren, PIV, a camera's frame), a logo, a picture written by
+[`app%save_image`](capture) read back: FIGURE reads **PNG** and **JPEG** files into the pixel array of a texture.
+
+| Procedure | Purpose |
+|---|---|
+| `fig_read_image(path, rgba [, stat])` | decode the file `path` into `integer(int8), allocatable :: rgba(:,:,:)`, allocated to `rgba(4, width, height)`; draws nothing, so a [task](processes#tasks) may call it |
+| `tex%load(path [, smooth] [, stat])` | `fig_read_image`, then `tex%init(width, height, smooth)` and `tex%update(rgba)`: the file on the GPU in one call, on the main thread |
+
+<<< @/examples/snippets/cb_photo-work.F90{fortran}
+
+**Layout.** `rgba(:, i, j)` holds the red, green, blue and alpha bytes of the pixel in column `i` (left to right)
+and row `j`, **row 1 the file's top row**: the layout `tex%update` takes, so `ig_image` shows the picture upright
+(in a plot, `ip_image` puts row 1 at the bottom: [Orientation](#textures)). Every image comes out as four channels:
+a grey image gives R = G = B, an image without alpha gives A = 255 (`-1_int8`). A 16-bit PNG is reduced to 8 bits a
+channel, a palette PNG expanded. Bytes 128-255 are negative `int8`, as for textures:
+`modulo(int(rgba(c, i, j), int32), 256)` is the 0-255 value.
+
+**One copy.** The decoder (stb_image) writes its own buffer; `fig_read_image` copies it into `rgba` and frees it.
+The copy costs a fraction of the decoding.
+
+**In a task.** `fig_read_image` touches no state of the GUI and keeps its failure message per thread, so a task
+decodes a large photograph while the window keeps drawing; the main thread then uploads the pixels the task gives
+back (`tex%init`, `tex%update`): [the cookbook's recipe](/manual/cookbook#show-a-photograph-beside-a-field) does
+exactly this. `tex%load` creates a texture, so it is a drawing call: refused from a task, as `tex%init` is.
+
+**Modes.** `fig_read_image` is the same in every mode: it reads a file of the machine the program runs on (in
+remote mode the server's, not the browser's). `tex%load` as `tex%init`: in window mode the texture is on the GPU, in
+remote mode it is sent to the browser with the next frame, in headless mode its size and state are kept, without
+pixels.
+
+**Formats.** PNG (any bit depth and colour type, interlaced too) and JPEG (baseline and progressive), recognised by
+their first bytes, not by the file's extension. Nothing else: a BMP, a GIF, a TIFF, a WebP or a text file is
+refused. A path is a file name, never a URL.
+
+### Statuses
+
+| Failure | Status | Message |
+|---|---|---|
+| the file does not exist or cannot be read | `FIG_ERR_FAILED` | `fig_read_image: '<path>' cannot be read: <the system's reason>` |
+| not a PNG or a JPEG (by its first bytes) | `FIG_ERR_ARGUMENT` | `fig_read_image: '<path>' is not a PNG or JPEG file (the formats FIGURE reads)` |
+| a PNG or JPEG the decoder refuses (cut short, damaged, an unsupported variant) | `FIG_ERR_ARGUMENT` | `fig_read_image: '<path>' is a PNG file that cannot be decoded: <reason>` (`JPEG`), the reason the decoder's, e.g. `Corrupt PNG` |
+| no memory for the pixels | `FIG_ERR_FAILED` | `fig_read_image: '<path>': out of memory` |
+| `tex%load`: any of the above | the same | the same, starting `texture_object%load:`; the texture is left as it was |
+| `tex%load` from a task, or before `app%init*` | `FIG_ERR_STATE` | as `tex%init` |
+
+On a failure `rgba` is left unallocated. Without `stat` a failure stops the program with its message
+([Error handling](errors)).
+
+### Limits
+
+- **No colour management:** a PNG's gamma (`gAMA`) and an embedded ICC profile are ignored: the bytes are shown as
+  sRGB.
+- **No EXIF orientation:** a photograph a camera stored sideways, with an orientation tag, comes out sideways.
+- **Damage is not always seen.** stb_image does not check PNG's CRCs nor zlib's checksum, and a JPEG cut short
+  decodes without an error, the missing part filled in: a file that decodes is not proven intact.
+- **JPEG is lossy:** a picture written as JPEG reads back close to, not equal to, what was written (FIGURE's test:
+  at most 3 levels of 255 apart at quality 90 on a smooth image, 8 tolerated). Compare pictures as PNG.
+- **Size:** files of less than 2 GiB; a texture larger than the GPU's limit (often 16384 a side) fails at `init`.
 
 ## An explorer: the Mandelbrot set
 

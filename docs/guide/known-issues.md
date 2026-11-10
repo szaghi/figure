@@ -87,6 +87,14 @@ find out. A program that rewrites the array in place (a time step) passes `chang
 by the compiler into a temporary at every call: its address may change from call to call, and the field is then
 coloured on every frame (correct, but slower): pass a contiguous array.
 
+## Images read from files
+
+`fig_read_image` and `tex%load` read PNG and JPEG only, with no colour management (a PNG's gamma and an ICC profile
+are ignored) and no EXIF orientation (a photograph stored sideways comes out sideways): rotate it in the program
+(`rgba(:, j, i)` for a transpose) or in an image editor. stb_image checks neither PNG's CRCs nor zlib's checksum,
+and decodes a JPEG cut short with the missing part filled in, so a file that decodes is not proven intact
+([Reading images](images#limits)).
+
 ## Text input
 
 `ig_input_text` edits a `character` variable, whose length is the field's capacity: a longer text is cut at it. Text

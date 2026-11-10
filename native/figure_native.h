@@ -86,6 +86,7 @@ int    fig_style_color(int lib, const char *name, int name_len, int set, float *
 int    fig_style_var(int lib, const char *name, int name_len, int set, double *values, int *count);
 void   fig_request_frames(int n);
 double fig_content_scale(void);
+/* The last failure's message on the calling thread (each thread has its own, as errno). */
 const char *fig_last_error(int *len);
 /* Set the message fig_last_error returns, for failures detected on the Fortran side. */
 void   fig_set_last_error(const char *msg, int msg_len);
@@ -96,6 +97,19 @@ void   fig_set_last_error(const char *msg, int msg_len);
 int    fig_texture_create(int width, int height, int smooth, unsigned long long *id);
 int    fig_texture_update(unsigned long long id, int width, int height, const unsigned char *rgba);
 void   fig_texture_destroy(unsigned long long id);
+
+/* Image files (figure_image.cpp; stb_image and stb_image_write, PNG and JPEG only, no URL). Callable from any thread
+ * (no shared state), so a task may read an image. read: the file `path` (UTF-8, path_len bytes) decoded to RGBA, 8
+ * bits per channel, rows of `width` pixels from the top row down; `*rgba` is the decoder's buffer, released with
+ * fig_image_free. FIG_ERR_FAILED when the file cannot be read (or no memory), FIG_ERR_ARGUMENT when it is not a PNG or
+ * a JPEG or cannot be decoded; the message names the file. write: `pixels` (channels 1-4: grey, grey + alpha, RGB,
+ * RGBA; rows of `width` pixels from the top) to `path`, as a PNG when quality is 0, else a JPEG of that quality
+ * (1-100, alpha dropped); FIG_ERR_ARGUMENT for a bad argument, FIG_ERR_FAILED when the file cannot be written. Not
+ * public in Fortran (tests; S1's pictures). */
+int    fig_image_read(const char *path, int path_len, unsigned char **rgba, int *width, int *height);
+void   fig_image_free(unsigned char *rgba);
+int    fig_image_write(const char *path, int path_len, const unsigned char *pixels, int channels, int width, int height,
+                       int quality);
 /* Around a user image: from_texture = 1 makes the backend sample with the texture's own filter, 0 restores its
  * render state; plot = 1 for the current ImPlot plot's draw list, 0 for the current window's. */
 void   fig_texture_sampling(int plot, int from_texture);

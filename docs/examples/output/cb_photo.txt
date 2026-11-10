@@ -1,0 +1,5 @@
+$ ./cb_photo --check ../../../docs/examples/data/schlieren.jpg
+photograph: 360 x 240 pixels
+centre pixel (R, G, B, A): 168 152 129 255
+texture of that size: T
+a missing file: stat 3, fig_read_image: 'no-such-photo.jpg' cannot be read: Couldn't open no-such-photo.jpg: No such file or directory

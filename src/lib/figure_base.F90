@@ -63,7 +63,7 @@ contains
    seconds = real(fig_time(), real64)
    endfunction figure_time
 
-   function figure_last_error() result(msg)
+   recursive function figure_last_error() result(msg)
    !< Message of the last failed call.
    character(len=:), allocatable          :: msg    !< Message.
    character(kind=c_char), pointer        :: buf(:) !< Borrowed C buffer.
@@ -80,7 +80,7 @@ contains
    enddo
    endfunction figure_last_error
 
-   subroutine figure_check(status, stat)
+   recursive subroutine figure_check(status, stat)
    !< Store `status` in `stat` if present, else stop on failure with the last error message.
    integer(c_int), intent(in)            :: status !< Status from the native layer.
    integer(int32), intent(out), optional :: stat   !< Status for the caller.
@@ -93,7 +93,7 @@ contains
    endif
    endsubroutine figure_check
 
-   subroutine figure_fail(status, message, stat)
+   recursive subroutine figure_fail(status, message, stat)
    !< Report a failure detected on the Fortran side: set the last error message, then act as `figure_check`.
    integer(c_int),   intent(in)            :: status  !< Failure status (a `FIG_ERR_*` code).
    character(len=*), intent(in)            :: message !< Message for `figure_last_error`.

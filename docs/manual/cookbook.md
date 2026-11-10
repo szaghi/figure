@@ -609,6 +609,31 @@ Used in context: [chapter 13](./tutorial/13-view3d) of the tutorial.
 Upload once, draw every frame: `tex%update` only when the pixels change (a new iteration of a computation), `ig_image`
 or `ip_image` in the loop.
 
+### Show a photograph beside a field
+
+<<< @/examples/snippets/cb_photo-work.F90{fortran}
+
+<<< @/examples/snippets/cb_photo-start.F90{fortran}
+
+<<< @/examples/snippets/cb_photo-take.F90{fortran}
+
+<<< @/examples/snippets/cb_photo-draw.F90{fortran}
+
+The photograph is decoded in a task: `fig_read_image` draws nothing, so a worker may call it, and a large JPEG does
+not freeze the window (the window says "reading ..." meanwhile). Once the task is done, the main thread puts the
+pixels on the GPU, once, with `tex%init` and `tex%update`; `smooth=.true.` blends pixels when the photograph is
+scaled, better for a photograph than the sharp squares a measured field wants. `ig_image` shows row 1 at the top,
+the file's top row, at the plot's height and in the photograph's proportions. For a small file the task is not
+worth it: `call photo%load('schlieren.jpg', smooth=.true.)` reads and uploads in one call, on the main thread.
+`cb_photo --check FILE` reads FILE headless and prints its size and centre pixel, then the refusal of a file that
+does not exist:
+
+<<< @/examples/output/cb_photo.txt{text}
+
+The picture is `docs/examples/data/schlieren.jpg`, a synthetic schlieren of a bow shock written by
+`scripts/gen_photo.py`. [Reading images](/guide/images#reading-images) has the layout, the formats, the statuses and
+the limits.
+
 ### Several plots sharing the x axis
 
 <<< @/examples/snippets/cb_subplots-subplots.F90{fortran}

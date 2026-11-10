@@ -10,7 +10,8 @@ native layer itself, next to the Fortran library:
   copied from CMake's fetched tree (build/native/_deps, so run scripts/build_native.sh first), only the files FIGURE
   compiles; Dear ImGui's ``imconfig.h`` carries the two settings CMake passes as definitions, so no compiler flag is
   needed; miniz is compiled through a small wrapper that sets its options;
-- ``src/stb/``: ``stb_image_write.h``, vendored in the repository (third_party/stb), included by figure_remote.cpp;
+- ``src/stb/``: ``stb_image.h`` and ``stb_image_write.h``, vendored in the repository (third_party/stb), included by
+  figure_image.cpp;
 - the licences of everything copied (``LICENSES/``), and ``fpm.toml``.
 
 SDL3 comes from the system (a package: libsdl3-dev, Homebrew's sdl3, MSYS2's SDL3), found by the compiler and linker
@@ -55,7 +56,8 @@ IMPLOT_FILES = ["implot.cpp", "implot_items.cpp", "implot_demo.cpp", "implot.h",
 NATIVE_FILES = [
     "figure_native.cpp", "figure_native.h", "figure_process.cpp", "figure_task.cpp", "figure_scope.cpp", "figure_canvas.cpp",
     "figure_files.cpp",
-    "figure_remote.cpp", "figure_colormap.cpp", "figure_field.cpp", "figure_view3d.cpp", "figure_view3d.h",
+    "figure_remote.cpp", "figure_image.cpp", "figure_image.h",
+    "figure_colormap.cpp", "figure_field.cpp", "figure_view3d.cpp", "figure_view3d.h",
     "figure_remote.h", "figure_theme.cpp", "figure_theme.h", "figure_style.h", "figure_glue_generated.cpp", "figure_style_generated.cpp",
 ]  # fmt: skip
 
@@ -259,7 +261,8 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(miniz / "miniz.c", src / "miniz" / "miniz.c.inc")
     copy(miniz / "miniz.h", src / "miniz" / "miniz.h")
     (src / "miniz" / "miniz_figure.c").write_text(MINIZ_WRAPPER)
-    copy(ROOT / "third_party" / "stb" / "stb_image_write.h", src / "stb" / "stb_image_write.h")
+    for f in ("stb_image.h", "stb_image_write.h"):
+        copy(ROOT / "third_party" / "stb" / f, src / "stb" / f)
     licences = out / "LICENSES"
     copy(ROOT / "LICENSE.mit.md", licences / "figure.md")
     copy(ROOT / "THIRD_PARTY.md", licences / "THIRD_PARTY.md")

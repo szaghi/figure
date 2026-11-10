@@ -45,7 +45,9 @@
 
 namespace {
 
-std::string last_error;
+// The last failure's message, one per thread (as errno): a task that fails (fig_image_read) does not overwrite the
+// main thread's, and the two never race on it.
+thread_local std::string last_error;
 
 // Work off the frame loop (process readers, tasks, any thread calling app%wake, request_frames or quit) wakes it:
 // window mode pushes an SDL event (SDL_PushEvent is safe from any thread); remote mode, which waits on its sockets,

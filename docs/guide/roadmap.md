@@ -341,6 +341,14 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   nvfortran copied it: into scratch arrays kept between calls, through a contiguous view of its memory. A component of
   an array of derived types stays a compiler copy on gfortran and nvfortran (a documented limit).
   `figure_test_plot_data` holds what each compiler passes in place ([Data in place](plots#data-in-place)): done.
+- **Images from files** (S4): `fig_read_image(path, rgba [, stat])` decodes a PNG or a JPEG into
+  `integer(int8), allocatable :: rgba(:,:,:)`, `rgba(4, width, height)` with row 1 the file's top row, the layout of
+  `tex%update`; it draws nothing, so a task may call it (asynchronous loading is a task: no new mechanism).
+  `tex%load(path [, smooth] [, stat])` reads a file into a texture on the main thread. stb_image 2.30 (MIT or public
+  domain), vendored beside stb_image_write at the same commit, with its PNG and JPEG decoders only and no file or URL
+  access of its own; a missing file, a file of another format and a damaged one are refused with their messages.
+  FIGURE's failure message is now kept per thread, so a task's failure no longer overwrites the main thread's
+  ([Reading images](images#reading-images)): done. S1's picture comparisons will decode PNGs with it.
 
 ## Next
 

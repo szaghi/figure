@@ -1,6 +1,6 @@
-!< figure_texture, RGBA images on the GPU, drawn by `ig_image` and `ip_image`.
+!< figure_texture, RGBA images on the GPU, drawn by `ig_image` and `ip_image`, and PNG or JPEG files read into pixels.
 module figure_texture
-!< figure_texture, RGBA images on the GPU, drawn by `ig_image` and `ip_image`.
+!< figure_texture, RGBA images on the GPU, drawn by `ig_image` and `ip_image`, and PNG or JPEG files read into pixels.
 !<
 !< A texture is the one retained resource of FIGURE: the image lives on the GPU between frames, so the program uploads
 !< pixels only when they change, not every frame.
@@ -18,15 +18,19 @@ module figure_texture
 !< `int(v - merge(256, 0, v > 127), int8)` converts a 0-255 integer `v`. `rgba(:, i, j)` is the pixel in column `i` and
 !< row `j`: in Fortran's column-major order that is exactly OpenGL's layout (channels, then a row, then the next row),
 !< so the array is uploaded in place.
-use, intrinsic :: iso_c_binding, only : c_int, c_loc, c_long_long, c_null_ptr
+!<
+!< `fig_read_image(path, rgba)` reads a PNG or a JPEG file into such an array (allocated to `rgba(4, width, height)`,
+!< row 1 the file's top row); it draws nothing, so a task may call it. `tex%load(path)` reads a file into a texture.
+use, intrinsic :: iso_c_binding, only : c_f_pointer, c_int, c_loc, c_long_long, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64
-use figure_base, only : figure_check, figure_fail, figure_refused
-use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_texture_create, fig_texture_destroy, fig_texture_update
+use figure_base, only : figure_check, figure_fail, figure_last_error, figure_refused
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, fig_image_free, fig_image_read, &
+                            fig_texture_create, fig_texture_destroy, fig_texture_update
 use figure_cimgui, only : im_texture_ref
 
 implicit none
 private
-public :: texture_object, texture_ref
+public :: texture_object, texture_ref, fig_read_image
 
 type :: texture_object
    !< An RGBA texture, 8 bits per channel.
@@ -39,6 +43,7 @@ type :: texture_object
    contains
       procedure, pass(self) :: init           !< Create the texture.
       procedure, pass(self) :: update         !< Upload all its pixels.
+      procedure, pass(self) :: load           !< Create it from a PNG or JPEG file.
       procedure, pass(self) :: destroy        !< Release it.
       procedure, pass(self) :: width          !< Width [pixels].
       procedure, pass(self) :: height         !< Height [pixels].
@@ -87,6 +92,28 @@ contains
    call figure_check(fig_texture_update(self%id, int(self%nx, c_int), int(self%ny, c_int), c_loc(rgba)), stat)
    endsubroutine update
 
+   recursive subroutine load(self, path, smooth, stat)
+   !< Create the texture from a PNG or JPEG file, its size the image's, and upload the pixels (`fig_read_image`, then
+   !< `init` and `update`); an existing texture is replaced. On a failure to read the file the texture is left as it
+   !< was. Main thread only, as `init`.
+   class(texture_object), intent(inout)         :: self        !< Texture.
+   character(len=*),      intent(in)            :: path        !< File name (UTF-8).
+   logical,               intent(in),  optional :: smooth      !< Linear filtering when scaled (default: nearest).
+   integer(int32),        intent(out), optional :: stat        !< Status: as `fig_read_image`, then as `init`.
+   integer(int8), allocatable, target           :: rgba(:,:,:) !< The image's pixels.
+   integer(int32)                               :: s           !< Status of a step.
+
+   if (figure_refused('texture_object%load', stat)) return ! a task does not draw
+   call read_image('texture_object%load', path, rgba, s)
+   if (s /= FIG_OK) then
+      call figure_check(int(s, c_int), stat)
+      return
+   endif
+   call self%init(int(size(rgba, 2), int32), int(size(rgba, 3), int32), smooth, s)
+   if (s == FIG_OK) call self%update(rgba, s)
+   call figure_check(int(s, c_int), stat)
+   endsubroutine load
+
    subroutine destroy(self)
    !< Release the texture (safe in any state).
    class(texture_object), intent(inout) :: self !< Texture.
@@ -120,6 +147,52 @@ contains
 
    yes = self%id /= 0_c_long_long
    endfunction is_initialized
+
+   recursive subroutine fig_read_image(path, rgba, stat)
+   !< Read a PNG or JPEG file into RGBA pixels: `rgba` is allocated to `rgba(4, width, height)`, `rgba(:, i, j)` the
+   !< red, green, blue and alpha bytes of the pixel in column `i` (left to right) and row `j` (**top to bottom**, the
+   !< file's order), the layout `tex%update` takes. A grey image gives R = G = B; an image without alpha gives A = 255
+   !< (-1_int8). Draws nothing: a task may call it. On a failure `rgba` is left unallocated.
+   character(len=*),           intent(in)            :: path        !< File name (UTF-8).
+   integer(int8), allocatable, intent(out)           :: rgba(:,:,:) !< Pixels: rgba(:, i, j) = R, G, B, A of (i, j).
+   integer(int32),             intent(out), optional :: stat        !< Status: `FIG_ERR_FAILED` if the file cannot be
+                                                                    !< read, `FIG_ERR_ARGUMENT` if it is not a PNG or a
+                                                                    !< JPEG, or cannot be decoded.
+   integer(int32)                                    :: s           !< Status.
+
+   call read_image('fig_read_image', path, rgba, s)
+   call figure_check(int(s, c_int), stat)
+   endsubroutine fig_read_image
+
+   recursive subroutine read_image(name, path, rgba, stat)
+   !< `fig_read_image` for the procedure `name`, which starts the message of a failure.
+   character(len=*),           intent(in)  :: name        !< The public procedure.
+   character(len=*),           intent(in)  :: path        !< File name (UTF-8).
+   integer(int8), allocatable, intent(out) :: rgba(:,:,:) !< Pixels.
+   integer(int32),             intent(out) :: stat        !< Status.
+   type(c_ptr)                             :: p           !< The decoder's pixels.
+   integer(int8), pointer                  :: q(:,:,:)    !< The same, as an array.
+   integer(c_int)                          :: w           !< Width [pixels].
+   integer(c_int)                          :: h           !< Height [pixels].
+   integer(c_int)                          :: status      !< Native status.
+   integer(int32)                          :: ierr        !< Allocation status.
+
+   status = fig_image_read(path, len(path, c_int), p, w, h)
+   if (status /= FIG_OK) then
+      call figure_fail(status, name//': '//figure_last_error(), stat)
+      return
+   endif
+   call c_f_pointer(p, q, [4_int64, int(w, int64), int(h, int64)])
+   allocate(rgba(4, w, h), stat=ierr)
+   if (ierr /= 0) then
+      call fig_image_free(p)
+      call figure_fail(FIG_ERR_FAILED, name//": '"//path//"': out of memory", stat)
+      return
+   endif
+   rgba(:,:,:) = q
+   call fig_image_free(p)
+   stat = int(FIG_OK, int32)
+   endsubroutine read_image
 
    pure function texture_ref(tex) result(ref)
    !< The `ImTextureRef` of a texture, for the figure_* modules that draw it (not exported by `figure`).
