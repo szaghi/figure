@@ -97,6 +97,108 @@ call ig_tooltip('the input files')
 if (ig_tool_button('Monitor', ICON_ACTIVITY, selected=tool == 2)) tool = 2
 ```
 
+## What happened to an item
+
+<Media name="cb_commit_on_leave" video alt="Two panels, Cases and Case. In Cases, a click on tail selects it; a double click on fuselage opens it in Case, whose fields show CFL 1.20 and fuselage.grd. The CFL field is clicked and abc typed over it: nothing is checked while typing. A click on the mesh field leaves the CFL field: the message reads CFL: abc is not a positive number, and the field shows 1.20 again. 1.5 is typed and enter pressed: CFL of fuselage set, the field shows 1.50. fuse.dat is typed in the mesh field and tab pressed: the message refuses it and the field shows fuselage.grd again." caption="docs/examples/src/cb_commit_on_leave.F90: a value checked once, when the user leaves the field; a row opened by a double click" />
+
+| Procedure | Notes |
+|---|---|
+| `ig_last_item()` → `item_status_object` | What happened to the item drawn last, all its states at once: a snapshot. |
+| `ig_item_hovered([delay] [, stat])` → `logical` | The pointer is over the item drawn last; with `delay`, only after it has been there `'short'` (0.15 s) or `'normal'` (0.40 s). |
+| `ig_any_item_hovered()` → `logical` | The pointer is over some item (a click there goes to a widget, not to the window). |
+| `ig_any_item_active()` → `logical` | Some item is active: a text field edited, a slider dragged, a button held. |
+
+(Dear ImGui's `IsItemHovered`, `IsItemActive`, `IsItemFocused`, `IsItemVisible`, `IsItemActivated`, `IsItemEdited`,
+`IsItemDeactivated`, `IsItemDeactivatedAfterEdit`, `IsItemToggledOpen`, `IsItemClicked`, `IsMouseDoubleClicked`,
+`GetItemRectMin`/`GetItemRectSize`, `IsAnyItemHovered`, `IsAnyItemActive`.)
+
+A widget's return value says one thing (a button was clicked, a field's text changed); `ig_last_item` says the rest:
+the user left the field, double-clicked a row, holds the pointer over a button. Its components:
+
+| Component | True |
+|---|---|
+| `hovered` | while the pointer is over the item, and no other item is held (a slider being dragged keeps the others from being hovered) |
+| `active` | while the item is held (a button pressed, a slider dragged) or edited (a text field with the cursor in it) |
+| `focused` | while the item has the keyboard focus (the cursor of keyboard navigation) |
+| `visible` | while the item is not clipped: inside the visible part of its window or [region](#lists-and-regions) |
+| `activated` | on the frame the item becomes active |
+| `edited` | on each frame the item changes its value |
+| `deactivated` | on the frame the item stops being active |
+| `deactivated_after_edit` | on the frame the item stops being active, if its value changed while it was: **the user left the field** (a click elsewhere, tab, enter) |
+| `toggled_open` | on the frame a tree node or a header opens or closes |
+| `clicked(b)` | on the frame mouse button `b` (1 left, 2 right, 3 middle) goes down over the item |
+| `double_clicked(b)` | on the frame of the second press of a double click of button `b` over the item |
+| `rect` | `[x, y, w, h]`: top-left corner, width and height, in pixels (the coordinates of `ig_item_rect` and of the mouse) |
+
+<<< @/examples/snippets/cb_commit_on_leave-leave.F90{fortran}
+
+<<< @/examples/snippets/cb_commit_on_leave-commit.F90{fortran}
+
+- **The snapshot rule.** Call `ig_last_item` right after the item: the next item drawn (a text, a tooltip's content,
+  any widget) becomes "the last item", and a later call answers about that one. The `item_status_object` the call
+  returns is a plain value: it keeps the states of the item it was taken after, whatever is drawn next, so take it
+  once and test its components where the program needs them. `ig_item_hovered` has no snapshot: it answers at once,
+  about the item drawn last.
+- **The one-frame rule.** `activated`, `edited`, `deactivated`, `deactivated_after_edit`, `toggled_open`, `clicked`
+  and `double_clicked` are events: true on the one frame the event happens, false on the next. Test them on every
+  frame, as a button's result. `hovered`, `active`, `focused` and `visible` are states: true on every frame while
+  they hold.
+- **Leaving a field.** `deactivated_after_edit` is true once per edit, on the frame the user leaves the field, and
+  only when the value changed: a field clicked and left as it was reports `deactivated` without it. It is the place
+  to check a value, convert it, or save it: the field's result (and `edited`) are true on every keystroke, when the
+  value is still half-typed. Escape ends an edit too, after putting the text back as it was: on that frame the field
+  reports `edited` and `deactivated_after_edit` with the old text in the variable, so the check sees the old value.
+- **A field the user is editing keeps its text.** While a text field is active, Dear ImGui keeps the text the user is
+  typing and writes it into the Fortran variable on every key: an assignment to the variable from the program is
+  overwritten on the next frame. Correct the text once the field is left, as the example does on
+  `deactivated_after_edit` (the field then shows the program's value).
+- **`clicked` is the press**, as Dear ImGui's `IsItemClicked`: a button's own result is the release over it (a press
+  dragged off the button is not a click of the button), so `ig_button` and `clicked(1)` can differ by a frame or two.
+  `clicked(2)` (the right button) is the usual way to open a [context menu](menus#popups-and-modals) on an item.
+- **`ig_item_hovered` with a delay** counts the time on the frames that call it with a delay: call it every frame,
+  as a tooltip is declared. The time is shared between items (moving to a neighbour keeps it) and cleared about
+  0.25 s after the last such call over an item.
+
+**Which widgets report which states**, measured with FIGURE's widgets (hovered, visible, `rect`, `clicked` and
+`double_clicked` are reported by every one):
+
+| Widget | `active`, `activated`, `deactivated`, `focused` | `edited` | `deactivated_after_edit` | `toggled_open` |
+|---|---|---|---|---|
+| `ig_text`, `ig_text_wrapped`, `ig_text_disabled`, `ig_text_colored` | never: text has no id | no | no | no |
+| `ig_button`, `ig_tool_button` | yes | no | no | no |
+| `ig_checkbox`, `ig_selectable` | yes | on the click | on the release of the click | no |
+| `ig_slider`, `ig_input`, `ig_input_text`, `ig_input_text_multiline`, `ig_color_edit` | yes (`ig_color_edit`: any of its fields) | on each frame the value changes | when left after a change | no |
+| `ig_combo` | yes, while pressed | on the pick | no: the combo is left when its list opens, before the pick | no |
+| `ig_tree_node`, `ig_collapsing_header` | yes | no | no | on the arrow, or a double click on the label |
+
+A combo's list takes the second click of a double click, so `ig_combo` reports no `double_clicked`. Ending a window
+or a region changes the last item (after `ig_end_child` it is the region itself): take the status of an item inside
+before the end.
+
+<<< @/examples/snippets/cb_commit_on_leave-double.F90{fortran}
+
+The program checks itself headless (`cb_commit_on_leave --check` clicks and types):
+
+<<< @/examples/output/cb_commit_on_leave.txt{text}
+
+Before frame 17 a single click on tail selected it without opening it; after frame 80 the CFL field was clicked and
+left with enter, unchanged: nothing was checked, nothing printed.
+
+**Status:** `ig_item_hovered` with an unknown `delay` returns `.false.` with `FIG_ERR_ARGUMENT` in `stat`:
+`ig_item_hovered: unknown delay "later" ('none', 'short' or 'normal')`; `stat` is optional (absent: `error stop` with
+the message, [Error handling](errors)). With no frame open, or from a [task](processes#tasks), each procedure is
+refused with `FIG_ERR_STATE` (`ig_last_item: no frame open`): `ig_last_item` returns a status with every component
+false and `rect` zero, the others `.false.`; without `stat` the error is reported by the next `app%next_frame`
+([Pairing and frames](errors#pairing-and-frames)). None of them opens a scope.
+
+- **Window:** the user's mouse and keyboard. **Headless:** the input of [`test_click`, `test_mouse_move`,
+  `test_type`](testing#synthetic-input). **Remote:** the browser's mouse and keyboard; a double click is two clicks
+  of the browser within Dear ImGui's 0.30 s.
+- **Threads:** the frame loop's thread only; a task is refused (`FIG_ERR_STATE`), as every drawing call.
+- **What it does not do:** no callbacks: the program asks after each item it cares about. No state of an item drawn
+  earlier in the frame (take its snapshot then) or of an item by its label. `ig_item_rect` remains for the corners
+  `(xmin, ymin, xmax, ymax)`; `rect` gives the same rectangle as corner and size.
+
 ## Multi-line text
 
 | Procedure | Notes |

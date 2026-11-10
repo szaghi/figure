@@ -98,6 +98,9 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_separator()` | horizontal separator |
 | `ig_show_demo_window([open])` | the Dear ImGui demo window |
 | `ig_item_rect(xmin, ymin, xmax, ymax)` | screen rectangle of the last item |
+| `ig_last_item()` → `item_status_object` | what happened to the item drawn last, in one snapshot: `hovered`, `active`, `focused`, `visible`, `activated`, `edited`, `deactivated`, `deactivated_after_edit`, `toggled_open`, `clicked(3)`, `double_clicked(3)`, `rect(4)` ([What happened to an item](widgets#what-happened-to-an-item)) |
+| `ig_item_hovered([delay] [, stat])` → `logical` | the pointer is over the item drawn last; `delay` `'none'`, `'short'` (0.15 s) or `'normal'` (0.40 s) |
+| `ig_any_item_hovered()` → `logical`, `ig_any_item_active()` → `logical` | the pointer is over some item; some item is held or edited |
 
 Details: [Widgets](widgets).
 

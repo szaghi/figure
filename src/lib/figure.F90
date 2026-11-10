@@ -52,7 +52,8 @@ use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig
                          ig_set_next_item_width, ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped,      &
                          ig_text_disabled, ig_text_colored, ig_tool_button, ig_focus_window,            &
                          ig_align_text_to_frame_padding, ig_text_size, ig_progress_bar, ig_input_text_multiline, &
-                         text_buffer_object, ig_set_clipboard, ig_get_clipboard
+                         text_buffer_object, ig_set_clipboard, ig_get_clipboard, item_status_object, ig_last_item, &
+                         ig_item_hovered, ig_any_item_hovered, ig_any_item_active
 use figure_implot, only : ip_begin_subplots, ip_end_subplots,                                              &
                           ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
                           ip_plot_limits, ip_plot_size, ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded,   &
@@ -98,6 +99,7 @@ public :: ig_tree_node, ig_tree_pop, ig_set_next_item_open
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size, ig_progress_bar
 public :: ig_input_text_multiline, text_buffer_object
 public :: ig_set_clipboard, ig_get_clipboard
+public :: item_status_object, ig_last_item, ig_item_hovered, ig_any_item_hovered, ig_any_item_active
 public :: ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg, ImGuiTableFlags_Borders
 public :: ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, ImGuiTableFlags_SizingFixedFit
 public :: ImGuiTableFlags_SizingStretchSame

@@ -22,7 +22,7 @@ public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, 
 public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_shortcut, fig_plot_tick_label
-public :: fig_app_wake, fig_set_next_item_shortcut
+public :: fig_app_wake, fig_set_next_item_shortcut, fig_last_item, fig_item_status, fig_mark_last_item_edited
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
@@ -48,6 +48,22 @@ integer(c_int), parameter :: FIG_ERR_STATE     = 1_c_int !< Call not allowed in 
 integer(c_int), parameter :: FIG_ERR_ARGUMENT  = 2_c_int !< Invalid argument.
 integer(c_int), parameter :: FIG_ERR_FAILED    = 3_c_int !< The platform (SDL, OpenGL) reported a failure.
 integer(c_int), parameter :: FIG_ERR_EXCEPTION = 4_c_int !< A C++ exception was caught at the boundary.
+
+type, bind(C) :: fig_item_status
+   !< The status of the item drawn last, as native/figure_native.h's `fig_item_status`: 1 or 0 each.
+   integer(c_int) :: hovered = 0_c_int                !< IsItemHovered.
+   integer(c_int) :: active = 0_c_int                 !< IsItemActive.
+   integer(c_int) :: focused = 0_c_int                !< IsItemFocused.
+   integer(c_int) :: visible = 0_c_int                !< IsItemVisible.
+   integer(c_int) :: activated = 0_c_int              !< IsItemActivated.
+   integer(c_int) :: edited = 0_c_int                 !< IsItemEdited.
+   integer(c_int) :: deactivated = 0_c_int            !< IsItemDeactivated.
+   integer(c_int) :: deactivated_after_edit = 0_c_int !< IsItemDeactivatedAfterEdit.
+   integer(c_int) :: toggled_open = 0_c_int           !< IsItemToggledOpen.
+   integer(c_int) :: clicked(3) = 0_c_int             !< IsItemClicked, per button (left, right, middle).
+   integer(c_int) :: double_clicked(3) = 0_c_int      !< Double-clicked over the item, per button.
+   real(c_double) :: rect(4) = 0.0_c_double           !< x, y, width, height [pixels].
+endtype fig_item_status
 
 interface
    ! ---- FIGURE glue ---------------------------------------------------------------------------------------------------
@@ -1164,6 +1180,19 @@ interface
    integer(c_int), value              :: scope_len !< Scope length [bytes].
    integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_ARGUMENT.
    endfunction fig_set_next_item_shortcut
+
+   function fig_last_item(s) result(status) bind(C, name='fig_last_item')
+   !< The status of the item drawn last, in one call.
+   import :: c_int, fig_item_status
+   implicit none
+   type(fig_item_status), intent(out) :: s      !< Status of the item.
+   integer(c_int)                     :: status !< Status: FIG_OK or FIG_ERR_STATE (no context).
+   endfunction fig_last_item
+
+   subroutine fig_mark_last_item_edited() bind(C, name='fig_mark_last_item_edited')
+   !< The item drawn last changed its value on this frame (Dear ImGui's MarkItemEdited).
+   implicit none
+   endsubroutine fig_mark_last_item_edited
 
    function fig_widget_input_text(label, label_len, hint, hint_len, buf, buf_size, flags) result(edited) &
       bind(C, name='fig_widget_input_text')

@@ -257,6 +257,34 @@ file in stream access, so line ends stay LF. [Multi-line text](/guide/widgets#mu
 
 Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
 
+### Check a value when the user leaves the field
+
+<<< @/examples/snippets/cb_commit_on_leave-leave.F90{fortran}
+
+<<< @/examples/snippets/cb_commit_on_leave-commit.F90{fortran}
+
+<Media name="cb_commit_on_leave" video alt="A case editor: abc typed over the CFL field is not checked while typing; a click on the mesh field leaves it, the message refuses abc and the field shows 1.20 again; 1.5 and enter: the CFL is set; fuse.dat in the mesh field and tab: refused, the field shows fuselage.grd again" caption="docs/examples/src/cb_commit_on_leave.F90" />
+
+`ig_input_text` returns `.true.` on every key, when the value is still half-typed. The status of the field, taken
+with `ig_last_item()` right after it, has `deactivated_after_edit` true on one frame: the frame the user leaves the
+field (a click elsewhere, tab, enter) after changing it. That is where the value is read and checked. A refused
+value is replaced in the variable, and the field shows it: the field is no longer edited, so the assignment holds
+(while the user types, the field writes its own text over the variable on every key). The program checks itself
+headless:
+
+<<< @/examples/output/cb_commit_on_leave.txt{text}
+
+[What happened to an item](/guide/widgets#what-happened-to-an-item) has every state and the widgets that report it.
+
+### Open a row on double click
+
+<<< @/examples/snippets/cb_commit_on_leave-double.F90{fortran}
+
+A click selects the row (the selectable's result); `double_clicked(1)`, true on the frame of the second click of a
+double click with the left button, opens it. The first click of the double click has selected the row already.
+`clicked(2)` is a right click on the row. Take the status right after the row's widget, before the next row is
+drawn: [the snapshot rule](/guide/widgets#what-happened-to-an-item).
+
 ## Plots
 
 ### Plot the columns of a matrix

@@ -1,0 +1,5 @@
+$ ./cb_commit_on_leave --check
+frame 17: opened fuselage
+frame 38: CFL: "abc" is not a positive number
+frame 59: CFL of fuselage set
+frame 74: mesh: "fuse.dat" is not a .grd file

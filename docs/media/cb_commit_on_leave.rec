@@ -1,0 +1,49 @@
+#! program build/docs-examples/bin/cb_commit_on_leave
+#! frames  330
+#! poster  300
+# A click on tail selects it; a double click on fuselage opens it. abc typed over the CFL is not checked while
+# typing; a click on the mesh field leaves the CFL: refused, the field shows 1.20 again. 1.5 and enter: set.
+# fuse.dat in the mesh field and tab: refused, the field shows fuselage.grd again.
+0   move 600 250
+10  move 130 84 15
+30  down
+31  up
+55  move 130 65 15
+75  down
+76  up
+80  down
+81  up
+105 move 420 68 15
+123 down
+124 up
+130 key end
+132 key shift down
+133 key home
+134 key shift up
+140 text a
+146 text b
+152 text c
+170 move 440 93 15
+188 down
+189 up
+200 key escape
+215 move 420 68 15
+233 down
+234 up
+240 key end
+242 key shift down
+243 key home
+244 key shift up
+250 text 1
+256 text .
+262 text 5
+272 key enter
+280 move 440 93 12
+294 down
+295 up
+300 key end
+302 key shift down
+303 key home
+304 key shift up
+308 text fuse.dat
+315 key tab

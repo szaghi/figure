@@ -18,7 +18,8 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, fi
                         figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_WINDOW
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
-                            fig_get_clipboard, fig_set_clipboard, FIG_ERR_ARGUMENT, FIG_OK
+                            fig_get_clipboard, fig_set_clipboard, fig_item_status, fig_last_item, fig_mark_last_item_edited, &
+                            FIG_ERR_ARGUMENT, FIG_OK
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : igGetTime, igProgressBar, &
                           im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
@@ -27,11 +28,13 @@ use figure_cimgui, only : igGetTime, igProgressBar, &
                           igSeparator, igSetNextItemWidth, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
                           igSliderScalar, igTextUnformatted, im_vec4, igGetStyleColorVec4, igPopStyleColor, &
                           igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos, igAlignTextToFramePadding, &
-                          igIsPopupOpen_Str, igSetWindowFocus_Str, igCalcTextSize, igColorEdit4
+                          igIsPopupOpen_Str, igSetWindowFocus_Str, igCalcTextSize, igColorEdit4, igIsAnyItemActive, &
+                          igIsAnyItemHovered, igIsItemHovered
 use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
                                 ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup, &
                                 ImGuiInputTextFlags_AllowTabInput, ImGuiInputTextFlags_ReadOnly, &
-                                ImGuiColorEditFlags_AlphaBar, ImGuiColorEditFlags_NoAlpha
+                                ImGuiColorEditFlags_AlphaBar, ImGuiColorEditFlags_NoAlpha, ImGuiHoveredFlags_DelayNormal, &
+                                ImGuiHoveredFlags_DelayShort, ImGuiHoveredFlags_None
 
 implicit none
 private
@@ -43,6 +46,7 @@ public :: ig_progress_bar
 public :: ig_color_edit
 public :: ig_input_text_multiline, text_buffer_object
 public :: ig_set_clipboard, ig_get_clipboard
+public :: item_status_object, ig_last_item, ig_item_hovered, ig_any_item_hovered, ig_any_item_active
 
 type :: text_buffer_object
    !< Text of any length, edited by `ig_input_text_multiline`: a file shown or edited as text, notes, a read-only view.
@@ -57,6 +61,26 @@ type :: text_buffer_object
       procedure, pass(self) :: length => text_buffer_length !< Its length [bytes].
       final                 :: text_buffer_final
 endtype text_buffer_object
+
+type :: item_status_object
+   !< What happened to an item, as `ig_last_item` found it right after the item was drawn: a snapshot, a plain value
+   !< the program keeps (later items do not change it). The event states (`activated`, `edited`, `deactivated`,
+   !< `deactivated_after_edit`, `toggled_open`, `clicked`, `double_clicked`) are true on one frame only, the frame of
+   !< the event; the others (`hovered`, `active`, `focused`, `visible`) last as long as the condition. Which widgets
+   !< report which states: widgets.md, "What happened to an item".
+   logical      :: hovered = .false.                !< The pointer is over the item, and no other item is held.
+   logical      :: active = .false.                 !< Held (a button pressed, a slider dragged) or being edited.
+   logical      :: focused = .false.                !< It has the keyboard focus (keyboard navigation's cursor).
+   logical      :: visible = .false.                !< Not clipped: inside its window or region's visible area.
+   logical      :: activated = .false.              !< It became active on this frame.
+   logical      :: edited = .false.                 !< It changed its value on this frame.
+   logical      :: deactivated = .false.            !< It stopped being active on this frame.
+   logical      :: deactivated_after_edit = .false. !< It stopped being active on this frame, its value changed meanwhile.
+   logical      :: toggled_open = .false.           !< A tree node or header opened or closed on this frame.
+   logical      :: clicked(3) = .false.             !< Clicked on this frame, per button: left, right, middle.
+   logical      :: double_clicked(3) = .false.      !< Double-clicked on this frame, per button: left, right, middle.
+   real(real64) :: rect(4) = 0.0_real64             !< x, y (top left), width, height [pixels].
+endtype item_status_object
 
 interface ig_slider
    !< Slider for an integer or a real value.
@@ -584,6 +608,7 @@ contains
       call igPopID()
    enddo
    call igEndCombo()
+   if (changed) call fig_mark_last_item_edited() ! as Dear ImGui's Combo: ig_last_item reports the pick as an edit
    endfunction ig_combo
 
    recursive subroutine ig_tooltip(text)
@@ -747,6 +772,89 @@ contains
    xmax = real(v%x, real64)
    ymax = real(v%y, real64)
    endsubroutine ig_item_rect
+
+   recursive function ig_last_item() result(s)
+   !< What happened to the item drawn last (Dear ImGui's `IsItem*`, `IsMouseDoubleClicked`, `GetItemRect*`), in one
+   !< call: hovered, active, focused, visible, activated, edited, deactivated, deactivated_after_edit, toggled_open,
+   !< clicked and double_clicked per button, its rectangle. Call it right after the item: the next item drawn replaces
+   !< "the last item", the snapshot does not change. Event states are true on one frame. The same in window, headless
+   !< and remote mode. No frame open or a task: all false (a usage error, reported by `app%next_frame`).
+   type(item_status_object) :: s      !< Status of the item.
+   type(fig_item_status)    :: c      !< C copy.
+   integer(c_int)           :: status !< Status of the call.
+
+   s = item_status_object()
+   if (figure_draw_refused('ig_last_item')) return ! a task does not draw
+   status = fig_last_item(c)
+   call figure_check(status)
+   if (status /= FIG_OK) return
+   s%hovered = c%hovered /= 0_c_int
+   s%active = c%active /= 0_c_int
+   s%focused = c%focused /= 0_c_int
+   s%visible = c%visible /= 0_c_int
+   s%activated = c%activated /= 0_c_int
+   s%edited = c%edited /= 0_c_int
+   s%deactivated = c%deactivated /= 0_c_int
+   s%deactivated_after_edit = c%deactivated_after_edit /= 0_c_int
+   s%toggled_open = c%toggled_open /= 0_c_int
+   s%clicked = c%clicked /= 0_c_int
+   s%double_clicked = c%double_clicked /= 0_c_int
+   s%rect = real(c%rect, real64)
+   endfunction ig_last_item
+
+   recursive function ig_item_hovered(delay, stat) result(hovered)
+   !< True while the pointer is over the item drawn last (Dear ImGui's `IsItemHovered`), and no other item is held.
+   !< `delay`: `'none'` (default) at once; `'short'` (0.15 s) and `'normal'` (0.40 s) once the pointer has been over
+   !< the item that long (Dear ImGui's `ImGuiHoveredFlags_DelayShort`/`DelayNormal`). The time counts only on frames
+   !< that make a delayed call, so call it every frame; it is shared between items (moving to a neighbour keeps it) and
+   !< cleared 0.25 s after the last delayed call over an item. An unknown delay: false, `FIG_ERR_ARGUMENT` in `stat`
+   !< (or `error stop` without it); no frame open or a task: `FIG_ERR_STATE`. The same in window, headless and remote
+   !< mode.
+   character(len=*), intent(in),  optional :: delay   !< 'none' (default), 'short' or 'normal'.
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   logical                                 :: hovered !< Hovered (after the delay).
+   integer(c_int)                          :: flags   !< ImGuiHoveredFlags.
+
+   hovered = .false.
+   if (figure_draw_refused('ig_item_hovered', stat)) return ! a task does not draw
+   flags = ImGuiHoveredFlags_None
+   if (present(delay)) then
+      select case (delay)
+      case ('none')
+         flags = ImGuiHoveredFlags_None
+      case ('short')
+         flags = ImGuiHoveredFlags_DelayShort
+      case ('normal')
+         flags = ImGuiHoveredFlags_DelayNormal
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, 'ig_item_hovered: unknown delay "'//delay// &
+                          '" (''none'', ''short'' or ''normal'')', stat)
+         return
+      endselect
+   endif
+   hovered = logical(igIsItemHovered(flags))
+   if (present(stat)) stat = FIG_OK
+   endfunction ig_item_hovered
+
+   recursive function ig_any_item_hovered() result(hovered)
+   !< True while the pointer is over any item (Dear ImGui's `IsAnyItemHovered`): a click there goes to a widget, not to
+   !< the window's background. No frame open or a task: false (a usage error, reported by `app%next_frame`).
+   logical :: hovered !< Some item hovered.
+
+   hovered = .false.
+   if (figure_draw_refused('ig_any_item_hovered')) return ! a task does not draw
+   hovered = logical(igIsAnyItemHovered())
+   endfunction ig_any_item_hovered
+
+   recursive function ig_any_item_active() result(active)
+   !< True while any item is active (Dear ImGui's `IsAnyItemActive`): a text field edited, a slider dragged, a button
+   !< held. No frame open or a task: false (a usage error, reported by `app%next_frame`).
+   logical :: active !< Some item active.
+
+   active = .false.
+   if (figure_draw_refused('ig_any_item_active')) return ! a task does not draw
+   active = logical(igIsAnyItemActive())
+   endfunction ig_any_item_active
 
    recursive subroutine ig_image(tex, width, height)
    !< A texture, pixel row 1 at the top (screen and image-file convention), `width` x `height` pixels (default: the

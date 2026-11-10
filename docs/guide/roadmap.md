@@ -238,6 +238,11 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   routing: `'focused'` (the new default) fires only in the window with the focus and not while a text field holds
   the key, `'global'` wherever the focus is, `'item'` for the item being edited; `ig_set_next_item_shortcut` gives a
   chord to a button ([Shortcuts](menus#shortcuts)): done.
+- **What happened to an item:** `ig_last_item()` returns an `item_status_object`, a snapshot of the item drawn
+  last (hovered, active, focused, visible, activated, edited, deactivated, `deactivated_after_edit`, toggled open,
+  clicked and double-clicked per button, its rectangle), filled by one native call; `ig_item_hovered([delay])`,
+  `ig_any_item_hovered`, `ig_any_item_active`; `ig_combo` reports its pick as an edit
+  ([What happened to an item](widgets#what-happened-to-an-item)): done.
 
 ## Next
 

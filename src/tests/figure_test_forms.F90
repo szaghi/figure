@@ -13,6 +13,13 @@ program figure_test_forms
 !< the focus; a text field being edited holds 'down' from its window and gives 'up' to its 'item' call; a chord with
 !< `repeat` fires again while held, one without fires once; a button owning ctrl+r is pressed by it in its window
 !< only; a call outside every window fires unless a focused window routes the same chord.
+!<
+!< Item status (`ig_last_item`): a text field typed into on three frames and left by a click elsewhere reports edited
+!< on those three frames and deactivated_after_edit on one frame after them; a button hovered (at once, and after the
+!< 'normal' delay), clicked once (no double click), clicked twice (one double click), right-clicked, held
+!< (`ig_any_item_active`); a snapshot taken before a tooltip keeps the button's status after the tooltip and another
+!< item are drawn; a combo's pick is an edit; a tree node's arrow toggles it open; a row scrolled out of a child
+!< region is not visible.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, ig_input_text, ig_item_rect,   &
                    ig_set_next_item_width, ig_set_next_window, ig_tooltip, ImGuiInputTextFlags_CharsNoBlank,   &
@@ -21,14 +28,16 @@ use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, 
                    ig_table_headers_row, ig_table_next_column, ig_table_next_row, ig_table_set_column,       &
                    ig_table_setup_column, ig_set_next_item_open, ig_tree_node, ig_tree_pop
 use figure, only : ig_color_edit, ig_set_next_item_shortcut, ig_shortcut, FIG_ERR_ARGUMENT, FIG_OK
-use figure_testing, only : test_click, test_drag, test_item_center, test_key, test_mouse_move, test_popup_rect, test_type, &
-                           test_window_rect
+use figure, only : ig_any_item_active, ig_any_item_hovered, ig_begin_child, ig_end_child, ig_item_hovered, ig_last_item, &
+                   item_status_object
+use figure_testing, only : test_click, test_drag, test_item_center, test_key, test_mouse_button, test_mouse_move, &
+                           test_next_frame, test_popup_rect, test_type, test_wheel, test_window_rect
 
 implicit none
 integer(int32), parameter :: FRAMES = 400_int32 !< Frames run.
 integer(int32), parameter :: TIP_FRAME = 230_int32 !< Frame on which the tooltip is looked for.
 type(app_object)          :: app                !< Application.
-logical                   :: test_passed(41)    !< Per-check outcome.
+logical                   :: test_passed(53)    !< Per-check outcome.
 character(len=16)         :: grid_file          !< A text field.
 character(len=4)          :: short              !< A text field of capacity 4.
 character(len=12)         :: no_blank           !< A text field that refuses blanks.
@@ -102,6 +111,23 @@ integer(int32)            :: item_ups(2)        !< 'up' ('item', after the field
 integer(int32)            :: repeats(2)         !< f7 held with repeat, f8 held without.
 integer(int32)            :: runs(2)            !< The button owning ctrl+r pressed: Right focused, then Left.
 integer(int32)            :: s_short(2)         !< Statuses: an unknown scope, 'item' for the next item.
+integer(int32)            :: leave_frames       !< Frames on which the field reported deactivated_after_edit.
+integer(int32)            :: leave_at           !< The last of them.
+integer(int32)            :: edit_frames        !< Frames on which the field reported edited.
+integer(int32)            :: last_edit          !< The last of them.
+character(len=16)         :: committed          !< The field's text on the frame it was left.
+integer(int32)            :: active_seen(2)     !< Frames on which the field was activated, deactivated.
+logical                   :: hover_seen(2)      !< The button: hovered with the pointer away, just arrived.
+integer(int32)            :: clicks(3)          !< Left clicks: one click, a double click; right clicks.
+integer(int32)            :: dbl(2)             !< Double clicks reported: after one click, after two.
+logical                   :: held(2)            !< ig_any_item_active: the button held, then released.
+logical                   :: snap_ok            !< The snapshot taken before a tooltip kept the button's status.
+integer(int32)            :: combo_edits        !< Frames on which the combo reported edited.
+integer(int32)            :: toggles            !< Frames on which the tree node reported toggled_open.
+logical                   :: row_visible(2, 2)  !< (row 1, row 30) of a child visible: before, after the wheel.
+integer(int32)            :: s_hover(2)         !< Statuses of ig_item_hovered: 'normal', an unknown delay.
+integer(int32)            :: picked             !< The combo's choice after the pick.
+integer(int32)            :: normal_at          !< First frame the button was hovered with the 'normal' delay.
 
 grid_file = 'CC/cc'
 short = ''
@@ -328,6 +354,7 @@ do frame = 1_int32, FRAMES
 enddo
 call colour_frames()
 call shortcut_frames()
+call item_frames()
 call app%destroy()
 
 test_passed(1) = grid_file == 'MESH/grid' .and. edits(1) > 0_int32            ! typed text, written back
@@ -376,6 +403,20 @@ test_passed(38) = repeats(1) >= 3_int32 .and. repeats(2) == 1_int32          ! r
 test_passed(39) = all(runs == [0_int32, 1_int32])                            ! the button owns ctrl+r, focused
 test_passed(40) = s_short(1) == FIG_ERR_ARGUMENT                             ! an unknown scope refused
 test_passed(41) = s_short(2) == FIG_ERR_ARGUMENT                             ! 'item' refused for the next item
+test_passed(42) = leave_frames == 1_int32 .and. leave_at > last_edit .and. committed == 'wig' ! left once, after
+test_passed(43) = edit_frames == 3_int32                                     ! edited on each keystroke's frame
+test_passed(44) = all(active_seen == [1_int32, 1_int32])                     ! activated once, deactivated once
+test_passed(45) = .not. hover_seen(1) .and. hover_seen(2) .and. s_hover(1) == FIG_OK .and. & ! hovered at once,
+                  normal_at >= 41_int32 + 24_int32 .and. normal_at < 41_int32 + 40_int32 ! and after the 'normal' delay
+test_passed(46) = clicks(1) == 1_int32 .and. dbl(1) == 0_int32               ! one click: no double click
+test_passed(47) = clicks(2) == 2_int32 .and. dbl(2) == 1_int32               ! two clicks: one double click
+test_passed(48) = clicks(3) == 1_int32                                       ! right click: clicked(2) only
+test_passed(49) = held(1) .and. .not. held(2)                                ! ig_any_item_active while held
+test_passed(50) = snap_ok                                                    ! the snapshot outlives the tooltip
+test_passed(51) = combo_edits == 1_int32 .and. picked == 2_int32 .and. toggles == 1_int32 ! combo pick, node arrow
+test_passed(52) = row_visible(1, 1) .and. .not. row_visible(2, 1) .and. &    ! a row scrolled out of the child:
+                  .not. row_visible(1, 2) .and. row_visible(2, 2)            ! not visible
+test_passed(53) = s_hover(2) == FIG_ERR_ARGUMENT                             ! an unknown delay refused
 
 write(output_unit, '(A,*(L2))') 'figure_test_forms checks:', test_passed
 if (.not. all(test_passed)) then
@@ -396,6 +437,11 @@ if (.not. all(test_passed)) then
    write(output_unit, '(A,9(I0,1X),A,I0,A,I0,A,3(I0,1X),A,2(I0,1X),A,2(I0,1X),A,2(I0,1X),A,2(I0,1X))') &
          'shortcuts: saves', saves_at, ', globals ', globals, ', tops ', tops, ', downs ', downs, ', item ups ', &
          item_ups, ', repeats ', repeats, ', runs ', runs, ', statuses ', s_short
+   write(output_unit, '(A,4(I0,1X),A,2(I0,1X),A,2L2,1X,I0,A,3(I0,1X),A,2(I0,1X),A,2L2,A,L2,A,3(I0,1X),A,4L2,A,2(I0,1X))') &
+         'items: leave/at/edits/last ', leave_frames, leave_at, edit_frames, last_edit, ', act/deact ', active_seen, &
+         ', hover', hover_seen, normal_at, ', clicks ', clicks, ', dbl ', dbl, ', held', held, ', snap', snap_ok, &
+         ', combo/picked/toggles ', combo_edits, picked, toggles, ', rows', row_visible, ', hover stats ', s_hover
+   write(output_unit, '(A)') 'committed "'//trim(committed)//'"'
 endif
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
@@ -548,6 +594,178 @@ contains
    call test_key(key)
    call test_key('shortcut', down=.false.)
    endsubroutine ctrl
+
+   subroutine item_frames()
+   !< One window, Items: a text field typed into and left, a button hovered, clicked, double-clicked, right-clicked
+   !< and held, a button with a tooltip whose snapshot is taken before the tooltip, a combo picked, a tree node opened
+   !< by its arrow, and a child region of 30 rows scrolled by the wheel.
+   character(len=16)        :: mesh       !< The text field.
+   integer(int32)           :: model      !< The combo's choice.
+   type(item_status_object) :: s          !< Status of an item.
+   type(item_status_object) :: snap       !< The help button's status, before its tooltip.
+   type(item_status_object) :: after      !< The last item's status after the tooltip and a text.
+   real(real64)             :: field(2)   !< Centre of the field.
+   real(real64)             :: button(2)  !< Centre of the button 'open'.
+   real(real64)             :: help(2)    !< Centre of the button 'help'.
+   real(real64)             :: combo(2)   !< Centre of the combo.
+   real(real64)             :: node(4)    !< The tree node's rectangle (x, y, w, h).
+   real(real64)             :: list(2)    !< Centre of the child region.
+   real(real64)             :: help_rect(4) !< The help button's rectangle by ig_item_rect (xmin, ymin, xmax, ymax).
+   real(real64)             :: x0, y0, x1, y1 !< A window's rectangle.
+   logical                  :: open       !< The tree node is open.
+   logical                  :: tip        !< The tooltip is shown.
+   integer(int32)           :: f          !< Frame.
+   integer(int32)           :: r          !< Row.
+
+   mesh = ''
+   committed = ''
+   model = 1_int32
+   field = 0.0_real64
+   button = 0.0_real64
+   help = 0.0_real64
+   combo = 0.0_real64
+   node = 0.0_real64
+   list = 0.0_real64
+   leave_frames = 0_int32
+   edit_frames = 0_int32
+   last_edit = 0_int32
+   leave_at = 0_int32
+   active_seen = 0_int32
+   hover_seen = .true.
+   dbl = 0_int32
+   clicks = 0_int32
+   held = .true.
+   snap_ok = .false.
+   combo_edits = 0_int32
+   toggles = 0_int32
+   row_visible = .false.
+   s_hover = FIG_OK
+   normal_at = 0_int32
+   do f = 1_int32, 300_int32
+      if (.not. app%next_frame()) exit
+      call ig_set_next_window(20.0_real64, 20.0_real64, 500.0_real64, 420.0_real64, always=.true.)
+      if (ig_begin('Items')) then
+         if (ig_input_text('mesh', mesh)) continue
+         s = ig_last_item()                                   ! right after the field
+         field = s%rect(1:2) + 0.5_real64 * s%rect(3:4)
+         if (s%edited) then
+            edit_frames = edit_frames + 1_int32
+            last_edit = f
+         endif
+         if (s%activated) active_seen(1) = active_seen(1) + 1_int32
+         if (s%deactivated) active_seen(2) = active_seen(2) + 1_int32
+         if (s%deactivated_after_edit) then
+            leave_frames = leave_frames + 1_int32
+            leave_at = f
+            committed = mesh
+         endif
+         if (ig_button('open')) continue
+         s = ig_last_item()
+         button = s%rect(1:2) + 0.5_real64 * s%rect(3:4)
+         select case (f)
+         case (36_int32)                                      ! the pointer away from every item
+            hover_seen(1) = s%hovered .or. ig_item_hovered() .or. ig_any_item_hovered()
+         case (43_int32)                                      ! the pointer on the button, just arrived
+            hover_seen(2) = s%hovered .and. ig_item_hovered() .and. ig_any_item_hovered() .and. &
+                            .not. ig_item_hovered(delay='normal')
+         endselect
+         if (f > 43_int32 .and. f < 90_int32) then            ! resting there: 'normal' after 0.40 s (24 frames)
+            if (ig_item_hovered(delay='normal', stat=s_hover(1)) .and. normal_at == 0_int32) normal_at = f
+         endif
+         if (f >= 90_int32 .and. f < 120_int32) then          ! one click
+            if (s%clicked(1)) clicks(1) = clicks(1) + 1_int32
+            if (s%double_clicked(1)) dbl(1) = dbl(1) + 1_int32
+         elseif (f >= 120_int32 .and. f < 145_int32) then     ! two clicks: a double click
+            if (s%clicked(1)) clicks(2) = clicks(2) + 1_int32
+            if (s%double_clicked(1)) dbl(2) = dbl(2) + 1_int32
+         elseif (f >= 145_int32 .and. f < 165_int32) then     ! a right click
+            if (s%clicked(2)) clicks(3) = clicks(3) + 1_int32
+            if (s%clicked(1) .or. s%double_clicked(2)) clicks(3) = clicks(3) + 10_int32
+         endif
+         if (ig_button('help')) continue
+         snap = ig_last_item()                                ! before the tooltip
+         call ig_item_rect(help_rect(1), help_rect(2), help_rect(3), help_rect(4))
+         help = snap%rect(1:2) + 0.5_real64 * snap%rect(3:4)
+         call ig_tooltip('opens the case')
+         call ig_text('after the tooltip')
+         after = ig_last_item()
+         if (f == 230_int32) then
+            call test_window_rect('##Tooltip_00', x0, y0, x1, y1, found=tip)
+            snap_ok = tip .and. snap%hovered .and. abs(snap%rect(1) - help_rect(1)) < 0.01_real64 .and. &
+                      abs(snap%rect(3) - (help_rect(3) - help_rect(1))) < 0.01_real64 .and. &
+                      .not. after%hovered .and. abs(after%rect(2) - snap%rect(2)) > 1.0_real64
+         endif
+         if (ig_combo('model', model, ['nul', 'spa', 'des'])) continue
+         s = ig_last_item()
+         combo = s%rect(1:2) + 0.5_real64 * s%rect(3:4)
+         if (s%edited) combo_edits = combo_edits + 1_int32
+         open = ig_tree_node('blocks')
+         s = ig_last_item()
+         node = s%rect
+         if (s%toggled_open) toggles = toggles + 1_int32
+         if (open) call ig_tree_pop()
+         if (ig_begin_child('list', height=100.0_real64, border=.true.)) then
+            do r = 1_int32, 30_int32
+               call ig_text('row '//achar(48 + r / 10)//achar(48 + mod(r, 10)))
+               s = ig_last_item()
+               if (f == 260_int32 .and. r == 1_int32) row_visible(1, 1) = s%visible  ! before the wheel
+               if (f == 260_int32 .and. r == 30_int32) row_visible(2, 1) = s%visible
+               if (f == 295_int32 .and. r == 1_int32) row_visible(1, 2) = s%visible  ! after it
+               if (f == 295_int32 .and. r == 30_int32) row_visible(2, 2) = s%visible
+            enddo
+         endif
+         call ig_end_child()
+         s = ig_last_item()
+         list = s%rect(1:2) + 0.5_real64 * s%rect(3:4)
+      endif
+      call ig_end()
+      if (f == 172_int32) held(1) = ig_any_item_active()     ! the button held
+      if (f == 180_int32) held(2) = ig_any_item_active()     ! released
+      select case (f)
+      case (5_int32)                                          ! click into the field, type three keys on three frames
+         call test_click(field(1), field(2))
+      case (12_int32)
+         call test_type('w')
+         call test_next_frame()
+         call test_type('i')
+         call test_next_frame()
+         call test_type('g')
+      case (25_int32)                                         ! leave the field: a click on the empty window
+         call test_click(450.0_real64, 410.0_real64)
+      case (40_int32)
+         call test_mouse_move(button(1), button(2))
+      case (90_int32)
+         call test_click(button(1), button(2))
+      case (120_int32)
+         call test_click(button(1), button(2))
+         call test_click(button(1), button(2))
+      case (145_int32)
+         call test_click(button(1), button(2), button='right')
+      case (165_int32)
+         call test_mouse_move(button(1), button(2))
+         call test_next_frame()
+         call test_mouse_button(.true.)
+      case (176_int32)
+         call test_mouse_button(.false.)
+      case (185_int32)
+         call test_mouse_move(help(1), help(2))
+      case (235_int32)                                        ! pick the second model
+         call test_click(combo(1), combo(2))
+      case (242_int32)
+         call test_key('down')
+         call test_key('enter')
+      case (255_int32)                                        ! open the node by its arrow
+         call test_click(node(1) + 6.0_real64, node(2) + 0.5_real64 * node(4))
+      case (270_int32)                                        ! scroll the list to its end
+         call test_mouse_move(list(1), list(2))
+         call test_next_frame()
+         call test_wheel(-20.0_real64)
+      case (285_int32)
+         if (ig_item_hovered(delay='later', stat=s_hover(2))) continue
+      endselect
+   enddo
+   picked = model
+   endsubroutine item_frames
 
    subroutine replace(k, text)
    !< Click field k, select its text, type `text`, confirm with enter. The text is selected with end, then shift+home,

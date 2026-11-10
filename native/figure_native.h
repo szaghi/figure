@@ -192,6 +192,16 @@ void   fig_clipper_delete(void *clipper);
 int    fig_shortcut(const char *keys, int keys_len, const char *scope, int scope_len, int repeat, int *pressed);
 /* The next item owns the chord (scope "focused" or "global"): the chord presses it, and its tooltip shows it. */
 int    fig_set_next_item_shortcut(const char *keys, int keys_len, const char *scope, int scope_len);
+/* The status of the item drawn last (Dear ImGui's IsItem*): 1 or 0 each; clicked and double_clicked per mouse button
+ * (0 left, 1 right, 2 middle); rect x, y, width, height [pixels]. All 0 when no context. */
+typedef struct fig_item_status {
+   int    hovered, active, focused, visible, activated, edited, deactivated, deactivated_after_edit, toggled_open;
+   int    clicked[3], double_clicked[3];
+   double rect[4];
+} fig_item_status;
+int    fig_last_item(fig_item_status *s);
+/* The item drawn last changed its value on this frame (MarkItemEdited): for widgets FIGURE composes (ig_combo). */
+void   fig_mark_last_item_edited(void);
 /* A text field over a caller-owned NUL-terminated buffer of buf_size bytes (InputText without a callback); 1 when
  * edited this frame. hint_len 0: no hint. */
 int    fig_widget_input_text(const char *label, int label_len, const char *hint, int hint_len, char *buf, int buf_size,

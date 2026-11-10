@@ -3247,6 +3247,41 @@ int fig_set_next_item_shortcut(const char *keys, int keys_len, const char *scope
    FIG_CATCH
 }
 
+// The status of the item drawn last, in one call (Dear ImGui's IsItem*, IsMouseDoubleClicked, GetItemRect*): a
+// snapshot the program keeps while it draws other items. clicked and double_clicked, per button (left, right, middle),
+// as IsItemClicked: the button went down this frame with the pointer over the item.
+// The item drawn last changed its value on this frame (Dear ImGui's MarkItemEdited, as Dear ImGui's own Combo calls
+// it after EndCombo): its status reports edited, and deactivated_after_edit when it is left.
+void fig_mark_last_item_edited(void) {
+   if (ImGui::GetCurrentContext() && GImGui->LastItemData.ID != 0) ImGui::MarkItemEdited(GImGui->LastItemData.ID);
+}
+
+int fig_last_item(fig_item_status *s) {
+   FIG_TRY
+   *s = fig_item_status{};
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   s->hovered = ImGui::IsItemHovered() ? 1 : 0;
+   s->active = ImGui::IsItemActive() ? 1 : 0;
+   s->focused = ImGui::IsItemFocused() ? 1 : 0;
+   s->visible = ImGui::IsItemVisible() ? 1 : 0;
+   s->activated = ImGui::IsItemActivated() ? 1 : 0;
+   s->edited = ImGui::IsItemEdited() ? 1 : 0;
+   s->deactivated = ImGui::IsItemDeactivated() ? 1 : 0;
+   s->deactivated_after_edit = ImGui::IsItemDeactivatedAfterEdit() ? 1 : 0;
+   s->toggled_open = ImGui::IsItemToggledOpen() ? 1 : 0;
+   for (int b = 0; b < 3; ++b) {
+      s->clicked[b] = ImGui::IsItemClicked(b) ? 1 : 0;
+      s->double_clicked[b] = ImGui::IsMouseDoubleClicked(b) && ImGui::IsItemHovered(ImGuiHoveredFlags_None) ? 1 : 0;
+   }
+   const ImVec2 a = ImGui::GetItemRectMin(), z = ImGui::GetItemRectSize();
+   s->rect[0] = a.x;
+   s->rect[1] = a.y;
+   s->rect[2] = z.x;
+   s->rect[3] = z.y;
+   return FIG_OK;
+   FIG_CATCH
+}
+
 int fig_input_key(const char *name, int name_len, int down) {
    if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
