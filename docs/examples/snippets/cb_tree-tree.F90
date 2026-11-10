@@ -6,7 +6,7 @@ if (ig_begin_table('grids', 3_int32)) then
    do b = 1_int32, BODIES
       call ig_table_next_row()
       call ig_table_next_column()
-      open = ig_tree_node(trim(BODY(b)), default_open=(b == 1_int32), span_full_width=.true.)
+      open = ig_tree_node(trim(BODY(b)), default_open=(b == 1_int32), span_all_columns=.true.)
       call ig_table_next_column()
       write(line, '(I0)') sum(CELLS(FIRST(b):LAST(b)))     ! the body's values, open or not
       call ig_text(trim(line))
@@ -16,9 +16,9 @@ if (ig_begin_table('grids', 3_int32)) then
             call ig_table_next_row()
             call ig_table_next_column()
             write(line, '(A,I0)') 'block ', k
-            if (ig_tree_node(trim(line), leaf=.true., selected=(k == chosen), span_full_width=.true., &
+            if (ig_tree_node(trim(line), leaf=.true., selected=(k == chosen), span_all_columns=.true., &
                              clicked=clicked)) call ig_tree_pop()
-            if (clicked) chosen = k                         ! a click on the label chooses, the arrow expands
+            if (clicked) chosen = k                         ! a click on the row chooses, the arrow expands
             call ig_table_next_column()
             write(line, '(I0)') CELLS(k)
             call ig_text(trim(line))

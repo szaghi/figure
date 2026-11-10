@@ -603,7 +603,7 @@ gives zeros; without `stat` the error is reported by the next `app%next_frame`
 | `ig_collapsing_header(label [, default_open])` | `.true.` while open: draw what it hides inside the `if`. No end call. |
 | `ig_begin_tab_bar(id)`, `ig_end_tab_bar()` | End only when the begin returned `.true.`. |
 | `ig_begin_tab(label [, open])`, `ig_end_tab()` | `.true.` for the selected tab: draw its content, then end it; end only then. With `open`, a close button. |
-| `ig_begin_table(id, columns [, flags] [, height])`, `ig_end_table()` | End only when the begin returned `.true.`. |
+| `ig_begin_table(id, columns [, ...])`, `ig_end_table()` | End only when the begin returned `.true.`; the rest in [Tables](#tables). |
 | `ig_push_id(id)`, `ig_pop_id()` | Always paired: an id scope, by `character` or `int32`. |
 | `ig_begin_disabled([disabled])`, `ig_end_disabled()` | Always paired: the widgets in between are greyed out and ignore input. |
 
@@ -613,24 +613,110 @@ checks both rules, and the nesting of the scopes, at every end: [Pairing and fra
 
 <<< @/examples/snippets/cb_form-fields.F90{fortran}
 
-A table is filled row by row: `ig_table_next_row`, then `ig_table_next_column` before each cell's widgets (or
-`ig_table_set_column(column)`, 1-based). Before the first row, `ig_table_setup_column(label [, width])` declares a
-column, fixed `width` in pixels or a share of the width left, and `ig_table_headers_row` draws their labels. The default
-`flags` give borders, alternating row colours and resizable columns; `ImGuiTableFlags_*` (`Borders`, `BordersInnerV`,
-`RowBg`, `Resizable`, `ScrollY` with `height`, `SizingFixedFit`, `SizingStretchSame`, `None`) replace them.
+## Tables
 
-Widgets repeated on every row repeat their labels: open an id scope per row with `ig_push_id(row)`, so that row 2's
-field is not row 1's (see [Labels and identifiers](#labels-and-identifiers)).
+<Media name="cb_table_sort" video alt="A table of 200 grid blocks with columns block, body, cells and residual. A click on the header cells sorts the rows by cells, largest first, and a second click smallest first; a click on residual puts the largest residuals on top, their rows coloured and their values marked with an exclamation mark; the wheel scrolls the rows while the header stays in place" caption="docs/examples/src/cb_table_sort.F90: a sortable table with a fixed header" />
+
+| Procedure | Notes |
+|---|---|
+| `ig_begin_table(id, columns [, flags] [, height] [, freeze_rows] [, freeze_cols] [, sortable] [, hideable] [, reorderable] [, scroll_x] [, stat])` → `logical` | A table of `columns` columns (1 to 511); `.true.`: fill it, then `ig_end_table()`. |
+| `ig_table_setup_column(label [, width] [, stretch] [, sort] [, default_sort] [, descending] [, hidden] [, no_hide] [, stat])` | Declares the next column, before the first row: its header label, a fixed `width` [pixels] or a `stretch` weight, how it sorts and hides. |
+| `ig_table_headers_row()` | A row with the labels of the declared columns: a click sorts, a drag reorders, a right click opens the columns' menu. |
+| `ig_table_next_row()`, `ig_table_next_column()`, `ig_table_set_column(column)` | Starts a row; moves to the next cell, or to cell `column` (1-based); the widgets that follow go in it. |
+| `ig_table_sort(column, descending [, stat])` → `logical` | `.true.` on the frame the user asks a new order; `column` (1-based) and `descending` give it, on every frame. The program sorts. |
+| `ig_table_row_color(rgba [, cell] [, stat])` | A colour behind the current row, or behind its cell `cell`, on this frame. |
+| `ig_table_hovered_column([stat])` → `integer(int32)` | The column under the pointer, headers included; 0 when none. |
+| `ig_table_column_enabled(column, enabled [, stat])` | Shows or hides a column of a hideable table from the program, from the next frame. |
+| `ig_tree_node(... [, span_all_columns])` | A tree node whose row is its hit area across every column ([Trees](#trees)). |
+
+(Dear ImGui's `BeginTable`, `TableSetupColumn`, `TableSetupScrollFreeze`, `TableHeadersRow`, `TableGetSortSpecs`,
+`TableSetBgColor`, `TableGetHoveredColumn`, `TableSetColumnEnabled`; `freeze_rows` and `freeze_cols` are
+`TableSetupScrollFreeze`'s rows and columns.)
+
+**Filling a table.** Row by row: `ig_table_next_row`, then `ig_table_next_column` before each cell's widgets (or
+`ig_table_set_column(column)`, 1-based). Before the first row, one `ig_table_setup_column` per column, in order, then
+`ig_table_headers_row` for their labels. A column is fixed (`width` [pixels]) or stretched (`stretch`, a weight
+[relative, > 0]: the stretched columns share the width left in proportion; default weight 1). Widgets repeated on
+every row repeat their labels: open an id scope per row with `ig_push_id(row)`, so that row 2's field is not row 1's
+(see [Labels and identifiers](#labels-and-identifiers)).
 
 <<< @/examples/snippets/cb_form-table.F90{fortran}
 
 <Media name="cb_form" alt="An input-file editor: a field typed over, a scheme picked from a list, a restart option ticked, then a row added to a table of boundary conditions and edited" caption="docs/examples/src/cb_form.F90: the preview on the right follows the variables" />
 
+**Flags.** The default `flags` give borders, alternating row colours and resizable columns. `flags` replaces them with
+`ImGuiTableFlags_*` combined by `ior` (every one of Dear ImGui's is exported: `Borders`, `BordersInnerV`, `RowBg`,
+`Resizable`, `ScrollY`, `ScrollX`, `Sortable`, `SortMulti`, `SortTristate`, `Hideable`, `Reorderable`,
+`HighlightHoveredColumn`, `NoSavedSettings`, the `Sizing*` policies, ...); the logical arguments then set (`.true.`)
+or clear (`.false.`) one flag each, over the default or over `flags`: `sortable`, `hideable`, `reorderable`,
+`scroll_x`.
+
+**A fixed header.** `freeze_rows=1` keeps the headers row in view while the rows scroll; `freeze_cols=n` keeps the
+first `n` columns in view while the table scrolls sideways. A frozen row turns `ImGuiTableFlags_ScrollY` on and a
+frozen column `ImGuiTableFlags_ScrollX` (Dear ImGui freezes only what scrolls). A table that scrolls is a region of
+its own: `height` [pixels] sets its height; without it, it fills the height left in the window. Long tables draw
+only the rows in view with a [`list_clipper_object`](#lists-and-regions) between the headers row and
+`ig_end_table`: the clipper counts the rows below the frozen header, so row 1 is the first row of data.
+
+<<< @/examples/snippets/cb_table_sort-table.F90{fortran}
+
+**Sorting is the program's job.** A click on a header asks an order; `ig_table_sort` reports it and FIGURE moves
+nothing. It returns `.true.` on the frame the order is asked: on the first frame (the default order: the column
+declared `default_sort`, or the first one), and after each click on a header (the same header again: the other
+direction; `descending` on a column makes its first click largest first). `column` is the column's place in the
+declaration, whatever order the user dragged the columns into. On a `.true.` frame the program sorts, then draws the
+rows in the new order. Sort a **permutation of the row indices**, not the data: the arrays stay where they are (other
+code indexes them, the selection is a block number, not a row), only `order(:)` moves, and the rows are drawn as
+`k = order(i)`. A stable sort (rows equal in the key keep their order) makes the column sorted before a second key.
+
+<<< @/examples/snippets/cb_table_sort-sort.F90{fortran}
+
+The program checks itself headless (clicks on the header, then the wheel):
+
+<<< @/examples/output/cb_table_sort.txt{text}
+
+**Row colours.** `ig_table_row_color(rgba)` in a row colours it on this frame, over the alternating background;
+`cell=c` colours only its cell in column `c`. `rgba` is `[r, g, b]` or `[r, g, b, a]` in [0, 1]. Pair the colour with
+a mark or a word (the residual's `!` above): a colour alone does not reach every reader.
+
+**Hidden columns.** In a hideable table, a right click on the headers row opens Dear ImGui's menu of the columns,
+where the user shows and hides them. `hidden=.true.` hides a column the first time the table is shown, `no_hide`
+keeps one shown, and `ig_table_column_enabled(column, enabled)` shows or hides one from the program (from the next
+frame). A hidden column draws nothing: the widgets in its cells are skipped. Dear ImGui keeps the widths, the order,
+the sort and the hidden columns from frame to frame, by the table's `id`, and across runs in the settings file when
+the program keeps one (`app%init(..., ini_file=...)`; none by default): `default_sort` and `hidden` act only on a table
+it has not seen. `ImGuiTableFlags_NoSavedSettings` keeps a table out of the file.
+
+**The column under the pointer.** `ig_table_hovered_column()` inside the table: 1 to `columns` over a column (its
+header included; the column's place in the declaration, as `ig_table_sort`'s), 0 elsewhere. With `ig_begin_popup_context` after a cell's widget it tells which column a right
+click was on ([Context menus](menus#context-menus)).
+
+- **Pairing:** `ig_end_table` only after a true `ig_begin_table`; the scope record checks it, and the trees, popups
+  and id scopes inside it close first ([Pairing and frames](errors#pairing-and-frames)). `ig_table_setup_column`
+  before the first row; `ig_table_sort` after the last `ig_table_setup_column` (before or after the headers row);
+  `ig_table_row_color` after `ig_table_next_row`, in the row it colours.
+- **Status:** the `stat` of each call is optional. An argument out of range (`columns` outside 1 to 511,
+  `freeze_rows` outside 0 to 127, `freeze_cols` outside 0 to `columns`, `width` and `stretch` together, a negative
+  width, a weight not above 0, a colour of the wrong size or outside [0, 1], a `cell` or `column` outside 1 to the
+  columns) gives `FIG_ERR_ARGUMENT`, nothing done (a begin returns `.false.`): absent `stat`, `error stop` with the
+  message. A call out of its place (`ig_table_sort`, `ig_table_row_color`, `ig_table_hovered_column`,
+  `ig_table_column_enabled` with no table open; `ig_table_sort` in a table not `sortable` or before every column is
+  declared; `ig_table_column_enabled` in a table not `hideable`; `ig_table_row_color` before the first row) is a usage
+  error, `FIG_ERR_STATE`: absent `stat`, reported by the next `app%next_frame` as the pairing errors are. The messages
+  are in [Error handling](errors#tables).
+- **Window, headless, remote:** the same; headless, `test_click` on a header sorts and `test_wheel` over the rows
+  scrolls them.
+- **Threads:** the frame loop's thread only; a task is refused (`FIG_ERR_STATE`).
+- **What it does not do:** no sorting of the program's rows (FIGURE reports the order; the program sorts); with
+  `ImGuiTableFlags_SortMulti` only the first key is reported (the others: raw `igTableGetSortSpecs`); no row selection
+  (an `ig_selectable` in the first cell, as in [Lists and regions](#lists-and-regions)); no editing of a cell in place
+  (put a field in it); the clipper needs rows of equal height.
+
 ## Trees
 
 | Procedure | Notes |
 |---|---|
-| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked])` → `logical` | A node of a tree (`TreeNodeEx`); `.true.` while open: draw its children, then `ig_tree_pop`. |
+| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked] [, span_all_columns])` → `logical` | A node of a tree (`TreeNodeEx`); `.true.` while open: draw its children, then `ig_tree_pop`. |
 | `ig_tree_pop()` | Closes the children of a node: only after `ig_tree_node` returned `.true.`. |
 | `ig_set_next_item_open(open [, always])` | Opens or closes the next node from the program: the first time it is shown, or with `always` on this frame whatever its state. |
 
@@ -647,7 +733,11 @@ cell in a table. `ig_set_next_item_open` also opens a collapsing header; an "exp
 
 **Values in columns.** A tree goes in a table's first column: each node and each child is a row
 (`ig_table_next_row`), the node's values in the next cells, and the children's rows come between the node and its
-pop, so the first column keeps their indentation.
+pop, so the first column keeps their indentation. `span_all_columns=.true.` (Dear ImGui's
+`ImGuiTreeNodeFlags_SpanAllColumns`) makes the node's whole row its hit area and its highlight: a click on a value
+chooses the node, and `selected` colours the row across every column, as in a file manager's tree view. Text in the
+other cells leaves the click to the node; the node covers the row, so a row whose cells hold widgets (a field, a
+button) keeps the node to its own cell (`span_full_width`, or no span).
 
 <<< @/examples/snippets/cb_tree-tree.F90{fortran}
 
@@ -659,7 +749,7 @@ closes, and clips that list.
 
 <<< @/examples/snippets/cb_tree-large.F90{fortran}
 
-<Media name="cb_tree" alt="A table of grids: the wing open with three blocks; block 2 is chosen by a click on its label and highlighted, the fuselage opened by its arrow shows two more blocks, then the background node opens on a region of 20000 blocks that scrolls" caption="docs/examples/src/cb_tree.F90" />
+<Media name="cb_tree" alt="A table of grids: the wing open with three blocks; block 2 is chosen by a click on its cells and highlighted across its row, the fuselage opened by its arrow shows two more blocks, then the background node opens on a region of 20000 blocks that scrolls" caption="docs/examples/src/cb_tree.F90" />
 
 Trees are drawn the same in window, headless and remote modes; they have no failure status.
 

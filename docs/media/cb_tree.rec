@@ -1,9 +1,10 @@
 #! program build/docs-examples/bin/cb_tree
 #! frames  210
 #! poster  200
-# choose block 2 by its label, open fuselage by its arrow, open the background node and scroll its 20000 blocks
+# choose block 2 by a click in its cells column (the node spans the row), open fuselage by its arrow, open the
+# background node and scroll its 20000 blocks
 0   move 300 330
-5   move 90 105 15
+5   move 440 105 15
 25  down
 27  up
 50  move 34 144 15

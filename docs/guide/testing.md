@@ -104,7 +104,8 @@ into a field), checks docking, styles, themes and fonts, headless; `src/tests/fi
 contrast of every built-in style; `figure_test_layout` checks that the Fortran mirrors of Dear ImGui's structures
 match the C++ ones, `figure_test_remote` drives the remote mode end to end through a WebSocket client
 ([Remote UI](remote#how-it-works)), and `figure_test_files` drives the file browser on a folder it writes (clicks,
-double-clicks, typed names and paths, Tab, Escape):
+double-clicks, typed names and paths, Tab, Escape); `figure_test_tables` scrolls a table with a frozen header by the
+wheel, sorts it by clicks on its headers, and checks hidden columns, row colours and tree rows spanning the table:
 
 ```bash
 fobis build --mode tests-gnu && exe/figure_test_headless

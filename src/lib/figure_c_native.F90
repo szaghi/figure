@@ -27,12 +27,14 @@ public :: fig_align_begin, fig_align_end, fig_align_next, fig_plot_end
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
+public :: fig_table_sort, fig_table_row_color, fig_table_column_enabled, fig_table_hovered_column
 public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_input_system_theme
 public :: fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_frame_hit, fig_frame_rect, fig_frame_state
 public :: fig_process_start, fig_process_pending, fig_process_take, fig_process_info, fig_process_kill
 public :: fig_process_release
 public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_task_cancel, fig_task_cancelled
 public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
+public :: fig_usage_error
 public :: fig_set_checks, fig_checks, fig_draw_refuse, fig_scope_open, fig_scope_close, fig_scope_report
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_notification_alpha
@@ -486,6 +488,16 @@ interface
    integer(c_int)                     :: action   !< 0, 1 or 2.
    endfunction fig_draw_refuse
 
+   function fig_usage_error(msg, msg_len, has_stat) result(action) bind(C, name='fig_usage_error')
+   !< A usage error found by a wrapper: kept and answered as the others; 1 refused, 2 refused, stop ('abort').
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: msg(*)   !< The message.
+   integer(c_int),         value      :: msg_len  !< Its length [bytes].
+   integer(c_int),         value      :: has_stat !< 1: the caller has a stat (the error is returned there).
+   integer(c_int)                     :: action   !< 1 or 2.
+   endfunction fig_usage_error
+
    subroutine fig_scope_open(kind, who, who_len, label, label_len, returned, aux) bind(C, name='fig_scope_open')
    !< A begin or a push, after it: its scope in the record of the frame.
    import :: c_char, c_int
@@ -767,6 +779,42 @@ interface
    implicit none
    type(c_ptr), value :: clipper !< Clipper.
    endsubroutine fig_clipper_delete
+
+   function fig_table_sort(column, descending, changed) result(code) bind(C, name='fig_table_sort')
+   !< The order asked of the current table: its primary key, and whether it is new on this frame (cleared then).
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: column     !< Column, 1-based (0: no order).
+   integer(c_int), intent(out) :: descending !< 1: descending.
+   integer(c_int), intent(out) :: changed    !< 1: a new order on this frame.
+   integer(c_int)              :: code       !< 0 done, 1 no table, 2 not sortable, 5 columns not all declared.
+   endfunction fig_table_sort
+
+   function fig_table_row_color(rgba, column) result(code) bind(C, name='fig_table_row_color')
+   !< A colour behind the current row (`column` 0) or one of its cells.
+   import :: c_double, c_int
+   implicit none
+   real(c_double), intent(in) :: rgba(4) !< Colour, RGBA in [0, 1].
+   integer(c_int), value      :: column  !< 0 the row, else the cell's column (1-based).
+   integer(c_int)             :: code    !< 0 done, 1 no table, 3 column out of range, 4 no row begun.
+   endfunction fig_table_row_color
+
+   function fig_table_column_enabled(column, enabled) result(code) bind(C, name='fig_table_column_enabled')
+   !< Show or hide a column of the current table from the next frame.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: column  !< Column, 1-based.
+   integer(c_int), value :: enabled !< 1 shown, 0 hidden.
+   integer(c_int)        :: code    !< 0 done, 1 no table, 2 not hideable, 3 column out of range.
+   endfunction fig_table_column_enabled
+
+   function fig_table_hovered_column(column) result(code) bind(C, name='fig_table_hovered_column')
+   !< The column of the current table under the pointer.
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: column !< Column, 1-based (0: none).
+   integer(c_int)              :: code   !< 0 done, 1 no table.
+   endfunction fig_table_hovered_column
 
    function fig_load_layout(path, path_len) result(status) bind(C, name='fig_load_layout')
    !< Read a layout from `path`, applied before the next frame.

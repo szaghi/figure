@@ -2834,6 +2834,60 @@ void fig_clipper_delete(void *clipper) {
    IM_DELETE(c);
 }
 
+// Tables: the current table, or null (no context, no table).
+static ImGuiTable *current_table() { return ImGui::GetCurrentContext() ? ImGui::GetCurrentTable() : nullptr; }
+
+int fig_table_sort(int *column, int *descending, int *changed) {
+   *column = 0;
+   *descending = 0;
+   *changed = 0;
+   ImGuiTable *t = current_table();
+   if (!t) return 1;
+   if (!(t->Flags & ImGuiTableFlags_Sortable)) return 2;
+   if (!t->IsLayoutLocked && t->DeclColumnsCount > 0 && t->DeclColumnsCount < t->ColumnsCount) return 5;
+   ImGuiTableSortSpecs *s = ImGui::TableGetSortSpecs(); // locks the layout when the headers row did not
+   if (!s) return 2;
+   if (s->SpecsCount > 0) {
+      *column = s->Specs[0].ColumnIndex + 1;
+      *descending = s->Specs[0].SortDirection == ImGuiSortDirection_Descending ? 1 : 0;
+   }
+   *changed = s->SpecsDirty ? 1 : 0;
+   s->SpecsDirty = false;
+   return 0;
+}
+
+int fig_table_row_color(const double *rgba, int column) {
+   ImGuiTable *t = current_table();
+   if (!t) return 1;
+   if (column < 0 || column > t->ColumnsCount) return 3;
+   if (t->CurrentRow < 0 || !t->IsInsideRow) return 4;
+   const ImU32 c = ImGui::GetColorU32(ImVec4(static_cast<float>(rgba[0]), static_cast<float>(rgba[1]),
+                                             static_cast<float>(rgba[2]), static_cast<float>(rgba[3])));
+   if (column == 0)
+      ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1, c, -1); // over the alternating background (RowBg0)
+   else
+      ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, c, column - 1);
+   return 0;
+}
+
+int fig_table_column_enabled(int column, int enabled) {
+   ImGuiTable *t = current_table();
+   if (!t) return 1;
+   if (!(t->Flags & ImGuiTableFlags_Hideable)) return 2;
+   if (column < 1 || column > t->ColumnsCount) return 3;
+   ImGui::TableSetColumnEnabled(column - 1, enabled != 0);
+   return 0;
+}
+
+int fig_table_hovered_column(int *column) {
+   *column = 0;
+   ImGuiTable *t = current_table();
+   if (!t) return 1;
+   const int h = ImGui::TableGetHoveredColumn(); // -1 not over the table, ColumnsCount right of the last column
+   if (h >= 0 && h < t->ColumnsCount) *column = h + 1;
+   return 0;
+}
+
 int fig_dock_space(unsigned int id, int flags) {
    FIG_TRY
    if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_dock_space: no frame is open");

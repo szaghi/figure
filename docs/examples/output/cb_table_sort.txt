@@ -1,0 +1,6 @@
+$ ./cb_table_sort --check
+frame 5: first frame, the default order: column 1, descending F; blocks 1, 2, 3, 4, 5
+frame 13: click on cells: column 3, descending T; blocks 107, 182, 24, 73, 102
+   cells of the first row: 118016, the largest: 118016
+frame 21: second click on cells: column 3, descending F; blocks 25, 72, 97, 39, 58
+frame 40: the wheel scrolled to row 24, the header in place: T

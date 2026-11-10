@@ -39,11 +39,25 @@ use figure_group, only : ig_begin_disabled, ig_begin_tab, ig_begin_tab_bar, ig_c
                          ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_begin_table, ig_end_table,    &
                          ig_table_setup_column, ig_table_headers_row, ig_table_next_row, ig_table_next_column, &
                          ig_table_set_column, ig_begin_child, ig_end_child, list_clipper_object,            &
+                         ig_table_sort, ig_table_row_color, ig_table_hovered_column, ig_table_column_enabled, &
                          ig_tree_node, ig_tree_pop, ig_set_next_item_open, ig_begin_group, ig_end_group,    &
                          ig_align_begin, ig_align_end, ig_align_next
-use figure_cimgui_enums, only : ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg,         &
-                                ImGuiTableFlags_Borders, ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, &
-                                ImGuiTableFlags_SizingFixedFit, ImGuiTableFlags_SizingStretchSame
+use figure_cimgui_enums, only : ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_Reorderable, &
+                                ImGuiTableFlags_Hideable, ImGuiTableFlags_Sortable, &
+                                ImGuiTableFlags_NoSavedSettings, ImGuiTableFlags_ContextMenuInBody, &
+                                ImGuiTableFlags_RowBg, ImGuiTableFlags_BordersInnerH, &
+                                ImGuiTableFlags_BordersOuterH, ImGuiTableFlags_BordersInnerV, &
+                                ImGuiTableFlags_BordersOuterV, ImGuiTableFlags_BordersH, ImGuiTableFlags_BordersV, &
+                                ImGuiTableFlags_BordersInner, ImGuiTableFlags_BordersOuter, &
+                                ImGuiTableFlags_Borders, ImGuiTableFlags_NoBordersInBody, &
+                                ImGuiTableFlags_NoBordersInBodyUntilResize, ImGuiTableFlags_SizingFixedFit, &
+                                ImGuiTableFlags_SizingFixedSame, ImGuiTableFlags_SizingStretchProp, &
+                                ImGuiTableFlags_SizingStretchSame, ImGuiTableFlags_NoHostExtendX, &
+                                ImGuiTableFlags_NoHostExtendY, ImGuiTableFlags_NoKeepColumnsVisible, &
+                                ImGuiTableFlags_PreciseWidths, ImGuiTableFlags_NoClip, ImGuiTableFlags_PadOuterX, &
+                                ImGuiTableFlags_NoPadOuterX, ImGuiTableFlags_NoPadInnerX, ImGuiTableFlags_ScrollX, &
+                                ImGuiTableFlags_ScrollY, ImGuiTableFlags_SortMulti, ImGuiTableFlags_SortTristate, &
+                                ImGuiTableFlags_HighlightHoveredColumn
 use figure_menu, only : ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar, ig_end_main_menu_bar, ig_end_menu, &
                         ig_end_menu_bar, ig_menu_item, ig_set_next_item_shortcut, ig_shortcut, ig_open_popup, &
                         ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup, &
@@ -101,6 +115,7 @@ public :: ig_collapsing_header, ig_begin_tab_bar, ig_end_tab_bar, ig_begin_tab, 
 public :: ig_begin_disabled, ig_end_disabled
 public :: ig_begin_table, ig_end_table, ig_table_setup_column, ig_table_headers_row, ig_table_next_row
 public :: ig_table_next_column, ig_table_set_column, list_clipper_object
+public :: ig_table_sort, ig_table_row_color, ig_table_hovered_column, ig_table_column_enabled
 public :: ig_tree_node, ig_tree_pop, ig_set_next_item_open
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size, ig_progress_bar
 public :: ig_input_text_multiline, text_buffer_object
@@ -111,9 +126,19 @@ public :: ig_font_size, ig_line_height, ig_frame_height, ig_em, ig_available, ig
 public :: ig_indent, ig_unindent, ig_separator_text, ig_push_item_width, ig_pop_item_width
 public :: ig_begin_tooltip, ig_begin_item_tooltip, ig_end_tooltip, ig_text_link, ig_text_link_url
 public :: ig_begin_group, ig_end_group, ig_align_begin, ig_align_end, ig_align_next
-public :: ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_RowBg, ImGuiTableFlags_Borders
-public :: ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, ImGuiTableFlags_SizingFixedFit
-public :: ImGuiTableFlags_SizingStretchSame
+public :: ImGuiTableFlags_None, ImGuiTableFlags_Resizable, ImGuiTableFlags_Reorderable
+public :: ImGuiTableFlags_Hideable, ImGuiTableFlags_Sortable, ImGuiTableFlags_NoSavedSettings
+public :: ImGuiTableFlags_ContextMenuInBody, ImGuiTableFlags_RowBg, ImGuiTableFlags_BordersInnerH
+public :: ImGuiTableFlags_BordersOuterH, ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_BordersOuterV
+public :: ImGuiTableFlags_BordersH, ImGuiTableFlags_BordersV, ImGuiTableFlags_BordersInner
+public :: ImGuiTableFlags_BordersOuter, ImGuiTableFlags_Borders, ImGuiTableFlags_NoBordersInBody
+public :: ImGuiTableFlags_NoBordersInBodyUntilResize, ImGuiTableFlags_SizingFixedFit
+public :: ImGuiTableFlags_SizingFixedSame, ImGuiTableFlags_SizingStretchProp
+public :: ImGuiTableFlags_SizingStretchSame, ImGuiTableFlags_NoHostExtendX, ImGuiTableFlags_NoHostExtendY
+public :: ImGuiTableFlags_NoKeepColumnsVisible, ImGuiTableFlags_PreciseWidths, ImGuiTableFlags_NoClip
+public :: ImGuiTableFlags_PadOuterX, ImGuiTableFlags_NoPadOuterX, ImGuiTableFlags_NoPadInnerX
+public :: ImGuiTableFlags_ScrollX, ImGuiTableFlags_ScrollY, ImGuiTableFlags_SortMulti
+public :: ImGuiTableFlags_SortTristate, ImGuiTableFlags_HighlightHoveredColumn
 public :: ImGuiInputTextFlags_None, ImGuiInputTextFlags_CharsDecimal, ImGuiInputTextFlags_CharsScientific
 public :: ImGuiInputTextFlags_CharsUppercase, ImGuiInputTextFlags_CharsNoBlank, ImGuiInputTextFlags_EnterReturnsTrue
 public :: ImGuiInputTextFlags_ReadOnly, ImGuiInputTextFlags_Password, ImGuiInputTextFlags_AutoSelectAll

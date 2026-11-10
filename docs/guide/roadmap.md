@@ -257,6 +257,11 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   `ig_end_tooltip` hold any content (a table, a plot); `ig_text_link`, and `ig_text_link_url`, which opens a URL in
   the browser (in remote mode through the page; headless, `test_opened_url` reads it); the new pairs in the scope
   record ([Context menus](menus#context-menus), [Tooltips](widgets#tooltips)): done.
+- **Tables: frozen header, sorting, row colours, trees in tables:** `ig_begin_table` freezes rows and columns in view
+  (`freeze_rows`, `freeze_cols`) and takes `sortable`, `hideable`, `reorderable`, `scroll_x`; `ig_table_setup_column`
+  a `stretch` weight and how a column sorts and hides; `ig_table_sort` reports the order the user asks (the program
+  sorts a permutation of its rows); `ig_table_row_color`, `ig_table_hovered_column`, `ig_table_column_enabled`;
+  `ig_tree_node(..., span_all_columns)`; every `ImGuiTableFlags_*` exported ([Tables](widgets#tables)): done.
 
 ## Next
 

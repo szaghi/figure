@@ -1,0 +1,20 @@
+#! program build/docs-examples/bin/cb_table_sort
+#! frames  270
+#! poster  95
+# A click on the header 'cells' sorts the blocks by their cells, largest first; a second click, smallest first. A
+# click on 'residual' puts the largest residuals on top: their rows are coloured and marked '!'. The wheel scrolls the
+# rows down to the last coloured ones; the header stays in place.
+0   move 300 380
+10  move 430 48 15
+40  down
+41  up
+75  down
+76  up
+100 move 540 48 12
+130 down
+131 up
+160 move 300 220 15
+185 wheel 0 -3
+200 wheel 0 -3
+215 wheel 0 -3
+230 wheel 0 -3

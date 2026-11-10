@@ -220,14 +220,36 @@ in a program variable, the values sit in one column (`ig_same_line(offset=...)`)
 
 <<< @/examples/snippets/cb_tree-tree.F90{fortran}
 
-<Media name="cb_tree" video alt="A table of grids with the bodies as tree nodes: a block chosen by a click on its label, the fuselage opened by its arrow, then a node of 20000 blocks opened and scrolled" caption="docs/examples/src/cb_tree.F90" />
+<Media name="cb_tree" video alt="A table of grids with the bodies as tree nodes: a click on the cells of block 2 chooses it and highlights its whole row, the fuselage opened by its arrow, then a node of 20000 blocks opened and scrolled" caption="docs/examples/src/cb_tree.F90" />
 
 Each body is a node in the table's first column with its total in the next cell; its blocks are leaf rows between the
-node and `ig_tree_pop`. A click on a label chooses the block (`clicked`), the arrow opens the body: the two never mix.
-The node of 20000 blocks clips its children with a `list_clipper_object`. [Trees](/guide/widgets#trees) has the
-rules.
+node and `ig_tree_pop`. With `span_all_columns`, a node's row is its click area and its highlight across every column:
+a click anywhere on a block's row chooses it (`clicked`), the arrow opens the body: the two never mix. The node of
+20000 blocks clips its children with a `list_clipper_object`. [Trees](/guide/widgets#trees) has the rules.
 
 Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
+
+### A sortable table with a fixed header
+
+<<< @/examples/snippets/cb_table_sort-table.F90{fortran}
+
+<Media name="cb_table_sort" video alt="A table of 200 grid blocks: a click on the header cells sorts them largest first, a second click smallest first; a click on residual puts the largest residuals on top, their rows coloured and marked with an exclamation mark; the wheel scrolls the rows and the header stays in place" caption="docs/examples/src/cb_table_sort.F90" />
+
+`freeze_rows=1` keeps the headers row in view while the 200 rows scroll inside the table (`height`, in em so that it
+follows the font); the `list_clipper_object` draws only the rows in view. `sortable=.true.` makes the headers ask an
+order; `ig_table_sort` is `.true.` on the frame one is asked, the first frame included, and the program sorts. It
+sorts `order`, a permutation of the block numbers, and draws row `i` as block `order(i)`: the data never move, so a
+block chosen elsewhere is still the same block. A row above the tolerance is coloured with `ig_table_row_color` and its
+residual marked `!`. The patch column is hidden at first (`hidden`); a right click on the headers shows it.
+
+<<< @/examples/snippets/cb_table_sort-sort.F90{fortran}
+
+The program checks itself headless:
+
+<<< @/examples/output/cb_table_sort.txt{text}
+
+[Tables](/guide/widgets#tables) has the rules: what the program sorts, the frozen rows and columns, the hidden
+columns.
 
 ### An input-file editor: fields, a list, tabs and a table
 

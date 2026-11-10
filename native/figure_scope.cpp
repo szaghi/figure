@@ -293,6 +293,14 @@ int fig_set_checks(int mode) {
 
 int fig_checks(void) { return sc.mode; }
 
+int fig_usage_error(const char *msg, int msg_len, int has_stat) {
+   try {
+      return usage_error(std::string(msg, msg_len > 0 ? static_cast<size_t>(msg_len) : 0), has_stat);
+   } catch (...) {
+      return 1;
+   }
+}
+
 int fig_draw_refuse(const char *who, int who_len, int has_stat) {
    if (fig_task_refuse(who, who_len)) return 1; // a task does not draw
    if (in_frame()) return 0;

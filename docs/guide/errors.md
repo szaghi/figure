@@ -61,6 +61,35 @@ procedure, the argument and the format, and nothing is drawn. The full program c
 | `ip_setup_axes`, `xformat` / `yformat` | the same, starting `ip_setup_axes: xformat` (or `yformat`) |
 | `ip_heatmap`, `ip_colormap_scale`, `ip_colormap_legend`, `label_format` | the same, starting `<procedure>: label_format` (`ip_colormap_legend` refuses only a format with a conversion: one without is text) |
 
+### Tables
+
+The table calls ([Tables](widgets#tables)) check their arguments on the Fortran side and their place in the native
+layer. An argument out of range is `FIG_ERR_ARGUMENT` (nothing done; absent `stat`, `error stop`); a call out of its
+place is a usage error, `FIG_ERR_STATE` (absent `stat`, reported by the next `app%next_frame` as the
+[pairing errors](#pairing-and-frames) are, or stopping at once in mode `'abort'`).
+
+| Failure | Status | Message |
+|---|---|---|
+| `columns` outside 1 to 511 | `FIG_ERR_ARGUMENT` | `ig_begin_table: columns <n> is out of 1 to 511` |
+| `freeze_rows` outside 0 to 127 | `FIG_ERR_ARGUMENT` | `ig_begin_table: freeze_rows <n> is out of 0 to 127` |
+| `freeze_cols` outside 0 to `columns` | `FIG_ERR_ARGUMENT` | `ig_begin_table: freeze_cols <n> is out of 0 to the columns` |
+| `width` and `stretch` together | `FIG_ERR_ARGUMENT` | `ig_table_setup_column: give width or stretch, not both` |
+| a negative or NaN `width` | `FIG_ERR_ARGUMENT` | `ig_table_setup_column: width <w> is negative` (`width NaN is not a width`) |
+| `stretch` not above 0, or NaN | `FIG_ERR_ARGUMENT` | `ig_table_setup_column: stretch <w> is not above 0` (`stretch NaN is not a weight`) |
+| `rgba` not of 3 or 4 components; one outside [0, 1] or NaN | `FIG_ERR_ARGUMENT` | `ig_table_row_color: rgba has 3 or 4 components`; `rgba components are in [0, 1]`; `rgba has a NaN component` |
+| `cell` or `column` outside 1 to the columns | `FIG_ERR_ARGUMENT` | `<call>: column <n> is out of 1 to <columns>` |
+| no table open | `FIG_ERR_STATE` | `<call>: no table is open (call it between ig_begin_table and ig_end_table)` |
+| `ig_table_sort` in a table not sortable | `FIG_ERR_STATE` | `ig_table_sort: the table is not sortable (ig_begin_table(..., sortable=.true.))` |
+| `ig_table_sort` before every column is declared | `FIG_ERR_STATE` | `ig_table_sort: call it after every column is declared (ig_table_setup_column)` |
+| `ig_table_column_enabled` in a table not hideable | `FIG_ERR_STATE` | `ig_table_column_enabled: the table is not hideable (ig_begin_table(..., hideable=.true.))` |
+| `ig_table_row_color` before the first row | `FIG_ERR_STATE` | `ig_table_row_color: no row is begun (call it after ig_table_next_row)` |
+
+::: warning Changed in v0.4.0
+Until v0.3.1 `ig_begin_table` passed any `columns` to Dear ImGui, whose check of a count out of 1 to 511 is an
+assertion: the program aborted inside `imgui_tables.cpp`, naming no Fortran call. From v0.4.0
+FIGURE refuses it first: `.false.`, `FIG_ERR_ARGUMENT`, and `error stop` when the call has no `stat`.
+:::
+
 ## Pairing and frames
 
 Dear ImGui's begin/end pairs are the likeliest bug of a FIGURE program: an `ig_end_table` where an `ig_tree_pop`

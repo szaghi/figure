@@ -187,6 +187,17 @@ void  *fig_clipper_new(void);
 void   fig_clipper_begin(void *clipper, int count, double item_height);
 int    fig_clipper_step(void *clipper, int *first, int *last, double *item_height);
 void   fig_clipper_delete(void *clipper);
+/* Tables (ig_table_*), in the current table: each returns 0 done, 1 no table is current, 2 the table lacks the flag
+ * the call needs (Sortable for sort, Hideable for column_enabled), 3 column out of range, 4 no row begun, 5 called
+ * before every column is declared. Columns are 1-based. sort: the primary key of the order asked (column 0 when there
+ * is none, SortTristate's third click), descending 1 or 0, changed 1 on the frame a new order is asked (the first
+ * frame included); it clears Dear ImGui's dirty flag. row_color: rgba in [0, 1] behind the current row (column 0) or
+ * one of its cells. column_enabled: shown (1) or hidden (0) from the next frame. hovered_column: the column under the
+ * pointer, 0 when none. */
+int    fig_table_sort(int *column, int *descending, int *changed);
+int    fig_table_row_color(const double *rgba, int column);
+int    fig_table_column_enabled(int column, int enabled);
+int    fig_table_hovered_column(int *column);
 /* A routed shortcut: keys "ctrl+s" (modifiers and one key, by the names of fig_input_key, joined by '+'), scope
  * "focused", "global" or "item"; *pressed 1 on the frame it fires. */
 int    fig_shortcut(const char *keys, int keys_len, const char *scope, int scope_len, int repeat, int *pressed);
@@ -316,6 +327,8 @@ int    fig_task_refuse(const char *name, int name_len);
 int    fig_set_checks(int mode);
 int    fig_checks(void);
 int    fig_draw_refuse(const char *who, int who_len, int has_stat);
+/* A usage error found by a wrapper (msg: the whole message): kept and answered as the others (0, 1 or 2 above). */
+int    fig_usage_error(const char *msg, int msg_len, int has_stat);
 void   fig_scope_open(int kind, const char *who, int who_len, const char *label, int label_len, int returned, int aux);
 int    fig_scope_close(int kind, const char *who, int who_len, int n, int has_stat);
 int    fig_scope_report(int *notify);

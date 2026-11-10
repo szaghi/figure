@@ -11,13 +11,13 @@ module figure_base
 use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_f_pointer, c_int, c_null_char, c_ptr
 use, intrinsic :: iso_fortran_env, only : error_unit, int32
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_last_error, fig_set_last_error, fig_task_refuse, &
-                            fig_draw_refuse, fig_scope_close, fig_scope_open
+                            fig_draw_refuse, fig_scope_close, fig_scope_open, fig_usage_error
 
 implicit none
 private
 public :: figure_check, figure_fail, figure_last_error, cstr, figure_refused
 public :: FORMAT_INTEGER, FORMAT_REAL, format_ok, format_refused
-public :: figure_draw_refused, figure_scope_open, figure_scope_refused
+public :: figure_draw_refused, figure_scope_open, figure_scope_refused, figure_usage_error
 public :: SCOPE_WINDOW, SCOPE_CHILD, SCOPE_TAB_BAR, SCOPE_TAB, SCOPE_TABLE, SCOPE_TREE, SCOPE_MAIN_MENU_BAR, SCOPE_MENU_BAR
 public :: SCOPE_MENU, SCOPE_POPUP, SCOPE_PLOT, SCOPE_SUBPLOTS, SCOPE_DOCK_LAYOUT, SCOPE_ID, SCOPE_DISABLED, SCOPE_FONT
 public :: SCOPE_STYLE_COLOR, SCOPE_STYLE_VAR, SCOPE_GROUP, SCOPE_ALIGN, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP
@@ -118,6 +118,19 @@ contains
    if (action == 2_c_int) call figure_check(FIG_ERR_STATE) ! 'abort': the message, then error stop
    if (refused .and. present(stat)) stat = int(FIG_ERR_STATE, int32)
    endfunction figure_draw_refused
+
+   recursive subroutine figure_usage_error(message, stat)
+   !< A usage error found by a wrapper (`FIG_ERR_STATE`: a call out of its place, as `ig_table_sort` outside a table):
+   !< returned in `stat` when present; without it, mode 'abort' stops the program here and the other modes keep it for
+   !< the next `app%next_frame`, as the errors of `figure_draw_refused`.
+   character(len=*), intent(in)            :: message !< The whole message (`<procedure>: <what>`).
+   integer(int32),   intent(out), optional :: stat    !< Status: `FIG_ERR_STATE`.
+   integer(c_int)                          :: action  !< 1 refused, 2 stop.
+
+   action = fig_usage_error(message, len(message, c_int), merge(1_c_int, 0_c_int, present(stat)))
+   if (action == 2_c_int) call figure_check(FIG_ERR_STATE) ! 'abort': the message, then error stop
+   if (present(stat)) stat = int(FIG_ERR_STATE, int32)
+   endsubroutine figure_usage_error
 
    recursive subroutine figure_scope_open(kind, who, label, returned, aux)
    !< After a begin or a push: its scope in the record of the frame (a begin of the "end only after true" kind that

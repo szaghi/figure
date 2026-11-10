@@ -84,10 +84,14 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_collapsing_header(label [, default_open])` → `logical` | a header that shows or hides what follows; `.true.` while open (no end call) |
 | `ig_begin_tab_bar(id)` → `logical`, `ig_end_tab_bar()` | a bar of tabs; end it only when the begin returned `.true.` |
 | `ig_begin_tab(label [, open])` → `logical`, `ig_end_tab()` | a tab; `.true.` when selected: draw its content, then end it (only then) |
-| `ig_begin_table(id, columns [, flags] [, height])` → `logical`, `ig_end_table()` | a table; end it only when the begin returned `.true.` |
-| `ig_table_setup_column(label [, width])`, `ig_table_headers_row()` | declare a column (fixed `width`, or a share of the rest); a row of their labels |
+| `ig_begin_table(id, columns [, flags] [, height] [, freeze_rows] [, freeze_cols] [, sortable] [, hideable] [, reorderable] [, scroll_x] [, stat])` → `logical`, `ig_end_table()` | a table (every `ImGuiTableFlags_*` exported); rows or columns frozen in view while the rest scrolls; end it only when the begin returned `.true.` ([Tables](widgets#tables)) |
+| `ig_table_setup_column(label [, width] [, stretch] [, sort] [, default_sort] [, descending] [, hidden] [, no_hide] [, stat])`, `ig_table_headers_row()` | declare a column (fixed `width`, or a `stretch` weight of the rest; how it sorts and hides); a row of their labels ([Tables](widgets#tables)) |
+| `ig_table_sort(column, descending [, stat])` → `logical` | `.true.` on the frame the user asks a new order of a sortable table: its key `column` and direction; the program sorts ([Tables](widgets#tables)) |
+| `ig_table_row_color(rgba [, cell] [, stat])` | a colour behind the current row, or one of its cells ([Tables](widgets#tables)) |
+| `ig_table_hovered_column([stat])` → `integer(int32)` | the column under the pointer, 0 when none ([Tables](widgets#tables)) |
+| `ig_table_column_enabled(column, enabled [, stat])` | show or hide a column of a hideable table from the program ([Tables](widgets#tables)) |
 | `ig_table_next_row()`, `ig_table_next_column()`, `ig_table_set_column(column)` | start a row; move to the next cell, or to cell `column` (1-based) |
-| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked])` → `logical`, `ig_tree_pop()` | a tree node; `.true.` while open: draw its children, then pop (only then); `clicked`: the label, not the arrow ([Trees](widgets#trees)) |
+| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked] [, span_all_columns])` → `logical`, `ig_tree_pop()` | a tree node; `.true.` while open: draw its children, then pop (only then); `clicked`: the label, not the arrow; in a table, `span_all_columns`: its whole row ([Trees](widgets#trees)) |
 | `ig_set_next_item_open(open [, always])` | open or close the next tree node or header from the program: first time only, or with `always` now |
 | `ig_push_id(id)`, `ig_pop_id()` | an id scope (`character` or `int32`): the same label in two scopes is two widgets (rows, loops) |
 | `ig_begin_disabled([disabled])`, `ig_end_disabled()` | the widgets in between are greyed out and ignore input |
