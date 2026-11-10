@@ -284,6 +284,12 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   `ip_setup_axis_constraints` (bounds of pan and zoom), `ip_setup_legend` (compass point, outside, in a row);
   `ip_plot_limits` and `test_plot_tick` of any axis; `ip_setup_axes`' `xscale`/`yscale` (`xlog`/`ylog` kept,
   deprecated); setup calls out of place are usage errors, not ImPlot's assertions ([Axes](plots#axes)): done.
+- **Plot interaction:** `ip_plot_hovered`, `ip_plot_mouse`, `ip_plot_to_pixels`, `ip_pixels_to_plot` (on any axis
+  pair), `ip_plot_selection` and `ip_cancel_selection` (the right-button box, kept without the zoom); `ip_drag_rect`,
+  `ip_tag` (a value on an axis, by default in the last item's colour), `ip_inf_lines` (at real or integer positions),
+  `ip_text`; the items `ip_stairs`, `ip_stems`, `ip_histogram` and `ip_histogram2d` (NaNs left out, binning rules
+  counted by FIGURE); calls outside a plot, the drag tools included, are usage errors
+  ([Reading a plot](plots#reading-a-plot), [Marks in a plot](plots#marks-in-a-plot), [Histograms](plots#histograms)): done.
 
 ## Next
 

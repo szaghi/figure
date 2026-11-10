@@ -1,7 +1,8 @@
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet"), the layout
 !< metrics (run with "layout_metrics"), the numbers and choices (run with "numbers_and_choices") and the canvas's
-!< drawing primitives (run with "canvas_primitives") and the axis layouts of a plot (run with "plot_axes").
+!< drawing primitives (run with "canvas_primitives"), the axis layouts of a plot (run with "plot_axes") and the marks and
+!< items of a plot (run with "plot_marks").
 program gallery
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet").
@@ -22,6 +23,9 @@ program gallery
 !<
 !< "plot_axes" draws six plots in a grid, each an axis layout with its calls in its title: two y axes, three y axes, a
 !< second x axis with fixed ticks, a log axis, a symmetric log axis, a time axis.
+!<
+!< "plot_marks" draws eight plots in a grid, each a mark or an item with its call in its title: tags, infinite lines,
+!< text, a rectangle the user drags, stairs, stems, a histogram and a 2-D histogram; the samples are deterministic.
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real32, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, &
                    ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_input, ig_same_line, ig_selectable,          &
@@ -38,6 +42,8 @@ use figure, only : ig_draw_line, ig_draw_polygon, ig_draw_text, canvas_event_obj
                    ip_setup_axes_limits
 use figure, only : ip_begin_subplots, ip_end_subplots, ip_set_axes, ip_setup_axis, ip_setup_axis_limits, &
                    ip_setup_axis_ticks, ip_setup_legend
+use figure, only : ip_tag, ip_inf_lines, ip_text, ip_drag_rect, ip_stairs, ip_stems, ip_histogram, ip_histogram2d, &
+                   ip_annotation, ip_spec, ImPlotStairsFlags_Shaded
 
 implicit none
 integer(int32),    parameter :: N = 200_int32                    !< Points per line.
@@ -100,6 +106,14 @@ if (trim(arg) == 'plot_axes') then
    call app%init('FIGURE: plot axes', 1000_int32, 640_int32)
    do while (app%next_frame())
       call plot_axes()
+   enddo
+   call app%destroy()
+   stop
+endif
+if (trim(arg) == 'plot_marks') then
+   call app%init('FIGURE: plot marks', 1200_int32, 640_int32)
+   do while (app%next_frame())
+      call plot_marks()
    enddo
    call app%destroy()
    stop
@@ -385,6 +399,90 @@ contains
    endif
    call ig_end()
    endsubroutine plot_axes
+
+   subroutine plot_marks()
+   !< Eight marks and items in a grid of plots, each titled with its call.
+   integer(int32), parameter :: M = 300_int32                 !< Samples.
+   integer(int32), parameter :: S = 2000_int32                !< Random samples.
+   real(real64), parameter   :: AMBER(4) = [0.96_real64, 0.69_real64, 0.25_real64, 1.0_real64] !< A mark's colour.
+   real(real64)              :: t(M)                          !< Iterations.
+   real(real64)              :: a(M)                          !< A residual, falling over six decades.
+   real(real64)              :: b(M)                          !< A coefficient near 0.8.
+   real(real64)              :: g(S)                          !< Near-normal samples (Irwin-Hall, from Weyl sequences).
+   real(real64)              :: g2(S)                         !< A second set, correlated with the first.
+   real(real64), save        :: rx(2) = [80.0_real64, 160.0_real64] !< The dragged rectangle along x.
+   real(real64), save        :: ry(2) = [0.65_real64, 0.95_real64]  !< ... along y.
+   real(real64)              :: phi                           !< A Weyl step.
+   integer(int32), parameter :: PRIMES(13) = [2_int32, 3_int32, 5_int32, 7_int32, 11_int32, 13_int32, 17_int32, &
+                                              19_int32, 23_int32, 29_int32, 31_int32, 37_int32, 41_int32] !< Steps.
+   integer(int32)            :: j                             !< Counter.
+   logical                   :: moved                         !< Unused result.
+
+   t = [(real(i, real64), i = 1_int32, M)]
+   a = 10.0_real64**(-6.0_real64 * t / real(M, real64)) * (1.0_real64 + 0.3_real64 * sin(t / 5.0_real64))
+   b = 0.8_real64 + 0.2_real64 * exp(-t / 60.0_real64) * cos(t / 12.0_real64)
+   g = 0.0_real64
+   do j = 1_int32, 12_int32
+      phi = sqrt(real(PRIMES(j), real64))
+      g = g + [(modulo(real(i, real64) * phi, 1.0_real64), i = 1_int32, S)]
+   enddo
+   g = g - 6.0_real64
+   g2 = 0.6_real64 * g + 0.8_real64 * [(modulo(real(i, real64) * sqrt(real(PRIMES(13), real64)), 1.0_real64) * 3.4_real64 - &
+                                      1.7_real64, i = 1_int32, S)]
+   call ig_set_next_window(10.0_real64, 10.0_real64, 1180.0_real64, 620.0_real64)
+   if (ig_begin('Plot marks')) then
+      if (ip_begin_subplots('##marks', 2_int32, 4_int32, height=-1.0_real64)) then
+         if (ip_begin_plot("ip_tag: the last values")) then
+            call ip_setup_axis('y1', label='residual', scale='log')
+            call ip_line('residual', t, a)
+            call ip_tag('y1', a(M))                                  ! the line's colour
+            call ip_tag('x1', t(M), text='now')
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("ip_inf_lines: level changes")) then
+            call ip_line('cl', t, b)
+            call ip_inf_lines('level change', [60_int32, 140_int32, 220_int32])
+            call ip_inf_lines('target', [0.8_real64], horizontal=.true.)
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("ip_text, ip_annotation")) then
+            call ip_setup_axes_limits(0.0_real64, 10.0_real64, 0.0_real64, 10.0_real64, always=.true.)
+            call ip_text('ip_text at (3, 7)', 3.0_real64, 7.0_real64)
+            call ip_text('vertical', 8.5_real64, 5.0_real64, vertical=.true.)
+            call ip_annotation(3.0_real64, 3.0_real64, 'ip_annotation', color=AMBER, offset=[30.0_real64, -20.0_real64])
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("ip_drag_rect: a window")) then
+            call ip_line('cl', t, b)
+            moved = ip_drag_rect(1_int32, rx(1), rx(2), ry(1), ry(2), color=AMBER)
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("ip_stairs")) then
+            call ip_stairs('level', [0_int32, 60_int32, 140_int32, 220_int32, 300_int32], &
+                           [1.0_real64, 2.0_real64, 3.0_real64, 4.0_real64, 4.0_real64])
+            call ip_stairs('shaded', [0_int32, 60_int32, 140_int32, 220_int32, 300_int32], &
+                           [0.5_real64, 1.0_real64, 1.5_real64, 2.0_real64, 2.0_real64], &
+                           spec=ip_spec(flags=ImPlotStairsFlags_Shaded, fill_alpha=0.4_real64))
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("ip_stems")) then
+            call ip_stems('peaks', [(real(j, real64), j = 1_int32, 12_int32)], &
+                          [(exp(-real(j, real64) / 4.0_real64) * cos(real(j, real64)), j = 1_int32, 12_int32)])
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("ip_histogram")) then
+            call ip_histogram('samples', g, bins=30_int32)
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("ip_histogram2d")) then
+            call ip_histogram2d('pairs', g, g2, xbins=40_int32, ybins=40_int32)
+            call ip_end_plot()
+         endif
+         call ip_end_subplots()
+      endif
+   endif
+   call ig_end()
+   endsubroutine plot_marks
 
    subroutine canvas_primitives()
    !< Each drawing primitive in a cell of its own, its call below it; then the plot layer, inside a plot.

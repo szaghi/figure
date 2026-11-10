@@ -43,7 +43,7 @@ public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig
 public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_widget_input_text_multiline
 public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
 public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
-public :: fig_plot_annotation, fig_drawn_extent_rgba
+public :: fig_plot_annotation, fig_drawn_extent_rgba, fig_plot_tag
 public :: fig_colormap_legend, fig_popup_rect, fig_opened_url
 public :: fig_canvas_event, fig_canvas, fig_draw, fig_cursor_screen_pos, fig_invisible_button, fig_drawn_extent_layer
 
@@ -1229,6 +1229,19 @@ interface
    integer(c_int), value              :: text_len !< Its length [bytes].
    integer(c_int)                     :: status   !< Status.
    endfunction fig_plot_annotation
+
+   function fig_plot_tag(axis, value, rgba, text, text_len, has_text) result(status) bind(C, name='fig_plot_tag')
+   !< A tag of the plot being declared on an axis set up, drawn at its end: a box with a text or the axis's label.
+   import :: c_char, c_double, c_float, c_int
+   implicit none
+   integer(c_int), value              :: axis     !< ImAxis (X1-X3 0-2, Y1-Y3 3-5).
+   real(c_double), value              :: value    !< Position [axis units].
+   real(c_float),          intent(in) :: rgba(4)  !< Box colour (alpha < 0: the last item's; 0: no box).
+   character(kind=c_char), intent(in) :: text(*)  !< Text (not NUL-terminated).
+   integer(c_int), value              :: text_len !< Its length [bytes].
+   integer(c_int), value              :: has_text !< 1: the text; 0: the axis's label of the value.
+   integer(c_int)                     :: status   !< Status: FIG_ERR_STATE outside a plot or for an axis not set up.
+   endfunction fig_plot_tag
 
    function fig_shortcut(keys, keys_len, scope, scope_len, repeat, pressed) result(status) bind(C, name='fig_shortcut')
    !< A routed shortcut ("ctrl+s", scope "focused", "global" or "item"); `pressed` 1 on the frame it fires.

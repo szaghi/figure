@@ -37,6 +37,11 @@ the input reaches the widgets there. A test queues, draws a few frames, then che
 | `test_next_frame([stat])` | a frame boundary: what is queued after it arrives one frame later |
 | `test_drop(paths, x, y [, stat])` | files or folders dropped at (x, y): `app%dropped` reports them together on the next frame ([Drops](frame-loop#drops)); no path is `FIG_ERR_ARGUMENT` |
 
+A plot's box selection is a drag with the right button, which `test_drag` does not do: queue its parts with
+`test_mouse_move`, `test_mouse_button(.true., 'right')`, `test_next_frame` and, after the frames that read it,
+`test_mouse_button(.false., 'right')`. To aim inside a plot, take the pixel of a plot point with
+[`ip_plot_to_pixels`](plots#reading-a-plot) on an earlier frame.
+
 And to aim and to check:
 
 | Procedure | Gives |

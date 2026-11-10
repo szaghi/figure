@@ -201,6 +201,18 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_contour(label, f, x0, x1, y0, y1 [, levels] [, nlevels] [, colormap] [, color] [, labels] [, line_weight] [, stat])` | contour lines of a field, read in place; NaNs leave holes ([plots](plots#contour-lines)) |
 | `ip_contour_lines(f, x0, x1, y0, y1, levels, x, y, first)` | the contour segments without drawing them (marching squares, `pure`) ([plots](plots#contour-lines)) |
 | `ip_contour_levels(f [, count])` → `real(real64)` array | levels at round numbers inside a field's finite range ([plots](plots#contour-lines)) |
+| `ip_stairs(label, x, y [, spec] [, stat])` | a staircase through the points; pre-step or shaded by flags ([plots](plots#items)) |
+| `ip_stems(label, x, y [, ref] [, spec] [, stat])` | stems from `y = ref` to the points, with markers ([plots](plots#items)) |
+| `ip_inf_lines(label, values [, horizontal] [, spec] [, stat])` | lines across the whole plot at x (or y) values, real or integer ([plots](plots#marks-in-a-plot)) |
+| `ip_histogram(label, values [, bins] [, vmin] [, vmax] [, bar_scale] [, max_count] [, spec] [, stat])` | a histogram: a bin count or a rule (`ImPlotBin_*`), NaNs left out ([plots](plots#histograms)) |
+| `ip_histogram2d(label, x, y [, xbins] [, ybins] [, xmin] [, xmax] [, ymin] [, ymax] [, colormap] [, max_count] [, spec] [, stat])` | a 2-D histogram, cells coloured by count ([plots](plots#histograms)) |
+| `ip_plot_hovered([stat])` → `logical` | the pointer is over the plot area ([plots](plots#reading-a-plot)) |
+| `ip_plot_mouse(x, y [, xaxis] [, yaxis] [, stat])` | the pointer in plot units ([plots](plots#reading-a-plot)) |
+| `ip_plot_to_pixels(x, y, px, py [, xaxis] [, yaxis] [, stat])`, `ip_pixels_to_plot(px, py, x, y ...)` | plot units to display pixels and back ([plots](plots#reading-a-plot)) |
+| `ip_plot_selection(xmin, xmax, ymin, ymax [, xaxis] [, yaxis] [, stat])` → `logical`, `ip_cancel_selection([stat])` | the box the user drags with the right button; ended without the zoom ([plots](plots#reading-a-plot)) |
+| `ip_drag_rect(id, xmin, xmax, ymin, ymax [, color] [, stat])` → `logical` | a rectangle the user moves and resizes; the values updated in place ([plots](plots#marks-in-a-plot)) |
+| `ip_tag(axis, value [, color] [, text] [, stat])` | a box on an axis at a value, with a text or the axis's label ([plots](plots#marks-in-a-plot)) |
+| `ip_text(text, x, y [, offset] [, vertical] [, stat])` | a text at a plot point ([plots](plots#marks-in-a-plot)) |
 | `ip_end_plot()` | end the plot (only if `ip_begin_plot` returned `.true.`) |
 
 Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots), [Colormaps](colormaps).

@@ -96,6 +96,13 @@ use figure_implot, only : ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_s
                           ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral, ImPlotColormap_Greys
 use figure_implot, only : ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_contour, &
                           ip_contour_lines, ip_contour_levels, ip_colormap_legend
+use figure_implot, only : ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, &
+                          ip_cancel_selection, ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems,     &
+                          ip_histogram, ip_histogram2d, ImPlotStairsFlags_PreStep, ImPlotStairsFlags_Shaded,         &
+                          ImPlotStemsFlags_Horizontal, ImPlotInfLinesFlags_Horizontal,                               &
+                          ImPlotHistogramFlags_Horizontal, ImPlotHistogramFlags_Cumulative,                          &
+                          ImPlotHistogramFlags_Density, ImPlotHistogramFlags_NoOutliers, ImPlotBin_Sqrt,             &
+                          ImPlotBin_Sturges, ImPlotBin_Rice, ImPlotBin_Scott
 use figure_imgui, only : ig_color_edit
 use figure_numbers, only : ig_input, ig_drag, ig_slider, ig_slider_angle, ig_drag_range, ig_radio, ig_list_box
 use figure_canvas, only : canvas_event_object, ig_canvas, ig_cursor_screen_pos, ig_invisible_button, ig_draw_line, &
@@ -193,6 +200,11 @@ public :: ImPlotMarker_Plus, ImPlotMarker_Asterisk, ImPlotMarker_Vertical, ImPlo
 public :: ImPlotItemFlags_None, ImPlotItemFlags_NoLegend, ImPlotItemFlags_NoFit
 public :: ImPlotLineFlags_Segments, ImPlotLineFlags_Loop, ImPlotLineFlags_SkipNaN, ImPlotLineFlags_NoClip
 public :: ImPlotLineFlags_Shaded, ImPlotScatterFlags_NoClip, ImPlotBarsFlags_Horizontal
+public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, ip_cancel_selection
+public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
+public :: ImPlotStairsFlags_PreStep, ImPlotStairsFlags_Shaded, ImPlotStemsFlags_Horizontal, ImPlotInfLinesFlags_Horizontal
+public :: ImPlotHistogramFlags_Horizontal, ImPlotHistogramFlags_Cumulative, ImPlotHistogramFlags_Density
+public :: ImPlotHistogramFlags_NoOutliers, ImPlotBin_Sqrt, ImPlotBin_Sturges, ImPlotBin_Rice, ImPlotBin_Scott
 public :: ImPlotColormap_Deep, ImPlotColormap_Dark, ImPlotColormap_Pastel, ImPlotColormap_Paired, ImPlotColormap_Viridis
 public :: ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool, ImPlotColormap_Pink, ImPlotColormap_Jet
 public :: ImPlotColormap_Twilight, ImPlotColormap_RdBu, ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral

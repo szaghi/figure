@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    plot_marks
+#! from    10
+#! frames  1
+# eight marks and items, each plot titled with its call: tags, infinite lines, text, a dragged rectangle, stairs, stems, histograms

@@ -131,6 +131,10 @@ int    fig_plot_tick_label(int axis, int index, char *buf, int buf_len, int *cou
  * box (alpha 0: none); clamp keeps it inside the plot. FIG_ERR_STATE outside a plot. */
 int    fig_plot_annotation(double x, double y, const float *rgba, float dx, float dy, int clamp, const char *text,
                            int text_len);
+/* A tag of the plot being declared on axis `axis` (an ImAxis set up) at `value`, drawn at its end: a box of colour rgba
+ * (rgba[3] < 0: the last item's colour; alpha 0: no box) with text (has_text 1) or the value as the axis labels it.
+ * FIG_ERR_STATE outside a plot or for an axis not set up. */
+int    fig_plot_tag(int axis, double value, const float *rgba, const char *text, int text_len, int has_text);
 /* A window's rectangle (xmin, ymin, xmax, ymax) [pixels] by name, as in the last frame; found 0 if none. */
 int    fig_window_rect(const char *name, int name_len, float *rect, int *found);
 /* The rectangle of the innermost open popup, as in the last frame; found 0 if none. */

@@ -3639,6 +3639,35 @@ int fig_plot_annotation(double x, double y, const float *rgba, float dx, float d
    return FIG_OK;
 }
 
+// A tag of the plot being declared on the axis `axis` (an ImAxis set up on this frame) at `value` [axis units], drawn at
+// EndPlot over the axis: a box of colour rgba (rgba[3] < 0: the colour of the last item drawn; alpha 0: no box, the
+// axis's text colour) holding `text` (has_text 1) or the value labelled as the axis labels its ticks (has_text 0).
+// Refused outside a plot and for an axis not set up (ImPlot would assert, or draw on a hidden axis).
+int fig_plot_tag(int axis, double value, const float *rgba, const char *text, int text_len, int has_text) {
+   if (!ImPlot::GetCurrentContext() || !ImPlot::GetCurrentPlot())
+      return fail(FIG_ERR_STATE, "ip_tag: no plot is being declared (call it between a true ip_begin_plot and ip_end_plot)");
+   if (axis < 0 || axis >= ImAxis_COUNT || !GImPlot->CurrentPlot->Axes[axis].Enabled)
+      return fail(FIG_ERR_STATE, "ip_tag: the axis is not set up");
+   const ImVec4 c = rgba[3] < 0.0f ? ImPlot::GetLastItemColor() : ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
+   const std::string t(text, text_len > 0 ? static_cast<size_t>(text_len) : 0);
+   // ImPlot's public TagX/TagY tag the current axes (its Tag(ImAxis, ...) is not in a header): the axis is made current
+   // for the call, then the program's current axes are restored
+   ImPlotPlot &plot = *GImPlot->CurrentPlot;
+   const ImAxis cx = plot.CurrentX, cy = plot.CurrentY;
+   if (axis < ImAxis_Y1) {
+      plot.CurrentX = axis;
+      if (has_text != 0) ImPlot::TagX(value, c, "%s", t.c_str());
+      else ImPlot::TagX(value, c, false);
+   } else {
+      plot.CurrentY = axis;
+      if (has_text != 0) ImPlot::TagY(value, c, "%s", t.c_str());
+      else ImPlot::TagY(value, c, false);
+   }
+   plot.CurrentX = cx;
+   plot.CurrentY = cy;
+   return FIG_OK;
+}
+
 // The rectangle of the innermost open popup (a menu, a combo's list, a colour picker), as drawn in the last frame;
 // found 0 if no popup is open.
 int fig_popup_rect(float *rect, int *found) {

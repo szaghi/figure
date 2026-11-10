@@ -29,8 +29,8 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, fi
                         figure_scope_refused, figure_usage_error, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
-                            fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints
-use figure_cimgui, only : im_vec2, im_vec4
+                            fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag
+use figure_cimgui, only : im_vec2, im_vec4, igIsMousePosValid
 use figure_texture, only : texture_object, texture_ref
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot,             &
                            ImPlot_PlotBars_doublePtrdoublePtr, ImPlot_PlotBars_FloatPtrFloatPtr,                   &
@@ -46,6 +46,14 @@ use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_Begin
                            ImPlot_SetupAxisFormat_Str, ImPlot_BeginSubplots, ImPlot_EndSubplots,                    &
                            ImPlot_SetNextAxisToFit, ImPlot_GetColormapCount, ImPlot_SetupAxis, ImPlot_SetAxes,     &
                            ImPlot_SetupAxisLimits, ImPlot_SetupAxisTicks_doublePtr, ImPlot_SetupLegend
+use figure_cimplot, only : im_plot_range, ImPlot_IsPlotHovered, ImPlot_GetPlotMousePos, ImPlot_PlotToPixels_double,    &
+                           ImPlot_PixelsToPlot_Float, ImPlot_IsPlotSelected, ImPlot_GetPlotSelection,                  &
+                           ImPlot_CancelPlotSelection, ImPlot_DragRect, ImPlot_PlotText, ImPlot_PlotInfLines_doublePtr, &
+                           ImPlot_PlotInfLines_FloatPtr, ImPlot_PlotStairs_doublePtrdoublePtr,                          &
+                           ImPlot_PlotStairs_FloatPtrFloatPtr, ImPlot_PlotStems_doublePtrdoublePtr,                     &
+                           ImPlot_PlotStems_FloatPtrFloatPtr, ImPlot_PlotHistogram_doublePtr,                           &
+                           ImPlot_PlotHistogram_FloatPtr, ImPlot_PlotHistogram2D_doublePtr,                             &
+                           ImPlot_PlotHistogram2D_FloatPtr
 use figure_cimplot, only : ImPlot_DragLineX, ImPlot_DragLineY, ImPlot_DragPoint, ImPlot_GetLastItemColor,           &
                            ImPlot_SampleColormap,                                                                       &
                            ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr,                                   &
@@ -75,6 +83,11 @@ use figure_cimplot_enums, only : ImAxis_X1, ImAxis_X2, ImAxis_X3, ImAxis_Y1, ImA
                                  ImPlotColormap_Viridis, ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool, &
                                  ImPlotColormap_Pink, ImPlotColormap_Jet, ImPlotColormap_Twilight, ImPlotColormap_RdBu,  &
                                  ImPlotColormap_BrBG, ImPlotColormap_PiYG, ImPlotColormap_Spectral, ImPlotColormap_Greys
+use figure_cimplot_enums, only : ImPlotInfLinesFlags_Horizontal, ImPlotTextFlags_Vertical, ImPlotStairsFlags_PreStep,   &
+                                 ImPlotStairsFlags_Shaded, ImPlotStemsFlags_Horizontal, ImPlotHistogramFlags_Horizontal, &
+                                 ImPlotHistogramFlags_Cumulative, ImPlotHistogramFlags_Density,                        &
+                                 ImPlotHistogramFlags_NoOutliers, ImPlotBin_Sqrt, ImPlotBin_Sturges, ImPlotBin_Rice,    &
+                                 ImPlotBin_Scott
 
 implicit none
 private
@@ -94,6 +107,8 @@ public :: ip_colormap_legend
 public :: ip_spec, plot_spec_object
 public :: ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_setup_axis_ticks, ip_setup_axis_constraints
 public :: ip_setup_legend
+public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, ip_cancel_selection
+public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
 public :: ImPlotMarker_Up, ImPlotMarker_Down, ImPlotMarker_Left, ImPlotMarker_Right, ImPlotMarker_Cross
@@ -101,6 +116,11 @@ public :: ImPlotMarker_Plus, ImPlotMarker_Asterisk, ImPlotMarker_Vertical, ImPlo
 public :: ImPlotItemFlags_None, ImPlotItemFlags_NoLegend, ImPlotItemFlags_NoFit
 public :: ImPlotLineFlags_Segments, ImPlotLineFlags_Loop, ImPlotLineFlags_SkipNaN, ImPlotLineFlags_NoClip
 public :: ImPlotLineFlags_Shaded, ImPlotScatterFlags_NoClip, ImPlotBarsFlags_Horizontal
+public :: ImPlotStairsFlags_PreStep, ImPlotStairsFlags_Shaded, ImPlotStemsFlags_Horizontal, ImPlotInfLinesFlags_Horizontal
+public :: ImPlotHistogramFlags_Horizontal, ImPlotHistogramFlags_Cumulative, ImPlotHistogramFlags_Density
+public :: ImPlotHistogramFlags_NoOutliers
+! ImPlot's binning rules, for `ip_histogram` and `ip_histogram2d`
+public :: ImPlotBin_Sqrt, ImPlotBin_Sturges, ImPlotBin_Rice, ImPlotBin_Scott
 ! ImPlot's colormaps, for `ip_heatmap` and `ip_colormap_scale` (by name, with the bundled ones: `ip_colormap`)
 public :: ImPlotColormap_Deep, ImPlotColormap_Dark, ImPlotColormap_Pastel, ImPlotColormap_Paired, ImPlotColormap_Viridis
 public :: ImPlotColormap_Plasma, ImPlotColormap_Hot, ImPlotColormap_Cool, ImPlotColormap_Pink, ImPlotColormap_Jet
@@ -166,6 +186,39 @@ interface ip_shaded
    module procedure ip_shaded_i32_r32, ip_shaded_i64_r32, ip_shaded_i32_r64, ip_shaded_i64_r64
    module procedure ip_shaded_ref_i32_r32, ip_shaded_ref_i64_r32, ip_shaded_ref_i32_r64, ip_shaded_ref_i64_r64
 endinterface ip_shaded
+
+interface ip_stairs
+   !< A staircase through the points (x(i), y(i)): y(i) held until x(i+1). Arrays read in place (plots.md, "Data in
+   !< place"); x may be `int32` or `int64`.
+   module procedure ip_stairs_r32, ip_stairs_r64
+   module procedure ip_stairs_i32_r32, ip_stairs_i64_r32, ip_stairs_i32_r64, ip_stairs_i64_r64
+endinterface ip_stairs
+
+interface ip_stems
+   !< Stems from y = ref to the points (x(i), y(i)), each with a marker.
+   module procedure ip_stems_r32, ip_stems_r64
+   module procedure ip_stems_i32_r32, ip_stems_i64_r32, ip_stems_i32_r64, ip_stems_i64_r64
+endinterface ip_stems
+
+interface ip_inf_lines
+   !< Lines across the whole plot at given x (or y) values: `real32`, `real64`, `int32` or `int64` positions.
+   module procedure ip_inf_lines_r32, ip_inf_lines_r64, ip_inf_lines_i32, ip_inf_lines_i64
+endinterface ip_inf_lines
+
+interface ip_histogram
+   !< A histogram of values: bars as high as the values in each bin.
+   module procedure ip_histogram_r32, ip_histogram_r64
+endinterface ip_histogram
+
+interface ip_histogram2d
+   !< A 2-D histogram of points: cells coloured by how many points fall in each.
+   module procedure ip_histogram2d_r32, ip_histogram2d_r64
+endinterface ip_histogram2d
+
+interface in_line
+   !< Whether an array's elements are adjacent in memory.
+   module procedure in_line_r32, in_line_r64
+endinterface in_line
 
 type :: buffer_r32
    !< A temporary of an item's array (single precision), when it cannot be read in place.
@@ -680,19 +733,7 @@ contains
    ymin = 0.0_real64
    ymax = 0.0_real64
    if (figure_draw_refused('ip_plot_limits', stat)) return ! a task does not draw
-   cx = -1_c_int ! IMPLOT_AUTO: the current axes
-   cy = -1_c_int
-   if (present(xaxis)) then
-      if (.not. pair_ok('ip_plot_limits', 'xaxis', xaxis, '', '', cx, cy, stat)) return
-      if (axis_refused('ip_plot_limits', xaxis, cx, .false., stat)) return
-   endif
-   if (present(yaxis)) then
-      if (.not. pair_ok('ip_plot_limits', '', '', 'yaxis', yaxis, cx, cy, stat)) return
-      if (axis_refused('ip_plot_limits', yaxis, cy, .false., stat)) return
-   endif
-   if (.not. (present(xaxis) .or. present(yaxis))) then
-      if (plot_refused('ip_plot_limits', .false., stat)) return
-   endif
+   if (axes_refused('ip_plot_limits', xaxis, yaxis, cx, cy, stat)) return
    call ImPlot_GetPlotLimits(cx, cy, limits)
    xmin = real(limits%X%Min, real64)
    xmax = real(limits%X%Max, real64)
@@ -1971,7 +2012,7 @@ contains
    !< A vertical line at `x` in the current plot that the user drags along x (between `ip_begin_plot` and
    !< `ip_end_plot`): `x` is updated in place, and the result is true in the frames it moves. `id` tells the drag
    !< tools of a plot apart (any integer, unique in the plot). Statuses: `FIG_ERR_ARGUMENT` for a colour of size /= 4,
-   !< `FIG_ERR_STATE` from a task.
+   !< `FIG_ERR_STATE` outside a plot (a usage error, from v0.4.0) and from a task.
    integer(int32),   intent(in)            :: id        !< Id, unique among the plot's drag tools.
    real(real64),     intent(inout), target :: x         !< Position [plot units].
    real(real64),     intent(in), optional  :: color(:)  !< Colour, RGBA in [0, 1] (default: the text colour).
@@ -1983,6 +2024,7 @@ contains
    if (figure_draw_refused('ip_drag_line_x', stat)) return ! a task does not draw
    moved = .false.
    if (.not. drag_ok('ip_drag_line_x', color, stat)) return
+   if (plot_refused('ip_drag_line_x', .false., stat)) return
    moved = logical(ImPlot_DragLineX(int(id, c_int), c_loc(x), drag_color(color),                                &
                                     real(uniform(thickness, 1.0_real64), c_float), 0_c_int, c_null_ptr, c_null_ptr, c_null_ptr))
    call figure_check(FIG_OK, stat)
@@ -2001,6 +2043,7 @@ contains
    if (figure_draw_refused('ip_drag_line_y', stat)) return ! a task does not draw
    moved = .false.
    if (.not. drag_ok('ip_drag_line_y', color, stat)) return
+   if (plot_refused('ip_drag_line_y', .false., stat)) return
    moved = logical(ImPlot_DragLineY(int(id, c_int), c_loc(y), drag_color(color),                                &
                                     real(uniform(thickness, 1.0_real64), c_float), 0_c_int, c_null_ptr, c_null_ptr, c_null_ptr))
    call figure_check(FIG_OK, stat)
@@ -2020,10 +2063,934 @@ contains
    if (figure_draw_refused('ip_drag_point', stat)) return ! a task does not draw
    moved = .false.
    if (.not. drag_ok('ip_drag_point', color, stat)) return
+   if (plot_refused('ip_drag_point', .false., stat)) return
    moved = logical(ImPlot_DragPoint(int(id, c_int), c_loc(x), c_loc(y), drag_color(color),                         &
                                     real(uniform(radius, 4.0_real64), c_float), 0_c_int, c_null_ptr, c_null_ptr, c_null_ptr))
    call figure_check(FIG_OK, stat)
    endfunction ip_drag_point
+
+   ! reading a plot: the pointer, conversions, the box selection
+
+   recursive function ip_plot_hovered(stat) result(hovered)
+   !< Whether the pointer is over the data area of the plot being declared (`IsPlotHovered`), on this frame. Between
+   !< `ip_begin_plot` and `ip_end_plot`; it ends the setup. Statuses: `FIG_ERR_STATE` outside a plot, from a task.
+   integer(int32), intent(out), optional :: stat    !< Status.
+   logical                               :: hovered !< The pointer is over the plot area.
+
+   hovered = .false.
+   if (figure_draw_refused('ip_plot_hovered', stat)) return ! a task does not draw
+   if (plot_refused('ip_plot_hovered', .false., stat)) return
+   hovered = logical(ImPlot_IsPlotHovered())
+   call figure_check(FIG_OK, stat)
+   endfunction ip_plot_hovered
+
+   recursive subroutine ip_plot_mouse(x, y, xaxis, yaxis, stat)
+   !< The pointer's position in plot units (`GetPlotMousePos`), on the axes the items use now or on `xaxis`/`yaxis`:
+   !< wherever the pointer is (`ip_plot_hovered` tells whether it is over the plot); `-huge(1.0_real64)` for both when
+   !< there is no pointer (no mouse event yet). Between `ip_begin_plot` and `ip_end_plot`; it ends the setup.
+   !< Statuses: `FIG_ERR_ARGUMENT` for a name that is not an axis of its direction; `FIG_ERR_STATE` outside a plot,
+   !< for an axis not set up, from a task (x and y are then 0).
+   real(real64),     intent(out)           :: x     !< Abscissa [x axis units].
+   real(real64),     intent(out)           :: y     !< Ordinate [y axis units].
+   character(len=*), intent(in),  optional :: xaxis !< 'x1', 'x2' or 'x3' (default: the current one).
+   character(len=*), intent(in),  optional :: yaxis !< 'y1', 'y2' or 'y3' (default: the current one).
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   type(im_plot_point)                     :: p     !< Position.
+   integer(c_int)                          :: cx    !< ImAxis of x (-1: the current one).
+   integer(c_int)                          :: cy    !< ImAxis of y (-1: the current one).
+
+   x = 0.0_real64
+   y = 0.0_real64
+   if (figure_draw_refused('ip_plot_mouse', stat)) return ! a task does not draw
+   if (axes_refused('ip_plot_mouse', xaxis, yaxis, cx, cy, stat)) return
+   if (.not. logical(igIsMousePosValid(c_null_ptr))) then ! no pointer: ImGui's -FLT_MAX would convert to a NaN or an
+      x = -huge(1.0_real64)                              ! overflow on a log axis
+      y = -huge(1.0_real64)
+      call figure_check(FIG_OK, stat)
+      return
+   endif
+   call ImPlot_GetPlotMousePos(cx, cy, p)
+   x = real(p%x, real64)
+   y = real(p%y, real64)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_plot_mouse
+
+   recursive subroutine ip_plot_to_pixels(x, y, px, py, xaxis, yaxis, stat)
+   !< The display pixel of the plot point (x, y) (`PlotToPixels`), on the axes the items use now or on
+   !< `xaxis`/`yaxis`: where `test_click` aims, where `ig_draw_*` draw on the window's layer. Between `ip_begin_plot`
+   !< and `ip_end_plot`; it ends the setup. Statuses: `FIG_ERR_ARGUMENT` for a NaN coordinate or a name that is not an
+   !< axis of its direction; `FIG_ERR_STATE` outside a plot, for an axis not set up, from a task (px and py are then 0).
+   real(real64),     intent(in)            :: x     !< Abscissa [x axis units].
+   real(real64),     intent(in)            :: y     !< Ordinate [y axis units].
+   real(real64),     intent(out)           :: px    !< Abscissa [pixels], right from the display's left edge.
+   real(real64),     intent(out)           :: py    !< Ordinate [pixels], down from the display's top edge.
+   character(len=*), intent(in),  optional :: xaxis !< 'x1', 'x2' or 'x3' (default: the current one).
+   character(len=*), intent(in),  optional :: yaxis !< 'y1', 'y2' or 'y3' (default: the current one).
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   type(im_vec2)                           :: v     !< Pixel.
+   integer(c_int)                          :: cx    !< ImAxis of x (-1: the current one).
+   integer(c_int)                          :: cy    !< ImAxis of y (-1: the current one).
+
+   px = 0.0_real64
+   py = 0.0_real64
+   if (figure_draw_refused('ip_plot_to_pixels', stat)) return ! a task does not draw
+   if (ieee_is_nan(x) .or. ieee_is_nan(y)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_plot_to_pixels: x and y must not be NaN', stat)
+      return
+   endif
+   if (axes_refused('ip_plot_to_pixels', xaxis, yaxis, cx, cy, stat)) return
+   v = ImPlot_PlotToPixels_double(real(x, c_double), real(y, c_double), cx, cy)
+   px = real(v%x, real64)
+   py = real(v%y, real64)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_plot_to_pixels
+
+   recursive subroutine ip_pixels_to_plot(px, py, x, y, xaxis, yaxis, stat)
+   !< The plot point at the display pixel (px, py) (`PixelsToPlot`), on the axes the items use now or on
+   !< `xaxis`/`yaxis`: the inverse of `ip_plot_to_pixels`. Between `ip_begin_plot` and `ip_end_plot`; it ends the
+   !< setup. Statuses: `FIG_ERR_ARGUMENT` for a NaN pixel or a name that is not an axis of its direction;
+   !< `FIG_ERR_STATE` outside a plot, for an axis not set up, from a task (x and y are then 0).
+   real(real64),     intent(in)            :: px    !< Abscissa [pixels], right from the display's left edge.
+   real(real64),     intent(in)            :: py    !< Ordinate [pixels], down from the display's top edge.
+   real(real64),     intent(out)           :: x     !< Abscissa [x axis units].
+   real(real64),     intent(out)           :: y     !< Ordinate [y axis units].
+   character(len=*), intent(in),  optional :: xaxis !< 'x1', 'x2' or 'x3' (default: the current one).
+   character(len=*), intent(in),  optional :: yaxis !< 'y1', 'y2' or 'y3' (default: the current one).
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   type(im_plot_point)                     :: p     !< Point.
+   integer(c_int)                          :: cx    !< ImAxis of x (-1: the current one).
+   integer(c_int)                          :: cy    !< ImAxis of y (-1: the current one).
+
+   x = 0.0_real64
+   y = 0.0_real64
+   if (figure_draw_refused('ip_pixels_to_plot', stat)) return ! a task does not draw
+   if (ieee_is_nan(px) .or. ieee_is_nan(py)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_pixels_to_plot: px and py must not be NaN', stat)
+      return
+   endif
+   if (axes_refused('ip_pixels_to_plot', xaxis, yaxis, cx, cy, stat)) return
+   call ImPlot_PixelsToPlot_Float(real(px, c_float), real(py, c_float), cx, cy, p)
+   x = real(p%x, real64)
+   y = real(p%y, real64)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_pixels_to_plot
+
+   recursive function ip_plot_selection(xmin, xmax, ymin, ymax, xaxis, yaxis, stat) result(selected)
+   !< The box the user is dragging with the right button (ImPlot's box selection, `IsPlotSelected`,
+   !< `GetPlotSelection`): true on the frames the box is drawn, with its extent in plot units on the axes the items use
+   !< now or on `xaxis`/`yaxis` (a locked axis spans its whole range). When the button is released ImPlot zooms to
+   !< the box; a program that takes the box as its own window calls `ip_cancel_selection` on the frame it takes it.
+   !< Between `ip_begin_plot` and `ip_end_plot`; it ends the setup. Statuses: `FIG_ERR_ARGUMENT` for a name that is not
+   !< an axis of its direction; `FIG_ERR_STATE` outside a plot, for an axis not set up, from a task (the extent is 0).
+   real(real64),     intent(out)           :: xmin     !< Left end [x axis units] (0 without a box).
+   real(real64),     intent(out)           :: xmax     !< Right end [x axis units].
+   real(real64),     intent(out)           :: ymin     !< Bottom end [y axis units].
+   real(real64),     intent(out)           :: ymax     !< Top end [y axis units].
+   character(len=*), intent(in),  optional :: xaxis    !< 'x1', 'x2' or 'x3' (default: the current one).
+   character(len=*), intent(in),  optional :: yaxis    !< 'y1', 'y2' or 'y3' (default: the current one).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   logical                                 :: selected !< A box is being dragged.
+   type(im_plot_rect)                      :: r        !< Its extent.
+   integer(c_int)                          :: cx       !< ImAxis of x (-1: the current one).
+   integer(c_int)                          :: cy       !< ImAxis of y (-1: the current one).
+
+   selected = .false.
+   xmin = 0.0_real64
+   xmax = 0.0_real64
+   ymin = 0.0_real64
+   ymax = 0.0_real64
+   if (figure_draw_refused('ip_plot_selection', stat)) return ! a task does not draw
+   if (axes_refused('ip_plot_selection', xaxis, yaxis, cx, cy, stat)) return
+   selected = logical(ImPlot_IsPlotSelected())
+   if (selected) then
+      call ImPlot_GetPlotSelection(cx, cy, r)
+      xmin = real(r%X%Min, real64)
+      xmax = real(r%X%Max, real64)
+      ymin = real(r%Y%Min, real64)
+      ymax = real(r%Y%Max, real64)
+   endif
+   call figure_check(FIG_OK, stat)
+   endfunction ip_plot_selection
+
+   recursive subroutine ip_cancel_selection(stat)
+   !< End the box the user is dragging (`CancelPlotSelection`) without the zoom ImPlot applies on release: the
+   !< program keeps the box (`ip_plot_selection` on this frame) as its own choice. Nothing happens without a box.
+   !< Between `ip_begin_plot` and `ip_end_plot`; it ends the setup. Statuses: `FIG_ERR_STATE` outside a plot, from a
+   !< task.
+   integer(int32), intent(out), optional :: stat !< Status.
+
+   if (figure_draw_refused('ip_cancel_selection', stat)) return ! a task does not draw
+   if (plot_refused('ip_cancel_selection', .false., stat)) return
+   call ImPlot_CancelPlotSelection()
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_cancel_selection
+
+   ! marks in a plot: a rectangle the user drags, tags, text
+
+   recursive function ip_drag_rect(id, xmin, xmax, ymin, ymax, color, stat) result(moved)
+   !< A rectangle [xmin, xmax] x [ymin, ymax] in the current plot that the user drags (`DragRect`): by its centre to
+   !< move it, by a corner or an edge to resize it; the four values are updated in place and the result is true in the
+   !< frames it changes. An edge dragged past the opposite one crosses it while the button is held; the values are put
+   !< in order when it is released. A rectangle of no width and no height cannot be grabbed. `id` as the other drag
+   !< tools. Statuses: `FIG_ERR_ARGUMENT` for a colour of size /= 4 or a NaN; `FIG_ERR_STATE` outside a plot, from a
+   !< task.
+   integer(int32),   intent(in)            :: id       !< Id, unique among the plot's drag tools.
+   real(real64),     intent(inout), target :: xmin     !< Left edge [plot units].
+   real(real64),     intent(inout), target :: xmax     !< Right edge [plot units].
+   real(real64),     intent(inout), target :: ymin     !< Bottom edge [plot units].
+   real(real64),     intent(inout), target :: ymax     !< Top edge [plot units].
+   real(real64),     intent(in), optional  :: color(:) !< Colour, RGBA in [0, 1] (default: the text colour).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   logical                                 :: moved    !< Moved or resized by the user in this frame.
+   logical(c_bool), target                 :: held     !< A handle is held.
+   real(real64)                            :: t        !< Swap.
+
+   moved = .false.
+   if (figure_draw_refused('ip_drag_rect', stat)) return ! a task does not draw
+   if (.not. drag_ok('ip_drag_rect', color, stat)) return
+   if (ieee_is_nan(xmin) .or. ieee_is_nan(xmax) .or. ieee_is_nan(ymin) .or. ieee_is_nan(ymax)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_drag_rect: an edge is NaN', stat)
+      return
+   endif
+   if (plot_refused('ip_drag_rect', .false., stat)) return
+   held = .false._c_bool
+   moved = logical(ImPlot_DragRect(int(id, c_int), c_loc(xmin), c_loc(ymin), c_loc(xmax), c_loc(ymax), drag_color(color), &
+                                   0_c_int, c_null_ptr, c_null_ptr, c_loc(held)))
+   if (.not. logical(held)) then ! released: in order (ImPlot moves each edge on its own)
+      if (xmin > xmax) then
+         t = xmin
+         xmin = xmax
+         xmax = t
+      endif
+      if (ymin > ymax) then
+         t = ymin
+         ymin = ymax
+         ymax = t
+      endif
+   endif
+   call figure_check(FIG_OK, stat)
+   endfunction ip_drag_rect
+
+   recursive subroutine ip_tag(axis, value, color, text, stat)
+   !< A tag on an axis of the current plot (`TagX`, `TagY`): a box at `value` over the axis, holding `text` or, without
+   !< it, the value labelled as the axis labels its ticks (its format). Drawn when the plot ends, over the axis's tick
+   !< labels. Default colour: that of the last item drawn (a tag after a line marks the line's last value). `axis` is
+   !< one of `'x1'`..`'x3'`, `'y1'`..`'y3'`, set up on this frame. Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, a
+   !< colour of size /= 4 or a NaN value; `FIG_ERR_STATE` outside a plot, for an axis not set up, from a task.
+   character(len=*), intent(in)            :: axis     !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   real(real64),     intent(in)            :: value    !< Position [axis units].
+   real(real64),     intent(in), optional  :: color(:) !< Box colour, RGBA in [0, 1] (default: the last item's).
+   character(len=*), intent(in), optional  :: text     !< Text (UTF-8; default: the value, in the axis's format).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   real(c_float)                           :: c(4)     !< Box colour.
+   integer(c_int)                          :: code     !< ImAxis.
+
+   if (figure_draw_refused('ip_tag', stat)) return ! a task does not draw
+   if (.not. rgba_ok(color)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_tag: a colour needs 4 components (RGBA)', stat)
+      return
+   endif
+   if (ieee_is_nan(value)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_tag: the value is NaN', stat)
+      return
+   endif
+   if (axis_refused('ip_tag', axis, code, .false., stat)) return
+   c = [0.0_c_float, 0.0_c_float, 0.0_c_float, -1.0_c_float] ! the last item's colour
+   if (present(color)) c = real(color, c_float)
+   if (present(text)) then
+      call figure_check(fig_plot_tag(code, real(value, c_double), c, text, len(text, c_int), 1_c_int), stat)
+   else
+      call figure_check(fig_plot_tag(code, real(value, c_double), c, ' ', 0_c_int, 0_c_int), stat)
+   endif
+   endsubroutine ip_tag
+
+   recursive subroutine ip_text(text, x, y, offset, vertical, stat)
+   !< A text centred on the plot point (x, y) of the current plot (`PlotText`), in the plot's inlay text colour, clipped
+   !< to the plot area; `offset` moves it [pixels] (x right, y down), `vertical=.true.` writes it bottom to top. Not
+   !< an item: no legend entry; it takes part in fitting the axes. Statuses: `FIG_ERR_ARGUMENT` for a NaN coordinate
+   !< or an offset of size /= 2; `FIG_ERR_STATE` outside a plot, from a task.
+   character(len=*), intent(in)            :: text      !< Text (UTF-8).
+   real(real64),     intent(in)            :: x         !< Abscissa [plot units].
+   real(real64),     intent(in)            :: y         !< Ordinate [plot units].
+   real(real64),     intent(in), optional  :: offset(:) !< Offset [pixels], (x right, y down) (default: none).
+   logical,          intent(in), optional  :: vertical  !< Written bottom to top (default: horizontal).
+   integer(int32),   intent(out), optional :: stat      !< Status.
+   type(im_plot_spec)                      :: c         !< Spec: the vertical flag.
+   type(im_vec2)                           :: d         !< Offset.
+
+   if (figure_draw_refused('ip_text', stat)) return ! a task does not draw
+   if (present(offset)) then
+      if (size(offset) /= 2) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_text: the offset needs 2 components (x, y)', stat)
+         return
+      endif
+   endif
+   if (ieee_is_nan(x) .or. ieee_is_nan(y)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_text: x and y must not be NaN', stat)
+      return
+   endif
+   if (plot_refused('ip_text', .false., stat)) return
+   d = im_vec2(0.0_c_float, 0.0_c_float)
+   if (present(offset)) d = im_vec2(real(offset(1), c_float), real(offset(2), c_float))
+   call figure_ImPlotSpec_default(c)
+   call set_flag(c%Flags, ImPlotTextFlags_Vertical, vertical)
+   call ImPlot_PlotText(cstr(text), real(x, c_double), real(y, c_double), d, c)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_text
+
+   ! more items: stairs, stems, infinite lines, histograms
+
+   recursive subroutine ip_stairs_r32(label, x, y, spec, stat)
+   !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
+   !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), single precision; read in place with any
+   !< stride (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   real(real32),           intent(in), target    :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
+   if (plot_refused('ip_stairs', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stairs_r32
+
+   recursive subroutine ip_stairs_i32_r32(label, x, y, spec, stat)
+   !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
+   !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), single precision, abscissae `integer(int32)`:
+   !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
+   if (plot_refused('ip_stairs', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stairs_i32_r32
+
+   recursive subroutine ip_stairs_i64_r32(label, x, y, spec, stat)
+   !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
+   !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), single precision, abscissae `integer(int64)`:
+   !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
+   if (plot_refused('ip_stairs', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stairs_i64_r32
+
+   recursive subroutine ip_stairs_r64(label, x, y, spec, stat)
+   !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
+   !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), double precision; read in place with any
+   !< stride (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   real(real64),           intent(in), target    :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
+   if (plot_refused('ip_stairs', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stairs_r64
+
+   recursive subroutine ip_stairs_i32_r64(label, x, y, spec, stat)
+   !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
+   !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), double precision, abscissae `integer(int32)`:
+   !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
+   if (plot_refused('ip_stairs', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stairs_i32_r64
+
+   recursive subroutine ip_stairs_i64_r64(label, x, y, spec, stat)
+   !< A staircase through the points (x(i), y(i)) (`PlotStairs`): y(i) held from x(i) to x(i+1) (with
+   !< `ImPlotStairsFlags_PreStep` in the spec, from x(i-1) to x(i)), double precision, abscissae `integer(int64)`:
+   !< converted into one temporary, the ordinates read in place (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stairs', stat)) return ! a task does not draw
+   if (plot_refused('ip_stairs', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stairs_i64_r64
+
+   recursive subroutine ip_stems_r32(label, x, y, ref, spec, stat)
+   !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), single precision;
+   !< read in place with any stride (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   real(real32),           intent(in), target    :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
+   if (plot_refused('ip_stems', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStems_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), &
+                                          int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stems_r32
+
+   recursive subroutine ip_stems_i32_r32(label, x, y, ref, spec, stat)
+   !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), single precision,
+   !< abscissae `integer(int32)`: converted into one temporary, the ordinates read in place (plots.md, "Data in
+   !< place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
+   if (plot_refused('ip_stems', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStems_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), &
+                                          int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stems_i32_r32
+
+   recursive subroutine ip_stems_i64_r32(label, x, y, ref, spec, stat)
+   !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), single precision,
+   !< abscissae `integer(int64)`: converted into one temporary, the ordinates read in place (plots.md, "Data in
+   !< place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
+   real(real32),           intent(in), target    :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r32), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
+   if (plot_refused('ip_stems', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStems_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), &
+                                          int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stems_i64_r32
+
+   recursive subroutine ip_stems_r64(label, x, y, ref, spec, stat)
+   !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), double precision;
+   !< read in place with any stride (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   real(real64),           intent(in), target    :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
+   if (plot_refused('ip_stems', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStems_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), &
+                                            int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stems_r64
+
+   recursive subroutine ip_stems_i32_r64(label, x, y, ref, spec, stat)
+   !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), double precision,
+   !< abscissae `integer(int32)`: converted into one temporary, the ordinates read in place (plots.md, "Data in
+   !< place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   integer(int32),         intent(in), target    :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
+   if (plot_refused('ip_stems', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStems_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), &
+                                            int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stems_i32_r64
+
+   recursive subroutine ip_stems_i64_r64(label, x, y, ref, spec, stat)
+   !< A stem from y = ref to each point (x(i), y(i)), with a marker at its end (`PlotStems`), double precision,
+   !< abscissae `integer(int64)`: converted into one temporary, the ordinates read in place (plots.md, "Data in
+   !< place").
+   character(len=*),       intent(in)            :: label !< Legend label.
+   integer(int64),         intent(in), target    :: x(:)  !< Abscissae.
+   real(real64),           intent(in), target    :: y(:)  !< Ordinates.
+   real(real64),           intent(in), optional  :: ref   !< Base of the stems [y units] (default 0).
+   type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat  !< Status.
+   type(series_r64), target                      :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_stems', stat)) return ! a task does not draw
+   if (plot_refused('ip_stems', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotStems_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), &
+                                            int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_stems_i64_r64
+
+   recursive subroutine ip_inf_lines_r32(label, values, horizontal, spec, stat)
+   !< Lines across the whole plot (`PlotInfLines`): vertical at x = values(i), or horizontal at y = values(i) with
+   !< `horizontal=.true.`, single precision; read in place with any stride (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label      !< Legend label.
+   real(real32),           intent(in), target    :: values(:)  !< Positions [x units; y units when horizontal].
+   logical,                intent(in), optional  :: horizontal !< Horizontal lines (default: vertical).
+   type(plot_spec_object), intent(in), optional  :: spec       !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat       !< Status.
+   type(series_r32), target                      :: d          !< Where ImPlot reads the array.
+
+   if (figure_draw_refused('ip_inf_lines', stat)) return ! a task does not draw
+   if (plot_refused('ip_inf_lines', .false., stat)) return
+   if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_inf_lines', stat)) return
+   call series_lead(d, 2, values)
+   call ImPlot_PlotInfLines_FloatPtr(cstr(label), d%p(2), &
+                                     int(size(values), c_int), inf_spec(series_spec(d, spec), horizontal))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_inf_lines_r32
+
+   recursive subroutine ip_inf_lines_r64(label, values, horizontal, spec, stat)
+   !< Lines across the whole plot (`PlotInfLines`): vertical at x = values(i), or horizontal at y = values(i) with
+   !< `horizontal=.true.`, double precision; read in place with any stride (plots.md, "Data in place").
+   character(len=*),       intent(in)            :: label      !< Legend label.
+   real(real64),           intent(in), target    :: values(:)  !< Positions [x units; y units when horizontal].
+   logical,                intent(in), optional  :: horizontal !< Horizontal lines (default: vertical).
+   type(plot_spec_object), intent(in), optional  :: spec       !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat       !< Status.
+   type(series_r64), target                      :: d          !< Where ImPlot reads the array.
+
+   if (figure_draw_refused('ip_inf_lines', stat)) return ! a task does not draw
+   if (plot_refused('ip_inf_lines', .false., stat)) return
+   if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_inf_lines', stat)) return
+   call series_lead(d, 2, values)
+   call ImPlot_PlotInfLines_doublePtr(cstr(label), d%p(2), &
+                                      int(size(values), c_int), inf_spec(series_spec(d, spec), horizontal))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_inf_lines_r64
+
+   recursive subroutine ip_inf_lines_i32(label, values, horizontal, spec, stat)
+   !< Lines across the whole plot (`PlotInfLines`) at integer positions (iterations): vertical at x = values(i), or
+   !< horizontal with `horizontal=.true.`; converted to double precision into one temporary.
+   character(len=*),       intent(in)            :: label      !< Legend label.
+   integer(int32),         intent(in)            :: values(:)  !< Positions [x units; y units when horizontal].
+   logical,                intent(in), optional  :: horizontal !< Horizontal lines (default: vertical).
+   type(plot_spec_object), intent(in), optional  :: spec       !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat       !< Status.
+   type(series_r64), target                      :: d          !< Where ImPlot reads the array.
+
+   if (figure_draw_refused('ip_inf_lines', stat)) return ! a task does not draw
+   if (plot_refused('ip_inf_lines', .false., stat)) return
+   if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_inf_lines', stat)) return
+   call series_put(d, 2, values)
+   call ImPlot_PlotInfLines_doublePtr(cstr(label), d%p(2), &
+                                      int(size(values), c_int), inf_spec(series_spec(d, spec), horizontal))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_inf_lines_i32
+
+   recursive subroutine ip_inf_lines_i64(label, values, horizontal, spec, stat)
+   !< Lines across the whole plot (`PlotInfLines`) at integer positions (iterations): vertical at x = values(i), or
+   !< horizontal with `horizontal=.true.`; converted to double precision into one temporary.
+   character(len=*),       intent(in)            :: label      !< Legend label.
+   integer(int64),         intent(in)            :: values(:)  !< Positions [x units; y units when horizontal].
+   logical,                intent(in), optional  :: horizontal !< Horizontal lines (default: vertical).
+   type(plot_spec_object), intent(in), optional  :: spec       !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat       !< Status.
+   type(series_r64), target                      :: d          !< Where ImPlot reads the array.
+
+   if (figure_draw_refused('ip_inf_lines', stat)) return ! a task does not draw
+   if (plot_refused('ip_inf_lines', .false., stat)) return
+   if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_inf_lines', stat)) return
+   call series_put(d, 2, values)
+   call ImPlot_PlotInfLines_doublePtr(cstr(label), d%p(2), &
+                                      int(size(values), c_int), inf_spec(series_spec(d, spec), horizontal))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_inf_lines_i64
+
+   recursive subroutine ip_histogram_r32(label, values, bins, vmin, vmax, bar_scale, max_count, spec, stat)
+   !< A histogram of `values` (`PlotHistogram`): `bins` bars over [vmin, vmax] (default: the range of the finite
+   !< values), each as high as the values that fall in its bin, single precision. NaN and infinite values are left out (a
+   !< temporary of the finite ones); a strided array is copied contiguous (ImPlot passes the item's stride on to the
+   !< bars it draws from its own counts). Flags in the spec: `ImPlotHistogramFlags_Horizontal`, `_Cumulative`,
+   !< `_Density`, `_NoOutliers`.
+   character(len=*),       intent(in)            :: label     !< Legend label.
+   real(real32),           intent(in), target    :: values(:) !< Values.
+   integer(int32),         intent(in),  optional :: bins      !< A count > 0, or a rule: `ImPlotBin_Sqrt`,
+                                                              !< `ImPlotBin_Sturges` (default), `ImPlotBin_Rice`,
+                                                              !< `ImPlotBin_Scott`.
+   real(real64),           intent(in),  optional :: vmin      !< Left end of the first bin [values units] (with `vmax`).
+   real(real64),           intent(in),  optional :: vmax      !< Right end of the last bin [values units] (with `vmin`).
+   real(real64),           intent(in),  optional :: bar_scale !< Bar width over bin width (default 1).
+   real(real64),           intent(out), optional :: max_count !< Height of the tallest bar (a count, or a density).
+   type(plot_spec_object), intent(in),  optional :: spec      !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat      !< Status.
+   real(real32), allocatable, target               :: packed(:) !< The finite values, contiguous, when copied.
+   type(c_ptr)                                   :: p         !< Where ImPlot reads them.
+   type(im_plot_range)                           :: r         !< Range.
+   type(im_plot_spec)                            :: c         !< Spec, stride automatic.
+   integer(c_int)                                :: nb        !< Bins.
+   integer(int64)                                :: n         !< Finite values.
+   real(c_double)                                :: top       !< Tallest bar.
+   real(real64)                                  :: sd        !< Standard deviation (Scott's rule).
+
+   if (present(max_count)) max_count = 0.0_real64
+   if (figure_draw_refused('ip_histogram', stat)) return ! a task does not draw
+   if (.not. bins_ok('ip_histogram', 'bins', bins, nb, stat)) return
+   if (.not. ends_ok('ip_histogram', 'vmin', vmin, 'vmax', vmax, stat)) return
+   if (plot_refused('ip_histogram', .false., stat)) return
+   if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_histogram', stat)) return
+   n = count(ieee_is_finite(values))
+   if (n == size(values, kind=int64) .and. in_line(values)) then
+      p = c_null_ptr
+      if (n > 0_int64) p = c_loc(values(1))
+   else
+      packed = pack(values, ieee_is_finite(values))
+      p = c_null_ptr
+      if (n > 0_int64) p = c_loc(packed)
+      plot_copies = plot_copies + 1_int64
+   endif
+   if (n == 0_int64) then
+      call figure_check(FIG_OK, stat) ! nothing to count: no item
+      return
+   endif
+   if (present(vmin)) then
+      r = im_plot_range(real(vmin, c_double), real(vmax, c_double))
+   else
+      r%Min = real(minval(values, mask=ieee_is_finite(values)), c_double)
+      r%Max = real(maxval(values, mask=ieee_is_finite(values)), c_double)
+      call widen(r)
+   endif
+   sd = 0.0_real64
+   if (nb == ImPlotBin_Scott) then
+      if (allocated(packed)) then
+         sd = std_dev(real(packed, real64))
+      else
+         sd = std_dev(real(values, real64))
+      endif
+   endif
+   nb = rule_bins(nb, n, r, sd)
+   c = spec_c(spec)
+   c%Offset = 0_c_int
+   c%Stride = -1_c_int ! IMPLOT_AUTO: the values are contiguous, and the bars ImPlot draws from its counts are too
+   plot_stride = int(storage_size(values) / 8, int64)
+   top = ImPlot_PlotHistogram_FloatPtr(cstr(label), p, int(n, c_int), nb, uniform(bar_scale, 1.0_real64), r, c)
+   if (present(max_count)) max_count = real(top, real64)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_histogram_r32
+
+   recursive subroutine ip_histogram2d_r32(label, x, y, xbins, ybins, xmin, xmax, ymin, ymax, colormap, max_count, &
+                                         spec, stat)
+   !< A 2-D histogram of the points (x(i), y(i)) (`PlotHistogram2D`): `xbins` x `ybins` cells over [xmin, xmax] x
+   !< [ymin, ymax] (default: the range of the finite points), coloured through `colormap` by how many points fall in
+   !< each, single precision; read in place with any stride (plots.md, "Data in place"). Points with a NaN or infinite
+   !< coordinate are left out (temporaries of the finite ones). Flags in the spec: `ImPlotHistogramFlags_Density`,
+   !< `_NoOutliers`.
+   character(len=*),       intent(in)            :: label     !< Legend label.
+   real(real32),           intent(in), target    :: x(:)      !< Abscissae.
+   real(real32),           intent(in), target    :: y(:)      !< Ordinates.
+   integer(int32),         intent(in),  optional :: xbins     !< Bins along x: a count > 0 or an `ImPlotBin_*` rule
+                                                              !< (default `ImPlotBin_Sturges`).
+   integer(int32),         intent(in),  optional :: ybins     !< Bins along y: the same.
+   real(real64),           intent(in),  optional :: xmin      !< Left end [x units] (with `xmax`).
+   real(real64),           intent(in),  optional :: xmax      !< Right end [x units] (with `xmin`).
+   real(real64),           intent(in),  optional :: ymin      !< Bottom end [y units] (with `ymax`).
+   real(real64),           intent(in),  optional :: ymax      !< Top end [y units] (with `ymin`).
+   integer(int32),         intent(in),  optional :: colormap  !< Colormap (`ip_colormap`; default: Viridis).
+   real(real64),           intent(out), optional :: max_count !< Points in the fullest cell (a count, or a density).
+   type(plot_spec_object), intent(in),  optional :: spec      !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat      !< Status.
+   type(series_r32), target                      :: d         !< Where ImPlot reads the arrays.
+   real(real32), allocatable, target               :: px(:)     !< The finite points' x, when copied.
+   real(real32), allocatable, target               :: py(:)     !< ... and y.
+   logical, allocatable                          :: fin(:)    !< Finite points.
+   type(im_plot_rect)                            :: r         !< Range.
+   type(im_plot_spec)                            :: c         !< Spec.
+   integer(c_int)                                :: nbx       !< Bins along x.
+   integer(c_int)                                :: nby       !< Bins along y.
+   integer(c_int)                                :: cmap      !< Colormap id.
+   integer(int64)                                :: n         !< Finite points.
+   real(c_double)                                :: top       !< Fullest cell.
+   real(real64)                                  :: sx        !< Standard deviation of x (Scott's rule).
+   real(real64)                                  :: sy        !< ... of y.
+
+   if (present(max_count)) max_count = 0.0_real64
+   if (figure_draw_refused('ip_histogram2d', stat)) return ! a task does not draw
+   if (.not. bins_ok('ip_histogram2d', 'xbins', xbins, nbx, stat)) return
+   if (.not. bins_ok('ip_histogram2d', 'ybins', ybins, nby, stat)) return
+   if (.not. ends_ok('ip_histogram2d', 'xmin', xmin, 'xmax', xmax, stat)) return
+   if (.not. ends_ok('ip_histogram2d', 'ymin', ymin, 'ymax', ymax, stat)) return
+   if (.not. colormap_ok('ip_histogram2d', colormap, cmap, stat)) return
+   if (plot_refused('ip_histogram2d', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_histogram2d', stat)) return
+   fin = ieee_is_finite(x) .and. ieee_is_finite(y)
+   n = count(fin)
+   if (n == size(x, kind=int64)) then
+      call series_lead(d, 2, y)
+      call series_put(d, 1, x)
+   else
+      px = pack(x, fin)
+      py = pack(y, fin)
+      d%stride = int(storage_size(px) / 8, int64)
+      if (n > 0_int64) then
+         d%p(1) = c_loc(px)
+         d%p(2) = c_loc(py)
+      endif
+      plot_copies = plot_copies + 2_int64
+   endif
+   if (n == 0_int64) then
+      call figure_check(FIG_OK, stat) ! nothing to count: no item
+      return
+   endif
+   ! the range is always given: ImPlot 1.2 WIP computes a missing x range wrong (its minimum twice)
+   if (present(xmin)) then
+      r%X = im_plot_range(real(xmin, c_double), real(xmax, c_double))
+   else
+      r%X%Min = real(minval(x, mask=fin), c_double)
+      r%X%Max = real(maxval(x, mask=fin), c_double)
+      call widen(r%X)
+   endif
+   if (present(ymin)) then
+      r%Y = im_plot_range(real(ymin, c_double), real(ymax, c_double))
+   else
+      r%Y%Min = real(minval(y, mask=fin), c_double)
+      r%Y%Max = real(maxval(y, mask=fin), c_double)
+      call widen(r%Y)
+   endif
+   sx = 0.0_real64
+   sy = 0.0_real64
+   if (nbx == ImPlotBin_Scott) sx = std_dev(real(pack(x, fin), real64))
+   if (nby == ImPlotBin_Scott) sy = std_dev(real(pack(y, fin), real64))
+   nbx = rule_bins(nbx, n, r%X, sx)
+   nby = rule_bins(nby, n, r%Y, sy)
+   c = series_spec(d, spec)
+   call ImPlot_PushColormap_PlotColormap(cmap)
+   top = ImPlot_PlotHistogram2D_FloatPtr(cstr(label), d%p(1), d%p(2), int(n, c_int), nbx, nby, r, c)
+   call ImPlot_PopColormap(1_c_int)
+   if (present(max_count)) max_count = real(top, real64)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_histogram2d_r32
+
+   recursive subroutine ip_histogram_r64(label, values, bins, vmin, vmax, bar_scale, max_count, spec, stat)
+   !< A histogram of `values` (`PlotHistogram`): `bins` bars over [vmin, vmax] (default: the range of the finite
+   !< values), each as high as the values that fall in its bin, double precision. NaN and infinite values are left out (a
+   !< temporary of the finite ones); a strided array is copied contiguous (ImPlot passes the item's stride on to the
+   !< bars it draws from its own counts). Flags in the spec: `ImPlotHistogramFlags_Horizontal`, `_Cumulative`,
+   !< `_Density`, `_NoOutliers`.
+   character(len=*),       intent(in)            :: label     !< Legend label.
+   real(real64),           intent(in), target    :: values(:) !< Values.
+   integer(int32),         intent(in),  optional :: bins      !< A count > 0, or a rule: `ImPlotBin_Sqrt`,
+                                                              !< `ImPlotBin_Sturges` (default), `ImPlotBin_Rice`,
+                                                              !< `ImPlotBin_Scott`.
+   real(real64),           intent(in),  optional :: vmin      !< Left end of the first bin [values units] (with `vmax`).
+   real(real64),           intent(in),  optional :: vmax      !< Right end of the last bin [values units] (with `vmin`).
+   real(real64),           intent(in),  optional :: bar_scale !< Bar width over bin width (default 1).
+   real(real64),           intent(out), optional :: max_count !< Height of the tallest bar (a count, or a density).
+   type(plot_spec_object), intent(in),  optional :: spec      !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat      !< Status.
+   real(real64), allocatable, target               :: packed(:) !< The finite values, contiguous, when copied.
+   type(c_ptr)                                   :: p         !< Where ImPlot reads them.
+   type(im_plot_range)                           :: r         !< Range.
+   type(im_plot_spec)                            :: c         !< Spec, stride automatic.
+   integer(c_int)                                :: nb        !< Bins.
+   integer(int64)                                :: n         !< Finite values.
+   real(c_double)                                :: top       !< Tallest bar.
+   real(real64)                                  :: sd        !< Standard deviation (Scott's rule).
+
+   if (present(max_count)) max_count = 0.0_real64
+   if (figure_draw_refused('ip_histogram', stat)) return ! a task does not draw
+   if (.not. bins_ok('ip_histogram', 'bins', bins, nb, stat)) return
+   if (.not. ends_ok('ip_histogram', 'vmin', vmin, 'vmax', vmax, stat)) return
+   if (plot_refused('ip_histogram', .false., stat)) return
+   if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_histogram', stat)) return
+   n = count(ieee_is_finite(values))
+   if (n == size(values, kind=int64) .and. in_line(values)) then
+      p = c_null_ptr
+      if (n > 0_int64) p = c_loc(values(1))
+   else
+      packed = pack(values, ieee_is_finite(values))
+      p = c_null_ptr
+      if (n > 0_int64) p = c_loc(packed)
+      plot_copies = plot_copies + 1_int64
+   endif
+   if (n == 0_int64) then
+      call figure_check(FIG_OK, stat) ! nothing to count: no item
+      return
+   endif
+   if (present(vmin)) then
+      r = im_plot_range(real(vmin, c_double), real(vmax, c_double))
+   else
+      r%Min = real(minval(values, mask=ieee_is_finite(values)), c_double)
+      r%Max = real(maxval(values, mask=ieee_is_finite(values)), c_double)
+      call widen(r)
+   endif
+   sd = 0.0_real64
+   if (nb == ImPlotBin_Scott) then
+      if (allocated(packed)) then
+         sd = std_dev(real(packed, real64))
+      else
+         sd = std_dev(real(values, real64))
+      endif
+   endif
+   nb = rule_bins(nb, n, r, sd)
+   c = spec_c(spec)
+   c%Offset = 0_c_int
+   c%Stride = -1_c_int ! IMPLOT_AUTO: the values are contiguous, and the bars ImPlot draws from its counts are too
+   plot_stride = int(storage_size(values) / 8, int64)
+   top = ImPlot_PlotHistogram_doublePtr(cstr(label), p, int(n, c_int), nb, uniform(bar_scale, 1.0_real64), r, c)
+   if (present(max_count)) max_count = real(top, real64)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_histogram_r64
+
+   recursive subroutine ip_histogram2d_r64(label, x, y, xbins, ybins, xmin, xmax, ymin, ymax, colormap, max_count, &
+                                         spec, stat)
+   !< A 2-D histogram of the points (x(i), y(i)) (`PlotHistogram2D`): `xbins` x `ybins` cells over [xmin, xmax] x
+   !< [ymin, ymax] (default: the range of the finite points), coloured through `colormap` by how many points fall in
+   !< each, double precision; read in place with any stride (plots.md, "Data in place"). Points with a NaN or infinite
+   !< coordinate are left out (temporaries of the finite ones). Flags in the spec: `ImPlotHistogramFlags_Density`,
+   !< `_NoOutliers`.
+   character(len=*),       intent(in)            :: label     !< Legend label.
+   real(real64),           intent(in), target    :: x(:)      !< Abscissae.
+   real(real64),           intent(in), target    :: y(:)      !< Ordinates.
+   integer(int32),         intent(in),  optional :: xbins     !< Bins along x: a count > 0 or an `ImPlotBin_*` rule
+                                                              !< (default `ImPlotBin_Sturges`).
+   integer(int32),         intent(in),  optional :: ybins     !< Bins along y: the same.
+   real(real64),           intent(in),  optional :: xmin      !< Left end [x units] (with `xmax`).
+   real(real64),           intent(in),  optional :: xmax      !< Right end [x units] (with `xmin`).
+   real(real64),           intent(in),  optional :: ymin      !< Bottom end [y units] (with `ymax`).
+   real(real64),           intent(in),  optional :: ymax      !< Top end [y units] (with `ymin`).
+   integer(int32),         intent(in),  optional :: colormap  !< Colormap (`ip_colormap`; default: Viridis).
+   real(real64),           intent(out), optional :: max_count !< Points in the fullest cell (a count, or a density).
+   type(plot_spec_object), intent(in),  optional :: spec      !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat      !< Status.
+   type(series_r64), target                      :: d         !< Where ImPlot reads the arrays.
+   real(real64), allocatable, target               :: px(:)     !< The finite points' x, when copied.
+   real(real64), allocatable, target               :: py(:)     !< ... and y.
+   logical, allocatable                          :: fin(:)    !< Finite points.
+   type(im_plot_rect)                            :: r         !< Range.
+   type(im_plot_spec)                            :: c         !< Spec.
+   integer(c_int)                                :: nbx       !< Bins along x.
+   integer(c_int)                                :: nby       !< Bins along y.
+   integer(c_int)                                :: cmap      !< Colormap id.
+   integer(int64)                                :: n         !< Finite points.
+   real(c_double)                                :: top       !< Fullest cell.
+   real(real64)                                  :: sx        !< Standard deviation of x (Scott's rule).
+   real(real64)                                  :: sy        !< ... of y.
+
+   if (present(max_count)) max_count = 0.0_real64
+   if (figure_draw_refused('ip_histogram2d', stat)) return ! a task does not draw
+   if (.not. bins_ok('ip_histogram2d', 'xbins', xbins, nbx, stat)) return
+   if (.not. bins_ok('ip_histogram2d', 'ybins', ybins, nby, stat)) return
+   if (.not. ends_ok('ip_histogram2d', 'xmin', xmin, 'xmax', xmax, stat)) return
+   if (.not. ends_ok('ip_histogram2d', 'ymin', ymin, 'ymax', ymax, stat)) return
+   if (.not. colormap_ok('ip_histogram2d', colormap, cmap, stat)) return
+   if (plot_refused('ip_histogram2d', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_histogram2d', stat)) return
+   fin = ieee_is_finite(x) .and. ieee_is_finite(y)
+   n = count(fin)
+   if (n == size(x, kind=int64)) then
+      call series_lead(d, 2, y)
+      call series_put(d, 1, x)
+   else
+      px = pack(x, fin)
+      py = pack(y, fin)
+      d%stride = int(storage_size(px) / 8, int64)
+      if (n > 0_int64) then
+         d%p(1) = c_loc(px)
+         d%p(2) = c_loc(py)
+      endif
+      plot_copies = plot_copies + 2_int64
+   endif
+   if (n == 0_int64) then
+      call figure_check(FIG_OK, stat) ! nothing to count: no item
+      return
+   endif
+   ! the range is always given: ImPlot 1.2 WIP computes a missing x range wrong (its minimum twice)
+   if (present(xmin)) then
+      r%X = im_plot_range(real(xmin, c_double), real(xmax, c_double))
+   else
+      r%X%Min = real(minval(x, mask=fin), c_double)
+      r%X%Max = real(maxval(x, mask=fin), c_double)
+      call widen(r%X)
+   endif
+   if (present(ymin)) then
+      r%Y = im_plot_range(real(ymin, c_double), real(ymax, c_double))
+   else
+      r%Y%Min = real(minval(y, mask=fin), c_double)
+      r%Y%Max = real(maxval(y, mask=fin), c_double)
+      call widen(r%Y)
+   endif
+   sx = 0.0_real64
+   sy = 0.0_real64
+   if (nbx == ImPlotBin_Scott) sx = std_dev(real(pack(x, fin), real64))
+   if (nby == ImPlotBin_Scott) sy = std_dev(real(pack(y, fin), real64))
+   nbx = rule_bins(nbx, n, r%X, sx)
+   nby = rule_bins(nby, n, r%Y, sy)
+   c = series_spec(d, spec)
+   call ImPlot_PushColormap_PlotColormap(cmap)
+   top = ImPlot_PlotHistogram2D_doublePtr(cstr(label), d%p(1), d%p(2), int(n, c_int), nbx, nby, r, c)
+   call ImPlot_PopColormap(1_c_int)
+   if (present(max_count)) max_count = real(top, real64)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_histogram2d_r64
 
    ! contour lines
 
@@ -2732,6 +3699,157 @@ contains
    endif
    ok = .true.
    endfunction range_ok
+
+   recursive function axes_refused(caller, xaxis, yaxis, cx, cy, stat) result(refused)
+   !< The ImAxis of an optional x axis name and y axis name (-1, the current axes, when absent); true (reported) for a
+   !< name that is not an axis of its direction (`FIG_ERR_ARGUMENT`), no plot being declared or an axis not set up
+   !< (usage errors, `FIG_ERR_STATE`).
+   character(len=*), intent(in)            :: caller  !< The procedure.
+   character(len=*), intent(in),  optional :: xaxis   !< 'x1', 'x2' or 'x3'.
+   character(len=*), intent(in),  optional :: yaxis   !< 'y1', 'y2' or 'y3'.
+   integer(c_int),   intent(out)           :: cx      !< ImAxis of x (-1: the current one).
+   integer(c_int),   intent(out)           :: cy      !< ImAxis of y (-1: the current one).
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: refused !< Refused: return.
+
+   refused = .true.
+   cx = -1_c_int ! IMPLOT_AUTO: the current axes
+   cy = -1_c_int
+   if (present(xaxis)) then
+      if (.not. pair_ok(caller, 'xaxis', xaxis, '', '', cx, cy, stat)) return
+      if (axis_refused(caller, xaxis, cx, .false., stat)) return
+   endif
+   if (present(yaxis)) then
+      if (.not. pair_ok(caller, '', '', 'yaxis', yaxis, cx, cy, stat)) return
+      if (axis_refused(caller, yaxis, cy, .false., stat)) return
+   endif
+   if (.not. (present(xaxis) .or. present(yaxis))) then
+      if (plot_refused(caller, .false., stat)) return
+   endif
+   refused = .false.
+   endfunction axes_refused
+
+   pure function inf_spec(c, horizontal) result(s)
+   !< The spec of infinite lines: `c` with ImPlot's horizontal flag set when `horizontal` is true.
+   type(im_plot_spec), intent(in)           :: c          !< Spec.
+   logical,            intent(in), optional :: horizontal !< Horizontal lines.
+   type(im_plot_spec)                       :: s          !< Spec to pass.
+
+   s = c
+   if (present(horizontal)) then
+      if (horizontal) s%Flags = ior(s%Flags, ImPlotInfLinesFlags_Horizontal)
+   endif
+   endfunction inf_spec
+
+   function bins_ok(caller, name, bins, nb, stat) result(ok)
+   !< The bins of a histogram: a count > 0 or an `ImPlotBin_*` rule (default Sturges'), in `nb`; false (reported,
+   !< `FIG_ERR_ARGUMENT`) for any other value.
+   character(len=*), intent(in)            :: caller !< The procedure.
+   character(len=*), intent(in)            :: name   !< The argument's name.
+   integer(int32),   intent(in),  optional :: bins   !< Bins given.
+   integer(c_int),   intent(out)           :: nb     !< Bins: a count, or a rule (negative).
+   integer(int32),   intent(out), optional :: stat   !< Status, on a refusal.
+   logical                                 :: ok     !< Not refused.
+
+   ok = .true.
+   nb = ImPlotBin_Sturges
+   if (.not. present(bins)) return
+   nb = int(bins, c_int)
+   if (nb == 0_c_int .or. nb < ImPlotBin_Scott) then
+      call figure_fail(FIG_ERR_ARGUMENT, caller//': '//name//' must be a count above 0 or an ImPlotBin_* rule', stat)
+      ok = .false.
+   endif
+   endfunction bins_ok
+
+   function ends_ok(caller, lo_name, lo, hi_name, hi, stat) result(ok)
+   !< Two optional ends of a range: both or neither, not NaN, `lo < hi`; false (reported, `FIG_ERR_ARGUMENT`) otherwise.
+   character(len=*), intent(in)            :: caller  !< The procedure.
+   character(len=*), intent(in)            :: lo_name !< Name of the lower end.
+   real(real64),     intent(in),  optional :: lo      !< Lower end.
+   character(len=*), intent(in)            :: hi_name !< Name of the upper end.
+   real(real64),     intent(in),  optional :: hi      !< Upper end.
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: ok      !< Not refused.
+
+   ok = .false.
+   if (present(lo) .neqv. present(hi)) then
+      call figure_fail(FIG_ERR_ARGUMENT, caller//': give both '//lo_name//' and '//hi_name//', or neither', stat)
+      return
+   endif
+   if (present(lo)) then
+      if (.not. range_ok(caller, lo_name, lo, hi_name, hi, stat)) return
+   endif
+   ok = .true.
+   endfunction ends_ok
+
+   pure subroutine widen(r)
+   !< A range of one value made one unit wide around it: ImPlot divides by the width of a bin.
+   type(im_plot_range), intent(inout) :: r !< Range.
+
+   if (r%Max > r%Min) return
+   r%Min = r%Min - 0.5_c_double
+   r%Max = r%Max + 0.5_c_double
+   endsubroutine widen
+
+   pure function rule_bins(nb, n, r, sd) result(bins)
+   !< A count of bins: `nb` when it is one, or by its rule over `n` values in the range `r` (ImPlot's formulas,
+   !< computed here: ImPlot's Scott rule divides by a zero spread or gives no bin for a narrow range).
+   integer(c_int),      intent(in) :: nb   !< A count (> 0) or an `ImPlotBin_*` rule.
+   integer(int64),      intent(in) :: n    !< Values.
+   type(im_plot_range), intent(in) :: r    !< Range.
+   real(real64),        intent(in) :: sd   !< Standard deviation of the values (Scott's rule).
+   integer(c_int)                  :: bins !< Bins, at least 1.
+   real(real64)                    :: w    !< Bin width (Scott's rule).
+   real(real64)                    :: k    !< Bins, as a real.
+
+   if (nb > 0_c_int) then
+      bins = nb
+      return
+   endif
+   select case (nb)
+   case (ImPlotBin_Sqrt)
+      k = ceiling(sqrt(real(n, real64)))
+   case (ImPlotBin_Rice)
+      k = ceiling(2.0_real64 * real(n, real64)**(1.0_real64 / 3.0_real64))
+   case (ImPlotBin_Scott)
+      w = 3.49_real64 * sd / real(n, real64)**(1.0_real64 / 3.0_real64)
+      k = 1.0_real64
+      if (w > 0.0_real64) k = anint(min(real(r%Max - r%Min, real64) / w, 1.0e6_real64))
+   case default ! Sturges
+      k = ceiling(1.0_real64 + log(real(n, real64)) / log(2.0_real64))
+   endselect
+   bins = int(max(1.0_real64, min(k, 1.0e6_real64)), c_int)
+   endfunction rule_bins
+
+   pure function std_dev(v) result(s)
+   !< Standard deviation of values (population: divided by their count; 0 for none).
+   real(real64), intent(in) :: v(:) !< Values.
+   real(real64)             :: s    !< Standard deviation.
+   real(real64)             :: m    !< Mean.
+
+   s = 0.0_real64
+   if (size(v) == 0) return
+   m = sum(v) / real(size(v), real64)
+   s = sqrt(sum((v - m)**2) / real(size(v), real64))
+   endfunction std_dev
+
+   function in_line_r32(a) result(contiguous_)
+   !< Whether an array's elements are adjacent in memory (its stride is its element size).
+   real(real32), intent(in), target :: a(:)        !< Array.
+   logical                          :: contiguous_ !< Adjacent.
+
+   contiguous_ = .true.
+   if (size(a) > 1) contiguous_ = gap(c_loc(a(1)), c_loc(a(2))) == storage_size(a, kind=int64) / 8_int64
+   endfunction in_line_r32
+
+   function in_line_r64(a) result(contiguous_)
+   !< Whether an array's elements are adjacent in memory (its stride is its element size).
+   real(real64), intent(in), target :: a(:)        !< Array.
+   logical                          :: contiguous_ !< Adjacent.
+
+   contiguous_ = .true.
+   if (size(a) > 1) contiguous_ = gap(c_loc(a(1)), c_loc(a(2))) == storage_size(a, kind=int64) / 8_int64
+   endfunction in_line_r64
 
    pure subroutine set_flag(flags, flag, on)
    !< Set (`on` true) or clear (`on` false) `flag` in `flags`; unchanged when `on` is absent.

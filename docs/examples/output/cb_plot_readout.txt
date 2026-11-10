@@ -1,0 +1,4 @@
+$ ./cb_plot_readout --check
+pointer over the plot: T
+nearest iteration:     250
+residual shown:        1.13E-04

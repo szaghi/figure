@@ -165,6 +165,25 @@ item, reached ImPlot's assertions: the program aborted inside `implot.cpp`, nami
 are usage errors with the messages above.
 :::
 
+### Plot queries and marks
+
+The calls that read a plot ([Reading a plot](plots#reading-a-plot)), its marks ([Marks in a plot](plots#marks-in-a-plot)),
+the drag tools and the items of v0.4.0 (`ip_stairs`, `ip_stems`, `ip_inf_lines`, [histograms](plots#histograms))
+check their arguments and their place as the axis calls do ([Plot axes](#plot-axes): the axis names, an axis not set
+up, no plot being declared give the messages there). `<p>` is the procedure.
+
+| Failure | Status | Message |
+|---|---|---|
+| no plot being declared (also `ip_drag_line_x`, `ip_drag_line_y`, `ip_drag_point`, from v0.4.0) | `FIG_ERR_STATE` | `<p>: no plot is being declared (call it between a true ip_begin_plot and ip_end_plot)` |
+| `ip_tag` on an axis not set up | `FIG_ERR_STATE` | `ip_tag: axis '<axis>' is not set up (call ip_setup_axis('<axis>') first, on every frame)` |
+| a NaN coordinate or pixel | `FIG_ERR_ARGUMENT` | `ip_plot_to_pixels: x and y must not be NaN`; `ip_pixels_to_plot: px and py must not be NaN`; `ip_text: x and y must not be NaN`; `ip_tag: the value is NaN`; `ip_drag_rect: an edge is NaN` |
+| a colour without 4 components | `FIG_ERR_ARGUMENT` | `<p>: a colour needs 4 components (RGBA)` |
+| an offset without 2 components | `FIG_ERR_ARGUMENT` | `ip_text: the offset needs 2 components (x, y)` |
+| bins 0, or below `ImPlotBin_Scott` | `FIG_ERR_ARGUMENT` | `ip_histogram: bins must be a count above 0 or an ImPlotBin_* rule` (`xbins`, `ybins`) |
+| one end of a histogram's range without the other; a NaN end; `vmin >= vmax` | `FIG_ERR_ARGUMENT` | `ip_histogram: give both vmin and vmax, or neither`; `vmin and vmax must not be NaN`; `vmin must be below vmax` (`xmin`/`xmax`, `ymin`/`ymax`) |
+| series of different sizes | `FIG_ERR_ARGUMENT` | `<p>: the series have different sizes` |
+| a colormap not registered | `FIG_ERR_ARGUMENT` | `ip_histogram2d: the colormap <id> is not registered (see ip_colormap)` |
+
 ## Pairing and frames
 
 Dear ImGui's begin/end pairs are the likeliest bug of a FIGURE program: an `ig_end_table` where an `ig_tree_pop`

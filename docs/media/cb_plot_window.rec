@@ -1,0 +1,15 @@
+#! program build/docs-examples/bin/cb_plot_window
+#! from    10
+#! frames  200
+#! poster  80
+# drag the window by its centre to the right, then widen it by its right edge
+0   move 895 515
+5   move 591 262 15
+25  down
+27  move 711 262 40
+70  up
+85  move 804 340 15
+105 down
+107 move 862 340 40
+150 up
+165 move 895 515 15

@@ -567,6 +567,43 @@ draws the plot headless and prints what each axis shows:
 
 [Axes](/guide/plots#axes) has the six axes, the scales, fixed ticks and constraints.
 
+### Read the value under the pointer
+
+<<< @/examples/snippets/cb_plot_readout-readout.F90{fortran}
+
+<Media name="cb_plot_readout" video alt="A residual falling over six decades on a log axis. The pointer moves across the plot: an amber vertical line follows it at the nearest iteration, an amber dot sits on the curve, an amber tag shows the iteration on the x axis and an amber box beside the dot the residual. The pointer leaves the plot and the marks disappear." caption="docs/examples/src/cb_plot_readout.F90" />
+
+While `ip_plot_hovered()` is true, `ip_plot_mouse` gives the pointer in plot units; the program rounds its x to the
+nearest iteration and marks it: `ip_inf_lines` at that integer draws a line across the plot, a one-point
+`ip_scatter` a dot on the curve, `ip_tag` puts the iteration on the x axis (labelled as the axis labels its ticks,
+`'%.0f'`), and `ip_annotation` writes the residual beside the dot. A tag on the y axis would hold it too, but a tag
+wider than the tick labels widens the axis, and the plot would shift under the pointer as it enters. The marks are
+drawn only on the frames the pointer is over the plot, so they vanish when it leaves. `cb_plot_readout --check` moves the pointer to
+iteration 250 with the testing module (the pixel from `ip_plot_to_pixels`) and prints what the readout shows:
+
+<<< @/examples/output/cb_plot_readout.txt{text}
+
+[Reading a plot](/guide/plots#reading-a-plot) has the conversions and the box selection.
+
+### Average over a window the user drags
+
+<<< @/examples/snippets/cb_plot_window-window.F90{fortran}
+
+<Media name="cb_plot_window" video alt="A lift coefficient settling near 0.8, an amber rectangle over iterations 300 to 450 with the mean drawn over it and tagged on the y axis. The rectangle is dragged right by its centre, then widened by its right edge; the mean segment and its tag follow." caption="docs/examples/src/cb_plot_window.F90" />
+
+`ip_drag_rect` gives the user a rectangle to move by its centre and resize by its edges; its four values are the
+program's variables, updated in place. Here the top and bottom are set to the plot's y limits on every frame, so the
+rectangle is a window of iterations across the plot's height, and its ends are kept on the data. The program averages
+the samples whose iterations fall inside, draws the mean as a two-point `ip_line` over the window and tags it on the
+y axis. `cb_plot_window --check` drags the rectangle 100 iterations to the right with `test_drag` and prints the
+window and its mean before and after:
+
+<<< @/examples/output/cb_plot_window.txt{text}
+
+ImPlot's box selection (right button) chooses a window too, once: [Reading a plot](/guide/plots#reading-a-plot)
+shows how to keep the box without the zoom. [Marks in a plot](/guide/plots#marks-in-a-plot) has the rectangle, tags,
+infinite lines and text.
+
 ### Plot the rows of a matrix
 
 A row of a column-major matrix is strided. When its abscissae are uniform, `ip_line(label, y, row [, xscale]

@@ -1,0 +1,3 @@
+$ ./cb_plot_window --check
+before the drag: iterations 300 to 450, mean 0.8005
+after the drag: iterations 400 to 550, mean 0.7990

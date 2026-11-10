@@ -45,13 +45,21 @@ a legend `label`, an optional [`spec`](#item-style) and an optional [`stat`](err
 | `ip_bars(label, x, y, bar_size [, spec] [, stat])` | bars of height `y(i)` centred at `x(i)`, `bar_size` wide in x units (`real(real64)`, required: ImPlot has no default for it) |
 | `ip_shaded(label, x, y1, y2 [, spec] [, stat])` | the area between the curves `y1(x)` and `y2(x)` |
 | `ip_shaded(label, x, y, yref [, spec] [, stat])` | the area between the curve `y(x)` and the line `y = yref` (`real(real64)`) |
+| `ip_stairs(label, x, y [, spec] [, stat])` | a staircase (`PlotStairs`): `y(i)` held from `x(i)` to `x(i+1)`; with `ip_spec(flags=ImPlotStairsFlags_PreStep)` from `x(i-1)` to `x(i)`, with `ImPlotStairsFlags_Shaded` filled down to 0 |
+| `ip_stems(label, x, y [, ref] [, spec] [, stat])` | a stem from `y = ref` (`real(real64)`, default 0) to each point, with a marker (`PlotStems`); `ImPlotStemsFlags_Horizontal` from `x = ref` |
+| `ip_inf_lines(label, values [, horizontal] [, spec] [, stat])` | lines across the whole plot (`PlotInfLines`) at `x = values(i)`, or at `y = values(i)` with `horizontal=.true.`; `values` may also be `integer(int32)` or `integer(int64)` (iterations) ([Marks in a plot](#marks-in-a-plot)) |
+| `ip_histogram(label, values [, bins] [, vmin] [, vmax] [, bar_scale] [, max_count] [, spec] [, stat])` | a histogram (`PlotHistogram`) ([Histograms](#histograms)) |
+| `ip_histogram2d(label, x, y [, xbins] [, ybins] [, xmin] [, xmax] [, ymin] [, ymax] [, colormap] [, max_count] [, spec] [, stat])` | a 2-D histogram (`PlotHistogram2D`), cells coloured by count ([Histograms](#histograms)) |
 
 <<< @/examples/snippets/cb_items-items.F90{fortran}
 
 <Media name="cb_items" alt="One plot with a blue band, a red line with markers, green bars and a red area to zero" caption="The items above, drawn by docs/examples/src/cb_items.F90" />
 
 The two `ip_shaded` forms are told apart by the fourth argument: an array (`y2`) or a scalar (`yref`). Items are
-drawn in the order they are called, each above the previous ones.
+drawn in the order they are called, each above the previous ones. The gallery below draws each of the newer items and
+marks with its call ([Marks in a plot](#marks-in-a-plot)):
+
+<Media name="plot_marks" alt="Eight plots in a grid. A residual on a log axis with a tag of its last value on the y axis and a tag 'now' on the x axis; a coefficient with three vertical lines at the level changes and a horizontal line at the target 0.8; two texts, one horizontal and one vertical, and an annotation in an amber box with a leader line; a coefficient with an amber rectangle over part of it; two staircases, one shaded; twelve stems with markers, decaying; a histogram of 2000 near-normal samples in 30 bins; a 2-D histogram of correlated pairs, an inclined ellipse of cells." caption="docs/examples/src/gallery.F90 plot_marks: each plot's title names its call" />
 
 Fields are items too: `ip_heatmap` colours the cells of a 2D array through a colormap, and `ip_colormap_scale` draws
 its colour bar ([Heatmaps](images#heatmaps)); the colormap is chosen by name with `ip_colormap`, among the bundled
@@ -319,8 +327,15 @@ draw (`FIG_ERR_STATE`, see [processes](processes)). Example: [Plot the history a
   as the example does. Without `color`, a drag tool is drawn in the style's text colour.
 - An annotation is not an item either: no legend entry, and it does not take part in fitting the axes.
 - Statuses: `FIG_ERR_ARGUMENT` for a colour without 4 components, an offset without 2, error-bar arrays of
-  different sizes; `FIG_ERR_STATE` for `ip_annotation` outside a plot, and for any of them from a
-  [task](processes#tasks). `stat` is optional (absent: `error stop` with the message).
+  different sizes; `FIG_ERR_STATE` for `ip_annotation` and the drag tools outside a plot, and for any of them from a
+  [task](processes#tasks). `stat` is optional (absent: `error stop` with the message). A rectangle the user drags,
+  `ip_drag_rect`, is in [Marks in a plot](#marks-in-a-plot).
+
+::: warning Changed in v0.4.0
+`ip_drag_line_x`, `ip_drag_line_y` and `ip_drag_point` outside a plot are usage errors (`FIG_ERR_STATE`,
+`<procedure>: no plot is being declared (...)`); until v0.3.1 they reached ImPlot's assertion and the program
+aborted.
+:::
 - Modes: the same in **window**, **headless** and **remote** mode. In headless mode the drag tools answer synthetic
   input (`test_drag`, [Testing](testing)); in remote mode the browser's pointer drags them.
 
@@ -366,7 +381,114 @@ segments.
 - Not done: filled contours (bands between levels: a heatmap of a discrete colormap, `ip_colormap(name, levels)`,
   shows them), smoothing of the lines, labels following the lines' direction.
 
+## Histograms
+
+| Procedure | Notes |
+|---|---|
+| `ip_histogram(label, values [, bins] [, vmin] [, vmax] [, bar_scale] [, max_count] [, spec] [, stat])` | Bars over `bins` equal bins of [`vmin`, `vmax`], each as high as the values falling in it (`PlotHistogram`). `values`: `real(real32)` or `real(real64)`. `bins`: a count > 0, or a rule, `ImPlotBin_Sqrt` (√n), `ImPlotBin_Sturges` (1 + log₂n, the default), `ImPlotBin_Rice` (2∛n), `ImPlotBin_Scott` (width 3.49 σ / ∛n). `vmin`/`vmax` (`real(real64)`, both or neither): default the range of the finite values. `bar_scale`: bar width over bin width (default 1). `max_count` (out): the height of the tallest bar. |
+| `ip_histogram2d(label, x, y [, xbins] [, ybins] [, xmin] [, xmax] [, ymin] [, ymax] [, colormap] [, max_count] [, spec] [, stat])` | Cells over [`xmin`, `xmax`] x [`ymin`, `ymax`] coloured through `colormap` (an id from [`ip_colormap`](colormaps), default Viridis) by the points falling in each (`PlotHistogram2D`); bins and ranges per axis as above; `max_count` (out): the fullest cell's count, the top of the colour scale ([`ip_colormap_scale`](images#heatmaps) draws it). |
+
+Flags, in `ip_spec(flags=...)`: `ImPlotHistogramFlags_Horizontal` (bars along x, 1-D only), `_Cumulative` (each bar
+adds the ones before it, 1-D only), `_Density` (counts divided by the number of values and the bin width: the
+bars' area is 1), `_NoOutliers` (values outside the range do not count in a density or a cumulative sum).
+
+- **NaN and infinite values are left out** (a temporary of the finite ones): ImPlot's counting compares them, an FPE
+  under `-ffpe-trap=invalid`. The default range is that of the finite values; a range of one value is made one unit
+  wide around it.
+- **Data in place.** `ip_histogram2d` reads `x` and `y` in place with their stride, as the other items ([Data in
+  place](#data-in-place)). `ip_histogram` reads a contiguous array in place and copies a strided one, contiguous
+  (`test_plot_copies` counts it): ImPlot 1.2 WIP passes the values' stride on to the bars it draws from its own
+  counts, which would read them at the wrong stride.
+- **The bins are counted by FIGURE when a rule is given** (ImPlot's formulas; `ImPlotBin_Scott` with a zero spread
+  gives one bin, where ImPlot divides by zero), and the 2-D range is always given to ImPlot (ImPlot 1.2 WIP computes
+  a missing x range wrong).
+- Statuses: `FIG_ERR_ARGUMENT` for `bins` 0 or below `ImPlotBin_Scott`, one end of a range without the other, a NaN
+  end or `vmin >= vmax`, series of different sizes, a colormap not registered; `FIG_ERR_STATE` outside a plot and from
+  a [task](processes#tasks).
+- Modes: the same in **window**, **headless** and **remote** mode. Threads: a task does not draw.
+- Not done: integer values (convert them to real), weights, bins of unequal width, the counts themselves (ImPlot
+  keeps them; `max_count` is the one it returns).
+
+## Reading a plot
+
+A program reads where the user points in plot units, converts between plot units and display pixels, and takes the
+box the user drags with the right button: the readout of a monitor, a window chosen by hand.
+
+| Procedure | Notes |
+|---|---|
+| `ip_plot_hovered([stat])` → `logical` | The pointer is over the plot area (`IsPlotHovered`), on this frame. |
+| `ip_plot_mouse(x, y [, xaxis] [, yaxis] [, stat])` | The pointer in plot units (`GetPlotMousePos`), wherever it is; `-huge(1.0_real64)` for both when there is no pointer (no mouse event yet). |
+| `ip_plot_to_pixels(x, y, px, py [, xaxis] [, yaxis] [, stat])` | The display pixel of a plot point (`PlotToPixels`): `px` right from the display's left edge, `py` down from its top, as `ig_item_rect` and `test_click` take them. |
+| `ip_pixels_to_plot(px, py, x, y [, xaxis] [, yaxis] [, stat])` | The plot point at a display pixel (`PixelsToPlot`). |
+| `ip_plot_selection(xmin, xmax, ymin, ymax [, xaxis] [, yaxis] [, stat])` → `logical` | `.true.` on the frames the user drags a box with the right button (`IsPlotSelected`, `GetPlotSelection`), with its extent in plot units; 0 without one. |
+| `ip_cancel_selection([stat])` | End that box without the zoom ImPlot applies when the button is released (`CancelPlotSelection`). |
+
+<<< @/examples/snippets/cb_plot_readout-readout.F90{fortran}
+
+<Media name="cb_plot_readout" video alt="A residual falling over six decades on a log axis. The pointer enters the plot from the left and moves right: an amber vertical line follows it at the nearest iteration, an amber dot sits on the curve there, the x axis shows the iteration in an amber tag, and an amber box beside the dot gives the residual, smaller as the pointer moves right. The pointer leaves the plot and the marks disappear." caption="docs/examples/src/cb_plot_readout.F90: the value under the pointer" />
+
+- **Axes.** Each call works on the axes the items use now (X1 and Y1, or those of the last
+  [`ip_set_axes`](#axes)), or on `xaxis` (`'x1'`, `'x2'`, `'x3'`) and `yaxis` (`'y1'`, `'y2'`, `'y3'`), as
+  `ip_plot_limits` does.
+- **Pixels and plot units.** Display pixels are `real(real64)`, ImPlot computes them in single precision (a pixel is
+  a `float`): a round trip through pixels keeps a value to a fraction of a pixel's width in plot units, not to its
+  full precision. On a log axis a value <= 0 has no pixel: ImPlot places it at the smallest positive double.
+- **The box selection.** ImPlot's box: press the right button in the plot and drag; `ip_plot_selection` is `.true.`
+  while the box is drawn, and on the release ImPlot zooms the axes to it (a locked axis keeps its range and the box
+  spans it). A program that takes the box as its own choice (a window of iterations) reads it while
+  `ip_plot_selection` is `.true.` and calls `ip_cancel_selection` on the frame it takes it: the box ends there and the
+  release zooms nothing. A left click while the right button is held cancels the box too (ImPlot's own key).
+- **Order and frames.** Between `ip_begin_plot` and `ip_end_plot`, after the setup: each of them ends the setup, as
+  an item does ([Axes](#axes)). Valid on the frame they are called; the pointer is that of the frame.
+- Statuses: `FIG_ERR_ARGUMENT` for a name that is not an axis of its direction, a NaN coordinate or pixel;
+  `FIG_ERR_STATE` outside a plot (a usage error: `<procedure>: no plot is being declared (...)`), for an axis not set
+  up, from a [task](processes#tasks). `stat` is optional ([Errors](errors#plot-queries-and-marks)).
+- Modes: **window**, the same; **headless**, the pointer is the scripted one (`test_mouse_move`, `test_mouse_button`
+  with `'right'` for a box, [Testing](testing)); **remote**, the browser's pointer. Threads: a task does not draw.
+- What they do not do: report the pointer over an axis (`IsAxisHovered`), over a subplot figure
+  (`IsSubplotsHovered`) or over a legend entry; change the buttons ImPlot uses (`GetInputMap`, raw only).
+
+## Marks in a plot
+
+Marks are drawn in plot units and are not items, except the infinite lines: a tag on an axis, a line across the
+plot, a text at a point, a rectangle the user drags. With the drag tools and annotations of
+[the next section](#error-bars-annotations-and-drag-tools) they mark what a program wants seen.
+
+| Procedure | Notes |
+|---|---|
+| `ip_tag(axis, value [, color] [, text] [, stat])` | A box on an axis at `value` (`TagX`, `TagY`): `axis` one of `'x1'`..`'x3'`, `'y1'`..`'y3'`, set up on this frame; it holds `text` or, without it, the value labelled as the axis labels its ticks (its `format`). `color`: RGBA in [0, 1], the text black or white for contrast; default, the colour of the last item drawn (a tag right after a line marks the line's last value in its colour). Drawn when the plot ends, over the axis's tick labels. |
+| `ip_inf_lines(label, values [, horizontal] [, spec] [, stat])` | Lines across the whole plot area (`PlotInfLines`), vertical at `x = values(i)` or horizontal at `y = values(i)`: an item, with a legend entry; `values` `real(real32)`, `real(real64)`, `integer(int32)` or `integer(int64)`, read in place. |
+| `ip_text(text, x, y [, offset] [, vertical] [, stat])` | A text centred on the plot point `(x, y)` (`PlotText`), in the plot's inlay text colour (`ip_push_style_color('InlayText', ...)` changes it), clipped to the plot area; `offset`: `[dx, dy]` [pixels], x right, y down; `vertical=.true.`: written bottom to top. It takes part in fitting the axes. |
+| `ip_drag_rect(id, xmin, xmax, ymin, ymax [, color] [, stat])` → `logical` | A rectangle the user drags (`DragRect`): by its centre to move it, by a corner or an edge to resize it; the four `real(real64)` values updated in place, `.true.` in the frames it changes. |
+
+<<< @/examples/snippets/cb_plot_window-window.F90{fortran}
+
+<Media name="cb_plot_window" video alt="A lift coefficient oscillating and settling near 0.8 over 600 iterations, an amber rectangle from iteration 300 to 450 across the plot's height, an amber segment at the mean over it and an amber tag 'mean 0.79..' on the y axis. The rectangle is dragged right by its centre: the segment and the tag follow, the mean changes. Then its right edge is dragged further right: the window widens and the mean changes again." caption="docs/examples/src/cb_plot_window.F90: the mean over a window the user drags" />
+
+- **A rectangle of the program's.** `ip_drag_rect` only moves its variables: constraints are the program's (above,
+  the window kept on the data and as high as the plot). ImPlot moves each edge on its own: dragged past the opposite
+  edge, `xmin` exceeds `xmax` while the button is held; FIGURE puts them back in order when it is released. A
+  rectangle of no width and no height cannot be grabbed. Its corners take part in fitting the axes. `id` as the other
+  [drag tools](#error-bars-annotations-and-drag-tools), unique among them in the plot.
+- **Tags** are drawn on the axis whichever axes the items use, after the plot's items, so a tag added late in the
+  plot still lands on its axis. A tag outside the axis's range is not shown. A tag wider than the axis's tick labels
+  widens the axis on the next frame, and the plot area shifts: a readout that follows the pointer writes a long value
+  beside the point instead (`ip_annotation`), as [the readout above](#reading-a-plot) does.
+- **Infinite lines** are not fitted: they take the axes' range, whatever it is.
+- **Order and frames.** Between `ip_begin_plot` and `ip_end_plot`, after the setup (each ends it), on every frame
+  they are to be seen.
+- Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, a colour without 4 components, an offset without 2, a NaN value,
+  coordinate or edge; `FIG_ERR_STATE` outside a plot (`<procedure>: no plot is being declared (...)`), for an axis not
+  set up, from a [task](processes#tasks). `stat` is optional ([Errors](errors#plot-queries-and-marks)).
+- Modes: the same in **window**, **headless** and **remote** mode; the rectangle answers `test_drag` headless and the
+  browser's pointer in remote mode. Threads: a task does not draw.
+- What they do not do: the tag's `round` option and printf-formatted tags (`TagX(x, col, fmt, ...)`: a Fortran program
+  writes the text itself, as the example does); a text in a colour of its own other than through the style; the
+  drag tools' flags (`ImPlotDragToolFlags_*`: no cursors, no fit, delayed, no move, no resize), and `out_clicked`,
+  `out_hovered` of the drag tools.
+
 ## Not bound yet
 
-Other items (stems, stairs, histograms, text, ...) and axis links to program variables, custom scales and tick
-formatters are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)); see the [roadmap](roadmap).
+Axis links to program variables, custom scales and tick formatters, digital plots, pie charts, bubbles and error
+bars along x are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)); see the
+[roadmap](roadmap).

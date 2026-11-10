@@ -1,0 +1,10 @@
+#! program build/docs-examples/bin/cb_plot_readout
+#! from    10
+#! frames  200
+#! poster  95
+# the pointer enters the plot from the left and sweeps right: the readout follows the nearest iteration; then it leaves
+0   move 30 300
+10  move 150 200 20
+40  move 450 330 50
+100 move 760 420 50
+160 move 880 500 20
