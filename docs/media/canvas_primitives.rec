@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    canvas_primitives
+#! from    10
+#! frames  1
+# each drawing primitive in a cell of its own with its call below it; then shapes drawn in plot units inside a plot

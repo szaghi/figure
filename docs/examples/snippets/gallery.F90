@@ -1,6 +1,7 @@
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet"), the layout
-!< metrics (run with "layout_metrics") and the numbers and choices (run with "numbers_and_choices").
+!< metrics (run with "layout_metrics"), the numbers and choices (run with "numbers_and_choices") and the canvas's
+!< drawing primitives (run with "canvas_primitives").
 program gallery
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet").
@@ -10,13 +11,15 @@ program gallery
 !<
 !< "layout_metrics" draws a form and, over it, the lengths FIGURE's layout calls give as dimension lines: the font size
 !< (1 em), the line and frame heights with and without spacing, a width in em, the space left, the window padding, the
-!< item spacing, an indent and a right-aligned group. The lines are drawn through Dear ImGui's draw list of the window
-!< (cimgui's ImDrawList_* functions, declared here: FIGURE has no drawing wrappers yet).
+!< item spacing, an indent and a right-aligned group. The lines are drawn with the canvas's primitives (`ig_draw_line`,
+!< `ig_draw_polygon`, `ig_draw_text`) on the window's layer, in screen pixels.
 !<
 !< "numbers_and_choices" draws every number widget of each kind, scale and shape, and the three ways to choose: radio
 !< buttons, a combo, a list box; each with its call written beside it.
-use, intrinsic :: iso_c_binding, only : c_char, c_float, c_int, c_null_char, c_null_ptr, c_ptr
-use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
+!<
+!< "canvas_primitives" draws each primitive of the canvas in a cell of its own (a canvas), its call written below it,
+!< and the plot layer: a shape in plot units inside a plot.
+use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real32, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, &
                    ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_input, ig_same_line, ig_selectable,          &
                    ig_separator, ig_set_next_window, ig_slider, ig_text, ig_text_colored, ig_text_disabled,              &
@@ -27,46 +30,14 @@ use figure, only : ig_align_begin, ig_align_end, ig_align_text_to_frame_padding,
                    ig_pop_item_width, ig_push_item_width, ig_unindent, item_status_object, ig_dummy, ig_text_size
 use figure, only : ig_combo, ig_drag, ig_drag_range, ig_list_box, ig_radio, ig_separator_text, &
                    ig_set_next_item_width, ig_slider_angle, ig_text_disabled
-use figure_cimgui, only : igGetWindowDrawList, im_vec2
+use figure, only : ig_draw_line, ig_draw_polygon, ig_draw_text, canvas_event_object, ig_begin_group, ig_canvas, &
+                   ig_draw_circle, ig_draw_image, ig_draw_polyline, ig_draw_rect, ig_end_group, texture_object, &
+                   ip_setup_axes_limits
 
 implicit none
-interface
-   subroutine ImDrawList_AddLine(self, p1, p2, col, thickness, flags) bind(C, name='ImDrawList_AddLine')
-   !< ImDrawList::AddLine (cimgui).
-   import :: c_float, c_int, c_ptr, im_vec2
-   implicit none
-   type(c_ptr),    value :: self      !< Draw list.
-   type(im_vec2),  value :: p1        !< From [pixels].
-   type(im_vec2),  value :: p2        !< To [pixels].
-   integer(c_int), value :: col       !< Colour, ImU32 (ABGR).
-   real(c_float),  value :: thickness !< Thickness [pixels].
-   integer(c_int), value :: flags     !< ImDrawFlags.
-   endsubroutine ImDrawList_AddLine
-
-   subroutine ImDrawList_AddTriangleFilled(self, p1, p2, p3, col) bind(C, name='ImDrawList_AddTriangleFilled')
-   !< ImDrawList::AddTriangleFilled (cimgui).
-   import :: c_int, c_ptr, im_vec2
-   implicit none
-   type(c_ptr),    value :: self !< Draw list.
-   type(im_vec2),  value :: p1   !< Corner [pixels].
-   type(im_vec2),  value :: p2   !< Corner [pixels].
-   type(im_vec2),  value :: p3   !< Corner [pixels].
-   integer(c_int), value :: col  !< Colour, ImU32 (ABGR).
-   endsubroutine ImDrawList_AddTriangleFilled
-
-   subroutine ImDrawList_AddText_Vec2(self, pos, col, text_begin, text_end) bind(C, name='ImDrawList_AddText_Vec2')
-   !< ImDrawList::AddText (cimgui).
-   import :: c_char, c_int, c_ptr, im_vec2
-   implicit none
-   type(c_ptr),            value      :: self          !< Draw list.
-   type(im_vec2),          value      :: pos           !< Top left [pixels].
-   integer(c_int),         value      :: col           !< Colour, ImU32 (ABGR).
-   character(kind=c_char), intent(in) :: text_begin(*) !< NUL-terminated text.
-   type(c_ptr),            value      :: text_end      !< Null: up to the NUL.
-   endsubroutine ImDrawList_AddText_Vec2
-endinterface
 integer(int32),    parameter :: N = 200_int32                    !< Points per line.
 integer(int32),    parameter :: NF = 60_int32                    !< Field size.
+real(real64), parameter :: DIM(4) = [240.0_real64, 176.0_real64, 64.0_real64, 255.0_real64] / 255.0_real64 !< Dimension colour.
 integer(int32),    parameter :: NT = 7_int32                     !< Themes.
 character(len=13), parameter :: THEMES(NT) = [character(len=13) :: 'seal', 'seal-light', 'paper', 'high-contrast', &
                                              'dark', 'light', 'classic']
@@ -116,6 +87,14 @@ if (trim(arg) == 'layout_metrics') then
    call app%init('FIGURE: layout metrics', 680_int32, 400_int32)
    do while (app%next_frame())
       call metrics()
+   enddo
+   call app%destroy()
+   stop
+endif
+if (trim(arg) == 'canvas_primitives') then
+   call app%init('FIGURE: canvas primitives', 900_int32, 520_int32)
+   do while (app%next_frame())
+      call canvas_primitives()
    enddo
    call app%destroy()
    stop
@@ -323,6 +302,93 @@ contains
    call ig_end()
    endsubroutine numbers_and_choices
 
+   subroutine canvas_primitives()
+   !< Each drawing primitive in a cell of its own, its call below it; then the plot layer, inside a plot.
+   real(real64), parameter :: CW = 200.0_real64                                  !< A cell's width [pixels].
+   real(real64), parameter :: CH = 110.0_real64                                  !< Its height [pixels].
+   real(real64), parameter :: AMBER(3) = [0.94_real64, 0.69_real64, 0.25_real64] !< The shapes' colour.
+   real(real64), parameter :: TEAL(3) = [0.30_real64, 0.75_real64, 0.70_real64]  !< A second colour.
+   type(canvas_event_object), save :: ev                                         !< A cell.
+   type(texture_object),      save :: tex                                        !< A small image.
+   integer(int8)                   :: px(4, 8, 8)                                !< Its pixels.
+   real(real64)                    :: x0, y0                                     !< A cell's top-left [pixels].
+   real(real64)                    :: t(7)                                       !< Polygon angles [radians].
+   integer(int32)                  :: c                                          !< Cell.
+
+   if (.not. tex%is_initialized()) then
+      do j = 1_int32, 8_int32
+         do i = 1_int32, 8_int32
+            px(:, i, j) = int([30 * i - 128, 30 * j - 128, 100, -1], int8) ! -1: 255, opaque
+         enddo
+      enddo
+      call tex%init(8_int32, 8_int32)
+      call tex%update(px)
+   endif
+   t = [(2.0_real64 * acos(-1.0_real64) * real(i, real64) / 7.0_real64, i = 0_int32, 6_int32)]
+   call ig_set_next_window(10.0_real64, 10.0_real64, 880.0_real64, 500.0_real64)
+   if (ig_begin('Canvas primitives')) then
+      do c = 1_int32, 8_int32
+         if (mod(c - 1_int32, 4_int32) /= 0_int32) call ig_same_line()
+         call ig_begin_group()
+         call ig_canvas('cell'//achar(48 + c), CW, CH, ev)
+         x0 = ev%origin(1)
+         y0 = ev%origin(2)
+         call ig_draw_rect(x0, y0, x0 + CW, y0 + CH, [1.0_real64, 1.0_real64, 1.0_real64, 0.12_real64])
+         select case (c)
+         case (1_int32)
+            call ig_draw_line(x0 + 20.0_real64, y0 + 90.0_real64, x0 + 180.0_real64, y0 + 20.0_real64, AMBER, 3.0_real64)
+            call ig_text_disabled('ig_draw_line(..., thickness=3)')
+         case (2_int32)
+            call ig_draw_rect(x0 + 20.0_real64, y0 + 20.0_real64, x0 + 90.0_real64, y0 + 90.0_real64, AMBER, 2.0_real64)
+            call ig_draw_rect(x0 + 110.0_real64, y0 + 20.0_real64, x0 + 180.0_real64, y0 + 90.0_real64, TEAL, filled=.true.)
+            call ig_text_disabled('ig_draw_rect(..., filled=.true.)')
+         case (3_int32)
+            call ig_draw_circle(x0 + 60.0_real64, y0 + 55.0_real64, 35.0_real64, AMBER, 2.0_real64)
+            call ig_draw_circle(x0 + 140.0_real64, y0 + 55.0_real64, 35.0_real64, TEAL, filled=.true.)
+            call ig_text_disabled('ig_draw_circle(x, y, radius, ...)')
+         case (4_int32)
+            call ig_draw_polyline(x0 + 20.0_real64 + 160.0_real64 * [(real(i, real64) / 40.0_real64, i = 0_int32, 40_int32)], &
+                                  y0 + 55.0_real64 - 35.0_real64 * sin([(real(i, real64) / 40.0_real64, i = 0_int32, &
+                                  40_int32)] * 4.0_real64 * acos(-1.0_real64)), AMBER, 2.0_real64)
+            call ig_text_disabled('ig_draw_polyline(x(:), y(:), ...)')
+         case (5_int32)
+            call ig_draw_polygon(x0 + 60.0_real64 + 40.0_real64 * cos(t), y0 + 55.0_real64 + 40.0_real64 * sin(t), &
+                                 AMBER, 2.0_real64)
+            call ig_draw_polygon(x0 + 140.0_real64 + [-35.0_real64, 35.0_real64, 0.0_real64, 0.0_real64], &
+                                 y0 + [90.0_real64, 90.0_real64, 55.0_real64, 20.0_real64], TEAL, filled=.true.)
+            call ig_text_disabled('ig_draw_polygon(..., filled=.true.)')
+         case (6_int32)
+            call ig_draw_text(x0 + 20.0_real64, y0 + 30.0_real64, 'inlet, u = 1 m/s', AMBER)
+            call ig_draw_text(x0 + 20.0_real64, y0 + 60.0_real64, 'wall'//achar(10)//'no slip', TEAL)
+            call ig_text_disabled('ig_draw_text(x, y, text, ...)')
+         case (7_int32)
+            call ig_draw_image(tex, x0 + 20.0_real64, y0 + 15.0_real64, x0 + 100.0_real64, y0 + 95.0_real64)
+            call ig_draw_image(tex, x0 + 110.0_real64, y0 + 15.0_real64, x0 + 190.0_real64, y0 + 95.0_real64, &
+                               color=[1.0_real64, 0.5_real64, 0.5_real64])
+            call ig_text_disabled('ig_draw_image(tex, ..., color)')
+         case default
+            call ig_draw_line(x0 + 100.0_real64, y0 + 10.0_real64, x0 + 100.0_real64, y0 + 100.0_real64, TEAL)
+            call ig_draw_line(x0 + 10.0_real64, y0 + 55.0_real64, x0 + 190.0_real64, y0 + 55.0_real64, TEAL)
+            call ig_draw_text(x0 + 104.0_real64, y0 + 10.0_real64, 'ev%origin + [cx, cy]', AMBER)
+            call ig_draw_circle(x0 + 100.0_real64, y0 + 55.0_real64, 4.0_real64, AMBER, filled=.true.)
+            call ig_text_disabled('ig_canvas(id, w, h, ev)')
+         endselect
+         call ig_end_group()
+      enddo
+      call ig_separator_text('layer=''plot'': plot units, clipped to the plot')
+      if (ip_begin_plot('##plot layer', 860.0_real64, 170.0_real64)) then
+         call ip_setup_axes('x [m]', 'y [m]')
+         call ip_setup_axes_limits(0.0_real64, 4.0_real64, -0.2_real64, 1.2_real64)
+         call ip_line('u', x * 4.0_real64, 0.5_real64 + 0.4_real64 * sin(6.0_real64 * x))
+         call ig_draw_rect(0.0_real64, 0.0_real64, 4.0_real64, 1.0_real64, TEAL, 2.0_real64, layer='plot')
+         call ig_draw_circle(1.0_real64, 0.5_real64, 12.0_real64, AMBER, filled=.true., layer='plot')
+         call ig_draw_text(1.1_real64, 0.45_real64, 'probe at (1, 0.5) m', AMBER, layer='plot')
+         call ip_end_plot()
+      endif
+   endif
+   call ig_end()
+   endsubroutine canvas_primitives
+
    subroutine note(text)
    !< A note on the widget just drawn, in grey, on its line.
    character(len=*), intent(in) :: text !< What the widget shows.
@@ -334,7 +400,6 @@ contains
    !< The layout metrics over a form: each length FIGURE's layout calls give, as a dimension line, its call written in
    !< a column at the right, level with it. The form leaves an empty row (`ig_dummy`) below each part for its lines.
    type(item_status_object) :: s         !< Status of an item.
-   type(c_ptr)              :: dl        !< The window's draw list.
    character(len=24)        :: name      !< A field.
    real(real64)             :: l1(4)     !< Line 1's rectangle [pixels].
    real(real64)             :: l2(4)     !< Line 2's.
@@ -404,28 +469,27 @@ contains
       s = ig_last_item()
       grp = s%rect
       ! the dimension lines; their calls in the column at xl
-      dl = igGetWindowDrawList()
       xc = l1(1)
       x0 = 10.0_real64
       xv = f1(1) + f1(3) + ig_em(1)
       xl = xv + ig_em(3)
       write(t, '(A,I0,A)') 'ig_font_size() = 1 em = ', nint(ig_font_size()), ' px'
-      call vdim(dl, xv, l1(2), l1(2) + ig_line_height(), xl, l1(2) + 0.5_real64 * l1(4), trim(t))
+      call vdim(xv, l1(2), l1(2) + ig_line_height(), xl, l1(2) + 0.5_real64 * l1(4), trim(t))
       write(t, '(A,I0,A)') 'ig_line_height(spacing=.true.) = ', nint(ig_line_height(spacing=.true.)), ' px'
-      call vdim(dl, xv + ig_em(1), l1(2), l2(2), xl, l2(2) + 0.5_real64 * l2(4), trim(t))
-      call hdim(dl, x0, f1(1), y(1), xl, 'ig_same_line(ig_em(5)): from the window''s edge')
+      call vdim(xv + ig_em(1), l1(2), l2(2), xl, l2(2) + 0.5_real64 * l2(4), trim(t))
+      call hdim(x0, f1(1), y(1), xl, 'ig_same_line(ig_em(5)): from the window''s edge')
       write(t, '(A,I0,A)') 'ig_frame_height() = ', nint(ig_frame_height()), ' px'
-      call vdim(dl, xv, f1(2), f1(2) + f1(4), xl, f1(2) + 0.5_real64 * f1(4), trim(t))
+      call vdim(xv, f1(2), f1(2) + f1(4), xl, f1(2) + 0.5_real64 * f1(4), trim(t))
       write(t, '(A,I0,A)') 'ig_frame_height(spacing=.true.) = ', nint(ig_frame_height(spacing=.true.)), ' px'
-      call vdim(dl, xv + ig_em(1), f1(2), f2(2), xl, f2(2) + 0.5_real64 * f2(4), trim(t))
+      call vdim(xv + ig_em(1), f1(2), f2(2), xl, f2(2) + 0.5_real64 * f2(4), trim(t))
       write(t, '(A,I0,A)') 'ig_push_item_width(ig_em(12)) = ', nint(f1(3)), ' px'
-      call hdim(dl, f1(1), f1(1) + f1(3), y(2), xl, trim(t))
-      call hdim(dl, x0, xc, y(3), xl, 'WindowPadding (style)')
-      call hdim(dl, b1(1) + b1(3), b2(1), y(4), xl, 'ItemSpacing (style), after ig_same_line()')
-      call hdim(dl, xc, ind(1), y(5), xl, 'ig_indent(): IndentSpacing (style)')
+      call hdim(f1(1), f1(1) + f1(3), y(2), xl, trim(t))
+      call hdim(x0, xc, y(3), xl, 'WindowPadding (style)')
+      call hdim(b1(1) + b1(3), b2(1), y(4), xl, 'ItemSpacing (style), after ig_same_line()')
+      call hdim(xc, ind(1), y(5), xl, 'ig_indent(): IndentSpacing (style)')
       write(t, '(A,I0,A)') 'ig_available(w, h): w = ', nint(w), ' px'
-      call hdim(dl, xc, xc + w, y(6) + 0.25_real64 * ig_line_height(), -1.0_real64, trim(t))
-      call hdim(dl, grp(1), grp(1) + grp(3), y(7), -2.0_real64, 'ig_align_begin(''buttons'', ''right'')')
+      call hdim(xc, xc + w, y(6) + 0.25_real64 * ig_line_height(), -1.0_real64, trim(t))
+      call hdim(grp(1), grp(1) + grp(3), y(7), -2.0_real64, 'ig_align_begin(''buttons'', ''right'')')
    endif
    call ig_end()
    endsubroutine metrics
@@ -440,103 +504,73 @@ contains
    ymid = s%rect(2) + 0.5_real64 * s%rect(4)
    endfunction row
 
-   subroutine vdim(dl, x, ya, yb, xl, yl, label)
+   subroutine vdim(x, ya, yb, xl, yl, label)
    !< A vertical dimension line at `x` from `ya` to `yb` [pixels], `label` at (`xl`, `yl`) with a leader to it.
-   type(c_ptr),      intent(in) :: dl    !< Draw list.
    real(real64),     intent(in) :: x     !< Abscissa [pixels].
    real(real64),     intent(in) :: ya    !< From [pixels].
    real(real64),     intent(in) :: yb    !< To [pixels].
    real(real64),     intent(in) :: xl    !< The label's left [pixels].
    real(real64),     intent(in) :: yl    !< Its middle [pixels].
    character(len=*), intent(in) :: label !< Text.
-   integer(c_int)               :: c     !< Colour.
 
-   c = abgr(240_int64, 176_int64, 64_int64, 255_int64)
-   call ImDrawList_AddLine(dl, v2(x, ya), v2(x, yb), c, 1.0_c_float, 0_c_int)
-   call ImDrawList_AddLine(dl, v2(x - 5.0_real64, ya), v2(x + 5.0_real64, ya), c, 1.0_c_float, 0_c_int)
-   call ImDrawList_AddLine(dl, v2(x - 5.0_real64, yb), v2(x + 5.0_real64, yb), c, 1.0_c_float, 0_c_int)
-   call ImDrawList_AddTriangleFilled(dl, v2(x, ya), v2(x - 3.0_real64, ya + 5.0_real64), v2(x + 3.0_real64, ya + 5.0_real64), c)
-   call ImDrawList_AddTriangleFilled(dl, v2(x, yb), v2(x + 3.0_real64, yb - 5.0_real64), v2(x - 3.0_real64, yb - 5.0_real64), c)
-   call leader(dl, x + 4.0_real64, 0.5_real64 * (ya + yb), xl, yl, label)
+   call ig_draw_line(x, ya, x, yb, DIM)
+   call ig_draw_line(x - 5.0_real64, ya, x + 5.0_real64, ya, DIM)
+   call ig_draw_line(x - 5.0_real64, yb, x + 5.0_real64, yb, DIM)
+   call ig_draw_polygon([x, x - 3.0_real64, x + 3.0_real64], [ya, ya + 5.0_real64, ya + 5.0_real64], DIM, filled=.true.)
+   call ig_draw_polygon([x, x + 3.0_real64, x - 3.0_real64], [yb, yb - 5.0_real64, yb - 5.0_real64], DIM, filled=.true.)
+   call leader(x + 4.0_real64, 0.5_real64 * (ya + yb), xl, yl, label)
    endsubroutine vdim
 
-   subroutine hdim(dl, xa, xb, y, xl, label)
+   subroutine hdim(xa, xb, y, xl, label)
    !< A horizontal dimension line at `y` from `xa` to `xb` [pixels]; `label` at `xl` with a leader to it, or, for `xl`
    !< -1, centred above the line, -2, at the left of its start.
-   type(c_ptr),      intent(in) :: dl    !< Draw list.
    real(real64),     intent(in) :: xa    !< From [pixels].
    real(real64),     intent(in) :: xb    !< To [pixels].
    real(real64),     intent(in) :: y     !< Ordinate [pixels].
    real(real64),     intent(in) :: xl    !< The label's left [pixels], or -1, -2.
    character(len=*), intent(in) :: label !< Text.
-   integer(c_int)               :: c     !< Colour.
    real(real64)                 :: tw    !< The label's width [pixels].
    real(real64)                 :: ext(2) !< The label's width and height [pixels].
 
-   c = abgr(240_int64, 176_int64, 64_int64, 255_int64)
-   call ImDrawList_AddLine(dl, v2(xa, y), v2(xb, y), c, 1.0_c_float, 0_c_int)
-   call ImDrawList_AddLine(dl, v2(xa, y - 5.0_real64), v2(xa, y + 5.0_real64), c, 1.0_c_float, 0_c_int)
-   call ImDrawList_AddLine(dl, v2(xb, y - 5.0_real64), v2(xb, y + 5.0_real64), c, 1.0_c_float, 0_c_int)
-   call ImDrawList_AddTriangleFilled(dl, v2(xa, y), v2(xa + 5.0_real64, y + 3.0_real64), v2(xa + 5.0_real64, y - 3.0_real64), c)
-   call ImDrawList_AddTriangleFilled(dl, v2(xb, y), v2(xb - 5.0_real64, y - 3.0_real64), v2(xb - 5.0_real64, y + 3.0_real64), c)
+   call ig_draw_line(xa, y, xb, y, DIM)
+   call ig_draw_line(xa, y - 5.0_real64, xa, y + 5.0_real64, DIM)
+   call ig_draw_line(xb, y - 5.0_real64, xb, y + 5.0_real64, DIM)
+   call ig_draw_polygon([xa, xa + 5.0_real64, xa + 5.0_real64], [y, y + 3.0_real64, y - 3.0_real64], DIM, filled=.true.)
+   call ig_draw_polygon([xb, xb - 5.0_real64, xb - 5.0_real64], [y, y - 3.0_real64, y + 3.0_real64], DIM, filled=.true.)
    if (len(label) == 0) return
    if (xl > 0.0_real64) then
-      call leader(dl, xb + 4.0_real64, y, xl, y, label)
+      call leader(xb + 4.0_real64, y, xl, y, label)
    else
       ext = ig_text_size(label)
       tw = ext(1)
       if (xl < -1.5_real64) then
-         call text_at(dl, xa - tw - 10.0_real64, y, label)
+         call text_at(xa - tw - 10.0_real64, y, label)
       else
-         call text_at(dl, 0.5_real64 * (xa + xb - tw), y - ig_line_height(), label)
+         call text_at(0.5_real64 * (xa + xb - tw), y - ig_line_height(), label)
       endif
    endif
    endsubroutine hdim
 
-   subroutine leader(dl, xa, ya, xl, yl, label)
+   subroutine leader(xa, ya, xl, yl, label)
    !< A thin leader from (`xa`, `ya`) to the label at (`xl`, `yl`), when there is room, and the label.
-   type(c_ptr),      intent(in) :: dl    !< Draw list.
    real(real64),     intent(in) :: xa    !< From [pixels].
    real(real64),     intent(in) :: ya    !< ...
    real(real64),     intent(in) :: xl    !< The label's left [pixels].
    real(real64),     intent(in) :: yl    !< Its middle [pixels].
    character(len=*), intent(in) :: label !< Text.
 
-   if (xl - 6.0_real64 > xa) call ImDrawList_AddLine(dl, v2(xa, ya), v2(xl - 6.0_real64, yl), &
-                                                     abgr(240_int64, 176_int64, 64_int64, 110_int64), 1.0_c_float, 0_c_int)
-   call text_at(dl, xl, yl, label)
+   if (xl - 6.0_real64 > xa) call ig_draw_line(xa, ya, xl - 6.0_real64, yl, [DIM(1:3), 110.0_real64 / 255.0_real64])
+   call text_at(xl, yl, label)
    endsubroutine leader
 
-   subroutine text_at(dl, x, ymid, label)
+   subroutine text_at(x, ymid, label)
    !< `label` from `x`, its middle at `ymid` [pixels].
-   type(c_ptr),      intent(in) :: dl    !< Draw list.
    real(real64),     intent(in) :: x     !< Left [pixels].
    real(real64),     intent(in) :: ymid  !< Middle [pixels].
    character(len=*), intent(in) :: label !< Text.
-   call ImDrawList_AddText_Vec2(dl, v2(x, ymid - 0.5_real64 * ig_line_height()), &
-                                abgr(240_int64, 176_int64, 64_int64, 255_int64), label//c_null_char, c_null_ptr)
+   call ig_draw_text(x, ymid - 0.5_real64 * ig_line_height(), label, DIM)
    endsubroutine text_at
 
-   pure function v2(x, y) result(p)
-   !< A point [pixels].
-   real(real64), intent(in) :: x !< Abscissa.
-   real(real64), intent(in) :: y !< Ordinate.
-   type(im_vec2)            :: p !< Point.
-   p = im_vec2(real(x, c_float), real(y, c_float))
-   endfunction v2
-
-   pure function abgr(r, g, b, a) result(c)
-   !< A colour as Dear ImGui packs it (ImU32: alpha, blue, green, red from the high byte), in a C int.
-   integer(int64), intent(in) :: r !< Red, 0 to 255.
-   integer(int64), intent(in) :: g !< Green.
-   integer(int64), intent(in) :: b !< Blue.
-   integer(int64), intent(in) :: a !< Alpha.
-   integer(c_int)             :: c !< Colour.
-   integer(int64)             :: u !< Unsigned value.
-   u = ior(ishft(a, 24), ior(ishft(b, 16), ior(ishft(g, 8), r)))
-   if (u > 2147483647_int64) u = u - 4294967296_int64 ! the same 32 bits, as a signed C int
-   c = int(u, c_int)
-   endfunction abgr
 
    subroutine swatches(title, maps, left, top, width)
    !< A window of colour bars, one per colormap, each named by its label.

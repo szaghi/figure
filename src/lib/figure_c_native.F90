@@ -45,6 +45,7 @@ public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_
 public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
 public :: fig_plot_annotation, fig_drawn_extent_rgba
 public :: fig_colormap_legend, fig_popup_rect, fig_opened_url
+public :: fig_canvas_event, fig_canvas, fig_draw, fig_cursor_screen_pos, fig_invisible_button, fig_drawn_extent_layer
 
 ! Status codes: must match native/figure_native.h.
 integer(c_int), parameter :: FIG_OK            = 0_c_int !< Success.
@@ -68,6 +69,28 @@ type, bind(C) :: fig_item_status
    integer(c_int) :: double_clicked(3) = 0_c_int      !< Double-clicked over the item, per button.
    real(c_double) :: rect(4) = 0.0_c_double           !< x, y, width, height [pixels].
 endtype fig_item_status
+
+type, bind(C) :: fig_canvas_event
+   !< The event of a canvas in a frame, as native/figure_native.h's `fig_canvas_event`: flags 1 or 0, per button (left,
+   !< right, middle).
+   integer(c_int) :: hovered = 0_c_int           !< The pointer is over it.
+   integer(c_int) :: active = 0_c_int            !< A button pressed over it is held.
+   integer(c_int) :: clicked(3) = 0_c_int        !< Pressed over it on this frame.
+   integer(c_int) :: double_clicked(3) = 0_c_int !< Double-clicked over it on this frame.
+   integer(c_int) :: down(3) = 0_c_int           !< Held, pressed over it.
+   integer(c_int) :: released(3) = 0_c_int       !< Released on this frame, pressed over it.
+   integer(c_int) :: ctrl = 0_c_int              !< Ctrl held.
+   integer(c_int) :: shift = 0_c_int             !< Shift held.
+   integer(c_int) :: alt = 0_c_int               !< Alt held.
+   integer(c_int) :: super = 0_c_int             !< Super (cmd, windows key) held.
+   real(c_double) :: mouse(2) = 0.0_c_double     !< The pointer from the canvas's top-left [pixels].
+   real(c_double) :: drag(2) = 0.0_c_double      !< The pointer from where the held button was pressed [pixels].
+   real(c_double) :: delta(2) = 0.0_c_double     !< The pointer's motion this frame, while held [pixels].
+   real(c_double) :: wheel = 0.0_c_double        !< Vertical wheel steps this frame, while hovered.
+   real(c_double) :: wheel_h = 0.0_c_double      !< Horizontal wheel steps this frame, while hovered.
+   real(c_double) :: origin(2) = 0.0_c_double    !< The canvas's top-left on the screen [pixels].
+   real(c_double) :: size(2) = 0.0_c_double      !< Its width and height [pixels].
+endtype fig_canvas_event
 
 interface
    ! ---- FIGURE glue ---------------------------------------------------------------------------------------------------
@@ -1503,5 +1526,73 @@ interface
    integer(c_int), value               :: buf_len !< Its size [bytes].
    integer(c_int)                      :: length  !< The name's length [bytes] (0: no such name).
    endfunction fig_colormap_name
+
+   ! ---- the canvas (native/figure_canvas.cpp) --------------------------------------------------------------------------
+   function fig_canvas(id, id_len, width, height, texture, ev) result(status) bind(C, name='fig_canvas')
+   !< An area taking the mouse, owning the wheel while hovered, the texture drawn over it; its event of the frame.
+   import :: c_char, c_double, c_int, c_long_long, fig_canvas_event
+   implicit none
+   character(kind=c_char), intent(in)  :: id(*)   !< Id (not NUL-terminated).
+   integer(c_int), value               :: id_len  !< Its length [bytes].
+   real(c_double), value               :: width   !< Width [pixels] (<= 0: the space left plus it).
+   real(c_double), value               :: height  !< Height [pixels] (<= 0: the space left plus it).
+   integer(c_long_long), value         :: texture !< ImTextureID drawn over it (0: none).
+   type(fig_canvas_event), intent(out) :: ev      !< Its event.
+   integer(c_int)                      :: status  !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_canvas
+
+   function fig_draw(kind, layer, x, y, n, rgba, thickness, radius, filled, text, text_len, texture) result(status) &
+      bind(C, name='fig_draw')
+   !< One drawing primitive on a layer: FIG_OK, -1 for the plot layer outside a plot.
+   import :: c_char, c_double, c_int, c_long_long
+   implicit none
+   integer(c_int), value              :: kind      !< 1 line, 2 rect, 3 circle, 4 polyline, 5 polygon, 6 text, 7 image.
+   integer(c_int), value              :: layer     !< 1 window, 2 foreground, 3 background, 4 plot.
+   real(c_double), intent(in)         :: x(*)      !< Abscissae [pixels, or plot units on layer 4].
+   real(c_double), intent(in)         :: y(*)      !< Ordinates [pixels, or plot units on layer 4].
+   integer(c_int), value              :: n         !< Points.
+   real(c_double), intent(in)         :: rgba(4)   !< Colour, RGBA in [0, 1].
+   real(c_double), value              :: thickness !< Line thickness [pixels].
+   real(c_double), value              :: radius    !< A circle's radius [pixels].
+   integer(c_int), value              :: filled    !< 1: filled (a polyline: closed).
+   character(kind=c_char), intent(in) :: text(*)   !< Text (not NUL-terminated).
+   integer(c_int), value              :: text_len  !< Its length [bytes].
+   integer(c_long_long), value        :: texture   !< ImTextureID (an image).
+   integer(c_int)                     :: status    !< Status.
+   endfunction fig_draw
+
+   subroutine fig_cursor_screen_pos(x, y) bind(C, name='fig_cursor_screen_pos')
+   !< Where the next item goes, on the screen (GetCursorScreenPos).
+   import :: c_double
+   implicit none
+   real(c_double), intent(out) :: x !< Abscissa [pixels].
+   real(c_double), intent(out) :: y !< Ordinate [pixels].
+   endsubroutine fig_cursor_screen_pos
+
+   function fig_invisible_button(id, id_len, width, height, pressed) result(status) bind(C, name='fig_invisible_button')
+   !< An invisible button (InvisibleButton).
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: id(*)   !< Id (not NUL-terminated).
+   integer(c_int), value               :: id_len  !< Its length [bytes].
+   real(c_double), value               :: width   !< Width [pixels] (<= 0: the space left plus it).
+   real(c_double), value               :: height  !< Height [pixels] (<= 0: the space left plus it).
+   integer(c_int),         intent(out) :: pressed !< 1: clicked on this frame.
+   integer(c_int)                      :: status  !< Status.
+   endfunction fig_invisible_button
+
+   function fig_drawn_extent_layer(rgba, layer, rect, found, vertices) result(status) &
+      bind(C, name='fig_drawn_extent_layer')
+   !< The extent and number of the vertices drawn so far in an RGBA colour on a layer (1 window, 2 foreground,
+   !< 3 background).
+   import :: c_float, c_int
+   implicit none
+   real(c_float),  intent(in)  :: rgba(4) !< Colour, RGBA in [0, 1].
+   integer(c_int), value       :: layer   !< Layer.
+   real(c_float),  intent(out) :: rect(4) !< xmin, ymin, xmax, ymax [pixels].
+   integer(c_int), intent(out) :: found    !< 1: something was drawn in it.
+   integer(c_int), intent(out) :: vertices !< Vertices in it.
+   integer(c_int)              :: status   !< Status.
+   endfunction fig_drawn_extent_layer
 endinterface
 endmodule figure_c_native

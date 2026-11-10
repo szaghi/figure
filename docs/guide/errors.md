@@ -112,6 +112,27 @@ assertion: the program aborted inside `imgui_tables.cpp`, naming no Fortran call
 FIGURE refuses it first: `.false.`, `FIG_ERR_ARGUMENT`, and `error stop` when the call has no `stat`.
 :::
 
+### Canvas
+
+The canvas and its primitives ([Canvas](canvas)) check their arguments on the Fortran side, before Dear ImGui sees
+them: a wrong one is `FIG_ERR_ARGUMENT`, nothing drawn (absent `stat`, `error stop` with the message). `<p>` is the
+procedure. The plot layer outside a plot is a usage error, `FIG_ERR_STATE` (absent `stat`, reported by the next
+`app%next_frame`, or stopping at once in mode `'abort'`).
+
+| Failure | Status | Message |
+|---|---|---|
+| an unknown `layer` | `FIG_ERR_ARGUMENT` | `<p>: unknown layer '<layer>' ('window', 'foreground', 'background' or 'plot')` |
+| `color` not of 3 or 4 components | `FIG_ERR_ARGUMENT` | `<p>: color has 3 or 4 components` |
+| a component of `color` outside [0, 1] or NaN | `FIG_ERR_ARGUMENT` | `<p>: color components are in [0, 1]` |
+| `x` and `y` of different sizes | `FIG_ERR_ARGUMENT` | `<p>: x has <n> points, y <m>` |
+| too few points (2 for a polyline, 3 for a polygon) | `FIG_ERR_ARGUMENT` | `<p>: <n> points, at least <m> needed` |
+| a coordinate NaN, infinite or beyond single precision | `FIG_ERR_ARGUMENT` | `<p>: x must be finite and within single precision` (`y`) |
+| `thickness` not above 0, NaN or infinite | `FIG_ERR_ARGUMENT` | `<p>: thickness is not a finite length above 0` |
+| `radius` below 0, NaN or infinite | `FIG_ERR_ARGUMENT` | `ig_draw_circle: radius is not a finite length >= 0` |
+| a texture not initialized | `FIG_ERR_ARGUMENT` | `ig_draw_image: the texture is not initialized` (`ig_canvas: ...`) |
+| a canvas or invisible button size NaN or infinite | `FIG_ERR_ARGUMENT` | `<p>: width and height must be finite and within single precision` |
+| `layer='plot'` outside a plot | `FIG_ERR_STATE` | `<p>: layer 'plot' outside a plot (call it between a true ip_begin_plot and ip_end_plot)` |
+
 ## Pairing and frames
 
 Dear ImGui's begin/end pairs are the likeliest bug of a FIGURE program: an `ig_end_table` where an `ig_tree_pop`

@@ -4,6 +4,7 @@ module figure
 !<
 !< Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui),
 !< numbers and choices (figure_numbers: fields, drag boxes and sliders of any kind, vectors, radio buttons, list boxes),
+!< a canvas and drawing primitives (figure_canvas: an area taking the mouse, lines, shapes, text and images on a layer),
 !< menus, popups and shortcuts (figure_menu), groups of widgets (figure_group: child regions, collapsing headers, tabs,
 !< tables, trees, id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style),
 !< the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the
@@ -95,6 +96,8 @@ use figure_implot, only : ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_
                           ip_contour_lines, ip_contour_levels, ip_colormap_legend
 use figure_imgui, only : ig_color_edit
 use figure_numbers, only : ig_input, ig_drag, ig_slider, ig_slider_angle, ig_drag_range, ig_radio, ig_list_box
+use figure_canvas, only : canvas_event_object, ig_canvas, ig_cursor_screen_pos, ig_invisible_button, ig_draw_line, &
+                          ig_draw_rect, ig_draw_circle, ig_draw_polyline, ig_draw_polygon, ig_draw_text, ig_draw_image
 use figure_style, only : ig_pop_style_color, ig_pop_style_var, ig_push_style_color, ig_push_style_var,        &
                          ip_pop_style_color, ip_pop_style_var, ip_push_style_color, ip_push_style_var,        &
                          ig_get_style_color, ig_get_style_var, ig_pop_font, ig_push_font, ig_set_style_color,    &
@@ -112,6 +115,8 @@ public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEP
 public :: ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
 public :: ig_drag, ig_slider_angle, ig_drag_range, ig_radio, ig_list_box
+public :: canvas_event_object, ig_canvas, ig_cursor_screen_pos, ig_invisible_button
+public :: ig_draw_line, ig_draw_rect, ig_draw_circle, ig_draw_polyline, ig_draw_polygon, ig_draw_text, ig_draw_image
 public :: ig_input_text, ig_set_next_item_width, ig_combo, ig_tooltip
 public :: ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored, ig_begin_child, ig_end_child
 public :: ig_collapsing_header, ig_begin_tab_bar, ig_end_tab_bar, ig_begin_tab, ig_end_tab, ig_push_id, ig_pop_id

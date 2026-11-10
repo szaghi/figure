@@ -27,7 +27,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_but
                             fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
                             fig_frame_state, fig_notification_rect, fig_notification_alpha, fig_drawn_extent, &
                             fig_file_browser_get, fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
-                            fig_drawn_extent_rgba, fig_popup_rect, fig_opened_url
+                            fig_popup_rect, fig_opened_url, fig_drawn_extent_layer
 use figure_imgui, only : ig_item_rect
 
 implicit none
@@ -233,10 +233,13 @@ contains
    if (present(found)) found = f == 1_c_int
    endsubroutine test_drawn_extent_name
 
-   subroutine test_drawn_extent_rgba(color, xmin, ymin, xmax, ymax, found, stat)
+   subroutine test_drawn_extent_rgba(color, xmin, ymin, xmax, ymax, found, stat, layer, vertices)
    !< The extent [pixels] of what was drawn so far in the current window in the RGBA colour `color` (as an item drawn
    !< with `ip_spec(line_color=color)`): call it inside the window, after the item (after `ip_end_plot` for what a plot
    !< draws at its end: annotations). Antialiased edges are drawn in other colours: the extent is that of the lines' cores.
+   !< With `layer` `'foreground'` or `'background'`, what was drawn so far on that layer of the window's viewport (the
+   !< `ig_draw_*` primitives' layers; `'window'`, the default, and `'plot'` are the window's own draw list).
+   !< `vertices`: how many vertices have the colour (a filled shape has fewer than its outline: one per corner).
    real(real64),   intent(in)            :: color(4) !< Colour, RGBA in [0, 1].
    real(real64),   intent(out)           :: xmin     !< Left.
    real(real64),   intent(out)           :: ymin     !< Top.
@@ -244,12 +247,22 @@ contains
    real(real64),   intent(out)           :: ymax     !< Bottom.
    logical,        intent(out), optional :: found    !< Something was drawn in it.
    integer(int32), intent(out), optional :: stat     !< Status: `FIG_ERR_STATE` outside a window.
+   character(len=*), intent(in), optional :: layer   !< `'window'` (default), `'plot'`, `'foreground'`, `'background'`.
+   integer(int32), intent(out), optional :: vertices !< Vertices drawn in the colour.
+   integer(c_int)                        :: nv       !< Native count.
    real(c_float)                         :: r(4)     !< Native rectangle.
    integer(c_int)                        :: f        !< Found flag.
+   integer(c_int)                        :: l        !< Layer code.
 
    r = 0.0_c_float
    f = 0_c_int
-   call figure_check(fig_drawn_extent_rgba(real(color, c_float), r, f), stat)
+   l = 1_c_int
+   if (present(layer)) then
+      if (layer == 'foreground') l = 2_c_int
+      if (layer == 'background') l = 3_c_int
+   endif
+   call figure_check(fig_drawn_extent_layer(real(color, c_float), l, r, f, nv), stat)
+   if (present(vertices)) vertices = int(nv, int32)
    xmin = real(r(1), real64)
    ymin = real(r(2), real64)
    xmax = real(r(3), real64)

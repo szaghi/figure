@@ -209,6 +209,24 @@ Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots), [Co
 
 Details: [Heatmaps and images](images).
 
+## Canvas: `ig_canvas`, `ig_draw_*`
+
+| Procedure | Purpose |
+|---|---|
+| `ig_canvas(id, width, height, ev [, texture] [, stat])` | an area taking the mouse; `ev` a `canvas_event_object`: hovered, active, clicked, double-clicked, down and released per button, the pointer in canvas pixels, the drag, the wheel (owned while hovered), the modifiers, the canvas's origin and size ([Canvas](canvas#the-canvas)) |
+| `ig_draw_line(x1, y1, x2, y2, color [, thickness] [, layer] [, stat])` | a segment ([Primitives](canvas#primitives)) |
+| `ig_draw_rect(x1, y1, x2, y2, color [, thickness] [, filled] [, layer] [, stat])` | a rectangle, outline or filled ([Primitives](canvas#primitives)) |
+| `ig_draw_circle(x, y, radius, color [, thickness] [, filled] [, layer] [, stat])` | a circle, its radius in pixels ([Primitives](canvas#primitives)) |
+| `ig_draw_polyline(x, y, color [, thickness] [, closed] [, layer] [, stat])` | a polyline through the arrays `x(:)`, `y(:)` ([Primitives](canvas#primitives)) |
+| `ig_draw_polygon(x, y, color [, thickness] [, filled] [, layer] [, stat])` | a polygon, outline or filled, convex or not ([Primitives](canvas#primitives)) |
+| `ig_draw_text(x, y, text, color [, layer] [, stat])` | text, its top-left at the point ([Primitives](canvas#primitives)) |
+| `ig_draw_image(texture, x1, y1, x2, y2 [, color] [, layer] [, stat])` | a texture stretched over a rectangle, tinted by `color` ([Primitives](canvas#primitives)) |
+| `ig_cursor_screen_pos(x, y)` | where the next item goes, in screen pixels ([Coordinates](canvas#coordinates)) |
+| `ig_invisible_button(id, width, height [, stat])` → `logical` | a button that draws nothing: a hot zone over a drawing ([The canvas](canvas#the-canvas)) |
+
+`layer` is `'window'` (default), `'foreground'`, `'background'` or `'plot'` (plot units, inside a plot). Details:
+[Canvas](canvas).
+
 ## Processes: `process_object`, `log_view_object`
 
 | Procedure | Purpose |
@@ -269,7 +287,7 @@ Details: [3-D views](view3d).
 | `test_frame_state(minimized, maximized [, stat])` | the window minimized, maximized (headless: as the bar's buttons recorded it) |
 | `test_system_theme(theme [, stat])` | the system's light or dark setting changes (`'light'`, `'dark'`, `'system'`), at the next frame: tests of `palette='auto'` ([styles](styles#follow-the-system-s-light-or-dark-setting)) |
 | `test_notification_rect(index, x0, y0, x1, y1 [, found] [, alpha])` | a notification shown in the last frame, 1 the newest, and the alpha it was drawn with ([notifications](frame-loop#notifications)) |
-| `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat])` | the extent drawn so far in the current window in a style colour by name (`'PlotHistogram'`: a progress bar's fill) or an RGBA colour (an item's `ip_spec` colour) |
+| `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat] [, layer] [, vertices])` | the extent drawn so far in the current window in a style colour by name (`'PlotHistogram'`: a progress bar's fill) or an RGBA colour (an item's `ip_spec` colour); with `layer`, the foreground or background layer; `vertices`, how many ([Canvas](canvas#testing-a-canvas)) |
 | `test_file_browser(shown [, folder] [, entries] [, error] [, asking] [, path_field] [, name_field] [, recent])` | the file browser in front: its folder, the entries in the order shown, the error shown, the replace question, the fields, the recent folders ([file browser](frame-loop#figure-s-file-browser)) |
 | `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser in the last frame (`'entry:NAME'`, `'ok'`, `'cancel'`, `'path'`, ...), to click it |
 | `test_settings_file(path [, stat])` | the file keeping the browser's recent folders, instead of FIGURE's own (`''`: memory only) |

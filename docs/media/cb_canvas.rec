@@ -1,0 +1,16 @@
+#! program build/docs-examples/bin/cb_canvas
+#! frames  200
+#! poster  118
+# The pointer rests on the top wall: drawn thicker, a tooltip names it and its condition. A click on the cylinder's
+# edge selects it; "slip wall" is chosen for it, and its colour and word change. A click on the inlet selects it.
+0   move 600 300
+10  move 300 74 15
+45  move 209 139 15
+70  down
+72  up
+85  move 383 253 20
+110 down
+112 up
+130 move 58 139 20
+160 down
+162 up

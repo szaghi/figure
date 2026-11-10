@@ -1,0 +1,13 @@
+$ ./cb_canvas --check
+the pointer 2 pixels below the top wall:
+  pointer in the canvas   433.0    36.0 px
+  hovered  top
+  selected none
+a click on the cylinder's edge:
+  pointer in the canvas   190.0   100.0 px
+  hovered  cylinder
+  selected cylinder, no-slip wall
+"slip wall" chosen:
+  pointer in the canvas   365.0   214.0 px
+  hovered  none
+  selected cylinder, slip wall

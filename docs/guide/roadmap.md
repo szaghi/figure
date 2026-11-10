@@ -266,6 +266,13 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   or vector, with checked formats (an `int64`'s written as an `int32`'s), `scale='log'` and `clamp`; `ig_input`'s
   `enter_returns` and `read_only`; `ig_slider_angle` (radians shown in degrees), `ig_drag_range`; `ig_radio` and
   `ig_list_box` (clipped, a height in pixels) ([Numbers](widgets#numbers), [Choices](widgets#choices)): done.
+- **A canvas and drawing primitives:** `ig_canvas(id, width, height, ev [, texture])` places an area that takes the
+  mouse and owns the wheel while hovered; its `canvas_event_object` gives hovered, active, clicks, double clicks,
+  presses and releases per button, the pointer in canvas pixels, the drag, the wheel and the modifiers;
+  `ig_draw_line`, `ig_draw_rect`, `ig_draw_circle`, `ig_draw_polyline`, `ig_draw_polygon`, `ig_draw_text` and
+  `ig_draw_image` draw on the window, the foreground, the background or inside a plot in plot units;
+  `ig_cursor_screen_pos`, `ig_invisible_button`; `test_drawn_extent` looks on a layer and counts vertices
+  ([Canvas](canvas)): done.
 
 ## Next
 

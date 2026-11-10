@@ -361,6 +361,29 @@ int    fig_colormap_name(int index, char *buf, int buf_len);
 int    fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, double vmax, int levels, int horizontal,
                            float width, float height, const char *fmt, int fmt_len);
 
+/* The canvas (figure_canvas.cpp, src/lib/figure_canvas.F90). fig_canvas: an invisible button of width x height
+ * pixels (<= 0: the space left plus that) taking the three mouse buttons, owning the wheel while hovered, with the
+ * texture (nonzero ImTextureID) drawn over it; the event of the frame in *ev: flags 1 or 0, per button (0 left,
+ * 1 right, 2 middle); mouse: the pointer from the canvas's top-left [pixels]; drag: the pointer from where the held
+ * button was pressed, while held and on its release; delta: its motion this frame while held; wheel and wheel_h:
+ * this frame's steps while hovered; origin, size: the canvas on the screen [pixels]. fig_draw: one primitive (kind 1
+ * line, 2 rect, 3 circle, 4 polyline, 5 polygon, 6 text, 7 image) of n points (x, y) on a layer (1 the window's draw
+ * list, 2 foreground, 3 background, 4 the current plot's, x and y in plot units, clipped to the plot), colour rgba in
+ * [0, 1]; filled: a closed polyline, a filled rect, circle or polygon; -1 outside a plot (layer 4). */
+typedef struct fig_canvas_event {
+   int    hovered, active, clicked[3], double_clicked[3], down[3], released[3], ctrl, shift, alt, super;
+   double mouse[2], drag[2], delta[2], wheel, wheel_h, origin[2], size[2];
+} fig_canvas_event;
+int    fig_canvas(const char *id, int id_len, double width, double height, unsigned long long texture,
+                  fig_canvas_event *ev);
+int    fig_draw(int kind, int layer, const double *x, const double *y, int n, const double *rgba, double thickness,
+                double radius, int filled, const char *text, int text_len, unsigned long long texture);
+void   fig_cursor_screen_pos(double *x, double *y);
+int    fig_invisible_button(const char *id, int id_len, double width, double height, int *pressed);
+/* Tests: the extent of the vertices drawn so far in an RGBA colour in the current window's draw list (layer 1), the
+ * foreground (2) or the background (3) one of its viewport, and their number. */
+int    fig_drawn_extent_layer(const float *rgba, int layer, float *rect, int *found, int *vertices);
+
 /* The cimgui/cimplot functions passing structs by value are wrapped in figure_glue_generated.cpp (generated). */
 
 #ifdef __cplusplus

@@ -58,6 +58,7 @@ const docs = [
       { text: 'Heatmaps and images',     link: '/guide/images' },
       { text: 'Colormaps',               link: '/guide/colormaps' },
       { text: '3-D views',               link: '/guide/view3d' },
+      { text: 'Canvas',                  link: '/guide/canvas' },
       { text: 'Processes and tasks',     link: '/guide/processes' },
       { text: 'Remote UI',               link: '/guide/remote' },
       { text: 'Performance',             link: '/guide/performance' },
@@ -111,7 +112,7 @@ export default withMermaid({
       {
         text: 'Reference',
         link: '/guide/features',
-        activeMatch: '^/guide/(features|frame-loop|widgets|menus|docking|styles|plots|images|view3d|remote|performance|errors|testing|capture|architecture|raw-bindings|known-issues)',
+        activeMatch: '^/guide/(features|frame-loop|widgets|menus|docking|styles|plots|images|view3d|canvas|remote|performance|errors|testing|capture|architecture|raw-bindings|known-issues)',
       },
       { text: 'API', link: '/api/' },
       {
