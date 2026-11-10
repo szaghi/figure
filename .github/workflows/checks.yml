@@ -1,0 +1,58 @@
+# FIGURE's own checks, beside the FoBiS scaffold's ci.yml (kept verbatim, so that `fobis scaffold sync` updates it):
+#   - docs: the documentation's checks (#6 §4.10): the feature map, the doc comments, an example in every section,
+#     the docs' version strings, the name map, the media sizes; every example compiled, the headless ones run;
+#   - tsan: ThreadSanitizer on the calls a task may make (quit, request_frames, wake, ...): scripts/tsan_check.sh.
+name: Checks
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["**"]   # a release tag points at a commit already checked on its branch push
+  pull_request:
+
+# a newer push to the same ref supersedes the running checks
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup build environment
+      uses: ./.github/actions/setup-build-env
+
+    # the examples link against lib/libfigure_native.a and lib/libSDL3.a (docs/examples/build.sh)
+    - name: Native layer
+      run: scripts/build_native.sh
+
+    - name: Docs checks
+      run: |
+        python3 scripts/check_docs.py --names --media
+        bash docs/examples/build.sh
+
+  tsan:
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup build environment
+      uses: ./.github/actions/setup-build-env
+
+    # ThreadSanitizer's shadow memory does not fit the randomized layout of the runners' kernels (32 bits)
+    - name: Narrow address space randomization
+      run: sudo sysctl vm.mmap_rnd_bits=28
+
+    - name: ThreadSanitizer check
+      run: CC=gcc CXX=g++-14 scripts/tsan_check.sh
