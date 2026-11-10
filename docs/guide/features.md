@@ -74,7 +74,8 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_menu_item(label [, shortcut] [, selected] [, enabled])` → `logical` | a menu item; `.true.` when picked; a check mark with `selected` |
 | `ig_open_popup(id)`, `ig_close_current_popup()` | open a popup (once, on an event); close the one being declared |
 | `ig_begin_popup(id)` → `logical`, `ig_begin_popup_modal(title [, open])` → `logical`, `ig_end_popup()` | a popup, a modal dialog; end only after a true begin |
-| `ig_shortcut(keys [, stat])` → `logical` | a key chord such as `'ctrl+s'` pressed this frame (cmd on macOS), once per press |
+| `ig_shortcut(keys [, scope] [, repeat] [, stat])` → `logical` | a key chord such as `'ctrl+s'` pressed this frame (cmd on macOS), routed: `'focused'` (default) only in the focused window, `'global'`, `'item'` ([Shortcuts](menus#shortcuts)) |
+| `ig_set_next_item_shortcut(keys [, scope] [, stat])` | the next item owns a chord: the chord presses it, its tooltip shows it ([Shortcuts](menus#a-button-that-owns-a-key)) |
 | `ig_tooltip(text)` | a tooltip on the previous widget, shown while the pointer rests on it |
 | `ig_set_clipboard(text [, stat])`, `ig_get_clipboard()` → `character` | put a text on the clipboard; read it (window: the system's; headless: the program's own; remote: the program's, joined to the browser's where it allows it) ([Clipboard](widgets#clipboard)) |
 | `ig_collapsing_header(label [, default_open])` → `logical` | a header that shows or hides what follows; `.true.` while open (no end call) |

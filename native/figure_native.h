@@ -187,8 +187,11 @@ void  *fig_clipper_new(void);
 void   fig_clipper_begin(void *clipper, int count, double item_height);
 int    fig_clipper_step(void *clipper, int *first, int *last);
 void   fig_clipper_delete(void *clipper);
-/* A key chord ("ctrl+s": modifiers and one key, by the names of fig_input_key, joined by '+'). */
-int    fig_key_chord(const char *keys, int keys_len, int *chord);
+/* A routed shortcut: keys "ctrl+s" (modifiers and one key, by the names of fig_input_key, joined by '+'), scope
+ * "focused", "global" or "item"; *pressed 1 on the frame it fires. */
+int    fig_shortcut(const char *keys, int keys_len, const char *scope, int scope_len, int repeat, int *pressed);
+/* The next item owns the chord (scope "focused" or "global"): the chord presses it, and its tooltip shows it. */
+int    fig_set_next_item_shortcut(const char *keys, int keys_len, const char *scope, int scope_len);
 /* A text field over a caller-owned NUL-terminated buffer of buf_size bytes (InputText without a callback); 1 when
  * edited this frame. hint_len 0: no hint. */
 int    fig_widget_input_text(const char *label, int label_len, const char *hint, int hint_len, char *buf, int buf_size,

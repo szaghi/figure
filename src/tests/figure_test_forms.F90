@@ -8,6 +8,11 @@ program figure_test_forms
 !< Colour editing: a component field dragged; the swatch clicked opens the picker, and a click in its saturation-value
 !< square near the top-left corner (white) picks a near-white colour, the alpha kept; an RGB colour keeps 3 components;
 !< a colour of 2 components refused.
+!<
+!< Shortcuts (routed): two windows bind ctrl+s, only the focused one's fires; a 'global' chord fires whichever has
+!< the focus; a text field being edited holds 'down' from its window and gives 'up' to its 'item' call; a chord with
+!< `repeat` fires again while held, one without fires once; a button owning ctrl+r is pressed by it in its window
+!< only; a call outside every window fires unless a focused window routes the same chord.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, ig_input_text, ig_item_rect,   &
                    ig_set_next_item_width, ig_set_next_window, ig_tooltip, ImGuiInputTextFlags_CharsNoBlank,   &
@@ -15,7 +20,7 @@ use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, 
                    ig_end_tab, ig_end_tab_bar, ig_pop_id, ig_push_id, ig_text, ig_begin_table, ig_end_table,   &
                    ig_table_headers_row, ig_table_next_column, ig_table_next_row, ig_table_set_column,       &
                    ig_table_setup_column, ig_set_next_item_open, ig_tree_node, ig_tree_pop
-use figure, only : ig_color_edit, FIG_ERR_ARGUMENT, FIG_OK
+use figure, only : ig_color_edit, ig_set_next_item_shortcut, ig_shortcut, FIG_ERR_ARGUMENT, FIG_OK
 use figure_testing, only : test_click, test_drag, test_item_center, test_key, test_mouse_move, test_popup_rect, test_type, &
                            test_window_rect
 
@@ -23,7 +28,7 @@ implicit none
 integer(int32), parameter :: FRAMES = 400_int32 !< Frames run.
 integer(int32), parameter :: TIP_FRAME = 230_int32 !< Frame on which the tooltip is looked for.
 type(app_object)          :: app                !< Application.
-logical                   :: test_passed(30)    !< Per-check outcome.
+logical                   :: test_passed(41)    !< Per-check outcome.
 character(len=16)         :: grid_file          !< A text field.
 character(len=4)          :: short              !< A text field of capacity 4.
 character(len=12)         :: no_blank           !< A text field that refuses blanks.
@@ -88,6 +93,15 @@ real(real64)              :: popup(4)           !< The picker's rectangle.
 logical                   :: popup_open(2)      !< The picker: open after the swatch's click, closed at the end.
 integer(int32)            :: colour_changes     !< Frames on which the editor reported a change.
 integer(int32)            :: s_colour(3)        !< Statuses of the colour editors.
+integer(int32)            :: saves(3)           !< ctrl+s fired: in Left, in Right, outside every window.
+integer(int32)            :: saves_at(3, 3)     !< `saves` after Left's focus, Right's focus, the background's.
+integer(int32)            :: globals            !< f6 ('global', in Left) fired.
+integer(int32)            :: tops               !< f9 (default scope, outside every window) fired.
+integer(int32)            :: downs(3)           !< 'down' (in Left) fired: no item active, field edited, end.
+integer(int32)            :: item_ups(2)        !< 'up' ('item', after the field): field edited, then not.
+integer(int32)            :: repeats(2)         !< f7 held with repeat, f8 held without.
+integer(int32)            :: runs(2)            !< The button owning ctrl+r pressed: Right focused, then Left.
+integer(int32)            :: s_short(2)         !< Statuses: an unknown scope, 'item' for the next item.
 
 grid_file = 'CC/cc'
 short = ''
@@ -313,6 +327,7 @@ do frame = 1_int32, FRAMES
    endselect
 enddo
 call colour_frames()
+call shortcut_frames()
 call app%destroy()
 
 test_passed(1) = grid_file == 'MESH/grid' .and. edits(1) > 0_int32            ! typed text, written back
@@ -349,6 +364,18 @@ test_passed(28) = popup_open(1) .and. .not. popup_open(2) .and. all(tint(1:3) > 
 test_passed(29) = colour_changes > 0_int32 .and. all(s_colour(1:2) == FIG_OK) .and. &      ! an untouched colour keeps
                   all(rgb == [0.1_real64, 0.2_real64, 0.3_real64])                        ! its double precision bits
 test_passed(30) = s_colour(3) == FIG_ERR_ARGUMENT                                         ! 2 components refused
+test_passed(31) = all(saves_at(1:2, 1) == [1_int32, 0_int32])                ! Left focused: only Left's ctrl+s
+test_passed(32) = all(saves_at(1:2, 2) == [1_int32, 1_int32])                ! Right focused: only Right's
+test_passed(33) = saves_at(3, 2) == 0_int32 .and. saves_at(3, 3) == 1_int32 .and. & ! outside every window: only
+                  all(saves_at(1:2, 3) == [1_int32, 1_int32])                ! when no window routes it
+test_passed(34) = globals == 1_int32                                         ! 'global' in Left, Right focused
+test_passed(35) = tops == 1_int32                                            ! default outside windows: fires
+test_passed(36) = all(downs == [1_int32, 1_int32, 1_int32])                  ! not while the field is edited
+test_passed(37) = all(item_ups == [1_int32, 1_int32])                        ! 'item': only while edited
+test_passed(38) = repeats(1) >= 3_int32 .and. repeats(2) == 1_int32          ! repeat, once without
+test_passed(39) = all(runs == [0_int32, 1_int32])                            ! the button owns ctrl+r, focused
+test_passed(40) = s_short(1) == FIG_ERR_ARGUMENT                             ! an unknown scope refused
+test_passed(41) = s_short(2) == FIG_ERR_ARGUMENT                             ! 'item' refused for the next item
 
 write(output_unit, '(A,*(L2))') 'figure_test_forms checks:', test_passed
 if (.not. all(test_passed)) then
@@ -366,6 +393,9 @@ if (.not. all(test_passed)) then
                                           tip_after
    write(output_unit, '(A,4F7.3,A,4F7.3,A,2L2,A,4F7.1,A,I0,A,3I3)') 'colour dragged', tint_dragged, ', picked', tint, &
          ', picker open', popup_open, ', picker', popup, ', changes ', colour_changes, ', statuses', s_colour
+   write(output_unit, '(A,9(I0,1X),A,I0,A,I0,A,3(I0,1X),A,2(I0,1X),A,2(I0,1X),A,2(I0,1X),A,2(I0,1X))') &
+         'shortcuts: saves', saves_at, ', globals ', globals, ', tops ', tops, ', downs ', downs, ', item ups ', &
+         item_ups, ', repeats ', repeats, ', runs ', runs, ', statuses ', s_short
 endif
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
@@ -413,6 +443,111 @@ contains
       endselect
    enddo
    endsubroutine colour_frames
+
+   subroutine shortcut_frames()
+   !< Two windows, Left and Right, both binding ctrl+s; Left also has a text field, 'down', 'up' for the field
+   !< ('item'), f6 ('global'), f7 (repeat), f8, and a button owning ctrl+r; f9 and ctrl+s outside every window.
+   character(len=16) :: note     !< Left's text field.
+   real(real64)      :: field(2) !< Centre of the field.
+   integer(int32)    :: f        !< Frame.
+
+   note = 'x'
+   field = 0.0_real64
+   saves = 0_int32
+   saves_at = -1_int32
+   globals = 0_int32
+   tops = 0_int32
+   downs = 0_int32
+   item_ups = 0_int32
+   repeats = 0_int32
+   runs = 0_int32
+   s_short = FIG_OK
+   do f = 1_int32, 170_int32
+      if (.not. app%next_frame()) exit
+      call ig_set_next_window(20.0_real64, 20.0_real64, 300.0_real64, 200.0_real64, always=.true.)
+      if (ig_begin('Left')) then
+         if (ig_input_text('note', note)) continue
+         call test_item_center(field(1), field(2))
+         if (ig_shortcut('up', scope='item')) item_ups(1) = item_ups(1) + 1_int32
+         if (ig_shortcut('ctrl+s')) saves(1) = saves(1) + 1_int32
+         if (ig_shortcut('down')) downs(1) = downs(1) + 1_int32
+         if (ig_shortcut('f6', scope='global')) globals = globals + 1_int32
+         if (ig_shortcut('f7', repeat=.true.)) repeats(1) = repeats(1) + 1_int32
+         if (ig_shortcut('f8')) repeats(2) = repeats(2) + 1_int32
+         call ig_set_next_item_shortcut('ctrl+r')
+         if (ig_button('Run')) runs(2) = runs(2) + 1_int32
+         if (f == 2_int32) then
+            if (ig_shortcut('f8', scope='window', stat=s_short(1))) continue
+            call ig_set_next_item_shortcut('ctrl+r', scope='item', stat=s_short(2))
+         endif
+      endif
+      call ig_end()
+      call ig_set_next_window(400.0_real64, 20.0_real64, 300.0_real64, 200.0_real64, always=.true.)
+      if (ig_begin('Right')) then
+         call ig_text('right')
+         if (ig_shortcut('ctrl+s')) saves(2) = saves(2) + 1_int32
+      endif
+      call ig_end()
+      if (ig_shortcut('ctrl+s')) saves(3) = saves(3) + 1_int32 ! outside every window
+      if (ig_shortcut('f9')) tops = tops + 1_int32
+      select case (f)
+      case (5_int32, 50_int32, 90_int32) ! focus Left by its title bar
+         call test_click(170.0_real64, 28.0_real64)
+      case (22_int32)                    ! focus Right
+         call test_click(550.0_real64, 28.0_real64)
+      case (12_int32, 30_int32, 158_int32)
+         call ctrl('s')
+      case (20_int32, 38_int32, 166_int32)
+         saves_at(:, merge(1_int32, merge(2_int32, 3_int32, f == 38_int32), f == 20_int32)) = saves
+      case (40_int32)                    ! Right focused: Left's 'global' f6, the top-level f9, Left's button's ctrl+r
+         call test_key('f6')
+         call test_key('f9')
+      case (44_int32)
+         call ctrl('r')
+         runs(1) = runs(2)
+      case (48_int32)
+         runs(1) = runs(2) - runs(1)     ! presses while Right had the focus
+         runs(2) = 0_int32
+      case (56_int32)                    ! Left focused: its button
+         call ctrl('r')
+      case (60_int32)                    ! Left focused, nothing edited: 'down' fires
+         call test_key('down')
+      case (66_int32)                    ! edit the field
+         call test_click(field(1), field(2))
+      case (72_int32)                    ! 'up' goes to the field's 'item' call
+         call test_key('up')
+      case (76_int32)
+         item_ups(2) = item_ups(1)
+         downs(2) = downs(1)
+      case (78_int32)                    ! 'down' is the field's: Left's call does not fire
+         call test_key('down')
+      case (84_int32)
+         downs(2) = downs(1) - downs(2) + 1_int32 ! 1 when it did not fire
+         call test_key('escape')
+      case (95_int32)                    ! the field no longer edited: 'item' does not fire
+         call test_key('up')
+      case (100_int32)                   ! hold f7 (repeat) and f8 (once) for 40 frames
+         call test_key('f7', down=.true.)
+         call test_key('f8', down=.true.)
+      case (140_int32)
+         call test_key('f7', down=.false.)
+         call test_key('f8', down=.false.)
+         downs(3) = downs(1)
+      case (150_int32)                   ! the background: no window has the focus
+         call test_click(900.0_real64, 500.0_real64)
+      endselect
+   enddo
+   item_ups(2) = item_ups(1) - item_ups(2) + 1_int32 ! 1 when the second 'up' did not fire
+   endsubroutine shortcut_frames
+
+   subroutine ctrl(key)
+   !< Press the platform's shortcut key with `key` (ctrl+key; cmd+key on macOS).
+   character(len=*), intent(in) :: key !< Key name.
+
+   call test_key('shortcut', down=.true.)
+   call test_key(key)
+   call test_key('shortcut', down=.false.)
+   endsubroutine ctrl
 
    subroutine replace(k, text)
    !< Click field k, select its text, type `text`, confirm with enter. The text is selected with end, then shift+home,

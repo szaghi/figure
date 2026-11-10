@@ -125,6 +125,25 @@ macOS). [Menus and shortcuts](/guide/menus) has the rules.
 
 Used in context: [chapter 8](./tutorial/08-shell) of the tutorial.
 
+### Keys that act only where the user is
+
+<<< @/examples/snippets/cb_shortcuts-keys.F90{fortran}
+
+<Media name="cb_shortcuts" video alt="Two panels, Blocks and Log. Blocks is clicked: down selects the next block, ctrl+s writes 'the blocks saved'. The name field is clicked and down is pressed: the selection stays, the key belongs to the field (it moves the keyboard navigation to the Run button). Log is clicked: ctrl+s writes 'the log saved', down leaves the block list alone, f5 presses Run in the other panel. f1 in the command field shows the field's help; after escape, f1 shows the general help." caption="docs/examples/src/cb_shortcuts.F90" />
+
+Each panel calls `ig_shortcut` in its own window, every frame: a chord fires only in the window with the focus, so
+the two ctrl+s save different things, and down moves the block list only while the list has the focus and its name
+field is not being edited. A key for the whole program is called outside every window, or with `scope='global'`; a
+button gets its own chord with `ig_set_next_item_shortcut`:
+
+<<< @/examples/snippets/cb_shortcuts-button.F90{fortran}
+
+The program checks itself headless (`cb_shortcuts --check` presses the keys):
+
+<<< @/examples/output/cb_shortcuts.txt{text}
+
+[Shortcuts](/guide/menus#shortcuts) has the scopes and the rules for text fields.
+
 ### A window whose frame FIGURE draws
 
 <<< @/examples/snippets/cb_frame-frame.F90{fortran}

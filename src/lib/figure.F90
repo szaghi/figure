@@ -44,8 +44,8 @@ use figure_cimgui_enums, only : ImGuiTableFlags_None, ImGuiTableFlags_Resizable,
                                 ImGuiTableFlags_Borders, ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_ScrollY, &
                                 ImGuiTableFlags_SizingFixedFit, ImGuiTableFlags_SizingStretchSame
 use figure_menu, only : ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar, ig_end_main_menu_bar, ig_end_menu, &
-                        ig_end_menu_bar, ig_menu_item, ig_shortcut, ig_open_popup, ig_begin_popup,            &
-                        ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
+                        ig_end_menu_bar, ig_menu_item, ig_set_next_item_shortcut, ig_shortcut, ig_open_popup, &
+                        ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
 use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_image, ig_input, &
                          ig_item_rect, ig_same_line, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
@@ -121,7 +121,7 @@ public :: ImGuiWindowFlags_AlwaysHorizontalScrollbar
 public :: ImGuiWindowFlags_NoNav, ImGuiWindowFlags_NoDecoration, ImGuiWindowFlags_NoInputs, ImGuiWindowFlags_NoDocking
 public :: ImGuiWindowFlags_MenuBar
 public :: ig_begin_main_menu_bar, ig_end_main_menu_bar, ig_begin_menu_bar, ig_end_menu_bar, ig_begin_menu, ig_end_menu
-public :: ig_menu_item, ig_shortcut
+public :: ig_menu_item, ig_set_next_item_shortcut, ig_shortcut
 public :: ig_open_popup, ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
 public :: ip_get_style_color, ip_get_style_var, ip_set_style_color, ip_set_style_var
 public :: ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode, ImGuiDockNodeFlags_NoDockingSplit

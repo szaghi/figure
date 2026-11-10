@@ -234,6 +234,10 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   before Dear ImGui sees it; a wrong end, a scope left open and a widget with no frame open are reported by
   `next_frame` with messages naming the Fortran calls, in three modes (`app%set_checks`: `'abort'`, `'report'`, the
   new default, `'recover'`) ([Pairing and frames](errors#pairing-and-frames)): done.
+- **Shortcuts routed to the focused window:** `ig_shortcut(keys [, scope] [, repeat])` goes through Dear ImGui's
+  routing: `'focused'` (the new default) fires only in the window with the focus and not while a text field holds
+  the key, `'global'` wherever the focus is, `'item'` for the item being edited; `ig_set_next_item_shortcut` gives a
+  chord to a button ([Shortcuts](menus#shortcuts)): done.
 
 ## Next
 

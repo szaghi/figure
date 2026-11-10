@@ -11,6 +11,10 @@ module figure_menu
 !< window flag `ImGuiWindowFlags_MenuBar` in its `ig_begin`. A menu item's shortcut text is only shown: the program
 !< reacts to the keys with `ig_shortcut`, every frame, outside the menu (the menu is closed most of the time).
 !<
+!< Shortcuts are routed (Dear ImGui's `Shortcut`): a chord goes to one place, by the call's scope: 'focused' (the
+!< default) to the focused window, 'global' wherever the focus is, 'item' to the item being edited or held; see
+!< menus.md, "Shortcuts".
+!<
 !< A popup is opened once, by an event (`ig_open_popup`, not every frame), and declared every frame
 !< (`ig_begin_popup`/`ig_begin_popup_modal`, then `ig_end_popup` only when the begin returned true); it closes when
 !< the user clicks outside it (a plain popup) or when the program calls `ig_close_current_popup` inside it. Open and
@@ -19,16 +23,16 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_int, c_loc, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_scope_open, figure_scope_refused, &
                         SCOPE_MAIN_MENU_BAR, SCOPE_MENU, SCOPE_MENU_BAR, SCOPE_POPUP
-use figure_c_native, only : FIG_OK, fig_key_chord
+use figure_c_native, only : fig_set_next_item_shortcut, fig_shortcut
 use figure_cimgui, only : igBeginMainMenuBar, igBeginMenu, igBeginMenuBar, igEndMainMenuBar, igEndMenu, igEndMenuBar, &
-                          igIsKeyChordPressed_Nil, igMenuItem_BoolPtr, igBeginPopup, igBeginPopupModal,         &
+                          igMenuItem_BoolPtr, igBeginPopup, igBeginPopupModal,         &
                           igCloseCurrentPopup, igEndPopup, igOpenPopup_Str
 use figure_cimgui_enums, only : ImGuiWindowFlags_AlwaysAutoResize
 
 implicit none
 private
 public :: ig_begin_main_menu_bar, ig_end_main_menu_bar, ig_begin_menu_bar, ig_end_menu_bar, ig_begin_menu, ig_end_menu
-public :: ig_menu_item, ig_shortcut
+public :: ig_menu_item, ig_set_next_item_shortcut, ig_shortcut
 public :: ig_open_popup, ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup
 
 contains
@@ -113,27 +117,65 @@ contains
    endif
    endfunction ig_menu_item
 
-   recursive function ig_shortcut(keys, stat) result(pressed)
-   !< True on the frame the key chord `keys` is pressed, e.g. `'ctrl+s'`, `'ctrl+shift+z'`, `'f5'`, `'escape'`:
-   !< modifiers (`ctrl`, `shift`, `alt`, `super`) and one key, by the names of `test_key`, joined by `+`. Once per
-   !< press, not repeated while held. On macOS `ctrl` is the cmd key (Dear ImGui follows the platform), so `'ctrl+s'`
-   !< is cmd+s there. Call it every frame, outside menus. An unknown name: false, and `FIG_ERR_ARGUMENT` in `stat` (or
-   !< `error stop` without it).
+   recursive function ig_shortcut(keys, scope, repeat, stat) result(pressed)
+   !< True on the frame the key chord `keys` is pressed and routed to this call, e.g. `'ctrl+s'`, `'ctrl+shift+z'`,
+   !< `'f5'`, `'escape'`: modifiers (`ctrl`, `shift`, `alt`, `super`) and one key, by the names of `test_key`, joined
+   !< by `+`. On macOS `ctrl` is the cmd key (Dear ImGui follows the platform), so `'ctrl+s'` is cmd+s there. Call it
+   !< every frame (a route is taken for the next frame), outside menus.
+   !<
+   !< `scope` (Dear ImGui's `ImGuiInputFlags_Route*`): `'focused'` (default) fires when the calling window, or a window
+   !< inside it, has the focus; called outside every window it fires unless a focused window routes the same chord.
+   !< While a text field is edited, a focused chord of a key alone or with shift (other than f1-f24) does not fire.
+   !< `'global'` fires whatever window has the focus, before the focused ones. `'item'` fires while the item drawn
+   !< just before the call is active (a text field being edited, a button held). Of two `'global'` calls of one chord
+   !< in different windows, the first of the frame fires.
+   !<
+   !< An unknown key or scope: false, and `FIG_ERR_ARGUMENT` in `stat` (or `error stop` without it); no frame open or a
+   !< task: `FIG_ERR_STATE`. The same in window, headless (keys of `test_key`) and remote mode (the browser's keys).
    character(len=*), intent(in)            :: keys    !< Key chord.
+   character(len=*), intent(in),  optional :: scope   !< 'focused' (default), 'global' or 'item'.
+   logical,          intent(in),  optional :: repeat  !< Fire again while the chord is held (default false: once).
    integer(int32),   intent(out), optional :: stat    !< Status.
    logical                                 :: pressed !< Pressed this frame.
-   integer(c_int)                          :: chord   !< ImGuiKeyChord.
-   integer(c_int)                          :: status  !< Status of the parse.
+   integer(c_int)                          :: rep     !< C copy of `repeat`.
+   integer(c_int)                          :: fired   !< 1 when it fired.
+   integer(c_int)                          :: status  !< Status of the call.
 
    pressed = .false.
    if (figure_draw_refused('ig_shortcut', stat)) return ! a task does not draw
-   pressed = .false.
-   chord = 0_c_int
-   status = fig_key_chord(keys, len(keys, c_int), chord)
+   rep = 0_c_int
+   if (present(repeat)) rep = merge(1_c_int, 0_c_int, repeat)
+   fired = 0_c_int
+   if (present(scope)) then
+      status = fig_shortcut(keys, len(keys, c_int), scope, len(scope, c_int), rep, fired)
+   else
+      status = fig_shortcut(keys, len(keys, c_int), 'focused', 7_c_int, rep, fired)
+   endif
    call figure_check(status, stat)
-   if (status /= FIG_OK) return
-   pressed = logical(igIsKeyChordPressed_Nil(chord))
+   pressed = fired /= 0_c_int
    endfunction ig_shortcut
+
+   recursive subroutine ig_set_next_item_shortcut(keys, scope, stat)
+   !< The next item owns the key chord `keys` (as `ig_shortcut`'s, e.g. `'ctrl+r'`): the chord presses it (a button
+   !< reports the press, a text field takes the keyboard), and its tooltip shows the chord. Call it just before the
+   !< item, every frame. `scope` (Dear ImGui's `ImGuiInputFlags_Route*`): `'focused'` (default) while the item's window
+   !< has the focus, `'global'` wherever the focus is; while a text field is edited, a focused chord of a key alone or
+   !< with shift (other than f1-f24) is not given. An unknown key or scope (`'item'` included: the item owns the chord
+   !< already) is refused with `FIG_ERR_ARGUMENT` in `stat` (or `error stop` without it), and the item has no chord;
+   !< no frame open or a task: `FIG_ERR_STATE`. The same in window, headless and remote mode.
+   character(len=*), intent(in)            :: keys   !< Key chord.
+   character(len=*), intent(in),  optional :: scope  !< 'focused' (default) or 'global'.
+   integer(int32),   intent(out), optional :: stat   !< Status.
+   integer(c_int)                          :: status !< Status of the call.
+
+   if (figure_draw_refused('ig_set_next_item_shortcut', stat)) return ! a task does not draw
+   if (present(scope)) then
+      status = fig_set_next_item_shortcut(keys, len(keys, c_int), scope, len(scope, c_int))
+   else
+      status = fig_set_next_item_shortcut(keys, len(keys, c_int), 'focused', 7_c_int)
+   endif
+   call figure_check(status, stat)
+   endsubroutine ig_set_next_item_shortcut
 
    recursive subroutine ig_open_popup(id)
    !< Open the popup `id` (call once, on the event that opens it: a click, a quit request; not every frame).

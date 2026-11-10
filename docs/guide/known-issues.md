@@ -65,6 +65,22 @@ of any length goes in a `text_buffer_object`, edited by `ig_input_text_multiline
 search, and Dear ImGui goes through the whole text on every frame (a log that grows without end belongs in a
 [log view](processes#the-log-view)).
 
+## Shortcuts in a browser
+
+In [remote mode](remote) the keys come from the browser, which keeps some chords for itself
+([Shortcuts](menus#shortcuts)):
+
+- **Never delivered to a page** (Chrome, Edge; Firefox keeps most of them too): ctrl+w, ctrl+t, ctrl+n,
+  ctrl+shift+w, ctrl+shift+t, ctrl+shift+n, ctrl+tab, ctrl+shift+tab (closing and opening tabs and windows). A
+  program's `ig_shortcut('ctrl+w')` never fires in remote mode; bind another chord, or offer the action in a menu too.
+- **Delivered, and acted on by the browser as well:** FIGURE's page stops the browser's own action for the chords
+  with ctrl (cmd on a Mac) other than ctrl+c, ctrl+v and ctrl+x, and for tab. The function keys and the alt chords
+  reach the program **and** the browser: f5 also reloads the page (the program goes on; the page reconnects), f11
+  switches the browser to full screen, f3 and f7 may start the browser's search or caret browsing, alt+left goes
+  back. Prefer ctrl chords for actions a remote user takes often.
+- **The system's chords** (alt+tab, cmd+tab, cmd+space, the window manager's) never reach the browser, as in window
+  mode.
+
 ## The clipboard and drops
 
 - **Remote mode, copy:** the browser's clipboard is written only where the browser allows it: a secure context

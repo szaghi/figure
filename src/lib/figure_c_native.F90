@@ -21,8 +21,8 @@ public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, f
 public :: fig_dock_layout_end, fig_window_dock, fig_style_color, fig_style_var, fig_load_style, fig_save_style
 public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_push_style_color, fig_push_style_var
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
-public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_key_chord, fig_plot_tick_label
-public :: fig_app_wake
+public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_shortcut, fig_plot_tick_label
+public :: fig_app_wake, fig_set_next_item_shortcut
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
@@ -1140,15 +1140,30 @@ interface
    integer(c_int)                     :: status   !< Status.
    endfunction fig_plot_annotation
 
-   function fig_key_chord(keys, keys_len, chord) result(status) bind(C, name='fig_key_chord')
-   !< A key chord from its name ("ctrl+s").
+   function fig_shortcut(keys, keys_len, scope, scope_len, repeat, pressed) result(status) bind(C, name='fig_shortcut')
+   !< A routed shortcut ("ctrl+s", scope "focused", "global" or "item"); `pressed` 1 on the frame it fires.
    import :: c_char, c_int
    implicit none
-   character(kind=c_char), intent(in) :: keys(*)  !< Chord name (not NUL-terminated).
-   integer(c_int), value              :: keys_len !< Name length [bytes].
-   integer(c_int), intent(out)        :: chord    !< ImGuiKeyChord.
-   integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_ARGUMENT.
-   endfunction fig_key_chord
+   character(kind=c_char), intent(in) :: keys(*)   !< Chord name (not NUL-terminated).
+   integer(c_int), value              :: keys_len  !< Name length [bytes].
+   character(kind=c_char), intent(in) :: scope(*)  !< Scope (not NUL-terminated).
+   integer(c_int), value              :: scope_len !< Scope length [bytes].
+   integer(c_int), value              :: repeat    !< 1: fire again while held.
+   integer(c_int), intent(out)        :: pressed   !< 1 on the frame it fires.
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_ARGUMENT.
+   endfunction fig_shortcut
+
+   function fig_set_next_item_shortcut(keys, keys_len, scope, scope_len) result(status) &
+      bind(C, name='fig_set_next_item_shortcut')
+   !< The next item owns the chord ("ctrl+s", scope "focused" or "global"): the chord presses it.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: keys(*)   !< Chord name (not NUL-terminated).
+   integer(c_int), value              :: keys_len  !< Name length [bytes].
+   character(kind=c_char), intent(in) :: scope(*)  !< Scope (not NUL-terminated).
+   integer(c_int), value              :: scope_len !< Scope length [bytes].
+   integer(c_int)                     :: status    !< Status: FIG_OK or FIG_ERR_ARGUMENT.
+   endfunction fig_set_next_item_shortcut
 
    function fig_widget_input_text(label, label_len, hint, hint_len, buf, buf_size, flags) result(edited) &
       bind(C, name='fig_widget_input_text')

@@ -1,0 +1,7 @@
+$ ./cb_shortcuts --check
+frame 11: down: next block, selected: fuselage
+frame 17: ctrl+s: the blocks saved
+frame 47: ctrl+s: the log saved
+frame 59: Run pressed
+frame 71: f1: help on the command field
+frame 83: f1: the general help

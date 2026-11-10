@@ -3151,8 +3151,8 @@ int fig_image_result(char *buf, int buf_len, int *state, int *path_len) {
 
 // A key chord from its name, "ctrl+s", "ctrl+shift+f5", "escape": modifiers (ctrl, shift, alt, super) and one key, by
 // the names of test_key, joined by '+'. With ConfigMacOSXBehaviors (macOS), Dear ImGui reads ctrl as the cmd key.
-int fig_key_chord(const char *keys, int keys_len, int *chord) {
-   const std::string s(keys, keys_len > 0 ? static_cast<size_t>(keys_len) : 0);
+// `who` names the Fortran procedure in the message of a failure.
+static int parse_chord(const std::string &s, const char *who, int *chord) {
    int mods = 0, key = ImGuiKey_None;
    size_t start = 0;
    while (start <= s.size()) {
@@ -3160,18 +3160,91 @@ int fig_key_chord(const char *keys, int keys_len, int *chord) {
       if (end == std::string::npos) end = s.size();
       const std::string name = s.substr(start, end - start);
       const ImGuiKey k = key_by_name(name);
-      if (k == ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, "ig_shortcut: unknown key \"" + name + "\" in \"" + s + "\"");
+      if (k == ImGuiKey_None)
+         return fail(FIG_ERR_ARGUMENT, std::string(who) + ": unknown key \"" + name + "\" in \"" + s + "\"");
       if (k & ImGuiMod_Mask_) {
          mods |= k;
       } else {
-         if (key != ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, "ig_shortcut: more than one key in \"" + s + "\"");
+         if (key != ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, std::string(who) + ": more than one key in \"" + s + "\"");
          key = k;
       }
       start = end + 1;
    }
-   if (key == ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, "ig_shortcut: no key besides the modifiers in \"" + s + "\"");
+   if (key == ImGuiKey_None)
+      return fail(FIG_ERR_ARGUMENT, std::string(who) + ": no key besides the modifiers in \"" + s + "\"");
    *chord = mods | key;
    return FIG_OK;
+}
+
+// The scope of a shortcut: 0 'focused', 1 'global', 2 'item' (only where `item_allowed`).
+static int parse_shortcut_scope(const std::string &s, const char *who, bool item_allowed, int *scope) {
+   if (s == "focused") *scope = 0;
+   else if (s == "global") *scope = 1;
+   else if (s == "item" && item_allowed) *scope = 2;
+   else
+      return fail(FIG_ERR_ARGUMENT, std::string(who) + ": unknown scope \"" + s + "\" (" +
+                                       (item_allowed ? "'focused', 'global' or 'item')" : "'focused' or 'global')"));
+   return FIG_OK;
+}
+
+// The routing flags of a scope. 'focused': Dear ImGui's focus route, the deepest focused window in the focus stack
+// of the calling window; a call outside every window (Dear ImGui's fallback window, which never has focus) takes
+// the global route of lowest priority instead: it fires unless a focused window routes the same chord. 'global':
+// the global route over the focused ones. 'item': the route of the active item.
+static ImGuiInputFlags shortcut_route(int scope) {
+   const ImGuiContext &g = *GImGui;
+   if (scope == 1) return ImGuiInputFlags_RouteGlobal | ImGuiInputFlags_RouteOverFocused;
+   if (scope == 2) return ImGuiInputFlags_RouteActive;
+   if (g.CurrentWindow && g.CurrentWindow->IsFallbackWindow) return ImGuiInputFlags_RouteGlobal;
+   return ImGuiInputFlags_RouteFocused;
+}
+
+// A text field being edited uses the plain keys (letters, arrows, home, end, enter, escape, ...): while one is
+// edited, a 'focused' chord of a key alone or with shift, other than f1-f24, is not delivered. Dear ImGui filters
+// only the keys that type a character.
+static bool shortcut_held_by_text(int chord) {
+   if (!ImGui::GetIO().WantTextInput) return false;
+   if (chord & (ImGuiMod_Ctrl | ImGuiMod_Alt | ImGuiMod_Super)) return false;
+   const int key = chord & ~ImGuiMod_Mask_;
+   return !(key >= ImGuiKey_F1 && key <= ImGuiKey_F24);
+}
+
+int fig_shortcut(const char *keys, int keys_len, const char *scope, int scope_len, int repeat, int *pressed) {
+   FIG_TRY
+   *pressed = 0;
+   int chord = 0, sc = 0;
+   const std::string k(keys, keys_len > 0 ? static_cast<size_t>(keys_len) : 0);
+   const std::string s(scope, scope_len > 0 ? static_cast<size_t>(scope_len) : 0);
+   int status = parse_chord(k, "ig_shortcut", &chord);
+   if (status != FIG_OK) return status;
+   status = parse_shortcut_scope(s, "ig_shortcut", true, &sc);
+   if (status != FIG_OK) return status;
+   if (sc == 0 && shortcut_held_by_text(chord)) return FIG_OK;
+   ImGuiInputFlags flags = shortcut_route(sc);
+   if (repeat) flags |= ImGuiInputFlags_Repeat;
+   ImGuiID owner = 0; // 0: Dear ImGui's routing id, the focus scope of the calling window
+   if (sc == 2) {
+      owner = GImGui->LastItemData.ID; // the item drawn last
+      if (owner == 0) return FIG_OK;
+   }
+   *pressed = ImGui::Shortcut(chord, flags, owner) ? 1 : 0;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_set_next_item_shortcut(const char *keys, int keys_len, const char *scope, int scope_len) {
+   FIG_TRY
+   int chord = 0, sc = 0;
+   const std::string k(keys, keys_len > 0 ? static_cast<size_t>(keys_len) : 0);
+   const std::string s(scope, scope_len > 0 ? static_cast<size_t>(scope_len) : 0);
+   int status = parse_chord(k, "ig_set_next_item_shortcut", &chord);
+   if (status != FIG_OK) return status;
+   status = parse_shortcut_scope(s, "ig_set_next_item_shortcut", false, &sc);
+   if (status != FIG_OK) return status;
+   if (sc == 0 && shortcut_held_by_text(chord)) return FIG_OK; // the next item is drawn without its chord
+   ImGui::SetNextItemShortcut(chord, shortcut_route(sc) | ImGuiInputFlags_Tooltip);
+   return FIG_OK;
+   FIG_CATCH
 }
 
 int fig_input_key(const char *name, int name_len, int down) {

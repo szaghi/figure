@@ -1,0 +1,33 @@
+#! program build/docs-examples/bin/cb_shortcuts
+#! frames  375
+#! poster  330
+# Blocks focused: down selects the next block, ctrl+s saves the blocks; down in the name field: the list stays;
+# Log focused: ctrl+s saves the log, down leaves the list, f5 presses Run; f1 in the command field: its help; after
+# escape, f1: the general help
+0   move 600 250
+10  move 180 20 15
+28  down
+30  up
+45  key down
+70  key ctrl down
+71  key s
+72  key ctrl up
+95  move 120 126 15
+113 down
+115 up
+135 key down
+160 key escape
+175 move 540 20 15
+193 down
+195 up
+215 key ctrl down
+216 key s
+217 key ctrl up
+240 key down
+260 key f5
+280 move 480 88 15
+298 down
+300 up
+315 key f1
+340 key escape
+355 key f1
