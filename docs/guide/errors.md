@@ -204,6 +204,21 @@ the procedure.
 The legends' other failures (`levels`, formats, equal ends) are those of
 [`ip_colormap_legend`](colormaps#a-colour-scale-legend).
 
+### Players
+
+`ig_player` ([Players](widgets#players)) checks the `player_object` and `labels` on the Fortran side, before it draws:
+a wrong one is `FIG_ERR_ARGUMENT`, nothing drawn and `.false.` returned (absent `stat`, `error stop` with the message).
+No frame open, or a task, is `FIG_ERR_STATE`, as for every widget.
+
+| Failure | Status | Message |
+|---|---|---|
+| `count` < 1 | `FIG_ERR_ARGUMENT` | `ig_player: count must be at least 1 (got <count>)` |
+| `speed` <= 0, NaN or infinite | `FIG_ERR_ARGUMENT` | `ig_player: speed must be > 0 snapshots per second` |
+| an unknown `mode` | `FIG_ERR_ARGUMENT` | `ig_player: unknown mode "<mode>" ('once', 'loop' or 'bounce')` |
+| `labels` not of `count` entries | `FIG_ERR_ARGUMENT` | `ig_player: labels has <n> entries, not count` |
+
+An `index` outside 1 to `count` is not an error: the player moves it to the nearest end and returns `.true.`.
+
 ## Pairing and frames
 
 Dear ImGui's begin/end pairs are the likeliest bug of a FIGURE program: an `ig_end_table` where an `ig_tree_pop`

@@ -661,6 +661,24 @@ gfortran copies a component of an array of derived types into a temporary before
 copy (stride 8 bytes); ifx passes it in place (stride of a record), nvfortran copies every strided section
 ([Data in place](/guide/plots#data-in-place) has the table and the measured costs).
 
+### Step through saved solutions
+
+<<< @/examples/snippets/cb_player-draw.F90{fortran}
+
+<Media name="cb_player" video alt="A window Solutions: a player on one line (step back, play, step forward, a slider reading t = 0.00 s) above a plot of a pulse at the left of a duct. The pointer clicks play: the slider runs through the times and the pulse moves right, then back. The pointer pauses, steps forward and back one snapshot, then right-clicks the slider: the menu shows the snapshots per second and the modes once, loop and bounce." caption="docs/examples/src/cb_player.F90" />
+
+The program keeps its saved solutions, here forty columns of `u`, and a `player_object` with their number, a speed in
+snapshots per second and a mode (`'bounce'`: back and forth); `ig_player` draws previous, play, next and a slider
+that shows each snapshot's time, and says which one to plot in `player%index`. While it plays, the player asks for
+frames itself, so lazy redraw goes on; it keeps time by the frame clock, so 8 snapshots per second stay 8 at any
+frame rate. A right click on the player changes the speed and the mode. `cb_player --check` clicks play, then
+pause 60 headless frames later (1/60 s each: a snapshot every 7 or 8 frames, 8 in the second), then next and
+previous:
+
+<<< @/examples/output/cb_player.txt{text}
+
+[Players](/guide/widgets#players) has the controls, the clock and the modes.
+
 ## Running work
 
 ### Run a tool and show its output

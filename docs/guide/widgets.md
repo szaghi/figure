@@ -604,6 +604,83 @@ A status bar with a progress bar, along the bottom of the window ([bar along a s
 
 <Media name="cb_status" alt="A run in progress: the status bar along the bottom reads running, iteration 213 of 240, beside a progress bar filled to 89 percent; above it, a warning notification: levels is 0, it must be at least 1" caption="docs/examples/src/cb_status.F90" />
 
+## Players
+
+| Procedure | Notes |
+|---|---|
+| `ig_player(id, player [, labels] [, stat])` → `logical` | A player for `player%count` snapshots on one line: previous, play/pause, next and a slider over the snapshots; a right click opens its menu (speed and mode). `.true.` on the frame it changed `player%index`. |
+| `player_object` | The player's state, a plain value the program keeps: `%index`, `%count`, `%playing`, `%speed`, `%mode`. |
+
+A player steps through saved solutions: the snapshots of a run written every so many iterations, the frames of an
+animation, the cases of a parameter sweep. The program keeps the snapshots (in memory or as files) and a
+`player_object`; `ig_player` draws the player and says which snapshot to show. It is built from Dear ImGui's
+`Button`, `SliderInt`, `BeginPopupContextItem`, `InputScalar` and `RadioButton` inside a group (`BeginGroup`); Dear
+ImGui has no player of its own (the idea is ImGuiExtra.jl's scrubber).
+
+<<< @/examples/snippets/cb_player-player.F90{fortran}
+
+<<< @/examples/snippets/cb_player-draw.F90{fortran}
+
+<Media name="cb_player" video alt="A window Solutions: a player on one line, a step-back button, a play button, a step-forward button and a slider that reads t = 0.00 s, above a plot of u against x with a pulse at the left. The pointer clicks play: the button turns into pause, the slider runs through t = 0.05, 0.10 s and on, and the pulse moves to the right; at t = 1.95 s it turns back. The pointer clicks pause, then step-forward and step-back: the slider moves by one snapshot each time. A right click on the slider opens the menu: a field for the snapshots per second and the radio buttons once, loop and bounce (chosen)." caption="docs/examples/src/cb_player.F90: step through saved solutions" />
+
+**The state.** The components are public: the program sets them when it likes (a new run loaded: `count`; a jump to
+a snapshot picked elsewhere: `index`; a key that plays: `playing`), and the player sets them when the user acts on
+it.
+
+| Component | Meaning | Default |
+|---|---|---|
+| `index` | the snapshot shown, 1 to `count` (outside: moved to the nearest end, and `.true.` returned) | 1 |
+| `count` | snapshots, at least 1 | 1 |
+| `playing` | advancing by itself | `.false.` |
+| `speed` | snapshots per second while playing, > 0 [1/s] | 10 |
+| `mode` | at the last snapshot: `'once'` stops (and `playing` becomes `.false.`), `'loop'` goes on from the first, `'bounce'` turns back, and again at the first | `'loop'` |
+
+**The controls.** Previous and next step one snapshot and stop the playing; in mode `'loop'` they wrap around (previous
+at the first shows the last), in the others they stop at the ends. Play starts from the snapshot shown (in mode
+`'once'` at the last snapshot, from the first) and turns into pause. A click or a drag on the slider shows that
+snapshot and stops the playing. The slider shows `labels(index)` (a time, a file name; `%` is shown as it is) or, without
+`labels`, `index / count`. A right click anywhere on the player opens its menu: the speed, typed (a value <= 0 is not
+taken), and the mode, three radio buttons; a click outside closes it.
+
+**Time.** While `playing`, the player advances `speed` snapshots per second of the frame clock (Dear ImGui's time,
+`GetTime`): the time between the frames in a window, 1/60 s per frame headless (so a test knows how many snapshots
+60 frames step), the time between frames in remote mode, the fixed frame time of a recording. A frame that takes
+longer steps more snapshots at once, so the player keeps time when frames are slow. The clock runs on the frames the
+player is drawn: hidden (a collapsed header, a tab not shown) it pauses, and goes on from there when shown again.
+While playing, `ig_player` asks for one more frame on every frame ([`app%request_frames(1)`](frame-loop#lazy-redraw)),
+so a lazy loop keeps drawing and the program needs no `set_lazy(.false.)`; paused, it asks for nothing and the loop
+sleeps again.
+
+**Layout.** The player is as wide as the current item width: `ig_set_next_item_width` before it, or
+`ig_push_item_width` ([Layout](#layout)); the buttons are square, a field's height; the slider takes the rest. The
+player is one group: `ig_same_line`, `ig_item_rect` and `ig_last_item` after it refer to the whole player, and its
+id scope (`id`) keeps its buttons apart from the window's other items; two players in one window need two ids.
+
+The program checks itself headless (play, at 8 snapshots per second a step every 7.5 frames of 1/60 s; pause 60
+frames later; next; previous):
+
+<<< @/examples/output/cb_player.txt{text}
+
+- **Pairing and frame rules:** call it every frame, inside a window; it opens no scope the program closes (its group,
+  id scope and menu are begun and ended inside, and the scope record of the frame sees them balanced). Valid on the
+  frame it returns `.true.`: draw `player%index` then.
+- **Units:** `speed` in snapshots per second; `index` and `count` are counts (1-based).
+- **Status:** `stat` is optional (absent: `error stop` with the message). Refused with `FIG_ERR_ARGUMENT`, nothing
+  drawn and `.false.` returned: `count` < 1 (`ig_player: count must be at least 1 (got 0)`), `speed` <= 0, NaN or
+  infinite (`ig_player: speed must be > 0 snapshots per second`), an unknown `mode` (`ig_player: unknown mode "ping"
+  ('once', 'loop' or 'bounce')`), `labels` not of `count` entries (`ig_player: labels has 2 entries, not count`). No
+  frame open or from a task: `FIG_ERR_STATE` ([Errors](errors#players)).
+- **Window, headless, remote:** the same. Headless, `test_click` presses its buttons and the slider (the buttons are
+  squares of side `ig_frame_height()`, `ItemSpacing` apart, from the left of `ig_item_rect`), `test_click(...,
+  button='right')` opens its menu, and every frame advances the clock by 1/60 s. In remote mode the frames come at
+  the rate the page draws them, and the player keeps time by the clock between them.
+- **Threads:** the frame loop's thread only; a task is refused (`FIG_ERR_STATE`). A `player_object` itself may be
+  set from anywhere the program owns it.
+- **What it does not do:** it does not load or keep the snapshots (the program draws `player%index`); it does not
+  skip a snapshot that takes long to load or draw (a slow frame steps more at once, it does not wait); no keyboard
+  shortcuts of its own (bind keys with `ig_shortcut` and set `playing` or `index`); no reverse play other than mode
+  `'bounce'`; speeds and modes are not saved between runs.
+
 ## Colour editing
 
 | Procedure | Notes |

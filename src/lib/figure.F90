@@ -11,7 +11,8 @@ module figure
 !< GPU textures (figure_texture) that `ig_image` and `ip_image` draw, and the Lucide icons by name, `ICON_*`
 !< (figure_icons), UTF-8 strings for any label: `ig_button(ICON_PLAY//' Run')`; programs started from the program and
 !< a view of their output (figure_process: `process_object`, `log_view_object`); Fortran procedures run on a worker
-!< thread (figure_task: `task_object`, `task_handle_object`); 3-D views of meshes (figure_view3d: `view3d_object`).
+!< thread (figure_task: `task_object`, `task_handle_object`); 3-D views of meshes (figure_view3d: `view3d_object`);
+!< a player for snapshots (figure_player: `player_object`, `ig_player`).
 use figure_app, only : app_object
 use figure_base, only : figure_last_error
 use figure_c_native, only : FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
@@ -117,6 +118,7 @@ use figure_texture, only : texture_object
 use figure_process, only : process_object, log_view_object
 use figure_task, only : task_object, task_handle_object, task_work
 use figure_view3d, only : view3d_object
+use figure_player, only : player_object, ig_player
 
 implicit none
 private
@@ -192,6 +194,7 @@ public :: ip_colormap_legend, ip_colormap_legend_edit, ip_field_image
 public :: ig_color_edit
 public :: process_object, log_view_object, task_object, task_handle_object, task_work
 public :: view3d_object
+public :: player_object, ig_player
 public :: ip_plot_limits, ip_plot_size, ip_setup_axes_limits, ip_begin_subplots, ip_end_subplots
 public :: ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_setup_axis_ticks, ip_setup_axis_constraints
 public :: ip_setup_legend

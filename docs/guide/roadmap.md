@@ -296,6 +296,10 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   change; log and symlog through a table indexed by the values' bits, restricted to the range (5 to 9 times faster,
   within 1/255); `ip_colormap_legend`'s `scale`, and `ip_colormap_legend_edit`, the legend whose range the user drags
   and zooms; `test_field_uploads`, `test_field_textures`, `test_field_time`, `test_field_pixel` ([Fields](plots#fields)): done.
+- **A player for snapshots:** `ig_player(id, player [, labels])` with a `player_object` (`index`, `count`,
+  `playing`, `speed` in snapshots per second, `mode` `'once'`, `'loop'` or `'bounce'`): previous, play/pause, next,
+  a slider showing each snapshot's label, a right-click menu for the speed and the mode; it plays on the frame clock
+  (1/60 s per headless frame) and asks for frames while playing, so lazy redraw keeps time ([Players](widgets#players)): done.
 
 ## Next
 

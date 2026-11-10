@@ -1,0 +1,21 @@
+#! program build/docs-examples/bin/cb_player
+#! frames  400
+#! poster  120
+# Play clicked: the slider runs through the times at 8 snapshots per second and the pulse moves along the duct, turns
+# back at t = 1.95 s (mode bounce); pause, then step forward and step back one snapshot; a right click on the slider
+# opens the player's menu: the snapshots per second and the modes once, loop, bounce.
+0   move 400 300
+10  move 57 50 15
+30  down
+31  up
+220 down
+221 up
+240 move 86 50 10
+255 down
+256 up
+275 move 28 50 10
+290 down
+291 up
+310 move 300 50 15
+330 down right
+331 up right

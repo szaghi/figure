@@ -1,0 +1,15 @@
+$ ./cb_player --check
+frame 5: play (8 snapshots per second, 1/60 s per headless frame)
+frame 17: snapshot 2 (t = 0.05 s)
+frame 24: snapshot 3 (t = 0.10 s)
+frame 32: snapshot 4 (t = 0.15 s)
+frame 39: snapshot 5 (t = 0.20 s)
+frame 47: snapshot 6 (t = 0.25 s)
+frame 54: snapshot 7 (t = 0.30 s)
+frame 62: snapshot 8 (t = 0.35 s)
+frame 65: pause
+frame 69: snapshot 9 (t = 0.40 s)
+frame 80: next
+frame 84: snapshot 10 (t = 0.45 s)
+frame 95: previous
+frame 99: snapshot 9 (t = 0.40 s)
