@@ -1,0 +1,26 @@
+#! program build/docs-examples/bin/cb_vector
+#! frames  330
+#! poster  320
+# Component 3 of gravity dragged 100 pixels left at 0.01 m/s^2 per pixel; component 1 dragged 150 pixels right; the
+# second field of probe clicked and 0.25 typed; the wind slider dragged from 45 to 120 degrees.
+0   move 500 150
+10  move 320 49 15
+35  down
+37  move 220 49 40
+82  up
+95  move 76 49 15
+115 down
+117 move 226 49 40
+162 up
+175 move 198 74 15
+195 down
+196 up
+205 text 0
+211 text .
+217 text 2
+223 text 5
+235 key enter
+250 move 67 99 15
+270 down
+272 move 139 99 30
+307 up

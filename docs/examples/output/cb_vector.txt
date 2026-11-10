@@ -1,0 +1,13 @@
+$ ./cb_vector --check
+at the start:
+  gravity    0.00    0.00   -9.81 m/s^2
+  probe      1.000    0.000    0.500 m
+  wind       45.0 degrees
+component 3 of gravity dragged 100 pixels left:
+  gravity    0.00    0.00  -10.81 m/s^2
+  probe      1.000    0.000    0.500 m
+  wind       45.0 degrees
+0.25 typed into component 2 of the probe:
+  gravity    0.00    0.00  -10.81 m/s^2
+  probe      1.000    0.250    0.500 m
+  wind       45.0 degrees

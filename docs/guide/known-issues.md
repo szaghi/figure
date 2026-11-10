@@ -44,9 +44,11 @@ FIGURE's nvfortran modes compile and link with `-Munixlogical`, so that `.true.`
 
 A section of a deferred-length allocatable character array (`character(len=:), allocatable :: names(:)`, as
 `ip_colormap_names` returns), passed to an assumed-shape dummy argument, arrives from the array's first element:
-`call show(names(3:4))` sees `names(1:2)`. Seen with gfortran 15.2 and 16.2, at every optimisation level; nvfortran
-26.9 passes the section right, and so does gfortran for a fixed-length array. Copy the section into a fixed-length
-array first (`own = names(k:k + 15)`, as `docs/examples/src/gallery.F90` does), or pass the elements one by one.
+`call show(names(3:4))` sees `names(1:2)`. Seen with gfortran 15.2 and 16.2, at every optimisation level. nvfortran
+26.9 passes a contiguous section right but not a strided one: `names(2:6:2)` arrives as blank strings. Both
+compilers pass a section of a fixed-length array right. Copy the section into a fixed-length array first
+(`own = names(k:k + 15)`, as `docs/examples/src/gallery.F90` does), or pass the elements one by one: this holds for
+every `items` argument (`ig_combo`, `ig_list_box`).
 
 ## gfortran: an array constructor of deferred-length strings
 

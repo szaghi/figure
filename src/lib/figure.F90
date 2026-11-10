@@ -3,6 +3,7 @@ module figure
 !< FIGURE, Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration.
 !<
 !< Umbrella module: `use figure` gives the application loop (figure_app), the Dear ImGui widgets (figure_imgui),
+!< numbers and choices (figure_numbers: fields, drag boxes and sliders of any kind, vectors, radio buttons, list boxes),
 !< menus, popups and shortcuts (figure_menu), groups of widgets (figure_group: child regions, collapsing headers, tabs,
 !< tables, trees, id scopes, disabled blocks), docking (figure_dock), the style colours and variables by name (figure_style),
 !< the ImPlot plots (figure_implot): items, heatmaps, images, their style (`ip_spec`) and ImPlot's constants, and the
@@ -62,9 +63,9 @@ use figure_menu, only : ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar
                         ig_end_menu_bar, ig_menu_item, ig_set_next_item_shortcut, ig_shortcut, ig_open_popup, &
                         ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup, &
                         ig_begin_popup_context
-use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_image, ig_input, &
+use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_image, &
                          ig_item_rect, ig_same_line, &
-                         ig_separator, ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_input_text,  &
+                         ig_separator, ig_set_next_window, ig_show_demo_window, ig_text, ig_input_text,  &
                          ig_set_next_item_width, ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped,      &
                          ig_text_disabled, ig_text_colored, ig_tool_button, ig_focus_window,            &
                          ig_align_text_to_frame_padding, ig_text_size, ig_progress_bar, ig_input_text_multiline, &
@@ -93,6 +94,7 @@ use figure_implot, only : ip_begin_subplots, ip_end_subplots,                   
 use figure_implot, only : ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_contour, &
                           ip_contour_lines, ip_contour_levels, ip_colormap_legend
 use figure_imgui, only : ig_color_edit
+use figure_numbers, only : ig_input, ig_drag, ig_slider, ig_slider_angle, ig_drag_range, ig_radio, ig_list_box
 use figure_style, only : ig_pop_style_color, ig_pop_style_var, ig_push_style_color, ig_push_style_var,        &
                          ip_pop_style_color, ip_pop_style_var, ip_push_style_color, ip_push_style_var,        &
                          ig_get_style_color, ig_get_style_var, ig_pop_font, ig_push_font, ig_set_style_color,    &
@@ -109,6 +111,7 @@ public :: app_object, figure_last_error
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator
 public :: ig_set_next_window, ig_show_demo_window, ig_slider, ig_text, ig_image
+public :: ig_drag, ig_slider_angle, ig_drag_range, ig_radio, ig_list_box
 public :: ig_input_text, ig_set_next_item_width, ig_combo, ig_tooltip
 public :: ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored, ig_begin_child, ig_end_child
 public :: ig_collapsing_header, ig_begin_tab_bar, ig_end_tab_bar, ig_begin_tab, ig_end_tab, ig_push_id, ig_pop_id

@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    numbers_and_choices
+#! from    10
+#! frames  1
+# every number widget by kind, shape and scale, each with its call beside it; radio buttons, a combo and a list box

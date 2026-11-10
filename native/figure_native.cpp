@@ -3351,6 +3351,71 @@ void fig_mark_last_item_edited(void) {
    if (ImGui::GetCurrentContext() && GImGui->LastItemData.ID != 0) ImGui::MarkItemEdited(GImGui->LastItemData.ID);
 }
 
+// A range [lo, hi] edited by two drags side by side, then the label: Dear ImGui's DragFloatRange2 for any data type.
+// Each drag is bounded by the other end and by the outer bound (the lower end may not pass the upper one); an end at
+// its bound already (lo at vmin with hi at vmin) is read-only, as upstream.
+int fig_drag_range(const char *label, int data_type, void *lo, void *hi, float speed, const void *vmin,
+                   const void *vmax, const char *format, int flags) {
+   ImGuiWindow *window = ImGui::GetCurrentWindow();
+   if (window->SkipItems) return 0;
+   ImGuiContext &g = *GImGui;
+   const size_t size = ImGui::DataTypeGetInfo(data_type)->Size;
+   ImGuiDataTypeStorage lo_max, hi_min; // the bound of one end is the other end (within the outer bounds)
+   ImGui::PushID(label);
+   ImGui::BeginGroup();
+   ImGui::PushMultiItemsWidths(2, ImGui::CalcItemWidth());
+   std::memcpy(&lo_max, ImGui::DataTypeCompare(data_type, hi, vmax) > 0 ? vmax : hi, size);
+   const int lo_flags = flags | (ImGui::DataTypeCompare(data_type, vmin, &lo_max) == 0 ? ImGuiSliderFlags_ReadOnly : 0);
+   bool changed = ImGui::DragScalar("##min", data_type, lo, speed, vmin, &lo_max, format, lo_flags);
+   ImGui::PopItemWidth();
+   ImGui::SameLine(0.0f, g.Style.ItemInnerSpacing.x);
+   std::memcpy(&hi_min, ImGui::DataTypeCompare(data_type, lo, vmin) < 0 ? vmin : lo, size);
+   const int hi_flags = flags | (ImGui::DataTypeCompare(data_type, &hi_min, vmax) == 0 ? ImGuiSliderFlags_ReadOnly : 0);
+   changed |= ImGui::DragScalar("##max", data_type, hi, speed, &hi_min, vmax, format, hi_flags);
+   ImGui::PopItemWidth();
+   ImGui::SameLine(0.0f, g.Style.ItemInnerSpacing.x);
+   ImGui::TextEx(label, ImGui::FindRenderedTextEnd(label));
+   ImGui::EndGroup();
+   ImGui::PopID();
+   return changed ? 1 : 0;
+}
+
+// A list box of Fortran strings (count items of item_len bytes, blank-padded): Dear ImGui's ListBox with a height in
+// pixels; the rows out of view are clipped (the chosen one is always submitted, so that keyboard navigation starts
+// from it).
+int fig_list_box(const char *label, int *current, const char *items, int item_len, int count, double height) {
+   ImGuiContext &g = *GImGui;
+   const float row = ImGui::GetTextLineHeightWithSpacing();
+   const float h = height != 0.0 ? static_cast<float>(height)
+                                 : ImTrunc(row * (static_cast<float>(std::min(count, 7)) + 0.25f) +
+                                           g.Style.FramePadding.y * 2.0f);
+   if (!ImGui::BeginListBox(label, ImVec2(0.0f, h))) return 0;
+   bool changed = false;
+   std::string text;
+   ImGuiListClipper clipper;
+   clipper.Begin(count, row);
+   if (*current >= 0 && *current < count) clipper.IncludeItemByIndex(*current);
+   while (clipper.Step()) {
+      for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+         const char *p = items + static_cast<size_t>(i) * static_cast<size_t>(item_len);
+         size_t n = item_len > 0 ? static_cast<size_t>(item_len) : 0;
+         while (n > 0 && p[n - 1] == ' ') --n;
+         text.assign(p, n);
+         const bool chosen = i == *current;
+         ImGui::PushID(i); // items may repeat a text: the index tells them apart
+         if (ImGui::Selectable(text.c_str(), chosen)) {
+            *current = i;
+            changed = true;
+         }
+         if (chosen) ImGui::SetItemDefaultFocus();
+         ImGui::PopID();
+      }
+   }
+   ImGui::EndListBox();
+   if (changed) ImGui::MarkItemEdited(g.LastItemData.ID);
+   return changed ? 1 : 0;
+}
+
 // Aligned groups: the cursor moved right by the space left on the line (all of it, or half for the centre), the
 // width being the group's on the previous frame (Dear ImGui's storage of the window, keyed by the id). The cursor is
 // moved as Indent moves it (not SetCursorPos, which an empty group would report as extending its parent).

@@ -23,6 +23,7 @@ public :: fig_show_style_editor, fig_set_font, fig_push_font, fig_pop_font, fig_
 public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_wheel, fig_input_key, fig_input_text
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_shortcut, fig_plot_tick_label
 public :: fig_app_wake, fig_set_next_item_shortcut, fig_last_item, fig_item_status, fig_mark_last_item_edited
+public :: fig_drag_range, fig_list_box
 public :: fig_align_begin, fig_align_end, fig_align_next, fig_plot_end
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
@@ -1243,6 +1244,36 @@ interface
    !< The item drawn last changed its value on this frame (Dear ImGui's MarkItemEdited).
    implicit none
    endsubroutine fig_mark_last_item_edited
+
+   function fig_drag_range(label, data_type, lo, hi, speed, vmin, vmax, format, flags) result(changed) &
+      bind(C, name='fig_drag_range')
+   !< Two drags side by side for the ends of a range, then the label: 1 when either end changed.
+   import :: c_char, c_float, c_int, c_ptr
+   implicit none
+   character(kind=c_char), intent(in) :: label(*)  !< Label (NUL-terminated; also the id).
+   integer(c_int), value              :: data_type !< ImGuiDataType of the four values.
+   type(c_ptr), value                 :: lo        !< Lower end.
+   type(c_ptr), value                 :: hi        !< Upper end.
+   real(c_float), value               :: speed     !< Change per pixel dragged.
+   type(c_ptr), value                 :: vmin      !< Lower bound of the lower end.
+   type(c_ptr), value                 :: vmax      !< Upper bound of the upper end.
+   type(c_ptr), value                 :: format    !< printf format (NUL-terminated), or null: Dear ImGui's default.
+   integer(c_int), value              :: flags     !< ImGuiSliderFlags.
+   integer(c_int)                     :: changed   !< 1: changed this frame.
+   endfunction fig_drag_range
+
+   function fig_list_box(label, current, items, item_len, count, height) result(changed) bind(C, name='fig_list_box')
+   !< A list box of blank-padded strings: 1 on the frame the user picks an item.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in)    :: label(*) !< Label (NUL-terminated; also the id).
+   integer(c_int),         intent(inout) :: current  !< 0-based index of the chosen item (any other value: none).
+   character(kind=c_char), intent(in)    :: items(*) !< The items, `item_len` bytes each, one after the other.
+   integer(c_int), value                 :: item_len !< Length of an item [bytes].
+   integer(c_int), value                 :: count    !< Items.
+   real(c_double), value                 :: height   !< Height [pixels]; 0 default; < 0 the space left minus it.
+   integer(c_int)                        :: changed  !< 1: an item picked this frame.
+   endfunction fig_list_box
 
    subroutine fig_plot_end() bind(C, name='fig_plot_end')
    !< End the current plot (ImPlot's EndPlot) without fitting an axis that has no data (an FPE under traps).

@@ -8,7 +8,7 @@ module figure_imgui
 !< refused and reported by `app%next_frame` (`app%set_checks`; errors.md, "Pairing and frames").
 !<
 !< Immediate mode: call the widgets every frame; each returns what happened this frame (`ig_button` is true on the
-!< frame it is clicked, `ig_checkbox`/`ig_slider` are true when they changed the value). Values are ordinary Fortran
+!< frame it is clicked, `ig_checkbox` is true when it changed the value). Values are ordinary Fortran
 !< variables, updated in place: no handles, no callbacks, no `target` requirements (the C `bool*` of a checkbox is a
 !< local copy, written back).
 use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_loc, c_long_long, &
@@ -16,7 +16,7 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
-                        figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP, SCOPE_WINDOW
+                        figure_scope_refused, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP, SCOPE_WINDOW
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, fig_item_status, fig_last_item, fig_mark_last_item_edited, &
@@ -25,9 +25,9 @@ use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : igGetTime, igProgressBar, &
                           im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
                           igPushID_Int, igSelectable_Bool, igSetItemDefaultFocus, igButton, igCheckbox, igEnd, &
-                          igGetItemRectMax, igGetItemRectMin, igImage, igInputDouble, igInputInt, igSameLine, &
+                          igGetItemRectMax, igGetItemRectMin, igImage, igSameLine, &
                           igSeparator, igSetNextItemWidth, igSetNextWindowPos, igSetNextWindowSize, igShowDemoWindow, &
-                          igSliderScalar, igTextUnformatted, im_vec4, igGetStyleColorVec4, igPopStyleColor, &
+                          igTextUnformatted, im_vec4, igGetStyleColorVec4, igPopStyleColor, &
                           igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos, igAlignTextToFramePadding, &
                           igIsPopupOpen_Str, igSetWindowFocus_Str, igCalcTextSize, igColorEdit4, igIsAnyItemActive, &
                           igIsAnyItemHovered, igIsItemHovered, igGetCursorStartPos, igGetScrollMaxX, igGetScrollMaxY, &
@@ -37,15 +37,15 @@ use figure_cimgui, only : igGetTime, igProgressBar, &
                           igGetFrameHeightWithSpacing, igGetTextLineHeight, igGetTextLineHeightWithSpacing,          &
                           igIndent, igNewLine, igPopItemWidth, igPushItemWidth, igSeparatorText, igSpacing, igUnindent, &
                           igBeginTooltip, igTextLink, igTextLinkOpenURL
-use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, ImGuiDataType_Double, ImGuiDataType_Float, &
-                                ImGuiDataType_S32, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup, &
+use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, &
+                                ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup, &
                                 ImGuiInputTextFlags_AllowTabInput, ImGuiInputTextFlags_ReadOnly, &
                                 ImGuiColorEditFlags_AlphaBar, ImGuiColorEditFlags_NoAlpha, ImGuiHoveredFlags_DelayNormal, &
                                 ImGuiHoveredFlags_DelayShort, ImGuiHoveredFlags_None
 
 implicit none
 private
-public :: ig_begin, ig_begin_side_bar, ig_end, ig_button, ig_checkbox, ig_slider, ig_input, ig_text, ig_same_line, ig_separator
+public :: ig_begin, ig_begin_side_bar, ig_end, ig_button, ig_checkbox, ig_text, ig_same_line, ig_separator
 public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_input_text, ig_set_next_item_width
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
@@ -92,16 +92,6 @@ type :: item_status_object
    logical      :: double_clicked(3) = .false.      !< Double-clicked on this frame, per button: left, right, middle.
    real(real64) :: rect(4) = 0.0_real64             !< x, y (top left), width, height [pixels].
 endtype item_status_object
-
-interface ig_slider
-   !< Slider for an integer or a real value.
-   module procedure ig_slider_i32, ig_slider_r32, ig_slider_r64
-endinterface ig_slider
-
-interface ig_input
-   !< Numeric field for an integer or a real value.
-   module procedure ig_input_i32, ig_input_r64
-endinterface ig_input
 
 interface ig_em
    !< A length of `x` em [pixels]: `x` times the current font size, so that a size given in lines of text follows the
@@ -282,117 +272,6 @@ contains
    changed = logical(igCheckbox(cstr(label), c_loc(v)))
    value = logical(v)
    endfunction ig_checkbox
-
-   recursive function ig_slider_i32(label, value, vmin, vmax) result(changed)
-   !< Integer slider; true when the user changed `value`.
-   character(len=*), intent(in)    :: label   !< Label.
-   integer(int32),   intent(inout) :: value   !< Value.
-   integer(int32),   intent(in)    :: vmin    !< Minimum.
-   integer(int32),   intent(in)    :: vmax    !< Maximum.
-   logical                         :: changed !< Changed this frame.
-   integer(c_int), target          :: v       !< C copy of `value`.
-   integer(c_int), target          :: lo      !< C copy of `vmin`.
-   integer(c_int), target          :: hi      !< C copy of `vmax`.
-
-   changed = .false.
-   if (figure_draw_refused('ig_slider')) return ! a task does not draw
-   v = int(value, c_int)
-   lo = int(vmin, c_int)
-   hi = int(vmax, c_int)
-   changed = logical(igSliderScalar(cstr(label), ImGuiDataType_S32, c_loc(v), c_loc(lo), c_loc(hi), c_null_ptr, 0_c_int))
-   value = int(v, int32)
-   endfunction ig_slider_i32
-
-   recursive function ig_slider_r32(label, value, vmin, vmax) result(changed)
-   !< Single-precision slider; true when the user changed `value`.
-   character(len=*), intent(in)    :: label   !< Label.
-   real(real32),     intent(inout) :: value   !< Value.
-   real(real32),     intent(in)    :: vmin    !< Minimum.
-   real(real32),     intent(in)    :: vmax    !< Maximum.
-   logical                         :: changed !< Changed this frame.
-   real(c_float), target           :: v       !< C copy of `value`.
-   real(c_float), target           :: lo      !< C copy of `vmin`.
-   real(c_float), target           :: hi      !< C copy of `vmax`.
-
-   changed = .false.
-   if (figure_draw_refused('ig_slider')) return ! a task does not draw
-   v = real(value, c_float)
-   lo = real(vmin, c_float)
-   hi = real(vmax, c_float)
-   changed = logical(igSliderScalar(cstr(label), ImGuiDataType_Float, c_loc(v), c_loc(lo), c_loc(hi), c_null_ptr, &
-                                    0_c_int))
-   value = real(v, real32)
-   endfunction ig_slider_r32
-
-   recursive function ig_slider_r64(label, value, vmin, vmax) result(changed)
-   !< Double-precision slider; true when the user changed `value`.
-   character(len=*), intent(in)    :: label   !< Label.
-   real(real64),     intent(inout) :: value   !< Value.
-   real(real64),     intent(in)    :: vmin    !< Minimum.
-   real(real64),     intent(in)    :: vmax    !< Maximum.
-   logical                         :: changed !< Changed this frame.
-   real(c_double), target          :: v       !< C copy of `value`.
-   real(c_double), target          :: lo      !< C copy of `vmin`.
-   real(c_double), target          :: hi      !< C copy of `vmax`.
-
-   changed = .false.
-   if (figure_draw_refused('ig_slider')) return ! a task does not draw
-   v = real(value, c_double)
-   lo = real(vmin, c_double)
-   hi = real(vmax, c_double)
-   changed = logical(igSliderScalar(cstr(label), ImGuiDataType_Double, c_loc(v), c_loc(lo), c_loc(hi), c_null_ptr, &
-                                    0_c_int))
-   value = real(v, real64)
-   endfunction ig_slider_r64
-
-   recursive function ig_input_r64(label, value, step, format, stat) result(changed)
-   !< Numeric input field for a real value; true when the user changed it. `format`: a C printf format of one real
-   !< value (`'%.3f'`, `'%8.2e'`, `'x = %.4g m'`), checked: one conversion `f`, `e`, `g` or `a`, with optional flags,
-   !< width and precision, and any `%%`. Statuses: `FIG_ERR_ARGUMENT` for any other format (nothing is drawn, `value`
-   !< is unchanged), `FIG_ERR_STATE` from a task; `stat` absent: `error stop` with the message.
-   character(len=*), intent(in)            :: label   !< Label.
-   real(real64),     intent(inout)         :: value   !< Value.
-   real(real64),     intent(in),  optional :: step    !< +/- buttons step (default: none).
-   character(len=*), intent(in),  optional :: format  !< printf format of one real (default '%.6g').
-   integer(int32),   intent(out), optional :: stat    !< Status.
-   logical                                 :: changed !< Changed this frame.
-   real(c_double), target                  :: v       !< C copy of `value`.
-   real(c_double)                          :: s       !< Step.
-
-   changed = .false.
-   if (figure_draw_refused('ig_input', stat)) return ! a task does not draw
-   if (present(format)) then
-      if (format_refused('ig_input', 'format', format, FORMAT_REAL, stat)) return
-   endif
-   v = real(value, c_double)
-   s = 0.0_c_double
-   if (present(step)) s = real(step, c_double)
-   if (present(format)) then
-      changed = logical(igInputDouble(cstr(label), c_loc(v), s, 10.0_c_double * s, cstr(format), 0_c_int))
-   else
-      changed = logical(igInputDouble(cstr(label), c_loc(v), s, 10.0_c_double * s, cstr('%.6g'), 0_c_int))
-   endif
-   value = real(v, real64)
-   call figure_check(FIG_OK, stat)
-   endfunction ig_input_r64
-
-   recursive function ig_input_i32(label, value, step) result(changed)
-   !< Numeric input field for an integer value; true when the user changed it.
-   character(len=*), intent(in)           :: label   !< Label.
-   integer(int32),   intent(inout)        :: value   !< Value.
-   integer(int32),   intent(in), optional :: step    !< +/- buttons step (default: none).
-   logical                                :: changed !< Changed this frame.
-   integer(c_int), target                 :: v       !< C copy of `value`.
-   integer(c_int)                         :: s       !< Step.
-
-   changed = .false.
-   if (figure_draw_refused('ig_input')) return ! a task does not draw
-   v = int(value, c_int)
-   s = 0_c_int
-   if (present(step)) s = int(step, c_int)
-   changed = logical(igInputInt(cstr(label), c_loc(v), s, 10_c_int * s, 0_c_int))
-   value = int(v, int32)
-   endfunction ig_input_i32
 
    recursive function ig_input_text(label, value, hint, flags) result(changed)
    !< A text field bound to `value`; true when the user edited it. The text can be as long as `value` (its length is

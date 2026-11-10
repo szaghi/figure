@@ -262,6 +262,10 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   a `stretch` weight and how a column sorts and hides; `ig_table_sort` reports the order the user asks (the program
   sorts a permutation of its rows); `ig_table_row_color`, `ig_table_hovered_column`, `ig_table_column_enabled`;
   `ig_tree_node(..., span_all_columns)`; every `ImGuiTableFlags_*` exported ([Tables](widgets#tables)): done.
+- **Numbers and choices:** `ig_input`, `ig_drag` and `ig_slider` for `int32`, `int64`, `real32` and `real64`, scalar
+  or vector, with checked formats (an `int64`'s written as an `int32`'s), `scale='log'` and `clamp`; `ig_input`'s
+  `enter_returns` and `read_only`; `ig_slider_angle` (radians shown in degrees), `ig_drag_range`; `ig_radio` and
+  `ig_list_box` (clipped, a height in pixels) ([Numbers](widgets#numbers), [Choices](widgets#choices)): done.
 
 ## Next
 

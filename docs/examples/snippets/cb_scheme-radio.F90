@@ -1,0 +1,6 @@
+call ig_separator_text('scheme')
+if (ig_radio('WENO5', scheme, 1_int32)) call said('scheme')
+call ig_same_line()
+if (ig_radio('WENO7', scheme, 2_int32)) call said('scheme')
+call ig_same_line()
+if (ig_radio('TVD', scheme, 3_int32)) call said('scheme')

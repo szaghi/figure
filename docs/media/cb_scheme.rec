@@ -1,0 +1,22 @@
+#! program build/docs-examples/bin/cb_scheme
+#! frames  330
+#! poster  320
+# TVD clicked: chosen, and the limiter combo appears; the combo opened and superbee picked; the list of blocks scrolled
+# by the wheel and a block clicked: highlighted, and named in the line below.
+0   move 330 300
+10  move 174 74 15
+35  down
+36  up
+55  move 90 99 15
+75  down
+76  up
+95  move 90 184 15
+115 down
+116 up
+140 move 100 200 15
+160 wheel 0 -1
+170 wheel 0 -1
+180 wheel 0 -1
+200 move 100 230 12
+225 down
+226 up

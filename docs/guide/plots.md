@@ -60,8 +60,9 @@ scientific maps, ImPlot's own and the user's ([Colormaps](colormaps)).
 
 Labels of numbers take a C `printf` format: the tick labels (`ip_setup_axes`' `xformat` and `yformat`), the values in
 a heatmap's cells and on its colour bar (`label_format` of `ip_heatmap`, `ip_colormap_scale`,
-`ip_colormap_legend`), and the numeric field `ig_input` ([Widgets](widgets#controls)). Every value printed is a real,
-and FIGURE checks the format before Dear ImGui or ImPlot uses it:
+`ip_colormap_legend`), and the number widgets (`ig_input`, `ig_drag`, `ig_slider`, `ig_slider_angle`,
+`ig_drag_range`: [Numbers](widgets#numbers)). The plots print reals, and FIGURE checks the format before Dear ImGui or
+ImPlot uses it:
 
 - **exactly one conversion of a real:** `f` or `F` (fixed point), `e` or `E` (exponent), `g` or `G` (the shorter of
   the two), `a` or `A` (hexadecimal);
@@ -85,6 +86,11 @@ text (`'%d'`, `'%i'`, `'%s'`), `%n`, `*` (`'%*f'`, `'%.*f'`), a length modifier 
 ([Colormaps](colormaps#a-colour-scale-legend)). The message names the procedure, the
 argument and the format: `ip_setup_axes: xformat '%s' is not a format of a real: one conversion %f, %e, %g or %a (or
 %F, %E, %G, %A) expected, with optional flags, width and precision` ([Errors](errors)).
+
+The number widgets take a format of their value's family: a real's as above, and for `int32` and `int64` values one
+conversion `d`, `i` or `u` under the same rules (`'%5d'`, `'%d cells'`); an `int64`'s is written as an `int32`'s,
+and FIGURE adds the length modifier C needs (`'%lld'`). A conversion longer than 24 characters is refused too (Dear
+ImGui copies it into a buffer of 32 bytes).
 
 C's formatter reads the value as the format says, and a format that does not match it is undefined behaviour: before
 v0.3.1 a `'%d'` given for a real printed a wrong label, and a `'%n'` for a heatmap's labels stopped the program

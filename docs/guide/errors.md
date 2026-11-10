@@ -32,7 +32,7 @@ Without `stat`:
 |---|---|---|
 | `FIG_OK` | 0 | success |
 | `FIG_ERR_STATE` | 1 | call not allowed in the current state: `init` twice, `next_frame` before `init`, a process started again while it runs ([Processes](processes#statuses)), a drawing procedure called from a task ([Tasks](processes#tasks)), a file dialog or browser whose id is still open ([File dialogs](frame-loop#file-dialogs)), `ip_annotation` outside a plot, a usage error: a wrong end, a scope left open, a drawing call with no frame open ([Pairing and frames](#pairing-and-frames)) |
-| `FIG_ERR_ARGUMENT` | 2 | invalid argument: non-positive window size, `ip_line` arrays of different sizes, a palette below the [contrast rule](styles#the-contrast-rule), a text of 2 GiB or more for a [text buffer](widgets#multi-line-text), an unknown colormap name or a malformed colormap file ([Colormaps](colormaps#statuses-and-modes)), a colour without 4 components or `nlevels` < 1 for the [plot extras and contours](plots#error-bars-annotations-and-drag-tools), a mesh array not contiguous or a connectivity index out of range for a [3-D view](view3d#statuses-and-modes), an unknown key or scope of a [shortcut](menus#status-modes-and-threads), an unknown delay of [`ig_item_hovered`](widgets#what-happened-to-an-item), a ratio outside [0, 1], an unknown axis or an offset below -1 for [scrolling and focus](widgets#scrolling-and-focus), an unknown `where` or a negative width for the [alignment calls](widgets#layout), a `printf` format that is not a format of one real for `ig_input`, `ip_setup_axes`, `ip_heatmap`, `ip_colormap_scale` or `ip_colormap_legend` ([Formats](plots#formats)) |
+| `FIG_ERR_ARGUMENT` | 2 | invalid argument: non-positive window size, `ip_line` arrays of different sizes, a palette below the [contrast rule](styles#the-contrast-rule), a text of 2 GiB or more for a [text buffer](widgets#multi-line-text), an unknown colormap name or a malformed colormap file ([Colormaps](colormaps#statuses-and-modes)), a colour without 4 components or `nlevels` < 1 for the [plot extras and contours](plots#error-bars-annotations-and-drag-tools), a mesh array not contiguous or a connectivity index out of range for a [3-D view](view3d#statuses-and-modes), an unknown key or scope of a [shortcut](menus#status-modes-and-threads), an unknown delay of [`ig_item_hovered`](widgets#what-happened-to-an-item), a ratio outside [0, 1], an unknown axis or an offset below -1 for [scrolling and focus](widgets#scrolling-and-focus), an unknown `where` or a negative width for the [alignment calls](widgets#layout), a `printf` format that is not a format of one real for `ip_setup_axes`, `ip_heatmap`, `ip_colormap_scale` or `ip_colormap_legend`, or not one of the value's family for a number widget ([Formats](plots#formats)), an argument of a number widget Dear ImGui would assert on: a bound NaN or beyond half the range of the kind, a speed not above 0, an unknown scale, a vector of no components ([Numbers and choices](#numbers-and-choices)) |
 | `FIG_ERR_FAILED` | 3 | the platform (SDL, OpenGL) reported a failure: no display, no OpenGL 3 context, a program that cannot be started |
 | `FIG_ERR_EXCEPTION` | 4 | a C++ exception was caught at the C boundary |
 
@@ -58,8 +58,30 @@ procedure, the argument and the format, and nothing is drawn. The full program c
 | Procedure and argument | Message |
 |---|---|
 | `ig_input`, `format` | `ig_input: format '<format>' is not a format of a real: one conversion %f, %e, %g or %a (or %F, %E, %G, %A) expected, with optional flags, width and precision` |
+| `ig_input`, `ig_drag`, `ig_slider`, `ig_drag_range` of an integer, `format` | `<procedure>: format '<format>' is not a format of an integer: one conversion %d, %i or %u expected, with optional flags, width and precision` |
+| the same of a real, and `ig_slider_angle` | as `ig_input`'s above, starting with the procedure's name |
 | `ip_setup_axes`, `xformat` / `yformat` | the same, starting `ip_setup_axes: xformat` (or `yformat`) |
 | `ip_heatmap`, `ip_colormap_scale`, `ip_colormap_legend`, `label_format` | the same, starting `<procedure>: label_format` (`ip_colormap_legend` refuses only a format with a conversion: one without is text) |
+
+### Numbers and choices
+
+The number widgets and the list box ([Numbers](widgets#numbers), [Choices](widgets#choices)) check their arguments
+on the Fortran side, before Dear ImGui sees them. A wrong argument is `FIG_ERR_ARGUMENT`: nothing is drawn, the value
+is left alone, the call returns `.false.` (absent `stat`, `error stop` with the message). `<p>` is the procedure,
+`<half>` half the largest value of the kind (1073741823 for an `int32`; reals are written as `1.70141E+038`).
+
+| Failure | Message |
+|---|---|
+| a format of the other family, with no conversion or more than one | as in the table above: `<p>: format '<format>' is not a format of an integer: ...` (or `of a real`) |
+| a conversion longer than 24 characters | `<p>: format '<format>' has a conversion longer than 24 characters` |
+| an unknown `scale` | `<p>: unknown scale '<scale>' ('linear' or 'log')` |
+| `scale='log'` for a drag without both bounds | `ig_drag: scale 'log' needs vmin and vmax` |
+| a bound NaN | `<p>: vmin is NaN` (`vmax`, `deg_min`, `deg_max`, `radians`, `height`, `lo`, `hi`) |
+| a bound beyond half the range of the kind | `<p>: vmax <value> is out of -<half> to <half>` |
+| `vmin > vmax` for a drag or a range; `lo > hi` | `<p>: vmin <value> is above vmax <value>`; `ig_drag_range: lo <value> is above hi <value>` |
+| a `speed` not above 0, NaN or beyond single precision | `<p>: speed <value> is not above 0 and within single precision` |
+| an angle or an end in degrees beyond single precision | `ig_slider_angle: radians <value> is out of ...`; `deg_min <value> is out of ...` |
+| a vector of no components | `<p>: value has no components` |
 
 ### Tables
 

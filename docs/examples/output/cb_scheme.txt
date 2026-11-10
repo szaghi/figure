@@ -1,0 +1,3 @@
+$ ./cb_scheme --check
+frame 9: scheme TVD
+frame 29: block 17 (scrolled, then picked)

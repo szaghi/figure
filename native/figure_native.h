@@ -213,6 +213,16 @@ typedef struct fig_item_status {
 int    fig_last_item(fig_item_status *s);
 /* The item drawn last changed its value on this frame (MarkItemEdited): for widgets FIGURE composes (ig_combo). */
 void   fig_mark_last_item_edited(void);
+/* Numbers and choices (figure_numbers.F90). drag_range: two drags side by side for the ends of a range [*lo, *hi] of
+ * one ImGuiDataType (DragFloatRange2's layout for any type), then the label; *lo is kept in [*vmin, *hi] and *hi in
+ * [*lo, *vmax] (both bounds always given); format NULL: Dear ImGui's default; flags ImGuiSliderFlags. Returns 1 when
+ * either end changed. list_box: a list of count items, each item_len bytes of items (trailing blanks not shown), in a
+ * box height pixels high (> 0), Dear ImGui's default height for 0 (up to 7 items), the space left minus -height for
+ * < 0; *current is the 0-based index chosen (any other value: none); only the rows in view are drawn. Returns 1 on
+ * the frame the user picks an item (*current is then its index), and marks the list box edited. */
+int    fig_drag_range(const char *label, int data_type, void *lo, void *hi, float speed, const void *vmin,
+                      const void *vmax, const char *format, int flags);
+int    fig_list_box(const char *label, int *current, const char *items, int item_len, int count, double height);
 /* An aligned group (ig_align_begin/ig_align_end): where 1 centre, 2 right of the space left on the line, 0 not moved.
  * The group's width is remembered from the previous frame in the current window's storage, keyed by id (GetID); the
  * first frame, or a frame on which the width changed, asks for one more frame. fig_align_next moves the cursor for an

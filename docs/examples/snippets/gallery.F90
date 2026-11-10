@@ -1,6 +1,6 @@
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
-!< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet"), and the
-!< layout metrics (run with "layout_metrics").
+!< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet"), the layout
+!< metrics (run with "layout_metrics") and the numbers and choices (run with "numbers_and_choices").
 program gallery
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet").
@@ -12,8 +12,11 @@ program gallery
 !< (1 em), the line and frame heights with and without spacing, a width in em, the space left, the window padding, the
 !< item spacing, an indent and a right-aligned group. The lines are drawn through Dear ImGui's draw list of the window
 !< (cimgui's ImDrawList_* functions, declared here: FIGURE has no drawing wrappers yet).
+!<
+!< "numbers_and_choices" draws every number widget of each kind, scale and shape, and the three ways to choose: radio
+!< buttons, a combo, a list box; each with its call written beside it.
 use, intrinsic :: iso_c_binding, only : c_char, c_float, c_int, c_null_char, c_null_ptr, c_ptr
-use, intrinsic :: iso_fortran_env, only : int32, int64, real64
+use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, &
                    ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_input, ig_same_line, ig_selectable,          &
                    ig_separator, ig_set_next_window, ig_slider, ig_text, ig_text_colored, ig_text_disabled,              &
@@ -22,6 +25,8 @@ use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_dock_id, ig_
 use figure, only : ig_align_begin, ig_align_end, ig_align_text_to_frame_padding, ig_available, ig_em, ig_font_size, &
                    ig_frame_height, ig_get_style_var, ig_indent, ig_input_text, ig_last_item, ig_line_height,         &
                    ig_pop_item_width, ig_push_item_width, ig_unindent, item_status_object, ig_dummy, ig_text_size
+use figure, only : ig_combo, ig_drag, ig_drag_range, ig_list_box, ig_radio, ig_separator_text, &
+                   ig_set_next_item_width, ig_slider_angle, ig_text_disabled
 use figure_cimgui, only : igGetWindowDrawList, im_vec2
 
 implicit none
@@ -88,7 +93,7 @@ integer(int32)               :: left                             !< Its left are
 integer(int32)               :: right                            !< Its right area.
 integer(int32)               :: top                              !< The upper right area.
 integer(int32)               :: bottom                           !< The lower right area.
-character(len=16)            :: arg                              !< Command argument.
+character(len=32)            :: arg                              !< Command argument.
 character(len=:), allocatable :: names(:)                        !< Every colormap name.
 character(len=12)            :: own(16)                          !< ImPlot's own colormaps.
 character(len=24)            :: label                            !< Legend label.
@@ -111,6 +116,14 @@ if (trim(arg) == 'layout_metrics') then
    call app%init('FIGURE: layout metrics', 680_int32, 400_int32)
    do while (app%next_frame())
       call metrics()
+   enddo
+   call app%destroy()
+   stop
+endif
+if (trim(arg) == 'numbers_and_choices') then
+   call app%init('FIGURE: numbers and choices', 1010_int32, 450_int32)
+   do while (app%next_frame())
+      call numbers_and_choices()
    enddo
    call app%destroy()
    stop
@@ -228,6 +241,95 @@ enddo
 call app%destroy()
 
 contains
+   subroutine numbers_and_choices()
+   !< Every number widget, by kind, shape and scale, then the three ways to choose; the call beside each widget.
+   integer(int32), save :: n32 = 128_int32                                     !< An int32.
+   integer(int64), save :: n64 = 6000000000_int64                              !< An int64 beyond 2**31.
+   real(real32),   save :: r32 = 1.5e-4_real32                                 !< A real32.
+   real(real64),   save :: r64 = 0.8_real64                                    !< A real64.
+   real(real64),   save :: v3(3) = [0.0_real64, 0.0_real64, -9.81_real64]      !< A 3-vector.
+   integer(int32), save :: grid(2) = [256_int32, 128_int32]                    !< An integer 2-vector.
+   real(real64),   save :: cfl = 0.1_real64                                    !< On a log scale.
+   real(real64),   save :: angle = 0.785398_real64                             !< An angle [radians].
+   real(real64),   save :: lo = 0.2_real64                                     !< A range.
+   real(real64),   save :: hi = 0.7_real64                                     !< ...
+   integer(int32), save :: scheme = 2_int32                                    !< A radio group.
+   integer(int32), save :: limiter = 4_int32                                   !< A combo.
+   integer(int32), save :: block = 3_int32                                     !< A list box.
+   character(len=10)    :: blocks(12)                                          !< The list.
+   real(real64)         :: w                                                   !< Width of the widgets [pixels].
+
+   do i = 1_int32, size(blocks, kind=int32)
+      write(blocks(i), '(A,I0)') 'block ', i
+   enddo
+   w = ig_em(15.0_real64)
+   call ig_set_next_window(10.0_real64, 10.0_real64, 640.0_real64, 430.0_real64)
+   if (ig_begin('Numbers')) then
+      call ig_separator_text('fields: ig_input')
+      call ig_set_next_item_width(w)
+      if (ig_input('int32', n32, step=1_int32)) continue
+      call note('ig_input(..., n32, step=1)')
+      call ig_set_next_item_width(w)
+      if (ig_input('int64', n64, format='%d cells')) continue
+      call note("format='%d cells'")
+      call ig_set_next_item_width(w)
+      if (ig_input('real32', r32, format='%.3e')) continue
+      call note("format='%.3e'")
+      call ig_set_next_item_width(w)
+      if (ig_input('vector', v3, format='%.2f')) continue
+      call note('a vector of 3 real64')
+      call ig_separator_text('drag boxes: ig_drag')
+      call ig_set_next_item_width(w)
+      if (ig_drag('real64', r64, speed=0.01_real64, format='%.2f')) continue
+      call note('speed=0.01')
+      call ig_set_next_item_width(w)
+      if (ig_drag('gravity', v3, speed=0.01_real64, format='%.2f m/s²')) continue
+      call note("format='%.2f m/s²'")
+      call ig_set_next_item_width(w)
+      if (ig_drag('cells', grid, speed=1.0_real64, vmin=1_int32, vmax=4096_int32)) continue
+      call note("a vector of 2 int32")
+      call ig_separator_text('sliders: ig_slider, ig_slider_angle')
+      call ig_set_next_item_width(w)
+      if (ig_slider('linear', r64, 0.0_real64, 1.0_real64)) continue
+      call note('ig_slider(..., 0.0, 1.0)')
+      call ig_set_next_item_width(w)
+      if (ig_slider('CFL', cfl, 1.0e-3_real64, 10.0_real64, format='%.3g', scale='log')) continue
+      call note("scale='log', 1e-3 to 10")
+      call ig_set_next_item_width(w)
+      if (ig_slider_angle('angle', angle, 0.0_real64, 360.0_real64)) continue
+      call note('radians shown in degrees')
+      call ig_separator_text('a range: ig_drag_range')
+      call ig_set_next_item_width(w)
+      if (ig_drag_range('range', lo, hi, speed=0.01_real64, vmin=0.0_real64, vmax=1.0_real64, format='%.2f')) continue
+      call note('lo, hi in [0, 1]')
+   endif
+   call ig_end()
+   call ig_set_next_window(660.0_real64, 10.0_real64, 340.0_real64, 430.0_real64)
+   if (ig_begin('Choices')) then
+      call ig_separator_text('a few, all shown: ig_radio')
+      if (ig_radio('WENO5', scheme, 1_int32)) continue
+      call ig_same_line()
+      if (ig_radio('WENO7', scheme, 2_int32)) continue
+      call ig_same_line()
+      if (ig_radio('TVD', scheme, 3_int32)) continue
+      call ig_separator_text('many, on demand: ig_combo')
+      call ig_set_next_item_width(w)
+      if (ig_combo('limiter', limiter, [character(len=10) :: 'minmod', 'van Leer', 'van Albada', 'superbee'])) continue
+      call ig_separator_text('a long list in view: ig_list_box')
+      call ig_set_next_item_width(w)
+      if (ig_list_box('block', block, blocks)) continue
+      call ig_text_disabled('(7 rows shown, it scrolls)')
+   endif
+   call ig_end()
+   endsubroutine numbers_and_choices
+
+   subroutine note(text)
+   !< A note on the widget just drawn, in grey, on its line.
+   character(len=*), intent(in) :: text !< What the widget shows.
+   call ig_same_line()
+   call ig_text_disabled(text)
+   endsubroutine note
+
    subroutine metrics()
    !< The layout metrics over a form: each length FIGURE's layout calls give, as a dimension line, its call written in
    !< a column at the right, level with it. The form leaves an empty row (`ig_dummy`) below each part for its lines.

@@ -53,20 +53,14 @@ as long as `ig_begin` is called for it, so guard the call with the same variable
 | `ig_button(label [, width] [, height])` | none | on the frame it is clicked |
 | `ig_tool_button(label, icon [, width] [, height] [, selected] [, accent])` | none | on the frame it is clicked |
 | `ig_checkbox(label, value)` | `logical` | when toggled |
-| `ig_slider(label, value, vmin, vmax)` | `integer(int32)`, `real(real32)` or `real(real64)`; `vmin`, `vmax` of the same kind | when changed |
-| `ig_input(label, value [, step] [, format] [, stat])` | `integer(int32)` or `real(real64)` (`format` and `stat` for reals) | when changed |
+| `ig_slider(label, value, vmin, vmax [, format] [, scale] [, clamp] [, stat])` | `int32`, `int64`, `real32` or `real64`, scalar or vector ([Numbers](#numbers)) | when changed |
+| `ig_input(label, value [, step] [, format] [, enter_returns] [, read_only] [, stat])` | `int32`, `int64`, `real32` or `real64`, scalar or vector ([Numbers](#numbers)) | when changed |
 | `ig_input_text(label, value [, hint] [, flags])` | `character(len=*)` | when edited |
 | `ig_combo(label, current, items)` | `integer(int32)`: index into the `character` array `items` | when an item is picked |
 
 - `ig_button` sizes are in pixels; the default fits the label.
-- `ig_slider` is generic: the kind of `value` selects the specific procedure. The user can also ctrl-click it to type
-  a value.
-- `ig_input` shows `-` and `+` buttons when `step` is given (ctrl-click steps by `10 * step`); `format` is a C
-  `printf` format of one real, default `'%.6g'`: `'%.3f'` (as Fortran's `F0.3`), `'%8.2e'` (`ES8.2`),
-  `'x = %.4g m'`. It is checked: one conversion `f`, `e`, `g` or `a` (or `F`, `E`, `G`, `A`), with optional flags,
-  width and precision, and any `%%`; another (`'%d'`, `'%s'`, `'%f %f'`, `'%lf'`) is refused with
-  `FIG_ERR_ARGUMENT`, the field not drawn and the value unchanged (`stat` absent: `error stop`). The full rule:
-  [Formats](plots#formats).
+- `ig_slider` and `ig_input`, with the drag boxes, angles, ranges and vectors, are in [Numbers](#numbers); radio
+  buttons and list boxes, the other ways to choose, in [Choices](#choices).
 - `ig_input_text` edits a `character` variable in place. **Its length is the field's capacity**: a
   `character(len=64)` holds at most 64 characters, and typing stops there. Trailing blanks are not part of the text
   (Fortran pads with them), so the field starts with `trim(value)`. `hint` is grey text shown while the field is empty
@@ -96,6 +90,161 @@ if (ig_tool_button('Input', ICON_FILE_PEN, selected=tool == 1)) tool = 1
 call ig_tooltip('the input files')
 if (ig_tool_button('Monitor', ICON_ACTIVITY, selected=tool == 2)) tool = 2
 ```
+
+## Numbers
+
+<Media name="numbers_and_choices" alt="Two windows. Numbers: fields for an int32 with - and + buttons, an int64 shown as 6000000000 cells, a real32 as 1.500e-04 and a vector of three reals; drag boxes for a real, a gravity vector shown as 0.00 m/s², 0.00 m/s², -9.81 m/s² and two integers; a linear slider, a CFL slider on a log scale at 0.1, an angle slider at 45 deg, and a range of two drag boxes 0.20 and 0.70; each with its call in grey beside it. Choices: three radio buttons WENO5, WENO7 (chosen), TVD; a combo showing superbee; a list box of blocks with block 3 highlighted, seven rows in view" caption="docs/examples/src/gallery.F90, run with numbers_and_choices" />
+
+| Procedure | Notes |
+|---|---|
+| `ig_input(label, value [, step] [, format] [, enter_returns] [, read_only] [, stat])` → `logical` | A field, typed (`InputScalar`, `InputScalarN`); `step` adds `-` and `+` buttons. |
+| `ig_drag(label, value [, speed] [, vmin] [, vmax] [, format] [, scale] [, clamp] [, stat])` → `logical` | A drag box: dragged sideways, or typed after a double click (`DragScalar`, `DragScalarN`). |
+| `ig_slider(label, value, vmin, vmax [, format] [, scale] [, clamp] [, stat])` → `logical` | A slider from `vmin` to `vmax`; ctrl-click types a value (`SliderScalar`, `SliderScalarN`). |
+| `ig_slider_angle(label, radians [, deg_min] [, deg_max] [, format] [, stat])` → `logical` | An angle kept in radians, shown and set in degrees (`SliderAngle`). |
+| `ig_drag_range(label, lo, hi [, speed] [, vmin] [, vmax] [, format] [, stat])` → `logical` | Two drag boxes for the ends of a range, `lo <= hi` kept (`DragFloatRange2`, `DragIntRange2`, for every kind). |
+
+Each returns `.true.` on the frame the user changed the value, and writes the value back in place
+([Values are your variables](#values-are-your-variables)).
+
+**Kinds.** `value` is `integer(int32)`, `integer(int64)`, `real(real32)` or `real(real64)`: the kind selects the
+specific procedure, and Dear ImGui edits the value in that kind (no conversion through another one: an `int64` holds
+6000000000, a `real64` keeps its 15 digits). `step`, `vmin`, `vmax`, `lo` and `hi` have the kind of `value`
+(`vmin=0.0_real32` for a `real32`); `speed` is `real(real64)` for every kind. `ig_slider_angle` takes `real32` or
+`real64`, its ends of the same kind.
+
+**Vectors.** A `value` of rank 1 is one widget of `size(value)` boxes side by side, sharing the item width
+([Tooltips and widths](#tooltips-and-widths)) and one label: a direction, a point, the cells of a grid. The bounds
+and the step are the same for every component; the call is `.true.` when any component changed, and a component
+typed into changes only itself. A vector of no components is refused.
+
+<<< @/examples/snippets/cb_vector-vector.F90{fortran}
+
+<Media name="cb_vector" video alt="A window Case with three widgets. The pointer drags the third box of gravity, -9.81 m/s², to the left: it goes down to -10.81 m/s² and the norm |g| below follows; the pointer drags the first box to the right, 0.00 to 1.50; it clicks the second field of probe, types 0.25 and presses enter; it drags the wind slider from 45 deg to 120 deg" caption="docs/examples/src/cb_vector.F90: a vector parameter with units" />
+
+**Formats.** `format` is a C `printf` format of one value of the kind's family, checked before Dear ImGui sees it:
+for a real, one conversion `f`, `e`, `g` or `a` (or `F`, `E`, `G`, `A`); for an integer, one conversion `d`, `i` or
+`u`; flags, width and precision as digits, and any other text around it, which is printed as it is: `'%.2f m/s²'`
+shows a unit in every box. An `int64` takes the formats of an `int32` (`'%d'`): FIGURE adds the length modifier C needs
+(`'%lld'`), and refuses one written by the program (length modifiers are refused for every kind). A format of the
+other family (`'%f'` for an integer, `'%d'` for a real), with no conversion, with more than one, or with a conversion
+longer than 24 characters is refused with `FIG_ERR_ARGUMENT`: nothing is drawn and the value is left alone. The full
+rule: [Formats](plots#formats).
+
+| Format | Shows 42, 1234.5678 | Resembles Fortran's |
+|---|---|---|
+| `'%d'` | `42` | `I0` |
+| `'%5d'`, `'%05d'` | `   42`, `00042` | `I5`, `I5.5` |
+| `'%+d'` | `+42` | `SP, I0` |
+| `'%d cells'` | `42 cells` | `I0, ' cells'` |
+| `'%.3f'` | `1234.568` | `F0.3` |
+| `'%10.3f'` | `  1234.568` | `F10.3` |
+| `'%.2e'` | `1.23e+03` | `ES9.2` (C writes the exponent with a lower-case `e` and at least two digits) |
+| `'%.4g'` | `1235` | `G0.4`, roughly (C drops trailing zeros) |
+| `'%.0f%%'` | `1235%` | `F0.0, '%'` |
+
+Default formats: `ig_input` `'%d'` for integers and `'%.6g'` for reals; the drags and sliders Dear ImGui's, `'%d'`
+for integers, `'%.3f'` for `real32` and `'%f'` (6 decimals) for `real64`. **Drags and sliders round a real to the
+precision the format shows** (`'%.2f'`: to hundredths): the value set is the value shown. A field does not round what
+is typed into it.
+
+**Speed, bounds, scale, clamp.** A drag changes `value` by `speed` per pixel [value units / pixel] (default 1: pass the
+step the value needs, `speed=0.01` for a value of order 1); shift multiplies it by 10, alt divides it by 100. `vmin`
+and `vmax` stop a drag (`vmin <= vmax`); without them a drag runs to half the range of the kind. A slider goes from
+`vmin` at its left end to `vmax` at its right one; `vmin > vmax` reverses it. `scale='log'` spaces the values
+logarithmically: equal distances multiply the value by equal factors, and the middle of a slider from `1e-3` to `10`
+is `0.1`, the geometric mean of its ends (a CFL number, a tolerance); a drag needs `vmin` and `vmax` for it. Ends of
+opposite signs go through a small band around zero, whose width follows the format's precision (Dear ImGui's
+logarithmic zero). A drag or a slider stops at its ends, but a value typed into it (a double click on a drag box, a
+ctrl-click on a slider) is kept as typed unless `clamp=.true.` (Dear ImGui's `ImGuiSliderFlags_AlwaysClamp`). The
+ends of a slider are within half the range of the kind (Dear ImGui's limit: ±1073741823 for an `int32`).
+
+**Fields.** `step` (> 0) adds `-` and `+` buttons; ctrl with a button steps by `10 * step`. A typed value is applied
+when the field is left (enter, tab, a click elsewhere), and the call is `.true.` on that frame or when a button is
+pressed. With `enter_returns=.true.` it is `.true.` only on the frame enter is pressed; a field left otherwise still
+changes its value, so read the value, or take `ig_last_item()`'s `deactivated_after_edit` to act on it
+([What happened to an item](#what-happened-to-an-item)). `read_only=.true.` shows the value, which the user can
+select and copy, not edit; the buttons are disabled.
+
+**Angles.** `ig_slider_angle` keeps the angle in radians in the program and shows it in degrees, `'%.0f deg'` by
+default (`format` is a format of the degrees); `deg_min` and `deg_max` are in degrees, default -360 and 360. Dear
+ImGui edits it in single precision: a `real64` angle is written only on the frames the user changes it, so an angle
+the user does not touch keeps all its digits.
+
+**Ranges.** `ig_drag_range` draws two drag boxes, `lo` and `hi`, then the label: `lo` stays between `vmin` and `hi`,
+`hi` between `lo` and `vmax`, values typed into the boxes too. Given with `lo > hi`, it is refused.
+
+- **Pairing and frame rules:** none opens a scope; call them in a window, between `next_frame` and the next one.
+  `ig_last_item()` after one describes it (a vector or a range: the whole group of boxes).
+- **Status:** the `stat` of each call is optional. A wrong argument gives `FIG_ERR_ARGUMENT`, nothing drawn, the value
+  untouched (absent `stat`: `error stop` with the message): a format refused as above, an unknown `scale`, a `'log'`
+  drag without both bounds, a bound NaN or beyond half the range of the kind, `vmin > vmax` for a drag, `lo > hi`, a
+  speed not above 0 or beyond single precision, an angle or an end in degrees beyond single precision, a vector of no
+  components. The messages are in [Error handling](errors#numbers-and-choices). With no frame open, or from a
+  [task](processes#tasks), each call is refused with `FIG_ERR_STATE`, as every drawing call.
+- **Window, headless, remote:** the same; headless, `test_drag` drags a box or a slider, `test_click` and `test_type`
+  type into a field ([Testing](testing#synthetic-input)).
+- **Threads:** the frame loop's thread only; a task is refused (`FIG_ERR_STATE`).
+- **What they do not do:** no bounds per component (one `vmin` and `vmax` for the whole vector); no unit conversion
+  (the format shows a unit; the value is in the unit the program keeps); no unsigned or 8- and 16-bit integers, no
+  vertical sliders, no wrap-around drags, no colour markers on the components (raw `igDragScalar`, `igVSliderScalar`
+  with the `ImGuiDataType_*` and `ImGuiSliderFlags_*` constants, [Raw bindings](raw-bindings)); `ig_input` does not
+  round what is typed; `ig_slider_angle` is single precision while it is dragged.
+
+::: warning Changed in v0.4.0
+`ig_input` and `ig_slider` were `int32` and `real64` fields and `int32`, `real32` and `real64` sliders with no format;
+the old calls compile and behave as before. New: every kind, vectors, `format` (checked) and `stat` for every kind,
+`scale` and `clamp`. A slider whose ends are beyond half the range of the kind was passed to Dear ImGui, whose check is
+an assertion: the program aborted inside `imgui_widgets.cpp`. From v0.4.0 it is refused first, `FIG_ERR_ARGUMENT`. The
+procedures moved from `figure_imgui` to `figure_numbers`: a program that names `figure_imgui` in a `use` for them
+takes them from `figure` instead.
+:::
+
+## Choices
+
+| Procedure | Notes |
+|---|---|
+| `ig_radio(label, current, value [, stat])` → `logical` | One option of a group sharing `current`: drawn chosen when `current == value`; a click sets `current = value` (`RadioButton`). |
+| `ig_combo(label, current, items)` → `logical` | The chosen item of `items`, in a list that opens on a click ([Controls](#controls)). |
+| `ig_list_box(label, current, items [, height] [, stat])` → `logical` | `items` in a box that stays open and scrolls; `current` the index chosen (`BeginListBox`, `ListBox`). |
+
+**Radio buttons, a combo or a list box.** Radio buttons show every option at once and take one click: a few options
+(two to five), each worth seeing, as the reconstruction scheme of a solver. A combo takes one line whatever the number
+of options, and two clicks: many options, or a form short of space, as a limiter among seven. A list box keeps several
+options in view and scrolls through the rest: a long list the user picks from again and again, as the blocks of a
+grid or the cases of a study.
+
+<<< @/examples/snippets/cb_scheme-radio.F90{fortran}
+
+<Media name="cb_scheme" video alt="A window Numerics: under scheme, the radio buttons WENO5 (chosen), WENO7 and TVD; under applied to, a list box of 64 blocks. The pointer clicks TVD: TVD is chosen and a limiter combo appears; it opens the combo and picks superbee; it scrolls the list box with the wheel and clicks block 17, which is highlighted; the line below reads TVD on block 17" caption="docs/examples/src/cb_scheme.F90: choose a scheme" />
+
+**Radio buttons.** One call per option, all with the same `current` and each with its own `value`; `ig_same_line`
+puts them on one row. A click sets `current = value` and returns `.true.` on that frame, also when the option was
+chosen already (as Dear ImGui's `RadioButton`); the click is reported as an edit by `ig_last_item`. `current` equal to
+no `value` shows none chosen.
+
+**List boxes.** `current` is the index of the chosen item, 1 to `size(items)`; any other value shows none chosen. A
+pick sets it and returns `.true.` on that frame, reported as an edit by `ig_last_item`. `height` [pixels] sets the
+box's height; 0 (default) fits up to 7 items (a list of 3 items gets 3 rows and a quarter); a negative height fills
+the window's height left but `-height` pixels. Only the rows in view are drawn, so a list of thousands costs what the
+rows on screen cost; the chosen item is always submitted, so that keyboard navigation starts from it. Trailing blanks
+of the items are not shown, and items may repeat a text (they are told apart by their index), as in `ig_combo`.
+
+<<< @/examples/snippets/cb_scheme-list.F90{fortran}
+
+The program checks itself headless (a click on TVD, the wheel over the list, a click on its top row):
+
+<<< @/examples/output/cb_scheme.txt{text}
+
+- **Pairing and frame rules:** none opens a scope (the list box's begin and end are inside `ig_list_box`).
+- **Status:** `stat` is optional. `ig_list_box` with a NaN `height`, or one beyond single precision, gives
+  `FIG_ERR_ARGUMENT` (absent `stat`: `error stop`); `ig_radio` cannot fail. With no frame open, or from a task, each is
+  refused with `FIG_ERR_STATE`.
+- **Window, headless, remote:** the same; headless, `test_click` clicks an option and `test_wheel` scrolls a list box.
+- **Threads:** the frame loop's thread only; a task is refused (`FIG_ERR_STATE`).
+- **What they do not do:** one choice only (no multiple selection: a list of `ig_selectable`, [Lists and
+  regions](#lists-and-regions)); no filter or search over the items; one line per item. Pass `items` as a whole array
+  or as a section of a fixed-length one: a section of a deferred-length array arrives wrong with gfortran and
+  nvfortran ([Known issues](known-issues#gfortran-a-section-of-a-deferred-length-character-array)).
 
 ## What happened to an item
 

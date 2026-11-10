@@ -386,6 +386,40 @@ The program checks itself headless, at 15 and at 24 pixels:
 
 [Layout](/guide/widgets#layout) has the rules: the em, groups, alignment and its first frame.
 
+### A vector parameter with units
+
+<<< @/examples/snippets/cb_vector-vector.F90{fortran}
+
+<Media name="cb_vector" video alt="A window Case: the pointer drags the third box of gravity from -9.81 to -10.81 m/s² and the first one from 0.00 to 1.50 m/s², the norm below following; it types 0.25 into the second field of probe; it drags the wind slider from 45 to 120 deg" caption="docs/examples/src/cb_vector.F90" />
+
+A `real64` array of rank 1 is one widget with a box per component, one label for the whole vector. `ig_drag` changes
+a component by `speed` per pixel (here 0.01 m/s² per pixel), and stops at `vmin` and `vmax`; `ig_input` takes a
+typed value in any component, which changes only that one. The format prints the unit in every box (`'%.2f m/s²'`),
+and the drag rounds the value to what the format shows, hundredths here. The wind is kept in radians, as the program
+computes with it, and shown and set in degrees by `ig_slider_angle`. The program checks itself headless:
+
+<<< @/examples/output/cb_vector.txt{text}
+
+[Numbers](/guide/widgets#numbers) has the kinds, the formats and their Fortran equivalents, the speed, the bounds and
+the log scale.
+
+### Choose a scheme
+
+<<< @/examples/snippets/cb_scheme-radio.F90{fortran}
+
+<<< @/examples/snippets/cb_scheme-list.F90{fortran}
+
+<Media name="cb_scheme" video alt="A window Numerics: a click on TVD chooses it and shows the limiter combo; the combo opens and superbee is picked; the list of 64 blocks scrolls under the wheel and a click chooses block 17, named in the line below" caption="docs/examples/src/cb_scheme.F90" />
+
+Three schemes, all worth seeing: radio buttons, one per scheme, sharing `scheme`; a click sets it and returns
+`.true.`. The limiter, one of seven and needed only for TVD: a combo, one line until it is opened. The block the
+scheme applies to, one of 64 and picked again and again: a list box that stays open and scrolls; only the rows in view
+are drawn. The program checks itself headless:
+
+<<< @/examples/output/cb_scheme.txt{text}
+
+[Choices](/guide/widgets#choices) has the rules: indices, heights, when to use which.
+
 ## Plots
 
 ### Plot the columns of a matrix

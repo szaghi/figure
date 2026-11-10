@@ -58,8 +58,13 @@ All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional 
 | `ig_button(label [, width] [, height])` → `logical` | a button; `.true.` on the frame it is clicked |
 | `ig_tool_button(label, icon [, width] [, height] [, selected] [, accent])` → `logical` | a workspace button: an icon above the label, framed; `selected` tinted in the accent |
 | `ig_checkbox(label, value)` → `logical` | a check box bound to a `logical`; `.true.` when toggled |
-| `ig_slider(label, value, vmin, vmax)` → `logical` | a slider for `int32`, `real32` or `real64`; `.true.` when changed |
-| `ig_input(label, value [, step] [, format] [, stat])` → `logical` | a numeric field for an `int32` or a `real64` (`format`, checked, and `stat` for reals only); `.true.` when changed |
+| `ig_input(label, value [, step] [, format] [, enter_returns] [, read_only] [, stat])` → `logical` | a field for an `int32`, `int64`, `real32` or `real64`, scalar or vector, typed; `-`/`+` buttons with `step`; `.true.` when changed ([Numbers](widgets#numbers)) |
+| `ig_drag(label, value [, speed] [, vmin] [, vmax] [, format] [, scale] [, clamp] [, stat])` → `logical` | a drag box for a number or a vector of any of the four kinds: `speed` per pixel, bounds, `'log'` scale ([Numbers](widgets#numbers)) |
+| `ig_slider(label, value, vmin, vmax [, format] [, scale] [, clamp] [, stat])` → `logical` | a slider for a number or a vector of any of the four kinds; `'log'` scale, typed values clamped with `clamp` ([Numbers](widgets#numbers)) |
+| `ig_slider_angle(label, radians [, deg_min] [, deg_max] [, format] [, stat])` → `logical` | an angle kept in radians, shown and set in degrees ([Numbers](widgets#numbers)) |
+| `ig_drag_range(label, lo, hi [, speed] [, vmin] [, vmax] [, format] [, stat])` → `logical` | two drag boxes for the ends of a range, `lo <= hi` kept ([Numbers](widgets#numbers)) |
+| `ig_radio(label, current, value [, stat])` → `logical` | a radio button of a group sharing `current`; a click sets `current = value` ([Choices](widgets#choices)) |
+| `ig_list_box(label, current, items [, height] [, stat])` → `logical` | a list of the `character` array `items` that stays open and scrolls; `current` the index chosen ([Choices](widgets#choices)) |
 | `ig_input_text(label, value [, hint] [, flags])` → `logical` | a text field bound to a `character` variable, whose length is the field's capacity; `.true.` when edited |
 | `ig_input_text_multiline(label, buffer [, width] [, height] [, read_only] [, tab_input] [, flags])` → `logical` | a field of several lines over a `text_buffer_object`, of any length; Enter a newline, undo and redo; `.true.` when edited ([Multi-line text](widgets#multi-line-text)) |
 | `text_buffer_object`: `buf%set(text [, stat])`, `buf%text()` → `character`, `buf%length()` → `int64` | the text of a multi-line field, kept by the native layer and grown as needed: replace it (CRLF becomes LF), copy it out, its length in bytes |

@@ -131,3 +131,8 @@ main = "figure_test_layout.F90"
 name = "figure_test_tables"
 source-dir = "src/tests"
 main = "figure_test_tables.F90"
+
+[[test]]
+name = "figure_test_numbers"
+source-dir = "src/tests"
+main = "figure_test_numbers.F90"
