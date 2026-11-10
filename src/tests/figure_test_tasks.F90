@@ -325,17 +325,24 @@ contains
    endsubroutine clock_monotonic
 
    subroutine clock_sleep(ok)
-   !< A sleep of 0.2 s (the system's: usleep, Sleep on Windows) measured by figure_time: 0.2 s within 20 ms. A loaded
-   !< machine wakes the thread late: up to 5 sleeps are tried, and one within 20 ms passes (a clock at a wrong rate
-   !< fails all of them).
+   !< The rate of figure_time against an independent monotonic clock (system_clock, int64) over the same sleep of the
+   !< system (usleep, Sleep on Windows) of 0.2 s: within 2 %, and at least 0.19 s. The sleep's own length is not
+   !< judged: a loaded runner wakes the thread late (macOS CI: 0.24-0.33 s), and both clocks see the same interval. A
+   !< clock at a wrong rate fails (SDL's CLOCK_MONOTONIC_RAW ran 7-11 % fast on WSL2). Up to 5 sleeps are tried, one
+   !< passing is enough: under nvfortran system_clock is the wall clock, which the system may step during one.
    logical, intent(out) :: ok         !< Outcome.
-   real(real64)         :: t0         !< Before [s].
-   real(real64)         :: elapsed(5) !< Measured [s].
+   real(real64)         :: t0         !< Before, by figure_time [s].
+   real(real64)         :: elapsed(5) !< Measured by figure_time [s].
+   real(real64)         :: ref(5)     !< Measured by system_clock [s].
+   integer(int64)       :: c0, c1     !< system_clock counts.
+   integer(int64)       :: rate       !< system_clock counts per second.
    integer(int32)       :: k          !< Attempt.
 
    ok = .false.
    elapsed = -1.0_real64
+   ref = -1.0_real64
    do k = 1_int32, size(elapsed, kind=int32)
+      call system_clock(c0, rate)
       t0 = figure_time()
 #ifdef _WIN32
       call os_sleep(200_c_int)
@@ -343,10 +350,13 @@ contains
       if (os_sleep(200000_c_int) /= 0_c_int) continue ! an interrupted sleep shows in the measure
 #endif
       elapsed(k) = figure_time() - t0
-      ok = abs(elapsed(k) - 0.2_real64) <= 0.02_real64
+      call system_clock(c1)
+      ref(k) = real(c1 - c0, real64) / real(rate, real64)
+      ok = elapsed(k) >= 0.19_real64 .and. abs(elapsed(k) - ref(k)) <= 0.02_real64 * ref(k)
       if (ok) exit
    enddo
-   if (.not. ok) write(error_unit, '(A,5(1X,F0.4))') 'clock: sleeps of 0.2 s measured [s]:', elapsed
+   if (.not. ok) write(error_unit, '(A,5(1X,F0.4),A,5(1X,F0.4))') 'clock: sleeps of 0.2 s by figure_time [s]:', &
+                                                                elapsed, '; by system_clock:', ref
    endsubroutine clock_sleep
 
    subroutine clock_in_task(ok)
