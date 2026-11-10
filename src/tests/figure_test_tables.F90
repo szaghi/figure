@@ -76,7 +76,7 @@ hovered_away = -1_int32
 value_x = 0.0_real64
 st = -1_int32
 allocate(character(len=160) :: msg(10))
-msg = ''
+msg(:) = '' ! a section: a whole-array assignment would reallocate msg to the length of '' (0)
 call app%init_headless(900_int32, 700_int32)
 do f = 1_int32, 70_int32
    if (.not. app%next_frame(s)) exit

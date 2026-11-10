@@ -528,6 +528,8 @@ contains
    class(*), allocatable       :: data    !< Result.
    real(real64)                :: t1      !< The frame's start [s].
    real(real64)                :: tw      !< Start of the wait for the task's end [s].
+   real(real64)                :: at      !< The task's call, planned [s].
+   integer(int32)              :: early   !< Frames begun before the call, woken by something else.
    integer(int32)              :: frames  !< Frames.
    integer(int32)              :: stat    !< Status.
    real(real64)                :: latency !< From the task's call to the frame [s].
@@ -537,9 +539,18 @@ contains
 
    settled = settle()
    call app%set_lazy(.true., max_wait=10.0_real64)
-   call t%start(waker_work, wake_job(action=action, n=2_int32, at=now() + 0.2_real64, hold=2.0_real64))
-   running = app%next_frame()
-   t1 = now()
+   at = now() + 0.2_real64
+   call t%start(waker_work, wake_job(action=action, n=2_int32, at=at, hold=2.0_real64))
+   ! a frame may start before the call, woken by an event that is not the task's (seen on macOS's real window, 2 of 2
+   ! runs, wake only): up to 3 are let through, and the frame measured is the first after the call (latency >= 0); a
+   ! loop that does not wait draws more than 3 in those 0.2 s and fails
+   early = -1_int32
+   do
+      early = early + 1_int32
+      running = app%next_frame()
+      t1 = now()
+      if (t1 >= at .or. .not. running .or. early >= 3_int32) exit
+   enddo
    call t%cancel()
    frames = frames_until_done(t, 10.0_real64)
    tw = now()  ! frames_until_done stops at the loop's end too (quit): the task may still be ending
@@ -557,9 +568,12 @@ contains
       endselect
    endif
    ok = ok .and. settled .and. (running .neqv. action == WAKE_BY_QUIT)
-   if (.not. ok) write(error_unit, '(A,A,A,ES11.3,A,L1,A,I0,A,L1)') 'woken by a task''s ', trim(names(action)), &
+   if (.not. ok) write(error_unit, '(A,A,A,ES11.3,A,L1,A,I0,A,L1,A,I0)') 'woken by a task''s ', trim(names(action)), &
                                                                  ': latency ', latency, ' s, next_frame ', running, &
-                                                                 ', task stat ', stat, ', settled ', settled
+                                                                 ', task stat ', stat, ', settled ', settled,     &
+                                                                 ', frames before the call ', early
+   if (ok .and. early > 0_int32) write(error_unit, '(A,A,A,I0)') 'woken by a task''s ', trim(names(action)), &
+                                                               ': frames before the call (not the task''s) ', early
    endsubroutine woken_by_task
 
    subroutine largest_request_kept(ok)

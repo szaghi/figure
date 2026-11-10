@@ -4,8 +4,8 @@ program cb_shortcuts
 !<
 !< Two panels bind ctrl+s (cmd+s on macOS): each saves its own content, and only the one with the focus fires. In the
 !< block list, up and down move the selection, but not while the name field is edited: there they are the field's
-!< (Dear ImGui's keyboard navigation moves out of the field). f5 presses the Run button wherever the focus is. f1 shows the general help, but the command field's own
-!< help while that field is edited.
+!< (Dear ImGui's keyboard navigation moves out of the field). f5 presses the Run button wherever the focus is. f1 shows
+!< the general help, but the command field's own help while that field is edited.
 !< `cb_shortcuts --check` opens no window: it presses the keys headless and prints what each did.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_end, ig_input_text, ig_selectable, ig_set_next_item_shortcut, &

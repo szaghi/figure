@@ -12,8 +12,8 @@ program figure_test_plot_marks
 !< 3. a rectangle dragged by its centre moves by the drag; a corner dragged past the opposite one is put in order when
 !<    released;
 !< 4. marks: a tag on Y1 is drawn on the left axis at its value, one on Y2 on the right axis at its value (the items on
-!<    X1/Y1), one on X1 with a text below the plot at its value, a tag without colour takes the last item's; a vertical and a horizontal infinite line span the plot area; a text is
-!<    drawn at its point, moved by its offset;
+!<    X1/Y1), one on X1 with a text below the plot at its value, a tag without colour takes the last item's; a vertical
+!<    and a horizontal infinite line span the plot area; a text is drawn at its point, moved by its offset;
 !< 5. items: a histogram of known data draws its four bars over the bins (counts 1, 2, 3, 4), its variants give known
 !<    heights (cumulative, density, one bin, strided, with a NaN, default bins, constant data); a 2-D histogram of known
 !<    points, with and without a range; stairs and stems span their points;

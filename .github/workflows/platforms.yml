@@ -114,8 +114,10 @@ jobs:
         msystem: UCRT64
         update: true
         install: git
+        # python-pydantic: FoBiS's typer needs pydantic, whose pydantic-core has no wheel for MSYS2's Python (pip
+        # would build it from source, with Rust); MSYS2's package is prebuilt
         pacboy: >-
-          gcc-fortran:p cmake:p ninja:p pkgconf:p python:p python-pip:p fpm:p sdl3:p mesa:p
+          gcc-fortran:p cmake:p ninja:p pkgconf:p python:p python-pip:p python-pydantic:p fpm:p sdl3:p mesa:p
 
     # the runner's display is 1024 x 768, narrower than figure_hello's window (1100 x 700)
     - name: Display resolution
