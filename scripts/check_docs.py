@@ -18,6 +18,9 @@ Default checks (exit 1 and a list of what is missing):
   ``<<< @/examples/...`` include names a file that exists.
 - **README:** README.md's first ```fortran block equals docs/examples/src/readme.F90, which docs/examples/build.sh
   compiles.
+- **Version:** the version strings of the docs (``VERSIONED``: the status lines of README.md, docs/index.md and
+  docs/guide/index.md, the fpm tags of README.md and docs/guide/install.md, the roadmap's section) say the version in
+  VERSION. scripts/release.sh writes VERSION and calls ``--bump``, so a release commit carries them.
 
 Options:
 
@@ -25,11 +28,18 @@ Options:
 - ``--media``: fail if the media a page shows (``<Media name>``: docs/public/media/<name>.png, .mp4, .gif) weigh more
   than 5 MB in all on that page, or if a ``<Media>`` names a recording that does not exist.
 
-Usage: python3 scripts/check_docs.py [--names] [--media]. Standard library only; run from anywhere.
+- ``--bump vX.Y.Z [--dry-run]``: write that version and today's date into the version strings (the roadmap's
+  ``## vX.Y.Z — in progress`` or ``— planned`` becomes ``— released <date>``), print the files changed, run no
+  check; ``--dry-run`` writes nothing. Fails if a string is not found (a section of the roadmap for the version
+  included).
+
+Usage: python3 scripts/check_docs.py [--names] [--media] | --bump vX.Y.Z [--dry-run]. Standard library only; run
+from anywhere.
 """
 
 from __future__ import annotations
 
+import datetime
 import re
 import sys
 import unicodedata
@@ -426,6 +436,68 @@ def check_readme() -> list[str]:
     return []
 
 
+# ------------------------------------------------------------------------------------------------- the version strings
+_V = r"v\d+\.\d+\.\d+"
+_D = r"\d{4}-\d{2}-\d{2}"
+# (file, pattern, replacement): the pattern's group "v" is the version (with its v), "d" the date; the replacement is
+# formatted with the new version (v) and the date (d)
+VERSIONED = [
+    ("README.md", rf"\*\*Status:\*\* (?P<v>{_V}), released (?P<d>{_D})", "**Status:** {v}, released {d}"),
+    ("README.md", rf'tag = "(?P<v>{_V})-fpm"', 'tag = "{v}-fpm"'),
+    ("docs/index.md", rf"FIGURE (?P<v>{_V}) is released \((?P<d>{_D})\)", "FIGURE {v} is released ({d})"),
+    ("docs/guide/index.md", rf"FIGURE (?P<v>{_V}) is released \((?P<d>{_D})\)", "FIGURE {v} is released ({d})"),
+    ("docs/guide/install.md", rf'tag = "(?P<v>{_V})-fpm"', 'tag = "{v}-fpm"'),
+]
+
+
+def check_version() -> list[str]:
+    """The version strings of the docs against VERSION, and the roadmap's section of that version released."""
+    version = (ROOT / "VERSION").read_text().strip()
+    missing: list[str] = []
+    for name, pattern, _ in VERSIONED:
+        found = [m.group("v") for m in re.finditer(pattern, (ROOT / name).read_text())]
+        if not found:
+            missing.append(f"{name}: no version string /{pattern}/")
+        missing += [f"{name}: says {v}, VERSION is {version} (python3 scripts/check_docs.py --bump {version})"
+                    for v in found if v != version]
+    roadmap = GUIDE / "roadmap.md"
+    if not re.search(rf"^## {re.escape(version)} — released {_D}$", roadmap.read_text(), re.M):
+        missing.append(f"docs/guide/roadmap.md: no section '## {version} — released <date>'")
+    return missing
+
+
+def bump_version(version: str, dry_run: bool) -> int:
+    """Write `version` and today's date into the version strings; print the files changed."""
+    if not re.fullmatch(_V, version):
+        print(f"check_docs: --bump {version}: not vX.Y.Z", file=sys.stderr)
+        return 2
+    date = datetime.date.today().isoformat()
+    texts: dict[str, str] = {}
+    errors: list[str] = []
+    for name, pattern, template in VERSIONED:
+        text = texts.get(name, (ROOT / name).read_text())
+        text, n = re.subn(pattern, template.format(v=version, d=date), text)
+        if n == 0:
+            errors.append(f"{name}: no version string /{pattern}/")
+        texts[name] = text
+    name = "docs/guide/roadmap.md"
+    text, n = re.subn(rf"^## {re.escape(version)} — (in progress|planned|released {_D})$",
+                      f"## {version} — released {date}", (ROOT / name).read_text(), flags=re.M)
+    if n != 1:
+        errors.append(f"{name}: {n} sections '## {version} — in progress' (or planned), not 1")
+    texts[name] = text
+    if errors:
+        for e in errors:
+            print(f"check_docs: --bump: {e}", file=sys.stderr)
+        return 1
+    for name, text in texts.items():
+        if (ROOT / name).read_text() != text:
+            if not dry_run:
+                (ROOT / name).write_text(text)
+            print(name)
+    return 0
+
+
 # ---------------------------------------------------------------------------------------------- the name map, the media
 def check_names() -> list[str]:
     """The name map regenerated and compared with the committed one."""
@@ -461,14 +533,21 @@ def check_media() -> list[str]:
 
 def main(argv: list[str]) -> int:
     """Run the checks asked for; print what is missing."""
+    usage = "usage: check_docs.py [--names] [--media] | --bump vX.Y.Z [--dry-run]"
+    if argv[:1] == ["--bump"]:
+        if len(argv) not in (2, 3) or argv[2:] not in ([], ["--dry-run"]):
+            print(f"check_docs: {usage}", file=sys.stderr)
+            return 2
+        return bump_version(argv[1], argv[2:] == ["--dry-run"])
     unknown = [a for a in argv if a not in ("--names", "--media")]
     if unknown:
-        print(f"check_docs: unknown option {unknown[0]} (usage: check_docs.py [--names] [--media])", file=sys.stderr)
+        print(f"check_docs: unknown option {unknown[0]} ({usage})", file=sys.stderr)
         return 2
-    missing = check_feature_map() + check_comments() + check_rows() + check_code_blocks() + check_readme()
+    missing = (check_feature_map() + check_comments() + check_rows() + check_code_blocks() + check_readme()
+               + check_version())
     done = ["the feature map lists every public procedure", "every public entity and argument has a doc comment",
             "every row's section has a compiled example", "no hand-written Fortran block",
-            "README.md's example is the compiled one"]
+            "README.md's example is the compiled one", "the docs say the version in VERSION"]
     if "--names" in argv:
         missing += check_names()
         done.append("the name map is current")

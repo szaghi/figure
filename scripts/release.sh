@@ -156,6 +156,16 @@ BEHIND="$(git rev-list --count HEAD..origin/${TRUNK} 2>/dev/null || echo 0)"
 [[ "$BEHIND" -eq 0 ]] \
   || die "${TRUNK} is ${BEHIND} commit(s) behind origin/${TRUNK} — run: git pull origin ${TRUNK}"
 
+# ── Docs' version strings ─────────────────────────────────────────────────────
+# the status lines, the fpm tags and the roadmap's section (scripts/check_docs.py, VERSIONED): checked now, so a
+# release that cannot write them stops before changing anything (the roadmap needs '## vX.Y.Z — in progress')
+HAS_DOC_VERSIONS=false
+if [[ -f scripts/check_docs.py ]]; then
+  HAS_DOC_VERSIONS=true
+  python3 scripts/check_docs.py --bump "$NEW_TAG" --dry-run > /dev/null \
+    || die "the docs' version strings cannot be set to ${NEW_TAG} (see above)"
+fi
+
 # ── fpm manifest ──────────────────────────────────────────────────────────────
 # fpm.toml carries its own copy of the version (X.Y.Z, without the v prefix that
 # fpm does not accept): it is kept aligned when the manifest declares one.
@@ -176,6 +186,7 @@ echo -e "${BOLD}This will:${RESET}"
 echo -e "  1. Regenerate ${CYAN}CHANGELOG.md${RESET} up to ${BOLD}${NEW_TAG}${RESET}"
 echo -e "  2. Update ${CYAN}VERSION${RESET} to ${BOLD}${NEW_TAG}${RESET}"
 $HAS_FPM_VERSION && echo -e "     and the version of ${CYAN}fpm.toml${RESET} to ${BOLD}${NEW_TAG#v}${RESET}"
+$HAS_DOC_VERSIONS && echo -e "     and the docs' version strings and roadmap section (${CYAN}check_docs.py --bump${RESET})"
 echo -e "  3. Commit with message: ${CYAN}chore(release): ${NEW_TAG}${RESET}"
 echo -e "  4. Create annotated tag ${BOLD}${NEW_TAG}${RESET}"
 echo -e "  5. Push commit and tag to origin  →  triggers GitHub release workflow"
@@ -206,6 +217,14 @@ if $HAS_FPM_VERSION; then
   mv fpm.toml.tmp fpm.toml
   grep -q "^version = \"${NEW_TAG#v}\"$" fpm.toml || die "fpm.toml update failed — version mismatch"
   success "fpm.toml updated to ${NEW_TAG#v}"
+fi
+
+# ── Update the docs' version strings ──────────────────────────────────────────
+if $HAS_DOC_VERSIONS; then
+  info "Updating the docs' version strings…"
+  DOC_CHANGED="$(python3 scripts/check_docs.py --bump "$NEW_TAG")" || die "check_docs.py --bump ${NEW_TAG} failed"
+  [[ -n "$DOC_CHANGED" ]] && mapfile -t DOC_FILES <<< "$DOC_CHANGED" && RELEASE_FILES+=("${DOC_FILES[@]}")
+  success "Docs updated to ${NEW_TAG}"
 fi
 
 # ── Commit ────────────────────────────────────────────────────────────────────
