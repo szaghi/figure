@@ -55,22 +55,41 @@ contains
    endsubroutine test_next_frame
 
    subroutine test_plot_tick(axis, index, label, count, stat)
-   !< The label of tick `index` (from 1) on `axis` (`'x'` or `'y'`) of the plot being declared, and the number of ticks:
-   !< call it between `ip_begin_plot` and `ip_end_plot`, after the setup (`ip_setup_axes`) and an item. `label` is ''
+   !< The label of tick `index` (from 1) on `axis` of the plot being declared, and the number of ticks: call it between
+   !< `ip_begin_plot` and `ip_end_plot`, after the setup (`ip_setup_axes`, `ip_setup_axis`) and an item (it ends the
+   !< setup). `axis` is `'x1'`, `'x2'`, `'x3'`, `'y1'`, `'y2'` or `'y3'` (`'x'` and `'y'`: x1 and y1). `label` is ''
    !< for an index out of range.
-   character(len=*),              intent(in)            :: axis   !< `'x'` or `'y'`.
+   character(len=*),              intent(in)            :: axis   !< `'x1'`..`'x3'`, `'y1'`..`'y3'`, `'x'`, `'y'`.
    integer(int32),                intent(in)            :: index  !< Tick, from 1.
    character(len=:), allocatable, intent(out)           :: label  !< Its label.
    integer(int32),                intent(out), optional :: count  !< Ticks on the axis.
-   integer(int32),                intent(out), optional :: stat   !< Status: `FIG_ERR_STATE` outside a plot.
+   integer(int32),                intent(out), optional :: stat   !< Status: `FIG_ERR_STATE` outside a plot or for an
+                                                                  !< axis not set up, `FIG_ERR_ARGUMENT` for an
+                                                                  !< unknown axis.
    character(kind=c_char, len=128)                      :: buf    !< Label buffer.
    integer(c_int)                                       :: n      !< Ticks.
    integer(c_int)                                       :: l      !< Label length.
-   integer(c_int)                                       :: a      !< Axis code.
+   integer(c_int)                                       :: a      !< Axis code (ImAxis).
 
    label = ''
-   a = 0_c_int
-   if (axis == 'y') a = 1_c_int
+   select case (trim(axis))
+   case ('x', 'x1')
+      a = 0_c_int
+   case ('x2')
+      a = 1_c_int
+   case ('x3')
+      a = 2_c_int
+   case ('y', 'y1')
+      a = 3_c_int
+   case ('y2')
+      a = 4_c_int
+   case ('y3')
+      a = 5_c_int
+   case default
+      a = -1_c_int
+   endselect
+   n = 0_c_int
+   l = 0_c_int
    call figure_check(fig_plot_tick_label(a, int(index, c_int), buf, len(buf, c_int), n, l), stat)
    if (present(count)) count = int(n, int32)
    if (l > 0_c_int) label = buf(1:min(l, len(buf, c_int)))

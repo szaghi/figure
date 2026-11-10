@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    plot_axes
+#! from    10
+#! frames  1
+# six axis layouts, each plot titled with its calls: two y axes, three y axes, x2 on top with fixed ticks, log, symlog, time

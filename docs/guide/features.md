@@ -171,10 +171,16 @@ Details: [Styles](styles), [Icons](styles#icons).
 | Procedure | Purpose |
 |---|---|
 | `ip_begin_plot(title [, width] [, height] [, equal])` → `logical` | begin a plot; `.true.` when visible |
-| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat] [, stat])` | axis labels; the axes fit the data on first use, every frame with `auto_fit=.true.`; `xlog`/`ylog`: logarithmic axes; `xformat`/`yformat`: tick label formats ([checked](plots#formats)) |
+| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat] [, xscale] [, yscale] [, stat])` | labels of X1 and Y1; the axes fit the data on first use, every frame with `auto_fit=.true.`; `xscale`/`yscale`: `'linear'`, `'log'`, `'symlog'`, `'time'` (`xlog`/`ylog`: deprecated `'log'`); `xformat`/`yformat`: tick label formats ([checked](plots#formats)) |
 | `ip_begin_subplots(title, rows, cols [, width] [, height] [, link_x] [, link_y])` → `logical`, `ip_end_subplots()` | a grid of plots, optionally sharing the x or y range |
-| `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | initial axis ranges |
-| `ip_plot_limits(...)`, `ip_plot_size(...)` | the ranges the user panned and zoomed to; the plot's size in pixels |
+| `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always] [, stat])` | initial ranges of X1 and Y1 |
+| `ip_setup_axis(axis [, label] [, scale] [, auto_fit] [, format] [, opposite] [, invert] [, lock] [, no_grid] [, stat])` | set up one of the six axes `'x1'`..`'x3'`, `'y1'`..`'y3'`: label, scale (`'linear'`, `'log'`, `'symlog'`, `'time'`), format, side, direction, lock, grid ([plots](plots#axes)) |
+| `ip_set_axes(x, y [, stat])` | the axes the next items use (`'x1'`..`'x3'`, `'y1'`..`'y3'`) ([plots](plots#axes)) |
+| `ip_setup_axis_limits(axis, vmin, vmax [, always] [, stat])` | initial range of one axis ([plots](plots#axes)) |
+| `ip_setup_axis_ticks(axis, values [, labels] [, stat])` | ticks at given values, with given labels or the axis's format ([plots](plots#axes)) |
+| `ip_setup_axis_constraints(axis [, vmin] [, vmax] [, zoom_min] [, zoom_max] [, stat])` | bounds the user cannot pan or zoom one axis past ([plots](plots#axes)) |
+| `ip_setup_legend([location] [, outside] [, horizontal] [, stat])` | the legend at a compass point, inside or outside the plot area, in a column or a row ([plots](plots#axes)) |
+| `ip_plot_limits(xmin, xmax, ymin, ymax [, xaxis] [, yaxis] [, stat])`, `ip_plot_size(...)` | the ranges the user panned and zoomed to, of the current axes or the named ones; the plot's size in pixels |
 | `ip_line(label, x, y [, spec] [, stat])` | a line through `(x(i), y(i))`; arrays of any stride read in place, `x` may be `int32`/`int64` ([plots](plots#data-in-place)) |
 | `ip_line(label, y [, xscale, xstart] ...)`, `ip_line(label, y, row ...)` | uniform x; a matrix row read in place |
 | `ip_scatter(label, x, y [, spec] [, stat])` | markers at `(x(i), y(i))` |
@@ -281,7 +287,7 @@ Details: [3-D views](view3d).
 | `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | where the open popup is (a menu, a context menu, a combo's list, a colour picker) |
 | `test_opened_url()` → `character` | the URL the last click on an `ig_text_link_url` asked to open (headless mode opens nothing) ([Links](widgets#links)) |
 | `test_quit()` | a quit request, as the window's close button makes it |
-| `test_plot_tick(axis, index, label [, count])` | a tick label of the plot being declared (tests of axis formats) |
+| `test_plot_tick(axis, index, label [, count] [, stat])` | a tick label of any of the six axes of the plot being declared (`'x1'`..`'y3'`; `'x'`, `'y'`) ([plots](plots#axes)) |
 | `test_plot_copies()` → `int64` | the arrays the plot items copied so far (a stride differing from the ordinates', integer abscissae) ([plots](plots#data-in-place)) |
 | `test_plot_stride()` → `int64` | the byte stride the last plot item gave ImPlot ([plots](plots#data-in-place)) |
 | `test_frame_hit(x, y)` → `character` | what the frame of `decorations='figure'` does at a point: `'client'`, `'drag'`, `'resize-top-left'`, ... ([the window's frame](frame-loop#the-window-s-frame)) |

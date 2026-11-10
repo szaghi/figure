@@ -3451,6 +3451,29 @@ void fig_plot_end(void) {
    ImPlot::EndPlot();
 }
 
+int fig_plot_state(int *enabled, int *scale) {
+   for (int i = 0; i < ImAxis_COUNT; ++i) {
+      enabled[i] = 0;
+      scale[i] = ImPlotScale_Linear;
+   }
+   if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot) return 0;
+   const ImPlotPlot &p = *GImPlot->CurrentPlot;
+   for (int i = 0; i < ImAxis_COUNT; ++i) {
+      enabled[i] = p.Axes[i].Enabled ? 1 : 0;
+      scale[i] = p.Axes[i].Scale;
+   }
+   return p.SetupLocked ? 2 : 1;
+}
+
+void fig_plot_axis_constraints(int axis, int given, const double *v) {
+   if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot || axis < 0 || axis >= ImAxis_COUNT) return;
+   ImPlotAxis &a = GImPlot->CurrentPlot->Axes[axis]; // ImPlot's SetupAxis*Constraints set both ends at once
+   if (given & 1) a.ConstraintRange.Min = v[0];
+   if (given & 2) a.ConstraintRange.Max = v[1];
+   if (given & 4) a.ConstraintZoom.Min = v[2];
+   if (given & 8) a.ConstraintZoom.Max = v[3];
+}
+
 int fig_align_begin(const char *id, int id_len, int where) {
    FIG_TRY
    if (!ImGui::GetCurrentContext() || !GImGui->WithinFrameScope) return fail(FIG_ERR_STATE, "no frame open");
@@ -3588,9 +3611,14 @@ int fig_plot_tick_label(int axis, int index, char *buf, int buf_len, int *count,
    ImPlotPlot *plot = ImPlot::GetCurrentContext() ? ImPlot::GetCurrentPlot() : nullptr;
    if (!plot)
       return fail(FIG_ERR_STATE, "test_plot_tick: no plot is being declared (between ip_begin_plot and ip_end_plot)");
-   if (axis != 0 && axis != 1) return fail(FIG_ERR_ARGUMENT, "test_plot_tick: axis is 'x' or 'y'");
+   static const char *names[ImAxis_COUNT] = {"x1", "x2", "x3", "y1", "y2", "y3"};
+   if (axis < 0 || axis >= ImAxis_COUNT)
+      return fail(FIG_ERR_ARGUMENT, "test_plot_tick: unknown axis ('x1', 'x2', 'x3', 'y1', 'y2', 'y3', 'x' or 'y')");
+   if (!plot->Axes[axis].Enabled)
+      return fail(FIG_ERR_STATE, std::string("test_plot_tick: axis '") + names[axis] +
+                                 "' is not set up (ip_setup_axis('" + names[axis] + "'))");
    ImPlot::SetupLock(); // the ticks exist once the setup is locked (the first item locks it)
-   const ImPlotTicker &ticker = plot->Axes[axis == 0 ? ImAxis_X1 : ImAxis_Y1].Ticker;
+   const ImPlotTicker &ticker = plot->Axes[axis].Ticker;
    *count = ticker.TickCount();
    if (index < 1 || index > *count) return FIG_OK;
    const char *text = ticker.GetText(index - 1);

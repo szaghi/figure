@@ -278,6 +278,12 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   differs from the ordinates' is copied at their stride; `integer(int32)`/`integer(int64)` abscissae, converted;
   `test_plot_copies`, `test_plot_stride`. What a compiler copies before the call is measured and documented
   ([Data in place](plots#data-in-place)): done.
+- **Plot axes:** `ip_setup_axis` sets up any of the six axes (X1-X3, Y1-Y3) with a label, a scale (`'linear'`,
+  `'log'`, `'symlog'`, `'time'`), a checked format, its side, direction, lock and grid; `ip_set_axes` sends the next
+  items to them, each fitting its own data; `ip_setup_axis_limits`, `ip_setup_axis_ticks` (fixed ticks and labels),
+  `ip_setup_axis_constraints` (bounds of pan and zoom), `ip_setup_legend` (compass point, outside, in a row);
+  `ip_plot_limits` and `test_plot_tick` of any axis; `ip_setup_axes`' `xscale`/`yscale` (`xlog`/`ylog` kept,
+  deprecated); setup calls out of place are usage errors, not ImPlot's assertions ([Axes](plots#axes)): done.
 
 ## Next
 

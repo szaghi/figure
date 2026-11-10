@@ -24,7 +24,7 @@ public :: fig_pop_style, fig_input_mouse_pos, fig_input_mouse_button, fig_input_
 public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_shortcut, fig_plot_tick_label
 public :: fig_app_wake, fig_set_next_item_shortcut, fig_last_item, fig_item_status, fig_mark_last_item_edited
 public :: fig_drag_range, fig_list_box
-public :: fig_align_begin, fig_align_end, fig_align_next, fig_plot_end
+public :: fig_align_begin, fig_align_end, fig_align_next, fig_plot_end, fig_plot_state, fig_plot_axis_constraints
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
@@ -1205,7 +1205,7 @@ interface
    !< A tick label of the plot being declared.
    import :: c_char, c_int
    implicit none
-   integer(c_int), value               :: axis      !< 0 x, 1 y.
+   integer(c_int), value               :: axis      !< An ImAxis: 0-2 X1-X3, 3-5 Y1-Y3.
    integer(c_int), value               :: index     !< Tick, from 1.
    character(kind=c_char), intent(out) :: buf(*)    !< Label.
    integer(c_int), value               :: buf_len   !< Buffer length.
@@ -1302,6 +1302,24 @@ interface
    !< End the current plot (ImPlot's EndPlot) without fitting an axis that has no data (an FPE under traps).
    implicit none
    endsubroutine fig_plot_end
+
+   function fig_plot_state(enabled, scale) result(state) bind(C, name='fig_plot_state')
+   !< The plot being declared: 0 none, 1 its setup open, 2 its setup over; its axes set up and their scales.
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: enabled(6) !< 1 for each axis (ImAxis order: X1-X3, Y1-Y3) set up.
+   integer(c_int), intent(out) :: scale(6)   !< Each axis's ImPlotScale.
+   integer(c_int)              :: state      !< 0 no plot, 1 setup open, 2 setup over.
+   endfunction fig_plot_state
+
+   subroutine fig_plot_axis_constraints(axis, given, v) bind(C, name='fig_plot_axis_constraints')
+   !< Constraints of an axis of the plot being declared: the ends whose bit is set in `given` take `v`.
+   import :: c_double, c_int
+   implicit none
+   integer(c_int), value      :: axis  !< An ImAxis.
+   integer(c_int), value      :: given !< Bits: 1 range min, 2 range max, 4 zoom min, 8 zoom max.
+   real(c_double), intent(in) :: v(4)  !< Range min, range max [axis units], zoom min, zoom max [axis units].
+   endsubroutine fig_plot_axis_constraints
 
    function fig_align_begin(id, id_len, where) result(status) bind(C, name='fig_align_begin')
    !< Begin an aligned group: moved by the space left on the line (`where` 1 centre, 2 right, 0 not moved), its width

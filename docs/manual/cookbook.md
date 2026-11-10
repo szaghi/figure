@@ -551,6 +551,22 @@ or `ip_image` in the loop.
 Zoom one, all follow (`link_x`). `yformat='%.4f'` prints the drag's ticks with four decimals, where the default would
 print -3781.31 on every tick. [Plots](/guide/plots#several-plots-in-one-figure) has the details.
 
+### Two quantities with different scales in one plot
+
+<<< @/examples/snippets/cb_two_axes-axes.F90{fortran}
+
+<Media name="cb_two_axes" video alt="A convergence plot: the residual falls over eight decades on a log axis on the left; cl and cd on a linear axis on the right, the legend outside on the right. The wheel zooms in and out; then the right axis is dragged down alone: cl and cd move, the residual stays." caption="docs/examples/src/cb_two_axes.F90" />
+
+A residual falls over decades and wants a log axis; force coefficients settle near 0.8 and 0.05 and want a linear
+one. Set up a second y axis with `ip_setup_axis('y2', ...)` before the items, draw the residual, then send the next
+items to it with `ip_set_axes('x1', 'y2')`. Each axis fits its own lines; Y2 sits on the right without grid lines,
+and dragging it pans it alone. The legend goes outside, on the east, so it covers no curve. `cb_two_axes --check`
+draws the plot headless and prints what each axis shows:
+
+<<< @/examples/output/cb_two_axes.txt{text}
+
+[Axes](/guide/plots#axes) has the six axes, the scales, fixed ticks and constraints.
+
 ### Plot the rows of a matrix
 
 A row of a column-major matrix is strided. When its abscissae are uniform, `ip_line(label, y, row [, xscale]

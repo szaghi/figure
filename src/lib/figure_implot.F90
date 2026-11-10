@@ -21,14 +21,15 @@ module figure_implot
 !< call ip_line('residual', it, res, spec=ip_spec(line_color=[1.0_real64, 0.0_real64, 0.0_real64, 1.0_real64], &
 !<                                               line_weight=2.0_real64, marker=ImPlotMarker_Circle))
 !<```
-use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_intptr_t, c_loc, c_null_ptr, c_ptr
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_int, c_intptr_t, c_loc, c_null_char, c_null_ptr, &
+                                         c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
-                        figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS
+                        figure_scope_refused, figure_usage_error, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
-                            fig_colormap_legend, fig_plot_end
+                            fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints
 use figure_cimgui, only : im_vec2, im_vec4
 use figure_texture, only : texture_object, texture_ref
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot,             &
@@ -43,14 +44,22 @@ use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_Begin
                            ImPlot_PushColormap_PlotColormap, im_plot_point, im_plot_rect, ImPlot_GetPlotLimits,     &
                            ImPlot_GetPlotSize, ImPlot_SetupAxesLimits, ImPlot_SetupAxisScale_PlotScale,             &
                            ImPlot_SetupAxisFormat_Str, ImPlot_BeginSubplots, ImPlot_EndSubplots,                    &
-                           ImPlot_SetNextAxisToFit, ImPlot_GetColormapCount
+                           ImPlot_SetNextAxisToFit, ImPlot_GetColormapCount, ImPlot_SetupAxis, ImPlot_SetAxes,     &
+                           ImPlot_SetupAxisLimits, ImPlot_SetupAxisTicks_doublePtr, ImPlot_SetupLegend
 use figure_cimplot, only : ImPlot_DragLineX, ImPlot_DragLineY, ImPlot_DragPoint, ImPlot_GetLastItemColor,           &
                            ImPlot_SampleColormap,                                                                       &
                            ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr,                                   &
                            ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt,                                         &
                            ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr,                                       &
                            ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt
-use figure_cimplot_enums, only : ImAxis_X1, ImAxis_Y1, ImPlotScale_Log10, ImPlotSubplotFlags_LinkAllX,                &
+use figure_cimplot_enums, only : ImAxis_X1, ImAxis_X2, ImAxis_X3, ImAxis_Y1, ImAxis_Y2, ImAxis_Y3, ImAxis_COUNT,      &
+                                 ImPlotScale_Linear, ImPlotScale_Time, ImPlotScale_Log10, ImPlotScale_SymLog,         &
+                                 ImPlotAxisFlags_Opposite, ImPlotAxisFlags_Invert, ImPlotAxisFlags_Lock,              &
+                                 ImPlotAxisFlags_NoGridLines, ImPlotLegendFlags_None, ImPlotLegendFlags_Outside,      &
+                                 ImPlotLegendFlags_Horizontal, ImPlotLocation_Center, ImPlotLocation_North,           &
+                                 ImPlotLocation_South, ImPlotLocation_West, ImPlotLocation_East,                      &
+                                 ImPlotLocation_NorthWest, ImPlotLocation_NorthEast, ImPlotLocation_SouthWest,        &
+                                 ImPlotLocation_SouthEast, ImPlotSubplotFlags_LinkAllX,                               &
                                  ImPlotSubplotFlags_LinkAllY, ImPlotSubplotFlags_None,                                &
                                  ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_None, ImPlotCond_Always, ImPlotCond_Once,     &
                                  ImPlotFlags_Equal, ImPlotFlags_None,                                              &
@@ -83,6 +92,8 @@ public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_
 public :: ip_contour, ip_contour_lines, ip_contour_levels
 public :: ip_colormap_legend
 public :: ip_spec, plot_spec_object
+public :: ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_setup_axis_ticks, ip_setup_axis_constraints
+public :: ip_setup_legend
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
 public :: ImPlotMarker_Up, ImPlotMarker_Down, ImPlotMarker_Left, ImPlotMarker_Right, ImPlotMarker_Cross
@@ -209,6 +220,7 @@ contains
    logical                                :: visible !< Plot visible.
    type(im_vec2)                          :: extent  !< Size (named so: a local `size` crashes nvfortran 26.9).
    integer(c_int)                         :: flags   !< ImPlotFlags.
+   integer(c_int)                         :: i       !< Axis (ImAxis).
 
    visible = .false.
    if (figure_draw_refused('ip_begin_plot')) return ! a task does not draw
@@ -219,9 +231,10 @@ contains
    if (present(equal)) then
       if (equal) flags = ior(flags, ImPlotFlags_Equal)
    endif
-   if (fits_pending > 0_int32) then                 ! a cell of a subplot figure drawn for the first time
-      call ImPlot_SetNextAxisToFit(ImAxis_X1)      ! the axes a plot uses: fitting the unused ones (no data, an
-      call ImPlot_SetNextAxisToFit(ImAxis_Y1)      ! empty range) computes inf - inf, an FPE under traps
+   if (fits_pending > 0_int32) then                 ! a cell of a subplot figure drawn for the first time: every axis
+      do i = 0_c_int, ImAxis_COUNT - 1_c_int       ! asked to fit; only the axes in use fit, because fitting an axis
+         call ImPlot_SetNextAxisToFit(i)           ! with no data (unused, or set up and empty) computes inf - inf,
+      enddo                                        ! an FPE under traps: fig_plot_end cancels those (ip_end_plot)
       fits_pending = fits_pending - 1_int32
    endif
    visible = logical(ImPlot_BeginPlot(cstr(title), extent, flags))
@@ -282,23 +295,30 @@ contains
    call fig_plot_end() ! ImPlot's EndPlot, without fitting an axis that has no data (an FPE under traps)
    endsubroutine ip_end_plot
 
-   recursive subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat, stat)
-   !< Axis labels (call right after `ip_begin_plot`); with `auto_fit=.true.` both axes fit the data every frame (data
-   !< that grows while the user watches), instead of once on first use. `xlog`/`ylog`: a base-10 logarithmic axis
-   !< (values <= 0 are not shown on it). `xformat`/`yformat`: a C printf format of the tick labels (`'%.6f'`,
-   !< `'%.2e'`, `'%g s'`), for values whose default labels look alike (-3781.31, -3781.31, ...), checked: one
-   !< conversion `f`, `e`, `g` or `a`, with optional flags, width and precision, and any `%%`. Statuses:
-   !< `FIG_ERR_ARGUMENT` for any other format (nothing is set up), `FIG_ERR_STATE` from a task; `stat` absent:
-   !< `error stop` with the message.
+   recursive subroutine ip_setup_axes(xlabel, ylabel, auto_fit, xlog, ylog, xformat, yformat, xscale, yscale, stat)
+   !< Labels of the axes X1 and Y1 (call right after `ip_begin_plot`, before any item); with `auto_fit=.true.` both
+   !< axes fit the data every frame (data that grows while the user watches), instead of once on first use.
+   !< `xscale`/`yscale`: `'linear'` (default), `'log'` (base 10: values <= 0 are not shown), `'symlog'` (symmetric
+   !< log: linear within [-1, 1], logarithmic beyond, both signs) or `'time'` (x only: UNIX seconds, labelled as dates
+   !< and times). `xlog`/`ylog` (deprecated, kept from v0.3): `.true.` is `'log'`. `xformat`/`yformat`: a C printf
+   !< format of the tick labels (`'%.6f'`, `'%.2e'`, `'%g s'`), checked: one conversion `f`, `e`, `g` or `a`, with
+   !< optional flags, width and precision, and any `%%`. Statuses: `FIG_ERR_ARGUMENT` for any other format, an unknown
+   !< scale, `'time'` on y, or `xlog` and `xscale` that disagree (nothing is set up); `FIG_ERR_STATE` outside a plot,
+   !< after its setup is over (an item, `ip_set_axes`, `ip_plot_limits`), or from a task; `stat` absent: `error stop`
+   !< with the message (a usage error: as `app%set_checks` says).
    character(len=*), intent(in)            :: xlabel   !< X label.
    character(len=*), intent(in)            :: ylabel   !< Y label.
    logical,          intent(in),  optional :: auto_fit !< Fit the axes to the data every frame (default: first use only).
-   logical,          intent(in),  optional :: xlog     !< Logarithmic x axis (default: linear).
-   logical,          intent(in),  optional :: ylog     !< Logarithmic y axis (default: linear).
+   logical,          intent(in),  optional :: xlog     !< Logarithmic x axis (deprecated: `xscale='log'`).
+   logical,          intent(in),  optional :: ylog     !< Logarithmic y axis (deprecated: `yscale='log'`).
    character(len=*), intent(in),  optional :: xformat  !< printf format of the x tick labels (one real).
    character(len=*), intent(in),  optional :: yformat  !< printf format of the y tick labels (one real).
+   character(len=*), intent(in),  optional :: xscale   !< Scale of x: 'linear', 'log', 'symlog', 'time'.
+   character(len=*), intent(in),  optional :: yscale   !< Scale of y: 'linear', 'log', 'symlog'.
    integer(int32),   intent(out), optional :: stat     !< Status.
    integer(c_int)                          :: flags    !< ImPlotAxisFlags of both axes.
+   integer(c_int)                          :: sx       !< ImPlotScale of x (-1: unknown).
+   integer(c_int)                          :: sy       !< ImPlotScale of y (-1: unknown).
 
    if (figure_draw_refused('ip_setup_axes', stat)) return ! a task does not draw
    if (present(xformat)) then
@@ -307,60 +327,378 @@ contains
    if (present(yformat)) then
       if (format_refused('ip_setup_axes', 'yformat', yformat, FORMAT_REAL, stat)) return
    endif
+   if (.not. scale_given_ok('ip_setup_axes', 'x', xlog, xscale, sx, stat)) return
+   if (.not. scale_given_ok('ip_setup_axes', 'y', ylog, yscale, sy, stat)) return
+   if (sy == ImPlotScale_Time) then
+      call figure_fail(FIG_ERR_ARGUMENT, "ip_setup_axes: yscale 'time' is refused: ImPlot labels time on x axes only", &
+                       stat)
+      return
+   endif
+   if (setup_refused('ip_setup_axes', stat)) return
    flags = ImPlotAxisFlags_None
    if (present(auto_fit)) then
       if (auto_fit) flags = ImPlotAxisFlags_AutoFit
    endif
    call ImPlot_SetupAxes(cstr(xlabel), cstr(ylabel), flags, flags)
-   if (present(xlog)) then
-      if (xlog) call ImPlot_SetupAxisScale_PlotScale(ImAxis_X1, ImPlotScale_Log10)
-   endif
-   if (present(ylog)) then
-      if (ylog) call ImPlot_SetupAxisScale_PlotScale(ImAxis_Y1, ImPlotScale_Log10)
-   endif
+   if (sx /= ImPlotScale_Linear) call ImPlot_SetupAxisScale_PlotScale(ImAxis_X1, sx)
+   if (sy /= ImPlotScale_Linear) call ImPlot_SetupAxisScale_PlotScale(ImAxis_Y1, sy)
    if (present(xformat)) call ImPlot_SetupAxisFormat_Str(ImAxis_X1, cstr(xformat))
    if (present(yformat)) call ImPlot_SetupAxisFormat_Str(ImAxis_Y1, cstr(yformat))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_setup_axes
 
-   recursive subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always)
-   !< Initial axis ranges (call right after `ip_begin_plot`): applied on first use only, so the user can pan and zoom
-   !< afterwards, or every frame with `always=.true.`.
-   real(real64), intent(in)           :: xmin   !< Left end of the x axis.
-   real(real64), intent(in)           :: xmax   !< Right end of the x axis.
-   real(real64), intent(in)           :: ymin   !< Bottom end of the y axis.
-   real(real64), intent(in)           :: ymax   !< Top end of the y axis.
-   logical,      intent(in), optional :: always !< Enforce every frame (default: first use only).
-   integer(c_int)                     :: cond   !< ImPlotCond.
+   recursive subroutine ip_setup_axes_limits(xmin, xmax, ymin, ymax, always, stat)
+   !< Initial ranges of the axes X1 and Y1 (call right after `ip_begin_plot`): applied on first use only, so the user
+   !< can pan and zoom afterwards, or every frame with `always=.true.`. Statuses: `FIG_ERR_STATE` outside a plot, after
+   !< its setup is over, or from a task.
+   real(real64),   intent(in)            :: xmin   !< Left end of the x axis.
+   real(real64),   intent(in)            :: xmax   !< Right end of the x axis.
+   real(real64),   intent(in)            :: ymin   !< Bottom end of the y axis.
+   real(real64),   intent(in)            :: ymax   !< Top end of the y axis.
+   logical,        intent(in), optional  :: always !< Enforce every frame (default: first use only).
+   integer(int32), intent(out), optional :: stat   !< Status.
+   integer(c_int)                        :: cond   !< ImPlotCond.
 
-   if (figure_draw_refused('ip_setup_axes_limits')) return ! a task does not draw
+   if (figure_draw_refused('ip_setup_axes_limits', stat)) return ! a task does not draw
+   if (setup_refused('ip_setup_axes_limits', stat)) return
    cond = ImPlotCond_Once
    if (present(always)) then
       if (always) cond = ImPlotCond_Always
    endif
    call ImPlot_SetupAxesLimits(real(xmin, c_double), real(xmax, c_double), real(ymin, c_double), real(ymax, c_double), &
                                cond)
+   call figure_check(FIG_OK, stat)
    endsubroutine ip_setup_axes_limits
 
-   recursive subroutine ip_plot_limits(xmin, xmax, ymin, ymax)
+   recursive subroutine ip_setup_axis(axis, label, scale, auto_fit, format, opposite, invert, lock, no_grid, stat)
+   !< Set up one axis of the plot being declared (`SetupAxis`): `axis` is `'x1'`, `'x2'`, `'x3'`, `'y1'`, `'y2'` or
+   !< `'y3'`. X1 and Y1 always exist; X2, X3, Y2 and Y3 exist on the frames this is called for them. Call it right
+   !< after `ip_begin_plot`, before any item, every frame. `scale`: `'linear'` (default), `'log'`, `'symlog'`,
+   !< `'time'` (x axes only). The secondary axes (2 and 3) are drawn on the opposite side (top, right) without grid
+   !< lines unless `opposite`/`no_grid` say otherwise. `lock`: the user cannot pan or zoom it. Statuses:
+   !< `FIG_ERR_ARGUMENT` for an unknown axis or scale, `'time'` on a y axis, a bad format (nothing set up);
+   !< `FIG_ERR_STATE` outside a plot, after its setup is over, or from a task.
+   character(len=*), intent(in)            :: axis     !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   character(len=*), intent(in),  optional :: label    !< Label (default: none).
+   character(len=*), intent(in),  optional :: scale    !< 'linear' (default), 'log', 'symlog', 'time'.
+   logical,          intent(in),  optional :: auto_fit !< Fit the data every frame (default: first use only).
+   character(len=*), intent(in),  optional :: format   !< printf format of the tick labels (one real).
+   logical,          intent(in),  optional :: opposite !< Ticks and label on the opposite side (default: axes 2, 3).
+   logical,          intent(in),  optional :: invert   !< Values grow leftwards (x) or downwards (y).
+   logical,          intent(in),  optional :: lock     !< No pan or zoom by the user.
+   logical,          intent(in),  optional :: no_grid  !< No grid lines (default: axes 2, 3).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   character(kind=c_char, len=:), allocatable, target :: clabel !< Label, NUL-terminated.
+   type(c_ptr)                             :: plabel   !< Its address (null: no label).
+   integer(c_int)                          :: code     !< ImAxis.
+   integer(c_int)                          :: sc       !< ImPlotScale.
+   integer(c_int)                          :: flags    !< ImPlotAxisFlags.
+   logical                                 :: aux      !< A secondary axis.
+
+   if (figure_draw_refused('ip_setup_axis', stat)) return ! a task does not draw
+   code = axis_index(axis)
+   if (code < 0_c_int) then
+      call figure_fail(FIG_ERR_ARGUMENT, "ip_setup_axis: unknown axis '"//axis//"' ('x1', 'x2', 'x3', 'y1', 'y2' "// &
+                       "or 'y3')", stat)
+      return
+   endif
+   if (present(format)) then
+      if (format_refused('ip_setup_axis', 'format', format, FORMAT_REAL, stat)) return
+   endif
+   if (.not. scale_given_ok('ip_setup_axis', '', scale=scale, code=sc, stat=stat)) return
+   if (sc == ImPlotScale_Time .and. code >= ImAxis_Y1) then
+      call figure_fail(FIG_ERR_ARGUMENT, "ip_setup_axis: scale 'time' on axis '"//axis//"' is refused: ImPlot "// &
+                       'labels time on x axes only', stat)
+      return
+   endif
+   if (setup_refused('ip_setup_axis', stat)) return
+   aux = code /= ImAxis_X1 .and. code /= ImAxis_Y1
+   flags = ImPlotAxisFlags_None
+   if (aux) flags = ior(ImPlotAxisFlags_Opposite, ImPlotAxisFlags_NoGridLines)
+   call set_flag(flags, ImPlotAxisFlags_Opposite, opposite)
+   call set_flag(flags, ImPlotAxisFlags_NoGridLines, no_grid)
+   call set_flag(flags, ImPlotAxisFlags_AutoFit, auto_fit)
+   call set_flag(flags, ImPlotAxisFlags_Invert, invert)
+   call set_flag(flags, ImPlotAxisFlags_Lock, lock)
+   plabel = c_null_ptr
+   if (present(label)) then
+      clabel = cstr(label)
+      plabel = c_loc(clabel)
+   endif
+   call ImPlot_SetupAxis(code, plabel, flags)
+   if (sc /= ImPlotScale_Linear) call ImPlot_SetupAxisScale_PlotScale(code, sc)
+   if (present(format)) call ImPlot_SetupAxisFormat_Str(code, cstr(format))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_setup_axis
+
+   recursive subroutine ip_set_axes(x, y, stat)
+   !< The axes the next items of the plot being declared use (`SetAxes`), until the next call or the plot's end (each
+   !< plot starts on X1 and Y1): `x` one of `'x1'`, `'x2'`, `'x3'`, `y` one of `'y1'`, `'y2'`, `'y3'`, each set up
+   !< (`ip_setup_axis`) on this frame. It ends the setup: call every `ip_setup_*` first. Statuses: `FIG_ERR_ARGUMENT`
+   !< for a name that is not an axis of its direction; `FIG_ERR_STATE` outside a plot, for an axis not set up, from a
+   !< task.
+   character(len=*), intent(in)            :: x    !< 'x1', 'x2' or 'x3'.
+   character(len=*), intent(in)            :: y    !< 'y1', 'y2' or 'y3'.
+   integer(int32),   intent(out), optional :: stat !< Status.
+   integer(c_int)                          :: cx   !< ImAxis of x.
+   integer(c_int)                          :: cy   !< ImAxis of y.
+
+   if (figure_draw_refused('ip_set_axes', stat)) return ! a task does not draw
+   if (.not. pair_ok('ip_set_axes', 'x', x, 'y', y, cx, cy, stat)) return
+   if (axis_refused('ip_set_axes', x, cx, .false., stat)) return
+   if (axis_refused('ip_set_axes', y, cy, .false., stat)) return
+   call ImPlot_SetAxes(cx, cy)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_set_axes
+
+   recursive subroutine ip_setup_axis_limits(axis, vmin, vmax, always, stat)
+   !< Initial range of one axis (`SetupAxisLimits`), applied on first use only (the user pans and zooms afterwards),
+   !< or every frame with `always=.true.`. After `ip_setup_axis` for that axis, before any item. Statuses:
+   !< `FIG_ERR_ARGUMENT` for an unknown axis, a NaN end, `vmin >= vmax`; `FIG_ERR_STATE` outside a plot, after its
+   !< setup is over, for an axis not set up, from a task.
+   character(len=*), intent(in)            :: axis   !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   real(real64),     intent(in)            :: vmin   !< Lower end [axis units].
+   real(real64),     intent(in)            :: vmax   !< Upper end [axis units].
+   logical,          intent(in),  optional :: always !< Enforce every frame (default: first use only).
+   integer(int32),   intent(out), optional :: stat   !< Status.
+   integer(c_int)                          :: code   !< ImAxis.
+   integer(c_int)                          :: cond   !< ImPlotCond.
+
+   if (figure_draw_refused('ip_setup_axis_limits', stat)) return ! a task does not draw
+   if (.not. range_ok('ip_setup_axis_limits', 'vmin', vmin, 'vmax', vmax, stat)) return
+   if (axis_refused('ip_setup_axis_limits', axis, code, .true., stat)) return
+   cond = ImPlotCond_Once
+   if (present(always)) then
+      if (always) cond = ImPlotCond_Always
+   endif
+   call ImPlot_SetupAxisLimits(code, real(vmin, c_double), real(vmax, c_double), cond)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_setup_axis_limits
+
+   recursive subroutine ip_setup_axis_ticks(axis, values, labels, stat)
+   !< Ticks of one axis at the given values instead of the automatic ones (`SetupAxisTicks`), labelled `labels` (as
+   !< given, trailing blanks dropped) or, without them, by the axis's format. After `ip_setup_axis` (and its `format`)
+   !< for that axis, before any item. Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, a NaN or infinite value,
+   !< labels not one per value, more values than a C `int` counts; `FIG_ERR_STATE` outside a plot, after its setup is
+   !< over, for an axis not set up, from a task.
+   character(len=*), intent(in)            :: axis      !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   real(real64),     intent(in)            :: values(:) !< Positions [axis units].
+   character(len=*), intent(in),  optional :: labels(:) !< One label per value.
+   integer(int32),   intent(out), optional :: stat      !< Status.
+   real(c_double),         allocatable, target :: v(:)   !< The values, contiguous.
+   character(kind=c_char), allocatable, target :: ch(:)  !< The labels, each NUL-terminated, one after the other.
+   type(c_ptr),            allocatable, target :: pl(:)  !< Their addresses.
+   type(c_ptr)                             :: pv        !< Address of the values.
+   type(c_ptr)                             :: pls       !< Address of the label addresses (null: none).
+   integer(c_int)                          :: code      !< ImAxis.
+   integer(int64)                          :: n         !< Values.
+   integer(int64)                          :: k         !< Counter.
+   integer(int64)                          :: at        !< Position in `ch`.
+   integer(int64)                          :: j         !< Character counter.
+   integer(int64)                          :: l         !< Length of a label.
+
+   if (figure_draw_refused('ip_setup_axis_ticks', stat)) return ! a task does not draw
+   n = size(values, kind=int64)
+   if (n > int(huge(1_c_int), int64)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_setup_axis_ticks: more values than a C int counts', stat)
+      return
+   endif
+   if (.not. all(ieee_is_finite(values))) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_setup_axis_ticks: values must be finite', stat)
+      return
+   endif
+   if (present(labels)) then
+      if (size(labels, kind=int64) /= n) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_setup_axis_ticks: labels must be one per value', stat)
+         return
+      endif
+   endif
+   if (axis_refused('ip_setup_axis_ticks', axis, code, .true., stat)) return
+   v = real(values, c_double)
+   pv = c_null_ptr
+   if (n > 0_int64) pv = c_loc(v)
+   pls = c_null_ptr
+   if (present(labels)) then
+      allocate(ch(n * (int(len(labels), int64) + 1_int64) + 1_int64))
+      allocate(pl(max(n, 1_int64)))
+      at = 1_int64
+      do k = 1_int64, n
+         l = int(len_trim(labels(k)), int64)
+         pl(k) = c_loc(ch(at))
+         do j = 1_int64, l
+            ch(at + j - 1_int64) = labels(k)(j:j)
+         enddo
+         ch(at + l) = c_null_char
+         at = at + l + 1_int64
+      enddo
+      if (n > 0_int64) pls = c_loc(pl)
+   endif
+   call ImPlot_SetupAxisTicks_doublePtr(code, pv, int(n, c_int), pls, .false._c_bool)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_setup_axis_ticks
+
+   recursive subroutine ip_setup_axis_constraints(axis, vmin, vmax, zoom_min, zoom_max, stat)
+   !< Bounds the user cannot pan or zoom one axis past (`SetupAxisLimitsConstraints`, `SetupAxisZoomConstraints`):
+   !< the range stays within [`vmin`, `vmax`], its width within [`zoom_min`, `zoom_max`]; an end not given keeps its
+   !< bound (none, or the scale's: a log axis stays above 0). After `ip_setup_axis` (and its `scale`) for that axis,
+   !< before any item, every frame. Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, a NaN, `vmin >= vmax`,
+   !< `zoom_min > zoom_max`, a negative zoom width, `vmin <= 0` on a log axis; `FIG_ERR_STATE` outside a plot, after
+   !< its setup is over, for an axis not set up, from a task.
+   character(len=*), intent(in)            :: axis     !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   real(real64),     intent(in),  optional :: vmin     !< Lowest value shown [axis units].
+   real(real64),     intent(in),  optional :: vmax     !< Highest value shown [axis units].
+   real(real64),     intent(in),  optional :: zoom_min !< Narrowest range [axis units].
+   real(real64),     intent(in),  optional :: zoom_max !< Widest range [axis units].
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   integer(c_int)                          :: code     !< ImAxis.
+   integer(c_int)                          :: given    !< Ends given (bits).
+   real(c_double)                          :: v(4)     !< Their values.
+   integer(c_int)                          :: on(6)    !< Axes set up.
+   integer(c_int)                          :: sc(6)    !< Their scales.
+   integer(c_int)                          :: state    !< Plot state.
+
+   if (figure_draw_refused('ip_setup_axis_constraints', stat)) return ! a task does not draw
+   given = 0_c_int
+   v = 0.0_c_double
+   if (.not. bound_ok('vmin', vmin, 1_c_int, 1_int32)) return
+   if (.not. bound_ok('vmax', vmax, 2_c_int, 2_int32)) return
+   if (.not. bound_ok('zoom_min', zoom_min, 4_c_int, 3_int32)) return
+   if (.not. bound_ok('zoom_max', zoom_max, 8_c_int, 4_int32)) return
+   if (iand(given, 3_c_int) == 3_c_int .and. .not. v(1) < v(2)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_setup_axis_constraints: vmin must be below vmax', stat)
+      return
+   endif
+   if ((iand(given, 4_c_int) /= 0_c_int .and. v(3) < 0.0_c_double) .or. &
+       (iand(given, 8_c_int) /= 0_c_int .and. v(4) < 0.0_c_double)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_setup_axis_constraints: a zoom width must not be negative', stat)
+      return
+   endif
+   if (iand(given, 12_c_int) == 12_c_int .and. v(3) > v(4)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_setup_axis_constraints: zoom_min must not be above zoom_max', stat)
+      return
+   endif
+   if (axis_refused('ip_setup_axis_constraints', axis, code, .true., stat)) return
+   state = fig_plot_state(on, sc)
+   if (sc(code + 1) == ImPlotScale_Log10 .and. iand(given, 1_c_int) /= 0_c_int .and. v(1) <= 0.0_c_double) then
+      call figure_fail(FIG_ERR_ARGUMENT, "ip_setup_axis_constraints: vmin must be above 0 on the log axis '"// &
+                       axis//"'", stat)
+      return
+   endif
+   call fig_plot_axis_constraints(code, given, v)
+   call figure_check(FIG_OK, stat)
+
+   contains
+      function bound_ok(name, b, bit, slot) result(ok)
+      !< Take an optional bound: false (refused, reported) for a NaN.
+      character(len=*),       intent(in) :: name !< Its argument name.
+      real(real64), optional, intent(in) :: b    !< The bound.
+      integer(c_int),         intent(in) :: bit  !< Its bit in `given`.
+      integer(int32),         intent(in) :: slot !< Its place in `v`.
+      logical                            :: ok   !< Not refused.
+
+      ok = .true.
+      if (.not. present(b)) return
+      if (ieee_is_nan(b)) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_setup_axis_constraints: '//name//' is NaN', stat)
+         ok = .false.
+         return
+      endif
+      given = ior(given, bit)
+      v(slot) = real(b, c_double)
+      endfunction bound_ok
+   endsubroutine ip_setup_axis_constraints
+
+   recursive subroutine ip_setup_legend(location, outside, horizontal, stat)
+   !< Where the plot's legend goes (`SetupLegend`): `location` a compass point, `'n'`, `'ne'`, `'e'`, `'se'`, `'s'`,
+   !< `'sw'`, `'w'`, `'nw'` (default, ImPlot's) or `'c'` (centre); `outside=.true.` puts it outside the plot area, on
+   !< that side, and the plot area shrinks to make room; `horizontal=.true.` lays the entries out in a row. Right
+   !< after `ip_begin_plot`, before any item. Statuses: `FIG_ERR_ARGUMENT` for an unknown location; `FIG_ERR_STATE`
+   !< outside a plot, after its setup is over, from a task.
+   character(len=*), intent(in),  optional :: location   !< Compass point: 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw',
+                                                         !< 'c' (default 'nw').
+   logical,          intent(in),  optional :: outside    !< Outside the plot area (default: inside).
+   logical,          intent(in),  optional :: horizontal !< Entries in a row (default: a column).
+   integer(int32),   intent(out), optional :: stat       !< Status.
+   integer(c_int)                          :: loc        !< ImPlotLocation.
+   integer(c_int)                          :: flags      !< ImPlotLegendFlags.
+
+   if (figure_draw_refused('ip_setup_legend', stat)) return ! a task does not draw
+   loc = ImPlotLocation_NorthWest
+   if (present(location)) then
+      select case (trim(location))
+      case ('n')
+         loc = ImPlotLocation_North
+      case ('ne')
+         loc = ImPlotLocation_NorthEast
+      case ('e')
+         loc = ImPlotLocation_East
+      case ('se')
+         loc = ImPlotLocation_SouthEast
+      case ('s')
+         loc = ImPlotLocation_South
+      case ('sw')
+         loc = ImPlotLocation_SouthWest
+      case ('w')
+         loc = ImPlotLocation_West
+      case ('nw')
+         loc = ImPlotLocation_NorthWest
+      case ('c')
+         loc = ImPlotLocation_Center
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, "ip_setup_legend: unknown location '"//location//"' ('n', 'ne', 'e', "// &
+                          "'se', 's', 'sw', 'w', 'nw' or 'c')", stat)
+         return
+      endselect
+   endif
+   if (setup_refused('ip_setup_legend', stat)) return
+   flags = ImPlotLegendFlags_None
+   call set_flag(flags, ImPlotLegendFlags_Outside, outside)
+   call set_flag(flags, ImPlotLegendFlags_Horizontal, horizontal)
+   call ImPlot_SetupLegend(loc, flags)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_setup_legend
+
+   recursive subroutine ip_plot_limits(xmin, xmax, ymin, ymax, xaxis, yaxis, stat)
    !< Axis ranges of the current plot, as the user has panned and zoomed them (between `ip_begin_plot` and
-   !< `ip_end_plot`; ends the setup phase: call `ip_setup_axes*` before).
-   real(real64), intent(out) :: xmin   !< Left end of the x axis.
-   real(real64), intent(out) :: xmax   !< Right end of the x axis.
-   real(real64), intent(out) :: ymin   !< Bottom end of the y axis.
-   real(real64), intent(out) :: ymax   !< Top end of the y axis.
-   type(im_plot_rect)        :: limits !< Limits.
+   !< `ip_end_plot`; ends the setup phase: call `ip_setup_*` before): of the axes the items use now (X1 and Y1, or
+   !< those of the last `ip_set_axes`), or of `xaxis` (`'x1'`, `'x2'`, `'x3'`) and `yaxis` (`'y1'`, `'y2'`, `'y3'`).
+   !< Statuses: `FIG_ERR_ARGUMENT` for a name that is not an axis of its direction; `FIG_ERR_STATE` outside a plot,
+   !< for an axis not set up, from a task (the limits are then 0).
+   real(real64),     intent(out)           :: xmin   !< Left end of the x axis.
+   real(real64),     intent(out)           :: xmax   !< Right end of the x axis.
+   real(real64),     intent(out)           :: ymin   !< Bottom end of the y axis.
+   real(real64),     intent(out)           :: ymax   !< Top end of the y axis.
+   character(len=*), intent(in),  optional :: xaxis  !< 'x1', 'x2' or 'x3' (default: the current one).
+   character(len=*), intent(in),  optional :: yaxis  !< 'y1', 'y2' or 'y3' (default: the current one).
+   integer(int32),   intent(out), optional :: stat   !< Status.
+   type(im_plot_rect)                      :: limits !< Limits.
+   integer(c_int)                          :: cx     !< ImAxis of x (-1: the current one).
+   integer(c_int)                          :: cy     !< ImAxis of y (-1: the current one).
 
    xmin = 0.0_real64
    xmax = 0.0_real64
    ymin = 0.0_real64
    ymax = 0.0_real64
-   if (figure_draw_refused('ip_plot_limits')) return ! a task does not draw
-   call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, limits) ! IMPLOT_AUTO: the current axes
+   if (figure_draw_refused('ip_plot_limits', stat)) return ! a task does not draw
+   cx = -1_c_int ! IMPLOT_AUTO: the current axes
+   cy = -1_c_int
+   if (present(xaxis)) then
+      if (.not. pair_ok('ip_plot_limits', 'xaxis', xaxis, '', '', cx, cy, stat)) return
+      if (axis_refused('ip_plot_limits', xaxis, cx, .false., stat)) return
+   endif
+   if (present(yaxis)) then
+      if (.not. pair_ok('ip_plot_limits', '', '', 'yaxis', yaxis, cx, cy, stat)) return
+      if (axis_refused('ip_plot_limits', yaxis, cy, .false., stat)) return
+   endif
+   if (.not. (present(xaxis) .or. present(yaxis))) then
+      if (plot_refused('ip_plot_limits', .false., stat)) return
+   endif
+   call ImPlot_GetPlotLimits(cx, cy, limits)
    xmin = real(limits%X%Min, real64)
    xmax = real(limits%X%Max, real64)
    ymin = real(limits%Y%Min, real64)
    ymax = real(limits%Y%Max, real64)
+   call figure_check(FIG_OK, stat)
    endsubroutine ip_plot_limits
 
    recursive subroutine ip_plot_size(width, height)
@@ -2212,6 +2550,202 @@ contains
                        stat)
    endif
    endfunction colormap_ok
+
+   pure function axis_index(name) result(code)
+   !< ImAxis of an axis name: 'x1', 'x2', 'x3', 'y1', 'y2', 'y3' ('x' and 'y': x1 and y1); -1 for any other.
+   character(len=*), intent(in) :: name !< Axis name.
+   integer(c_int)               :: code !< ImAxis, or -1.
+
+   select case (trim(name))
+   case ('x', 'x1')
+      code = ImAxis_X1
+   case ('x2')
+      code = ImAxis_X2
+   case ('x3')
+      code = ImAxis_X3
+   case ('y', 'y1')
+      code = ImAxis_Y1
+   case ('y2')
+      code = ImAxis_Y2
+   case ('y3')
+      code = ImAxis_Y3
+   case default
+      code = -1_c_int
+   endselect
+   endfunction axis_index
+
+   function scale_given_ok(caller, prefix, log, scale, code, stat) result(ok)
+   !< The scale asked by a `log` flag (v0.3) and a `scale` name: its ImPlotScale in `code`; false (reported,
+   !< `FIG_ERR_ARGUMENT`) for an unknown name or a flag and a name that disagree.
+   character(len=*), intent(in)            :: caller !< The procedure.
+   character(len=*), intent(in)            :: prefix !< 'x', 'y' (`xscale`, `xlog`) or '' (`scale`).
+   logical,          intent(in),  optional :: log    !< Logarithmic (deprecated flag).
+   character(len=*), intent(in),  optional :: scale  !< 'linear', 'log', 'symlog', 'time'.
+   integer(c_int),   intent(out)           :: code   !< ImPlotScale.
+   integer(int32),   intent(out), optional :: stat   !< Status, on a refusal.
+   logical                                 :: ok     !< Not refused.
+
+   ok = .false.
+   code = ImPlotScale_Linear
+   if (present(scale)) then
+      select case (trim(scale))
+      case ('linear')
+         code = ImPlotScale_Linear
+      case ('log')
+         code = ImPlotScale_Log10
+      case ('symlog')
+         code = ImPlotScale_SymLog
+      case ('time')
+         code = ImPlotScale_Time
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': unknown '//prefix//"scale '"//scale//"' ('linear', 'log', "// &
+                          "'symlog' or 'time')", stat)
+         return
+      endselect
+   endif
+   if (present(log)) then
+      if (present(scale) .and. (log .neqv. code == ImPlotScale_Log10)) then
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': '//prefix//'log and '//prefix//"scale '"//scale//"' disagree "// &
+                          '(give '//prefix//'scale only: '//prefix//'log is deprecated)', stat)
+         return
+      endif
+      if (log) code = ImPlotScale_Log10
+   endif
+   ok = .true.
+   endfunction scale_given_ok
+
+   recursive function plot_refused(caller, setup, stat) result(refused)
+   !< True (a usage error reported, `FIG_ERR_STATE`) with no plot being declared or, when `setup`, with its setup over.
+   character(len=*), intent(in)            :: caller  !< The procedure.
+   logical,          intent(in)            :: setup   !< The call is part of the setup.
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: refused !< Refused: return.
+   integer(c_int)                          :: on(6)   !< Axes set up.
+   integer(c_int)                          :: sc(6)   !< Their scales.
+   integer(c_int)                          :: state   !< 0 no plot, 1 setup open, 2 setup over.
+
+   refused = .true.
+   state = fig_plot_state(on, sc)
+   if (state == 0_c_int) then
+      call figure_usage_error(caller//': no plot is being declared (call it between a true ip_begin_plot and '// &
+                              'ip_end_plot)', stat)
+      return
+   endif
+   if (setup .and. state == 2_c_int) then
+      call figure_usage_error(caller//': the setup of the plot is over (call the ip_setup_* procedures before the '// &
+                              'first item, ip_set_axes and ip_plot_limits)', stat)
+      return
+   endif
+   refused = .false.
+   endfunction plot_refused
+
+   recursive function setup_refused(caller, stat) result(refused)
+   !< True (a usage error reported) outside a plot or after its setup is over: the ImPlot setup calls assert there.
+   character(len=*), intent(in)            :: caller  !< The procedure.
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: refused !< Refused: return.
+
+   refused = plot_refused(caller, .true., stat)
+   endfunction setup_refused
+
+   recursive function axis_refused(caller, axis, code, setup, stat) result(refused)
+   !< True (reported) for an unknown axis name (`FIG_ERR_ARGUMENT`), no plot being declared, its setup over when
+   !< `setup`, or an axis not set up on this frame (usage errors, `FIG_ERR_STATE`). `code`: the axis's ImAxis.
+   character(len=*), intent(in)            :: caller  !< The procedure.
+   character(len=*), intent(in)            :: axis    !< Axis name.
+   integer(c_int),   intent(out)           :: code    !< ImAxis.
+   logical,          intent(in)            :: setup   !< The call is part of the setup.
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: refused !< Refused: return.
+   integer(c_int)                          :: on(6)   !< Axes set up.
+   integer(c_int)                          :: sc(6)   !< Their scales.
+   integer(c_int)                          :: state   !< Plot state.
+
+   refused = .true.
+   code = axis_index(axis)
+   if (code < 0_c_int) then
+      call figure_fail(FIG_ERR_ARGUMENT, caller//": unknown axis '"//axis//"' ('x1', 'x2', 'x3', 'y1', 'y2' or "// &
+                       "'y3')", stat)
+      return
+   endif
+   if (plot_refused(caller, setup, stat)) return
+   state = fig_plot_state(on, sc)
+   if (on(code + 1_c_int) == 0_c_int) then
+      call figure_usage_error(caller//": axis '"//trim(axis)//"' is not set up (call ip_setup_axis('"//trim(axis)// &
+                              "') first, on every frame)", stat)
+      return
+   endif
+   refused = .false.
+   endfunction axis_refused
+
+   function pair_ok(caller, xname, x, yname, y, cx, cy, stat) result(ok)
+   !< The ImAxis of an x axis name `x` (argument `xname`, skipped when '') and of a y axis name `y`; false (reported,
+   !< `FIG_ERR_ARGUMENT`) for a name that is not an axis of its direction.
+   character(len=*), intent(in)            :: caller !< The procedure.
+   character(len=*), intent(in)            :: xname  !< Argument name of x ('': no x).
+   character(len=*), intent(in)            :: x      !< X axis name.
+   character(len=*), intent(in)            :: yname  !< Argument name of y ('': no y).
+   character(len=*), intent(in)            :: y      !< Y axis name.
+   integer(c_int),   intent(inout)         :: cx     !< ImAxis of x (unchanged without x).
+   integer(c_int),   intent(inout)         :: cy     !< ImAxis of y (unchanged without y).
+   integer(int32),   intent(out), optional :: stat   !< Status, on a refusal.
+   logical                                 :: ok     !< Not refused.
+
+   ok = .false.
+   if (len(xname) > 0) then
+      cx = axis_index(x)
+      if (cx < ImAxis_X1 .or. cx > ImAxis_X3) then
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': '//xname//" '"//x//"' is not an x axis ('x1', 'x2' or 'x3')", &
+                          stat)
+         return
+      endif
+   endif
+   if (len(yname) > 0) then
+      cy = axis_index(y)
+      if (cy < ImAxis_Y1 .or. cy > ImAxis_Y3) then
+         call figure_fail(FIG_ERR_ARGUMENT, caller//': '//yname//" '"//y//"' is not a y axis ('y1', 'y2' or 'y3')", &
+                          stat)
+         return
+      endif
+   endif
+   ok = .true.
+   endfunction pair_ok
+
+   function range_ok(caller, lo_name, lo, hi_name, hi, stat) result(ok)
+   !< False (reported, `FIG_ERR_ARGUMENT`) for a NaN end or `lo >= hi`.
+   character(len=*), intent(in)            :: caller  !< The procedure.
+   character(len=*), intent(in)            :: lo_name !< Name of the lower end.
+   real(real64),     intent(in)            :: lo      !< Lower end.
+   character(len=*), intent(in)            :: hi_name !< Name of the upper end.
+   real(real64),     intent(in)            :: hi      !< Upper end.
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: ok      !< Not refused.
+
+   ok = .false.
+   if (ieee_is_nan(lo) .or. ieee_is_nan(hi)) then
+      call figure_fail(FIG_ERR_ARGUMENT, caller//': '//lo_name//' and '//hi_name//' must not be NaN', stat)
+      return
+   endif
+   if (.not. lo < hi) then
+      call figure_fail(FIG_ERR_ARGUMENT, caller//': '//lo_name//' must be below '//hi_name, stat)
+      return
+   endif
+   ok = .true.
+   endfunction range_ok
+
+   pure subroutine set_flag(flags, flag, on)
+   !< Set (`on` true) or clear (`on` false) `flag` in `flags`; unchanged when `on` is absent.
+   integer(c_int), intent(inout)        :: flags !< Flags.
+   integer(c_int), intent(in)           :: flag  !< The flag.
+   logical,        intent(in), optional :: on    !< Set or clear.
+
+   if (.not. present(on)) return
+   if (on) then
+      flags = ior(flags, flag)
+   else
+      flags = iand(flags, not(flag))
+   endif
+   endsubroutine set_flag
 
    function series_ok(nx, ny, item, stat) result(ok)
    !< Whether two series can be plotted together: same size, and a size ImPlot's `int` count holds.

@@ -54,7 +54,7 @@ lines in bursts. `--pace 3` slows this small case down (3 ms a line), so that a 
   `solver%kill()` asks the solver to end; the next frames see it ended, killed.
 - `output%draw('output')` draws the lines in view, in a region of their own, and follows the end while it is
   scrolled to the bottom ([The log view](/guide/processes#the-log-view)). A click chooses a line, ctrl+c copies it.
-- The residuals are plotted on a logarithmic axis (`ylog=.true.`), and `auto_fit=.true.` fits the axes to the data
+- The residuals are plotted on a logarithmic axis (`yscale='log'`, [Axes](/guide/plots#axes)), and `auto_fit=.true.` fits the axes to the data
   in every frame, so the plot follows the curve as it grows ([Plots](/guide/plots)).
 
 <<< @/examples/snippets/tut11_run-run-menu.F90{fortran}

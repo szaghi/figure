@@ -14,9 +14,9 @@ title: Plots
 | Procedure | Notes |
 |---|---|
 | `ip_begin_plot(title [, width] [, height] [, equal]) → logical` | `.true.` when the plot is visible. `title` is also the identifier: unique within the window. Default size: full width, ImPlot's default height. A negative `height` fills the space left in the window. `equal=.true.`: one unit spans as many pixels on x as on y (maps, the complex plane). |
-| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat] [, stat])` | Axis labels. Call it right after `ip_begin_plot`, before any item. The axes fit the data on first use, then follow the user's pan and zoom; with `auto_fit=.true.` they refit to the data every frame (a history that grows while the program runs) and the user cannot pan or zoom them. `xlog=.true.`/`ylog=.true.`: a base-10 logarithmic axis (residual histories, spectra); values <= 0 are not shown on it. `xformat`/`yformat`: a C `printf` format of the tick labels (`'%.4f'`, `'%.2e'`, `'%g s'`), for values whose default labels look alike; checked ([Formats](#formats)). |
-| `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always])` | Initial axis ranges, applied on first use (the user pans and zooms afterwards), or every frame with `always=.true.`. Right after `ip_begin_plot`. |
-| `ip_plot_limits(xmin, xmax, ymin, ymax)` | The axis ranges as the user has panned and zoomed them, this frame. After the `ip_setup_*` calls (it ends the setup phase). |
+| `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat] [, xscale] [, yscale] [, stat])` | Labels of the axes X1 and Y1. Call it right after `ip_begin_plot`, before any item. The axes fit the data on first use, then follow the user's pan and zoom; with `auto_fit=.true.` they refit to the data every frame (a history that grows while the program runs) and the user cannot pan or zoom them. `xscale`/`yscale`: `'linear'`, `'log'`, `'symlog'`, `'time'` (x only) ([Axes](#axes)); `xlog=.true.`/`ylog=.true.` is the v0.3 spelling of `'log'`, kept. `xformat`/`yformat`: a C `printf` format of the tick labels (`'%.4f'`, `'%.2e'`, `'%g s'`), for values whose default labels look alike; checked ([Formats](#formats)). |
+| `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always] [, stat])` | Initial ranges of X1 and Y1, applied on first use (the user pans and zooms afterwards), or every frame with `always=.true.`. Right after `ip_begin_plot`. |
+| `ip_plot_limits(xmin, xmax, ymin, ymax [, xaxis] [, yaxis] [, stat])` | The axis ranges as the user has panned and zoomed them, this frame: of the axes the items use now, or of `xaxis`/`yaxis` (`'x2'`, `'y2'` ...). After the `ip_setup_*` calls (it ends the setup phase). |
 | `ip_plot_size(width, height)` | The size of the plot's data area [pixels], e.g. to compute an image at the screen's resolution. |
 | `ip_line(label, x, y [, spec] [, stat])` | A line through `(x(i), y(i))`. `label` is the legend entry. |
 | `ip_end_plot()` | Only when `ip_begin_plot` returned `.true.`. |
@@ -97,6 +97,93 @@ C's formatter reads the value as the format says, and a format that does not mat
 v0.3.1 a `'%d'` given for a real printed a wrong label, and a `'%n'` for a heatmap's labels stopped the program
 (`%n in writable segment detected`, glibc on Linux). The same in every mode: **window**,
 **headless** and **remote**.
+
+## Axes
+
+A plot has six axes: three x axes, `'x1'`, `'x2'`, `'x3'`, and three y axes, `'y1'`, `'y2'`, `'y3'` (ImPlot's
+`ImAxis_X1` ... `ImAxis_Y3`). X1 and Y1 always exist; the others exist on the frames a program sets them up. Each axis
+has its own range, scale, ticks and label, and fits its own data: residuals on a log scale and force coefficients on a
+linear one share the iterations in one plot.
+
+<<< @/examples/snippets/cb_two_axes-axes.F90{fortran}
+
+<Media name="cb_two_axes" video alt="A convergence plot: the residual falls over eight decades on a log axis on the left; cl and cd on a linear axis on the right, the legend outside on the right. The wheel zooms in and out on both axes; then the right axis is dragged down alone: cl and cd move, the residual stays." caption="docs/examples/src/cb_two_axes.F90: two y axes, each fitted to its own lines" />
+
+| Procedure | Notes |
+|---|---|
+| `ip_setup_axis(axis [, label] [, scale] [, auto_fit] [, format] [, opposite] [, invert] [, lock] [, no_grid] [, stat])` | Set up one axis (`SetupAxis`, `SetupAxisScale`, `SetupAxisFormat`). `scale`: `'linear'` (default), `'log'`, `'symlog'`, `'time'`. `auto_fit`: refit to the data every frame. `format`: the tick labels' `printf` format, checked ([Formats](#formats)). `opposite`: ticks and label on the other side (top, right); `invert`: values grow leftwards or downwards; `lock`: the user cannot pan or zoom it; `no_grid`: no grid lines. Axes 2 and 3 default to `opposite` and `no_grid`; X1 and Y1 to neither. |
+| `ip_set_axes(x, y [, stat])` | The axes the next items use (`SetAxes`), until the next call or the plot's end: `x` one of `'x1'`, `'x2'`, `'x3'`, `y` one of `'y1'`, `'y2'`, `'y3'`. Each plot starts on X1 and Y1. |
+| `ip_setup_axis_limits(axis, vmin, vmax [, always] [, stat])` | Initial range of one axis (`SetupAxisLimits`), on first use or, with `always=.true.`, every frame. |
+| `ip_setup_axis_ticks(axis, values [, labels] [, stat])` | Ticks at `values` (`real(real64)`, axis units) instead of the automatic ones (`SetupAxisTicks`), labelled `labels` (one per value, trailing blanks dropped) or, without them, by the axis's `format`. |
+| `ip_setup_axis_constraints(axis [, vmin] [, vmax] [, zoom_min] [, zoom_max] [, stat])` | Bounds the user cannot pan or zoom past (`SetupAxisLimitsConstraints`, `SetupAxisZoomConstraints`): the range stays inside [`vmin`, `vmax`], its width inside [`zoom_min`, `zoom_max`] (axis units). An end not given keeps its bound: none, or the scale's (a log axis stays above 0). |
+| `ip_setup_legend([location] [, outside] [, horizontal] [, stat])` | Where the legend goes (`SetupLegend`): `location` a compass point, `'n'`, `'ne'`, `'e'`, `'se'`, `'s'`, `'sw'`, `'w'`, `'nw'` (the default) or `'c'` (centre); `outside=.true.` puts it outside the plot area on that side, and the plot area shrinks to make room; `horizontal=.true.` lays its entries in a row. |
+| `ip_plot_limits(xmin, xmax, ymin, ymax [, xaxis] [, yaxis] [, stat])` | The ranges of the axes the items use now, or of `xaxis` and `yaxis`. |
+| `test_plot_tick(axis, index, label [, count] [, stat])` | The tick labels of any axis, for tests ([Testing](testing)): `axis` one of the six names (`'x'` and `'y'`: X1 and Y1). |
+
+**Which call addresses which axis.** `ip_setup_axes`, `ip_setup_axes_limits` and the items before any `ip_set_axes`
+address X1 and Y1; every `ip_setup_axis*` call names its axis; the items address the pair of the last `ip_set_axes`.
+`'x'` and `'y'` are accepted for `'x1'` and `'y1'` wherever an axis is named.
+
+**Order and frames.** As ImPlot asks, a plot has a setup phase and then its content, on every frame:
+
+1. right after a true `ip_begin_plot`: `ip_setup_axes`, `ip_setup_axis` (an axis 2 or 3 exists only on the frames this
+   is called for it), then for that axis `ip_setup_axis_limits`, `ip_setup_axis_ticks`, `ip_setup_axis_constraints`
+   (after `ip_setup_axis`: its `scale` resets the constraints, and the ticks take the `format` in effect), and
+   `ip_setup_legend`;
+2. then the items, with `ip_set_axes` between them.
+
+The first item, `ip_set_axes`, `ip_plot_limits`, `ip_plot_size`, `test_plot_tick` and the drag tools end the setup. A
+setup call after that, or outside a plot, is a usage error (`FIG_ERR_STATE`, message `<procedure>: the setup of the
+plot is over (...)` or `<procedure>: no plot is being declared (...)`); a call naming an axis not set up on this frame
+is one too (`<procedure>: axis 'y2' is not set up (call ip_setup_axis('y2') first, on every frame)`). Before v0.4.0
+ImPlot's assertion aborted the program in these cases.
+
+**Scales.**
+- `'linear'`: the default.
+- `'log'`: base 10, ticks at the decades. A value <= 0 has no place on it: ImPlot draws it at the smallest positive
+  double (10<sup>-308</sup>), far below the axis, so a line through it drops off the bottom; it does not take part in
+  the fit, and the axis's range stays above 0 (a `vmin` <= 0 in `ip_setup_axis_constraints` is refused).
+- `'symlog'`: symmetric log, `2 asinh(v / 2)`: close to linear in [-1, 1], logarithmic beyond, for both signs (Cp,
+  vorticity, a signed residual). Ticks at 0 and at the decades of each sign; near 0 the labels of ±1 and 0 can
+  crowd.
+- `'time'`: x axes only (ImPlot locates time ticks on horizontal axes alone; `'time'` on a y axis is refused): values
+  are UNIX seconds (`real(real64)`), labelled as dates and times in UTC (ImPlot's style `UseLocalTime` off). ImPlot's
+  time labels do not use the axis's `format`.
+
+<Media name="plot_axes" alt="Six plots in a grid. A residual on a log y axis with a coefficient on a second y axis on the right; three y axes, the third stacked on the right; a second x axis on top with three labelled fixed ticks, start, settle and steady; two residuals on a log axis; a signed quantity on a symmetric log axis with ticks at -1000, -100, -10, 0, 10, 100, 1000; a temperature over a time axis labelled 9am to 11am, 11/9/26, UTC." caption="docs/examples/src/gallery.F90 plot_axes: each plot's title names its calls" />
+
+**Fitting and the FPE rule.** Each axis fits the items drawn on it, on first use (or every frame with `auto_fit`),
+and a double click fits again; X2 and X3 fit the abscissae of the items on them. An axis with nothing to fit, unused
+or set up with no item on it, keeps its range: ImPlot would compute `inf - inf` there (a NaN, which traps under
+`-ffpe-trap=invalid`), so `ip_end_plot` cancels the fit of every empty axis, and the first frame of a subplot figure
+asks every axis to fit and keeps only those with data.
+
+Statuses: `FIG_ERR_ARGUMENT`, nothing set up, for an unknown axis, scale or location, an axis of the wrong direction
+in `ip_set_axes` or `ip_plot_limits`, `'time'` on a y axis, a format refused, `vmin >= vmax` or a NaN end, ticks with
+labels not one per value or a value not finite, constraints with `vmin >= vmax`, `zoom_min > zoom_max`, a negative
+width, a NaN, or `vmin <= 0` on a log axis, `ip_setup_axes`' `xlog` and `xscale` that disagree; `FIG_ERR_STATE` for the
+usage errors above and from a [task](processes#tasks). `stat` is optional: absent, an argument error stops with the
+message (`error stop`) and a usage error goes as `app%set_checks` says ([Errors](errors#plot-axes)).
+
+Modes: the same in **window**, **headless** and **remote** mode (the axes are laid out and drawn on the CPU; in remote
+mode the browser's pointer pans, zooms and drags the axes). Threads: a task does not draw (`FIG_ERR_STATE`).
+
+What it does not do:
+- custom scales (ImPlot's transform callbacks: no callbacks into Fortran), linked axes between plots other than
+  subplots' `link_x`/`link_y`, axis links to the program's variables (`SetupAxisLinks`);
+- keep the default ticks besides fixed ones (`SetupAxisTicks`' `show_default`), or a tick formatter written in Fortran;
+- an axis 2 or 3 that persists by itself: it is set up on every frame, as everything in a plot;
+- the legend of a subplot figure shared by its plots (`ImPlotSubplotFlags_ShareItems`).
+
+::: warning Changed in v0.4.0
+`ip_setup_axes` takes `xscale`/`yscale` (`'linear'`, `'log'`, `'symlog'`, `'time'`). `xlog`/`ylog` stay as a
+synonym of `'log'` (deprecated, to be removed in a later release): every v0.3.1 call compiles and draws as before;
+`xlog=.true.` with an `xscale` other than `'log'` is refused. The new arguments come before `stat`: a call passing
+`stat` by position (none in FIGURE's examples) must name it. `ip_setup_axes`, `ip_setup_axes_limits` and
+`ip_plot_limits` outside a plot or after the setup are usage errors instead of ImPlot's assertion;
+`ip_setup_axes_limits` and `ip_plot_limits` take an optional `stat`. Subplot figures fit every axis in use on their
+first frame, not only X1 and Y1. `test_plot_tick` takes the six axis names.
+:::
 
 ## Item style
 
@@ -281,5 +368,5 @@ segments.
 
 ## Not bound yet
 
-Other items (stems, stairs, histograms, text, ...) and axis setup beyond labels, limits, log scales and
-tick formats (time and symmetric-log scales, tick positions) are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)); see the [roadmap](roadmap).
+Other items (stems, stairs, histograms, text, ...) and axis links to program variables, custom scales and tick
+formatters are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)); see the [roadmap](roadmap).

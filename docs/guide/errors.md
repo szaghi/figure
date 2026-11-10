@@ -61,6 +61,7 @@ procedure, the argument and the format, and nothing is drawn. The full program c
 | `ig_input`, `ig_drag`, `ig_slider`, `ig_drag_range` of an integer, `format` | `<procedure>: format '<format>' is not a format of an integer: one conversion %d, %i or %u expected, with optional flags, width and precision` |
 | the same of a real, and `ig_slider_angle` | as `ig_input`'s above, starting with the procedure's name |
 | `ip_setup_axes`, `xformat` / `yformat` | the same, starting `ip_setup_axes: xformat` (or `yformat`) |
+| `ip_setup_axis`, `format` | the same, starting `ip_setup_axis: format` |
 | `ip_heatmap`, `ip_colormap_scale`, `ip_colormap_legend`, `label_format` | the same, starting `<procedure>: label_format` (`ip_colormap_legend` refuses only a format with a conversion: one without is text) |
 
 ### Numbers and choices
@@ -132,6 +133,37 @@ procedure. The plot layer outside a plot is a usage error, `FIG_ERR_STATE` (abse
 | a texture not initialized | `FIG_ERR_ARGUMENT` | `ig_draw_image: the texture is not initialized` (`ig_canvas: ...`) |
 | a canvas or invisible button size NaN or infinite | `FIG_ERR_ARGUMENT` | `<p>: width and height must be finite and within single precision` |
 | `layer='plot'` outside a plot | `FIG_ERR_STATE` | `<p>: layer 'plot' outside a plot (call it between a true ip_begin_plot and ip_end_plot)` |
+
+### Plot axes
+
+The axis calls ([Axes](plots#axes)) check their arguments on the Fortran side and their place against the plot being
+declared, before ImPlot sees them (ImPlot's own checks are assertions: the program aborted). A wrong argument is
+`FIG_ERR_ARGUMENT`, nothing set up (absent `stat`, `error stop` with the message); a call out of its place is a usage
+error, `FIG_ERR_STATE` (absent `stat`, reported by the next `app%next_frame`, or stopping at once in mode `'abort'`).
+`<p>` is the procedure.
+
+| Failure | Status | Message |
+|---|---|---|
+| an unknown axis name | `FIG_ERR_ARGUMENT` | `<p>: unknown axis '<axis>' ('x1', 'x2', 'x3', 'y1', 'y2' or 'y3')` |
+| a y axis where an x axis is expected, or the reverse | `FIG_ERR_ARGUMENT` | `<p>: x '<axis>' is not an x axis ('x1', 'x2' or 'x3')` (`y`, `xaxis`, `yaxis`) |
+| an unknown scale | `FIG_ERR_ARGUMENT` | `<p>: unknown scale '<scale>' ('linear', 'log', 'symlog' or 'time')` (`xscale`, `yscale`) |
+| `'time'` on a y axis | `FIG_ERR_ARGUMENT` | `ip_setup_axis: scale 'time' on axis '<axis>' is refused: ImPlot labels time on x axes only` |
+| `xlog` and an `xscale` other than `'log'` | `FIG_ERR_ARGUMENT` | `ip_setup_axes: xlog and xscale '<scale>' disagree (give xscale only: xlog is deprecated)` |
+| a limit NaN, or `vmin >= vmax` | `FIG_ERR_ARGUMENT` | `ip_setup_axis_limits: vmin and vmax must not be NaN`; `vmin must be below vmax` |
+| tick values not finite; labels not one per value | `FIG_ERR_ARGUMENT` | `ip_setup_axis_ticks: values must be finite`; `labels must be one per value` |
+| a constraint NaN; `vmin >= vmax`; `zoom_min > zoom_max`; a negative width | `FIG_ERR_ARGUMENT` | `ip_setup_axis_constraints: vmin is NaN`; `vmin must be below vmax`; `zoom_min must not be above zoom_max`; `a zoom width must not be negative` |
+| `vmin <= 0` on a log axis | `FIG_ERR_ARGUMENT` | `ip_setup_axis_constraints: vmin must be above 0 on the log axis '<axis>'` |
+| an unknown legend location | `FIG_ERR_ARGUMENT` | `ip_setup_legend: unknown location '<location>' ('n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw' or 'c')` |
+| no plot being declared | `FIG_ERR_STATE` | `<p>: no plot is being declared (call it between a true ip_begin_plot and ip_end_plot)` |
+| a setup call after an item, `ip_set_axes` or `ip_plot_limits` | `FIG_ERR_STATE` | `<p>: the setup of the plot is over (call the ip_setup_* procedures before the first item, ip_set_axes and ip_plot_limits)` |
+| an axis not set up on this frame | `FIG_ERR_STATE` | `<p>: axis '<axis>' is not set up (call ip_setup_axis('<axis>') first, on every frame)` |
+| `test_plot_tick` of an axis not set up | `FIG_ERR_STATE` | `test_plot_tick: axis '<axis>' is not set up (ip_setup_axis('<axis>'))` |
+
+::: warning Changed in v0.4.0
+Until v0.3.1 `ip_setup_axes`, `ip_setup_axes_limits` and `ip_plot_limits` outside a plot, or a setup call after an
+item, reached ImPlot's assertions: the program aborted inside `implot.cpp`, naming no Fortran call. From v0.4.0 they
+are usage errors with the messages above.
+:::
 
 ## Pairing and frames
 

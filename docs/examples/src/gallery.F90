@@ -1,7 +1,7 @@
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet"), the layout
 !< metrics (run with "layout_metrics"), the numbers and choices (run with "numbers_and_choices") and the canvas's
-!< drawing primitives (run with "canvas_primitives").
+!< drawing primitives (run with "canvas_primitives") and the axis layouts of a plot (run with "plot_axes").
 program gallery
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet").
@@ -19,6 +19,9 @@ program gallery
 !<
 !< "canvas_primitives" draws each primitive of the canvas in a cell of its own (a canvas), its call written below it,
 !< and the plot layer: a shape in plot units inside a plot.
+!<
+!< "plot_axes" draws six plots in a grid, each an axis layout with its calls in its title: two y axes, three y axes, a
+!< second x axis with fixed ticks, a log axis, a symmetric log axis, a time axis.
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real32, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, &
                    ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_input, ig_same_line, ig_selectable,          &
@@ -33,6 +36,8 @@ use figure, only : ig_combo, ig_drag, ig_drag_range, ig_list_box, ig_radio, ig_s
 use figure, only : ig_draw_line, ig_draw_polygon, ig_draw_text, canvas_event_object, ig_begin_group, ig_canvas, &
                    ig_draw_circle, ig_draw_image, ig_draw_polyline, ig_draw_rect, ig_end_group, texture_object, &
                    ip_setup_axes_limits
+use figure, only : ip_begin_subplots, ip_end_subplots, ip_set_axes, ip_setup_axis, ip_setup_axis_limits, &
+                   ip_setup_axis_ticks, ip_setup_legend
 
 implicit none
 integer(int32),    parameter :: N = 200_int32                    !< Points per line.
@@ -87,6 +92,14 @@ if (trim(arg) == 'layout_metrics') then
    call app%init('FIGURE: layout metrics', 680_int32, 400_int32)
    do while (app%next_frame())
       call metrics()
+   enddo
+   call app%destroy()
+   stop
+endif
+if (trim(arg) == 'plot_axes') then
+   call app%init('FIGURE: plot axes', 1000_int32, 640_int32)
+   do while (app%next_frame())
+      call plot_axes()
    enddo
    call app%destroy()
    stop
@@ -301,6 +314,77 @@ contains
    endif
    call ig_end()
    endsubroutine numbers_and_choices
+
+   subroutine plot_axes()
+   !< Six axis layouts in a grid of plots, each titled with the calls that make it.
+   integer(int32), parameter :: M = 300_int32 !< Samples.
+   real(real64)              :: t(M)          !< Abscissae: iterations.
+   real(real64)              :: a(M)          !< A residual, falling over six decades.
+   real(real64)              :: b(M)          !< A coefficient near 0.8.
+   real(real64)              :: c(M)          !< A temperature near 300.
+   real(real64)              :: s(M)          !< A signed quantity over [-5000, 5000].
+   real(real64)              :: clock(M)      !< UNIX seconds over three hours of 2026-11-09.
+
+   t = [(real(i, real64), i = 1_int32, M)]
+   a = 10.0_real64**(-6.0_real64 * t / real(M, real64)) * (1.0_real64 + 0.3_real64 * sin(t / 5.0_real64))
+   b = 0.8_real64 + 0.2_real64 * exp(-t / 60.0_real64) * cos(t / 12.0_real64)
+   c = 300.0_real64 + 20.0_real64 * (1.0_real64 - exp(-t / 80.0_real64))
+   s = 5000.0_real64 * sin(t / 30.0_real64) * exp(-t / 200.0_real64)
+   clock = 1794211200.0_real64 + 36.0_real64 * t
+   call ig_set_next_window(10.0_real64, 10.0_real64, 980.0_real64, 620.0_real64)
+   if (ig_begin('Axis layouts')) then
+      if (ip_begin_subplots('##axes', 2_int32, 3_int32, height=-1.0_real64)) then
+         if (ip_begin_plot("ip_setup_axis('y2'): a second y axis")) then
+            call ip_setup_axis('y1', label='residual', scale='log')
+            call ip_setup_axis('y2', label='cl')
+            call ip_setup_legend('s')
+            call ip_line('residual (y1)', t, a)
+            call ip_set_axes('x1', 'y2')
+            call ip_line('cl (y2)', t, b)
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("'y2' and 'y3': three y axes")) then
+            call ip_setup_axis('y2', label='cl')
+            call ip_setup_axis('y3', label='T [K]')
+            call ip_setup_legend('se')
+            call ip_line('residual (y1)', t, a * 1.0e3_real64)
+            call ip_set_axes('x1', 'y2')
+            call ip_line('cl (y2)', t, b)
+            call ip_set_axes('x1', 'y3')
+            call ip_line('T (y3)', t, c)
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("'x2' on top, fixed ticks")) then
+            call ip_setup_axis('x1', label='iteration')
+            call ip_setup_axis('x2', label='phase')
+            call ip_setup_axis_limits('x2', 0.0_real64, 3.0_real64)
+            call ip_setup_axis_ticks('x2', [0.5_real64, 1.5_real64, 2.5_real64], &
+                                     [character(len=8) :: 'start', 'settle', 'steady'])
+            call ip_line('cl over iterations (x1)', t, b)
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("scale='log'")) then
+            call ip_setup_axis('y1', label='residual', scale='log')
+            call ip_line('residual', t, a)
+            call ip_line('residual / 10', t, a / 10.0_real64)
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("scale='symlog': both signs")) then
+            call ip_setup_axis('y1', label='vorticity', scale='symlog')
+            call ip_line('vorticity', t, s)
+            call ip_end_plot()
+         endif
+         if (ip_begin_plot("scale='time' (x only)")) then
+            call ip_setup_axis('x1', label='UTC', scale='time')
+            call ip_setup_axis('y1', label='T [K]')
+            call ip_line('T', clock, c)
+            call ip_end_plot()
+         endif
+         call ip_end_subplots()
+      endif
+   endif
+   call ig_end()
+   endsubroutine plot_axes
 
    subroutine canvas_primitives()
    !< Each drawing primitive in a cell of its own, its call below it; then the plot layer, inside a plot.

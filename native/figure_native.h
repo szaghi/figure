@@ -124,7 +124,8 @@ int    fig_input_mouse_button(int button, int down);
 int    fig_input_wheel(float dx, float dy);
 int    fig_input_key(const char *name, int name_len, int down);
 int    fig_input_text(const char *text, int text_len);
-/* A tick label of the plot being declared: axis 0 x, 1 y, index from 1; count of ticks (tests of axis formats). */
+/* A tick label of the plot being declared: axis an ImAxis (0..2 X1..X3, 3..5 Y1..Y3), index from 1; count of
+ * ticks (tests of axis formats). FIG_ERR_STATE outside a plot or for an axis not set up. */
 int    fig_plot_tick_label(int axis, int index, char *buf, int buf_len, int *count, int *len);
 /* An annotation of the plot being declared: text in a box at (x, y), offset (dx, dy) [pixels] (0: centred), rgba the
  * box (alpha 0: none); clamp keeps it inside the plot. FIG_ERR_STATE outside a plot. */
@@ -230,6 +231,13 @@ int    fig_list_box(const char *label, int *current, const char *items, int item
 /* End the current ImPlot plot (EndPlot) without fitting an axis that has no data: ImPlot would compute
  * -inf * padding there, NaN with the default padding 0, which traps under -ffpe-trap=invalid. */
 void   fig_plot_end(void);
+/* The plot being declared: 0 none, 1 its setup open, 2 its setup over (locked by an item, SetAxes, GetPlotLimits);
+ * enabled[i] 1 for each axis (ImAxis i) set up (X1 and Y1 always), scale[i] its ImPlotScale. */
+int    fig_plot_state(int *enabled, int *scale);
+/* Constraints of an axis of the plot being declared (setup open, axis set up): the ends whose bit is set in given
+ * (1 range min, 2 range max, 4 zoom min, 8 zoom max) take v[0..3], the others keep theirs (a log axis keeps its
+ * positive minimum). */
+void   fig_plot_axis_constraints(int axis, int given, const double *v);
 int    fig_align_begin(const char *id, int id_len, int where);
 void   fig_align_end(void);
 void   fig_align_next(double width, int where);

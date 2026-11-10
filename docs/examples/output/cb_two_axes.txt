@@ -1,0 +1,4 @@
+$ ./cb_two_axes --check
+Y1 (log), fitted to the residual:      8.14E-09 to  1.05E+00
+Y2 (linear), fitted to cl and cd:        0.0503 to    1.0960
+Y2's tick labels ('%.2f'): 0.20 0.40 0.60 0.80 1.00

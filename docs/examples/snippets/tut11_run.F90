@@ -722,7 +722,7 @@ contains
    if (size(res) == 0) then
       call ig_text_disabled('The residuals, as the solver prints them.')
    elseif (ip_begin_plot('Residuals', width=-1.0_real64, height=-1.0_real64)) then
-      call ip_setup_axes('iteration', 'residual', auto_fit=.true., ylog=.true.) ! follows the data as it grows
+      call ip_setup_axes('iteration', 'residual', auto_fit=.true., yscale='log') ! follows the data as it grows
       call ip_line('residual', iters, res)
       call ip_end_plot()
    endif

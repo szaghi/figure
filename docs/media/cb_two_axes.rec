@@ -1,0 +1,16 @@
+#! program build/docs-examples/bin/cb_two_axes
+#! frames  170
+#! poster  20
+# zoom in on the plot with the wheel: both y axes follow their own data range; then drag the right (Y2) axis alone
+0   move 450 250
+10  move 420 260 15
+30  wheel 0 1
+40  wheel 0 1
+50  wheel 0 1
+60  wheel 0 -1
+70  wheel 0 -1
+80  wheel 0 -1
+95  move 760 260 15
+115 down
+120 move 760 330 20
+145 up

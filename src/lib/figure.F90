@@ -76,7 +76,9 @@ use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig
                          ig_line_height, ig_frame_height, ig_em, ig_available, ig_spacing, ig_dummy, ig_new_line, &
                          ig_indent, ig_unindent, ig_separator_text, ig_push_item_width, ig_pop_item_width, &
                          ig_begin_tooltip, ig_begin_item_tooltip, ig_end_tooltip, ig_text_link, ig_text_link_url
-use figure_implot, only : ip_begin_subplots, ip_end_subplots,                                              &
+use figure_implot, only : ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_setup_axis_ticks,                  &
+                          ip_setup_axis_constraints, ip_setup_legend,                                             &
+                          ip_begin_subplots, ip_end_subplots,                                              &
                           ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
                           ip_plot_limits, ip_plot_size, ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded,   &
                           ip_spec, plot_spec_object, ip_colormap, ip_colormap_names, ip_load_colormap,                &
@@ -183,6 +185,8 @@ public :: ig_color_edit
 public :: process_object, log_view_object, task_object, task_handle_object, task_work
 public :: view3d_object
 public :: ip_plot_limits, ip_plot_size, ip_setup_axes_limits, ip_begin_subplots, ip_end_subplots
+public :: ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_setup_axis_ticks, ip_setup_axis_constraints
+public :: ip_setup_legend
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
 public :: ImPlotMarker_Up, ImPlotMarker_Down, ImPlotMarker_Left, ImPlotMarker_Right, ImPlotMarker_Cross
 public :: ImPlotMarker_Plus, ImPlotMarker_Asterisk, ImPlotMarker_Vertical, ImPlotMarker_Horizontal
