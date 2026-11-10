@@ -40,6 +40,15 @@ FIGURE's nvfortran modes compile and link with `-Munixlogical`, so that `.true.`
   `--flag "-Mbackslash -Munixlogical -mp"` (`-mp` for [tasks](#tasks)), as in
   [Installation](install#the-fortran-library-with-fpm).
 
+## nvfortran: `system_clock` is the wall clock
+
+nvfortran's `system_clock` (26.9, any integer kind) reads `gettimeofday`, the wall clock, not a monotonic clock:
+when the system steps its time, an interval measured with it jumps by the step. WSL2 steps it often (measured: +2.56 s
+every 32 s against the monotonic clock), which made FIGURE's own lazy-loop test fail one run in twenty under nvfortran.
+gfortran's `system_clock` with an `int64` count is monotonic. To time a frame, a wait or a task under nvfortran, read
+the monotonic clock: `clock_gettime(CLOCK_MONOTONIC, ...)` through `bind(C)` (Linux's `CLOCK_MONOTONIC` is 1), as
+`src/tests/figure_test_tasks.F90` does.
+
 ## gfortran: a section of a deferred-length character array
 
 A section of a deferred-length allocatable character array (`character(len=:), allocatable :: names(:)`, as

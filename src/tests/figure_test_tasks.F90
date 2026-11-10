@@ -1,6 +1,9 @@
 !< figure_test_tasks_work, the work procedures of figure_test_tasks (module procedures: they run on other threads).
 module figure_test_tasks_work
 !< figure_test_tasks_work, the work procedures of figure_test_tasks (module procedures: they run on other threads).
+#if defined(__NVCOMPILER)
+use, intrinsic :: iso_c_binding, only : c_int, c_long
+#endif
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_color_edit, ig_end, ig_input, ig_push_style_color, &
                    ig_same_line, ig_separator, ig_slider, ig_text, ip_begin_plot, ip_colormap_legend, ip_line, &
@@ -8,7 +11,7 @@ use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_color_edit, 
 
 implicit none
 private
-public :: sum_job, sum_work, forever_work, draw_work, drop_work, fail_work, pause, ended_by_object
+public :: sum_job, sum_work, forever_work, draw_work, drop_work, fail_work, now, pause, ended_by_object
 public :: wake_job, waker_work, WAKE_BY_REQUEST, WAKE_BY_WAKE, WAKE_BY_QUIT
 
 type :: sum_job
@@ -28,9 +31,9 @@ type :: wake_job
    !< A call from a task to the application at a given time (`at`), then a hold until cancelled (or `hold` seconds).
    integer(int32) :: action = 0_int32    !< WAKE_BY_REQUEST, WAKE_BY_WAKE or WAKE_BY_QUIT.
    integer(int32) :: n = 1_int32         !< Frames requested (WAKE_BY_REQUEST).
-   integer(int64) :: at = 0_int64        !< When to call (system_clock count).
+   real(real64)   :: at = 0.0_real64     !< When to call (`now()`) [s].
    real(real64)   :: hold = 0.0_real64   !< Time alive after the call, unless cancelled [s].
-   integer(int64) :: called = -1_int64   !< When it called (system_clock count).
+   real(real64)   :: called = -1.0_real64 !< When it called (`now()`) [s]; read by the program after the task's end.
 endtype wake_job
 
 integer(int32), parameter :: WAKE_BY_REQUEST = 1_int32 !< app%request_frames(n).
@@ -39,16 +42,53 @@ integer(int32), parameter :: WAKE_BY_QUIT = 3_int32    !< app%quit().
 
 logical :: ended_by_object = .false. !< forever_work saw the cancel of its object's end.
 
+#if defined(__NVCOMPILER)
+type, bind(C) :: timespec
+   !< POSIX struct timespec (Linux: time_t and long are both C long).
+   integer(c_long) :: tv_sec = 0_c_long  !< Seconds [s].
+   integer(c_long) :: tv_nsec = 0_c_long !< Nanoseconds [ns].
+endtype timespec
+
+integer(c_int), parameter :: CLOCK_MONOTONIC = 1_c_int !< Linux's id of the monotonic clock.
+
+interface
+   function clock_gettime(clock_id, tp) result(status) bind(C, name='clock_gettime')
+   !< POSIX clock_gettime.
+   import :: c_int, timespec
+   integer(c_int), value         :: clock_id !< Clock.
+   type(timespec), intent(out)   :: tp       !< Its time.
+   integer(c_int)                :: status   !< 0 on success.
+   endfunction clock_gettime
+endinterface
+#endif
+
 contains
+   recursive function now() result(seconds)
+   !< The one clock of this test, on every thread: monotonic, in seconds from an arbitrary origin. nvfortran's
+   !< system_clock reads gettimeofday, the wall clock, which the system steps (seen: +2.56 s every 32 s on WSL2), so
+   !< under nvfortran the monotonic clock is read directly; gfortran's system_clock (int64) is already monotonic.
+   real(real64)   :: seconds    !< Time [s].
+#if defined(__NVCOMPILER)
+   type(timespec) :: ts         !< Its time.
+
+   if (clock_gettime(CLOCK_MONOTONIC, ts) /= 0_c_int) error stop 'figure_test_tasks: clock_gettime failed'
+   seconds = real(ts%tv_sec, real64) + 1.0e-9_real64 * real(ts%tv_nsec, real64)
+#else
+   integer(int64) :: t, rate    !< Clock.
+
+   call system_clock(t, rate)
+   seconds = real(t, real64) / real(rate, real64)
+#endif
+   endfunction now
+
    recursive subroutine pause(seconds)
    !< Wait `seconds` (by the clock).
-   real(real64), intent(in) :: seconds     !< Time [s].
-   integer(int64)           :: t0, t, rate !< Clock.
+   real(real64), intent(in) :: seconds !< Time [s].
+   real(real64)             :: t0      !< Start [s].
 
-   call system_clock(t0, rate)
+   t0 = now()
    do
-      call system_clock(t)
-      if (real(t - t0, real64) / real(rate, real64) >= seconds) exit
+      if (now() - t0 >= seconds) exit
    enddo
    endsubroutine pause
 
@@ -159,15 +199,13 @@ contains
    type(task_handle_object), intent(inout) :: h       !< Handle.
    class(*),                 intent(inout) :: data    !< A wake_job.
    type(app_object)                        :: app     !< The application (its calls act on the one loop).
-   integer(int64)                          :: t, rate !< Clock.
 
    select type (data)
    type is (wake_job)
       do
-         call system_clock(t, rate)
-         if (t >= data%at) exit
+         if (now() >= data%at) exit
       enddo
-      call system_clock(data%called)
+      data%called = now()
       select case (data%action)
       case (WAKE_BY_REQUEST)
          call app%request_frames(data%n)
@@ -178,8 +216,7 @@ contains
       endselect
       do
          if (h%cancelled()) exit
-         call system_clock(t)
-         if (real(t - data%called, real64) / real(rate, real64) >= data%hold) exit
+         if (now() - data%called >= data%hold) exit
          call pause(0.001_real64)
       enddo
    endselect
@@ -204,8 +241,8 @@ program figure_test_tasks
 !< figure_test_tasks, background tasks: progress, result, cancel, the threading rule, several at once, headless.
 use, intrinsic :: iso_fortran_env, only : error_unit, int32, int64, output_unit, real64
 use figure, only : app_object, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, figure_last_error, task_object
-use figure_test_tasks_work, only : draw_work, drop_work, ended_by_object, fail_work, forever_work, pause, sum_job, &
-                                  sum_work, wake_job, waker_work, WAKE_BY_QUIT, WAKE_BY_REQUEST, WAKE_BY_WAKE
+use figure_test_tasks_work, only : draw_work, drop_work, ended_by_object, fail_work, forever_work, now, pause, &
+                                  sum_job, sum_work, wake_job, waker_work, WAKE_BY_QUIT, WAKE_BY_REQUEST, WAKE_BY_WAKE
 
 implicit none
 type(app_object)              :: app             !< Application.
@@ -244,15 +281,14 @@ contains
    type(task_object), intent(in)  :: t      !< Task.
    real(real64),      intent(in)  :: limit  !< Time out [s].
    integer(int32)                 :: frames !< Frames.
-   integer(int64)                 :: t0, tn, rate !< Clock.
+   real(real64)                   :: t0     !< Start [s].
 
    frames = 0_int32
-   call system_clock(t0, rate)
+   t0 = now()
    do while (.not. t%done())
       if (.not. app%next_frame()) exit
       frames = frames + 1_int32
-      call system_clock(tn)
-      if (real(tn - t0, real64) / real(rate, real64) > limit) exit
+      if (now() - t0 > limit) exit
    enddo
    endfunction frames_until_done
 
@@ -463,15 +499,24 @@ contains
    if (.not. ok) write(error_unit, '(A)') 'object end: the task did not see its cancel'
    endsubroutine object_end
 
-   subroutine settle()
-   !< Lazy redraw off for a few frames: the frames still to draw run out, so that the next lazy frame waits.
-   integer(int32) :: k !< Frame.
+   function settle() result(settled)
+   !< Lazy frames (max_wait 0.1 s) until one waits: the frames still to draw, however many a previous check left, have
+   !< run out, so that the next lazy frame waits. A wait lasts max_wait; a frame that does not wait, at most 60 per
+   !< second in remote mode, takes ~0.017 s.
+   logical        :: settled !< A frame waited (within 300 frames).
+   integer(int32) :: k       !< Frame.
+   real(real64)   :: ta      !< A frame's start [s].
 
-   call app%set_lazy(.false.)
-   do k = 1_int32, 6_int32
+   call app%set_lazy(.true., max_wait=0.1_real64)
+   settled = .false.
+   do k = 1_int32, 300_int32
+      ta = now()
       if (.not. app%next_frame()) exit
+      settled = now() - ta >= 0.09_real64
+      if (settled) exit
    enddo
-   endsubroutine settle
+   if (.not. settled) write(error_unit, '(A)') 'settle: the loop never waited'
+   endfunction settle
 
    subroutine woken_by_task(action, ok)
    !< A lazy loop with max_wait 10 s, idle: a task's request_frames, wake or quit starts the next frame (ends the loop,
@@ -481,32 +526,40 @@ contains
    logical,        intent(out) :: ok      !< Outcome.
    type(task_object)           :: t       !< Task.
    class(*), allocatable       :: data    !< Result.
-   integer(int64)              :: t0, t1, rate !< Clock.
+   real(real64)                :: t1      !< The frame's start [s].
+   real(real64)                :: tw      !< Start of the wait for the task's end [s].
    integer(int32)              :: frames  !< Frames.
    integer(int32)              :: stat    !< Status.
    real(real64)                :: latency !< From the task's call to the frame [s].
    logical                     :: running !< next_frame's result.
+   logical                     :: settled !< The loop waited before the check.
    character(len=*), parameter :: names(3) = ['request_frames', 'wake          ', 'quit          '] !< Calls.
 
-   call settle()
+   settled = settle()
    call app%set_lazy(.true., max_wait=10.0_real64)
-   call system_clock(t0, rate)
-   call t%start(waker_work, wake_job(action=action, n=2_int32, at=t0 + rate / 5_int64, hold=2.0_real64))
+   call t%start(waker_work, wake_job(action=action, n=2_int32, at=now() + 0.2_real64, hold=2.0_real64))
    running = app%next_frame()
-   call system_clock(t1)
+   t1 = now()
    call t%cancel()
    frames = frames_until_done(t, 10.0_real64)
+   tw = now()  ! frames_until_done stops at the loop's end too (quit): the task may still be ending
+   do while (.not. t%done() .and. now() - tw < 5.0_real64)
+      call pause(0.001_real64)
+   enddo
    call t%result(data, stat)
    ok = .false.
-   latency = -1.0_real64
-   select type (data)
-   type is (wake_job)
-      latency = real(t1 - data%called, real64) / real(rate, real64)
-      ok = data%called > 0_int64 .and. latency >= 0.0_real64 .and. latency < 1.0_real64 .and. stat == FIG_OK
-   endselect
-   ok = ok .and. (running .neqv. action == WAKE_BY_QUIT)
-   if (.not. ok) write(error_unit, '(A,A,A,F8.4,A,L1)') 'woken by a task''s ', trim(names(action)), ': latency ', &
-                                                       latency, ' s, next_frame ', running
+   latency = huge(1.0_real64)  ! no result
+   if (allocated(data)) then
+      select type (data)
+      type is (wake_job)  ! data%called: written by the task before its end, read after it (t%result)
+         latency = t1 - data%called  ! negative: the frame began before the call (the loop did not wait)
+         ok = data%called >= 0.0_real64 .and. latency >= 0.0_real64 .and. latency < 1.0_real64 .and. stat == FIG_OK
+      endselect
+   endif
+   ok = ok .and. settled .and. (running .neqv. action == WAKE_BY_QUIT)
+   if (.not. ok) write(error_unit, '(A,A,A,ES11.3,A,L1,A,I0,A,L1)') 'woken by a task''s ', trim(names(action)), &
+                                                                 ': latency ', latency, ' s, next_frame ', running, &
+                                                                 ', task stat ', stat, ', settled ', settled
    endsubroutine woken_by_task
 
    subroutine largest_request_kept(ok)
@@ -514,45 +567,45 @@ contains
    !< waits again (max_wait 1 s): concurrent requests keep the largest, and the event of the wake-up does not lower it.
    logical, intent(out)  :: ok      !< Outcome.
    type(task_object)     :: t(8)    !< Tasks.
-   integer(int64)        :: t0, ta, tb, rate !< Clock.
+   real(real64)          :: at, ta  !< The tasks' call, a frame's start [s].
    integer(int32)        :: k       !< Task.
    integer(int32)        :: frames  !< Frames drawn before the loop waited.
+   logical               :: settled !< The loop waited before the check.
 
-   call settle()
+   settled = settle()
    call app%set_lazy(.true., max_wait=1.0_real64)
-   call system_clock(t0, rate)
+   at = now() + 0.2_real64
    do k = 1_int32, 8_int32
-      call t(k)%start(waker_work, wake_job(action=WAKE_BY_REQUEST, n=10_int32 * k, at=t0 + rate / 5_int64))
+      call t(k)%start(waker_work, wake_job(action=WAKE_BY_REQUEST, n=10_int32 * k, at=at))
    enddo
    do while (any([(t(k)%running(), k = 1_int32, 8_int32)]))
       call pause(0.005_real64)
    enddo
    frames = 0_int32
    do while (frames < 1000_int32)
-      call system_clock(ta)
+      ta = now()
       if (.not. app%next_frame()) exit
-      call system_clock(tb)
-      if (real(tb - ta, real64) / real(rate, real64) > 0.5_real64) exit ! a wait: the frames requested ran out
+      if (now() - ta >= 0.9_real64) exit ! a wait (max_wait 1 s): the frames requested ran out; a frame takes ~0.017 s
       frames = frames + 1_int32
    enddo
-   ok = frames >= 80_int32 .and. frames <= 90_int32
+   ok = settled .and. frames >= 80_int32 .and. frames <= 90_int32
    if (.not. ok) write(error_unit, '(A,I0,A)') 'largest request kept: ', frames, ' frames before the wait (80 expected)'
    endsubroutine largest_request_kept
 
    subroutine woken_by_main(ok)
    !< app%wake from the loop's own thread: the next frame does not wait (max_wait 10 s).
    logical, intent(out) :: ok      !< Outcome.
-   integer(int64)       :: t0, t1, rate !< Clock.
+   real(real64)         :: t0      !< The frame's start [s].
    real(real64)         :: elapsed !< next_frame's time [s].
+   logical              :: settled !< The loop waited before the check.
 
-   call settle()
+   settled = settle()
    call app%set_lazy(.true., max_wait=10.0_real64)
    call app%wake()
-   call system_clock(t0, rate)
+   t0 = now()
    ok = app%next_frame()
-   call system_clock(t1)
-   elapsed = real(t1 - t0, real64) / real(rate, real64)
-   ok = ok .and. elapsed < 1.0_real64 ! a frame's own cost, not a 10 s wait (0.125 s seen on a macOS runner)
+   elapsed = now() - t0
+   ok = ok .and. settled .and. elapsed < 1.0_real64 ! a frame's own cost, not a 10 s wait (0.125 s seen on a macOS runner)
    if (.not. ok) write(error_unit, '(A,F8.4,A)') 'woken by the main thread: next_frame took ', elapsed, ' s'
    endsubroutine woken_by_main
 
