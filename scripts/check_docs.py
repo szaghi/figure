@@ -20,7 +20,8 @@ Default checks (exit 1 and a list of what is missing):
   compiles.
 - **Version:** the version strings of the docs (``VERSIONED``: the status lines of README.md, docs/index.md and
   docs/guide/index.md, the fpm tags of README.md and docs/guide/install.md, the roadmap's section) say the version in
-  VERSION. scripts/release.sh writes VERSION and calls ``--bump``, so a release commit carries them.
+  VERSION. scripts/release_hook.sh, run by scripts/release.sh after it writes VERSION, calls ``--bump``, so a
+  release commit carries them.
 
 Options:
 
