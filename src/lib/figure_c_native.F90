@@ -32,6 +32,7 @@ public :: fig_process_start, fig_process_pending, fig_process_take, fig_process_
 public :: fig_process_release
 public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_task_cancel, fig_task_cancelled
 public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
+public :: fig_set_checks, fig_checks, fig_draw_refuse, fig_scope_open, fig_scope_close, fig_scope_report
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_notification_alpha
 public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig_file_browser_rect
@@ -442,6 +443,65 @@ interface
    integer(c_int),         value      :: name_len !< Its length [bytes].
    integer(c_int)                     :: refused  !< 1: refused.
    endfunction fig_task_refuse
+
+   function fig_set_checks(mode) result(status) bind(C, name='fig_set_checks')
+   !< The usage checks: 0 abort, 1 report (the default), 2 recover; `FIG_ERR_ARGUMENT` for another value.
+   import :: c_int
+   implicit none
+   integer(c_int), value :: mode   !< Mode.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_set_checks
+
+   function fig_checks() result(mode) bind(C, name='fig_checks')
+   !< The usage checks in effect: 0 abort, 1 report, 2 recover.
+   import :: c_int
+   implicit none
+   integer(c_int) :: mode !< Mode.
+   endfunction fig_checks
+
+   function fig_draw_refuse(who, who_len, has_stat) result(action) bind(C, name='fig_draw_refuse')
+   !< At a drawing entry point: 0 go on; 1 refused (from a task, or no frame open); 2 refused, stop ('abort').
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: who(*)   !< The entry point.
+   integer(c_int),         value      :: who_len  !< Its length [bytes].
+   integer(c_int),         value      :: has_stat !< 1: the caller has a stat (the error is returned there).
+   integer(c_int)                     :: action   !< 0, 1 or 2.
+   endfunction fig_draw_refuse
+
+   subroutine fig_scope_open(kind, who, who_len, label, label_len, returned, aux) bind(C, name='fig_scope_open')
+   !< A begin or a push, after it: its scope in the record of the frame.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int),         value      :: kind      !< SCOPE_* of figure_base.
+   character(kind=c_char), intent(in) :: who(*)    !< The procedure.
+   integer(c_int),         value      :: who_len   !< Its length [bytes].
+   character(kind=c_char), intent(in) :: label(*)  !< The label (or id) of the scope.
+   integer(c_int),         value      :: label_len !< Its length [bytes].
+   integer(c_int),         value      :: returned  !< 1: the begin returned true.
+   integer(c_int),         value      :: aux       !< The dock id of a dock layout (else 0).
+   endsubroutine fig_scope_open
+
+   function fig_scope_close(kind, who, who_len, n, has_stat) result(action) bind(C, name='fig_scope_close')
+   !< An end or a pop, before it: checked against the record; 0 go on, 1 refused, 2 refused, stop ('abort').
+   import :: c_char, c_int
+   implicit none
+   integer(c_int),         value      :: kind     !< SCOPE_* of figure_base.
+   character(kind=c_char), intent(in) :: who(*)   !< The procedure.
+   integer(c_int),         value      :: who_len  !< Its length [bytes].
+   integer(c_int),         value      :: n        !< Pops (style changes; 1 otherwise).
+   integer(c_int),         value      :: has_stat !< 1: the caller has a stat (the error is returned there).
+   integer(c_int)                     :: action   !< 0, 1 or 2.
+   endfunction fig_scope_close
+
+   function fig_scope_report(notify) result(status) bind(C, name='fig_scope_report')
+   !< The usage errors of the last frame (and between frames): `FIG_ERR_STATE` with every message in the last error,
+   !< or, in mode recover, `FIG_OK` and `notify` 1 when they are new.
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: notify !< 1: show them in a notification.
+   integer(c_int)              :: status !< Status.
+   endfunction fig_scope_report
 
    function fig_frame_hit(x, y, hit) result(status) bind(C, name='fig_frame_hit')
    !< The frame's hit-test class at (x, y), from the last frame.

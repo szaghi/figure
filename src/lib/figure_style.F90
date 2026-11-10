@@ -2,7 +2,10 @@
 module figure_style
 !< figure_style, every colour and variable of the Dear ImGui and ImPlot styles, by name.
 !<
-!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md. The scoped
+!< changes (`*_push_*`/`*_pop_*`, fonts) also need a frame open, and register in the scope record of the frame: a
+!< pop without its push is a usage error (`app%set_checks`; errors.md, "Pairing and frames"). Reading and setting
+!< the style (`*_get_*`, `*_set_*`) work outside a frame.
 !<
 !< The style is global: a change applies to everything drawn afterwards, until it is changed again (or a new style is
 !< chosen with `app%set_style`, which resets every colour and variable). Names are the libraries' own:
@@ -17,8 +20,9 @@ module figure_style
 !< pixels hold the values Dear ImGui uses, already multiplied by the display's content scale (`app%content_scale()`).
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int, c_loc, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real64
-use figure_base, only : figure_check, figure_fail, figure_refused
-use figure_c_native, only : FIG_ERR_ARGUMENT, fig_pop_font, fig_pop_style, fig_push_font, fig_push_style_color,      &
+use figure_base, only : figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
+                        figure_scope_refused, SCOPE_FONT, SCOPE_STYLE_COLOR, SCOPE_STYLE_VAR
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_pop_font, fig_pop_style, fig_push_font, fig_push_style_color,      &
                             fig_push_style_var, fig_show_style_editor, fig_style_color, fig_style_var
 
 implicit none
@@ -138,9 +142,12 @@ contains
    character(len=*), intent(in)            :: name  !< Colour name (`ImGuiCol_*` without the prefix).
    character(len=*), intent(in)            :: color !< Hex colour.
    integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(int32)                          :: s     !< Status of the push.
 
-   if (figure_refused('ig_push_style_color', stat)) return ! a task does not draw
-   call push_color_hex(LIB_IMGUI, 'ig_push_style_color', name, color, stat)
+   if (figure_draw_refused('ig_push_style_color', stat)) return ! a task does not draw, nor outside a frame
+   call push_color_hex(LIB_IMGUI, 'ig_push_style_color', name, color, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_COLOR, 'ig_push_style_color', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ig_push_style_color_hex
 
    recursive subroutine ig_push_style_color_rgba(name, rgba, stat)
@@ -148,9 +155,12 @@ contains
    character(len=*), intent(in)            :: name    !< Colour name.
    real(real64),     intent(in)            :: rgba(:) !< Components.
    integer(int32),   intent(out), optional :: stat    !< Status.
+   integer(int32)                          :: s       !< Status of the push.
 
-   if (figure_refused('ig_push_style_color', stat)) return ! a task does not draw
-   call push_color(LIB_IMGUI, 'ig_push_style_color', name, rgba, stat)
+   if (figure_draw_refused('ig_push_style_color', stat)) return ! a task does not draw, nor outside a frame
+   call push_color(LIB_IMGUI, 'ig_push_style_color', name, rgba, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_COLOR, 'ig_push_style_color', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ig_push_style_color_rgba
 
    recursive subroutine ig_pop_style_color(n, stat)
@@ -159,7 +169,7 @@ contains
    integer(int32), intent(in),  optional :: n    !< How many.
    integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
 
-   if (figure_refused('ig_pop_style_color', stat)) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_STYLE_COLOR, 'ig_pop_style_color', n, stat)) return ! task, no frame, too few pushes
    call pop(0_c_int, n, stat)
    endsubroutine ig_pop_style_color
 
@@ -168,9 +178,12 @@ contains
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
    real(real64),     intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(int32)                          :: s     !< Status of the push.
 
-   if (figure_refused('ig_push_style_var', stat)) return ! a task does not draw
-   call push_var(LIB_IMGUI, name, [value, 0.0_real64], 1_c_int, stat)
+   if (figure_draw_refused('ig_push_style_var', stat)) return ! a task does not draw, nor outside a frame
+   call push_var(LIB_IMGUI, name, [value, 0.0_real64], 1_c_int, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_VAR, 'ig_push_style_var', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ig_push_style_var_r64
 
    recursive subroutine ig_push_style_var_vec2(name, value, stat)
@@ -178,9 +191,12 @@ contains
    character(len=*), intent(in)            :: name     !< Variable name (a field of `ImGuiStyle`).
    real(real64),     intent(in)            :: value(2) !< Values (x, y).
    integer(int32),   intent(out), optional :: stat     !< Status.
+   integer(int32)                          :: s        !< Status of the push.
 
-   if (figure_refused('ig_push_style_var', stat)) return ! a task does not draw
-   call push_var(LIB_IMGUI, name, value, 2_c_int, stat)
+   if (figure_draw_refused('ig_push_style_var', stat)) return ! a task does not draw, nor outside a frame
+   call push_var(LIB_IMGUI, name, value, 2_c_int, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_VAR, 'ig_push_style_var', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ig_push_style_var_vec2
 
    recursive subroutine ig_push_style_var_logical(name, value, stat)
@@ -188,9 +204,12 @@ contains
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
    logical,          intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(int32)                          :: s     !< Status of the push.
 
-   if (figure_refused('ig_push_style_var', stat)) return ! a task does not draw
-   call push_var(LIB_IMGUI, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, stat)
+   if (figure_draw_refused('ig_push_style_var', stat)) return ! a task does not draw, nor outside a frame
+   call push_var(LIB_IMGUI, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_VAR, 'ig_push_style_var', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ig_push_style_var_logical
 
    recursive subroutine ig_push_style_var_i32(name, value, stat)
@@ -198,9 +217,12 @@ contains
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImGuiStyle`).
    integer(int32),   intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(int32)                          :: s     !< Status of the push.
 
-   if (figure_refused('ig_push_style_var', stat)) return ! a task does not draw
-   call push_var(LIB_IMGUI, name, [real(value, real64), 0.0_real64], 1_c_int, stat)
+   if (figure_draw_refused('ig_push_style_var', stat)) return ! a task does not draw, nor outside a frame
+   call push_var(LIB_IMGUI, name, [real(value, real64), 0.0_real64], 1_c_int, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_VAR, 'ig_push_style_var', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ig_push_style_var_i32
 
    recursive subroutine ig_pop_style_var(n, stat)
@@ -209,7 +231,7 @@ contains
    integer(int32), intent(in),  optional :: n    !< How many.
    integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
 
-   if (figure_refused('ig_pop_style_var', stat)) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_STYLE_VAR, 'ig_pop_style_var', n, stat)) return ! task, no frame, too few pushes
    call pop(1_c_int, n, stat)
    endsubroutine ig_pop_style_var
 
@@ -218,9 +240,12 @@ contains
    character(len=*), intent(in)            :: name  !< Colour name (`ImPlotCol_*` without the prefix).
    character(len=*), intent(in)            :: color !< Hex colour.
    integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(int32)                          :: s     !< Status of the push.
 
-   if (figure_refused('ip_push_style_color', stat)) return ! a task does not draw
-   call push_color_hex(LIB_IMPLOT, 'ip_push_style_color', name, color, stat)
+   if (figure_draw_refused('ip_push_style_color', stat)) return ! a task does not draw, nor outside a frame
+   call push_color_hex(LIB_IMPLOT, 'ip_push_style_color', name, color, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_COLOR, 'ip_push_style_color', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ip_push_style_color_hex
 
    recursive subroutine ip_push_style_color_rgba(name, rgba, stat)
@@ -228,9 +253,12 @@ contains
    character(len=*), intent(in)            :: name    !< Colour name.
    real(real64),     intent(in)            :: rgba(:) !< Components.
    integer(int32),   intent(out), optional :: stat    !< Status.
+   integer(int32)                          :: s       !< Status of the push.
 
-   if (figure_refused('ip_push_style_color', stat)) return ! a task does not draw
-   call push_color(LIB_IMPLOT, 'ip_push_style_color', name, rgba, stat)
+   if (figure_draw_refused('ip_push_style_color', stat)) return ! a task does not draw, nor outside a frame
+   call push_color(LIB_IMPLOT, 'ip_push_style_color', name, rgba, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_COLOR, 'ip_push_style_color', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ip_push_style_color_rgba
 
    recursive subroutine ip_pop_style_color(n, stat)
@@ -238,7 +266,7 @@ contains
    integer(int32), intent(in),  optional :: n    !< How many.
    integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
 
-   if (figure_refused('ip_pop_style_color', stat)) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_STYLE_COLOR, 'ip_pop_style_color', n, stat)) return ! task, no frame, too few pushes
    call pop(0_c_int, n, stat)
    endsubroutine ip_pop_style_color
 
@@ -247,9 +275,12 @@ contains
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImPlotStyle`).
    real(real64),     intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(int32)                          :: s     !< Status of the push.
 
-   if (figure_refused('ip_push_style_var', stat)) return ! a task does not draw
-   call push_var(LIB_IMPLOT, name, [value, 0.0_real64], 1_c_int, stat)
+   if (figure_draw_refused('ip_push_style_var', stat)) return ! a task does not draw, nor outside a frame
+   call push_var(LIB_IMPLOT, name, [value, 0.0_real64], 1_c_int, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_VAR, 'ip_push_style_var', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ip_push_style_var_r64
 
    recursive subroutine ip_push_style_var_vec2(name, value, stat)
@@ -257,9 +288,12 @@ contains
    character(len=*), intent(in)            :: name     !< Variable name (a field of `ImPlotStyle`).
    real(real64),     intent(in)            :: value(2) !< Values (x, y).
    integer(int32),   intent(out), optional :: stat     !< Status.
+   integer(int32)                          :: s        !< Status of the push.
 
-   if (figure_refused('ip_push_style_var', stat)) return ! a task does not draw
-   call push_var(LIB_IMPLOT, name, value, 2_c_int, stat)
+   if (figure_draw_refused('ip_push_style_var', stat)) return ! a task does not draw, nor outside a frame
+   call push_var(LIB_IMPLOT, name, value, 2_c_int, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_VAR, 'ip_push_style_var', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ip_push_style_var_vec2
 
    recursive subroutine ip_push_style_var_logical(name, value, stat)
@@ -267,9 +301,12 @@ contains
    character(len=*), intent(in)            :: name  !< Variable name (a field of `ImPlotStyle`).
    logical,          intent(in)            :: value !< Value.
    integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(int32)                          :: s     !< Status of the push.
 
-   if (figure_refused('ip_push_style_var', stat)) return ! a task does not draw
-   call push_var(LIB_IMPLOT, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, stat)
+   if (figure_draw_refused('ip_push_style_var', stat)) return ! a task does not draw, nor outside a frame
+   call push_var(LIB_IMPLOT, name, [merge(1.0_real64, 0.0_real64, value), 0.0_real64], 1_c_int, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_VAR, 'ip_push_style_var', name)
+   call figure_check(int(s, c_int), stat)
    endsubroutine ip_push_style_var_logical
 
    recursive subroutine ip_pop_style_var(n, stat)
@@ -277,7 +314,7 @@ contains
    integer(int32), intent(in),  optional :: n    !< How many.
    integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
 
-   if (figure_refused('ip_pop_style_var', stat)) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_STYLE_VAR, 'ip_pop_style_var', n, stat)) return ! task, no frame, too few pushes
    call pop(1_c_int, n, stat)
    endsubroutine ip_pop_style_var
 
@@ -288,7 +325,7 @@ contains
    integer(int32), intent(out),   optional :: stat !< Status: `FIG_ERR_STATE` outside a frame.
    integer(c_int), target                  :: o    !< C copy of `open`.
 
-   if (figure_refused('ig_show_style_editor', stat)) return ! a task does not draw
+   if (figure_draw_refused('ig_show_style_editor', stat)) return ! a task does not draw
    if (present(open)) then
       if (.not. open) return
       o = merge(1_c_int, 0_c_int, open)
@@ -306,8 +343,9 @@ contains
    real(real64),     intent(in),  optional :: size !< Size [logical pixels], in (0, 200].
    integer(int32),   intent(out), optional :: stat !< Status.
    real(c_double)                          :: s    !< Size; 0: keep.
+   integer(c_int)                          :: st   !< Status of the push.
 
-   if (figure_refused('ig_push_font', stat)) return ! a task does not draw
+   if (figure_draw_refused('ig_push_font', stat)) return ! a task does not draw, nor outside a frame
    s = 0.0_c_double
    if (present(size)) then
       if (.not. (size > 0.0_real64)) then
@@ -316,14 +354,16 @@ contains
       endif
       s = real(size, c_double)
    endif
-   call figure_check(fig_push_font(font, len_trim(font, c_int), s), stat)
+   st = fig_push_font(font, len_trim(font, c_int), s)
+   if (st == FIG_OK) call figure_scope_open(SCOPE_FONT, 'ig_push_font', trim(font))
+   call figure_check(st, stat)
    endsubroutine ig_push_font
 
    recursive subroutine ig_pop_font(stat)
    !< Back to the font before the last `ig_push_font`.
    integer(int32), intent(out), optional :: stat !< Status.
 
-   if (figure_refused('ig_pop_font', stat)) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_FONT, 'ig_pop_font', stat=stat)) return ! a task, no frame, or no push open
    call figure_check(fig_pop_font(), stat)
    endsubroutine ig_pop_font
 

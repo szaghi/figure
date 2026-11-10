@@ -4,17 +4,45 @@ module figure_base
 !<
 !< Procedures that can fail take an optional `stat`: if present it receives `FIG_OK` or a `FIG_ERR_*` code and
 !< `figure_last_error()` gives the message; if absent, a failure prints the message and stops (`error stop`).
+!<
+!< Usage checks: every drawing procedure asks `figure_draw_refused` first (a task, or no frame open), and every
+!< begin/end and push/pop pair registers in the scope record of the frame (`figure_scope_open` after the begin,
+!< `figure_scope_refused` before the end): see errors.md, "Pairing and frames".
 use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_f_pointer, c_int, c_null_char, c_ptr
 use, intrinsic :: iso_fortran_env, only : error_unit, int32
-use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_last_error, fig_set_last_error, fig_task_refuse
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_last_error, fig_set_last_error, fig_task_refuse, &
+                            fig_draw_refuse, fig_scope_close, fig_scope_open
 
 implicit none
 private
 public :: figure_check, figure_fail, figure_last_error, cstr, figure_refused
 public :: FORMAT_INTEGER, FORMAT_REAL, format_ok, format_refused
+public :: figure_draw_refused, figure_scope_open, figure_scope_refused
+public :: SCOPE_WINDOW, SCOPE_CHILD, SCOPE_TAB_BAR, SCOPE_TAB, SCOPE_TABLE, SCOPE_TREE, SCOPE_MAIN_MENU_BAR, SCOPE_MENU_BAR
+public :: SCOPE_MENU, SCOPE_POPUP, SCOPE_PLOT, SCOPE_SUBPLOTS, SCOPE_DOCK_LAYOUT, SCOPE_ID, SCOPE_DISABLED, SCOPE_FONT
+public :: SCOPE_STYLE_COLOR, SCOPE_STYLE_VAR
 
 integer(int32), parameter :: FORMAT_INTEGER = 1_int32 !< A printf format of an integer value: d, i, u.
 integer(int32), parameter :: FORMAT_REAL = 2_int32    !< A printf format of a real value: f, F, e, E, g, G, a, A.
+! Kinds of scope in the record of the frame (native/figure_scope.cpp's kind_t: the same values).
+integer(c_int), parameter :: SCOPE_WINDOW = 1_c_int         !< ig_begin, ig_begin_side_bar / ig_end (always paired).
+integer(c_int), parameter :: SCOPE_CHILD = 2_c_int          !< ig_begin_child / ig_end_child (always paired).
+integer(c_int), parameter :: SCOPE_TAB_BAR = 3_c_int        !< ig_begin_tab_bar / ig_end_tab_bar (after true).
+integer(c_int), parameter :: SCOPE_TAB = 4_c_int            !< ig_begin_tab / ig_end_tab (after true).
+integer(c_int), parameter :: SCOPE_TABLE = 5_c_int          !< ig_begin_table / ig_end_table (after true).
+integer(c_int), parameter :: SCOPE_TREE = 6_c_int           !< ig_tree_node / ig_tree_pop (after true).
+integer(c_int), parameter :: SCOPE_MAIN_MENU_BAR = 7_c_int  !< ig_begin_main_menu_bar / ig_end_main_menu_bar (after true).
+integer(c_int), parameter :: SCOPE_MENU_BAR = 8_c_int       !< ig_begin_menu_bar / ig_end_menu_bar (after true).
+integer(c_int), parameter :: SCOPE_MENU = 9_c_int           !< ig_begin_menu / ig_end_menu (after true).
+integer(c_int), parameter :: SCOPE_POPUP = 10_c_int         !< ig_begin_popup, ig_begin_popup_modal / ig_end_popup (after true).
+integer(c_int), parameter :: SCOPE_PLOT = 11_c_int          !< ip_begin_plot / ip_end_plot (after true).
+integer(c_int), parameter :: SCOPE_SUBPLOTS = 12_c_int      !< ip_begin_subplots / ip_end_subplots (after true).
+integer(c_int), parameter :: SCOPE_DOCK_LAYOUT = 13_c_int   !< ig_dock_layout_begin / ig_dock_layout_end (after true).
+integer(c_int), parameter :: SCOPE_ID = 14_c_int            !< ig_push_id / ig_pop_id.
+integer(c_int), parameter :: SCOPE_DISABLED = 15_c_int      !< ig_begin_disabled / ig_end_disabled.
+integer(c_int), parameter :: SCOPE_FONT = 16_c_int          !< ig_push_font / ig_pop_font.
+integer(c_int), parameter :: SCOPE_STYLE_COLOR = 17_c_int   !< ig_/ip_push_style_color / ig_/ip_pop_style_color.
+integer(c_int), parameter :: SCOPE_STYLE_VAR = 18_c_int     !< ig_/ip_push_style_var / ig_/ip_pop_style_var.
 
 contains
    function figure_last_error() result(msg)
@@ -68,6 +96,62 @@ contains
    refused = fig_task_refuse(name, len(name, c_int)) == 1_c_int
    if (refused .and. present(stat)) stat = int(FIG_ERR_STATE, int32)
    endfunction figure_refused
+
+   recursive function figure_draw_refused(name, stat) result(refused)
+   !< True when the drawing entry point `name` must return at once: called from a task (as `figure_refused`), or with
+   !< no frame open (a usage error: `FIG_ERR_STATE`, `<name>: no frame open`). A usage error is returned in `stat`
+   !< when present; without it, mode 'abort' stops the program here and the other modes keep it for the next
+   !< `app%next_frame` (`app%set_checks`). False, `stat` untouched, inside a frame on the main thread.
+   character(len=*), intent(in)            :: name    !< The entry point.
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: refused !< Refused: return.
+   integer(c_int)                          :: action  !< 0 go on, 1 refused, 2 stop.
+
+   action = fig_draw_refuse(name, len(name, c_int), merge(1_c_int, 0_c_int, present(stat)))
+   refused = action /= 0_c_int
+   if (action == 2_c_int) call figure_check(FIG_ERR_STATE) ! 'abort': the message, then error stop
+   if (refused .and. present(stat)) stat = int(FIG_ERR_STATE, int32)
+   endfunction figure_draw_refused
+
+   recursive subroutine figure_scope_open(kind, who, label, returned, aux)
+   !< After a begin or a push: its scope in the record of the frame (a begin of the "end only after true" kind that
+   !< returned false is remembered for the message of a wrong end, not opened).
+   integer(c_int),   intent(in)           :: kind     !< SCOPE_*.
+   character(len=*), intent(in)           :: who      !< The procedure (`ig_begin`).
+   character(len=*), intent(in)           :: label    !< Its label or id (`''` when none).
+   logical,          intent(in), optional :: returned !< What the begin returned (default true).
+   integer(int32),   intent(in), optional :: aux      !< The dock id of a dock layout.
+   integer(c_int)                         :: r        !< C copy of `returned`.
+   integer(c_int)                         :: a        !< C copy of `aux`.
+
+   r = 1_c_int
+   if (present(returned)) r = merge(1_c_int, 0_c_int, returned)
+   a = 0_c_int
+   if (present(aux)) a = int(aux, c_int)
+   call fig_scope_open(kind, who, len(who, c_int), label, len(label, c_int), r, a)
+   endsubroutine figure_scope_open
+
+   recursive function figure_scope_refused(kind, who, n, stat) result(refused)
+   !< Before an end or a pop: true when it must return at once, because it is called from a task or with no frame open
+   !< (as `figure_draw_refused`) or because it does not close the innermost open scope of the record (`FIG_ERR_STATE`,
+   !< the message naming both calls); in mode 'recover' an end whose scope is open further down closes the scopes
+   !< opened after it and goes on. A usage error is returned in `stat` when present; without it, mode 'abort' stops
+   !< here and the other modes keep it for the next `app%next_frame`.
+   integer(c_int),   intent(in)            :: kind    !< SCOPE_*.
+   character(len=*), intent(in)            :: who     !< The procedure (`ig_end`).
+   integer(int32),   intent(in),  optional :: n       !< Pops (style changes; default 1).
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: refused !< Refused: return.
+   integer(c_int)                          :: k       !< Pops.
+   integer(c_int)                          :: action  !< 0 go on, 1 refused, 2 stop.
+
+   k = 1_c_int
+   if (present(n)) k = int(n, c_int)
+   action = fig_scope_close(kind, who, len(who, c_int), k, merge(1_c_int, 0_c_int, present(stat)))
+   refused = action /= 0_c_int
+   if (action == 2_c_int) call figure_check(FIG_ERR_STATE) ! 'abort': the message, then error stop
+   if (refused .and. present(stat)) stat = int(FIG_ERR_STATE, int32)
+   endfunction figure_scope_refused
 
    pure function format_ok(fmt, family, text) result(ok)
    !< True when `fmt` is a printf format for one value of `family` (`FORMAT_INTEGER` or `FORMAT_REAL`): exactly one

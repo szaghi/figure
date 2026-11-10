@@ -2431,6 +2431,7 @@ int fig_begin_frame(int *running) {
       ImGui::NewFrame();
       st.in_frame = true;
       frame_bar_open();
+      fig_scope_frame_begin(); // the scope record: after FIGURE's own bar
       return FIG_OK;
    }
    if (st.m == mode::remote) {
@@ -2467,6 +2468,7 @@ int fig_begin_frame(int *running) {
       ImGui::NewFrame();
       st.in_frame = true;
       frame_bar_open();
+      fig_scope_frame_begin(); // the scope record: after FIGURE's own bar
       return FIG_OK;
    }
    SDL_Event ev;
@@ -2530,6 +2532,7 @@ int fig_begin_frame(int *running) {
    ImGui::NewFrame();
    st.in_frame = true;
    frame_bar_open();
+   fig_scope_frame_begin(); // the scope record: after FIGURE's own bar
    return FIG_OK;
    FIG_CATCH
 }
@@ -2538,6 +2541,7 @@ int fig_end_frame(void) {
    FIG_TRY
    if (fig_task_refuse("app%next_frame", 14)) return FIG_ERR_STATE; // a task does not draw
    if (!st.in_frame) return fail(FIG_ERR_STATE, "end_frame without begin_frame");
+   fig_scope_frame_end(); // what the program left open, closed (and reported by the next fig_scope_report)
    frame_bar_close();
    fig_file_browser_draw(); // FIGURE's file browser, a modal over the program's windows
    draw_notifications();    // after the program's windows, above them
@@ -2586,6 +2590,7 @@ void fig_shutdown(void) {
    try {
       fig_process_shutdown(); // the captured children end with the program (before SDL_Quit)
       if (st.in_frame) {
+         fig_scope_frame_end(); // what the program left open, closed
          ImGui::EndFrame();
          st.in_frame = false;
       }
@@ -2610,6 +2615,7 @@ void fig_shutdown(void) {
    }
    st = state_t{};
    cap = capture_t{};
+   fig_scope_reset();
    notes.clear();
    note_rects.clear();
    fig_file_browser_reset(0, 0);

@@ -28,7 +28,10 @@ the value, discard the result with `continue`:
 | `ig_set_next_window(x, y [, width, height] [, always])` | Position, and size if both `width` and `height` are given, of the next `ig_begin`, in pixels. Applied on first use only (the user can move the window afterwards; with `app%init(..., ini_file=...)` the layout is remembered across runs), or every frame with `always=.true.`. |
 | `ig_focus_window(name)` → `logical` | Brings window `name` forward and gives it the keyboard; a docked window's tab is shown. While a popup or a modal is open it does nothing and returns `.false.` (focusing another window would close the popup): ask again on a later frame. The window must have been drawn (`ig_begin`) this frame or before. |
 
-Widgets called outside any `ig_begin`/`ig_end` pair go to Dear ImGui's implicit "Debug" window.
+Widgets called outside any `ig_begin`/`ig_end` pair go to Dear ImGui's implicit "Debug" window; called with no frame
+open (before the first `app%next_frame`, after the loop), they are refused. A broken pairing (an `ig_end` while a
+table or a tree node is still open, a window left open at the end of the frame) is reported by the next
+`app%next_frame`, naming the calls: [Pairing and frames](errors#pairing-and-frames).
 
 **Window flags**, exported by `figure` and combined with `ior`: `ImGuiWindowFlags_NoTitleBar`, `NoResize`, `NoMove`,
 `NoScrollbar`, `NoScrollWithMouse`, `NoCollapse`, `AlwaysAutoResize`, `NoBackground`, `NoSavedSettings`,
@@ -285,7 +288,8 @@ beside it. Each region scrolls under the wheel on its own; the window does not m
 | `ig_begin_disabled([disabled])`, `ig_end_disabled()` | Always paired: the widgets in between are greyed out and ignore input. |
 
 Tabs and tables follow Dear ImGui's rule, which differs from windows: `ig_end` follows every `ig_begin`, whatever it
-returned, while `ig_end_tab`, `ig_end_tab_bar` and `ig_end_table` follow only a begin that returned `.true.`.
+returned, while `ig_end_tab`, `ig_end_tab_bar` and `ig_end_table` follow only a begin that returned `.true.`. FIGURE
+checks both rules, and the nesting of the scopes, at every end: [Pairing and frames](errors#pairing-and-frames).
 
 <<< @/examples/snippets/cb_form-fields.F90{fortran}
 

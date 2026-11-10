@@ -18,7 +18,7 @@ module figure_app
 !< the application's own variables.
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc
 use, intrinsic :: iso_fortran_env, only : int8, int32, output_unit, real64
-use figure_base, only : figure_check, figure_fail, figure_refused
+use figure_base, only : figure_check, figure_fail, figure_last_error, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_begin_frame, fig_content_scale, fig_end_frame, fig_init, &
                             fig_init_headless, fig_init_remote, fig_load_style, fig_request_frames, fig_save_style,   &
                             fig_set_docking, fig_set_font, fig_set_ini_file, fig_set_lazy, fig_set_remote_compress,       &
@@ -29,7 +29,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_begin_f
                             fig_image_result, fig_save_layout, fig_load_layout, fig_set_style_parts, fig_palette_color, &
                             fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_notify,              &
                             fig_notification_count, fig_notification_get, fig_file_browser, fig_dropped, &
-                            fig_dropped_path
+                            fig_dropped_path, fig_set_checks, fig_scope_report
 use figure_icons, only : ICON_CIRCLE_CHECK, ICON_CIRCLE_X, ICON_INFO, ICON_TRIANGLE_ALERT
 
 implicit none
@@ -47,6 +47,7 @@ type :: app_object
       procedure, pass(self) :: init_headless  !< Contexts only, no window (tests).
       procedure, pass(self) :: init_remote    !< The UI in a web browser (no window, display or GPU).
       procedure, pass(self) :: next_frame     !< Close the current frame, open the next; false on quit.
+      procedure, pass(self) :: set_checks     !< What a usage error does: 'abort', 'report' (default), 'recover'.
       procedure, pass(self) :: set_lazy       !< Lazy redraw on/off, longest sleep.
       procedure, pass(self) :: set_style      !< The style: a name, or a look and a palette.
       procedure, pass(self) :: palette_color  !< The colour of a palette role in effect.
@@ -314,12 +315,17 @@ contains
    endsubroutine init_remote
 
    recursive function next_frame(self, stat) result(running)
-   !< Render the open frame (if any), then process input and open the next; `.false.` when the user quits.
+   !< Render the open frame (if any), then process input and open the next; `.false.` when the user quits. The usage
+   !< errors of the frame just ended (a wrong end, a scope left open, a drawing call with no frame open: `set_checks`)
+   !< are reported here: `FIG_ERR_STATE` with every message, one per line, in `figure_last_error`; the scopes left
+   !< open have been closed and the next frame is open, so the loop can go on. In mode 'recover' they are shown in a
+   !< notification instead and the status is `FIG_OK`. See errors.md, "Pairing and frames".
    class(app_object), intent(inout)        :: self    !< Application.
    integer(int32),    intent(out), optional :: stat   !< Status.
    logical                                 :: running !< Keep looping.
    integer(c_int)                          :: status  !< Native status.
    integer(c_int)                          :: r       !< Running flag.
+   integer(c_int)                          :: show    !< 1: notify the usage errors ('recover').
 
    running = .false.
    if (figure_refused('app%next_frame', stat)) return ! a task does not draw
@@ -335,8 +341,51 @@ contains
    status = fig_begin_frame(r)
    running = status == FIG_OK .and. r /= 0_c_int
    self%in_frame = running
+   if (status == FIG_OK) then
+      status = fig_scope_report(show) ! the usage errors of the frame ended (and of calls between frames)
+      if (show == 1_c_int) call self%notify(figure_last_error(), 'error', 10.0_real64)
+   endif
    call figure_check(status, stat)
    endfunction next_frame
+
+   recursive subroutine set_checks(self, mode, stat)
+   !< What a usage error does: a wrong end (one that does not close the innermost open scope, or follows a begin that
+   !< returned false where the rule is "end only after a true begin"), a scope left open at the end of the frame, a
+   !< drawing procedure called with no frame open. FIGURE keeps a record of the scopes open in the frame (every
+   !< begin/end and push/pop pair it wraps) and checks each end against it before Dear ImGui sees it; the messages
+   !< name the Fortran calls (`ig_end_table: the open scope is ig_tree_node('Blocks') (close it with ig_tree_pop
+   !< before ig_end_table)`). `mode`:
+   !<
+   !< - `'abort'`: the program stops (`error stop`, the message on standard error) at the call that breaks the rule,
+   !<   or at `next_frame` for a scope left open; calls outside FIGURE (raw bindings) meet Dear ImGui's own assertions;
+   !< - `'report'` (the default): the wrong call is refused (it does nothing), the frame goes on, the scopes left open
+   !<   are closed, and the next `next_frame` returns `FIG_ERR_STATE` with every message (without its `stat`: `error
+   !<   stop`, as any failure);
+   !< - `'recover'`: as `'report'`, but an end whose scope is open further down first closes the scopes opened after
+   !<   it, and `next_frame` shows the messages in a notification (`figure_last_error` has them) and returns `FIG_OK`.
+   !<
+   !< A call with a `stat` of its own (`ig_pop_style_color(stat=s)`) gets its usage error there, in every mode.
+   !< Callable before `init*`; `destroy` restores the default. Statuses: `FIG_ERR_ARGUMENT` for another mode,
+   !< `FIG_ERR_STATE` from a task. The same in every mode (window, headless, remote).
+   class(app_object), intent(inout)         :: self !< Application.
+   character(len=*),  intent(in)            :: mode !< 'abort', 'report' or 'recover'.
+   integer(int32),    intent(out), optional :: stat !< Status.
+   integer(c_int)                           :: m    !< Mode code.
+
+   if (figure_refused('app%set_checks', stat)) return ! the loop's thread only
+   select case (mode)
+   case ('abort')
+      m = 0_c_int
+   case ('report')
+      m = 1_c_int
+   case ('recover')
+      m = 2_c_int
+   case default
+      call figure_fail(FIG_ERR_ARGUMENT, "app%set_checks: mode is 'abort', 'report' or 'recover', not '"//mode//"'", stat)
+      return
+   endselect
+   call figure_check(fig_set_checks(m), stat)
+   endsubroutine set_checks
 
    recursive subroutine set_lazy(self, enabled, max_wait)
    !< Lazy redraw (default on): once the UI settles, sleep until input or `max_wait` seconds (default 0.5). Callable

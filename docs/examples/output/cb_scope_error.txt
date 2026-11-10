@@ -1,0 +1,10 @@
+$ ./cb_scope_error
+report:
+ig_end_table: the open scope is ig_tree_node('Blocks') (close it with ig_tree_pop before ig_end_table)
+ig_end: the open scope is ig_tree_node('Blocks') (close it with ig_tree_pop before ig_end)
+app%next_frame: ig_tree_node('Blocks') is still open (close it with ig_tree_pop)
+app%next_frame: ig_begin_table('blocks') is still open (close it with ig_end_table)
+app%next_frame: ig_begin('Grid') is still open (close it with ig_end)
+fixed: no usage error
+recover: stat == FIG_OK is T, the message:
+ig_end_table: the open scope is ig_tree_node('Blocks') (close it with ig_tree_pop before ig_end_table)

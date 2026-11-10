@@ -2,7 +2,10 @@
 module figure_imgui
 !< figure_imgui, Dear ImGui widgets with Fortran arguments.
 !<
-!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md; and a call
+!< with no frame open, a usage error (`FIG_ERR_STATE`, `<procedure>: no frame open`). Every begin/end and push/pop
+!< pair registers in the scope record of the frame, which checks each end before Dear ImGui sees it: a wrong end is
+!< refused and reported by `app%next_frame` (`app%set_checks`; errors.md, "Pairing and frames").
 !<
 !< Immediate mode: call the widgets every frame; each returns what happened this frame (`ig_button` is true on the
 !< frame it is clicked, `ig_checkbox`/`ig_slider` are true when they changed the value). Values are ordinary Fortran
@@ -11,7 +14,8 @@ module figure_imgui
 use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_loc, c_long_long, &
                                         c_null_char, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_base, only : cstr, figure_check, figure_fail, figure_refused, format_refused, FORMAT_REAL
+use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
+                        figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_WINDOW
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, FIG_ERR_ARGUMENT, FIG_OK
@@ -78,7 +82,7 @@ contains
    type(c_ptr)                               :: p       !< bool* or null.
 
    visible = .false.
-   if (figure_refused('ig_begin')) return ! a task does not draw
+   if (figure_draw_refused('ig_begin')) return ! a task does not draw
    p = c_null_ptr
    if (present(open)) then
       o = logical(open, c_bool)
@@ -88,6 +92,7 @@ contains
    if (present(flags)) f = int(flags, c_int)
    visible = logical(igBegin(cstr(name), p, f))
    if (present(open)) open = logical(o)
+   call figure_scope_open(SCOPE_WINDOW, 'ig_begin', name, visible)
    endfunction ig_begin
 
    recursive function ig_begin_side_bar(name, side, size) result(visible)
@@ -103,7 +108,7 @@ contains
    integer(c_int)               :: s       !< Side code.
 
    visible = .false.
-   if (figure_refused('ig_begin_side_bar')) return ! a task does not draw
+   if (figure_draw_refused('ig_begin_side_bar')) return ! a task does not draw
    select case (side)
    case ('right')
       s = 1_c_int
@@ -115,6 +120,7 @@ contains
       s = 0_c_int
    endselect
    visible = fig_begin_side_bar(name, len(name, c_int), s, real(size, c_double)) == 1_c_int
+   call figure_scope_open(SCOPE_WINDOW, 'ig_begin_side_bar', name, visible)
    endfunction ig_begin_side_bar
 
    recursive function ig_focus_window(name) result(focused)
@@ -125,14 +131,15 @@ contains
    logical                      :: focused !< Focused (false: a popup is open, ask again later).
 
    focused = .false.
-   if (figure_refused('ig_focus_window')) return ! a task does not draw
+   if (figure_draw_refused('ig_focus_window')) return ! a task does not draw
    focused = .not. logical(igIsPopupOpen_Str(c_null_char, ImGuiPopupFlags_AnyPopup))
    if (focused) call igSetWindowFocus_Str(cstr(name))
    endfunction ig_focus_window
 
    recursive subroutine ig_end()
-   !< End the window opened by `ig_begin` (whatever it returned).
-   if (figure_refused('ig_end')) return ! a task does not draw
+   !< End the window opened by `ig_begin` or `ig_begin_side_bar` (whatever it returned). Refused (`FIG_ERR_STATE`,
+   !< reported by `app%next_frame`) when the innermost open scope is not a window: errors.md, "Pairing and frames".
+   if (figure_scope_refused(SCOPE_WINDOW, 'ig_end')) return ! a task, no frame, or not the innermost scope
    call igEnd()
    endsubroutine ig_end
 
@@ -145,7 +152,7 @@ contains
    logical,      intent(in), optional :: always !< Enforce every frame (default: first use only).
    integer(c_int)                     :: cond   !< ImGuiCond.
 
-   if (figure_refused('ig_set_next_window')) return ! a task does not draw
+   if (figure_draw_refused('ig_set_next_window')) return ! a task does not draw
    cond = ImGuiCond_FirstUseEver
    if (present(always)) then
       if (always) cond = ImGuiCond_Always
@@ -164,7 +171,7 @@ contains
    type(im_vec2)                          :: extent   !< Size (not `size`: see docs/guide/known-issues.md).
 
    pressed = .false.
-   if (figure_refused('ig_button')) return ! a task does not draw
+   if (figure_draw_refused('ig_button')) return ! a task does not draw
    extent = im_vec2(0.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
@@ -189,7 +196,7 @@ contains
    integer(c_int)                         :: sel      !< C copy of `selected`.
 
    clicked = .false.
-   if (figure_refused('ig_tool_button')) return ! a task does not draw
+   if (figure_draw_refused('ig_tool_button')) return ! a task does not draw
    w = 0.0_c_double
    h = 0.0_c_double
    if (present(width)) w = real(width, c_double)
@@ -217,7 +224,7 @@ contains
    recursive subroutine ig_align_text_to_frame_padding()
    !< The text that follows on this line is lowered to the text of framed widgets (fields, buttons): a label or a value
    !< beside fields, in a table row of fields.
-   if (figure_refused('ig_align_text_to_frame_padding')) return ! a task does not draw
+   if (figure_draw_refused('ig_align_text_to_frame_padding')) return ! a task does not draw
    call igAlignTextToFramePadding()
    endsubroutine ig_align_text_to_frame_padding
 
@@ -229,7 +236,7 @@ contains
    logical(c_bool), target         :: v       !< C copy of `value`.
 
    changed = .false.
-   if (figure_refused('ig_checkbox')) return ! a task does not draw
+   if (figure_draw_refused('ig_checkbox')) return ! a task does not draw
    v = logical(value, c_bool)
    changed = logical(igCheckbox(cstr(label), c_loc(v)))
    value = logical(v)
@@ -247,7 +254,7 @@ contains
    integer(c_int), target          :: hi      !< C copy of `vmax`.
 
    changed = .false.
-   if (figure_refused('ig_slider')) return ! a task does not draw
+   if (figure_draw_refused('ig_slider')) return ! a task does not draw
    v = int(value, c_int)
    lo = int(vmin, c_int)
    hi = int(vmax, c_int)
@@ -267,7 +274,7 @@ contains
    real(c_float), target           :: hi      !< C copy of `vmax`.
 
    changed = .false.
-   if (figure_refused('ig_slider')) return ! a task does not draw
+   if (figure_draw_refused('ig_slider')) return ! a task does not draw
    v = real(value, c_float)
    lo = real(vmin, c_float)
    hi = real(vmax, c_float)
@@ -288,7 +295,7 @@ contains
    real(c_double), target          :: hi      !< C copy of `vmax`.
 
    changed = .false.
-   if (figure_refused('ig_slider')) return ! a task does not draw
+   if (figure_draw_refused('ig_slider')) return ! a task does not draw
    v = real(value, c_double)
    lo = real(vmin, c_double)
    hi = real(vmax, c_double)
@@ -312,7 +319,7 @@ contains
    real(c_double)                          :: s       !< Step.
 
    changed = .false.
-   if (figure_refused('ig_input', stat)) return ! a task does not draw
+   if (figure_draw_refused('ig_input', stat)) return ! a task does not draw
    if (present(format)) then
       if (format_refused('ig_input', 'format', format, FORMAT_REAL, stat)) return
    endif
@@ -338,7 +345,7 @@ contains
    integer(c_int)                         :: s       !< Step.
 
    changed = .false.
-   if (figure_refused('ig_input')) return ! a task does not draw
+   if (figure_draw_refused('ig_input')) return ! a task does not draw
    v = int(value, c_int)
    s = 0_c_int
    if (present(step)) s = int(step, c_int)
@@ -362,7 +369,7 @@ contains
    integer(int32)                             :: i       !< Counter.
 
    changed = .false.
-   if (figure_refused('ig_input_text')) return ! a task does not draw
+   if (figure_draw_refused('ig_input_text')) return ! a task does not draw
    n = len_trim(value)
    do i = 1_int32, n
       buf(i) = value(i:i)
@@ -406,7 +413,7 @@ contains
    integer(c_int)                                 :: f         !< Flags.
 
    changed = .false.
-   if (figure_refused('ig_input_text_multiline')) return ! a task does not draw
+   if (figure_draw_refused('ig_input_text_multiline')) return ! a task does not draw
    w = 0.0_c_double
    if (present(width)) w = real(width, c_double)
    h = 0.0_c_double
@@ -523,7 +530,7 @@ contains
    integer(int32)                          :: n       !< Components.
 
    changed = .false.
-   if (figure_refused('ig_color_edit', stat)) return ! a task does not draw
+   if (figure_draw_refused('ig_color_edit', stat)) return ! a task does not draw
    n = size(rgba, kind=int32)
    if (n /= 3_int32 .and. n /= 4_int32) then
       call figure_fail(FIG_ERR_ARGUMENT, 'ig_color_edit: the colour needs 3 (RGB) or 4 (RGBA) components', stat)
@@ -558,7 +565,7 @@ contains
    logical                         :: chosen   !< Item i is the current one.
 
    changed = .false.
-   if (figure_refused('ig_combo')) return ! a task does not draw
+   if (figure_draw_refused('ig_combo')) return ! a task does not draw
    changed = .false.
    if (current >= 1_int32 .and. current <= size(items, kind=int32)) then
       if (.not. logical(igBeginCombo(cstr(label), cstr(trim(items(current))), 0_c_int))) return
@@ -583,7 +590,7 @@ contains
    !< A tooltip on the previous widget: `text` shows while the pointer rests on it (after Dear ImGui's usual delay).
    character(len=*), intent(in) :: text !< Text.
 
-   if (figure_refused('ig_tooltip')) return ! a task does not draw
+   if (figure_draw_refused('ig_tooltip')) return ! a task does not draw
    if (.not. logical(igBeginItemTooltip())) return
    call igTextUnformatted(cstr(text), c_null_ptr)
    call igEndTooltip()
@@ -593,7 +600,7 @@ contains
    !< Width of the next widget's field [pixels]; negative: up to that distance from the window's right edge.
    real(real64), intent(in) :: width !< Width [pixels].
 
-   if (figure_refused('ig_set_next_item_width')) return ! a task does not draw
+   if (figure_draw_refused('ig_set_next_item_width')) return ! a task does not draw
    call igSetNextItemWidth(real(width, c_float))
    endsubroutine ig_set_next_item_width
 
@@ -601,7 +608,7 @@ contains
    !< Plain text (no formatting: compose it with Fortran internal writes).
    character(len=*), intent(in) :: text !< Text.
 
-   if (figure_refused('ig_text')) return ! a task does not draw
+   if (figure_draw_refused('ig_text')) return ! a task does not draw
    call igTextUnformatted(cstr(text), c_null_ptr)
    endsubroutine ig_text
 
@@ -610,7 +617,7 @@ contains
    !< window's left edge (aligned columns of labels and fields).
    real(real64), intent(in), optional :: offset !< Distance from the window's left edge [pixels].
 
-   if (figure_refused('ig_same_line')) return ! a task does not draw
+   if (figure_draw_refused('ig_same_line')) return ! a task does not draw
    if (present(offset)) then
       call igSameLine(real(offset, c_float), -1.0_c_float)
    else
@@ -626,7 +633,7 @@ contains
    logical                      :: clicked  !< Clicked this frame.
 
    clicked = .false.
-   if (figure_refused('ig_selectable')) return ! a task does not draw
+   if (figure_draw_refused('ig_selectable')) return ! a task does not draw
    clicked = logical(igSelectable_Bool(cstr(label), logical(selected, c_bool), 0_c_int, &
                                        im_vec2(0.0_c_float, 0.0_c_float)))
    endfunction ig_selectable
@@ -635,7 +642,7 @@ contains
    !< Text wrapped at the right edge of the window or region (help text, long messages).
    character(len=*), intent(in) :: text !< Text.
 
-   if (figure_refused('ig_text_wrapped')) return ! a task does not draw
+   if (figure_draw_refused('ig_text_wrapped')) return ! a task does not draw
    call igPushTextWrapPos(0.0_c_float)
    call igTextUnformatted(cstr(text), c_null_ptr)
    call igPopTextWrapPos()
@@ -646,7 +653,7 @@ contains
    character(len=*), intent(in) :: text  !< Text.
    type(im_vec4), pointer       :: muted !< The style's TextDisabled colour.
 
-   if (figure_refused('ig_text_disabled')) return ! a task does not draw
+   if (figure_draw_refused('ig_text_disabled')) return ! a task does not draw
    call c_f_pointer(igGetStyleColorVec4(ImGuiCol_TextDisabled), muted)
    call igPushStyleColor_Vec4(ImGuiCol_Text, muted)
    call igTextUnformatted(cstr(text), c_null_ptr)
@@ -660,7 +667,7 @@ contains
    real(real64),     intent(in) :: color(:) !< [r, g, b] or [r, g, b, a].
    type(im_vec4)                :: c        !< Colour.
 
-   if (figure_refused('ig_text_colored')) return ! a task does not draw
+   if (figure_draw_refused('ig_text_colored')) return ! a task does not draw
    c = im_vec4(1.0_c_float, 1.0_c_float, 1.0_c_float, 1.0_c_float)
    if (size(color) >= 3) then
       c%x = real(color(1), c_float)
@@ -686,7 +693,7 @@ contains
    real(c_float)                          :: w        !< Width.
    type(c_ptr)                            :: overlay  !< Label or null.
 
-   if (figure_refused('ig_progress_bar')) return ! a task does not draw
+   if (figure_draw_refused('ig_progress_bar')) return ! a task does not draw
    f = real(fraction, c_float)
    if (fraction < 0.0_real64) f = -real(igGetTime(), c_float) ! Dear ImGui's indeterminate form: a moving negative
    w = -tiny(1.0_c_float)                                      ! -FLT_MIN: the width left
@@ -701,7 +708,7 @@ contains
 
    recursive subroutine ig_separator()
    !< Horizontal separator.
-   if (figure_refused('ig_separator')) return ! a task does not draw
+   if (figure_draw_refused('ig_separator')) return ! a task does not draw
    call igSeparator()
    endsubroutine ig_separator
 
@@ -710,7 +717,7 @@ contains
    logical, intent(inout), optional :: open !< Window open (close button).
    logical(c_bool), target          :: o    !< C copy of `open`.
 
-   if (figure_refused('ig_show_demo_window')) return ! a task does not draw
+   if (figure_draw_refused('ig_show_demo_window')) return ! a task does not draw
    if (present(open)) then
       o = logical(open, c_bool)
       call igShowDemoWindow(c_loc(o))
@@ -732,7 +739,7 @@ contains
    ymin = 0.0_real64
    xmax = 0.0_real64
    ymax = 0.0_real64
-   if (figure_refused('ig_item_rect')) return ! a task does not draw
+   if (figure_draw_refused('ig_item_rect')) return ! a task does not draw
    v = igGetItemRectMin()
    xmin = real(v%x, real64)
    ymin = real(v%y, real64)
@@ -749,7 +756,7 @@ contains
    real(real64),         intent(in), optional :: height !< Height [pixels].
    type(im_vec2)                              :: extent !< Size (named so: a local `size` crashes nvfortran 26.9).
 
-   if (figure_refused('ig_image')) return ! a task does not draw
+   if (figure_draw_refused('ig_image')) return ! a task does not draw
    extent = im_vec2(real(tex%width(), c_float), real(tex%height(), c_float))
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)

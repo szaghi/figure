@@ -92,6 +92,10 @@ shortcuts: Dear ImGui swaps the two as the events arrive.
 Put the interface in a procedure that the application calls every frame, and call the same procedure from the test:
 chapter 5 of the [tutorial](/manual/tutorial/05-headless) does this with a module, `draw_panel`, and a state type.
 
+Call `app%set_checks('abort')` after `init_headless`: a misplaced end in the interface then stops the test at the
+faulty call, with a message naming it, even where the test passes a `stat` to `next_frame`
+([Usage checks](frame-loop#usage-checks)).
+
 ## The repository's tests
 
 `src/tests/figure_test_headless.F90` drives every widget and plot type through `figure_testing` (clicks, a drag, typing

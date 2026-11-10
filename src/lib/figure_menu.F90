@@ -2,7 +2,10 @@
 module figure_menu
 !< figure_menu, menus, popups and keyboard shortcuts.
 !<
-!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md; and a call
+!< with no frame open, a usage error (`FIG_ERR_STATE`, `<procedure>: no frame open`). Every begin/end and push/pop
+!< pair registers in the scope record of the frame, which checks each end before Dear ImGui sees it: a wrong end is
+!< refused and reported by `app%next_frame` (`app%set_checks`; errors.md, "Pairing and frames").
 !<
 !< Pairing (Dear ImGui's): each `ig_end_*` only after its `ig_begin_*` returned true. A window's own menu bar needs the
 !< window flag `ImGuiWindowFlags_MenuBar` in its `ig_begin`. A menu item's shortcut text is only shown: the program
@@ -14,7 +17,8 @@ module figure_menu
 !< begin must use the same id in the same id scope (the same window).
 use, intrinsic :: iso_c_binding, only : c_bool, c_int, c_loc, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32
-use figure_base, only : cstr, figure_check, figure_refused
+use figure_base, only : cstr, figure_check, figure_draw_refused, figure_scope_open, figure_scope_refused, &
+                        SCOPE_MAIN_MENU_BAR, SCOPE_MENU, SCOPE_MENU_BAR, SCOPE_POPUP
 use figure_c_native, only : FIG_OK, fig_key_chord
 use figure_cimgui, only : igBeginMainMenuBar, igBeginMenu, igBeginMenuBar, igEndMainMenuBar, igEndMenu, igEndMenuBar, &
                           igIsKeyChordPressed_Nil, igMenuItem_BoolPtr, igBeginPopup, igBeginPopupModal,         &
@@ -33,13 +37,14 @@ contains
    logical :: visible !< The bar is drawn.
 
    visible = .false.
-   if (figure_refused('ig_begin_main_menu_bar')) return ! a task does not draw
+   if (figure_draw_refused('ig_begin_main_menu_bar')) return ! a task does not draw
    visible = logical(igBeginMainMenuBar())
+   call figure_scope_open(SCOPE_MAIN_MENU_BAR, 'ig_begin_main_menu_bar', '', visible)
    endfunction ig_begin_main_menu_bar
 
    recursive subroutine ig_end_main_menu_bar()
    !< End the main menu bar (only after `ig_begin_main_menu_bar` returned true).
-   if (figure_refused('ig_end_main_menu_bar')) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_MAIN_MENU_BAR, 'ig_end_main_menu_bar')) return ! a task, no frame, or not innermost
    call igEndMainMenuBar()
    endsubroutine ig_end_main_menu_bar
 
@@ -48,13 +53,14 @@ contains
    logical :: visible !< The bar is drawn.
 
    visible = .false.
-   if (figure_refused('ig_begin_menu_bar')) return ! a task does not draw
+   if (figure_draw_refused('ig_begin_menu_bar')) return ! a task does not draw
    visible = logical(igBeginMenuBar())
+   call figure_scope_open(SCOPE_MENU_BAR, 'ig_begin_menu_bar', '', visible)
    endfunction ig_begin_menu_bar
 
    recursive subroutine ig_end_menu_bar()
    !< End the window's menu bar (only after `ig_begin_menu_bar` returned true).
-   if (figure_refused('ig_end_menu_bar')) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_MENU_BAR, 'ig_end_menu_bar')) return ! a task, no frame, or not the innermost scope
    call igEndMenuBar()
    endsubroutine ig_end_menu_bar
 
@@ -66,15 +72,16 @@ contains
    logical(c_bool)                        :: e       !< C copy of `enabled`.
 
    open = .false.
-   if (figure_refused('ig_begin_menu')) return ! a task does not draw
+   if (figure_draw_refused('ig_begin_menu')) return ! a task does not draw
    e = .true._c_bool
    if (present(enabled)) e = logical(enabled, c_bool)
    open = logical(igBeginMenu(cstr(label), e))
+   call figure_scope_open(SCOPE_MENU, 'ig_begin_menu', label, open)
    endfunction ig_begin_menu
 
    recursive subroutine ig_end_menu()
    !< End a menu (only after `ig_begin_menu` returned true).
-   if (figure_refused('ig_end_menu')) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_MENU, 'ig_end_menu')) return ! a task, no frame, or not the innermost scope
    call igEndMenu()
    endsubroutine ig_end_menu
 
@@ -92,7 +99,7 @@ contains
    character(len=:), allocatable             :: keys     !< Shortcut text, NUL-terminated (empty when absent).
 
    picked = .false.
-   if (figure_refused('ig_menu_item')) return ! a task does not draw
+   if (figure_draw_refused('ig_menu_item')) return ! a task does not draw
    e = .true._c_bool
    if (present(enabled)) e = logical(enabled, c_bool)
    keys = cstr('')
@@ -119,7 +126,7 @@ contains
    integer(c_int)                          :: status  !< Status of the parse.
 
    pressed = .false.
-   if (figure_refused('ig_shortcut', stat)) return ! a task does not draw
+   if (figure_draw_refused('ig_shortcut', stat)) return ! a task does not draw
    pressed = .false.
    chord = 0_c_int
    status = fig_key_chord(keys, len(keys, c_int), chord)
@@ -132,7 +139,7 @@ contains
    !< Open the popup `id` (call once, on the event that opens it: a click, a quit request; not every frame).
    character(len=*), intent(in) :: id !< Popup id, as given to `ig_begin_popup` or `ig_begin_popup_modal`.
 
-   if (figure_refused('ig_open_popup')) return ! a task does not draw
+   if (figure_draw_refused('ig_open_popup')) return ! a task does not draw
    if (igOpenPopup_Str(cstr(id), 0_c_int)) continue
    endsubroutine ig_open_popup
 
@@ -143,8 +150,9 @@ contains
    logical                      :: open !< The popup is open.
 
    open = .false.
-   if (figure_refused('ig_begin_popup')) return ! a task does not draw
+   if (figure_draw_refused('ig_begin_popup')) return ! a task does not draw
    open = logical(igBeginPopup(cstr(id), 0_c_int))
+   call figure_scope_open(SCOPE_POPUP, 'ig_begin_popup', id, open)
    endfunction ig_begin_popup
 
    recursive function ig_begin_popup_modal(title, open) result(shown)
@@ -157,7 +165,7 @@ contains
    logical(c_bool), target                   :: o     !< C copy of `open`.
 
    shown = .false.
-   if (figure_refused('ig_begin_popup_modal')) return ! a task does not draw
+   if (figure_draw_refused('ig_begin_popup_modal')) return ! a task does not draw
    if (present(open)) then
       o = logical(open, c_bool)
       shown = logical(igBeginPopupModal(cstr(title), c_loc(o), ImGuiWindowFlags_AlwaysAutoResize))
@@ -165,17 +173,18 @@ contains
    else
       shown = logical(igBeginPopupModal(cstr(title), c_null_ptr, ImGuiWindowFlags_AlwaysAutoResize))
    endif
+   call figure_scope_open(SCOPE_POPUP, 'ig_begin_popup_modal', title, shown)
    endfunction ig_begin_popup_modal
 
    recursive subroutine ig_end_popup()
    !< End a popup or modal (only after its begin returned true).
-   if (figure_refused('ig_end_popup')) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_POPUP, 'ig_end_popup')) return ! a task, no frame, or not the innermost scope
    call igEndPopup()
    endsubroutine ig_end_popup
 
    recursive subroutine ig_close_current_popup()
    !< Close the popup or modal being declared (call it inside, e.g. when its OK button is pressed).
-   if (figure_refused('ig_close_current_popup')) return ! a task does not draw
+   if (figure_draw_refused('ig_close_current_popup')) return ! a task does not draw
    call igCloseCurrentPopup()
    endsubroutine ig_close_current_popup
 endmodule figure_menu

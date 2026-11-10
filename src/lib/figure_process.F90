@@ -15,7 +15,7 @@ module figure_process
 !< The arguments are passed as an array, without a shell: `['sh', '-c', 'a | b']` when a pipeline is wanted.
 use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_float, c_int, c_long_long, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64
-use figure_base, only : cstr, figure_check, figure_fail, figure_refused
+use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_process_info, fig_process_kill,            &
                             fig_process_pending, fig_process_release, fig_process_start, fig_process_take
 use figure_cimgui, only : igBeginChild_Str, igBeginPopupContextWindow, igEndChild, igEndPopup, igGetCursorPosX,     &
@@ -487,7 +487,7 @@ contains
    logical                                      :: chosen  !< It is chosen.
    integer(int32)                               :: widest  !< Lines in the largest range of the clipper.
 
-   if (figure_refused('log_view_object%draw')) return ! a task does not draw
+   if (figure_draw_refused('log_view_object%draw')) return ! a task does not draw
    h = 0.0_c_float
    if (present(height)) h = real(height, c_float)
    if (igBeginChild_Str(cstr(id), im_vec2(0.0_c_float, h), ImGuiChildFlags_Borders,                                 &

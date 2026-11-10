@@ -21,8 +21,9 @@ title: Plots
 | `ip_line(label, x, y [, spec] [, stat])` | A line through `(x(i), y(i))`. `label` is the legend entry. |
 | `ip_end_plot()` | Only when `ip_begin_plot` returned `.true.`. |
 
-Unlike `ig_begin`/`ig_end`, the plot pair is conditional: call `ip_end_plot` inside the `if`. A title that starts
-with `##` hides the title and keeps the identifier:
+Unlike `ig_begin`/`ig_end`, the plot pair is conditional: call `ip_end_plot` inside the `if` (an `ip_end_plot` after
+a false begin, or with another scope innermost, is refused and reported: [Pairing and frames](errors#pairing-and-frames)).
+A title that starts with `##` hides the title and keeps the identifier:
 
 <<< @/examples/snippets/tut03_plots-untitled.F90{fortran}
 

@@ -46,6 +46,45 @@ decides how many frames to run.
 request, once, and the program answers it, typically with a "Discard changes?" dialog
 ([Ask before quitting](menus#ask-before-quitting)). In remote mode closing the browser's tab never ends the program.
 
+### Usage checks
+
+| Procedure | Notes |
+|---|---|
+| `app%set_checks(mode [, stat])` | What a usage error does: `'abort'`, `'report'` (the default) or `'recover'`. |
+
+A usage error is a begin/end pair used wrongly (an end that is not the innermost open scope's, an end after a begin
+that returned `.false.` where the rule is "end only after a true begin", a scope left open at the end of the frame) or
+a drawing call with no frame open. FIGURE checks every pair it wraps against a record of the frame's scopes
+([Pairing and frames](errors#pairing-and-frames) has the rules and every message); `next_frame` is where the errors of
+a frame are reported:
+
+- **`'abort'`**: the program stops (`error stop`, `FIGURE error: <message>` on standard error) at the call that breaks
+  the rule, or at `next_frame` for a scope left open.
+- **`'report'`** (default): the wrong call does nothing, the frame goes on, FIGURE closes what was left open, and
+  `next_frame(stat)` returns `FIG_ERR_STATE` with the messages (one per line) in `figure_last_error()`, the next frame
+  open. Without `stat`, `next_frame` stops the program with them, as any failure without `stat` does.
+- **`'recover'`**: as `'report'`, but an end whose own scope is open further down closes the scopes opened after it
+  first (the missing ends), `next_frame` returns `FIG_OK`, and the messages are in `figure_last_error()` and in a
+  [notification](#notifications), one per distinct set of messages:
+
+<<< @/examples/snippets/cb_scope_error-recover.F90{fortran}
+
+The mode can be set before `init*`, and `destroy` restores the default. A call with a `stat` of its own (a style pop,
+`ig_dock_layout_end`) gets its usage error in that `stat`, in every mode. Statuses: `FIG_ERR_ARGUMENT` for another
+mode, `FIG_ERR_STATE` from a task (the mode belongs to the loop's thread). Modes: the same in **window**, **headless**
+and **remote** mode. Dear ImGui's names: its error recovery is `io.ConfigErrorRecovery*`; FIGURE sets it for the mode
+(assertions on in `'abort'`, off with FIGURE's callback in the others).
+
+**Tests run in `'abort'`.** A test should fail at the line of the fault, and a test that passes a `stat` to
+`next_frame` for another reason must not step over a usage error: `call app%set_checks('abort')` after
+`init_headless`. FIGURE's own test suite runs in the default mode, which stops a test just as well, one call later,
+because its loops pass no `stat` to `next_frame`; `src/tests/figure_test_errors.F90` checks the three modes.
+
+What the checks do not do: they cannot be turned off (they cost about 50 ns a pair: [What the checks
+cost](errors#what-the-checks-cost)); they do not check calls that are not pairs, nor raw calls that close what FIGURE
+opened; `'recover'` repairs the structure of the frame, not what the widgets drawn in the wrong scope showed in it
+([What is not checked](errors#what-is-not-checked-and-what-recovery-cannot-repair)).
+
 ## Lazy redraw
 
 Lazy redraw is on by default. After the last input event, FIGURE draws three more frames (Dear ImGui settles in a few

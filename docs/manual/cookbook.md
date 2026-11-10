@@ -456,6 +456,23 @@ Used in context: [chapter 15](./tutorial/15-robust) of the tutorial.
 Without `stat`, the message goes to standard error and the program ends with `error stop 1`. See
 [Error handling](/guide/errors).
 
+### Find a misplaced end
+
+A table of blocks with a tree in its first cell, whose `ig_tree_pop` was forgotten:
+
+<<< @/examples/snippets/cb_scope_error-grid.F90{fortran}
+
+In mode `'report'` (the default) the frame goes on and the next `next_frame(stat)` returns `FIG_ERR_STATE`, every
+error on its own line. The first line is the bug, the ones after it are what followed from it:
+
+<<< @/examples/snippets/cb_scope_error-wrong.F90{fortran}
+
+<<< @/examples/output/cb_scope_error.txt{text}
+
+With `ig_tree_pop` back the frame reports nothing; in mode `'recover'` the table's end closes the tree first, the
+program goes on (`FIG_OK`) and the message is in a notification. In a test, `app%set_checks('abort')` stops at the
+faulty call. [Pairing and frames](/guide/errors#pairing-and-frames) has every rule and message.
+
 ## Testing
 
 ### Click a button in a test

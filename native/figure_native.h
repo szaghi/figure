@@ -276,6 +276,27 @@ void   fig_task_release(int id);
 int    fig_task_on_worker(void);
 int    fig_task_refuse(const char *name, int name_len);
 
+/* Usage checks (figure_scope.cpp): the scope record of the frame. Every begin/end and push/pop pair FIGURE wraps
+ * registers: open after the begin (kind: the SCOPE_* parameters of figure_base.F90; who the Fortran procedure; label;
+ * what the begin returned; aux the dock id of a dock layout), close before the end (n pops of a style change). A
+ * usage error (a wrong end, a drawing call with no frame open) sets the last error and answers: 0 go on, 1 return at
+ * once (refused; the caller's stat, when has_stat, is FIG_ERR_STATE), 2 stop the program (mode 'abort', no stat).
+ * Without a stat of its own the error is kept and reported by fig_scope_report, after the next frame has begun:
+ * FIG_ERR_STATE with every message, one per line; in mode 'recover' FIG_OK, with notify 1 when the messages differ
+ * from the last ones notified. set_checks: 0 abort, 1 report (the default), 2 recover. draw_refuse is the check of
+ * a drawing entry point: a task first (fig_task_refuse), then a frame open. Internal (figure_native.cpp): the
+ * record's frame begin (after NewFrame: Dear ImGui's error recovery set up for the mode, the stack sizes kept), frame
+ * end (before the frame is rendered: what is still open closed, raw leftovers recovered) and reset (at shutdown). */
+int    fig_set_checks(int mode);
+int    fig_checks(void);
+int    fig_draw_refuse(const char *who, int who_len, int has_stat);
+void   fig_scope_open(int kind, const char *who, int who_len, const char *label, int label_len, int returned, int aux);
+int    fig_scope_close(int kind, const char *who, int who_len, int n, int has_stat);
+int    fig_scope_report(int *notify);
+void   fig_scope_frame_begin(void);
+void   fig_scope_frame_end(void);
+void   fig_scope_reset(void);
+
 /* Colormaps (figure_colormap.cpp): the bundled maps (third_party/colormaps), ImPlot's own and the user's, by name.
  * fig_colormap gives the ImPlot id of `name` (<name>_r reversed; levels > 0: that many discrete bands, in [2, 256]),
  * registering it with ImPlot at its first use (an ImPlot context is needed). fig_load_colormap reads a user map from a

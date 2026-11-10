@@ -225,6 +225,16 @@ A patch of three defects of v0.3.0, tracked in [issue #5](https://github.com/sza
 - **The 3-D view owns the mouse wheel while hovered:** inside a scrolling window or child, the wheel over the view
   zooms it and no longer scrolls the container ([Mouse](view3d#mouse)): done.
 
+## v0.4.0 — in progress
+
+Widget control, errors a Fortran programmer can act on, and the plots a monitor and a post-processor need; the plan,
+step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
+
+- **Usage errors reported, not aborted:** a record of the frame's scopes checks every begin/end and push/pop pair
+  before Dear ImGui sees it; a wrong end, a scope left open and a widget with no frame open are reported by
+  `next_frame` with messages naming the Fortran calls, in three modes (`app%set_checks`: `'abort'`, `'report'`, the
+  new default, `'recover'`) ([Pairing and frames](errors#pairing-and-frames)): done.
+
 ## Next
 
 Candidates, to be driven by what applications need.

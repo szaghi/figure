@@ -54,7 +54,8 @@ A popup is opened once, by an event, and declared every frame:
 | `ig_close_current_popup()` | Close the popup or modal being declared: call it inside, on its OK or Cancel. |
 
 `ig_end_popup` follows only a begin that returned `.true.`. Open and begin use the same id, in the same window (the
-id is scoped like a widget's label).
+id is scoped like a widget's label). A wrong end (after a false begin, or with another scope innermost) is refused
+and reported: [Pairing and frames](errors#pairing-and-frames).
 
 ## Ask before quitting
 

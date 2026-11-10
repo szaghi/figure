@@ -25,7 +25,7 @@ module figure_view3d
 !< derived again and the view is rendered at the next draw.
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_int, c_long_long, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64
-use figure_base, only : figure_check, figure_fail, figure_refused
+use figure_base, only : figure_check, figure_draw_refused, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
 
 implicit none
@@ -706,7 +706,7 @@ contains
    integer(int32),       intent(out), optional :: stat   !< Status.
    real(c_double)                              :: w, h   !< Size.
 
-   if (figure_refused('view3d_object%draw', stat)) return
+   if (figure_draw_refused('view3d_object%draw', stat)) return
    if (.not. alive(self, 'draw', stat)) return
    w = 0.0_c_double
    if (present(width)) w = real(width, c_double)

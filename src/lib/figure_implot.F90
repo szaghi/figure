@@ -2,7 +2,10 @@
 module figure_implot
 !< figure_implot, ImPlot plots with Fortran arrays.
 !<
-!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+!< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md; and a call
+!< with no frame open, a usage error (`FIG_ERR_STATE`, `<procedure>: no frame open`). Every begin/end and push/pop
+!< pair registers in the scope record of the frame, which checks each end before Dear ImGui sees it: a wrong end is
+!< refused and reported by `app%next_frame` (`app%set_checks`; errors.md, "Pairing and frames").
 !<
 !< `ip_begin_plot` returns true when the plot is visible: then declare its axes and items and close it with
 !< `ip_end_plot` (only in that case). Items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`) take `real(real32)` or
@@ -19,7 +22,8 @@ module figure_implot
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
-use figure_base, only : cstr, figure_check, figure_fail, figure_refused, format_refused, FORMAT_REAL
+use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
+                        figure_scope_refused, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
                             fig_colormap_legend
@@ -155,7 +159,7 @@ contains
    integer(c_int)                         :: flags   !< ImPlotFlags.
 
    visible = .false.
-   if (figure_refused('ip_begin_plot')) return ! a task does not draw
+   if (figure_draw_refused('ip_begin_plot')) return ! a task does not draw
    extent = im_vec2(-1.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
@@ -169,6 +173,7 @@ contains
       fits_pending = fits_pending - 1_int32
    endif
    visible = logical(ImPlot_BeginPlot(cstr(title), extent, flags))
+   call figure_scope_open(SCOPE_PLOT, 'ip_begin_plot', title, visible)
    endfunction ip_begin_plot
 
    recursive function ip_begin_subplots(title, rows, cols, width, height, link_x, link_y) result(visible)
@@ -188,7 +193,7 @@ contains
    integer(c_int)                         :: flags   !< ImPlotSubplotFlags.
 
    visible = .false.
-   if (figure_refused('ip_begin_subplots')) return ! a task does not draw
+   if (figure_draw_refused('ip_begin_subplots')) return ! a task does not draw
    extent = im_vec2(-1.0_c_float, 300.0_c_float * real(rows, c_float))
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
@@ -201,6 +206,7 @@ contains
    endif
    visible = logical(ImPlot_BeginSubplots(cstr(title), int(rows, c_int), int(cols, c_int), extent, flags, c_null_ptr, &
                                           c_null_ptr))
+   call figure_scope_open(SCOPE_SUBPLOTS, 'ip_begin_subplots', title, visible)
    ! ImPlot gives linked axes no initial fit: the first time this figure is drawn, its plots fit to their data (linked
    ! axes then share the range of the last plot fitted)
    if (visible) then
@@ -214,13 +220,13 @@ contains
 
    recursive subroutine ip_end_subplots()
    !< End the grid of plots (only after `ip_begin_subplots` returned true).
-   if (figure_refused('ip_end_subplots')) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_SUBPLOTS, 'ip_end_subplots')) return ! a task, no frame, or not the innermost scope
    call ImPlot_EndSubplots()
    endsubroutine ip_end_subplots
 
    recursive subroutine ip_end_plot()
    !< End the plot (only after `ip_begin_plot` returned true).
-   if (figure_refused('ip_end_plot')) return ! a task does not draw
+   if (figure_scope_refused(SCOPE_PLOT, 'ip_end_plot')) return ! a task, no frame, or not the innermost scope
    call ImPlot_EndPlot()
    endsubroutine ip_end_plot
 
@@ -242,7 +248,7 @@ contains
    integer(int32),   intent(out), optional :: stat     !< Status.
    integer(c_int)                          :: flags    !< ImPlotAxisFlags of both axes.
 
-   if (figure_refused('ip_setup_axes', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_setup_axes', stat)) return ! a task does not draw
    if (present(xformat)) then
       if (format_refused('ip_setup_axes', 'xformat', xformat, FORMAT_REAL, stat)) return
    endif
@@ -275,7 +281,7 @@ contains
    logical,      intent(in), optional :: always !< Enforce every frame (default: first use only).
    integer(c_int)                     :: cond   !< ImPlotCond.
 
-   if (figure_refused('ip_setup_axes_limits')) return ! a task does not draw
+   if (figure_draw_refused('ip_setup_axes_limits')) return ! a task does not draw
    cond = ImPlotCond_Once
    if (present(always)) then
       if (always) cond = ImPlotCond_Always
@@ -297,7 +303,7 @@ contains
    xmax = 0.0_real64
    ymin = 0.0_real64
    ymax = 0.0_real64
-   if (figure_refused('ip_plot_limits')) return ! a task does not draw
+   if (figure_draw_refused('ip_plot_limits')) return ! a task does not draw
    call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, limits) ! IMPLOT_AUTO: the current axes
    xmin = real(limits%X%Min, real64)
    xmax = real(limits%X%Max, real64)
@@ -313,7 +319,7 @@ contains
 
    width = 0.0_real64
    height = 0.0_real64
-   if (figure_refused('ip_plot_size')) return ! a task does not draw
+   if (figure_draw_refused('ip_plot_size')) return ! a task does not draw
    extent = ImPlot_GetPlotSize()
    width = real(extent%x, real64)
    height = real(extent%y, real64)
@@ -367,7 +373,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
-   if (figure_refused('ip_line', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), addr_r32(x), addr_r32(y), int(size(x), c_int), spec_c(spec))
    call figure_check(FIG_OK, stat)
@@ -381,7 +387,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
-   if (figure_refused('ip_scatter', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call ImPlot_PlotScatter_FloatPtrFloatPtr(cstr(label), addr_r32(x), addr_r32(y), int(size(x), c_int), spec_c(spec))
    call figure_check(FIG_OK, stat)
@@ -396,7 +402,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec     !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat     !< Status.
 
-   if (figure_refused('ip_bars', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call ImPlot_PlotBars_FloatPtrFloatPtr(cstr(label), addr_r32(x), addr_r32(y), int(size(x), c_int), &
                                          real(bar_size, c_double), spec_c(spec))
@@ -412,7 +418,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
-   if (figure_refused('ip_shaded', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
    if (.not. series_ok(size(x, kind=int64), size(y2, kind=int64), 'ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), addr_r32(x), addr_r32(y1), addr_r32(y2), &
@@ -429,7 +435,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
-   if (figure_refused('ip_shaded', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), addr_r32(x), addr_r32(y), int(size(x), c_int), &
                                               real(yref, c_double), spec_c(spec))
@@ -445,7 +451,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec   !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat   !< Status.
 
-   if (figure_refused('ip_line', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call ImPlot_PlotLine_FloatPtrInt(cstr(label), addr_r32(y), int(size(y), c_int), uniform(xscale, 1.0_real64), &
                                     uniform(xstart, 0.0_real64), spec_c(spec))
@@ -465,7 +471,7 @@ contains
    type(im_plot_spec)                                     :: c      !< Spec with the row stride.
    type(c_ptr)                                            :: p      !< Address of y(row, 1), or null.
 
-   if (figure_refused('ip_line', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. row_ok(size(y, 1, kind=int64), size(y, 2, kind=int64), storage_size(y, kind=int64), row, stat)) return
    c = spec_c(spec)
    c%Offset = 0_c_int
@@ -502,7 +508,7 @@ contains
    type(c_ptr)                                            :: p            !< Field address, or null when empty.
    integer(c_int)                                         :: cmap         !< The colormap's id.
 
-   if (figure_refused('ip_heatmap', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_heatmap', stat)) return ! a task does not draw
    if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
    if (.not. colormap_ok('ip_heatmap', colormap, cmap, stat)) return
    if (present(label_format)) then
@@ -538,7 +544,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
-   if (figure_refused('ip_line', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), addr_r64(x), addr_r64(y), int(size(x), c_int), spec_c(spec))
    call figure_check(FIG_OK, stat)
@@ -552,7 +558,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
-   if (figure_refused('ip_scatter', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_scatter', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call ImPlot_PlotScatter_doublePtrdoublePtr(cstr(label), addr_r64(x), addr_r64(y), int(size(x), c_int), &
                                               spec_c(spec))
@@ -568,7 +574,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec     !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat     !< Status.
 
-   if (figure_refused('ip_bars', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call ImPlot_PlotBars_doublePtrdoublePtr(cstr(label), addr_r64(x), addr_r64(y), int(size(x), c_int), &
                                            real(bar_size, c_double), spec_c(spec))
@@ -584,7 +590,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
-   if (figure_refused('ip_shaded', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y1, kind=int64), 'ip_shaded', stat)) return
    if (.not. series_ok(size(x, kind=int64), size(y2, kind=int64), 'ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), addr_r64(x), addr_r64(y1), addr_r64(y2), &
@@ -601,7 +607,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat  !< Status.
 
-   if (figure_refused('ip_shaded', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_shaded', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), addr_r64(x), addr_r64(y), int(size(x), c_int), &
                                                 real(yref, c_double), spec_c(spec))
@@ -617,7 +623,7 @@ contains
    type(plot_spec_object), intent(in), optional           :: spec   !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional          :: stat   !< Status.
 
-   if (figure_refused('ip_line', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call ImPlot_PlotLine_doublePtrInt(cstr(label), addr_r64(y), int(size(y), c_int), uniform(xscale, 1.0_real64), &
                                      uniform(xstart, 0.0_real64), spec_c(spec))
@@ -637,7 +643,7 @@ contains
    type(im_plot_spec)                                     :: c      !< Spec with the row stride.
    type(c_ptr)                                            :: p      !< Address of y(row, 1), or null.
 
-   if (figure_refused('ip_line', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. row_ok(size(y, 1, kind=int64), size(y, 2, kind=int64), storage_size(y, kind=int64), row, stat)) return
    c = spec_c(spec)
    c%Offset = 0_c_int
@@ -674,7 +680,7 @@ contains
    type(c_ptr)                                            :: p            !< Field address, or null when empty.
    integer(c_int)                                         :: cmap         !< The colormap's id.
 
-   if (figure_refused('ip_heatmap', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_heatmap', stat)) return ! a task does not draw
    if (.not. field_ok(size(f, 1, kind=int64), size(f, 2, kind=int64), present(scale_min), present(scale_max), stat)) return
    if (.not. colormap_ok('ip_heatmap', colormap, cmap, stat)) return
    if (present(label_format)) then
@@ -713,7 +719,7 @@ contains
    type(plot_spec_object), intent(in), optional  :: spec  !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional :: stat  !< Status.
 
-   if (figure_refused('ip_image', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_image', stat)) return ! a task does not draw
    if (.not. tex%is_initialized()) then
       call figure_fail(FIG_ERR_STATE, 'ip_image: the texture is not initialized', stat)
       return
@@ -742,7 +748,7 @@ contains
    type(im_vec2)                           :: extent       !< Size (0: ImPlot's default).
    integer(c_int)                          :: cmap         !< The colormap's id.
 
-   if (figure_refused('ip_colormap_scale', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_colormap_scale', stat)) return ! a task does not draw
    if (.not. colormap_ok('ip_colormap_scale', colormap, cmap, stat)) return
    if (present(label_format)) then
       if (format_refused('ip_colormap_scale', 'label_format', label_format, FORMAT_REAL, stat)) return
@@ -789,7 +795,7 @@ contains
    integer(c_int)                          :: n            !< Bands.
    integer(c_int)                          :: h            !< Horizontal flag.
 
-   if (figure_refused('ip_colormap_legend', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_colormap_legend', stat)) return ! a task does not draw
    if (present(label_format)) then
       ! as documented since v0.3.0: '' is the default format, a text without conversion is printed as it is
       if (format_refused('ip_colormap_legend', 'label_format', label_format, FORMAT_REAL, stat, text=.true.)) return
@@ -907,7 +913,7 @@ contains
    type(plot_spec_object), intent(in), optional                     :: spec        !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional                    :: stat        !< Status.
 
-   if (figure_refused('ip_error_bars', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
    if (.not. series_ok(size(x, kind=int64), size(err, kind=int64), 'ip_error_bars', stat)) return
    if (present(err_high)) then
@@ -932,7 +938,7 @@ contains
    type(plot_spec_object), intent(in), optional                     :: spec        !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional                    :: stat        !< Status.
 
-   if (figure_refused('ip_error_bars', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
    if (.not. series_ok(size(x, kind=int64), size(err, kind=int64), 'ip_error_bars', stat)) return
    if (present(err_high)) then
@@ -965,7 +971,7 @@ contains
    real(c_float)                           :: c(4)      !< Box colour.
    real(c_float)                           :: d(2)      !< Offset.
 
-   if (figure_refused('ip_annotation', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_annotation', stat)) return ! a task does not draw
    if (.not. rgba_ok(color)) then
       call figure_fail(FIG_ERR_ARGUMENT, 'ip_annotation: a colour needs 4 components (RGBA)', stat)
       return
@@ -997,7 +1003,7 @@ contains
    logical                                 :: moved     !< Moved by the user in this frame.
 
    moved = .false.
-   if (figure_refused('ip_drag_line_x', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_drag_line_x', stat)) return ! a task does not draw
    moved = .false.
    if (.not. drag_ok('ip_drag_line_x', color, stat)) return
    moved = logical(ImPlot_DragLineX(int(id, c_int), c_loc(x), drag_color(color),                                &
@@ -1015,7 +1021,7 @@ contains
    logical                                 :: moved     !< Moved by the user in this frame.
 
    moved = .false.
-   if (figure_refused('ip_drag_line_y', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_drag_line_y', stat)) return ! a task does not draw
    moved = .false.
    if (.not. drag_ok('ip_drag_line_y', color, stat)) return
    moved = logical(ImPlot_DragLineY(int(id, c_int), c_loc(y), drag_color(color),                                &
@@ -1034,7 +1040,7 @@ contains
    logical                                 :: moved    !< Moved by the user in this frame.
 
    moved = .false.
-   if (figure_refused('ip_drag_point', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_drag_point', stat)) return ! a task does not draw
    moved = .false.
    if (.not. drag_ok('ip_drag_point', color, stat)) return
    moved = logical(ImPlot_DragPoint(int(id, c_int), c_loc(x), c_loc(y), drag_color(color),                         &
@@ -1069,7 +1075,7 @@ contains
    logical                                 :: found       !< The field has finite values.
    integer(c_int)                          :: cmap        !< Colormap id.
 
-   if (figure_refused('ip_contour', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_contour', stat)) return ! a task does not draw
    if (.not. contour_ok(nlevels, colormap, color, cmap, stat)) return
    if (present(levels)) then
       lev = levels
@@ -1116,7 +1122,7 @@ contains
    logical                                 :: found       !< The field has finite values.
    integer(c_int)                          :: cmap        !< Colormap id.
 
-   if (figure_refused('ip_contour', stat)) return ! a task does not draw
+   if (figure_draw_refused('ip_contour', stat)) return ! a task does not draw
    if (.not. contour_ok(nlevels, colormap, color, cmap, stat)) return
    if (present(levels)) then
       lev = levels
