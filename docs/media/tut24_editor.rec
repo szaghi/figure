@@ -1,0 +1,40 @@
+#! program build/docs-examples/bin/tut24_editor
+#! fresh   /tmp/figure-studio
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  460
+#! poster  200
+#! crop    0 0 1100 680
+#! keys
+# The Input panel, the heat.inp tab: the namelist in the code editor. A double-click selects omega and a typo is typed
+# over it: the line is marked, Apply is greyed out, the mark's message under the pointer. The name typed again, the
+# mark goes. F1: the Help window, its sections and tables, scrolled with the wheel; its link to the body selects Body in
+# the input's tree
+0   wait
+0   move 600 300
+10  move 37 115 12
+25  down
+26  up
+45  move 605 80 12
+60  down
+61  up
+85  move 636 225 15
+105 down
+106 up
+108 down
+109 up
+130 text omgea
+150 move 556 225 15
+230 move 636 225 10
+245 down
+246 up
+248 down
+249 up
+265 text omega
+300 move 700 400 10
+315 key f1
+345 move 560 300 10
+360 wheel 0 -3
+375 wheel 0 -3
+395 move 340 326 10
+410 down
+411 up

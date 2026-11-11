@@ -1,0 +1,32 @@
+#! program build/docs-examples/bin/tut25_clip
+#! fresh   /tmp/figure-studio
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  380
+#! poster  270
+#! crop    0 0 1100 680
+# The 3-D panel from the tools' bar; clip: the surface cut at the probe line, the gizmo on the cut. The red arrow
+# dragged: the cut moves along x and the body shows again. Turn: rings; the blue ring dragged turns the cut about the
+# vertical. A click on the view cube's top face: the camera looks down on the plate and its slanted cut
+0   wait
+0   move 600 300
+10  move 37 300 12
+25  down
+26  up
+45  move 527 61 12
+60  down
+61  up
+85  move 758 246 15
+105 down
+106 move 815 266 30
+140 up
+165 move 640 61 15
+180 down
+181 up
+200 move 801 299 15
+225 down
+226 move 735 292 30
+260 up
+285 move 1041 102 15
+300 down
+301 up
+350 move 700 300 15

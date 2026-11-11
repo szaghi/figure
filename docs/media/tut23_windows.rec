@@ -1,0 +1,30 @@
+#! program build/docs-examples/bin/tut23_windows
+#! fresh   /tmp/figure-studio
+#! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
+#! frames  390
+#! poster  130
+#! crop    0 0 1100 680
+# The plate open in the Setup layout. View: the panels with their check marks, the two layouts, Reset layout, then the
+# studio's own items; Analysis: Result and 3-D side by side above Run, Messages beside Run, Input hidden. View > Input
+# shows it as a tab beside Result; View > Setup gives back the first arrangement
+0   wait
+0   move 600 300
+20  move 157 11 15
+40  down
+41  up
+70  move 165 175 15
+95  down
+96  up
+140 move 157 11 15
+160 down
+161 up
+190 move 158 56 15
+215 down
+216 up
+260 move 157 11 15
+280 down
+281 up
+310 move 159 156 15
+335 down
+336 up
+360 move 600 300 15

@@ -47,6 +47,9 @@ const docs = [
       { text: '20. Tables that act',          link: '/manual/tutorial/20-tables' },
       { text: '21. A sketch and a monitor',   link: '/manual/tutorial/21-monitor' },
       { text: '22. The field and its snapshots', link: '/manual/tutorial/22-player' },
+      { text: '23. Windows and layouts',      link: '/manual/tutorial/23-windows' },
+      { text: '24. An editor and the help',   link: '/manual/tutorial/24-editor' },
+      { text: '25. A clip plane, a picture test', link: '/manual/tutorial/25-clip' },
     ],
   },
   {

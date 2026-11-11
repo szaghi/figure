@@ -355,6 +355,8 @@ fonts: the Greek letters, upper and lower case; `∇ ∂ Δ ∞ ≈ ≤ ≥ ± �
 `⁰ ¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹`, `₀ ₁ ₂ ₃ ₄ ₅ ₆ ₇ ₈ ₉`. Noto Sans Math has every one of them except `·` and the super- and
 subscript digits, which both Plex fonts have. `figure_test_text` checks each one's bitmap in both fonts.
 
+<Media name="glyphs" alt="A window titled Glyphs with two groups, plex-sans (IBM Plex Sans) and plex-mono (IBM Plex Mono), each with five rows: the upper-case Greek letters, the lower-case Greek letters, the operators nabla, partial, Delta, infinity, approximately equal, less or equal, greater or equal, plus-minus, times, middle dot, square root, sum and integral, then the superscript and the subscript digits 0 to 9. Every glyph is drawn, none as a box" caption="docs/examples/src/gallery.F90, run as gallery glyphs: the symbols CFD writes, in the two text fonts" />
+
 <<< @/examples/snippets/cb_fallback_font-table.F90{fortran}
 
 A program's own fallback, for a script Plex and Noto Sans Math lack (a CJK font, a font of its own symbols):

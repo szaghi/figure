@@ -331,8 +331,8 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   own and registers the sampler callbacks. Against an RTX 4070 the renderer agrees within 2 levels on 68 of the 80
   documentation recordings; 3 differ by one pixel of a plot line, 9 draw what a task or a process produced by the
   wall clock. A 1400 x 860 frame takes 0.7 to 1.7 ms on 8 threads.
-  `scripts/docs_media.py --check` compares each poster with the CPU renderer's and `--update` accepts the new ones; on
-  demand until S9 records every picture again: done.
+  `scripts/docs_media.py --check` compares each poster with the CPU renderer's and `--update` accepts the new ones (in
+  CI since S9): done.
 - **Shortcuts: an unrouted scope `'always'`** (S11): `ig_shortcut(keys, scope='always')` is Dear ImGui's
   `IsKeyChordPressed`, v0.3's behaviour: every call of the chord fires, whatever has the focus, a text field being
   edited included; `ig_set_next_item_shortcut` refuses it. The four scopes in one table, and v0.4.0's migration note
@@ -426,6 +426,23 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   and JPEG files. Links are reported, never opened: `.true.` on the frame one is clicked, its URL in `link` (polled);
   a link to a heading scrolls there. It draws through Dear ImGui only: the same in every mode
   ([Markdown](widgets#markdown)): done.
+- **The documentation pass: every picture from one renderer, checked** (S9): every recording of the site recorded
+  again in one pass, headless, by S1's CPU renderer (`docs_media.py --headless`), the GPU's and llvmpipe's posters of
+  earlier releases and the stale `seal` pictures of v0.3.0 replaced, posters chosen again; `docs_media.py --check`
+  runs in the Checks workflow on every push, its differing pictures kept as an artifact. A capture script's `wait`
+  holds the recording until the program's tasks and processes are done (`fig_tasks_busy`, `fig_processes_busy`), so
+  the recordings of runs and reads by the wall clock (the solver of the tutorial, a task's read) are the same on any
+  machine and under any load ([Input scripts](capture#input-scripts)); a recording's `#! fresh` folder is removed
+  before its program starts, so the tutorial's example cases do not depend on the recordings run before; the
+  mandelbrot recording masks its line of timings. The name map covers the extensions: the
+  functions of ImGuiColorTextEdit, ImGuizmo, ImGradient and imgui_rich_md that FIGURE calls reach, by FIGURE call,
+  and the native glue bound outside `figure_c_native` (the 3-D view, the editor, Markdown) is followed too
+  ([Dear ImGui and ImPlot names](imgui-names#extensions)). Tutorial part three grows by three chapters: the studio's
+  windows registered, a View menu and layouts, its settings kept (23); its input in the code editor with the mistakes
+  marked, its help in Markdown (24); a clip plane placed with a gizmo, a view cube, and a picture test of its main
+  window by paths (25) ([Tutorial](/manual/)). A fresh reader's pass on the pages of v0.5.0, and the check modes
+  stated plainly: `'report'` without a `stat` stops the program, `'recover'` goes on
+  ([The three modes](errors#the-three-modes)): done.
 
 ## Next
 

@@ -9,4 +9,5 @@
 60  move 60 68 15
 80  down
 82  up
+95  wait
 100 move 560 42 20

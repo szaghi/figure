@@ -76,7 +76,7 @@ instead (linear filtering), better for photographs.
 
 **Lifetime.** `texture_object` has no finaliser on purpose: an assignment or a function result would finalise a copy
 and destroy the texture the original still uses. Destroy textures explicitly, or let `app%destroy` release them. In
-headless mode textures are accepted and checked (sizes, state) but nothing is drawn.
+headless mode the textures keep their pixels, and FIGURE's CPU renderer draws them ([Screenshots and videos](capture)).
 
 ## Reading images
 
@@ -107,8 +107,8 @@ exactly this. `tex%load` creates a texture, so it is a drawing call: refused fro
 
 **Modes.** `fig_read_image` is the same in every mode: it reads a file of the machine the program runs on (in
 remote mode the server's, not the browser's). `tex%load` as `tex%init`: in window mode the texture is on the GPU, in
-remote mode it is sent to the browser with the next frame, in headless mode its size and state are kept, without
-pixels.
+remote mode it is sent to the browser with the next frame, in headless mode its pixels are kept for the CPU
+renderer.
 
 **Formats.** PNG (any bit depth and colour type, interlaced too) and JPEG (baseline and progressive), recognised by
 their first bytes, not by the file's extension. Nothing else: a BMP, a GIF, a TIFF, a WebP or a text file is

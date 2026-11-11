@@ -196,6 +196,18 @@ void fig_task_release(int id) {
 
 int fig_task_on_worker(void) { return current ? 1 : 0; }
 
+// Tasks whose procedure has not returned: the capture's "wait" holds its frames until there are none.
+int fig_tasks_busy(void) {
+   if (!reg_m) return 0;
+   int n = 0;
+   SDL_LockMutex(reg_m);
+   if (reg)
+      for (const auto &kv : *reg)
+         if (SDL_GetAtomicInt(&kv.second->done) == 0) ++n;
+   SDL_UnlockMutex(reg_m);
+   return n;
+}
+
 int fig_task_refuse(const char *name, int name_len) {
    task_t *t = current;
    if (!t) return 0;

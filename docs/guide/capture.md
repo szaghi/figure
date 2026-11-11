@@ -37,8 +37,8 @@ SDL is not started, and the frames come from the CPU renderer, at the window's s
 FIGURE_CAPTURE=shot_ FIGURE_CAPTURE_HEADLESS=1 FIGURE_CAPTURE_FROM=10 FIGURE_CAPTURE_FRAMES=1 exe/examples/figure_hello
 ```
 
-In that mode `app%set_icon` gives FIGURE's title bar its icon, as in the window; the calls that need a real window
-(the system's file dialogs, `set_size_limits`) are refused as in any headless program.
+In that mode `app%set_icon` gives FIGURE's title bar its icon, as in the window; the system's file dialogs are refused as in
+any headless program, and `set_size_limits` does nothing.
 
 ### The CPU renderer and the GPU
 
@@ -114,6 +114,11 @@ One event per line, at the frame given first (counted from 0, skipped frames inc
 | `<frame> key <name> [down\|up]` | a key is pressed and released, or only pressed or released, by the names of `test_key`: `a`-`z`, `0`-`9`, `f1`-`f12`, `enter`, `tab`, `backspace`, `delete`, `escape`, `space`, the arrows, `home`, `end`, `pageup`, `pagedown`, `ctrl`, `shift`, `alt`, `super` |
 | `<frame> drop <x> <y> <path>` | a file or folder is dropped on the window at `(x, y)` |
 | `<frame> close` | the window's close button is clicked: a quit request (see [`set_confirm_quit`](menus#ask-before-quitting)) |
+| `<frame> wait` | the script holds until the program's [tasks](processes#tasks) and [processes](processes#processes) are done. First the program waits, drawing nothing, until no task runs and no process is alive; then frames are drawn but not counted, not written and without scripted input, at a frame time of 10 µs (animations and notifications do not move), until no task and no process has been busy for 10 frames, so that the program has taken their results (at most 600 s in all). The events after it follow on the next counted frame, which shows the work done. A `wait` listed first at its frame holds that frame itself: `0 wait` makes the work a program starts before its first frame (a file read at the start) done when frame 0 is drawn |
+
+`wait` makes a recording of a program that works by the wall clock the same on any machine and under any load: a
+solver run with F5, a file read by a task. A task is busy until its procedure returns, a process until it has exited
+and its output has ended and been taken.
 
 With a script, Dear ImGui draws its own mouse cursor, so the pointer shows in the frames. A malformed line is
 reported on standard error and skipped. To find coordinates, take one screenshot first and read them from the image.
@@ -164,26 +169,33 @@ what differs from the window background, and writes
 
 ```bash
 bash docs/examples/build.sh && fobis build --mode examples-gnu   # the programs
-GALLIUM_DRIVER=d3d12 python3 scripts/docs_media.py                # all recordings (or name some)
-python3 scripts/docs_media.py --headless cb_editor                # recorded without a window, by the CPU renderer
+python3 scripts/docs_media.py --headless                          # all recordings (or name some), by the CPU renderer
 python3 scripts/docs_media.py --check                             # each poster against the CPU renderer's
 python3 scripts/docs_media.py --update                            # accept the pictures --check wrote
+GALLIUM_DRIVER=d3d12 python3 scripts/docs_media.py cb_editor      # in a window, on the GPU: to compare, not to commit
 ```
 
 `--headless` records with `FIGURE_CAPTURE_HEADLESS=1`: no window opens, no display or GPU is needed, and the
-pictures are the CPU renderer's, the ones `--check` compares with (the recordings added from v0.5.0 on are made so).
+pictures are the CPU renderer's, the ones `--check` compares with. Every picture of the site is recorded so: the
+documentation pass of v0.5.0 recorded them all again in one pass, the GPU's and llvmpipe's of earlier releases
+replaced.
 `--check` renders each recording headless (`FIGURE_CAPTURE_HEADLESS=1`) with the CPU renderer, crops its poster the
 same way and compares it with the committed one by [`test_compare_image`](testing#pictures-as-tests)'s rule: a channel
 may differ by 2 levels, no pixel by more. A header line `#! mask x y w h` leaves a rectangle of the poster out (a
 clock, anything drawn from the wall time), `#! check threshold=N max_failed=M` changes the tolerance, and
 `#! check.linux`, `#! check.darwin`, `#! check.win32` change it on one platform only, where a difference was measured
-there. A failure writes `docs/public/media/<name>.new.png` and `<name>.diff.png` (failed pixels red, those within the
+there. `#! fresh /tmp/<folder>` removes a folder before the program starts, so that what it writes there (the tutorial's
+`--examples /tmp/figure-studio`) does not depend on the recordings run before it. A failure writes `docs/public/media/<name>.new.png` and `<name>.diff.png` (failed pixels red, those within the
 tolerance dark red, masked ones blue); `--update` makes each `.new.png` the poster. Remote recordings are not checked.
 
-**On demand for now, not in CI:** the posters committed with v0.4.0 were recorded on a GPU or in software (llvmpipe),
-some before later changes to the programs or the style, so 34 of the 80 checked fail today (stale content, llvmpipe's
-tie rule, programs whose frames show what a task or a process produced by the wall clock). The documentation pass of v0.5.0 (#7 S9) records every picture again with the CPU renderer and adds
-`--check` to CI.
+**In CI:** the Checks workflow runs `--check` on every push, on ubuntu-latest, after the examples are built; on a
+failure it keeps the `.new.png` and `.diff.png` pictures as an artifact. A change that changes a picture is committed
+with the new poster (`--update`, after looking at the `.new.png`), and its commit says why.
+
+**Recordings of programs that work by the clock.** A recording whose program runs a process or a task (the solver of
+the tutorial, a file read in the background) waits for its result before the poster frame: the script leaves the
+frames it needs, and the program shows the same picture once the work is done, however long it took. What depends on
+the wall time itself (a run's duration, a clock) is left out with `#! mask`.
 
 A recording with `#! remote <width> <height>` starts the program with `--remote` and takes the picture with a
 headless Chromium instead ([Remote UI](remote)).

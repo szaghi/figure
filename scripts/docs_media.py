@@ -23,13 +23,16 @@ replays (see FIGURE_CAPTURE_INPUT in native/figure_native.cpp):
                                                        "--remote PORT", and a headless Chromium (CHROME, or
                                                        puppeteer's) draws the page at this size; the still gets a
                                                        browser bar (no input script)
+    #! fresh   /tmp/figure-studio                      a folder under /tmp removed before the program starts: what the
+                                                       program writes there (--examples DIR) is not an earlier run's
     #! mask    x y w h                                 --check: a rectangle of the poster [pixels] left out (a clock,
                                                        anything drawn from the wall time); one line each
     #! check   threshold=2 max_failed=0                --check's tolerance (the defaults shown); ``#! check.linux``,
                                                        ``check.darwin``, ``check.win32``: for that platform only,
                                                        where a difference was measured there
     0 move 300 120
-    ...
+    40 wait                                            the script holds until the program's tasks and processes are
+    ...                                                done (docs/guide/capture.md, "Input scripts")
 
 The program runs in a real window, on the GPU, with the capture of the native layer: no screen recorder, the frames
 are the program's own back buffer, at a fixed frame time, with only the scripted input. Each recording is cropped to
@@ -52,11 +55,12 @@ Usage: python3 scripts/docs_media.py [name ...]          (default: every docs/me
                                                          <name>.diff.png; exit status 1 if any failed
        python3 scripts/docs_media.py --update [name ...] accept the .new.png pictures --check wrote (each replaces its
                                                          <name>.png; the .diff.png removed)
---check writes no committed file. It is run on demand, not in CI yet: the posters of v0.4.0 were recorded on a GPU
-or in software (llvmpipe), not by the CPU renderer, so they fail until the documentation pass (#7 S9) records them
-all again with it; remote recordings (a browser's picture) are not checked.
-Needs: the programs built (bash docs/examples/build.sh; fobis build --mode examples-gnu), ffmpeg and ImageMagick.
-On WSLg set GALLIUM_DRIVER=d3d12 for the GPU (the default, llvmpipe, works too, slower).
+--check writes no committed file. CI runs it on every push (.github/workflows/checks.yml): every committed poster is
+the CPU renderer's (--headless), since the documentation pass of v0.5.0 (#7 S9) recorded them all again with it;
+remote recordings (a browser's picture) are not checked.
+Needs: the programs built (bash docs/examples/build.sh; fobis build --mode examples-gnu), ffmpeg and ImageMagick
+(--check: ImageMagick only). Without --headless a recording runs in a window, on the GPU: on WSLg set
+GALLIUM_DRIVER=d3d12 (the default, llvmpipe, works too, slower); the site's pictures are recorded --headless.
 """
 
 from __future__ import annotations
@@ -97,6 +101,17 @@ ARROW = [(0, 0), (0, 17), (4, 13), (7, 20), (10, 19), (7, 12), (12, 12)]
 
 class MediaError(Exception):
     """A recording failed."""
+
+
+def fresh(name: str, header: dict[str, str]) -> None:
+    """Remove the folder of '#! fresh' (under /tmp only), so that the program writes it anew."""
+    if "fresh" not in header:
+        return
+    folder = Path(header["fresh"])
+    if not folder.is_absolute() or folder.parts[:2] != ("/", "tmp") or len(folder.parts) < 3:
+        msg = f"{name}: '#! fresh {folder}' is not a folder under /tmp"
+        raise MediaError(msg)
+    shutil.rmtree(folder, ignore_errors=True)
 
 
 def parse(rec: Path) -> tuple[dict[str, str], str]:
@@ -235,6 +250,7 @@ def record_remote(name: str, header: dict[str, str]) -> None:
     width, height = (int(v) for v in header["remote"].split())
     port = 18765
     program = ROOT / header["program"]
+    fresh(name, header)
     server = subprocess.Popen(
         [str(program), *shlex.split(header.get("args", "")), "--remote", str(port)],
         cwd=program.parent,
@@ -335,6 +351,7 @@ def capture(name: str, header: dict[str, str], script: str, work: Path, headless
         msg = f"{name}: {program} not built"
         raise MediaError(msg)
     (work / "input").write_text(script)
+    fresh(name, header)
     env = dict(
         os.environ,
         FIGURE_CAPTURE=str(work / "f_"),

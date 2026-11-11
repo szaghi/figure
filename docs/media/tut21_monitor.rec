@@ -1,4 +1,5 @@
 #! program build/docs-examples/bin/tut21_monitor
+#! fresh   /tmp/figure-studio
 #! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
 #! frames  420
 #! poster  250
@@ -8,8 +9,10 @@
 # the pointer over it reads the nearest iteration; the left end of the averaging window is dragged right, and the
 # window's mean, tagged on the right axis, follows. Input > Boundaries: the sketch of the plate; the pointer on the
 # north side draws it thicker; a click on the east side chooses its row in the table
+0   wait
 0   move 600 300
 10  key f5
+11  wait
 150 move 950 520 15
 200 move 820 500 10
 215 down

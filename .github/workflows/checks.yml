@@ -1,6 +1,7 @@
 # FIGURE's own checks, beside the FoBiS scaffold's ci.yml (kept verbatim, so that `fobis scaffold sync` updates it):
 #   - docs: the documentation's checks (#6 §4.10): the feature map, the doc comments, an example in every section,
-#     the docs' version strings, the name map, the media sizes; every example compiled, the headless ones run;
+#     the docs' version strings, the name map, the media sizes; every example compiled, the headless ones run; every
+#     picture of the site rendered headless by FIGURE's CPU renderer and compared with the committed one (#7 §4.6);
 #   - tsan: ThreadSanitizer on the calls a task may make (quit, request_frames, wake, ...): scripts/tsan_check.sh.
 name: Checks
 
@@ -38,6 +39,25 @@ jobs:
       run: |
         python3 scripts/check_docs.py --names --media
         bash docs/examples/build.sh
+
+    # each recording's poster, rendered headless (no display, no GPU) and compared with the committed one: per channel
+    # |d| <= 2, no pixel more (docs/media/*.rec state their masks and any per-platform tolerance); the programs are
+    # build.sh's and the examples mode's (figure_hello, figure_mandelbrot)
+    - name: Pictures checked
+      run: |
+        command -v convert > /dev/null && command -v identify > /dev/null || sudo apt-get install -y imagemagick
+        fobis build --mode examples-gnu
+        python3 scripts/docs_media.py --check
+
+    - name: Pictures that differ
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pictures-that-differ
+        path: |
+          docs/public/media/*.new.png
+          docs/public/media/*.diff.png
+        if-no-files-found: ignore
 
   tsan:
     runs-on: ubuntu-latest

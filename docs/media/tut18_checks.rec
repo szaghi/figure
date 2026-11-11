@@ -1,4 +1,5 @@
 #! program build/docs-examples/bin/tut18_checks
+#! fresh   /tmp/figure-studio
 #! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
 #! frames  430
 #! poster  290
@@ -7,6 +8,7 @@
 # keys that respect the focus: Result's tab is clicked, right moves its probe line a node at a time; the title field
 # is clicked and edited, right moves the field's cursor and the probe line stays; escape; the pointer rests on Run,
 # whose tooltip shows F5; F5, pressed with the focus elsewhere, runs the solver
+0   wait
 0   move 600 300
 20  move 456 31 15
 40  down
@@ -25,3 +27,4 @@
 235 move 383 384 15
 300 move 600 250 10
 320 key f5
+400 wait

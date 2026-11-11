@@ -50,6 +50,9 @@ shows what is new.
 | [20. Tables that act](./tutorial/20-tables) | a list of runs | a sortable table with a frozen header, row colours, context menus, tooltips with a plot; radio buttons, drag boxes, a log slider |
 | [21. A sketch and a monitor](./tutorial/21-monitor) | a sketch, a monitor | a canvas and drawing primitives; a second y axis, integer abscissae, the pointer read in plot units, tags, drag lines |
 | [22. The field and its snapshots](./tutorial/22-player) | snapshots | `ip_field_image`, `ip_colormap_legend_edit`, `player_object` and `ig_player` |
+| [23. Windows and layouts](./tutorial/23-windows) | a View menu, layouts, settings kept | `app%add_window`, `app%add_layout`, `app%view_menu`, layouts built on `ig_dock_layout_begin`; `app%open_prefs`, `save_pref`, `load_pref` |
+| [24. The input in an editor, the help in Markdown](./tutorial/24-editor) | a code editor, a help page | `code_editor_object`: highlighting, completion, marks on lines; `markdown_view_object`: a page with contents, find, links |
+| [25. A clip plane by hand, the studio as a picture](./tutorial/25-clip) | a gizmo, a picture test | `view%gizmo`, `view%view_cube`, `view%clip`; `test_item_click` by path; `test_capture` and `test_compare_image` with masks |
 
 ```mermaid
 flowchart LR
@@ -62,6 +65,7 @@ flowchart LR
   end
   subgraph three [Part three: the studio grows]
     R[18. checks, keys] --> S[19. fields, sizes] --> T[20. tables] --> U[21. sketch, monitor] --> V[22. field, player]
+    V --> W[23. windows, layouts] --> X[24. editor, help] --> Y[25. gizmo, picture test]
   end
   F --> G
   Q --> R

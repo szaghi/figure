@@ -1,4 +1,5 @@
 #! program build/docs-examples/bin/tut20_tables
+#! fresh   /tmp/figure-studio
 #! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
 #! frames  890
 #! poster  515
@@ -8,8 +9,10 @@
 # on run 1 (a tooltip with its residuals); the iterations' header clicked twice (fewest first, then most); a right
 # click on a row opens its menu; escape. Input > Boundaries: radio buttons; a right click on west, "Every side as this
 # one". Body: the centre's x dragged
+0   wait
 0   move 600 300
 10  key f5
+11  wait
 40  move 393 31 12
 55  down
 56  up
@@ -21,6 +24,7 @@
 116 move 729 86 15
 135 up
 165 key f5
+166 wait
 450 move 434 412 12
 465 down
 466 up

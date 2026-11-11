@@ -553,6 +553,25 @@ int fig_process_take(int id, char *buf, long long len, long long *got) {
    }
 }
 
+// Processes still at work: one that has not exited, a captured one whose output has not ended (the reader has not read
+// it all), and with output != 0 a captured one whose output the program has not taken. The capture's "wait" holds its
+// frames until there are none.
+int fig_processes_busy(int output) {
+   std::vector<std::shared_ptr<process_t>> all;
+   {
+      std::lock_guard<std::mutex> lock(reg_mutex);
+      if (!reg) return 0;
+      for (const auto &kv : *reg) all.push_back(kv.second);
+   }
+   int n = 0;
+   for (const auto &q : all) {
+      std::lock_guard<std::mutex> lock(q->m);
+      check_exit(*q);
+      if (!q->exited || (!q->detached && (!q->eof || (output && !q->out.empty())))) ++n;
+   }
+   return n;
+}
+
 int fig_process_info(int id, int *running, int *exited, int *code, int *killed, long long *pid, int *detached) {
    const auto q = find(id);
    *running = 0;

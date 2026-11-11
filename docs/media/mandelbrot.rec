@@ -3,6 +3,8 @@
 #! poster  285
 #! scale   960
 #! crf     30
+#! mask    0 39 400 15
+# (the mask: the line of the times computed and uploaded, by the wall clock)
 # zoom about 175 times into the seahorse valley spiral (-0.743644 + 0.131826 i), then raise the iterations
 0   move 900 600
 5   move 618 382 20

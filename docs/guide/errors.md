@@ -380,6 +380,17 @@ the default.
 | A call with a `stat` of its own (`ig_pop_style_color(stat=s)`, `ig_dock_layout_end(id, stat=s)`, a drawing call with `stat`) | `stat = FIG_ERR_STATE` there | the same | the same |
 | Dear ImGui's own checks (raw calls) | its assertions, as before | its error recovery, the message (`Dear ImGui: Missing PopID()`) among the frame's | the same |
 
+**`'report'` without a `stat` stops the program.** The plain loop `do while (app%next_frame())` in the default mode
+ends with `error stop` at the frame after a usage error, its messages on standard error, as every FIGURE failure
+without a `stat` does. A program that must go on either passes `stat` and decides (the studio of the tutorial reports
+the messages in a notification and draws on: [chapter 18](/manual/tutorial/18-checks)), or chooses `'recover'`, which
+goes on by itself and shows them in a notification:
+
+| Loop | `'report'` (default) | `'recover'` |
+|---|---|---|
+| `do while (app%next_frame())` | stops at the next frame: `error stop` with the messages | goes on; the messages in a notification |
+| `do while (app%next_frame(stat=s))` | goes on; `s = FIG_ERR_STATE`, the messages in `figure_last_error()` | goes on; `s = FIG_OK`, the messages in a notification |
+
 `'abort'` gives the earliest stop, at the line of the faulty call: the mode for tests ([Usage checks](frame-loop#usage-checks)).
 `'report'` turns the errors into a status, as every other FIGURE failure: the program decides. `'recover'` keeps an
 interactive program running through an error in a rarely used panel, the way NASA's Mirage.jl uses Dear ImGui's

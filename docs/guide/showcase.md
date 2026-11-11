@@ -140,7 +140,9 @@ test calls the same procedure ([Headless testing](testing)). The test drives the
 synthetic input of `figure_testing` (clicks, keys, typed text, the platform's shortcut key): it opens a file through
 the path field, searches, types values, adds rows and blocks, saves with ctrl+s, and compares the file saved with the
 one the Python editor writes after the same edits. The pictures on this page are recorded by FIGURE's capture with a
-scripted input ([Screenshots and videos](capture)), so they are redone when the interface changes.
+scripted input ([Screenshots and videos](capture)), so they are redone when the interface changes. They are the
+tools' own recordings, made in their repository: the only pictures of this site that the documentation's check
+(`docs_media.py --check`) does not render again.
 
 ## What the tools asked of FIGURE
 
@@ -149,3 +151,12 @@ and its documentation, never with a raw binding in the tool: selectables, wrappe
 shortcuts; popups, modals and the question before quitting; the system's file dialogs; plot tick formats, subplots
 and docking a window that appears later; the testing module in the static library and the window's title after
 `app%init`.
+
+v0.5.0 adds what the next round of the tools needs, each with its headless test: input files in a
+[code editor](editor) that highlights them and marks each mistake on its line (asked for by the tools' input
+files); help pages in [Markdown](widgets#markdown); a window registry with a View menu, layouts and
+[preferences](frame-loop#preferences) kept between runs ([Windows and layouts](docking#windows-and-layouts)); a clip
+plane or a probe placed by hand with a [gizmo](view3d#gizmos); small [3-D plots](plots#_3-d-plots) of probes and
+trajectories; and tests that find items by [path](testing#finding-items-by-path) and compare what a window
+[looks like](testing#pictures-as-tests). The tutorial's studio uses them all
+([chapters 23 to 25](/manual/tutorial/23-windows)).

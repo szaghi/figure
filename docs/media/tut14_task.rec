@@ -1,13 +1,16 @@
 #! program build/docs-examples/bin/tut14_task
+#! fresh   /tmp/figure-studio
 #! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
 #! frames  220
 #! poster  150
 # the fine case (900 x 600 nodes, a 7 MB field.dat) dropped on the window: the Result panel shows the task's progress
 # while it reads, then the field, drawn from a coarse copy; the 3-D tab shows the same copy (the reading runs in real
 # time: the frames that show its progress depend on the machine)
+0   wait
 0   move 600 300
 20  move 700 300 10
 40  drop 700 300 /tmp/figure-studio/fine
+100 wait
 120 move 1000 620 20
 170 move 513 31 15
 185 down

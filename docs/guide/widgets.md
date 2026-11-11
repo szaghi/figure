@@ -469,8 +469,8 @@ through Dear ImGui only: a help page looks the same in a window, headless and in
 `md%init`; `FIG_ERR_ARGUMENT` for an empty id (`md%draw`), a search longer than 255 bytes or of two lines (`md%find`),
 an empty heading (`md%scroll_to`), an empty file name (`md%load`); `FIG_ERR_FAILED` for a file that cannot be read
 (`md%load`, the text kept). Absent `stat`: `error stop` with the message ([Errors](errors)). **Threads:** the frame
-loop's thread only; `md%set_text`, `md%load`, `md%find` and `md%scroll_to` may be called before `init*` (they draw
-nothing). **Modes:** the same in window, headless and remote modes. **What it does not do:** no LaTeX formulas
+loop's thread only; `md%set_text`, `md%load`, `md%find` and `md%scroll_to` may be called before `app%init*`, after
+`md%init` (they draw nothing). **Modes:** the same in window, headless and remote modes. **What it does not do:** no LaTeX formulas
 (`$...$` is text), no images from URLs, no Mermaid diagrams (a ` ```mermaid ` block is code), no syntax highlighting
 in code blocks, no file included into a page (`![[file]]`), no footnotes; nothing is opened by a click
 ([Known issues](known-issues#markdown)).

@@ -1,4 +1,5 @@
 #! program build/docs-examples/bin/cb_open_browser
+#! fresh   /tmp/figure-cases
 #! args    /tmp/figure-cases
 #! frames  230
 #! poster  85

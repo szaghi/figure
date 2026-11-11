@@ -7,3 +7,4 @@
 25  down
 27  up
 45  move 600 45 20
+60  wait

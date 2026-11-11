@@ -257,7 +257,7 @@ so no GPU, display or tolerance for a driver is needed.
   within `threshold` dark red, the masked ones blue and the rest the golden, faded. On a match it removes such files
   left by an earlier run. To accept a new picture, copy the `.new.png` over the golden, in the commit that changes
   what the window shows, and say why in its message.
-- `test_capture` needs an open frame (`FIG_ERR_STATE` otherwise) and removes a file `path` of an earlier run at once,
+- `test_capture` needs an open frame (`FIG_ERR_STATE` otherwise) and a name (`FIG_ERR_ARGUMENT` for an empty one), and removes a file `path` of an earlier run at once,
   so a picture that cannot be written (its reason on standard error) leaves nothing to compare. In a window it reads
   the GPU's pixels instead, which depend on the driver: goldens belong to headless tests.
 - `test_compare_image` fails with `FIG_ERR_FAILED` when a file cannot be read or written, and with `FIG_ERR_ARGUMENT`

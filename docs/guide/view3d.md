@@ -201,7 +201,7 @@ point)` (above). In `'rotate'` the rings turn the normal; in `'translate'` the a
 
 `v%view_matrix(m)` and `v%projection_matrix(m)` give the camera's matrices as `real(real64) :: m(4, 4)`, `m(i, j)`
 the row `i` and column `j`, column vectors: a world point `p` lands at the clip coordinates
-`matmul(P, matmul(V, [p, 1]))`, and at the view's pixel `((1 + x/w) / 2 * width, (1 - y/w) / 2 * height)` from its
+`matmul(P, matmul(V, [p, 1.0_real64]))`, and at the view's pixel `((1 + x/w) / 2 * width, (1 - y/w) / 2 * height)` from its
 top-left corner.
 
 | | `V = v%view_matrix` | `P = v%projection_matrix` |

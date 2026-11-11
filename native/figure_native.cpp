@@ -298,7 +298,13 @@ struct capture_t {
    float       px = 0.0f, py = 0.0f;           // pointer position
    float       gx = 0.0f, gy = 0.0f;           // glide target
    int         glide = 0;                      // glide frames left
+   bool        hold = false;      // a "wait" holds the script: until no task or process is busy
+   bool        held = false;      // this frame is held: not counted, not written, no scripted input
+   int         idle = 0;          // held frames in a row with nothing busy
+   Uint64      hold_t0 = 0;       // when the hold began [ns]
 } cap;
+constexpr int    HOLD_IDLE = 10;                          // idle frames that end a hold
+constexpr Uint64 HOLD_LIMIT = 600ull * SDL_NS_PER_SECOND; // a hold longer than this ends, with a warning
 
 // Drops: a path dropped on the window (SDL's drop events; a test's or a capture script's), at (x, y) [pixels]; the
 // paths dropped before a frame begins are that frame's (app%dropped), and only that frame's.
@@ -372,7 +378,7 @@ void capture_read_input(const char *path) {
          int at = 0;
          ok = std::sscanf(rest, "%f %f %n", &e.x, &e.y, &at) == 2 && rest[at] != '\0';
          if (ok) e.arg = rest + at;
-      } else if (e.what == "close") {
+      } else if (e.what == "close" || e.what == "wait") {
          ok = true;
       } else {
          ok = false;
@@ -388,6 +394,17 @@ void capture_read_input(const char *path) {
                     [](const capture_event_t &a, const capture_event_t &b) { return a.frame < b.frame; });
 }
 
+// A hold begins: the thread waits, drawing nothing, until no task runs and no process is alive or still has output to
+// be read (at most HOLD_LIMIT): the program then takes each result whole, in one frame; the held frames that follow
+// see to what it does with them.
+void capture_hold() {
+   cap.hold = true;
+   cap.idle = 0;
+   cap.hold_t0 = SDL_GetTicksNS();
+   while ((fig_tasks_busy() > 0 || fig_processes_busy(0) > 0) && SDL_GetTicksNS() - cap.hold_t0 <= HOLD_LIMIT)
+      SDL_Delay(1);
+}
+
 // Apply the scripted input of the current frame (before ImGui::NewFrame).
 void capture_apply_input() {
    ImGuiIO &io = ImGui::GetIO();
@@ -399,6 +416,11 @@ void capture_apply_input() {
    }
    for (; cap.next < cap.events.size() && cap.events[cap.next].frame <= cap.frame; ++cap.next) {
       const capture_event_t &e = cap.events[cap.next];
+      if (e.what == "wait") { // after events of its frame: the next frames are held (capture_frame_input)
+         capture_hold();
+         ++cap.next;
+         return; // the events after it: on the first frame after the hold
+      }
       if (e.what == "move") {
          cap.gx = e.x;
          cap.gy = e.y;
@@ -429,10 +451,35 @@ void capture_apply_input() {
 
 // A captured frame's clock and input: the fixed frame time, the script's events, Dear ImGui's cursor drawn with a
 // script (every mode).
+// A "wait" holds the script. First the frame waits, without drawing, until no task runs and no process is alive or has
+// output still to be read (the work started before the first frame, a file read at the start, is then there when frame
+// 0 is drawn, whatever the machine). Then the frames go on, at a frame time of 10 us (the animations and the
+// notifications do not move), not counted, not written and without scripted input, until no task (fig_tasks_busy) and
+// no process (fig_processes_busy) has been busy for HOLD_IDLE frames: the frame after the hold shows the work done,
+// however long it took by the wall clock.
 void capture_frame_input() {
    ImGuiIO &io = ImGui::GetIO();
    io.DeltaTime = cap.dt;
    io.MouseDrawCursor = !cap.events.empty();
+   cap.held = false;
+   if (!cap.hold && cap.next < cap.events.size() && cap.events[cap.next].what == "wait" &&
+       cap.events[cap.next].frame <= cap.frame) { // a wait first at its frame: this frame is held too
+      capture_hold();
+      ++cap.next;
+   }
+   if (cap.hold) {
+      cap.idle = fig_tasks_busy() == 0 && fig_processes_busy(1) == 0 ? cap.idle + 1 : 0;
+      const bool late = SDL_GetTicksNS() - cap.hold_t0 > HOLD_LIMIT;
+      if (late) std::fprintf(stderr, "figure capture: a wait still busy after %llu s: the script goes on\n",
+                             static_cast<unsigned long long>(HOLD_LIMIT / SDL_NS_PER_SECOND));
+      if (cap.idle < HOLD_IDLE && !late) {
+         cap.held = true;
+         io.DeltaTime = 1.0e-5f;
+         SDL_Delay(1); // the work's threads and processes get the processor
+         return;
+      }
+      cap.hold = false;
+   }
    capture_apply_input();
 }
 
@@ -1958,7 +2005,7 @@ void cpu_frame(std::vector<unsigned char> &rgb, int &w, int &h) {
 // Headless and remote modes, after ImGui::Render and the textures' answers: the capture's frame and the pictures
 // asked for, rendered by the CPU once for all of them.
 void cpu_pictures() {
-   const bool due = cap.on && cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count);
+   const bool due = cap.on && !cap.held && cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count);
    if (due || img.state == 1 || !test_capture_path.empty()) {
       std::vector<unsigned char> rgb;
       int w = 0, h = 0;
@@ -1966,7 +2013,7 @@ void cpu_pictures() {
       if (due) capture_write(rgb.data(), w, h);
       pictures_write(ImGui::GetIO(), rgb.data(), w, h);
    }
-   if (cap.on) ++cap.frame;
+   if (cap.on && !cap.held) ++cap.frame;
 }
 
 } // namespace
@@ -2855,7 +2902,7 @@ int fig_end_frame(void) {
    p_glClearColor(st.clear[0], st.clear[1], st.clear[2], 1.0f);
    p_glClear(GL_COLOR_BUFFER_BIT_);
    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-   const bool due = cap.on && cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count);
+   const bool due = cap.on && !cap.held && cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count);
    if (due || img.state == 1 || !test_capture_path.empty()) { // the GPU's pixels, read back once
       const int fw = static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x);
       const int fh = static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y);
@@ -2864,7 +2911,7 @@ int fig_end_frame(void) {
       if (due) capture_write(rgb.data(), fw, fh);
       if (fw > 0 && fh > 0) pictures_write(io, rgb.data(), fw, fh);
    }
-   if (cap.on) ++cap.frame;
+   if (cap.on && !cap.held) ++cap.frame;
    Uint64 t_swap = 0;
    if (rs.on) t_swap = SDL_GetTicksNS();
    SDL_GL_SwapWindow(st.window);

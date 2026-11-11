@@ -58,6 +58,21 @@ IGNORED = {  # upstream accessors FIGURE uses for its own bookkeeping, exposed b
     "GetCurrentContext", "GetIO", "GetPlatformIO", "GetStyle", "GetMainViewport", "GetFrameCount", "GetColorU32",
     "SetupLock", "GetCurrentPlot", "GetCurrentWindow", "GetCurrentWindowRead",
 }
+EXTENSIONS = {  # extension: (namespace or class its functions are named with, its header, the native file of its glue,
+    # how the glue calls it: "ns" Name::Function(, "method" a method of the class, called on FIGURE's subclass)
+    "ImGuiColorTextEdit": ("TextEditor", "third_party/ImGuiColorTextEdit/TextEditor.h", "figure_editor.cpp", "method"),
+    "ImGuizmo": ("ImGuizmo", "third_party/ImGuizmo/ImGuizmo.h", "figure_view3d.cpp", "ns"),
+    "ImGradient": ("ImGradient", "third_party/ImGuizmo/ImGradient.h", "figure_colormap.cpp", "ns"),
+    "imgui_rich_md": ("RichMd", "third_party/imgui_rich_md/rich_md.h", "figure_markdown.cpp", "ns"),
+}
+EXTENSION_IGNORED = {  # the extensions' bookkeeping FIGURE's glue calls on every use: no feature of their own
+    "ImGuizmo::PushID", "ImGuizmo::PopID", "ImGuizmo::SetDrawlist", "ImGuizmo::SetRect", "ImGuizmo::SetOrthographic",
+    "ImGuizmo::BeginFrameState", "ImGuizmo::GetStyle", "ImGuizmo::SetGizmoSizeClipSpace", "ImGuizmo::AllowAxisFlip",
+    "ImGuizmo::IsUsing", "ImGuizmo::IsUsingViewManipulate", "ImGuizmo::GetHoveredHandleType",
+    "RichMd::SetCurrentContext", "RichMd::CreateContext", "RichMd::DestroyContext", "RichMd::SetHostServices",
+    "RichMd::GetFont", "RichMd::GetCodeFont", "RichMd::UniqueSlug", "RichMd::OnImage_Default",
+    "TextEditor::GetPalette", "TextEditor::SetPalette",
+}
 GENERATED = {"figure_cimgui", "figure_cimplot", "figure_cimplot3d", "figure_cimgui_enums", "figure_cimplot_enums",
              "figure_cimplot3d_enums", "figure_icons"}
 
@@ -105,6 +120,22 @@ def upstream_functions(lib: str) -> tuple[dict[str, list[tuple[int, str]]], str,
     return out, version, f"https://github.com/{repo}/blob/{commit}/{header}"
 
 
+def extension_functions(ext: str) -> set[str]:
+    """The public functions of an extension: of its namespace, or the public methods of its class (first public
+    section)."""
+    ns, header, _, how = EXTENSIONS[ext]
+    text = (ROOT / header).read_text()
+    if how == "method":
+        start = text.index(f"class IMGUI_API {ns}")
+        body = text[start:]
+        body = body[body.index("public:") : body.index("\nprotected:") if "\nprotected:" in body else len(body)]
+        body = re.sub(r"\n\t(struct|class|enum)\b.*?\n\t\};", "", body, flags=re.S)  # nested types
+    else:
+        body = text
+    return set(re.findall(r"^\s+(?:IMGUI_API\s+|inline\s+|static\s+)*[A-Za-z_][\w:<>&\*, ]*?[\s\*&]([A-Z]\w*)\s*\(",
+                          body, re.M))
+
+
 def bound_names() -> set[str]:
     """C names bound by the raw modules (figure_cimgui, figure_cimplot, figure_cimplot3d)."""
     names: set[str] = set()
@@ -141,16 +172,28 @@ def block_end(code: str, i: int) -> int:
 def native_calls() -> dict[str, set[str]]:
     """For each native function the Fortran side binds (its Fortran interface name), the upstream calls in its body
     and in the native helpers it calls (one level; a helper called by many native functions is not followed)."""
-    cpp = "\n".join(p.read_text() for p in sorted(NATIVE.glob("*.cpp")))
     bodies: dict[str, str] = {}
-    for m in re.finditer(r"^(?:[A-Za-z_][\w:<>\*&, ]*?\s|extern \"C\" [\w:<>\*& ]*?)\b(\w+)\s*\([^;{}]*\)\s*(?:const\s*)?\{",
-                         cpp, re.M):
-        if m.group(1) in ("if", "for", "while", "switch", "return"):
-            continue
-        bodies[m.group(1)] = bodies.get(m.group(1), "") + cpp[m.end():block_end(cpp, m.end())]
+    files: dict[str, set[str]] = {}  # native function: the files defining it
+    for path in sorted(NATIVE.glob("*.cpp")):
+        cpp = path.read_text()
+        for m in re.finditer(r"^(?:[A-Za-z_][\w:<>\*&, ]*?\s|extern \"C\" [\w:<>\*& ]*?)\b(\w+)\s*\([^;{}]*\)\s*(?:const\s*)?\{",
+                             cpp, re.M):
+            if m.group(1) in ("if", "for", "while", "switch", "return"):
+                continue
+            bodies[m.group(1)] = bodies.get(m.group(1), "") + cpp[m.end():block_end(cpp, m.end())]
+            files.setdefault(m.group(1), set()).add(path.name)
+    methods = {ext: extension_functions(ext) for ext, (_, _, _, how) in EXTENSIONS.items() if how == "method"}
     upstream = {n: {f"ImGui::{c}" for c in re.findall(r"\bImGui::(\w+)\s*\(", b)}
                 | {f"ImPlot::{c}" for c in re.findall(r"\bImPlot::(\w+)\s*\(", b)}
                 | {f"ImPlot3D::{c}" for c in re.findall(r"\bImPlot3D::(\w+)\s*\(", b)} for n, b in bodies.items()}
+    for ext, (ns, _, glue, how) in EXTENSIONS.items():
+        for n, b in bodies.items():
+            if glue not in files[n]:
+                continue
+            if how == "ns":
+                upstream[n] |= {f"{ns}::{c}" for c in re.findall(rf"\b{ns}::(\w+)\s*\(", b)}
+            else:  # a method, called on FIGURE's subclass of the class (e->SetText(, Render( in its own methods)
+                upstream[n] |= {f"{ns}::{c}" for c in re.findall(r"(?<![\w:])(\w+)\s*\(", b) if c in methods[ext]}
     helpers = {n: {c for c in re.findall(r"\b(\w+)\s*\(", b) if c in bodies and c != n and not c.startswith("fig_")}
                for n, b in bodies.items()}
     users: dict[str, int] = {}
@@ -158,8 +201,11 @@ def native_calls() -> dict[str, set[str]]:
         if n.startswith("fig_"):
             for h in hs:
                 users[h] = users.get(h, 0) + 1
-    cname = dict(re.findall(r"(?:function|subroutine)\s+(\w+)\s*\([^)]*\)[^\n]*?bind\(C,\s*name='(\w+)'\)",
-                            re.sub(r"&\s*\n\s*", " ", (LIB / "figure_c_native.F90").read_text())))
+    cname: dict[str, str] = {}  # the native layer's interfaces: figure_c_native's, and those of the modules that
+    for path in sorted(LIB.glob("*.F90")):  # bind their own (figure_view3d, figure_editor, figure_markdown, ...)
+        if path.stem not in GENERATED:
+            cname.update(re.findall(r"(?:function|subroutine)\s+(\w+)\s*\([^)]*\)[^\n]*?bind\(C,\s*name='(\w+)'\)",
+                                    re.sub(r"&\s*\n\s*", " ", path.read_text())))
     calls: dict[str, set[str]] = {}
     for fname, c in cname.items():
         if c not in bodies:
@@ -315,6 +361,21 @@ def generate() -> str:
             rows.append(f"| {link} | {cell} |")
         totals.append((lib, version, url, n_exposed, len(funcs)))
         sections += [f"## {lib} {version}", "", f"| {lib} | FIGURE |", "|---|---|", *rows, ""]
+    ext_rows = ["## Extensions", "",
+                "The extensions FIGURE vendors (third_party/) are reached through FIGURE's own calls only. Each row is "
+                "a function of the extension that a FIGURE call reaches; the rest of the extension's API is not "
+                "exposed. The extensions' bookkeeping (ids, draw lists, contexts, fonts, palettes) is left out.", ""]
+    for ext, (ns, header, _, _) in EXTENSIONS.items():
+        api = extension_functions(ext)
+        rows = []
+        for key in sorted(k for k in exposed if k.startswith(ns + "::") and k not in EXTENSION_IGNORED):
+            if key.split("::")[1] not in api:
+                continue
+            rows.append(f"| `{key}` | {', '.join(f'`{f}`' for f in sorted(exposed[key]))} |")
+        if rows:
+            ext_rows += [f"### {ext}", "", f"Declared in `{header}`; {len(rows)} of its {len(api)} public functions "
+                         "reached.", "", f"| {ext} | FIGURE |", "|---|---|", *rows, ""]
+    sections += ext_rows
     (_, v1, u1, e1, n1), (_, v2, u2, e2, n2), (_, v3, u3, e3, n3) = totals
     out += [
         "Each public function of Dear ImGui, ImPlot and ImPlot3D, linked to its declaration in the header FIGURE is "

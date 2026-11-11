@@ -76,6 +76,4 @@ snapshot while playing. The test plays the player as its play button does, by se
 over saved snapshots. Reference: [Fields](/guide/plots#fields), [Players](/guide/widgets#players).
 :::
 
-This is the end of part three. The [Cookbook](../cookbook) answers one task per recipe, the
-[Reference](/guide/features) lists every procedure, and the [name map](/guide/imgui-names) gives the FIGURE call of a
-Dear ImGui or ImPlot function.
+[Chapter 23](./23-windows) hands the studio's windows to FIGURE: a View menu, layouts, and the user's settings kept.

@@ -20,7 +20,7 @@ Everything is polled, as every FIGURE widget: `ed%draw` returns `.true.` on the 
 
 | Procedure | Purpose |
 |---|---|
-| `ed%init([language] [, stat])`, `ed%destroy()`, `ed%is_initialized()` → `logical` | create the editor, empty, highlighting `language` (default plain text); release it; whether it exists |
+| `ed%init([language] [, stat])`, `ed%destroy()`, `ed%is_initialized()` → `logical` | create the editor, empty, highlighting `language`, a `language_object` (`code_language('fortran')`; default plain text); release it; whether it exists |
 | `ed%set_language(language [, stat])` | highlight another language from now on (text, marks and undo history kept) |
 | `ed%set_text(text [, stat])`, `ed%text()` → `character`, `ed%line_count()` → `int32` | replace the text (UTF-8, LF or CR LF; the marks and the undo history go); the text, every line ended by LF; its lines |
 | `ed%draw(id [, width] [, height] [, stat])` → `logical` | the editor as a widget at the cursor; `.true.` on the frame the user changed the text |

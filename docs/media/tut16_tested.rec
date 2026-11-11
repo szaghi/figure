@@ -1,4 +1,5 @@
 #! program build/docs-examples/bin/tut16_tested
+#! fresh   /tmp/figure-studio
 #! args    --examples /tmp/figure-studio
 #! frames  420
 #! poster  330
@@ -16,7 +17,9 @@
 60  move 864 507 15
 78  down
 80  up
+82  wait
 100 key f5
+280 wait
 300 move 1000 640 15
 340 move 37 300 15
 355 down

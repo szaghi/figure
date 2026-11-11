@@ -344,6 +344,7 @@ int    fig_process_start(int *id, const char *args, const int *arg_lens, int nar
 int    fig_process_pending(int id, long long *len, int *running);
 int    fig_process_take(int id, char *buf, long long len, long long *got);
 int    fig_process_info(int id, int *running, int *exited, int *code, int *killed, long long *pid, int *detached);
+int    fig_processes_busy(int output); // processes alive, or with output not taken (the capture's "wait")
 int    fig_process_kill(int id, int force);
 void   fig_process_release(int id);
 void   fig_process_shutdown(void);
@@ -379,6 +380,7 @@ int    fig_task_cancelled(int id);
 int    fig_task_finish(int id);
 void   fig_task_release(int id);
 int    fig_task_on_worker(void);
+int    fig_tasks_busy(void);     // tasks whose procedure has not returned (the capture's "wait")
 int    fig_task_refuse(const char *name, int name_len);
 
 /* Usage checks (figure_scope.cpp): the scope record of the frame. Every begin/end and push/pop pair FIGURE wraps

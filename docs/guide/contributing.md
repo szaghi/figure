@@ -67,3 +67,14 @@ bash docs/examples/build.sh     # compile every example against src/lib, run the
                                 # regenerate docs/examples/snippets and docs/examples/output
 cd docs && npm install && npm run docs:build
 ```
+
+Every picture of the site is recorded headless by FIGURE's CPU renderer from a `docs/media/<name>.rec`, and CI
+renders each again and compares it with the committed poster ([The documentation's
+recordings](capture#the-documentation-s-recordings)). A change that alters what a recorded program draws records it
+again in the same commit:
+
+```bash
+fobis build --mode examples-gnu                    # figure_hello, figure_mandelbrot (the rest: build.sh)
+python3 scripts/docs_media.py --check              # which pictures changed: <name>.new.png, <name>.diff.png
+python3 scripts/docs_media.py --headless NAME      # record one again (its video too), then look at it
+```

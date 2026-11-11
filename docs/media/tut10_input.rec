@@ -1,4 +1,5 @@
 #! program build/docs-examples/bin/tut10_input
+#! fresh   /tmp/figure-studio
 #! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
 #! frames  470
 #! poster  335

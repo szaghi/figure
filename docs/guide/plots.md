@@ -677,7 +677,8 @@ Take ImPlot3D for a figure that a 2-D plot would draw if it had a third axis; ta
 - Statuses: `FIG_ERR_ARGUMENT` for series of different sizes, `x` and `y` that do not match `z`'s shape,
   `triangles` without 3 rows or with a vertex outside `[1, size(x)]`, `limits` without 6 values or a minimum not
   below its maximum, one angle or one scale end without the other, a colormap not registered, a colour without 4
-  values, a NaN position of a text; `FIG_ERR_STATE` for an item, a text or `ip3_setup_axes` outside a 3-D plot,
+  values, a NaN position of a text, a text's `offset` without 2 values, a surface's `scale_min` not below its
+  `scale_max`; `FIG_ERR_STATE` for an item, a text or `ip3_setup_axes` outside a 3-D plot,
   `ip3_setup_axes` after the first item, and any of them from a [task](processes#tasks). `stat` is optional (absent:
   `error stop` with the message; a usage error as `app%set_checks` says). [Errors](errors#implot3d) lists the
   messages.
