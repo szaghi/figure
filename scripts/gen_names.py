@@ -1,12 +1,13 @@
-"""Generate the name map, docs/guide/imgui-names.md: each Dear ImGui and ImPlot function, and the FIGURE call that
-exposes it, or "raw only".
+"""Generate the name map, docs/guide/imgui-names.md: each Dear ImGui, ImPlot and ImPlot3D function, and the FIGURE call
+that exposes it, or "raw only".
 
-The upstream functions are the public free functions of Dear ImGui (``namespace ImGui`` in imgui.h) and ImPlot
-(``namespace ImPlot`` in implot.h) in cimgui's and cimplot's metadata (``definitions.json``, the input of
-scripts/gen_bindings.py), less the ones behind ``IMGUI_DISABLE_OBSOLETE_FUNCTIONS`` / ``IMPLOT_DISABLE_OBSOLETE_FUNCTIONS``
-(FIGURE builds without them). Each links to its line in the header at the vendored commit: the Dear ImGui and ImPlot
-commits are the submodules of the cimgui and cimplot tags pinned in native/CMakeLists.txt, as fetched by the native
-build (build/native/_deps).
+The upstream functions are the public free functions of Dear ImGui (``namespace ImGui`` in imgui.h), ImPlot
+(``namespace ImPlot`` in implot.h) and ImPlot3D (``namespace ImPlot3D`` in implot3d.h) in cimgui's, cimplot's and
+cimplot3d's metadata (``definitions.json``, the input of scripts/gen_bindings.py), less the ones behind
+``IMGUI_DISABLE_OBSOLETE_FUNCTIONS`` / ``IMPLOT_DISABLE_OBSOLETE_FUNCTIONS`` / ``IMPLOT3D_DISABLE_OBSOLETE_FUNCTIONS``.
+Each links to its line in the header at the vendored commit: the commits are the submodules of the cimgui, cimplot
+and cimplot3d tags pinned in native/CMakeLists.txt, as fetched by the native build (build/native/_deps); ImPlot3D's
+header is read from its vendored copy (third_party/implot3d, the submodule's commit, its header unpatched).
 
 A FIGURE call exposes an upstream function when the call reaches it: the public procedures of ``use figure`` (the
 testing module left out), the specific procedures of its generics and the procedures bound to its types are followed
@@ -41,7 +42,10 @@ from check_docs import TYPES, parse, public_names, strip_comment, used_from  # n
 UPSTREAM = {  # library: (cimgui-like source dir, submodule, header, namespace, obsolete macro, GitHub repository)
     "Dear ImGui": ("cimgui-src", "imgui", "imgui.h", "ImGui", "IMGUI_DISABLE_OBSOLETE_FUNCTIONS", "ocornut/imgui"),
     "ImPlot": ("cimplot-src", "implot", "implot.h", "ImPlot", "IMPLOT_DISABLE_OBSOLETE_FUNCTIONS", "epezent/implot"),
+    "ImPlot3D": ("cimplot3d-src", "implot3d", "implot3d.h", "ImPlot3D", "IMPLOT3D_DISABLE_OBSOLETE_FUNCTIONS",
+                 "brenocq/implot3d"),
 }
+VENDORED = {"ImPlot3D": ROOT / "third_party" / "implot3d"}  # libraries whose header is read from the repository
 NOT_FOLLOWED = {  # helpers of every drawing call: checks and conversions, not features
     "figure_draw_refused", "figure_task_refused", "c_string", "c_str", "f_string", "set_stat", "fail",
     "scope_push", "scope_pop", "scope_check", "format_ok", "format_refused", "alive",
@@ -54,7 +58,8 @@ IGNORED = {  # upstream accessors FIGURE uses for its own bookkeeping, exposed b
     "GetCurrentContext", "GetIO", "GetPlatformIO", "GetStyle", "GetMainViewport", "GetFrameCount", "GetColorU32",
     "SetupLock", "GetCurrentPlot", "GetCurrentWindow", "GetCurrentWindowRead",
 }
-GENERATED = {"figure_cimgui", "figure_cimplot", "figure_cimgui_enums", "figure_cimplot_enums", "figure_icons"}
+GENERATED = {"figure_cimgui", "figure_cimplot", "figure_cimplot3d", "figure_cimgui_enums", "figure_cimplot_enums",
+             "figure_cimplot3d_enums", "figure_icons"}
 
 
 class NamesError(Exception):
@@ -65,7 +70,7 @@ def upstream_functions(lib: str) -> tuple[dict[str, list[tuple[int, str]]], str,
     """The public functions of a library (name: [(header line, C name), ...]), its version and the header's URL."""
     src, sub, header, ns, obsolete, repo = UPSTREAM[lib]
     defs = DEPS / src / "generator" / "output" / "definitions.json"
-    hdr = DEPS / src / sub / header
+    hdr = VENDORED[lib] / header if lib in VENDORED else DEPS / src / sub / header
     if not defs.is_file() or not hdr.is_file():
         msg = f"{defs.relative_to(ROOT)} or {hdr.relative_to(ROOT)} missing: run scripts/build_native.sh"
         raise NamesError(msg)
@@ -76,7 +81,7 @@ def upstream_functions(lib: str) -> tuple[dict[str, list[tuple[int, str]]], str,
         raise NamesError(msg)
     commit = tree[2]
     lines = hdr.read_text().splitlines()
-    version = next(re.search(r'"([^"]+)"', ln).group(1) for ln in lines if re.match(r"#define (IMGUI|IMPLOT)_VERSION ", ln))
+    version = next(re.search(r'"([^"]+)"', ln).group(1) for ln in lines if re.match(r"#define (IMGUI|IMPLOT|IMPLOT3D)_VERSION ", ln))
     hidden: set[int] = set()  # header lines behind the obsolete macro
     depth: list[bool] = []
     for n, line in enumerate(lines, 1):
@@ -101,9 +106,9 @@ def upstream_functions(lib: str) -> tuple[dict[str, list[tuple[int, str]]], str,
 
 
 def bound_names() -> set[str]:
-    """C names bound by the raw modules (figure_cimgui, figure_cimplot)."""
+    """C names bound by the raw modules (figure_cimgui, figure_cimplot, figure_cimplot3d)."""
     names: set[str] = set()
-    for f in ("figure_cimgui.F90", "figure_cimplot.F90"):
+    for f in ("figure_cimgui.F90", "figure_cimplot.F90", "figure_cimplot3d.F90"):
         names.update(re.findall(r"bind\(C,\s*name='(\w+)'\)", (LIB / f).read_text()))
         names.update(re.findall(r"^\s*(?:function|subroutine)\s+(\w+)", (LIB / f).read_text(), re.M))
     return names
@@ -144,7 +149,8 @@ def native_calls() -> dict[str, set[str]]:
             continue
         bodies[m.group(1)] = bodies.get(m.group(1), "") + cpp[m.end():block_end(cpp, m.end())]
     upstream = {n: {f"ImGui::{c}" for c in re.findall(r"\bImGui::(\w+)\s*\(", b)}
-                | {f"ImPlot::{c}" for c in re.findall(r"\bImPlot::(\w+)\s*\(", b)} for n, b in bodies.items()}
+                | {f"ImPlot::{c}" for c in re.findall(r"\bImPlot::(\w+)\s*\(", b)}
+                | {f"ImPlot3D::{c}" for c in re.findall(r"\bImPlot3D::(\w+)\s*\(", b)} for n, b in bodies.items()}
     helpers = {n: {c for c in re.findall(r"\b(\w+)\s*\(", b) if c in bodies and c != n and not c.startswith("fig_")}
                for n, b in bodies.items()}
     users: dict[str, int] = {}
@@ -257,7 +263,7 @@ def exposures() -> dict[str, set[str]]:
                     out |= native[c]
                 elif re.match(r"ig[a-z]", c) and c not in where:  # a raw binding of figure_cimgui: igsetscrollherey
                     out.add(c)
-                elif c.startswith("implot_") and c not in where:  # of figure_cimplot
+                elif c.startswith(("implot_", "implot3d_")) and c not in where:  # of figure_cimplot, figure_cimplot3d
                     out.add(c)
                 else:
                     r = resolve(k[0], c)
@@ -291,7 +297,7 @@ def generate() -> str:
     totals = []
     for lib in UPSTREAM:
         funcs, version, url = upstream_functions(lib)
-        prefix = "ImGui::" if lib == "Dear ImGui" else "ImPlot::"
+        prefix = {"Dear ImGui": "ImGui::", "ImPlot": "ImPlot::", "ImPlot3D": "ImPlot3D::"}[lib]
         rows = []
         n_exposed = 0
         for name in sorted(funcs, key=str.lower):
@@ -309,13 +315,13 @@ def generate() -> str:
             rows.append(f"| {link} | {cell} |")
         totals.append((lib, version, url, n_exposed, len(funcs)))
         sections += [f"## {lib} {version}", "", f"| {lib} | FIGURE |", "|---|---|", *rows, ""]
-    (_, v1, u1, e1, n1), (_, v2, u2, e2, n2) = totals
+    (_, v1, u1, e1, n1), (_, v2, u2, e2, n2), (_, v3, u3, e3, n3) = totals
     out += [
-        "Each public function of Dear ImGui and of ImPlot, linked to its declaration in the header FIGURE is built "
-        f"with ([imgui.h]({u1}), Dear ImGui {v1}, docking branch; [implot.h]({u2}), ImPlot {v2}), and the FIGURE "
-        f"calls that reach it. FIGURE exposes {e1} of the {n1} Dear ImGui functions and {e2} of the {n2} ImPlot "
-        "functions. A reader of Dear ImGui's or ImPlot's documentation finds here the FIGURE name of what they read "
-        "about; the [feature map](features) lists FIGURE's calls, and each reference section names the upstream "
+        "Each public function of Dear ImGui, ImPlot and ImPlot3D, linked to its declaration in the header FIGURE is "
+        f"built with ([imgui.h]({u1}), Dear ImGui {v1}, docking branch; [implot.h]({u2}), ImPlot {v2}; "
+        f"[implot3d.h]({u3}), ImPlot3D {v3}), and the FIGURE calls that reach it. FIGURE exposes {e1} of the {n1} "
+        f"Dear ImGui functions, {e2} of the {n2} ImPlot functions and {e3} of the {n3} ImPlot3D functions. A reader "
+        "of Dear ImGui's, ImPlot's or ImPlot3D's documentation finds here the FIGURE name of what they read about; the [feature map](features) lists FIGURE's calls, and each reference section names the upstream "
         "functions it wraps.",
         "",
         "- A FIGURE call is listed when it calls the function, directly or through the library's own procedures: "
@@ -324,13 +330,13 @@ def generate() -> str:
         "`BeginPopupContextWindow` and `BeginPopupContextVoid` by its `on` argument); one that reaches a function "
         "only for its own bookkeeping is listed too.",
         "- **raw only:** no FIGURE call reaches it. The C name is the function's binding in the raw modules "
-        "(`figure_cimgui`, `figure_cimplot`), which are internal to the library ([Raw bindings](raw-bindings)): a "
+        "(`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d`), which are internal to the library ([Raw bindings](raw-bindings)): a "
         "program needing one asks for a wrapper. **not bound:** variadic or taking a callback, skipped by the raw "
         "layer.",
-        "- Functions behind `IMGUI_DISABLE_OBSOLETE_FUNCTIONS` and `IMPLOT_DISABLE_OBSOLETE_FUNCTIONS` are left out: "
-        "FIGURE is built without them.",
+        "- Functions behind `IMGUI_DISABLE_OBSOLETE_FUNCTIONS`, `IMPLOT_DISABLE_OBSOLETE_FUNCTIONS` and "
+        "`IMPLOT3D_DISABLE_OBSOLETE_FUNCTIONS` are left out: FIGURE does not bind them.",
         "",
-        "Generated by `scripts/gen_names.py` from cimgui's and cimplot's metadata, the library's sources and the "
+        "Generated by `scripts/gen_names.py` from cimgui's, cimplot's and cimplot3d's metadata, the library's sources and the "
         "native glue; `python3 scripts/check_docs.py --names` fails when this page is not current.",
         "",
     ]

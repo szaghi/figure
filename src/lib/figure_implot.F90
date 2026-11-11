@@ -111,6 +111,8 @@ public :: ip_colormap_legend, ip_colormap_legend_edit, ip_field_image
 public :: ip_spec, plot_spec_object
 public :: ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_setup_axis_ticks, ip_setup_axis_constraints
 public :: ip_setup_legend
+! The items' stride helpers, for the 3-D items of figure_implot3d (not re-exported by figure)
+public :: series_r32, series_r64, series_lead, series_put, series_scratch, series_gap
 public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, ip_cancel_selection
 public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
@@ -273,6 +275,16 @@ interface series_spec
    !< The C spec of an item with its stride.
    module procedure spec_stride_r32, spec_stride_r64
 endinterface series_spec
+
+interface series_gap
+   !< Bytes from one address to the next one: the stride of an array, from the addresses of two consecutive elements.
+   module procedure gap
+endinterface series_gap
+
+interface series_scratch
+   !< The scratch of a slot, at least `n` elements long, for an array an item lays out itself (a grid, a field).
+   module procedure scratch_slot_r32, scratch_slot_r64
+endinterface series_scratch
 
 interface scratch_copy
    !< Copy an item's array into its slot's scratch at the item's stride (integer abscissae converted).
@@ -4485,6 +4497,32 @@ contains
    enddo
    scratch_frame = -1_int32
    endsubroutine scratch_age
+
+   subroutine scratch_slot_r32(k, n, v)
+   !< The scratch of slot `k` (single precision), at least `n` elements long, for an array an item lays out itself
+   !< (figure_implot3d: a surface's grid), counted as a copy (`test_plot_copies`). Valid until the next item.
+   integer(int32),                      intent(in)  :: k    !< Slot.
+   integer(int64),                      intent(in)  :: n    !< Elements needed.
+   real(real32), pointer, contiguous,   intent(out) :: v(:) !< The slot's first n elements.
+
+   call scratch_age()
+   call scratch_reserve_r32(k, n)
+   v => scratch_r32(k)%v(1_int64:n)
+   plot_copies = plot_copies + 1_int64
+   endsubroutine scratch_slot_r32
+
+   subroutine scratch_slot_r64(k, n, v)
+   !< The scratch of slot `k` (double precision), at least `n` elements long, for an array an item lays out itself
+   !< (figure_implot3d: a surface's grid), counted as a copy (`test_plot_copies`). Valid until the next item.
+   integer(int32),                      intent(in)  :: k    !< Slot.
+   integer(int64),                      intent(in)  :: n    !< Elements needed.
+   real(real64), pointer, contiguous,   intent(out) :: v(:) !< The slot's first n elements.
+
+   call scratch_age()
+   call scratch_reserve_r64(k, n)
+   v => scratch_r64(k)%v(1_int64:n)
+   plot_copies = plot_copies + 1_int64
+   endsubroutine scratch_slot_r64
 
    subroutine scratch_reserve_r32(k, n)
    !< Make the scratch of slot `k` (single precision) at least `n` elements long: kept from item to item and from frame

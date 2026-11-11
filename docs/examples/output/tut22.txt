@@ -19,8 +19,8 @@ $ ./tut22_player --test tut22-cases
 [ok]     two runs in the table, sorted by iterations on a click of its header
 [ok]     a second click reverses the order
 [ok]     a right click on a run opens its menu
-[FAILED] a click on a problem shows the Body section, the radius in keys
-[FAILED] a click on the sketch's east side chooses it
+[ok]     a click on a problem shows the Body section, the radius in keys
+[ok]     a click on the sketch's east side chooses it
 [ok]     an input with the body out of the plate is refused
 [ok]     and accepted once corrected
 [ok]     larger text: one em is 19 pixels, the bar 5 em
@@ -28,7 +28,4 @@ $ ./tut22_player --test tut22-cases
          ig_end_tab: no ig_begin_tab is open (no scope is open)
 [ok]     no other frame of the test had a usage error
 [ok]     the title bar's close button ends the studio
-26 of 28 checks passed
-Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG IEEE_DENORMAL
-ERROR STOP tut22_player: a check failed
-[exit status 1]
+28 of 28 checks passed

@@ -423,6 +423,13 @@ int      fig_gradient_edit(const char *id, int id_len, const char *name, int nam
                            int *changed);
 int      fig_colormap_stops(const char *name, int name_len, double *pos, double *rgb, int cap, int *n);
 unsigned fig_colormap_generation(void);
+/* ImPlot3D (figure_plot3d.cpp): fig_plot3d_colormap gives the ImPlot3D id of the ImPlot colormap implot_id (FIGURE's
+ * registry: fig_colormap), copied into ImPlot3D's registry under its name at its first use, and its keys copied again
+ * when they changed (ig_gradient_edit). fig_plot3d_end ends the current 3-D plot (EndPlot). fig_plot3d_state: 0 no
+ * 3-D plot being declared, 1 its setup open, 2 its setup over (locked by an item). */
+int    fig_plot3d_colormap(int implot_id, int *id);
+void   fig_plot3d_end(void);
+int    fig_plot3d_state(void);
 /* A colour-scale legend: a bar of the colormap cmap from vmin to vmax (bottom to top, or left to right when horizontal),
  * ticks and their values (fmt, printf; empty: %g); levels > 0: that many bands; width, height [pixels]: > 0 given,
  * < 0 the space left, 0 the default. An ImGui item of the current window. */

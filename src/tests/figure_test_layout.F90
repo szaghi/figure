@@ -9,15 +9,20 @@ use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use figure_cimgui, only : im_vec4, figure_sizeof_ImVec4_c, im_texture_ref, figure_sizeof_ImTextureRef_c
 use figure_cimplot, only : im_plot_point, figure_sizeof_ImPlotPoint_c, im_plot_range, figure_sizeof_ImPlotRange_c, im_plot_rect, &
                     figure_sizeof_ImPlotRect_c, im_plot_spec, figure_sizeof_ImPlotSpec_c
+use figure_cimplot3d, only : im_plot3d_point, figure_sizeof_ImPlot3DPoint_c, im_plot3d_quat, figure_sizeof_ImPlot3DQuat_c, &
+                    im_plot3d_spec, figure_sizeof_ImPlot3DSpec_c
 
 implicit none
-type(im_vec4)        :: im_vec4_v              !< Mirror instance.
-type(im_texture_ref) :: im_texture_ref_v       !< Mirror instance.
-type(im_plot_point)  :: im_plot_point_v        !< Mirror instance.
-type(im_plot_range)  :: im_plot_range_v        !< Mirror instance.
-type(im_plot_rect)   :: im_plot_rect_v         !< Mirror instance.
-type(im_plot_spec)   :: im_plot_spec_v         !< Mirror instance.
-logical              :: test_passed(6) !< Per-check outcome.
+type(im_vec4)         :: im_vec4_v               !< Mirror instance.
+type(im_texture_ref)  :: im_texture_ref_v        !< Mirror instance.
+type(im_plot_point)   :: im_plot_point_v         !< Mirror instance.
+type(im_plot_range)   :: im_plot_range_v         !< Mirror instance.
+type(im_plot_rect)    :: im_plot_rect_v          !< Mirror instance.
+type(im_plot_spec)    :: im_plot_spec_v          !< Mirror instance.
+type(im_plot3d_point) :: im_plot3d_point_v       !< Mirror instance.
+type(im_plot3d_quat)  :: im_plot3d_quat_v        !< Mirror instance.
+type(im_plot3d_spec)  :: im_plot3d_spec_v        !< Mirror instance.
+logical               :: test_passed(9) !< Per-check outcome.
 
 test_passed(1) = c_sizeof(im_vec4_v) == figure_sizeof_ImVec4_c()
 test_passed(2) = c_sizeof(im_texture_ref_v) == figure_sizeof_ImTextureRef_c()
@@ -25,8 +30,11 @@ test_passed(3) = c_sizeof(im_plot_point_v) == figure_sizeof_ImPlotPoint_c()
 test_passed(4) = c_sizeof(im_plot_range_v) == figure_sizeof_ImPlotRange_c()
 test_passed(5) = c_sizeof(im_plot_rect_v) == figure_sizeof_ImPlotRect_c()
 test_passed(6) = c_sizeof(im_plot_spec_v) == figure_sizeof_ImPlotSpec_c()
+test_passed(7) = c_sizeof(im_plot3d_point_v) == figure_sizeof_ImPlot3DPoint_c()
+test_passed(8) = c_sizeof(im_plot3d_quat_v) == figure_sizeof_ImPlot3DQuat_c()
+test_passed(9) = c_sizeof(im_plot3d_spec_v) == figure_sizeof_ImPlot3DSpec_c()
 
-write(output_unit, '(A,6L2)') 'figure_test_layout checks:', test_passed
+write(output_unit, '(A,9L2)') 'figure_test_layout checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,I0,A,I0)') 'im_vec4: Fortran ', c_sizeof(im_vec4_v), ', C ', figure_sizeof_ImVec4_c()
@@ -35,6 +43,10 @@ if (.not. all(test_passed)) then
    write(error_unit, '(A,I0,A,I0)') 'im_plot_range: Fortran ', c_sizeof(im_plot_range_v), ', C ', figure_sizeof_ImPlotRange_c()
    write(error_unit, '(A,I0,A,I0)') 'im_plot_rect: Fortran ', c_sizeof(im_plot_rect_v), ', C ', figure_sizeof_ImPlotRect_c()
    write(error_unit, '(A,I0,A,I0)') 'im_plot_spec: Fortran ', c_sizeof(im_plot_spec_v), ', C ', figure_sizeof_ImPlotSpec_c()
+   write(error_unit, '(A,I0,A,I0)') 'im_plot3d_point: Fortran ', c_sizeof(im_plot3d_point_v), ', C ', &
+                                     figure_sizeof_ImPlot3DPoint_c()
+   write(error_unit, '(A,I0,A,I0)') 'im_plot3d_quat: Fortran ', c_sizeof(im_plot3d_quat_v), ', C ', figure_sizeof_ImPlot3DQuat_c()
+   write(error_unit, '(A,I0,A,I0)') 'im_plot3d_spec: Fortran ', c_sizeof(im_plot3d_spec_v), ', C ', figure_sizeof_ImPlot3DSpec_c()
    error stop 1
 endif
 endprogram figure_test_layout

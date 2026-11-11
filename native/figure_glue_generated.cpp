@@ -1,6 +1,6 @@
 // FIGURE generated glue (scripts/gen_bindings.py: do not edit).
 //
-// C wrappers of the cimgui/cimplot functions that pass structs by value, which Fortran cannot call directly:
+// C wrappers of the cimgui/cimplot/cimplot3d functions that pass structs by value, which Fortran cannot call directly:
 // `figure_<name>` takes each such struct by pointer and returns a struct result through `res`. Every wrapper
 // is noexcept: Dear ImGui and ImPlot do not throw, and an exception must not unwind through Fortran frames,
 // so one would terminate the program. Also: the size of each struct Fortran mirrors (checked by
@@ -9,6 +9,10 @@
 #include "implot.h"
 #include "implot_internal.h"
 #include "cimplot.h"
+// ... and as cimplot3d.cpp
+#include "implot3d.h"
+#include "implot3d_internal.h"
+#include "cimplot3d.h"
 
 #include <cstddef>
 #include <cstring>
@@ -295,6 +299,79 @@ void figure_ImPlot_PushStyleColor_Vec4(ImPlotCol idx, const ImVec4_c* col) noexc
 void figure_ImPlot_SampleColormap(float t, ImPlotColormap cmap, ImVec4_c* res) noexcept { *res = ImPlot_SampleColormap(t, cmap); }
 void figure_ImPlot_TagX_Bool(double x, const ImVec4_c* col, bool round) noexcept { ImPlot_TagX_Bool(x, *col, round); }
 void figure_ImPlot_TagY_Bool(double y, const ImVec4_c* col, bool round) noexcept { ImPlot_TagY_Bool(y, *col, round); }
+void figure_ImPlot3D_GetColormapColor(int idx, ImPlot3DColormap cmap, ImVec4_c* res) noexcept { *res = ImPlot3D_GetColormapColor(idx, cmap); }
+void figure_ImPlot3D_GetStyleColorVec4(ImPlot3DCol idx, ImVec4_c* res) noexcept { *res = ImPlot3D_GetStyleColorVec4(idx); }
+void figure_ImPlot3D_NextColormapColor(ImVec4_c* res) noexcept { *res = ImPlot3D_NextColormapColor(); }
+void figure_ImPlot3D_PixelsToPlotPlane_double(double x, double y, ImPlane3D plane, bool mask, ImPlot3DPoint_c* res) noexcept { *res = ImPlot3D_PixelsToPlotPlane_double(x, y, plane, mask); }
+void figure_ImPlot3D_PixelsToPlotPlane_Vec2(const ImVec2_c pix, ImPlane3D plane, bool mask, ImPlot3DPoint_c* res) noexcept { *res = ImPlot3D_PixelsToPlotPlane_Vec2(pix, plane, mask); }
+void figure_ImPlot3D_PlotDummy(const char* label_id, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotDummy(label_id, *spec); }
+void figure_ImPlot3D_PlotImage_Plot3DPoint(const char* label_id, const ImTextureRef_c* tex_ref, const ImPlot3DPoint_c* p0, const ImPlot3DPoint_c* p1, const ImPlot3DPoint_c* p2, const ImPlot3DPoint_c* p3, const ImVec2_c uv0, const ImVec2_c uv1, const ImVec2_c uv2, const ImVec2_c uv3, const ImVec4_c* tint_col, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotImage_Plot3DPoint(label_id, *tex_ref, *p0, *p1, *p2, *p3, uv0, uv1, uv2, uv3, *tint_col, *spec); }
+void figure_ImPlot3D_PlotImage_Vec2(const char* label_id, const ImTextureRef_c* tex_ref, const ImPlot3DPoint_c* center, const ImPlot3DPoint_c* axis_u, const ImPlot3DPoint_c* axis_v, const ImVec2_c uv0, const ImVec2_c uv1, const ImVec4_c* tint_col, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotImage_Vec2(label_id, *tex_ref, *center, *axis_u, *axis_v, uv0, uv1, *tint_col, *spec); }
+void figure_ImPlot3D_PlotLine_doublePtr(const char* label_id, const double* xs, const double* ys, const double* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_doublePtr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotLine_FloatPtr(const char* label_id, const float* xs, const float* ys, const float* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_FloatPtr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotLine_S16Ptr(const char* label_id, const ImS16* xs, const ImS16* ys, const ImS16* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_S16Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotLine_S32Ptr(const char* label_id, const ImS32* xs, const ImS32* ys, const ImS32* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_S32Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotLine_S64Ptr(const char* label_id, const ImS64* xs, const ImS64* ys, const ImS64* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_S64Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotLine_S8Ptr(const char* label_id, const ImS8* xs, const ImS8* ys, const ImS8* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_S8Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotLine_U16Ptr(const char* label_id, const ImU16* xs, const ImU16* ys, const ImU16* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_U16Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotLine_U32Ptr(const char* label_id, const ImU32* xs, const ImU32* ys, const ImU32* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_U32Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotLine_U64Ptr(const char* label_id, const ImU64* xs, const ImU64* ys, const ImU64* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_U64Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotLine_U8Ptr(const char* label_id, const ImU8* xs, const ImU8* ys, const ImU8* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotLine_U8Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotMesh_doublePtr(const char* label_id, const double* vtx_xs, const double* vtx_ys, const double* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_doublePtr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotMesh_FloatPtr(const char* label_id, const float* vtx_xs, const float* vtx_ys, const float* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_FloatPtr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotMesh_S16Ptr(const char* label_id, const ImS16* vtx_xs, const ImS16* vtx_ys, const ImS16* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_S16Ptr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotMesh_S32Ptr(const char* label_id, const ImS32* vtx_xs, const ImS32* vtx_ys, const ImS32* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_S32Ptr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotMesh_S64Ptr(const char* label_id, const ImS64* vtx_xs, const ImS64* vtx_ys, const ImS64* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_S64Ptr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotMesh_S8Ptr(const char* label_id, const ImS8* vtx_xs, const ImS8* vtx_ys, const ImS8* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_S8Ptr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotMesh_U16Ptr(const char* label_id, const ImU16* vtx_xs, const ImU16* vtx_ys, const ImU16* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_U16Ptr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotMesh_U32Ptr(const char* label_id, const ImU32* vtx_xs, const ImU32* vtx_ys, const ImU32* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_U32Ptr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotMesh_U64Ptr(const char* label_id, const ImU64* vtx_xs, const ImU64* vtx_ys, const ImU64* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_U64Ptr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotMesh_U8Ptr(const char* label_id, const ImU8* vtx_xs, const ImU8* vtx_ys, const ImU8* vtx_zs, const unsigned int* idxs, int vtx_count, int idx_count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotMesh_U8Ptr(label_id, vtx_xs, vtx_ys, vtx_zs, idxs, vtx_count, idx_count, *spec); }
+void figure_ImPlot3D_PlotQuad_doublePtr(const char* label_id, const double* xs, const double* ys, const double* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_doublePtr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotQuad_FloatPtr(const char* label_id, const float* xs, const float* ys, const float* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_FloatPtr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotQuad_S16Ptr(const char* label_id, const ImS16* xs, const ImS16* ys, const ImS16* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_S16Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotQuad_S32Ptr(const char* label_id, const ImS32* xs, const ImS32* ys, const ImS32* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_S32Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotQuad_S64Ptr(const char* label_id, const ImS64* xs, const ImS64* ys, const ImS64* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_S64Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotQuad_S8Ptr(const char* label_id, const ImS8* xs, const ImS8* ys, const ImS8* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_S8Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotQuad_U16Ptr(const char* label_id, const ImU16* xs, const ImU16* ys, const ImU16* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_U16Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotQuad_U32Ptr(const char* label_id, const ImU32* xs, const ImU32* ys, const ImU32* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_U32Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotQuad_U64Ptr(const char* label_id, const ImU64* xs, const ImU64* ys, const ImU64* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_U64Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotQuad_U8Ptr(const char* label_id, const ImU8* xs, const ImU8* ys, const ImU8* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotQuad_U8Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_doublePtr(const char* label_id, const double* xs, const double* ys, const double* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_doublePtr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_FloatPtr(const char* label_id, const float* xs, const float* ys, const float* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_FloatPtr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_S16Ptr(const char* label_id, const ImS16* xs, const ImS16* ys, const ImS16* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_S16Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_S32Ptr(const char* label_id, const ImS32* xs, const ImS32* ys, const ImS32* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_S32Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_S64Ptr(const char* label_id, const ImS64* xs, const ImS64* ys, const ImS64* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_S64Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_S8Ptr(const char* label_id, const ImS8* xs, const ImS8* ys, const ImS8* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_S8Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_U16Ptr(const char* label_id, const ImU16* xs, const ImU16* ys, const ImU16* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_U16Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_U32Ptr(const char* label_id, const ImU32* xs, const ImU32* ys, const ImU32* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_U32Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_U64Ptr(const char* label_id, const ImU64* xs, const ImU64* ys, const ImU64* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_U64Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotScatter_U8Ptr(const char* label_id, const ImU8* xs, const ImU8* ys, const ImU8* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotScatter_U8Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotSurface_doublePtr(const char* label_id, const double* xs, const double* ys, const double* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_doublePtr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+void figure_ImPlot3D_PlotSurface_FloatPtr(const char* label_id, const float* xs, const float* ys, const float* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_FloatPtr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+void figure_ImPlot3D_PlotSurface_S16Ptr(const char* label_id, const ImS16* xs, const ImS16* ys, const ImS16* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_S16Ptr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+void figure_ImPlot3D_PlotSurface_S32Ptr(const char* label_id, const ImS32* xs, const ImS32* ys, const ImS32* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_S32Ptr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+void figure_ImPlot3D_PlotSurface_S64Ptr(const char* label_id, const ImS64* xs, const ImS64* ys, const ImS64* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_S64Ptr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+void figure_ImPlot3D_PlotSurface_S8Ptr(const char* label_id, const ImS8* xs, const ImS8* ys, const ImS8* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_S8Ptr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+void figure_ImPlot3D_PlotSurface_U16Ptr(const char* label_id, const ImU16* xs, const ImU16* ys, const ImU16* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_U16Ptr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+void figure_ImPlot3D_PlotSurface_U32Ptr(const char* label_id, const ImU32* xs, const ImU32* ys, const ImU32* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_U32Ptr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+void figure_ImPlot3D_PlotSurface_U64Ptr(const char* label_id, const ImU64* xs, const ImU64* ys, const ImU64* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_U64Ptr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+void figure_ImPlot3D_PlotSurface_U8Ptr(const char* label_id, const ImU8* xs, const ImU8* ys, const ImU8* zs, int x_count, int y_count, double scale_min, double scale_max, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotSurface_U8Ptr(label_id, xs, ys, zs, x_count, y_count, scale_min, scale_max, *spec); }
+ImVec2_c figure_ImPlot3D_PlotToPixels_Plot3DPoint(const ImPlot3DPoint_c* point) noexcept { return ImPlot3D_PlotToPixels_Plot3DPoint(*point); }
+void figure_ImPlot3D_PlotTriangle_doublePtr(const char* label_id, const double* xs, const double* ys, const double* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_doublePtr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotTriangle_FloatPtr(const char* label_id, const float* xs, const float* ys, const float* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_FloatPtr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotTriangle_S16Ptr(const char* label_id, const ImS16* xs, const ImS16* ys, const ImS16* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_S16Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotTriangle_S32Ptr(const char* label_id, const ImS32* xs, const ImS32* ys, const ImS32* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_S32Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotTriangle_S64Ptr(const char* label_id, const ImS64* xs, const ImS64* ys, const ImS64* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_S64Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotTriangle_S8Ptr(const char* label_id, const ImS8* xs, const ImS8* ys, const ImS8* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_S8Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotTriangle_U16Ptr(const char* label_id, const ImU16* xs, const ImU16* ys, const ImU16* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_U16Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotTriangle_U32Ptr(const char* label_id, const ImU32* xs, const ImU32* ys, const ImU32* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_U32Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotTriangle_U64Ptr(const char* label_id, const ImU64* xs, const ImU64* ys, const ImU64* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_U64Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PlotTriangle_U8Ptr(const char* label_id, const ImU8* xs, const ImU8* ys, const ImU8* zs, int count, const ImPlot3DSpec_c* spec) noexcept { ImPlot3D_PlotTriangle_U8Ptr(label_id, xs, ys, zs, count, *spec); }
+void figure_ImPlot3D_PushStyleColor_Vec4(ImPlot3DCol idx, const ImVec4_c* col) noexcept { ImPlot3D_PushStyleColor_Vec4(idx, *col); }
+void figure_ImPlot3D_SampleColormap(float t, ImPlot3DColormap cmap, ImVec4_c* res) noexcept { *res = ImPlot3D_SampleColormap(t, cmap); }
+void figure_ImPlot3D_SetupBoxInitialRotation_Plot3DQuat(const ImPlot3DQuat_c* rotation) noexcept { ImPlot3D_SetupBoxInitialRotation_Plot3DQuat(*rotation); }
+void figure_ImPlot3D_SetupBoxRotation_Plot3DQuat(const ImPlot3DQuat_c* rotation, bool animate, ImPlot3DCond cond) noexcept { ImPlot3D_SetupBoxRotation_Plot3DQuat(*rotation, animate, cond); }
 
 size_t figure_sizeof_ImVec4_c(void) noexcept { return sizeof(ImVec4_c); }
 size_t figure_sizeof_ImTextureRef_c(void) noexcept { return sizeof(ImTextureRef_c); }
@@ -302,6 +379,9 @@ size_t figure_sizeof_ImPlotPoint_c(void) noexcept { return sizeof(ImPlotPoint_c)
 size_t figure_sizeof_ImPlotRange_c(void) noexcept { return sizeof(ImPlotRange_c); }
 size_t figure_sizeof_ImPlotRect_c(void) noexcept { return sizeof(ImPlotRect_c); }
 size_t figure_sizeof_ImPlotSpec_c(void) noexcept { return sizeof(ImPlotSpec_c); }
+size_t figure_sizeof_ImPlot3DPoint_c(void) noexcept { return sizeof(ImPlot3DPoint_c); }
+size_t figure_sizeof_ImPlot3DQuat_c(void) noexcept { return sizeof(ImPlot3DQuat_c); }
+size_t figure_sizeof_ImPlot3DSpec_c(void) noexcept { return sizeof(ImPlot3DSpec_c); }
 
 // ImPlotSpec's defaults from its C++ constructor (IMPLOT_AUTO, IMPLOT_AUTO_COL, ...), never copied by hand: the
 // C++ and C layouts are checked equal field by field, then the bytes are copied.
@@ -325,6 +405,30 @@ static_assert(offsetof(ImPlotSpec, Stride) == offsetof(ImPlotSpec_c, Stride), "I
 static_assert(offsetof(ImPlotSpec, Flags) == offsetof(ImPlotSpec_c, Flags), "ImPlotSpec.Flags misplaced");
 void figure_ImPlotSpec_default(ImPlotSpec_c* res) noexcept {
    const ImPlotSpec spec;
+   std::memcpy(res, &spec, sizeof(spec));
+}
+
+// ImPlot3DSpec's defaults from its C++ constructor (IMPLOT3D_AUTO, IMPLOT3D_AUTO_COL, ...), never copied by hand: the
+// C++ and C layouts are checked equal field by field, then the bytes are copied.
+static_assert(sizeof(ImPlot3DSpec) == sizeof(ImPlot3DSpec_c), "ImPlot3DSpec and ImPlot3DSpec_c differ in size");
+static_assert(offsetof(ImPlot3DSpec, LineColor) == offsetof(ImPlot3DSpec_c, LineColor), "ImPlot3DSpec.LineColor misplaced");
+static_assert(offsetof(ImPlot3DSpec, LineColors) == offsetof(ImPlot3DSpec_c, LineColors), "ImPlot3DSpec.LineColors misplaced");
+static_assert(offsetof(ImPlot3DSpec, LineWeight) == offsetof(ImPlot3DSpec_c, LineWeight), "ImPlot3DSpec.LineWeight misplaced");
+static_assert(offsetof(ImPlot3DSpec, FillColor) == offsetof(ImPlot3DSpec_c, FillColor), "ImPlot3DSpec.FillColor misplaced");
+static_assert(offsetof(ImPlot3DSpec, FillColors) == offsetof(ImPlot3DSpec_c, FillColors), "ImPlot3DSpec.FillColors misplaced");
+static_assert(offsetof(ImPlot3DSpec, FillAlpha) == offsetof(ImPlot3DSpec_c, FillAlpha), "ImPlot3DSpec.FillAlpha misplaced");
+static_assert(offsetof(ImPlot3DSpec, Marker) == offsetof(ImPlot3DSpec_c, Marker), "ImPlot3DSpec.Marker misplaced");
+static_assert(offsetof(ImPlot3DSpec, MarkerSize) == offsetof(ImPlot3DSpec_c, MarkerSize), "ImPlot3DSpec.MarkerSize misplaced");
+static_assert(offsetof(ImPlot3DSpec, MarkerSizes) == offsetof(ImPlot3DSpec_c, MarkerSizes), "ImPlot3DSpec.MarkerSizes misplaced");
+static_assert(offsetof(ImPlot3DSpec, MarkerLineColor) == offsetof(ImPlot3DSpec_c, MarkerLineColor), "ImPlot3DSpec.MarkerLineColor misplaced");
+static_assert(offsetof(ImPlot3DSpec, MarkerLineColors) == offsetof(ImPlot3DSpec_c, MarkerLineColors), "ImPlot3DSpec.MarkerLineColors misplaced");
+static_assert(offsetof(ImPlot3DSpec, MarkerFillColor) == offsetof(ImPlot3DSpec_c, MarkerFillColor), "ImPlot3DSpec.MarkerFillColor misplaced");
+static_assert(offsetof(ImPlot3DSpec, MarkerFillColors) == offsetof(ImPlot3DSpec_c, MarkerFillColors), "ImPlot3DSpec.MarkerFillColors misplaced");
+static_assert(offsetof(ImPlot3DSpec, Offset) == offsetof(ImPlot3DSpec_c, Offset), "ImPlot3DSpec.Offset misplaced");
+static_assert(offsetof(ImPlot3DSpec, Stride) == offsetof(ImPlot3DSpec_c, Stride), "ImPlot3DSpec.Stride misplaced");
+static_assert(offsetof(ImPlot3DSpec, Flags) == offsetof(ImPlot3DSpec_c, Flags), "ImPlot3DSpec.Flags misplaced");
+void figure_ImPlot3DSpec_default(ImPlot3DSpec_c* res) noexcept {
+   const ImPlot3DSpec spec;
    std::memcpy(res, &spec, sizeof(spec));
 }
 

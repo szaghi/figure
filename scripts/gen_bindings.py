@@ -1,12 +1,13 @@
-"""Generate FIGURE's raw Fortran layer from the cimgui and cimplot generator metadata.
+"""Generate FIGURE's raw Fortran layer from the cimgui, cimplot and cimplot3d generator metadata.
 
-Inputs: ``definitions.json`` and ``structs_and_enums.json`` of the pinned cimgui and cimplot, as fetched by the
-native build (``build/native/_deps/{cimgui,cimplot}-src/generator/output``). Outputs, committed to the repository:
+Inputs: ``definitions.json`` and ``structs_and_enums.json`` of the pinned cimgui, cimplot and cimplot3d, as fetched by
+the native build (``build/native/_deps/{cimgui,cimplot,cimplot3d}-src/generator/output``). Outputs, committed to the
+repository:
 
-  - ``src/lib/figure_cimgui.F90``, ``src/lib/figure_cimplot.F90``: ``bind(C)`` interfaces of the public free
-    functions that Fortran can call directly;
-  - ``src/lib/figure_cimgui_enums.F90``, ``src/lib/figure_cimplot_enums.F90``: every public enumerator as an
-    ``integer(c_int)`` parameter, values taken from the metadata, never hand-copied;
+  - ``src/lib/figure_cimgui.F90``, ``src/lib/figure_cimplot.F90``, ``src/lib/figure_cimplot3d.F90``: ``bind(C)``
+    interfaces of the public free functions that Fortran can call directly;
+  - ``src/lib/figure_cimgui_enums.F90``, ``src/lib/figure_cimplot_enums.F90``, ``src/lib/figure_cimplot3d_enums.F90``:
+    every public enumerator as an ``integer(c_int)`` parameter, values taken from the metadata, never hand-copied;
   - ``docs/guide/raw-bindings.md``: the classification of every public function (direct, glue, skipped) and why.
 
 A function is **direct** when every argument is a scalar (numbers, ``bool``, enums and flags), a pointer, or an
@@ -73,14 +74,24 @@ MIRRORS: dict[str, tuple[str, str]] = {
     "ImPlotRange": ("im_plot_range", "cimplot"),
     "ImPlotRect": ("im_plot_rect", "cimplot"),
     "ImPlotSpec": ("im_plot_spec", "cimplot"),
+    "ImPlot3DPoint": ("im_plot3d_point", "cimplot3d"),
+    "ImPlot3DQuat": ("im_plot3d_quat", "cimplot3d"),
+    "ImPlot3DSpec": ("im_plot3d_spec", "cimplot3d"),
 }
+# Structs by value the mirrors do not cover -> why their functions are skipped (each has a sibling or an alternative).
+UNMIRRORED = {
+    "ImPlot3DRay": "`ImPlot3DRay` by value (no `_c` type in the C API)",
+    "ImPlot3DStyle": "`ImPlot3DStyle` by value (an array field; `ImPlot3D_GetStyle` gives a pointer)",
+}
+# Spec structs whose C++ defaults the glue exports (`figure_<struct>_default`): struct -> library.
+SPEC_DEFAULTS = {"ImPlotSpec": "cimplot", "ImPlot3DSpec": "cimplot3d"}
 
 
 @dataclass
 class Library:
-    """One C library to bind (cimgui or cimplot)."""
+    """One C library to bind (cimgui, cimplot or cimplot3d)."""
 
-    name: str  # cimgui | cimplot
+    name: str  # cimgui | cimplot | cimplot3d
     header: str  # public header location tag in the metadata: imgui | implot
     title: str  # human name for comments
     namespace: str  # C++ namespace of the free functions
@@ -89,6 +100,7 @@ class Library:
 LIBRARIES = [
     Library("cimgui", "imgui", "Dear ImGui", "ImGui"),
     Library("cimplot", "implot", "ImPlot", "ImPlot"),
+    Library("cimplot3d", "implot3d", "ImPlot3D", "ImPlot3D"),
 ]
 
 
@@ -168,7 +180,7 @@ def resolve(ctype: str, typedefs: dict[str, str]) -> str:
     ctype : str
         C type as written in the metadata.
     typedefs : dict[str, str]
-        Typedef map of the library (cimplot's includes cimgui's).
+        Typedef map of the library (cimplot's and cimplot3d's include cimgui's).
 
     Returns
     -------
@@ -283,6 +295,8 @@ def classify(ov: dict, typedefs: dict[str, str]) -> Function:
         elif base in SCALARS:
             ftype, kind = SCALARS[base]
             fn.args.append(Argument(name, ctype, f"{ftype}, value", kind, note))
+        elif base.removesuffix("_c") in UNMIRRORED:
+            return _set(fn, "skipped", UNMIRRORED[base.removesuffix("_c")])
         else:
             msg = f"{fn.cname}: unmapped argument type {ctype!r} (resolved {base!r})"
             raise GenerationError(msg)
@@ -307,6 +321,8 @@ def classify(ov: dict, typedefs: dict[str, str]) -> Function:
         ) + f"returns `{ret}` by value"
         return fn
     rbase = resolve(ret, typedefs)
+    if "*" not in ret and rbase.removesuffix("_c") in UNMIRRORED:
+        return _set(fn, "skipped", "returns " + UNMIRRORED[rbase.removesuffix("_c")])
     if "*" in ret:
         fn.result = ("type(c_ptr)", "c_ptr")
     elif rbase in VEC2:
@@ -484,9 +500,8 @@ def function_module(
     ]
     if types:
         lines.append(f"public :: {', '.join(types)}")
-    probes = [f"figure_sizeof_{c}_c" for c in mirrors] + (
-        ["figure_ImPlotSpec_default"] if lib.name == "cimplot" else []
-    )
+    specs = [s for s, owner in SPEC_DEFAULTS.items() if owner == lib.name]
+    probes = [f"figure_sizeof_{c}_c" for c in mirrors] + [f"figure_{s}_default" for s in specs]
     lines += _chunks([f.cname for f in bound] + probes, "public :: ")
     if lib.name == "cimgui":
         lines += [
@@ -513,15 +528,16 @@ def function_module(
             "   integer(c_size_t) :: res !< Size [bytes].",
             f"   endfunction figure_sizeof_{c}_c",
         ]
-    if lib.name == "cimplot":
+    for s in specs:
+        m = MIRRORS[s][0]
         lines += [
             "",
-            "   subroutine figure_ImPlotSpec_default(res) bind(C, name='figure_ImPlotSpec_default')",
-            "   !< An `ImPlotSpec` with the C++ constructor's defaults (automatic colours, markers, sizes, stride).",
-            "   import :: im_plot_spec",
+            f"   subroutine figure_{s}_default(res) bind(C, name='figure_{s}_default')",
+            f"   !< An `{s}` with the C++ constructor's defaults (automatic colours, markers, sizes, stride).",
+            f"   import :: {m}",
             "   implicit none",
-            "   type(im_plot_spec), intent(out) :: res !< Default spec.",
-            "   endsubroutine figure_ImPlotSpec_default",
+            f"   type({m}), intent(out) :: res !< Default spec.",
+            f"   endsubroutine figure_{s}_default",
         ]
     lines += ["endinterface", f"endmodule {module}"]
     return "\n".join(lines) + "\n"
@@ -564,7 +580,7 @@ def glue_cpp(glue: list[Function], structs: dict) -> str:
     out = [
         "// FIGURE generated glue (scripts/gen_bindings.py: do not edit).",
         "//",
-        "// C wrappers of the cimgui/cimplot functions that pass structs by value, which Fortran cannot call directly:",
+        "// C wrappers of the cimgui/cimplot/cimplot3d functions that pass structs by value, which Fortran cannot call directly:",
         "// `figure_<name>` takes each such struct by pointer and returns a struct result through `res`. Every wrapper",
         "// is noexcept: Dear ImGui and ImPlot do not throw, and an exception must not unwind through Fortran frames,",
         "// so one would terminate the program. Also: the size of each struct Fortran mirrors (checked by",
@@ -573,6 +589,10 @@ def glue_cpp(glue: list[Function], structs: dict) -> str:
         '#include "implot.h"',
         '#include "implot_internal.h"',
         '#include "cimplot.h"',
+        "// ... and as cimplot3d.cpp",
+        '#include "implot3d.h"',
+        '#include "implot3d_internal.h"',
+        '#include "cimplot3d.h"',
         "",
         "#include <cstddef>",
         "#include <cstring>",
@@ -606,22 +626,26 @@ def glue_cpp(glue: list[Function], structs: dict) -> str:
         out.append(
             f"size_t figure_sizeof_{c}_c(void) noexcept {{ return sizeof({c}_c); }}"
         )
-    fields = [fld["name"] for fld in structs["ImPlotSpec"]]
+    for s in SPEC_DEFAULTS:
+        fields = [fld["name"] for fld in structs[s]]
+        auto = "IMPLOT_AUTO, IMPLOT_AUTO_COL" if s == "ImPlotSpec" else "IMPLOT3D_AUTO, IMPLOT3D_AUTO_COL"
+        out += [
+            "",
+            f"// {s}'s defaults from its C++ constructor ({auto}, ...), never copied by hand: the",
+            "// C++ and C layouts are checked equal field by field, then the bytes are copied.",
+            f'static_assert(sizeof({s}) == sizeof({s}_c), "{s} and {s}_c differ in size");',
+        ]
+        out += [
+            f'static_assert(offsetof({s}, {n}) == offsetof({s}_c, {n}), "{s}.{n} misplaced");'
+            for n in fields
+        ]
+        out += [
+            f"void figure_{s}_default({s}_c* res) noexcept {{",
+            f"   const {s} spec;",
+            "   std::memcpy(res, &spec, sizeof(spec));",
+            "}",
+        ]
     out += [
-        "",
-        "// ImPlotSpec's defaults from its C++ constructor (IMPLOT_AUTO, IMPLOT_AUTO_COL, ...), never copied by hand: the",
-        "// C++ and C layouts are checked equal field by field, then the bytes are copied.",
-        'static_assert(sizeof(ImPlotSpec) == sizeof(ImPlotSpec_c), "ImPlotSpec and ImPlotSpec_c differ in size");',
-    ]
-    out += [
-        f'static_assert(offsetof(ImPlotSpec, {n}) == offsetof(ImPlotSpec_c, {n}), "ImPlotSpec.{n} misplaced");'
-        for n in fields
-    ]
-    out += [
-        "void figure_ImPlotSpec_default(ImPlotSpec_c* res) noexcept {",
-        "   const ImPlotSpec spec;",
-        "   std::memcpy(res, &spec, sizeof(spec));",
-        "}",
         "",
         '} // extern "C"',
     ]
@@ -696,7 +720,7 @@ def layout_test() -> str:
         "use, intrinsic :: iso_c_binding, only : c_sizeof",
         "use, intrinsic :: iso_fortran_env, only : error_unit, output_unit",
     ]
-    for owner in ("cimgui", "cimplot"):
+    for owner in ("cimgui", "cimplot", "cimplot3d"):
         names = [x for t, f, o in pairs if o == owner for x in (t, f)]
         lines += wrap(
             f"use figure_{owner}, only : {', '.join(names)}", "                    "
@@ -717,8 +741,9 @@ def layout_test() -> str:
         "if (.not. all(test_passed)) then",
     ]
     for t, f, _ in pairs:
-        lines.append(
-            f"   write(error_unit, '(A,I0,A,I0)') '{t}: Fortran ', c_sizeof({t}_v), ', C ', {f}()"
+        lines += wrap(
+            f"   write(error_unit, '(A,I0,A,I0)') '{t}: Fortran ', c_sizeof({t}_v), ', C ', {f}()",
+            "                                     ",
         )
     lines += ["   error stop 1", "endif", "endprogram figure_test_layout"]
     return "\n".join(lines) + "\n"
@@ -833,16 +858,17 @@ def report(results: list[tuple[Library, list[Function]]]) -> str:
         "",
         "<!-- generated by scripts/gen_bindings.py: do not edit -->",
         "",
-        "The raw layer is generated from the cimgui and cimplot metadata by `scripts/gen_bindings.py`. A public free",
-        "function is **direct** when every argument is a scalar, a pointer or an `ImVec2` by value (and so is its",
-        "result): it is bound with `bind(C)` in `figure_cimgui` / `figure_cimplot`. A function passing a larger",
-        "struct by value (`ImVec4`, `ImPlotSpec`, `ImPlotPoint`, ...) goes through the generated **glue**",
+        "The raw layer is generated from the cimgui, cimplot and cimplot3d metadata by `scripts/gen_bindings.py`. A",
+        "public free function is **direct** when every argument is a scalar, a pointer or an `ImVec2` by value (and so",
+        "is its result): it is bound with `bind(C)` in `figure_cimgui` / `figure_cimplot` / `figure_cimplot3d`. A",
+        "function passing a larger struct by value (`ImVec4`, `ImPlotSpec`, `ImPlot3DSpec`, ...) goes through the",
+        "generated **glue**",
         "(`native/figure_glue_generated.cpp`): a C wrapper `figure_<name>` takes the struct by pointer and returns a",
         "struct result through `res`; the Fortran interface keeps the C API name, with the struct as a `bind(C)` mirror",
         "type (`im_vec4`, `im_plot_spec`, ...) passed by reference. `src/tests/figure_test_layout.F90` checks that each",
         "mirror has the size of its C struct. Variadic functions and functions taking callbacks are **skipped**.",
-        "Enumerators are in `figure_cimgui_enums` / `figure_cimplot_enums`. These modules are private to the library:",
-        "programs use the wrappers (`ig_*`, `ip_*`).",
+        "Enumerators are in `figure_cimgui_enums` / `figure_cimplot_enums` / `figure_cimplot3d_enums`. These modules",
+        "are private to the library: programs use the wrappers (`ig_*`, `ip_*`, `ip3_*`).",
         "",
         "| Library | Public functions | Direct | Glue (generated) | Skipped |",
         "|---|---|---|---|---|",
@@ -925,7 +951,7 @@ def symbols_defined(outputs: dict[Path, str], library: Path) -> bool:
     outputs : dict[Path, str]
         Generated outputs.
     library : Path
-        Static library holding cimgui and cimplot (``lib/libfigure_native.a``).
+        Static library holding cimgui, cimplot and cimplot3d (``lib/libfigure_native.a``).
 
     Returns
     -------
@@ -982,7 +1008,7 @@ def main(argv: list[str]) -> int:
         0 on success; 1 if ``--check`` finds a difference or the generation fails.
     """
     parser = argparse.ArgumentParser(
-        description="Generate FIGURE's raw cimgui/cimplot Fortran layer."
+        description="Generate FIGURE's raw cimgui/cimplot/cimplot3d Fortran layer."
     )
     parser.add_argument(
         "--check",

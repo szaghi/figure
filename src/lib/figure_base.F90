@@ -21,6 +21,7 @@ public :: figure_draw_refused, figure_scope_open, figure_scope_refused, figure_u
 public :: SCOPE_WINDOW, SCOPE_CHILD, SCOPE_TAB_BAR, SCOPE_TAB, SCOPE_TABLE, SCOPE_TREE, SCOPE_MAIN_MENU_BAR, SCOPE_MENU_BAR
 public :: SCOPE_MENU, SCOPE_POPUP, SCOPE_PLOT, SCOPE_SUBPLOTS, SCOPE_DOCK_LAYOUT, SCOPE_ID, SCOPE_DISABLED, SCOPE_FONT
 public :: SCOPE_STYLE_COLOR, SCOPE_STYLE_VAR, SCOPE_GROUP, SCOPE_ALIGN, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP
+public :: SCOPE_PLOT3D
 
 integer(int32), parameter :: FORMAT_INTEGER = 1_int32 !< A printf format of an integer value: d, i, u.
 integer(int32), parameter :: FORMAT_REAL = 2_int32    !< A printf format of a real value: f, F, e, E, g, G, a, A.
@@ -49,6 +50,7 @@ integer(c_int), parameter :: SCOPE_ALIGN = 20_c_int         !< ig_align_begin / 
 integer(c_int), parameter :: SCOPE_ITEM_WIDTH = 21_c_int    !< ig_push_item_width / ig_pop_item_width (always paired).
 integer(c_int), parameter :: SCOPE_TOOLTIP = 22_c_int       !< ig_begin_tooltip, ig_begin_item_tooltip / ig_end_tooltip
                                                              !< (after true).
+integer(c_int), parameter :: SCOPE_PLOT3D = 23_c_int        !< ip3_begin_plot / ip3_end_plot (after true).
 
 contains
    recursive function figure_time() result(seconds)

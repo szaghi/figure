@@ -13,6 +13,9 @@ FIGURE renders the view itself, on the CPU: a **software rasterizer** in the nat
 image, which is shown as a [texture](images). So the pixels are the same in window, remote and headless modes, and
 tests check them one by one.
 
+For a figure that is a plot with a third axis (a trajectory, probes, a small surface over labelled axes), the
+[3-D plots](plots#_3-d-plots) of ImPlot3D are lighter; [3-D plots](plots#_3-d-plots) has the rule for choosing.
+
 <Media name="cb_view3d" alt="A window titled Body. A row of buttons (+x, -y, +z, Fit), a ticked check box 'grid', a check box 'cut at z = 0' and a text 'cell (26, 19): Cp = -0.635 at (2.02 -0.37 0.37)'. Below, a slender body drawn with its grid lines, coloured from blue at the middle to red at both ends, with a yellow line through it along its axis. In the video the body turns under a drag, comes closer with the wheel, a click on it fills the text with the cell clicked, then the check box cuts away the half above z = 0." caption="docs/examples/src/cb_view3d.F90" />
 
 ## Procedures

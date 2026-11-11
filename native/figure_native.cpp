@@ -13,6 +13,7 @@
 #include "imgui_impl_sdl3.h"
 #include "implot.h"
 #include "implot_internal.h" // GetStyleColorVec4: ImPlot's automatic colours resolved
+#include "implot3d.h"        // ImPlot3D's context, beside ImPlot's
 // stb_truetype, as Dear ImGui bundles it, private to this file: an ICON_* rendered as the window's icon (set_icon)
 #define STBRP_STATIC
 #define STB_RECT_PACK_IMPLEMENTATION
@@ -735,6 +736,7 @@ void create_contexts() {
    IMGUI_CHECKVERSION();
    ImGui::CreateContext();
    ImPlot::CreateContext();
+   ImPlot3D::CreateContext(); // the small 3-D figures (figure_plot3d.cpp)
    ImGuiIO &io = ImGui::GetIO();
    // Docking on by default: a window dragged by its title bar docks into another window or into a dock space
    // (fig_set_docking turns it off). Multi-viewports stay off: remote and headless modes cannot have them.
@@ -757,6 +759,7 @@ void destroy_contexts() {
    st.font_em.clear();
    st.fallbacks.clear(); // a program's fallbacks belong to its application: a new init starts without them
    st.fallbacks_merged = 0;
+   if (ImPlot3D::GetCurrentContext()) ImPlot3D::DestroyContext();
    if (ImPlot::GetCurrentContext()) ImPlot::DestroyContext();
    if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
 }

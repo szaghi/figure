@@ -81,6 +81,8 @@ gfortran -I lib/mod readme.F90 lib/libfigure.a -L lib $(python3 scripts/check_sy
   completed, find and replace, a diff of two versions (ImGuiColorTextEdit, drawn in every mode).
 - **3-D views and gizmos**: meshes coloured by fields, drawn by FIGURE's own rasterizer; a view cube, and handles that
   move a clipping plane or a probe by hand (ImGuizmo); colormaps edited by their stops.
+- **3-D plots**: trajectories, probes, a field as a height surface and small meshes over labelled axes, in a box the
+  user turns (ImPlot3D, the arrays read in place as the 2-D plots').
 - **Headless testing**: `app%init_headless` and the `figure_testing` module drive the interface with synthetic input,
   in CI without a display.
 

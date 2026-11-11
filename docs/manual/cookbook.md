@@ -707,6 +707,24 @@ the point hit. [3-D views](/guide/view3d) has the camera, clipping planes and th
 
 Used in context: [chapter 13](./tutorial/13-view3d) of the tutorial.
 
+### A trajectory in 3-D
+
+<<< @/examples/snippets/cb_trajectory-setup.F90{fortran}
+
+<<< @/examples/snippets/cb_trajectory-draw.F90{fortran}
+
+<Media name="cb_trajectory" video alt="A 3-D plot titled trajectory: a red path of the Lorenz system grows inside a box with grid planes and labelled axes x, y and z, a blue marker at its newest point; the count of points below rises. A right drag across the plot turns the box to the right and back, its two wings coming into view; a turn of the wheel zooms in." caption="docs/examples/src/cb_trajectory.F90" />
+
+The solver keeps the path as the columns of a `3 × n` matrix and the plot reads its three rows where they are: one
+stride (24 bytes) for the three arrays, no copy. `auto_fit=.true.` refits the box as the path grows; `elevation` and
+`azimuth` are the box's first rotation, which the user changes with a right drag and gets back with a right double
+click. The test runs 200 frames headless, then turns the box with a right drag:
+
+<<< @/examples/output/cb_trajectory.txt{text}
+
+For meshes of many faces, a field on a body, cuts and clipping planes, take a [3-D view](/guide/view3d) instead:
+[3-D plots](/guide/plots#_3-d-plots) has the rule.
+
 ### Place a clipping plane by hand
 
 <<< @/examples/snippets/cb_gizmo-start.F90{fortran}

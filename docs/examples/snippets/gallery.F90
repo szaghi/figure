@@ -2,8 +2,8 @@
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet"), the layout
 !< metrics (run with "layout_metrics"), the numbers and choices (run with "numbers_and_choices") and the canvas's
 !< drawing primitives (run with "canvas_primitives"), the axis layouts of a plot (run with "plot_axes") and the marks and
-!< items of a plot (run with "plot_marks") and the scales of a field (run with "field_scales"), and the symbols CFD
-!< writes in both text fonts (run with "glyphs").
+!< items of a plot (run with "plot_marks") and the scales of a field (run with "field_scales"), the symbols CFD
+!< writes in both text fonts (run with "glyphs") and the small 3-D figures of ImPlot3D (run with "plot3d").
 program gallery
 !< gallery, the style gallery: one program, recorded in every built-in theme (run with "cycle" to switch them live),
 !< and the galleries of palettes, looks and colormaps (run with "palettes", "looks", "colormaps" or "jet").
@@ -33,6 +33,9 @@ program gallery
 !<
 !< "glyphs" draws the symbols CFD writes (the Greek letters, the operators, the super- and subscript digits) in IBM
 !< Plex Sans and in IBM Plex Mono: the glyphs a font lacks come from the bundled fallback, Noto Sans Math.
+!<
+!< "plot3d" draws three 3-D plots (ImPlot3D): a particle's trajectory past three probes, a field as a height surface
+!< and a body as a mesh of triangles, each titled with its calls.
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_value, ieee_quiet_nan
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, &
@@ -54,6 +57,8 @@ use figure, only : ip_tag, ip_inf_lines, ip_text, ip_drag_rect, ip_stairs, ip_st
                    ip_annotation, ip_spec, ImPlotStairsFlags_Shaded
 use figure, only : ip_field_image, ip_colormap_legend
 use figure, only : ig_pop_font, ig_push_font
+use figure, only : ip3_begin_plot, ip3_end_plot, ip3_line, ip3_mesh, ip3_scatter, ip3_setup_axes, ip3_spec, &
+                   ip3_surface, ip3_text, ImPlot3DMarker_Diamond
 
 implicit none
 integer(int32),    parameter :: N = 200_int32                    !< Points per line.
@@ -132,6 +137,14 @@ if (trim(arg) == 'field_scales') then
    call app%init('FIGURE: field scales', 1100_int32, 700_int32)
    do while (app%next_frame())
       call field_scales()
+   enddo
+   call app%destroy()
+   stop
+endif
+if (trim(arg) == 'plot3d') then
+   call app%init('FIGURE: 3-D plots', 1200_int32, 460_int32)
+   do while (app%next_frame())
+      call plot3d()
    enddo
    call app%destroy()
    stop
@@ -425,6 +438,66 @@ contains
    endif
    call ig_end()
    endsubroutine plot_axes
+
+   subroutine plot3d()
+   !< Three 3-D plots side by side: a trajectory past probes, a field as a height surface, a body as a mesh.
+   integer(int32), parameter :: M = 400_int32                 !< Points of the trajectory.
+   integer(int32), parameter :: G = 41_int32                  !< Grid points a side.
+   real(real64), parameter   :: RED(4) = [0.93_real64, 0.33_real64, 0.24_real64, 1.0_real64] !< The trajectory's colour.
+   real(real64)              :: s(M)                          !< Time.
+   real(real64)              :: px(M), py(M), pz(M)           !< The particle's positions.
+   real(real64)              :: gx(G), gy(G)                  !< The grid.
+   real(real64)              :: h(G, G)                       !< The field's heights.
+   real(real64)              :: probes(3, 3)                  !< Three probes, a column each.
+   real(real64)              :: bx(6), by(6), bz(6)           !< An octahedron's vertices.
+   integer(int32)            :: tri(3, 8)                     !< Its faces.
+   real(real64)              :: w                             !< Width of a plot [pixels].
+
+   s = [(10.0_real64 * real(i - 1, real64) / real(M - 1, real64), i = 1_int32, M)]
+   gx = [(-2.0_real64 + 4.0_real64 * real(i - 1, real64) / real(G - 1, real64), i = 1_int32, G)]
+   gy = gx
+   do j = 1_int32, G
+      do i = 1_int32, G
+         h(i, j) = exp(-((gx(i) - 0.6_real64)**2 + (gy(j) + 0.4_real64)**2)) - &
+                   0.7_real64 * exp(-((gx(i) + 0.8_real64)**2 + (gy(j) - 0.7_real64)**2) / 0.6_real64)
+      enddo
+   enddo
+   bx = [1.0_real64, -1.0_real64, 0.0_real64, 0.0_real64, 0.0_real64, 0.0_real64]
+   by = [0.0_real64, 0.0_real64, 1.0_real64, -1.0_real64, 0.0_real64, 0.0_real64]
+   bz = [0.0_real64, 0.0_real64, 0.0_real64, 0.0_real64, 1.5_real64, -1.5_real64]
+   tri = reshape([1, 3, 5,  3, 2, 5,  2, 4, 5,  4, 1, 5,  3, 1, 6,  2, 3, 6,  4, 2, 6,  1, 4, 6], [3, 8])
+   px = cos(s) * exp(-0.12_real64 * s)                   ! a particle spiralling in as it rises
+   py = sin(s) * exp(-0.12_real64 * s)
+   pz = 0.1_real64 * s
+   probes = reshape([0.8_real64, 0.0_real64, 0.2_real64,  -0.3_real64, 0.5_real64, 0.5_real64, &
+                     0.1_real64, -0.2_real64, 0.9_real64], [3, 3])
+   call ig_set_next_window(10.0_real64, 10.0_real64, 1180.0_real64, 440.0_real64)
+   if (ig_begin('3-D plots')) then
+      w = 380.0_real64
+      if (ip3_begin_plot('ip3_line, ip3_scatter, ip3_text', width=w, height=-1.0_real64)) then
+         call ip3_setup_axes('x [m]', 'y [m]', 'z [m]', elevation=20.0_real64, azimuth=-50.0_real64)
+         call ip3_line('particle', px, py, pz, spec=ip3_spec(line_color=RED, line_weight=2.0_real64))
+         call ip3_scatter('probes', probes(1, :), probes(2, :), probes(3, :), &          ! rows: read in place
+                          spec=ip3_spec(marker=ImPlot3DMarker_Diamond, marker_size=5.0_real64))
+         call ip3_text('release', px(1), py(1), pz(1), offset=[0.0_real64, -14.0_real64])
+         call ip3_end_plot()
+      endif
+      call ig_same_line()
+      if (ip3_begin_plot('ip3_surface: a field as heights', width=w, height=-1.0_real64)) then
+         call ip3_setup_axes('x', 'y', 'p', elevation=35.0_real64, azimuth=-60.0_real64)
+         call ip3_surface('p', gx, gy, h, colormap=ip_colormap('cool-warm'))
+         call ip3_end_plot()
+      endif
+      call ig_same_line()
+      if (ip3_begin_plot('ip3_mesh: a body of triangles', width=w, height=-1.0_real64, equal=.true.)) then
+         call ip3_setup_axes('x', 'y', 'z', elevation=20.0_real64, azimuth=-35.0_real64)
+         call ip3_mesh('body', bx, by, bz, tri, spec=ip3_spec(fill_alpha=0.7_real64, line_color=[0.9_real64, 0.9_real64, &
+                                                             0.9_real64, 1.0_real64]))
+         call ip3_end_plot()
+      endif
+   endif
+   call ig_end()
+   endsubroutine plot3d
 
    subroutine plot_marks()
    !< Eight marks and items in a grid of plots, each titled with its call.

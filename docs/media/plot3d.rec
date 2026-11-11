@@ -1,0 +1,5 @@
+#! program build/docs-examples/bin/gallery
+#! args    plot3d
+#! from    10
+#! frames  1
+# three 3-D plots (ImPlot3D), each titled with its calls: a trajectory past probes, a field as heights, a mesh

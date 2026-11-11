@@ -3,7 +3,7 @@
 FIGURE is released under the [MIT licence](LICENSE.mit.md). Its native layer (`scripts/build_native.sh`) downloads
 and compiles the projects below into `lib/libfigure_native.a` and `lib/libSDL3.a` (stb_image and stb_image_write are
 kept in `third_party/stb/`, the code editor in `third_party/ImGuiColorTextEdit/`, the gizmos in `third_party/ImGuizmo/`,
-not downloaded), and embeds the
+ImPlot3D in `third_party/implot3d/`, not downloaded), and embeds the
 fonts kept in `third_party/fonts/`, the palettes of `themes/palettes/`, whose colours are those of the projects named
 below (their licence files in `third_party/palettes/`), and the colormaps of `third_party/colormaps/` (256 RGB samples
 each, with their licence files): a program linked with FIGURE contains them. Their licences are all permissive and
@@ -15,6 +15,8 @@ compatible with FIGURE's. The native build installs each licence file under `sha
 | [ImPlot](https://github.com/epezent/implot) | 1.2 WIP, through cimplot `v1.1` | MIT | Evan Pezent | plots, heatmaps, colormaps |
 | [cimgui](https://github.com/cimgui/cimgui) | `1.93.1WIPdock` | MIT | Stephan Dilly | the C API of Dear ImGui, and its metadata used by `scripts/gen_bindings.py` |
 | [cimplot](https://github.com/cimgui/cimplot) | `v1.1` | MIT | Victor Bombí | the C API of ImPlot, and its metadata used by `scripts/gen_bindings.py` |
+| [ImPlot3D](https://github.com/brenocq/implot3d) | 0.6 WIP, commit `c54525f8d46cece384cc2618761a2c55016b06db` (2026-10-25: v0.5, its version bumped; the submodule cimplot3d `v0.5` pins), vendored in `third_party/implot3d/` (`implot3d.cpp`, `implot3d_items.cpp`, `implot3d_meshes.cpp`, `implot3d_demo.cpp`, `implot3d.h`, `implot3d_internal.h`), unmodified but for FIGURE's one patch (`patches/0001-no-mouse-position.patch`, applied: no FPE without a mouse position), its licence `LICENSE` | MIT | Breno Cunha Queiroz | the small 3-D figures (`ip3_*`): lines, markers, surfaces, meshes and texts in a box the user turns; it draws through Dear ImGui's draw lists only and needs no ImPlot |
+| [cimplot3d](https://github.com/cimgui/cimplot3d) | `v0.5` (commit `c7b527f`, 2026-10-26), fetched without its `implot3d` submodule | MIT | Victor Bombí | the C API of ImPlot3D, and its metadata used by `scripts/gen_bindings.py` (`figure_cimplot3d`, `figure_cimplot3d_enums`) and `scripts/gen_names.py` |
 | [miniz](https://github.com/richgel999/miniz) | `3.0.2` (release archive, SHA-256 pinned) | MIT | Rich Geldreich, RAD Game Tools, Valve Software | deflate for the remote mode's compressed messages |
 | [stb_image_write](https://github.com/nothings/stb) | v1.16, `stb_image_write.h` at commit `4e9b368` (its last change: `1ee679c`), vendored unmodified in `third_party/stb/`, its licence (from the end of the file) in `LICENSE-stb.txt` | MIT or public domain (Unlicense), at the user's choice; FIGURE takes MIT | Sean Barrett | the JPEG encoder of the remote mode's changing images; the PNG and JPEG encoders of FIGURE's tests |
 | [stb_image](https://github.com/nothings/stb) | v2.30, `stb_image.h` at commit `4e9b368` (its last change: `013ac3b`, 2024-05-31; the repository's last commit 2026-11-07), vendored unmodified in `third_party/stb/` (SHA-256 `594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3`), its licence, the same text as stb_image_write's, in `LICENSE-stb.txt` | MIT or public domain (Unlicense), at the user's choice; FIGURE takes MIT | Sean Barrett | the PNG and JPEG decoders of `fig_read_image` and `tex%load` (built with `STBI_ONLY_PNG`, `STBI_ONLY_JPEG`, `STBI_NO_STDIO`: no other format, no file or URL access of its own) |
@@ -42,7 +44,7 @@ compatible with FIGURE's. The native build installs each licence file under `sha
 
 ## Distributing a program built with FIGURE
 
-- **MIT** (FIGURE, Dear ImGui, ImPlot, cimgui, cimplot, miniz, stb_image, stb_image_write, ImGuiColorTextEdit, ImGuizmo, the
+- **MIT** (FIGURE, Dear ImGui, ImPlot, ImPlot3D, cimgui, cimplot, cimplot3d, miniz, stb_image, stb_image_write, ImGuiColorTextEdit, ImGuizmo, the
   Lucide icons derived from Feather, the palettes Nord, Solarized, Gruvbox, Dracula, Catppuccin, Tokyo Night and One Dark) and **ISC**
   (Lucide): the copyright notice and the permission notice must be included in all copies or substantial portions of
   the software. For a binary, ship the licence files with it (the `share/licenses/` tree, where the Lucide one is

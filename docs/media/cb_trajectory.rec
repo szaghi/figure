@@ -1,0 +1,18 @@
+#! program build/docs-examples/bin/cb_trajectory
+#! from    5
+#! frames  300
+#! poster  299
+#! crop    0 0 720 560
+# a trajectory in 3-D growing while the solver runs (the Lorenz system, three steps a frame); a right drag across the
+# plot turns the box one way, then back; the wheel zooms in a step
+0   move 650 520
+40  move 300 260 20
+70  down right
+74  move 450 270 40
+120 up right
+140 move 420 230 10
+160 down right
+164 move 330 220 40
+210 up right
+230 wheel 0 1
+250 move 650 520 20

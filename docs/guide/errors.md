@@ -284,6 +284,27 @@ arguments on the Fortran side (names) and in the native layer (values):
 matrix and the camera as they were and returns `.false.`; `view_matrix` and `projection_matrix` fail only on a view
 not initialized (`FIG_ERR_STATE`), their matrix then zero.
 
+### ImPlot3D
+
+The [3-D plots](plots#_3-d-plots) check their arguments on the Fortran side, before ImPlot3D sees them (ImPlot3D
+asserts on an item outside a plot and on a setup after the first item):
+
+| Failure | Status | Message |
+|---|---|---|
+| an item, a text or `ip3_setup_axes` outside a 3-D plot | `FIG_ERR_STATE` | `ip3_line: no 3-D plot is being declared (call it between ip3_begin_plot and ip3_end_plot)`, `ip3_setup_axes: no 3-D plot is being declared (call it after ip3_begin_plot returned true)` |
+| `ip3_setup_axes` after an item | `FIG_ERR_STATE` | `ip3_setup_axes: the setup of the 3-D plot is over (call it before the first item)` |
+| series of different sizes, more points than a C `int` counts | `FIG_ERR_ARGUMENT` | `ip3_line: the series have different sizes`, `ip3_line: more points than a C int can count` (and the same for `ip3_scatter`, `ip3_mesh`) |
+| `x`, `y` that do not match `z` | `FIG_ERR_ARGUMENT` | `ip3_surface: x and y must match z: size(x) = size(z, 1), size(y) = size(z, 2) (or x and y of the shape of z)`, `ip3_surface: x, y and z of a grid must have the same shape` |
+| one scale end, a minimum not below the maximum | `FIG_ERR_ARGUMENT` | `ip3_surface: give both scale_min and scale_max, or neither`, `ip3_surface: scale_min must be below scale_max` |
+| a colormap not registered | `FIG_ERR_ARGUMENT` | `ip3_surface: the colormap <id> is not registered (see ip_colormap)` |
+| triangles without 3 rows, a vertex outside `[1, size(x)]` | `FIG_ERR_ARGUMENT` | `ip3_mesh: triangles needs 3 rows (the vertices of each triangle)`, `ip3_mesh: a triangle has a vertex outside [1, size(x)]` |
+| `limits` without 6 values, or a minimum not below its maximum; one angle | `FIG_ERR_ARGUMENT` | `ip3_setup_axes: limits needs 6 values (xmin, xmax, ymin, ymax, zmin, zmax)`, `ip3_setup_axes: each minimum of limits must be below its maximum`, `ip3_setup_axes: give both elevation and azimuth, or neither` |
+| a NaN position, an offset without 2 values | `FIG_ERR_ARGUMENT` | `ip3_text: x, y and z must not be NaN`, `ip3_text: the offset needs 2 components (x, y)` |
+| a colour without 4 values | `FIG_ERR_ARGUMENT` | `ip3_spec: a colour needs 4 components (RGBA)` |
+
+A refused item draws nothing; the plot goes on. An `ip3_end_plot` without a true `ip3_begin_plot` is a pairing error
+([below](#pairing-and-frames)).
+
 ## Pairing and frames
 
 Dear ImGui's begin/end pairs are the likeliest bug of a FIGURE program: an `ig_end_table` where an `ig_tree_pop`
@@ -306,10 +327,10 @@ stops. `app%set_checks('abort')` stops at the faulty call itself.
 | Rule | Pairs |
 |---|---|
 | **Always paired:** the end follows every begin, whatever it returned | `ig_begin`, `ig_begin_side_bar` / `ig_end`; `ig_begin_child` / `ig_end_child`; `ig_push_id` / `ig_pop_id`; `ig_begin_disabled` / `ig_end_disabled`; `ig_push_font` / `ig_pop_font`; `ig_push_style_color`, `ip_push_style_color` / `ig_pop_style_color`, `ip_pop_style_color`; `ig_push_style_var`, `ip_push_style_var` / `ig_pop_style_var`, `ip_pop_style_var`; `ig_begin_group` / `ig_end_group`; `ig_align_begin` / `ig_align_end`; `ig_push_item_width` / `ig_pop_item_width` |
-| **End only after a true begin** | `ig_begin_tab_bar` / `ig_end_tab_bar`; `ig_begin_tab` / `ig_end_tab`; `ig_begin_table` / `ig_end_table`; `ig_tree_node` / `ig_tree_pop`; `ig_begin_main_menu_bar` / `ig_end_main_menu_bar`; `ig_begin_menu_bar` / `ig_end_menu_bar`; `ig_begin_menu` / `ig_end_menu`; `ig_begin_popup`, `ig_begin_popup_context`, `ig_begin_popup_modal` / `ig_end_popup`; `ig_begin_tooltip`, `ig_begin_item_tooltip` / `ig_end_tooltip`; `ip_begin_plot` / `ip_end_plot`; `ip_begin_subplots` / `ip_end_subplots`; `ig_dock_layout_begin` / `ig_dock_layout_end` |
+| **End only after a true begin** | `ig_begin_tab_bar` / `ig_end_tab_bar`; `ig_begin_tab` / `ig_end_tab`; `ig_begin_table` / `ig_end_table`; `ig_tree_node` / `ig_tree_pop`; `ig_begin_main_menu_bar` / `ig_end_main_menu_bar`; `ig_begin_menu_bar` / `ig_end_menu_bar`; `ig_begin_menu` / `ig_end_menu`; `ig_begin_popup`, `ig_begin_popup_context`, `ig_begin_popup_modal` / `ig_end_popup`; `ig_begin_tooltip`, `ig_begin_item_tooltip` / `ig_end_tooltip`; `ip_begin_plot` / `ip_end_plot`; `ip_begin_subplots` / `ip_end_subplots`; `ip3_begin_plot` / `ip3_end_plot`; `ig_dock_layout_begin` / `ig_dock_layout_end` |
 
 - **Scopes nest.** Windows, child regions, tab bars, tabs, tables, tree nodes, menu bars, menus, popups (context
-  menus included), tooltips, plots, subplot figures, dock layouts, id scopes, groups, aligned groups and pushed item
+  menus included), tooltips, plots, subplot figures, 3-D plots, dock layouts, id scopes, groups, aligned groups and pushed item
   widths are closed innermost first:
   an end that is not the end of the innermost open one is wrong.
 - **Pushes do not nest.** A style colour, a style variable, a font and a disabled block are undone by the newest push

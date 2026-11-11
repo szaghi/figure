@@ -402,6 +402,15 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   continuous colormap by its stops, resampling it and its registered variants, fields and 3-D views coloured again;
   `ip_colormap_stops` gives them, to save as a CSV ([Gizmos](view3d#gizmos),
   [Editing a colormap](colormaps#editing-a-colormap)): done.
+- **ImPlot3D: small 3-D figures** (S7): ImPlot3D (MIT) vendored at commit `c54525f` (the submodule of cimplot3d
+  `v0.5`) with one patch (no FPE without a mouse position), its C API and metadata from cimplot3d `v0.5` (MIT),
+  fetched as cimgui and cimplot are; `scripts/gen_bindings.py` generates `figure_cimplot3d` and
+  `figure_cimplot3d_enums` from that metadata, and the name map covers ImPlot3D. `ip3_begin_plot`, `ip3_end_plot`,
+  `ip3_setup_axes` (labels, initial ranges and rotation), `ip3_line`, `ip3_scatter`, `ip3_surface` (over a
+  rectilinear grid or any grid of quadrilaterals), `ip3_mesh`, `ip3_text` and `ip3_spec`; the items take the 2-D
+  items' strided interface (any stride read in place, ASYNCHRONOUS dummies), and a surface takes FIGURE's colormaps,
+  copied into ImPlot3D's registry and followed through `ig_gradient_edit`'s edits. It draws through Dear ImGui only:
+  the same in every mode ([3-D plots](plots#_3-d-plots)): done.
 
 ## Next
 

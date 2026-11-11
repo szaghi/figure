@@ -400,6 +400,28 @@ its ImGradient, with FIGURE's glue:
   moved point kept per editor and its press taken by an item (they were statics shared by every editor, and a drag
   moved the window).
 
+## ImPlot3D
+
+The [3-D plots](plots#_3-d-plots) are ImPlot3D's, which draws every primitive as Dear ImGui triangles:
+
+- **Back-to-front drawing, no depth buffer.** ImPlot3D sorts the triangles and segments of a plot by the depth of
+  their centres, each frame, and draws the farthest first. Where two surfaces cross, or a long triangle lies beside a
+  short one, the order is wrong over part of their overlap: a surface shows through another, a line is hidden where it
+  passes in front (the golden picture of `figure_test_plot3d` shows a transparent mesh crossing a surface). Plots
+  without intersections (a trajectory, probes, one surface) are drawn right; meshes that cross belong to
+  [`view3d_object`](view3d), which has a depth buffer.
+- **Remote bandwidth.** In remote mode every vertex of every plot goes to the browser each frame, as for any widget:
+  a surface of 100 × 100 with its grid lines is about 65 000 vertices (39 208 for the fill, 26 328 for the lines,
+  measured), some 1 MB a frame before deflate, against one image for a `view3d_object`. Keep remote 3-D plots near
+  10⁴ primitives, or draw the surface without its lines (`ImPlot3DSurfaceFlags_NoLines`).
+- **No lighting.** Surfaces and meshes have flat colours (a colormap, or one colour); a body of one colour reads as
+  its outline: give it edges (`line_color`) or a translucent fill.
+- **Cost.** Every frame ImPlot3D projects and sorts every primitive on the CPU: a surface of 200 × 200 is 40 000
+  quads to sort per frame.
+- **FIGURE patches ImPlot3D** in one place (`third_party/implot3d/patches/0001-no-mouse-position.patch`): with no
+  mouse position (headless and remote modes before the first move, a window the pointer has left) its input handling
+  tested the position against the box and overflowed, a trap under `-ffpe-trap=invalid,overflow`.
+
 ## The one-line installer
 
 What [the installer](install#the-one-line-installer) does not cover:

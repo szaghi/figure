@@ -1,0 +1,51 @@
+FIGURE's patch 1 of 1 to ImPlot3D (commit c54525f8d46cece384cc2618761a2c55016b06db, the submodule of cimplot3d v0.5).
+
+With no mouse position (Dear ImGui's -FLT_MAX: headless and remote modes before the first move, a window the pointer
+has left), ImPlot3D's input handling still tests the position against the box's faces and axes and casts a ray
+through it: the cross products overflow and inf - inf follows, which traps under -ffpe-trap=invalid,overflow (every
+3-D plot of FIGURE's debug tests stopped in ImTriangleContainsPoint, from GetMouseOverPlane). The four places that read
+the position return, or take no point, when ImGui::IsMousePosValid is false; with a valid position nothing changes.
+Applied to third_party/implot3d/implot3d.cpp; without it src/tests/figure_test_plot3d.F90 stops with SIGFPE in the
+gnu-debug build. To offer upstream.
+
+diff --git a/implot3d.cpp b/implot3d.cpp
+index 84287f2..45a2d37 100644
+--- a/implot3d.cpp
++++ b/implot3d.cpp
+@@ -517,6 +517,8 @@ void RenderMousePos() {
+         return;
+ 
+     ImVec2 mouse_pos = ImGui::GetMousePos();
++    if (!ImGui::IsMousePosValid(&mouse_pos)) // FIGURE: no mouse (-FLT_MAX): nothing to show
++        return;
+     ImPlot3DPoint mouse_plot_pos = PixelsToPlotPlane(mouse_pos, ImPlane3D_YZ, true);
+     if (mouse_plot_pos.IsNaN())
+         mouse_plot_pos = PixelsToPlotPlane(mouse_pos, ImPlane3D_XZ, true);
+@@ -637,6 +639,8 @@ int GetMouseOverPlane(const bool* active_faces, const ImVec2* corners_pix, int*
+     ImVec2 mouse_pos = io.MousePos;
+     if (plane_out)
+         *plane_out = -1;
++    if (!ImGui::IsMousePosValid(&mouse_pos)) // FIGURE: no mouse (-FLT_MAX): the products below overflow
++        return -1;
+ 
+     // Check each active face
+     for (int a = 0; a < 3; a++) {
+@@ -718,6 +722,8 @@ int GetMouseOverAxis(const ImPlot3DPlot& plot, const ImVec2* corners_pix, const
+     ImVec2 mouse_pos = io.MousePos;
+     if (edge_out)
+         *edge_out = -1;
++    if (!ImGui::IsMousePosValid(&mouse_pos)) // FIGURE: no mouse (-FLT_MAX): the products below overflow
++        return -1;
+ 
+     // Compute box center in screen space (average of all corners)
+     ImVec2 box_center(0, 0);
+@@ -2506,7 +2512,8 @@ void HandleInput(ImPlot3DPlot& plot) {
+         }
+     }
+     ImVec2 mouse_pos = ImGui::GetMousePos();
+-    ImPlot3DPoint mouse_pos_plot = PixelsToPlotPlane(mouse_pos, mouse_plane, false);
++    // FIGURE: no mouse (-FLT_MAX): no point under it (the ray's arithmetic would overflow)
++    ImPlot3DPoint mouse_pos_plot = ImGui::IsMousePosValid(&mouse_pos) ? PixelsToPlotPlane(mouse_pos, mouse_plane, false) : ImPlot3DPoint();
+ 
+     // AUTO FIT -------------------------------------------------------------------
+ 

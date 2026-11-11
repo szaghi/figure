@@ -47,6 +47,7 @@ What exists today:
   completion, find and replace, a diff of two texts;
 - [3-D views](view3d) of meshes coloured by fields, with a view cube and gizmos that move a clipping plane, a box or a
   probe by hand; colormaps [edited by their stops](colormaps#editing-a-colormap);
+- [3-D plots](plots#_3-d-plots) (ImPlot3D): trajectories, probes, height surfaces and small meshes over labelled axes;
 - pictures: a rectangle of the window saved as a PNG by the program; every frame recorded, with scripted input, for
   documentation;
 - headless testing with synthetic input (`figure_testing`, in the library);

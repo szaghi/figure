@@ -13,6 +13,8 @@
 #include "imgui_internal.h"
 #include "implot.h"
 #include "implot_internal.h"
+#include "implot3d.h"
+#include "implot3d_internal.h"
 
 #include <string>
 #include <vector>
@@ -23,7 +25,7 @@ namespace {
 enum kind_t {
    K_WINDOW = 1, K_CHILD, K_TAB_BAR, K_TAB, K_TABLE, K_TREE, K_MAIN_MENU_BAR, K_MENU_BAR, K_MENU, K_POPUP, K_PLOT,
    K_SUBPLOTS, K_DOCK_LAYOUT, K_ID, K_DISABLED, K_FONT, K_STYLE_COLOR, K_STYLE_VAR, K_GROUP, K_ALIGN, K_ITEM_WIDTH,
-   K_TOOLTIP, K_COUNT
+   K_TOOLTIP, K_PLOT3D, K_COUNT
 };
 
 struct kind_info_t {
@@ -58,6 +60,7 @@ const kind_info_t KINDS[K_COUNT] = {
    {"ig_align_begin", "ig_align_end", true, false, false},         // an aligned group: the same
    {"ig_push_item_width", "ig_pop_item_width", true, false, false}, // the window's own stack of widths
    {"ig_begin_tooltip", "ig_end_tooltip", true, true, true},       // a tooltip is a window of its own
+   {"ip3_begin_plot", "ip3_end_plot", true, true, false},          // an ImPlot3D plot
 };
 
 constexpr int CHECKS_ABORT = 0, CHECKS_REPORT = 1, CHECKS_RECOVER = 2;
@@ -70,6 +73,7 @@ struct sizes_t {
    ImGuiTabBar            *tab_bar = nullptr;
    ImPlotPlot             *plot = nullptr;
    ImPlotSubplot          *subplot = nullptr;
+   ImPlot3DPlot           *plot3d = nullptr;
 };
 
 struct entry_t {
@@ -116,6 +120,7 @@ sizes_t take_sizes() {
       z.plot = GImPlot->CurrentPlot;
       z.subplot = GImPlot->CurrentSubplot;
    }
+   if (ImPlot3D::GetCurrentContext()) z.plot3d = ImPlot3D::GImPlot3D->CurrentPlot;
    return z;
 }
 
@@ -130,7 +135,7 @@ std::string grown(const sizes_t &then, int kind) {
    };
    add("windows", now.s.SizeOfWindowStack, then.s.SizeOfWindowStack);
    if (now.s.SizeOfWindowStack == then.s.SizeOfWindowStack) { // the same window: its own stacks compare
-      if (kind != K_PLOT && kind != K_SUBPLOTS) // ImPlot pushes an id of its own at a plot's first item
+      if (kind != K_PLOT && kind != K_SUBPLOTS && kind != K_PLOT3D) // ImPlot, ImPlot3D push an id of their own
          add("ids", now.s.SizeOfIDStack, then.s.SizeOfIDStack);
       add("tree depth", now.s.SizeOfTreeStack, then.s.SizeOfTreeStack);
    }
@@ -153,6 +158,7 @@ std::string grown(const sizes_t &then, int kind) {
    other("tab bar", now.tab_bar != then.tab_bar);
    other("plot", now.plot != then.plot);
    other("subplot figure", now.subplot != then.subplot);
+   other("3-D plot", now.plot3d != then.plot3d);
    return out;
 }
 
@@ -164,6 +170,7 @@ void recover_to(const sizes_t &then) {
    sc.muted = true;
    if (ImPlot::GetCurrentContext() && GImPlot->CurrentPlot && !then.plot) fig_plot_end();
    if (ImPlot::GetCurrentContext() && GImPlot->CurrentSubplot && !then.subplot) ImPlot::EndSubplots();
+   if (ImPlot3D::GetCurrentContext() && ImPlot3D::GImPlot3D->CurrentPlot && !then.plot3d) fig_plot3d_end();
    if (GImGui->CurrentWindowStack.Size > then.s.SizeOfWindowStack)
       ImGui::ErrorRecoveryTryToRecoverState(&then.s);
    else
@@ -246,6 +253,7 @@ void close_entry(const entry_t &e) {
    case K_ALIGN: fig_align_end(); break;
    case K_ITEM_WIDTH: ImGui::PopItemWidth(); break;
    case K_TOOLTIP: ImGui::EndTooltip(); break;
+   case K_PLOT3D: fig_plot3d_end(); break;
    default: break;
    }
 }

@@ -237,6 +237,23 @@ Details: [Styles](styles), [Icons](styles#icons).
 
 Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots), [Colormaps](colormaps).
 
+## 3-D plots: `ip3_*`
+
+| Procedure | Purpose |
+|---|---|
+| `ip3_begin_plot(title [, width] [, height] [, equal])` → `logical` | begin a 3-D plot (ImPlot3D): a box the user turns (right drag), pans and zooms; `.true.` when visible ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_setup_axes(xlabel, ylabel, zlabel [, auto_fit] [, limits] [, elevation] [, azimuth] [, stat])` | labels of the three axes, their initial ranges, the box's initial rotation; fit every frame with `auto_fit=.true.` ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_line(label, x, y, z [, spec] [, stat])` | a line through `(x(i), y(i), z(i))`; arrays of any stride read in place ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_scatter(label, x, y, z [, spec] [, stat])` | markers at `(x(i), y(i), z(i))` ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_surface(label, x, y, z [, colormap] [, scale_min] [, scale_max] [, spec] [, stat])` | a field `z(i, j)` as a height surface over `x(i)`, `y(j)` or a grid `x(i, j)`, `y(i, j)`, coloured by a FIGURE colormap ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_mesh(label, x, y, z, triangles [, spec] [, stat])` | triangles over vertices, `triangles(1:3, k)` from 1 ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_text(text, x, y, z [, angle] [, offset] [, stat])` | a text at a point of the box ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_spec(...)` → `plot3d_spec_object` | a 3-D item's style: colours, line weight, markers, flags (`ImPlot3DMarker_*`, `ImPlot3D*Flags_*`) ([3-D plots](plots#_3-d-plots)) |
+| `ip3_end_plot()` | end the 3-D plot (only if `ip3_begin_plot` returned `.true.`) ([3-D plots](plots#_3-d-plots)) |
+
+ImPlot3D is for plots of up to about 10⁴ primitives; meshes of millions of faces belong to
+[`view3d_object`](view3d) ([which one](plots#_3-d-plots)).
+
 ## Images: `texture_object`, `ig_image`
 
 | Procedure | Purpose |

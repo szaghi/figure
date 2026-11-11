@@ -622,6 +622,72 @@ plot, a text at a point, a rectangle the user drags. With the drag tools and ann
   drag tools' flags (`ImPlotDragToolFlags_*`: no cursors, no fit, delayed, no move, no resize), and `out_clicked`,
   `out_hovered` of the drag tools.
 
+## 3-D plots
+
+`figure_implot3d` binds [ImPlot3D](https://github.com/brenocq/implot3d) (0.6 WIP): small 3-D figures that are plots,
+not scenes: probe positions, trajectories, a field as a height surface, a body as a few triangles, in a box with
+labelled axes and a legend, which the user turns with the mouse.
+
+**ImPlot3D or `view3d_object`?** Both draw in 3-D; they are built for different sizes:
+
+| | `ip3_*` (ImPlot3D) | [`view3d_object`](view3d) |
+|---|---|---|
+| for | plots: lines, markers, surfaces and meshes over labelled axes, a legend | scenes: meshes coloured by fields, cuts, clipping planes, gizmos |
+| size | up to about 10⁴ primitives (points, segments, triangles) | millions of faces |
+| drawing | every primitive is a Dear ImGui triangle, sorted back to front each frame (no depth buffer): no intersecting surfaces | FIGURE's own rasterizer with a depth buffer: one image per frame |
+| remote mode | every vertex sent to the browser each frame | one image per frame |
+| lighting | none: flat colours | Lambert shading |
+
+Take ImPlot3D for a figure that a 2-D plot would draw if it had a third axis; take `view3d_object` for geometry.
+
+<<< @/examples/snippets/gallery-plot3d.F90{fortran}
+
+<Media name="plot3d" alt="Three 3-D plots side by side, each in a box with grid planes and labelled axes, titled with its calls. Left, ip3_line, ip3_scatter, ip3_text: a red spiral rising from a point labelled release, past three blue diamond markers, axes x [m], y [m], z [m]. Middle, ip3_surface: a field as heights, a bump and a hollow over a square grid, coloured blue to red by the cool-warm map, its grid lines drawn. Right, ip3_mesh: an octahedron of blue triangles with light edges, seen from above its equator." caption="docs/examples/src/gallery.F90, run with plot3d" />
+
+| Procedure | Notes |
+|---|---|
+| `ip3_begin_plot(title [, width] [, height] [, equal]) → logical` | `.true.` when the plot is visible: declare its axes and items, then `ip3_end_plot`. `title` is the identifier (`'##id'` hides it). Default size: full width, ImPlot3D's default height; a negative `height` fills the space left. `equal=.true.`: one unit spans as many pixels on the three axes. |
+| `ip3_setup_axes(xlabel, ylabel, zlabel [, auto_fit] [, limits] [, elevation] [, azimuth] [, stat])` | Labels of the three axes. Call it right after `ip3_begin_plot`, before any item. The axes fit the data on first use; `auto_fit=.true.`: every frame (a path that grows). `limits = [xmin, xmax, ymin, ymax, zmin, zmax]`: the initial ranges. `elevation`, `azimuth` [degrees], both or neither: the box's initial rotation, which a right double click goes back to. Ranges and rotation are set once: then they are the user's. |
+| `ip3_line(label, x, y, z [, spec] [, stat])` | A line through `(x(i), y(i), z(i))`. |
+| `ip3_scatter(label, x, y, z [, spec] [, stat])` | A marker at each point (ImPlot3D's default marker: a circle). |
+| `ip3_surface(label, x, y, z [, colormap] [, scale_min] [, scale_max] [, spec] [, stat])` | A surface of heights `z(i, j)` over the grid `x(i)`, `y(j)` (`x` of `size(z, 1)`, `y` of `size(z, 2)`), or over any grid of quadrilaterals, `x(i, j)`, `y(i, j)`, `z(i, j)` of one shape. Coloured by `colormap` (an id from [`ip_colormap`](colormaps), default Viridis) from `scale_min` to `scale_max` (both or neither; default: the finite range of `z`); with `spec`'s `fill_color`, one colour. |
+| `ip3_mesh(label, x, y, z, triangles [, spec] [, stat])` | Triangles over the vertices `(x(i), y(i), z(i))`: `triangles(1:3, k)` are the vertices of the k-th, from 1 (`integer(int32)`, `3 × n`). |
+| `ip3_text(text, x, y, z [, angle] [, offset] [, stat])` | A text centred on a point of the box, in the plot's text colour, hidden when the point is outside the box; `angle` [radians], `offset` [pixels] (x right, y down). Not an item: no legend entry, no part in fitting. |
+| `ip3_spec([line_color] [, line_weight] [, fill_color] [, fill_alpha] [, marker] [, marker_size] [, marker_line_color] [, marker_fill_color] [, flags] [, stat]) → plot3d_spec_object` | An item's style from ImPlot3D's defaults, as `ip_spec` for the 2-D items. `marker`: `ImPlot3DMarker_None`, `_Circle`, `_Square`, `_Diamond`, `_Up`, `_Down`, `_Left`, `_Right`, `_Cross`, `_Plus`, `_Asterisk`, `_Auto`. `flags`: `ImPlot3DItemFlags_NoLegend`, `_NoFit`; `ImPlot3DLineFlags_Segments`, `_Loop`, `_SkipNaN`; `ImPlot3DSurfaceFlags_NoLines`, `_NoFill`, `_NoMarkers`; `ImPlot3DMeshFlags_NoLines`, `_NoFill`, `_NoMarkers`; combine with `ior`. |
+| `ip3_end_plot()` | Only when `ip3_begin_plot` returned `.true.`. |
+
+- **The mouse.** A right drag turns the box, a left drag pans, the wheel (or a middle drag) zooms, a right double
+  click goes back to the initial rotation, a right click opens ImPlot3D's menu; a click on a legend entry hides its
+  item. ImPlot3D keeps the rotation and the ranges from frame to frame. A program reads nothing back: no callbacks,
+  nothing polled but what the items draw.
+- **Data in place.** The items take `real(real32)` or `real(real64)` arrays (all of one kind) of any stride, read
+  during the call as the 2-D items' ([Data in place](#data-in-place)): ImPlot3D has one byte stride for the three
+  arrays of an item, so the rows of a `3 × n` matrix, `p(1, :)`, `p(2, :)`, `p(3, :)`, are read where they are, and
+  an array of another stride is copied at it. A surface's `z` is read in place when its elements are equally spaced
+  in memory (a whole array, `z(:, j1:j2)`, a plane `a(k, :, :)`), else copied; `x(i)`, `y(j)` are expanded into the
+  grid's two coordinate arrays (ImPlot3D reads one value per vertex: two copies, kept from item to item); a mesh's
+  triangles are converted to ImPlot3D's 0-based indices (one copy).
+- **Colormaps.** A surface takes FIGURE's colormaps: the bundled ones, ImPlot's, the user's, their `_r` and
+  `levels` variants (`ip_colormap`). Each is copied into ImPlot3D's registry at its first use, and again when its
+  colours change: a map edited by [`ig_gradient_edit`](colormaps#editing-a-colormap) recolours the surfaces drawn
+  with it on the same frame.
+- **Drawing order.** ImPlot3D sorts every triangle and segment by its depth, back to front, each frame: two surfaces
+  that cross, or a long triangle beside a short one, can be drawn in the wrong order where they overlap
+  ([Known issues](known-issues#implot3d)).
+- Statuses: `FIG_ERR_ARGUMENT` for series of different sizes, `x` and `y` that do not match `z`'s shape,
+  `triangles` without 3 rows or with a vertex outside `[1, size(x)]`, `limits` without 6 values or a minimum not
+  below its maximum, one angle or one scale end without the other, a colormap not registered, a colour without 4
+  values, a NaN position of a text; `FIG_ERR_STATE` for an item, a text or `ip3_setup_axes` outside a 3-D plot,
+  `ip3_setup_axes` after the first item, and any of them from a [task](processes#tasks). `stat` is optional (absent:
+  `error stop` with the message; a usage error as `app%set_checks` says). [Errors](errors#implot3d) lists the
+  messages.
+- Modes: the same in **window**, **headless** and **remote** mode: ImPlot3D draws through Dear ImGui's draw lists
+  only. In remote mode every vertex goes to the browser each frame: a surface of 100 × 100 with its grid lines is
+  about 65 000 vertices (measured: 39 208 for the fill, 26 328 for the lines), some 1 MB a frame before deflate
+  ([Known issues](known-issues#implot3d)).
+- Not bound yet: ImPlot3D's triangles and quads as items of their own, images in the box, per-point colours and
+  sizes, the axes' ticks, formats and scales, the legend's place, its style variables and colours.
+
 ## Not bound yet
 
 Axis links to program variables, custom scales and tick formatters, digital plots, pie charts, bubbles and error

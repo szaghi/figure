@@ -6,8 +6,8 @@ native layer itself, next to the Fortran library:
 - ``src/fortran/``: the Fortran library (src/lib);
 - ``src/native/``: FIGURE's C++ glue (native/), with the files CMake generates at configure time (the browser page,
   the themes, the colormaps and the font, embedded) written here by the same rules;
-- ``src/cimgui/`` (with ``imgui/``), ``src/cimplot/`` (with ``implot/``), ``src/miniz/``: the pinned third-party sources,
-  copied from CMake's fetched tree (build/native/_deps, so run scripts/build_native.sh first), only the files FIGURE
+- ``src/cimgui/`` (with ``imgui/``), ``src/cimplot/`` (with ``implot/``), ``src/cimplot3d/``, ``src/miniz/``: the pinned
+  third-party sources, copied from CMake's fetched tree (build/native/_deps, so run scripts/build_native.sh first), only the files FIGURE
   compiles; Dear ImGui's ``imconfig.h`` carries the three settings CMake passes as definitions and its
   ``-ffp-contract=off`` as pragmas, so no compiler flag is needed; miniz is compiled through a small wrapper that sets
   its options;
@@ -17,6 +17,8 @@ native layer itself, next to the Fortran library:
   (third_party/ImGuiColorTextEdit, FIGURE's patch applied), compiled with figure_editor.cpp;
 - ``src/gizmo/``: ImGuizmo's subset (ImGuizmo.cpp, ImGradient.cpp and their headers: the 3-D view's gizmos and the
   gradient editor), vendored in the repository (third_party/ImGuizmo, FIGURE's patches applied);
+- ``src/cimplot3d/implot3d/``: ImPlot3D (the small 3-D figures), vendored in the repository (third_party/implot3d,
+  FIGURE's patch applied), where cimplot3d.cpp includes it from (``./implot3d/implot3d.h``);
 - the licences of everything copied (``LICENSES/``), and ``fpm.toml``.
 
 SDL3 comes from the system (a package: libsdl3-dev, Homebrew's sdl3, MSYS2's SDL3), found by the compiler and linker
@@ -26,8 +28,8 @@ Usage::
 
     python3 scripts/fpm_package.py OUTDIR [--version X.Y.Z] [--fetch [CACHE]]
 
-``--fetch`` takes the third-party sources from the network instead of CMake's tree: the pins (cimgui and cimplot git
-tags, miniz's archive and SHA-256) are read from native/CMakeLists.txt, so both builds use the same versions, and
+``--fetch`` takes the third-party sources from the network instead of CMake's tree: the pins (cimgui, cimplot and
+cimplot3d git tags, miniz's archive and SHA-256) are read from native/CMakeLists.txt, so both builds use the same versions, and
 CACHE (default: a temporary directory) keeps the downloads. Publishing needs no CMake and no SDL build that way.
 
 Then ``cd OUTDIR && fpm build``, or depend on it from another fpm project. Standard library only; run from anywhere.
@@ -59,12 +61,15 @@ IMGUI_FILES = [
 ]  # fmt: skip
 EDITOR_FILES = ["TextEditor.cpp", "TextEditor.h", "TextEditorLanguages.h", "TextDiff.cpp", "TextDiff.h", "dtl.h"]
 GIZMO_FILES = ["ImGuizmo.cpp", "ImGuizmo.h", "ImGradient.cpp", "ImGradient.h"]
+IMPLOT3D_FILES = [
+    "implot3d.cpp", "implot3d_items.cpp", "implot3d_meshes.cpp", "implot3d_demo.cpp", "implot3d.h", "implot3d_internal.h",
+]  # fmt: skip
 IMPLOT_FILES = ["implot.cpp", "implot_items.cpp", "implot_demo.cpp", "implot.h", "implot_internal.h", "LICENSE"]
 NATIVE_FILES = [
     "figure_native.cpp", "figure_native.h", "figure_process.cpp", "figure_task.cpp", "figure_scope.cpp", "figure_canvas.cpp",
     "figure_files.cpp", "figure_app.cpp",
     "figure_remote.cpp", "figure_image.cpp", "figure_image.h", "figure_items.cpp", "figure_items.h",
-    "figure_swrast.cpp", "figure_swrast.h", "figure_editor.cpp",
+    "figure_swrast.cpp", "figure_swrast.h", "figure_editor.cpp", "figure_plot3d.cpp",
     "figure_colormap.cpp", "figure_field.cpp", "figure_view3d.cpp", "figure_view3d.h",
     "figure_remote.h", "figure_theme.cpp", "figure_theme.h", "figure_style.h", "figure_glue_generated.cpp", "figure_style_generated.cpp",
 ]  # fmt: skip
@@ -98,8 +103,8 @@ MINIZ_WRAPPER = """// FIGURE (scripts/fpm_package.py): miniz with the options na
 """
 
 MANIFEST = """# FIGURE as a self-contained fpm package, written by scripts/fpm_package.py from the repository at {commit}.
-# Do not edit: regenerate. fpm compiles the native layer itself (Dear ImGui, ImPlot, cimgui, cimplot, miniz and
-# FIGURE's glue, all in src/); SDL3 comes from the system.
+# Do not edit: regenerate. fpm compiles the native layer itself (Dear ImGui, ImPlot, ImPlot3D, cimgui, cimplot,
+# cimplot3d, miniz, the vendored extensions and FIGURE's glue, all in src/); SDL3 comes from the system.
 name = "figure"
 version = "{version}"
 license = "MIT"
@@ -126,7 +131,7 @@ include-dir = [{include_dirs}]
 
 INCLUDE_DIRS = [
     "src/native", "src/cimgui", "src/cimgui/imgui", "src/cimgui/imgui/backends", "src/cimplot", "src/cimplot/implot",
-    "src/miniz", "src/stb", "src/editor", "src/gizmo",
+    "src/miniz", "src/stb", "src/editor", "src/gizmo", "src/cimplot3d", "src/cimplot3d/implot3d",
 ]  # fmt: skip
 
 
@@ -140,11 +145,12 @@ def copy(src: Path, dst: Path) -> None:
 
 
 def pins() -> dict[str, str]:
-    """The third-party pins of native/CMakeLists.txt: cimgui and cimplot tags, miniz URL and SHA-256."""
+    """The third-party pins of native/CMakeLists.txt: cimgui, cimplot and cimplot3d tags, miniz URL and SHA-256."""
     cmake = (ROOT / "native" / "CMakeLists.txt").read_text()
     found = {
         "cimgui": re.search(r'set\(FIGURE_CIMGUI_TAG\s+"([^"]+)"', cmake),
         "cimplot": re.search(r'set\(FIGURE_CIMPLOT_TAG\s+"([^"]+)"', cmake),
+        "cimplot3d": re.search(r'set\(FIGURE_CIMPLOT3D_TAG\s+"([^"]+)"', cmake),
         "miniz_url": re.search(r"FetchContent_Declare\(miniz\s+URL\s+(\S+)", cmake),
         "miniz_sha256": re.search(r"URL_HASH\s+SHA256=([0-9a-f]{64})", cmake),
     }
@@ -156,7 +162,8 @@ def pins() -> dict[str, str]:
 
 
 def fetch(cache: Path) -> Path:
-    """Download the pinned sources into cache/{cimgui-src,cimplot-src,miniz-src}, as CMake lays them out."""
+    """Download the pinned sources into cache/{cimgui,cimplot,cimplot3d,miniz}-src, as CMake lays them out (cimplot3d
+    without its submodule: ImPlot3D is vendored)."""
     p = pins()
     for name, url in (("cimgui", "https://github.com/cimgui/cimgui"), ("cimplot", "https://github.com/cimgui/cimplot")):
         dst = cache / f"{name}-src"
@@ -167,6 +174,14 @@ def fetch(cache: Path) -> Path:
                  "--shallow-submodules", url, str(dst)],
                 check=True,
             )  # fmt: skip
+    dst = cache / "cimplot3d-src"
+    if not (dst / "cimplot3d.cpp").is_file():
+        shutil.rmtree(dst, ignore_errors=True)
+        subprocess.run(
+            ["git", "-c", "advice.detachedHead=false", "clone", "--quiet", "--depth", "1", "--branch", p["cimplot3d"],
+             "https://github.com/cimgui/cimplot3d", str(dst)],
+            check=True,
+        )  # fmt: skip
     dst = cache / "miniz-src"
     if not (dst / "miniz.c").is_file():
         with urllib.request.urlopen(p["miniz_url"], timeout=120) as r:  # noqa: S310 (a pinned https URL)
@@ -275,6 +290,12 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(cimplot / "cimplot.h", src / "cimplot" / "cimplot.h")
     for f in IMPLOT_FILES:
         copy(cimplot / "implot" / f, src / "cimplot" / "implot" / f)
+    cimplot3d = deps / "cimplot3d-src"
+    copy(cimplot3d / "cimplot3d.cpp", src / "cimplot3d" / "cimplot3d.cpp")
+    copy(cimplot3d / "cimplot3d.h", src / "cimplot3d" / "cimplot3d.h")
+    implot3d = ROOT / "third_party" / "implot3d"
+    for f in IMPLOT3D_FILES:
+        copy(implot3d / f, src / "cimplot3d" / "implot3d" / f)
     miniz = deps / "miniz-src"
     copy(miniz / "miniz.c", src / "miniz" / "miniz.c.inc")
     copy(miniz / "miniz.h", src / "miniz" / "miniz.h")
@@ -296,6 +317,8 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(cimgui / "LICENSE", licences / "cimgui.txt")
     copy(cimplot / "implot" / "LICENSE", licences / "implot.txt")
     copy(cimplot / "LICENSE", licences / "cimplot.txt")
+    copy(implot3d / "LICENSE", licences / "implot3d.txt")
+    copy(cimplot3d / "LICENSE", licences / "cimplot3d.txt")
     copy(miniz / "LICENSE", licences / "miniz.txt")
     copy(ROOT / "third_party" / "stb" / "LICENSE-stb.txt", licences / "stb.txt")
     copy(cte / "LICENSE", licences / "imguicolortextedit.txt")

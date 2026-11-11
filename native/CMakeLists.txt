@@ -1,4 +1,4 @@
-# FIGURE native layer: Dear ImGui + ImPlot + cimgui + cimplot + SDL3/OpenGL3 backends + FIGURE glue.
+# FIGURE native layer: Dear ImGui + ImPlot + ImPlot3D + cimgui + cimplot + cimplot3d + SDL3/OpenGL3 backends + FIGURE glue.
 #
 # Built once, before any Fortran build, by scripts/build_native.sh. Neither FoBiS nor fpm compiles C++: both only link
 # the static libraries this project installs into <prefix>/lib (default: the repository's lib/).
@@ -8,6 +8,12 @@
 #                            despite its name, points to Dear ImGui's master branch and has no docking.
 #   cimplot v1.1          -> ImPlot 1.2 WIP (git submodule of cimplot); generated against cimgui 1.93dock, the same
 #                            Dear ImGui 1.93 API (docking only adds to it)
+#   cimplot3d v0.5        -> the C API of ImPlot3D 0.6 WIP and its generator metadata (read by gen_bindings.py),
+#                            generated against the same Dear ImGui 1.93 API; fetched without its submodule
+#   ImPlot3D              -> the small 3-D figures (ip3_*; MIT): brenocq/implot3d at commit c54525f (the submodule
+#                            cimplot3d v0.5 pins: v0.5 with its version bumped), vendored in third_party/implot3d with
+#                            FIGURE's one patch (its patches/ directory). It needs Dear ImGui only (not ImPlot) and
+#                            draws through its draw lists
 #   SDL     release-3.4.20
 #   miniz   3.0.2         -> deflate for the remote mode's compressed messages (MIT)
 #   stb_image_write v1.16 -> JPEG for the remote mode's changing images, PNG and JPEG files (MIT or public domain),
@@ -31,6 +37,7 @@ include(FetchContent)
 
 set(FIGURE_CIMGUI_TAG  "1.93.1WIPdock"  CACHE STRING "cimgui git tag")
 set(FIGURE_CIMPLOT_TAG "v1.1"           CACHE STRING "cimplot git tag")
+set(FIGURE_CIMPLOT3D_TAG "v0.5"         CACHE STRING "cimplot3d git tag")
 set(FIGURE_SDL_TAG     "release-3.4.20" CACHE STRING "SDL git tag")
 
 # ---- SDL3, static ---------------------------------------------------------------------------------------------------
@@ -65,6 +72,12 @@ FetchContent_Declare(cimplot
    GIT_TAG        ${FIGURE_CIMPLOT_TAG}
    GIT_SHALLOW    TRUE
    GIT_SUBMODULES implot)
+# cimplot3d without its implot3d submodule: ImPlot3D is vendored (third_party/implot3d, patched)
+FetchContent_Declare(cimplot3d
+   GIT_REPOSITORY https://github.com/cimgui/cimplot3d
+   GIT_TAG        ${FIGURE_CIMPLOT3D_TAG}
+   GIT_SHALLOW    TRUE
+   GIT_SUBMODULES "")
 FetchContent_GetProperties(cimgui)
 if(NOT cimgui_POPULATED)
    FetchContent_Populate(cimgui)
@@ -72,6 +85,10 @@ endif()
 FetchContent_GetProperties(cimplot)
 if(NOT cimplot_POPULATED)
    FetchContent_Populate(cimplot)
+endif()
+FetchContent_GetProperties(cimplot3d)
+if(NOT cimplot3d_POPULATED)
+   FetchContent_Populate(cimplot3d)
 endif()
 
 # ---- miniz: deflate (remote mode), one C file from its release archive -------------------------------------------
@@ -85,6 +102,8 @@ endif()
 
 set(IMGUI_DIR  ${cimgui_SOURCE_DIR}/imgui)
 set(IMPLOT_DIR ${cimplot_SOURCE_DIR}/implot)
+# ImPlot3D (brenocq/implot3d at the commit cimplot3d's metadata describes), vendored: the small 3-D figures
+set(IMPLOT3D_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/implot3d)
 # ImGuiColorTextEdit (goossens fork), vendored: the code editor and the text diff
 set(FIGURE_CTE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/ImGuiColorTextEdit)
 # ImGuizmo (its subset: ViewManipulate, Manipulate, ImGradient), vendored: the 3-D view's gizmos, the gradient editor
@@ -103,6 +122,11 @@ add_library(figure_native STATIC
    ${IMPLOT_DIR}/implot.cpp
    ${IMPLOT_DIR}/implot_items.cpp
    ${IMPLOT_DIR}/implot_demo.cpp
+   ${cimplot3d_SOURCE_DIR}/cimplot3d.cpp
+   ${IMPLOT3D_DIR}/implot3d.cpp
+   ${IMPLOT3D_DIR}/implot3d_items.cpp
+   ${IMPLOT3D_DIR}/implot3d_meshes.cpp
+   ${IMPLOT3D_DIR}/implot3d_demo.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_native.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_process.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_task.cpp
@@ -121,6 +145,7 @@ add_library(figure_native STATIC
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_items.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_swrast.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_editor.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/figure_plot3d.cpp
    ${FIGURE_CTE_DIR}/TextEditor.cpp
    ${FIGURE_CTE_DIR}/TextDiff.cpp
    ${FIGURE_GIZMO_DIR}/ImGuizmo.cpp
@@ -136,6 +161,9 @@ target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../
 target_include_directories(figure_native PRIVATE ${FIGURE_CTE_DIR})
 # ImGuizmo: its headers for figure_view3d.cpp and figure_colormap.cpp
 target_include_directories(figure_native PRIVATE ${FIGURE_GIZMO_DIR})
+# cimplot3d.cpp includes "./implot3d/implot3d.h": found as third_party/./implot3d/implot3d.h, the vendored copy
+set_source_files_properties(${cimplot3d_SOURCE_DIR}/cimplot3d.cpp PROPERTIES
+                            INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/../third_party)
 # The browser client page, embedded in figure_remote.cpp as a C++ raw string (reconfigured when the page changes).
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote_client.html)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote_client.html FIGURE_REMOTE_CLIENT)
@@ -225,7 +253,8 @@ target_compile_options(figure_native PRIVATE
    $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang,IntelLLVM>:-ffp-contract=off>
    $<$<COMPILE_LANG_AND_ID:C,GNU,Clang,AppleClang,IntelLLVM>:-ffp-contract=off>)
 target_include_directories(figure_native PUBLIC
-   ${CMAKE_CURRENT_SOURCE_DIR} ${cimgui_SOURCE_DIR} ${IMGUI_DIR} ${IMGUI_DIR}/backends ${cimplot_SOURCE_DIR} ${IMPLOT_DIR})
+   ${CMAKE_CURRENT_SOURCE_DIR} ${cimgui_SOURCE_DIR} ${IMGUI_DIR} ${IMGUI_DIR}/backends ${cimplot_SOURCE_DIR} ${IMPLOT_DIR}
+   ${cimplot3d_SOURCE_DIR} ${IMPLOT3D_DIR})
 target_link_libraries(figure_native PUBLIC SDL3::SDL3-static)
 
 install(TARGETS figure_native ARCHIVE DESTINATION lib)
@@ -257,6 +286,8 @@ install(FILES "${cimgui_SOURCE_DIR}/imgui/LICENSE.txt" DESTINATION share/license
 install(FILES "${cimplot_SOURCE_DIR}/implot/LICENSE" DESTINATION share/licenses/implot)
 install(FILES "${cimgui_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimgui)
 install(FILES "${cimplot_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimplot)
+install(FILES "${IMPLOT3D_DIR}/LICENSE" DESTINATION share/licenses/implot3d)
+install(FILES "${cimplot3d_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimplot3d)
 install(FILES "${miniz_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/miniz)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb/LICENSE-stb.txt" DESTINATION share/licenses/stb)
 install(FILES "${FIGURE_CTE_DIR}/LICENSE" DESTINATION share/licenses/imguicolortextedit)

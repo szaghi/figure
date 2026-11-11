@@ -1,0 +1,4 @@
+$ ./cb_trajectory --test
+points: 601, path drawn: T
+rows read in place: stride 24 bytes, 0 copies
+turned by a right drag: T
