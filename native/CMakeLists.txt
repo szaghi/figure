@@ -17,6 +17,9 @@
 #   ImGuiColorTextEdit    -> the code editor and the text diff (code_editor_object, code_diff; MIT, with dtl, BSD-3),
 #                            the goossens fork at commit 0a489da, vendored in third_party/ImGuiColorTextEdit with
 #                            FIGURE's one patch (its patches/ directory)
+#   ImGuizmo              -> the view cube, the gizmos and the gradient editor (view3d_object%view_cube, %gizmo,
+#                            ig_gradient_edit; MIT): ImGuizmo.cpp and ImGradient.cpp at commit 105e4fd, vendored in
+#                            third_party/ImGuizmo with FIGURE's three patches (its patches/ directory)
 cmake_minimum_required(VERSION 3.24)
 project(figure_native LANGUAGES C CXX)
 
@@ -84,6 +87,8 @@ set(IMGUI_DIR  ${cimgui_SOURCE_DIR}/imgui)
 set(IMPLOT_DIR ${cimplot_SOURCE_DIR}/implot)
 # ImGuiColorTextEdit (goossens fork), vendored: the code editor and the text diff
 set(FIGURE_CTE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/ImGuiColorTextEdit)
+# ImGuizmo (its subset: ViewManipulate, Manipulate, ImGradient), vendored: the 3-D view's gizmos, the gradient editor
+set(FIGURE_GIZMO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/ImGuizmo)
 
 add_library(figure_native STATIC
    ${cimgui_SOURCE_DIR}/cimgui.cpp
@@ -118,6 +123,8 @@ add_library(figure_native STATIC
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_editor.cpp
    ${FIGURE_CTE_DIR}/TextEditor.cpp
    ${FIGURE_CTE_DIR}/TextDiff.cpp
+   ${FIGURE_GIZMO_DIR}/ImGuizmo.cpp
+   ${FIGURE_GIZMO_DIR}/ImGradient.cpp
    ${miniz_SOURCE_DIR}/miniz.c)
 # miniz: only its deflate and zlib-format functions, all under the mz_ prefix (no zlib names: a program may link zlib)
 target_compile_definitions(figure_native PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
@@ -127,6 +134,8 @@ target_include_directories(figure_native PRIVATE ${miniz_SOURCE_DIR})
 target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb)
 # ImGuiColorTextEdit: its headers for figure_editor.cpp (TextEditor.cpp includes its languages/ by relative path)
 target_include_directories(figure_native PRIVATE ${FIGURE_CTE_DIR})
+# ImGuizmo: its headers for figure_view3d.cpp and figure_colormap.cpp
+target_include_directories(figure_native PRIVATE ${FIGURE_GIZMO_DIR})
 # The browser client page, embedded in figure_remote.cpp as a C++ raw string (reconfigured when the page changes).
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote_client.html)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote_client.html FIGURE_REMOTE_CLIENT)
@@ -252,6 +261,7 @@ install(FILES "${miniz_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/miniz)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb/LICENSE-stb.txt" DESTINATION share/licenses/stb)
 install(FILES "${FIGURE_CTE_DIR}/LICENSE" DESTINATION share/licenses/imguicolortextedit)
 install(FILES "${FIGURE_CTE_DIR}/LICENSE-dtl.txt" DESTINATION share/licenses/dtl)
+install(FILES "${FIGURE_GIZMO_DIR}/LICENSE" DESTINATION share/licenses/imguizmo)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.mit.md" DESTINATION share/licenses/figure)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexSans.txt" DESTINATION share/licenses/ibm-plex)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexMono.txt" DESTINATION share/licenses/ibm-plex)

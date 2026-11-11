@@ -1,0 +1,6 @@
+$ ./cb_gradient --test
+cool-warm: 13 stops
+its middle stop at  0.604, colour 0.950 0.791 0.711
+dragged by 3% of the row, now at  0.633
+after a double click: 14 stops
+saved and read back: within 0 of 255 per channel

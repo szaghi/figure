@@ -79,6 +79,8 @@ gfortran -I lib/mod readme.F90 lib/libfigure.a -L lib $(python3 scripts/check_sy
   headless and remote programs draw theirs with FIGURE's CPU renderer, no GPU needed, and tests compare them with goldens.
 - **Code editor**: input files and code highlighted, a validator's findings marked on their lines, the program's keys
   completed, find and replace, a diff of two versions (ImGuiColorTextEdit, drawn in every mode).
+- **3-D views and gizmos**: meshes coloured by fields, drawn by FIGURE's own rasterizer; a view cube, and handles that
+  move a clipping plane or a probe by hand (ImGuizmo); colormaps edited by their stops.
 - **Headless testing**: `app%init_headless` and the `figure_testing` module drive the interface with synthetic input,
   in CI without a display.
 

@@ -392,6 +392,16 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   one undo, `goto`, `cursor`, `selection`, `insert`, `word_at_cursor`, `undo`, `redo`, `read_only`; `draw` returns
   `.true.` when the user changed the text. `code_diff` draws two texts' difference by id, in one column or side by
   side, and `code_diff_lines` reports the lines added and removed, from a task too ([Code editor](editor)): done.
+- **Gizmos for the 3-D view; a gradient editor** (S6): ImGuizmo (MIT) vendored at commit `105e4fd`, its subset
+  `ViewManipulate`, `Manipulate` and `ImGradient`, with FIGURE's glue and three small patches (the per-frame state
+  without `BeginFrame`'s window, the cube's turn landing on its target, ImGradient's state per editor). `v%view_cube`
+  turns the camera to the face, edge or corner clicked and orbits on a drag; `v%gizmo(id, matrix [, mode] [, space]
+  [, snap])` moves a 4x4 placement by arrows, rings or handles, polled, for a clipping plane, a box or a probe placed
+  by hand; `v%view_matrix` and `v%projection_matrix` give the camera's matrices (column-major, OpenGL's conventions,
+  as ImGuizmo's; real64, ImGuizmo computing in real32 about the camera's target). `ig_gradient_edit` edits any
+  continuous colormap by its stops, resampling it and its registered variants, fields and 3-D views coloured again;
+  `ip_colormap_stops` gives them, to save as a CSV ([Gizmos](view3d#gizmos),
+  [Editing a colormap](colormaps#editing-a-colormap)): done.
 
 ## Next
 

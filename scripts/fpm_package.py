@@ -15,6 +15,8 @@ native layer itself, next to the Fortran library:
   figure_image.cpp;
 - ``src/editor/``: ImGuiColorTextEdit (the code editor and the text diff, with dtl), vendored in the repository
   (third_party/ImGuiColorTextEdit, FIGURE's patch applied), compiled with figure_editor.cpp;
+- ``src/gizmo/``: ImGuizmo's subset (ImGuizmo.cpp, ImGradient.cpp and their headers: the 3-D view's gizmos and the
+  gradient editor), vendored in the repository (third_party/ImGuizmo, FIGURE's patches applied);
 - the licences of everything copied (``LICENSES/``), and ``fpm.toml``.
 
 SDL3 comes from the system (a package: libsdl3-dev, Homebrew's sdl3, MSYS2's SDL3), found by the compiler and linker
@@ -56,6 +58,7 @@ IMGUI_FILES = [
     "backends/imgui_impl_opengl3.cpp", "backends/imgui_impl_opengl3.h", "backends/imgui_impl_opengl3_loader.h",
 ]  # fmt: skip
 EDITOR_FILES = ["TextEditor.cpp", "TextEditor.h", "TextEditorLanguages.h", "TextDiff.cpp", "TextDiff.h", "dtl.h"]
+GIZMO_FILES = ["ImGuizmo.cpp", "ImGuizmo.h", "ImGradient.cpp", "ImGradient.h"]
 IMPLOT_FILES = ["implot.cpp", "implot_items.cpp", "implot_demo.cpp", "implot.h", "implot_internal.h", "LICENSE"]
 NATIVE_FILES = [
     "figure_native.cpp", "figure_native.h", "figure_process.cpp", "figure_task.cpp", "figure_scope.cpp", "figure_canvas.cpp",
@@ -123,7 +126,7 @@ include-dir = [{include_dirs}]
 
 INCLUDE_DIRS = [
     "src/native", "src/cimgui", "src/cimgui/imgui", "src/cimgui/imgui/backends", "src/cimplot", "src/cimplot/implot",
-    "src/miniz", "src/stb", "src/editor",
+    "src/miniz", "src/stb", "src/editor", "src/gizmo",
 ]  # fmt: skip
 
 
@@ -283,6 +286,9 @@ def write(a: argparse.Namespace, deps: Path) -> int:
         copy(cte / f, src / "editor" / f)
     for lang in sorted((cte / "languages").glob("*.h")):  # TextEditor.cpp includes them by relative path
         copy(lang, src / "editor" / "languages" / lang.name)
+    gizmo = ROOT / "third_party" / "ImGuizmo"
+    for f in GIZMO_FILES:
+        copy(gizmo / f, src / "gizmo" / f)
     licences = out / "LICENSES"
     copy(ROOT / "LICENSE.mit.md", licences / "figure.md")
     copy(ROOT / "THIRD_PARTY.md", licences / "THIRD_PARTY.md")
@@ -294,6 +300,7 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(ROOT / "third_party" / "stb" / "LICENSE-stb.txt", licences / "stb.txt")
     copy(cte / "LICENSE", licences / "imguicolortextedit.txt")
     copy(cte / "LICENSE-dtl.txt", licences / "dtl.txt")
+    copy(gizmo / "LICENSE", licences / "imguizmo.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexSans.txt", licences / "ibm-plex.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexMono.txt", licences / "ibm-plex-mono.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-Lucide.txt", licences / "lucide.txt")

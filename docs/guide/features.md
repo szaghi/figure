@@ -211,6 +211,8 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_colormap(name [, levels] [, stat])` → `integer(int32)` | a colormap's id by name: bundled (`'cividis'`, `'batlow'`, `'cool-warm'`, ...), ImPlot's own or loaded; `<name>_r` reversed, `levels` discrete bands ([colormaps](colormaps)) <!-- visual --> |
 | `ip_load_colormap(name, file [, stat])` | a user colormap from a CSV table of RGB rows or a ParaView JSON preset ([user maps](colormaps#user-maps)) |
 | `ip_colormap_names(names)` | the names `ip_colormap` knows ([colormaps](colormaps)) <!-- visual --> |
+| `ig_gradient_edit(id, colormap [, width] [, height] [, stat])` → `logical` | a gradient editor of a colormap (ImGuizmo's ImGradient): stops dragged, added, recoloured, removed; the map, its variants and what is drawn with it follow ([editing a colormap](colormaps#editing-a-colormap)) <!-- visual --> |
+| `ip_colormap_stops(name, positions, colours [, stat])` | a colormap's stops, as the editor shows them; saved as a CSV, read back by `ip_load_colormap` ([editing a colormap](colormaps#editing-a-colormap)) |
 | `ip_image(label, tex, xmin, xmax, ymin, ymax ...)` | a texture in a plot, pixel row 1 at the bottom ([textures](images#textures)) |
 | `ip_error_bars(label, x, y, err [, err_high] [, spec] [, stat])` | vertical error bars, symmetric or not ([plots](plots#error-bars-annotations-and-drag-tools)) <!-- visual --> |
 | `ip_annotation(x, y, text [, color] [, offset] [, stat])` | a text at a plot point, in a box of a colour or alone ([plots](plots#error-bars-annotations-and-drag-tools)) <!-- visual --> |
@@ -303,6 +305,9 @@ Details: [Processes and tasks](processes#tasks).
 | `v%draw(id [, width] [, height] [, stat])` | the view as a widget; the mouse orbits, pans, zooms, fits; rendered only when something changed, at half resolution while moving ([meshes](view3d#meshes)) |
 | `v%pick(x, y, mesh, element [, point] [, stat])` → `logical`, `v%hovered(mesh, element [, point] [, stat])` → `logical`, `v%clicked(...)` → `logical` | the element under a pixel, under the mouse, clicked ([picking](view3d#picking)) |
 | `v%image(rgba [, stat])`, `v%render_info([count] [, milliseconds] [, width] [, height] [, half] [, stat])` | the pixels of the last render; renders so far, the last one's time and size ([rendering](view3d#how-a-view-is-rendered)) |
+| `v%view_cube([size] [, corner] [, stat])` | a view cube over the view (ImGuizmo's ViewManipulate): a click on a face, an edge or a corner turns the camera to it, a drag orbits ([gizmos](view3d#gizmos)) <!-- visual --> |
+| `v%gizmo(id, matrix [, mode] [, space] [, snap] [, stat])` → `logical` | handles over the view moving a 4x4 placement (ImGuizmo's Manipulate): translate, rotate, scale, in world or local axes, snapped; a clipping plane, a box, a probe placed by hand ([gizmos](view3d#gizmos)) <!-- visual --> |
+| `v%view_matrix(m [, stat])`, `v%projection_matrix(m [, stat])` | the camera's view and projection matrices, column-major 4x4 `real(real64)` (OpenGL's conventions) ([matrices](view3d#matrices)) |
 
 Details: [3-D views](view3d).
 

@@ -1,0 +1,53 @@
+FIGURE's patch 1 of 3 to ImGuizmo (commit 105e4fde45e4e74aae8973d98750820ef7aca7e2).
+
+ImGuizmo::BeginFrame resets the per-frame state (the hotspot flags that keep two gizmos from being highlighted at
+once, the view cube's use flags) and opens a full-screen, transparent window named "gizmo" to draw into. FIGURE draws
+the gizmos into the window of the 3-D view and wants no window of its own in every program (it would be listed by
+test paths, the window registry and the docking layer): BeginFrameState is the reset alone, which BeginFrame calls
+too. FIGURE calls it once a frame, before the first gizmo (native/figure_view3d.cpp, gizmo_frame). Applied to
+third_party/ImGuizmo/ImGuizmo.cpp and ImGuizmo.h; without it a gizmo hovered once is never hovered again
+(src/tests/figure_test_gizmo.F90). To offer upstream.
+
+--- a/ImGuizmo.cpp
++++ b/ImGuizmo.cpp
+@@ -1061,6 +1061,15 @@
+       ImGui::SetCurrentContext(ctx);
+    }
+ 
++   void BeginFrameState()
++   {
++      gContext.mbOverGizmoHotspotLastFrame = gContext.mbOverGizmoHotspot;
++      gContext.mbOverGizmoHotspot = false;
++      // view manipulate flags accumulate across every ViewManipulate call of the frame
++      gContext.mbUsingViewManipulate = false;
++      gContext.mIsViewManipulatorHovered = false;
++   }
++
+    void BeginFrame()
+    {
+       const ImU32 flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus;
+@@ -1080,11 +1089,7 @@
+ 
+       ImGui::Begin("gizmo", NULL, flags);
+       gContext.mDrawList = ImGui::GetWindowDrawList();
+-      gContext.mbOverGizmoHotspotLastFrame = gContext.mbOverGizmoHotspot;
+-      gContext.mbOverGizmoHotspot = false;
+-      // view manipulate flags accumulate across every ViewManipulate call of the frame
+-      gContext.mbUsingViewManipulate = false;
+-      gContext.mIsViewManipulatorHovered = false;
++      BeginFrameState();
+       ImGui::End();
+       ImGui::PopStyleVar();
+       ImGui::PopStyleColor(2);
+--- a/ImGuizmo.h
++++ b/ImGuizmo.h
+@@ -126,6 +126,9 @@
+ 
+    // call BeginFrame right after ImGui_XXXX_NewFrame();
+    IMGUI_API void BeginFrame();
++   // BeginFrame's per-frame state alone, without its full-screen window: call it once a frame before the first
++   // Manipulate or ViewManipulate, and SetDrawlist (FIGURE's patch 0001)
++   IMGUI_API void BeginFrameState();
+ 
+    // this is necessary because when imguizmo is compiled into a dll, and imgui into another
+    // globals are not shared between them.

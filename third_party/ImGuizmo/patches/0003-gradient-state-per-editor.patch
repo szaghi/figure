@@ -1,0 +1,47 @@
+FIGURE's patch 3 of 3 to ImGuizmo (commit 105e4fde45e4e74aae8973d98750820ef7aca7e2).
+
+ImGradient::Edit kept the selected point and the point being moved in function statics and drew into a child
+window of the fixed id 137: two editors shared one selection and one drag (a drag in one moved the point of the same
+index in the other), two editors in one window drew into one child, and a press on a point, which no item took,
+started moving the window. The child's id now comes from the ID stack (ImGui::GetID), the selection and the moved
+point are kept in the window's storage under ids derived from it, and an invisible button under the points takes the
+press. Applied to third_party/ImGuizmo/ImGradient.cpp; checked by src/tests/figure_test_gizmo.F90 (a stop dragged,
+the window not moved). To offer upstream.
+
+--- a/ImGradient.cpp
++++ b/ImGradient.cpp
+@@ -74,14 +74,22 @@
+       bool ret = false;
+       ImGuiIO& io = ImGui::GetIO();
+       ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+-      ImGui::BeginChild(137, size, ImGuiChildFlags_FrameStyle);
++      // the child's id from the ID stack, and the selection and the point moved kept per editor in the window's
++      // storage, not in statics: several editors, in one window or in several (FIGURE's patch 0003)
++      const ImGuiID childId = ImGui::GetID("##ImGradient");
++      const ImGuiID selectionId = ImGui::GetID("##ImGradient.selection");
++      const ImGuiID movingId = ImGui::GetID("##ImGradient.moving");
++      ImGuiStorage* storage = ImGui::GetStateStorage();
++      int currentSelection = storage->GetInt(selectionId, -1);
++      int movingPt = storage->GetInt(movingId, -1);
++      ImGui::BeginChild(childId, size, ImGuiChildFlags_FrameStyle);
+ 
+       ImDrawList* draw_list = ImGui::GetWindowDrawList();
+       const ImVec2 offset = ImGui::GetCursorScreenPos();
++      // an item under the points takes the press, which would otherwise move the window (FIGURE's patch 0003)
++      ImGui::InvisibleButton("##points", ImMax(ImGui::GetContentRegionAvail(), ImVec2(1.f, 1.f)));
+ 
+       const ImVec4* pts = delegate.GetPoints();
+-      static int currentSelection = -1;
+-      static int movingPt = -1;
+       if (currentSelection >= int(delegate.GetPointCount()))
+          currentSelection = -1;
+       if (movingPt != -1)
+@@ -116,6 +124,8 @@
+       }
+       ImGui::EndChild();
+       ImGui::PopStyleVar();
++      storage->SetInt(selectionId, currentSelection);
++      storage->SetInt(movingId, movingPt);
+ 
+       selection = currentSelection;
+       return ret;

@@ -361,6 +361,45 @@ The [code editor](editor) is ImGuiColorTextEdit (the goossens fork) with FIGURE'
   after a deletion, stored the new numbers in a `bool`, so the third mark and those after it took the second one's
   colour once any character was deleted.
 
+## Gizmos
+
+The [view cube and the gizmos](view3d#gizmos) are ImGuizmo's, and the [gradient editor](colormaps#editing-a-colormap)
+its ImGradient, with FIGURE's glue:
+
+- **Precision at grazing angles.** A drag along an axis moves the matrix by the mouse's motion over the sine of the
+  angle φ between the axis and the line of sight: at 30° a pixel is worth 2 pixels' worth of world at that depth, at
+  12° about 5 (measured, `figure_test_gizmo`: 1.87, 2.69 and 4.32 at 30°, 20° and 12°, against 1/sin φ = 2.00, 2.92,
+  4.81, the rest the perspective's gain as the point comes toward the eye). Below a few degrees the arrow is hidden
+  (ImGuizmo's limit: its projection shorter than 0.02 in clip units, a twentieth of its full length on a 400-pixel
+  view, about 3°); a plane handle seen
+  edge-on likewise. An arrow shorter than about 12 pixels on the screen lies inside the centre square, which moves
+  the point in the screen's plane instead. Turn the camera (the view cube) so that the axis lies across the screen,
+  or move in the plane of the two other axes.
+- **Single precision.** ImGuizmo computes in `real(real32)`: a moved matrix comes back rounded to about 10⁻⁷ of the
+  scene's size (FIGURE moves the world so that the camera's target is at the origin first; a matrix not moved is not
+  touched). A gizmo far from the target, many scene sizes away, is placed more coarsely.
+- **The gizmos' rays use a wider depth range than the view.** ImGuizmo casts the mouse's ray from the point at clip
+  depth 0 and mirrors an intersection that falls behind it; with the view's own near and far planes, which hug the
+  meshes, that point lies inside the scene, and an arrow pointing toward the eye dragged the wrong way. FIGURE gives
+  the gizmos the view's projection with the depth range [d/1000, 1000 d] (d the camera's distance): the same pixels,
+  the ray's origin near the eye. `v%projection_matrix` is the view's own.
+- **A gizmo takes the mouse one frame late:** from the frame after the pointer reaches a handle (the view's own item
+  must not be hovered when ImGuizmo looks); a press in the same frame as the pointer's arrival orbits the view. The
+  view cube takes it at once (its rectangle is known).
+- **No callbacks, no undo:** the program keeps the matrix before a drag if it wants to go back.
+- **The cube's faces have no letters**, only the axis colours (red x, green y, blue z); the cube's motion is
+  ImGuizmo's 40-frame turn (the last frame landing on the face: FIGURE's patch). Autodesk holds a US patent on
+  this kind of view cube (US7782319B2), which ImGuizmo's authors consider defensive; FIGURE ships ImGuizmo's code as
+  it is.
+- **The gradient editor:** a stop moves by the mouse's motion over the row's whole width (ImGradient's rule), a
+  little faster than its square, which spans the width less one square; stops may cross each other (the map takes
+  them by position); two editors of one map edit the same stops, each with its own selection.
+- **FIGURE patches ImGuizmo** in three places (`third_party/ImGuizmo/patches/`): `BeginFrameState` (the per-frame
+  state of `BeginFrame` without the full-screen window it opens, which would have been a window of every program);
+  the view cube's last frame of a turn landing on its target (it stopped 1.3·10⁻⁴ short); ImGradient's selection and
+  moved point kept per editor and its press taken by an item (they were statics shared by every editor, and a drag
+  moved the window).
+
 ## The one-line installer
 
 What [the installer](install#the-one-line-installer) does not cover:

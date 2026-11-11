@@ -240,7 +240,7 @@ def package_sources() -> list[str]:
     assert spec is not None and spec.loader is not None
     pkg = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(pkg)
-    files = (*pkg.IMGUI_FILES, *pkg.IMPLOT_FILES, *pkg.NATIVE_FILES, *pkg.EDITOR_FILES)
+    files = (*pkg.IMGUI_FILES, *pkg.IMPLOT_FILES, *pkg.NATIVE_FILES, *pkg.EDITOR_FILES, *pkg.GIZMO_FILES)
     shipped = {Path(f).name for f in files if f.endswith(".cpp")}
     shipped |= {"cimgui.cpp", "cimplot.cpp", "miniz.c"}
     cmake = (ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")

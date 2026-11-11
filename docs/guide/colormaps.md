@@ -19,6 +19,8 @@ CSV table or a ParaView preset. All of them are chosen **by name**, reversed or 
 | `ip_colormap(name [, levels] [, stat])` → `integer(int32)` | the ImPlot id of the map `name`, for the `colormap` argument of `ip_heatmap`, `ip_field_image`, `ip_colormap_scale` and the legends; `<name>_r` reversed, `levels` discrete bands; -1 on a failure |
 | `ip_load_colormap(name, file [, stat])` | read a map from a CSV table or a ParaView JSON preset and register it as `name` |
 | `ip_colormap_names(names)` | the names `ip_colormap` knows, `character(len=:), allocatable :: names(:)` |
+| `ig_gradient_edit(id, colormap [, width] [, height] [, stat])` → `logical` | a gradient editor of the map named `colormap`: its stops dragged, added, recoloured, removed; `.true.` on the frame the map changed ([Editing a colormap](#editing-a-colormap)) |
+| `ip_colormap_stops(name, positions, colours [, stat])` | the map's stops, `real(real64), allocatable :: positions(:), colours(:,:)` ([Editing a colormap](#editing-a-colormap)) |
 
 <<< @/examples/snippets/cb_colormap-diverging.F90{fortran}
 
@@ -34,7 +36,7 @@ loaded ones (in load order); reversed and discrete maps are not listed.
 the same name and levels returns the same id. ImPlot keeps its colormaps for the life of its context and cannot
 replace one, so an id holds until `app%destroy`; after a new `init*` the maps are registered again at their next use,
 possibly under other ids. Ask `ip_colormap` every frame (the lookup is cheap) rather than keeping an id across an
-`app%destroy`.
+`app%destroy`. A map keeps its id when [its colours are edited](#editing-a-colormap).
 
 **The default.** `ip_heatmap` and `ip_colormap_scale` without `colormap` use ImPlot's Viridis, perceptually uniform:
 not ImPlot's current colormap, which holds the style's line colours. An id that is not registered (-1, a stale one)
@@ -193,13 +195,56 @@ colormap), not empty, without `|`, and not starting with `'FIGURE '` (the prefix
 opacity points, the annotations and an indexed preset (`IndexedColors`, refused) are not. A `\u` escape in a JSON
 string is read as `?`.
 
+## Editing a colormap
+
+<Media name="cb_gradient" video alt="A window titled Colormap: a horizontal strip of the cool-warm map from blue through white to red, below it a row of small squares, one per stop of the map, each of its colour, and a Save button; below, a field from -1 to 1 drawn with the map, and its vertical legend. In the video the white stop is dragged to the right and the field's white band widens; a click selects a light blue stop, its colour button opens Dear ImGui's colour picker, a click on its hue bar turns the stop green, and a green band appears in the strip, in the field around the -0.4 contour and in the legend." caption="docs/examples/src/cb_gradient.F90" />
+
+`ig_gradient_edit(id, colormap)` is a widget of the current window that edits a map **by its stops**: colours at
+positions in [0, 1], the map linear between them. It is ImGuizmo's `ImGradient` (vendored, with FIGURE's patch,
+[THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)) with FIGURE's strip of the map above it.
+
+<<< @/examples/snippets/cb_gradient-edit.F90{fortran}
+
+| The mouse | Does |
+|---|---|
+| drag a stop's square | moves the stop along the strip (it may pass others: the map takes the stops in order of position) |
+| double click on the stops' row | adds a stop there, of the map's colour at that point |
+| click a stop | selects it: its colour button and **Remove** appear on the right |
+| the colour button | Dear ImGui's colour picker for the stop |
+| **Remove** | removes the stop (a map keeps two) |
+
+- **Each change resamples the map** from its stops, constant before the first and after the last: its table (256
+  colours for a bundled or loaded map; the keys of one of ImPlot's own) and every variant registered (`<name>_r`,
+  `ip_colormap(name, levels)`). Heatmaps, [fields](plots#fields), legends and [3-D views](view3d) drawn with the map
+  show the new colours from the frame of the change on; fields and views are coloured again (their textures are
+  cached by the map's colours too). The result is `.true.` on that frame.
+- **The stops of a map not edited yet** come from its colours: every key of a short table (ImPlot's own maps, a CSV of
+  up to 16 rows); for a table of 256, some of its colours, each the farthest from the last between which the map is
+  linear within 2 levels of 0-255 per channel: 10 to 21 stops for the bundled maps (`cool-warm`: 13; `turbo`: 21). So
+  the first change also moves the map's colours by at most 2 levels where the user did not touch it.
+- **An edit lasts for the program's life:** a new `init*` registers the map again with its edited colours. Save it
+  with `ip_colormap_stops`, as a CSV of `x, r, g, b` rows, which [`ip_load_colormap`](#user-maps) reads back as the
+  same map:
+
+<<< @/examples/snippets/cb_gradient-save.F90{fortran}
+
+<<< @/examples/output/cb_gradient.txt{text}
+
+- **Which maps.** Any continuous map: bundled, ImPlot's own, loaded. Not a reversed one (`<name>_r`: edit `<name>`,
+  the reverse follows), not a qualitative one (Deep, Dark, Pastel, Paired: lists of colours, no gradient).
+- **Sizes** [pixels]: `width` positive given, else the space left plus it (default 0: all of it); `height` the strip
+  and the stops' row together (default two rows of a frame). The selected stop's controls take the right end.
+- Statuses: `FIG_ERR_ARGUMENT` for an unknown name, a reversed or qualitative map; `FIG_ERR_STATE` outside a frame
+  (for `ip_colormap_stops`: before `init*`) and from a [task](processes#tasks). The same in **window**, **headless**
+  and **remote** mode.
+
 ## Statuses and modes
 
 | Status | When |
 |---|---|
-| `FIG_ERR_ARGUMENT` | `ip_colormap`: an unknown name, `levels` outside [2, 256]; `ip_load_colormap`: a malformed file (the message gives the line), a name taken or not allowed, a preset name not in a file of several; `ip_heatmap`, `ip_colormap_scale`: a colormap id that is not registered |
+| `FIG_ERR_ARGUMENT` | `ip_colormap`: an unknown name, `levels` outside [2, 256]; `ip_load_colormap`: a malformed file (the message gives the line), a name taken or not allowed, a preset name not in a file of several; `ip_heatmap`, `ip_colormap_scale`: a colormap id that is not registered; `ig_gradient_edit`, `ip_colormap_stops`: an unknown name, a reversed or qualitative map |
 | `FIG_ERR_FAILED` | `ip_load_colormap`: the file cannot be read |
-| `FIG_ERR_STATE` | `ip_colormap` before `init*`; any of the three from a [task](processes#tasks) |
+| `FIG_ERR_STATE` | `ip_colormap`, `ip_colormap_stops` before `init*`, `ig_gradient_edit` outside a frame; any of them from a [task](processes#tasks) |
 
 `stat` is optional: absent, a failure stops the program with the message (`error stop`); present, it receives the
 status, and `figure_last_error` the message ([Error handling](errors)).

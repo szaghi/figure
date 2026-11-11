@@ -60,6 +60,16 @@ int  fig_view3d_pick(int handle, int what, double x, double y, int *hit, int *me
 /* The last render: its pixels (rgba NULL: only the size), size, renders so far, its time [ms], half resolution. */
 int  fig_view3d_image(int handle, unsigned char *rgba, long long cap, int *width, int *height);
 int  fig_view3d_info(int handle, int *renders, double *ms, int *width, int *height, int *half);
+/* The camera's view and projection matrices (column-major 4x4, OpenGL's conventions) for the widget's size at the last
+ * draw (1 x 1 before the first); either NULL: not wanted. */
+int  fig_view3d_matrices(int handle, double *view, double *projection);
+/* Gizmos (ImGuizmo), drawn over the image of the view drawn in this frame and window. The view cube: size [pixels],
+ * corner 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left; changed 1 when it turned the camera. A gizmo moving
+ * matrix (column-major 4x4, its last row 0 0 0 1): mode 0 translate, 1 rotate, 2 scale; space 0 world, 1 local; snap
+ * (has_snap 1) in world units, degrees or a scale step; changed 1 when the user moved it (matrix updated). */
+int  fig_view3d_cube(int handle, double size, int corner, int *changed);
+int  fig_view3d_gizmo(int handle, const char *id, int id_len, double *matrix, int mode, int space, int has_snap,
+                      double snap, int *changed);
 
 #ifdef __cplusplus
 }

@@ -33,7 +33,7 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, fi
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
                             fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag, &
-                            fig_field_image
+                            fig_field_image, fig_gradient_edit, fig_colormap_stops
 use figure_cimgui, only : im_vec2, im_vec4, igGetFrameCount, igIsMousePosValid
 use figure_texture, only : texture_object, texture_ref
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot,             &
@@ -104,7 +104,7 @@ integer(int64), public          :: plot_copies = 0   !< Arrays the items copied 
 integer(int64), public          :: plot_stride = 0   !< Byte stride given to ImPlot for the last item: `test_plot_stride`.
 public :: ip_bars, ip_line, ip_scatter, ip_shaded
 public :: ip_colormap_scale, ip_heatmap, ip_image, ip_plot_limits, ip_plot_size, ip_setup_axes_limits
-public :: ip_colormap, ip_colormap_names, ip_load_colormap
+public :: ip_colormap, ip_colormap_names, ip_load_colormap, ip_colormap_stops, ig_gradient_edit
 public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point
 public :: ip_contour, ip_contour_lines, ip_contour_levels
 public :: ip_colormap_legend, ip_colormap_legend_edit, ip_field_image
@@ -2229,6 +2229,72 @@ contains
    if (figure_refused('ip_load_colormap', stat)) return ! the registry belongs to the main thread
    call figure_check(fig_load_colormap(name, len_trim(name, c_int), file, len_trim(file, c_int)), stat)
    endsubroutine ip_load_colormap
+
+   recursive function ig_gradient_edit(id, colormap, width, height, stat) result(changed)
+   !< A gradient editor of the colormap named `colormap` (ImGuizmo's ImGradient): the map's strip, its stops below it
+   !< (a square each, of the stop's colour), and on their right the selected stop's colour and a Remove button. A stop
+   !< dragged along the strip moves, a double click on the stops' row adds one there (the map's colour at that point),
+   !< a click selects one, whose colour the colour button changes (Dear ImGui's picker) and Remove removes (a map keeps
+   !< two). Each change resamples the map from its stops, linearly between them and constant beyond the first and the
+   !< last: its table (256 colours for a bundled or loaded map, its keys for one of ImPlot's) and every variant
+   !< registered (`<name>_r`, discrete levels), so heatmaps, fields, legends and 3-D views drawn with it show the new
+   !< colours from this frame on (fields and views are coloured again). True on the frame the map changed. The stops
+   !< are those `ip_colormap_stops` gives; the edit lasts for the program's life. An item of the current window.
+   !< Sizes [pixels]: `width` positive given, else the space left plus it (default 0: all of it); `height` the strip
+   !< and the stops' row (default: two rows of a frame). Statuses: `FIG_ERR_ARGUMENT` for an unknown name, a reversed
+   !< (`_r`) or discrete map or a qualitative one (Deep, Dark, Pastel, Paired: lists of colours); `FIG_ERR_STATE`
+   !< outside a frame and from a task. The same in every mode.
+   character(len=*), intent(in)            :: id       !< Widget id, unique in the window (not shown).
+   character(len=*), intent(in)            :: colormap !< Colormap name (`ip_colormap_names`).
+   real(real64),     intent(in),  optional :: width    !< Width [pixels].
+   real(real64),     intent(in),  optional :: height   !< Height [pixels].
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   logical                                 :: changed  !< The map changed on this frame.
+   real(c_float)                           :: w        !< Width.
+   real(c_float)                           :: h        !< Height.
+   integer(c_int)                          :: c        !< Changed.
+
+   changed = .false.
+   if (figure_draw_refused('ig_gradient_edit', stat)) return
+   w = 0.0_c_float
+   if (present(width)) w = real(width, c_float)
+   h = 0.0_c_float
+   if (present(height)) h = real(height, c_float)
+   c = 0_c_int
+   call figure_check(fig_gradient_edit(id, len(id, c_int), colormap, len_trim(colormap, c_int), w, h, c), stat)
+   changed = c /= 0_c_int
+   endfunction ig_gradient_edit
+
+   recursive subroutine ip_colormap_stops(name, positions, colours, stat)
+   !< The stops of the colormap `name`, sorted by position: as `ig_gradient_edit` shows and edits them. A map not
+   !< edited yet has stops derived from its colours: every key of a short table (ImPlot's own maps, a CSV of up to 16
+   !< rows), else some of its 256 colours, each the farthest from the last between which the map is linear within 2
+   !< levels of 0-255 per channel (10 to 21 stops for the bundled maps). A CSV file of the rows `x, r, g, b` written
+   !< from them is read back by `ip_load_colormap` as the same map. Statuses as `ig_gradient_edit` (`FIG_ERR_STATE`
+   !< before `init*` and from a task); on a failure the arrays have size 0.
+   character(len=*),          intent(in)            :: name         !< Colormap name.
+   real(real64), allocatable, intent(out)           :: positions(:) !< Positions, in [0, 1].
+   real(real64), allocatable, intent(out)           :: colours(:,:) !< Colours, `colours(:, k)` RGB in [0, 1].
+   integer(int32),            intent(out), optional :: stat         !< Status.
+   integer(c_int)                                   :: n            !< Stops.
+   integer(c_int)                                   :: cap          !< Room for them.
+   integer(c_int)                                   :: status       !< Native status.
+   real(c_double)                                   :: p(1)         !< Probe.
+   real(c_double)                                   :: q(3)         !< Probe.
+
+   allocate(positions(0), colours(3, 0))
+   if (figure_refused('ip_colormap_stops', stat)) return
+   n = 0_c_int
+   status = fig_colormap_stops(name, len_trim(name, c_int), p, q, 0_c_int, n)
+   if (status /= FIG_OK) then
+      call figure_check(status, stat)
+      return
+   endif
+   deallocate(positions, colours)
+   allocate(positions(n), colours(3, n))
+   cap = n
+   call figure_check(fig_colormap_stops(name, len_trim(name, c_int), positions, colours, cap, n), stat)
+   endsubroutine ip_colormap_stops
 
    recursive subroutine ip_colormap_names(names)
    !< The names `ip_colormap` knows: the bundled maps (alphabetical), ImPlot's own (in ImPlot's order), then the maps

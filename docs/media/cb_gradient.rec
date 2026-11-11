@@ -1,0 +1,25 @@
+#! program build/docs-examples/bin/cb_gradient
+#! from    5
+#! frames  220
+#! poster  219
+#! crop    0 0 620 600
+# a colormap edited by its stops: the white stop dragged right moves the field's white band; a click selects a light
+# blue stop, its colour button opens the picker, a click on the hue bar turns it green, the field and the legend
+# follow; a click outside closes the picker
+0   move 500 560
+5   move 222 74 15
+25  down
+29  move 248 74 25
+60  up
+70  move 150 74 15
+88  down
+90  up
+100 move 442 74 15
+118 down
+120 up
+130 move 530 172 20
+155 down
+157 up
+175 move 570 560 20
+198 down
+200 up

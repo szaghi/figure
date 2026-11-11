@@ -62,6 +62,10 @@ type :: view3d_object
       procedure, pass(self) :: clicked         !< The element clicked.
       procedure, pass(self) :: image           !< The pixels of the last render.
       procedure, pass(self) :: render_info     !< Renders so far, the last one's time and size.
+      procedure, pass(self) :: view_cube       !< A view cube over the view, turning the camera.
+      procedure, pass(self) :: gizmo           !< A gizmo moving a matrix, over the view.
+      procedure, pass(self) :: view_matrix     !< The camera's view matrix.
+      procedure, pass(self) :: projection_matrix !< The camera's projection matrix.
 endtype view3d_object
 
 integer(c_int), parameter :: K_TRIANGLES = 0_c_int !< Mesh kinds of the native layer.
@@ -216,6 +220,38 @@ interface
    integer(c_int),       intent(out) :: width, height
    integer(c_int)                    :: status
    endfunction fig_view3d_image
+
+   function fig_view3d_matrices(handle, view, projection) result(status) bind(C, name='fig_view3d_matrices')
+   import :: c_double, c_int
+   implicit none
+   integer(c_int), value       :: handle
+   real(c_double), intent(out) :: view(16), projection(16)
+   integer(c_int)              :: status
+   endfunction fig_view3d_matrices
+
+   function fig_view3d_cube(handle, size, corner, changed) result(status) bind(C, name='fig_view3d_cube')
+   import :: c_double, c_int
+   implicit none
+   integer(c_int), value       :: handle
+   real(c_double), value       :: size
+   integer(c_int), value       :: corner
+   integer(c_int), intent(out) :: changed
+   integer(c_int)              :: status
+   endfunction fig_view3d_cube
+
+   function fig_view3d_gizmo(handle, id, id_len, matrix, mode, space, has_snap, snap, changed) result(status) &
+      bind(C, name='fig_view3d_gizmo')
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int),         value         :: handle
+   character(kind=c_char), intent(in)    :: id(*)
+   integer(c_int),         value         :: id_len
+   real(c_double),         intent(inout) :: matrix(16)
+   integer(c_int),         value         :: mode, space, has_snap
+   real(c_double),         value         :: snap
+   integer(c_int),         intent(out)   :: changed
+   integer(c_int)                        :: status
+   endfunction fig_view3d_gizmo
 
    function fig_view3d_info(handle, renders, ms, width, height, half) result(status) bind(C, name='fig_view3d_info')
    import :: c_double, c_int
@@ -796,6 +832,152 @@ contains
    endsubroutine render_info
 
    ! ---- private -------------------------------------------------------------------------------------------------------
+
+   recursive subroutine view_cube(self, size, corner, stat)
+   !< A view cube (ImGuizmo's `ViewManipulate`) in a corner of the view, drawn over its image: call it after `draw`,
+   !< in the same window and frame. A click on a face turns the camera to look at it (the eye on that side), a click on
+   !< an edge or a corner between the faces it touches, over 40 frames; a drag on the cube orbits the camera. The
+   !< camera's target and distance are kept. The faces take the gizmos' axis colours: red the two of x, green of y,
+   !< blue of z. While the pointer is over the cube, the view does not take the mouse. Polled: the camera changes, as
+   !< `get_camera` reads. Statuses: `FIG_ERR_STATE` if the view was not drawn in this frame and window, outside a
+   !< frame and from a task; `FIG_ERR_ARGUMENT` for a size not above 0 or an unknown corner. The same in every mode.
+   class(view3d_object), intent(in)            :: self   !< View.
+   real(real64),         intent(in),  optional :: size   !< Side [pixels] (default 96; at most the view's).
+   character(len=*),     intent(in),  optional :: corner !< `'top-right'` (default), `'top-left'`, `'bottom-right'`,
+                                                         !< `'bottom-left'`.
+   integer(int32),       intent(out), optional :: stat   !< Status.
+   real(c_double)                              :: s      !< Side.
+   integer(c_int)                              :: c      !< Corner.
+   integer(c_int)                              :: moved  !< The camera turned.
+
+   if (figure_draw_refused('view3d_object%view_cube', stat)) return
+   if (.not. alive(self, 'view_cube', stat)) return
+   s = 96.0_c_double
+   if (present(size)) s = real(size, c_double)
+   c = 0_c_int
+   if (present(corner)) then
+      select case (trim(adjustl(corner)))
+      case ('top-right'); c = 0_c_int
+      case ('top-left'); c = 1_c_int
+      case ('bottom-right'); c = 2_c_int
+      case ('bottom-left'); c = 3_c_int
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, "view3d_object%view_cube: corner must be 'top-right', 'top-left', " // &
+                          "'bottom-right' or 'bottom-left', got '"//trim(corner)//"'", stat)
+         return
+      endselect
+   endif
+   call figure_check(fig_view3d_cube(self%handle, s, c, moved), stat)
+   endsubroutine view_cube
+
+   recursive function gizmo(self, id, matrix, mode, space, snap, stat) result(changed)
+   !< A gizmo (ImGuizmo's `Manipulate`) moving `matrix`, drawn over the view's image at the point the matrix places:
+   !< call it after `draw`, in the same window and frame, once a frame for as long as the gizmo is shown. `mode`
+   !< `'translate'` shows three arrows (along an axis) and three squares (in a plane), `'rotate'` three circles (about
+   !< an axis) and one facing the eye, `'scale'` three handles; `space` `'world'` orients them along the world's axes,
+   !< `'local'` along the matrix's own (scale is always local). `snap` rounds the motion of a drag to a step: world
+   !< units, degrees or a scale step. True on the frames the user moved it, with `matrix` updated; untouched on the
+   !< others. While the pointer is over a handle (from the frame after it reaches it) or a drag goes on, the view does
+   !< not take the mouse. `matrix` is column-major as the view's (`view_matrix`): `matrix(1:3, 1:3)` the rotation and
+   !< scale, `matrix(1:3, 4)` the translation, `matrix(4, :)` = (0, 0, 0, 1); a clipping plane at `matrix(1:3, 4)` with
+   !< normal `matrix(1:3, 3)` follows it (`unclip`, then `clip`). ImGuizmo works in single precision: a moved matrix is
+   !< rounded to real32 relative to the camera's target (about 1e-7 of the scene's size). Statuses: `FIG_ERR_STATE` if
+   !< the view was not drawn in this frame and window, outside a frame and from a task; `FIG_ERR_ARGUMENT` for an
+   !< unknown mode or space, a snap not above 0, a matrix not finite or whose last row is not (0, 0, 0, 1). The same in
+   !< every mode.
+   class(view3d_object), intent(in)            :: self         !< View.
+   character(len=*),     intent(in)            :: id           !< Gizmo id (unique in the window).
+   real(real64),         intent(inout)         :: matrix(4,4)  !< The placement moved [world units].
+   character(len=*),     intent(in),  optional :: mode         !< `'translate'` (default), `'rotate'`, `'scale'`.
+   character(len=*),     intent(in),  optional :: space        !< `'world'` (default), `'local'`.
+   real(real64),         intent(in),  optional :: snap         !< Step of a drag [world units, degrees or factor].
+   integer(int32),       intent(out), optional :: stat         !< Status.
+   logical                                     :: changed      !< The user moved the gizmo on this frame.
+   integer(c_int)                              :: m            !< Mode.
+   integer(c_int)                              :: s            !< Space.
+   integer(c_int)                              :: moved        !< Moved.
+   real(c_double)                              :: a(16)        !< C copy.
+   real(c_double)                              :: step         !< Snap.
+   integer(c_int)                              :: has_step     !< Snap given.
+
+   changed = .false.
+   if (figure_draw_refused('view3d_object%gizmo', stat)) return
+   if (.not. alive(self, 'gizmo', stat)) return
+   m = 0_c_int
+   if (present(mode)) then
+      select case (trim(adjustl(mode)))
+      case ('translate'); m = 0_c_int
+      case ('rotate'); m = 1_c_int
+      case ('scale'); m = 2_c_int
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, "view3d_object%gizmo: mode must be 'translate', 'rotate' or 'scale', got '" &
+                          //trim(mode)//"'", stat)
+         return
+      endselect
+   endif
+   s = 0_c_int
+   if (present(space)) then
+      select case (trim(adjustl(space)))
+      case ('world'); s = 0_c_int
+      case ('local'); s = 1_c_int
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, "view3d_object%gizmo: space must be 'world' or 'local', got '"//trim(space)// &
+                          "'", stat)
+         return
+      endselect
+   endif
+   step = 0.0_c_double
+   has_step = 0_c_int
+   if (present(snap)) then
+      step = real(snap, c_double)
+      has_step = 1_c_int
+   endif
+   a = reshape(real(matrix, c_double), [16])
+   moved = 0_c_int
+   call figure_check(fig_view3d_gizmo(self%handle, id, len(id, c_int), a, m, s, has_step, step, moved), stat)
+   if (moved /= 0_c_int) then
+      matrix = reshape(real(a, real64), [4, 4])
+      changed = .true.
+   endif
+   endfunction gizmo
+
+   recursive subroutine view_matrix(self, m, stat)
+   !< The camera's view matrix: world to eye coordinates, column-major 4x4 with column vectors (OpenGL's convention,
+   !< and ImGuizmo's): `m(1:3, 1:3)` the rotation, whose rows are the screen's right, up and the direction from the
+   !< target to the eye, `m(1:3, 4)` the translation; the eye looks down its -z. As the camera is now (`set_camera`,
+   !< `orbit`, a view cube); a camera never set is first fitted to the meshes.
+   class(view3d_object), intent(in)            :: self   !< View.
+   real(real64),         intent(out)           :: m(4,4) !< View matrix.
+   integer(int32),       intent(out), optional :: stat   !< Status.
+   real(c_double)                              :: v(16)  !< View.
+   real(c_double)                              :: p(16)  !< Projection.
+
+   m = 0.0_real64
+   if (figure_refused('view3d_object%view_matrix', stat)) return
+   if (.not. alive(self, 'view_matrix', stat)) return
+   v = 0.0_c_double
+   call figure_check(fig_view3d_matrices(self%handle, v, p), stat)
+   m = reshape(real(v, real64), [4, 4])
+   endsubroutine view_matrix
+
+   recursive subroutine projection_matrix(self, m, stat)
+   !< The camera's perspective projection: eye to clip coordinates, column-major 4x4 (OpenGL's convention: clip z in
+   !< [-w, w], `m(4, 3)` = -1), for the view's size at its last `draw` (1 x 1 before the first) and its vertical field
+   !< of view; the near and far planes enclose the visible meshes' bounding sphere, so they change with the meshes and
+   !< the camera. The image is `projection_matrix * view_matrix` applied to world points.
+   class(view3d_object), intent(in)            :: self   !< View.
+   real(real64),         intent(out)           :: m(4,4) !< Projection matrix.
+   integer(int32),       intent(out), optional :: stat   !< Status.
+   real(c_double)                              :: v(16)  !< View.
+   real(c_double)                              :: p(16)  !< Projection.
+
+   m = 0.0_real64
+   if (figure_refused('view3d_object%projection_matrix', stat)) return
+   if (.not. alive(self, 'projection_matrix', stat)) return
+   p = 0.0_c_double
+   call figure_check(fig_view3d_matrices(self%handle, v, p), stat)
+   m = reshape(real(p, real64), [4, 4])
+   endsubroutine projection_matrix
 
    function alive(self, name, stat) result(ok)
    !< The view exists; else `FIG_ERR_STATE`.

@@ -663,6 +663,23 @@ Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
 The editor writes `line_color` on the frames the user changes it; the plot reads it every frame. The swatch opens a
 picker; the fields are dragged, or typed after a double-click. [Colour editing](/guide/widgets#colour-editing).
 
+### Edit a colormap and save it
+
+<<< @/examples/snippets/cb_gradient-edit.F90{fortran}
+
+<<< @/examples/snippets/cb_gradient-save.F90{fortran}
+
+<Media name="cb_gradient" video alt="A strip of the cool-warm map over a row of its stops, a Save button, and a field drawn with the map beside its legend. The white stop is dragged right and the field's white band widens; a light blue stop is selected, its colour button opens the picker, a click on the hue bar turns it green, and a green band appears in the strip, the field and the legend." caption="docs/examples/src/cb_gradient.F90" />
+
+`ig_gradient_edit` edits the map by its stops: drag one, double-click the row to add one, click one to recolour or
+remove it. The map itself changes, so the field, the legend and anything else drawn with `cool-warm` follow on the
+same frame. `ip_colormap_stops` gives the stops; written as `x, r, g, b` rows they are a CSV that
+`ip_load_colormap` reads back as the same map, which the test checks:
+
+<<< @/examples/output/cb_gradient.txt{text}
+
+[Editing a colormap](/guide/colormaps#editing-a-colormap) has the rules.
+
 ### Probe a field with lines and points the user drags
 
 <<< @/examples/snippets/cb_contour-probes.F90{fortran}
@@ -689,6 +706,29 @@ changed, so a still view costs nothing per frame. A click on the surface gives t
 the point hit. [3-D views](/guide/view3d) has the camera, clipping planes and the cost per mode.
 
 Used in context: [chapter 13](./tutorial/13-view3d) of the tutorial.
+
+### Place a clipping plane by hand
+
+<<< @/examples/snippets/cb_gizmo-start.F90{fortran}
+
+<<< @/examples/snippets/cb_gizmo-draw.F90{fortran}
+
+<<< @/examples/snippets/cb_gizmo-cut.F90{fortran}
+
+<Media name="cb_gizmo" video alt="A slender body cut by a plane drawn as a yellow square, a gizmo of three arrows at the plane's centre and a view cube in the corner. The red arrow is dragged and the cut moves toward the tail; Turn shows the rings, the blue one is dragged and the plane turns about z; a click on the cube's green face turns the camera to look from -y." caption="docs/examples/src/cb_gizmo.F90" />
+
+The plane is a 4x4 placement: its third column the normal, its fourth the point. `view%gizmo` draws handles there,
+over the view (after `view%draw`, in the same window), and returns `.true.` on the frames the user drags one, the
+matrix updated: cut again then. `view%view_cube` turns the camera to the face clicked. With the camera's matrices the
+program finds where a point is on the screen; the test drags the plane's arrow that way and clicks the cube:
+
+<<< @/examples/snippets/cb_gizmo-pixel.F90{fortran}
+
+<<< @/examples/snippets/cb_gizmo-test.F90{fortran}
+
+<<< @/examples/output/cb_gizmo.txt{text}
+
+[Gizmos](/guide/view3d#gizmos) has the modes, the matrices' conventions and the mouse.
 
 ### Show an image computed by the program
 

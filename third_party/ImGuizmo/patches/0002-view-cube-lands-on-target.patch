@@ -1,0 +1,21 @@
+FIGURE's patch 2 of 3 to ImGuizmo (commit 105e4fde45e4e74aae8973d98750820ef7aca7e2).
+
+ViewManipulate turns the camera to the face, edge or corner clicked over 40 frames, each moving the view direction 20%
+of the way left (a geometric approach): after the 40th it is 0.8^40 = 1.3e-4 short, so a click on the +x face left the
+camera at an azimuth of about 0.0075 degrees, not 0. The last frame now lands on the target. Applied to
+third_party/ImGuizmo/ImGuizmo.cpp; checked by src/tests/figure_test_gizmo.F90 (a click on a face gives azimuth and
+elevation within 1e-3 degrees). To offer upstream.
+
+--- a/ImGuizmo.cpp
++++ b/ImGuizmo.cpp
+@@ -3440,6 +3440,10 @@
+          vec_t newDir = viewInverse.v.dir * handednessSign;
+          newDir.Lerp(interpolationDir * handednessSign, 0.2f);
+          newDir.Normalize();
++         if (interpolationFrames == 0) // the last frame lands on the face, edge or corner clicked (FIGURE's patch 0002)
++         {
++            newDir = interpolationDir * handednessSign;
++         }
+ 
+          vec_t newUp = viewInverse.v.up;
+          newUp.Lerp(interpolationUp, 0.3f);

@@ -1,8 +1,9 @@
 // A field through a colormap (ip_field_image, src/lib/figure_implot.F90): a real32 or real64 matrix coloured into an
 // RGBA texture and drawn as one ImPlot image. The texture is cached by the item's ImGui id and coloured again only
-// when the program says the values changed, or the array (address, shape, kind), the range, the colormap, the scale
-// or the NaN colour differ from the last colouring; an entry not drawn for IDLE_SECONDS is released at the end of a
-// frame. Every argument is checked on the Fortran side; main thread only, inside a plot.
+// when the program says the values changed, or the array (address, shape, kind), the range, the colormap (or its
+// colours, edited by ig_gradient_edit), the scale or the NaN colour differ from the last colouring; an entry not
+// drawn for IDLE_SECONDS is released at the end of a frame. Every argument is checked on the Fortran side; main
+// thread only, inside a plot.
 //
 // Colouring. A value v maps to t = (s(v) - s(lo)) / (s(hi) - s(lo)), s the scale (identity, log10, or ImPlot's symlog
 // 2 asinh(v/2)), v clamped to [lo, hi] first, then to the colormap's colour at t as ImPlot samples it
@@ -50,6 +51,7 @@ struct entry_t {
    double vmin = 0.0, vmax = 0.0;      // ... its ends
    double lo = 0.0, hi = 1.0;          // the range applied
    int cmap = -1, scale = LINEAR;      // colormap, scale
+   unsigned colormaps = 0;             // fig_colormap_generation (a colormap edited: coloured again)
    ImU32 nan = 0;                      // NaN colour
    double last_time = 0.0;             // ImGui::GetTime() of the last drawing
    int last_frame = -1;                // ImGui::GetFrameCount() of the last drawing
@@ -164,7 +166,8 @@ int fig_field_image(const char *label, int label_len, const void *data, int kind
       const ImU32 nanc = to_u32(nan_rgba);
       entry_t &e = cache[id];
       const bool again = e.tex == 0 || changed || e.data != data || e.kind != kind || e.nx != nx || e.ny != ny ||
-                         e.cmap != cmap || e.scale != scale || e.nan != nanc || e.has_vmin != has_vmin ||
+                         e.cmap != cmap || e.colormaps != fig_colormap_generation() || e.scale != scale ||
+                         e.nan != nanc || e.has_vmin != has_vmin ||
                          e.has_vmax != has_vmax || (has_vmin && e.vmin != vmin) || (has_vmax && e.vmax != vmax);
       e.label = name;
       e.last_time = ImGui::GetTime();
@@ -188,6 +191,7 @@ int fig_field_image(const char *label, int label_len, const void *data, int kind
          e.nx = nx;
          e.ny = ny;
          e.cmap = cmap;
+         e.colormaps = fig_colormap_generation();
          e.scale = scale;
          e.nan = nanc;
          e.has_vmin = has_vmin;

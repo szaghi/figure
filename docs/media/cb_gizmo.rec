@@ -1,0 +1,23 @@
+#! program build/docs-examples/bin/cb_gizmo
+#! from    5
+#! frames  260
+#! poster  180
+#! crop    0 0 720 540
+# a clipping plane placed by hand: its arrow dragged along the normal moves the cut toward the tail; Turn, then the
+# blue ring dragged turns the plane about z; a click on the view cube's green face (-y) turns the camera to it
+0   move 600 450
+5   move 408 309 15
+28  down
+32  move 470 328 30
+70  up
+85  move 78 49 15
+104 down
+106 up
+115 move 400 352 20
+140 down
+144 move 470 340 30
+178 up
+190 move 636 126 20
+212 down
+214 up
+240 move 600 450 15

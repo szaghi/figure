@@ -1,0 +1,4 @@
+$ ./cb_gizmo --test
+plane point before:  2.000  0.000  0.000
+plane point after:   2.709  0.000  0.000
+camera after a click on the cube (azimuth, elevation):  -45.00    0.00

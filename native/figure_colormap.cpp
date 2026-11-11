@@ -14,6 +14,8 @@
 #include "implot.h"
 #include "implot_internal.h" // ImPlotColormapData::IsQual: a derived map of a qualitative one stays qualitative
 
+#include "ImGradient.h" // the gradient editor (ImGuizmo's ImGradient, third_party/ImGuizmo)
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -51,6 +53,15 @@ struct user_map_t {
 };
 std::vector<user_map_t>        user_maps; // in load order
 std::map<std::string, table_t> bundled;   // parsed at first use
+// maps edited by ig_gradient_edit: their stops, and for ImPlot's own maps the edited keys (the bundled and the
+// user's tables are edited in place), applied again to a new ImPlot context
+struct gradient_t {
+   std::vector<ImVec4> stops;            // rgb, w the position in [0, 1], in the editor's order (not sorted)
+   table_t             builtin;          // ImPlot's own map: its keys as edited
+   ImPlotContext      *applied = nullptr; // the context the keys were written to
+};
+std::map<std::string, gradient_t> gradients;
+unsigned generation = 0; // fig_colormap_generation
 
 int fail(int status, const std::string &msg) {
    fig_set_last_error(msg.c_str(), static_cast<int>(msg.size()));
@@ -572,6 +583,127 @@ band_format parse_band_format(const std::string &f) {
    return b;
 }
 
+
+// The keys of the map `base` (its table; ImPlot's own: its keys, as edited), and whether it is qualitative.
+bool base_keys(const std::string &base, table_t &keys, bool &qual) {
+   qual = false;
+   const int builtin = implot_map(base);
+   if (builtin >= 0) {
+      const int b = ImPlot::GetColormapIndex(IMPLOT_MAPS[builtin]);
+      if (b < 0) return false;
+      qual = ImPlot::GetCurrentContext()->ColormapData.IsQual(b);
+      const auto g = gradients.find(base);
+      if (g != gradients.end() && !g->second.builtin.empty()) {
+         keys = g->second.builtin;
+         return true;
+      }
+      keys.clear();
+      for (int i = 0; i < ImPlot::GetColormapSize(b); ++i) {
+         const ImVec4 c = ImPlot::GetColormapColor(i, b);
+         keys.push_back({c.x, c.y, c.z});
+      }
+      return true;
+   }
+   const table_t *tb = bundled_map(base);
+   if (!tb) tb = user_map(base);
+   if (!tb) return false;
+   keys = *tb;
+   return true;
+}
+
+// The keys of a variant of `keys`: reversed, and cut into `levels` bands (0: continuous); qual updated.
+table_t variant_keys(table_t keys, bool reversed, int levels, bool &qual) {
+   if (reversed) std::reverse(keys.begin(), keys.end());
+   if (levels > 0) { // a band each, its colour the map's at the band's centre
+      table_t bands(static_cast<size_t>(levels));
+      for (int k = 0; k < levels; ++k) {
+         const double t = (k + 0.5) / levels;
+         bands[static_cast<size_t>(k)] =
+            qual ? keys[std::min(static_cast<size_t>(t * keys.size()), keys.size() - 1)] : lerp(keys, t);
+      }
+      keys = std::move(bands);
+      qual = true;
+   }
+   return keys;
+}
+
+// Write `keys` into the registered ImPlot map `id` (the same number of keys); RebuildTables is the caller's.
+void write_keys(int id, const table_t &keys) {
+   ImPlotColormapData &cd = ImPlot::GetCurrentContext()->ColormapData;
+   if (id < 0 || id >= cd.Count || cd.KeyCounts[id] != static_cast<int>(keys.size())) return;
+   for (size_t i = 0; i < keys.size(); ++i)
+      cd.Keys[cd.KeyOffsets[id] + static_cast<int>(i)] =
+         ImGui::ColorConvertFloat4ToU32(ImVec4(static_cast<float>(keys[i][0]), static_cast<float>(keys[i][1]),
+                                               static_cast<float>(keys[i][2]), 1.0f));
+}
+
+// An edited ImPlot map's keys written to the current context, once per context.
+void apply_builtin(const std::string &base) {
+   const auto g = gradients.find(base);
+   if (g == gradients.end() || g->second.builtin.empty() || g->second.applied == ImPlot::GetCurrentContext()) return;
+   const int builtin = implot_map(base);
+   if (builtin < 0) return;
+   write_keys(ImPlot::GetColormapIndex(IMPLOT_MAPS[builtin]), g->second.builtin);
+   ImPlot::GetCurrentContext()->ColormapData.RebuildTables();
+   g->second.applied = ImPlot::GetCurrentContext();
+}
+
+// The map's colour at t of stops (sorted by position; before the first and after the last, their colours).
+rgb_t stops_at(const std::vector<ImVec4> &sorted, double t) {
+   if (sorted.empty()) return {0.0, 0.0, 0.0};
+   if (t <= sorted.front().w) return {sorted.front().x, sorted.front().y, sorted.front().z};
+   for (size_t i = 1; i < sorted.size(); ++i)
+      if (t <= sorted[i].w) {
+         const ImVec4 &a = sorted[i - 1], &b = sorted[i];
+         const double w = b.w > a.w ? (t - a.w) / (b.w - a.w) : 1.0;
+         return {a.x + w * (b.x - a.x), a.y + w * (b.y - a.y), a.z + w * (b.z - a.z)};
+      }
+   return {sorted.back().x, sorted.back().y, sorted.back().z};
+}
+
+std::vector<ImVec4> sorted_stops(std::vector<ImVec4> s) {
+   std::stable_sort(s.begin(), s.end(), [](const ImVec4 &a, const ImVec4 &b) { return a.w < b.w; });
+   return s;
+}
+
+// The stops of a table of n keys at uniform positions: every key for a short table (n <= 16, as ImPlot's own maps),
+// else keys taken greedily, each as far from the last as the line between them passes within STOP_TOLERANCE of every
+// key between (per channel): what the editor shows of a 256-sample map (10 to 21 stops for the bundled ones), its
+// colours kept within 2 levels of 0-255, the tolerance of FIGURE's picture comparisons.
+constexpr double STOP_TOLERANCE = 2.0 / 255.0;
+std::vector<ImVec4> stops_of(const table_t &keys) {
+   std::vector<ImVec4> s;
+   const size_t n = keys.size();
+   auto stop = [&](size_t i) {
+      s.emplace_back(static_cast<float>(keys[i][0]), static_cast<float>(keys[i][1]), static_cast<float>(keys[i][2]),
+                     n > 1 ? static_cast<float>(static_cast<double>(i) / static_cast<double>(n - 1)) : 0.0f);
+   };
+   if (n == 0) return s;
+   if (n <= 16) {
+      for (size_t i = 0; i < n; ++i) stop(i);
+      return s;
+   }
+   size_t a = 0;
+   stop(0);
+   while (a + 1 < n) {
+      size_t b = a + 1;
+      while (b + 1 < n) { // extend the segment to b + 1 while every key between stays within the tolerance
+         bool ok = true;
+         const size_t c = b + 1;
+         for (size_t k = a + 1; k < c && ok; ++k) {
+            const double w = static_cast<double>(k - a) / static_cast<double>(c - a);
+            for (int j = 0; j < 3; ++j)
+               if (std::fabs(keys[a][j] + w * (keys[c][j] - keys[a][j]) - keys[k][j]) > STOP_TOLERANCE) ok = false;
+         }
+         if (!ok) break;
+         b = c;
+      }
+      stop(b);
+      a = b;
+   }
+   return s;
+}
+
 } // namespace
 
 int fig_colormap(const char *name, int name_len, int levels, int *id) {
@@ -590,6 +722,7 @@ int fig_colormap(const char *name, int name_len, int levels, int *id) {
       const int builtin_id = builtin >= 0 ? ImPlot::GetColormapIndex(IMPLOT_MAPS[builtin]) : -1;
       if (builtin >= 0 && builtin_id < 0) // ImPlot renamed one of its maps: IMPLOT_MAPS is out of date
          return fail(FIG_ERR_FAILED, "ip_colormap: ImPlot has no colormap '" + base + "'");
+      if (builtin >= 0) apply_builtin(base); // an edited map of ImPlot's, in a new context
       if (builtin >= 0 && !reversed && levels == 0) {
          *id = builtin_id;
          return FIG_OK;
@@ -599,30 +732,9 @@ int fig_colormap(const char *name, int name_len, int levels, int *id) {
       if (*id >= 0) return FIG_OK;
       table_t keys;
       bool qual = false;
-      if (builtin >= 0) {
-         const int b = builtin_id;
-         qual = ImPlot::GetCurrentContext()->ColormapData.IsQual(b);
-         for (int i = 0; i < ImPlot::GetColormapSize(b); ++i) {
-            const ImVec4 c = ImPlot::GetColormapColor(i, b);
-            keys.push_back({c.x, c.y, c.z});
-         }
-      } else {
-         const table_t *t = bundled_map(base);
-         if (!t) t = user_map(base);
-         if (!t) return fail(FIG_ERR_FAILED, "ip_colormap: the table of '" + base + "' cannot be read");
-         keys = *t;
-      }
-      if (reversed) std::reverse(keys.begin(), keys.end());
-      if (levels > 0) { // a band each, its colour the map's at the band's centre
-         table_t bands(static_cast<size_t>(levels));
-         for (int k = 0; k < levels; ++k) {
-            const double t = (k + 0.5) / levels;
-            bands[static_cast<size_t>(k)] =
-               qual ? keys[std::min(static_cast<size_t>(t * keys.size()), keys.size() - 1)] : lerp(keys, t);
-         }
-         keys = std::move(bands);
-         qual = true;
-      }
+      if (!base_keys(base, keys, qual))
+         return fail(FIG_ERR_FAILED, "ip_colormap: the table of '" + base + "' cannot be read");
+      keys = variant_keys(std::move(keys), reversed, levels, qual);
       std::vector<ImVec4> colours;
       for (const auto &k : keys)
          colours.emplace_back(static_cast<float>(k[0]), static_cast<float>(k[1]), static_cast<float>(k[2]), 1.0f);
@@ -894,6 +1006,201 @@ int fig_colormap_legend(const char *id, int id_len, int cmap, double vmin, doubl
             dl->AddLine(ImVec2(r.Max.x, p), ImVec2(r.Max.x + tick, p), text);
             dl->AddText(ImVec2(r.Max.x + tick + style.ItemInnerSpacing.x, p - ts.y * 0.5f), text, s.c_str());
          }
+      }
+      return FIG_OK;
+   } catch (const std::exception &e) {
+      return fail(FIG_ERR_EXCEPTION, std::string("C++ exception: ") + e.what());
+   } catch (...) {
+      return fail(FIG_ERR_EXCEPTION, "unknown C++ exception");
+   }
+}
+
+namespace {
+
+// The map `n` as the gradient editor takes it: its base name, or an error message.
+bool editable(const std::string &n, const char *who, std::string &err) {
+   std::string base;
+   bool reversed = false;
+   if (!resolves(n, base, reversed)) {
+      err = std::string(who) + ": unknown colormap '" + n + "' (ip_colormap_names lists them)";
+      return false;
+   }
+   if (reversed) {
+      err = std::string(who) + ": '" + n + "' is a reversed map: edit '" + base + "'";
+      return false;
+   }
+   table_t keys;
+   bool qual = false;
+   if (!base_keys(base, keys, qual) || keys.size() < 2) {
+      err = std::string(who) + ": the table of '" + n + "' cannot be read";
+      return false;
+   }
+   if (qual) {
+      err = std::string(who) + ": '" + n + "' is qualitative (a list of colours, not a scale): it has no gradient";
+      return false;
+   }
+   return true;
+}
+
+gradient_t &gradient_of(const std::string &base) {
+   auto g = gradients.find(base);
+   if (g == gradients.end()) {
+      table_t keys;
+      bool qual = false;
+      base_keys(base, keys, qual);
+      g = gradients.emplace(base, gradient_t{}).first;
+      g->second.stops = stops_of(keys);
+   }
+   return g->second;
+}
+
+// The map `base` resampled from its stops: its table (or ImPlot's keys), and every registered variant's keys.
+void resample_from_stops(const std::string &base, gradient_t &g) {
+   table_t keys;
+   bool qual = false;
+   base_keys(base, keys, qual);
+   const std::vector<ImVec4> s = sorted_stops(g.stops);
+   const size_t n = keys.size();
+   for (size_t k = 0; k < n; ++k) keys[k] = stops_at(s, n > 1 ? static_cast<double>(k) / (n - 1) : 0.0);
+   const int builtin = implot_map(base);
+   if (builtin >= 0) {
+      g.builtin = keys;
+      g.applied = ImPlot::GetCurrentContext();
+      write_keys(ImPlot::GetColormapIndex(IMPLOT_MAPS[builtin]), keys);
+   } else if (bundled_map(base)) {
+      bundled[base] = keys;
+   } else {
+      for (auto &m : user_maps)
+         if (m.name == base) m.rows = keys;
+   }
+   for (const std::string &name : {base, base + "_r"})
+      for (int levels = 0; levels <= MAX_LEVELS; levels = levels == 0 ? 2 : levels + 1) {
+         if (levels == 0 && name == base && builtin >= 0) continue; // written above
+         const std::string registered = levels > 0 ? name + "|" + std::to_string(levels) : name;
+         const int id = ImPlot::GetColormapIndex(registered.c_str());
+         if (id < 0) continue;
+         bool q = qual;
+         write_keys(id, variant_keys(keys, name != base, levels, q));
+      }
+   ImPlot::GetCurrentContext()->ColormapData.RebuildTables();
+   ++generation;
+}
+
+// ImGradient's delegate on a map's stops: kept in the editor's order (ImGradient keeps the index of the point it
+// moves across frames), sorted only to sample them.
+struct stops_delegate : ImGradient::Delegate {
+   std::vector<ImVec4> &p;
+   explicit stops_delegate(std::vector<ImVec4> &stops) : p(stops) {}
+   size_t GetPointCount() override { return p.size(); }
+   ImVec4 *GetPoints() override { return p.data(); }
+   int EditPoint(int i, ImVec4 value) override {
+      p[static_cast<size_t>(i)] = value;
+      return i;
+   }
+   ImVec4 GetPoint(float t) override {
+      const rgb_t c = stops_at(sorted_stops(p), t);
+      return ImVec4(static_cast<float>(c[0]), static_cast<float>(c[1]), static_cast<float>(c[2]), t);
+   }
+   void AddPoint(ImVec4 value) override { p.push_back(value); }
+};
+
+bool same_stops(const std::vector<ImVec4> &a, const std::vector<ImVec4> &b) {
+   if (a.size() != b.size()) return false;
+   for (size_t i = 0; i < a.size(); ++i)
+      if (a[i].x != b[i].x || a[i].y != b[i].y || a[i].z != b[i].z || a[i].w != b[i].w) return false;
+   return true;
+}
+
+} // namespace
+
+unsigned fig_colormap_generation(void) { return generation; }
+
+int fig_gradient_edit(const char *id, int id_len, const char *name, int name_len, float width, float height,
+                      int *changed) {
+   try {
+      *changed = 0;
+      if (!ImGui::GetCurrentContext() || !ImPlot::GetCurrentContext())
+         return fail(FIG_ERR_STATE, "ig_gradient_edit: figure is not initialized");
+      const std::string n = str(name, name_len);
+      std::string err;
+      if (!editable(n, "ig_gradient_edit", err)) return fail(FIG_ERR_ARGUMENT, err);
+      if (implot_map(n) >= 0) apply_builtin(n);
+      gradient_t &g = gradient_of(n);
+      const std::vector<ImVec4> before = g.stops;
+      // the widget: the map's strip over the stops (ImGradient's row), and on the stops' right the selected stop's
+      // colour and a button removing it (room kept for them when none is selected)
+      const ImGuiStyle &style = ImGui::GetStyle();
+      const float row = ImGui::GetFrameHeight();
+      const float controls = row + style.ItemSpacing.x + ImGui::CalcTextSize("Remove").x + 2.0f * style.FramePadding.x;
+      const ImVec2 avail = ImGui::GetContentRegionAvail();
+      const float w = std::max(4.0f * row + controls + style.ItemSpacing.x, width > 0.0f ? width : avail.x + width);
+      const float h = std::max(2.0f * row + style.ItemSpacing.y, height > 0.0f ? height : 2.0f * row + style.ItemSpacing.y);
+      const float bar = w - controls - style.ItemSpacing.x;
+      const float strip = h - row - style.ItemSpacing.y;
+      ImGui::PushID(id, id + std::max(id_len, 0));
+      ImGui::BeginGroup();
+      // the map, between the centres of the stops at 0 and 1 (ImGradient puts a stop at t from t (w - row) + row / 2)
+      const ImVec2 p0 = ImGui::GetCursorScreenPos();
+      ImGui::Dummy(ImVec2(bar, strip));
+      ImDrawList *dl = ImGui::GetWindowDrawList();
+      const std::vector<ImVec4> s = sorted_stops(g.stops);
+      const float x0 = p0.x + 0.5f * row, x1 = p0.x + bar - 0.5f * row;
+      const int segments = std::max(1, static_cast<int>(x1 - x0) / 2);
+      auto u32 = [](const rgb_t &c) {
+         return ImGui::ColorConvertFloat4ToU32(
+            ImVec4(static_cast<float>(c[0]), static_cast<float>(c[1]), static_cast<float>(c[2]), 1.0f));
+      };
+      for (int k = 0; k < segments; ++k) {
+         const double ta = static_cast<double>(k) / segments, tb = static_cast<double>(k + 1) / segments;
+         const ImU32 ca = u32(stops_at(s, ta)), cb = u32(stops_at(s, tb));
+         dl->AddRectFilledMultiColor(ImVec2(std::floor(x0 + (x1 - x0) * static_cast<float>(ta)), p0.y),
+                                     ImVec2(std::floor(x0 + (x1 - x0) * static_cast<float>(tb)), p0.y + strip), ca, cb,
+                                     cb, ca);
+      }
+      // the stops: dragged, a double click adds one, a click selects one
+      stops_delegate d(g.stops);
+      int selected = -1;
+      ImGradient::Edit(d, ImVec2(bar, row), selected);
+      ImGui::SetCursorScreenPos(ImVec2(p0.x + bar + style.ItemSpacing.x, p0.y + strip + style.ItemSpacing.y));
+      if (selected >= 0 && selected < static_cast<int>(g.stops.size())) {
+         ImVec4 &c = g.stops[static_cast<size_t>(selected)];
+         float rgb[3] = {c.x, c.y, c.z};
+         if (ImGui::ColorEdit3("##stop", rgb, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
+            c.x = rgb[0], c.y = rgb[1], c.z = rgb[2];
+         ImGui::SameLine();
+         ImGui::BeginDisabled(g.stops.size() <= 2);
+         if (ImGui::Button("Remove")) g.stops.erase(g.stops.begin() + selected);
+         ImGui::EndDisabled();
+      } else {
+         ImGui::Dummy(ImVec2(controls, row));
+      }
+      ImGui::EndGroup();
+      ImGui::PopID();
+      if (!same_stops(before, g.stops)) {
+         resample_from_stops(n, g);
+         *changed = 1;
+      }
+      return FIG_OK;
+   } catch (const std::exception &e) {
+      return fail(FIG_ERR_EXCEPTION, std::string("C++ exception: ") + e.what());
+   } catch (...) {
+      return fail(FIG_ERR_EXCEPTION, "unknown C++ exception");
+   }
+}
+
+int fig_colormap_stops(const char *name, int name_len, double *pos, double *rgb, int cap, int *n) {
+   try {
+      *n = 0;
+      if (!ImPlot::GetCurrentContext()) return fail(FIG_ERR_STATE, "ip_colormap_stops: figure is not initialized");
+      const std::string nm = str(name, name_len);
+      std::string err;
+      if (!editable(nm, "ip_colormap_stops", err)) return fail(FIG_ERR_ARGUMENT, err);
+      const std::vector<ImVec4> s = sorted_stops(gradient_of(nm).stops);
+      *n = static_cast<int>(s.size());
+      for (int i = 0; i < std::min(cap, *n); ++i) {
+         pos[i] = s[static_cast<size_t>(i)].w;
+         rgb[3 * i] = s[static_cast<size_t>(i)].x, rgb[3 * i + 1] = s[static_cast<size_t>(i)].y;
+         rgb[3 * i + 2] = s[static_cast<size_t>(i)].z;
       }
       return FIG_OK;
    } catch (const std::exception &e) {

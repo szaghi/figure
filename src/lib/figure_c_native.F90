@@ -44,6 +44,7 @@ public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig
 public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_widget_input_text_multiline
 public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
 public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
+public :: fig_gradient_edit, fig_colormap_stops
 public :: fig_plot_annotation, fig_drawn_extent_rgba, fig_plot_tag
 public :: fig_colormap_legend, fig_popup_rect, fig_opened_url
 public :: fig_items_record, fig_item_find, fig_item_value, fig_items_list, fig_items_name, fig_items_tooltip
@@ -1820,6 +1821,34 @@ interface
    integer(c_int), value               :: buf_len !< Its size [bytes].
    integer(c_int)                      :: length  !< The name's length [bytes] (0: no such name).
    endfunction fig_colormap_name
+
+   function fig_gradient_edit(id, id_len, name, name_len, width, height, changed) result(status) &
+      bind(C, name='fig_gradient_edit')
+   !< The gradient editor of the colormap `name`: its stops dragged, added, recoloured, removed; changed 1 on a change.
+   import :: c_char, c_float, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: id(*)    !< Id (not NUL-terminated).
+   integer(c_int), value               :: id_len   !< Its length [bytes].
+   character(kind=c_char), intent(in)  :: name(*)  !< Colormap name.
+   integer(c_int), value               :: name_len !< Its length [bytes].
+   real(c_float), value                :: width    !< Width [pixels] (<= 0: the space left plus it).
+   real(c_float), value                :: height   !< Height [pixels] (<= 0: the default).
+   integer(c_int), intent(out)         :: changed  !< 1: the map changed on this frame.
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_gradient_edit
+
+   function fig_colormap_stops(name, name_len, pos, rgb, cap, n) result(status) bind(C, name='fig_colormap_stops')
+   !< The stops of the colormap `name` (sorted by position): up to `cap` copied, `n` their number.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: name(*)  !< Colormap name.
+   integer(c_int), value               :: name_len !< Its length [bytes].
+   real(c_double), intent(out)         :: pos(*)   !< Positions in [0, 1].
+   real(c_double), intent(out)         :: rgb(*)   !< Colours, 3 per stop, in [0, 1].
+   integer(c_int), value               :: cap      !< Stops room.
+   integer(c_int), intent(out)         :: n        !< Stops.
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_colormap_stops
 
    ! ---- the canvas (native/figure_canvas.cpp) --------------------------------------------------------------------------
    function fig_canvas(id, id_len, width, height, texture, ev) result(status) bind(C, name='fig_canvas')

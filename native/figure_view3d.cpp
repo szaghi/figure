@@ -18,7 +18,10 @@
 #include "figure_view3d.h"
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "implot.h"
+
+#include "ImGuizmo.h"
 
 #include <SDL3/SDL.h>
 
@@ -141,6 +144,15 @@ struct view_t {
    int                    tex_full_w = 0, tex_full_h = 0, tex_half_w = 0, tex_half_h = 0;
    pick_t                 hovered, clicked;
    bool                   moving = false;
+   unsigned               colormaps = 0;    // fig_colormap_generation at the last table loads
+   // the gizmos drawn over the image (fig_view3d_cube, fig_view3d_gizmo)
+   ImVec2                 image_pos{0, 0};  // the image's top-left corner [pixels] at the last draw
+   int                    image_frame = -1; // ... its Dear ImGui frame
+   ImGuiID                image_window = 0; // ... its window
+   ImVec2                 cube_min{0, 0}, cube_max{0, 0}; // the view cube's rectangle, from the image's corner
+   int                    cube_frame = -10; // the last frame it was drawn
+   int                    overlay_frame = -10; // the last frame a gizmo or the cube was hovered or in use
+   bool                   cube_moved = false;  // the cube turned the camera (the next draw: a move)
 };
 
 std::map<int, std::unique_ptr<view_t>> views;
@@ -269,12 +281,14 @@ void fit(view_t &v, double aspect) {
    v.camera_set = true;
 }
 
-// projection * view for a w x h target; near and far from the bounding sphere.
-void matrices(const view_t &v, int w, int h, double mvp[16]) {
+// The view V and the projection P for a w x h target (column-major, OpenGL's conventions: a right-handed eye space
+// looking down -z, clip z in [-w, w]); near and far from the bounding sphere.
+void view_projection(const view_t &v, int w, int h, double V[16], double P[16]) {
    double f[3], r[3], u[3], e[3];
    basis(v.cam, f, r, u);
    eye_of(v.cam, e);
-   double V[16] = {r[0], u[0], -f[0], 0, r[1], u[1], -f[1], 0, r[2], u[2], -f[2], 0, 0, 0, 0, 1};
+   const double Vr[16] = {r[0], u[0], -f[0], 0, r[1], u[1], -f[1], 0, r[2], u[2], -f[2], 0, 0, 0, 0, 1};
+   std::memcpy(V, Vr, sizeof Vr);
    V[12] = -(r[0] * e[0] + r[1] * e[1] + r[2] * e[2]);
    V[13] = -(u[0] * e[0] + u[1] * e[1] + u[2] * e[2]);
    V[14] = f[0] * e[0] + f[1] * e[1] + f[2] * e[2];
@@ -286,7 +300,14 @@ void matrices(const view_t &v, int w, int h, double mvp[16]) {
    if (zf <= 0.0) zf = 1.0;
    zn = std::max(zn, zf * 1.0e-4); // the eye inside the sphere: a near plane close to it
    const double t = 1.0 / std::tan(0.5 * v.cam.fov * DEG), aspect = static_cast<double>(w) / h;
-   const double P[16] = {t / aspect, 0, 0, 0, 0, t, 0, 0, 0, 0, (zf + zn) / (zn - zf), -1, 0, 0, 2 * zf * zn / (zn - zf), 0};
+   const double Pr[16] = {t / aspect, 0, 0, 0, 0, t, 0, 0, 0, 0, (zf + zn) / (zn - zf), -1, 0, 0, 2 * zf * zn / (zn - zf), 0};
+   std::memcpy(P, Pr, sizeof Pr);
+}
+
+// projection * view for a w x h target.
+void matrices(const view_t &v, int w, int h, double mvp[16]) {
+   double V[16], P[16];
+   view_projection(v, w, h, V, P);
    mul(P, V, mvp);
 }
 
@@ -798,6 +819,82 @@ void style_background(view_t &v) {
    }
 }
 
+
+// ---- gizmos (ImGuizmo, third_party/ImGuizmo) ---------------------------------------------------------------------
+//
+// ImGuizmo works in single precision, on column-major float[16] matrices with OpenGL's conventions, as FIGURE's view
+// and projection: FIGURE gives it its own matrices in real64, rounded, with the world moved so that the camera's
+// target is at the origin (the gizmo's numbers are then of the scene's size, not of its distance from the origin).
+// The view cube's world has y up, FIGURE's z: its camera is turned by C (x' = x, y' = z, z' = -y) on the way in and
+// back on the way out, and its faces take FIGURE's axis colours (x red, y green, z blue).
+
+// ImGuizmo's per-frame state, once a frame, without its full-screen window (FIGURE's patch 0001).
+void gizmo_frame() {
+   static int last = -1;
+   static ImGuiContext *context = nullptr;
+   const int frame = ImGui::GetFrameCount();
+   if (frame == last && context == ImGui::GetCurrentContext()) return;
+   last = frame, context = ImGui::GetCurrentContext();
+   ImGuizmo::BeginFrameState();
+}
+
+// The view's matrices for its widget size, the world moved by -o (o: the camera's target), in single precision. The
+// projection's depth range is widened to [distance / 1000, 1000 distance] (x and y unchanged): ImGuizmo casts its
+// mouse rays from the point at clip depth 0, which with the view's own near and far planes (around the meshes'
+// bounding sphere) lies inside the scene, and a handle nearer the eye than that point drags the wrong way (it takes
+// the ray's intersection behind its origin, mirrored); the widened range puts it at about distance / 500.
+void gizmo_matrices(view_t &v, float fv[16], float fp[16], double o[3]) {
+   if (!v.camera_set) fit(v, v.vw > 0 && v.vh > 0 ? static_cast<double>(v.vw) / v.vh : 1.0);
+   double V[16], P[16];
+   view_projection(v, std::max(v.vw, 1), std::max(v.vh, 1), V, P);
+   const double zn = 1.0e-3 * v.cam.distance, zf = 1.0e3 * v.cam.distance;
+   P[10] = (zf + zn) / (zn - zf);
+   P[14] = 2.0 * zf * zn / (zn - zf);
+   for (int d = 0; d < 3; ++d) o[d] = v.cam.target[d];
+   for (int r = 0; r < 3; ++r) V[12 + r] += V[r] * o[0] + V[4 + r] * o[1] + V[8 + r] * o[2]; // V * T(o)
+   for (int k = 0; k < 16; ++k) fv[k] = static_cast<float>(V[k]), fp[k] = static_cast<float>(P[k]);
+}
+
+// While ImGuizmo runs: Dear ImGui's "no mouse" position (-FLT_MAX, before the first move or after the pointer left)
+// replaced by one far outside the view, so that ImGuizmo's ray computations (which read io.MousePos) do not overflow:
+// a program built with floating-point traps (gfortran's -ffpe-trap, the debug modes) would stop on it.
+struct mouse_guard {
+   ImVec2 saved;
+   bool   invalid;
+   mouse_guard() : saved(ImGui::GetIO().MousePos), invalid(!ImGui::IsMousePosValid()) {
+      if (invalid) ImGui::GetIO().MousePos = ImVec2(-1.0e5f, -1.0e5f);
+   }
+   ~mouse_guard() {
+      if (invalid) ImGui::GetIO().MousePos = saved;
+   }
+};
+
+// Keep Dear ImGui's active id on `id` while a gizmo is dragged with the left button: no item and no window takes
+// the press (a press on no item would start moving the window).
+void hold_active(ImGuiID id, bool using_it) {
+   ImGuiWindow *w = ImGui::GetCurrentWindow();
+   if (using_it && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      if (ImGui::GetActiveID() == 0) ImGui::SetActiveID(id, w);
+      if (ImGui::GetActiveID() == id) ImGui::KeepAliveID(id);
+   } else if (ImGui::GetActiveID() == id) {
+      ImGui::ClearActiveID();
+   }
+}
+
+// The azimuth and elevation [degrees] of a camera whose back vector (target to eye) is b and up vector u (FIGURE's
+// world); at a pole the azimuth is the one whose up vector is u.
+void orientation(const double b[3], const double u[3], double &azimuth, double &elevation) {
+   const double n = std::sqrt(b[0] * b[0] + b[1] * b[1] + b[2] * b[2]);
+   const double bz = n > 0.0 ? b[2] / n : 0.0;
+   if (bz > 1.0 - 1.0e-6) {
+      elevation = 90.0, azimuth = std::atan2(-u[1], -u[0]) / DEG; // basis(): u = -(cos az, sin az, 0) looking down
+   } else if (bz < -1.0 + 1.0e-6) {
+      elevation = -90.0, azimuth = std::atan2(u[1], u[0]) / DEG;
+   } else {
+      elevation = std::asin(bz) / DEG, azimuth = std::atan2(b[1], b[0]) / DEG;
+   }
+}
+
 } // namespace
 
 #define V3_TRY try {
@@ -1070,20 +1167,44 @@ int fig_view3d_draw(int handle, const char *id, int id_len, double width, double
    if (h <= 0.0f) h = std::max(1.0f, avail.y + h);
    const int iw = std::max(1, static_cast<int>(w)), ih = std::max(1, static_cast<int>(h));
    const ImVec2 p0 = ImGui::GetCursorScreenPos();
-   ImGui::InvisibleButton(label.c_str(), ImVec2(static_cast<float>(iw), static_cast<float>(ih)),
-                          ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
-                              ImGuiButtonFlags_MouseButtonMiddle);
-   // the wheel is the view's while the pointer is over it: claimed for the next frame, so that a scrolling window or
-   // child holding the view does not scroll on the same turn of the wheel (Dear ImGui's key ownership)
-   ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
-   ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
+   // the mouse over the view cube, or over a gizmo (or using one) in the last frame: the gizmos', not the view's, unless
+   // the view is being dragged. The view is then an item without an id, which no press activates and the mouse does
+   // not hover: ImGuizmo's gizmos start a drag only while no item is hovered or active (the cube and the gizmo
+   // calls take the press themselves, so that the window does not move)
+   const int frame = ImGui::GetFrameCount();
+   const ImVec2 mouse = ImGui::GetIO().MousePos;
+   const bool over_cube = v->cube_frame >= frame - 1 && mouse.x >= p0.x + v->cube_min.x &&
+                          mouse.x < p0.x + v->cube_max.x && mouse.y >= p0.y + v->cube_min.y &&
+                          mouse.y < p0.y + v->cube_max.y;
+   const bool overlay = (over_cube || v->overlay_frame >= frame - 1) && ImGui::GetActiveID() != ImGui::GetID(label.c_str());
+   if (overlay) {
+      ImGui::Dummy(ImVec2(static_cast<float>(iw), static_cast<float>(ih)));
+   } else {
+      ImGui::InvisibleButton(label.c_str(), ImVec2(static_cast<float>(iw), static_cast<float>(ih)),
+                             ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
+                                 ImGuiButtonFlags_MouseButtonMiddle);
+      // the wheel is the view's while the pointer is over it: claimed for the next frame, so that a scrolling window
+      // or child holding the view does not scroll on the same turn of the wheel (Dear ImGui's key ownership)
+      ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+      ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
+   }
+   v->image_pos = p0;
+   v->image_frame = frame;
+   v->image_window = ImGui::GetCurrentWindow()->ID;
    const ImGuiIO &io = ImGui::GetIO();
-   const bool hovered = ImGui::IsItemHovered();
-   const bool active = ImGui::IsItemActive();
+   const bool hovered = !overlay && ImGui::IsItemHovered();
+   const bool active = !overlay && ImGui::IsItemActive();
+   const bool deactivated = !overlay && ImGui::IsItemDeactivated();
    if (iw != v->vw || ih != v->vh) v->vw = iw, v->vh = ih, v->dirty = true;
    style_background(*v);
+   if (v->colormaps != fig_colormap_generation()) { // a colormap was edited (ig_gradient_edit): its tables again
+      v->colormaps = fig_colormap_generation();
+      for (auto &m : v->meshes) m->table_ok = false;
+      v->dirty = true;
+   }
    // the mouse
-   bool moved = false;
+   bool moved = v->cube_moved;
+   v->cube_moved = false;
    if (!v->camera_set && !v->meshes.empty()) fit(*v, static_cast<double>(iw) / ih);
    if (active && (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f)) {
       const float dx = io.MouseDelta.x, dy = io.MouseDelta.y;
@@ -1134,7 +1255,7 @@ int fig_view3d_draw(int handle, const char *id, int id_len, double width, double
    // picking: hovered element, and the one clicked (a release without a drag)
    v->hovered = hovered ? pick_at(*v, io.MousePos.x - p0.x, io.MousePos.y - p0.y) : pick_t{};
    v->clicked = pick_t{};
-   if (ImGui::IsItemDeactivated() && hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+   if (deactivated && hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
       const ImVec2 d = ImVec2(io.MousePos.x - io.MouseClickedPos[0].x, io.MousePos.y - io.MouseClickedPos[0].y);
       if (d.x * d.x + d.y * d.y <= 9.0f) v->clicked = v->hovered;
    }
@@ -1177,6 +1298,141 @@ int fig_view3d_info(int handle, int *renders, double *ms, int *width, int *heigh
    *width = v->rw;
    *height = v->rh;
    *half = v->half ? 1 : 0;
+   return FIG_OK;
+   V3_CATCH
+}
+
+int fig_view3d_matrices(int handle, double *view, double *projection) {
+   V3_TRY
+   V3_VIEW
+   if (!v->camera_set) fit(*v, v->vw > 0 && v->vh > 0 ? static_cast<double>(v->vw) / v->vh : 1.0);
+   double V[16], P[16];
+   view_projection(*v, std::max(v->vw, 1), std::max(v->vh, 1), V, P);
+   if (view) std::memcpy(view, V, sizeof V);
+   if (projection) std::memcpy(projection, P, sizeof P);
+   return FIG_OK;
+   V3_CATCH
+}
+
+// The gizmos need the view drawn in this frame, in the current window: they are drawn over its image.
+#define V3_DRAWN(what)                                                                                                 \
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");                         \
+   if (v->image_frame != ImGui::GetFrameCount() || v->image_window != ImGui::GetCurrentWindow()->ID)                 \
+      return fail(FIG_ERR_STATE, std::string("view3d_object%") + what +                                              \
+                                     ": draw the view first, in this frame and in this window");
+
+int fig_view3d_cube(int handle, double size, int corner, int *changed) {
+   V3_TRY
+   V3_VIEW
+   *changed = 0;
+   V3_DRAWN("view_cube")
+   if (!(size > 0.0)) return fail(FIG_ERR_ARGUMENT, "view3d_object%view_cube: the size must be positive");
+   if (corner < 0 || corner > 3) return fail(FIG_ERR_ARGUMENT, "view3d_object%view_cube: unknown corner");
+   const float s = static_cast<float>(std::min({size, static_cast<double>(v->vw), static_cast<double>(v->vh)}));
+   const ImVec2 rel((corner == 1 || corner == 3) ? 0.0f : static_cast<float>(v->vw) - s,
+                    (corner == 2 || corner == 3) ? static_cast<float>(v->vh) - s : 0.0f);
+   const ImVec2 pos(v->image_pos.x + rel.x, v->image_pos.y + rel.y);
+   gizmo_frame();
+   ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+   ImGuizmo::SetOrthographic(false);
+   ImGuizmo::SetRect(v->image_pos.x, v->image_pos.y, static_cast<float>(v->vw), static_cast<float>(v->vh));
+   float fv[16], fp[16];
+   double o[3];
+   gizmo_matrices(*v, fv, fp, o);
+   // the camera into the cube's y-up world: V' = V C^-1, C^-1 (x', y', z') = (x', -z', y'): columns 1 and 2 of the
+   // rotation become column 2 and -column 1
+   float cv[16];
+   std::memcpy(cv, fv, sizeof cv);
+   for (int r = 0; r < 3; ++r) cv[4 + r] = fv[8 + r], cv[8 + r] = -fv[4 + r];
+   float before[16];
+   std::memcpy(before, cv, sizeof cv);
+   static const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+   float model[16];
+   std::memcpy(model, identity, sizeof model);
+   ImGuizmo::Style &st = ImGuizmo::GetStyle();
+   std::swap(st.Colors[ImGuizmo::DIRECTION_Y], st.Colors[ImGuizmo::DIRECTION_Z]); // y' is FIGURE's z
+   const ImGuiID id = ImGui::GetID(("##figure-view-cube-" + std::to_string(handle)).c_str());
+   ImGuizmo::PushID(static_cast<int>(id));
+   const bool using_before = ImGuizmo::IsUsingViewManipulate();
+   {
+      const mouse_guard guard;
+      ImGuizmo::ViewManipulate(cv, fp, ImGuizmo::TRANSLATE, ImGuizmo::WORLD, model, static_cast<float>(v->cam.distance),
+                               pos, ImVec2(s, s), 0);
+   }
+   const bool using_it = ImGuizmo::IsUsingViewManipulate() && !using_before;
+   ImGuizmo::PopID();
+   std::swap(st.Colors[ImGuizmo::DIRECTION_Y], st.Colors[ImGuizmo::DIRECTION_Z]);
+   const ImVec2 mp = ImGui::GetIO().MousePos;
+   const bool inside = mp.x >= pos.x && mp.x < pos.x + s && mp.y >= pos.y && mp.y < pos.y + s &&
+                       ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+   hold_active(id, using_it || (inside && ImGui::IsMouseClicked(ImGuiMouseButton_Left)));
+   v->cube_min = rel;
+   v->cube_max = ImVec2(rel.x + s, rel.y + s);
+   v->cube_frame = ImGui::GetFrameCount();
+   if (using_it) v->overlay_frame = v->cube_frame;
+   if (std::memcmp(before, cv, sizeof cv) != 0) { // back to FIGURE's world: rows 1 (up) and 2 (back), by C^-1
+      const double u[3] = {cv[1], -cv[9], cv[5]}, b[3] = {cv[2], -cv[10], cv[6]};
+      double az, el;
+      orientation(b, u, az, el);
+      v->cam.azimuth = std::remainder(az, 360.0);
+      v->cam.elevation = std::clamp(el, -90.0, 90.0);
+      v->camera_set = true;
+      v->dirty = true;
+      v->cube_moved = true;
+      *changed = 1;
+   }
+   return FIG_OK;
+   V3_CATCH
+}
+
+int fig_view3d_gizmo(int handle, const char *id, int id_len, double *matrix, int mode, int space, int has_snap,
+                     double snap, int *changed) {
+   V3_TRY
+   V3_VIEW
+   *changed = 0;
+   V3_DRAWN("gizmo")
+   if (mode < 0 || mode > 2) return fail(FIG_ERR_ARGUMENT, "view3d_object%gizmo: unknown mode");
+   if (has_snap && !(snap > 0.0 && std::isfinite(snap)))
+      return fail(FIG_ERR_ARGUMENT, "view3d_object%gizmo: snap must be positive");
+   for (int k = 0; k < 16; ++k)
+      if (!std::isfinite(matrix[k])) return fail(FIG_ERR_ARGUMENT, "view3d_object%gizmo: the matrix is not finite");
+   if (matrix[3] != 0.0 || matrix[7] != 0.0 || matrix[11] != 0.0 || matrix[15] != 1.0)
+      return fail(FIG_ERR_ARGUMENT, "view3d_object%gizmo: the matrix's last row must be (0, 0, 0, 1)");
+   const std::string label(id, static_cast<size_t>(std::max(id_len, 0)));
+   gizmo_frame();
+   ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+   ImGuizmo::SetOrthographic(false);
+   const float w = static_cast<float>(v->vw), h = static_cast<float>(v->vh);
+   ImGuizmo::SetRect(v->image_pos.x, v->image_pos.y, w, h);
+   // the axes about a fifth of the view's shorter side, in [40, 120] pixels; ImGuizmo's size is in clip space,
+   // measured along the view's longer side
+   const float px = std::clamp(0.2f * std::min(w, h), 40.0f, 120.0f);
+   ImGuizmo::SetGizmoSizeClipSpace(2.0f * px / std::max(std::max(w, h), 1.0f));
+   ImGuizmo::AllowAxisFlip(false); // the arrows point along +x, +y, +z (ImGuizmo's default flips them to the eye)
+   float fv[16], fp[16], fm[16];
+   double o[3];
+   gizmo_matrices(*v, fv, fp, o);
+   for (int k = 0; k < 16; ++k) fm[k] = static_cast<float>(matrix[k] - (k >= 12 && k < 15 ? o[k - 12] : 0.0));
+   static const ImGuizmo::OPERATION OPS[3] = {ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE};
+   float s3[3] = {static_cast<float>(snap), static_cast<float>(snap), static_cast<float>(snap)};
+   const ImGuiID gid = ImGui::GetID(label.c_str());
+   ImGuizmo::PushID(static_cast<int>(gid));
+   bool moved = false;
+   {
+      const mouse_guard guard;
+      moved = ImGuizmo::Manipulate(fv, fp, OPS[mode], space == 1 ? ImGuizmo::LOCAL : ImGuizmo::WORLD, fm, nullptr,
+                                   has_snap ? s3 : nullptr);
+   }
+   const bool using_it = ImGuizmo::IsUsing();
+   const bool over = ImGuizmo::GetHoveredHandleType() != ImGuizmo::MT_NONE;
+   ImGuizmo::PopID();
+   hold_active(gid, using_it);
+   if (using_it || over) v->overlay_frame = ImGui::GetFrameCount();
+   if (moved) {
+      for (int k = 0; k < 16; ++k) matrix[k] = static_cast<double>(fm[k]) + (k >= 12 && k < 15 ? o[k - 12] : 0.0);
+      matrix[3] = matrix[7] = matrix[11] = 0.0, matrix[15] = 1.0;
+      *changed = 1;
+   }
    return FIG_OK;
    V3_CATCH
 }

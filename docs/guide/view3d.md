@@ -37,6 +37,9 @@ tests check them one by one.
 | `v%hovered(mesh, element [, point] [, stat])` → `logical`, `v%clicked(...)` → `logical` | the element under the mouse, the element clicked, in the last `draw` |
 | `v%image(rgba [, stat])` | the pixels of the last render, `integer(int8), allocatable :: rgba(:,:,:)`, as `tex%update` takes them |
 | `v%render_info([count] [, milliseconds] [, width] [, height] [, half] [, stat])` | the renders so far, the time and size of the last one, whether it was at half resolution |
+| `v%view_cube([size] [, corner] [, stat])` | a view cube over the view, after `draw`: a click on a face, an edge or a corner turns the camera to it, a drag orbits ([Gizmos](#gizmos)) |
+| `v%gizmo(id, matrix [, mode] [, space] [, snap] [, stat])` → `logical` | handles over the view, after `draw`, moving `matrix` (`real(real64) :: matrix(4, 4)`): `'translate'`, `'rotate'` or `'scale'`; `.true.` on the frames the user moved it ([Gizmos](#gizmos)) |
+| `v%view_matrix(m [, stat])`, `v%projection_matrix(m [, stat])` | the camera's view and projection matrices, `real(real64) :: m(4, 4)`, column-major as OpenGL's ([Matrices](#matrices)) |
 
 Every procedure is refused from a [task](processes#tasks) (`FIG_ERR_STATE`), as the other drawing procedures are.
 
@@ -139,6 +142,83 @@ Surfaces are cut exactly, per pixel; lines per segment. The cut shows the inside
 
 <<< @/examples/snippets/cb_view3d_render-clip.F90{fortran}
 
+## Gizmos
+
+<Media name="cb_gizmo" video alt="A window titled Cut: buttons Move and Turn, then the plane's point and normal as text, then a 3-D view of a slender body coloured from blue to red, cut by a plane drawn as a yellow square; at the plane's centre a gizmo of three arrows, red along x, green along y, blue along z, and in the view's top-right corner a small cube with green, red and blue faces. In the video the red arrow is dragged and the cut moves toward the tail (point 2.77); Turn shows three rings and a white circle, the blue ring is dragged and the plane turns about z (normal 0.71 0.70 0); a click on the cube's green face turns the camera to look from -y." caption="docs/examples/src/cb_gizmo.F90: a clipping plane placed by hand" />
+
+Two kinds of handles are drawn over the view's image, in the same window, after `v%draw` in the same frame: a
+**view cube**, which turns the camera, and **gizmos**, which move a placement of the program's: a clipping plane, a
+box, a probe. Both are [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo)'s (`ViewManipulate` and
+`Manipulate`), vendored in FIGURE ([THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)); they
+draw through Dear ImGui's draw lists, so they look and work the same in window, headless and remote modes. They are
+polled, as every widget: no callback.
+
+<<< @/examples/snippets/cb_gizmo-start.F90{fortran}
+
+<<< @/examples/snippets/cb_gizmo-draw.F90{fortran}
+
+<<< @/examples/snippets/cb_gizmo-cut.F90{fortran}
+
+**The view cube.** `v%view_cube([size] [, corner])` draws a cube of `size` pixels (default 96, at most the view's
+side) in a corner of the view: `'top-right'` (default), `'top-left'`, `'bottom-right'`, `'bottom-left'`. Its faces
+turn with the camera and take the gizmos' axis colours: red the two faces of x, green of y, blue of z. Each face is
+cut into nine panels: a click on a face's middle turns the camera to look at that face (the eye on its side), a click
+on an edge or a corner panel to look along the diagonal between the faces it touches; the camera turns there over 40
+frames, rendered at half resolution as a drag is, and its target and distance are kept. A drag on the cube orbits
+the camera, z kept up. The camera then reads as `v%get_camera` gives it: the +x face gives azimuth 0 and elevation
+0, the top face elevation 90°.
+
+**A gizmo.** `v%gizmo(id, matrix [, mode] [, space] [, snap])` draws handles at the point `matrix` places and
+returns `.true.` on the frames the user drags one, `matrix` updated; it is untouched on the others. Call it every
+frame the handles are shown; `id` tells the gizmos of a window apart.
+
+| `mode` | Handles | A drag |
+|---|---|---|
+| `'translate'` (default) | three arrows, three squares, the centre | along an axis, in a plane, in the screen's plane |
+| `'rotate'` | three rings, one circle facing the eye | about an axis, about the line of sight |
+| `'scale'` | three handles, the centre | along an axis, all three together |
+
+- **`space`:** `'world'` (default) puts the handles along the world's axes, `'local'` along the matrix's own columns
+  (scale is always local).
+- **The arrows point along +x, +y and +z**, whatever side the eye is on. An axis seen nearly end-on, or a plane
+  edge-on, is hidden: it cannot be dragged with any precision ([Known issues](known-issues#gizmos)).
+- **`snap`:** a drag moves by whole steps from where it started: world units for `'translate'`, degrees for
+  `'rotate'`, a factor step for `'scale'`.
+- **The size:** the arrows are about a fifth of the view's shorter side, between 40 and 120 pixels, at any distance.
+
+**The mouse.** While the pointer is over the cube, over a gizmo's handle, or a drag of either goes on, the view does
+not take the mouse (no orbit, no pick): the handles do. A gizmo takes the mouse from the frame after the pointer
+reaches its handle, the cube at once. A drag that starts on the view and crosses a handle stays the view's.
+
+**A clipping plane by hand.** Keep the plane as a matrix: its third column the normal, its fourth the point (the first
+two the plane's own axes, for an outline). When the gizmo moves it, cut again: `v%unclip()`, then `v%clip(normal,
+point)` (above). In `'rotate'` the rings turn the normal; in `'translate'` the arrow along the normal moves the cut.
+
+### Matrices
+
+`v%view_matrix(m)` and `v%projection_matrix(m)` give the camera's matrices as `real(real64) :: m(4, 4)`, `m(i, j)`
+the row `i` and column `j`, column vectors: a world point `p` lands at the clip coordinates
+`matmul(P, matmul(V, [p, 1]))`, and at the view's pixel `((1 + x/w) / 2 * width, (1 - y/w) / 2 * height)` from its
+top-left corner.
+
+| | `V = v%view_matrix` | `P = v%projection_matrix` |
+|---|---|---|
+| maps | world to the eye's coordinates | the eye's coordinates to clip coordinates |
+| content | `V(1:3, 1:3)`: rows the screen's right, up, and the direction from the target to the eye; `V(1:3, 4)` the translation | a perspective of the vertical field of view `fov` and the view's aspect (its size at the last `draw`) |
+| conventions | right-handed, the eye looking down its -z (OpenGL's) | clip z in [-w, w], `P(4, 3) = -1` (OpenGL's) |
+
+<<< @/examples/snippets/cb_gizmo-pixel.F90{fortran}
+
+These are FIGURE's matrices and ImGuizmo's alike: column-major `float[16]`, column vectors, translation in the fourth
+column (indices 12 to 14 counted from 0), OpenGL's handedness and depth range. The difference is the precision:
+FIGURE's camera is `real(real64)`, ImGuizmo computes in `real(real32)`. FIGURE hands it the matrices rounded, with
+the world moved so that the camera's target is at the origin, so that its numbers are of the scene's size and not of
+its distance from the origin (a body at x = 10⁶ is placed as well as one at the origin). A matrix the user moved
+comes back rounded to single precision in that frame: about 10⁻⁷ of the scene's size; one the user did not move is
+not touched. The near and far planes enclose the visible meshes' bounding sphere, so `P` changes when meshes are
+added, moved or hidden; the gizmos get `P` with a wider depth range, the same pixels ([Known issues](known-issues#gizmos)). The camera's z is up; ImGuizmo's view cube has y up, and FIGURE turns the camera into its
+frame and back (the cube's faces show FIGURE's axes).
+
 ## How a view is rendered
 
 A view is rendered again only when something changed since its last render:
@@ -227,10 +307,13 @@ image goes. `init_remote(lossy=.false.)` sends every image exact. See [Known iss
   - a distance or zoom factor ≤ 0, a field of view outside (0°, 180°), an elevation outside [-90°, 90°];
   - an unknown standard view;
   - a seventh clipping plane or a zero normal;
-  - an unknown mesh id.
+  - an unknown mesh id;
+  - a view cube's size not above 0 or an unknown corner; a gizmo's unknown mode or space, a snap not above 0, a
+    matrix not finite or whose last row is not (0, 0, 0, 1).
 - **`FIG_ERR_STATE`:**
   - a view not initialized;
-  - a call from a task.
+  - a call from a task;
+  - `view_cube` or `gizmo` before the view was drawn in this frame, in this window (or outside a frame).
 
 A failed `v%triangles` (or the other kinds) adds nothing and returns 0.
 
@@ -249,6 +332,7 @@ A failed `v%triangles` (or the other kinds) adds nothing and returns 0.
 - **The image has the view's size in logical pixels.** On a display scaled 2x it is magnified, not rendered at the
   display's resolution.
 - **Picking finds surfaces only,** not lines.
+- **Gizmos are single precision** and lose precision on an axis seen at a grazing angle: [Known issues](known-issues#gizmos).
 - **Large meshes on one thread:** above a million triangles a render takes tens of milliseconds (the table above).
   Read large grids off the frame loop with a [task](processes#tasks), then hand the arrays to the view.
 

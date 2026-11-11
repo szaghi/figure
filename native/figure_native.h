@@ -413,6 +413,16 @@ int    fig_colormap(const char *name, int name_len, int levels, int *id);
 int    fig_load_colormap(const char *name, int name_len, const char *path, int path_len);
 int    fig_colormap_count(void);
 int    fig_colormap_name(int index, char *buf, int buf_len);
+/* The gradient editor (ig_gradient_edit, ImGuizmo's ImGradient): the stops of the map `name` (not reversed, not
+ * discrete, not qualitative), dragged, added by a double click, recoloured and removed; each change resamples the map
+ * (its table, and every registered variant's keys in ImPlot). changed 1 on the frame it changed. width, height:
+ * [pixels], <= 0 the space left minus that. fig_colormap_stops: the map's stops (as the editor shows them), positions
+ * pos[n] in [0, 1] and colours rgb[3 n]; *n their number, at most cap copied. fig_colormap_generation: changes at each
+ * edit (what caches a map's colours compares). */
+int      fig_gradient_edit(const char *id, int id_len, const char *name, int name_len, float width, float height,
+                           int *changed);
+int      fig_colormap_stops(const char *name, int name_len, double *pos, double *rgb, int cap, int *n);
+unsigned fig_colormap_generation(void);
 /* A colour-scale legend: a bar of the colormap cmap from vmin to vmax (bottom to top, or left to right when horizontal),
  * ticks and their values (fmt, printf; empty: %g); levels > 0: that many bands; width, height [pixels]: > 0 given,
  * < 0 the space left, 0 the default. An ImGui item of the current window. */
