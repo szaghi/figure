@@ -2,4 +2,7 @@
 #! args    looks
 #! from    10
 #! frames  1
+# --check: the plotted values depend on the compiler (on CI's gfortran 14.3, against the recording's 16.2,
+# 1 pixel(s) differed by more than 2; measured 2026-11-11): 8 allowed, the threshold unchanged
+#! check   max_failed=8
 # the four looks side by side, in the palette seal

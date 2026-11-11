@@ -1,6 +1,9 @@
 #! program build/docs-examples/bin/tut04_live
 #! frames  300
 #! poster  290
+# --check: the plotted values depend on the compiler (on CI's gfortran 14.3, against the recording's 16.2,
+# 2 pixel(s) differed by more than 2; measured 2026-11-11): 8 allowed, the threshold unchanged
+#! check   max_failed=8
 # tick "running", then raise the iterations per frame
 0   move 500 300
 5   move 38 59 20
