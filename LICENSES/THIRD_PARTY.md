@@ -1,0 +1,75 @@
+# Third-party software
+
+FIGURE is released under the [MIT licence](LICENSE.mit.md). Its native layer (`scripts/build_native.sh`) downloads
+and compiles the projects below into `lib/libfigure_native.a` and `lib/libSDL3.a` (stb_image and stb_image_write are
+kept in `third_party/stb/`, the code editor in `third_party/ImGuiColorTextEdit/`, the gizmos in `third_party/ImGuizmo/`,
+ImPlot3D in `third_party/implot3d/`, imgui_rich_md in `third_party/imgui_rich_md/` and md4c in `third_party/md4c/`, not
+downloaded), and embeds the
+fonts kept in `third_party/fonts/`, the palettes of `themes/palettes/`, whose colours are those of the projects named
+below (their licence files in `third_party/palettes/`), and the colormaps of `third_party/colormaps/` (256 RGB samples
+each, with their licence files): a program linked with FIGURE contains them. Their licences are all permissive and
+compatible with FIGURE's. The native build installs each licence file under `share/licenses/<project>/`.
+
+| Project | Version (pinned in `native/CMakeLists.txt`) | Licence | Copyright | In FIGURE |
+|---|---|---|---|---|
+| [Dear ImGui](https://github.com/ocornut/imgui) | 1.93.1 WIP, docking branch, through cimgui `1.93.1WIPdock` | MIT | Omar Cornut | widgets, windows, the OpenGL 3 and SDL3 backends |
+| [ImPlot](https://github.com/epezent/implot) | 1.2 WIP, through cimplot `v1.1` | MIT | Evan Pezent | plots, heatmaps, colormaps |
+| [cimgui](https://github.com/cimgui/cimgui) | `1.93.1WIPdock` | MIT | Stephan Dilly | the C API of Dear ImGui, and its metadata used by `scripts/gen_bindings.py` |
+| [cimplot](https://github.com/cimgui/cimplot) | `v1.1` | MIT | Victor Bombí | the C API of ImPlot, and its metadata used by `scripts/gen_bindings.py` |
+| [ImPlot3D](https://github.com/brenocq/implot3d) | 0.6 WIP, commit `c54525f8d46cece384cc2618761a2c55016b06db` (2026-10-25: v0.5, its version bumped; the submodule cimplot3d `v0.5` pins), vendored in `third_party/implot3d/` (`implot3d.cpp`, `implot3d_items.cpp`, `implot3d_meshes.cpp`, `implot3d_demo.cpp`, `implot3d.h`, `implot3d_internal.h`), unmodified but for FIGURE's one patch (`patches/0001-no-mouse-position.patch`, applied: no FPE without a mouse position), its licence `LICENSE` | MIT | Breno Cunha Queiroz | the small 3-D figures (`ip3_*`): lines, markers, surfaces, meshes and texts in a box the user turns; it draws through Dear ImGui's draw lists only and needs no ImPlot |
+| [cimplot3d](https://github.com/cimgui/cimplot3d) | `v0.5` (commit `c7b527f`, 2026-10-26), fetched without its `implot3d` submodule | MIT | Victor Bombí | the C API of ImPlot3D, and its metadata used by `scripts/gen_bindings.py` (`figure_cimplot3d`, `figure_cimplot3d_enums`) and `scripts/gen_names.py` |
+| [miniz](https://github.com/richgel999/miniz) | `3.0.2` (release archive, SHA-256 pinned) | MIT | Rich Geldreich, RAD Game Tools, Valve Software | deflate for the remote mode's compressed messages |
+| [stb_image_write](https://github.com/nothings/stb) | v1.16, `stb_image_write.h` at commit `4e9b368` (its last change: `1ee679c`), vendored unmodified in `third_party/stb/`, its licence (from the end of the file) in `LICENSE-stb.txt` | MIT or public domain (Unlicense), at the user's choice; FIGURE takes MIT | Sean Barrett | the JPEG encoder of the remote mode's changing images; the PNG and JPEG encoders of FIGURE's tests |
+| [stb_image](https://github.com/nothings/stb) | v2.30, `stb_image.h` at commit `4e9b368` (its last change: `013ac3b`, 2024-05-31; the repository's last commit 2026-11-07), vendored unmodified in `third_party/stb/` (SHA-256 `594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3`), its licence, the same text as stb_image_write's, in `LICENSE-stb.txt` | MIT or public domain (Unlicense), at the user's choice; FIGURE takes MIT | Sean Barrett | the PNG and JPEG decoders of `fig_read_image` and `tex%load` (built with `STBI_ONLY_PNG`, `STBI_ONLY_JPEG`, `STBI_NO_STDIO`: no other format, no file or URL access of its own) |
+| [ImGuiColorTextEdit](https://github.com/goossens/ImGuiColorTextEdit), the goossens fork | commit `0a489da863f22f7493049f5c6eb85355f405b02e` (2026-11-10), vendored in `third_party/ImGuiColorTextEdit/` (`TextEditor.cpp`, `TextEditor.h`, `TextEditorLanguages.h`, `languages/`, `TextDiff.cpp`, `TextDiff.h`), unmodified but for FIGURE's one patch of one line (`patches/0001-compress-markers-index.patch`, applied), its licence `LICENSE` | MIT | Johan A. Goossens | the code editor and the text diff (`code_editor_object`, `code_diff`), with FIGURE's own glue (`native/figure_editor.cpp`; not cimgui's cimCTE, which has no licence file) |
+| [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) | commit `105e4fde45e4e74aae8973d98750820ef7aca7e2` (2026-10-10; its four files' last change `18cef5e`, 2026-08-08), vendored in `third_party/ImGuizmo/`: only `ImGuizmo.cpp`, `ImGuizmo.h`, `ImGradient.cpp`, `ImGradient.h` (the subset `ViewManipulate`, `Manipulate`, `ImGradient`; not its graph editor, sequencer, curve editor or zoom slider), unmodified but for FIGURE's three patches (`patches/`, applied), its licence `LICENSE` | MIT | Cedric Guillemet and contributors | the view cube and the gizmos of the 3-D view (`v%view_cube`, `v%gizmo`) and the gradient editor (`ig_gradient_edit`), with FIGURE's own glue (`native/figure_view3d.cpp`, `native/figure_colormap.cpp`); they draw through Dear ImGui's draw lists only |
+| [imgui_rich_md](https://github.com/pthom/imgui_rich_md) | v1.0.0 and 14 commits, commit `427bcb17f8c467d0dc1869b04f8e99a6c7b0e45f` (2026-11-09), vendored in `third_party/imgui_rich_md/`: only its renderer, search and documents (`rich_md.cpp`, `rich_md.h`, `rich_md_host.h`, `narrative_programming.cpp`, `narrative_programming.h`, `internal/rich_md_internal.h`, `internal/rich_md_renderer.cpp`, `internal/rich_md_renderer.h`, `internal/rich_md_search.cpp`, `internal/rich_md_search.h`; not its LaTeX, Mermaid, code-editor and download back ends, its fonts, its images or its copy of stb_image), unmodified but for FIGURE's one patch of one line (`patches/0001-figure-stb-image.patch`, applied: its images decoded by FIGURE's stb_image), its licence `LICENSE`, and imgui_md's, whose renderer it started from, `LICENSE.imgui_md` | MIT | Pascal Thomet; Dmitry Mekhontsev (imgui_md) | Markdown in the window (`ig_markdown`, `markdown_view_object`), with FIGURE's own glue (`native/figure_markdown.cpp`); it draws through Dear ImGui only and creates its textures through Dear ImGui |
+| [md4c](https://github.com/mity/md4c) | release-0.5.2 and 16 commits, commit `481fbfbdf72daab2912380d62bb5f2187d438408` (2024-02-25: the commit imgui_rich_md pins as its submodule; the repository's last commit 2026-10-19), `src/md4c.c` and `src/md4c.h` vendored unmodified in `third_party/md4c/`, its licence `LICENSE.md` | MIT | Martin Mitáš | the Markdown parser of imgui_rich_md (CommonMark, with GitHub's tables, strikethrough and task lists) |
+| [dtl](https://github.com/cubicdaiya/dtl) (Diff Template Library) | 1.21, `dtl.h` as the ImGuiColorTextEdit fork ships it (same commit), unmodified; its licence, from the head of the file, in `third_party/ImGuiColorTextEdit/LICENSE-dtl.txt` | BSD-3-Clause | Tatsuhiko Kubo | the shortest edit script of `code_diff` and `code_diff_lines` |
+| [SDL](https://github.com/libsdl-org/SDL) | `release-3.4.20` | zlib | Sam Lantinga | window, input, OpenGL context, file dialogs |
+| [IBM Plex Sans](https://github.com/IBM/plex) | 3.005, release `@ibm/plex-sans@1.1.0` (`ibm-plex-sans.zip`, SHA-256 `fb365d910566e6d199cc2c15579a7dd9a267128e18431a394ed81f1970c69200`), `fonts/complete/ttf/`: `third_party/fonts/IBMPlexSans-Regular.ttf`, `-Bold.ttf`, `-Italic.ttf`, `-BoldItalic.ttf` (unmodified) | OFL-1.1 | IBM Corp. (Reserved Font Name "Plex") | Regular: the default font of the interface; Bold, Italic, Bold Italic: Markdown's emphasis and headings; embedded |
+| [IBM Plex Mono](https://github.com/IBM/plex) | Regular 2.005, release `@ibm/plex-mono@2.5.0`, `third_party/fonts/IBMPlexMono-Regular.ttf` (unmodified) | OFL-1.1 | IBM Corp. (Reserved Font Name "Plex") | the monospace font (`'plex-mono'`), embedded |
+| [Nord](https://github.com/nordtheme/nord) | `src/nord.css`, commit `005e87e` | MIT | Sven Greb | the colours of the palette `nord` (`themes/palettes/nord.toml`), embedded |
+| [Solarized](https://github.com/altercation/solarized) | `README.md`, commit `4f90b03` | MIT | Ethan Schoonover | the palettes `solarized-dark` and `solarized-light` |
+| [Gruvbox](https://github.com/morhetz/gruvbox) | `colors/gruvbox.vim`, commit `0401386` | MIT (stated in its README and `package.json`; no licence file) | Pavel Pertsev | the palettes `gruvbox-dark` and `gruvbox-light` |
+| [Dracula](https://github.com/dracula/dracula-theme) | `README.md`, commit `1e04a4b` | MIT | Dracula Theme | the palette `dracula` |
+| [Catppuccin](https://github.com/catppuccin/palette) | `palette.json`, v1.8.0 (commit `07d02aa`) | MIT | Catppuccin | the palettes `catppuccin-mocha` and `catppuccin-latte` |
+| [Tokyo Night](https://github.com/enkia/tokyo-night-vscode-theme) | `README.md` and `themes/tokyo-night-color-theme.json`, commit `da5546b` | MIT | Enkia | the palette `tokyo-night` |
+| [One Dark](https://github.com/joshdick/onedark.vim) | `autoload/onedark.vim`, commit `ad9610c`; one grey (mono-2) from [Atom's One Dark](https://github.com/atom/atom/tree/master/packages/one-dark-syntax), commit `8ae45ca` | MIT | Joshua Dick; GitHub Inc. | the palette `one-dark` |
+| [matplotlib](https://github.com/matplotlib/matplotlib) | v3.11.2, `lib/matplotlib/_cm_listed.py` (`_cividis_data`, `_inferno_data`, `_magma_data`, `_turbo_data`) | matplotlib licence (`LICENSE/LICENSE`) | Matplotlib Development Team | the colormaps `cividis` (designed by J. R. Nuñez, C. R. Anderton and R. S. Renslow, PNNL, contributed to matplotlib by its author, PR #9871), `inferno`, `magma` and `turbo`; values unchanged, written as CSV (`third_party/colormaps/<name>.csv`) |
+| [mpl-colormaps](https://github.com/BIDS/colormap) | `colormaps.py`, commit `bc54947` | CC0-1.0 | Nathaniel J. Smith, Stéfan van der Walt | `inferno` and `magma`: their tables, equal to matplotlib's (checked by `scripts/gen_colormaps.py`) |
+| [Turbo](https://gist.github.com/mikhailov-work/ee72ba4191942acecc03fe6da94fc73f) | `turbo_colormap.py`, gist revision `dccf285` | Apache-2.0 | Google LLC (Anton Mikhailov) | `turbo`: its table, equal to matplotlib's (checked) |
+| [cmocean](https://github.com/matplotlib/cmocean) | v4.0.3, `cmocean/rgb/<name>-rgb.txt` | MIT | Kristen M. Thyng | the colormaps `thermal`, `haline`, `deep`, `balance` and `curl` (`curl`: 512 rows resampled linearly to 256, as cmocean does) |
+| [Cool to Warm](https://www.kennethmoreland.com/color-advice/) (Kenneth Moreland) | `smooth-cool-warm-table-float-0256.csv`, [kennethmoreland-com.github.io](https://github.com/kennethmoreland-com/kennethmoreland-com.github.io) commit `04f580e`; licence: ParaView's, as that page states, text from ParaView v6.2.0 `Copyright.txt` | BSD-3-Clause | Kitware Inc. | the colormap `cool-warm`, ParaView's "Cool to Warm" |
+| [Scientific colour maps](https://www.fabiocrameri.ch/colourmaps/) | 8.0.1, [Zenodo 10.5281/zenodo.8409685](https://doi.org/10.5281/zenodo.8409685), `ScientificColourMaps8.zip`, `<name>/<name>.txt`; licence from its `+LICENCE.pdf` | MIT | Fabio Crameri | the colormaps `batlow`, `vik`, `roma` and `romaO` |
+| [Noto Sans Math](https://github.com/notofonts/math) | Regular 3.000, release `NotoSansMath-v3.000` (tag commit `00e9941`), `third_party/fonts/NotoSansMath-Regular.ttf` (unmodified, the unhinted TTF of the release archive `NotoSansMath-v3.000.zip`, SHA-256 `ac351837b41f8a897f020b97fb0f075ad574c1e9669fb5839ada1f92fd748356`), its licence `OFL.txt` as `LICENSE-NotoSansMath.txt` | OFL-1.1 | The Noto Project Authors | the fallback merged into every text font after Plex and Lucide: Greek, `∇`, the mathematical operators; embedded |
+| [Lucide](https://lucide.dev) | `lucide-static` 1.61.0 (npm), `third_party/fonts/lucide.ttf` and its code point map `lucide-info.json` (both unmodified, from `font/`) | ISC, and MIT for the icons derived from Feather | Lucide Icons and Contributors; Cole Bemis (Feather) | the icons (`ICON_*`), embedded and merged into every text font |
+
+## Distributing a program built with FIGURE
+
+- **MIT** (FIGURE, Dear ImGui, ImPlot, ImPlot3D, cimgui, cimplot, cimplot3d, miniz, stb_image, stb_image_write, ImGuiColorTextEdit, ImGuizmo, imgui_rich_md, imgui_md, md4c, the
+  Lucide icons derived from Feather, the palettes Nord, Solarized, Gruvbox, Dracula, Catppuccin, Tokyo Night and One Dark) and **ISC**
+  (Lucide): the copyright notice and the permission notice must be included in all copies or substantial portions of
+  the software. For a binary, ship the licence files with it (the `share/licenses/` tree, where the Lucide one is
+  `share/licenses/lucide/` and the palettes' are `share/licenses/<palette>/`, or the texts in your documentation or
+  "About" box).
+- **BSD-3-Clause** (dtl, in the code editor's diff): reproduce its copyright notice, the conditions and the
+  disclaimer in the documentation of a binary (`share/licenses/dtl/`), and do not use its authors' names to promote
+  it.
+- **The colormaps** (`share/licenses/<project>/`, `<project>` one of `matplotlib`, `mpl-colormaps`, `turbo`,
+  `cmocean`, `paraview`, `crameri`): MIT (cmocean, Crameri's), as above; **BSD-3-Clause** (ParaView's Cool to Warm):
+  reproduce the copyright notice, the conditions and the disclaimer in the documentation of a binary, and do not use
+  Kitware's name to promote it; **Apache-2.0** (Turbo): ship the licence and Google's notice with it (`LICENSE-turbo.txt`
+  holds both); the **matplotlib licence**: keep its copyright notice, and a derivative work states its changes (here:
+  the tables are matplotlib's values written as CSV); **CC0** (mpl-colormaps): no condition.
+- **OFL-1.1** (IBM Plex Sans, IBM Plex Mono, Noto Sans Math): the fonts may be bundled and embedded with any
+  software; their copyright and licence must accompany them (`share/licenses/ibm-plex/`, one file per font, the same
+  text; `share/licenses/noto-sans-math/`), and they may not be sold by themselves. A modified version of Plex may not
+  use the name "Plex".
+- **zlib** (SDL): no notice is required in a binary distribution. Altered source versions must be marked as such, and
+  the notice may not be removed from source distributions.
+
+## Not bundled
+
+Tools used only to build, test or document FIGURE (CMake, FoBiS, fpm, Python, VitePress, ffmpeg, ImageMagick,
+Chromium) are not part of what a program links, and their licences do not apply to it.
