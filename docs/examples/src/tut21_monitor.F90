@@ -1937,6 +1937,10 @@ contains
       if (.not. started) exit
       call frames(1_int32)
    enddo
+   do k = 1_int32, 1000000_int32                     ! and its field read: the Result panel comes forward with it,
+      if (size(field) > 0) exit                      ! at a time of the task's, not of the test's
+      call frames(1_int32)
+   enddo
    call test_click(runs_tab_at(1), runs_tab_at(2))   ! the Runs tab
    call frames(6_int32)
    call test_click(header_at(1), header_at(2))       ! the iterations' header: fewest first

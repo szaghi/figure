@@ -56,6 +56,12 @@ The pages live in `docs/` (VitePress). Every Fortran snippet shown in the tutori
 program in `docs/examples/src`, with marker comments: `!region NAME` ... `!endregion NAME` for a part shown on its
 own, `!run ID COMMAND` for a run whose output is shown (headless programs only).
 
+Every run is a test. A `!run` must exit with status 0: a `--test` or `--check` self-test that fails, or a crash, fails
+`build.sh`. An example that ends with an error on purpose (an `error stop` shown in the pages) is marked
+`!run-exit STATUS ID COMMAND` and must exit with exactly that status; its output ends with `[exit status STATUS]`.
+`build.sh` goes through every run, then names each one that failed and its output file (written all the same, to be
+read) and exits with status 1.
+
 ```bash
 bash docs/examples/build.sh     # compile every example against src/lib, run the headless ones,
                                 # regenerate docs/examples/snippets and docs/examples/output

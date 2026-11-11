@@ -6,7 +6,7 @@ use figure, only : app_object
 
 implicit none
 type(app_object) :: app !< Application.
-!run cb_error_stop ./cb_error_stop
+!run-exit 1 cb_error_stop ./cb_error_stop
 
 !region stop
 call app%init_headless(400_int32, 300_int32)

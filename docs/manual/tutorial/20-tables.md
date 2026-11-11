@@ -70,8 +70,9 @@ The formats are checked against the value's kind before Dear ImGui uses them: `'
 
 ## The test
 
-Two runs, the second with a smaller omega; the Runs tab clicked, the iterations' header clicked twice, a right click
-on a row:
+Two runs, the second with a smaller omega, each waited for until its field is read (the Result panel comes forward
+then, at a moment of the task's: a click before it could land on a panel about to be covered); the Runs tab clicked,
+the iterations' header clicked twice, a right click on a row:
 
 <<< @/examples/snippets/tut20_tables-runs_test.F90{fortran}
 

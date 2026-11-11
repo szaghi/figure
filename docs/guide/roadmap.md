@@ -411,6 +411,11 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   items' strided interface (any stride read in place, ASYNCHRONOUS dummies), and a surface takes FIGURE's colormaps,
   copied into ImPlot3D's registry and followed through `ig_gradient_edit`'s edits. It draws through Dear ImGui only:
   the same in every mode ([3-D plots](plots#_3-d-plots)): done.
+- **The examples' runs are tests**: `docs/examples/build.sh` fails when a run exits with a status other than the
+  one its marker states (0 for `!run`, STATUS for `!run-exit STATUS`, an example that demonstrates an error exit), so
+  a failed self-test no longer reaches the pages as `[exit status N]`. The tutorial's checks after a second run wait
+  for its field to be read, as after the first: the Result panel comes forward when the reading task ends, which
+  under load landed between a click and its check ([Contributing](contributing#documentation)): done.
 
 ## Next
 
