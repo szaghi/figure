@@ -4,6 +4,41 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.0] — 2026-11-11
+### Added
+- **imgui**: Ig_shortcut scope 'always', the unrouted chord of v0.3
+
+- **clock**: Figure_time, a monotonic clock in seconds
+
+- **fonts**: Noto Sans Math, the fallback font after Plex and Lucide
+
+- **images**: Fig_read_image and tex%load, PNG and JPEG files through stb_image
+
+- **testing**: Items by path, a frame driver, id and label checks
+
+- **app**: A window registry with its View menu, layouts, preferences, message boxes, splitters
+
+- **render**: Pictures without a GPU, a CPU renderer of Dear ImGui's draw data
+
+- **editor**: A code editor with highlighting, marks, completion and a diff
+
+- **view3d**: A view cube, gizmos and a gradient editor (ImGuizmo)
+
+- **implot3d**: Small 3-D figures, ImPlot3D (ip3_*)
+
+- **markdown**: Markdown in the window, imgui_rich_md (ig_markdown, markdown_view_object)
+
+
+### Documentation
+- The version strings at v0.4.0, and the roadmap at v0.5.0
+
+- Every picture from one renderer, checked in CI; tutorial part three grows
+
+
+### Performance
+- **implot**: ASYNCHRONOUS plot dummies, nvfortran passes sections in place
+
+
 ## [0.4.0] — 2026-11-10
 ### Added
 - **app**: Usage errors reported, not aborted: scope record, frame check, app%set_checks

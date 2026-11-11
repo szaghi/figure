@@ -313,7 +313,7 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   recorded. A fresh reader's pass over the installation and part one; the [migration notes](changelog#migration-to-v0-4-0): done.
 - **A fallback font for symbols Plex lacks** (S10): moved to v0.5.0.
 
-## v0.5.0 — planned
+## v0.5.0 — released 2026-11-11
 
 Pictures without a GPU, tests that find items by path, an application layer, images from files and four extensions
 (a code editor, gizmos for the 3-D view, ImPlot3D, Markdown); carried over from v0.4.0: the fallback font (Noto Sans

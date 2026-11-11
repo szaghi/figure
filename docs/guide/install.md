@@ -247,7 +247,7 @@ Another fpm project depends on FIGURE through the package published for each rel
 
 ```toml
 [dependencies]
-figure = { git = "https://github.com/szaghi/figure", tag = "v0.4.0-fpm" }
+figure = { git = "https://github.com/szaghi/figure", tag = "v0.5.0-fpm" }
 ```
 
 A plain `fpm build` then compiles everything; only SDL3 comes from the system (on macOS fpm also needs
