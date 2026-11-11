@@ -8,6 +8,9 @@
 #include <string>
 
 struct ImDrawData;
+namespace figure_swrast {
+struct texture_t;
+}
 
 namespace figure_remote {
 
@@ -34,6 +37,9 @@ void send_frame(ImDrawData *draw_data);
 // client that connects later.
 void texture_update(std::uint64_t id, int width, int height, const unsigned char *rgba, bool linear);
 void texture_destroy(std::uint64_t id);
+// The pixels kept of a texture (a user texture's last update, an atlas page), for the CPU renderer (save_image and
+// the capture in remote mode): false when none are kept. Valid until the texture next changes.
+bool texture_pixels(std::uint64_t id, figure_swrast::texture_t *t);
 // The background behind the windows (the style's), sent to the client now and to every client that connects.
 void set_background(float r, float g, float b);
 // Deflate frames and textures: 0 auto (while the client has been the bottleneck in the last 5 s), 1 always, 2 never.

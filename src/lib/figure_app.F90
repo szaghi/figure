@@ -201,8 +201,9 @@ contains
 
    recursive subroutine set_icon_image(self, image, stat)
    !< The window's icon (task bar, dock, the title bar of `decorations='figure'`) from an image, `image(4, width,
-   !< height)`: `image(:, i, j)` = R, G, B, A of pixel (i, j), j = 1 the top row. Window mode only; 1 to 1024 pixels a
-   !< side (64 x 64 or 256 x 256 are usual).
+   !< height)`: `image(:, i, j)` = R, G, B, A of pixel (i, j), j = 1 the top row. Window mode only (and a window's
+   !< program captured headless, `FIGURE_CAPTURE_HEADLESS`: the title bar's icon); 1 to 1024 pixels a side (64 x 64 or
+   !< 256 x 256 are usual).
    class(app_object), intent(inout)                     :: self        !< Application.
    integer(int8),     intent(in), contiguous, target    :: image(:,:,:) !< Pixels.
    integer(int32),    intent(out), optional             :: stat        !< Status: `FIG_ERR_STATE` in headless and remote
@@ -221,7 +222,8 @@ contains
    recursive subroutine set_icon_glyph(self, icon, stat)
    !< The window's icon from one of the bundled icons, `ICON_*`: rendered at 64 x 64 pixels in the palette's text on
    !< accent colour on a rounded square of its accent; the title bar of `decorations='figure'` shows the glyph in the
-   !< accent colour. Window mode only.
+   !< accent colour. Window mode only (and a window's program captured headless, `FIGURE_CAPTURE_HEADLESS`: the title
+   !< bar's icon).
    class(app_object), intent(inout)         :: self !< Application.
    character(len=*),  intent(in)            :: icon !< One `ICON_*` constant.
    integer(int32),    intent(out), optional :: stat !< Status: `FIG_ERR_STATE` in headless and remote modes,
@@ -888,8 +890,9 @@ contains
    !< Write the rectangle (xmin, ymin)-(xmax, ymax) of the window [logical pixels, as `ig_item_rect` and
    !< `test_window_rect` give them] as a PNG file, at the screen's resolution, when the current frame is rendered.
    !< Ask for it outside the frame in which a menu or popup covers the rectangle (they would be in the picture).
-   !< The outcome comes once, from `image_result`. Window mode only: in remote and headless modes there are no
-   !< pixels on the program's side, `FIG_ERR_STATE`; an empty rectangle or file name, `FIG_ERR_ARGUMENT`.
+   !< The outcome comes once, from `image_result`. Every mode: a window's pixels are read back from the GPU, headless
+   !< and remote modes draw the frame with FIGURE's CPU renderer (capture.md). An empty rectangle or file name,
+   !< `FIG_ERR_ARGUMENT`; before `init*`, `FIG_ERR_STATE`.
    class(app_object), intent(inout)         :: self !< Application.
    character(len=*),  intent(in)            :: path !< PNG file.
    real(real64),      intent(in)            :: xmin !< Left.

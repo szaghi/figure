@@ -55,8 +55,8 @@ integer(int32)            :: f                                    !< Frame.
 integer(int32)            :: i                                    !< Counter.
 integer(int32)            :: st                                   !< Status of a frame.
 integer(int32)            :: errors                               !< Frames with a usage error.
-integer(int32)            :: bad(12)                              !< Statuses of refused calls.
-character(len=160)        :: msg(12)                              !< Their messages.
+integer(int32)            :: bad(13)                              !< Statuses of refused calls.
+character(len=160)        :: msg(13)                              !< Their messages.
 real(real64), allocatable :: vbad(:)                             !< A vector of no components.
 real(real64)              :: nan                                  !< NaN.
 integer(int32)            :: ibad                                 !< Values given to refused calls.
@@ -181,7 +181,8 @@ ok(16) = all(bad == int(FIG_ERR_ARGUMENT, int32)) .and. ibad == 7_int32 .and. rb
          msg(10) == "ig_drag: format '%0000000000000000000000001.2f' has a conversion longer than 24 characters" .and. &
          msg(11) == 'ig_list_box: height is NaN' .and.                                                   &
          msg(12) == "ig_slider: format '%d' is not a format of a real: one conversion %f, %e, %g or %a (or %F, %E, "// &
-                    "%G, %A) expected, with optional flags, width and precision"
+                    "%G, %A) expected, with optional flags, width and precision" .and.                    &
+         msg(13) == 'ig_slider: vmin -1.79769E+308 is out of -8.98847E+307 to 8.98847E+307' ! negative reals written
 ok(17) = errors == 0_int32                                            ! no usage error kept for a frame
 ok(18) = all(rect(3, :) > rect(1, :))                                 ! the geometry was read
 
@@ -196,8 +197,8 @@ if (.not. all(ok)) then
       ' angle ', angle
    write(output_unit, '(A,I3,F8.3,A,I3,F8.3,A,F8.3,I3)') 'enter left ', enter_true_left, e_left, ' enter ', &
       enter_true, e, ' ro ', ro, ro_changes
-   write(output_unit, '(A,12I3,A,I0)') 'statuses ', bad, ' errors ', errors
-   do i = 1_int32, 12_int32
+   write(output_unit, '(A,13I3,A,I0)') 'statuses ', bad, ' errors ', errors
+   do i = 1_int32, 13_int32
       write(output_unit, '(A)') trim(msg(i))
    enddo
 endif
@@ -242,6 +243,8 @@ contains
    msg(11) = figure_last_error()
    if (ig_slider('e12', rbad, 0.0_real64, 1.0_real64, format='%d', stat=bad(12))) continue
    msg(12) = figure_last_error()
+   if (ig_slider('e13', rbad, -huge(1.0_real64), 1.0_real64, stat=bad(13))) continue ! a negative real in the message
+   msg(13) = figure_last_error()
    endsubroutine refused_calls
 
    subroutine script(frame)

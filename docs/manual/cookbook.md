@@ -943,3 +943,24 @@ with the nearest item named:
 [Finding items by path](/guide/testing#finding-items-by-path) has the path syntax and the statuses,
 [Running until idle](/guide/testing#running-until-idle) and [Checks](/guide/testing#checks) the rest
 (`docs/examples/src/cb_paths.F90`).
+
+### Test what a window looks like
+
+Capture the window in a headless test and compare it with a picture committed beside the test (a golden): FIGURE's
+CPU renderer draws headless frames the same way on every machine, so the comparison needs no GPU and no display.
+`test_capture` asks for the frame being drawn and writes it when the frame is rendered, at the next `next_frame`;
+`test_compare_image` lets each channel differ by 2 levels and no pixel more, and leaves out what is not
+deterministic, here the line of a clock:
+
+<<< @/examples/snippets/cb_golden-capture.F90{fortran}
+
+A change that shows fails, with the count, the largest difference and where; the picture is written beside the
+reference as `<stem>.new.png`, with `<stem>.diff.png` marking the failed pixels in red:
+
+<<< @/examples/snippets/cb_golden-change.F90{fortran}
+
+<<< @/examples/output/cb_golden.txt{text}
+
+To make the golden, run the test once and keep its capture (`solver.png` here); when the window changes on purpose,
+copy the `.new.png` over the golden in the same commit. [Pictures as tests](/guide/testing#pictures-as-tests) has the
+rule, the masks and the statuses (`docs/examples/src/cb_golden.F90`).

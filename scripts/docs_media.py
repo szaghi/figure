@@ -23,6 +23,11 @@ replays (see FIGURE_CAPTURE_INPUT in native/figure_native.cpp):
                                                        "--remote PORT", and a headless Chromium (CHROME, or
                                                        puppeteer's) draws the page at this size; the still gets a
                                                        browser bar (no input script)
+    #! mask    x y w h                                 --check: a rectangle of the poster [pixels] left out (a clock,
+                                                       anything drawn from the wall time); one line each
+    #! check   threshold=2 max_failed=0                --check's tolerance (the defaults shown); ``#! check.linux``,
+                                                       ``check.darwin``, ``check.win32``: for that platform only,
+                                                       where a difference was measured there
     0 move 300 120
     ...
 
@@ -35,6 +40,17 @@ layer's glide replayed), with a ring while a button is held, and, with ``#! keys
 that a viewer sees what was pressed. The poster is the program's frame as it is, without them.
 
 Usage: python3 scripts/docs_media.py [name ...]          (default: every docs/media/*.rec)
+       python3 scripts/docs_media.py --check [name ...]  render each recording headless with FIGURE's CPU renderer
+                                                         (FIGURE_CAPTURE_HEADLESS=1: no window, no GPU) and compare
+                                                         the poster with the committed one: per channel |d| <= 2, no
+                                                         pixel more (the #! check and #! mask lines aside); on a
+                                                         failure writes docs/public/media/<name>.new.png and
+                                                         <name>.diff.png; exit status 1 if any failed
+       python3 scripts/docs_media.py --update [name ...] accept the .new.png pictures --check wrote (each replaces its
+                                                         <name>.png; the .diff.png removed)
+--check writes no committed file. It is run on demand, not in CI yet: the posters of v0.4.0 were recorded on a GPU
+or in software (llvmpipe), not by the CPU renderer, so they fail until the documentation pass (#7 S9) records them
+all again with it; remote recordings (a browser's picture) are not checked.
 Needs: the programs built (bash docs/examples/build.sh; fobis build --mode examples-gnu), ffmpeg and ImageMagick.
 On WSLg set GALLIUM_DRIVER=d3d12 for the GPU (the default, llvmpipe, works too, slower).
 """
@@ -64,6 +80,8 @@ BACKGROUND = {  # the window background of each style (apply_style in native/fig
     "high-contrast": "#000000",
 }
 MARGIN = 12  # pixels around the content
+THRESHOLD = 2  # --check: the largest difference of a channel that passes (0-255), as test_compare_image's default
+MAX_FAILED = 0  # --check: pixels allowed to differ by more
 FPS = 30
 CAPTION_FRAMES = 45  # a key caption stays 1.5 s, or until the next one
 CAPTION_FONT = ROOT / "third_party" / "fonts" / "IBMPlexSans-Regular.ttf"
@@ -84,7 +102,10 @@ def parse(rec: Path) -> tuple[dict[str, str], str]:
     for line in rec.read_text().splitlines():
         if line.startswith("#!"):
             key, _, value = line[2:].strip().partition(" ")
-            header[key] = value.strip()
+            if key == "mask" and "mask" in header:  # several rectangles, one a line
+                header[key] += ";" + value.strip()
+            else:
+                header[key] = value.strip()
         else:
             script.append(line)
     for key in ("program", "frames"):
@@ -300,6 +321,74 @@ def record_remote(name: str, header: dict[str, str]) -> None:
     )
 
 
+def capture(name: str, header: dict[str, str], script: str, work: Path, headless: bool) -> tuple[list[Path],
+                                                                                            tuple[int, int, int, int]]:
+    """Run the program of a recording with the native layer's capture into `work`: its frames and the crop (x, y, w, h)
+    of the poster and the video. `headless`: no window, the frames drawn by FIGURE's CPU renderer."""
+    frames = int(header["frames"])
+    program = ROOT / header["program"]
+    if not program.is_file():
+        msg = f"{name}: {program} not built"
+        raise MediaError(msg)
+    (work / "input").write_text(script)
+    env = dict(
+        os.environ,
+        FIGURE_CAPTURE=str(work / "f_"),
+        FIGURE_CAPTURE_INPUT=str(work / "input"),
+        FIGURE_CAPTURE_FRAMES=str(frames),
+        FIGURE_CAPTURE_FROM=header.get("from", "0"),
+        FIGURE_CAPTURE_FPS=str(FPS),
+        FIGURE_STYLE=header.get("style", STYLE),
+    )
+    if headless:
+        env["FIGURE_CAPTURE_HEADLESS"] = "1"
+    else:
+        env.pop("FIGURE_CAPTURE_HEADLESS", None)
+    run = subprocess.run(
+        [str(program), *shlex.split(header.get("args", ""))],
+        env=env,
+        cwd=program.parent,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    shots = sorted(work.glob("f_*.ppm"))
+    if len(shots) != frames:
+        msg = f"{name}: {len(shots)} of {frames} frames written (exit {run.returncode}): {run.stderr.strip()}"
+        raise MediaError(msg)
+    if "crop" in header:
+        x, y, w, h = (int(v) for v in header["crop"].split())
+    else:  # the union of the content boxes, sampled every few frames
+        boxes = [
+            b
+            for f in shots[:: max(1, frames // 24)] + [shots[-1]]
+            if (b := bbox(f, BACKGROUND.get(header.get("style", STYLE), "#000000")))
+        ]
+        if not boxes:
+            msg = f"{name}: the frames are empty"
+            raise MediaError(msg)
+        w_full, h_full = (int(v) for v in shots[0].read_bytes().split(b"\n", 2)[1].split())
+        x = max(0, min(b[0] for b in boxes) - MARGIN)
+        y = max(0, min(b[1] for b in boxes) - MARGIN)
+        w = min(w_full, max(b[2] for b in boxes) + MARGIN) - x
+        h = min(h_full, max(b[3] for b in boxes) + MARGIN) - y
+    w -= w % 2  # H.264 with yuv420p needs even sizes
+    h -= h % 2
+    return shots, (x, y, w, h)
+
+
+def write_poster(shot: Path, crop: tuple[int, int, int, int], header: dict[str, str], dst: Path) -> None:
+    """The poster: one frame, cropped (and scaled), as a PNG."""
+    x, y, w, h = crop
+    resize = ["-resize", f"{header['scale']}x"] if "scale" in header else []
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["convert", str(shot), "-crop", f"{w}x{h}+{x}+{y}", "+repage", *resize, "-strip", str(dst)],
+        check=True,
+    )
+
+
 def record(name: str) -> None:
     """Run one recording and write its media."""
     header, script = parse(RECS / f"{name}.rec")
@@ -309,70 +398,10 @@ def record(name: str) -> None:
     frames = int(header["frames"])
     poster = int(header.get("poster", frames - 1))
     video = header.get("video", "yes" if frames > 1 else "no") == "yes"
-    program = ROOT / header["program"]
-    if not program.is_file():
-        msg = f"{name}: {program} not built"
-        raise MediaError(msg)
     with tempfile.TemporaryDirectory(prefix="figure-media-") as tmp:
         work = Path(tmp)
-        (work / "input").write_text(script)
-        env = dict(
-            os.environ,
-            FIGURE_CAPTURE=str(work / "f_"),
-            FIGURE_CAPTURE_INPUT=str(work / "input"),
-            FIGURE_CAPTURE_FRAMES=str(frames),
-            FIGURE_CAPTURE_FROM=header.get("from", "0"),
-            FIGURE_CAPTURE_FPS=str(FPS),
-            FIGURE_STYLE=header.get("style", STYLE),
-        )
-        run = subprocess.run(
-            [str(program), *shlex.split(header.get("args", ""))],
-            env=env,
-            cwd=program.parent,
-            capture_output=True,
-            text=True,
-            timeout=300,
-            check=False,
-        )
-        shots = sorted(work.glob("f_*.ppm"))
-        if len(shots) != frames:
-            msg = f"{name}: {len(shots)} of {frames} frames written (exit {run.returncode}): {run.stderr.strip()}"
-            raise MediaError(msg)
-        if "crop" in header:
-            x, y, w, h = (int(v) for v in header["crop"].split())
-        else:  # the union of the content boxes, sampled every few frames
-            boxes = [
-                b
-                for f in shots[:: max(1, frames // 24)] + [shots[-1]]
-                if (b := bbox(f, BACKGROUND.get(header.get("style", STYLE), "#000000")))
-            ]
-            if not boxes:
-                msg = f"{name}: the frames are empty"
-                raise MediaError(msg)
-            w_full, h_full = (
-                int(v) for v in shots[0].read_bytes().split(b"\n", 2)[1].split()
-            )
-            x = max(0, min(b[0] for b in boxes) - MARGIN)
-            y = max(0, min(b[1] for b in boxes) - MARGIN)
-            w = min(w_full, max(b[2] for b in boxes) + MARGIN) - x
-            h = min(h_full, max(b[3] for b in boxes) + MARGIN) - y
-        w -= w % 2  # H.264 with yuv420p needs even sizes
-        h -= h % 2
-        OUT.mkdir(parents=True, exist_ok=True)
-        resize = ["-resize", f"{header['scale']}x"] if "scale" in header else []
-        subprocess.run(
-            [
-                "convert",
-                str(shots[poster]),
-                "-crop",
-                f"{w}x{h}+{x}+{y}",
-                "+repage",
-                *resize,
-                "-strip",
-                str(OUT / f"{name}.png"),
-            ],
-            check=True,
-        )
+        shots, (x, y, w, h) = capture(name, header, script, work, headless=False)
+        write_poster(shots[poster], (x, y, w, h), header, OUT / f"{name}.png")
         if video:
             marks = overlays(script, frames, int(header.get("from", "0")))
             if header.get("pointer", "yes") == "no":
@@ -432,21 +461,146 @@ def record(name: str) -> None:
                     check=True,
                 )
     sizes = ", ".join(
-        f"{p.name} {p.stat().st_size // 1024} KB" for p in sorted(OUT.glob(f"{name}.*"))
+        f"{p.name} {p.stat().st_size // 1024} KB"
+        for p in sorted(OUT.glob(f"{name}.*"))
+        if not p.name.endswith((".new.png", ".diff.png"))
     )
     print(f"{name}: {frames} frames, {w}x{h}: {sizes}")
 
 
-def main(names: list[str]) -> int:
-    """Record the given recordings, or all of them."""
-    for tool in ("ffmpeg", "convert"):
+def pixels(png: Path) -> tuple[int, int, bytes]:
+    """Width, height and RGBA bytes (rows from the top) of a picture."""
+    size = subprocess.run(
+        ["identify", "-format", "%w %h", str(png)], check=True, capture_output=True, text=True
+    ).stdout.split()
+    raw = subprocess.run(["convert", str(png), "-depth", "8", "rgba:-"], check=True, capture_output=True).stdout
+    return int(size[0]), int(size[1]), raw
+
+
+def tolerance(header: dict[str, str]) -> tuple[int, int]:
+    """--check's threshold and max_failed: the defaults, then "#! check", then "#! check.<this platform>"."""
+    values = {"threshold": THRESHOLD, "max_failed": MAX_FAILED}
+    for key in ("check", f"check.{sys.platform}"):
+        for item in header.get(key, "").split():
+            k, _, v = item.partition("=")
+            if k not in values or not v.isdigit():
+                msg = f"#! {key}: '{item}' is not threshold=N or max_failed=N"
+                raise MediaError(msg)
+            values[k] = int(v)
+    return values["threshold"], values["max_failed"]
+
+
+def masks(header: dict[str, str]) -> list[tuple[int, int, int, int]]:
+    """The rectangles (x, y, w, h) [pixels of the poster] "#! mask" leaves out."""
+    out = []
+    for part in header.get("mask", "").split(";"):
+        if part.strip():
+            values = part.split()
+            if len(values) != 4 or not all(v.isdigit() for v in values):
+                msg = f"#! mask: '{part.strip()}' is not x y w h"
+                raise MediaError(msg)
+            x, y, w, h = (int(v) for v in values)
+            out.append((x, y, w, h))
+    return out
+
+
+def compare(new: Path, ref: Path, threshold: int, max_failed: int, boxes: list[tuple[int, int, int, int]],
+            diff: Path) -> tuple[bool, str]:
+    """test_compare_image's rule (src/lib/figure_testing.F90): the same size, and at most max_failed pixels outside
+    the masks with a channel differing by more than threshold. On a failure, a diff picture (failed pixels red, those
+    within the threshold dark red, masked ones blue, the rest the reference faded). The outcome and a summary."""
+    w, h, a = pixels(new)
+    wr, hr, b = pixels(ref)
+    if (w, h) != (wr, hr):
+        return False, f"{w}x{h} pixels, the committed poster {wr}x{hr}"
+    masked = bytearray(w * h)
+    for x, y, mw, mh in boxes:
+        for j in range(max(0, y), min(h, y + mh)):
+            masked[j * w + max(0, x) : j * w + min(w, x + mw)] = b"\x01" * max(0, min(w, x + mw) - max(0, x))
+    failed, worst, where = 0, 0, (0, 0)
+    out = bytearray(w * h * 3)
+    for k in range(w * h):
+        p = 4 * k
+        d = max(abs(a[p] - b[p]), abs(a[p + 1] - b[p + 1]), abs(a[p + 2] - b[p + 2]), abs(a[p + 3] - b[p + 3]))
+        lum = (3 * b[p] + 6 * b[p + 1] + b[p + 2]) // 10
+        if masked[k]:
+            out[3 * k : 3 * k + 3] = bytes((lum // 4, lum // 4, 96 + lum // 3))
+        elif d > threshold:
+            failed += 1
+            out[3 * k : 3 * k + 3] = b"\xff\x00\x00"
+            if d > worst:
+                worst, where = d, (k % w, k // w)
+        elif d > 0:
+            out[3 * k : 3 * k + 3] = bytes((140, 30, 30))
+        else:
+            out[3 * k : 3 * k + 3] = bytes((lum // 3, lum // 3, lum // 3))
+    if failed <= max_failed:
+        return True, f"{failed} pixels over {threshold}"
+    subprocess.run(["convert", "-size", f"{w}x{h}", "-depth", "8", "rgb:-", str(diff)], input=bytes(out), check=True)
+    return False, f"{failed} pixels differ by more than {threshold} ({max_failed} allowed), the most by {worst} at {where}"
+
+
+def check(name: str) -> str:
+    """Render one recording headless with the CPU renderer and compare its poster with the committed one: 'pass',
+    'fail' (the .new.png and .diff.png written beside it) or 'skip'."""
+    header, script = parse(RECS / f"{name}.rec")
+    new, diff, ref = OUT / f"{name}.new.png", OUT / f"{name}.diff.png", OUT / f"{name}.png"
+    if "remote" in header:
+        print(f"{name}: skipped (remote: a browser's picture)")
+        return "skip"
+    if not ref.is_file():
+        print(f"{name}: skipped (no committed poster)")
+        return "skip"
+    frames = int(header["frames"])
+    poster = int(header.get("poster", frames - 1))
+    threshold, max_failed = tolerance(header)
+    with tempfile.TemporaryDirectory(prefix="figure-media-") as tmp:
+        work = Path(tmp)
+        shots, crop = capture(name, header, script, work, headless=True)
+        write_poster(shots[poster], crop, header, work / "poster.png")
+        diff.unlink(missing_ok=True)  # an earlier run's: compare writes it again on a failure of the same size
+        ok, summary = compare(work / "poster.png", ref, threshold, max_failed, masks(header), diff)
+        if ok:
+            new.unlink(missing_ok=True)
+        else:
+            shutil.copyfile(work / "poster.png", new)
+    print(f"{name}: {'pass' if ok else 'FAIL'}: {summary}" + ("" if ok else f": see {new.name}, {diff.name}"))
+    return "pass" if ok else "fail"
+
+
+def update(names: list[str]) -> int:
+    """Accept the .new.png pictures of --check: each replaces its poster, its .diff.png removed."""
+    found = sorted(OUT.glob("*.new.png"))
+    if names:
+        found = [p for p in found if p.name.removesuffix(".new.png") in names]
+    for p in found:
+        name = p.name.removesuffix(".new.png")
+        p.replace(OUT / f"{name}.png")
+        (OUT / f"{name}.diff.png").unlink(missing_ok=True)
+        print(f"{name}: {name}.png updated")
+    if not found:
+        print("docs_media.py: no .new.png to accept")
+    return 0
+
+
+def main(args: list[str]) -> int:
+    """Record the given recordings, or all of them; --check compares, --update accepts."""
+    mode = args[0] if args and args[0] in ("--check", "--update") else ""
+    names = args[1:] if mode else args
+    if mode == "--update":
+        return update(names)
+    for tool in ("ffmpeg", "convert", "identify") if not mode else ("convert", "identify"):
         if not shutil.which(tool):
             print(f"docs_media.py: {tool} not found", file=sys.stderr)
             return 1
     names = names or sorted(p.stem for p in RECS.glob("*.rec"))
     failed = 0
+    outcomes: dict[str, int] = {"pass": 0, "fail": 0, "skip": 0}
     for name in names:
         try:
+            if mode == "--check":
+                outcomes[check(name)] += 1
+                continue
             record(name)
         except (
             MediaError,
@@ -455,6 +609,10 @@ def main(names: list[str]) -> int:
         ) as err:
             print(f"docs_media.py: {err}", file=sys.stderr)
             failed += 1
+    if mode == "--check":
+        print(f"docs_media.py --check: {outcomes['pass']} passed, {outcomes['fail']} failed, {outcomes['skip']} skipped"
+              f", {failed} not rendered")
+        return 1 if failed or outcomes["fail"] else 0
     return 1 if failed else 0
 
 

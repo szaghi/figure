@@ -38,6 +38,7 @@
 #endif
 #include "figure_native.h"
 #include "figure_remote.h"
+#include "figure_swrast.h"
 
 #include "imgui.h"
 // miniz: deflate and zlib streams only, mz_ names only (CMake passes the same; an fpm build passes nothing)
@@ -891,6 +892,14 @@ void keep_texture(std::uint64_t id, int width, int height, const unsigned char *
 
 void texture_update(std::uint64_t id, int width, int height, const unsigned char *rgba, bool linear) {
    keep_texture(id, width, height, rgba, linear, true);
+}
+
+bool texture_pixels(std::uint64_t id, figure_swrast::texture_t *t) {
+   const auto it = sv.textures.find(id);
+   if (it == sv.textures.end() || it->second.rgba.empty()) return false;
+   t->width = it->second.width, t->height = it->second.height, t->channels = 4;
+   t->pixels = it->second.rgba.data(), t->smooth = it->second.linear;
+   return true;
 }
 
 void texture_destroy(std::uint64_t id) {

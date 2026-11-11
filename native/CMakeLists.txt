@@ -109,6 +109,7 @@ add_library(figure_native STATIC
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_image.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_items.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/figure_swrast.cpp
    ${miniz_SOURCE_DIR}/miniz.c)
 # miniz: only its deflate and zlib-format functions, all under the mz_ prefix (no zlib names: a program may link zlib)
 target_compile_definitions(figure_native PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
@@ -196,6 +197,14 @@ target_compile_definitions(figure_native PUBLIC
    IMGUI_USER_CONFIG="${cimgui_SOURCE_DIR}/cimconfig.h"
    IMGUI_DISABLE_OBSOLETE_FUNCTIONS=1
    IMGUI_ENABLE_TEST_ENGINE)
+# No contraction of a * b + c into a fused multiply-add (GCC and Clang contract by default where the target has FMA:
+# aarch64, x86-64 with -march=haswell and later): Dear ImGui's and ImPlot's layout arithmetic and the CPU renderer's
+# then round the same way on every platform, so a picture rendered headless does not depend on the machine (#7 S1: an
+# FMA build moved an axis by one pixel row). MSVC does not contract by default. scripts/fpm_package.py sets the same
+# with pragmas in imconfig.h.
+target_compile_options(figure_native PRIVATE
+   $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang,IntelLLVM>:-ffp-contract=off>
+   $<$<COMPILE_LANG_AND_ID:C,GNU,Clang,AppleClang,IntelLLVM>:-ffp-contract=off>)
 target_include_directories(figure_native PUBLIC
    ${CMAKE_CURRENT_SOURCE_DIR} ${cimgui_SOURCE_DIR} ${IMGUI_DIR} ${IMGUI_DIR}/backends ${cimplot_SOURCE_DIR} ${IMPLOT_DIR})
 target_link_libraries(figure_native PUBLIC SDL3::SDL3-static)

@@ -89,7 +89,9 @@ lines are the input, one event per frame number: `move`, `down`, `up`, `key`, `t
 capture on, and with `FIGURE_STYLE=seal`, the style of these pages; with `SDL_VIDEO_DRIVER=offscreen` in its
 environment SDL draws into memory and no window appears on the screen, which is how this tutorial's recordings were
 made. While recording, FIGURE ignores the real mouse and keyboard, fixes the frame time and reads nothing of the
-user's (no ini file, no recent folders), so a recording made again gives the same picture.
+user's (no ini file, no recent folders), so a recording made again gives the same picture. `docs_media.py --check`
+plays the same scripts headless, drawn by FIGURE's CPU renderer, and compares each picture with the committed one
+([The documentation's recordings](/guide/capture#the-documentation-s-recordings)).
 
 ::: tip What you learned
 A whole application tested headless, by its users' gestures: keys and the platform's shortcut key, clicks aimed at

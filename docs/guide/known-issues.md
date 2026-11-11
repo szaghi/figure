@@ -306,6 +306,29 @@ POSIX):
   refusal happens in such a build too.
 - **No preemption:** a task with no safe point (`h%cancelled()`) cannot be stopped; its object's end waits for it.
 
+## Pictures without a GPU
+
+Headless and remote modes draw their pictures (`save_image`, `FIGURE_CAPTURE`, `test_capture`) with FIGURE's CPU
+renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
+
+- **Differences from the GPU:** 1 or 2 levels (of 255) at anti-aliased edges and blends. Measured against an RTX 4070
+  on the documentation's 80 recordings: no other difference except single pixels of a plot line where a pixel centre
+  falls within 1/256 pixel of an edge and the two round the other way (one pixel, by up to 155 levels, in each of 3
+  recordings). A golden made by the CPU renderer is compared with the CPU renderer's pictures, so this does not touch
+  tests; a picture read back from a window differs from one rendered headless by these.
+- **Ties:** pixel centres on an edge go by the image's top-left rule (Direct3D's, that GPU's). Mesa's llvmpipe uses
+  OpenGL's and draws one row of pixels differently there (the first row of an image drawn with nearest filtering,
+  heatmap cell edges); a native OpenGL GPU driver was not measured.
+- **Programs that wait on the wall clock:** a recording made headless (`FIGURE_CAPTURE_HEADLESS`) draws its frames
+  faster than a window does, so what a task or a process has produced by a given frame differs: a progress bar, a
+  log, a plot fitted to data that arrived later. Such a recording is deterministic in each mode, not across them.
+- **Draw callbacks:** a program's own `ImDrawList` callback (raw bindings) is not run by the CPU renderer.
+- **Other platforms:** macOS and Windows were not measured; their C libraries' `sin`, `cos`, `log10` and `pow` may
+  move a rounded corner or a tick by a level or a pixel. A golden check can be given a per-platform tolerance where
+  one is measured (`docs_media.py`'s `#! check.<platform>`).
+- **Speed:** about 1 ns a pixel drawn per thread; a 1400 x 860 frame of the documentation's scenes takes 0.7 to 1.7 ms
+  on 8 threads, 0.8 to 6.7 ms on one, more with a large texture sampled on every pixel.
+
 ## 3-D views
 
 [3-D views](view3d) are rendered on the CPU, into an image:

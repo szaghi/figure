@@ -73,6 +73,11 @@ source-dir = "src/tests"
 main = "figure_test_images.F90"
 
 [[test]]
+name = "figure_test_pixels"
+source-dir = "src/tests"
+main = "figure_test_pixels.F90"
+
+[[test]]
 name = "figure_test_paths"
 source-dir = "src/tests"
 main = "figure_test_paths.F90"

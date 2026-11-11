@@ -1,7 +1,9 @@
 // FIGURE native glue: SDL3 window + OpenGL3 renderer + Dear ImGui/ImPlot contexts, behind the C ABI of figure_native.h.
 #include "figure_native.h"
+#include "figure_image.h"
 #include "figure_items.h"
 #include "figure_remote.h"
+#include "figure_swrast.h"
 #include "figure_style.h"
 #include "figure_theme.h"
 
@@ -204,11 +206,14 @@ struct state_t {
    struct texture_t {
       int  width = 0, height = 0;
       bool smooth = false;
+      std::vector<unsigned char> rgba; // headless mode: the pixels, for the CPU renderer (remote mode keeps its own)
    };
    std::chrono::steady_clock::time_point last_frame; // remote mode: the frame clock (no SDL)
    double        remote_min_dt = 1.0 / 60.0;           // remote mode: shortest time between frames [s] (0: no cap)
    std::map<unsigned long long, texture_t> textures; // user textures by ImTextureID (the GL name in window mode)
    unsigned long long next_headless_texture = 1;     // headless mode: ids without GL objects
+   bool          window_capture = false; // headless mode started by fig_init (FIGURE_CAPTURE_HEADLESS): a window's
+                                         // program, whose set_icon then gives the bar its icon as in the window
 } st;
 
 // At least n more frames, from any thread: a compare-and-swap maximum, so that concurrent requests keep the largest
@@ -249,8 +254,11 @@ struct redraw_stats_t {
    std::map<Uint32, int> events;      // events by SDL_EventType
 } rs;
 
-// Frame capture, enabled by the environment variable FIGURE_CAPTURE=<prefix> (window mode only): every frame drawn is
-// read back and written to <prefix>NNNNN.ppm, for documentation screenshots and animations. Capture is hermetic: the
+// Frame capture, enabled by the environment variable FIGURE_CAPTURE=<prefix>, in every mode: every frame drawn is
+// written to <prefix>NNNNN.ppm, for documentation screenshots and animations; a window's frames are read back from the
+// GPU, headless and remote modes render theirs with FIGURE's CPU renderer (figure_swrast.cpp).
+// FIGURE_CAPTURE_HEADLESS=1 makes fig_init start headless mode instead of a window (same size, no SDL): the frames of
+// a window program without a display or a GPU (scripts/docs_media.py --check). Capture is hermetic: the
 // real mouse and keyboard are ignored (the program scripts its own input with fig_input_mouse), the content scale is
 // 1, lazy redraw is off and the frame clock is fixed (FIGURE_CAPTURE_FPS, default 30), so the frames depend only on
 // the program. FIGURE_CAPTURE_FROM=N skips the first N frames (default 0); FIGURE_CAPTURE_FRAMES=N ends the program
@@ -265,7 +273,8 @@ struct redraw_stats_t {
 //                                        delete, escape, space, arrows, home, end, pageup, pagedown, ctrl, shift, alt,
 //                                        super (press and release when down|up is omitted)
 //    <frame> close                       the window's close button is clicked (a quit request)
-// With an input script Dear ImGui draws its own mouse cursor, so the pointer shows in the frames.
+// With an input script Dear ImGui draws its own mouse cursor, so the pointer shows in the frames. In remote mode the
+// browser's input still reaches the program (the recording is of the session), with the fixed clock and the script.
 struct capture_event_t {
    long        frame = 0;
    std::string what;
@@ -416,6 +425,15 @@ void capture_apply_input() {
    }
 }
 
+// A captured frame's clock and input: the fixed frame time, the script's events, Dear ImGui's cursor drawn with a
+// script (every mode).
+void capture_frame_input() {
+   ImGuiIO &io = ImGui::GetIO();
+   io.DeltaTime = cap.dt;
+   io.MouseDrawCursor = !cap.events.empty();
+   capture_apply_input();
+}
+
 void capture_setup() {
    cap = capture_t{};
    const char *prefix = std::getenv("FIGURE_CAPTURE");
@@ -476,12 +494,9 @@ constexpr unsigned int GL_NEAREST_ = 0x2600, GL_LINEAR_ = 0x2601, GL_RGBA_ = 0x1
 constexpr unsigned int GL_UNPACK_ROW_LENGTH_ = 0x0CF2, GL_UNPACK_ALIGNMENT_ = 0x0CF5, GL_PACK_ALIGNMENT_ = 0x0D05;
 constexpr unsigned int GL_RGB_ = 0x1907;
 
-// Capture: read the back buffer (just rendered) and write it as a binary PPM, top row first.
-void capture_write(int w, int h) {
+// Capture: the frame (RGB, rows from the top) as the next binary PPM.
+void capture_write(const unsigned char *rgb, int w, int h) {
    if (w <= 0 || h <= 0) return;
-   std::vector<unsigned char> px(static_cast<size_t>(w) * h * 3);
-   p_glPixelStorei(GL_PACK_ALIGNMENT_, 1);
-   p_glReadPixels(0, 0, w, h, GL_RGB_, GL_UNSIGNED_BYTE_, px.data());
    char name[32];
    std::snprintf(name, sizeof(name), "%05ld.ppm", cap.written);
    const std::string path = cap.prefix + name;
@@ -492,10 +507,19 @@ void capture_write(int w, int h) {
       return;
    }
    std::fprintf(f, "P6\n%d %d\n255\n", w, h);
-   const size_t row = static_cast<size_t>(w) * 3;
-   for (int y = h - 1; y >= 0; --y) std::fwrite(px.data() + static_cast<size_t>(y) * row, 1, row, f); // GL rows go up
+   std::fwrite(rgb, 1, static_cast<size_t>(w) * h * 3, f);
    std::fclose(f);
    ++cap.written;
+}
+
+// Window mode: the back buffer just rendered, RGB, rows from the top (GL counts them from the bottom).
+void gl_read(std::vector<unsigned char> &rgb, int w, int h) {
+   std::vector<unsigned char> px(static_cast<size_t>(w) * h * 3);
+   rgb.resize(px.size());
+   p_glPixelStorei(GL_PACK_ALIGNMENT_, 1);
+   p_glReadPixels(0, 0, w, h, GL_RGB_, GL_UNSIGNED_BYTE_, px.data());
+   const size_t row = static_cast<size_t>(w) * 3;
+   for (int y = 0; y < h; ++y) std::memcpy(rgb.data() + y * row, px.data() + (h - 1 - y) * row, row);
 }
 
 // Layouts (fig_save_layout, fig_load_layout): Dear ImGui's settings (windows' positions and sizes, docking nodes,
@@ -513,17 +537,21 @@ void apply_layout() {
 }
 
 // Save an image of a rectangle of the window (fig_save_image): asked for during a frame, written when that frame is
-// rendered (fig_end_frame, before the swap), reported once by fig_image_result. Window mode only.
+// rendered (fig_end_frame; a window's before the swap), reported once by fig_image_result. A window's pixels are read
+// back from the GPU; headless and remote modes render the frame with the CPU renderer.
 struct image_request_t {
    std::string path, error;
    float       x0 = 0.0f, y0 = 0.0f, x1 = 0.0f, y1 = 0.0f; // logical pixels
    int         state = 0;                                 // 0 none, 1 pending, 2 written, 3 failed
 };
 image_request_t img;
+// A test's picture of the whole frame (fig_test_capture): written when the frame is rendered, as save_image's, its
+// failure on standard error (the test's comparison then finds no file).
+std::string test_capture_path;
 
-void image_write(const ImGuiIO &io) {
+// The rectangle of img of the frame `rgb` (fw x fh pixels, RGB, rows from the top) written as a PNG.
+void image_write(const ImGuiIO &io, const unsigned char *rgb, int fw, int fh) {
    const float sx = io.DisplayFramebufferScale.x, sy = io.DisplayFramebufferScale.y;
-   const int fw = static_cast<int>(io.DisplaySize.x * sx), fh = static_cast<int>(io.DisplaySize.y * sy);
    const int x0 = std::max(0, static_cast<int>(img.x0 * sx)), x1 = std::min(fw, static_cast<int>(img.x1 * sx + 0.5f));
    const int y0 = std::max(0, static_cast<int>(img.y0 * sy)), y1 = std::min(fh, static_cast<int>(img.y1 * sy + 0.5f));
    const int w = x1 - x0, h = y1 - y0;
@@ -532,21 +560,24 @@ void image_write(const ImGuiIO &io) {
       img.error = "save_image: the rectangle is outside the window";
       return;
    }
-   std::vector<unsigned char> px(static_cast<size_t>(w) * h * 3), top(px.size());
-   p_glPixelStorei(GL_PACK_ALIGNMENT_, 1);
-   p_glReadPixels(x0, fh - y1, w, h, GL_RGB_, GL_UNSIGNED_BYTE_, px.data()); // GL counts rows from the bottom
+   std::vector<unsigned char> part(static_cast<size_t>(w) * h * 3);
    const size_t row = static_cast<size_t>(w) * 3;
-   for (int y = 0; y < h; ++y) std::memcpy(top.data() + y * row, px.data() + (h - 1 - y) * row, row);
-   SDL_Surface *surf = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGB24, top.data(), static_cast<int>(row));
-   if (!surf) {
-      img.state = 3;
-      img.error = std::string("save_image: ") + SDL_GetError();
-      return;
-   }
-   const bool ok = SDL_SavePNG(surf, img.path.c_str());
-   SDL_DestroySurface(surf);
+   for (int y = 0; y < h; ++y)
+      std::memcpy(part.data() + y * row, rgb + (static_cast<size_t>(y0 + y) * fw + x0) * 3, row);
+   const bool ok = fig_image_write(img.path.data(), static_cast<int>(img.path.size()), part.data(), 3, w, h, 0) == FIG_OK;
    img.state = ok ? 2 : 3;
-   if (!ok) img.error = "save_image: cannot write " + img.path + ": " + SDL_GetError();
+   if (!ok) img.error = "save_image: " + last_error;
+}
+
+// The pictures asked for in this frame (save_image, test_capture), from the frame `rgb`.
+void pictures_write(const ImGuiIO &io, const unsigned char *rgb, int fw, int fh) {
+   if (img.state == 1) image_write(io, rgb, fw, fh);
+   if (!test_capture_path.empty()) {
+      const std::string p = test_capture_path;
+      test_capture_path.clear();
+      if (fig_image_write(p.data(), static_cast<int>(p.size()), rgb, 3, fw, fh, 0) != FIG_OK)
+         std::fprintf(stderr, "figure test_capture: %s\n", last_error.c_str());
+   }
 }
 
 // plex_sans_ttf[], plex_mono_ttf[]: IBM Plex Sans and Plex Mono Regular (OFL-1.1); lucide_ttf[]: Lucide (ISC); from
@@ -1870,17 +1901,68 @@ bool set_window_icon(const unsigned char *rgba, int width, int height, std::stri
    return ok;
 }
 
-// Headless renderer: acknowledge texture requests (font atlas pages) without a GPU, as a real backend would.
+// Headless renderer: acknowledge texture requests (font atlas pages) without a GPU, as a real backend would. Their ids
+// have the top bit set, so they never meet a user texture's (numbered from 1); the CPU renderer reads their pixels
+// from Dear ImGui's ImTextureData.
+constexpr unsigned long long ATLAS_ID_BIT = 0x8000000000000000ull;
 void headless_textures() {
    for (ImTextureData *t : ImGui::GetPlatformIO().Textures) {
       if (t->Status == ImTextureStatus_WantCreate || t->Status == ImTextureStatus_WantUpdates) {
-         t->SetTexID(static_cast<ImTextureID>(1));
+         t->SetTexID(static_cast<ImTextureID>(ATLAS_ID_BIT | static_cast<unsigned int>(t->UniqueID)));
          t->SetStatus(ImTextureStatus_OK);
       } else if (t->Status == ImTextureStatus_WantDestroy) {
          t->SetTexID(ImTextureID_Invalid);
          t->SetStatus(ImTextureStatus_Destroyed);
       }
    }
+}
+
+// The sampler callbacks a renderer backend registers (fig_texture_sampling puts them around a user image), for modes
+// without the GL backend: they do nothing when called, and the CPU renderer reads them from the draw lists as the GL
+// backend's state changes (a user texture's own filter, then linear again). Remote mode's page ignores them.
+void sampler_from_texture(const ImDrawList *, const ImDrawCmd *) {}
+void sampler_reset(const ImDrawList *, const ImDrawCmd *) {}
+void sampler_linear(const ImDrawList *, const ImDrawCmd *) {}
+void sampler_nearest(const ImDrawList *, const ImDrawCmd *) {}
+void register_samplers() {
+   ImGuiPlatformIO &pio = ImGui::GetPlatformIO();
+   pio.DrawCallback_SetSamplerFromTex = sampler_from_texture;
+   pio.DrawCallback_ResetRenderState = sampler_reset;
+   pio.DrawCallback_SetSamplerLinear = sampler_linear;
+   pio.DrawCallback_SetSamplerNearest = sampler_nearest;
+}
+
+// The CPU renderer's user textures: headless mode's copies, remote mode's (kept to be sent to the browser).
+bool cpu_texture(ImTextureID id, figure_swrast::texture_t *t) {
+   if (st.m == mode::remote) return figure_remote::texture_pixels(static_cast<std::uint64_t>(id), t);
+   const auto it = st.textures.find(static_cast<unsigned long long>(id));
+   if (it == st.textures.end() || it->second.rgba.empty()) return false;
+   t->width = it->second.width, t->height = it->second.height, t->channels = 4;
+   t->pixels = it->second.rgba.data(), t->smooth = it->second.smooth;
+   return true;
+}
+
+// The frame just rendered (ImGui::Render), drawn by the CPU renderer: RGB, rows from the top, the frame buffer's size.
+int render_threads = 0; // fig_render_threads (tests): 0 the default
+void cpu_frame(std::vector<unsigned char> &rgb, int &w, int &h) {
+   const ImGuiIO &io = ImGui::GetIO();
+   w = static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x);
+   h = static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y);
+   figure_swrast::render(ImGui::GetDrawData(), w, h, st.clear, rgb, cpu_texture, render_threads, nullptr);
+}
+
+// Headless and remote modes, after ImGui::Render and the textures' answers: the capture's frame and the pictures
+// asked for, rendered by the CPU once for all of them.
+void cpu_pictures() {
+   const bool due = cap.on && cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count);
+   if (due || img.state == 1 || !test_capture_path.empty()) {
+      std::vector<unsigned char> rgb;
+      int w = 0, h = 0;
+      cpu_frame(rgb, w, h);
+      if (due) capture_write(rgb.data(), w, h);
+      pictures_write(ImGui::GetIO(), rgb.data(), w, h);
+   }
+   if (cap.on) ++cap.frame;
 }
 
 } // namespace
@@ -1935,6 +2017,16 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    FIG_TRY
    if (st.m != mode::none) return fail(FIG_ERR_STATE, "figure is already initialized");
    if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "window size must be positive");
+   const char *cap_prefix = std::getenv("FIGURE_CAPTURE"), *cap_headless = std::getenv("FIGURE_CAPTURE_HEADLESS");
+   if (cap_prefix && *cap_prefix && cap_headless && *cap_headless && std::strcmp(cap_headless, "0") != 0) {
+      // a capture without a window: the same program headless, at the window's size, drawn by the CPU renderer
+      const int s = fig_init_headless(width, height);
+      if (s == FIG_OK) {
+         st.title.assign(title, title_len > 0 ? static_cast<size_t>(title_len) : 0);
+         st.window_capture = true;
+      }
+      return s;
+   }
    SDL_SetMainReady();
    if (!SDL_Init(SDL_INIT_VIDEO)) return fail(FIG_ERR_FAILED, std::string("SDL_Init: ") + SDL_GetError());
    SDL_SetEventEnabled(SDL_EVENT_DROP_FILE, true); // files and folders dropped on the window (app%dropped)
@@ -2038,6 +2130,8 @@ int fig_init_headless(int width, int height) {
    pio.Platform_GetClipboardTextFn = headless_get_clipboard;
    platform_open = nullptr;
    take_open_in_shell(); // a link opens nothing: Dear ImGui's default would run xdg-open and wait for it
+   register_samplers(); // a user texture's own filter, as the GL backend's, for the CPU renderer
+   capture_setup();
    st.m = mode::headless;
    loop_starts();
    fig_file_browser_reset(1, 0); // tests: the recent folders in memory, or in the file a test names
@@ -2072,6 +2166,8 @@ int fig_init_remote(int width, int height, const char *host, int host_len, int p
    pio.Platform_GetClipboardTextFn = [](ImGuiContext *) { return figure_remote::clipboard(); };
    platform_open = nullptr;
    take_open_in_shell(); // a link is opened by the page, in the browser
+   register_samplers(); // a user texture's own filter, as the GL backend's, for the CPU renderer
+   capture_setup();
    st.m = mode::remote;
    loop_starts();
    fig_file_browser_reset(1, 1);
@@ -2157,6 +2253,20 @@ int fig_frame_options(int decorations, int buttons) {
 
 int fig_set_icon_rgba(const unsigned char *rgba, int width, int height) {
    FIG_TRY
+   if (st.window_capture) { // the bar's icon only, a texture of the CPU renderer
+      if (width <= 0 || height <= 0 || width > 1024 || height > 1024)
+         return fail(FIG_ERR_ARGUMENT, "set_icon: the image is rgba(4, width, height), 1 to 1024 pixels a side");
+      if (st.frame.icon_tex != 0) fig_texture_destroy(st.frame.icon_tex);
+      unsigned long long id = 0;
+      const int s = fig_texture_create(width, height, 1, &id);
+      if (s != FIG_OK) return s;
+      fig_texture_update(id, width, height, rgba);
+      st.frame.icon_tex = static_cast<unsigned int>(id);
+      st.frame.icon_w = width;
+      st.frame.icon_h = height;
+      st.frame.icon_glyph.clear();
+      return FIG_OK;
+   }
    if (st.m != mode::window) return fail(FIG_ERR_STATE, std::string("set_icon: there is no window in ") +
                                                          (st.m == mode::none ? "no mode (before init)"
                                                           : st.m == mode::headless ? "headless mode" : "remote mode"));
@@ -2182,6 +2292,16 @@ int fig_set_icon_rgba(const unsigned char *rgba, int width, int height) {
 
 int fig_set_icon_glyph(const char *icon, int icon_len) {
    FIG_TRY
+   if (st.window_capture) { // the bar's icon only
+      const std::string g(icon, icon_len > 0 ? static_cast<size_t>(icon_len) : 0);
+      std::vector<unsigned char> rgba;
+      std::string err;
+      if (!render_icon_glyph(g, 64, rgba, err)) return fail(FIG_ERR_ARGUMENT, err);
+      if (st.frame.icon_tex != 0) fig_texture_destroy(st.frame.icon_tex);
+      st.frame.icon_tex = 0;
+      st.frame.icon_glyph = g;
+      return FIG_OK;
+   }
    if (st.m != mode::window) return fail(FIG_ERR_STATE, std::string("set_icon: there is no window in ") +
                                                          (st.m == mode::none ? "no mode (before init)"
                                                           : st.m == mode::headless ? "headless mode" : "remote mode"));
@@ -2570,9 +2690,14 @@ int fig_begin_frame(int *running) {
       st.system_theme_changed = false;
       system_theme_changed();
    }
+   if (cap.on && cap.count >= 0 && cap.written >= cap.count) { // capture: enough frames written (every mode)
+      *running = 0;
+      return FIG_OK;
+   }
    if (st.m == mode::headless) { // never waits: a wake-up has nothing to end
       woken = false;
       ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+      if (cap.on) capture_frame_input();
       frame_without_event(); // the frames asked for (test_run waits for none), counted down as in window mode
       figure_items::frame_begin(); // the items of the frame that ended: what paths find now
       apply_test_input();
@@ -2596,7 +2721,7 @@ int fig_begin_frame(int *running) {
       // wake-up during it is never lost)
       woken = false;
       const bool pending = figure_remote::frame_pending(), busy = figure_remote::queue_busy();
-      const bool wait = pending ? busy : st.lazy && st.frames_left <= 0 && st.test_input.empty();
+      const bool wait = pending ? busy : st.lazy && st.frames_left <= 0 && st.test_input.empty() && !cap.on;
       bool got = figure_remote::serve(wait ? st.max_wait_ms.load() : 0);
       const auto next = st.last_frame + std::chrono::duration_cast<clock::duration>(
                                            std::chrono::duration<double>(st.remote_min_dt));
@@ -2614,6 +2739,7 @@ int fig_begin_frame(int *running) {
       const float dt = std::chrono::duration<float>(now - st.last_frame).count();
       st.last_frame = now;
       ImGui::GetIO().DeltaTime = dt > 0.0f ? dt : 1.0e-4f;
+      if (cap.on) capture_frame_input(); // the fixed clock and the script; the browser's input goes on
       figure_items::frame_begin(); // the items of the frame that ended: what paths find now
       apply_test_input();
       take_drops();
@@ -2647,7 +2773,6 @@ int fig_begin_frame(int *running) {
    };
    // Lazy redraw: once ImGui has settled, sleep until an event arrives or max_wait elapses (a periodic refresh that
    // lets live data from the application appear); never spin at the display rate while idle.
-   if (cap.on && cap.count >= 0 && cap.written >= cap.count) *running = 0; // capture: enough frames written
    // a fig_wake from now on pushes its event, which ends the wait or is polled below; one before is already queued
    woken = false;
    if (st.lazy && st.frames_left <= 0 && !cap.on && st.test_input.empty()) {
@@ -2675,9 +2800,7 @@ int fig_begin_frame(int *running) {
       SDL_GetWindowSizeInPixels(st.window, &fw, &fh);
       io.DisplaySize = ImVec2(static_cast<float>(w), static_cast<float>(h));
       if (w > 0 && h > 0) io.DisplayFramebufferScale = ImVec2(static_cast<float>(fw) / w, static_cast<float>(fh) / h);
-      io.DeltaTime = cap.dt;
-      io.MouseDrawCursor = !cap.events.empty();
-      capture_apply_input();
+      capture_frame_input();
    } else {
       ImGui_ImplSDL3_NewFrame();
    }
@@ -2709,10 +2832,12 @@ int fig_end_frame(void) {
    ImGui::Render();
    if (st.m == mode::headless) {
       headless_textures();
+      cpu_pictures();
       return FIG_OK;
    }
    if (st.m == mode::remote) {
-      figure_remote::send_frame(ImGui::GetDrawData());
+      figure_remote::send_frame(ImGui::GetDrawData()); // the atlas's pixels kept there first
+      cpu_pictures();
       return FIG_OK;
    }
    Uint64 t_render = 0;
@@ -2726,13 +2851,16 @@ int fig_end_frame(void) {
    p_glClearColor(st.clear[0], st.clear[1], st.clear[2], 1.0f);
    p_glClear(GL_COLOR_BUFFER_BIT_);
    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-   if (cap.on) {
-      if (cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count))
-         capture_write(static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x),
-                       static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y));
-      ++cap.frame;
+   const bool due = cap.on && cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count);
+   if (due || img.state == 1 || !test_capture_path.empty()) { // the GPU's pixels, read back once
+      const int fw = static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x);
+      const int fh = static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y);
+      std::vector<unsigned char> rgb;
+      if (fw > 0 && fh > 0) gl_read(rgb, fw, fh);
+      if (due) capture_write(rgb.data(), fw, fh);
+      if (fw > 0 && fh > 0) pictures_write(io, rgb.data(), fw, fh);
    }
-   if (img.state == 1) image_write(io);
+   if (cap.on) ++cap.frame;
    Uint64 t_swap = 0;
    if (rs.on) t_swap = SDL_GetTicksNS();
    SDL_GL_SwapWindow(st.window);
@@ -2780,6 +2908,9 @@ void fig_shutdown(void) {
    }
    st = state_t{};
    cap = capture_t{};
+   img = image_request_t{};
+   test_capture_path.clear();
+   render_threads = 0;
    fig_scope_reset();
    notes.clear();
    note_rects.clear();
@@ -2810,7 +2941,11 @@ int fig_texture_create(int width, int height, int smooth, unsigned long long *id
                      nullptr);
       *id = name;
    }
-   st.textures[*id] = {width, height, smooth != 0};
+   state_t::texture_t &t = st.textures[*id];
+   t.width = width, t.height = height, t.smooth = smooth != 0;
+   // headless mode: the pixels, for the CPU renderer (transparent until the first update, as a fresh GL texture's
+   // contents are undefined)
+   if (st.m == mode::headless) t.rgba.assign(static_cast<size_t>(width) * static_cast<size_t>(height) * 4u, 0);
    return FIG_OK;
    FIG_CATCH
 }
@@ -2831,6 +2966,8 @@ int fig_texture_update(unsigned long long id, int width, int height, const unsig
       p_glTexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, width, height, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba);
    } else if (st.m == mode::remote) {
       figure_remote::texture_update(id, width, height, rgba, t->second.smooth); // kept, and sent to the browser
+   } else { // headless: kept for the CPU renderer
+      std::memcpy(t->second.rgba.data(), rgba, t->second.rgba.size());
    }
    return FIG_OK;
    FIG_CATCH
@@ -2839,7 +2976,8 @@ int fig_texture_update(unsigned long long id, int width, int height, const unsig
 void fig_texture_sampling(int plot, int from_texture) {
    // The OpenGL3 backend samples every texture through its own (linear) sampler object, which overrides the
    // glTexParameteri filter of user textures: around a user image, ask it to use the texture's own filter, then
-   // restore its render state. No-op without a renderer backend (headless).
+   // restore its render state. Headless and remote modes register callbacks of their own (register_samplers), which
+   // the CPU renderer follows.
    try {
       if (!ImGui::GetCurrentContext()) return;
       const ImGuiPlatformIO &pio = ImGui::GetPlatformIO();
@@ -3400,8 +3538,7 @@ int fig_load_layout(const char *path, int path_len) {
 
 int fig_save_image(const char *path, int path_len, double x0, double y0, double x1, double y1) {
    FIG_TRY
-   if (st.m != mode::window)
-      return fail(FIG_ERR_STATE, "save_image needs a window: in remote and headless modes there are no pixels here");
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if (path_len <= 0) return fail(FIG_ERR_ARGUMENT, "save_image: no file name");
    if (!(x1 > x0) || !(y1 > y0)) return fail(FIG_ERR_ARGUMENT, "save_image: an empty rectangle");
    img = image_request_t{};
@@ -3412,6 +3549,26 @@ int fig_save_image(const char *path, int path_len, double x0, double y0, double 
    img.y1 = static_cast<float>(y1);
    img.state = 1;
    frames_at_least(2); // the frame that renders it, even in lazy mode
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_test_capture(const char *path, int path_len) {
+   FIG_TRY
+   if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (!st.in_frame) return fail(FIG_ERR_STATE, "test_capture: no frame open (call it between next_frame calls)");
+   if (path_len <= 0) return fail(FIG_ERR_ARGUMENT, "test_capture: no file name");
+   test_capture_path.assign(path, static_cast<size_t>(path_len));
+   std::remove(test_capture_path.c_str()); // a picture of an earlier run is never compared for this one
+   frames_at_least(2);
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_render_threads(int threads) {
+   FIG_TRY
+   if (threads < 0 || threads > 64) return fail(FIG_ERR_ARGUMENT, "render threads must be in [0, 64]");
+   render_threads = threads;
    return FIG_OK;
    FIG_CATCH
 }

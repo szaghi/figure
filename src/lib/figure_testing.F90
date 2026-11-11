@@ -19,8 +19,8 @@ module figure_testing
 !<
 !< Coordinates are display pixels, as `ig_item_rect` and `test_window_rect` give them. Works in every mode; with
 !< `app%init_headless` no window, display or GPU is needed, so tests run in CI as is.
-use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_long_long
-use, intrinsic :: iso_fortran_env, only : int32, int64, real64
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_loc, c_long_long
+use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64
 use figure_base, only : figure_check, figure_fail, figure_last_error
 use figure_c_native, only : FIG_OK, FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
@@ -30,9 +30,10 @@ use figure_c_native, only : FIG_OK, FIG_ERR_ARGUMENT, fig_input_key, fig_input_m
                             fig_popup_rect, fig_opened_url, fig_drawn_extent_layer, fig_field_uploads, &
                             fig_field_count, fig_field_time, fig_field_pixel, fig_test_glyph, fig_items_record, &
                             fig_item_find, fig_item_value, fig_items_list, fig_item_click, fig_item_type, &
-                            fig_menu_click, fig_test_run
+                            fig_menu_click, fig_test_run, fig_test_capture, fig_image_write, fig_set_last_error
 use figure_imgui, only : ig_item_rect
 use figure_implot, only : plot_copies, plot_stride
+use figure_texture, only : fig_read_image
 
 implicit none
 private
@@ -44,6 +45,7 @@ public :: test_popup_rect, test_opened_url, test_plot_copies, test_plot_stride
 public :: test_field_uploads, test_field_textures, test_field_time, test_field_pixel, test_glyph
 public :: test_record_items, test_item_exists, test_item_rect, test_item_click, test_item_type_text, test_item_checked
 public :: test_item_value, test_menu_click, test_run, test_id_conflicts, test_unnamed_items
+public :: test_capture, test_compare_image
 
 ! The state bits of an item found by a path: must match native/figure_items.h's state_t.
 integer(c_int), parameter :: ITEM_CHECKABLE = 2_c_int  !< A checkbox, a menu item, a selectable in a menu.
@@ -855,6 +857,253 @@ contains
 
    call items_list(2_c_int, count, list)
    endfunction test_unnamed_items
+
+   subroutine test_capture(path, stat)
+   !< The whole frame as a PNG file `path`, written when the current frame is rendered (at the next `app%next_frame`):
+   !< in headless and remote modes drawn by FIGURE's CPU renderer, the same pixels on every machine (capture.md); in a
+   !< window, read back from the GPU. A file `path` of an earlier run is removed at once, so a capture that cannot be
+   !< written (its reason on standard error) leaves no picture to compare. Then `test_compare_image(path, golden)`.
+   character(len=*), intent(in)            :: path !< PNG file.
+   integer(int32),   intent(out), optional :: stat !< Status: `FIG_ERR_STATE` with no frame open, `FIG_ERR_ARGUMENT`
+                                                   !< for an empty name.
+
+   call figure_check(fig_test_capture(path, len_trim(path, c_int)), stat)
+   endsubroutine test_capture
+
+   function test_compare_image(path, golden, threshold, max_failed, masks, failed, stat) result(equal)
+   !< Whether the picture `path` (a `test_capture`, a `save_image`) matches the reference `golden`: the same size, and
+   !< at most `max_failed` pixels (default 0) with a channel (R, G, B or A) that differs by more than `threshold`
+   !< (default 2, on 0-255: what the CPU renderer may differ by across platforms, capture.md), the pixels whose
+   !< centre lies in a rectangle of `masks` left out (a clock, an animation: what is not deterministic).
+   !<
+   !< On a mismatch it writes `<stem>.new.png` (the picture) and `<stem>.diff.png` beside the golden, `<stem>` the
+   !< golden's name without `.png`: in the diff the pixels that fail are red, those that differ within `threshold`
+   !< dark red, the masked ones blue and the others the golden's, faded; `figure_last_error` says how many failed, by
+   !< how much at most and where. On a match it removes such files left by an earlier run. Pixels are counted from the
+   !< picture's top-left corner, as `ig_item_rect` gives them (logical pixels are picture pixels at a content scale of
+   !< 1, as headless mode's).
+   character(len=*), intent(in)            :: path         !< The picture (PNG or JPEG).
+   character(len=*), intent(in)            :: golden       !< The reference (PNG).
+   integer(int32),   intent(in),  optional :: threshold    !< Largest difference of a channel that passes [0-255].
+   integer(int32),   intent(in),  optional :: max_failed   !< Pixels allowed to fail.
+   real(real64),     intent(in),  optional :: masks(:,:)   !< Rectangles left out, masks(:, k) = xmin, ymin, xmax,
+                                                           !< ymax [pixels].
+   integer(int64),   intent(out), optional :: failed       !< Pixels that failed (-1: the sizes differ).
+   integer(int32),   intent(out), optional :: stat         !< Status: `FIG_ERR_FAILED` when a file cannot be read or
+                                                           !< written, `FIG_ERR_ARGUMENT` for a file that is not an
+                                                           !< image, a `threshold` outside 0-255, a negative
+                                                           !< `max_failed`, `masks` not of 4 rows or a rectangle whose
+                                                           !< maximum is below its minimum.
+   logical                                 :: equal        !< The picture matches.
+   integer(int8), allocatable              :: got(:,:,:)   !< The picture, rgba(4, width, height).
+   integer(int8), allocatable              :: ref(:,:,:)   !< The golden.
+   integer(int8), allocatable              :: diff(:,:,:)  !< The diff picture, RGB.
+   integer(int8), allocatable              :: rgb(:,:,:)   !< The picture, RGB (.new.png).
+   logical,       allocatable              :: masked(:,:)  !< Pixels left out.
+   integer(int32)                          :: t            !< Threshold.
+   integer(int32)                          :: m            !< Pixels allowed to fail.
+   integer(int32)                          :: s            !< Status.
+   integer(int32)                          :: i, j, k      !< Column, row, rectangle.
+   integer(int32)                          :: d            !< A pixel's largest channel difference.
+   integer(int32)                          :: worst        !< The largest difference of a failed pixel.
+   integer(int32)                          :: at(2)        !< Where it is (column, row, from 0).
+   integer(int32)                          :: lum          !< The golden's luminance at a pixel.
+   integer(int64)                          :: n            !< Pixels that failed.
+   logical                                 :: ok           !< Outcome.
+   character(len=:), allocatable           :: stem         !< The golden's name without .png.
+   character(len=:), allocatable           :: msg          !< Message.
+
+   equal = .false.
+   if (present(failed)) failed = 0_int64
+   t = 2_int32
+   if (present(threshold)) t = threshold
+   m = 0_int32
+   if (present(max_failed)) m = max_failed
+   if (t < 0_int32 .or. t > 255_int32) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'test_compare_image: threshold '//itoa(t)//' is out of 0 to 255', stat)
+      return
+   endif
+   if (m < 0_int32) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'test_compare_image: max_failed '//itoa(m)//' is negative', stat)
+      return
+   endif
+   if (present(masks)) then
+      if (size(masks, 1) /= 4) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'test_compare_image: masks must have 4 rows (xmin, ymin, xmax, ymax)', &
+                          stat)
+         return
+      endif
+      if (any(masks(3,:) < masks(1,:)) .or. any(masks(4,:) < masks(2,:))) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'test_compare_image: a mask whose maximum is below its minimum', stat)
+         return
+      endif
+   endif
+   call read_picture(path, got, s)
+   if (s /= FIG_OK) then
+      call figure_fail(s, figure_last_error(), stat)
+      return
+   endif
+   call read_picture(golden, ref, s)
+   if (s /= FIG_OK) then
+      call figure_fail(s, figure_last_error(), stat)
+      return
+   endif
+   stem = trim(golden)
+   if (len(stem) > 4) then
+      if (stem(len(stem) - 3:) == '.png') stem = stem(1:len(stem) - 4)
+   endif
+   rgb = got(1:3,:,:)
+   if (any(shape(got) /= shape(ref))) then
+      if (present(failed)) failed = -1_int64
+      call write_picture(stem//'.new.png', rgb, s)
+      if (s /= FIG_OK) then
+         call figure_fail(s, figure_last_error(), stat)
+         return
+      endif
+      call remove_file(stem//'.diff.png')
+      msg = 'test_compare_image: '//trim(path)//' is '//itoa(size(got, 2, int32))//'x'//itoa(size(got, 3, int32))// &
+            ' pixels, '//trim(golden)//' '//itoa(size(ref, 2, int32))//'x'//itoa(size(ref, 3, int32))//': see '// &
+            stem//'.new.png'
+      call fig_set_last_error(msg, len(msg, c_int))
+      if (present(stat)) stat = int(FIG_OK, int32)
+      return
+   endif
+   allocate(masked(size(got, 2), size(got, 3)))
+   masked = .false.
+   if (present(masks)) then
+      do k = 1_int32, size(masks, 2, int32)
+         do j = 1_int32, size(got, 3, int32)
+            if (real(j, real64) - 0.5_real64 < masks(2, k) .or. real(j, real64) - 0.5_real64 > masks(4, k)) cycle
+            do i = 1_int32, size(got, 2, int32)
+               if (real(i, real64) - 0.5_real64 >= masks(1, k) .and. real(i, real64) - 0.5_real64 <= masks(3, k)) &
+                  masked(i, j) = .true.
+            enddo
+         enddo
+      enddo
+   endif
+   allocate(diff(3, size(got, 2), size(got, 3)))
+   n = 0_int64
+   worst = 0_int32
+   at = 0_int32
+   do j = 1_int32, size(got, 3, int32)
+      do i = 1_int32, size(got, 2, int32)
+         d = maxval(abs(ubyte(got(:, i, j)) - ubyte(ref(:, i, j))))
+         lum = (ubyte(ref(1, i, j)) * 3_int32 + ubyte(ref(2, i, j)) * 6_int32 + ubyte(ref(3, i, j))) / 10_int32
+         if (masked(i, j)) then
+            diff(:, i, j) = sbyte([lum / 4_int32, lum / 4_int32, 96_int32 + lum / 3_int32])
+         elseif (d > t) then
+            n = n + 1_int64
+            diff(:, i, j) = sbyte([255_int32, 0_int32, 0_int32])
+            if (d > worst) then
+               worst = d
+               at = [i - 1_int32, j - 1_int32]
+            endif
+         elseif (d > 0_int32) then
+            diff(:, i, j) = sbyte([140_int32, 30_int32, 30_int32])
+         else
+            diff(:, i, j) = sbyte([lum / 3_int32, lum / 3_int32, lum / 3_int32])
+         endif
+      enddo
+   enddo
+   if (present(failed)) failed = n
+   ok = n <= int(m, int64)
+   if (ok) then
+      call remove_file(stem//'.new.png')
+      call remove_file(stem//'.diff.png')
+   else
+      call write_picture(stem//'.new.png', rgb, s)
+      if (s == FIG_OK) call write_picture(stem//'.diff.png', diff, s)
+      if (s /= FIG_OK) then
+         call figure_fail(s, figure_last_error(), stat)
+         return
+      endif
+      msg = 'test_compare_image: '//ltoa(n)//' pixels of '//trim(path)//' differ from '//trim(golden)// &
+            ' by more than '//itoa(t)//' ('//itoa(m)//' allowed), the most by '//itoa(worst)//' at ('// &
+            itoa(at(1))//', '//itoa(at(2))//'): see '//stem//'.diff.png'
+      call fig_set_last_error(msg, len(msg, c_int))
+   endif
+   if (present(stat)) stat = int(FIG_OK, int32)
+   equal = ok
+   endfunction test_compare_image
+
+   subroutine read_picture(path, rgba, stat)
+   !< fig_read_image for test_compare_image: its message under that name.
+   character(len=*),           intent(in)  :: path        !< File.
+   integer(int8), allocatable, intent(out) :: rgba(:,:,:) !< Pixels.
+   integer(int32),             intent(out) :: stat        !< Status.
+   character(len=:), allocatable           :: msg         !< Message.
+   character(len=*), parameter             :: FROM = 'fig_read_image: ' !< The prefix replaced.
+
+   call fig_read_image(trim(path), rgba, stat)
+   if (stat == FIG_OK) return
+   msg = figure_last_error()
+   if (index(msg, FROM) == 1) msg = msg(len(FROM) + 1:)
+   msg = 'test_compare_image: '//msg
+   call fig_set_last_error(msg, len(msg, c_int))
+   endsubroutine read_picture
+
+   subroutine write_picture(path, pixels, stat)
+   !< A PNG of pixels(channels, width, height), rows from the top (FIGURE's encoder).
+   character(len=*), intent(in)                     :: path          !< File.
+   integer(int8),    intent(in), target, contiguous :: pixels(:,:,:) !< Pixels.
+   integer(int32),   intent(out)                    :: stat          !< Status.
+   character(len=:), allocatable                    :: msg           !< Message.
+
+   stat = int(fig_image_write(path, len(path, c_int), c_loc(pixels), int(size(pixels, 1), c_int), &
+                              int(size(pixels, 2), c_int), int(size(pixels, 3), c_int), 0_c_int), int32)
+   if (stat == FIG_OK) return
+   msg = 'test_compare_image: '//figure_last_error()
+   call fig_set_last_error(msg, len(msg, c_int))
+   endsubroutine write_picture
+
+   subroutine remove_file(path)
+   !< Remove the file `path` if it exists.
+   character(len=*), intent(in) :: path   !< File.
+   logical                      :: exists !< It exists.
+   integer(int32)               :: u      !< Unit.
+   integer(int32)               :: ios    !< I/O status.
+
+   inquire(file=path, exist=exists)
+   if (.not. exists) return
+   open(newunit=u, file=path, status='old', iostat=ios)
+   if (ios == 0_int32) close(u, status='delete', iostat=ios)
+   endsubroutine remove_file
+
+   elemental function ubyte(b) result(v)
+   !< The value 0-255 of a byte.
+   integer(int8), intent(in) :: b !< Byte.
+   integer(int32)            :: v !< Value.
+
+   v = modulo(int(b, int32), 256_int32)
+   endfunction ubyte
+
+   elemental function sbyte(v) result(b)
+   !< The byte of a value 0-255.
+   integer(int32), intent(in) :: v !< Value.
+   integer(int8)             :: b !< Byte.
+
+   b = int(merge(v - 256_int32, v, v > 127_int32), int8)
+   endfunction sbyte
+
+   pure function itoa(i) result(text)
+   !< An integer, written.
+   integer(int32), intent(in)    :: i    !< Integer.
+   character(len=:), allocatable :: text !< Its text.
+   character(len=12)             :: buf  !< Buffer.
+
+   write(buf, '(I0)') i
+   text = trim(buf)
+   endfunction itoa
+
+   pure function ltoa(i) result(text)
+   !< A 64-bit integer, written.
+   integer(int64), intent(in)    :: i    !< Integer.
+   character(len=:), allocatable :: text !< Its text.
+   character(len=21)             :: buf  !< Buffer.
+
+   write(buf, '(I0)') i
+   text = trim(buf)
+   endfunction ltoa
 
    function item_query(path, must, found, rect, state, full) result(status)
    !< fig_item_find of a path (trailing blanks dropped).

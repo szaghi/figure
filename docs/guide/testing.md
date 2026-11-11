@@ -230,6 +230,47 @@ longest path.
 
 The same in every mode; recording must be on (the call turns it on, from the next frame).
 
+## Pictures as tests
+
+A test can check what a window looks like, pixel by pixel, against a committed picture (a golden): FIGURE's CPU
+renderer draws headless mode's frames the same way on every machine ([Screenshots and videos](capture#determinism)),
+so no GPU, display or tolerance for a driver is needed.
+
+| Procedure | Does |
+|---|---|
+| `test_capture(path [, stat])` | the whole frame as a PNG file `path`, written when the current frame is rendered (the next `app%next_frame`) |
+| `test_compare_image(path, golden [, threshold] [, max_failed] [, masks] [, failed] [, stat])` → `logical` | the picture `path` matches `golden` |
+
+<<< @/examples/snippets/cb_golden-capture.F90{fortran}
+
+- **The rule:** the same size, and at most `max_failed` pixels (default 0) with a channel (R, G, B or A, 0-255) that
+  differs by more than `threshold` (default 2: what the CPU renderer may differ by where floating point rounds
+  differently, as the GPU from it). Not a perceptual distance: a heatmap's row moved by one pixel differs by 17 levels
+  on 900 pixels, which a perceptual threshold of 0.1 lets through, and this rule does not.
+- **Masks:** `masks(4, n)`, rectangles `xmin, ymin, xmax, ymax` [pixels from the picture's top-left corner, as
+  `ig_item_rect` gives them] whose pixels are left out (a pixel whose centre is inside one): a clock, the age of a
+  notification, anything drawn from the wall time, which headless mode's fixed frame time does not make
+  deterministic.
+- **On a mismatch** it writes `<stem>.new.png` (the picture) and `<stem>.diff.png` beside the golden, `<stem>` the
+  golden's name without `.png`, and `figure_last_error` says how many pixels failed, the largest difference and
+  where; `failed` gives the count (`-1` when the sizes differ). In the diff the failed pixels are red, those that differ
+  within `threshold` dark red, the masked ones blue and the rest the golden, faded. On a match it removes such files
+  left by an earlier run. To accept a new picture, copy the `.new.png` over the golden, in the commit that changes
+  what the window shows, and say why in its message.
+- `test_capture` needs an open frame (`FIG_ERR_STATE` otherwise) and removes a file `path` of an earlier run at once,
+  so a picture that cannot be written (its reason on standard error) leaves nothing to compare. In a window it reads
+  the GPU's pixels instead, which depend on the driver: goldens belong to headless tests.
+- `test_compare_image` fails with `FIG_ERR_FAILED` when a file cannot be read or written, and with `FIG_ERR_ARGUMENT`
+  for a file that is not a PNG or JPEG, `threshold` outside 0-255, a negative `max_failed`, `masks` without 4 rows or
+  a rectangle upside down ([Errors](errors)).
+
+<<< @/examples/output/cb_golden.txt{text}
+
+The whole example: `docs/examples/src/cb_golden.F90`. `src/tests/figure_test_pixels.F90` checks the renderer itself:
+the same frame twice and on 1 and 7 threads, a committed golden, textures filtered as the GPU filters them (nearest,
+linear, a field through a colormap), a glyph of the bitmap font pixel for pixel, `save_image` in headless and remote
+modes.
+
 ## Test the interface you ship
 
 Put the interface in a procedure that the application calls every frame, and call the same procedure from the test:

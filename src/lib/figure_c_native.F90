@@ -27,6 +27,7 @@ public :: fig_drag_range, fig_list_box
 public :: fig_align_begin, fig_align_end, fig_align_next, fig_plot_end, fig_plot_state, fig_plot_axis_constraints
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
+public :: fig_test_capture, fig_render_threads
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
 public :: fig_table_sort, fig_table_row_color, fig_table_column_enabled, fig_table_hovered_column
 public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_input_system_theme
@@ -752,7 +753,7 @@ interface
 
    function fig_save_image(path, path_len, x0, y0, x1, y1) result(status) bind(C, name='fig_save_image')
    !< Ask for the rectangle (x0, y0)-(x1, y1) [logical pixels] of the window as a PNG file, written when this frame is
-   !< rendered.
+   !< rendered (a window's from the GPU, headless and remote modes' from the CPU renderer).
    import :: c_char, c_double, c_int
    implicit none
    character(kind=c_char), intent(in) :: path(*)  !< File.
@@ -772,6 +773,23 @@ interface
    integer(c_int), intent(out)         :: path_len !< Full length of the path.
    integer(c_int)                      :: status   !< Status.
    endfunction fig_image_result
+
+   function fig_test_capture(path, path_len) result(status) bind(C, name='fig_test_capture')
+   !< Ask for the whole frame as a PNG file, written when this frame is rendered (an earlier file of that name removed).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< File.
+   integer(c_int), value              :: path_len !< Its length.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_test_capture
+
+   function fig_render_threads(threads) result(status) bind(C, name='fig_render_threads')
+   !< The CPU renderer's threads (0: the default; tests compare pictures rendered with different counts).
+   import :: c_int
+   implicit none
+   integer(c_int), value :: threads !< Threads, 0-64.
+   integer(c_int)        :: status  !< Status.
+   endfunction fig_render_threads
 
    function fig_save_layout(path, path_len, comment, comment_len) result(status) bind(C, name='fig_save_layout')
    !< Write the layout (Dear ImGui's settings) to `path`, after the `comment` lines (newline-separated) as comments.

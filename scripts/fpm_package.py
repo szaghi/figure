@@ -8,8 +8,9 @@ native layer itself, next to the Fortran library:
   the themes, the colormaps and the font, embedded) written here by the same rules;
 - ``src/cimgui/`` (with ``imgui/``), ``src/cimplot/`` (with ``implot/``), ``src/miniz/``: the pinned third-party sources,
   copied from CMake's fetched tree (build/native/_deps, so run scripts/build_native.sh first), only the files FIGURE
-  compiles; Dear ImGui's ``imconfig.h`` carries the three settings CMake passes as definitions, so no compiler flag is
-  needed; miniz is compiled through a small wrapper that sets its options;
+  compiles; Dear ImGui's ``imconfig.h`` carries the three settings CMake passes as definitions and its
+  ``-ffp-contract=off`` as pragmas, so no compiler flag is needed; miniz is compiled through a small wrapper that sets
+  its options;
 - ``src/stb/``: ``stb_image.h`` and ``stb_image_write.h``, vendored in the repository (third_party/stb), included by
   figure_image.cpp;
 - the licences of everything copied (``LICENSES/``), and ``fpm.toml``.
@@ -57,6 +58,7 @@ NATIVE_FILES = [
     "figure_native.cpp", "figure_native.h", "figure_process.cpp", "figure_task.cpp", "figure_scope.cpp", "figure_canvas.cpp",
     "figure_files.cpp", "figure_app.cpp",
     "figure_remote.cpp", "figure_image.cpp", "figure_image.h", "figure_items.cpp", "figure_items.h",
+    "figure_swrast.cpp", "figure_swrast.h",
     "figure_colormap.cpp", "figure_field.cpp", "figure_view3d.cpp", "figure_view3d.h",
     "figure_remote.h", "figure_theme.cpp", "figure_theme.h", "figure_style.h", "figure_glue_generated.cpp", "figure_style_generated.cpp",
 ]  # fmt: skip
@@ -71,6 +73,13 @@ IMCONFIG_ADDITION = """
 #define IMGUI_ENABLE_TEST_ENGINE // Dear ImGui's item hooks, implemented by FIGURE (figure_items.cpp)
 #endif
 #undef NDEBUG // cimgui's cimconfig.h: Dear ImGui's assertions stay on
+// native/CMakeLists.txt's -ffp-contract=off, as pragmas (every file that draws includes imgui.h, so this file): no
+// fused multiply-add, so a picture rendered headless does not depend on the machine (#7 S1)
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#elif defined(__GNUC__) && !defined(__NVCOMPILER)
+#pragma GCC optimize("fp-contract=off")
+#endif
 """
 
 MINIZ_WRAPPER = """// FIGURE (scripts/fpm_package.py): miniz with the options native/CMakeLists.txt sets (deflate and zlib streams only,

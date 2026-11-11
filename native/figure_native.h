@@ -221,8 +221,14 @@ int    fig_file_browser_pending(const char *id, int id_len);
 int    fig_file_browser_result(const char *id, int id_len, char *buf, int buf_len, int *state, int *path_len);
 void   fig_file_browser_draw(void);
 void   fig_file_browser_reset(int init, int keep);
+/* Pictures: a rectangle of the frame (save_image, every mode: a window's from the GPU, headless and remote modes' from
+ * the CPU renderer, figure_swrast.cpp), written as a PNG when the frame is rendered; its outcome once. fig_test_capture:
+ * the whole frame (test_capture), inside a frame, written when it is rendered (an earlier file of that name removed at
+ * once; a failure on standard error). fig_render_threads: the CPU renderer's threads (0: the default, tests). */
 int    fig_save_image(const char *path, int path_len, double x0, double y0, double x1, double y1);
 int    fig_image_result(char *buf, int buf_len, int *state, int *path_len);
+int    fig_test_capture(const char *path, int path_len);
+int    fig_render_threads(int threads);
 int    fig_save_layout(const char *path, int path_len, const char *comment, int comment_len);
 int    fig_load_layout(const char *path, int path_len);
 int    fig_begin_side_bar(const char *name, int name_len, int side, double size);

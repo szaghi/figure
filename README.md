@@ -75,7 +75,8 @@ gfortran -I lib/mod readme.F90 lib/libfigure.a -L lib $(python3 scripts/check_sy
 - **Remote mode**: `app%init_remote()` serves the same interface to a web browser, with an access token: no display or
   GPU on the program's side, e.g. a cluster node through an SSH tunnel. Unchanged frames are not sent, frames are
   capped and compressed when the link is slow.
-- **Pictures**: `app%save_image` writes a plot or a panel as a PNG; every frame can be recorded, with scripted input.
+- **Pictures**: `app%save_image` writes a plot or a panel as a PNG; every frame can be recorded, with scripted input;
+  headless and remote programs draw theirs with FIGURE's CPU renderer, no GPU needed, and tests compare them with goldens.
 - **Headless testing**: `app%init_headless` and the `figure_testing` module drive the interface with synthetic input,
   in CI without a display.
 

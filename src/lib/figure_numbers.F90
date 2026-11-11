@@ -1433,7 +1433,7 @@ contains
       text = 'NaN'
       return
    endif
-   write(buf, '(ES12.5E3)') x
+   write(buf, '(ES13.5E3)') x ! W >= D + E + 5: room for the sign (ES12.5E3 wrote asterisks for a negative)
    text = trim(adjustl(buf))
    endfunction real_text
 endmodule figure_numbers

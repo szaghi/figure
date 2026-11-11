@@ -1,0 +1,4 @@
+$ ./cb_golden ../../../docs/examples/data/cb_golden.png
+the window looks as committed: T
+after the change: F (494 pixels)
+test_compare_image: 494 pixels of changed.png differ from solver.png by more than 2 (0 allowed), the most by 186 at (104, 52): see solver.diff.png

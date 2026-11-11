@@ -320,6 +320,19 @@ Pictures without a GPU, tests that find items by path, an application layer, ima
 Math), an unrouted shortcut scope, plot data in place under nvfortran and a monotonic clock. The plan, step by step, is
 [issue #7](https://github.com/szaghi/figure/issues/7).
 
+- **Pixels without a GPU** (S1): FIGURE's own CPU renderer of Dear ImGui's draw data (`native/figure_swrast.cpp`,
+  the owner's choice from the spike against Mesa's llvmpipe): what the OpenGL 3 backend asks of a GPU (scissors,
+  textures with their filter, vertex colours, blending into 8 bits), the image's top-left tie rule, 8 threads by bands
+  of rows. `app%save_image` and `FIGURE_CAPTURE*` work in headless and remote modes, and `FIGURE_CAPTURE_HEADLESS=1`
+  records a window program without a window ([Screenshots and videos](capture)). `test_capture` and
+  `test_compare_image` check a window against a golden (per channel |Δ| ≤ 2, no pixel more, masks), writing
+  `.new.png` and `.diff.png` on a mismatch ([Pictures as tests](testing#pictures-as-tests)). The native layer is
+  compiled with `-ffp-contract=off`. Headless mode keeps CPU copies of user textures, gives the font atlas ids of its
+  own and registers the sampler callbacks. Against an RTX 4070 the renderer agrees within 2 levels on 68 of the 80
+  documentation recordings; 3 differ by one pixel of a plot line, 9 draw what a task or a process produced by the
+  wall clock. A 1400 x 860 frame takes 0.7 to 1.7 ms on 8 threads.
+  `scripts/docs_media.py --check` compares each poster with the CPU renderer's and `--update` accepts the new ones; on
+  demand until S9 records every picture again: done.
 - **Shortcuts: an unrouted scope `'always'`** (S11): `ig_shortcut(keys, scope='always')` is Dear ImGui's
   `IsKeyChordPressed`, v0.3's behaviour: every call of the chord fires, whatever has the focus, a text field being
   edited included; `ig_set_next_item_shortcut` refuses it. The four scopes in one table, and v0.4.0's migration note

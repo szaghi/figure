@@ -45,7 +45,7 @@ integer(int32)            :: bar_root         !< The dock space beside the bar.
 real(real64)              :: lay(4)           !< The Layout window after a layout is loaded.
 integer(int32)            :: stat_lay(4)      !< save_layout, load_layout, a missing file, not a layout.
 character(len=:), allocatable :: lay_text     !< The layout file's first line.
-integer(int32)            :: stat_img(2)      !< save_image headless (no pixels), image_result with nothing asked.
+integer(int32)            :: stat_img(2)      !< save_image of an empty rectangle, image_result with nothing asked.
 logical                   :: img_done         !< image_result: done.
 character(len=:), allocatable :: img_path     !< image_result: the file.
 real(real64)              :: long_x(100000)   !< A line over 65536 vertices: abscissae.
@@ -393,7 +393,7 @@ call ig_pop_style_color()
 call ig_get_style_color('Button', popped)
 call ig_get_style_var('FrameRounding', round_popped, back_n(1))
 call ig_pop_style_color(stat=stat_pop)
-call app%save_image('x.png', 0.0_real64, 0.0_real64, 10.0_real64, 10.0_real64, stat=stat_img(1)) ! headless: no pixels
+call app%save_image('x.png', 0.0_real64, 0.0_real64, 0.0_real64, 10.0_real64, stat=stat_img(1)) ! an empty rectangle
 call app%image_result(img_path, img_done, stat=stat_img(2))
 call app%set_font('proggy', stat=stat_font(1))
 if (app%next_frame()) call icon_widths(icon_w(:, 3), icon_px(3)) ! the icons in Dear ImGui's bitmap font too
@@ -519,8 +519,8 @@ test_passed(48) = abs(bar(1)) < 1.0e-6_real64 .and. abs(bar(3) - 80.0_real64) < 
 test_passed(47) = all(stat_lay(1:2) == int(FIG_OK, int32)) .and. stat_lay(3) == int(FIG_ERR_FAILED, int32) .and. &
                   stat_lay(4) == int(FIG_ERR_ARGUMENT, int32) .and. trim(lay_text) == '; kept by the program' .and. &
                   all(abs(lay - [50.0_real64, 60.0_real64, 350.0_real64, 260.0_real64]) < 1.0e-6_real64) ! a layout
-test_passed(46) = stat_img(1) == int(FIG_ERR_STATE, int32) .and. stat_img(2) == int(FIG_OK, int32) .and. &
-                  .not. img_done .and. len(img_path) == 0                          ! save_image needs a window
+test_passed(46) = stat_img(1) == int(FIG_ERR_ARGUMENT, int32) .and. stat_img(2) == int(FIG_OK, int32) .and. &
+                  .not. img_done .and. len(img_path) == 0                          ! refused, nothing to report
 test_passed(33) = stat_lines(1) == int(FIG_OK, int32) .and. okabe_cmap >= 0_c_int .and. &
                   stat_lines(2) == int(FIG_ERR_ARGUMENT, int32)                     ! named line palette
 test_passed(49) = icons_drawn(icon_w(:, 1), icon_px(1)) .and. icons_drawn(icon_w(:, 2), icon_px(2)) ! default, file
