@@ -1,0 +1,30 @@
+#! program build/docs-examples/bin/cb_markdown
+#! args    ../../../docs/examples/data/cb_markdown.md
+#! frames  370
+#! poster  369
+#! crop    0 0 1000 600
+#! keys
+# a link of a few lines of Markdown in the solver's window opens the help, a page from a Markdown file; a click in its
+# table of contents scrolls to "Boundary conditions"; ctrl+f finds "pressure" (enter: the next match); escape closes
+# the bar; back at the top, a click on the link to the project's site is reported to the program, which shows it on
+# the last line: nothing is opened
+0   move 200 300
+10  move 111 74 15
+30  down
+32  up
+50  move 404 135 20
+80  down
+82  up
+130 move 760 300 15
+150 key ctrl down
+151 key f
+152 key ctrl up
+160 text pressure
+200 key enter
+240 key escape
+260 move 380 78 15
+280 down
+282 up
+310 move 770 123 15
+330 down
+332 up

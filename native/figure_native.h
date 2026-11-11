@@ -568,6 +568,25 @@ int       fig_code_diff(const char *id, int id_len, const char *left, long long 
 int       fig_code_diff_lines(const char *left, long long left_len, const char *right, long long right_len,
                               int *added, int *n_added, int *removed, int *n_removed, int cap);
 
+/* Markdown (figure_markdown.cpp, imgui_rich_md): fig_markdown draws a text at the cursor, clicked 1 on the frame a link
+ * of it was clicked (its URL from fig_markdown_link: returns the length, copies up to n bytes); views (documents: a
+ * scroll area, a table of contents, a search) by handle (from 1), their text kept here; fig_markdown_view_find and
+ * fig_markdown_view_scroll_to (a heading's text, or its slug after '#') act at the view's next draw; info: the matches
+ * of the search and the current one (from 0; -1 none) at its last draw. fig_markdown_shutdown: the context, its fonts
+ * and images released (fig_shutdown). */
+int       fig_markdown(const char *text, long long len, int *clicked);
+long long fig_markdown_link(char *buf, long long n);
+int       fig_markdown_view_create(int *handle, int toc, int search);
+void      fig_markdown_view_destroy(int handle);
+int       fig_markdown_view_set_text(int handle, const char *text, long long len);
+int       fig_markdown_view_load(int handle, const char *path, int len);
+long long fig_markdown_view_text(int handle, char *buf, long long n);
+int       fig_markdown_view_find(int handle, const char *text, int len);
+int       fig_markdown_view_scroll_to(int handle, const char *heading, int len);
+int       fig_markdown_view_info(int handle, int *matches, int *current);
+int       fig_markdown_view_draw(int handle, const char *id, int id_len, double width, double height, int *clicked);
+void      fig_markdown_shutdown(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -241,8 +241,8 @@ def package_sources() -> list[str]:
     pkg = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(pkg)
     files = (*pkg.IMGUI_FILES, *pkg.IMPLOT_FILES, *pkg.NATIVE_FILES, *pkg.EDITOR_FILES, *pkg.GIZMO_FILES,
-             *pkg.IMPLOT3D_FILES)
-    shipped = {Path(f).name for f in files if f.endswith(".cpp")}
+             *pkg.IMPLOT3D_FILES, *pkg.RICHMD_FILES, *pkg.MD4C_FILES)
+    shipped = {Path(f).name for f in files if f.endswith((".cpp", ".c"))}
     shipped |= {"cimgui.cpp", "cimplot.cpp", "cimplot3d.cpp", "miniz.c"}
     cmake = (ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
     block = re.search(r"add_library\(figure_native STATIC(.*?)\)\n", cmake, re.S)

@@ -66,6 +66,7 @@ TYPES = {
     "view3d_object": "v",
     "code_editor_object": "ed",
     "language_object": "lang",
+    "markdown_view_object": "md",
 }  # public types with type-bound procedures, and the variable name the docs use
 INCLUDE = "<<< @/examples/snippets/"
 

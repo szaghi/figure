@@ -422,6 +422,31 @@ The [3-D plots](plots#_3-d-plots) are ImPlot3D's, which draws every primitive as
   mouse position (headless and remote modes before the first move, a window the pointer has left) its input handling
   tested the position against the box and overflowed, a trap under `-ffpe-trap=invalid,overflow`.
 
+## Markdown
+
+[Markdown](widgets#markdown) is imgui_rich_md's, with md4c's parser, vendored with FIGURE's glue:
+
+- **Not supported:** LaTeX formulas (`$...$` and `$$...$$` stay text: imgui_rich_md's formulas need MicroTeX and
+  FreeType), images from URLs (`![](https://...)` draws nothing: no download is made), Mermaid diagrams (a
+  ` ```mermaid ` block is shown as code), syntax highlighting in code blocks, files included into a page (`![[file]]`,
+  imgui_rich_md's transclusions: the text is drawn as it is), wikilinks (`[[page]]` is text), footnotes, raw HTML
+  beyond the tags listed in [Markdown](widgets#markdown). Image files are PNG or JPEG only (FIGURE's decoder).
+- **`_text_` is underlined,** not italic (md4c's underline extension, which imgui_rich_md turns on): `*text*` is
+  italic.
+- **Images are read relative to the working directory,** not to the file `md%load` read: write their paths from where
+  the program runs, or give absolute ones. Each image is read and uploaded once, on its first draw, and kept until the
+  application ends.
+- **Every frame parses the whole text** (md4c, then the layout of what it finds), for `ig_markdown` and a document
+  alike; `ig_markdown` also copies its text across the C boundary each frame, a document keeps its own. A page of a few
+  screens is cheap; a manual of hundreds of pages belongs in several documents.
+- **The table of contents lists the headings of levels 1 to 3;** deeper ones are reached by scrolling, and by the
+  search.
+- **A table sized by its content** (`SizingStretchProp`, imgui_rich_md's tables) computes 0 / 0 in Dear ImGui on its first
+  frame, before its columns have widths: FIGURE holds the floating-point traps while Markdown is drawn, so a program
+  built with `-ffpe-trap=invalid` does not stop there.
+- **FIGURE patches imgui_rich_md** in one line (`third_party/imgui_rich_md/patches/0001-figure-stb-image.patch`): its
+  images are decoded by FIGURE's copy of stb_image, not by a second one of its own.
+
 ## The one-line installer
 
 What [the installer](install#the-one-line-installer) does not cover:

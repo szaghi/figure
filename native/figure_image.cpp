@@ -75,6 +75,12 @@ bool encode_png(std::string &out, int width, int height, int channels, const uns
    return stbi_write_png_to_func(append, &out, width, height, channels, pixels, width * channels) != 0;
 }
 
+unsigned char *decode(const unsigned char *data, int size, int *width, int *height, int *channels, int desired) {
+   return stbi_load_from_memory(data, size, width, height, channels, desired);
+}
+
+void free_pixels(void *pixels) { stbi_image_free(pixels); }
+
 } // namespace figure_image
 
 extern "C" {

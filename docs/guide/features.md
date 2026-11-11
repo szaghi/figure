@@ -345,6 +345,16 @@ Details: [3-D views](view3d).
 | `code_diff(id, left, right [, side_by_side] [, language] [, width] [, height] [, stat])` | the difference of two texts as a widget, one column or side by side | [the diff](editor#the-diff) <!-- visual --> |
 | `code_diff_lines(left, right, added, removed [, stat])` | the lines added and removed, without drawing; a task may call it | [the diff](editor#the-diff) |
 
+## Markdown: `ig_markdown`, `markdown_view_object`
+
+| Procedure | Purpose | Details |
+|---|---|---|
+| `ig_markdown(text [, link] [, stat])` → `logical` | a Markdown text at the cursor (imgui_rich_md, drawn through Dear ImGui: the same in every mode): headings, emphasis, lists, tables, code in IBM Plex Mono, quotes, images from files; `.true.` on the frame a link is clicked, its URL in `link`, nothing opened | [Markdown](widgets#markdown) <!-- visual --> |
+| `md%init([toc] [, search] [, stat])`, `md%destroy()`, `md%is_initialized()` → `logical` | create a document (`markdown_view_object`) with a table of contents and a find bar; release it; whether it exists | [Markdown](widgets#markdown) |
+| `md%set_text(text [, stat])`, `md%load(path [, stat])`, `md%text()` → `character` | the document's text, given or read from a file; a copy of it | [Markdown](widgets#markdown) |
+| `md%draw(id [, link] [, width] [, height] [, stat])` → `logical` | the document as a widget with its own scroll; `.true.` on the frame a link is clicked, its URL in `link`; a link to a heading scrolls there | [Markdown](widgets#markdown) <!-- visual --> |
+| `md%find(text [, stat])`, `md%matches()` → `int32`, `md%current_match()` → `int32`, `md%scroll_to(heading [, stat])` | search as the find bar does, its matches and the current one; scroll to a heading by its text or anchor | [Markdown](widgets#markdown) |
+
 ## Testing: `figure_testing`
 
 | Procedure | Does |

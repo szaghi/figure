@@ -1,0 +1,21 @@
+FIGURE's patch 1 of 1 to imgui_rich_md (commit 427bcb17f8c467d0dc1869b04f8e99a6c7b0e45f).
+
+rich_md.cpp decodes the images of a Markdown text with stb_image, from its own copy (imgui_rich_md/third_party/
+stb_image.h, v2.29, compiled by its stb_image_impl.cpp with exported stbi_* symbols). FIGURE keeps one copy of stb_image
+(third_party/stb, v2.30, compiled static in native/figure_image.cpp, PNG and JPEG only): the include now names
+native/figure_rich_md_stb.h, which maps the two functions rich_md.cpp calls (stbi_load_from_memory, stbi_image_free) to
+FIGURE's decoder. No second decoder, no stbi_* symbol exported from libfigure_native.a to meet a program's own
+stb_image. Applied to third_party/imgui_rich_md/rich_md.cpp; checked by src/tests/figure_test_markdown.F90 (an image
+from a PNG file drawn). FIGURE-specific: not for upstream.
+
+--- a/rich_md.cpp
++++ b/rich_md.cpp
+@@ -40,7 +40,7 @@
+ #include "backends/mermaid/rich_md_mermaid.h"
+ #endif
+ 
+-#include "third_party/stb_image.h"
++#include "figure_rich_md_stb.h"  // FIGURE's patch 0001: stb_image is FIGURE's (native/figure_image.cpp)
+ 
+ #include <algorithm>
+ #include <string>

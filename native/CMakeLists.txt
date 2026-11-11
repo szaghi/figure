@@ -1,4 +1,5 @@
-# FIGURE native layer: Dear ImGui + ImPlot + ImPlot3D + cimgui + cimplot + cimplot3d + SDL3/OpenGL3 backends + FIGURE glue.
+# FIGURE native layer: Dear ImGui + ImPlot + ImPlot3D + cimgui + cimplot + cimplot3d + SDL3/OpenGL3 backends + the vendored
+# extensions (ImGuiColorTextEdit, ImGuizmo, imgui_rich_md with md4c) + FIGURE glue.
 #
 # Built once, before any Fortran build, by scripts/build_native.sh. Neither FoBiS nor fpm compiles C++: both only link
 # the static libraries this project installs into <prefix>/lib (default: the repository's lib/).
@@ -26,6 +27,11 @@
 #   ImGuizmo              -> the view cube, the gizmos and the gradient editor (view3d_object%view_cube, %gizmo,
 #                            ig_gradient_edit; MIT): ImGuizmo.cpp and ImGradient.cpp at commit 105e4fd, vendored in
 #                            third_party/ImGuizmo with FIGURE's three patches (its patches/ directory)
+#   imgui_rich_md         -> Markdown in the window (ig_markdown, markdown_view_object; MIT): pthom/imgui_rich_md at
+#                            commit 427bcb1, its renderer, search and documents only (no LaTeX, Mermaid, code editor
+#                            or URL images), vendored in third_party/imgui_rich_md with FIGURE's one patch (its
+#                            patches/ directory); md4c (its Markdown parser, MIT) at the commit imgui_rich_md pins,
+#                            481fbfb, vendored unmodified in third_party/md4c
 cmake_minimum_required(VERSION 3.24)
 project(figure_native LANGUAGES C CXX)
 
@@ -108,6 +114,9 @@ set(IMPLOT3D_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/implot3d)
 set(FIGURE_CTE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/ImGuiColorTextEdit)
 # ImGuizmo (its subset: ViewManipulate, Manipulate, ImGradient), vendored: the 3-D view's gizmos, the gradient editor
 set(FIGURE_GIZMO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/ImGuizmo)
+# imgui_rich_md and md4c, vendored: Markdown in the window
+set(FIGURE_RICHMD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui_rich_md)
+set(FIGURE_MD4C_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/md4c)
 
 add_library(figure_native STATIC
    ${cimgui_SOURCE_DIR}/cimgui.cpp
@@ -146,10 +155,16 @@ add_library(figure_native STATIC
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_swrast.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_editor.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_plot3d.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/figure_markdown.cpp
    ${FIGURE_CTE_DIR}/TextEditor.cpp
    ${FIGURE_CTE_DIR}/TextDiff.cpp
    ${FIGURE_GIZMO_DIR}/ImGuizmo.cpp
    ${FIGURE_GIZMO_DIR}/ImGradient.cpp
+   ${FIGURE_RICHMD_DIR}/rich_md.cpp
+   ${FIGURE_RICHMD_DIR}/narrative_programming.cpp
+   ${FIGURE_RICHMD_DIR}/internal/rich_md_renderer.cpp
+   ${FIGURE_RICHMD_DIR}/internal/rich_md_search.cpp
+   ${FIGURE_MD4C_DIR}/md4c.c
    ${miniz_SOURCE_DIR}/miniz.c)
 # miniz: only its deflate and zlib-format functions, all under the mz_ prefix (no zlib names: a program may link zlib)
 target_compile_definitions(figure_native PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
@@ -161,6 +176,9 @@ target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../
 target_include_directories(figure_native PRIVATE ${FIGURE_CTE_DIR})
 # ImGuizmo: its headers for figure_view3d.cpp and figure_colormap.cpp
 target_include_directories(figure_native PRIVATE ${FIGURE_GIZMO_DIR})
+# imgui_rich_md: its headers for figure_markdown.cpp; md4c's for its renderer. rich_md.cpp takes stb_image from
+# figure_image.cpp through native/figure_rich_md_stb.h (its patch 0001), found in native/ (a public include directory)
+target_include_directories(figure_native PRIVATE ${FIGURE_RICHMD_DIR} ${FIGURE_MD4C_DIR})
 # cimplot3d.cpp includes "./implot3d/implot3d.h": found as third_party/./implot3d/implot3d.h, the vendored copy
 set_source_files_properties(${cimplot3d_SOURCE_DIR}/cimplot3d.cpp PROPERTIES
                             INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/../third_party)
@@ -210,12 +228,17 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/figure_colormaps.inc "${FIGURE_COLORMAPS_
 # The bundled fonts (third_party/fonts), embedded as byte arrays: IBM Plex Sans (OFL-1.1), the default font of the
 # interface, IBM Plex Mono (OFL-1.1), the monospace one, and the Lucide icons (ISC), merged into every text font.
 set(FIGURE_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexSans-Regular.ttf)
+# IBM Plex Sans Bold, Italic and Bold Italic (OFL-1.1): Markdown's emphasis (figure_markdown.cpp)
+set(FIGURE_BOLD_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexSans-Bold.ttf)
+set(FIGURE_ITALIC_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexSans-Italic.ttf)
+set(FIGURE_BOLD_ITALIC_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexSans-BoldItalic.ttf)
 set(FIGURE_MONO_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/IBMPlexMono-Regular.ttf)
 set(FIGURE_ICON_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/lucide.ttf)
 # Noto Sans Math (OFL-1.1): the fallback merged into every text font after Plex and Lucide (Greek, the operators)
 set(FIGURE_MATH_FONT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/NotoSansMath-Regular.ttf)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${FIGURE_FONT_FILE} ${FIGURE_MONO_FONT_FILE}
-             ${FIGURE_ICON_FONT_FILE} ${FIGURE_MATH_FONT_FILE})
+             ${FIGURE_ICON_FONT_FILE} ${FIGURE_MATH_FONT_FILE} ${FIGURE_BOLD_FONT_FILE} ${FIGURE_ITALIC_FONT_FILE}
+             ${FIGURE_BOLD_ITALIC_FONT_FILE})
 file(READ ${FIGURE_FONT_FILE} FIGURE_FONT_HEX HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_FONT_BYTES "${FIGURE_FONT_HEX}")
 file(READ ${FIGURE_MONO_FONT_FILE} FIGURE_MONO_FONT_HEX HEX)
@@ -224,13 +247,23 @@ file(READ ${FIGURE_ICON_FONT_FILE} FIGURE_ICON_FONT_HEX HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_ICON_FONT_BYTES "${FIGURE_ICON_FONT_HEX}")
 file(READ ${FIGURE_MATH_FONT_FILE} FIGURE_MATH_FONT_HEX HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_MATH_FONT_BYTES "${FIGURE_MATH_FONT_HEX}")
+file(READ ${FIGURE_BOLD_FONT_FILE} FIGURE_BOLD_FONT_HEX HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_BOLD_FONT_BYTES "${FIGURE_BOLD_FONT_HEX}")
+file(READ ${FIGURE_ITALIC_FONT_FILE} FIGURE_ITALIC_FONT_HEX HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_ITALIC_FONT_BYTES "${FIGURE_ITALIC_FONT_HEX}")
+file(READ ${FIGURE_BOLD_ITALIC_FONT_FILE} FIGURE_BOLD_ITALIC_FONT_HEX HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," FIGURE_BOLD_ITALIC_FONT_BYTES "${FIGURE_BOLD_ITALIC_FONT_HEX}")
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/figure_font.inc
      "// generated from third_party/fonts/{IBMPlexSans-Regular,IBMPlexMono-Regular,lucide,NotoSansMath-Regular}.ttf\n"
+     "// and third_party/fonts/IBMPlexSans-{Bold,Italic,BoldItalic}.ttf\n"
      "// by native/CMakeLists.txt\n"
      "static const unsigned char plex_sans_ttf[] = {${FIGURE_FONT_BYTES}};\n"
      "static const unsigned char plex_mono_ttf[] = {${FIGURE_MONO_FONT_BYTES}};\n"
      "static const unsigned char lucide_ttf[] = {${FIGURE_ICON_FONT_BYTES}};\n"
-     "static const unsigned char noto_math_ttf[] = {${FIGURE_MATH_FONT_BYTES}};\n")
+     "static const unsigned char noto_math_ttf[] = {${FIGURE_MATH_FONT_BYTES}};\n"
+     "static const unsigned char plex_sans_bold_ttf[] = {${FIGURE_BOLD_FONT_BYTES}};\n"
+     "static const unsigned char plex_sans_italic_ttf[] = {${FIGURE_ITALIC_FONT_BYTES}};\n"
+     "static const unsigned char plex_sans_bold_italic_ttf[] = {${FIGURE_BOLD_ITALIC_FONT_BYTES}};\n")
 target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 if(WIN32)
    target_link_libraries(figure_native PUBLIC ws2_32)
@@ -293,6 +326,8 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb/LICENSE-stb.txt" D
 install(FILES "${FIGURE_CTE_DIR}/LICENSE" DESTINATION share/licenses/imguicolortextedit)
 install(FILES "${FIGURE_CTE_DIR}/LICENSE-dtl.txt" DESTINATION share/licenses/dtl)
 install(FILES "${FIGURE_GIZMO_DIR}/LICENSE" DESTINATION share/licenses/imguizmo)
+install(FILES "${FIGURE_RICHMD_DIR}/LICENSE" "${FIGURE_RICHMD_DIR}/LICENSE.imgui_md" DESTINATION share/licenses/imgui_rich_md)
+install(FILES "${FIGURE_MD4C_DIR}/LICENSE.md" DESTINATION share/licenses/md4c)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.mit.md" DESTINATION share/licenses/figure)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexSans.txt" DESTINATION share/licenses/ibm-plex)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexMono.txt" DESTINATION share/licenses/ibm-plex)

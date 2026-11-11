@@ -1,0 +1,465 @@
+// Part of imgui_rich_md - MIT License - Copyright (c) 2022-2026 Pascal Thomet - https://github.com/pthom/imgui_rich_md
+// Forked from imgui_md by Dmitry Mekhontsev (https://github.com/mekhontsev/imgui_md, its MIT license below), and
+// heavily modified since: LaTeX formulas, admonitions, collapsible sections, wikilinks, task lists, images with a
+// loading spinner, HTML tags (<sub>, <sup>, <kbd>, <mark>, <u>, <center>, <md-error>), and a Style that follows the
+// ImGui theme. Internal: the public API is in rich_md.h.
+/*
+ * imgui_md: Markdown for Dear ImGui using MD4C
+ * (http://https://github.com/mekhontsev/imgui_md)
+ *
+ * Copyright (c) 2021 Dmitry Mekhontsev
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
+
+#ifndef RICHMD_RENDERER_H
+#define RICHMD_RENDERER_H
+
+#include "md4c.h"
+#include "imgui.h"
+#include "imgui_internal.h"  // ImRect
+#include "../rich_md.h"  // Style
+#include "rich_md_internal.h"  // PendingAnchor, DocumentRenders
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+namespace RichMd
+{
+
+struct Renderer
+{
+	// GitHub-style admonitions: > [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION]
+	enum class AdmonitionKind { None, Note, Tip, Important, Warning, Caution };
+
+	Renderer();
+	virtual ~Renderer() {};
+
+	//returns 0 on success
+	int print(const char* str, const char* str_end);
+
+	// Enable parsing of LaTeX math spans ($...$ and $$...$$).
+	// When enabled, MD_FLAG_LATEXMATHSPANS is set on the md4c parser,
+	// and MD_TEXT_LATEXMATH content is accumulated into m_latex_buffer
+	// between SPAN_LATEXMATH enter/leave (or SPAN_LATEXMATH_DISPLAY), then drawn on leave
+	// with the texture returned by get_latex_texture() (the source is shown when there is none).
+	void EnableLatex();
+
+	// Enable or disable a specific MD_FLAG_XXX on the md4c parser.
+	// Call before print(); default flags are MD_FLAG_TABLES, MD_FLAG_UNDERLINE,
+	// MD_FLAG_STRIKETHROUGH, MD_FLAG_TASKLISTS.
+	void set_flag(unsigned flag, bool enable);
+
+	Style style;
+	bool selectableText = true;  // the text can be selected (set by RichMd::RenderRaw for each fragment)
+	bool foldableHeadings = false;     // the headings fold (set by RichMd::RenderRaw from the context's options)
+	int foldableHeadingsMinLevel = 2;  // the first level that folds
+
+	// The headings of the last fragment, in order
+	const std::vector<Heading>& headings() const { return m_headings; }
+	// Folds (or unfolds) every foldable heading, at the next frame: those of the document (at its end), else those
+	// of the last fragment
+	void fold_all(bool folded);
+	// A heading of a document's section of widgets (DocumentHeading() without its title), at the current line: it
+	// ends the fold that hid the content above it, or is hidden by it; a foldable one gets its arrow. Returns whether
+	// its section shows.
+	bool document_heading(int level, const std::string& text);
+	// Set between BeginDocument() and EndDocument(): the headings and the anchors of the fragments go to the document
+	DocumentRenders* document = nullptr;
+
+	// The automatic link color: the text color, shifted to blue
+	static ImVec4 default_link_color();
+	// Resolved colors (automatic ones derived from the ImGui style)
+	ImVec4 link_color() const;
+	// Decorates the last item as a link (underline, hand cursor, tooltip with the url when
+	// style.linkTooltip): returns true when it was clicked. Draw the text with link_color() first.
+	static bool link_item(const Style& style, const char* url);
+	ImVec4 admonition_color(AdmonitionKind kind) const;
+
+	//for example, these flags can be changed in div callback
+
+	//draw border
+	bool m_table_border = true;
+	//render header in a different way than other rows
+	bool m_table_header_highlight = true;
+
+protected:
+
+	virtual void BLOCK_DOC(bool);
+	virtual void BLOCK_QUOTE(bool);
+	virtual void BLOCK_UL(const MD_BLOCK_UL_DETAIL*, bool);
+	virtual void BLOCK_OL(const MD_BLOCK_OL_DETAIL*, bool);
+	virtual void BLOCK_LI(const MD_BLOCK_LI_DETAIL*, bool);
+	virtual void BLOCK_HR(bool e);
+	virtual void BLOCK_H(const MD_BLOCK_H_DETAIL* d, bool e);
+	virtual void BLOCK_CODE(const MD_BLOCK_CODE_DETAIL*, bool);
+	virtual void BLOCK_HTML(bool);
+	virtual void BLOCK_P(bool);
+	virtual void BLOCK_TABLE(const MD_BLOCK_TABLE_DETAIL*, bool);
+	virtual void BLOCK_THEAD(bool);
+	virtual void BLOCK_TBODY(bool);
+	virtual void BLOCK_TR(bool);
+	virtual void BLOCK_TH(const MD_BLOCK_TD_DETAIL*, bool);
+	virtual void BLOCK_TD(const MD_BLOCK_TD_DETAIL*, bool);
+
+	virtual void SPAN_EM(bool e);
+	virtual void SPAN_STRONG(bool e);
+	virtual void SPAN_A(const MD_SPAN_A_DETAIL* d, bool e);
+	virtual void SPAN_IMG(const MD_SPAN_IMG_DETAIL*, bool);
+	virtual void SPAN_CODE(bool);
+	virtual void SPAN_DEL(bool);
+	virtual void SPAN_LATEXMATH(bool);
+	virtual void SPAN_LATEXMATH_DISPLAY(bool);
+	virtual void SPAN_WIKILINK(const MD_SPAN_WIKILINK_DETAIL*, bool);
+	virtual void SPAN_U(bool);
+
+	////////////////////////////////////////////////////////////////////////////
+
+	struct image_info
+	{
+		ImTextureRef texture;   // a backend id, or an ImTextureData created by the backend at render time
+		ImVec2	size;
+		ImVec2	uv0;
+		ImVec2	uv1;
+	};
+
+	// none: nothing is drawn; ready: nfo is filled; loading: a spinner is drawn in place of the image
+	enum class image_status { none, ready, loading };
+	// The image at m_img_src. nfo.size is in logical pixels: the renderer applies the font scales.
+	virtual image_status get_image(image_info& nfo) const;
+	// The spinner drawn while an image is loading
+	virtual void draw_loading_spinner();
+
+	// A formula as a texture, in physical pixels (see get_latex_texture)
+	struct latex_texture
+	{
+		ImTextureRef texture;       // invalid (no data, no id): this formula failed, nothing is drawn
+		ImVec2 size_px = ImVec2(0.0f, 0.0f);
+		float baseline_px = 0.0f;   // from the top of the texture to the text baseline
+		std::string error;          // set when the formula is invalid: the source is shown with this message as a tooltip
+	};
+	// The formula rendered at font_size_px (physical pixels), with the display style for $$...$$.
+	// Return false when LaTeX is not available, or when the formula is invalid (then fill out.error):
+	// the formula's source is shown instead.
+	virtual bool get_latex_texture(const std::string& latex, float font_size_px, ImU32 color, bool display, latex_texture& out) const;
+
+	struct MdSizedFont
+	{
+		ImFont* font;
+		float size;
+	};
+	virtual MdSizedFont get_font() const;
+
+	virtual ImVec4 get_color() const;
+
+    // By default, code blocks are rendered as text with the code font, but you can override this
+    virtual void render_code_block();
+
+    // The search in a code block, in a document: its matches. The code block draws them, then hands their rectangles
+    // back (on the screen; none when it does not know them: its matches are then at the top of the block).
+    std::vector<CodeBlockMatch> code_block_matches(const std::string& code) const;
+    void add_code_block_matches(const std::string& code, const std::vector<CodeBlockMatch>& matches,
+                                const std::vector<ImRect>& rects, float blockTop);
+
+    // Code blocks may be rendered inside a child window (see the overrides of render_code_block).
+    // Return false where child windows cannot be used (e.g. inside the canvas of a node editor):
+    // code blocks are then rendered as inline code.
+    virtual bool can_use_child_windows() const { return true; }
+
+    // Draw a non-interactive checkbox glyph for a task-list item bullet.
+    // Called from BLOCK_LI when MD_BLOCK_LI_DETAIL::is_task is non-zero.
+    virtual void render_task_marker(bool checked);
+
+    // Draw the admonition header row (icon/label) after detecting
+    // a GitHub-style "[!NOTE]" / "[!TIP]" / ... marker at the start
+    // of a blockquote.
+    virtual void render_admonition_header(AdmonitionKind kind);
+
+	//url == m_href
+	virtual void open_url() const;
+	// A part of a link to m_href was just drawn: returns true when a tap on it opens the url by itself (in a browser,
+	// on a touch screen): the tap then does nothing more
+	virtual bool tap_opens_url() const;
+	// A wikilink [[target]] or [[target|label]] was clicked (m_href == target; MD_FLAG_WIKILINKS)
+	virtual void open_wikilink() const;
+	// A heading was rendered (its text without markup)
+	virtual void heading(int level, const std::string& text);
+
+	//returns true if the term has been processed
+	virtual bool render_entity(const char* str, const char* str_end);
+
+	//returns true if the term has been processed
+	virtual bool check_html(const char* str, const char* str_end);
+	// An HTML comment (<!-- ... -->) is not shown: true for its raw HTML chunks
+	bool skip_html_comment(const char* str, const char* str_end, bool afterComment);
+	bool separate_block();
+
+	//called when '\n' in source text where it is not semantically meaningful
+	virtual void soft_break();
+
+	//e==true : enter
+	//e==false : leave
+	virtual void html_div(const std::string& dclass, bool e);
+	////////////////////////////////////////////////////////////////////////////
+
+    virtual void push_code_style();
+    virtual void pop_code_style();
+
+	//current state
+	std::string m_href;//empty if no link/image
+    std::string m_img_src;//empty if no link/image
+
+	bool m_is_underline=false;
+	bool m_is_strikethrough = false;
+	bool m_is_em = false;
+	bool m_is_strong = false;
+	// Inline HTML span state (driven by <sub>, <sup>, <kbd>, <mark>)
+	bool m_is_sub = false;
+	bool m_is_sup = false;
+	bool m_is_kbd = false;
+	bool m_is_error = false;         // inside <md-error title="reason">: error color, the reason as a tooltip
+	std::string m_error_title;
+	bool m_is_mark = false;
+
+	// <details>/<summary> state. One bool per currently-open <details>
+	// (true = expanded, false = collapsed -> content is skipped).
+	// m_details_awaiting_summary is set between <details> and the first
+	// <summary>…</summary>, during which the summary's inner text is
+	// captured as the header label.
+	std::vector<bool> m_details_open_stack;
+	bool m_details_awaiting_summary = false;
+	// True when the current <details ...> tag had the `open` attribute,
+	// so the next <summary>…</summary> should start expanded.
+	bool m_details_awaiting_open_default = false;
+	// True for exactly one MD_TEXT_HTML event right after </details>
+	// is processed — lets us swallow the trailing "\n" that md4c emits
+	// as a separate chunk, so content after the collapsible sits tight.
+	bool m_details_suppress_next_raw_html = false;
+	bool m_in_html_comment = false;       // inside a comment that spans several chunks (lines)
+	bool m_html_comment_closed = false;   // the previous chunk closed a comment
+	bool m_html_gap_pending = false;      // an HTML block whose gap waits for its first chunk that is not a comment
+	int m_details_id_counter = 0;  // reset in print(); incremented per <summary> for unique PushID
+
+	// <pre>…</pre> state. Between the tags, raw HTML text is buffered
+	// in m_pre_buffer; it's then rendered as monospaced block text
+	// (no code-block frame, no syntax coloring). Reset in print().
+	bool m_in_pre = false;
+	std::string m_pre_buffer;
+
+	bool m_is_table_header = false;
+	bool m_is_table_body = false;
+	bool m_is_image = false;
+	bool m_is_wikilink = false;
+	std::string m_heading_text;  // accumulated while inside a heading
+	// <center> ... </center>: content centered with the aligned-cell trick
+	bool m_in_center = false;
+	int m_center_vtx_start = 0;
+	float m_center_width = 0.0f;
+	bool m_is_code = false; // true for block code and inline code
+    bool m_is_code_block = false;
+	bool m_is_latex_inline = false; // LaTeX math state (populated when EnableLatex() has been called)
+	bool m_is_latex_display = false;
+	std::string m_latex_buffer;
+	bool m_skip_next_block_gap = true;
+	ImVec2 m_list_block_mark;  // in a list: the last item drawn when a block of an item started (or its marker)
+	int m_quote_depth = 0;
+	std::vector<ImVec2> m_quote_start;  // position (screen coords) of the indented content column at quote entry; used at exit to draw the vertical bar
+
+	// Current quote's kind (None if a plain quote). Cleared on quote enter,
+	// set by admonition detection in text().
+	AdmonitionKind m_admonition_kind = AdmonitionKind::None;
+	// True on entry to a quote while we're waiting for the first text to
+	// decide whether it's an admonition. Any span enter or non-match clears it.
+	bool m_admonition_scan_pending = false;
+	// After detecting a marker like "[!NOTE]", skip the following soft break
+	// so the admonition label and the content don't collide on one line.
+	bool m_admonition_skip_next_softbr = false;
+    std::string m_code_block_language;
+    std::string m_code_block;
+	unsigned m_hlevel=0; // 0 - no heading
+
+private:
+
+	int text(MD_TEXTTYPE type, const char* str, const char* str_end);
+	int block(MD_BLOCKTYPE type, void* d, bool e);
+	int span(MD_SPANTYPE type, void* d, bool e);
+
+	void render_text(const char* str, const char* str_end);
+	float glued_width(const char* str_end) const;
+	void render_latex_span(bool display);
+    void render_inline_code(const char* str, const char* str_end);
+
+	void set_font(bool e);
+	void set_color(bool e);
+	void set_href(bool e, const MD_ATTRIBUTE& src);
+    void set_img_src(bool e, const MD_ATTRIBUTE& src);
+
+	static void line(ImColor c, bool under);
+
+	//table state
+	int m_table_id_counter = 0;  // reset in print(); incremented per table for unique PushID
+	bool m_table_open = false;   // BeginTable() succeeded for the current table
+	// Per-cell alignment state, used while rendering a TH/TD whose
+	// align is CENTER or RIGHT. The cell opens a BeginGroup(), notes
+	// the drawlist vertex count, and on exit computes the content
+	// width from the group, then shifts the vertices horizontally so
+	// the content is centered/right-aligned within the cell.
+	MD_ALIGN m_cell_align = MD_ALIGN_DEFAULT;
+	int m_cell_vtx_start = 0;
+	float m_cell_width = 0.0f;
+
+	//list state
+	struct list_info
+	{
+		unsigned	cur_ol;
+		char		delim;
+		bool		is_ol;
+		bool		first_item_pending;
+	};
+	std::vector<list_info> m_list_stack;
+
+	std::vector<std::string> m_div_stack;
+
+	// Selectable text: the text runs drawn by the fragment (rebuilt by print()), and the selection, a range of byte
+	// offsets in the fragment's text (so that it survives a relayout). One selection at a time, in one fragment.
+	struct TextRun
+	{
+		ImVec2 min, max;              // its rectangle, in screen coordinates
+		ImFont* font = nullptr;
+		float fontSize = 0.0f;
+		size_t begin = 0, end = 0;    // the bytes of the fragment's text it shows
+		int block = 0;                // a newline separates the runs of two blocks, in a copy
+		std::string href;             // the target of a link
+		std::string replacement;      // what it shows instead of its bytes, when not empty (a soft break, a formula)
+	};
+	std::vector<TextRun> m_runs;
+	const char* m_fragment_begin = nullptr;
+	const char* m_fragment_end = nullptr;
+	int m_block_number = 0;
+	int m_top_block_count = 0;  // the top-level blocks of the fragment so far, the hidden ones included
+	const char* m_latex_source_begin = nullptr;  // the source of the formula being read
+	const char* m_latex_source_end = nullptr;
+	size_t m_cell_run_start = 0;                 // the first run of an aligned cell or of a <center>, shifted with it
+	size_t m_center_run_start = 0;
+	ImGuiID m_selection_fragment = 0;
+	ImGuiID m_selection_text_hash = 0;           // the text of the fragment when the selection was made
+	size_t m_selection_anchor = 0, m_selection_focus = 0;
+	bool m_selection_by_unit = false;            // made by a double or triple click: a drag must pass the threshold
+	bool m_press_in_selection = false;           // a press inside the selection keeps it: a drag starts a new one,
+	                                             // a release collapses it (a release at no position, a cancel, keeps it)
+	std::string m_menu_link;                     // the link under the right click that opened the menu
+
+	// The headings of the fragment (print() clears them), and the slugs given so far (a repeated one gets -1, -2...)
+	std::vector<Heading> m_headings;
+	std::unordered_map<std::string, int> m_slug_occurrences;
+	float m_heading_top = -1.f;          // the top of the heading being read (its first text run), in content coordinates
+	// What hides the content: the outermost collapsed <details> (its header), or the folded heading. The headings and
+	// the text it hides are placed there. Its id holds its state (1: open), as a CollapsingHeader's.
+	float m_hidden_y = 0.f;
+	float m_hidden_bottom = 0.f;
+	ImGuiID m_hidden_id = 0;
+	std::vector<ImGuiID> m_heading_details;  // for each heading, the id of what hides it (0: none)
+	void add_heading(int level, float y, bool hidden);
+	// The fold: what follows a folded heading is hidden, until a heading of its level or above, at the top level (a
+	// fold never crosses a list, a quote or a <details>)
+	std::vector<ImGuiID> m_heading_folds;   // for each heading, the id of its fold's state (0: it does not fold)
+	ImGuiStorage* m_fold_storage = nullptr; // where the states are: the storage of the fragment's window
+	int m_fold_level = 0;        // the level of the folded heading (0: no fold)
+	int m_container_depth = 0;   // the lists and quotes around the current block, counted also while hidden
+	float m_fold_margin = 0.f;        // the width of the margin of the arrows, at the left of the content (0: none)
+	float m_fold_margin_left = 0.f;   // its left, on the screen
+	float m_heading_font_size = 0.f;  // the size of the heading being read (its arrow's)
+	bool top_level() const { return m_container_depth == 0 && m_details_open_stack.empty(); }
+	bool hidden() const;         // inside a collapsed <details>, or a fold
+	void fold_heading(int level, float top, ImGuiID id);
+	void load_document_fold();
+	void save_document_fold();
+
+	// An anchor link (#slug) clicked in a fragment: resolved at the end of the fragment, once its headings are known (in
+	// a document: by EndDocument(), once those of all its fragments are known)
+	PendingAnchor m_anchor;
+	ImGuiID m_fragment_id = 0;           // the fragment being drawn (its id, taken in the id scope of print())
+	void follow_link();
+	void resolve_anchor(ImGuiID fragmentId);
+	ImDrawListSplitter m_selection_splitter;     // channel 0: the highlight, behind the text of channel 1
+
+	void record_run(const char* str, const char* str_end, const std::string& replacement = "");
+	void shift_runs(size_t first, float dx);
+	size_t offset_at(ImVec2 pos) const;
+	const TextRun* run_at(size_t offset) const;
+	void select_at(ImGuiID fragmentId, size_t offset, int clicks);
+	void select_all(ImGuiID fragmentId);
+	// The text the runs between two offsets of the fragment show: the replacement of a run that has one, a space at a
+	// wrap (where only blanks separate two runs of a block), a newline between two blocks. sourceOffsets, when given,
+	// gets for each byte of the text the bytes of the fragment it shows: [first, second) (a whole run for a replacement,
+	// an empty range between two runs for a separator)
+	void visible_text(size_t b, size_t e, std::string& out,
+	                  std::vector<std::pair<size_t, size_t>>* sourceOffsets = nullptr) const;
+	std::string selected_text() const;
+	std::string selected_markdown() const;
+	void update_selection(ImGuiID fragmentId);
+	void show_selection_menu(ImGuiID fragmentId);
+	void draw_selection() const;
+	void select_range(ImGuiID fragmentId, size_t b, size_t e);
+	// The rectangles (on the screen) of the text between two offsets of the fragment: one per run
+	void range_rects(size_t b, size_t e, std::vector<ImRect>& out) const;
+	// The matches of the document's search in this fragment: added to the document, drawn behind the text
+	void search_fragment(int fragmentIndex);
+
+	// The search in the text a fragment does not draw as runs: the collapsed sections' (their matches are at their
+	// header), the code blocks' (drawn by the code block)
+	struct HiddenText
+	{
+		std::string text;
+		std::vector<size_t> sources;  // per byte of the text: its offset in the fragment's text
+		ImGuiID details = 0;          // the collapsed <details> that hides it
+		float y = 0.f, bottom = 0.f;  // its header, in the content's coordinates
+	};
+	std::vector<HiddenText> m_hidden_texts;
+	void add_hidden_text(const char* str, const char* str_end);
+	std::vector<std::pair<size_t, size_t>> m_code_block_sources;  // per chunk of m_code_block: its offset there, and in
+	                                                              // the fragment's text
+	size_t code_block_source(size_t offset) const;
+	std::vector<DocumentMatch> m_code_block_matches;  // those of the fragment so far
+
+	MD_PARSER m_md;
+};
+
+// A slug made from a heading's text, unique among those given so far (a repeated one gets -1, -2...)
+std::string UniqueSlug(const std::string& text, std::unordered_map<std::string, int>& occurrences);
+
+// The heading of an anchor: a collapsed section that hides it opens first (at the next frame), and the anchor waits.
+// Returns the heading's index, -1 while waiting, -2 when no heading has the anchor's slug.
+int FindAnchorHeading(PendingAnchor& anchor, const std::vector<Heading>& headings,
+                      const std::vector<ImGuiID>& headingDetails);
+// The scroll of the current window that shows its content's y at its top (below a title bar, a menu bar)
+float ScrollToShowAtTop(float y);
+// One frame of the correction of a scroll, in the current window: set again until it holds. Returns true when it holds,
+// or when the frames run out.
+bool CorrectScroll(float scroll, int& frames);
+
+// One frame of the way to an anchor, in the current window: a collapsed section that hides its heading opens (at the
+// next frame), or the window scrolls the heading to its top (corrected at the next frames, until it holds)
+enum class AnchorStatus { Waiting, Reached, NotFound };
+AnchorStatus ResolveAnchor(PendingAnchor& anchor, const std::vector<Heading>& headings,
+                           const std::vector<ImGuiID>& headingDetails);
+
+} // namespace RichMd
+
+#endif  /* RICHMD_RENDERER_H */

@@ -416,6 +416,16 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   a failed self-test no longer reaches the pages as `[exit status N]`. The tutorial's checks after a second run wait
   for its field to be read, as after the first: the Result panel comes forward when the reading task ends, which
   under load landed between a click and its check ([Contributing](contributing#documentation)): done.
+- **Markdown in the window** (S8): imgui_rich_md (MIT, the owner's choice) vendored at commit `427bcb1`, its renderer,
+  search and documents only, with md4c (MIT, its parser) at the commit it pins, `481fbfb`, FIGURE's glue and one patch
+  of one line (its images decoded by FIGURE's stb_image). No LaTeX, no images from URLs, no Mermaid. `ig_markdown(text
+  [, link])` draws a text at the cursor and `markdown_view_object` a document (`init`, `set_text`, `load`, `draw`)
+  with a table of contents and a find bar (`find`, `matches`, `current_match`, `scroll_to`). Text in IBM Plex Sans,
+  its Bold, Italic and Bold Italic now bundled (OFL-1.1, the same release as its Regular), code in IBM Plex Mono, the
+  icons and the fallback fonts merged; headings, lists, tables, quotes and admonitions, code blocks, images from PNG
+  and JPEG files. Links are reported, never opened: `.true.` on the frame one is clicked, its URL in `link` (polled);
+  a link to a heading scrolls there. It draws through Dear ImGui only: the same in every mode
+  ([Markdown](widgets#markdown)): done.
 
 ## Next
 

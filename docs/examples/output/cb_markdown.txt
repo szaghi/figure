@@ -1,0 +1,3 @@
+$ ./cb_markdown --test ../../../docs/examples/data/cb_markdown.md
+help: 'pressure' found 2 times, current 1
+help: scrolled to "Boundary conditions", last link: (none)

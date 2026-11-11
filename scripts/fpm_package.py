@@ -19,6 +19,9 @@ native layer itself, next to the Fortran library:
   gradient editor), vendored in the repository (third_party/ImGuizmo, FIGURE's patches applied);
 - ``src/cimplot3d/implot3d/``: ImPlot3D (the small 3-D figures), vendored in the repository (third_party/implot3d,
   FIGURE's patch applied), where cimplot3d.cpp includes it from (``./implot3d/implot3d.h``);
+- ``src/richmd/`` and ``src/md4c/``: imgui_rich_md's renderer, search and documents (Markdown in the window) and md4c,
+  its parser, vendored in the repository (third_party/imgui_rich_md, FIGURE's patch applied; third_party/md4c),
+  compiled with figure_markdown.cpp;
 - the licences of everything copied (``LICENSES/``), and ``fpm.toml``.
 
 SDL3 comes from the system (a package: libsdl3-dev, Homebrew's sdl3, MSYS2's SDL3), found by the compiler and linker
@@ -64,12 +67,19 @@ GIZMO_FILES = ["ImGuizmo.cpp", "ImGuizmo.h", "ImGradient.cpp", "ImGradient.h"]
 IMPLOT3D_FILES = [
     "implot3d.cpp", "implot3d_items.cpp", "implot3d_meshes.cpp", "implot3d_demo.cpp", "implot3d.h", "implot3d_internal.h",
 ]  # fmt: skip
+RICHMD_FILES = [
+    "rich_md.cpp", "rich_md.h", "rich_md_host.h", "narrative_programming.cpp", "narrative_programming.h",
+    "internal/rich_md_internal.h", "internal/rich_md_renderer.cpp", "internal/rich_md_renderer.h",
+    "internal/rich_md_search.cpp", "internal/rich_md_search.h",
+]  # fmt: skip
+MD4C_FILES = ["md4c.c", "md4c.h"]
 IMPLOT_FILES = ["implot.cpp", "implot_items.cpp", "implot_demo.cpp", "implot.h", "implot_internal.h", "LICENSE"]
 NATIVE_FILES = [
     "figure_native.cpp", "figure_native.h", "figure_process.cpp", "figure_task.cpp", "figure_scope.cpp", "figure_canvas.cpp",
     "figure_files.cpp", "figure_app.cpp",
     "figure_remote.cpp", "figure_image.cpp", "figure_image.h", "figure_items.cpp", "figure_items.h",
     "figure_swrast.cpp", "figure_swrast.h", "figure_editor.cpp", "figure_plot3d.cpp",
+    "figure_markdown.cpp", "figure_fonts.h", "figure_rich_md_stb.h",
     "figure_colormap.cpp", "figure_field.cpp", "figure_view3d.cpp", "figure_view3d.h",
     "figure_remote.h", "figure_theme.cpp", "figure_theme.h", "figure_style.h", "figure_glue_generated.cpp", "figure_style_generated.cpp",
 ]  # fmt: skip
@@ -131,7 +141,7 @@ include-dir = [{include_dirs}]
 
 INCLUDE_DIRS = [
     "src/native", "src/cimgui", "src/cimgui/imgui", "src/cimgui/imgui/backends", "src/cimplot", "src/cimplot/implot",
-    "src/miniz", "src/stb", "src/editor", "src/gizmo", "src/cimplot3d", "src/cimplot3d/implot3d",
+    "src/miniz", "src/stb", "src/editor", "src/gizmo", "src/cimplot3d", "src/cimplot3d/implot3d", "src/richmd", "src/md4c",
 ]  # fmt: skip
 
 
@@ -224,10 +234,12 @@ def cmake_embeds(out: Path) -> None:
     (out / "figure_colormaps.inc").write_text(text)
     text = (
         "// generated from third_party/fonts/{IBMPlexSans-Regular,IBMPlexMono-Regular,lucide,NotoSansMath-Regular}.ttf"
-        " by scripts/fpm_package.py\n"
+        " and third_party/fonts/IBMPlexSans-{Bold,Italic,BoldItalic}.ttf by scripts/fpm_package.py\n"
     )
     for array, ttf in (("plex_sans_ttf", "IBMPlexSans-Regular.ttf"), ("plex_mono_ttf", "IBMPlexMono-Regular.ttf"),
-                       ("lucide_ttf", "lucide.ttf"), ("noto_math_ttf", "NotoSansMath-Regular.ttf")):
+                       ("lucide_ttf", "lucide.ttf"), ("noto_math_ttf", "NotoSansMath-Regular.ttf"),
+                       ("plex_sans_bold_ttf", "IBMPlexSans-Bold.ttf"), ("plex_sans_italic_ttf", "IBMPlexSans-Italic.ttf"),
+                       ("plex_sans_bold_italic_ttf", "IBMPlexSans-BoldItalic.ttf")):
         font = (ROOT / "third_party" / "fonts" / ttf).read_bytes()
         rows = [",".join(f"0x{b:02x}" for b in font[i : i + 32]) for i in range(0, len(font), 32)]
         text += f"static const unsigned char {array}[] = {{\n" + ",\n".join(rows) + "};\n"
@@ -310,6 +322,12 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     gizmo = ROOT / "third_party" / "ImGuizmo"
     for f in GIZMO_FILES:
         copy(gizmo / f, src / "gizmo" / f)
+    richmd = ROOT / "third_party" / "imgui_rich_md"
+    for f in RICHMD_FILES:
+        copy(richmd / f, src / "richmd" / f)
+    md4c = ROOT / "third_party" / "md4c"
+    for f in MD4C_FILES:
+        copy(md4c / f, src / "md4c" / f)
     licences = out / "LICENSES"
     copy(ROOT / "LICENSE.mit.md", licences / "figure.md")
     copy(ROOT / "THIRD_PARTY.md", licences / "THIRD_PARTY.md")
@@ -324,6 +342,9 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(cte / "LICENSE", licences / "imguicolortextedit.txt")
     copy(cte / "LICENSE-dtl.txt", licences / "dtl.txt")
     copy(gizmo / "LICENSE", licences / "imguizmo.txt")
+    copy(richmd / "LICENSE", licences / "imgui_rich_md.txt")
+    copy(richmd / "LICENSE.imgui_md", licences / "imgui_md.txt")
+    copy(md4c / "LICENSE.md", licences / "md4c.md")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexSans.txt", licences / "ibm-plex.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexMono.txt", licences / "ibm-plex-mono.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-Lucide.txt", licences / "lucide.txt")

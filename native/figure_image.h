@@ -11,6 +11,10 @@ namespace figure_image {
 bool encode_jpeg(std::string &out, int width, int height, int channels, const unsigned char *pixels, int quality);
 // Append to `out` the PNG of the same pixels (lossless; zlib-compressed, filtered). False if the encoder fails.
 bool encode_png(std::string &out, int width, int height, int channels, const unsigned char *pixels);
+// Decode a PNG or JPEG in memory to `desired` channels (0: its own), as stbi_load_from_memory; null if it is neither or
+// it is corrupt. Free the pixels with free_pixels. (imgui_rich_md's images: native/figure_rich_md_stb.h.)
+unsigned char *decode(const unsigned char *data, int size, int *width, int *height, int *channels, int desired);
+void free_pixels(void *pixels);
 
 } // namespace figure_image
 

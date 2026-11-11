@@ -296,6 +296,30 @@ once. Boxes asked while one is open stack over it, each answering its own questi
 Two regions side by side (`ig_begin_child`, `ig_same_line`), each scrolling on its own: the list keeps the selection
 in a program variable, the values sit in one column (`ig_same_line(offset=...)`), the help wraps at the region's edge.
 
+### A help window from a Markdown file
+
+<<< @/examples/snippets/cb_markdown-setup.F90{fortran}
+
+<<< @/examples/snippets/cb_markdown-draw.F90{fortran}
+
+<Media name="cb_markdown" video alt="A solver's window reads Case cylinder, Re = 100 in bold and italic, then Keys and units: help, a link. A click on help opens a Help window beside it: a table of contents on the left (Solver help, Fluid properties, Output, Boundary conditions), the page on the right with headings, a table of keys in a monospace font, a list, a code block and a tip. A click on Boundary conditions scrolls the page there; ctrl+f opens a find bar, pressure typed highlights two matches, enter goes to the second. Back at the top, a click on the link project's site: the window's last line reads Last link: https://szaghi.github.io/figure/." caption="docs/examples/src/cb_markdown.F90" />
+
+The page is a file the program ships (`docs/examples/data/cb_markdown.md`): `help%load` reads it once, `help%draw` shows
+it in a scroll area with its table of contents (from three headings) and a find bar (ctrl+f). A link to one of its
+headings scrolls there; any other link comes back to the program, which decides what it means: nothing is opened. A
+few lines of Markdown in any window go through `ig_markdown`, whose links come back the same way; here the program's
+own link `help` opens the help window:
+
+<<< @/examples/snippets/cb_markdown-inline.F90{fortran}
+
+The same page runs headless as a test: a search counted, a scroll to a heading.
+
+<<< @/examples/snippets/cb_markdown-test.F90{fortran}
+
+<<< @/examples/output/cb_markdown.txt{text}
+
+[Markdown](/guide/widgets#markdown) has what a page may hold, and what it may not.
+
 ### A hierarchy with values in columns
 
 <<< @/examples/snippets/cb_tree-tree.F90{fortran}

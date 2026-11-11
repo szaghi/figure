@@ -1,5 +1,6 @@
 // FIGURE native glue: SDL3 window + OpenGL3 renderer + Dear ImGui/ImPlot contexts, behind the C ABI of figure_native.h.
 #include "figure_native.h"
+#include "figure_fonts.h"
 #include "figure_image.h"
 #include "figure_items.h"
 #include "figure_remote.h"
@@ -2881,6 +2882,7 @@ void fig_shutdown(void) {
    try {
       fig_app_shutdown(); // the preferences saved while the window and the contexts exist, then forgotten
       fig_field_reset(); // the field cache forgotten: its textures go with the others below
+      fig_markdown_shutdown(); // Markdown's context, its fonts and images: while the renderer can free them
       fig_process_shutdown(); // the captured children end with the program (before SDL_Quit)
       if (st.in_frame) {
          fig_scope_frame_end(); // what the program left open, closed
@@ -4548,3 +4550,50 @@ void fig_layout_text(const char *text, long long len) {
    layout_due = true;
    frames_at_least(3);
 }
+
+// ---- Fonts for the other native files (figure_fonts.h) --------------------------------------------------------------
+
+namespace figure_fonts {
+
+bool bytes(const std::string &name, const unsigned char *&data, int &size) {
+   struct entry {
+      const char *name;
+      const unsigned char *data;
+      int size;
+   };
+   static const entry table[] = {
+      {"plex-sans", plex_sans_ttf, static_cast<int>(sizeof(plex_sans_ttf))},
+      {"plex-sans-bold", plex_sans_bold_ttf, static_cast<int>(sizeof(plex_sans_bold_ttf))},
+      {"plex-sans-italic", plex_sans_italic_ttf, static_cast<int>(sizeof(plex_sans_italic_ttf))},
+      {"plex-sans-bold-italic", plex_sans_bold_italic_ttf, static_cast<int>(sizeof(plex_sans_bold_italic_ttf))},
+      {"plex-mono", plex_mono_ttf, static_cast<int>(sizeof(plex_mono_ttf))},
+   };
+   for (const entry &e : table)
+      if (name == e.name) {
+         data = e.data;
+         size = e.size;
+         return true;
+      }
+   return false;
+}
+
+bool adopt(ImFont *f, const std::string &key, const char *label, std::string &err) {
+   if (!f || f->Sources.Size == 0) {
+      err = "cannot load the font " + key;
+      return false;
+   }
+   ImFontConfig *src = f->Sources[0];
+   // as get_font: a finite advance bound (FLT_MAX overflows to infinity above the reference size), before any glyph
+   for (ImFontConfig *s : f->Sources) s->GlyphMaxAdvanceX = 1.0e30f;
+   if (label) std::snprintf(src->Name, sizeof(src->Name), "%s", label);
+   if (!merge_icons(f, src->SizePixels)) {
+      err = "cannot merge the icons into the font " + key;
+      return false;
+   }
+   st.font_em[f] = em_per_size(static_cast<const unsigned char *>(src->FontData));
+   if (!merge_fallbacks(f, err)) return false;
+   st.fonts[key] = f; // the program's fallbacks added later reach it too (apply_fallbacks)
+   return true;
+}
+
+} // namespace figure_fonts

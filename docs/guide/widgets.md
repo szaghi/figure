@@ -411,6 +411,70 @@ a URL does). **Status:** no `stat`: with no frame open, or from a task, nothing 
 the next `app%next_frame`. **Threads:** the frame loop's thread only. **What it does not do:** no link inside a wrapped
 paragraph (a link is an item of its own: put text before it with `ig_same_line`); no visited state.
 
+## Markdown
+
+| Procedure | Notes |
+|---|---|
+| `ig_markdown(text [, link] [, stat])` → `logical` | Draws `text`, Markdown, at the cursor, as wide as the window: `.true.` on the frame one of its links is clicked, its URL in `link`. |
+| `md%init([toc] [, search] [, stat])`, `md%destroy()`, `md%is_initialized()` → `logical` | A document (`markdown_view_object`): its text kept by FIGURE, drawn in a scroll area of its own, with a table of contents (`toc`, default on) and a find bar (`search`, default on). |
+| `md%set_text(text [, stat])`, `md%load(path [, stat])`, `md%text()` → `character` | Its text, given or read from a file (UTF-8); a copy of it. |
+| `md%draw(id [, link] [, width] [, height] [, stat])` → `logical` | Draws the document as a widget; `.true.` on the frame one of its links is clicked, its URL in `link`. |
+| `md%find(text [, stat])`, `md%matches()` → `int32`, `md%current_match()` → `int32` | Searches `text` as the find bar does (`''` ends the search); the matches, and the current one (from 1), at the last draw. |
+| `md%scroll_to(heading [, stat])` | Scrolls to a heading, by its text or by its anchor after `#`. |
+
+The renderer is [imgui_rich_md](https://github.com/pthom/imgui_rich_md) (MIT, with [md4c](https://github.com/mity/md4c),
+its parser), vendored ([Third-party software](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)). It draws
+through Dear ImGui only: a help page looks the same in a window, headless and in a browser (remote mode).
+
+<<< @/examples/snippets/cb_markdown-draw.F90{fortran}
+
+<Media name="cb_markdown" video alt="A help page from a Markdown file beside a solver's window: a table of contents, headings, a table of keys, a list, a code block and a tip; a click in the contents scrolls to a section, ctrl+f highlights the matches of pressure, a click on a link shows its URL on the window's last line" caption="docs/examples/src/cb_markdown.F90" />
+
+- **What a text may hold.** Headings (`#` to `######`, larger as they rise), paragraphs, `**bold**`, `*italic*`
+  (`_text_` is underlined, not italic), `~~strikethrough~~`, `` `code spans` ``, links and bare URLs, lists (`-`, `*` with a bullet, `1.`), task lists (`- [x]`),
+  quotes, GitHub's admonitions (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`), tables (columns
+  sized by their content, aligned by `:---:`, resizable), fenced and indented code blocks with a Copy button, horizontal
+  rules, collapsible sections (`<details><summary>`), and the HTML tags `<u>`, `<mark>`, `<kbd>`, `<sub>`, `<sup>`,
+  `<br>`. Lines end with LF or CR LF.
+- **Fonts.** The text in IBM Plex Sans (regular, bold, italic, bold italic: the four styles are bundled), headings
+  larger by 5 % (`######`) to 42 % (`#`); code spans and blocks in IBM Plex Mono. The [icons](styles#icons) and the
+  [fallback fonts](styles#fonts) (Noto Sans Math, the program's own) are merged into all of them, as into every
+  FIGURE font: `∇·u`, `ρ` and an `ICON_*` show in a page. The body text is 15 pixels, the interface's default size.
+- **Links are reported, never opened.** A click on a link returns `.true.` from the call that drew it, on that frame,
+  with its URL in `link` (`''` on the other frames): the program decides what it means (another page, a section, a
+  file, a browser through [`ig_text_link_url`](#links)'s platform handler or its own). A link to a heading of the same
+  text (`[units](#units)`) scrolls there instead and is not reported; one to a heading the text lacks is, as
+  `'#units'`. The pointer resting on a link shows its URL; a right click offers Copy, Copy as Markdown, Select All and
+  Copy Link.
+- **Anchors.** A heading's anchor is GitHub's: lower case, blanks as `-`, punctuation dropped
+  (`Boundary conditions` → `#boundary-conditions`; a repeated title's second is `-1`).
+- **Selection.** The text is selected with the mouse (a double click a word, a triple click a paragraph) and copied
+  with ctrl+c (cmd+c on macOS).
+- **Images** from files: `![alt](path)`, a PNG or a JPEG, read relative to the working directory (not to a file
+  `md%load` read), at its size in pixels (`<img src="path" width="200">` for another). Not from a URL.
+- **Documents.** `md%draw` draws its text in a child region `width` × `height` pixels (0: the available region;
+  negative: up to that distance from its edge), which scrolls on its own. The table of contents appears from three
+  headings: a panel beside the text whose edge the reader drags, or a line above a narrow document (under 40 em); it
+  shows the current section, and a click scrolls to one. The find bar (ctrl+f, cmd+f on macOS, or `/` while the
+  document has the focus) highlights the matches in the text, the code blocks and the collapsed sections, counts them
+  per section, ticks them on the scrollbar; enter goes to the next one, shift+enter to the previous one, escape closes
+  it. `md%find` and `md%scroll_to` do the same from the program; they act at the next `md%draw`.
+- **`ig_markdown` or a document.** `ig_markdown` is a few lines inside a window (a description above a form, an About
+  box): the text is passed, and converted, at every frame, and the window scrolls it with the rest. A document keeps
+  its text (no copy per frame), and has its own scroll, its contents and its search: a help page, release notes.
+
+<<< @/examples/snippets/cb_markdown-inline.F90{fortran}
+
+**Status:** `ig_markdown` and `md%draw` return `FIG_ERR_STATE` with no frame open and from a task, `md%*` before
+`md%init`; `FIG_ERR_ARGUMENT` for an empty id (`md%draw`), a search longer than 255 bytes or of two lines (`md%find`),
+an empty heading (`md%scroll_to`), an empty file name (`md%load`); `FIG_ERR_FAILED` for a file that cannot be read
+(`md%load`, the text kept). Absent `stat`: `error stop` with the message ([Errors](errors)). **Threads:** the frame
+loop's thread only; `md%set_text`, `md%load`, `md%find` and `md%scroll_to` may be called before `init*` (they draw
+nothing). **Modes:** the same in window, headless and remote modes. **What it does not do:** no LaTeX formulas
+(`$...$` is text), no images from URLs, no Mermaid diagrams (a ` ```mermaid ` block is code), no syntax highlighting
+in code blocks, no file included into a page (`![[file]]`), no footnotes; nothing is opened by a click
+([Known issues](known-issues#markdown)).
+
 ## Multi-line text
 
 | Procedure | Notes |
