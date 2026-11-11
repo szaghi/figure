@@ -14,6 +14,9 @@
 #                            vendored unmodified in third_party/stb (one header)
 #   stb_image v2.30       -> PNG and JPEG files read (fig_read_image, tex%load; MIT or public domain), vendored
 #                            unmodified in third_party/stb (one header), the same stb commit as stb_image_write
+#   ImGuiColorTextEdit    -> the code editor and the text diff (code_editor_object, code_diff; MIT, with dtl, BSD-3),
+#                            the goossens fork at commit 0a489da, vendored in third_party/ImGuiColorTextEdit with
+#                            FIGURE's one patch (its patches/ directory)
 cmake_minimum_required(VERSION 3.24)
 project(figure_native LANGUAGES C CXX)
 
@@ -79,6 +82,8 @@ endif()
 
 set(IMGUI_DIR  ${cimgui_SOURCE_DIR}/imgui)
 set(IMPLOT_DIR ${cimplot_SOURCE_DIR}/implot)
+# ImGuiColorTextEdit (goossens fork), vendored: the code editor and the text diff
+set(FIGURE_CTE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/ImGuiColorTextEdit)
 
 add_library(figure_native STATIC
    ${cimgui_SOURCE_DIR}/cimgui.cpp
@@ -110,6 +115,9 @@ add_library(figure_native STATIC
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_image.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_items.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/figure_swrast.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/figure_editor.cpp
+   ${FIGURE_CTE_DIR}/TextEditor.cpp
+   ${FIGURE_CTE_DIR}/TextDiff.cpp
    ${miniz_SOURCE_DIR}/miniz.c)
 # miniz: only its deflate and zlib-format functions, all under the mz_ prefix (no zlib names: a program may link zlib)
 target_compile_definitions(figure_native PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
@@ -117,6 +125,8 @@ target_compile_definitions(figure_native PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_
 target_include_directories(figure_native PRIVATE ${miniz_SOURCE_DIR})
 # stb_image and stb_image_write: PNG and JPEG, both compiled in figure_image.cpp only, their functions static
 target_include_directories(figure_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb)
+# ImGuiColorTextEdit: its headers for figure_editor.cpp (TextEditor.cpp includes its languages/ by relative path)
+target_include_directories(figure_native PRIVATE ${FIGURE_CTE_DIR})
 # The browser client page, embedded in figure_remote.cpp as a C++ raw string (reconfigured when the page changes).
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote_client.html)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/figure_remote_client.html FIGURE_REMOTE_CLIENT)
@@ -240,6 +250,8 @@ install(FILES "${cimgui_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimgui)
 install(FILES "${cimplot_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/cimplot)
 install(FILES "${miniz_SOURCE_DIR}/LICENSE" DESTINATION share/licenses/miniz)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb/LICENSE-stb.txt" DESTINATION share/licenses/stb)
+install(FILES "${FIGURE_CTE_DIR}/LICENSE" DESTINATION share/licenses/imguicolortextedit)
+install(FILES "${FIGURE_CTE_DIR}/LICENSE-dtl.txt" DESTINATION share/licenses/dtl)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.mit.md" DESTINATION share/licenses/figure)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexSans.txt" DESTINATION share/licenses/ibm-plex)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fonts/LICENSE-IBMPlexMono.txt" DESTINATION share/licenses/ibm-plex)

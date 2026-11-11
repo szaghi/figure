@@ -2,11 +2,11 @@
 
 FIGURE is released under the [MIT licence](LICENSE.mit.md). Its native layer (`scripts/build_native.sh`) downloads
 and compiles the projects below into `lib/libfigure_native.a` and `lib/libSDL3.a` (stb_image and stb_image_write are
-kept in `third_party/stb/`, not downloaded), and embeds the fonts kept in `third_party/fonts/`, the palettes of
-`themes/palettes/`, whose colours are those of the projects named below (their licence files in
-`third_party/palettes/`), and the colormaps of `third_party/colormaps/` (256 RGB samples each, with their licence
-files): a program linked with FIGURE contains them. Their licences are all permissive and compatible with FIGURE's.
-The native build installs each licence file under `share/licenses/<project>/`.
+kept in `third_party/stb/`, the code editor in `third_party/ImGuiColorTextEdit/`, not downloaded), and embeds the
+fonts kept in `third_party/fonts/`, the palettes of `themes/palettes/`, whose colours are those of the projects named
+below (their licence files in `third_party/palettes/`), and the colormaps of `third_party/colormaps/` (256 RGB samples
+each, with their licence files): a program linked with FIGURE contains them. Their licences are all permissive and
+compatible with FIGURE's. The native build installs each licence file under `share/licenses/<project>/`.
 
 | Project | Version (pinned in `native/CMakeLists.txt`) | Licence | Copyright | In FIGURE |
 |---|---|---|---|---|
@@ -17,6 +17,8 @@ The native build installs each licence file under `share/licenses/<project>/`.
 | [miniz](https://github.com/richgel999/miniz) | `3.0.2` (release archive, SHA-256 pinned) | MIT | Rich Geldreich, RAD Game Tools, Valve Software | deflate for the remote mode's compressed messages |
 | [stb_image_write](https://github.com/nothings/stb) | v1.16, `stb_image_write.h` at commit `4e9b368` (its last change: `1ee679c`), vendored unmodified in `third_party/stb/`, its licence (from the end of the file) in `LICENSE-stb.txt` | MIT or public domain (Unlicense), at the user's choice; FIGURE takes MIT | Sean Barrett | the JPEG encoder of the remote mode's changing images; the PNG and JPEG encoders of FIGURE's tests |
 | [stb_image](https://github.com/nothings/stb) | v2.30, `stb_image.h` at commit `4e9b368` (its last change: `013ac3b`, 2024-05-31; the repository's last commit 2026-11-07), vendored unmodified in `third_party/stb/` (SHA-256 `594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3`), its licence, the same text as stb_image_write's, in `LICENSE-stb.txt` | MIT or public domain (Unlicense), at the user's choice; FIGURE takes MIT | Sean Barrett | the PNG and JPEG decoders of `fig_read_image` and `tex%load` (built with `STBI_ONLY_PNG`, `STBI_ONLY_JPEG`, `STBI_NO_STDIO`: no other format, no file or URL access of its own) |
+| [ImGuiColorTextEdit](https://github.com/goossens/ImGuiColorTextEdit), the goossens fork | commit `0a489da863f22f7493049f5c6eb85355f405b02e` (2026-11-10), vendored in `third_party/ImGuiColorTextEdit/` (`TextEditor.cpp`, `TextEditor.h`, `TextEditorLanguages.h`, `languages/`, `TextDiff.cpp`, `TextDiff.h`), unmodified but for FIGURE's one patch of one line (`patches/0001-compress-markers-index.patch`, applied), its licence `LICENSE` | MIT | Johan A. Goossens | the code editor and the text diff (`code_editor_object`, `code_diff`), with FIGURE's own glue (`native/figure_editor.cpp`; not cimgui's cimCTE, which has no licence file) |
+| [dtl](https://github.com/cubicdaiya/dtl) (Diff Template Library) | 1.21, `dtl.h` as the ImGuiColorTextEdit fork ships it (same commit), unmodified; its licence, from the head of the file, in `third_party/ImGuiColorTextEdit/LICENSE-dtl.txt` | BSD-3-Clause | Tatsuhiko Kubo | the shortest edit script of `code_diff` and `code_diff_lines` |
 | [SDL](https://github.com/libsdl-org/SDL) | `release-3.4.20` | zlib | Sam Lantinga | window, input, OpenGL context, file dialogs |
 | [IBM Plex Sans](https://github.com/IBM/plex) | Regular 3.005, `third_party/fonts/IBMPlexSans-Regular.ttf` (unmodified) | OFL-1.1 | IBM Corp. (Reserved Font Name "Plex") | the default font of the interface, embedded |
 | [IBM Plex Mono](https://github.com/IBM/plex) | Regular 2.005, release `@ibm/plex-mono@2.5.0`, `third_party/fonts/IBMPlexMono-Regular.ttf` (unmodified) | OFL-1.1 | IBM Corp. (Reserved Font Name "Plex") | the monospace font (`'plex-mono'`), embedded |
@@ -38,12 +40,15 @@ The native build installs each licence file under `share/licenses/<project>/`.
 
 ## Distributing a program built with FIGURE
 
-- **MIT** (FIGURE, Dear ImGui, ImPlot, cimgui, cimplot, miniz, stb_image, stb_image_write, the Lucide icons derived from
-  Feather, the palettes Nord, Solarized, Gruvbox, Dracula, Catppuccin, Tokyo Night and One Dark) and **ISC**
+- **MIT** (FIGURE, Dear ImGui, ImPlot, cimgui, cimplot, miniz, stb_image, stb_image_write, ImGuiColorTextEdit, the
+  Lucide icons derived from Feather, the palettes Nord, Solarized, Gruvbox, Dracula, Catppuccin, Tokyo Night and One Dark) and **ISC**
   (Lucide): the copyright notice and the permission notice must be included in all copies or substantial portions of
   the software. For a binary, ship the licence files with it (the `share/licenses/` tree, where the Lucide one is
   `share/licenses/lucide/` and the palettes' are `share/licenses/<palette>/`, or the texts in your documentation or
   "About" box).
+- **BSD-3-Clause** (dtl, in the code editor's diff): reproduce its copyright notice, the conditions and the
+  disclaimer in the documentation of a binary (`share/licenses/dtl/`), and do not use its authors' names to promote
+  it.
 - **The colormaps** (`share/licenses/<project>/`, `<project>` one of `matplotlib`, `mpl-colormaps`, `turbo`,
   `cmocean`, `paraview`, `crameri`): MIT (cmocean, Crameri's), as above; **BSD-3-Clause** (ParaView's Cool to Warm):
   reproduce the copyright notice, the conditions and the disclaimer in the documentation of a binary, and do not use

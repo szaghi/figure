@@ -1,0 +1,19 @@
+FIGURE's patch 1 of 1 to ImGuiColorTextEdit (goossens fork, commit 0a489da863f22f7493049f5c6eb85355f405b02e).
+
+TextEditor::compressMarkers, run after any deletion while markers exist, stores each kept marker's new index in a
+`bool`: every index above 1 becomes 1, so a third marker and the ones after it point at the second one's colour and
+tooltip once a character is deleted anywhere. The index is a size_t. (compressSquiggles has the same field; FIGURE does
+not use squiggles and leaves it.) Applied to third_party/ImGuiColorTextEdit/TextEditor.cpp; checked by
+src/tests/figure_test_editor.F90 (marks kept on their lines after an edit). To report upstream.
+
+--- a/TextEditor.cpp
++++ b/TextEditor.cpp
+@@ -2233,7 +2233,7 @@
+ 		// references to current markers
+ 		struct Reference {
+ 			bool used = false;
+-			bool index = 0;
++			size_t index = 0;
+ 		};
+ 
+ 		std::vector<Reference> references(markers.size());

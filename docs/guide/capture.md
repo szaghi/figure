@@ -165,10 +165,13 @@ what differs from the window background, and writes
 ```bash
 bash docs/examples/build.sh && fobis build --mode examples-gnu   # the programs
 GALLIUM_DRIVER=d3d12 python3 scripts/docs_media.py                # all recordings (or name some)
+python3 scripts/docs_media.py --headless cb_editor                # recorded without a window, by the CPU renderer
 python3 scripts/docs_media.py --check                             # each poster against the CPU renderer's
 python3 scripts/docs_media.py --update                            # accept the pictures --check wrote
 ```
 
+`--headless` records with `FIGURE_CAPTURE_HEADLESS=1`: no window opens, no display or GPU is needed, and the
+pictures are the CPU renderer's, the ones `--check` compares with (the recordings added from v0.5.0 on are made so).
 `--check` renders each recording headless (`FIGURE_CAPTURE_HEADLESS=1`) with the CPU renderer, crops its poster the
 same way and compares it with the committed one by [`test_compare_image`](testing#pictures-as-tests)'s rule: a channel
 may differ by 2 levels, no pixel by more. A header line `#! mask x y w h` leaves a rectangle of the poster out (a

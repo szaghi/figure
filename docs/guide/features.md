@@ -306,6 +306,23 @@ Details: [Processes and tasks](processes#tasks).
 
 Details: [3-D views](view3d).
 
+## Code editor: `code_editor_object`, `code_diff`
+
+| Procedure | Purpose | Details |
+|---|---|---|
+| `ed%init([language] [, stat])`, `ed%destroy()`, `ed%is_initialized()` → `logical`, `ed%set_language(language [, stat])` | create a code editor (ImGuiColorTextEdit, drawn through Dear ImGui: the same in every mode), highlighting a language; release it; whether it exists; another language | [code editor](editor#procedures) |
+| `ed%set_text(text [, stat])`, `ed%text()` → `character`, `ed%line_count()` → `int32` | replace the text (marks and undo history go); the text, every line ended by LF; its lines | [code editor](editor#procedures) |
+| `ed%draw(id [, width] [, height] [, stat])` → `logical` | the editor as a widget, in IBM Plex Mono with the fallback symbols; `.true.` on the frame the user changed the text | [code editor](editor) <!-- visual --> |
+| `ed%mark(line, severity, message [, stat])`, `ed%clear_marks([stat])`, `ed%mark_of(line [, message])` → `character` | a finding on its line: `'error'`, `'warning'`, `'info'`, a tint, an icon and a tooltip; remove them; read one back | [marks](editor#marks) |
+| `ed%goto(line [, column] [, focus] [, stat])`, `ed%focus([stat])`, `ed%cursor(line, column)`, `ed%selection(first_line, first_column, last_line, last_column [, text])` → `logical`, `ed%select(first_line, first_column, last_line, last_column [, stat])` | move the cursor, give the editor the keyboard; where the cursor is; the selection; select a range | [code editor](editor#procedures) |
+| `ed%insert(text [, stat])`, `ed%word_at_cursor()` → `character`, `ed%undo([stat])` → `logical`, `ed%redo([stat])` → `logical` | insert at the cursor; the word the cursor is in; undo, redo a change | [code editor](editor#procedures) |
+| `ed%find(text [, case_sensitive] [, whole_word] [, stat])` → `logical`, `ed%replace(text, by [, case_sensitive] [, whole_word] [, stat])` → `int32` | select the next occurrence; replace every one, in one undo | [find and replace](editor#find-and-replace) |
+| `ed%set_completions(words [, stat])`, `ed%completing([words])` → `logical` | the words completion offers (keys of several words in a key = value language); whether the popup is open, with what it offers | [completion](editor#completion) |
+| `ed%read_only(on [, stat])`, `ed%is_read_only()` → `logical`, `ed%set_options([line_numbers] [, tab_size] [, whitespace] [, line_highlight] [, stat])`, `ed%line_rect(line, x0, y0, x1, y1)` → `logical` | read-only or editable; the editor's options; a line's rectangle on the last draw | [code editor](editor#procedures) |
+| `code_language(name [, stat])` → `language_object`, `lang%init(name [, keywords] [, types] [, comment] [, comment_alt] [, block_comment] [, preprocessor] [, single_quotes] [, double_quotes] [, numbers] [, case_sensitive] [, key_value] [, stat])`, `lang%name()` → `character` | the shipped languages (`'fortran'`, `'input'`, `'text'`, the fork's thirteen); a language of the program's own | [languages](editor#languages) <!-- visual --> |
+| `code_diff(id, left, right [, side_by_side] [, language] [, width] [, height] [, stat])` | the difference of two texts as a widget, one column or side by side | [the diff](editor#the-diff) <!-- visual --> |
+| `code_diff_lines(left, right, added, removed [, stat])` | the lines added and removed, without drawing; a task may call it | [the diff](editor#the-diff) |
+
 ## Testing: `figure_testing`
 
 | Procedure | Does |

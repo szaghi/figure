@@ -43,6 +43,8 @@ What exists today:
 - plots of `real(real32)` and `real(real64)` arrays, read in place: lines (also of matrix rows, with a stride),
   scatter, bars, shaded areas, with styles; logarithmic axes, tick label formats, subplots with linked axes; heatmaps
   with their colour scale; images (`texture_object`), in a plot or as a widget;
+- a [code editor](editor): highlighting (Fortran, input files, the program's own languages), marks on lines,
+  completion, find and replace, a diff of two texts;
 - pictures: a rectangle of the window saved as a PNG by the program; every frame recorded, with scripted input, for
   documentation;
 - headless testing with synthetic input (`figure_testing`, in the library);

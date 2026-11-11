@@ -13,7 +13,8 @@ module figure
 !< (figure_icons), UTF-8 strings for any label: `ig_button(ICON_PLAY//' Run')`; programs started from the program and
 !< a view of their output (figure_process: `process_object`, `log_view_object`); Fortran procedures run on a worker
 !< thread (figure_task: `task_object`, `task_handle_object`); 3-D views of meshes (figure_view3d: `view3d_object`);
-!< a player for snapshots (figure_player: `player_object`, `ig_player`).
+!< a player for snapshots (figure_player: `player_object`, `ig_player`); a code editor and a text diff (figure_editor:
+!< `code_editor_object`, `language_object`, `code_language`, `code_diff`, `code_diff_lines`).
 use figure_app, only : app_object
 use figure_base, only : figure_last_error, figure_time
 use figure_c_native, only : FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
@@ -120,6 +121,7 @@ use figure_process, only : process_object, log_view_object
 use figure_task, only : task_object, task_handle_object, task_work
 use figure_view3d, only : view3d_object
 use figure_player, only : player_object, ig_player
+use figure_editor, only : code_editor_object, language_object, code_language, code_diff, code_diff_lines
 
 implicit none
 private
@@ -197,6 +199,7 @@ public :: ig_color_edit
 public :: process_object, log_view_object, task_object, task_handle_object, task_work
 public :: view3d_object
 public :: player_object, ig_player
+public :: code_editor_object, language_object, code_language, code_diff, code_diff_lines
 public :: ip_plot_limits, ip_plot_size, ip_setup_axes_limits, ip_begin_subplots, ip_end_subplots
 public :: ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_setup_axis_ticks, ip_setup_axis_constraints
 public :: ip_setup_legend

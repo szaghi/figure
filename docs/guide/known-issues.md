@@ -344,6 +344,23 @@ renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
   camera moves at that rate.
 - **The image has the view's size in logical pixels:** on a display scaled 2x it is magnified.
 
+## The code editor
+
+The [code editor](editor) is ImGuiColorTextEdit (the goossens fork) with FIGURE's glue:
+
+- **Symbols of the fallback font keep their own width.** The editor places each character on a grid of IBM Plex
+  Mono's advance; `ρ`, `∞`, `∇` come from Noto Sans Math, whose glyphs are narrower or wider than the grid, and may
+  touch the next character. The columns after them stay aligned.
+- **Deleting text in a marked line removes its mark** (the fork's rule): mark again after each change, as a validator
+  on `ed%draw`'s result does. Typing in the line keeps it.
+- **A mark per line.** A second mark on a line joins the messages and keeps the gravest severity.
+- **The fork's options not exposed:** word wrap, line folding, the minimap, several cursors made by the program,
+  squiggles under part of a line, a context menu of the program's. They are reached through FIGURE's glue when a
+  program needs one.
+- **FIGURE patches the fork in one line** (`third_party/ImGuiColorTextEdit/patches/`): its marker list, renumbered
+  after a deletion, stored the new numbers in a `bool`, so the third mark and those after it took the second one's
+  colour once any character was deleted.
+
 ## The one-line installer
 
 What [the installer](install#the-one-line-installer) does not cover:

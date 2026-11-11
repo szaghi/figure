@@ -240,7 +240,8 @@ def package_sources() -> list[str]:
     assert spec is not None and spec.loader is not None
     pkg = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(pkg)
-    shipped = {Path(f).name for f in (*pkg.IMGUI_FILES, *pkg.IMPLOT_FILES, *pkg.NATIVE_FILES) if f.endswith(".cpp")}
+    files = (*pkg.IMGUI_FILES, *pkg.IMPLOT_FILES, *pkg.NATIVE_FILES, *pkg.EDITOR_FILES)
+    shipped = {Path(f).name for f in files if f.endswith(".cpp")}
     shipped |= {"cimgui.cpp", "cimplot.cpp", "miniz.c"}
     cmake = (ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
     block = re.search(r"add_library\(figure_native STATIC(.*?)\)\n", cmake, re.S)

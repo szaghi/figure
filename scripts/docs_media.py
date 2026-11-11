@@ -40,6 +40,10 @@ layer's glide replayed), with a ring while a button is held, and, with ``#! keys
 that a viewer sees what was pressed. The poster is the program's frame as it is, without them.
 
 Usage: python3 scripts/docs_media.py [name ...]          (default: every docs/media/*.rec)
+       python3 scripts/docs_media.py --headless [name ...] record them headless instead, with FIGURE's CPU renderer
+                                                         (FIGURE_CAPTURE_HEADLESS=1: no window, no display, no GPU),
+                                                         the pictures --check compares with (#7 S9 records the site
+                                                         this way)
        python3 scripts/docs_media.py --check [name ...]  render each recording headless with FIGURE's CPU renderer
                                                          (FIGURE_CAPTURE_HEADLESS=1: no window, no GPU) and compare
                                                          the poster with the committed one: per channel |d| <= 2, no
@@ -389,8 +393,8 @@ def write_poster(shot: Path, crop: tuple[int, int, int, int], header: dict[str, 
     )
 
 
-def record(name: str) -> None:
-    """Run one recording and write its media."""
+def record(name: str, headless: bool = False) -> None:
+    """Run one recording and write its media; `headless`: drawn by the CPU renderer, no window."""
     header, script = parse(RECS / f"{name}.rec")
     if "remote" in header:
         record_remote(name, header)
@@ -400,7 +404,7 @@ def record(name: str) -> None:
     video = header.get("video", "yes" if frames > 1 else "no") == "yes"
     with tempfile.TemporaryDirectory(prefix="figure-media-") as tmp:
         work = Path(tmp)
-        shots, (x, y, w, h) = capture(name, header, script, work, headless=False)
+        shots, (x, y, w, h) = capture(name, header, script, work, headless=headless)
         write_poster(shots[poster], (x, y, w, h), header, OUT / f"{name}.png")
         if video:
             marks = overlays(script, frames, int(header.get("from", "0")))
@@ -585,6 +589,8 @@ def update(names: list[str]) -> int:
 
 def main(args: list[str]) -> int:
     """Record the given recordings, or all of them; --check compares, --update accepts."""
+    headless = "--headless" in args
+    args = [a for a in args if a != "--headless"]
     mode = args[0] if args and args[0] in ("--check", "--update") else ""
     names = args[1:] if mode else args
     if mode == "--update":
@@ -601,7 +607,7 @@ def main(args: list[str]) -> int:
             if mode == "--check":
                 outcomes[check(name)] += 1
                 continue
-            record(name)
+            record(name, headless)
         except (
             MediaError,
             subprocess.CalledProcessError,

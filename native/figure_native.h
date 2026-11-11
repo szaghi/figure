@@ -516,6 +516,41 @@ void  *fig_window_handle(void);
 int    fig_capture_on(void);
 void   fig_layout_text(const char *text, long long len);
 
+/* The code editor and the text diff (figure_editor.cpp, ImGuiColorTextEdit): editors by handle (from 1); lines and
+ * columns from 1 (columns count characters); a language as figure_editor.F90's packed definition (empty: plain text).
+ * fig_editor_string: what 0 the text, 1 the word at the cursor, 2 the selected text, 3 the completions offered (LF
+ * between them); returns the length, copies up to n bytes. fig_editor_option: 0 read-only, 1 line numbers, 2 tab size,
+ * 3 whitespace shown, 4 the current line highlighted (set 1 writes value, then value is read back). */
+int       fig_editor_create(int *handle);
+void      fig_editor_destroy(int handle);
+int       fig_editor_language(int handle, const char *packed, int packed_len);
+int       fig_editor_set_text(int handle, const char *text, long long len);
+long long fig_editor_string(int handle, int what, char *buf, long long n);
+int       fig_editor_draw(int handle, const char *id, int id_len, double width, double height, int *changed);
+int       fig_editor_mark(int handle, int line, int severity, const char *message, int message_len);
+int       fig_editor_clear_marks(int handle);
+long long fig_editor_mark_of(int handle, int line, int *severity, char *buf, long long n);
+int       fig_editor_goto(int handle, int line, int column, int focus);
+int       fig_editor_find(int handle, const char *text, int len, int case_sensitive, int whole_word, int *found);
+int       fig_editor_replace(int handle, const char *what, int what_len, const char *with, int with_len,
+                             int case_sensitive, int whole_word, int *count);
+int       fig_editor_cursor(int handle, int *line, int *column);
+int       fig_editor_selection(int handle, int *pos, int *has);
+int       fig_editor_select(int handle, int l0, int c0, int l1, int c1);
+int       fig_editor_insert(int handle, const char *text, long long len);
+int       fig_editor_completions(int handle, const char *words, long long len);
+int       fig_editor_completing(int handle, int *active);
+int       fig_editor_option(int handle, int option, int set, int *value);
+int       fig_editor_undo(int handle, int redo, int *done);
+int       fig_editor_info(int handle, int *lines, int *can_undo, int *can_redo);
+int       fig_editor_focus(int handle);
+int       fig_editor_line_rect(int handle, int line, float *rect, int *visible);
+int       fig_code_diff(const char *id, int id_len, const char *left, long long left_len, const char *right,
+                        long long right_len, const char *packed, int packed_len, int side_by_side, double width,
+                        double height);
+int       fig_code_diff_lines(const char *left, long long left_len, const char *right, long long right_len,
+                              int *added, int *n_added, int *removed, int *n_removed, int cap);
+
 #ifdef __cplusplus
 }
 #endif

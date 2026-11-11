@@ -1,0 +1,10 @@
+$ ./cb_editor --test
+opened:
+  line 2: error: reynolds number must be positive
+  line 3: error: unknown key "mach numbr"
+after the fix:
+  line 3: error: unknown key "mach numbr"
+completion offers a key
+line 5: " mach number"
+1 key renamed
+at the end:

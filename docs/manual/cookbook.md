@@ -359,6 +359,44 @@ file in stream access, so line ends stay LF. [Multi-line text](/guide/widgets#mu
 
 Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
 
+### Edit an input file with its errors marked
+
+<<< @/examples/snippets/cb_editor-start.F90{fortran}
+
+<<< @/examples/snippets/cb_editor-validate.F90{fortran}
+
+<<< @/examples/snippets/cb_editor-draw.F90{fortran}
+
+<Media name="cb_editor" video alt="An input file in the code editor. Line 2, reynolds number = -15, and line 3, mach numbr = 0.3, are tinted vermilion with a crossed circle beside their numbers; the pointer rests on line 2 and its tooltip reads error: reynolds number must be positive. A click after the minus sign and a backspace: the value becomes 15 and the mark goes. On the empty line 5, typing mach n opens a popup offering mach number, and tab inserts it." caption="docs/examples/src/cb_editor.F90" />
+
+A `code_editor_object` highlights the file (`code_language('input')`: sections, keys, values, comments) and draws
+line numbers; the program's validator marks each finding on its line, with a tooltip, a tint and an icon by severity.
+`draw` returns `.true.` on the frame the user changed the text: the validator runs then, clears the marks and marks
+what it finds, so a fix removes its mark at once. `set_completions` gives the keys the solver reads: typing the start
+of one offers it, tab inserts it. The same calls run headless as a test, typing the fix and the key:
+
+<<< @/examples/snippets/cb_editor-test.F90{fortran}
+
+<<< @/examples/output/cb_editor.txt{text}
+
+[Code editor](/guide/editor) has the languages, the marks, completion, find and replace.
+
+### Show what changed between two versions of a file
+
+<<< @/examples/snippets/cb_diff-lines.F90{fortran}
+
+<<< @/examples/snippets/cb_diff-draw.F90{fortran}
+
+<Media name="cb_diff" alt="Two versions of an input file side by side: the old reynolds number = 1000 tinted red on the left, the new 5000 green on the right, restart file = RST/r added at the end in green" caption="docs/examples/src/cb_diff.F90" />
+
+`code_diff` draws the two texts side by side (or in one column), the removed lines red and the added ones green,
+compared again only when a text changes; `code_diff_lines` gives the same lines as numbers, without a frame, so a
+task or a test can use them:
+
+<<< @/examples/output/cb_diff.txt{text}
+
+[The diff](/guide/editor#the-diff) has the details.
+
 ### Greek letters and operators in a monospace table
 
 <<< @/examples/snippets/cb_fallback_font-table.F90{fortran}

@@ -1,0 +1,4 @@
+$ ./cb_diff --test
+1 line(s) removed, 2 added
+removed from the old file: 2
+added in the new file: 2 7

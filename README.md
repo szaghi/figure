@@ -77,6 +77,8 @@ gfortran -I lib/mod readme.F90 lib/libfigure.a -L lib $(python3 scripts/check_sy
   capped and compressed when the link is slow.
 - **Pictures**: `app%save_image` writes a plot or a panel as a PNG; every frame can be recorded, with scripted input;
   headless and remote programs draw theirs with FIGURE's CPU renderer, no GPU needed, and tests compare them with goldens.
+- **Code editor**: input files and code highlighted, a validator's findings marked on their lines, the program's keys
+  completed, find and replace, a diff of two versions (ImGuiColorTextEdit, drawn in every mode).
 - **Headless testing**: `app%init_headless` and the `figure_testing` module drive the interface with synthetic input,
   in CI without a display.
 

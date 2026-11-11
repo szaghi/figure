@@ -382,6 +382,16 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   drawn by FIGURE, any number at once (`app%message_box`, polled); `ig_splitter` between two panes; the window's size
   limits (`app%set_size_limits`) ([Windows and layouts](docking#windows-and-layouts),
   [Preferences](frame-loop#preferences), [Message boxes](menus#message-boxes), [Splitters](widgets#splitters)): done.
+- **A code editor** (S5): `code_editor_object`, ImGuiColorTextEdit (the goossens fork, MIT, with dtl, BSD-3)
+  vendored at commit `0a489da` with FIGURE's own glue and one patch of one line (the fork's marker list renumbered
+  into a `bool`). It draws through Dear ImGui only (the same in every mode), in IBM Plex Mono with the fallback
+  symbols and the style's colours. Languages are data (`language_object`: keywords, types, comments, strings,
+  numbers, case, a key = value mode); `code_language` ships Fortran, `key = value` input files, plain text and the
+  fork's thirteen. Marks of three severities with a tint, an icon and a tooltip (`mark`, `mark_of`, `clear_marks`);
+  completion of the program's words, keys of several words included, polled with `completing`; `find`, `replace` in
+  one undo, `goto`, `cursor`, `selection`, `insert`, `word_at_cursor`, `undo`, `redo`, `read_only`; `draw` returns
+  `.true.` when the user changed the text. `code_diff` draws two texts' difference by id, in one column or side by
+  side, and `code_diff_lines` reports the lines added and removed, from a task too ([Code editor](editor)): done.
 
 ## Next
 

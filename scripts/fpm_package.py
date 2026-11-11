@@ -13,6 +13,8 @@ native layer itself, next to the Fortran library:
   its options;
 - ``src/stb/``: ``stb_image.h`` and ``stb_image_write.h``, vendored in the repository (third_party/stb), included by
   figure_image.cpp;
+- ``src/editor/``: ImGuiColorTextEdit (the code editor and the text diff, with dtl), vendored in the repository
+  (third_party/ImGuiColorTextEdit, FIGURE's patch applied), compiled with figure_editor.cpp;
 - the licences of everything copied (``LICENSES/``), and ``fpm.toml``.
 
 SDL3 comes from the system (a package: libsdl3-dev, Homebrew's sdl3, MSYS2's SDL3), found by the compiler and linker
@@ -53,12 +55,13 @@ IMGUI_FILES = [
     "backends/imgui_impl_sdl3.cpp", "backends/imgui_impl_sdl3.h",
     "backends/imgui_impl_opengl3.cpp", "backends/imgui_impl_opengl3.h", "backends/imgui_impl_opengl3_loader.h",
 ]  # fmt: skip
+EDITOR_FILES = ["TextEditor.cpp", "TextEditor.h", "TextEditorLanguages.h", "TextDiff.cpp", "TextDiff.h", "dtl.h"]
 IMPLOT_FILES = ["implot.cpp", "implot_items.cpp", "implot_demo.cpp", "implot.h", "implot_internal.h", "LICENSE"]
 NATIVE_FILES = [
     "figure_native.cpp", "figure_native.h", "figure_process.cpp", "figure_task.cpp", "figure_scope.cpp", "figure_canvas.cpp",
     "figure_files.cpp", "figure_app.cpp",
     "figure_remote.cpp", "figure_image.cpp", "figure_image.h", "figure_items.cpp", "figure_items.h",
-    "figure_swrast.cpp", "figure_swrast.h",
+    "figure_swrast.cpp", "figure_swrast.h", "figure_editor.cpp",
     "figure_colormap.cpp", "figure_field.cpp", "figure_view3d.cpp", "figure_view3d.h",
     "figure_remote.h", "figure_theme.cpp", "figure_theme.h", "figure_style.h", "figure_glue_generated.cpp", "figure_style_generated.cpp",
 ]  # fmt: skip
@@ -120,7 +123,7 @@ include-dir = [{include_dirs}]
 
 INCLUDE_DIRS = [
     "src/native", "src/cimgui", "src/cimgui/imgui", "src/cimgui/imgui/backends", "src/cimplot", "src/cimplot/implot",
-    "src/miniz", "src/stb",
+    "src/miniz", "src/stb", "src/editor",
 ]  # fmt: skip
 
 
@@ -275,6 +278,11 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     (src / "miniz" / "miniz_figure.c").write_text(MINIZ_WRAPPER)
     for f in ("stb_image.h", "stb_image_write.h"):
         copy(ROOT / "third_party" / "stb" / f, src / "stb" / f)
+    cte = ROOT / "third_party" / "ImGuiColorTextEdit"
+    for f in EDITOR_FILES:
+        copy(cte / f, src / "editor" / f)
+    for lang in sorted((cte / "languages").glob("*.h")):  # TextEditor.cpp includes them by relative path
+        copy(lang, src / "editor" / "languages" / lang.name)
     licences = out / "LICENSES"
     copy(ROOT / "LICENSE.mit.md", licences / "figure.md")
     copy(ROOT / "THIRD_PARTY.md", licences / "THIRD_PARTY.md")
@@ -284,6 +292,8 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(cimplot / "LICENSE", licences / "cimplot.txt")
     copy(miniz / "LICENSE", licences / "miniz.txt")
     copy(ROOT / "third_party" / "stb" / "LICENSE-stb.txt", licences / "stb.txt")
+    copy(cte / "LICENSE", licences / "imguicolortextedit.txt")
+    copy(cte / "LICENSE-dtl.txt", licences / "dtl.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexSans.txt", licences / "ibm-plex.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-IBMPlexMono.txt", licences / "ibm-plex-mono.txt")
     copy(ROOT / "third_party" / "fonts" / "LICENSE-Lucide.txt", licences / "lucide.txt")

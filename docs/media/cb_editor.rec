@@ -1,0 +1,17 @@
+#! program build/docs-examples/bin/cb_editor
+#! frames  300
+#! poster  60
+#! keys
+# the marks of an input file: the pointer on line 2 shows its tooltip; a click after the minus of -15 and a backspace
+# fix it (its mark goes); on the empty line 5, "mach n" typed opens the completion popup, tab inserts the key
+0   move 330 160
+10  move 330 70 20
+80  move 221 70 12
+96  down
+98  up
+112 key backspace
+150 move 90 115 20
+174 down
+176 up
+190 text  mach n
+240 key tab
