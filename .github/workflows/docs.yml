@@ -38,6 +38,7 @@ jobs:
       (github.event_name != 'workflow_run' &&
        github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
     runs-on: ubuntu-latest
+    container: ghcr.io/szaghi/fortran-toolchains:gnu-16.2
 
     steps:
 
@@ -47,10 +48,23 @@ jobs:
       with:
         ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-    - name: Setup build environment
-      uses: ./.github/actions/setup-build-env
-      with:
-        extra-pip-packages: formal-ford2vitepress
+    - name: Packages the toolchain image lacks
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ninja-build \
+          libxext-dev \
+          libxrandr-dev \
+          libxcursor-dev \
+          libxi-dev \
+          libxfixes-dev \
+          libxss-dev \
+          libxtst-dev \
+          libwayland-dev \
+          libxkbcommon-dev \
+          libegl-dev \
+          libdbus-1-dev \
+          libdecor-0-dev
 
     - name: Setup Node.js
       uses: actions/setup-node@v4

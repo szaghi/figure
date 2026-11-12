@@ -208,7 +208,13 @@ rule = bash docs/examples/build.sh
 # install.yml is FIGURE's own: its fpm step builds the package published as the tag vX.Y.Z-fpm (fpm.yml), since the
 # repository's fpm.toml needs the native layer built first. scripts/install.sh is FIGURE's own one-line installer
 # (per compiler, the native layer, pkg-config, uninstall; tested by installer.yml), published as a release asset.
+# ci.yml's test and docs.yml's build run in the fortran-toolchains image (gfortran 16.2, the compiler of the local
+# builds); toolchain_packages adds what that image lacks: ninja and SDL3's headers. apt_packages stays for the jobs
+# on the bare runner (install.yml).
 [scaffold]
-apt_packages = cmake ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev
-               libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
-skip         = LICENSE.gpl3.md .github/workflows/install.yml scripts/install.sh
+apt_packages       = cmake ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev
+                     libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
+toolchain_image    = ghcr.io/szaghi/fortran-toolchains:gnu-16.2
+toolchain_packages = ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev
+                     libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
+skip               = LICENSE.gpl3.md .github/workflows/install.yml scripts/install.sh
