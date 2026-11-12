@@ -3,6 +3,8 @@
 #     the docs' version strings, the name map, the media sizes; every example compiled, the headless ones run; every
 #     picture of the site rendered headless by FIGURE's CPU renderer and compared with the committed one (#7 §4.6);
 #   - tsan: ThreadSanitizer on the calls a task may make (quit, request_frames, wake, ...): scripts/tsan_check.sh.
+# Both run in the toolchain image of ci.yml (fobos [scaffold] toolchain_image: gfortran 16.2, the compiler the pictures
+# are rendered with), with the packages it lacks (fobos [scaffold] toolchain_packages, plus ImageMagick).
 name: Checks
 
 on:
@@ -22,14 +24,20 @@ permissions:
 jobs:
   docs:
     runs-on: ubuntu-latest
+    container: ghcr.io/szaghi/fortran-toolchains:gnu-16.2
 
     steps:
 
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Setup build environment
-      uses: ./.github/actions/setup-build-env
+    - name: Packages the toolchain image lacks
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
+          libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev \
+          imagemagick
 
     # the examples link against lib/libfigure_native.a and lib/libSDL3.a (docs/examples/build.sh)
     - name: Native layer
@@ -45,7 +53,6 @@ jobs:
     # build.sh's and the examples mode's (figure_hello, figure_mandelbrot)
     - name: Pictures checked
       run: |
-        command -v convert > /dev/null && command -v identify > /dev/null || sudo apt-get install -y imagemagick
         fobis build --mode examples-gnu
         python3 scripts/docs_media.py --check
 
@@ -61,18 +68,26 @@ jobs:
 
   tsan:
     runs-on: ubuntu-latest
+    # privileged: the address space randomization below is the kernel's, read-only to an unprivileged container
+    container:
+      image: ghcr.io/szaghi/fortran-toolchains:gnu-16.2
+      options: --privileged
 
     steps:
 
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Setup build environment
-      uses: ./.github/actions/setup-build-env
+    - name: Packages the toolchain image lacks
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
+          libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
 
     # ThreadSanitizer's shadow memory does not fit the randomized layout of the runners' kernels (32 bits)
     - name: Narrow address space randomization
-      run: sudo sysctl vm.mmap_rnd_bits=28
+      run: echo 28 > /proc/sys/vm/mmap_rnd_bits
 
     - name: ThreadSanitizer check
-      run: CC=gcc CXX=g++-14 scripts/tsan_check.sh
+      run: CC=gcc CXX=g++ scripts/tsan_check.sh
