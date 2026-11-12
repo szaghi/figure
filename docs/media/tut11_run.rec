@@ -3,9 +3,6 @@
 #! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
 #! frames  330
 #! poster  300
-# --check: the plotted values depend on the compiler (on CI's gfortran 14.3, against the recording's 16.2,
-# 27 pixel(s) differed by more than 2; measured 2026-11-11): 81 allowed, the threshold unchanged
-#! check   max_failed=81
 # Run: the solver's lines fill the log, the residual plot grows on a logarithmic axis, the status bar shows the
 # iteration and the progress towards the tolerance; at the end a notification says the solver converged
 # (the solver runs in real time while the frames are drawn at the capture's pace: the video's timing depends on the

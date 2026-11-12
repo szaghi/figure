@@ -188,9 +188,10 @@ there. `#! fresh /tmp/<folder>` removes a folder before the program starts, so t
 `--examples /tmp/figure-studio`) does not depend on the recordings run before it. A failure writes `docs/public/media/<name>.new.png` and `<name>.diff.png` (failed pixels red, those within the
 tolerance dark red, masked ones blue); `--update` makes each `.new.png` the poster. Remote recordings are not checked.
 
-**In CI:** the Checks workflow runs `--check` on every push, on ubuntu-latest, after the examples are built; on a
-failure it keeps the `.new.png` and `.diff.png` pictures as an artifact. A change that changes a picture is committed
-with the new poster (`--update`, after looking at the `.new.png`), and its commit says why.
+**In CI:** the Checks workflow runs `--check` on every push, in the toolchain image of `ci.yml` (gfortran 16.2, the
+compiler the recordings are made with), after the examples are built; on a failure it keeps the `.new.png` and
+`.diff.png` pictures as an artifact. A change that changes a picture is committed with the new poster (`--update`, after
+looking at the `.new.png`), and its commit says why.
 
 **Recordings of programs that work by the clock.** A recording whose program runs a process or a task (the solver of
 the tutorial, a file read in the background) waits for its result before the poster frame: the script leaves the

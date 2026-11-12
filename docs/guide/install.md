@@ -331,7 +331,7 @@ with fpm, builds the examples and builds FIGURE as an fpm dependency (`scripts/f
 
 | Platform | Fortran | C/C++ | fobos varset | A real window |
 |---|---|---|---|---|
-| Linux (Ubuntu) | gfortran (`ci.yml`), nvfortran 26.9, Intel ifx 2026.1 | g++ | `linux` (default) | Xvfb, Mesa's OpenGL (nvfortran job) |
+| Linux (Ubuntu) | gfortran 16.2 (`ci.yml`, the fortran-toolchains image), nvfortran 26.9, Intel ifx 2026.1 | g++ | `linux` (default) | Xvfb, Mesa's OpenGL (nvfortran job) |
 | macOS (arm64) | gfortran 14 (Homebrew) | Apple clang | `macos` | the runner's display |
 | Windows (MSYS2 UCRT64) | gfortran | g++ | `windows` | the runner's display, Mesa's software OpenGL |
 
