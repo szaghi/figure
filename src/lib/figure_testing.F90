@@ -688,9 +688,9 @@ contains
 
    subroutine test_record_items(on, stat)
    !< Record the items of each frame, for the procedures that find an item by its path, from the next frame on (or
-   !< stop). On from `app%init_headless`; in window and remote modes from the first call of a path procedure (that
-   !< call finds nothing yet) or of this one. Recording costs a little per item and frame (testing.md, "Finding items
-   !< by path"); stopping it gives that back.
+   !< stop). On by default in every mode, from the first frame; called before `app%init*`, its choice holds from the
+   !< first frame. Recording costs a little per item and frame (testing.md, "Finding items by path"); stopping it gives
+   !< that back.
    logical,        intent(in)            :: on   !< Record.
    integer(int32), intent(out), optional :: stat !< Status.
 

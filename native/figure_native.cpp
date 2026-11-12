@@ -798,7 +798,7 @@ void create_contexts() {
    if (ImFont *f = get_font("plex-sans", err)) io.FontDefault = f;
    ImGui::GetStyle().FontSizeBase = DEFAULT_FONT_SIZE;
    st.font = "plex-sans";
-   figure_items::reset(); // no item recorded yet; recording as test_record_items last asked (off by default)
+   figure_items::reset(); // no item recorded yet; recording as test_record_items last asked (on by default)
 }
 
 void destroy_contexts() {
@@ -2169,7 +2169,6 @@ int fig_init_headless(int width, int height) {
    if (st.m != mode::none) return fail(FIG_ERR_STATE, "figure is already initialized");
    if (width <= 0 || height <= 0) return fail(FIG_ERR_ARGUMENT, "display size must be positive");
    create_contexts();
-   ImGui::GetCurrentContext()->TestEngineHookItems = true; // headless programs are tests: items found by path at once
    ImGuiIO &io = ImGui::GetIO();
    io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;

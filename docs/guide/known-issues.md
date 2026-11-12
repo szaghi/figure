@@ -99,9 +99,9 @@ and decodes a JPEG cut short with the missing part filled in, so a file that dec
 
 A path names items that have an id: text, separators, progress bars, images and plot items are not items, and are
 found only through a widget with a label. Items with the same label in one id scope share one id (an id conflict,
-`test_id_conflicts`): no path tells them apart, give them `##` ids. In window and remote modes the items are recorded
-from the first path call or `test_record_items(.true.)` on, so that first call finds nothing. A value is read from the
-glyphs drawn: a character cut by a clip rectangle is not read ([Finding items by path](testing#finding-items-by-path)).
+`test_id_conflicts`): no path tells them apart, give them `##` ids. The items are recorded in every mode from the
+first frame (since v0.6.0; v0.5.0 recorded window and remote programs only from their first path call, which found
+nothing); `test_record_items(.false.)` stops it. A value is read from the glyphs drawn: a character cut by a clip rectangle is not read ([Finding items by path](testing#finding-items-by-path)).
 
 ## Preferences and the window's place
 

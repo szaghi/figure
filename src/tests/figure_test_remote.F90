@@ -8,12 +8,14 @@ program figure_test_remote
 !< resize event, the skipping of unchanged frames and the frame-rate cap, the clipboard message, and an image updated
 !< in consecutive frames (12 frames, once the client holds A down) arriving as JPEG, then exact once it stops; this
 !< program checks that the click arrived once, that the browser's paste reached its clipboard (it answers with a copy,
-!< which the client checks), and the client's verdict. Needs python3 (3.11+) on the PATH; run from the repository
+!< which the client checks), that the program's first path call finds the button (items recorded from the first frame
+!< in every mode), and the client's verdict. Needs python3 (3.11+) on the PATH; run from the repository
 !< root, as scripts/run_tests.sh does.
 use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, real64
 use figure, only : app_object, ig_begin, ig_button, ig_end, ig_get_clipboard, ig_image, ig_item_rect, ig_set_clipboard, &
                    ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, texture_object, figure_time
 use figure_cimgui, only : igIsKeyDown_Nil
+use figure_testing, only : test_item_exists
 use figure_cimgui_enums, only : ImGuiKey_A, ImGuiKey_Z
 
 implicit none
@@ -33,7 +35,8 @@ real(real64)                :: x1                                       !< Butto
 real(real64)                :: y1                                       !< Button rectangle, bottom [pixels].
 logical                     :: written                                  !< The click point is written.
 logical                     :: exists                                   !< A file exists.
-logical                     :: test_passed(4)                           !< Per-check outcome.
+logical                     :: test_passed(5)                           !< Per-check outcome.
+logical                     :: found_first                              !< The first path call found the button.
 logical                     :: pasted                                   !< The browser's paste reached the clipboard.
 character(len=*), parameter :: PASTE = 'pasted in the browser '//char(195)//char(169) !< As scripts/remote_client.py.
 character(len=256)          :: verdict                                  !< The client's verdict.
@@ -63,6 +66,7 @@ clicks = 0_int32
 frames = 0_int32
 written = .false.
 test_passed = .false.
+found_first = .false.
 verdict = 'no verdict'
 call app%init_remote(port=0_int32, port_used=port, quiet=.true., compress='always', url=url, stat=stat) ! deflate all
 token = url(index(url, '?token=') + 7:)                                 ! the random token, 32 hex digits
@@ -91,6 +95,8 @@ if (test_passed(1)) then
          call ig_item_rect(x0, y0, x1, y1)
       endif
       call ig_end()
+      ! the program's first path call, in remote mode: the items are recorded from the first frame (v0.6.0)
+      if (frames == 2_int32) found_first = test_item_exists('Remote/Hit me through the network')
       if (.not. pasted) then ! the client's paste: answered with a copy, which goes back to the page
          if (ig_get_clipboard() == PASTE) then
             pasted = .true.
@@ -155,10 +161,11 @@ endif
 test_passed(2) = clicks == 1_int32         ! the network click reached the button, once
 test_passed(3) = trim(verdict) == 'ok'     ! the client's protocol checks passed
 test_passed(4) = pasted                    ! the browser's paste reached the program's clipboard
+test_passed(5) = found_first               ! the first path call found the button: recorded from frame 1
 call remove_file(CLICK_FILE)
 call remove_file(OK_FILE)
 
-write(output_unit, '(A,4L2)') 'figure_test_remote checks:', test_passed
+write(output_unit, '(A,5L2)') 'figure_test_remote checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,I0,A,I0,A,I0,A)') 'port ', port, ', frames ', frames, ', clicks ', clicks, &

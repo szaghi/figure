@@ -130,7 +130,7 @@ text it shows. The procedures read the last frame drawn.
 | `test_item_checked(path [, stat])` → `logical` | a checkbox, a menu item with a check mark, a selectable in a menu: checked in the last frame |
 | `test_item_value(path, text [, shown] [, stat])` → `logical` | true when the item showed `text` as its value: the text drawn inside its rectangle, its label taken out (a field's text, a slider's number as its format writes it, a combo's choice), blanks collapsed; `shown` gives what it showed |
 | `test_menu_click(path [, stat])` | queues a click through a menu path: the first menu now, each following level once its menu has opened, over the next frames; a menu already open is pointed at, not clicked again |
-| `test_record_items(on [, stat])` | records the items of each frame from the next frame on, or stops |
+| `test_record_items(on [, stat])` | records the items of each frame from the next frame on (the default, in every mode), or stops |
 
 (Dear ImGui's test engine has the like as `ItemExists`, `ItemClick`, `ItemInputValue` and `MenuClick`, run from a
 test coroutine; FIGURE's queue input that the program's own frame loop then draws, as every `test_*` procedure.)
@@ -178,9 +178,14 @@ level that does not appear within 20 frames ends the queued input, and the next 
 `test_item_exists` fails only for a malformed path; `test_item_rect` returns `.false.` for a missing path and fails for
 several items.
 
-**Recording.** On from `app%init_headless`. In window and remote modes it starts with the first call of a path
-procedure, which finds nothing yet (the frame it reads was not recorded), or with `test_record_items(.true.)` before
-the frames. Recording costs about 0.02 µs per item and frame (1000 buttons, headless, gfortran -O2: 92 µs a frame
+::: warning Changed in v0.6.0
+The items are recorded in every mode from the first frame. v0.5.0 recorded window and remote programs only from their
+first path call, which found nothing; the first call now finds the items of the last frame.
+:::
+
+**Recording.** On in every mode from the first frame (since v0.6.0; v0.5.0 started it in window and remote modes
+with the first path call, which found nothing). `test_record_items(.false.)` stops it, before `app%init*` from the
+first frame; `test_record_items(.true.)` starts it again. Recording costs about 0.02 µs per item and frame (1000 buttons, headless, gfortran -O2: 92 µs a frame
 without, 113 µs with; `figure_test_paths` measures it); a program that never records pays one test of a boolean per
 item, the hooks being off (measured against a native layer built without the hooks: 1 to 2 µs a frame for the same
 1000 buttons, within the run-to-run spread). Dear ImGui's behaviour does not change with recording: the hooks only read.

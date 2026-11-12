@@ -15,6 +15,7 @@ What a program written for v0.5.0 meets in v0.6.0, with a link to the section th
 | Change | What to do |
 |---|---|
 | [Tables](widgets#tables): FIGURE patches Dear ImGui's 0 / 0 in a `SizingStretchProp` table's first frame (ocornut/imgui#8718); the columns start equal there. A program built with `-ffpe-trap=invalid` no longer stops at its own such table, and Markdown is drawn with the traps as the program set them (v0.5.0 held them) | nothing to change; a program that held the traps itself around such a table can stop doing so |
+| [Finding items by path](testing#finding-items-by-path): the items are recorded in every mode from the first frame; v0.5.0 recorded window and remote programs only from their first path call, which found nothing | nothing; a program that called `test_record_items(.true.)` for that first call can drop it. A window program that never finds items by path pays about 0.02 µs per item and frame; `test_record_items(.false.)` before `app%init` gives it back |
 
 ## Migration to v0.5.0
 

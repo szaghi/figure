@@ -73,7 +73,7 @@ struct table_t {
 };
 
 table_t building, last;
-bool    want_recording = false; // asked before a context existed
+bool    want_recording = true;  // on in every mode from the first frame (v0.6.0); test_record_items asks otherwise
 
 // ItemInfo before its ItemAdd (a tab registers its label first): applied when the item is added.
 struct pending_t {
