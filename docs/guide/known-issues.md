@@ -21,24 +21,34 @@ trailing blanks included: pass `trim(...)` of a fixed-length buffer.
 A local variable named `size` in one procedure and the intrinsic `size()` called in another procedure of the same
 module make nvfortran 26.9 fail with "ILM file: can't find intrinsic size" (an internal compiler error). The code is
 legal Fortran. FIGURE names such locals `extent`; avoid naming a local `size` in modules of your own built with
-nvfortran 26.9 if you hit the same error.
+nvfortran 26.9 if you hit the same error. **Checked 2026-11-12:** a minimal module of that shape compiles with nvfortran
+26.9, so the trigger is not reduced yet. No canary: the defect is a build failure, which a test cannot report.
 
 ## nvfortran: `-Munixlogical`
 
 FIGURE's nvfortran modes compile and link with `-Munixlogical`, so that `.true.` passed to C is 1, the value of a C
 `bool` (nvfortran's default is -1); the counterpart of ifx's `-fpscomp logicals`. Measured with nvfortran 26.9:
 
-- **Compile and link with it, or neither:** besides the logical values of the code it compiles, the option selects
+- **Compile and link with it, or neither** (#4, N1; no canary: the defect is in how a program is built, which a test
+  built one way cannot see): besides the logical values of the code it compiles, the option selects
   at the link the run-time library's own (it adds `f90alt.o`). Code compiled with it but linked without it, or the
   reverse, gets `select type` wrong: no `type is` matches, while `same_type_as` says the type is the same. fobos
   passes it to both (`$CNVF` and the nvfortran modes' `lflags`); fpm passes `--flag` to both.
 - **A program of yours** need not use it: FIGURE built with it works in a program compiled and linked without it
   (each side reads the other's `.true.` as true). If you use it, use it for the whole program, at the link too.
 - **`execute_command_line(..., wait=.true.)`** in code compiled with it does not wait: the command runs
-  asynchronously. Leave `wait` out (waiting is its default).
+  asynchronously. Leave `wait` out (waiting is its default). Checked 2026-11-12 (nvfortran 26.9), and by the canary
+  [`figure_test_canaries`](testing#canaries) on every nvfortran run of the tests.
 - **fpm:** `--flag` replaces fpm's own nvfortran flags, `-Mbackslash` among them: pass
   `--flag "-Mbackslash -Munixlogical -mp"` (`-mp` for [tasks](#tasks)), as in
   [Installation](install#the-fortran-library-with-fpm).
+
+## nvfortran: `char(i)` of a variable
+
+`g = char(i)`, with `i` a variable and `g` a deferred-length string, gives `g` the length `i` with nvfortran 26.9 (`len(g)`
+is 206 for `i = 206`), where the standard gives 1; `char(206)` with a constant is right. gfortran 16.2 and ifx 2026.2
+give 1. FIGURE's UTF-8 helpers build the character in a fixed-length buffer (`utf8` in `docs/examples/src/gallery.F90`
+and `src/tests/figure_test_text.F90`). Checked 2026-11-12; canary: [`figure_test_canaries`](testing#canaries).
 
 ## nvfortran: `system_clock` is the wall clock
 
@@ -55,7 +65,9 @@ A section of a deferred-length allocatable character array (`character(len=:), a
 `ip_colormap_names` returns), passed to an assumed-shape dummy argument, arrives from the array's first element:
 `call show(names(3:4))` sees `names(1:2)`. Seen with gfortran 15.2 and 16.2, at every optimisation level. nvfortran
 26.9 passes a contiguous section right but not a strided one: `names(2:6:2)` arrives as blank strings. Both
-compilers pass a section of a fixed-length array right. Copy the section into a fixed-length array first
+compilers pass a section of a fixed-length array right (checked 2026-11-12: gfortran 16.2 still wrong; nvfortran 26.9
+right for `names(3:4)`, a segmentation fault for `names(2:4:2)` at `-O0`; ifx 2026.2 right; canary:
+[`figure_test_canaries`](testing#canaries), #4 Bug A). Copy the section into a fixed-length array first
 (`own = names(k:k + 15)`, as `docs/examples/src/gallery.F90` does), or pass the elements one by one: this holds for
 every `items` argument (`ig_combo`, `ig_list_box`).
 
@@ -66,14 +78,25 @@ An array constructor with a type-spec whose values are deferred-length character
 memory and written past its end: the program crashes later, in an unrelated allocation (`corrupted size vs.
 prev_size`). Seen with gfortran 16.2 (valgrind reports the write in the constructor). The arguments of
 `process_object%start` are the usual victim: fill a fixed-length array element by element instead, as
-`docs/examples/src/tut11_run.F90` does.
+`docs/examples/src/tut11_run.F90` does. Checked 2026-11-12: gfortran 16.2 still aborts (`malloc(): corrupted top
+size`); nvfortran 26.9 and ifx 2026.2 are right. Canary: [`figure_test_canaries`](testing#canaries), which runs
+the case in a child process (#4 Bug B).
+
+## gfortran: a component passed to a `bind(C)` assumed-shape dummy
+
+A component of an allocatable array of derived type (`runs%cl`), passed to a `bind(C)` procedure's assumed-shape dummy
+(a C descriptor), corrupts the caller's array descriptor with gfortran 15.2 and 16.2 (#4, Bug C). FIGURE is not
+affected: its calls pass no such dummies, and its raw bindings are internal. A program that writes its own `bind(C)`
+interfaces beside FIGURE's, with assumed-shape dummies, should pass a contiguous copy of such a component. No canary:
+FIGURE has no workaround to remove.
 
 ## Strided plot data copied by the compiler
 
 The plot items read strided arrays in place ([Data in place](plots#data-in-place)), but a compiler may copy a
-non-contiguous actual argument into a temporary before the call, at every call: gfortran 16.2 does it for a component
-of an array of derived types (`runs%cl`), nvfortran 26.9 for every strided section (`a(::2)`, `a(i, :)`, `runs%cl`);
-ifx 2025.3 passes both in place. The plot is the same; the copy costs time (at a million points, `runs%t` and
+non-contiguous actual argument into a temporary before the call, at every call. The items' array dummies are
+`asynchronous` (v0.5.0): gfortran 16.2 and nvfortran 26.9 then pass strided sections (`a(::2)`, `a(i, :)`) in place and
+copy a component of an array of derived types (`runs%cl`); ifx 2026.2 passes both in place (measured 2026-11-12;
+`figure_test_plot_data` checks it on every compiler of the tests). The plot is the same; the copy costs time (at a million points, `runs%t` and
 `runs%cl` add about 55 % to the item with gfortran). Workarounds: `ip_line(label, y, row)` reads a row of a matrix in
 place on every compiler; series stored as columns or contiguous arrays are never copied; a buffer the program fills
 once per update and reuses avoids the allocation of the compiler's temporaries.

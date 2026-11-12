@@ -305,3 +305,23 @@ scripts/fpm.sh test
 ```
 
 It passes with gfortran 16.2 (release and debug), nvfortran 26.9 and fpm.
+
+### Canaries
+
+FIGURE works around a few compiler defects ([Known issues](known-issues), szaghi/figure#4). A **canary** is a test
+that passes while the defect is there and fails when it is gone, naming the workaround to remove, so that a workaround
+does not outlive its reason. `src/tests/figure_test_canaries.F90` holds them, and `scripts/run_tests.sh` runs it with
+the other tests on every compiler. Each canary states the defect, the compilers it was seen on and the workaround:
+
+| Line | Meaning | Test |
+|---|---|---|
+| `still needed:` | the defect is there, on a compiler it was seen on | passes |
+| `fixed: remove <workaround>` | a compiler it was seen on no longer has it | fails |
+| `new on this compiler:` | another compiler has it too | fails |
+| `not affected:` | neither | passes |
+
+To add one: a function that runs the defect's smallest case and returns `.true.` when the result is wrong, and a
+`report` call with the defect, the compilers (`gfortran`, `nvfortran`, `ifx`, from `compiler_version()`) and the
+workaround with its file. A case that crashes or corrupts memory runs in a child process: the program calls itself
+with an argument (`--probe-ctor` for Bug B) and reads the child's exit status. A defect a test cannot see (a build
+failure, a flag missing at the link) gets no canary: its note in Known issues says why.
