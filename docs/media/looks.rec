@@ -2,4 +2,8 @@
 #! args    looks
 #! from    10
 #! frames  1
+# --check: the plotted values depend on the host, not the compiler (the same pixels on CI with gfortran 14.3 and
+# 16.2, none here; likely libm's results, by glibc version or CPU): on CI 1 pixel(s) over 2, measured
+# 2026-11-12; 8 allowed, the threshold unchanged
+#! check   max_failed=8
 # the four looks side by side, in the palette seal
