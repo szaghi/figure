@@ -9,9 +9,12 @@ program figure_test_tables
 !< click descending, and frames without a click ask nothing. A column declared hidden draws nothing until the program
 !< shows it. A row colour and a cell colour drawn in the extent of their row and cell. A tree node spanning all
 !< columns: its row is as wide as the table and a click in its last column chooses it. The column under the pointer.
-!< Usage errors and wrong arguments refused with their status; no frame has a usage error otherwise.
+!< Usage errors and wrong arguments refused with their status; no frame has a usage error otherwise. A table sized in
+!< proportion to its content (`ImGuiTableFlags_SizingStretchProp`) from its first frame, with the floating-point traps
+!< of the debug build on: Dear ImGui divided 0 by 0 there (ocornut/imgui#8718), FIGURE's patch guards the division.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
-use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_end,        &
+use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, ImGuiTableFlags_SizingStretchProp, app_object,           &
+                   figure_last_error, ig_begin, ig_end,                                                              &
                    ig_begin_table, ig_end_table, ig_item_rect, ig_set_next_window, ig_table_column_enabled,        &
                    ig_table_headers_row, ig_table_hovered_column, ig_table_next_column, ig_table_next_row,       &
                    ig_table_row_color, ig_table_setup_column, ig_table_sort, ig_text, ig_text_colored, ig_tree_node, &
@@ -26,7 +29,7 @@ real(real64),   parameter :: ROW_COLOR(4) = [0.90_real64, 0.10_real64, 0.20_real
 real(real64),   parameter :: CELL_COLOR(4) = [0.10_real64, 0.80_real64, 0.30_real64, 1.0_real64] !< A cell's colour.
 type(app_object)          :: app              !< Application.
 type(list_clipper_object) :: clip             !< Rows in view.
-logical                   :: ok(16)           !< Per-check outcome.
+logical                   :: ok(17)           !< Per-check outcome.
 real(real64)              :: header(4)        !< Rectangle of the last header drawn [pixels].
 real(real64)              :: header_y0        !< Top of the header before the wheel.
 real(real64)              :: value_x          !< Centre of column 2 [pixels].
@@ -48,6 +51,7 @@ logical                   :: desc             !< Descending.
 logical                   :: clicked          !< The tree node was clicked.
 logical                   :: tree_open        !< The tree node is open.
 logical                   :: header_still     !< The header kept its place while the rows scrolled.
+integer(int32)            :: prop_frames      !< Frames the proportional table was drawn in.
 integer(int32)            :: first_row        !< First row drawn this frame.
 integer(int32)            :: col              !< Sort column.
 integer(int32)            :: sorts            !< Frames on which a new order was asked.
@@ -74,6 +78,7 @@ note_after = .false.
 hovered = -1_int32
 hovered_away = -1_int32
 value_x = 0.0_real64
+prop_frames = 0_int32
 st = -1_int32
 allocate(character(len=160) :: msg(10))
 msg(:) = '' ! a section: a whole-array assignment would reallocate msg to the length of '' (0)
@@ -119,6 +124,16 @@ do f = 1_int32, 70_int32
          if (f < 30_int32 .and. note_found) note_before = .true.
          if (f > 32_int32 .and. note_found) note_after = .true.
          call ig_end_table()
+      endif
+      ! columns sized in proportion to their content, from the first frame (the 0/0 of ocornut/imgui#8718)
+      if (ig_begin_table('proportional', 2_int32, flags=ImGuiTableFlags_SizingStretchProp)) then
+         call ig_table_next_row()
+         call ig_table_next_column()
+         call ig_text('a short cell')
+         call ig_table_next_column()
+         call ig_text('a longer cell, so the columns differ')
+         call ig_end_table()
+         prop_frames = prop_frames + 1_int32
       endif
       ! a hierarchy with values in columns
       if (ig_begin_table('tree', 3_int32)) then
@@ -249,6 +264,7 @@ ok(14) = all(st([4, 5, 7, 8, 10]) == int(FIG_ERR_ARGUMENT, int32)) .and.        
          msg(8) == 'ig_table_setup_column: give width or stretch, not both'
 ok(15) = errors == 0_int32                                    ! no usage error kept for a frame
 ok(16) = value_x > 0.0_real64 .and. header_y0 > 0.0_real64    ! the geometry was read
+ok(17) = prop_frames == f - 1_int32                            ! the proportional table, every frame, no trap
 
 write(output_unit, '(A,*(L2))') 'figure_test_tables checks:', ok
 if (.not. all(ok)) then

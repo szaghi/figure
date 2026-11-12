@@ -28,7 +28,6 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
-#include <cfenv>
 #include <cstdio>
 #include <cstring>
 #include <map>
@@ -161,18 +160,6 @@ int ensure() {
    return FIG_OK;
 }
 
-// Floating-point traps held while a Markdown text is drawn, restored after (with the flags as they were): Dear ImGui
-// divides 0 by 0 in the first frame of a table sized in proportion to its content (ImGuiTableFlags_SizingStretchProp,
-// imgui_rich_md's tables: TableUpdateLayout, the columns' widths still unknown), a NaN weight it computes again in the
-// next frame. A program built with -ffpe-trap=invalid (gfortran) would stop there.
-struct traps_held {
-   std::fenv_t env;
-   traps_held() { std::feholdexcept(&env); }
-   ~traps_held() { std::fesetenv(&env); }
-   traps_held(const traps_held &) = delete;
-   traps_held &operator=(const traps_held &) = delete;
-};
-
 // A draw is possible: a frame open, the context made.
 int ready(const char *what) {
    if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
@@ -225,7 +212,6 @@ int fig_markdown(const char *text, long long len, int *clicked) {
    const int s = ready("ig_markdown");
    if (s != FIG_OK) return s;
    link_clicked = false;
-   const traps_held held;
    RichMd::RenderRaw(str(text, len));
    *clicked = link_clicked ? 1 : 0;
    link_clicked = false;
@@ -352,7 +338,6 @@ int fig_markdown_view_draw(int handle, const char *id, int id_len, double width,
       }
    }
    link_clicked = false;
-   const traps_held held;
    RichMd::BeginDocument(label.c_str(), ImVec2(static_cast<float>(width), static_cast<float>(height)), v->options);
    RichMd::RenderRaw(v->text);
    RichMd::EndDocument();

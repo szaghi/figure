@@ -8,6 +8,14 @@ Every release, and what is done since the last one (Unreleased). The state of th
 The list is generated from the commit messages by git-cliff (`git cliff -o CHANGELOG.md`; `scripts/release.sh`
 regenerates it for each release).
 
+## Migration to v0.6.0
+
+What a program written for v0.5.0 meets in v0.6.0, with a link to the section that has the details.
+
+| Change | What to do |
+|---|---|
+| [Tables](widgets#tables): FIGURE patches Dear ImGui's 0 / 0 in a `SizingStretchProp` table's first frame (ocornut/imgui#8718); the columns start equal there. A program built with `-ffpe-trap=invalid` no longer stops at its own such table, and Markdown is drawn with the traps as the program set them (v0.5.0 held them) | nothing to change; a program that held the traps itself around such a table can stop doing so |
+
 ## Migration to v0.5.0
 
 What a program written for v0.4.0 meets in v0.5.0, with a link to the section that has the details.

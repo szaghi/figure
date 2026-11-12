@@ -8,7 +8,7 @@ native layer itself, next to the Fortran library:
   the themes, the colormaps and the font, embedded) written here by the same rules;
 - ``src/cimgui/`` (with ``imgui/``), ``src/cimplot/`` (with ``implot/``), ``src/cimplot3d/``, ``src/miniz/``: the pinned
   third-party sources, copied from CMake's fetched tree (build/native/_deps, so run scripts/build_native.sh first), only the files FIGURE
-  compiles; Dear ImGui's ``imconfig.h`` carries the three settings CMake passes as definitions and its
+  compiles, Dear ImGui with FIGURE's one-line patches (native/patches/imgui-*.patch, as native/CMakeLists.txt applies them); Dear ImGui's ``imconfig.h`` carries the three settings CMake passes as definitions and its
   ``-ffp-contract=off`` as pragmas, so no compiler flag is needed; miniz is compiled through a small wrapper that sets
   its options;
 - ``src/stb/``: ``stb_image.h`` and ``stb_image_write.h``, vendored in the repository (third_party/stb), included by
@@ -154,6 +154,25 @@ def copy(src: Path, dst: Path) -> None:
     shutil.copyfile(src, dst)
 
 
+IMGUI_PATCHES = sorted((ROOT / "native" / "patches").glob("imgui-*.patch"))  # as native/CMakeLists.txt applies them
+
+
+def patch_line(folder: Path, patch: Path) -> None:
+    """Apply a one-line patch of native/patches (figure_patch_line of native/CMakeLists.txt) to the file of *folder*
+    its ``--- a/<file>`` header names: its removed line replaced by its added one; refused when the line is not in the
+    file (upstream changed it)."""
+    lines = patch.read_text().replace("\r", "").splitlines()
+    path = folder / next(ln for ln in lines if ln.startswith("--- a/"))[6:]
+    old = next(ln[1:] for ln in lines if ln.startswith("-") and not ln.startswith("---"))
+    new = next(ln[1:] for ln in lines if ln.startswith("+") and not ln.startswith("+++"))
+    text = path.read_text()
+    if old not in text:
+        msg = (f"fpm_package: {patch.relative_to(ROOT)} does not apply to {path.name}: its line changed upstream; "
+               "check the patch against its upstream issue (THIRD_PARTY.md), then update or remove it")
+        raise SystemExit(msg)
+    path.write_text(text.replace(old, new))
+
+
 def pins() -> dict[str, str]:
     """The third-party pins of native/CMakeLists.txt: cimgui, cimplot and cimplot3d tags, miniz URL and SHA-256."""
     cmake = (ROOT / "native" / "CMakeLists.txt").read_text()
@@ -295,6 +314,8 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(cimgui / "cimgui.h", src / "cimgui" / "cimgui.h")
     for f in IMGUI_FILES:
         copy(cimgui / "imgui" / f, src / "cimgui" / "imgui" / f)
+    for patch in IMGUI_PATCHES:  # FIGURE's patches to the fetched Dear ImGui
+        patch_line(src / "cimgui" / "imgui", patch)
     with (src / "cimgui" / "imgui" / "imconfig.h").open("a") as h:
         h.write(IMCONFIG_ADDITION)
     cimplot = deps / "cimplot-src"

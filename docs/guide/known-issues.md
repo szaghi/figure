@@ -442,8 +442,11 @@ The [3-D plots](plots#_3-d-plots) are ImPlot3D's, which draws every primitive as
 - **The table of contents lists the headings of levels 1 to 3;** deeper ones are reached by scrolling, and by the
   search.
 - **A table sized by its content** (`SizingStretchProp`, imgui_rich_md's tables) computes 0 / 0 in Dear ImGui on its first
-  frame, before its columns have widths: FIGURE holds the floating-point traps while Markdown is drawn, so a program
-  built with `-ffpe-trap=invalid` does not stop there.
+  frame, before its columns have widths ([ocornut/imgui#8718](https://github.com/ocornut/imgui/issues/8718), open).
+  FIGURE patches that line (`native/patches/imgui-0001-stretch-weight-zero-sum.patch`, [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)):
+  each column then starts with the same weight, and a program built with `-ffpe-trap=invalid` does not stop, in
+  Markdown or in its own `ig_begin_table(..., flags=ImGuiTableFlags_SizingStretchProp)`. Since v0.6.0; v0.5.0 held the
+  traps while Markdown was drawn, and a program's own table stopped.
 - **FIGURE patches imgui_rich_md** in one line (`third_party/imgui_rich_md/patches/0001-figure-stb-image.patch`): its
   images are decoded by FIGURE's copy of stb_image, not by a second one of its own.
 

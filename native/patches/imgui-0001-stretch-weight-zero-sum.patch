@@ -1,0 +1,11 @@
+--- a/imgui_tables.cpp
++++ b/imgui_tables.cpp
+@@ -1055,7 +1055,7 @@
+                 if (column->InitStretchWeightOrWidth > 0.0f)
+                     column->StretchWeight = column->InitStretchWeightOrWidth;
+                 else if (table_sizing_policy == ImGuiTableFlags_SizingStretchProp)
+-                    column->StretchWeight = (column->WidthAuto / stretch_sum_width_auto) * count_stretch;
++                    column->StretchWeight = (stretch_sum_width_auto > 0.0f) ? (column->WidthAuto / stretch_sum_width_auto) * count_stretch : 1.0f;
+                 else
+                     column->StretchWeight = 1.0f;
+             }

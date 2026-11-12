@@ -12,7 +12,7 @@ compatible with FIGURE's. The native build installs each licence file under `sha
 
 | Project | Version (pinned in `native/CMakeLists.txt`) | Licence | Copyright | In FIGURE |
 |---|---|---|---|---|
-| [Dear ImGui](https://github.com/ocornut/imgui) | 1.93.1 WIP, docking branch, through cimgui `1.93.1WIPdock` | MIT | Omar Cornut | widgets, windows, the OpenGL 3 and SDL3 backends |
+| [Dear ImGui](https://github.com/ocornut/imgui) | 1.93.1 WIP, docking branch, through cimgui `1.93.1WIPdock`, fetched unmodified but for FIGURE's one patch of one line (`native/patches/imgui-0001-stretch-weight-zero-sum.patch`, [ocornut/imgui#8718](https://github.com/ocornut/imgui/issues/8718): no 0 / 0 in a `SizingStretchProp` table's first frame), applied by `native/CMakeLists.txt` to a copy in the build directory and by `scripts/fpm_package.py` to the fpm package; a patch whose line changed upstream stops the build | MIT | Omar Cornut | widgets, windows, the OpenGL 3 and SDL3 backends |
 | [ImPlot](https://github.com/epezent/implot) | 1.2 WIP, through cimplot `v1.1` | MIT | Evan Pezent | plots, heatmaps, colormaps |
 | [cimgui](https://github.com/cimgui/cimgui) | `1.93.1WIPdock` | MIT | Stephan Dilly | the C API of Dear ImGui, and its metadata used by `scripts/gen_bindings.py` |
 | [cimplot](https://github.com/cimgui/cimplot) | `v1.1` | MIT | Victor Bombí | the C API of ImPlot, and its metadata used by `scripts/gen_bindings.py` |

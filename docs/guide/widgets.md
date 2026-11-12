@@ -973,6 +973,13 @@ every row repeat their labels: open an id scope per row with `ig_push_id(row)`, 
 or clear (`.false.`) one flag each, over the default or over `flags`: `sortable`, `hideable`, `reorderable`,
 `scroll_x`.
 
+**Sizing policies.** `ImGuiTableFlags_SizingFixedFit` gives each column its content's width, `SizingFixedSame` the
+widest content's, `SizingStretchSame` an equal share of the table, and `SizingStretchProp` a share in proportion to its
+content. A `SizingStretchProp` table works with the floating-point traps of a debug build (`-ffpe-trap=invalid`): in
+its first frame, before its columns have widths, Dear ImGui divides 0 by 0, a line FIGURE patches
+([Known issues](known-issues#markdown)); the columns then start equal and take their proportions from the second
+frame.
+
 **A fixed header.** `freeze_rows=1` keeps the headers row in view while the rows scroll; `freeze_cols=n` keeps the
 first `n` columns in view while the table scrolls sideways. A frozen row turns `ImGuiTableFlags_ScrollY` on and a
 frozen column `ImGuiTableFlags_ScrollX` (Dear ImGui freezes only what scrolls). A table that scrolls is a region of

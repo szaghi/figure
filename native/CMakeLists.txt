@@ -118,12 +118,43 @@ set(FIGURE_GIZMO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/ImGuizmo)
 set(FIGURE_RICHMD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui_rich_md)
 set(FIGURE_MD4C_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/md4c)
 
+# ---- FIGURE's patches to the fetched Dear ImGui (native/patches/imgui-*.patch, THIRD_PARTY.md) ---------------------
+# Each patch changes one line. It is applied to a copy of the file in the build directory, compiled instead of the
+# fetched one (the fetched sources stay as fetched, a FETCHCONTENT_SOURCE_DIR_CIMGUI included); scripts/fpm_package.py
+# applies the same patches to the fpm package. A patch whose line is no longer in the file stops the configuration:
+# upstream changed it (fixed, perhaps), and the patch is checked against its upstream issue, then updated or removed.
+function(figure_patch_line source patch out)
+   file(READ ${patch} diff)
+   string(REPLACE "\r" "" diff "${diff}") # a checkout with CRLF line ends
+   string(REGEX MATCH "\n-([^-\n][^\n]*)" old "${diff}") # the removed line, not the --- header
+   set(old "${CMAKE_MATCH_1}")
+   string(REGEX MATCH "\n\\+([^+\n][^\n]*)" new "${diff}") # the added line, not the +++ header
+   set(new "${CMAKE_MATCH_1}")
+   file(READ ${source} text)
+   string(FIND "${text}" "${old}" at)
+   if(at EQUAL -1)
+      message(FATAL_ERROR "${patch} does not apply to ${source}: its line changed upstream. Check the patch against "
+                          "its upstream issue (THIRD_PARTY.md), then update or remove it.")
+   endif()
+   string(REPLACE "${old}" "${new}" text "${text}")
+   if(EXISTS ${out})
+      file(READ ${out} current)
+   endif()
+   if(NOT "${current}" STREQUAL "${text}")
+      file(WRITE ${out} "${text}")
+   endif()
+   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${patch} ${source})
+endfunction()
+# ocornut/imgui#8718: TableUpdateLayout divides 0 by 0 in a SizingStretchProp table's first frame
+figure_patch_line(${IMGUI_DIR}/imgui_tables.cpp ${CMAKE_CURRENT_SOURCE_DIR}/patches/imgui-0001-stretch-weight-zero-sum.patch
+                  ${CMAKE_CURRENT_BINARY_DIR}/patched/imgui_tables.cpp)
+
 add_library(figure_native STATIC
    ${cimgui_SOURCE_DIR}/cimgui.cpp
    ${IMGUI_DIR}/imgui.cpp
    ${IMGUI_DIR}/imgui_draw.cpp
    ${IMGUI_DIR}/imgui_widgets.cpp
-   ${IMGUI_DIR}/imgui_tables.cpp
+   ${CMAKE_CURRENT_BINARY_DIR}/patched/imgui_tables.cpp # patched: native/patches/imgui-0001-*.patch
    ${IMGUI_DIR}/imgui_demo.cpp
    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
