@@ -3874,7 +3874,8 @@ int fig_plot_state(int *enabled, int *scale) {
 
 void fig_plot_axis_constraints(int axis, int given, const double *v) {
    if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot || axis < 0 || axis >= ImAxis_COUNT) return;
-   ImPlotAxis &a = GImPlot->CurrentPlot->Axes[axis]; // ImPlot's SetupAxis*Constraints set both ends at once
+   // name map: ImPlot::SetupAxisLimitsConstraints, ImPlot::SetupAxisZoomConstraints (each sets both ends at once)
+   ImPlotAxis &a = GImPlot->CurrentPlot->Axes[axis];
    if (given & 1) a.ConstraintRange.Min = v[0];
    if (given & 2) a.ConstraintRange.Max = v[1];
    if (given & 4) a.ConstraintZoom.Min = v[2];

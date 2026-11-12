@@ -513,9 +513,10 @@ def check_names() -> list[str]:
     except gen_names.NamesError as err:
         return [f"--names: {err}"]
     page = GUIDE / "imgui-names.md"
+    problems = gen_names.pinned_problems()
     if not page.is_file() or page.read_text() != text:
-        return ["docs/guide/imgui-names.md is not current: run python3 scripts/gen_names.py"]
-    return []
+        problems.append("docs/guide/imgui-names.md is not current: run python3 scripts/gen_names.py")
+    return problems
 
 
 def check_media() -> list[str]:

@@ -15,8 +15,13 @@ through the library's private procedures (src/lib) down to the raw bindings they
 Dear ImGui; ``ImPlot_*`` of figure_cimplot: ImPlot) and to the native functions (``fig_*`` of figure_c_native),
 whose C++ bodies (native/*.cpp) are searched for ``ImGui::Name(`` and ``ImPlot::Name(``. Helpers every drawing call
 goes through (the threading and scope checks, the C strings) are not followed: they would list every FIGURE call
-against the few functions they use. A function no public call reaches is "raw only": bound in figure_cimgui or
-figure_cimplot (internal modules) with its C name, or not bound at all (variadic, a callback: "not bound").
+against the few functions they use, except the shared helpers of SHARED_FOLLOWED (a family's drawing: the canvas's
+``draw``). Glue that does an upstream function's work without calling it (it sets the library's state directly) names
+the function in a ``// name map: ImPlot::SetupAxisLimitsConstraints`` comment in its body. A function no public call
+reaches is "used internally" when FIGURE calls it all the same (native/*.cpp, or a raw binding called in src/lib: the
+file browser's tables, the notifications, contexts and styles), and "raw only" in any case: bound in figure_cimgui or
+figure_cimplot (internal modules) with its C name, or not bound at all (variadic, a callback: "not bound"). PINNED
+lists mappings that once went missing: check_docs.py --names fails when one is lost.
 
 Usage: python3 scripts/gen_names.py            (writes docs/guide/imgui-names.md)
        python3 scripts/check_docs.py --names   (regenerates in memory and compares)
@@ -54,6 +59,10 @@ NATIVE_NOT_FOLLOWED = {"frame_bar_open", "frame_bar_close", "draw_notifications"
 # by every frame: the title bar of decorations='figure' and the notifications (app%next_frame does not expose them)
 NATIVE_SHARED = 4  # a native helper called by more native entry points than this is not followed
 SHARED = 3  # a private helper reached by more FIGURE calls than this is not followed
+SHARED_FOLLOWED = {  # shared helpers that are a family's drawing or setting, not a check: followed all the same
+    ("figure_canvas", "draw"), ("figure_editor", "editor_string"), ("figure_style", "pop"),
+    ("figure_view3d", "add_mesh"),
+}
 IGNORED = {  # upstream accessors FIGURE uses for its own bookkeeping, exposed by no call
     "GetCurrentContext", "GetIO", "GetPlatformIO", "GetStyle", "GetMainViewport", "GetFrameCount", "GetColorU32",
     "SetupLock", "GetCurrentPlot", "GetCurrentWindow", "GetCurrentWindowRead",
@@ -75,6 +84,28 @@ EXTENSION_IGNORED = {  # the extensions' bookkeeping FIGURE's glue calls on ever
 }
 GENERATED = {"figure_cimgui", "figure_cimplot", "figure_cimplot3d", "figure_cimgui_enums", "figure_cimplot_enums",
              "figure_cimplot3d_enums", "figure_icons"}
+
+
+PINNED = {  # mappings the generator must keep finding (check_docs.py --names fails otherwise): each a way it once
+    # missed a function. A FIGURE call, or "internal" for a function FIGURE uses but exposes by no call.
+    "ImPlot::SetupAxisLimitsConstraints": "ip_setup_axis_constraints",  # glue that sets the state: `// name map:`
+    "ImPlot::SetupAxisZoomConstraints": "ip_setup_axis_constraints",
+    "ImPlot::PushPlotClipRect": "ig_draw_line",  # behind a shared helper (figure_canvas's draw)
+    "ImGui::GetBackgroundDrawList": "ig_draw_rect",
+    "ImGui::TableHeader": "internal",  # the file browser's own table
+}
+
+
+def pinned_problems() -> list[str]:
+    """The PINNED mappings the generator no longer finds."""
+    exposed = exposures()
+    internal = internal_calls()
+    out = []
+    for upstream, want in PINNED.items():
+        found = upstream in internal if want == "internal" else want in exposed.get(upstream, set())
+        if not found:
+            out.append(f"gen_names.py: {upstream} no longer maps to {want} (PINNED)")
+    return out
 
 
 class NamesError(Exception):
@@ -169,6 +200,29 @@ def block_end(code: str, i: int) -> int:
     return i
 
 
+def annotated(body: str) -> set[str]:
+    """The upstream functions a native body does the work of without calling them, named by a comment
+    ``// name map: ImPlot::SetupAxisLimitsConstraints, ImPlot::SetupAxisZoomConstraints`` (glue that sets the
+    library's state directly)."""
+    return {n for m in re.findall(r"//\s*name map:\s*([^\n]*)", body) for n in re.findall(r"\b\w+::\w+\b", m)}
+
+
+def internal_calls() -> dict[str, set[str]]:
+    """For each upstream call FIGURE makes anywhere (``ImGui::Name`` in native/*.cpp, a raw binding called by
+    src/lib), the files making it: what FIGURE uses for its own drawing and bookkeeping."""
+    out: dict[str, set[str]] = {}
+    for path in sorted(NATIVE.glob("*.cpp")):
+        for ns in ("ImGui", "ImPlot", "ImPlot3D"):
+            for c in re.findall(rf"\b{ns}::(\w+)\s*\(", path.read_text()):
+                out.setdefault(f"{ns}::{c}", set()).add(path.name)
+    calls, _ = library_calls()
+    for (mod, _), called in calls.items():
+        for c in called:
+            if re.match(r"ig[a-z]|implot_|implot3d_", c):
+                out.setdefault(c, set()).add(f"{mod}.F90")
+    return out
+
+
 def native_calls() -> dict[str, set[str]]:
     """For each native function the Fortran side binds (its Fortran interface name), the upstream calls in its body
     and in the native helpers it calls (one level; a helper called by many native functions is not followed)."""
@@ -185,7 +239,8 @@ def native_calls() -> dict[str, set[str]]:
     methods = {ext: extension_functions(ext) for ext, (_, _, _, how) in EXTENSIONS.items() if how == "method"}
     upstream = {n: {f"ImGui::{c}" for c in re.findall(r"\bImGui::(\w+)\s*\(", b)}
                 | {f"ImPlot::{c}" for c in re.findall(r"\bImPlot::(\w+)\s*\(", b)}
-                | {f"ImPlot3D::{c}" for c in re.findall(r"\bImPlot3D::(\w+)\s*\(", b)} for n, b in bodies.items()}
+                | {f"ImPlot3D::{c}" for c in re.findall(r"\bImPlot3D::(\w+)\s*\(", b)}
+                | annotated(b) for n, b in bodies.items()}
     for ext, (ns, _, glue, how) in EXTENSIONS.items():
         for n, b in bodies.items():
             if glue not in files[n]:
@@ -293,7 +348,7 @@ def exposures() -> dict[str, set[str]]:
             r = resolve(key[0], c)
             if r and r not in public:
                 users.setdefault(r, set()).add(shown)
-    shared = {k for k, v in users.items() if len(v) > SHARED}
+    shared = {k for k, v in users.items() if len(v) > SHARED and k not in SHARED_FOLLOWED}
 
     def upstream_of(key: tuple[str, str]) -> set[str]:
         out: set[str] = set()
@@ -328,6 +383,7 @@ def exposures() -> dict[str, set[str]]:
 def generate() -> str:
     """The name map page."""
     exposed = exposures()
+    internal = internal_calls()
     bound = {b.lower(): b for b in bound_names()}
     out = [
         "---",
@@ -345,7 +401,7 @@ def generate() -> str:
         funcs, version, url = upstream_functions(lib)
         prefix = {"Dear ImGui": "ImGui::", "ImPlot": "ImPlot::", "ImPlot3D": "ImPlot3D::"}[lib]
         rows = []
-        n_exposed = 0
+        n_exposed = n_internal = 0
         for name in sorted(funcs, key=str.lower):
             overloads = sorted(funcs[name])
             figure: set[str] = set(exposed.get(prefix + name, set()))
@@ -358,8 +414,14 @@ def generate() -> str:
             else:
                 raw = [bound[c.lower()] for _, c in overloads if c.lower() in bound]
                 cell = "raw only: " + (", ".join(f"`{r}`" for r in raw) if raw else "not bound")
+                files = set(internal.get(prefix + name, set()))
+                for _, c in overloads:
+                    files |= internal.get(c.lower(), set())
+                if files:
+                    n_internal += 1
+                    cell = f"used internally ({', '.join(f'`{f}`' for f in sorted(files))}); {cell}"
             rows.append(f"| {link} | {cell} |")
-        totals.append((lib, version, url, n_exposed, len(funcs)))
+        totals.append((lib, version, url, n_exposed, len(funcs), n_internal))
         sections += [f"## {lib} {version}", "", f"| {lib} | FIGURE |", "|---|---|", *rows, ""]
     ext_rows = ["## Extensions", "",
                 "The extensions FIGURE vendors (third_party/) are reached through FIGURE's own calls only. Each row is "
@@ -376,12 +438,13 @@ def generate() -> str:
             ext_rows += [f"### {ext}", "", f"Declared in `{header}`; {len(rows)} of its {len(api)} public functions "
                          "reached.", "", f"| {ext} | FIGURE |", "|---|---|", *rows, ""]
     sections += ext_rows
-    (_, v1, u1, e1, n1), (_, v2, u2, e2, n2), (_, v3, u3, e3, n3) = totals
+    (_, v1, u1, e1, n1, i1), (_, v2, u2, e2, n2, i2), (_, v3, u3, e3, n3, i3) = totals
     out += [
         "Each public function of Dear ImGui, ImPlot and ImPlot3D, linked to its declaration in the header FIGURE is "
         f"built with ([imgui.h]({u1}), Dear ImGui {v1}, docking branch; [implot.h]({u2}), ImPlot {v2}; "
         f"[implot3d.h]({u3}), ImPlot3D {v3}), and the FIGURE calls that reach it. FIGURE exposes {e1} of the {n1} "
-        f"Dear ImGui functions, {e2} of the {n2} ImPlot functions and {e3} of the {n3} ImPlot3D functions. A reader "
+        f"Dear ImGui functions, {e2} of the {n2} ImPlot functions and {e3} of the {n3} ImPlot3D functions; it uses {i1}, "
+        f"{i2} and {i3} more for its own drawing and bookkeeping, which no FIGURE call exposes. A reader "
         "of Dear ImGui's, ImPlot's or ImPlot3D's documentation finds here the FIGURE name of what they read about; the [feature map](features) lists FIGURE's calls, and each reference section names the upstream "
         "functions it wraps.",
         "",
@@ -390,6 +453,9 @@ def generate() -> str:
         "several functions combines them (`ig_begin_popup_context` is `BeginPopupContextItem`, "
         "`BeginPopupContextWindow` and `BeginPopupContextVoid` by its `on` argument); one that reaches a function "
         "only for its own bookkeeping is listed too.",
+        "- **used internally:** FIGURE calls it in the files named, for its own drawing (the file browser, the "
+        "notifications, the title bar) or bookkeeping (contexts, styles), but no FIGURE call exposes it: it is raw "
+        "only for a program.",
         "- **raw only:** no FIGURE call reaches it. The C name is the function's binding in the raw modules "
         "(`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d`), which are internal to the library ([Raw bindings](raw-bindings)): a "
         "program needing one asks for a wrapper. **not bound:** variadic or taking a callback, skipped by the raw "
