@@ -56,6 +56,10 @@ them at every render: nothing is copied per frame. So the arrays must:
 - be contiguous (a non-contiguous section is refused with `FIG_ERR_ARGUMENT`);
 - stay allocated while the mesh exists: `v%remove` the mesh before deallocating them.
 
+**Mesh ids.** Each mesh added gets the next id, from 1, for the life of the view: `v%remove` and `v%clear` give no id
+back. A program that builds its meshes again after `v%clear` (a new field, a new plane) gets ids past the ones it had,
+so a table indexed by mesh id is sized by the ids returned (grown when one exceeds it), not by the count of meshes.
+
 When the program changes their values (a new time step, a moved grid), it calls `v%changed(mesh)`. The view then
 derives, once, what it keeps beside them:
 - the triangle list, 0-based (the connectivity's indices are checked there);
