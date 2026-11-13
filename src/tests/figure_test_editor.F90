@@ -456,10 +456,10 @@ contains
    logical, intent(out)          :: ok   !< Outcome.
    character(len=4096)           :: self !< This program.
    integer(int32)                :: code, cstat !< Exit status, command status.
-   logical                       :: linux !< /proc/self/status exists.
+   logical                       :: on_linux !< /proc/self/status exists.
 
-   inquire(file='/proc/self/status', exist=linux)
-   if (.not. linux) then
+   inquire(file='/proc/self/status', exist=on_linux)
+   if (.not. on_linux) then
       write(output_unit, '(A)') 'figure_test_editor: check 15 needs glibc (Linux): skipped'
       ok = .true.
       return
