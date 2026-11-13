@@ -1,0 +1,16 @@
+FIGURE's patch 2 of 2 to ImGuiColorTextEdit (goossens fork, commit 0a489da863f22f7493049f5c6eb85355f405b02e).
+
+TextEditor::cursorWidth has no initial value. TextEditor::render calls updateState (TextEditor.cpp:141, 146) before
+it sets cursorWidth (:164-166), and updateState adds cursorWidth to the editor's total width (:1199-1206). So a fresh
+editor's first frame computes its content size from whatever the heap held; at the second frame Dear ImGui truncates
+it to an int (ImTrunc in SetNextWindowContentSize), and a huge or NaN value is IEEE invalid: a SIGFPE under traps
+(found by xall_figure's GUI tests, gfortran -ffpe-trap=invalid, intermittently). The member gets the value render
+gives it without a style (1 pixel at scale 1). Applied to third_party/ImGuiColorTextEdit/TextEditor.h; checked by
+src/tests/figure_test_editor.F90 (check 15: a fresh editor drawn twice under traps, its heap filled with 0x7F bytes,
+in a child process). To report upstream.
+
+--- a/TextEditor.h
++++ b/TextEditor.h
+@@ -2071,1 +2071,1 @@
+-	float cursorWidth;
++	float cursorWidth = 1.0f;

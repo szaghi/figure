@@ -2068,7 +2068,7 @@ protected:
 	static constexpr size_t invalidLine = std::numeric_limits<size_t>::max();
 
 	bool firstFrame = true;
-	float cursorWidth;
+	float cursorWidth = 1.0f;
 	ImVec2 cursorScreenPos;
 	ImVec2 visibleSize;
 	ImDrawList* drawList;

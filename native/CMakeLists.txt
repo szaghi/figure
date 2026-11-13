@@ -23,7 +23,7 @@
 #                            unmodified in third_party/stb (one header), the same stb commit as stb_image_write
 #   ImGuiColorTextEdit    -> the code editor and the text diff (code_editor_object, code_diff; MIT, with dtl, BSD-3),
 #                            the goossens fork at commit 0a489da, vendored in third_party/ImGuiColorTextEdit with
-#                            FIGURE's one patch (its patches/ directory)
+#                            FIGURE's two patches (its patches/ directory)
 #   ImGuizmo              -> the view cube, the gizmos and the gradient editor (view3d_object%view_cube, %gizmo,
 #                            ig_gradient_edit; MIT): ImGuizmo.cpp and ImGradient.cpp at commit 105e4fd, vendored in
 #                            third_party/ImGuizmo with FIGURE's three patches (its patches/ directory)

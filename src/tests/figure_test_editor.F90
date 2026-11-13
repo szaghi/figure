@@ -9,8 +9,11 @@ program figure_test_editor
 !< not the missing-glyph box; typing changes the text and `draw` reports it; ctrl+z undoes it, `redo` and `undo`
 !< too; find (by case or not, wrapping, not found) and replace in one undo; completion offers the keys that start
 !< with the typed text and tab inserts one; a read-only editor refuses an insert and ignores typing; the diff's lines
-!< and its drawing; the statuses. The pictures are `figure_test_editor.*.tmp`, removed at the end.
+!< and its drawing; the statuses; a fresh editor drawn twice under IEEE invalid traps, its heap filled with 0x7F bytes
+!< (FIGURE's patch 0002 of the fork: cursorWidth initialised; a child process, MALLOC_PERTURB_=128). The pictures
+!< are `figure_test_editor.*.tmp`, removed at the end.
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, output_unit, real64
+use, intrinsic :: ieee_exceptions, only : ieee_invalid, ieee_set_halting_mode
 use figure, only : app_object, code_diff, code_diff_lines, code_editor_object, code_language, FIG_ERR_ARGUMENT, &
                    FIG_ERR_STATE, FIG_OK, fig_read_image, ig_begin, ig_end, ig_set_next_window, language_object
 use figure_testing, only : test_capture, test_compare_image, test_glyph, test_key, test_type
@@ -28,7 +31,7 @@ integer(int32),   parameter :: W = 640_int32                               !< Di
 integer(int32),   parameter :: H = 320_int32                               !< Display height [pixels].
 type(app_object)            :: app             !< Application.
 type(code_editor_object)    :: ed              !< The editor.
-logical                     :: test_passed(14) !< Per-check outcome.
+logical                     :: test_passed(15) !< Per-check outcome.
 logical                     :: changed         !< `draw` reported a change, over some frames.
 integer(int32)              :: early           !< code_diff's status before the first frame.
 logical                     :: early_draw      !< ed%draw's result before the first frame.
@@ -36,6 +39,8 @@ integer(int32)              :: early_stat      !< ... its status.
 character(len=8)            :: keep            !< FIGURE_TEST_KEEP.
 
 test_passed = .false.
+call get_command_argument(1, keep)
+if (keep == '--fresh') call fresh_under_traps()          ! the child of check 15: never returns
 call app%init_headless(W, H)
 call ed%init(code_language('input'))
 call ed%set_text(input_file(RHO, INF))
@@ -53,6 +58,7 @@ call read_only(test_passed(11))
 call diff(test_passed(12))
 call statuses(test_passed(13))
 call languages(test_passed(14))
+call fresh_child(test_passed(15))
 call ed%destroy()
 call app%destroy()
 call get_environment_variable('FIGURE_TEST_KEEP', keep)
@@ -439,4 +445,43 @@ contains
       if (ios == 0_int32) close(u, status='delete')
    enddo
    endsubroutine remove_files
+   subroutine fresh_child(ok)
+   !< Check 15: this program run again with `--fresh` and glibc's MALLOC_PERTURB_=128, so that new memory holds 0x7F
+   !< bytes (3.4e38 as a float): a field the fork leaves uninitialised (TextEditor::cursorWidth, before FIGURE's patch
+   !< 0002) is then huge, its sum truncated to an int in Dear ImGui (ImTrunc) at the second draw: IEEE invalid, a
+   !< SIGFPE under traps, on every run rather than when the heap happens to hold garbage. The child exits 0 when both
+   !< draws pass.
+   logical, intent(out)          :: ok   !< Outcome.
+   character(len=4096)           :: self !< This program.
+   integer(int32)                :: code, cstat !< Exit status, command status.
+
+   call get_command_argument(0, self)
+   call execute_command_line('MALLOC_PERTURB_=128 '//trim(self)//' --fresh > /dev/null 2>&1', exitstat=code, &
+                             cmdstat=cstat)
+   ok = cstat == 0_int32 .and. code == 0_int32
+   if (.not. ok) write(output_unit, '(A,I0)') 'figure_test_editor: a fresh editor under traps, exit status ', code
+   endsubroutine fresh_child
+
+   subroutine fresh_under_traps()
+   !< The child of check 15: a fresh editor drawn twice with IEEE invalid halting on; exit 0.
+   type(code_editor_object) :: fresh !< A new editor.
+   integer(int32)           :: k     !< Frame.
+
+   call app%init_headless(W, H)
+   call fresh%init(code_language('input'))
+   call fresh%set_text(input_file('a', 'b'))
+   call ieee_set_halting_mode(ieee_invalid, .true.)
+   do k = 1_int32, 2_int32
+      if (.not. app%next_frame()) error stop 'figure_test_editor: next_frame returned false in headless mode'
+      call ig_set_next_window(10.0_real64, 10.0_real64, 620.0_real64, 300.0_real64, always=.true.)
+      if (ig_begin('Fresh')) then
+         if (fresh%draw('fresh')) continue
+      endif
+      call ig_end()
+   enddo
+   call ieee_set_halting_mode(ieee_invalid, .false.)
+   call fresh%destroy()
+   call app%destroy()
+   stop 0
+   endsubroutine fresh_under_traps
 endprogram figure_test_editor
