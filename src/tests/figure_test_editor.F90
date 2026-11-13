@@ -10,8 +10,8 @@ program figure_test_editor
 !< too; find (by case or not, wrapping, not found) and replace in one undo; completion offers the keys that start
 !< with the typed text and tab inserts one; a read-only editor refuses an insert and ignores typing; the diff's lines
 !< and its drawing; the statuses; a fresh editor drawn twice under IEEE invalid traps, its heap filled with 0x7F bytes
-!< (FIGURE's patch 0002 of the fork: cursorWidth initialised; a child process, MALLOC_PERTURB_=128). The pictures
-!< are `figure_test_editor.*.tmp`, removed at the end.
+!< (FIGURE's patch 0002 of the fork: cursorWidth initialised; a child process, MALLOC_PERTURB_=128; Linux only). The
+!< pictures are `figure_test_editor.*.tmp`, removed at the end.
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, output_unit, real64
 use, intrinsic :: ieee_exceptions, only : ieee_invalid, ieee_set_halting_mode
 use figure, only : app_object, code_diff, code_diff_lines, code_editor_object, code_language, FIG_ERR_ARGUMENT, &
@@ -451,10 +451,19 @@ contains
    !< 0002) is then huge, its sum truncated to an int in Dear ImGui (ImTrunc) at the second draw: IEEE invalid, a
    !< SIGFPE under traps, on every run rather than when the heap happens to hold garbage. The child exits 0 when both
    !< draws pass.
+   !< glibc only (MALLOC_PERTURB_; the command's `VAR=value` prefix is a POSIX shell's): Linux, found by its /proc
+   !< (gfortran's preprocessor does not define __linux__); elsewhere the check passes untested, with a line saying so.
    logical, intent(out)          :: ok   !< Outcome.
    character(len=4096)           :: self !< This program.
    integer(int32)                :: code, cstat !< Exit status, command status.
+   logical                       :: linux !< /proc/self/status exists.
 
+   inquire(file='/proc/self/status', exist=linux)
+   if (.not. linux) then
+      write(output_unit, '(A)') 'figure_test_editor: check 15 needs glibc (Linux): skipped'
+      ok = .true.
+      return
+   endif
    call get_command_argument(0, self)
    call execute_command_line('MALLOC_PERTURB_=128 '//trim(self)//' --fresh > /dev/null 2>&1', exitstat=code, &
                              cmdstat=cstat)
