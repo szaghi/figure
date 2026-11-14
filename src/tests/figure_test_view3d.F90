@@ -16,9 +16,10 @@ program figure_test_view3d
 !<   resolution while it moves, at full size when it ends) and the wheel; no render when nothing changed;
 !< - the wheel inside a scrolling child: over the view it zooms the view and does not scroll the child; beside the view
 !<   it scrolls the child and does not zoom.
-!< The vertex caches: held after a render, freed after 30 draws without one, and a render after that gives the same
-!< pixels. Then the refusals with their statuses, the mesh ids (each the next one, none given back by remove or
-!< clear), and the time of a 3.2e5-triangle render (printed, not checked).
+!< A drag leaves the meshes' grid lines out of its half-size renders. The vertex caches: held after a render, freed
+!< after 30 draws without one, and a render after that gives the same pixels. Then the refusals with their statuses,
+!< the mesh ids (each the next one, none given back by remove or clear), and the time of a 3.2e5-triangle render
+!< (printed, not checked).
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
 use figure, only : app_object, ig_begin, ig_end, ig_item_rect, ig_set_next_window, ip_colormap, view3d_object, &
@@ -37,7 +38,7 @@ real(real64), parameter   :: PI = acos(-1.0_real64)       !< Pi.
 type(app_object)          :: app                          !< Application.
 type(view3d_object)       :: v(NV)                        !< The views.
 real(real64)              :: origin(2, NV)                !< Each view's top-left on the display [pixels].
-logical                   :: test_passed(18)              !< Per-check outcome.
+logical                   :: test_passed(19)              !< Per-check outcome.
 ! the data, kept by address: target
 real(real64), target      :: cube_xyz(3, 8)               !< Cube's vertices.
 integer(int32), target    :: cube_quads(4, 6)             !< Cube's faces.
@@ -71,7 +72,7 @@ call v(4)%init(threads=1_int32, background=[0.1_real64, 0.1_real64, 0.1_real64])
 m = v(4)%surface(wave_xyz, scalar=wave_s, colormap='turbo', edges=.true.)
 call v(5)%init(threads=4_int32, background=[0.1_real64, 0.1_real64, 0.1_real64])
 m = v(5)%surface(wave_xyz, scalar=wave_s, colormap='turbo', edges=.true.)
-call v(6)%init(lighting=.false., background=[0.0_real64, 0.0_real64, 0.0_real64])
+call v(6)%init(threads=4_int32, lighting=.false., background=[0.0_real64, 0.0_real64, 0.0_real64]) ! the binned path
 m = v(6)%surface(plane_xyz, color=[0.0_real64, 0.0_real64, 1.0_real64], edges=.true.)
 call v(6)%set_mesh(m, edge_color=[1.0_real64, 0.0_real64, 0.0_real64])
 m = v(6)%lines(line_xyz, color=[0.0_real64, 1.0_real64, 0.0_real64])
@@ -97,6 +98,7 @@ test_passed(12) = check_cache()
 test_passed(13) = check_refusals()
 test_passed(17) = check_ids()
 test_passed(18) = check_release()
+test_passed(19) = check_moving_edges()
 call check_wheel_in_child(test_passed(15:16))
 call perf_log()
 
@@ -555,6 +557,35 @@ contains
    check_release = held > 0_int64 .and. freed == 0_int64 .and. again == held .and. all(img == before)
    if (.not. check_release) write(output_unit, '(A,3I12)') 'release: held, freed, again ', held, freed, again
    endfunction check_release
+
+   logical function check_moving_edges()
+   !< A drag on the view of lines and edges: its half-size renders leave the red edges out and keep the green line;
+   !< the full-size render at the end draws the edges again.
+   real(real64)   :: x0, y0       !< Start of the drag.
+   logical        :: half, edges_moving, line_moving, edges_after !< Found.
+
+   x0 = origin(1, 6) + 60.0_real64
+   y0 = origin(2, 6) + 60.0_real64
+   call test_mouse_move(x0, y0)
+   call frame()
+   call frame()
+   call test_mouse_button(.true.)
+   call frame()
+   call test_mouse_move(x0 + 4.0_real64, y0)
+   call frame()
+   call v(6)%render_info(half=half)
+   call v(6)%image(img)
+   edges_moving = any(img(1, :, :) == -1_int8 .and. img(2, :, :) == 0_int8 .and. img(3, :, :) == 0_int8)
+   line_moving = any(img(1, :, :) == 0_int8 .and. img(2, :, :) == -1_int8 .and. img(3, :, :) == 0_int8)
+   call test_mouse_button(.false.)
+   call frame()
+   call frame()
+   call v(6)%image(img)
+   edges_after = any(img(1, :, :) == -1_int8 .and. img(2, :, :) == 0_int8 .and. img(3, :, :) == 0_int8)
+   check_moving_edges = half .and. .not. edges_moving .and. line_moving .and. edges_after
+   if (.not. check_moving_edges) write(output_unit, '(A,4L2)') 'moving edges: half, edges, line, edges after', half, &
+                                                                edges_moving, line_moving, edges_after
+   endfunction check_moving_edges
 
    logical function check_ids()
    !< Mesh ids go on: each mesh added gets the next one, from 1; `remove` and `clear` give none back.

@@ -256,7 +256,9 @@ A render runs in three steps:
 The image is uploaded into a texture and drawn by Dear ImGui as any image.
 
 **Fast moves.** While the user drags or turns the wheel, the view is rendered at half its width and height: a quarter
-of the pixels to fill, and to send in remote mode. It renders at full size again in the frame where the move ends:
+of the pixels to fill, and to send in remote mode. The meshes' grid lines (`edges`) are left out until the move ends:
+on a fine grid seen whole they are several to a pixel, the larger part of a render (a level of 6.6 M grid-line
+segments: about 130 ms a render with them, 25 ms without), and draw only a tint; lines meshes are still drawn. It renders at full size again in the frame where the move ends:
 the button released, or a frame without a wheel step. A drag held still keeps the half-size image, without
 rendering, until it moves again or ends. `fast_moves=.false.` at `init` keeps full size.
 

@@ -784,7 +784,8 @@ void band(const view_t &v, const frame_t &F, int y0, int y1, int block, bool bin
          for (size_t t = 0; t < mp->tri.size() / 3; ++t) band_triangle(F, y0, y1, *mp, t);
    for (const auto &mp : v.meshes)
       if (mp->visible)
-         for (size_t s = 0; s < mp->seg.size() / 2; ++s) band_segment(F, y0, y1, *mp, s);
+         if (mp->kind == LINES || !v.half) // a mesh's grid lines are not drawn while the camera moves
+            for (size_t s = 0; s < mp->seg.size() / 2; ++s) band_segment(F, y0, y1, *mp, s);
 }
 
 // The per-render vertex caches (64 B a vertex) are needed only while a render runs; they are kept while renders follow
@@ -829,7 +830,8 @@ bool bin_elements(view_t &v, int T, int w, int h, int rows, bool segments, bins_
    for (size_t i = 0; i < v.meshes.size(); ++i) {
       const mesh_t &m = *v.meshes[i];
       if (!m.visible) continue;
-      const size_t n = segments ? m.seg.size() / 2 : (m.kind == LINES ? 0 : m.tri.size() / 3);
+      const size_t n = segments ? (m.kind != LINES && v.half ? 0 : m.seg.size() / 2) // no grid lines while it moves
+                                : (m.kind == LINES ? 0 : m.tri.size() / 3);
       if (n == 0) continue;
       mesh_of.push_back(static_cast<int32_t>(i));
       first.push_back(first.back() + static_cast<int64_t>(n));
