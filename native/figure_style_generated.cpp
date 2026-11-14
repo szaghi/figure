@@ -74,6 +74,8 @@ const field IMGUI_FIELDS[] = {
    {"DockingNodeHasCloseButton", offsetof(ImGuiStyle, DockingNodeHasCloseButton), FIG_STYLE_BOOL},
    {"DockingSeparatorSize", offsetof(ImGuiStyle, DockingSeparatorSize), FIG_STYLE_FLOAT},
    {"MouseCursorScale", offsetof(ImGuiStyle, MouseCursorScale), FIG_STYLE_FLOAT},
+   {"SymbolArrowSizeFactor", offsetof(ImGuiStyle, SymbolArrowSizeFactor), FIG_STYLE_VEC2},
+   {"SymbolArrowThicknessFactor", offsetof(ImGuiStyle, SymbolArrowThicknessFactor), FIG_STYLE_FLOAT},
    {"AntiAliasedLines", offsetof(ImGuiStyle, AntiAliasedLines), FIG_STYLE_BOOL},
    {"AntiAliasedLineEnds", offsetof(ImGuiStyle, AntiAliasedLineEnds), FIG_STYLE_BOOL},
    {"AntiAliasedFill", offsetof(ImGuiStyle, AntiAliasedFill), FIG_STYLE_BOOL},
@@ -85,7 +87,7 @@ const field IMGUI_FIELDS[] = {
    {"HoverFlagsForTooltipMouse", offsetof(ImGuiStyle, HoverFlagsForTooltipMouse), FIG_STYLE_INT},
    {"HoverFlagsForTooltipNav", offsetof(ImGuiStyle, HoverFlagsForTooltipNav), FIG_STYLE_INT},
 };
-const int IMGUI_FIELDS_COUNT = 72;
+const int IMGUI_FIELDS_COUNT = 74;
 
 const field IMPLOT_FIELDS[] = {
    {"PlotDefaultSize", offsetof(ImPlotStyle, PlotDefaultSize), FIG_STYLE_VEC2},

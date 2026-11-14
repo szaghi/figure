@@ -271,7 +271,8 @@ The same program without those lines (`cb_style plain`), in the default style:
   `PlotBorder`, `LegendBg`, `LegendText`, `TitleText`, `AxisText`, `AxisGrid`, `Selection`, `Crosshairs`, ...);
 - **variables:** the fields of Dear ImGui's `ImGuiStyle` (`Alpha`, `WindowPadding`, `WindowRounding`,
   `WindowBorderSize`, `FramePadding`, `FrameRounding`, `ItemSpacing`, `ItemInnerSpacing`, `IndentSpacing`,
-  `ScrollbarSize`, `GrabMinSize`, `GrabRounding`, `TabRounding`, `ButtonTextAlign`, `AntiAliasedLines`, ...) and of
+  `ScrollbarSize`, `GrabMinSize`, `GrabRounding`, `TabRounding`, `ButtonTextAlign`, `AntiAliasedLines`, the arrows'
+  `SymbolArrowSizeFactor` and `SymbolArrowThicknessFactor`, ...) and of
   ImPlot's `ImPlotStyle` (`PlotBorderSize`, `MinorAlpha`, `MajorTickLen`, `MajorGridSize`, `PlotPadding`,
   `LabelPadding`, `LegendPadding`, `FitPadding`, `PlotDefaultSize`, ...). The list is generated from the bound
   libraries' metadata, so every field of the bound version is there (fonts are set through the font API; the colour

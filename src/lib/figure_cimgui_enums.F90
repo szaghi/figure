@@ -202,7 +202,7 @@ public :: ImGuiWindowFlags_Tooltip, ImGuiWindowFlags_Popup, ImGuiWindowFlags_Mod
 public :: ImTextureFormat_RGBA32, ImTextureFormat_Alpha8, ImTextureStatus_OK, ImTextureStatus_Destroyed, ImTextureStatus_WantCreate
 public :: ImTextureStatus_WantUpdates, ImTextureStatus_WantDestroy
 
-! ImDrawFlags_ (imgui:3452)
+! ImDrawFlags_ (imgui:3456)
 integer(c_int), parameter :: ImDrawFlags_None                     = 0_c_int
 integer(c_int), parameter :: ImDrawFlags_RoundTopLeft             = 16_c_int
 integer(c_int), parameter :: ImDrawFlags_RoundTopRight            = 32_c_int
@@ -234,13 +234,13 @@ integer(c_int), parameter :: ImDrawFlags_AllowInPushScope_        = 8286704_c_in
 integer(c_int), parameter :: ImDrawFlags_AllowInFrameScope_       = 16675312_c_int
 integer(c_int), parameter :: ImDrawFlags_StrokeMask_              = 917504_c_int
 integer(c_int), parameter :: ImDrawFlags_InvalidMask_             = -2147483633_c_int
-! ImFontAtlasFlags_ (imgui:3928)
+! ImFontAtlasFlags_ (imgui:3933)
 integer(c_int), parameter :: ImFontAtlasFlags_None                = 0_c_int
 integer(c_int), parameter :: ImFontAtlasFlags_NoPowerOfTwoHeight  = 1_c_int
 integer(c_int), parameter :: ImFontAtlasFlags_NoMouseCursors      = 2_c_int
 integer(c_int), parameter :: ImFontAtlasFlags_NoBakedLines        = 4_c_int
 integer(c_int), parameter :: ImFontAtlasFlags_NoBakedRoundCorners = 8_c_int
-! ImFontFlags_ (imgui:4143)
+! ImFontFlags_ (imgui:4148)
 integer(c_int), parameter :: ImFontFlags_None            = 0_c_int
 integer(c_int), parameter :: ImFontFlags_NoLoadError     = 2_c_int
 integer(c_int), parameter :: ImFontFlags_NoLoadGlyphs    = 4_c_int
@@ -696,7 +696,7 @@ integer(c_int), parameter :: ImGuiMod_Shift               = 8192_c_int
 integer(c_int), parameter :: ImGuiMod_Alt                 = 16384_c_int
 integer(c_int), parameter :: ImGuiMod_Super               = 32768_c_int
 integer(c_int), parameter :: ImGuiMod_Mask_               = 61440_c_int
-! ImGuiListClipperFlags_ (imgui:3045)
+! ImGuiListClipperFlags_ (imgui:3049)
 integer(c_int), parameter :: ImGuiListClipperFlags_None                  = 0_c_int
 integer(c_int), parameter :: ImGuiListClipperFlags_NoSetTableRowCounters = 1_c_int
 ! ImGuiMouseButton_ (imgui:2087)
@@ -723,7 +723,7 @@ integer(c_int), parameter :: ImGuiMouseSource_Mouse       = 0_c_int
 integer(c_int), parameter :: ImGuiMouseSource_TouchScreen = 1_c_int
 integer(c_int), parameter :: ImGuiMouseSource_Pen         = 2_c_int
 integer(c_int), parameter :: ImGuiMouseSource_COUNT       = 3_c_int
-! ImGuiMultiSelectFlags_ (imgui:3240)
+! ImGuiMultiSelectFlags_ (imgui:3244)
 integer(c_int), parameter :: ImGuiMultiSelectFlags_None                  = 0_c_int
 integer(c_int), parameter :: ImGuiMultiSelectFlags_SingleSelect          = 1_c_int
 integer(c_int), parameter :: ImGuiMultiSelectFlags_NoSelectAll           = 2_c_int
@@ -768,7 +768,7 @@ integer(c_int), parameter :: ImGuiSelectableFlags_Disabled          = 8_c_int
 integer(c_int), parameter :: ImGuiSelectableFlags_AllowOverlap      = 16_c_int
 integer(c_int), parameter :: ImGuiSelectableFlags_Highlight         = 32_c_int
 integer(c_int), parameter :: ImGuiSelectableFlags_SelectOnNav       = 64_c_int
-! ImGuiSelectionRequestType (imgui:3288)
+! ImGuiSelectionRequestType (imgui:3292)
 integer(c_int), parameter :: ImGuiSelectionRequestType_None     = 0_c_int
 integer(c_int), parameter :: ImGuiSelectionRequestType_SetAll   = 1_c_int
 integer(c_int), parameter :: ImGuiSelectionRequestType_SetRange = 2_c_int
@@ -958,7 +958,7 @@ integer(c_int), parameter :: ImGuiTreeNodeFlags_CollapsingHeader     = 26_c_int
 integer(c_int), parameter :: ImGuiTreeNodeFlags_DrawLinesNone        = 262144_c_int
 integer(c_int), parameter :: ImGuiTreeNodeFlags_DrawLinesFull        = 524288_c_int
 integer(c_int), parameter :: ImGuiTreeNodeFlags_DrawLinesToNodes     = 1048576_c_int
-! ImGuiViewportFlags_ (imgui:4231)
+! ImGuiViewportFlags_ (imgui:4236)
 integer(c_int), parameter :: ImGuiViewportFlags_None                = 0_c_int
 integer(c_int), parameter :: ImGuiViewportFlags_IsPlatformWindow    = 1_c_int
 integer(c_int), parameter :: ImGuiViewportFlags_IsPlatformMonitor   = 2_c_int
@@ -1005,10 +1005,10 @@ integer(c_int), parameter :: ImGuiWindowFlags_Tooltip                   = 335544
 integer(c_int), parameter :: ImGuiWindowFlags_Popup                     = 67108864_c_int
 integer(c_int), parameter :: ImGuiWindowFlags_Modal                     = 134217728_c_int
 integer(c_int), parameter :: ImGuiWindowFlags_ChildMenu                 = 268435456_c_int
-! ImTextureFormat (imgui:3759)
+! ImTextureFormat (imgui:3764)
 integer(c_int), parameter :: ImTextureFormat_RGBA32 = 0_c_int
 integer(c_int), parameter :: ImTextureFormat_Alpha8 = 1_c_int
-! ImTextureStatus (imgui:3766)
+! ImTextureStatus (imgui:3771)
 integer(c_int), parameter :: ImTextureStatus_OK          = 0_c_int
 integer(c_int), parameter :: ImTextureStatus_Destroyed   = 1_c_int
 integer(c_int), parameter :: ImTextureStatus_WantCreate  = 2_c_int

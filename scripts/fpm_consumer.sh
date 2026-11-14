@@ -32,7 +32,7 @@ if [[ -n "$git_url" ]]; then
    dep="git = \"$git_url\", tag = \"$git_tag\""
 else
    fetch=()
-   [[ -d "$root/build/native/_deps/cimgui-src" ]] || fetch=(--fetch) # no CMake tree here: download the pinned sources
+   [[ -d "$root/build/native/_deps/cimplot-src" ]] || fetch=(--fetch) # no CMake tree here: download the pinned sources
    python3 "$root/scripts/fpm_package.py" "$work/figure" ${fetch[@]+"${fetch[@]}"}
    dep="path = \"../figure\"" # fpm wants it relative
 fi

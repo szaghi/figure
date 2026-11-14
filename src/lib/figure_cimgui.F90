@@ -3092,11 +3092,12 @@ interface
    logical(c_bool)                    :: res      !< Result, C `bool`.
    endfunction igTreeNodeEx_Str
 
-   function igTreeNodeGetOpen(storage_id) result(res) bind(C, name='igTreeNodeGetOpen')
-   !< ImGui::TreeNodeGetOpen(ImGuiID), imgui.h.
+   function igTreeNodeGetOpen(storage_id, flags) result(res) bind(C, name='igTreeNodeGetOpen')
+   !< ImGui::TreeNodeGetOpen(ImGuiID,ImGuiTreeNodeFlags), imgui.h.
    import :: c_bool, c_int
    implicit none
    integer(c_int), value :: storage_id !< C `ImGuiID`.
+   integer(c_int), value :: flags      !< C `ImGuiTreeNodeFlags`, default `0`.
    logical(c_bool)       :: res        !< Result, C `bool`.
    endfunction igTreeNodeGetOpen
 
