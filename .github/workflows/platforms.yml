@@ -48,7 +48,7 @@ jobs:
     - name: fpm
       uses: fortran-lang/setup-fpm@v9
       with:
-        fpm-version: v0.12.0
+        fpm-version: v0.13.0
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
     # setup-fortran exports CC=gcc/CXX=g++ (Homebrew GCC): SDL needs clang on Apple (-fobjc-arc), and the link line
@@ -94,7 +94,7 @@ jobs:
 
     # FIGURE as a plain fpm dependency of another project: fpm compiles the native layer itself, SDL3 from Homebrew.
     # The C/C++ compiler is Apple clang: on macOS fpm links the C++ runtime as libc++ (g++ objects need libstdc++).
-    # Apple clang defaults to C++98, and fpm 0.12 takes no C++ flags from a manifest: FPM_CXXFLAGS gives C++17.
+    # Apple clang defaults to C++98, and fpm takes no C++ flags from a manifest (0.12): FPM_CXXFLAGS gives C++17.
     - name: fpm dependency (system SDL3)
       run: |
         brew install sdl3
@@ -252,7 +252,7 @@ jobs:
     - name: fpm
       uses: fortran-lang/setup-fpm@v9
       with:
-        fpm-version: v0.12.0
+        fpm-version: v0.13.0
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
     # with --flag fpm drops its own nvfortran flags, -Mbackslash among them: given back, with fobos' -Munixlogical
@@ -318,7 +318,7 @@ jobs:
     - name: fpm
       uses: fortran-lang/setup-fpm@v9
       with:
-        fpm-version: v0.12.0
+        fpm-version: v0.13.0
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
     # -fpscomp logicals, as fobos' $CIFX: .true. is 1, the value of a C bool (fpm's ifx flags leave it -1)
