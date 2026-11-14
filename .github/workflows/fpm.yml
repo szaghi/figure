@@ -114,11 +114,13 @@ jobs:
         compiler: gcc
         version: 14
 
+    # macOS stays at v0.12.0: v0.13.0's macOS binary is linked against Homebrew's gcc@12 runtime
+    # (/opt/homebrew/opt/gcc@12/lib/gcc/12/libgfortran.5.dylib), which the runner does not have
     - name: fpm
       if: matrix.os == 'macos-15'
       uses: fortran-lang/setup-fpm@v9
       with:
-        fpm-version: v0.13.0
+        fpm-version: v0.12.0
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
     # Apple clang for the C/C++ (on macOS fpm links libc++), in C++17 (its default is C++98)

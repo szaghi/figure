@@ -45,10 +45,12 @@ jobs:
         brew install ninja pkg-config
         python -m pip install FoBiS.py
 
+    # v0.12.0 here: v0.13.0's macOS binary is linked against Homebrew's gcc@12 runtime
+    # (/opt/homebrew/opt/gcc@12/lib/gcc/12/libgfortran.5.dylib), which the runner does not have
     - name: fpm
       uses: fortran-lang/setup-fpm@v9
       with:
-        fpm-version: v0.13.0
+        fpm-version: v0.12.0
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
     # setup-fortran exports CC=gcc/CXX=g++ (Homebrew GCC): SDL needs clang on Apple (-fobjc-arc), and the link line
