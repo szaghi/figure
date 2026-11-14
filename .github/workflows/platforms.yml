@@ -78,6 +78,11 @@ jobs:
     - name: Windowed run (figure_hello, frames checked)
       run: python3 scripts/window_check.py --out window-frames
 
+    - name: Windowed run with floating-point traps (figure_hello built with -ffpe-trap)
+      run: |
+        fobis build --mode examples-gnu-traps --varset macos
+        python3 scripts/window_check.py --program exe/examples-traps/figure_hello --out window-frames-traps
+
     - name: Upload the frames of the windowed run
       if: always()
       uses: actions/upload-artifact@v4
@@ -156,6 +161,16 @@ jobs:
       run: |
         cp /ucrt64/bin/opengl32.dll exe/examples/
         python scripts/window_check.py --out window-frames
+
+    # the same, built with floating-point traps: Mesa's own arithmetic raises IEEE flags, which the native layer masks
+    # around its GL calls (a program built with -ffpe-trap stopped at its window's creation before)
+    - name: Windowed run with floating-point traps (figure_hello built with -ffpe-trap)
+      env:
+        GALLIUM_DRIVER: llvmpipe
+      run: |
+        fobis build --mode examples-gnu-traps --varset windows
+        cp /ucrt64/bin/opengl32.dll exe/examples-traps/
+        python scripts/window_check.py --program exe/examples-traps/figure_hello --out window-frames-traps
 
     - name: Upload the frames of the windowed run
       if: always()

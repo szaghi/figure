@@ -3,6 +3,8 @@
 /exe/
 /mod/
 /obj/
+/mod-traps/
+/obj-traps/
 /lib/
 /include/
 /share/

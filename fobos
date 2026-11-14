@@ -7,7 +7,7 @@ authors    = Stefano Zaghi
 email      = stefano.zaghi@cnr.it
 
 [modes]
-modes = tests-gnu tests-gnu-debug examples-gnu
+modes = tests-gnu tests-gnu-debug examples-gnu examples-gnu-traps
         tests-nvf examples-nvf
         tests-ifx examples-ifx
         figure-static-gnu figure-static-nvf figure-static-ifx
@@ -60,6 +60,18 @@ template  = template-gnu
 cflags    = $CGNU -O2
 openmp    = True
 build_dir = exe/examples
+src       = src/lib/ src/examples/
+
+# examples-gnu-traps: the examples with gfortran's floating-point traps, run in a window by the Platforms workflow
+# (window_check.py): the native layer holds the FP environment around the GL driver, so a program built with traps
+# opens its window (Mesa's llvmpipe raised them at window creation before)
+[examples-gnu-traps]
+template  = template-gnu
+cflags    = $CGNU -O2 -ffpe-trap=invalid,zero,overflow
+openmp    = True
+build_dir = exe/examples-traps
+obj_dir   = obj-traps
+mod_dir   = mod-traps
 src       = src/lib/ src/examples/
 
 # nvfortran: -Munixlogical ($CNVF) makes .true. the C value 1 (the default is -1, not a C bool), as ifx's -fpscomp logicals;
