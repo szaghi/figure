@@ -39,7 +39,7 @@ For a figure that is a plot with a third axis (a trajectory, probes, a small sur
 | `v%pick(x, y, mesh, element [, point] [, stat])` → `logical` | the element under a pixel of the view (from its top-left corner) |
 | `v%hovered(mesh, element [, point] [, stat])` → `logical`, `v%clicked(...)` → `logical` | the element under the mouse, the element clicked, in the last `draw` |
 | `v%image(rgba [, stat])` | the pixels of the last render, `integer(int8), allocatable :: rgba(:,:,:)`, as `tex%update` takes them |
-| `v%render_info([count] [, milliseconds] [, width] [, height] [, half] [, stat])` | the renders so far, the time and size of the last one, whether it was at half resolution |
+| `v%render_info([count] [, milliseconds] [, width] [, height] [, half] [, cache_bytes] [, stat])` | the renders so far, the time and size of the last one, whether it was at half resolution, the bytes the vertex caches hold (`int64`; see [Meshes](#meshes)) |
 | `v%view_cube([size] [, corner] [, stat])` | a view cube over the view, after `draw`: a click on a face, an edge or a corner turns the camera to it, a drag orbits ([Gizmos](#gizmos)) |
 | `v%gizmo(id, matrix [, mode] [, space] [, snap] [, stat])` → `logical` | handles over the view, after `draw`, moving `matrix` (`real(real64) :: matrix(4, 4)`): `'translate'`, `'rotate'` or `'scale'`; `.true.` on the frames the user moved it ([Gizmos](#gizmos)) |
 | `v%view_matrix(m [, stat])`, `v%projection_matrix(m [, stat])` | the camera's view and projection matrices, `real(real64) :: m(4, 4)`, column-major as OpenGL's ([Matrices](#matrices)) |
@@ -68,6 +68,11 @@ derives, once, what it keeps beside them:
 - the scalar's range.
 
 It renders at the next `draw`. These derived arrays take about 12 bytes per vertex and 24 per triangle.
+
+A render also transforms every vertex into a cache of 64 bytes a vertex. The view keeps the caches while renders
+follow one another (a drag, a field changed every frame) and frees them after 30 draws without a render; on glibc it
+then returns the freed memory to the system (`malloc_trim`). A mesh of 3.4 M vertices thus holds 206 MiB more while it
+moves than while it rests. `v%render_info(cache_bytes=b)` reports what they hold.
 
 **Kinds.**
 - **Triangles** and **quads** take a connectivity from 1, `tri(3, nt)` or `quad(4, nq)`; a quad's vertices go around

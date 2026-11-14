@@ -37,6 +37,9 @@
 #include <memory>
 #include <string>
 #include <vector>
+#if defined(__GLIBC__)
+#include <malloc.h> // malloc_trim
+#endif
 
 namespace {
 
@@ -128,6 +131,7 @@ struct view_t {
    bool                   camera_set = false; // false: fitted at the first render with a mesh
    std::vector<plane_t>   planes;
    bool                   dirty = true;
+   int                    idle_draws = 0;   // draws since the last render (the vertex caches freed at IDLE_RELEASE)
    // the last render
    int                    rw = 0, rh = 0;   // its size [pixels]
    bool                   half = false;
@@ -354,6 +358,8 @@ int derive(mesh_t &m) {
    };
    if (m.kind == TRIANGLES || m.kind == QUADS) {
       const int per = m.kind == TRIANGLES ? 3 : 4;
+      m.tri.reserve(static_cast<size_t>(m.ncell) * (per == 4 ? 6 : 3));
+      if (m.edges) m.seg.reserve(static_cast<size_t>(m.ncell) * 2 * per);
       for (int64_t c = 0; c < m.ncell; ++c) {
          int32_t k[4];
          for (int i = 0; i < per; ++i) {
@@ -367,6 +373,10 @@ int derive(mesh_t &m) {
       }
    } else if (m.kind == SURFACE) {
       const int ni = m.ni, nj = m.nj;
+      const size_t cells = static_cast<size_t>(std::max(ni - 1, 0)) * std::max(nj - 1, 0);
+      m.tri.reserve(6 * cells);
+      if (m.edges)
+         m.seg.reserve(2 * (static_cast<size_t>(std::max(ni - 1, 0)) * nj + static_cast<size_t>(ni) * std::max(nj - 1, 0)));
       for (int j = 0; j + 1 < nj; ++j)
          for (int i = 0; i + 1 < ni; ++i) {
             const int32_t a = i + j * ni, b = a + 1, c = a + 1 + ni, d = a + ni;
@@ -379,6 +389,9 @@ int derive(mesh_t &m) {
             for (int j = 0; j + 1 < nj; ++j) m.seg.insert(m.seg.end(), {i + j * ni, i + (j + 1) * ni});
       }
    } else { // lines
+      const size_t ns = m.conn ? static_cast<size_t>(m.ncell) : static_cast<size_t>(std::max<int64_t>(m.nv - 1, 0));
+      m.seg.reserve(2 * ns);
+      m.seg_cell.reserve(ns);
       if (m.conn) {
          for (int64_t c = 0; c < m.ncell; ++c) {
             const int32_t a = m.conn[2 * c] - 1, b = m.conn[2 * c + 1] - 1;
@@ -730,6 +743,25 @@ void band(const view_t &v, const frame_t &F, int y0, int y1) {
          segment(F, y0, y1, A, B);
       }
    }
+}
+
+// The per-render vertex caches (64 B a vertex) are needed only while a render runs; they are kept while renders follow
+// one another (a drag, a field changed every frame) and freed after IDLE_RELEASE draws without one. Small caches return
+// to malloc, not to the system: on glibc, malloc_trim gives the freed pages back.
+constexpr int IDLE_RELEASE = 30;
+
+size_t cache_bytes(const view_t &v) {
+   size_t b = 0;
+   for (const auto &m : v.meshes) b += m->sv.capacity() * sizeof(vtx_t);
+   return b;
+}
+
+void release_caches(view_t &v) {
+   if (cache_bytes(v) == 0) return;
+   for (auto &m : v.meshes) std::vector<vtx_t>().swap(m->sv);
+#if defined(__GLIBC__)
+   malloc_trim(0);
+#endif
 }
 
 void render(view_t &v, int w, int h, bool half) {
@@ -1243,6 +1275,9 @@ int fig_view3d_draw(int handle, const char *id, int id_len, double width, double
       }
       if (s != FIG_OK) return s;
       v->dirty = false;
+      v->idle_draws = 0;
+   } else if (++v->idle_draws == IDLE_RELEASE) {
+      release_caches(*v);
    }
    // the image
    const unsigned long long tex = v->half ? v->tex_half : v->tex_full;
@@ -1298,6 +1333,14 @@ int fig_view3d_info(int handle, int *renders, double *ms, int *width, int *heigh
    *width = v->rw;
    *height = v->rh;
    *half = v->half ? 1 : 0;
+   return FIG_OK;
+   V3_CATCH
+}
+
+int fig_view3d_cache(int handle, long long *bytes) {
+   V3_TRY
+   V3_VIEW
+   *bytes = static_cast<long long>(cache_bytes(*v));
    return FIG_OK;
    V3_CATCH
 }

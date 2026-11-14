@@ -262,6 +262,14 @@ interface
    integer(c_int), intent(out) :: width, height, half
    integer(c_int)              :: status
    endfunction fig_view3d_info
+
+   function fig_view3d_cache(handle, bytes) result(status) bind(C, name='fig_view3d_cache')
+   import :: c_int, c_long_long
+   implicit none
+   integer(c_int),       value       :: handle
+   integer(c_long_long), intent(out) :: bytes
+   integer(c_int)                    :: status
+   endfunction fig_view3d_cache
 endinterface
 
 contains
@@ -809,16 +817,19 @@ contains
    call figure_check(s, stat)
    endsubroutine image
 
-   recursive subroutine render_info(self, count, milliseconds, width, height, half, stat)
-   !< The renders so far, the last one's time [ms] and size [pixels], and whether it was at half resolution.
+   recursive subroutine render_info(self, count, milliseconds, width, height, half, cache_bytes, stat)
+   !< The renders so far, the last one's time [ms] and size [pixels], whether it was at half resolution, and the bytes
+   !< the per-render vertex caches hold (64 a vertex; freed after 30 draws without a render).
    class(view3d_object), intent(in)            :: self         !< View.
    integer(int32),       intent(out), optional :: count        !< Renders since `init`.
    real(real64),         intent(out), optional :: milliseconds !< The last render's time [ms].
    integer(int32),       intent(out), optional :: width        !< Its width [pixels].
    integer(int32),       intent(out), optional :: height       !< Its height [pixels].
    logical,              intent(out), optional :: half         !< At half resolution (the camera was moving).
+   integer(int64),       intent(out), optional :: cache_bytes  !< The vertex caches' bytes.
    integer(int32),       intent(out), optional :: stat         !< Status.
    integer(c_int)                              :: n, w, h, hf  !< Values.
+   integer(c_long_long)                        :: cb           !< Cache bytes.
    real(c_double)                              :: ms           !< Time.
 
    if (figure_refused('view3d_object%render_info', stat)) return
@@ -829,6 +840,10 @@ contains
    if (present(width)) width = int(w, int32)
    if (present(height)) height = int(h, int32)
    if (present(half)) half = hf /= 0_c_int
+   if (present(cache_bytes)) then
+      call figure_check(fig_view3d_cache(self%handle, cb), stat)
+      cache_bytes = int(cb, int64)
+   endif
    endsubroutine render_info
 
    ! ---- private -------------------------------------------------------------------------------------------------------

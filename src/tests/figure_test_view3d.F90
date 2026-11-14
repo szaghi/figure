@@ -16,8 +16,9 @@ program figure_test_view3d
 !<   resolution while it moves, at full size when it ends) and the wheel; no render when nothing changed;
 !< - the wheel inside a scrolling child: over the view it zooms the view and does not scroll the child; beside the view
 !<   it scrolls the child and does not zoom.
-!< Then the refusals with their statuses, the mesh ids (each the next one, none given back by remove or clear), and
-!< the time of a 3.2e5-triangle render (printed, not checked).
+!< The vertex caches: held after a render, freed after 30 draws without one, and a render after that gives the same
+!< pixels. Then the refusals with their statuses, the mesh ids (each the next one, none given back by remove or
+!< clear), and the time of a 3.2e5-triangle render (printed, not checked).
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
 use figure, only : app_object, ig_begin, ig_end, ig_item_rect, ig_set_next_window, ip_colormap, view3d_object, &
@@ -36,7 +37,7 @@ real(real64), parameter   :: PI = acos(-1.0_real64)       !< Pi.
 type(app_object)          :: app                          !< Application.
 type(view3d_object)       :: v(NV)                        !< The views.
 real(real64)              :: origin(2, NV)                !< Each view's top-left on the display [pixels].
-logical                   :: test_passed(17)              !< Per-check outcome.
+logical                   :: test_passed(18)              !< Per-check outcome.
 ! the data, kept by address: target
 real(real64), target      :: cube_xyz(3, 8)               !< Cube's vertices.
 integer(int32), target    :: cube_quads(4, 6)             !< Cube's faces.
@@ -95,6 +96,7 @@ test_passed(11) = check_mouse_picks()
 test_passed(12) = check_cache()
 test_passed(13) = check_refusals()
 test_passed(17) = check_ids()
+test_passed(18) = check_release()
 call check_wheel_in_child(test_passed(15:16))
 call perf_log()
 
@@ -530,6 +532,30 @@ contains
    check_refusals = all(st == FIG_ERR_ARGUMENT)
    if (.not. check_refusals) write(output_unit, '(A,8I3)') 'refusals', st
    endfunction check_refusals
+
+   logical function check_release()
+   !< The per-render vertex caches: held after a render (64 B a vertex), freed after 30 draws without a render; the
+   !< render that follows makes them again and gives the same pixels.
+   integer(int8), allocatable :: before(:,:,:) !< The image before the release.
+   integer(int64)             :: held, freed, again !< Cache bytes.
+   integer(int32)             :: k !< Frame.
+
+   call v(4)%changed()
+   call frame()
+   call v(4)%render_info(cache_bytes=held)
+   call v(4)%image(before)
+   do k = 1_int32, 31_int32
+      call frame()
+   enddo
+   call v(4)%render_info(cache_bytes=freed)
+   call v(4)%changed()
+   call frame()
+   call v(4)%render_info(cache_bytes=again)
+   call v(4)%image(img)
+   check_release = held > 0_int64 .and. mod(held, 64_int64) == 0_int64 .and. freed == 0_int64 .and. &
+                   again == held .and. all(img == before)
+   if (.not. check_release) write(output_unit, '(A,3I12)') 'release: held, freed, again ', held, freed, again
+   endfunction check_release
 
    logical function check_ids()
    !< Mesh ids go on: each mesh added gets the next one, from 1; `remove` and `clear` give none back.
