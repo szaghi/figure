@@ -22,7 +22,7 @@ For a figure that is a plot with a third axis (a trajectory, probes, a small sur
 
 | Procedure | Notes |
 |---|---|
-| `v%init([threads] [, fast_moves] [, lighting] [, background] [, stat])` | create the view, after `app%init*`: `threads` in [1, 4] (default 1), half resolution while the user moves the camera (default `.true.`), shading by a light at the eye (default `.true.`), background `[r, g, b]` (default: the style's window background) |
+| `v%init([threads] [, fast_moves] [, lighting] [, background] [, stat])` | create the view, after `app%init*`: `threads` in [1, 16] (default 1), half resolution while the user moves the camera (default `.true.`), shading by a light at the eye (default `.true.`), background `[r, g, b]` (default: the style's window background) |
 | `v%destroy()`, `v%is_initialized()` → `logical` | release the view and its textures (any state); whether it exists |
 | `v%triangles(xyz, tri [, scalar] [, cell_scalar] [, colormap] [, color] [, edges] [, flat] [, stat])` → `int32` | add triangles: `real(real64) :: xyz(3, nv)`, `integer(int32) :: tri(3, nt)` (from 1); the mesh's id |
 | `v%quads(xyz, quad [, ...])` → `int32` | add quadrilaterals, `quad(4, nq)`, each drawn as two triangles |
@@ -310,7 +310,7 @@ image goes. `init_remote(lossy=.false.)` sends every image exact. See [Known iss
 **Statuses.** `stat` is optional; absent, a failure stops the program with its message ([Error handling](errors)).
 
 - **`FIG_ERR_ARGUMENT`:**
-  - `threads` outside [1, 4];
+  - `threads` outside [1, 16];
   - an array of the wrong shape, or not contiguous;
   - a connectivity index outside [1, nv];
   - a scalar of the wrong size;

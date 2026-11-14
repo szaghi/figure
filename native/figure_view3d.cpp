@@ -46,7 +46,8 @@ namespace {
 
 constexpr float AMBIENT = 0.25f;     // light where a surface is seen edge-on
 constexpr int MAX_PLANES = 6;        // clipping planes
-constexpr int MAX_THREADS = 4;       // the band split gains nothing beyond (S15 spike)
+constexpr int MAX_THREADS = 16;      // blocks of rows shared out: more threads help a large model (the band split of
+                                     // the S15 spike gained nothing beyond 4)
 constexpr float LINE_BIAS = 2.0e-3f; // NDC depth by which lines come forward of the surfaces they lie on
 constexpr double PI = 3.14159265358979323846;
 constexpr double DEG = PI / 180.0;

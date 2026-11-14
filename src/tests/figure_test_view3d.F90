@@ -518,7 +518,7 @@ contains
    m = v(6)%triangles(cube_xyz, bad_tri, stat=st(1))
    st(1) = merge(st(1), -1_int32, m == 0_int32)
    call v(6)%view('+w', stat=st(2))
-   call w%init(threads=5_int32, stat=st(3))
+   call w%init(threads=17_int32, stat=st(3))
    m = v(6)%triangles(cube_xyz, one_tri, scalar=short, stat=st(4))
    st(4) = merge(st(4), -1_int32, m == 0_int32)
    do k = 1_int32, 6_int32

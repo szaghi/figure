@@ -275,9 +275,9 @@ endinterface
 contains
    recursive subroutine init(self, threads, fast_moves, lighting, background, stat)
    !< Create the view (an existing one is destroyed first). After `app%init*`. Statuses: `FIG_ERR_ARGUMENT` for
-   !< `threads` outside [1, 4]; `FIG_ERR_STATE` from a task. The same in every mode.
+   !< `threads` outside [1, 16]; `FIG_ERR_STATE` from a task. The same in every mode.
    class(view3d_object), intent(inout)         :: self          !< View.
-   integer(int32),       intent(in),  optional :: threads       !< Threads rendering bands of rows, in [1, 4] (default 1).
+   integer(int32),       intent(in),  optional :: threads       !< Threads rendering blocks of rows, in [1, 16] (default 1).
    logical,              intent(in),  optional :: fast_moves    !< Half resolution while the user moves the camera
                                                                  !< (default true).
    logical,              intent(in),  optional :: lighting      !< Shade by a light at the eye (default true); off: the
