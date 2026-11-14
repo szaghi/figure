@@ -98,7 +98,7 @@ jobs:
       continue-on-error: true
       run: |
         brew install ffmpeg imagemagick
-        bash docs/examples/build.sh --varset macos
+        bash docs/examples/build.sh --varset macos || echo "build.sh: some runs failed (outputs uploaded); the programs are built"
         python3 scripts/docs_media.py --check
 
     - name: Upload the pictures that differ
@@ -109,6 +109,7 @@ jobs:
         path: |
           docs/public/media/*.new.png
           docs/public/media/*.diff.png
+          docs/examples/output/*.txt
         if-no-files-found: ignore
 
     - name: Tests (fpm)
@@ -207,7 +208,7 @@ jobs:
     - name: Pictures measured (docs_media.py --check)
       continue-on-error: true
       run: |
-        bash docs/examples/build.sh --varset windows
+        bash docs/examples/build.sh --varset windows || echo "build.sh: some runs failed (outputs uploaded); the programs are built"
         python scripts/docs_media.py --check
 
     - name: Upload the pictures that differ
@@ -218,6 +219,7 @@ jobs:
         path: |
           docs/public/media/*.new.png
           docs/public/media/*.diff.png
+          docs/examples/output/*.txt
         if-no-files-found: ignore
 
     - name: Tests (fpm)
