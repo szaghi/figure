@@ -29,6 +29,7 @@
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL_main.h>
 
+#include <cfenv>
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
@@ -2064,6 +2065,20 @@ long long fig_opened_url(char *buf, long long cap_bytes) {
    return static_cast<long long>(opened_url.size());
 }
 
+// The floating-point environment held around calls into the GL driver and the window system: their own arithmetic
+// (Mesa's llvmpipe in glXCreateContext, shader compilation, rasterization) raises IEEE flags that C code may raise
+// with the exceptions masked, the default. A program built with traps (gfortran -ffpe-trap=invalid,zero,overflow, a
+// debug build) stopped there with SIGFPE at its window's creation (xall_figure's debug xall_gui, 2026-11-13). Inside,
+// every exception is masked and the flags cleared; on leaving, the program's environment comes back as it was (its
+// traps, and its flags without the driver's). FIGURE's own and Dear ImGui's arithmetic stay outside: still trapped.
+struct fp_held_t {
+   std::fenv_t env;
+   fp_held_t() { std::feholdexcept(&env); }
+   ~fp_held_t() { std::fesetenv(&env); }
+   fp_held_t(const fp_held_t &) = delete;
+   fp_held_t &operator=(const fp_held_t &) = delete;
+};
+
 int fig_init(const char *title, int title_len, int width, int height, int vsync) {
    FIG_TRY
    if (st.m != mode::none) return fail(FIG_ERR_STATE, "figure is already initialized");
@@ -2082,6 +2097,7 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    if (!SDL_Init(SDL_INIT_VIDEO)) return fail(FIG_ERR_FAILED, std::string("SDL_Init: ") + SDL_GetError());
    SDL_SetEventEnabled(SDL_EVENT_DROP_FILE, true); // files and folders dropped on the window (app%dropped)
    sdl_events = true;
+   fp_held_t held; // the window, its GL context and the GL backend made with the driver's arithmetic untrapped
 #if defined(__APPLE__)
    const char *glsl = "#version 150";
    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
@@ -2323,6 +2339,7 @@ int fig_set_icon_rgba(const unsigned char *rgba, int width, int height) {
    if (width <= 0 || height <= 0 || width > 1024 || height > 1024)
       return fail(FIG_ERR_ARGUMENT, "set_icon: the image is rgba(4, width, height), 1 to 1024 pixels a side");
    if (st.frame.on) { // the bar's icon: a texture of the image (even where the system refuses the window's)
+      fp_held_t held; // the upload: the driver's
       if (st.frame.icon_tex == 0) p_glGenTextures(1, &st.frame.icon_tex);
       p_glBindTexture(GL_TEXTURE_2D_, st.frame.icon_tex);
       p_glTexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, static_cast<int>(GL_LINEAR_));
@@ -2842,7 +2859,10 @@ int fig_begin_frame(int *running) {
       rs.wait += now - rs.t_mark;
       rs.t_mark = now;
    }
-   ImGui_ImplOpenGL3_NewFrame();
+   {
+      fp_held_t held; // the backend's first frame compiles its shaders in the driver
+      ImGui_ImplOpenGL3_NewFrame();
+   }
    if (cap.on) { // what ImGui_ImplSDL3_NewFrame does, without the real mouse, keyboard focus or wall clock
       ImGuiIO &io = ImGui::GetIO();
       int w, h, fw, fh;
@@ -2896,24 +2916,33 @@ int fig_end_frame(void) {
       rs.build += t_render - rs.t_mark;
    }
    const ImGuiIO &io = ImGui::GetIO();
-   p_glViewport(0, 0, static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x),
-                static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y));
-   p_glClearColor(st.clear[0], st.clear[1], st.clear[2], 1.0f);
-   p_glClear(GL_COLOR_BUFFER_BIT_);
-   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+   {
+      fp_held_t held; // the draw: the driver's
+      p_glViewport(0, 0, static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x),
+                   static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y));
+      p_glClearColor(st.clear[0], st.clear[1], st.clear[2], 1.0f);
+      p_glClear(GL_COLOR_BUFFER_BIT_);
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+   }
    const bool due = cap.on && !cap.held && cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count);
    if (due || img.state == 1 || !test_capture_path.empty()) { // the GPU's pixels, read back once
       const int fw = static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x);
       const int fh = static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y);
       std::vector<unsigned char> rgb;
-      if (fw > 0 && fh > 0) gl_read(rgb, fw, fh);
+      if (fw > 0 && fh > 0) {
+         fp_held_t held; // the read-back: the driver's
+         gl_read(rgb, fw, fh);
+      }
       if (due) capture_write(rgb.data(), fw, fh);
       if (fw > 0 && fh > 0) pictures_write(io, rgb.data(), fw, fh);
    }
    if (cap.on && !cap.held) ++cap.frame;
    Uint64 t_swap = 0;
    if (rs.on) t_swap = SDL_GetTicksNS();
-   SDL_GL_SwapWindow(st.window);
+   {
+      fp_held_t held; // the swap: the driver's (and the window system's)
+      SDL_GL_SwapWindow(st.window);
+   }
    if (rs.on) {
       const Uint64 now = SDL_GetTicksNS();
       rs.render += t_swap - t_render;
@@ -2936,6 +2965,7 @@ void fig_shutdown(void) {
          st.in_frame = false;
       }
       if (st.m == mode::window) {
+         fp_held_t held; // the backend's and the textures' release: the driver's
          if (st.frame.icon_tex != 0) p_glDeleteTextures(1, &st.frame.icon_tex);
          for (const auto &t : st.textures) {
             const unsigned int name = static_cast<unsigned int>(t.first);
@@ -2950,6 +2980,7 @@ void fig_shutdown(void) {
       run_frames = 0;
       if (st.m == mode::remote) figure_remote::stop();
       if (st.m == mode::window) {
+         fp_held_t held; // the context and the window released: the driver's
          sdl_events = false;
          SDL_GL_DestroyContext(st.gl);
          SDL_DestroyWindow(st.window);
@@ -2980,6 +3011,7 @@ int fig_texture_create(int width, int height, int smooth, unsigned long long *id
       *id = figure_remote::new_texture_id();
    } else {
       unsigned int name = 0;
+      fp_held_t held; // the upload: the driver's
       p_glGenTextures(1, &name);
       if (name == 0) return fail(FIG_ERR_FAILED, "glGenTextures returned no texture");
       p_glBindTexture(GL_TEXTURE_2D_, name);
@@ -3011,6 +3043,7 @@ int fig_texture_update(unsigned long long id, int width, int height, const unsig
       return fail(FIG_ERR_ARGUMENT, "pixel array size differs from the texture size");
    if (st.m == mode::window) {
       // tightly packed RGBA rows straight from the caller's array: one upload, no staging copy
+      fp_held_t held; // the upload: the driver's
       p_glBindTexture(GL_TEXTURE_2D_, static_cast<unsigned int>(id));
       p_glPixelStorei(GL_UNPACK_ROW_LENGTH_, 0);
       p_glPixelStorei(GL_UNPACK_ALIGNMENT_, 1);
