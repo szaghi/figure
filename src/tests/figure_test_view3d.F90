@@ -534,8 +534,8 @@ contains
    endfunction check_refusals
 
    logical function check_release()
-   !< The per-render vertex caches: held after a render (64 B a vertex), freed after 30 draws without a render; the
-   !< render that follows makes them again and gives the same pixels.
+   !< The per-render caches (64 B a vertex, the bands' triangle lists): held after a render, freed after 30 draws
+   !< without a render; the render that follows makes them again, as large, and gives the same pixels.
    integer(int8), allocatable :: before(:,:,:) !< The image before the release.
    integer(int64)             :: held, freed, again !< Cache bytes.
    integer(int32)             :: k !< Frame.
@@ -552,8 +552,7 @@ contains
    call frame()
    call v(4)%render_info(cache_bytes=again)
    call v(4)%image(img)
-   check_release = held > 0_int64 .and. mod(held, 64_int64) == 0_int64 .and. freed == 0_int64 .and. &
-                   again == held .and. all(img == before)
+   check_release = held > 0_int64 .and. freed == 0_int64 .and. again == held .and. all(img == before)
    if (.not. check_release) write(output_unit, '(A,3I12)') 'release: held, freed, again ', held, freed, again
    endfunction check_release
 

@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -69,6 +70,15 @@ struct vtx_t {
    uint32_t code;
    int32_t  X, Y;
    float    sz, iw;
+};
+
+// The elements (triangles, or segments) of the visible meshes numbered in one sequence (the meshes in order, then
+// each mesh's elements in order), sorted to the blocks of rows they may cover: lists[k][b] holds, increasing, the
+// numbers thread k binned to block b (4 bytes each).
+struct bins_t {
+   std::vector<int32_t> mesh_of;                        // a numbered mesh's index in the view's list
+   std::vector<int64_t> first;                          // its first element's number (one more entry: the total)
+   std::vector<std::vector<std::vector<uint32_t>>> lists; // [binning thread][block]
 };
 
 struct mesh_t {
@@ -132,6 +142,7 @@ struct view_t {
    std::vector<plane_t>   planes;
    bool                   dirty = true;
    int                    idle_draws = 0;   // draws since the last render (the vertex caches freed at IDLE_RELEASE)
+   bins_t                 tbins, sbins;     // the triangles, the segments each block of rows draws (renders by threads)
    // the last render
    int                    rw = 0, rh = 0;   // its size [pixels]
    bool                   half = false;
@@ -511,6 +522,11 @@ inline void project(vtx_t &v, float hw, float hh, bool always) {
 
 // One triangle inside the guard band, clipped to rows [y0, y1). Edge functions in exact integers (1/SUB pixel): a
 // pixel centre on an edge shared by two triangles belongs to exactly one, by the top-left rule.
+// The first and last pixel whose centre (p + 1/2) lies at or after, at or before, fixed-point coordinate q.
+inline int64_t floor_sub(int64_t q) { return q >= 0 ? q / SUB : -((-q + SUB - 1) / SUB); }
+inline int ceil_px(int64_t q) { return static_cast<int>(-floor_sub(-(q - SUB / 2))); }
+inline int floor_px(int64_t q) { return static_cast<int>(floor_sub(q - SUB / 2)); }
+
 void raster(const frame_t &F, int y0, int y1, const vtx_t &A, const vtx_t &B, const vtx_t &C, int32_t id,
             unsigned partial) {
    const vtx_t *v[3] = {&A, &B, &C};
@@ -686,8 +702,70 @@ void transform(const view_t &v, mesh_t &m, const double mvp[16], const float eye
    }
 }
 
-// Rows [y0, y1) of every visible mesh: clear, triangles, then lines.
-void band(const view_t &v, const frame_t &F, int y0, int y1) {
+// One triangle of a mesh on rows [y0, y1): culled when outside a clip-space plane or the rows, else coloured, lit
+// and rasterized.
+void band_triangle(const frame_t &F, int y0, int y1, const mesh_t &m, size_t t) {
+   const int per = m.cells_per_tri();
+   const int32_t *k = &m.tri[3 * t];
+   const vtx_t &a0 = m.sv[k[0]], &b0 = m.sv[k[1]], &c0 = m.sv[k[2]];
+   if (a0.code & b0.code & c0.code) return; // outside a clip-space plane
+   if (!(a0.code | b0.code | c0.code)) {    // no pixel centre of the band's rows inside its box: raster draws nothing
+      const int64_t minx = std::min({a0.X, b0.X, c0.X}), maxx = std::max({a0.X, b0.X, c0.X});
+      const int64_t miny = std::min({a0.Y, b0.Y, c0.Y}), maxy = std::max({a0.Y, b0.Y, c0.Y});
+      if (std::max(0, ceil_px(minx)) > std::min(F.w - 1, floor_px(maxx)) ||
+          std::max(y0, ceil_px(miny)) > std::min(y1 - 1, floor_px(maxy)))
+         return;
+   }
+   vtx_t A = a0, B = b0, C = c0;
+   if (m.scalar && m.on_cells) {
+      float c[3];
+      scalar_colour(m, m.scalar[t / per], c);
+      A.r = B.r = C.r = c[0], A.g = B.g = C.g = c[1], A.b = B.b = C.b = c[2];
+   }
+   if (m.flat && F.lighting) {
+      const float u[3] = {B.wx - A.wx, B.wy - A.wy, B.wz - A.wz}, w[3] = {C.wx - A.wx, C.wy - A.wy, C.wz - A.wz};
+      const float n[3] = {u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]};
+      const float s = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+      const float l = AMBIENT + (1.0f - AMBIENT) *
+                                    (s > 0.0f ? std::fabs(n[0] * F.eye_dir[0] + n[1] * F.eye_dir[1] +
+                                                          n[2] * F.eye_dir[2]) / s
+                                              : 0.0f);
+      A.l = B.l = C.l = l;
+   }
+   triangle(F, y0, y1, A, B, C, m.base + static_cast<int32_t>(t));
+}
+
+// One segment of a mesh on rows [y0, y1): edges in the edge colour, lines in theirs.
+void band_segment(const frame_t &F, int y0, int y1, const mesh_t &m, size_t s) {
+   vtx_t A = m.sv[m.seg[2 * s]], B = m.sv[m.seg[2 * s + 1]];
+   if (m.kind != LINES) {
+      A.r = B.r = m.edge_color[0], A.g = B.g = m.edge_color[1], A.b = B.b = m.edge_color[2];
+   } else if (m.scalar && m.on_cells) {
+      float c[3];
+      scalar_colour(m, m.scalar[m.seg_cell[s]], c);
+      A.r = B.r = c[0], A.g = B.g = c[1], A.b = B.b = c[2];
+   }
+   segment(F, y0, y1, A, B);
+}
+
+// The elements binned to a block, in their order: fn(mesh, element) for each.
+template <typename F>
+void each_binned(const view_t &v, const bins_t &bins, int block, F fn) {
+   for (const auto &per : bins.lists) {
+      const auto &list = per[static_cast<size_t>(block)];
+      if (list.empty()) continue;
+      size_t mi = static_cast<size_t>(std::upper_bound(bins.first.begin(), bins.first.end(),
+                                                       static_cast<int64_t>(list.front())) - bins.first.begin()) - 1;
+      for (const uint32_t g : list) {
+         while (static_cast<int64_t>(g) >= bins.first[mi + 1]) ++mi;
+         fn(*v.meshes[static_cast<size_t>(bins.mesh_of[mi])], static_cast<size_t>(g - bins.first[mi]));
+      }
+   }
+}
+
+// Rows [y0, y1): clear, the triangles, then the segments. With `binned`, those of block `block` only (each list in
+// the order the elements had: depth ties resolve as without bins); without, every visible mesh's.
+void band(const view_t &v, const frame_t &F, int y0, int y1, int block, bool binned) {
    const size_t a = static_cast<size_t>(y0) * F.w, b = static_cast<size_t>(y1) * F.w;
    const uint32_t bg = static_cast<uint32_t>(v.background[0]) | (static_cast<uint32_t>(v.background[1]) << 8) |
                        (static_cast<uint32_t>(v.background[2]) << 16) | 0xff000000u;
@@ -695,54 +773,17 @@ void band(const view_t &v, const frame_t &F, int y0, int y1) {
    for (size_t i = a; i < b; ++i, p += 4) std::memcpy(p, &bg, 4); // RGBA bytes in memory order on little-endian
    std::fill(F.depth + a, F.depth + b, std::numeric_limits<float>::infinity());
    std::fill(F.ids + a, F.ids + b, -1);
-   for (const auto &mp : v.meshes) {
-      const mesh_t &m = *mp;
-      if (!m.visible || m.kind == LINES) continue;
-      const size_t nt = m.tri.size() / 3;
-      const int per = m.cells_per_tri();
-      for (size_t t = 0; t < nt; ++t) {
-         const int32_t *k = &m.tri[3 * t];
-         const vtx_t &a0 = m.sv[k[0]], &b0 = m.sv[k[1]], &c0 = m.sv[k[2]];
-         if (a0.code & b0.code & c0.code) continue; // outside a clip-space plane
-         if (!(a0.code | b0.code | c0.code)) {      // outside the band
-            const int32_t miny = std::min({a0.Y, b0.Y, c0.Y}), maxy = std::max({a0.Y, b0.Y, c0.Y});
-            if (maxy < y0 * SUB + SUB / 2 || miny > (y1 - 1) * SUB + SUB / 2) continue;
-         }
-         vtx_t A = a0, B = b0, C = c0;
-         if (m.scalar && m.on_cells) {
-            float c[3];
-            scalar_colour(m, m.scalar[t / per], c);
-            A.r = B.r = C.r = c[0], A.g = B.g = C.g = c[1], A.b = B.b = C.b = c[2];
-         }
-         if (m.flat && F.lighting) {
-            const float u[3] = {B.wx - A.wx, B.wy - A.wy, B.wz - A.wz}, w[3] = {C.wx - A.wx, C.wy - A.wy, C.wz - A.wz};
-            const float n[3] = {u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]};
-            const float s = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
-            const float l = AMBIENT + (1.0f - AMBIENT) *
-                                          (s > 0.0f ? std::fabs(n[0] * F.eye_dir[0] + n[1] * F.eye_dir[1] +
-                                                                n[2] * F.eye_dir[2]) / s
-                                                    : 0.0f);
-            A.l = B.l = C.l = l;
-         }
-         triangle(F, y0, y1, A, B, C, m.base + static_cast<int32_t>(t));
-      }
+   if (binned) {
+      each_binned(v, v.tbins, block, [&](const mesh_t &m, size_t t) { band_triangle(F, y0, y1, m, t); });
+      each_binned(v, v.sbins, block, [&](const mesh_t &m, size_t s) { band_segment(F, y0, y1, m, s); });
+      return;
    }
-   for (const auto &mp : v.meshes) {
-      const mesh_t &m = *mp;
-      if (!m.visible || m.seg.empty()) continue;
-      const size_t ns = m.seg.size() / 2;
-      for (size_t s = 0; s < ns; ++s) {
-         vtx_t A = m.sv[m.seg[2 * s]], B = m.sv[m.seg[2 * s + 1]];
-         if (m.kind != LINES) {
-            A.r = B.r = m.edge_color[0], A.g = B.g = m.edge_color[1], A.b = B.b = m.edge_color[2];
-         } else if (m.scalar && m.on_cells) {
-            float c[3];
-            scalar_colour(m, m.scalar[m.seg_cell[s]], c);
-            A.r = B.r = c[0], A.g = B.g = c[1], A.b = B.b = c[2];
-         }
-         segment(F, y0, y1, A, B);
-      }
-   }
+   for (const auto &mp : v.meshes)
+      if (mp->visible && mp->kind != LINES)
+         for (size_t t = 0; t < mp->tri.size() / 3; ++t) band_triangle(F, y0, y1, *mp, t);
+   for (const auto &mp : v.meshes)
+      if (mp->visible)
+         for (size_t s = 0; s < mp->seg.size() / 2; ++s) band_segment(F, y0, y1, *mp, s);
 }
 
 // The per-render vertex caches (64 B a vertex) are needed only while a render runs; they are kept while renders follow
@@ -753,15 +794,90 @@ constexpr int IDLE_RELEASE = 30;
 size_t cache_bytes(const view_t &v) {
    size_t b = 0;
    for (const auto &m : v.meshes) b += m->sv.capacity() * sizeof(vtx_t);
+   for (const bins_t *bins : {&v.tbins, &v.sbins})
+      for (const auto &per : bins->lists)
+         for (const auto &list : per) b += list.capacity() * sizeof(uint32_t);
    return b;
 }
 
 void release_caches(view_t &v) {
    if (cache_bytes(v) == 0) return;
    for (auto &m : v.meshes) std::vector<vtx_t>().swap(m->sv);
+   v.tbins = bins_t();
+   v.sbins = bins_t();
 #if defined(__GLIBC__)
    malloc_trim(0);
 #endif
+}
+
+// Rows per block: the image is drawn in blocks of BLOCK_ROWS rows, each by whichever thread is free, so that a
+// model filling a strip of the view still keeps every thread busy.
+constexpr int BLOCK_ROWS = 16;
+
+// The elements of the visible meshes (triangles, or segments) sorted to the blocks of `rows` rows they may cover, once per
+// render, so that each block walks its own. Thread k bins a contiguous range of them (the meshes in order, then each
+// mesh's elements in order) into bins[k][b]; block b reads bins[0..T-1][b] in turn, so it draws them in the order they
+// had. An element crossing a clip-space plane goes to every block (its screen rows are not known before clipping); one
+// outside a plane, or above or below every row, to none. The blocks' own tests still decide: the bins only narrow
+// what they look at.
+bool bin_elements(view_t &v, int T, int w, int h, int rows, bool segments, bins_t &bins) {
+   std::vector<int32_t> &mesh_of = bins.mesh_of;
+   std::vector<int64_t> &first = bins.first;
+   mesh_of.clear();
+   first.assign(1, 0);
+   for (size_t i = 0; i < v.meshes.size(); ++i) {
+      const mesh_t &m = *v.meshes[i];
+      if (!m.visible) continue;
+      const size_t n = segments ? m.seg.size() / 2 : (m.kind == LINES ? 0 : m.tri.size() / 3);
+      if (n == 0) continue;
+      mesh_of.push_back(static_cast<int32_t>(i));
+      first.push_back(first.back() + static_cast<int64_t>(n));
+   }
+   const int64_t total = first.back();
+   if (total > static_cast<int64_t>(UINT32_MAX)) return false; // numbers past 4 bytes: drawn without bins
+   const int nb = (h + rows - 1) / rows;
+   bins.lists.resize(static_cast<size_t>(T));
+   for (auto &per : bins.lists) {
+      per.resize(static_cast<size_t>(nb));
+      for (auto &list : per) list.clear();
+   }
+   if (total == 0) return true;
+   const int32_t lo_y = SUB / 2, hi_y = (h - 1) * SUB + SUB / 2;
+   const int per_el = segments ? 2 : 3;
+   parallel(T, [&](int k) {
+      auto &mine = bins.lists[k];
+      const int64_t g0 = total * k / T, g1 = total * (k + 1) / T;
+      if (g0 >= g1) return;
+      size_t mi = static_cast<size_t>(std::upper_bound(first.begin(), first.end(), g0) - first.begin()) - 1;
+      for (int64_t g = g0; g < g1; ++g) {
+         while (g >= first[mi + 1]) ++mi;
+         const mesh_t &m = *v.meshes[static_cast<size_t>(mesh_of[mi])];
+         const int32_t e = static_cast<int32_t>(g - first[mi]);
+         const int32_t *kk = segments ? &m.seg[2 * static_cast<size_t>(e)] : &m.tri[3 * static_cast<size_t>(e)];
+         uint32_t all = ~0u, any = 0u;
+         int32_t minx = INT32_MAX, maxx = INT32_MIN, miny = INT32_MAX, maxy = INT32_MIN;
+         for (int q = 0; q < per_el; ++q) {
+            const vtx_t &p = m.sv[kk[q]];
+            all &= p.code, any |= p.code;
+            minx = std::min(minx, p.X), maxx = std::max(maxx, p.X);
+            miny = std::min(miny, p.Y), maxy = std::max(maxy, p.Y);
+         }
+         if (all) continue;
+         int b0 = 0, b1 = nb - 1;
+         if (!any) {
+            if (maxy < lo_y - SUB || miny > hi_y + SUB) continue;
+            // a triangle whose box holds no pixel centre of the image draws nothing (raster's own test): most of a
+            // fine grid seen whole, several triangles to a pixel
+            if (!segments && (std::max(0, ceil_px(minx)) > std::min(w - 1, floor_px(maxx)) ||
+                              std::max(0, ceil_px(miny)) > std::min(h - 1, floor_px(maxy))))
+               continue;
+            const int r0 = std::max(0, (miny - SUB / 2) / SUB - 1), r1 = std::min(h - 1, (maxy - SUB / 2) / SUB + 1);
+            b0 = r0 / rows, b1 = r1 / rows;
+         }
+         for (int bb = b0; bb <= b1; ++bb) mine[static_cast<size_t>(bb)].push_back(static_cast<uint32_t>(g));
+      }
+   });
+   return true;
 }
 
 void render(view_t &v, int w, int h, bool half) {
@@ -796,7 +912,21 @@ void render(view_t &v, int w, int h, bool half) {
       for (auto &mp : v.meshes)
          if (mp->visible) transform(v, *mp, v.mvp, F.eye_dir, w, h, mp->nv * i / T, mp->nv * (i + 1) / T);
    });
-   parallel(T, [&](int i) { band(v, F, h * i / T, h * (i + 1) / T); });
+   // one thread: one block, every mesh walked (nothing to share out); else blocks of BLOCK_ROWS taken by whichever
+   // thread is free, each walking the elements binned to it
+   const bool binned = T > 1 && bin_elements(v, T, w, h, BLOCK_ROWS, false, v.tbins) &&
+                       bin_elements(v, T, w, h, BLOCK_ROWS, true, v.sbins);
+   const int rows = binned ? BLOCK_ROWS : h, nb = (h + rows - 1) / rows;
+   std::atomic<int> next{0};
+   parallel(binned ? T : 1, [&](int) {
+      for (int b = next++; b < nb; b = next++) band(v, F, b * rows, std::min(h, (b + 1) * rows), b, binned);
+   });
+   // a list keeps the largest size it ever needed: across frames of a drag the lists' capacity would creep to several
+   // times what they hold (seen: 4.6 times, with the grid lines on). Those holding less than half shrink.
+   for (bins_t *bins : {&v.tbins, &v.sbins})
+      for (auto &per : bins->lists)
+         for (auto &list : per)
+            if (list.capacity() > 2 * list.size() + 4096) list.shrink_to_fit();
    ++v.renders;
    v.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }

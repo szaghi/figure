@@ -60,7 +60,7 @@ int  fig_view3d_pick(int handle, int what, double x, double y, int *hit, int *me
 /* The last render: its pixels (rgba NULL: only the size), size, renders so far, its time [ms], half resolution. */
 int  fig_view3d_image(int handle, unsigned char *rgba, long long cap, int *width, int *height);
 int  fig_view3d_info(int handle, int *renders, double *ms, int *width, int *height, int *half);
-/* The bytes the per-render vertex caches hold (freed after 30 draws without a render). */
+/* The bytes the per-render caches hold (vertices, the bands' triangle lists; freed after 30 draws without a render). */
 int  fig_view3d_cache(int handle, long long *bytes);
 /* The camera's view and projection matrices (column-major 4x4, OpenGL's conventions) for the widget's size at the last
  * draw (1 x 1 before the first); either NULL: not wanted. */
