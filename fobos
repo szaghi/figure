@@ -63,8 +63,8 @@ build_dir = exe/examples
 src       = src/lib/ src/examples/
 
 # examples-gnu-traps: the examples with gfortran's floating-point traps, run in a window by the Platforms workflow
-# (window_check.py): the native layer holds the FP environment around the GL driver, so a program built with traps
-# opens its window (Mesa's llvmpipe raised them at window creation before)
+# (window_check.py, its Windows job: Mesa's llvmpipe): the native layer holds the FP environment around the GL driver,
+# so a program built with traps opens its window (Mesa raised them at window creation before)
 [examples-gnu-traps]
 template  = template-gnu
 cflags    = $CGNU -O2 -ffpe-trap=invalid,zero,overflow
