@@ -21,8 +21,12 @@
 # The library is compiled from src/lib/ by FoBiS command-line options, not by a fobos mode: the modes of fobos run
 # the native build (pre_build) every time, while here the native layer must already be in lib/ (scripts/build_native.sh).
 #
-# Usage: bash docs/examples/build.sh            (FC=... for another gfortran; build products in build/docs-examples)
+# Usage: bash docs/examples/build.sh [--varset linux|macos|windows]
+#   (FC=... for another gfortran; build products in build/docs-examples). The varset of fobos gives the native link line
+#   ($NATIVE_LIBS, $NATIVE_LFLAGS), as for the fobos modes: linux by default.
 set -euo pipefail
+varset=linux
+if [[ ${1:-} == --varset ]]; then varset=${2:?build.sh: --varset needs a name}; shift 2; fi
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 ex=$root/docs/examples
@@ -54,27 +58,43 @@ for src in "$ex"/src/*.F90; do
    done
 done
 
-# programs: the library sources and the examples in one FoBiS build, with the flags of fobos (template-gnu, -O2)
+# programs: the library sources and the examples in one FoBiS build, with the flags of fobos (template-gnu, -O2) and the
+# link line of its varset
+read_varset() { # read_varset NAME: the value of $NAME in fobos's [varset:$varset] (continuation lines joined)
+   awk -v sec="[varset:$varset]" -v key="\$$1" '
+      $0 == sec {on = 1; next} /^\[/ {on = 0}
+      on && $1 == key && $2 == "=" {sub(/^[^=]*= */, ""); v = $0; cont = 1; next}
+      on && cont && /^[ \t]+[^ \t]/ {sub(/^[ \t]+/, ""); v = v " " $0; next}
+      {cont = 0}
+      END {print v}' "$root/fobos"
+}
+native_libs=$(read_varset NATIVE_LIBS)
+native_lflags=$(read_varset NATIVE_LFLAGS)
+[[ -n $native_libs ]] || { echo "docs/examples/build.sh: fobos has no \$NATIVE_LIBS in [varset:$varset]" >&2; exit 1; }
 ext_libs=()
-for lib in figure_native SDL3 stdc++ dl pthread m; do ext_libs+=(--ext-libs "$lib"); done # fobos $NATIVE_LIBS
+for lib in $native_libs; do ext_libs+=(--ext-libs "$lib"); done
+lflags=()
+[[ -n $native_lflags ]] && lflags=(--lflags "$native_lflags")
 cp "$root"/src/lib/*.F90 "$root"/src/lib/*.inc "$ex"/src/*.F90 "$build/src/" # the .inc: included by figure.F90
 (cd "$build" && fobis build --compiler gnu --fc "$fc" --src src --build-dir bin --mod-dir mod --obj-dir obj \
                      --cflags "-c -std=f2018 -ffree-line-length-132 -fimplicit-none -O2" \
-                     --lib-dir "$root/lib" "${ext_libs[@]}" --jobs 1) \
+                     --lib-dir "$root/lib" "${ext_libs[@]}" ${lflags[@]+"${lflags[@]}"} --jobs 1) \
    > "$build/build.log" 2>&1 || { cat "$build/build.log"; echo "docs/examples/build.sh: build failed" >&2; exit 1; }
 for src in "$ex"/src/*.F90; do
    name=$(basename "$src" .F90)
-   [[ -x "$build/bin/$name" ]] || { cat "$build/build.log"; echo "docs/examples/build.sh: $name not built" >&2; exit 1; }
+   [[ -x "$build/bin/$name" || -x "$build/bin/$name.exe" ]] || { cat "$build/build.log"; echo "docs/examples/build.sh: $name not built" >&2; exit 1; }
    echo "built $name"
 done
 
 # runs of the headless programs
+extra_path=""
+[[ $varset == windows ]] && extra_path=":$PATH" # MSYS2: the runtime's DLLs (gfortran, the C++ library) are on the PATH
 failed=()
 run() { # run STATUS ID COMMAND: the run's output in output/ID.txt; a status other than STATUS is a failure
    local expect=$1 id=$2 status=0; shift 2
    {
       printf '$ %s\n' "$*"
-      (cd "$build/bin" && env -i PATH="$build/bin:/usr/bin:/bin" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" LC_ALL=C \
+      (cd "$build/bin" && env -i PATH="$build/bin:/usr/bin:/bin$extra_path" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" LC_ALL=C \
                           GFORTRAN_UNBUFFERED_PRECONNECTED=y GFORTRAN_ERROR_BACKTRACE=0 bash -c "$*" 2>&1 < /dev/null) || status=$?
       if ((status != 0)); then printf '[exit status %d]\n' "$status"; fi
    } > "$ex/output/$id.txt"

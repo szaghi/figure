@@ -91,6 +91,26 @@ jobs:
         path: window-frames
         if-no-files-found: warn
 
+    # S10 (szaghi/figure#10): the docs' pictures on macOS, the posters rendered headless and compared with the
+    # committed ones. A measurement until the per-platform tolerances (#! check.<platform>) are set: it does not fail
+    # the job; the pictures that differ are uploaded
+    - name: Pictures measured (docs_media.py --check)
+      continue-on-error: true
+      run: |
+        brew install ffmpeg imagemagick
+        bash docs/examples/build.sh --varset macos
+        python3 scripts/docs_media.py --check
+
+    - name: Upload the pictures that differ
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pictures-macos
+        path: |
+          docs/public/media/*.new.png
+          docs/public/media/*.diff.png
+        if-no-files-found: ignore
+
     - name: Tests (fpm)
       run: scripts/fpm.sh test --compiler "${FC}"
 
@@ -122,7 +142,8 @@ jobs:
         # python-pydantic: FoBiS's typer needs pydantic, whose pydantic-core has no wheel for MSYS2's Python (pip
         # would build it from source, with Rust); MSYS2's package is prebuilt
         pacboy: >-
-          gcc-fortran:p cmake:p ninja:p pkgconf:p python:p python-pip:p python-pydantic:p fpm:p sdl3:p mesa:p
+          gcc-fortran:p cmake:p ninja:p pkgconf:p python:p python-pip:p python-pydantic:p fpm:p sdl3:p mesa:p ffmpeg:p
+          imagemagick:p
 
     # the runner's display is 1024 x 768, narrower than figure_hello's window (1100 x 700)
     - name: Display resolution
@@ -179,6 +200,25 @@ jobs:
         name: window-frames-windows
         path: window-frames
         if-no-files-found: warn
+
+    # S10 (szaghi/figure#10): the docs' pictures on Windows, the posters rendered headless and compared with the
+    # committed ones. A measurement until the per-platform tolerances (#! check.<platform>) are set: it does not fail
+    # the job; the pictures that differ are uploaded
+    - name: Pictures measured (docs_media.py --check)
+      continue-on-error: true
+      run: |
+        bash docs/examples/build.sh --varset windows
+        python scripts/docs_media.py --check
+
+    - name: Upload the pictures that differ
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pictures-windows
+        path: |
+          docs/public/media/*.new.png
+          docs/public/media/*.diff.png
+        if-no-files-found: ignore
 
     - name: Tests (fpm)
       run: scripts/fpm.sh test
