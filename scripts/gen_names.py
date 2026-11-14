@@ -157,7 +157,10 @@ def extension_functions(ext: str) -> set[str]:
     ns, header, _, how = EXTENSIONS[ext]
     text = (ROOT / header).read_text()
     if how == "method":
-        start = text.index(f"class IMGUI_API {ns}")
+        found = re.search(rf"class \w+_API {ns}\b", text)  # IMGUI_API, or the class's own macro (TEXTEDITOR_API)
+        if not found:
+            raise ValueError(f"{header}: no exported class {ns}")
+        start = found.start()
         body = text[start:]
         body = body[body.index("public:") : body.index("\nprotected:") if "\nprotected:" in body else len(body)]
         body = re.sub(r"\n\t(struct|class|enum)\b.*?\n\t\};", "", body, flags=re.S)  # nested types

@@ -32,6 +32,10 @@ TextEditor::TextEditor() {
 }
 
 
+//
+//	TextEditor::reset
+//
+
 void TextEditor::reset() {
 	document.clear();
 	transactions.reset();
@@ -433,18 +437,19 @@ void TextEditor::renderMatchingBracketLines() {
 		for (auto bracket = bracketeer.begin(); bracket < bracketeer.end(); bracket++) {
 			if (bracket->visible &&
 				document[bracket->start.line].foldingState != FoldingState::folded &&
-				document[bracket->start.line].foldingState != FoldingState::hidden &&
-				bracket->end.line - bracket->start.line > 1) {
+				document[bracket->start.line].foldingState != FoldingState::hidden) {
 
 				const auto startVisPos = docPos2VisPos(bracket->start);
 				const auto endVisPos = docPos2VisPos(bracket->end);
 
-				if (startVisPos.row <= lastVisibleRow && endVisPos.row >= firstVisibleRow) {
-					const auto column = std::min(startVisPos.column,endVisPos.column);
+				if (startVisPos.row <= lastVisibleRow &&
+					endVisPos.row >= firstVisibleRow &&
+					endVisPos.row - startVisPos.row > 1) {
 
+					const auto column = std::min(startVisPos.column, endVisPos.column);
 					const auto lineX = cursorScreenPos.x + textLeftOffset + column * glyphSize.x;
-					const auto startY = cursorScreenPos.y + (startVisPos.row + 1) * glyphSize.y;
-					const auto endY = cursorScreenPos.y + endVisPos.row * glyphSize.y;
+					const auto startY = cursorScreenPos.y + std::max(startVisPos.row + 1, firstVisibleRow) * glyphSize.y;
+					const auto endY = cursorScreenPos.y + std::min(endVisPos.row, lastVisibleRow) * glyphSize.y;
 
 					const auto color = palette.get(bracket == active ? Color::matchingBracketActive : Color::whitespace);
 					drawList->AddLine(ImVec2(lineX, startY), ImVec2(lineX, endY), color);
@@ -618,8 +623,8 @@ void TextEditor::renderText() {
 			if (codepoint == '\t') {
 				if (config.showTabs && column >= firstRenderableColumn) {
 					const auto x1 = glyphPos.x + glyphSize.x * 0.3f;
+					const auto x2 = glyphPos.x + (config.showShortTabs ? glyphSize.x : glyphSize.x * static_cast<float>(glyph.columns) - 1.0f);
 					const auto y = glyphPos.y + fontSize * 0.5f;
-					const auto x2 = glyphPos.x + glyphSize.x;
 
 					ImVec2 p1, p2, p3, p4;
 					p1 = ImVec2(x1, y);
@@ -3773,6 +3778,23 @@ std::string TextEditor::Document::getSectionText(DocPos start, DocPos end) const
 
 
 //
+//	TextEditor::Document::getLineCodePoints
+//
+
+std::vector<ImWchar> TextEditor::Document::getLineCodePoints(size_t lineNo) const {
+	auto& line = at(lineNo);
+	std::vector<ImWchar> result;
+	result.reserve(line.size());
+
+	for (auto& glyph : line) {
+		result.emplace_back(glyph.codepoint);
+	}
+
+	return result;
+}
+
+
+//
 //	TextEditor::Document::getCodePoint
 //
 
@@ -4365,6 +4387,31 @@ TextEditor::DocPos TextEditor::Document::normalizePos(DocPos pos) const {
 	} else {
 		return pos;
 	}
+}
+
+
+//
+//	TextEditor::Document::getContext
+//
+
+std::string TextEditor::Document::getContext(DocPos pos, std::function<bool(ImWchar)> isContext) const {
+	const auto& line = at(pos.line);
+	auto start = pos;
+	auto end = pos;
+
+	if (isContext(line[end.index].codepoint)) {
+		end.index++;
+
+		while (end.index < line.size() && isContext(line[end.index].codepoint)) {
+			end.index++;
+		}
+
+		while (start.index > 0 && isContext(line[start.index - 1].codepoint)) {
+			start.index--;
+		}
+	}
+
+	return (start == end) ? "" : getSectionText(start, end);
 }
 
 
@@ -5290,7 +5337,12 @@ void TextEditor::renderFindReplace() {
 
 		auto button1Width = ImGui::CalcTextSize(findButtonLabel.c_str()).x + style.ItemSpacing.x * 2.0f;
 		auto button2Width = ImGui::CalcTextSize(findAllButtonLabel.c_str()).x + style.ItemSpacing.x * 2.0f;
-		const auto optionWidth = ImGui::CalcTextSize("Aa").x + style.ItemSpacing.x * 2.0f;
+
+		auto optionWidth = 0.0f;
+		optionWidth = std::max(optionWidth, ImGui::CalcTextSize(findCapsButtonLabel.c_str()).x);
+		optionWidth = std::max(optionWidth, ImGui::CalcTextSize(findWholeWordButtonLabel.c_str()).x);
+		optionWidth = std::max(optionWidth, ImGui::CalcTextSize(findCloseButtonLabel.c_str()).x);
+		optionWidth += style.ItemSpacing.x * 2.0f;
 
 		if (!config.readOnly) {
 			button1Width = std::max(button1Width, ImGui::CalcTextSize(replaceButtonLabel.c_str()).x + style.ItemSpacing.x * 2.0f);
@@ -5379,19 +5431,19 @@ void TextEditor::renderFindReplace() {
 
 		ImGui::SameLine();
 
-		if (latchButton("Aa", &caseSensitiveFind, ImVec2(optionWidth, 0.0f))) {
+		if (latchButton(findCapsButtonLabel.c_str(), &caseSensitiveFind, ImVec2(optionWidth, 0.0f))) {
 			find();
 		}
 
 		ImGui::SameLine();
 
-		if (latchButton("[]", &wholeWordFind, ImVec2(optionWidth, 0.0f))) {
+		if (latchButton(findWholeWordButtonLabel.c_str(), &wholeWordFind, ImVec2(optionWidth, 0.0f))) {
 			find();
 		}
 
 		ImGui::SameLine();
 
-		if (ImGui::Button("x", ImVec2(optionWidth, 0.0f))) {
+		if (ImGui::Button(findCloseButtonLabel.c_str(), ImVec2(optionWidth, 0.0f))) {
 			closeFindReplace();
 		}
 
@@ -5569,6 +5621,19 @@ void TextEditor::replaceSectionText(const DocPos& start, const DocPos& end, cons
 	const auto transaction = startTransaction();
 	deleteText(transaction, start, end);
 	const auto newEnd = insertText(transaction, start, text);
+	cursors.clearAdditional();
+	cursors.getMain().update(newEnd, newEnd);
+	endTransaction(transaction);
+}
+
+
+//
+//	TextEditor::insertSectionText
+//
+
+void TextEditor::insertSectionText(DocPos pos, const std::string_view& text) {
+	const auto transaction = startTransaction();
+	const auto newEnd = insertText(transaction, pos, text);
 	cursors.clearAdditional();
 	cursors.getMain().update(newEnd, newEnd);
 	endTransaction(transaction);

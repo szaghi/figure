@@ -1,4 +1,4 @@
-FIGURE's patch 1 of 1 to ImGuiColorTextEdit (goossens fork, commit 0a489da863f22f7493049f5c6eb85355f405b02e).
+FIGURE's patch 1 of 2 to ImGuiColorTextEdit (goossens fork, commit 9f812a0 (2026-11-13)).
 
 TextEditor::compressMarkers, run after any deletion while markers exist, stores each kept marker's new index in a
 `bool`: every index above 1 becomes 1, so a third marker and the ones after it point at the second one's colour and
@@ -8,7 +8,7 @@ src/tests/figure_test_editor.F90 (marks kept on their lines after an edit). To r
 
 --- a/TextEditor.cpp
 +++ b/TextEditor.cpp
-@@ -2233,7 +2233,7 @@
+@@ -2238,7 +2238,7 @@
  		// references to current markers
  		struct Reference {
  			bool used = false;

@@ -610,7 +610,7 @@ The extensions FIGURE vendors (third_party/) are reached through FIGURE's own ca
 
 ### ImGuiColorTextEdit
 
-Declared in `third_party/ImGuiColorTextEdit/TextEditor.h`; 33 of its 210 public functions reached.
+Declared in `third_party/ImGuiColorTextEdit/TextEditor.h`; 33 of its 219 public functions reached.
 
 | ImGuiColorTextEdit | FIGURE |
 |---|---|

@@ -32,7 +32,11 @@
 //	TextEditor
 //
 
-class IMGUI_API TextEditor {
+#ifndef TEXTEDITOR_API
+#define TEXTEDITOR_API IMGUI_API
+#endif
+
+class TEXTEDITOR_API TextEditor {
 public:
 	// constructor
 	TextEditor();
@@ -114,6 +118,8 @@ public:
 	inline bool IsShowSpacesEnabled() const { return config.showSpaces; }
 	inline void SetShowTabsEnabled(bool value) { config.showTabs = value; }
 	inline bool IsShowTabsEnabled() const { return config.showTabs; }
+	inline void SetShortTabsEnabled(bool value) { config.showShortTabs = value; }
+	inline bool IsShortTabsEnabled() const { return config.showShortTabs; }
 	inline void SetShowLineNumbersEnabled(bool value) { config.showLineNumbers = value; }
 	inline bool IsShowLineNumbersEnabled() const { return config.showLineNumbers; }
 	inline void SetShowMiniMapEnabled(bool value) { config.showMiniMap = value; }
@@ -147,6 +153,9 @@ public:
 	inline size_t GetTextLeftMargin() const { return config.textMargin; }
 
 	// load new text into editor (see note below on cursor and scroll manipulation after setting new text)
+	// none of the SetText create transactions or call configured change callbacks
+	// in fact, the SetText functions do a full reset of the entire editors state
+	// if you want it to be transactional and/or have callbacks, use the ReplaceAllText or ReplaceSectionText API calls instead
 	//
 	// API calls to set/get text are available for all standard C++ UTF-8 and unicode string formats to support fast file en/de-coding
 	// other API calls use UTF-8 encoded std::strings
@@ -193,10 +202,14 @@ public:
 	inline std::string GetSectionText(const DocSelection& selection) const { return GetSectionText(selection.start, selection.end); }
 	inline std::string GetCursorText(size_t cursor) const { return cursor < cursors.size() ? document.getSectionText(cursors[cursor].getSelectionStart(), cursors[cursor].getSelectionEnd()) : ""; }
 	inline std::string GetLineText(size_t line) const { return line < document.size() ? document.getSectionText(DocPos(line, 0), document.getEndOfLine(DocPos(line, 0))) : ""; }
+	inline std::vector<ImWchar> GetLineCodePoints(size_t line) const { return line < document.size() ? document.getLineCodePoints(line) : std::vector<ImWchar>(); }
 
 	// replace text in editor (new text must be UTF-8 encoded)
+	// replace functions do create undoable transactions and execute configured callbacks
+	inline void ReplaceAllText(const std::string_view& text) { replaceSectionText(document.getTop(), document.getBottom(), text); }
 	inline void ReplaceSectionText(DocPos start, DocPos end, const std::string_view& text) { replaceSectionText(normalizePos(start), normalizePos(end), text); }
 	inline void ReplaceSectionText(const DocSelection& selection, const std::string_view& text) { ReplaceSectionText(selection.start, selection.end, text); }
+	inline void InsertSectionText(DocPos pos, const std::string_view& text) { insertSectionText(normalizePos(pos), text); }
 
 	// clear the editor
 	inline void ClearText() { SetText(""); }
@@ -315,6 +328,10 @@ public:
 	inline DocPos FindWordStart(DocPos pos, bool wordOnly=false) const { return document.findWordStart(normalizePos(pos), wordOnly); }
 	inline DocPos FindWordEnd(DocPos pos, bool wordOnly=false) const { return document.findWordEnd(normalizePos(pos), wordOnly); }
 
+	// given a specified document location, match codepoints left and right on that line and return discovered context as a string
+	// a callback function must be provided that determines if a codepoint meets the intended context requirements
+	inline std::string GetContext(DocPos pos, std::function<bool(ImWchar)> isContext) const { return document.getContext(normalizePos(pos), isContext); }
+
 	// find/replace support (strings must be UTF-8 encoded)
 	inline void SelectFirstOccurrenceOf(const std::string_view& text, bool caseSensitive=true, bool wholeWord=false) { selectFirstOccurrenceOf(text, caseSensitive, wholeWord); }
 	inline void SelectNextOccurrenceOf(const std::string_view& text, bool caseSensitive=true, bool wholeWord=false) { selectNextOccurrenceOf(text, caseSensitive, wholeWord); }
@@ -333,6 +350,9 @@ public:
 	// internationalize find window labels (strings must be UTF-8 encoded)
 	inline void SetFindButtonLabel(const std::string_view& label) { findButtonLabel = label; }
 	inline void SetFindAllButtonLabel(const std::string_view& label) { findAllButtonLabel = label; }
+	inline void SetFindCapsButtonLabel(const std::string_view& label) { findCapsButtonLabel = label; }
+	inline void SetFindWholeWordButtonLabel(const std::string_view& label) { findWholeWordButtonLabel = label; }
+	inline void SetFindCloseButtonLabel(const std::string_view& label) { findCloseButtonLabel = label; }
 	inline void SetReplaceButtonLabel(const std::string_view& label) { replaceButtonLabel = label; }
 	inline void SetReplaceAllButtonLabel(const std::string_view& label) { replaceAllButtonLabel = label; }
 
@@ -496,7 +516,7 @@ public:
 	// the editor sets up a popup menu in the right location
 	// the callback has to populate it
 	// context callbacks activate on a right click
-	// hover callbacks are just based on position (no mouse buttons required)
+	// hover callbacks active when mouse is over a glyph (no mouse buttons required)
 	struct PopupData {
 		DocPos pos;
 		void* userData;
@@ -1038,6 +1058,7 @@ protected:
 		bool autoIndent = true;
 		bool showSpaces = true;
 		bool showTabs = true;
+		bool showShortTabs = true;
 		bool showLineNumbers = true;
 		bool showMiniMap = false;
 		size_t miniMapColumns = 0;
@@ -1339,6 +1360,7 @@ protected:
 		// get part of document text (returned strings are UTF-8 encoded)
 		std::string getSectionText(DocPos start, DocPos end) const;
 		inline std::string getLineText(size_t line) const { return getSectionText(DocPos(line, 0), DocPos(line, at(line).size())); }
+		std::vector<ImWchar> getLineCodePoints(size_t line) const;
 		ImWchar getCodePoint(DocPos location) const;
 
 		// iterate through glyphs between two positions
@@ -1396,6 +1418,8 @@ protected:
 		DocPos findNextNonWhiteSpace(DocPos from, bool includeEndOfLine=true) const;
 		DocPos normalizePos(DocPos pos) const;
 		inline size_t normalizeLine(size_t line) const { return line >= size() ? size() - 1 : line; }
+
+		std::string getContext(DocPos pos, std::function<bool(ImWchar)> isContext) const;
 
 		DocPos getLeftBeforeHiddenLines(DocPos pos) const;
 		DocPos getRightAfterHiddenLines(DocPos pos) const;
@@ -1985,6 +2009,7 @@ protected:
 	void replaceTextInCurrentCursor(const std::string_view& text);
 	void replaceTextInAllCursors(const std::string_view& text);
 	void replaceSectionText(const DocPos& start, const DocPos& end, const std::string_view& text);
+	void insertSectionText(DocPos pos, const std::string_view& text);
 
 	void openFindReplace();
 	void closeFindReplace();
@@ -2135,6 +2160,10 @@ protected:
 	std::string findAllButtonLabel = "Find All";
 	std::string replaceButtonLabel = "Replace";
 	std::string replaceAllButtonLabel = "Replace All";
+	std::string findCapsButtonLabel = "Aa";
+	std::string findWholeWordButtonLabel = "[]";
+	std::string findCloseButtonLabel = "x";
+
 	bool findReplaceVisible = false;
 	bool focusOnEditor = false;
 	bool focusOnFind = false;

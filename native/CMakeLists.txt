@@ -22,7 +22,7 @@
 #   stb_image v2.30       -> PNG and JPEG files read (fig_read_image, tex%load; MIT or public domain), vendored
 #                            unmodified in third_party/stb (one header), the same stb commit as stb_image_write
 #   ImGuiColorTextEdit    -> the code editor and the text diff (code_editor_object, code_diff; MIT, with dtl, BSD-3),
-#                            the goossens fork at commit 0a489da, vendored in third_party/ImGuiColorTextEdit with
+#                            the goossens fork at commit 9f812a0, vendored in third_party/ImGuiColorTextEdit with
 #                            FIGURE's two patches (its patches/ directory)
 #   ImGuizmo              -> the view cube, the gizmos and the gradient editor (view3d_object%view_cube, %gizmo,
 #                            ig_gradient_edit; MIT): ImGuizmo.cpp and ImGradient.cpp at commit 105e4fd, vendored in
@@ -30,8 +30,8 @@
 #   imgui_rich_md         -> Markdown in the window (ig_markdown, markdown_view_object; MIT): pthom/imgui_rich_md at
 #                            commit 427bcb1, its renderer, search and documents only (no LaTeX, Mermaid, code editor
 #                            or URL images), vendored in third_party/imgui_rich_md with FIGURE's one patch (its
-#                            patches/ directory); md4c (its Markdown parser, MIT) at the commit imgui_rich_md pins,
-#                            481fbfb, vendored unmodified in third_party/md4c
+#                            patches/ directory); md4c (its Markdown parser, MIT) at release-0.5.3 (imgui_rich_md
+#                            pins 481fbfb, its ancestor: the same md4c.h), vendored unmodified in third_party/md4c
 cmake_minimum_required(VERSION 3.24)
 project(figure_native LANGUAGES C CXX)
 

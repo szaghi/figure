@@ -19,7 +19,7 @@
 //	TextDiff
 //
 
-class IMGUI_API TextDiff {
+class TEXTEDITOR_API TextDiff {
 public:
 	// constructor
 	TextDiff();
@@ -39,6 +39,8 @@ public:
 	inline bool IsShowSpacesEnabled() const { return diff.config.showSpaces; }
 	inline void SetShowTabsEnabled(bool value) { diff.config.showTabs = value; }
 	inline bool IsShowTabsEnabled() const { return diff.config.showTabs; }
+	inline void SetShortTabsEnabled(bool value) { diff.config.showShortTabs = value; }
+	inline bool IsShortTabsEnabled() const { return diff.config.showShortTabs; }
 	inline void SetShowScrollbarMiniMapEnabled(bool value) { diff.config.showScrollbarMiniMap = value; }
 	inline bool IsShowScrollbarMiniMapEnabled() const { return diff.config.showScrollbarMiniMap; }
 	inline void SetLanguage(const TextEditor::Language* language) { diff.config.language = language; }

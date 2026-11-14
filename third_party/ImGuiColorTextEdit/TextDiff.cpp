@@ -292,8 +292,8 @@ void TextDiff::IntegratedView::renderLine(float x, float y, const TextEditor::Li
 		if (codepoint == '\t') {
 			if (diff.config.showTabs && column >= firstRenderableColumn) {
 				const auto x1 = glyphPos.x + glyphSize.x * 0.3f;
+				const auto x2 = glyphPos.x + (diff.config.showShortTabs ? glyphSize.x : glyphSize.x * static_cast<float>(glyph.columns) - 1.0f);
 				const auto y1 = glyphPos.y + fontSize * 0.5f;
-				const auto x2 = glyphPos.x + glyphSize.x;
 
 				const auto p1 = ImVec2(x1, y1);
 				const auto p2 = ImVec2(x2, y1);
@@ -650,8 +650,8 @@ void TextDiff::SideBySideView::renderLine(float x, float y, const TextEditor::Li
 		if (codepoint == '\t') {
 			if (diff.config.showTabs && column >= firstRenderableColumn) {
 				const auto x1 = glyphPos.x + glyphSize.x * 0.3f;
+				const auto x2 = glyphPos.x + (diff.config.showShortTabs ? glyphSize.x : glyphSize.x * static_cast<float>(glyph.columns) - 1.0f);
 				const auto y1 = glyphPos.y + fontSize * 0.5f;
-				const auto x2 = glyphPos.x + glyphSize.x;
 
 				const auto p1 = ImVec2(x1, y1);
 				const auto p2 = ImVec2(x2, y1);
