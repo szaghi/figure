@@ -4,6 +4,9 @@
 #! frames  380
 #! poster  270
 #! crop    0 0 1100 680
+# --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
+# masked, the rest compared (run 43649582637, 2026-11-14)
+#! mask.darwin 0 0 1100 22
 # The 3-D panel from the tools' bar; clip: the surface cut at the probe line, the gizmo on the cut. The red arrow
 # dragged: the cut moves along x and the body shows again. Turn: rings; the blue ring dragged turns the cut about the
 # vertical. A click on the view cube's top face: the camera looks down on the plate and its slanted cut

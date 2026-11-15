@@ -5,6 +5,9 @@
 #! poster  200
 #! crop    0 0 1100 680
 #! keys
+# --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
+# masked, the rest compared (run 43649582637, 2026-11-14)
+#! mask.darwin 0 0 1100 22
 # The Input panel, the heat.inp tab: the namelist in the code editor. A double-click selects omega and a typo is typed
 # over it: the line is marked, Apply is greyed out, the mark's message under the pointer. The name typed again, the
 # mark goes. F1: the Help window, its sections and tables, scrolled with the wheel; its link to the body selects Body in

@@ -27,9 +27,12 @@ replays (see FIGURE_CAPTURE_INPUT in native/figure_native.cpp):
                                                        program writes there (--examples DIR) is not an earlier run's
     #! mask    x y w h                                 --check: a rectangle of the poster [pixels] left out (a clock,
                                                        anything drawn from the wall time); one line each
+    #! mask.darwin x y w h                             --check: as mask, on that platform only (``linux``,
+                                                       ``darwin``, ``win32``): what is drawn there from its arithmetic
     #! check   threshold=2 max_failed=0                --check's tolerance (the defaults shown); ``#! check.linux``,
                                                        ``check.darwin``, ``check.win32``: for that platform only,
-                                                       where a difference was measured there
+                                                       where a difference was measured there; ``skip`` there: the
+                                                       recording is not compared on that platform (a comment says why)
     0 move 300 120
     40 wait                                            the script holds until the program's tasks and processes are
     ...                                                done (docs/guide/capture.md, "Input scripts")
@@ -122,7 +125,7 @@ def parse(rec: Path) -> tuple[dict[str, str], str]:
     for line in rec.read_text().splitlines():
         if line.startswith("#!"):
             key, _, value = line[2:].strip().partition(" ")
-            if key == "mask" and "mask" in header:  # several rectangles, one a line
+            if key.partition(".")[0] == "mask" and key in header:  # several rectangles, one a line
                 header[key] += ";" + value.strip()
             else:
                 header[key] = value.strip()
@@ -515,6 +518,8 @@ def tolerance(header: dict[str, str]) -> tuple[int, int]:
     values = {"threshold": THRESHOLD, "max_failed": MAX_FAILED}
     for key in ("check", f"check.{sys.platform}"):
         for item in header.get(key, "").split():
+            if item == "skip" and key != "check":
+                continue  # skipped(): checked before rendering
             k, _, v = item.partition("=")
             if k not in values or not v.isdigit():
                 msg = f"#! {key}: '{item}' is not threshold=N or max_failed=N"
@@ -523,10 +528,15 @@ def tolerance(header: dict[str, str]) -> tuple[int, int]:
     return values["threshold"], values["max_failed"]
 
 
+def skipped(header: dict[str, str]) -> bool:
+    """'#! check.<this platform> skip': the recording is not compared here."""
+    return "skip" in header.get(f"check.{sys.platform}", "").split()
+
+
 def masks(header: dict[str, str]) -> list[tuple[int, int, int, int]]:
-    """The rectangles (x, y, w, h) [pixels of the poster] "#! mask" leaves out."""
+    """The rectangles (x, y, w, h) [pixels of the poster] "#! mask" and "#! mask.<this platform>" leave out."""
     out = []
-    for part in header.get("mask", "").split(";"):
+    for part in (header.get("mask", "") + ";" + header.get(f"mask.{sys.platform}", "")).split(";"):
         if part.strip():
             values = part.split()
             if len(values) != 4 or not all(v.isdigit() for v in values):
@@ -583,6 +593,9 @@ def check(name: str) -> str:
         return "skip"
     if not ref.is_file():
         print(f"{name}: skipped (no committed poster)")
+        return "skip"
+    if skipped(header):
+        print(f"{name}: skipped (#! check.{sys.platform} skip)")
         return "skip"
     frames = int(header["frames"])
     poster = int(header.get("poster", frames - 1))

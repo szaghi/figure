@@ -110,6 +110,7 @@ jobs:
           docs/public/media/*.new.png
           docs/public/media/*.diff.png
           docs/examples/output/*.txt
+          build/docs-examples/bin/*.png
         if-no-files-found: ignore
 
     - name: Tests (fpm)
@@ -220,6 +221,7 @@ jobs:
           docs/public/media/*.new.png
           docs/public/media/*.diff.png
           docs/examples/output/*.txt
+          build/docs-examples/bin/*.png
         if-no-files-found: ignore
 
     - name: Tests (fpm)

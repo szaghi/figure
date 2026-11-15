@@ -5,6 +5,10 @@
 #! crf     30
 #! mask    0 39 400 15
 # (the mask: the line of the times computed and uploaded, by the wall clock)
+# --check on macOS: the fractal is the program's arithmetic, arm64 fuses multiply-adds: 44443 pixel(s) of it over 2
+# (run 43649582637, 2026-11-14); the image masked there, the rest compared (2 pixels of the arrow left, 8 allowed)
+#! mask.darwin 36 58 902 517
+#! check.darwin max_failed=8
 # zoom about 175 times into the seahorse valley spiral (-0.743644 + 0.131826 i), then raise the iterations
 0   move 900 600
 5   move 618 382 20

@@ -5,6 +5,9 @@
 #! poster  515
 #! crop    0 0 1100 680
 #! keys
+# --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
+# masked, the rest compared (run 43649582637, 2026-11-14)
+#! mask.darwin 0 0 1100 22
 # F5 runs the plate; Input > Solver, omega dragged from 1.8 to 1.5; F5 runs it again. The Runs tab: the pointer rests
 # on run 1 (a tooltip with its residuals); the iterations' header clicked twice (fewest first, then most); a right
 # click on a row opens its menu; escape. Input > Boundaries: radio buttons; a right click on west, "Every side as this

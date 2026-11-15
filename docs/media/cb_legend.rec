@@ -2,6 +2,8 @@
 #! from    10
 #! frames  160
 #! poster  110
+# --check on macOS: a rounded border lands a pixel over (Apple's libm, arm64): 62 pixel(s) over 2 (run 43649582637, 2026-11-14); 128 allowed
+#! check.darwin max_failed=128
 # open the colour editor's picker, choose a yellow hue, then a saturated bright yellow: the contour lines follow
 0   move 487 49 5
 10  down

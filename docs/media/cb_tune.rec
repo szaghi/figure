@@ -2,6 +2,8 @@
 #! frames  260
 #! poster  250
 #! scale   960
+# --check on macOS: the plotted curve and the sliders' values (Apple's libm, arm64), the most by 22: 104 pixel(s) over 2 (run 43649582637, 2026-11-14); 216 allowed
+#! check.darwin max_failed=216
 # round the frames, give them a border, widen their padding, then save the theme
 0   move 400 500
 5   move 576 235 20

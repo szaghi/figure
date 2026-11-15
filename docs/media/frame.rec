@@ -1,6 +1,9 @@
 #! program build/docs-examples/bin/cb_frame
 #! frames  210
 #! poster  66
+# --check on macOS: the script clicks the title bar or its menus, laid out the other way there (buttons on the
+# left): it plays something else, not compared (run 43649582637, 2026-11-14)
+#! check.darwin skip
 # the bar drawn by FIGURE: open the File menu from it, look along it, then hover minimize, maximize and close
 0   move 450 300
 10  move 45 10 14

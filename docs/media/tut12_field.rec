@@ -3,6 +3,9 @@
 #! args    --examples /tmp/figure-studio --case /tmp/figure-studio/plate
 #! frames  560
 #! poster  470
+# --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
+# masked, the rest compared (run 43649582637, 2026-11-14)
+#! mask.darwin 0 0 1100 22
 # F5 runs the solver; the Result panel comes forward with the field in cividis, its legend and contour lines; the
 # probe line is dragged towards the hot side (the profile follows), the probe point moved; batlow, in 8 bands; jet,
 # with its warning (the solver runs in real time: the frames start once it has surely ended)

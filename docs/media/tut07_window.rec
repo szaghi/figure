@@ -1,6 +1,9 @@
 #! program build/docs-examples/bin/tut07_window
 #! frames  290
 #! poster  95
+# --check on macOS: the script clicks the title bar or its menus, laid out the other way there (buttons on the
+# left): it plays something else, not compared (run 43649582637, 2026-11-14)
+#! check.darwin skip
 # the bar drawn by FIGURE: along the title, then minimize, maximize and close (red when hovered); close asks first,
 # Cancel; File > Quit asks the same question, Cancel
 0   move 480 330

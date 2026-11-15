@@ -3,6 +3,9 @@
 #! args    --examples /tmp/figure-studio
 #! frames  330
 #! poster  248
+# --check on macOS: the script clicks the title bar or its menus, laid out the other way there (buttons on the
+# left): it plays something else, not compared (run 43649582637, 2026-11-14)
+#! check.darwin skip
 # File > Open case shows FIGURE's file browser on the example cases; a double-click enters plate, Choose opens it;
 # the title edited (the window's title gets a *); the folder channel dropped on the window: Discard changes?, Discard
 0   move 500 300

@@ -5,6 +5,9 @@
 #! poster  228
 #! crop    0 0 1100 680
 #! keys
+# --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
+# masked, the rest compared (run 43649582637, 2026-11-14)
+#! mask.darwin 0 0 1100 22
 # F5 runs the plate, writing a snapshot every 4 iterations; the Result panel shows the converged field and the player
 # of the run's snapshots. Play: the field steps through iterations 4 to 112 and the converged one, again and again;
 # pause, then back one snapshot twice. The legend is dragged down (the range moves up) and zoomed with the wheel: the
