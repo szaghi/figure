@@ -17,7 +17,8 @@ Run by src/tests/figure_test_remote.F90 against the program's server. Checks, in
   - an image updated in consecutive frames (the client presses A: the program changes it in 12 frames) arrives as
     JPEG (kind 8) from its second change: a baseline JPEG whose size, read from its header, is the texture's (and,
     where Pillow is installed, decodes to that size), of a texture received exact before; once it stops, its exact
-    pixels (kind 2) replace it: no texture is left as JPEG;
+    pixels (kind 2) replace it: no texture is left as JPEG (replaced more than once where a frame came over 150 ms
+    after the last, the program's STILL: a slow machine's pause mid-change, measured on macOS CI 2026-11-15);
   - then, nothing changing, no frame is sent again for 2.5 s, only "unchanged" messages (at least one);
   - then the pointer toggles the button's hover 200 times per second: frames keep coming, at most 75 per second
     (the program caps them at 60);
@@ -399,8 +400,8 @@ def run(port: int, click_file: Path, token: str) -> None:
     if len(jpegs) != 1 or not 2 <= max(jpegs.values()) <= JPEG_CHANGES - 1:
         msg = f"JPEG messages per texture {jpegs}: expected one texture, 2 to {JPEG_CHANGES - 1} (its changes but the first)"
         raise ProtocolError(msg)
-    if lossy or replaced != 1:
-        msg = f"textures left as JPEG {sorted(lossy)}, {replaced} replaced exact (expected none left, one replaced)"
+    if lossy or replaced < 1:
+        msg = f"textures left as JPEG {sorted(lossy)}, {replaced} replaced exact (expected none left, at least one)"
         raise ProtocolError(msg)
 
 
