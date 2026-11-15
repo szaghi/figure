@@ -115,18 +115,19 @@ jobs:
     - name: Tests (fpm)
       run: scripts/fpm.sh test --compiler "${FC}"
 
-    # S1 (szaghi/figure#10): a lazy loop in remote mode began a frame before a task's app%wake on macOS (ce582c1):
-    # figure_test_tasks 10 times with FIGURE_DEBUG_WAKE, which logs what ended each wait. A diagnostic: it does not
-    # fail the job; the logs are uploaded, the early frames summed up here
-    - name: Wake diagnostic (figure_test_tasks, FIGURE_DEBUG_WAKE)
-      continue-on-error: true
+    # S1 (szaghi/figure#10): the lazy loop's waits, figure_test_tasks 10 times (the runner's slow frames once made its
+    # settling end early: 2 owed frames drawn before a task's call, read in FIGURE_DEBUG_WAKE's logs); each run's log
+    # uploaded, any failed run fails the job
+    - name: Wake checks (figure_test_tasks 10 times, FIGURE_DEBUG_WAKE)
       run: |
         mkdir -p wake-logs
+        failed=0
         for i in 1 2 3 4 5 6 7 8 9 10; do
           FIGURE_DEBUG_WAKE=1 scripts/fpm.sh test figure_test_tasks --compiler "${FC}" \
-            > "wake-logs/run-$i.out" 2> "wake-logs/run-$i.log" || echo "run $i failed"
+            > "wake-logs/run-$i.out" 2> "wake-logs/run-$i.log" || { echo "run $i failed"; failed=$((failed + 1)); }
         done
-        grep -H "frames before the call" wake-logs/*.log || echo "no early frame in 10 runs"
+        echo "figure_test_tasks: $failed of 10 runs failed"
+        [ "$failed" -eq 0 ]
 
     - name: Upload the wake logs
       if: always()
@@ -250,18 +251,19 @@ jobs:
     - name: Tests (fpm)
       run: scripts/fpm.sh test
 
-    # S1 (szaghi/figure#10): a lazy loop in remote mode began a frame before a task's app%wake on macOS (ce582c1):
-    # figure_test_tasks 10 times with FIGURE_DEBUG_WAKE, which logs what ended each wait. A diagnostic: it does not
-    # fail the job; the logs are uploaded, the early frames summed up here
-    - name: Wake diagnostic (figure_test_tasks, FIGURE_DEBUG_WAKE)
-      continue-on-error: true
+    # S1 (szaghi/figure#10): the lazy loop's waits, figure_test_tasks 10 times (the runner's slow frames once made its
+    # settling end early: 2 owed frames drawn before a task's call, read in FIGURE_DEBUG_WAKE's logs); each run's log
+    # uploaded, any failed run fails the job
+    - name: Wake checks (figure_test_tasks 10 times, FIGURE_DEBUG_WAKE)
       run: |
         mkdir -p wake-logs
+        failed=0
         for i in 1 2 3 4 5 6 7 8 9 10; do
           FIGURE_DEBUG_WAKE=1 scripts/fpm.sh test figure_test_tasks \
-            > "wake-logs/run-$i.out" 2> "wake-logs/run-$i.log" || echo "run $i failed"
+            > "wake-logs/run-$i.out" 2> "wake-logs/run-$i.log" || { echo "run $i failed"; failed=$((failed + 1)); }
         done
-        grep -H "frames before the call" wake-logs/*.log || echo "no early frame in 10 runs"
+        echo "figure_test_tasks: $failed of 10 runs failed"
+        [ "$failed" -eq 0 ]
 
     - name: Upload the wake logs
       if: always()

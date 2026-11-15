@@ -170,6 +170,12 @@ figure wake: 0.972652 frame remote: waited 0.201 s (max_wait 10000 ms), frames l
 
 It prints a line per frame: a diagnostic for a few seconds of a run, not for a session.
 
+A frame that begins with `no wait` while `frames left` is above 0 is not an early wake-up: it is a frame still owed
+to the last input. A program (or a test) that wants the loop idle before it measures a wait asks
+[`test_run`](testing#running-until-idle) whether frames are still owed, not how long the last frame took: on a slow machine a frame
+that does not wait can take longer than `max_wait` (0.07 to 0.15 s on CI's macOS runner, where `figure_test_tasks`
+once took two owed frames for early wake-ups).
+
 ### What idle costs
 
 With lazy redraw on and no input, a FIGURE program draws `1 / max_wait` frames per second: exactly 2 frames/s with

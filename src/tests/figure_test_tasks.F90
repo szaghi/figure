@@ -245,6 +245,7 @@ use figure, only : app_object, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, figure_las
 use figure_test_tasks_work, only : draw_work, drop_work, ended_by_object, fail_work, forever_work, pause, &
                                   sum_job, sum_work, wake_job, waker_work, WAKE_BY_QUIT, WAKE_BY_REQUEST, WAKE_BY_WAKE
 use figure_test_tasks_work, only : clock_calls, clock_job, clock_work
+use figure_testing, only : test_run
 use, intrinsic :: iso_c_binding, only : c_int
 
 implicit none
@@ -611,22 +612,28 @@ contains
    endsubroutine object_end
 
    function settle() result(settled)
-   !< Lazy frames (max_wait 0.1 s) until one waits: the frames still to draw, however many a previous check left, have
-   !< run out, so that the next lazy frame waits. A wait lasts max_wait; a frame that does not wait, at most 60 per
-   !< second in remote mode, takes ~0.017 s.
-   logical        :: settled !< A frame waited (within 300 frames).
-   integer(int32) :: k       !< Frame.
-   real(real64)   :: ta      !< A frame's start [s].
+   !< Lazy frames (max_wait 0.1 s) until the loop is idle: no input queued and no frame still owed (test_run), however
+   !< many a previous check left, so that the next lazy frame waits. Then one lazy frame: a wake-up still on its way (a
+   !< previous task's end) ends its wait and owes frames again, and the loop settles anew. Not by a frame's length: on
+   !< the macOS runner a frame that does not wait takes 0.07-0.15 s, longer than max_wait, and two owed frames were
+   !< drawn after such a "settle" (szaghi/figure#10 S1, FIGURE_DEBUG_WAKE).
+   logical        :: settled !< Idle, and a lazy frame left it idle (within 10 rounds).
+   integer(int32) :: k       !< Round.
+   integer(int32) :: stat    !< Status of test_run.
 
    call app%set_lazy(.true., max_wait=0.1_real64)
    settled = .false.
-   do k = 1_int32, 300_int32
-      ta = figure_time()
-      if (.not. app%next_frame()) exit
-      settled = figure_time() - ta >= 0.09_real64
+   do k = 1_int32, 10_int32
+      stat = FIG_OK
+      do while (test_run(300_int32, stat=stat)) ! the frames still owed
+         if (.not. app%next_frame()) return
+      enddo
+      if (stat /= FIG_OK) exit
+      if (.not. app%next_frame()) return     ! a lazy frame: it waits max_wait, unless a wake-up was on its way
+      settled = .not. test_run(300_int32, stat=stat) .and. stat == FIG_OK
       if (settled) exit
    enddo
-   if (.not. settled) write(error_unit, '(A)') 'settle: the loop never waited'
+   if (.not. settled) write(error_unit, '(A)') 'settle: the loop never became idle'
    endfunction settle
 
    subroutine woken_by_task(action, ok)
@@ -640,7 +647,6 @@ contains
    real(real64)                :: t1      !< The frame's start [s].
    real(real64)                :: tw      !< Start of the wait for the task's end [s].
    real(real64)                :: at      !< The task's call, planned [s].
-   integer(int32)              :: early   !< Frames begun before the call, woken by something else.
    integer(int32)              :: frames  !< Frames.
    integer(int32)              :: stat    !< Status.
    real(real64)                :: latency !< From the task's call to the frame [s].
@@ -652,17 +658,8 @@ contains
    call app%set_lazy(.true., max_wait=10.0_real64)
    at = figure_time() + 0.2_real64
    call t%start(waker_work, wake_job(action=action, n=2_int32, at=at, hold=2.0_real64))
-   ! a frame may start before the call, woken by something that is not the task's (remote mode on the macOS runner,
-   ! 2 of 2 runs, wake only, ce582c1; FIGURE_DEBUG_WAKE logs what ended each wait, szaghi/figure#10 S1): up to 3 are
-   ! let through, and the frame measured is the first after the call (latency >= 0); a loop that does not wait draws
-   ! more than 3 in those 0.2 s and fails
-   early = -1_int32
-   do
-      early = early + 1_int32
-      running = app%next_frame()
-      t1 = figure_time()
-      if (t1 >= at .or. .not. running .or. early >= 3_int32) exit
-   enddo
+   running = app%next_frame()  ! idle (settle): it waits until the task's call
+   t1 = figure_time()
    call t%cancel()
    frames = frames_until_done(t, 10.0_real64)
    tw = figure_time()  ! frames_until_done stops at the loop's end too (quit): the task may still be ending
@@ -680,12 +677,9 @@ contains
       endselect
    endif
    ok = ok .and. settled .and. (running .neqv. action == WAKE_BY_QUIT)
-   if (.not. ok) write(error_unit, '(A,A,A,ES11.3,A,L1,A,I0,A,L1,A,I0)') 'woken by a task''s ', trim(names(action)), &
-                                                                 ': latency ', latency, ' s, next_frame ', running, &
-                                                                 ', task stat ', stat, ', settled ', settled,     &
-                                                                 ', frames before the call ', early
-   if (ok .and. early > 0_int32) write(error_unit, '(A,A,A,I0)') 'woken by a task''s ', trim(names(action)), &
-                                                               ': frames before the call (not the task''s) ', early
+   if (.not. ok) write(error_unit, '(A,A,A,ES11.3,A,L1,A,I0,A,L1)') 'woken by a task''s ', trim(names(action)), &
+                                                              ': latency ', latency, ' s, next_frame ', running, &
+                                                              ', task stat ', stat, ', settled ', settled
    endsubroutine woken_by_task
 
    subroutine largest_request_kept(ok)
