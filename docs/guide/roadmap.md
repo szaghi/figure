@@ -445,7 +445,7 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   stated plainly: `'report'` without a `stat` stops the program, `'recover'` goes on
   ([The three modes](errors#the-three-modes)): done.
 
-## v0.6.0 — in progress
+## v0.6.0 — released 2026-11-15
 
 Known defects and risks first: what v0.5.0 left open, the vendored libraries against their upstream heads, and CI
 running the gate's compilers on every platform, with the documentation's pictures checked there. It had no driving
