@@ -3,6 +3,9 @@
 #! args    /tmp/figure-cases
 #! frames  230
 #! poster  85
+# --check on Windows: the program writes its example cases with POSIX shell commands (mkdir -p, rm, touch -t),
+# which cmd.exe refuses: not compared there (run 43688555041, 2026-11-15)
+#! check.win32 skip
 # Open shows the browser on the example cases (written by the program, fixed sizes and times); a click on Size sorts
 # the files by size, a double-click enters "cylinder Re100", a click chooses overset.input and Open answers
 0   move 300 300

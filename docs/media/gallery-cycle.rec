@@ -3,6 +3,8 @@
 #! frames  315
 #! poster  10
 #! scale   960
-# --check on macOS: the plotted values (Apple's libm, arm64), the most by 8: 5 pixel(s) over 2 (run 43649582637, 2026-11-14); 16 allowed
+# --check on macOS and Windows: the plotted values, by the C library's maths (glibc on Linux, not there): 5
+# pixel(s) over 2 on both, the most by 8 (runs 43649582637, 43688555041); 16 allowed
 #! check.darwin max_failed=16
+#! check.win32 max_failed=16
 # the same program in the seven built-in themes, 1.5 s each (the program switches them every 45 frames)

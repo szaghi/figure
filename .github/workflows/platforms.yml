@@ -91,14 +91,13 @@ jobs:
         path: window-frames
         if-no-files-found: warn
 
-    # S10 (szaghi/figure#10): the docs' pictures on macOS, the posters rendered headless and compared with the
-    # committed ones. A measurement until the per-platform tolerances (#! check.<platform>) are set: it does not fail
-    # the job; the pictures that differ are uploaded
-    - name: Pictures measured (docs_media.py --check)
-      continue-on-error: true
+    # S10 (szaghi/figure#10): the docs' examples run and their pictures, rendered headless, compared with the committed
+    # ones, with macOS's own masks, tolerances and skips (#! mask.darwin, #! check.darwin: measured 2026-11-15, run
+    # 43688555041, 86 passed); the pictures that differ are uploaded
+    - name: Pictures checked (docs_media.py --check)
       run: |
         brew install ffmpeg imagemagick
-        bash docs/examples/build.sh --varset macos || echo "build.sh: some runs failed (outputs uploaded); the programs are built"
+        bash docs/examples/build.sh --varset macos
         python3 scripts/docs_media.py --check
 
     - name: Upload the pictures that differ
@@ -204,11 +203,14 @@ jobs:
         if-no-files-found: warn
 
     # S10 (szaghi/figure#10): the docs' pictures on Windows, the posters rendered headless and compared with the
-    # committed ones. A measurement until the per-platform tolerances (#! check.<platform>) are set: it does not fail
-    # the job; the pictures that differ are uploaded
+    # committed ones. Still a measurement (it does not fail the job; the pictures that differ are uploaded): the studio
+    # tutorials write their example cases with POSIX shell commands (mkdir -p, rm, touch -t), which cmd.exe refuses,
+    # so they are skipped here (#! check.win32 skip) and tutorial part 25's --test run fails
     - name: Pictures measured (docs_media.py --check)
       continue-on-error: true
       run: |
+        # /tmp of the recordings (#! args, #! fresh) is \tmp of the working drive to a Windows program: it must exist
+        python -c "import os; os.makedirs('/tmp', exist_ok=True)"
         bash docs/examples/build.sh --varset windows || echo "build.sh: some runs failed (outputs uploaded); the programs are built"
         python scripts/docs_media.py --check
 

@@ -8,6 +8,9 @@
 # --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
 # masked, the rest compared (run 43649582637, 2026-11-14)
 #! mask.darwin 0 0 1100 22
+# --check on Windows: the program writes its example cases with POSIX shell commands (mkdir -p, rm, touch -t),
+# which cmd.exe refuses: not compared there (run 43688555041, 2026-11-15)
+#! check.win32 skip
 # F5 runs the plate, writing a snapshot every 4 iterations; the Result panel shows the converged field and the player
 # of the run's snapshots. Play: the field steps through iterations 4 to 112 and the converged one, again and again;
 # pause, then back one snapshot twice. The legend is dragged down (the range moves up) and zoomed with the wheel: the

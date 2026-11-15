@@ -8,6 +8,9 @@
 # --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
 # masked, the rest compared (run 43649582637, 2026-11-14)
 #! mask.darwin 0 0 1100 22
+# --check on Windows: the program writes its example cases with POSIX shell commands (mkdir -p, rm, touch -t),
+# which cmd.exe refuses: not compared there (run 43688555041, 2026-11-15)
+#! check.win32 skip
 # F5 runs the plate: the monitor draws the residual on the left axis (log) and the mean temperature on the right one;
 # the pointer over it reads the nearest iteration; the left end of the averaging window is dragged right, and the
 # window's mean, tagged on the right axis, follows. Input > Boundaries: the sketch of the plate; the pointer on the

@@ -8,6 +8,9 @@
 # --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
 # masked, the rest compared (run 43649582637, 2026-11-14)
 #! mask.darwin 0 0 1100 22
+# --check on Windows: the program writes its example cases with POSIX shell commands (mkdir -p, rm, touch -t),
+# which cmd.exe refuses: not compared there (run 43688555041, 2026-11-15)
+#! check.win32 skip
 # keys that respect the focus: Result's tab is clicked, right moves its probe line a node at a time; the title field
 # is clicked and edited, right moves the field's cursor and the probe line stays; escape; the pointer rests on Run,
 # whose tooltip shows F5; F5, pressed with the focus elsewhere, runs the solver

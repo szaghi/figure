@@ -346,19 +346,25 @@ renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
   faster than a window does, so what a task or a process has produced by a given frame differs: a progress bar, a
   log, a plot fitted to data that arrived later. Such a recording is deterministic in each mode, not across them.
 - **Draw callbacks:** a program's own `ImDrawList` callback (raw bindings) is not run by the CPU renderer.
-- **Other platforms:** the CPU renderer draws the same pixels on macOS (arm64, Apple clang, gfortran 16) as on
-  Linux (67 of the documentation's 94 recordings passed with the Linux tolerances, on CI, 2026-11-14); what differs
-  there is the program's own arithmetic and FIGURE's title bar:
-  - Apple's `libm` and arm64's fused multiply-adds move what a program computes: a rounded border or a plotted value
-    by a pixel (5 to 104 pixels in 4 recordings), a fractal by much more (44443 pixels of the Mandelbrot example);
+- **Other platforms:** the CPU renderer draws the same pixels on macOS (arm64, Apple clang, gfortran 16) and Windows
+  (MSYS2 UCRT64, gfortran) as on Linux (on CI, 2026-11-15: of the documentation's 94 recordings, 86 pass on macOS
+  with its overrides, 73 on Windows with none); what differs is the program's own arithmetic, FIGURE's title
+  bar on macOS, and on Windows the examples' shell commands:
+  - the C library's maths (glibc on Linux, not elsewhere) and, on arm64, multiply-adds the compiler may fuse move
+    what a program computes: a rounded border or a plotted value by a pixel (5 and 104 pixels in two recordings, the
+    same counts on macOS and Windows; 62 in a third on macOS), a fractal by much more (the Mandelbrot example: 44443
+    pixels on macOS, 30727 on Windows);
   - FIGURE's title bar (`decorations='figure'`) has its buttons on the left on macOS, the menus after them: every
     picture of a window with it differs there (about 1400 pixels), and an input script that clicks the bar or its
-    menus at fixed coordinates plays something else.
+    menus at fixed coordinates plays something else;
+  - the studio tutorials write their example cases with POSIX shell commands (`mkdir -p`, `rm`, `touch -t`) through
+    `execute_command_line`, which on Windows runs `cmd.exe`: there the cases are not written, so neither their
+    pictures nor tutorial part 25's golden window can be compared.
 
   `docs_media.py --check` gives such a recording a per-platform mask, tolerance or skip (`#! mask.darwin`,
-  `#! check.darwin max_failed=N`, `#! check.darwin skip`), each with the number measured; a program's own golden
+  `#! check.win32 max_failed=N`, `#! check.darwin skip`), each with the number measured; a program's own golden
   check can leave out the bar where the close button is left of the menus (`test_frame_rect`, as tutorial part 25
-  does). Windows (MSYS2 UCRT64, Mesa llvmpipe) is not measured yet.
+  does).
 - **Speed:** about 1 ns a pixel drawn per thread; a 1400 x 860 frame of the documentation's scenes takes 0.7 to 1.7 ms
   on 8 threads, 0.8 to 6.7 ms on one, more with a large texture sampled on every pixel.
 

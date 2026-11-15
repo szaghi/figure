@@ -6,6 +6,9 @@
 # --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
 # masked, the rest compared (run 43649582637, 2026-11-14)
 #! mask.darwin 0 0 1100 22
+# --check on Windows: the program writes its example cases with POSIX shell commands (mkdir -p, rm, touch -t),
+# which cmd.exe refuses: not compared there (run 43688555041, 2026-11-15)
+#! check.win32 skip
 # east in the tree: the boundaries' table; east becomes fixed at 40; Solver: omega dragged to 1.59; the heat.inp tab
 # shows the file's text in the monospace font; max_iter edited there, Apply; the form shows 3000; ctrl+z takes it back
 0   move 600 300
