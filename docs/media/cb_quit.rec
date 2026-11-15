@@ -6,9 +6,9 @@
 8   move 200 49 12
 22  down
 24  up
-28  key ctrl down
+28  key shortcut down
 29  key a
-30  key ctrl up
+30  key shortcut up
 34  text wing
 46  move 42 75 12
 60  down

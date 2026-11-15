@@ -6,9 +6,9 @@
 10  move 150 74 15
 28  down
 30  up
-34  key ctrl down
+34  key shortcut down
 35  key a
-36  key ctrl up
+36  key shortcut up
 40  text MESH/grid
 56  key enter
 62  move 150 149 15
@@ -38,9 +38,9 @@
 290 move 480 145 15
 308 down
 310 up
-314 key ctrl down
+314 key shortcut down
 315 key a
-316 key ctrl up
+316 key shortcut up
 320 text 3
 326 key enter
 334 move 300 330 20

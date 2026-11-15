@@ -18,9 +18,9 @@
 105 move 925 131 15
 120 down
 122 up
-125 key ctrl down
+125 key shortcut down
 126 key a
-127 key ctrl up
+127 key shortcut up
 130 text 40
 140 key enter
 160 move 428 218 15
@@ -47,7 +47,7 @@
 380 move 555 61 15
 395 down
 397 up
-420 key ctrl down
+420 key shortcut down
 421 key z
-422 key ctrl up
+422 key shortcut up
 445 move 700 300 15

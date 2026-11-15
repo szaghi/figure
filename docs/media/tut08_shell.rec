@@ -28,9 +28,9 @@
 305 down
 307 up
 330 move 600 300 15
-340 key ctrl down
+340 key shortcut down
 341 key q
-342 key ctrl up
+342 key shortcut up
 360 move 566 358 15
 380 down
 382 up

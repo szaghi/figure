@@ -10,9 +10,9 @@
 28  down
 30  up
 45  key down
-70  key ctrl down
+70  key shortcut down
 71  key s
-72  key ctrl up
+72  key shortcut up
 95  move 120 126 15
 113 down
 115 up
@@ -21,9 +21,9 @@
 175 move 540 20 15
 193 down
 195 up
-215 key ctrl down
+215 key shortcut down
 216 key s
-217 key ctrl up
+217 key shortcut up
 240 key down
 260 key f5
 280 move 480 88 15

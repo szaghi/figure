@@ -16,9 +16,9 @@
 80  down
 82  up
 130 move 760 300 15
-150 key ctrl down
+150 key shortcut down
 151 key f
-152 key ctrl up
+152 key shortcut up
 160 text pressure
 200 key enter
 240 key escape

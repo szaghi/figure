@@ -2206,7 +2206,8 @@ contains
    character(len=:), allocatable :: title      !< The window's title.
    real(real64)                  :: x          !< The probe line before a key.
    integer(int64)                :: uploads    !< Field colourings so far.
-   real(real64)                  :: masks(4, 1) !< What the picture's comparison leaves out [pixels].
+   real(real64)                  :: masks(4, 2) !< What the picture's comparison leaves out [pixels].
+   real(real64)                  :: m(4)       !< The menus in the title bar [pixels].
    real(real64)                  :: p0(2), p1(2) !< The plane's point and a point along its normal, drawn [pixels].
    real(real64)                  :: u(2)       !< The normal's direction on the display.
    real(real64)                  :: x0         !< The plane's abscissa before the drag [m].
@@ -2243,7 +2244,7 @@ contains
    call test_click(0.5_real64 * (r(1) + r(3)), 0.5_real64 * (r(2) + r(4)))
    call frames(8_int32)
    title = app%title()
-   call check(index(case_dir, '/plate', back=.true.) == len(case_dir) - 5 .and. &
+   call check(index(case_dir, 'plate', back=.true.) == len(case_dir) - 4 .and. &
               title == 'Heated plate - FIGURE studio', 'Choose opens the case, the window''s title says which')
 
    !region picture
@@ -2255,6 +2256,10 @@ contains
    call test_capture('tut25_clip.png')               ! the whole window, written when this frame is rendered
    call frames(1_int32)
    masks(:, 1) = path_rect                           ! the case's path: this machine's folders
+   masks(:, 2) = 0.0_real64                          ! the title bar: left out where it is the other platform's
+   call test_frame_rect('close', r(1), r(2), r(3), r(4))
+   call test_frame_rect('menus', m(1), m(2), m(3), m(4))
+   if (r(1) < m(1)) call test_frame_rect('bar', masks(1, 2), masks(2, 2), masks(3, 2), masks(4, 2)) ! macOS: buttons left
    call check(test_compare_image('tut25_clip.png', golden, masks=masks), &
               'the main window looks as committed (docs/examples/data/tut25_clip.png)')
    call check(test_id_conflicts() == 0_int32, 'no two items of the main window share an id')

@@ -16,9 +16,9 @@
 80  move 650 136 15
 95  down
 97  up
-100 key ctrl down
+100 key shortcut down
 101 key a
-102 key ctrl up
+102 key shortcut up
 105 text 20
 110 key enter
 130 key f5

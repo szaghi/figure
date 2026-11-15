@@ -6,27 +6,27 @@
 # right edge; ctrl+down four times: 21, 18, 15, 12; ctrl+up once: back to 15
 0   move 450 400
 10  move 330 330 15
-40  key ctrl down
+40  key shortcut down
 41  key up
-42  key ctrl up
-60  key ctrl down
+42  key shortcut up
+60  key shortcut down
 61  key up
-62  key ctrl up
-80  key ctrl down
+62  key shortcut up
+80  key shortcut down
 81  key up
-82  key ctrl up
-125 key ctrl down
+82  key shortcut up
+125 key shortcut down
 126 key down
-127 key ctrl up
-140 key ctrl down
+127 key shortcut up
+140 key shortcut down
 141 key down
-142 key ctrl up
-155 key ctrl down
+142 key shortcut up
+155 key shortcut down
 156 key down
-157 key ctrl up
-170 key ctrl down
+157 key shortcut up
+170 key shortcut down
 171 key down
-172 key ctrl up
-200 key ctrl down
+172 key shortcut up
+200 key shortcut down
 201 key up
-202 key ctrl up
+202 key shortcut up

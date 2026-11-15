@@ -322,9 +322,18 @@ void take_drops() {
    st.dropped_y = st.drop_y;
 }
 
-// The keys of a capture script: the names of test_key (fig_input_key), defined further down.
+// The keys of test_key (fig_input_key) and of a capture script: key_by_name's, defined further down, and "shortcut",
+// the platform's shortcut key, the one ig_shortcut's ctrl means: cmd (super) on macOS, where Dear ImGui swaps it with
+// ctrl as the events arrive, ctrl elsewhere.
 extern "C" ImGuiKey key_by_name(const std::string &n);
-ImGuiKey capture_key(const std::string &name) { return key_by_name(name); }
+ImGuiKey capture_key(const std::string &name) {
+#if defined(__APPLE__)
+   if (name == "shortcut") return ImGuiMod_Super;
+#else
+   if (name == "shortcut") return ImGuiMod_Ctrl;
+#endif
+   return key_by_name(name);
+}
 
 int capture_button(const std::string &name) {
    if (name == "right") return ImGuiMouseButton_Right;
@@ -3977,13 +3986,7 @@ int fig_last_item(fig_item_status *s) {
 int fig_input_key(const char *name, int name_len, int down) {
    if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
-   // "shortcut": the platform's shortcut key, the one ig_shortcut's ctrl means: cmd (super) on macOS, where Dear ImGui
-   // swaps it with ctrl as the events arrive, ctrl elsewhere
-#if defined(__APPLE__)
-   const ImGuiKey k = n == "shortcut" ? ImGuiMod_Super : key_by_name(n);
-#else
-   const ImGuiKey k = n == "shortcut" ? ImGuiMod_Ctrl : key_by_name(n);
-#endif
+   const ImGuiKey k = capture_key(n);                // with "shortcut"
    if (k == ImGuiKey_None) return fail(FIG_ERR_ARGUMENT, "key: unknown name \"" + n + "\"");
    state_t::input_t e;
    e.kind = 4;

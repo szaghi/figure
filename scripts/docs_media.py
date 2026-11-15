@@ -72,7 +72,7 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
 RECS = ROOT / "docs" / "media"
@@ -93,8 +93,8 @@ MAX_FAILED = 0  # --check: pixels allowed to differ by more
 FPS = 30
 CAPTION_FRAMES = 45  # a key caption stays 1.5 s, or until the next one
 CAPTION_FONT = ROOT / "third_party" / "fonts" / "IBMPlexSans-Regular.ttf"
-MODIFIERS = ("ctrl", "shift", "alt", "super")
-KEY_NAMES = {"escape": "esc", "pageup": "page up", "pagedown": "page down", "backspace": "backspace"}
+MODIFIERS = ("shortcut", "ctrl", "shift", "alt", "super")  # shortcut: the platform's (ctrl; cmd on macOS)
+KEY_NAMES = {"shortcut": "ctrl", "escape": "esc", "pageup": "page up", "pagedown": "page down", "backspace": "backspace"}
 # the pointer: an arrow, its tip at (0, 0) [pixels], white with a dark outline
 ARROW = [(0, 0), (0, 17), (4, 13), (7, 20), (10, 19), (7, 12), (12, 12)]
 
@@ -107,8 +107,9 @@ def fresh(name: str, header: dict[str, str]) -> None:
     """Remove the folder of '#! fresh' (under /tmp only), so that the program writes it anew."""
     if "fresh" not in header:
         return
-    folder = Path(header["fresh"])
-    if not folder.is_absolute() or folder.parts[:2] != ("/", "tmp") or len(folder.parts) < 3:
+    posix = PurePosixPath(header["fresh"])  # a POSIX path also on Windows, where /tmp is the current drive's
+    folder = Path(posix)
+    if not posix.is_absolute() or posix.parts[:2] != ("/", "tmp") or len(posix.parts) < 3:
         msg = f"{name}: '#! fresh {folder}' is not a folder under /tmp"
         raise MediaError(msg)
     shutil.rmtree(folder, ignore_errors=True)
@@ -177,7 +178,7 @@ def overlays(script: str, frames: int, first: int) -> list[tuple[tuple[float, fl
                     elif state == "up" and name in mods:
                         mods.remove(name)
                 elif state != "up":  # a key pressed (and released), or pressed and held
-                    caption = "+".join([*mods, KEY_NAMES.get(name, name)])
+                    caption = "+".join(KEY_NAMES.get(k, k) for k in [*mods, name])
                     until = frame + CAPTION_FRAMES
             k += 1
         if frame >= first:
@@ -245,11 +246,18 @@ def chrome() -> str:
     return str(found[-1])
 
 
+def program_path(header: dict[str, str]) -> Path:
+    """The program of '#! program', from the repository root; NAME.exe where only that is built (Windows)."""
+    program = ROOT / header["program"]
+    exe = program.with_name(program.name + ".exe")
+    return exe if not program.is_file() and exe.is_file() else program
+
+
 def record_remote(name: str, header: dict[str, str]) -> None:
     """Serve the program's UI and take a browser screenshot of it, in a drawn browser window."""
     width, height = (int(v) for v in header["remote"].split())
     port = 18765
-    program = ROOT / header["program"]
+    program = program_path(header)
     fresh(name, header)
     server = subprocess.Popen(
         [str(program), *shlex.split(header.get("args", "")), "--remote", str(port)],
@@ -346,7 +354,7 @@ def capture(name: str, header: dict[str, str], script: str, work: Path, headless
     """Run the program of a recording with the native layer's capture into `work`: its frames and the crop (x, y, w, h)
     of the poster and the video. `headless`: no window, the frames drawn by FIGURE's CPU renderer."""
     frames = int(header["frames"])
-    program = ROOT / header["program"]
+    program = program_path(header)
     if not program.is_file():
         msg = f"{name}: {program} not built"
         raise MediaError(msg)
@@ -374,6 +382,10 @@ def capture(name: str, header: dict[str, str], script: str, work: Path, headless
         timeout=300,
         check=False,
     )
+    bad = [line for line in run.stderr.splitlines() if line.startswith("figure capture:") and "bad event" in line]
+    if bad:  # the native layer skips a line it cannot read: the recording would play something else
+        msg = f"{name}: " + "; ".join(bad)
+        raise MediaError(msg)
     shots = sorted(work.glob("f_*.ppm"))
     if len(shots) != frames:
         msg = f"{name}: {len(shots)} of {frames} frames written (exit {run.returncode}): {run.stderr.strip()}"

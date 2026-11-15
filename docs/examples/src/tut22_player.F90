@@ -1947,7 +1947,7 @@ contains
    call test_click(0.5_real64 * (r(1) + r(3)), 0.5_real64 * (r(2) + r(4)))
    call frames(8_int32)
    title = app%title()
-   call check(index(case_dir, '/plate', back=.true.) == len(case_dir) - 5 .and. &
+   call check(index(case_dir, 'plate', back=.true.) == len(case_dir) - 4 .and. &
               title == 'Heated plate - FIGURE studio', 'Choose opens the case, the window''s title says which')
 
    !region leave
