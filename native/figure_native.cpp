@@ -67,8 +67,6 @@ bool on_main_thread() { return std::this_thread::get_id() == main_thread.load();
 // line each on standard error, timed by fig_time (docs/guide/frame-loop.md, "Waking the loop").
 std::atomic<bool> debug_wake{false};
 
-extern "C" double fig_time(void);
-
 void wake_log(const char *what, const std::string &detail) {
    std::fprintf(stderr, "figure wake: %.6f %s %s\n", fig_time(), what, detail.c_str());
 }
