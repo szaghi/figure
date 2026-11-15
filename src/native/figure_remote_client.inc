@@ -1,0 +1,237 @@
+// generated from native/figure_remote_client.html by scripts/fpm_package.py
+static const char client_html[] = R"FIGUREHTML(<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIGURE remote</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1a1a1c; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+  #bar { position: fixed; right: 8px; bottom: 6px; font: 12px monospace; color: #888; pointer-events: none; }
+  #notice { color: #e8b04a; margin-right: 1.5em; }
+  #notice:empty { display: none; }
+</style>
+</head>
+<body>
+<canvas id="ui" tabindex="0"></canvas>
+<div id="bar"><span id="notice"></span><span id="status">connecting</span></div>
+<script>
+// FIGURE remote client: draws the Dear ImGui draw lists the program streams over a WebSocket, sends input back.
+// Protocol: see native/figure_remote.cpp.
+"use strict";
+const canvas = document.getElementById("ui");
+const status = document.getElementById("status"); // the connection and the frame counter, updated every frame
+const notice = document.getElementById("notice"); // what the user must read: kept beside the counter, not overwritten
+let noticeTimer = 0;
+// Show a notice for `ms` milliseconds (0: until the next notice).
+function notify(text, ms = 8000) {
+  notice.textContent = text;
+  clearTimeout(noticeTimer);
+  if (ms > 0) noticeTimer = setTimeout(() => { notice.textContent = ""; }, ms);
+}
+const gl = canvas.getContext("webgl", { alpha: false, antialias: false, premultipliedAlpha: false });
+const textures = new Map();
+let ws = null, frames = 0, lastFrame = null, background = [0.10, 0.10, 0.11];
+
+const vs = `attribute vec2 pos; attribute vec2 uv; attribute vec4 col; uniform vec2 scale; uniform float unit;
+  varying vec2 v_uv; varying vec4 v_col;
+  void main() { v_uv = uv; v_col = col; vec2 p = pos * unit;
+                gl_Position = vec4(p.x * scale.x - 1.0, 1.0 - p.y * scale.y, 0.0, 1.0); }`;
+const fs = `precision mediump float; uniform sampler2D tex; varying vec2 v_uv; varying vec4 v_col;
+  void main() { gl_FragColor = v_col * texture2D(tex, v_uv); }`;
+function shader(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, shader(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, fs));
+gl.linkProgram(prog); gl.useProgram(prog);
+const loc = { pos: gl.getAttribLocation(prog, "pos"), uv: gl.getAttribLocation(prog, "uv"),
+              col: gl.getAttribLocation(prog, "col"), scale: gl.getUniformLocation(prog, "scale"),
+              unit: gl.getUniformLocation(prog, "unit") };
+const vbo = gl.createBuffer(), ibo = gl.createBuffer();
+
+// pixels: w x h RGBA bytes, or an ImageBitmap (a decoded JPEG, kind 8: w and h unused)
+function setTexture(id, w, h, linear, pixels) {
+  let t = textures.get(id);
+  if (!t) { t = gl.createTexture(); textures.set(id, t); }
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  if (pixels instanceof Uint8Array)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  else
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  const filter = linear ? gl.LINEAR : gl.NEAREST; // the font atlas is linear; user images keep sharp pixels
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+}
+
+function draw(buf) {
+  const dv = new DataView(buf);
+  const dpr = window.devicePixelRatio || 1;
+  const dw = dv.getFloat32(1, true), dh = dv.getFloat32(5, true);
+  const nlists = dv.getUint32(9, true);
+  canvas.width = Math.round(canvas.clientWidth * dpr); canvas.height = Math.round(canvas.clientHeight * dpr);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.disable(gl.SCISSOR_TEST); // the clear obeys the scissor: left on from the last frame, it would clear one rect
+  gl.clearColor(background[0], background[1], background[2], 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.BLEND); gl.blendEquation(gl.FUNC_ADD);
+  gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.disable(gl.CULL_FACE); gl.disable(gl.DEPTH_TEST); gl.enable(gl.SCISSOR_TEST);
+  gl.uniform2f(loc.scale, 2 / dw, 2 / dh);
+  const sx = canvas.width / dw, sy = canvas.height / dh;
+  let p = 13;
+  for (let l = 0; l < nlists; ++l) {
+    const nv = dv.getUint32(p, true), ni = dv.getUint32(p + 4, true), nc = dv.getUint32(p + 8, true);
+    const compact = (dv.getUint32(p + 12, true) & 1) !== 0, stride = compact ? 12 : 20; p += 16;
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(buf, p, nv * stride), gl.STREAM_DRAW); p += nv * stride;
+    gl.uniform1f(loc.unit, compact ? 0.25 : 1.0); // compact positions are in 1/4 pixel
+    let base = -1; // the vertex the attributes start at: indices are 16-bit, relative to each command's vtx_offset
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(buf, p, ni * 2), gl.STREAM_DRAW);
+    p += ni * 2 + (ni % 2) * 2;
+    for (let c = 0; c < nc; ++c) {
+      const x1 = dv.getFloat32(p, true), y1 = dv.getFloat32(p + 4, true);
+      const x2 = dv.getFloat32(p + 8, true), y2 = dv.getFloat32(p + 12, true);
+      const tex = dv.getUint32(p + 16, true), off = dv.getUint32(p + 20, true), count = dv.getUint32(p + 24, true);
+      const vtx = dv.getUint32(p + 28, true);
+      p += 32;
+      if (x2 <= x1 || y2 <= y1) continue;
+      gl.scissor(Math.floor(x1 * sx), Math.floor(canvas.height - y2 * sy),
+                 Math.ceil((x2 - x1) * sx), Math.ceil((y2 - y1) * sy));
+      const t = textures.get(tex); if (!t) continue;
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      if (vtx !== base) { // WebGL has no base vertex: point the attributes at the command's vertex range
+        base = vtx;
+        const at = vtx * stride;
+        gl.enableVertexAttribArray(loc.pos); gl.enableVertexAttribArray(loc.uv); gl.enableVertexAttribArray(loc.col);
+        if (compact) { // i16 x, y; u16 u, v (normalized); u32 rgba
+          gl.vertexAttribPointer(loc.pos, 2, gl.SHORT, false, 12, at);
+          gl.vertexAttribPointer(loc.uv, 2, gl.UNSIGNED_SHORT, true, 12, at + 4);
+          gl.vertexAttribPointer(loc.col, 4, gl.UNSIGNED_BYTE, true, 12, at + 8);
+        } else {
+          gl.vertexAttribPointer(loc.pos, 2, gl.FLOAT, false, 20, at);
+          gl.vertexAttribPointer(loc.uv, 2, gl.FLOAT, false, 20, at + 8);
+          gl.vertexAttribPointer(loc.col, 4, gl.UNSIGNED_BYTE, true, 20, at + 16);
+        }
+      }
+      gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, off * 2);
+    }
+  }
+}
+
+// Messages are handled in arrival order; a deflated one (kind 6) is inflated first, and a JPEG texture (kind 8)
+// decoded, asynchronously: the next message waits for it.
+let queue = Promise.resolve();
+function onMessage(ev) {
+  queue = queue.then(() => {
+    const kind = new Uint8Array(ev.data, 0, 1)[0];
+    if (kind !== 6) return handle(ev.data);
+    const inflated = new Blob([new Uint8Array(ev.data, 1)]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return new Response(inflated).arrayBuffer().then(handle);
+  }).catch(err => { notify("error: " + err, 0); });
+}
+
+function handle(buf) {
+  const kind = new Uint8Array(buf, 0, 1)[0], dv = new DataView(buf);
+  if (kind === 1) { lastFrame = buf; draw(buf); status.textContent = "frame " + (++frames); }
+  else if (kind === 2) { // a texture changed: the frame using it may be unchanged, so not sent again: redraw it
+    setTexture(dv.getUint32(1, true), dv.getUint32(5, true), dv.getUint32(9, true),
+               (dv.getUint32(13, true) & 1) !== 0, new Uint8Array(buf, 17));
+    if (lastFrame) draw(lastFrame);
+  }
+  else if (kind === 8) { // a changing texture as JPEG: decoded by the browser, then as kind 2
+    const jpeg = new Blob([new Uint8Array(buf, 17)], { type: "image/jpeg" });
+    return createImageBitmap(jpeg, { premultiplyAlpha: "none", colorSpaceConversion: "none" }).then(bitmap => {
+      setTexture(dv.getUint32(1, true), 0, 0, (dv.getUint32(13, true) & 1) !== 0, bitmap);
+      bitmap.close();
+      if (lastFrame) draw(lastFrame);
+    });
+  }
+  else if (kind === 5) status.textContent = "frame " + frames + " (unchanged)"; // the program is alive
+  else if (kind === 4) {
+    background = [dv.getFloat32(1, true), dv.getFloat32(5, true), dv.getFloat32(9, true)];
+    const c = background.map(v => Math.round(v * 255)); document.body.style.background = `rgb(${c})`;
+    if (lastFrame) draw(lastFrame);
+  }
+  else if (kind === 3) { const id = dv.getUint32(1, true); const t = textures.get(id); if (t) { gl.deleteTexture(t); textures.delete(id); } }
+  else if (kind === 7) { // the program copied a text: to the browser's clipboard, where the browser allows it
+    const text = new TextDecoder().decode(new Uint8Array(buf, 1));
+    const kept = "copied in the program only: ";
+    if (navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(text).catch(() => { notify(kept + "the browser refused its clipboard"); });
+    else notify(kept + "the browser's clipboard needs https or localhost");
+  }
+  else if (kind === 9) { // the user clicked a link (ig_text_link_url): a new tab, where the browser allows it
+    const url = new TextDecoder().decode(new Uint8Array(buf, 1));
+    const tab = window.open(url, "_blank", "noopener");
+    if (!tab) notify("the browser blocked opening " + url + ": allow pop-ups for this page", 0);
+  }
+}
+
+function send(s) { if (ws && ws.readyState === 1) ws.send(s); }
+function sendSize() { send(`s:${canvas.clientWidth},${canvas.clientHeight}`); }
+function connect() {
+  const token = new URLSearchParams(location.search).get("token"); // the program's access token, from the address
+  ws = new WebSocket(`ws://${location.host}/ws` + (token ? `?token=${encodeURIComponent(token)}` : ""));
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { status.textContent = "connected"; sendSize(); };
+  ws.onmessage = onMessage;
+  ws.onclose = () => { status.textContent = "disconnected: retrying"; textures.clear(); lastFrame = null; setTimeout(connect, 1000); };
+}
+const pos = e => { const r = canvas.getBoundingClientRect(); return `${e.clientX - r.left},${e.clientY - r.top}`; };
+canvas.addEventListener("mousemove", e => send(`m:${pos(e)}`));
+canvas.addEventListener("mousedown", e => { canvas.focus(); send(`m:${pos(e)}`); send(`b:${[0, 2, 1][e.button] ?? 0},1`); e.preventDefault(); });
+window.addEventListener("mouseup", e => send(`b:${[0, 2, 1][e.button] ?? 0},0`));
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+canvas.addEventListener("wheel", e => { send(`w:${-e.deltaX / 100},${-e.deltaY / 100}`); e.preventDefault(); }, { passive: false });
+// On a Mac, cmd is the shortcut key: it is sent as ctrl (and ctrl as cmd), as Dear ImGui does on macOS itself, so that
+// ig_shortcut('ctrl+s') is cmd+s there. Shortcuts stay in the page: the browser's own (save, open, print) are not
+// triggered, except copy, paste and cut.
+const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const swap = { MetaLeft: "ControlLeft", MetaRight: "ControlRight", ControlLeft: "MetaLeft", ControlRight: "MetaRight" };
+const keyCode = c => (mac && swap[c]) || c;
+// Paste: the browser hands its clipboard to the page only in the paste event that follows ctrl+v (cmd+v), so that key
+// is held back until then and sent after the text ("p:"): the program's paste reads the browser's clipboard. Without
+// a paste event in 200 ms the key goes alone (the program pastes its own clipboard).
+let heldPaste = null; // the held ctrl+v: { up: its keyup came meanwhile }
+function releasePaste(text) {
+  if (!heldPaste) return;
+  if (text !== null) send(`p:${text}`);
+  send("k:1,KeyV");
+  if (heldPaste.up) send("k:0,KeyV");
+  heldPaste = null;
+}
+document.addEventListener("paste", e => {
+  releasePaste(e.clipboardData ? e.clipboardData.getData("text/plain") : null);
+  e.preventDefault();
+});
+// Files dropped on the page stay on this computer, not on the server: the page refuses them (a dropped file would
+// otherwise replace the page).
+window.addEventListener("dragover", e => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "none"; });
+window.addEventListener("drop", e => { e.preventDefault(); notify("files cannot be dropped in remote mode"); });
+canvas.addEventListener("keydown", e => {
+  if (e.code === "KeyV" && (e.ctrlKey || e.metaKey) && !e.repeat) {
+    heldPaste = { up: false };
+    setTimeout(() => releasePaste(null), 200);
+    return;
+  }
+  send(`k:1,${keyCode(e.code)}`);
+  if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) send(`c:${e.key}`);
+  if (e.code === "Tab" || ((e.ctrlKey || e.metaKey) && !["KeyC", "KeyV", "KeyX"].includes(e.code))) e.preventDefault();
+});
+canvas.addEventListener("keyup", e => {
+  if (e.code === "KeyV" && heldPaste) { heldPaste.up = true; return; }
+  send(`k:0,${keyCode(e.code)}`);
+});
+window.addEventListener("resize", () => { sendSize(); if (lastFrame) draw(lastFrame); });
+connect();
+</script>
+</body>
+</html>
+)FIGUREHTML";
