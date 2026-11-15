@@ -3,6 +3,9 @@
 #! args    /tmp/figure-cases
 #! frames  230
 #! poster  85
+# --check on Windows: the browser shows the native path (D:\tmp\figure-cases) and the drives (C:, D:) where Linux
+# shows /tmp/figure-cases and /: 977 pixel(s) over 2 (run 43744364220, 2026-11-15); the path field and the places masked
+#! mask.win32 130 115 175 108
 # Open shows the browser on the example cases (written by the program, fixed sizes and times); a click on Size sorts
 # the files by size, a double-click enters "cylinder Re100", a click chooses overset.input and Open answers
 0   move 300 300
