@@ -346,9 +346,19 @@ renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
   faster than a window does, so what a task or a process has produced by a given frame differs: a progress bar, a
   log, a plot fitted to data that arrived later. Such a recording is deterministic in each mode, not across them.
 - **Draw callbacks:** a program's own `ImDrawList` callback (raw bindings) is not run by the CPU renderer.
-- **Other platforms:** macOS and Windows were not measured; their C libraries' `sin`, `cos`, `log10` and `pow` may
-  move a rounded corner or a tick by a level or a pixel. A golden check can be given a per-platform tolerance where
-  one is measured (`docs_media.py`'s `#! check.<platform>`).
+- **Other platforms:** the CPU renderer draws the same pixels on macOS (arm64, Apple clang, gfortran 16) as on
+  Linux (67 of the documentation's 94 recordings passed with the Linux tolerances, on CI, 2026-11-14); what differs
+  there is the program's own arithmetic and FIGURE's title bar:
+  - Apple's `libm` and arm64's fused multiply-adds move what a program computes: a rounded border or a plotted value
+    by a pixel (5 to 104 pixels in 4 recordings), a fractal by much more (44443 pixels of the Mandelbrot example);
+  - FIGURE's title bar (`decorations='figure'`) has its buttons on the left on macOS, the menus after them: every
+    picture of a window with it differs there (about 1400 pixels), and an input script that clicks the bar or its
+    menus at fixed coordinates plays something else.
+
+  `docs_media.py --check` gives such a recording a per-platform mask, tolerance or skip (`#! mask.darwin`,
+  `#! check.darwin max_failed=N`, `#! check.darwin skip`), each with the number measured; a program's own golden
+  check can leave out the bar where the close button is left of the menus (`test_frame_rect`, as tutorial part 25
+  does). Windows (MSYS2 UCRT64, Mesa llvmpipe) is not measured yet.
 - **Speed:** about 1 ns a pixel drawn per thread; a 1400 x 860 frame of the documentation's scenes takes 0.7 to 1.7 ms
   on 8 threads, 0.8 to 6.7 ms on one, more with a large texture sampled on every pixel.
 
