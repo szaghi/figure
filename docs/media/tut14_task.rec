@@ -6,9 +6,6 @@
 # --check on macOS: FIGURE's title bar has its buttons on the left there, the menus after them (by design): the bar
 # masked, the rest compared (run 43649582637, 2026-11-14)
 #! mask.darwin 0 0 1100 22
-# --check on Windows: the program writes its example cases with POSIX shell commands (mkdir -p, rm, touch -t),
-# which cmd.exe refuses: not compared there (run 43688555041, 2026-11-15)
-#! check.win32 skip
 # the fine case (900 x 600 nodes, a 7 MB field.dat) dropped on the window: the Result panel shows the task's progress
 # while it reads, then the field, drawn from a coarse copy; the 3-D tab shows the same copy (the reading runs in real
 # time: the frames that show its progress depend on the machine)

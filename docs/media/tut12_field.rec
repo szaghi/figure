@@ -11,9 +11,6 @@
 # after three atlas histories (grown and repacked too), and this recording 6 times under full CPU load, differ by no
 # pixel. A macOS-only variation, its cause not found: 32 allowed
 #! check.darwin max_failed=32
-# --check on Windows: the program writes its example cases with POSIX shell commands (mkdir -p, rm, touch -t),
-# which cmd.exe refuses: not compared there (run 43688555041, 2026-11-15)
-#! check.win32 skip
 # F5 runs the solver; the Result panel comes forward with the field in cividis, its legend and contour lines; the
 # probe line is dragged towards the hot side (the profile follows), the probe point moved; batlow, in 8 bands; jet,
 # with its warning (the solver runs in real time: the frames start once it has surely ended)

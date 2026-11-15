@@ -6,9 +6,6 @@
 # --check on macOS: the script clicks the title bar or its menus, laid out the other way there (buttons on the
 # left): it plays something else, not compared (run 43649582637, 2026-11-14)
 #! check.darwin skip
-# --check on Windows: the program writes its example cases with POSIX shell commands (mkdir -p, rm, touch -t),
-# which cmd.exe refuses: not compared there (run 43688555041, 2026-11-15)
-#! check.win32 skip
 # F5 runs the solver; View > Run hides the Run panel; the 3-D button shows the field as a surface with the body; Fit
 # and the wheel fill the panel; the grid; the pointer reads the temperature; the cut along the probe line; a click
 # moves the Result panel's probe point there, and the Result tab shows it (the frames start once the run has ended)

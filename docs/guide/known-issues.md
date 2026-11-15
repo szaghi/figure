@@ -353,17 +353,18 @@ renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
 - **Other platforms:** the CPU renderer draws the same pixels on macOS (arm64, Apple clang, gfortran 16) and Windows
   (MSYS2 UCRT64, gfortran) as on Linux (on CI, 2026-11-15: of the documentation's 94 recordings, 86 pass on macOS
   with its overrides, 77 on Windows with its own, 73 with none); what differs is the program's own arithmetic,
-  FIGURE's title bar on macOS, and on Windows the examples' shell commands:
+  FIGURE's title bar on macOS:
   - the C library's maths (glibc on Linux, not elsewhere) and, on arm64, multiply-adds the compiler may fuse move
     what a program computes: a rounded border or a plotted value by a pixel (5 and 104 pixels in two recordings, the
     same counts on macOS and Windows; 62 in a third on macOS), a fractal by much more (the Mandelbrot example: 44443
     pixels on macOS, 30727 on Windows);
   - FIGURE's title bar (`decorations='figure'`) has its buttons on the left on macOS, the menus after them: every
     picture of a window with it differs there (about 1400 pixels), and an input script that clicks the bar or its
-    menus at fixed coordinates plays something else;
-  - the studio tutorials write their example cases with POSIX shell commands (`mkdir -p`, `rm`, `touch -t`) through
-    `execute_command_line`, which on Windows runs `cmd.exe`: there the cases are not written, so neither their
-    pictures nor tutorial part 25's golden window can be compared.
+    menus at fixed coordinates plays something else.
+
+  The studio tutorials wrote their example cases with POSIX shell commands, which `cmd.exe` refuses, so v0.6.0 did not
+  compare their pictures on Windows; since v0.7.0 they use [FIGURE's file API](frame-loop#files-and-folders) and
+  `process_object`, and their recordings are measured on Windows too.
 
   `docs_media.py --check` gives such a recording a per-platform mask, tolerance or skip (`#! mask.darwin`,
   `#! check.win32 max_failed=N`, `#! check.darwin skip`), each with the number measured; a program's own golden
