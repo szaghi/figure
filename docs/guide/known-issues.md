@@ -204,6 +204,10 @@ show:
   keyboard; typing, the clipboard and drops in a window are untried on macOS and Windows.
 - **Windows' OpenGL:** the runner has no GPU, so CI renders with Mesa's software `opengl32.dll`; a vendor's driver
   is not exercised.
+- **Floating-point traps in a window:** CI opens `figure_hello` built with `-ffpe-trap=invalid,zero,overflow` on
+  Windows (Mesa's llvmpipe) only; on Apple silicon gfortran's traps turn any exception into `SIGILL`, and AppKit's own
+  event handling raises them, outside FIGURE's calls: the program stops in the system's frameworks (2026-11-14). FIGURE holds the floating-point environment around its calls into
+  the driver and the window system, which raise flags with the exceptions masked.
 
 On WSL2, set `GALLIUM_DRIVER=d3d12`, or Mesa renders in software ([Installation](install#wsl2-wslg)).
 
@@ -379,8 +383,12 @@ renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
   node cannot carry at more than a few renders a second ([Changing images](remote#changing-images)).
 - **A slow link still limits the frame rate:** a 1600x1000 view zoomed in on a grid sends about 118 KB per JPEG, 7
   MB/s at 60 frames a second; below that FIGURE sends only the newest frame and image, fewer per second.
-- **Large meshes:** above a million triangles a render takes tens of milliseconds (`threads=4` halves it), and the
-  camera moves at that rate.
+- **Large meshes:** above a million triangles a render takes tens of milliseconds, and the camera moves at that rate.
+  The image is drawn in blocks of 16 rows by whichever of the `threads` (up to 16) is free. Measured on a grid of 6.5
+  million triangles and 6.6 million grid-line segments (xall_figure, 956x687, 2026-11-14): 25 ms a render on 4
+  threads and 19 ms on 16 without the grid lines, 132 and 124 ms with them; the segments read two vertices each, so
+  more threads gain little there. While the camera moves the half-size renders leave the grid lines out (the render
+  at the end of the move draws them).
 - **The image has the view's size in logical pixels:** on a display scaled 2x it is magnified.
 
 ## The code editor
@@ -396,9 +404,14 @@ The [code editor](editor) is ImGuiColorTextEdit (the goossens fork) with FIGURE'
 - **The fork's options not exposed:** word wrap, line folding, the minimap, several cursors made by the program,
   squiggles under part of a line, a context menu of the program's. They are reached through FIGURE's glue when a
   program needs one.
-- **FIGURE patches the fork in one line** (`third_party/ImGuiColorTextEdit/patches/`): its marker list, renumbered
-  after a deletion, stored the new numbers in a `bool`, so the third mark and those after it took the second one's
-  colour once any character was deleted.
+- **FIGURE patches the fork in two places** (`third_party/ImGuiColorTextEdit/patches/`, re-applied at the fork's
+  head 9f812a0 in v0.6.0; checked 2026-11-15):
+  - its marker list, renumbered after a deletion, stored the new numbers in a `bool`, so the third mark and those
+    after it took the second one's colour once any character was deleted;
+  - `cursorWidth` had no initial value, and a fresh editor's first frame sized itself from whatever the heap held: a
+    NaN or a huge width, a `SIGFPE` at the second frame in a program built with `-ffpe-trap=invalid` (found by
+    xall_figure's GUI tests, intermittently). It starts at 1 pixel; `figure_test_editor` draws a fresh editor twice
+    under traps with its heap filled with `0x7F` bytes (Linux).
 
 ## Gizmos
 
