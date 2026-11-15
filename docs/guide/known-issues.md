@@ -348,8 +348,8 @@ renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
 - **Draw callbacks:** a program's own `ImDrawList` callback (raw bindings) is not run by the CPU renderer.
 - **Other platforms:** the CPU renderer draws the same pixels on macOS (arm64, Apple clang, gfortran 16) and Windows
   (MSYS2 UCRT64, gfortran) as on Linux (on CI, 2026-11-15: of the documentation's 94 recordings, 86 pass on macOS
-  with its overrides, 73 on Windows with none); what differs is the program's own arithmetic, FIGURE's title
-  bar on macOS, and on Windows the examples' shell commands:
+  with its overrides, 77 on Windows with its own, 73 with none); what differs is the program's own arithmetic,
+  FIGURE's title bar on macOS, and on Windows the examples' shell commands:
   - the C library's maths (glibc on Linux, not elsewhere) and, on arm64, multiply-adds the compiler may fuse move
     what a program computes: a rounded border or a plotted value by a pixel (5 and 104 pixels in two recordings, the
     same counts on macOS and Windows; 62 in a third on macOS), a fractal by much more (the Mandelbrot example: 44443

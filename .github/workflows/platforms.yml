@@ -202,12 +202,12 @@ jobs:
         path: window-frames
         if-no-files-found: warn
 
-    # S10 (szaghi/figure#10): the docs' pictures on Windows, the posters rendered headless and compared with the
-    # committed ones. Still a measurement (it does not fail the job; the pictures that differ are uploaded): the studio
-    # tutorials write their example cases with POSIX shell commands (mkdir -p, rm, touch -t), which cmd.exe refuses,
-    # so they are skipped here (#! check.win32 skip) and tutorial part 25's --test run fails
-    - name: Pictures measured (docs_media.py --check)
-      continue-on-error: true
+    # S10 (szaghi/figure#10): the docs' pictures on Windows, rendered headless and compared with the committed ones,
+    # with Windows' own masks, tolerances and skips (#! mask.win32, #! check.win32: measured 2026-11-15, run
+    # 43700878292, 77 passed); the pictures that differ are uploaded. The studio tutorials write their example cases
+    # with POSIX shell commands (mkdir -p, rm, touch -t), which cmd.exe refuses: their recordings are skipped here and
+    # tutorial part 25's --test run fails, so a failed example run does not fail this step (macOS's does)
+    - name: Pictures checked (docs_media.py --check)
       run: |
         # /tmp of the recordings (#! args, #! fresh) is \tmp of the working drive to a Windows program: it must exist
         python -c "import os; os.makedirs('/tmp', exist_ok=True)"
