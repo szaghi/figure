@@ -153,8 +153,8 @@ after `max_wait`. Redraw on a worker's news: [cookbook](/manual/cookbook#redraw-
 
 Set `FIGURE_DEBUG_WAKE` (any value) before running a program: `init` (every mode) reads it, and from then on the glue
 prints a line to standard error for each wake-up sent and, in window and remote modes (headless mode never waits),
-for each frame that begins, timed by `figure_time`. With
-illustrative values (remote mode, a task's `app%wake` ending a 10 s wait):
+for each frame that begins, timed by `figure_time`. With illustrative values (remote mode, a task's `app%wake`
+ending a 10 s wait):
 
 ```text
 figure wake: 0.971644 send from another thread
@@ -165,16 +165,16 @@ figure wake: 0.972652 frame remote: waited 0.201 s (max_wait 10000 ms), frames l
 |---|---|
 | `send from …` | a wake-up sent (`request_frames`, `wake`, `quit` from another thread, a task's report or end, a process's output or end), from the loop's thread or another; `merged`: one is already on its way for this wait, none is sent |
 | `frame remote:` / `frame window:` | a frame begins; `waited` and how long, or `no wait` (frames were left to draw, a test's input, a capture) |
-| `frames left` | the frames still to draw after the last input when the frame was asked for: a wait happens only at 0 |
-| after the colon | what ended the wait: `max_wait`; in remote mode `datagrams(N)` (wake-ups, N bytes), `accept` (a browser connected), `read` (a message), `closed` (a browser left), `frame-ready` (a frame skipped for a slow browser can go out); in window mode `wake event` or `SDL event TYPE` (SDL's event type code, decimal); `-`: no wait |
+| `frames left` | the frames still owed (an input or a wake-up gives 3, `request_frames(n)` gives n), counted as the frame begins: the loop waits only at 0 |
+| after the colon | what ended the wait, or, after `no wait` in remote mode, what arrived while the frame waited for its turn (60 frames a second at most): `max_wait`; in remote mode `datagrams(N)` (wake-ups, N bytes), `accept` (a browser connected), `read` (a message), `closed` (a browser left), `frame-ready` (a frame skipped for a slow browser can go out); in window mode `wake event` or `SDL event TYPE` (SDL's event type code, decimal); `-`: no wait |
 
 It prints a line per frame: a diagnostic for a few seconds of a run, not for a session.
 
 A frame that begins with `no wait` while `frames left` is above 0 is not an early wake-up: it is a frame still owed
 to the last input. A program (or a test) that wants the loop idle before it measures a wait asks
-[`test_run`](testing#running-until-idle) whether frames are still owed, not how long the last frame took: on a slow machine a frame
-that does not wait can take longer than `max_wait` (0.07 to 0.15 s on CI's macOS runner, where `figure_test_tasks`
-once took two owed frames for early wake-ups).
+[`test_run`](testing#running-until-idle) whether frames are still owed, not how long the last frame took: on a slow
+machine a frame that does not wait can take longer than `max_wait` (0.07 to 0.15 s on CI's macOS runner, where
+`figure_test_tasks` once took two owed frames for early wake-ups).
 
 ### What idle costs
 
