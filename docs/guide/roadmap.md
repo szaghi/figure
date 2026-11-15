@@ -8,6 +8,7 @@ The plan of each release is tracked step by step in an issue: v0.1.0 in
 [issue #1](https://github.com/szaghi/figure/issues/1), v0.2.0 in [issue #2](https://github.com/szaghi/figure/issues/2),
 v0.3.0 in [issue #3](https://github.com/szaghi/figure/issues/3), v0.3.1 in [issue #5](https://github.com/szaghi/figure/issues/5),
 v0.4.0 in [issue #6](https://github.com/szaghi/figure/issues/6), v0.5.0 in [issue #7](https://github.com/szaghi/figure/issues/7),
+v0.6.0 in [issue #10](https://github.com/szaghi/figure/issues/10),
 each step with its tasks, its checks, the documentation and the pictures it updates, and a log of the work. This page
 summarises them.
 
@@ -444,6 +445,54 @@ Math), an unrouted shortcut scope, plot data in place under nvfortran and a mono
   stated plainly: `'report'` without a `stat` stops the program, `'recover'` goes on
   ([The three modes](errors#the-three-modes)): done.
 
-## Next
+## v0.6.0 — in progress
 
-Candidates, to be driven by what applications need.
+Known defects and risks first: what v0.5.0 left open, the vendored libraries against their upstream heads, and CI
+running the gate's compilers on every platform, with the documentation's pictures checked there. It had no driving
+application; what xall_figure met in its round-4 work (3-D views on a large grid, floating-point traps) came in
+between. The plan, step by step, is [issue #10](https://github.com/szaghi/figure/issues/10).
+
+- **The macOS "early wake"** (S1): `figure_test_tasks` let up to 3 frames start before a task's `app%wake`, seen on
+  the macOS runner. `FIGURE_DEBUG_WAKE` logs each wake-up sent and what ended each wait of the loop
+  ([What ended a wait](frame-loop#what-ended-a-wait)); its logs showed no early wake-up: the frames were owed to
+  earlier input, and the test's settling took a slow frame (0.07–0.15 s there) for a wait. The test settles by
+  `test_run` now and allows no early frame, 10 runs a push on macOS and Windows: done.
+- **Dear ImGui's 0 / 0 in a `SizingStretchProp` table** (S2): FIGURE's first patch to fetched code
+  (`native/patches/`, applied by CMake and to the fpm package, a canary when upstream's line moves); a program built
+  with `-ffpe-trap=invalid` no longer stops at such a table, and Markdown no longer holds the traps
+  (ocornut/imgui#8718): done.
+- **Compiler canaries** (S5): `figure_test_canaries` passes while a compiler defect FIGURE works around is still
+  there and fails, naming the workaround to remove, once it is gone ([Known issues](known-issues)): done.
+- **v0.5.0's choices reviewed** (S6): items for finding by path are recorded in every mode from the first frame
+  ([Finding items by path](testing#finding-items-by-path)): done.
+- **Dear ImGui at the docking head** (S7): 1.93.1 WIP (cf53467); cimgui has no tag there, so FIGURE runs cimgui's
+  generator (`scripts/gen_cimgui.sh`) and vendors the result in `third_party/cimgui`. Upstream's new look (stroked
+  arrows, darker backgrounds) is adopted, and 81 of the 94 pictures were recorded again: done.
+- **md4c and the code editor** (S8): md4c at release-0.5.3, the editor at its fork's head with FIGURE's two patches;
+  SDL stays at release-3.4.20, the newest: done.
+- **CI runs the gate's compilers; the pictures checked on every platform** (S10): Linux's jobs in the toolchain image
+  (gfortran 16.2), macOS on gfortran 16, fpm v0.13.0 (v0.12.0 on macOS); every picture compared on Linux, macOS and
+  Windows with per-platform masks, tolerances and skips, each with its measured number
+  ([Pictures without a GPU](known-issues#pictures-without-a-gpu)); a windowed run with floating-point traps on Windows:
+  done.
+- **The name map follows FIGURE's native glue** (S12), and tells what FIGURE uses internally
+  ([Dear ImGui names](imgui-names)): done.
+- **From xall_figure's round 4:** a program built with floating-point traps opens its window (the native layer holds
+  the floating-point environment around the driver); a fresh code editor's first frames are finite under traps; 3-D
+  views share their render out by blocks of rows among up to 16 threads, leave the grid lines out while the camera
+  moves and free their vertex caches at rest ([3-D views](view3d#how-a-view-is-rendered)): done.
+- **The documentation pass** (S17): the migration notes, this section, the known issues dated: done.
+
+## Next: v0.7.0
+
+The steps v0.6.0's plan held and the owner moved (2026-11-14), so that v0.6.0 ships its fixes:
+
+- **The showcase's pictures from FIGURE's renderer** (#10 S3): xall_figure's recordings, made on a GPU, are the one
+  exception to "every picture from one renderer"; it waits on xall_figure recording headless.
+- **Compiler oddities reduced to reproducers** (#10 S4), for the compiler reports of #4.
+- **Upstream reports against the current heads** (#10 S9), for #8 and #9; filing them is the owner's.
+- **Consumers** (#10 S11): a CMake package, an offline build, the installer's gaps.
+- **Portable example cases:** the studio tutorials write their cases with POSIX shell commands, so Windows cannot
+  check their pictures; a small file API (make a folder, remove a file, set a file's time) would let them be portable.
+- **Features no application has asked for yet** (#10 S13–S16): drag and drop, linked and aligned plots, and the rest
+  of block D. Each waits for an application that needs it.
