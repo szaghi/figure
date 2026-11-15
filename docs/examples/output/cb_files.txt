@@ -1,0 +1,4 @@
+$ ./cb_files
+the input exists: T
+its time: 2026-10-15 09:10:00
+the results are gone: T

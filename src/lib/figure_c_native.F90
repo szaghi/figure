@@ -38,6 +38,7 @@ public :: fig_process_release
 public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_task_cancel, fig_task_cancelled
 public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
 public :: fig_usage_error, fig_time, fig_add_fallback_font, fig_test_glyph
+public :: fig_make_folder, fig_remove, fig_set_file_time, fig_file_time, fig_file_exists
 public :: fig_set_checks, fig_checks, fig_draw_refuse, fig_scope_open, fig_scope_close, fig_scope_report
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_notification_alpha
@@ -565,6 +566,56 @@ interface
    implicit none
    real(c_double) :: seconds !< Seconds since the first call [s].
    endfunction fig_time
+
+   function fig_make_folder(path, path_len, parents) result(status) bind(C, name='fig_make_folder')
+   !< Make a folder (parents /= 0: its missing parents too); one already there is no error.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< Path, UTF-8.
+   integer(c_int), value              :: path_len !< Its length.
+   integer(c_int), value              :: parents  !< Make the missing parents.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_make_folder
+
+   function fig_remove(path, path_len, recursive) result(status) bind(C, name='fig_remove')
+   !< Remove a file or an empty folder (recursive /= 0: a tree); a missing path is no error.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)   !< Path, UTF-8.
+   integer(c_int), value              :: path_len  !< Its length.
+   integer(c_int), value              :: recursive !< Remove a tree.
+   integer(c_int)                     :: status    !< Status.
+   endfunction fig_remove
+
+   function fig_set_file_time(path, path_len, when, when_len) result(status) bind(C, name='fig_set_file_time')
+   !< Set a path's modification time to a local time 'YYYY-MM-DD hh:mm[:ss]'.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< Path, UTF-8.
+   integer(c_int), value              :: path_len !< Its length.
+   character(kind=c_char), intent(in) :: when(*)  !< Local time.
+   integer(c_int), value              :: when_len !< Its length.
+   integer(c_int)                     :: status   !< Status.
+   endfunction fig_set_file_time
+
+   function fig_file_time(path, path_len, out) result(status) bind(C, name='fig_file_time')
+   !< A path's modification time, 'YYYY-MM-DD hh:mm:ss' local, into the 19 characters of out.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)    :: path(*)  !< Path, UTF-8.
+   integer(c_int), value                 :: path_len !< Its length.
+   character(kind=c_char), intent(inout) :: out(19)  !< The time.
+   integer(c_int)                        :: status   !< Status.
+   endfunction fig_file_time
+
+   function fig_file_exists(path, path_len) result(exists) bind(C, name='fig_file_exists')
+   !< 1 if the path exists (a file or a folder), else 0.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: path(*)  !< Path, UTF-8.
+   integer(c_int), value              :: path_len !< Its length.
+   integer(c_int)                     :: exists   !< 1 or 0.
+   endfunction fig_file_exists
 
    subroutine fig_scope_open(kind, who, who_len, label, label_len, returned, aux) bind(C, name='fig_scope_open')
    !< A begin or a push, after it: its scope in the record of the frame.

@@ -283,6 +283,36 @@ The program checks itself headless (it prints facts about the times, which chang
 pause of the clock. A sleep or a frame wait measured with it is as long as the system made it, which on a loaded
 machine is longer than asked.
 
+## Files and folders
+
+Standard Fortran opens, reads and writes files, and `inquire` tests one; it cannot make a folder, remove one or set a
+file's time. `execute_command_line('mkdir -p ...')` does where a POSIX shell runs it, not on Windows, where it runs
+`cmd.exe`, which refuses `mkdir -p`, `rm -f` and `touch`. These procedures do it in the native layer, the same on
+Linux, macOS and Windows; they need no window, so they work before `init*` and from any thread.
+
+| Procedure | Notes |
+|---|---|
+| `figure_make_folder(path [, parents] [, stat])` | make a folder and its missing parents (`parents=.false.`: not them); a folder already there is no error |
+| `figure_remove(path [, recursive] [, stat])` | remove a file or an empty folder (`recursive=.true.`: a folder and its content); a missing path is no error |
+| `figure_set_file_time(path, time [, stat])` | set a file's or folder's modification time to a local time `'YYYY-MM-DD hh:mm'` or `'YYYY-MM-DD hh:mm:ss'` |
+| `figure_file_time(path [, stat])` → `character(len=19)` | its modification time, local, `'YYYY-MM-DD hh:mm:ss'`; blank on a failure |
+| `figure_file_exists(path)` → `logical` | a file or a folder is there (what `inquire(file=)` says of a folder is the compiler's choice) |
+
+A solver's case prepared by a GUI (`docs/examples/src/cb_files.F90`, run by the documentation's build):
+
+<<< @/examples/snippets/cb_files-files.F90{fortran}
+
+- **Paths:** UTF-8, with `/` separators everywhere (Windows also takes `\`); a relative path starts at the working
+  folder, as `open` does.
+- **Times:** local, as `touch -t` takes them and as a file browser shows them: a time set on one machine reads the same
+  on another in the same time zone. Seconds are kept; a time that is not a date (`2026-02-30`) is refused with
+  `FIG_ERR_ARGUMENT`. Both the access and the modification time are set.
+- **Statuses:** `FIG_ERR_FAILED` with the system's reason (a parent missing with `parents=.false.`, a folder not
+  empty without `recursive`, a file where a folder is asked for, a path that cannot be read); `FIG_ERR_ARGUMENT` for an
+  empty path or a malformed time. Without `stat` a failure stops the program ([Errors](errors)).
+- **Not covered:** permissions; copying and renaming (read the file and write the copy); symbolic links are not
+  followed by `figure_remove`, which removes the link, not its target.
+
 ## File dialogs
 
 Two kinds of dialog choose a file to open, where to save, or a folder: the **system's own** (window mode only), and

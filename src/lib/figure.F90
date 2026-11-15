@@ -18,6 +18,7 @@ module figure
 !< (figure_markdown: `ig_markdown`, `markdown_view_object`).
 use figure_app, only : app_object
 use figure_base, only : figure_last_error, figure_time
+use figure_files, only : figure_file_exists, figure_file_time, figure_make_folder, figure_remove, figure_set_file_time
 use figure_c_native, only : FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 use figure_cimgui_enums, only : ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode,         &
                                 ImGuiDockNodeFlags_NoDockingSplit, ImGuiDockNodeFlags_NoResize,               &
@@ -138,6 +139,7 @@ use figure_implot3d, only : ip3_begin_plot, ip3_end_plot, ip3_setup_axes, ip3_li
 implicit none
 private
 public :: app_object, fig_read_image, figure_last_error, figure_time
+public :: figure_file_exists, figure_file_time, figure_make_folder, figure_remove, figure_set_file_time
 public :: FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_EXCEPTION
 public :: ig_splitter
 public :: ig_begin, ig_begin_side_bar, ig_button, ig_checkbox, ig_end, ig_input, ig_item_rect, ig_same_line, ig_separator

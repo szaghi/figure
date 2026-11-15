@@ -20,6 +20,9 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#if !defined(_WIN32)
+#include <fcntl.h> // AT_FDCWD, utimensat
+#endif
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -31,6 +34,8 @@
 #endif
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -943,6 +948,155 @@ int fig_file_browser_rect(const char *part_name, int part_len, float *rect, int 
    rect[3] = it->second.w;
    *found = 1;
    return FIG_OK;
+}
+
+} // extern "C"
+
+// ---- Files and folders: figure_make_folder, figure_remove, figure_set_file_time, figure_file_time,
+// figure_file_exists (src/lib/figure_files.F90). Paths are UTF-8, with '/' or (on Windows) '\\' separators; a
+// relative path is taken from the working folder. Any thread.
+
+namespace {
+
+// "YYYY-MM-DD hh:mm" or "YYYY-MM-DD hh:mm:ss", a local time, to seconds since the epoch; false when malformed or not a
+// date (2026-02-30).
+bool parse_local_time(const std::string &s, std::time_t &t) {
+   if (s.size() != 16 && s.size() != 19) return false;
+   for (size_t i = 0; i < s.size(); ++i) {
+      const char c = s[i];
+      const bool sep = i == 4 || i == 7 || i == 10 || i == 13 || i == 16;
+      if (sep) {
+         if (c != (i == 10 ? ' ' : (i == 13 || i == 16 ? ':' : '-'))) return false;
+      } else if (c < '0' || c > '9') {
+         return false;
+      }
+   }
+   const auto num = [&](size_t at, size_t n) { return std::atoi(s.substr(at, n).c_str()); };
+   std::tm tm{};
+   tm.tm_year = num(0, 4) - 1900;
+   tm.tm_mon = num(5, 2) - 1;
+   tm.tm_mday = num(8, 2);
+   tm.tm_hour = num(11, 2);
+   tm.tm_min = num(14, 2);
+   tm.tm_sec = s.size() == 19 ? num(17, 2) : 0;
+   tm.tm_isdst = -1; // the local rule decides
+   if (tm.tm_mon < 0 || tm.tm_mon > 11 || tm.tm_mday < 1 || tm.tm_mday > 31 || tm.tm_hour > 23 || tm.tm_min > 59 ||
+       tm.tm_sec > 59)
+      return false;
+   const int year = tm.tm_year, mon = tm.tm_mon, mday = tm.tm_mday;
+   t = std::mktime(&tm);
+   return t != static_cast<std::time_t>(-1) && tm.tm_year == year && tm.tm_mon == mon && tm.tm_mday == mday;
+}
+
+// No C++ exception crosses into Fortran (as figure_native.cpp's FIG_TRY: what std::filesystem throws, an allocation).
+#define FILES_TRY try {
+#define FILES_CATCH                                                                                                   \
+   }                                                                                                                  \
+   catch (const std::exception &e) {                                                                                  \
+      return fail(FIG_ERR_EXCEPTION, std::string("C++ exception: ") + e.what());                                      \
+   }                                                                                                                  \
+   catch (...) {                                                                                                      \
+      return fail(FIG_ERR_EXCEPTION, "unknown C++ exception");                                                        \
+   }
+
+std::string path_arg(const char *path, int path_len) {
+   return std::string(path, path_len > 0 ? static_cast<size_t>(path_len) : 0);
+}
+
+} // namespace
+
+extern "C" {
+
+int fig_make_folder(const char *path, int path_len, int parents) {
+   FILES_TRY
+   const std::string s = path_arg(path, path_len);
+   if (s.empty()) return fail(FIG_ERR_ARGUMENT, "figure_make_folder: the path is empty");
+   const fs::path p = from_u8(s);
+   std::error_code ec;
+   if (fs::is_directory(p, ec)) return FIG_OK; // there already
+   if (fs::exists(p, ec)) return fail(FIG_ERR_FAILED, "figure_make_folder: '" + s + "' exists and is not a folder");
+   if (parents) fs::create_directories(p, ec);
+   else fs::create_directory(p, ec);
+   if (ec) return fail(FIG_ERR_FAILED, "figure_make_folder: '" + s + "': " + ec.message());
+   return FIG_OK;
+   FILES_CATCH
+}
+
+int fig_remove(const char *path, int path_len, int recursive) {
+   FILES_TRY
+   const std::string s = path_arg(path, path_len);
+   if (s.empty()) return fail(FIG_ERR_ARGUMENT, "figure_remove: the path is empty");
+   const fs::path p = from_u8(s);
+   std::error_code ec;
+   if (!fs::exists(fs::symlink_status(p, ec))) return FIG_OK; // nothing to remove: not an error, as rm -f
+   if (recursive) fs::remove_all(p, ec);
+   else fs::remove(p, ec);
+   if (ec) return fail(FIG_ERR_FAILED, "figure_remove: '" + s + "': " + ec.message());
+   return FIG_OK;
+   FILES_CATCH
+}
+
+int fig_set_file_time(const char *path, int path_len, const char *when, int when_len) {
+   FILES_TRY
+   const std::string s = path_arg(path, path_len), w = path_arg(when, when_len);
+   std::time_t t = 0;
+   if (!parse_local_time(w, t))
+      return fail(FIG_ERR_ARGUMENT, "figure_set_file_time: '" + w + "' is not a local time 'YYYY-MM-DD hh:mm[:ss]'");
+#if defined(_WIN32)
+   const std::wstring wp = from_u8(s).wstring();
+   HANDLE h = CreateFileW(wp.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                          nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr); // a folder too
+   if (h == INVALID_HANDLE_VALUE) return fail(FIG_ERR_FAILED, "figure_set_file_time: '" + s + "' cannot be opened");
+   const unsigned long long ticks = (static_cast<unsigned long long>(t) + 11644473600ull) * 10000000ull; // 100 ns, 1601
+   FILETIME ft;
+   ft.dwLowDateTime = static_cast<DWORD>(ticks & 0xffffffffull);
+   ft.dwHighDateTime = static_cast<DWORD>(ticks >> 32);
+   const BOOL ok = SetFileTime(h, nullptr, &ft, &ft);
+   CloseHandle(h);
+   if (!ok) return fail(FIG_ERR_FAILED, "figure_set_file_time: '" + s + "': SetFileTime failed");
+#else
+   timespec ts[2];
+   ts[0].tv_sec = ts[1].tv_sec = t;
+   ts[0].tv_nsec = ts[1].tv_nsec = 0;
+   if (utimensat(AT_FDCWD, s.c_str(), ts, 0) != 0)
+      return fail(FIG_ERR_FAILED, "figure_set_file_time: '" + s + "': " + std::strerror(errno));
+#endif
+   return FIG_OK;
+   FILES_CATCH
+}
+
+int fig_file_time(const char *path, int path_len, char *out) {
+   FILES_TRY
+   const std::string s = path_arg(path, path_len);
+   std::memset(out, ' ', 19);
+#if defined(_WIN32)
+   struct _stat64 st;
+   if (_wstat64(from_u8(s).wstring().c_str(), &st) != 0)
+#else
+   struct stat st;
+   if (stat(s.c_str(), &st) != 0)
+#endif
+      return fail(FIG_ERR_FAILED, "figure_file_time: '" + s + "': " + std::strerror(errno));
+   const std::time_t tt = static_cast<std::time_t>(st.st_mtime);
+   std::tm           tm{};
+#if defined(_WIN32)
+   if (localtime_s(&tm, &tt) != 0) return fail(FIG_ERR_FAILED, "figure_file_time: '" + s + "': no local time");
+#else
+   if (!localtime_r(&tt, &tm)) return fail(FIG_ERR_FAILED, "figure_file_time: '" + s + "': no local time");
+#endif
+   char buf[32];
+   if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm) != 19)
+      return fail(FIG_ERR_FAILED, "figure_file_time: '" + s + "': the time does not format");
+   std::memcpy(out, buf, 19);
+   return FIG_OK;
+   FILES_CATCH
+}
+
+int fig_file_exists(const char *path, int path_len) {
+   const std::string s = path_arg(path, path_len);
+   if (s.empty()) return 0;
+   std::error_code ec;
+   return fs::exists(from_u8(s), ec) ? 1 : 0;
 }
 
 } // extern "C"

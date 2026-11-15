@@ -58,6 +58,11 @@ A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) 
 | `app%palette_color(role, rgba [, stat])` | the colour of a palette role in effect (`'text'`, `'accent'`, `'error'`, ...) as `[r, g, b, a]` in [0, 1] | [palette roles](styles#palette-roles) |
 | `app%destroy()` | close the window, destroy the contexts | [frame loop](frame-loop#the-application) |
 | `figure_time()` → `real(real64)` | seconds since its first call on a monotonic clock (not stepped by the system, unlike nvfortran's `system_clock`); before `init*` and from any thread | [time](frame-loop#time) |
+| `figure_make_folder(path [, parents] [, stat])` | a folder and its missing parents, on every platform (no shell) | [files and folders](frame-loop#files-and-folders) |
+| `figure_remove(path [, recursive] [, stat])` | remove a file, an empty folder or (`recursive`) a tree; a missing path is no error | [files and folders](frame-loop#files-and-folders) |
+| `figure_set_file_time(path, time [, stat])` | a file's or folder's modification time, as a local `'YYYY-MM-DD hh:mm[:ss]'` | [files and folders](frame-loop#files-and-folders) |
+| `figure_file_time(path [, stat])` → `character(len=19)` | its modification time, local `'YYYY-MM-DD hh:mm:ss'` | [files and folders](frame-loop#files-and-folders) |
+| `figure_file_exists(path)` → `logical` | a file or a folder is there | [files and folders](frame-loop#files-and-folders) |
 
 ## Widgets: `ig_*`
 

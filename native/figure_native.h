@@ -212,6 +212,15 @@ int    fig_file_dialog_pending(const char *id, int id_len);
 int    fig_file_browser(int kind, const char *id, int id_len, const char *filters, int filters_len, const char *path,
                         int path_len);
 int    fig_file_browser_settings(const char *path, int path_len);
+/* Files and folders (any thread): make a folder (parents: its missing parents too; one already there is no error);
+ * remove a file or an empty folder (recursive: a tree; a missing path is no error); set a path's modification time to
+ * a local time "YYYY-MM-DD hh:mm[:ss]"; its modification time as "YYYY-MM-DD hh:mm:ss" (19 characters into out); 1 if
+ * the path exists (a file or a folder), else 0. */
+int    fig_make_folder(const char *path, int path_len, int parents);
+int    fig_remove(const char *path, int path_len, int recursive);
+int    fig_set_file_time(const char *path, int path_len, const char *when, int when_len);
+int    fig_file_time(const char *path, int path_len, char *out);
+int    fig_file_exists(const char *path, int path_len);
 int    fig_file_browser_get(int what, int index, char *buf, int buf_len, int *len, int *count);
 int    fig_file_browser_rect(const char *part, int part_len, float *rect, int *found);
 /* Internal (figure_native.cpp): a browser open with this id; its answer, as fig_file_dialog_result; draw the front
