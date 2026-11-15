@@ -735,6 +735,14 @@ void stop() {
    sv = server_t{};
 }
 
+std::string wake_reasons; // what ended the waits since take_wake_reasons (FIGURE_DEBUG_WAKE), on the loop's thread
+
+std::string take_wake_reasons() {
+   std::string r;
+   r.swap(wake_reasons);
+   return r;
+}
+
 bool serve_once(int timeout_ms) {
    if (sv.listener == NO_SOCKET) return false;
    fd_set rd, wr;
@@ -758,8 +766,9 @@ bool serve_once(int timeout_ms) {
    bool got = false;
    if (wk != NO_SOCKET && FD_ISSET(wk, &rd)) { // woken: drain the datagrams, draw a frame
       char buf[64];
-      while (recv(wk, buf, sizeof(buf), 0) > 0) {
-      }
+      long bytes = 0;
+      for (int n; (n = static_cast<int>(recv(wk, buf, sizeof(buf), 0))) > 0;) bytes += n;
+      wake_reasons += "datagrams(" + std::to_string(bytes) + ") ";
       got = true;
    }
    if (FD_ISSET(sv.listener, &rd)) {
@@ -775,6 +784,7 @@ bool serve_once(int timeout_ms) {
          connection_t c;
          c.s = s;
          sv.conns.push_back(c);
+         wake_reasons += "accept ";
       }
    }
    for (auto &c : sv.conns) {
@@ -791,9 +801,13 @@ bool serve_once(int timeout_ms) {
             close_socket(c.s); // closed by the peer
             c.s = NO_SOCKET;
             got = true;
+            wake_reasons += "closed ";
             break;
          }
-         if (c.s != NO_SOCKET) got = (c.websocket ? ws_read(c) : http_read(c)) || got;
+         if (c.s != NO_SOCKET && (c.websocket ? ws_read(c) : http_read(c))) {
+            got = true;
+            wake_reasons += "read ";
+         }
       }
       if (c.s != NO_SOCKET && !c.out.empty()) flush(c);
       if (c.s != NO_SOCKET && c.close_after && c.out.empty()) {
@@ -822,7 +836,10 @@ bool serve(int timeout_ms) {
          std::chrono::duration_cast<std::chrono::milliseconds>(end - std::chrono::steady_clock::now()).count());
       const bool was_busy = sv.unsent_frame > 0;
       if (serve_once(std::max(still >= 0 ? std::min(left, still + 1) : left, 0))) return true;
-      if (sv.pending && was_busy && sv.unsent_frame == 0) return true; // the latest frame can be sent now
+      if (sv.pending && was_busy && sv.unsent_frame == 0) { // the latest frame can be sent now
+         wake_reasons += "frame-ready ";
+         return true;
+      }
       if (left <= 0) return false;
    }
 }

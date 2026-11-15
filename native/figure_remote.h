@@ -24,6 +24,9 @@ void stop();
 bool serve(int timeout_ms);
 // From any thread: end serve's wait at once (serve returns true), or the next one's if none is under way.
 void wake();
+// What ended serve's waits since the last call (FIGURE_DEBUG_WAKE): "datagrams(N)" (the wake socket, N bytes),
+// "accept", "read", "closed" (a peer), "frame-ready" (a skipped frame can go out); "" for none (a timeout).
+std::string take_wake_reasons();
 // A frame was skipped because the previous one was still queued (a slow client): the program should draw again, so
 // that the latest state goes out as soon as the queue drains (serve returns true then).
 bool frame_pending();

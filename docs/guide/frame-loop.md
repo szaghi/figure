@@ -149,6 +149,27 @@ A worker that computes and wakes the loop when it has news, and the lazy loop th
 Before v0.3.1, `request_frames` and `quit` from a task did not wake the loop: their frame came at the next input or
 after `max_wait`. Redraw on a worker's news: [cookbook](/manual/cookbook#redraw-when-a-worker-has-news).
 
+#### What ended a wait
+
+Set `FIGURE_DEBUG_WAKE` (any value) before running a program: `init` (every mode) reads it, and from then on the glue
+prints a line to standard error for each wake-up sent and, in window and remote modes (headless mode never waits),
+for each frame that begins, timed by `figure_time`. With
+illustrative values (remote mode, a task's `app%wake` ending a 10 s wait):
+
+```text
+figure wake: 0.971644 send from another thread
+figure wake: 0.972652 frame remote: waited 0.201 s (max_wait 10000 ms), frames left 0: datagrams(1)
+```
+
+| Part | Meaning |
+|---|---|
+| `send from …` | a wake-up sent (`request_frames`, `wake`, `quit` from another thread, a task's report or end, a process's output or end), from the loop's thread or another; `merged`: one is already on its way for this wait, none is sent |
+| `frame remote:` / `frame window:` | a frame begins; `waited` and how long, or `no wait` (frames were left to draw, a test's input, a capture) |
+| `frames left` | the frames still to draw after the last input when the frame was asked for: a wait happens only at 0 |
+| after the colon | what ended the wait: `max_wait`; in remote mode `datagrams(N)` (wake-ups, N bytes), `accept` (a browser connected), `read` (a message), `closed` (a browser left), `frame-ready` (a frame skipped for a slow browser can go out); in window mode `wake event` or `SDL event TYPE` (SDL's event type code, decimal); `-`: no wait |
+
+It prints a line per frame: a diagnostic for a few seconds of a run, not for a session.
+
 ### What idle costs
 
 With lazy redraw on and no input, a FIGURE program draws `1 / max_wait` frames per second: exactly 2 frames/s with

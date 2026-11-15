@@ -115,6 +115,27 @@ jobs:
     - name: Tests (fpm)
       run: scripts/fpm.sh test --compiler "${FC}"
 
+    # S1 (szaghi/figure#10): a lazy loop in remote mode began a frame before a task's app%wake on macOS (ce582c1):
+    # figure_test_tasks 10 times with FIGURE_DEBUG_WAKE, which logs what ended each wait. A diagnostic: it does not
+    # fail the job; the logs are uploaded, the early frames summed up here
+    - name: Wake diagnostic (figure_test_tasks, FIGURE_DEBUG_WAKE)
+      continue-on-error: true
+      run: |
+        mkdir -p wake-logs
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          FIGURE_DEBUG_WAKE=1 scripts/fpm.sh test figure_test_tasks --compiler "${FC}" \
+            > "wake-logs/run-$i.out" 2> "wake-logs/run-$i.log" || echo "run $i failed"
+        done
+        grep -H "frames before the call" wake-logs/*.log || echo "no early frame in 10 runs"
+
+    - name: Upload the wake logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: wake-logs-macos
+        path: wake-logs
+        if-no-files-found: ignore
+
     # FIGURE as a plain fpm dependency of another project: fpm compiles the native layer itself, SDL3 from Homebrew.
     # The C/C++ compiler is Apple clang: on macOS fpm links the C++ runtime as libc++ (g++ objects need libstdc++).
     # Apple clang defaults to C++98, and fpm takes no C++ flags from a manifest (0.12): FPM_CXXFLAGS gives C++17.
@@ -228,6 +249,27 @@ jobs:
 
     - name: Tests (fpm)
       run: scripts/fpm.sh test
+
+    # S1 (szaghi/figure#10): a lazy loop in remote mode began a frame before a task's app%wake on macOS (ce582c1):
+    # figure_test_tasks 10 times with FIGURE_DEBUG_WAKE, which logs what ended each wait. A diagnostic: it does not
+    # fail the job; the logs are uploaded, the early frames summed up here
+    - name: Wake diagnostic (figure_test_tasks, FIGURE_DEBUG_WAKE)
+      continue-on-error: true
+      run: |
+        mkdir -p wake-logs
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          FIGURE_DEBUG_WAKE=1 scripts/fpm.sh test figure_test_tasks \
+            > "wake-logs/run-$i.out" 2> "wake-logs/run-$i.log" || echo "run $i failed"
+        done
+        grep -H "frames before the call" wake-logs/*.log || echo "no early frame in 10 runs"
+
+    - name: Upload the wake logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: wake-logs-windows
+        path: wake-logs
+        if-no-files-found: ignore
 
     # FIGURE as a plain fpm dependency of another project: fpm compiles the native layer itself, SDL3 from MSYS2
     - name: fpm dependency (system SDL3)

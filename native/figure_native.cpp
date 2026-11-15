@@ -63,10 +63,21 @@ std::atomic<std::thread::id> main_thread{}; // the thread that called fig_init*:
 
 bool on_main_thread() { return std::this_thread::get_id() == main_thread.load(); }
 
+// FIGURE_DEBUG_WAKE (any value, read by fig_init*): each wake-up sent and what ended each wait of the frame loop, one
+// line each on standard error, timed by fig_time (docs/guide/frame-loop.md, "Waking the loop").
+std::atomic<bool> debug_wake{false};
+
+extern "C" double fig_time(void);
+
+void wake_log(const char *what, const std::string &detail) {
+   std::fprintf(stderr, "figure wake: %.6f %s %s\n", fig_time(), what, detail.c_str());
+}
+
 // fig_init*: this thread runs the frame loop; no wake-up is pending.
 void loop_starts() {
    main_thread = std::this_thread::get_id();
    woken = false;
+   debug_wake = std::getenv("FIGURE_DEBUG_WAKE") != nullptr;
 }
 std::atomic<bool> sdl_events{false};  // window mode: SDL's event queue is up
 
@@ -2798,6 +2809,8 @@ int fig_begin_frame(int *running) {
       woken = false;
       const bool pending = figure_remote::frame_pending(), busy = figure_remote::queue_busy();
       const bool wait = pending ? busy : st.lazy && st.frames_left <= 0 && st.test_input.empty() && !cap.on;
+      const int left_before = st.frames_left.load();
+      const double t_wait = debug_wake ? fig_time() : 0.0;
       bool got = figure_remote::serve(wait ? st.max_wait_ms.load() : 0);
       const auto next = st.last_frame + std::chrono::duration_cast<clock::duration>(
                                            std::chrono::duration<double>(st.remote_min_dt));
@@ -2805,6 +2818,13 @@ int fig_begin_frame(int *running) {
          got = figure_remote::serve(static_cast<int>(
                   std::chrono::duration_cast<std::chrono::milliseconds>(next - t).count()) + 1) || got;
       while (figure_remote::serve(0)) got = true; // drain what else arrived
+      if (debug_wake) {
+         const std::string why = figure_remote::take_wake_reasons();
+         char d[160];
+         std::snprintf(d, sizeof(d), "remote: %s %.3f s (max_wait %d ms), frames left %d: ",
+                       wait ? "waited" : "no wait,", fig_time() - t_wait, st.max_wait_ms.load(), left_before);
+         wake_log("frame", d + (why.empty() ? std::string(wait ? "max_wait" : "-") : why));
+      }
       if (st.quit_now.exchange(false)) { // fig_quit from another thread during the wait (which it ended)
          *running = 0;
          return FIG_OK;
@@ -2851,11 +2871,23 @@ int fig_begin_frame(int *running) {
    // lets live data from the application appear); never spin at the display rate while idle.
    // a fig_wake from now on pushes its event, which ends the wait or is polled below; one before is already queued
    woken = false;
-   if (st.lazy && st.frames_left <= 0 && !cap.on && st.test_input.empty()) {
-      if (SDL_WaitEventTimeout(&ev, st.max_wait_ms))
+   const bool wait = st.lazy && st.frames_left <= 0 && !cap.on && st.test_input.empty();
+   const int left_before = st.frames_left.load();
+   const double t_wait = debug_wake ? fig_time() : 0.0;
+   std::string why = wait ? "max_wait" : "-";
+   if (wait) {
+      if (SDL_WaitEventTimeout(&ev, st.max_wait_ms)) {
+         if (debug_wake) why = ev.type == SDL_EVENT_USER ? "wake event" : "SDL event " + std::to_string(ev.type);
          handle(ev);
-      else if (rs.on)
+      } else if (rs.on) {
          ++rs.timeouts;
+      }
+   }
+   if (debug_wake) {
+      char d[160];
+      std::snprintf(d, sizeof(d), "window: %s %.3f s (max_wait %d ms), frames left %d: ", wait ? "waited" : "no wait,",
+                    fig_time() - t_wait, st.max_wait_ms.load(), left_before);
+      wake_log("frame", d + why);
    }
    while (SDL_PollEvent(&ev)) handle(ev);
    if (st.quit_now.exchange(false)) *running = 0; // fig_quit from another thread during the wait (which it ended)
@@ -4424,7 +4456,11 @@ void fig_input_mouse(float x, float y, int left_down) {
 } // extern "C"
 
 extern "C" void fig_wake(void) {
-   if (woken.exchange(true)) return; // one wake-up per wait is enough
+   const bool merged = woken.exchange(true); // one wake-up per wait is enough
+   if (debug_wake)
+      wake_log("send", std::string(on_main_thread() ? "from the loop's thread" : "from another thread") +
+                          (merged ? ", merged (one is on its way)" : ""));
+   if (merged) return;
    if (sdl_events.load()) {
       SDL_Event e;
       SDL_zero(e);

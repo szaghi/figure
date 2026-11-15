@@ -652,9 +652,10 @@ contains
    call app%set_lazy(.true., max_wait=10.0_real64)
    at = figure_time() + 0.2_real64
    call t%start(waker_work, wake_job(action=action, n=2_int32, at=at, hold=2.0_real64))
-   ! a frame may start before the call, woken by an event that is not the task's (seen on macOS's real window, 2 of 2
-   ! runs, wake only): up to 3 are let through, and the frame measured is the first after the call (latency >= 0); a
-   ! loop that does not wait draws more than 3 in those 0.2 s and fails
+   ! a frame may start before the call, woken by something that is not the task's (remote mode on the macOS runner,
+   ! 2 of 2 runs, wake only, ce582c1; FIGURE_DEBUG_WAKE logs what ended each wait, szaghi/figure#10 S1): up to 3 are
+   ! let through, and the frame measured is the first after the call (latency >= 0); a loop that does not wait draws
+   ! more than 3 in those 0.2 s and fails
    early = -1_int32
    do
       early = early + 1_int32

@@ -415,6 +415,7 @@ Details: [Error handling](errors).
 | Variable | Effect |
 |---|---|
 | `FIGURE_DEBUG_REDRAW` | any value: once per second, redraw statistics on standard error (window mode) — see [frame loop](frame-loop#redraw-diagnostics) |
+| `FIGURE_DEBUG_WAKE` | any value: each wake-up sent and what ended each wait of the loop, on standard error (window and remote modes) — see [frame loop](frame-loop#what-ended-a-wait) |
 | `FIGURE_STYLE` | the style at initialisation: a name of `app%set_style`, or a theme file — see [styles](styles) |
 | `FIGURE_CAPTURE`, `FIGURE_CAPTURE_*` | record the frames of a window to image files, with scripted input — see [screenshots and videos](capture) |
 | `GALLIUM_DRIVER=d3d12` | not read by FIGURE: on WSL2, makes Mesa render on the GPU — see [installation](install#wsl2-wslg) |
