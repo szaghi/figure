@@ -9,6 +9,7 @@ program tut11_run
 !< with the progress towards the tolerance, a notification at the end, and Stop. `tut11_run --examples DIR` writes
 !< two example cases into DIR; `--case DIR` opens the case DIR at the start.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
+use figure, only : figure_file_exists, figure_make_folder, figure_set_file_time
 use figure, only : app_object, FIG_OK, figure_last_error, ICON_CHART_AREA, ICON_CHECK, ICON_FILE_PEN, ICON_FLAME, &
                    ICON_FOLDER, ICON_FOLDER_OPEN, ICON_HISTORY, ICON_INFO, ICON_LAYOUT, ICON_PALETTE, ICON_PLAY, &
                    ICON_POWER_SQUARE, ICON_SAVE, ICON_SQUARE, ICON_UNDO, ig_begin, ig_begin_child, &
@@ -909,12 +910,13 @@ contains
    endfunction num
 
    subroutine write_examples(folder)
-   !< Two example cases in `folder`, all modified on 2026-10-15 at fixed times (`touch -t`, POSIX), for the pictures.
+   !< Two example cases in `folder`, all modified on 2026-10-15 at fixed times (figure_set_file_time), for the pictures.
    character(len=*), intent(in) :: folder !< Folder.
    type(case_t)                 :: c      !< An input.
    integer(int32)               :: stat   !< Status.
 
-   call execute_command_line('mkdir -p "'//folder//'/plate" "'//folder//'/channel"', exitstat=stat)
+   call figure_make_folder(folder//'/plate')
+   call figure_make_folder(folder//'/channel')
    call write_case(folder//'/plate/'//INPUT_FILE, c, stat)
    c%title = 'Cooled channel'
    c%nx = 64_int32
@@ -927,6 +929,20 @@ contains
    c%body_y = 0.375_real64
    c%body_r = 0.2_real64
    call write_case(folder//'/channel/'//INPUT_FILE, c, stat)
-   call execute_command_line('touch -t 202610150910 "'//folder//'"/*/'//INPUT_FILE//' "'//folder//'"/*/', exitstat=stat)
+   call date_cases(folder)
    endsubroutine write_examples
+
+   subroutine date_cases(folder)
+   !< Every example case of `folder` and its input modified on 2026-10-15 at 09:10, local time, for the pictures.
+   character(len=*), intent(in) :: folder   !< The cases' folder.
+   character(len=7), parameter  :: CASES(4) = ['plate  ', 'channel', 'fine   ', 'broken '] !< The example cases.
+   integer(int32)               :: k        !< Case.
+   integer(int32)               :: stat     !< Status: a case not written is skipped.
+
+   do k = 1_int32, 4_int32
+      if (.not. figure_file_exists(folder//'/'//trim(CASES(k)))) cycle
+      call figure_set_file_time(folder//'/'//trim(CASES(k))//'/'//INPUT_FILE, '2026-10-15 09:10', stat=stat)
+      call figure_set_file_time(folder//'/'//trim(CASES(k)), '2026-10-15 09:10', stat=stat)
+   enddo
+   endsubroutine date_cases
 endprogram tut11_run

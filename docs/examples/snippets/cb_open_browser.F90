@@ -7,6 +7,7 @@ program cb_open_browser
 !< opens the browser there.
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure, only : app_object, FIG_OK, ig_begin, ig_button, ig_end, ig_same_line, ig_set_next_window, ig_text
+use figure, only : figure_make_folder, figure_set_file_time
 
 implicit none
 type(app_object)              :: app       !< Application.
@@ -46,29 +47,29 @@ call app%destroy()
 contains
    subroutine write_cases(folder)
    !< The example cases: three case folders and five files, sizes fixed, all modified on 2026-10-15 at fixed times
-   !< (`touch -t`, POSIX; elsewhere the files keep the time they are written).
+   !< (figure_set_file_time: the same on every platform).
    character(len=*), intent(in) :: folder !< Folder.
-   integer(int32)               :: ios    !< Status of a command.
+   character(len=*), parameter  :: NACA = 'naca0012 '//char(206)//char(177)//'=4'//char(194)//char(176) !< A UTF-8 name.
 
-   call execute_command_line('mkdir "'//folder//'"', exitstat=ios)
-   call execute_command_line('mkdir "'//folder//'/cylinder Re100"', exitstat=ios)
-   call execute_command_line('mkdir "'//folder//'/naca0012 '//char(206)//char(177)//'=4'//char(194)//char(176)//'"', &
-                             exitstat=ios)                                          ! "naca0012 α=4°": UTF-8 names
-   call execute_command_line('mkdir "'//folder//'/sphere"', exitstat=ios)
-   call write_file(folder//'/overset.input', 1250_int32, '202610150910')
-   call write_file(folder//'/mesh.grd', 3500000_int32, '202610150915')
-   call write_file(folder//'/run.log', 18400_int32, '202610151742')
-   call write_file(folder//'/forces.dat', 96000_int32, '202610151741')
-   call write_file(folder//'/notes.txt', 300_int32, '202610150900')
-   call write_file(folder//'/cylinder Re100/overset.input', 1100_int32, '202610141600')
-   call execute_command_line('touch -t 202610150905 "'//folder//'"/*/', exitstat=ios)
+   call figure_make_folder(folder//'/cylinder Re100')
+   call figure_make_folder(folder//'/'//NACA)
+   call figure_make_folder(folder//'/sphere')
+   call write_file(folder//'/overset.input', 1250_int32, '2026-10-15 09:10')
+   call write_file(folder//'/mesh.grd', 3500000_int32, '2026-10-15 09:15')
+   call write_file(folder//'/run.log', 18400_int32, '2026-10-15 17:42')
+   call write_file(folder//'/forces.dat', 96000_int32, '2026-10-15 17:41')
+   call write_file(folder//'/notes.txt', 300_int32, '2026-10-15 09:00')
+   call write_file(folder//'/cylinder Re100/overset.input', 1100_int32, '2026-10-14 16:00')
+   call figure_set_file_time(folder//'/cylinder Re100', '2026-10-15 09:05') ! after the file written in it
+   call figure_set_file_time(folder//'/'//NACA, '2026-10-15 09:05')
+   call figure_set_file_time(folder//'/sphere', '2026-10-15 09:05')
    endsubroutine write_cases
 
-   subroutine write_file(name, bytes, stamp)
-   !< A file of `bytes` bytes, modified at `stamp` (`touch -t` format, CCYYMMDDhhmm, local time).
+   subroutine write_file(name, bytes, time)
+   !< A file of `bytes` bytes, modified at `time` (local, 'YYYY-MM-DD hh:mm').
    character(len=*), intent(in) :: name  !< File.
    integer(int32),   intent(in) :: bytes !< Size [bytes].
-   character(len=*), intent(in) :: stamp !< Modification time.
+   character(len=*), intent(in) :: time  !< Modification time.
    integer(int32)               :: u     !< Unit.
    integer(int32)               :: ios   !< Status.
 
@@ -76,6 +77,6 @@ contains
    if (ios /= 0) return
    write(u) repeat('#', bytes)
    close(u)
-   call execute_command_line('touch -t '//stamp//' "'//name//'"', exitstat=ios)
+   call figure_set_file_time(name, time)
    endsubroutine write_file
 endprogram cb_open_browser
