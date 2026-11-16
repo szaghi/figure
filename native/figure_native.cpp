@@ -303,6 +303,7 @@ struct capture_t {
    long        count = -1;        // frames to write; negative: unlimited
    long        frame = 0;         // frames drawn
    long        written = 0;       // frames written
+   long        atlas = -1;        // FIGURE_CAPTURE_ATLAS: the written frame whose font atlas is written too (#12 S3)
    std::vector<capture_event_t> events; // scripted input, by frame
    size_t      next = 0;          // first event not yet applied
    float       px = 0.0f, py = 0.0f;           // pointer position
@@ -514,6 +515,7 @@ void capture_setup() {
    }
    if (const char *v = std::getenv("FIGURE_CAPTURE_FROM")) cap.from = std::atol(v);
    if (const char *v = std::getenv("FIGURE_CAPTURE_FRAMES")) cap.count = std::atol(v);
+   if (const char *v = std::getenv("FIGURE_CAPTURE_ATLAS"); v && *v) cap.atlas = std::atol(v);
    if (const char *v = std::getenv("FIGURE_CAPTURE_INPUT"); v && *v) capture_read_input(v);
 }
 
@@ -562,6 +564,35 @@ constexpr unsigned int GL_NEAREST_ = 0x2600, GL_LINEAR_ = 0x2601, GL_RGBA_ = 0x1
 constexpr unsigned int GL_UNPACK_ROW_LENGTH_ = 0x0CF2, GL_UNPACK_ALIGNMENT_ = 0x0CF5, GL_PACK_ALIGNMENT_ = 0x0D05;
 constexpr unsigned int GL_RGB_ = 0x1907;
 
+// Capture: the font atlas as the frame just written was drawn with it, each page's coverage (alpha) as a binary PGM,
+// <prefix>NNNNN-atlasK.pgm: what docs_media.py --check keeps of a recording that fails (#12 S3, a glyph drawn
+// differently on one platform).
+void capture_write_atlas() {
+   int k = 0;
+   for (const ImTextureData *t : ImGui::GetPlatformIO().Textures) {
+      if (!t->Pixels || t->Width <= 0 || t->Height <= 0) continue;
+      char name[48];
+      std::snprintf(name, sizeof(name), "%05ld-atlas%d.pgm", cap.written, k++);
+      const std::string path = cap.prefix + name;
+      FILE *f = std::fopen(path.c_str(), "wb");
+      if (!f) {
+         std::fprintf(stderr, "figure capture: cannot write %s\n", path.c_str());
+         continue;
+      }
+      std::fprintf(f, "P5\n%d %d\n255\n", t->Width, t->Height);
+      const size_t n = static_cast<size_t>(t->Width) * static_cast<size_t>(t->Height);
+      const unsigned char *px = static_cast<const unsigned char *>(t->Pixels);
+      if (t->Format == ImTextureFormat_Alpha8) {
+         std::fwrite(px, 1, n, f);
+      } else { // RGBA32: the alpha channel holds the glyphs' coverage
+         std::vector<unsigned char> a(n);
+         for (size_t i = 0; i < n; ++i) a[i] = px[4 * i + 3];
+         std::fwrite(a.data(), 1, n, f);
+      }
+      std::fclose(f);
+   }
+}
+
 // Capture: the frame (RGB, rows from the top) as the next binary PPM.
 void capture_write(const unsigned char *rgb, int w, int h) {
    if (w <= 0 || h <= 0) return;
@@ -577,6 +608,7 @@ void capture_write(const unsigned char *rgb, int w, int h) {
    std::fprintf(f, "P6\n%d %d\n255\n", w, h);
    std::fwrite(rgb, 1, static_cast<size_t>(w) * h * 3, f);
    std::fclose(f);
+   if (cap.written == cap.atlas) capture_write_atlas();
    ++cap.written;
 }
 

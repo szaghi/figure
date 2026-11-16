@@ -108,6 +108,7 @@ jobs:
         path: |
           docs/public/media/*.new.png
           docs/public/media/*.diff.png
+          docs/public/media/*.atlas*.png
           docs/examples/output/*.txt
           build/docs-examples/bin/*.png
         if-no-files-found: ignore
@@ -244,6 +245,7 @@ jobs:
         path: |
           docs/public/media/*.new.png
           docs/public/media/*.diff.png
+          docs/public/media/*.atlas*.png
           docs/examples/output/*.txt
           build/docs-examples/bin/*.png
         if-no-files-found: ignore

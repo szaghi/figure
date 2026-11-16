@@ -23,3 +23,4 @@ docs/public/coverage.json
 # test_compare_image and docs_media.py --check: a picture that failed and its diff (accepted by --update, or removed)
 *.new.png
 *.diff.png
+*.atlas[0-9]*.png

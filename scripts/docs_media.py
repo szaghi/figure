@@ -54,8 +54,9 @@ Usage: python3 scripts/docs_media.py [name ...]          (default: every docs/me
                                                          (FIGURE_CAPTURE_HEADLESS=1: no window, no GPU) and compare
                                                          the poster with the committed one: per channel |d| <= 2, no
                                                          pixel more (the #! check and #! mask lines aside); on a
-                                                         failure writes docs/public/media/<name>.new.png and
-                                                         <name>.diff.png; exit status 1 if any failed
+                                                         failure writes docs/public/media/<name>.new.png,
+                                                         <name>.diff.png and the font atlas the poster was drawn
+                                                         with, <name>.atlasK.png; exit status 1 if any failed
        python3 scripts/docs_media.py --update [name ...] accept the .new.png pictures --check wrote (each replaces its
                                                          <name>.png; the .diff.png removed)
 --check writes no committed file. CI runs it on every push (.github/workflows/checks.yml): every committed poster is
@@ -352,8 +353,8 @@ def record_remote(name: str, header: dict[str, str]) -> None:
     )
 
 
-def capture(name: str, header: dict[str, str], script: str, work: Path, headless: bool) -> tuple[list[Path],
-                                                                                            tuple[int, int, int, int]]:
+def capture(name: str, header: dict[str, str], script: str, work: Path, headless: bool,
+            atlas: int | None = None) -> tuple[list[Path], tuple[int, int, int, int]]:
     """Run the program of a recording with the native layer's capture into `work`: its frames and the crop (x, y, w, h)
     of the poster and the video. `headless`: no window, the frames drawn by FIGURE's CPU renderer."""
     frames = int(header["frames"])
@@ -372,6 +373,8 @@ def capture(name: str, header: dict[str, str], script: str, work: Path, headless
         FIGURE_CAPTURE_FPS=str(FPS),
         FIGURE_STYLE=header.get("style", STYLE),
     )
+    if atlas is not None:  # the font atlas as that recorded frame was drawn with it: work/f_NNNNN-atlasK.pgm
+        env["FIGURE_CAPTURE_ATLAS"] = str(atlas)
     if headless:
         env["FIGURE_CAPTURE_HEADLESS"] = "1"
     else:
@@ -602,20 +605,26 @@ def check(name: str) -> str:
     threshold, max_failed = tolerance(header)
     with tempfile.TemporaryDirectory(prefix="figure-media-") as tmp:
         work = Path(tmp)
-        shots, crop = capture(name, header, script, work, headless=True)
+        shots, crop = capture(name, header, script, work, headless=True, atlas=poster)
         write_poster(shots[poster], crop, header, work / "poster.png")
         diff.unlink(missing_ok=True)  # an earlier run's: compare writes it again on a failure of the same size
         ok, summary = compare(work / "poster.png", ref, threshold, max_failed, masks(header), diff)
+        for old in OUT.glob(f"{name}.atlas*.png"):
+            old.unlink()
         if ok:
             new.unlink(missing_ok=True)
         else:
             shutil.copyfile(work / "poster.png", new)
+            # the font atlas the poster was drawn with, kept with it: a glyph drawn differently on one platform
+            # (#12 S3) is told apart from a different text or placement by comparing the pages
+            for k, page in enumerate(sorted(work.glob(f"f_{poster:05d}-atlas*.pgm"))):
+                subprocess.run(["convert", str(page), str(OUT / f"{name}.atlas{k}.png")], check=True)
     print(f"{name}: {'pass' if ok else 'FAIL'}: {summary}" + ("" if ok else f": see {new.name}, {diff.name}"))
     return "pass" if ok else "fail"
 
 
 def update(names: list[str]) -> int:
-    """Accept the .new.png pictures of --check: each replaces its poster, its .diff.png removed."""
+    """Accept the .new.png pictures of --check: each replaces its poster, its .diff.png and atlas pages removed."""
     found = sorted(OUT.glob("*.new.png"))
     if names:
         found = [p for p in found if p.name.removesuffix(".new.png") in names]
@@ -623,6 +632,8 @@ def update(names: list[str]) -> int:
         name = p.name.removesuffix(".new.png")
         p.replace(OUT / f"{name}.png")
         (OUT / f"{name}.diff.png").unlink(missing_ok=True)
+        for page in OUT.glob(f"{name}.atlas*.png"):
+            page.unlink()
         print(f"{name}: {name}.png updated")
     if not found:
         print("docs_media.py: no .new.png to accept")
