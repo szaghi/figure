@@ -134,6 +134,26 @@ ext_libs = figure_native SDL3 stdc++ dl pthread m
 requirements below apply); `fobis build` then rebuilds nothing that is up to date. `ext_libs` is the Linux link line;
 `python3 .fobis_deps/figure/scripts/check_sync.py --link-flags` prints that of the platform it runs on.
 
+## Building without network
+
+A cluster's compute or login node often reaches no outside network, and the native build downloads SDL3, cimplot,
+cimplot3d and miniz the first time. Each release (since v0.7.0) also publishes `figure-<version>-sources.tar.gz`: the
+repository's files and those four sources, in `third_party/fetched/`. Copy it to the machine, unpack it, and build there:
+`scripts/build_native.sh` finds `third_party/fetched/` and downloads nothing (it says `offline, from
+third_party/fetched/`).
+
+```bash
+tar -xzf figure-v0.7.0-sources.tar.gz && cd figure-v0.7.0-sources
+bash scripts/install.sh --gnu --source "$PWD" --prefix "$HOME/.local"   # or: scripts/build_native.sh, then FoBiS
+```
+
+- **FoBiS:** the installer installs FoBiS from PyPI when it is missing: on such a machine, install FoBiS first (from a
+  wheel copied there, `pip install FoBiS.py-<version>.whl`).
+- **System packages:** SDL3's X11, Wayland and DBus development headers come from the system's packages, as for any
+  build ([Linux packages](#linux-packages)); headless and remote programs need none of them.
+- **Making one:** `scripts/source_archive.sh [OUTDIR]` writes the archive of a tree whose native layer was built (or
+  configured) once, with the network; the release workflow runs it for every release.
+
 ## Building from the repository
 
 FIGURE has two layers, built separately:

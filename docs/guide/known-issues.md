@@ -527,5 +527,7 @@ What [the installer](install#the-one-line-installer) does not cover:
 
 ## First build needs the network
 
-The native build downloads cimgui, cimplot, SDL3 and miniz (CMake `FetchContent`) the first time, and every FoBiS mode runs
-it first (a few seconds when nothing changed).
+The native build downloads SDL3, cimplot, cimplot3d and miniz (CMake `FetchContent`) the first time (Dear ImGui and
+cimgui are in the repository), and every FoBiS mode runs it first (a few seconds when nothing changed). A machine with
+no network builds from the release's sources archive instead, which holds them all
+([Building without network](install#building-without-network), since v0.7.0).
