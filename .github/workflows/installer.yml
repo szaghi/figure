@@ -1,5 +1,5 @@
 # The one-line installer (scripts/install.sh) on fresh runners: Ubuntu, where --deps installs SDL's development
-# packages with apt, and macOS, with Homebrew. Each run builds FIGURE, installs it into a scratch prefix, compiles and
+# packages with apt, and macOS, with Homebrew; and Ubuntu with Intel ifx (--intel), for a push or a dispatch. Each run builds FIGURE, installs it into a scratch prefix, compiles and
 # runs the installer's proof program (pkg-config, headless), then checks that --uninstall leaves the prefix empty.
 #   - push (when the installer changes) and a dispatch with no tag: this commit, with --source;
 #   - a dispatch with a tag, and "Release figure" once it has published a release (workflow_run: a release made with
@@ -81,5 +81,43 @@ jobs:
     - name: Uninstall leaves an empty prefix
       run: |
         bash scripts/install.sh --uninstall --prefix "$PREFIX"
+        left="$(find "$PREFIX" -mindepth 1)"
+        if [ -n "$left" ]; then echo "left in the prefix:"; echo "$left"; exit 1; fi
+
+  # ifx (--intel, Linux): oneAPI from Intel's apt repository through setup-fortran, which exports CC=icx and CXX=icpx;
+  # FIGURE's native layer is built with gcc and g++ (ifx links libstdc++), so they are unset for the installer
+  install-ifx:
+    name: install (ubuntu-latest, ifx)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run'
+    env:
+      PREFIX: ${{ github.workspace }}/../figure-prefix
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Intel ifx
+      uses: fortran-lang/setup-fortran@v1
+      with:
+        compiler: intel
+        version: "2026.1"
+
+    - name: Install this commit with ifx (--intel --source)
+      run: env -u CC -u CXX bash scripts/install.sh --intel --deps --source "$GITHUB_WORKSPACE" --prefix "$PREFIX"
+
+    - name: figure.pc carries -fpscomp logicals
+      run: |
+        export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
+        pkg-config --cflags figure | grep -q -- "-fpscomp logicals"
+
+    - name: A CMake project finds it with ifx
+      run: |
+        cmake -S scripts/cmake_consumer -B "$RUNNER_TEMP/cmake_consumer" -DCMAKE_PREFIX_PATH="$PREFIX" \
+          -DCMAKE_Fortran_COMPILER="$(command -v ifx)"
+        cmake --build "$RUNNER_TEMP/cmake_consumer"
+        "$RUNNER_TEMP/cmake_consumer/figure_cmake_consumer"
+
+    - name: Uninstall leaves an empty prefix
+      run: |
+        bash scripts/install.sh --uninstall --intel --prefix "$PREFIX"
         left="$(find "$PREFIX" -mindepth 1)"
         if [ -n "$left" ]; then echo "left in the prefix:"; echo "$left"; exit 1; fi
