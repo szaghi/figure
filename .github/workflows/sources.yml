@@ -42,6 +42,15 @@ jobs:
       with:
         ref: ${{ env.TAG }}   # the release's tree; empty: the event's commit
 
+    - name: SDL3's build packages (fobos [scaffold] apt_packages)
+      # SDL's configure stops without X11 or Wayland headers, which the bare runner lacks
+      run: |
+        pkgs="$(python3 -c "import configparser; c = configparser.ConfigParser(interpolation=None, strict=False); \
+          c.read('fobos'); print(' '.join(c['scaffold']['apt_packages'].split()))")"
+        sudo apt-get update -y
+        # shellcheck disable=SC2086 # the package names are words
+        sudo apt-get install -y $pkgs
+
     - name: Fetch the native build's sources (CMake's configure step)
       run: cmake -S native -B build/native
 
