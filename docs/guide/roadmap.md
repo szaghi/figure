@@ -483,7 +483,7 @@ between. The plan, step by step, is [issue #10](https://github.com/szaghi/figure
   moves and free their vertex caches at rest ([3-D views](view3d#how-a-view-is-rendered)): done.
 - **The documentation pass** (S17): the migration notes, this section, the known issues dated: done.
 
-## v0.7.0 — in progress
+## v0.7.0 — released 2026-11-16
 
 The plan is [#12](https://github.com/szaghi/figure/issues/12): the steps v0.6.0 moved (2026-11-14), the findings of
 v0.6.0, and the features no application had asked for, which the owner took in without waiting for one (2026-11-16).

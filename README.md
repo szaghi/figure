@@ -124,7 +124,7 @@ fobis build --mode examples-gnu && exe/examples/figure_hello  # the examples, in
 
 ```toml
 [dependencies]
-figure = { git = "https://github.com/szaghi/figure", tag = "v0.6.0-fpm" }
+figure = { git = "https://github.com/szaghi/figure", tag = "v0.7.0-fpm" }
 ```
 
 Inside this repository, `scripts/fpm.sh test` runs fpm on the native layer CMake built.
@@ -139,7 +139,7 @@ a [cookbook](https://szaghi.github.io/figure/manual/cookbook), the [guide](https
 (widgets, plots, styles, docking, remote mode, [performance](https://szaghi.github.io/figure/guide/performance),
 testing) and the API reference. Every picture there is recorded from the program it describes.
 
-**Status:** v0.6.0, released 2026-11-15 ([changelog](CHANGELOG.md),
+**Status:** v0.7.0, released 2026-11-16 ([changelog](CHANGELOG.md),
 [roadmap](https://szaghi.github.io/figure/guide/roadmap)); the API can still change before v1.0.
 
 ## Copyrights

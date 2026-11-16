@@ -4,6 +4,55 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.0] — 2026-11-16
+### Added
+- **files**: Make, remove, date and test files and folders on every platform
+
+- **capture**: A failed picture keeps the font atlas it was drawn with
+
+- **install**: A CMake package, find_package(figure) and figure::figure
+
+- **install**: The installer takes Intel ifx (--intel)
+
+- **build**: A sources archive per release, the native layer built without network
+
+- **dnd**: Drag and drop between items and onto plots
+
+- **plots**: Plots across plots, digital signals and grouped bars
+
+- **select**: Multi-selection in lists, tables and trees
+
+- **implot3d**: Triangles, quads, images, axis scales, the box, the legend and picking
+
+
+### Changed
+- **docs**: The studio tutorials write their example cases without a shell
+
+
+### Documentation
+- **known-issues**: Nvfortran's internal error on a local named size, reduced
+
+- V0.7.0's documentation pass
+
+- S3's additions read afresh, the known issues of v0.7.0 checked again
+
+- V0.7.0's pictures measured on the three platforms, the fixes after block D
+
+- **showcase**: Six of the showcase's pictures from FIGURE's renderer
+
+
+### Fixed
+- **ci**: Release.yml back to the scaffold's; the sources archive in its own workflow
+
+- **ci**: The installer's CMake check finds macOS's gfortran-N
+
+- **ci**: The sources archive's runner gets SDL3's build packages
+
+- **test**: Ctrl+click in the multi-selection test is cmd+click on macOS
+
+- **process**: A detached child's end seen where init does not reap it
+
+
 ## [0.6.0] — 2026-11-15
 ### Added
 - **testing**: Items recorded in every mode from the first frame

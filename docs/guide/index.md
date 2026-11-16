@@ -23,7 +23,7 @@ respect to retained-mode toolkits.
 
 ## Status
 
-FIGURE v0.6.0 is released (2026-11-15), grown from its applications outside this repository, tools and a GUI for a
+FIGURE v0.7.0 is released (2026-11-16), grown from its applications outside this repository, tools and a GUI for a
 CFD solver ([showcase](showcase)); v0.4.0 is in progress ([roadmap](roadmap)). The API can still change before v1.0 ([roadmap](roadmap)).
 
 What exists today:
