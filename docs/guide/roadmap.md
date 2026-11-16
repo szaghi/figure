@@ -515,7 +515,12 @@ v0.6.0, and the features no application had asked for, which the owner took in w
 - **ImPlot3D's remaining items** (S10): triangles, quads, images in the box, one axis's scale, the box's proportions
   and view, the legend's place, the pointer's ray ([3-D plots](plots#_3-d-plots)); no depth buffer until
   brenocq/implot3d#151 merges: done.
-- **The documentation pass** (S11): the migration notes, this section, the pages above read afresh.
+- **The documentation pass** (S11): the migration notes, this section, the pages above read afresh; the new pictures
+  measured on Linux, macOS and Windows, all equal there (run 43868894311): done.
+- **Found after block D:** on macOS a multi-selection's ctrl+click is cmd+click (the tests press the platform's
+  `shortcut`); a detached process was never seen ended where the first process of a container does not reap it
+  (GitHub's job containers, Docker without `--init`): FIGURE reaps it, or reads it as a zombie
+  ([Known issues](known-issues#processes)), and the examples' runs stop after 10 minutes: done.
 
 ## Next
 

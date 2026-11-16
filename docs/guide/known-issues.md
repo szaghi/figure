@@ -374,10 +374,9 @@ renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
   log, a plot fitted to data that arrived later. Such a recording is deterministic in each mode, not across them.
 - **Draw callbacks:** a program's own `ImDrawList` callback (raw bindings) is not run by the CPU renderer.
 - **Other platforms:** the CPU renderer draws the same pixels on macOS (arm64, Apple clang, gfortran 16) and Windows
-  (MSYS2 UCRT64, gfortran) as on Linux (on CI, run 43822162486, 2026-11-16: of the documentation's 96 recordings,
-  2 skipped everywhere, 86 pass on macOS with its overrides and 8 more skipped there, all 94 others on Windows with
-  its own; 72 have no per-platform override; the five recordings v0.7.0 adds are measured by the push that brings
-  them); what differs is the program's own arithmetic, FIGURE's title bar on macOS, a path shown natively on
+  (MSYS2 UCRT64, gfortran) as on Linux (on CI, run 43868894311, 2026-11-16: of the documentation's 101 recordings,
+  2 skipped everywhere, 91 pass on macOS with its overrides and 8 more skipped there, all 99 others on Windows with
+  its own; 77 have no per-platform override, the five v0.7.0 adds among them); what differs is the program's own arithmetic, FIGURE's title bar on macOS, a path shown natively on
   Windows, and one glyph on macOS:
   - the C library's maths (glibc on Linux, not elsewhere) and, on arm64, multiply-adds the compiler may fuse move
     what a program computes: a rounded border or a plotted value by a pixel (5 and 104 pixels in two recordings, the
