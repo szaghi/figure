@@ -2,7 +2,7 @@
 #! frames  260
 #! poster  150
 #! keys
-# click block 3, shift+click block 8: 3 to 8; ctrl+click block 11 (added) and block 5 (removed); Freeze marks them;
+# click block 3, shift+click block 8: 3 to 8; ctrl+click (cmd on macOS) block 11 (added) and block 5 (removed); Freeze marks them;
 # back in the list (ctrl+click block 1), ctrl+a selects all 2000; escape clears
 0   move 300 300
 5   move 80 93 15
@@ -14,23 +14,23 @@
 64  up
 66  key shift up
 85  move 80 245 15
-100 key ctrl down
+100 key shortcut down
 102 down
 104 up
-106 key ctrl up
+106 key shortcut up
 115 move 80 131 10
-125 key ctrl down
+125 key shortcut down
 127 down
 129 up
-131 key ctrl up
+131 key shortcut up
 150 move 38 415 15
 170 down
 172 up
 180 move 80 55 10
-188 key ctrl down
+188 key shortcut down
 190 down
 192 up
-194 key ctrl up
+194 key shortcut up
 205 key shortcut down
 207 key a
 209 key shortcut up

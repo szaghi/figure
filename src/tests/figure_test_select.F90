@@ -5,11 +5,12 @@ program figure_test_select
 !< escape, box-selection, a clipped list, a tree, a single-selection list, and the usage errors.
 !<
 !< A list of 40 lines in a child region of 8 lines' height, clipped (`list_clipper_object`, the range source kept):
-!< a click on line 3 selects it alone; shift+click on 7 extends to 3..7; ctrl+click on 10 adds it, on 5 removes it;
-!< ctrl+a selects all 40; escape clears; a click on 2, the wheel (line 2 out of view, kept drawn by the clipper),
-!< shift+click on a line in view: 2 to that line. A short list of 5 lines in a tall child: a drag from the void below the last line up to line 2 box-selects
-!< 2..5. A tree of 4 nodes: click node 2, shift+click node 4: 2..4. A single-selection list: ctrl+click two lines,
-!< the last one alone selected. The refusals with their statuses and messages.
+!< a click on line 3 selects it alone; shift+click on 7 extends to 3..7; ctrl+click (cmd+click on macOS: the key
+!< `shortcut`) on 10 adds it, on 5 removes it; ctrl+a selects all 40; escape clears; a click on 2, the wheel (line 2
+!< out of view, kept drawn by the clipper), shift+click on a line in view: 2 to that line. A short list of 5 lines in
+!< a tall child: a drag from the void below the last line up to line 2 box-selects 2..5. A tree of 4 nodes: click
+!< node 2, shift+click node 4: 2..4. A single-selection list: ctrl+click two lines, the last one alone selected. The
+!< refusals with their statuses and messages.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_begin_child, &
                    ig_begin_multi_select, ig_end, ig_end_child, ig_end_multi_select, ig_item_rect, ig_push_id,     &
@@ -130,14 +131,14 @@ do f = 1_int32, 200_int32
       call test_key('shift', down=.false.)
    case (25_int32)
       got(:, 2) = sel%flags()
-      call test_key('ctrl', down=.true.)
+      call test_key('shortcut', down=.true.)
       call click_on(line(:, 10))
-      call test_key('ctrl', down=.false.)
+      call test_key('shortcut', down=.false.)
    case (35_int32)
       got(:, 3) = sel%flags()
-      call test_key('ctrl', down=.true.)
+      call test_key('shortcut', down=.true.)
       call click_on(line(:, 5))
-      call test_key('ctrl', down=.false.)
+      call test_key('shortcut', down=.false.)
    case (45_int32)
       got(:, 4) = sel%flags()
       call test_key('shortcut', down=.true.)
@@ -178,11 +179,11 @@ do f = 1_int32, 200_int32
       call click_on(node(:, 4))
       call test_key('shift', down=.false.)
    case (135_int32)
-      call test_key('ctrl', down=.true.)
+      call test_key('shortcut', down=.true.)
       call click_on(single(:, 1))
       call test_next_frame()
       call click_on(single(:, 3))
-      call test_key('ctrl', down=.false.)
+      call test_key('shortcut', down=.false.)
    endselect
 enddo
 if (app%next_frame(s)) continue
