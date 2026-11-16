@@ -73,8 +73,14 @@ jobs:
 
     - name: A CMake project finds it (find_package, figure::figure)
       run: |
+        # the gfortran the installer took: gfortran, else the newest gfortran-N (GitHub's macOS images, Homebrew)
+        fc="$(command -v gfortran || true)"
+        if [ -z "$fc" ]; then
+          fc="$(command -v "$(compgen -c gfortran- | grep -E '^gfortran-[0-9]+$' | sort -t- -k2 -n -u | tail -n 1)")"
+        fi
+        echo "Fortran compiler: $fc"
         cmake -S scripts/cmake_consumer -B "$RUNNER_TEMP/cmake_consumer" -DCMAKE_PREFIX_PATH="$PREFIX" \
-          -DCMAKE_Fortran_COMPILER="$(command -v gfortran)"
+          -DCMAKE_Fortran_COMPILER="$fc"
         cmake --build "$RUNNER_TEMP/cmake_consumer"
         "$RUNNER_TEMP/cmake_consumer/figure_cmake_consumer"
 
