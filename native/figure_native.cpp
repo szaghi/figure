@@ -860,6 +860,7 @@ void destroy_contexts() {
    st.fallbacks_merged = 0;
    if (ImPlot3D::GetCurrentContext()) ImPlot3D::DestroyContext();
    if (ImPlot::GetCurrentContext()) ImPlot::DestroyContext();
+   fig_plot_links_reset(); // the link groups belong to the plots
    if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
 }
 

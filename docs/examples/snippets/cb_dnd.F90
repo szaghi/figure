@@ -43,7 +43,7 @@ do while (app%next_frame())
          if (ig_dragging('case')) call ig_text_disabled('drop on the plot')
          call ig_table_next_column()
          if (ip_begin_plot('residuals', height=-1.0_real64)) then
-            call ip_setup_axes('iteration', 'residual')
+            call ip_setup_axes('iteration', 'residual', auto_fit=.true.)
             do c = 1_int32, CASES
                if (.not. shown(c)) cycle
                res = exp(-RATE(c) * it)

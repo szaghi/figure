@@ -195,6 +195,10 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_begin_plot(title [, width] [, height] [, equal])` → `logical` | begin a plot; `.true.` when visible ([plots](plots#a-plot)) |
 | `ip_setup_axes(xlabel, ylabel [, auto_fit] [, xlog] [, ylog] [, xformat] [, yformat] [, xscale] [, yscale] [, stat])` | labels of X1 and Y1; the axes fit the data on first use, every frame with `auto_fit=.true.`; `xscale`/`yscale`: `'linear'`, `'log'`, `'symlog'`, `'time'` (`xlog`/`ylog`: deprecated `'log'`); `xformat`/`yformat`: tick label formats ([checked](plots#formats)) |
 | `ip_begin_subplots(title, rows, cols [, width] [, height] [, link_x] [, link_y])` → `logical`, `ip_end_subplots()` | a grid of plots, optionally sharing the x or y range ([plots](plots#several-plots-in-one-figure)) <!-- visual --> |
+| `ip_link_axis(axis, group [, stat])` | an axis linked to a named group: one range for every plot of the group ([plots](plots#plots-across-plots)) <!-- visual --> |
+| `ip_begin_aligned(group [, horizontal] [, stat])` → `logical`, `ip_end_aligned([stat])` | plots whose plot areas start and end at the same pixels ([plots](plots#plots-across-plots)) <!-- visual --> |
+| `ip_legend_hovered(label [, stat])` → `logical`, `ip_begin_legend_popup(label [, button] [, stat])` → `logical`, `ip_end_legend_popup([stat])` | the pointer on an item's legend entry; a popup opened from it ([plots](plots#plots-across-plots)) |
+| `ip_hide_next_item([hidden] [, always] [, stat])` | the next item hidden or shown, once or every frame ([plots](plots#plots-across-plots)) |
 | `ip_setup_axes_limits(xmin, xmax, ymin, ymax [, always] [, stat])` | initial ranges of X1 and Y1 ([plots](plots#axes)) <!-- visual --> |
 | `ip_setup_axis(axis [, label] [, scale] [, auto_fit] [, format] [, opposite] [, invert] [, lock] [, no_grid] [, stat])` | set up one of the six axes `'x1'`..`'x3'`, `'y1'`..`'y3'`: label, scale (`'linear'`, `'log'`, `'symlog'`, `'time'`), format, side, direction, lock, grid ([plots](plots#axes)) <!-- visual --> |
 | `ip_set_axes(x, y [, stat])` | the axes the next items use (`'x1'`..`'x3'`, `'y1'`..`'y3'`) ([plots](plots#axes)) <!-- visual --> |
@@ -228,6 +232,8 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_contour_lines(f, x0, x1, y0, y1, levels, x, y, first)` | the contour segments without drawing them (marching squares, `pure`) ([plots](plots#contour-lines)) |
 | `ip_contour_levels(f [, count])` → `real(real64)` array | levels at round numbers inside a field's finite range ([plots](plots#contour-lines)) |
 | `ip_stairs(label, x, y [, spec] [, stat])` | a staircase through the points; pre-step or shaded by flags ([plots](plots#items)) <!-- visual --> |
+| `ip_digital(label, x, y [, spec] [, stat])` | a digital signal in a band at the bottom of the plot ([plots](plots#grouped-bars-and-digital-signals)) <!-- visual --> |
+| `ip_bar_groups(labels, values [, group_size] [, shift] [, horizontal] [, stacked] [, colormap] [, spec] [, stat])` | items in groups of bars, side by side or stacked ([plots](plots#grouped-bars-and-digital-signals)) <!-- visual --> |
 | `ip_stems(label, x, y [, ref] [, spec] [, stat])` | stems from `y = ref` to the points, with markers ([plots](plots#items)) <!-- visual --> |
 | `ip_inf_lines(label, values [, horizontal] [, spec] [, stat])` | lines across the whole plot at x (or y) values, real or integer ([plots](plots#marks-in-a-plot)) <!-- visual --> |
 | `ip_histogram(label, values [, bins] [, vmin] [, vmax] [, bar_scale] [, max_count] [, spec] [, stat])` | a histogram: a bin count or a rule (`ImPlotBin_*`), NaNs left out ([plots](plots#histograms)) |

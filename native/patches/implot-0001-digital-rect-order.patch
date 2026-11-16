@@ -1,0 +1,5 @@
+--- a/implot_items.cpp
++++ b/implot_items.cpp
+@@ -3408,1 +3408,1 @@
+-                    draw_list.AddRectFilled(pMin, pMax, ImGui::GetColorU32(s.Spec.FillColor));
++                    draw_list.AddRectFilled(ImMin(pMin, pMax), ImMax(pMin, pMax), ImGui::GetColorU32(s.Spec.FillColor));

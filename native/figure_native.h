@@ -232,6 +232,12 @@ int    fig_dnd_target(const char *type, int type_len, int *len);
 int    fig_dnd_plot_target(int where, int axis, const char *type, int type_len, int *len, double *x, double *y);
 void   fig_dnd_payload(char *buf, int len);
 int    fig_dnd_dragging(const char *type, int type_len);
+/* Plots across plots (figure_plot_links.cpp): link `axis` (ImAxis) of the plot being set up to the group `name`
+ * (1 linked, 0 not yet: a new group's first frame, its plots fitting alone); forget every group (at the contexts'
+ * destruction); 1 while a group of aligned plots is open. */
+int    fig_plot_link(int axis, const char *name, int name_len);
+void   fig_plot_links_reset(void);
+int    fig_aligned_open(void);
 int    fig_file_browser_get(int what, int index, char *buf, int buf_len, int *len, int *count);
 int    fig_file_browser_rect(const char *part, int part_len, float *rect, int *found);
 /* Internal (figure_native.cpp): a browser open with this id; its answer, as fig_file_dialog_result; draw the front

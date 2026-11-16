@@ -1,5 +1,5 @@
 if (ip_begin_plot('residuals', height=-1.0_real64)) then
-   call ip_setup_axes('iteration', 'residual')
+   call ip_setup_axes('iteration', 'residual', auto_fit=.true.)
    do c = 1_int32, CASES
       if (.not. shown(c)) cycle
       res = exp(-RATE(c) * it)

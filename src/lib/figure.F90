@@ -104,7 +104,9 @@ use figure_implot, only : ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_
                           ip_contour_lines, ip_contour_levels, ip_colormap_legend, &
                           ip_colormap_legend_edit, ip_field_image
 use figure_implot, only : ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, &
-                          ip_cancel_selection, ip_drop_target, ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, &
+                          ip_cancel_selection, ip_drop_target, ip_link_axis, ip_begin_aligned, ip_end_aligned, &
+                          ip_legend_hovered, ip_begin_legend_popup, ip_end_legend_popup, ip_hide_next_item, &
+                          ip_digital, ip_bar_groups, ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, &
                           ip_stems, &
                           ip_histogram, ip_histogram2d, ImPlotStairsFlags_PreStep, ImPlotStairsFlags_Shaded,         &
                           ImPlotStemsFlags_Horizontal, ImPlotInfLinesFlags_Horizontal,                               &
@@ -228,6 +230,8 @@ public :: ImPlotLineFlags_Segments, ImPlotLineFlags_Loop, ImPlotLineFlags_SkipNa
 public :: ImPlotLineFlags_Shaded, ImPlotScatterFlags_NoClip, ImPlotBarsFlags_Horizontal
 public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, ip_cancel_selection
 public :: ip_drop_target
+public :: ip_link_axis, ip_begin_aligned, ip_end_aligned, ip_legend_hovered, ip_begin_legend_popup
+public :: ip_end_legend_popup, ip_hide_next_item, ip_digital, ip_bar_groups
 public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
 public :: ImPlotStairsFlags_PreStep, ImPlotStairsFlags_Shaded, ImPlotStemsFlags_Horizontal, ImPlotInfLinesFlags_Horizontal
 public :: ImPlotHistogramFlags_Horizontal, ImPlotHistogramFlags_Cumulative, ImPlotHistogramFlags_Density

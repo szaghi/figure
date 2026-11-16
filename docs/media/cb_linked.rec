@@ -1,0 +1,22 @@
+#! program build/docs-examples/bin/cb_linked
+#! from    10
+#! frames  250
+#! poster  150
+# zoom the forces' x axis with the wheel: the three plots follow; drag the CFL plot's x axis: the three pan; a right
+# click on the drag entry of the legend opens its popup, where "shown" is cleared: the drag line is hidden
+0   move 500 300
+5   move 420 505 15
+25  wheel 0 1
+30  wheel 0 1
+35  wheel 0 1
+40  wheel 0 1
+55  move 420 346 10
+70  down
+75  move 300 346 15
+95  up
+110 move 112 436 15
+130 down right
+132 up right
+150 move 131 474 10
+170 down
+172 up

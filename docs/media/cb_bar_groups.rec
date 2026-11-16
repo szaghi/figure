@@ -1,0 +1,4 @@
+#! program build/docs-examples/bin/cb_bar_groups
+#! from    10
+#! frames  1
+# grouped and stacked bars of the phases per case; a residual with the solver's output as a digital signal

@@ -29,14 +29,21 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
-                        figure_scope_refused, figure_usage_error, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS
+                        figure_scope_refused, figure_usage_error, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS, &
+                        SCOPE_ALIGNED, SCOPE_LEGEND_POPUP
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
                             fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag, &
-                            fig_field_image, fig_gradient_edit, fig_colormap_stops, fig_dnd_plot_target
+                            fig_field_image, fig_gradient_edit, fig_colormap_stops, fig_dnd_plot_target, &
+                            fig_plot_link, fig_aligned_open
 use figure_cimgui, only : im_vec2, im_vec4, igGetFrameCount, igIsMousePosValid
 use figure_texture, only : texture_object, texture_ref
 use figure_imgui, only : take_payload
+use figure_cimplot, only : ImPlot_BeginAlignedPlots, ImPlot_EndAlignedPlots, ImPlot_IsLegendEntryHovered,           &
+                           ImPlot_BeginLegendPopup, ImPlot_EndLegendPopup, ImPlot_HideNextItem,                    &
+                           ImPlot_PlotDigital_doublePtr, ImPlot_PlotDigital_FloatPtr, ImPlot_PlotBarGroups_doublePtr, &
+                           ImPlot_PlotBarGroups_FloatPtr
+use figure_cimplot_enums, only : ImPlotBarGroupsFlags_Horizontal, ImPlotBarGroupsFlags_Stacked
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot,             &
                            ImPlot_PlotBars_doublePtrdoublePtr, ImPlot_PlotBars_FloatPtrFloatPtr,                   &
                            ImPlot_PlotLine_doublePtrdoublePtr, ImPlot_PlotLine_FloatPtrFloatPtr,                   &
@@ -116,6 +123,8 @@ public :: ip_setup_legend
 public :: series_r32, series_r64, series_lead, series_put, series_scratch, series_gap
 public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, ip_cancel_selection
 public :: ip_drop_target
+public :: ip_link_axis, ip_begin_aligned, ip_end_aligned, ip_legend_hovered, ip_begin_legend_popup
+public :: ip_end_legend_popup, ip_hide_next_item, ip_digital, ip_bar_groups
 public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -155,6 +164,16 @@ interface ip_scatter
    module procedure ip_scatter_r32, ip_scatter_r64
    module procedure ip_scatter_i32_r32, ip_scatter_i64_r32, ip_scatter_i32_r64, ip_scatter_i64_r64
 endinterface ip_scatter
+
+interface ip_digital
+   !< A digital signal: y(i) at x(i), drawn as bars of the signal's height in a band at the bottom of the plot.
+   module procedure ip_digital_r32, ip_digital_r64
+endinterface ip_digital
+
+interface ip_bar_groups
+   !< Items in groups of bars: `values(g, i)`, item i in group g.
+   module procedure ip_bar_groups_r32, ip_bar_groups_r64
+endinterface ip_bar_groups
 
 interface ip_bars
    !< Bars of height y(i) centred at x(i).
@@ -2679,6 +2698,338 @@ contains
    if (where /= 3_c_int .and. present(y)) y = real(py, real64)
    dropped = .true.
    endfunction ip_drop_target
+
+   recursive subroutine ip_link_axis(axis, group, stat)
+   !< Link `axis` (`'x1'`..`'y3'`) of the plot being set up to the group `group` (`SetupAxisLinks`): every plot linked
+   !< to a group shows the same range, and a pan or a zoom in any of them moves all. FIGURE keeps the group's range;
+   !< a new group takes the range its first plot fits on its first frame. Call it in the setup, after
+   !< `ip_setup_axes`/`ip_setup_axis`, every frame. Statuses: `FIG_ERR_ARGUMENT` for an unknown axis or an empty group
+   !< name; `FIG_ERR_STATE` outside a plot, after its setup is over, for an axis not set up, from a task.
+   character(len=*), intent(in)            :: axis  !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   character(len=*), intent(in)            :: group !< The group's name (any text, not empty).
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(c_int)                          :: code  !< ImAxis.
+   integer(c_int)                          :: linked !< 1 linked this frame, 0 a new group's first.
+
+   if (figure_draw_refused('ip_link_axis', stat)) return ! a task does not draw
+   if (axis_refused('ip_link_axis', axis, code, .true., stat)) return
+   if (len_trim(group) == 0) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_link_axis: the group has no name', stat)
+      return
+   endif
+   linked = fig_plot_link(code, group, len(group, c_int))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_link_axis
+
+   recursive function ip_begin_aligned(group, horizontal, stat) result(open)
+   !< Begin a group of aligned plots (`BeginAlignedPlots`): the plots begun until `ip_end_aligned` have their plot areas
+   !< start and end at the same pixels, whatever the width of their tick labels (stacked plots: the same left and right
+   !< edges; `horizontal=.true.`, side by side: the same top and bottom). When true, close it with `ip_end_aligned`.
+   !< One group at a time. Statuses: `FIG_ERR_STATE` inside another group, outside a frame or from a task.
+   character(len=*), intent(in)            :: group      !< The group's id.
+   logical,          intent(in),  optional :: horizontal !< Plots side by side (default: stacked).
+   integer(int32),   intent(out), optional :: stat       !< Status.
+   logical                                 :: open       !< The group is open: begin its plots, then end it.
+   logical                                 :: h          !< Side by side.
+
+   open = .false.
+   if (figure_draw_refused('ip_begin_aligned', stat)) return ! a task does not draw
+   if (fig_aligned_open() /= 0_c_int) then
+      call figure_usage_error('ip_begin_aligned: a group of aligned plots is open (ImPlot aligns one group at a time)', &
+                              stat)
+      return
+   endif
+   h = .false.
+   if (present(horizontal)) h = horizontal
+   open = logical(ImPlot_BeginAlignedPlots(cstr(group), logical(.not. h, c_bool)))
+   call figure_scope_open(SCOPE_ALIGNED, 'ip_begin_aligned', group, open)
+   call figure_check(FIG_OK, stat)
+   endfunction ip_begin_aligned
+
+   recursive subroutine ip_end_aligned(stat)
+   !< End a group of aligned plots (only after `ip_begin_aligned` returned true).
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for an end with no group open.
+
+   if (figure_scope_refused(SCOPE_ALIGNED, 'ip_end_aligned', stat=stat)) return
+   call ImPlot_EndAlignedPlots()
+   if (present(stat)) stat = FIG_OK
+   endsubroutine ip_end_aligned
+
+   recursive function ip_legend_hovered(label, stat) result(hovered)
+   !< True while the pointer is on the legend entry of the item `label` (`IsLegendEntryHovered`): a program shows more
+   !< about the item then (a tooltip). After the item, before `ip_end_plot`. Statuses: `FIG_ERR_STATE` outside a plot
+   !< or from a task.
+   character(len=*), intent(in)            :: label   !< The item's label.
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   logical                                 :: hovered !< The entry is hovered.
+
+   hovered = .false.
+   if (figure_draw_refused('ip_legend_hovered', stat)) return ! a task does not draw
+   if (plot_refused('ip_legend_hovered', .false., stat)) return
+   hovered = logical(ImPlot_IsLegendEntryHovered(cstr(label)))
+   call figure_check(FIG_OK, stat)
+   endfunction ip_legend_hovered
+
+   recursive function ip_begin_legend_popup(label, button, stat) result(open)
+   !< A popup of the legend entry of the item `label` (`BeginLegendPopup`), opened by a click of `button` (`'right'`,
+   !< default, `'left'` or `'middle'`) on the entry: when true, draw its contents (widgets), then
+   !< `ip_end_legend_popup`. After the item, before `ip_end_plot`. Statuses: `FIG_ERR_ARGUMENT` for an unknown button;
+   !< `FIG_ERR_STATE` outside a plot or from a task.
+   character(len=*), intent(in)            :: label  !< The item's label.
+   character(len=*), intent(in),  optional :: button !< 'right' (default), 'left' or 'middle'.
+   integer(int32),   intent(out), optional :: stat   !< Status.
+   logical                                 :: open   !< The popup is open: draw it, then end it.
+   integer(c_int)                          :: b      !< ImGuiMouseButton.
+
+   open = .false.
+   if (figure_draw_refused('ip_begin_legend_popup', stat)) return ! a task does not draw
+   b = 1_c_int
+   if (present(button)) then
+      select case (button)
+      case ('left')
+         b = 0_c_int
+      case ('right')
+         b = 1_c_int
+      case ('middle')
+         b = 2_c_int
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, "ip_begin_legend_popup: button must be 'left', 'right' or 'middle'", stat)
+         return
+      endselect
+   endif
+   if (plot_refused('ip_begin_legend_popup', .false., stat)) return
+   open = logical(ImPlot_BeginLegendPopup(cstr(label), b))
+   call figure_scope_open(SCOPE_LEGEND_POPUP, 'ip_begin_legend_popup', label, open)
+   call figure_check(FIG_OK, stat)
+   endfunction ip_begin_legend_popup
+
+   recursive subroutine ip_end_legend_popup(stat)
+   !< End a legend entry's popup (only after `ip_begin_legend_popup` returned true).
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for an end with no popup open.
+
+   if (figure_scope_refused(SCOPE_LEGEND_POPUP, 'ip_end_legend_popup', stat=stat)) return
+   call ImPlot_EndLegendPopup()
+   if (present(stat)) stat = FIG_OK
+   endsubroutine ip_end_legend_popup
+
+   recursive subroutine ip_hide_next_item(hidden, always, stat)
+   !< Hide (default) or show the next item (`HideNextItem`): its legend entry stays, greyed while hidden, and a click
+   !< on it shows it again. The first time the item is drawn only, unless `always=.true.`: then on this frame, whatever
+   !< the user did (the program decides, every frame it calls it). Before the item, inside a plot. Statuses:
+   !< `FIG_ERR_STATE` outside a plot or from a task.
+   logical,        intent(in),  optional :: hidden !< Hidden (default true) or shown.
+   logical,        intent(in),  optional :: always !< On this frame (default: the item's first frame only).
+   integer(int32), intent(out), optional :: stat   !< Status.
+   logical                               :: h      !< Hidden.
+   integer(c_int)                        :: cond   !< ImPlotCond.
+
+   if (figure_draw_refused('ip_hide_next_item', stat)) return ! a task does not draw
+   if (plot_refused('ip_hide_next_item', .false., stat)) return
+   h = .true.
+   if (present(hidden)) h = hidden
+   cond = ImPlotCond_Once
+   if (present(always)) then
+      if (always) cond = ImPlotCond_Always
+   endif
+   call ImPlot_HideNextItem(logical(h, c_bool), cond)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_hide_next_item
+
+   recursive subroutine ip_digital_r64(label, x, y, spec, stat)
+   !< A digital signal (`PlotDigital`): y(i) at x(i), held to x(i+1), drawn in a band of its own at the bottom of the
+   !< plot whatever the y axis (0 and 1 as low and high; larger values as taller steps), double precision; read in place with
+   !< any stride (plots.md, "Data in place"). The y axis does not fit it; the x axis does. `spec`'s `size` is the
+   !< band's height [pixels].
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real64),               intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),               intent(in), target, asynchronous :: y(:)  !< Values.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_digital', stat)) return ! a task does not draw
+   if (plot_refused('ip_digital', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_digital', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotDigital_doublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_digital_r64
+
+   recursive subroutine ip_bar_groups_r64(labels, values, group_size, shift, horizontal, stacked, colormap, spec, stat)
+   !< Items in groups of bars (`PlotBarGroups`), double precision: `values(g, i)` is item i in group g, group g centred at
+   !< x = g - 1 (0, 1, ...; `shift` moves them all), the items of a group side by side in `group_size` (a fraction of
+   !< the unit, in (0, 1], default 0.67) or, `stacked=.true.`, on top of each other (negative values below 0);
+   !< `horizontal=.true.`: along y. `labels(i)` names item i (its legend entry; trailing blanks dropped). The items take
+   !< the colours of `colormap` (an id of `ip_colormap`) in order, default the plot's line colours; `spec`'s
+   !< `fill_color` paints them all. Statuses: `FIG_ERR_ARGUMENT` for `size(labels)` not `size(values, 2)`, no values,
+   !< `group_size` outside (0, 1], an unknown colormap; `FIG_ERR_STATE` outside a plot or from a task.
+   character(len=*),       intent(in)            :: labels(:)    !< One per item.
+   real(real64),               intent(in)            :: values(:, :) !< values(group, item).
+   real(real64),           intent(in),  optional :: group_size   !< Width of a group [x units] (default 0.67).
+   real(real64),           intent(in),  optional :: shift        !< Shift of every group [x units] (default 0).
+   logical,                intent(in),  optional :: horizontal   !< Groups along y (default: along x).
+   logical,                intent(in),  optional :: stacked      !< Items stacked (default: side by side).
+   integer(int32),         intent(in),  optional :: colormap     !< The items' colours (default: the plot's).
+   type(plot_spec_object), intent(in),  optional :: spec         !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat         !< Status.
+   type(series_r64), target                     :: d            !< Where ImPlot reads the values.
+   real(real64), allocatable, target                 :: v(:)         !< The values, contiguous, item by item.
+   character(kind=c_char, len=:), allocatable, target :: names   !< The labels, each NUL-terminated.
+   type(c_ptr), allocatable, target              :: ptr(:)       !< Their addresses.
+   type(im_plot_spec)                            :: c            !< Spec with the flags.
+   real(c_double)                                :: gs, sh       !< Group size, shift.
+   integer(c_int)                                :: cmap         !< Colormap id.
+   integer                                       :: i, k, w      !< Item, position, label width.
+   character(len=24)                             :: t1, t2       !< Numbers, printed.
+
+   if (figure_draw_refused('ip_bar_groups', stat)) return ! a task does not draw
+   if (size(labels) /= size(values, 2)) then
+      write(t1, '(I0)') size(labels)
+      write(t2, '(I0)') size(values, 2)
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_bar_groups: '//trim(t1)//' labels for '//trim(t2)// &
+                       ' items (size(values, 2))', stat)
+      return
+   endif
+   if (size(values) == 0) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_bar_groups: no values', stat)
+      return
+   endif
+   gs = 0.67_c_double
+   if (present(group_size)) then
+      if (.not. (group_size > 0.0_real64 .and. group_size <= 1.0_real64)) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_bar_groups: group_size must be in (0, 1]', stat)
+         return
+      endif
+      gs = real(group_size, c_double)
+   endif
+   sh = 0.0_c_double
+   if (present(shift)) sh = real(shift, c_double)
+   if (present(colormap)) then
+      if (.not. colormap_ok('ip_bar_groups', colormap, cmap, stat)) return
+   endif
+   if (plot_refused('ip_bar_groups', .false., stat)) return
+   v = reshape(values, [size(values)])                  ! column-major values(g, i): item i's groups in a row
+   w = len(labels) + 1
+   allocate(character(kind=c_char, len=w * size(labels)) :: names)
+   allocate(ptr(size(labels)))
+   do i = 1, size(labels)
+      k = (i - 1) * w
+      names(k + 1:k + w) = trim(labels(i))//c_null_char
+      ptr(i) = c_loc(names(k + 1:k + 1))
+   enddo
+   call series_lead(d, 1, v)
+   c = series_spec(d, spec)
+   if (present(horizontal)) then
+      if (horizontal) c%Flags = ior(c%Flags, ImPlotBarGroupsFlags_Horizontal)
+   endif
+   if (present(stacked)) then
+      if (stacked) c%Flags = ior(c%Flags, ImPlotBarGroupsFlags_Stacked)
+   endif
+   if (present(colormap)) call ImPlot_PushColormap_PlotColormap(cmap)
+   call ImPlot_PlotBarGroups_doublePtr(c_loc(ptr), d%p(1), int(size(values, 2), c_int), int(size(values, 1), c_int), gs, &
+                                  sh, c)
+   if (present(colormap)) call ImPlot_PopColormap(1_c_int)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_bar_groups_r64
+
+   recursive subroutine ip_digital_r32(label, x, y, spec, stat)
+   !< A digital signal (`PlotDigital`): y(i) at x(i), held to x(i+1), drawn in a band of its own at the bottom of the
+   !< plot whatever the y axis (0 and 1 as low and high; larger values as taller steps), single precision; read in place with
+   !< any stride (plots.md, "Data in place"). The y axis does not fit it; the x axis does. `spec`'s `size` is the
+   !< band's height [pixels].
+   character(len=*),       intent(in)                       :: label !< Legend label.
+   real(real32),               intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),               intent(in), target, asynchronous :: y(:)  !< Values.
+   type(plot_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                :: d     !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_digital', stat)) return ! a task does not draw
+   if (plot_refused('ip_digital', .false., stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_digital', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call ImPlot_PlotDigital_FloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_digital_r32
+
+   recursive subroutine ip_bar_groups_r32(labels, values, group_size, shift, horizontal, stacked, colormap, spec, stat)
+   !< Items in groups of bars (`PlotBarGroups`), single precision: `values(g, i)` is item i in group g, group g centred at
+   !< x = g - 1 (0, 1, ...; `shift` moves them all), the items of a group side by side in `group_size` (a fraction of
+   !< the unit, in (0, 1], default 0.67) or, `stacked=.true.`, on top of each other (negative values below 0);
+   !< `horizontal=.true.`: along y. `labels(i)` names item i (its legend entry; trailing blanks dropped). The items take
+   !< the colours of `colormap` (an id of `ip_colormap`) in order, default the plot's line colours; `spec`'s
+   !< `fill_color` paints them all. Statuses: `FIG_ERR_ARGUMENT` for `size(labels)` not `size(values, 2)`, no values,
+   !< `group_size` outside (0, 1], an unknown colormap; `FIG_ERR_STATE` outside a plot or from a task.
+   character(len=*),       intent(in)            :: labels(:)    !< One per item.
+   real(real32),               intent(in)            :: values(:, :) !< values(group, item).
+   real(real64),           intent(in),  optional :: group_size   !< Width of a group [x units] (default 0.67).
+   real(real64),           intent(in),  optional :: shift        !< Shift of every group [x units] (default 0).
+   logical,                intent(in),  optional :: horizontal   !< Groups along y (default: along x).
+   logical,                intent(in),  optional :: stacked      !< Items stacked (default: side by side).
+   integer(int32),         intent(in),  optional :: colormap     !< The items' colours (default: the plot's).
+   type(plot_spec_object), intent(in),  optional :: spec         !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat         !< Status.
+   type(series_r32), target                     :: d            !< Where ImPlot reads the values.
+   real(real32), allocatable, target                 :: v(:)         !< The values, contiguous, item by item.
+   character(kind=c_char, len=:), allocatable, target :: names   !< The labels, each NUL-terminated.
+   type(c_ptr), allocatable, target              :: ptr(:)       !< Their addresses.
+   type(im_plot_spec)                            :: c            !< Spec with the flags.
+   real(c_double)                                :: gs, sh       !< Group size, shift.
+   integer(c_int)                                :: cmap         !< Colormap id.
+   integer                                       :: i, k, w      !< Item, position, label width.
+   character(len=24)                             :: t1, t2       !< Numbers, printed.
+
+   if (figure_draw_refused('ip_bar_groups', stat)) return ! a task does not draw
+   if (size(labels) /= size(values, 2)) then
+      write(t1, '(I0)') size(labels)
+      write(t2, '(I0)') size(values, 2)
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_bar_groups: '//trim(t1)//' labels for '//trim(t2)// &
+                       ' items (size(values, 2))', stat)
+      return
+   endif
+   if (size(values) == 0) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_bar_groups: no values', stat)
+      return
+   endif
+   gs = 0.67_c_double
+   if (present(group_size)) then
+      if (.not. (group_size > 0.0_real64 .and. group_size <= 1.0_real64)) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_bar_groups: group_size must be in (0, 1]', stat)
+         return
+      endif
+      gs = real(group_size, c_double)
+   endif
+   sh = 0.0_c_double
+   if (present(shift)) sh = real(shift, c_double)
+   if (present(colormap)) then
+      if (.not. colormap_ok('ip_bar_groups', colormap, cmap, stat)) return
+   endif
+   if (plot_refused('ip_bar_groups', .false., stat)) return
+   v = reshape(values, [size(values)])                  ! column-major values(g, i): item i's groups in a row
+   w = len(labels) + 1
+   allocate(character(kind=c_char, len=w * size(labels)) :: names)
+   allocate(ptr(size(labels)))
+   do i = 1, size(labels)
+      k = (i - 1) * w
+      names(k + 1:k + w) = trim(labels(i))//c_null_char
+      ptr(i) = c_loc(names(k + 1:k + 1))
+   enddo
+   call series_lead(d, 1, v)
+   c = series_spec(d, spec)
+   if (present(horizontal)) then
+      if (horizontal) c%Flags = ior(c%Flags, ImPlotBarGroupsFlags_Horizontal)
+   endif
+   if (present(stacked)) then
+      if (stacked) c%Flags = ior(c%Flags, ImPlotBarGroupsFlags_Stacked)
+   endif
+   if (present(colormap)) call ImPlot_PushColormap_PlotColormap(cmap)
+   call ImPlot_PlotBarGroups_FloatPtr(c_loc(ptr), d%p(1), int(size(values, 2), c_int), int(size(values, 1), c_int), gs, &
+                                  sh, c)
+   if (present(colormap)) call ImPlot_PopColormap(1_c_int)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_bar_groups_r32
 
    recursive subroutine ip_tag(axis, value, color, text, stat)
    !< A tag on an axis of the current plot (`TagX`, `TagY`): a box at `value` over the axis, holding `text` or, without

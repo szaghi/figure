@@ -40,6 +40,7 @@ public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
 public :: fig_usage_error, fig_time, fig_add_fallback_font, fig_test_glyph
 public :: fig_make_folder, fig_remove, fig_set_file_time, fig_file_time, fig_file_exists
 public :: fig_dnd_source, fig_dnd_target, fig_dnd_plot_target, fig_dnd_payload, fig_dnd_dragging
+public :: fig_plot_link, fig_aligned_open
 public :: fig_set_checks, fig_checks, fig_draw_refuse, fig_scope_open, fig_scope_close, fig_scope_report
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_notification_alpha
@@ -675,6 +676,23 @@ interface
    integer(c_int), value              :: type_len !< Its length.
    integer(c_int)                     :: dragging !< 1 or 0.
    endfunction fig_dnd_dragging
+
+   function fig_plot_link(axis, name, name_len) result(linked) bind(C, name='fig_plot_link')
+   !< Link `axis` of the plot being set up to the group `name`: 1 linked, 0 not yet (a new group fits first).
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value              :: axis     !< ImAxis.
+   character(kind=c_char), intent(in) :: name(*)  !< Group.
+   integer(c_int), value              :: name_len !< Its length.
+   integer(c_int)                     :: linked   !< 1 or 0.
+   endfunction fig_plot_link
+
+   function fig_aligned_open() result(open) bind(C, name='fig_aligned_open')
+   !< 1 when a group of aligned plots is open.
+   import :: c_int
+   implicit none
+   integer(c_int) :: open !< 1 or 0.
+   endfunction fig_aligned_open
 
    subroutine fig_scope_open(kind, who, who_len, label, label_len, returned, aux) bind(C, name='fig_scope_open')
    !< A begin or a push, after it: its scope in the record of the frame.

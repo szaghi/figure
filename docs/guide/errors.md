@@ -198,6 +198,21 @@ up, no plot being declared give the messages there). `<p>` is the procedure.
 | a type starting with `_` | `FIG_ERR_ARGUMENT` | `<p>: type '<type>' starts with '_' (Dear ImGui's own types)` |
 | `ip_drop_target` with both `axis` and `legend` | `FIG_ERR_ARGUMENT` | `ip_drop_target: give axis or legend, not both` |
 
+### Plots across plots
+
+`ip_link_axis`, `ip_begin_aligned`, the legend's calls, `ip_hide_next_item`, `ip_digital` and `ip_bar_groups`
+([Plots across plots](plots#plots-across-plots), [Grouped bars](plots#grouped-bars-and-digital-signals)); their place
+and axis give the messages of [Plot axes](#plot-axes) and the [pairs](#pairing-and-frames).
+
+| Failure | Status | Message |
+|---|---|---|
+| an empty group name | `FIG_ERR_ARGUMENT` | `ip_link_axis: the group has no name` |
+| a group inside a group | `FIG_ERR_STATE` | `ip_begin_aligned: a group of aligned plots is open (ImPlot aligns one group at a time)` |
+| an unknown button | `FIG_ERR_ARGUMENT` | `ip_begin_legend_popup: button must be 'left', 'right' or 'middle'` |
+| labels and items that differ in number | `FIG_ERR_ARGUMENT` | `ip_bar_groups: <n> labels for <m> items (size(values, 2))` |
+| no values | `FIG_ERR_ARGUMENT` | `ip_bar_groups: no values` |
+| `group_size` outside (0, 1] | `FIG_ERR_ARGUMENT` | `ip_bar_groups: group_size must be in (0, 1]` |
+
 ### Fields
 
 `ip_field_image`, `ip_colormap_legend` and `ip_colormap_legend_edit` ([Fields](plots#fields)) check their arguments
@@ -358,10 +373,10 @@ stops. `app%set_checks('abort')` stops at the faulty call itself.
 | Rule | Pairs |
 |---|---|
 | **Always paired:** the end follows every begin, whatever it returned | `ig_begin`, `ig_begin_side_bar` / `ig_end`; `ig_begin_child` / `ig_end_child`; `ig_push_id` / `ig_pop_id`; `ig_begin_disabled` / `ig_end_disabled`; `ig_push_font` / `ig_pop_font`; `ig_push_style_color`, `ip_push_style_color` / `ig_pop_style_color`, `ip_pop_style_color`; `ig_push_style_var`, `ip_push_style_var` / `ig_pop_style_var`, `ip_pop_style_var`; `ig_begin_group` / `ig_end_group`; `ig_align_begin` / `ig_align_end`; `ig_push_item_width` / `ig_pop_item_width` |
-| **End only after a true begin** | `ig_begin_tab_bar` / `ig_end_tab_bar`; `ig_begin_tab` / `ig_end_tab`; `ig_begin_table` / `ig_end_table`; `ig_tree_node` / `ig_tree_pop`; `ig_begin_main_menu_bar` / `ig_end_main_menu_bar`; `ig_begin_menu_bar` / `ig_end_menu_bar`; `ig_begin_menu` / `ig_end_menu`; `ig_begin_popup`, `ig_begin_popup_context`, `ig_begin_popup_modal` / `ig_end_popup`; `ig_begin_tooltip`, `ig_begin_item_tooltip` / `ig_end_tooltip`; `ip_begin_plot` / `ip_end_plot`; `ip_begin_subplots` / `ip_end_subplots`; `ip3_begin_plot` / `ip3_end_plot`; `ig_dock_layout_begin` / `ig_dock_layout_end` |
+| **End only after a true begin** | `ig_begin_tab_bar` / `ig_end_tab_bar`; `ig_begin_tab` / `ig_end_tab`; `ig_begin_table` / `ig_end_table`; `ig_tree_node` / `ig_tree_pop`; `ig_begin_main_menu_bar` / `ig_end_main_menu_bar`; `ig_begin_menu_bar` / `ig_end_menu_bar`; `ig_begin_menu` / `ig_end_menu`; `ig_begin_popup`, `ig_begin_popup_context`, `ig_begin_popup_modal` / `ig_end_popup`; `ig_begin_tooltip`, `ig_begin_item_tooltip` / `ig_end_tooltip`; `ip_begin_plot` / `ip_end_plot`; `ip_begin_subplots` / `ip_end_subplots`; `ip3_begin_plot` / `ip3_end_plot`; `ip_begin_aligned` / `ip_end_aligned`; `ip_begin_legend_popup` / `ip_end_legend_popup`; `ig_dock_layout_begin` / `ig_dock_layout_end` |
 
 - **Scopes nest.** Windows, child regions, tab bars, tabs, tables, tree nodes, menu bars, menus, popups (context
-  menus included), tooltips, plots, subplot figures, 3-D plots, dock layouts, id scopes, groups, aligned groups and pushed item
+  menus included), tooltips, plots, subplot figures, 3-D plots, groups of aligned plots, legend popups, dock layouts, id scopes, groups, aligned groups and pushed item
   widths are closed innermost first:
   an end that is not the end of the innermost open one is wrong.
 - **Pushes do not nest.** A style colour, a style variable, a font and a disabled block are undone by the newest push

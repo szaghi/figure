@@ -50,6 +50,8 @@ a legend `label`, an optional [`spec`](#item-style) and an optional [`stat`](err
 | `ip_inf_lines(label, values [, horizontal] [, spec] [, stat])` | lines across the whole plot (`PlotInfLines`) at `x = values(i)`, or at `y = values(i)` with `horizontal=.true.`; `values` may also be `integer(int32)` or `integer(int64)` (iterations) ([Marks in a plot](#marks-in-a-plot)) |
 | `ip_histogram(label, values [, bins] [, vmin] [, vmax] [, bar_scale] [, max_count] [, spec] [, stat])` | a histogram (`PlotHistogram`) ([Histograms](#histograms)) |
 | `ip_histogram2d(label, x, y [, xbins] [, ybins] [, xmin] [, xmax] [, ymin] [, ymax] [, colormap] [, max_count] [, spec] [, stat])` | a 2-D histogram (`PlotHistogram2D`), cells coloured by count ([Histograms](#histograms)) |
+| `ip_digital(label, x, y [, spec] [, stat])` | a digital signal (`PlotDigital`): `y(i)` held from `x(i)` to `x(i+1)`, drawn in a band of its own at the bottom of the plot whatever the y axis ([Grouped bars and digital signals](#grouped-bars-and-digital-signals)) |
+| `ip_bar_groups(labels, values [, group_size] [, shift] [, horizontal] [, stacked] [, colormap] [, spec] [, stat])` | items in groups of bars (`PlotBarGroups`): `values(g, i)` is item `i` in group `g`, side by side or stacked ([Grouped bars and digital signals](#grouped-bars-and-digital-signals)) |
 
 <<< @/examples/snippets/cb_items-items.F90{fortran}
 
@@ -60,6 +62,28 @@ drawn in the order they are called, each above the previous ones. The gallery be
 marks with its call ([Marks in a plot](#marks-in-a-plot)):
 
 <Media name="plot_marks" alt="Eight plots in a grid. A residual on a log axis with a tag of its last value on the y axis and a tag 'now' on the x axis; a coefficient with three vertical lines at the level changes and a horizontal line at the target 0.8; two texts, one horizontal and one vertical, and an annotation in an amber box with a leader line; a coefficient with an amber rectangle over part of it; two staircases, one shaded; twelve stems with markers, decaying; a histogram of 2000 near-normal samples in 30 bins; a 2-D histogram of correlated pairs, an inclined ellipse of cells." caption="docs/examples/src/gallery.F90 plot_marks: each plot's title names its call" />
+
+### Grouped bars and digital signals
+
+`ip_bar_groups` draws several items over the same categories: group `g` (a case, a block) at `x = g - 1`, its items
+(the phases of a run) side by side within `group_size` of the unit (default 0.67), or stacked with `stacked=.true.`
+(negative values below 0); `horizontal=.true.` lays the groups along y. `labels(i)` is item `i`'s legend entry, its
+colour the plot's next line colour, or `colormap`'s `i`-th (an id of [`ip_colormap`](colormaps)); `spec`'s
+`fill_color` paints them all. The values are copied once, item by item, in the order ImPlot reads them.
+
+<<< @/examples/snippets/cb_bar_groups-groups.F90{fortran}
+
+`ip_digital` draws a state over time: 0 and 1 (a solver writing its output, a valve open), held from one abscissa to
+the next, in a band at the bottom of the plot that the y axis does not scale: it sits under a residual whatever the
+residual's range. Its x values take part in fitting x, its y values in nothing; `spec`'s `size` is the band's height.
+
+<<< @/examples/snippets/cb_bar_groups-digital.F90{fortran}
+
+<Media name="cb_bar_groups" alt="Three plots. The cost of four cases, three bars per case: solver, I/O and overset side by side, the solver's growing from 12 to 104 seconds. The same costs stacked, one bar per case. A residual decaying over 300 iterations, and under it a digital signal high for 8 iterations in every 50, when the solver writes its output." caption="docs/examples/src/cb_bar_groups.F90" />
+
+- Statuses: `FIG_ERR_ARGUMENT` for `size(labels)` not `size(values, 2)`, no values, `group_size` outside (0, 1], an
+  unknown colormap, series of different sizes (`ip_digital`); `FIG_ERR_STATE` outside a plot or from a
+  [task](processes#tasks).
 
 Fields are items too: `ip_heatmap` colours the cells of a 2D array through a colormap, and `ip_colormap_scale` draws
 its colour bar ([Heatmaps](images#heatmaps)); the colormap is chosen by name with `ip_colormap`, among the bundled
@@ -363,6 +387,37 @@ draw (`FIG_ERR_STATE`, see [processes](processes)). Example: [Plot the history a
 - The first time a figure is drawn its plots fit to their data; linked axes then take the range of the last plot
   (the common abscissa, in practice). ImPlot itself gives linked axes no initial fit.
 - Size as `ip_begin_plot`: a negative `height` fills the space left; the default is 300 pixels per row.
+
+### Plots across plots
+
+A grid of subplots shares one size and one window region. Plots that are each a figure of their own (a residual, a
+CFL number and the forces, each with its own height, legend and axes) are linked and aligned instead:
+
+| Procedure | Notes |
+|---|---|
+| `ip_link_axis(axis, group [, stat])` | Links `axis` (`'x1'`..`'y3'`) of the plot being set up to the group named `group` (`SetupAxisLinks`): the plots of a group show one range, and a pan or a zoom in any of them moves all. In the setup, every frame. |
+| `ip_begin_aligned(group [, horizontal] [, stat])` → `logical`, `ip_end_aligned([stat])` | The plots begun in between have their plot areas start and end at the same pixels whatever the width of their tick labels (`BeginAlignedPlots`): stacked plots line up their left and right edges, `horizontal=.true.` (side by side) their tops and bottoms. End only after a true begin; one group at a time. |
+| `ip_legend_hovered(label [, stat])` → `logical` | `.true.` while the pointer is on the legend entry of the item `label` (`IsLegendEntryHovered`): a tooltip about the item. |
+| `ip_begin_legend_popup(label [, button] [, stat])` → `logical`, `ip_end_legend_popup([stat])` | A popup opened by a click of `button` (`'right'`, default, `'left'`, `'middle'`) on the item's legend entry (`BeginLegendPopup`): when `.true.`, draw its widgets, then end it. |
+| `ip_hide_next_item([hidden] [, always] [, stat])` | Hides (default) or shows the next item (`HideNextItem`); its legend entry stays, greyed while hidden. Once, the first time the item is drawn, or with `always=.true.` on this frame whatever the user clicked: the program decides. |
+
+<<< @/examples/snippets/cb_linked-linked.F90{fortran}
+
+<Media name="cb_linked" video alt="Three plots stacked over 400 iterations: a residual, a CFL number rising to 5, and the lift and drag coefficients, their plot areas starting at the same pixel although their tick labels differ in width. The wheel over the forces zooms all three to the same iterations; a pan drags all three. A right click on the drag entry of the legend opens a popup with its last value and a shown checkbox, which hides the drag line when cleared." caption="docs/examples/src/cb_linked.F90: three plots over one iteration axis" />
+
+- **A group's first frame.** ImPlot gives linked axes no initial fit. FIGURE keeps each group's range itself (a
+  Fortran program names a group, it keeps no variables with a fixed address for ImPlot), and a new group is not linked
+  on its first frame: each of its plots fits its own data there, and from the next frame the group takes the range of
+  the first plot that named it. Groups live as long as the application; a new `init` starts without them.
+- **Aligned, not linked.** Alignment is about pixels, linking about values: plots over different abscissae can be
+  aligned, and linked plots in different windows are not aligned.
+- **Legends.** The hover and the popup are asked after the item is drawn, before `ip_end_plot`; the popup is a window
+  of its own, its widgets drawn in it (a tooltip from `ip_legend_hovered` likewise, with `ig_begin_tooltip`). A left
+  click on an entry still hides its item, as ImPlot does; `ip_hide_next_item(..., always=.true.)` overrides it each
+  frame.
+- Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, an empty group name, an unknown button; `FIG_ERR_STATE` outside a
+  plot, `ip_link_axis` after the setup, `ip_begin_aligned` inside another group, an end with nothing open (as the
+  other [pairs](errors#pairing-and-frames)), from a [task](processes#tasks).
 
 ## Error bars, annotations and drag tools
 
@@ -704,6 +759,6 @@ Take ImPlot3D for a figure that a 2-D plot would draw if it had a third axis; ta
 
 ## Not bound yet
 
-Axis links to program variables, custom scales and tick formatters, digital plots, pie charts, bubbles and error
+Custom scales and tick formatters, pie charts, bubbles and error
 bars along x are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)); see the
 [roadmap](roadmap).

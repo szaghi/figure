@@ -76,7 +76,7 @@ MD4C_FILES = ["md4c.c", "md4c.h"]
 IMPLOT_FILES = ["implot.cpp", "implot_items.cpp", "implot_demo.cpp", "implot.h", "implot_internal.h", "LICENSE"]
 NATIVE_FILES = [
     "figure_native.cpp", "figure_native.h", "figure_process.cpp", "figure_task.cpp", "figure_scope.cpp", "figure_canvas.cpp",
-    "figure_files.cpp", "figure_dnd.cpp", "figure_app.cpp",
+    "figure_files.cpp", "figure_dnd.cpp", "figure_plot_links.cpp", "figure_app.cpp",
     "figure_remote.cpp", "figure_image.cpp", "figure_image.h", "figure_items.cpp", "figure_items.h",
     "figure_swrast.cpp", "figure_swrast.h", "figure_editor.cpp", "figure_plot3d.cpp",
     "figure_markdown.cpp", "figure_fonts.h", "figure_rich_md_stb.h",
@@ -155,6 +155,7 @@ def copy(src: Path, dst: Path) -> None:
 
 
 IMGUI_PATCHES = sorted((ROOT / "native" / "patches").glob("imgui-*.patch"))  # as native/CMakeLists.txt applies them
+IMPLOT_PATCHES = sorted((ROOT / "native" / "patches").glob("implot-*.patch"))  # ... and these to ImPlot
 
 
 def patch_line(folder: Path, patch: Path) -> None:
@@ -323,6 +324,8 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     copy(cimplot / "cimplot.h", src / "cimplot" / "cimplot.h")
     for f in IMPLOT_FILES:
         copy(cimplot / "implot" / f, src / "cimplot" / "implot" / f)
+    for patch in IMPLOT_PATCHES:  # FIGURE's patches to the fetched ImPlot
+        patch_line(src / "cimplot" / "implot", patch)
     cimplot3d = deps / "cimplot3d-src"
     copy(cimplot3d / "cimplot3d.cpp", src / "cimplot3d" / "cimplot3d.cpp")
     copy(cimplot3d / "cimplot3d.h", src / "cimplot3d" / "cimplot3d.h")
