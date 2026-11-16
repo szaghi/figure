@@ -26,6 +26,7 @@
 #   lib/figure/TAG/          libfigure.a, libfigure_native.a, libSDL3.a (static)
 #   include/figure/TAG/      the .mod files
 #   lib/pkgconfig/figure-TAG.pc, and figure.pc (a copy of the last one installed)
+#   lib/cmake/figure-TAG/    figure-config.cmake (the target figure::figure) and its version file (this compiler only)
 #   share/figure/TAG/        licences, themes, the manifest
 # The script never runs sudo unless --deps is given, and shows the command first.
 # Bash 3.2 compatible (macOS's /bin/bash).
@@ -433,6 +434,49 @@ uninstall_tag() { # uninstall_tag TAG
    ok "removed $t from $prefix"
 }
 
+# CMake: find_package(figure CONFIG) finds lib/cmake/figure-TAG/ (CMake searches <prefix>/lib/cmake/figure*/); the
+# version file accepts only a project whose Fortran compiler is this install's (its .mod files work with no other), so
+# with several compilers installed CMake takes the matching one. The target figure::figure carries the module folder
+# and the link line of the .pc.
+write_cmake_config() { # write_cmake_config LIBS
+   local t="$compiler_tag" cm_rel="lib/cmake/figure-$compiler_tag" id libs_list
+   case "$fc_family" in gnu) id="GNU" ;; nvidia) id="NVHPC" ;; *) id="$fc_family" ;; esac
+   # shellcheck disable=SC2086 # the link line's words, one per list element
+   libs_list="$(printf '%s;' -lfigure $1)"
+   record_dirs "$cm_rel"
+   cat > "$prefix/$cm_rel/figure-config.cmake" << EOF
+# FIGURE ${version#v} for $t ($fc), written by install.sh: the imported target figure::figure
+get_filename_component(_figure_prefix "\${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+if(NOT TARGET figure::figure)
+   add_library(figure::figure INTERFACE IMPORTED)
+   set_target_properties(figure::figure PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "\${_figure_prefix}/include/figure/$t"
+      INTERFACE_LINK_DIRECTORIES "\${_figure_prefix}/lib/figure/$t"
+      INTERFACE_LINK_LIBRARIES "${libs_list%;}")
+endif()
+set(figure_COMPILER "$t")
+unset(_figure_prefix)
+EOF
+   cat > "$prefix/$cm_rel/figure-config-version.cmake" << EOF
+# FIGURE ${version#v} for $t: suitable only for a project whose Fortran compiler is $id $fc_version (the .mod files
+# work with the compiler that wrote them, no other)
+set(PACKAGE_VERSION "${version#v}")
+if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "$id" OR NOT CMAKE_Fortran_COMPILER_VERSION VERSION_EQUAL "$fc_version")
+   set(PACKAGE_VERSION_UNSUITABLE TRUE)
+   set(PACKAGE_VERSION "\${PACKAGE_VERSION} ($t, not \${CMAKE_Fortran_COMPILER_ID} \${CMAKE_Fortran_COMPILER_VERSION})")
+elseif(PACKAGE_FIND_VERSION AND PACKAGE_VERSION VERSION_LESS PACKAGE_FIND_VERSION)
+   set(PACKAGE_VERSION_COMPATIBLE FALSE)
+else()
+   set(PACKAGE_VERSION_COMPATIBLE TRUE)
+   if(PACKAGE_FIND_VERSION AND PACKAGE_VERSION VERSION_EQUAL PACKAGE_FIND_VERSION)
+      set(PACKAGE_VERSION_EXACT TRUE)
+   endif()
+endif()
+EOF
+   echo "f $cm_rel/figure-config.cmake" >> "$manifest_tmp"
+   echo "f $cm_rel/figure-config-version.cmake" >> "$manifest_tmp"
+}
+
 install_files() {
    stage "4. Install into $prefix"
    local t="$compiler_tag" libs pc_rel lib_rel inc_rel share_rel f
@@ -471,6 +515,7 @@ Libs: -L\${libdir} -lfigure $libs
 EOF
    echo "f $pc_rel" >> "$manifest_tmp"
    cp "$prefix/$pc_rel" "$prefix/lib/pkgconfig/figure.pc"
+   write_cmake_config "$libs"
    record_dirs "$share_rel"
    echo "f $(manifest_rel "$t")" >> "$manifest_tmp"
    cp "$manifest_tmp" "$prefix/$(manifest_rel "$t")"

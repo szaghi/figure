@@ -60,6 +60,7 @@ For the [tutorial](/manual/), the one-line installer is enough.
 | `include/figure/<tag>/` | the `.mod` files, for this compiler and version only |
 | `lib/pkgconfig/figure-<tag>.pc` | this install's flags: `-I` for the modules, then the libraries and the platform's link line |
 | `lib/pkgconfig/figure.pc` | a copy of the last install's `.pc`: `pkg-config figure` means the compiler installed last |
+| `lib/cmake/figure-<tag>/` | `figure-config.cmake`, the imported target `figure::figure` for CMake, and its version file, which accepts only a project built with this compiler ([From CMake](#from-cmake)) |
 | `share/figure/<tag>/` | the licences (FIGURE's and those of the code compiled into the libraries, see [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)), the theme files, and `manifest`, the list of every file and directory installed |
 
 | Option | Meaning |
@@ -84,6 +85,31 @@ curl -fsSL https://github.com/szaghi/figure/releases/latest/download/install.sh 
 
 It removes exactly the files and directories listed in the manifests, and nothing else in the prefix. What the
 installer does not cover is listed in the [known issues](known-issues#the-one-line-installer).
+
+### From CMake
+
+A CMake project finds an installed FIGURE with `find_package` and links the imported target `figure::figure`, which
+carries the modules' folder and the whole link line (the native layer, SDL3, the platform's libraries):
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(my_program LANGUAGES Fortran)
+find_package(figure 0.6 CONFIG REQUIRED)
+add_executable(my_program my_program.F90)
+target_link_libraries(my_program PRIVATE figure::figure)
+```
+
+```bash
+cmake -S . -B build -DCMAKE_PREFIX_PATH=$HOME/.local   # the installer's --prefix
+cmake --build build
+```
+
+- **The compiler decides:** a `.mod` file works only with the compiler that wrote it, so each install's version file
+  accepts only a project whose Fortran compiler is that install's (`GNU 16.2.0` for `gnu-16.2.0`, `NVHPC 26.9` for
+  `nvidia-26.9`). With several compilers installed, CMake takes the matching one; with none matching, it says which
+  installs it considered and why each was refused (`figure_COMPILER` names the one found).
+- **No FoBiS, no fpm:** the project is built by CMake alone, against the static libraries the installer put in
+  `lib/figure/<tag>/`. `scripts/cmake_consumer/` is such a project, built by the installer's CI on Ubuntu and macOS.
 
 ## FIGURE as a FoBiS dependency
 

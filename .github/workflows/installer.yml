@@ -71,6 +71,13 @@ jobs:
         pkg-config --modversion figure
         pkg-config --cflags --libs figure
 
+    - name: A CMake project finds it (find_package, figure::figure)
+      run: |
+        cmake -S scripts/cmake_consumer -B "$RUNNER_TEMP/cmake_consumer" -DCMAKE_PREFIX_PATH="$PREFIX" \
+          -DCMAKE_Fortran_COMPILER="$(command -v gfortran)"
+        cmake --build "$RUNNER_TEMP/cmake_consumer"
+        "$RUNNER_TEMP/cmake_consumer/figure_cmake_consumer"
+
     - name: Uninstall leaves an empty prefix
       run: |
         bash scripts/install.sh --uninstall --prefix "$PREFIX"
