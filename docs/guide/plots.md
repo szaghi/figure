@@ -722,7 +722,22 @@ Take ImPlot3D for a figure that a 2-D plot would draw if it had a third axis; ta
 | `ip3_mesh(label, x, y, z, triangles [, spec] [, stat])` | Triangles over the vertices `(x(i), y(i), z(i))`: `triangles(1:3, k)` are the vertices of the k-th, from 1 (`integer(int32)`, `3 × n`). |
 | `ip3_text(text, x, y, z [, angle] [, offset] [, stat])` | A text centred on a point of the box, in the plot's text colour, hidden when the point is outside the box; `angle` [radians], `offset` [pixels] (x right, y down). Not an item: no legend entry, no part in fitting. |
 | `ip3_spec([line_color] [, line_weight] [, fill_color] [, fill_alpha] [, marker] [, marker_size] [, marker_line_color] [, marker_fill_color] [, flags] [, stat]) → plot3d_spec_object` | An item's style from ImPlot3D's defaults, as `ip_spec` for the 2-D items. `marker`: `ImPlot3DMarker_None`, `_Circle`, `_Square`, `_Diamond`, `_Up`, `_Down`, `_Left`, `_Right`, `_Cross`, `_Plus`, `_Asterisk`, `_Auto`. `flags`: `ImPlot3DItemFlags_NoLegend`, `_NoFit`; `ImPlot3DLineFlags_Segments`, `_Loop`, `_SkipNaN`; `ImPlot3DSurfaceFlags_NoLines`, `_NoFill`, `_NoMarkers`; `ImPlot3DMeshFlags_NoLines`, `_NoFill`, `_NoMarkers`; combine with `ior`. |
+| `ip3_triangles(label, x, y, z [, spec] [, stat])` | Triangles as an item (`PlotTriangle`): points 1–3 are the first, 4–6 the second, ...; filled with `fill_color`, edged with `line_color`. |
+| `ip3_quads(label, x, y, z [, spec] [, stat])` | Quadrilaterals as an item (`PlotQuad`): each 4 points in a row are one. |
+| `ip3_image(label, texture, corners [, tint] [, stat])` | A [texture](images) on a quadrilateral of the box (`PlotImage`): `corners(:, k)` the x, y, z of its corners in the image's top-left, top-right, bottom-right, bottom-left order; `tint` (RGBA) multiplies its colours. An item: a legend entry, part of the fit. |
+| `ip3_setup_axis(axis [, label] [, scale] [, auto_fit] [, invert] [, lock] [, no_grid] [, stat])` | One axis, `'x'`, `'y'` or `'z'` (`SetupAxis`, `SetupAxisScale`): `scale` `'linear'`, `'log'` (values <= 0 not shown) or `'symlog'`; fit every frame, inverted, locked against the mouse, without grid lines. After `ip3_setup_axes` (which it overrides for that axis), before any item. |
+| `ip3_setup_box([scale] [, elevation] [, azimuth] [, animate] [, stat])` | The box's proportions, `scale = [x, y, z]` relative sides (`SetupBoxScale`; default a cube), and a view the program turns it to on this frame, `elevation` and `azimuth` [degrees] (`SetupBoxRotation`; `animate`: smoothly). A "top view" button calls it once; called every frame, the user cannot turn the box. |
+| `ip3_setup_legend([location] [, horizontal] [, no_buttons] [, stat])` | Where the legend goes (`SetupLegend`): a compass point, `'n'` .. `'nw'` (default) or `'c'`; entries in a row; entries that do not hide their items. |
+| `ip3_mouse_ray(origin, direction [, stat])` → `logical` | The ray under the pointer in plot coordinates (`PixelsToPlotRay`): every point of the box drawn there is `origin + t direction` (`direction` of length 1); `.true.` over the plot. A program picks with it: where the ray meets a plane, the nearest of its points. Linear axes: on a log axis the ray is in the transformed space. |
+| `ip3_plot_to_pixels(x, y, z, px, py [, stat])` | The pixel where a point is drawn now (`PlotToPixels`): a label beside it, a test's click. |
 | `ip3_end_plot()` | Only when `ip3_begin_plot` returned `.true.`. |
+
+<<< @/examples/snippets/cb_plot3d_pick-pick.F90{fortran}
+
+A marker drawn at the point picked on the floor would be hidden: ImPlot3D sorts each triangle by its centre, and the
+floor's two large triangles are nearer the eye than a point lying on them. The readout shows the point instead.
+
+<Media name="cb_plot3d_pick" video alt="A 3-D plot of a wedge of two triangles and a quad over a floor image, a ring of warm colours on a cool field, in a flattened box with its legend in the north-east corner. The pointer moves over the floor: the readout under the plot gives the x and y where the pointer's ray meets the floor, the same as ImPlot3D's own readout of the point under the pointer." caption="docs/examples/src/cb_plot3d_pick.F90: picking with the pointer's ray" />
 
 - **The mouse.** A right drag turns the box, a left drag pans, the wheel (or a middle drag) zooms, a right double
   click goes back to the initial rotation, a right click opens ImPlot3D's menu; a click on a legend entry hides its
@@ -754,8 +769,8 @@ Take ImPlot3D for a figure that a 2-D plot would draw if it had a third axis; ta
   only. In remote mode every vertex goes to the browser each frame: a surface of 100 × 100 with its grid lines is
   about 65 000 vertices (measured: 39 208 for the fill, 26 328 for the lines), some 1 MB a frame before deflate
   ([Known issues](known-issues#implot3d)).
-- Not bound yet: ImPlot3D's triangles and quads as items of their own, images in the box, per-point colours and
-  sizes, the axes' ticks, formats and scales, the legend's place, its style variables and colours.
+- Not bound yet: per-point colours and sizes, the axes' ticks and formats, ImPlot3D's style variables and colours;
+  a depth buffer (brenocq/implot3d#151, not merged): items that intersect are drawn in sorted order, not by pixel.
 
 ## Not bound yet
 

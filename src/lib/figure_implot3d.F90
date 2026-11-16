@@ -20,12 +20,25 @@ module figure_implot3d
 !< outside a 3-D plot, and `ip3_setup_axes` after the plot's first item, are usage errors (`FIG_ERR_STATE`, as
 !< `app%set_checks` says). The begin/end pair registers in the scope record of the frame (errors.md, "Pairing and
 !< frames").
-use, intrinsic :: iso_c_binding, only : c_bool, c_double, c_float, c_int, c_loc
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_scope_open, figure_scope_refused, &
                         figure_usage_error, SCOPE_PLOT3D
-use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_plot3d_colormap, fig_plot3d_end, fig_plot3d_state
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_plot3d_colormap, fig_plot3d_end, fig_plot3d_state, &
+                            fig_plot3d_mouse_ray
+use figure_texture, only : texture_object, texture_ref
+use figure_cimplot3d, only : im_plot3d_point, ImPlot3D_PlotTriangle_doublePtr, ImPlot3D_PlotTriangle_FloatPtr,  &
+                             ImPlot3D_PlotQuad_doublePtr, ImPlot3D_PlotQuad_FloatPtr, ImPlot3D_PlotImage_Plot3DPoint, &
+                             ImPlot3D_SetupAxis, ImPlot3D_SetupAxisScale_Plot3DScale, ImPlot3D_SetupBoxScale,      &
+                             ImPlot3D_SetupLegend, ImPlot3D_PlotToPixels_double
+use figure_cimplot3d_enums, only : ImAxis3D_X, ImAxis3D_Y, ImAxis3D_Z, ImPlot3DScale_Linear, ImPlot3DScale_Log10,  &
+                                   ImPlot3DScale_SymLog, ImPlot3DAxisFlags_Invert, ImPlot3DAxisFlags_Lock,        &
+                                   ImPlot3DAxisFlags_NoGridLines, ImPlot3DCond_Always, ImPlot3DLocation_North,     &
+                                   ImPlot3DLocation_NorthEast, ImPlot3DLocation_East, ImPlot3DLocation_SouthEast,  &
+                                   ImPlot3DLocation_South, ImPlot3DLocation_SouthWest, ImPlot3DLocation_West,      &
+                                   ImPlot3DLocation_NorthWest, ImPlot3DLocation_Center, ImPlot3DLegendFlags_None,  &
+                                   ImPlot3DLegendFlags_Horizontal, ImPlot3DLegendFlags_NoButtons
 use figure_cimgui, only : im_vec2, im_vec4
 use figure_cimplot_enums, only : ImPlotColormap_Viridis
 use figure_cimplot3d, only : figure_ImPlot3DSpec_default, im_plot3d_spec, ImPlot3D_BeginPlot, ImPlot3D_SetupAxes, &
@@ -54,6 +67,8 @@ implicit none
 private
 public :: ip3_begin_plot, ip3_end_plot, ip3_setup_axes, ip3_line, ip3_scatter, ip3_surface, ip3_mesh, ip3_text
 public :: ip3_spec, plot3d_spec_object
+public :: ip3_triangles, ip3_quads, ip3_image, ip3_setup_axis, ip3_setup_box, ip3_setup_legend, ip3_mouse_ray
+public :: ip3_plot_to_pixels
 ! ImPlot3D's marker and item-flag constants (values generated from the cimplot3d metadata), for `ip3_spec`
 public :: ImPlot3DMarker_None, ImPlot3DMarker_Auto, ImPlot3DMarker_Circle, ImPlot3DMarker_Square
 public :: ImPlot3DMarker_Diamond, ImPlot3DMarker_Up, ImPlot3DMarker_Down, ImPlot3DMarker_Left, ImPlot3DMarker_Right
@@ -69,6 +84,16 @@ type :: plot3d_spec_object
    !< The C struct is private so that a spec always starts from ImPlot3D's defaults (a zeroed one draws nothing).
    type(im_plot3d_spec), private :: c !< `ImPlot3DSpec`, as passed to ImPlot3D.
 endtype plot3d_spec_object
+
+interface ip3_triangles
+   !< Triangles: each three points (x(i), y(i), z(i)) in a row are one.
+   module procedure ip3_triangles_r32, ip3_triangles_r64
+endinterface ip3_triangles
+
+interface ip3_quads
+   !< Quadrilaterals: each four points in a row are one.
+   module procedure ip3_quads_r32, ip3_quads_r64
+endinterface ip3_quads
 
 interface ip3_line
    !< A line through the points (x(i), y(i), z(i)).
@@ -555,6 +580,383 @@ contains
    endsubroutine ip3_text
 
    ! helpers
+
+   recursive subroutine ip3_image(label, texture, corners, tint, stat)
+   !< An image on a quadrilateral of the box (`PlotImage`): `corners(:, k)` the x, y, z of its four corners, in the
+   !< image's top-left, top-right, bottom-right, bottom-left order (a rectangle on a plane: a field on a cut, a
+   !< picture on the floor); `tint` multiplies its colours (RGBA, default white). An item: a legend entry, part of the
+   !< fit. Drawn as two triangles, sorted with the other items. Statuses: `FIG_ERR_ARGUMENT` for `corners` not 3 x 4, a
+   !< tint without 4 components, a texture not initialized; `FIG_ERR_STATE` outside a 3-D plot, from a task.
+   character(len=*),     intent(in)            :: label        !< Legend label.
+   type(texture_object), intent(in)            :: texture      !< The image.
+   real(real64),         intent(in)            :: corners(:, :) !< x, y, z of the four corners (3 x 4).
+   real(real64),         intent(in),  optional :: tint(:)      !< RGBA multiplier (default 1, 1, 1, 1).
+   integer(int32),       intent(out), optional :: stat         !< Status.
+   type(im_plot3d_point)                       :: p(4)         !< The corners.
+   type(im_vec4)                               :: c            !< Tint.
+   integer                                     :: k            !< Corner.
+
+   if (figure_draw_refused('ip3_image', stat)) return ! a task does not draw
+   if (size(corners, 1) /= 3 .or. size(corners, 2) /= 4) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip3_image: corners must be 3 x 4 (x, y, z of four corners)', stat)
+      return
+   endif
+   c = im_vec4(1.0_c_float, 1.0_c_float, 1.0_c_float, 1.0_c_float)
+   if (present(tint)) then
+      if (size(tint) /= 4) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip3_image: a colour needs 4 components (RGBA)', stat)
+         return
+      endif
+      c = im_vec4(real(tint(1), c_float), real(tint(2), c_float), real(tint(3), c_float), real(tint(4), c_float))
+   endif
+   if (.not. texture%is_initialized()) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip3_image: the texture is not initialized (texture%init)', stat)
+      return
+   endif
+   if (outside_plot('ip3_image', stat)) return
+   do k = 1, 4
+      p(k) = im_plot3d_point(real(corners(1, k), c_double), real(corners(2, k), c_double), &
+                             real(corners(3, k), c_double))
+   enddo
+   call ImPlot3D_PlotImage_Plot3DPoint(cstr(label), texture_ref(texture), p(1), p(2), p(3), p(4),            &
+                                       im_vec2(0.0_c_float, 0.0_c_float), im_vec2(1.0_c_float, 0.0_c_float), &
+                                       im_vec2(1.0_c_float, 1.0_c_float), im_vec2(0.0_c_float, 1.0_c_float), c, &
+                                       spec_at(0_int64))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_image
+
+   recursive subroutine ip3_setup_axis(axis, label, scale, auto_fit, invert, lock, no_grid, stat)
+   !< Set up one axis of the 3-D plot being declared (`SetupAxis`, `SetupAxisScale`): `axis` `'x'`, `'y'` or `'z'`;
+   !< `scale` `'linear'` (default), `'log'` (base 10: values <= 0 are not shown) or `'symlog'`; `auto_fit` fits the data
+   !< every frame; `invert` grows the axis the other way; `lock` fixes its range against the mouse; `no_grid`: no grid
+   !< lines. After `ip3_begin_plot` (and `ip3_setup_axes`, which it overrides for that axis), before any item.
+   !< Statuses: `FIG_ERR_ARGUMENT` for an unknown axis or scale; `FIG_ERR_STATE` outside a 3-D plot, after its first
+   !< item, from a task.
+   character(len=*), intent(in)            :: axis     !< 'x', 'y' or 'z'.
+   character(len=*), intent(in),  optional :: label    !< Label (default: none).
+   character(len=*), intent(in),  optional :: scale    !< 'linear' (default), 'log', 'symlog'.
+   logical,          intent(in),  optional :: auto_fit !< Fit the data every frame.
+   logical,          intent(in),  optional :: invert   !< Values grow the other way.
+   logical,          intent(in),  optional :: lock     !< No pan or zoom by the user.
+   logical,          intent(in),  optional :: no_grid  !< No grid lines.
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   integer(c_int)                          :: code     !< ImAxis3D.
+   integer(c_int)                          :: sc       !< ImPlot3DScale.
+   integer(c_int)                          :: flags    !< ImPlot3DAxisFlags.
+   character(kind=c_char, len=:), allocatable, target :: clabel !< Label, NUL-terminated.
+   type(c_ptr)                             :: plabel   !< Its address (null: none).
+
+   if (figure_draw_refused('ip3_setup_axis', stat)) return ! a task does not draw
+   select case (axis)
+   case ('x')
+      code = ImAxis3D_X
+   case ('y')
+      code = ImAxis3D_Y
+   case ('z')
+      code = ImAxis3D_Z
+   case default
+      call figure_fail(FIG_ERR_ARGUMENT, "ip3_setup_axis: unknown axis '"//axis//"' ('x', 'y' or 'z')", stat)
+      return
+   endselect
+   sc = ImPlot3DScale_Linear
+   if (present(scale)) then
+      select case (scale)
+      case ('linear')
+         sc = ImPlot3DScale_Linear
+      case ('log')
+         sc = ImPlot3DScale_Log10
+      case ('symlog')
+         sc = ImPlot3DScale_SymLog
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, "ip3_setup_axis: unknown scale '"//scale//"' ('linear', 'log' or "// &
+                          "'symlog')", stat)
+         return
+      endselect
+   endif
+   if (setup3d_refused('ip3_setup_axis', stat)) return
+   flags = ImPlot3DAxisFlags_None
+   if (opt(auto_fit)) flags = ior(flags, ImPlot3DAxisFlags_AutoFit)
+   if (opt(invert)) flags = ior(flags, ImPlot3DAxisFlags_Invert)
+   if (opt(lock)) flags = ior(flags, ImPlot3DAxisFlags_Lock)
+   if (opt(no_grid)) flags = ior(flags, ImPlot3DAxisFlags_NoGridLines)
+   plabel = c_null_ptr
+   if (present(label)) then
+      clabel = cstr(label)
+      plabel = c_loc(clabel)
+   endif
+   call ImPlot3D_SetupAxis(code, plabel, flags)
+   if (sc /= ImPlot3DScale_Linear) call ImPlot3D_SetupAxisScale_Plot3DScale(code, sc)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_setup_axis
+
+   recursive subroutine ip3_setup_box(scale, elevation, azimuth, animate, stat)
+   !< The box of the 3-D plot being declared: `scale` its x, y, z sides relative to each other (`SetupBoxScale`,
+   !< default 1, 1, 1: a cube); `elevation` and `azimuth` [degrees], both or neither, turn it to that view on this
+   !< frame (`SetupBoxRotation`: a "top view" button calls it once; called every frame, the user cannot turn it),
+   !< `animate=.true.` turning it there smoothly. Before any item. Statuses: `FIG_ERR_ARGUMENT` for a scale without 3
+   !< positive values, one angle without the other; `FIG_ERR_STATE` outside a 3-D plot, after its first item, from a
+   !< task.
+   real(real64),   intent(in),  optional :: scale(:)  !< Relative sides [x, y, z].
+   real(real64),   intent(in),  optional :: elevation !< Elevation [degrees].
+   real(real64),   intent(in),  optional :: azimuth   !< Azimuth [degrees].
+   logical,        intent(in),  optional :: animate   !< Turn there smoothly (default: at once).
+   integer(int32), intent(out), optional :: stat      !< Status.
+
+   if (figure_draw_refused('ip3_setup_box', stat)) return ! a task does not draw
+   if (present(scale)) then
+      if (size(scale) /= 3) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip3_setup_box: scale needs 3 values (x, y, z)', stat)
+         return
+      endif
+      if (.not. all(scale > 0.0_real64)) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip3_setup_box: each value of scale must be above 0', stat)
+         return
+      endif
+   endif
+   if (present(elevation) .neqv. present(azimuth)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip3_setup_box: give both elevation and azimuth, or neither', stat)
+      return
+   endif
+   if (setup3d_refused('ip3_setup_box', stat)) return
+   if (present(scale)) call ImPlot3D_SetupBoxScale(real(scale(1), c_double), real(scale(2), c_double), &
+                                                    real(scale(3), c_double))
+   if (present(elevation)) call ImPlot3D_SetupBoxRotation_double(real(elevation, c_double), real(azimuth, c_double), &
+                                                                 logical(opt(animate), c_bool), ImPlot3DCond_Always)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_setup_box
+
+   recursive subroutine ip3_setup_legend(location, horizontal, no_buttons, stat)
+   !< Where the 3-D plot's legend goes (`SetupLegend`): `location` a compass point, `'n'`, `'ne'`, `'e'`, `'se'`,
+   !< `'s'`, `'sw'`, `'w'`, `'nw'` (default, ImPlot3D's) or `'c'`; `horizontal=.true.`: entries in a row;
+   !< `no_buttons=.true.`: a click on an entry does not hide its item. Before any item. Statuses: `FIG_ERR_ARGUMENT`
+   !< for an unknown location; `FIG_ERR_STATE` outside a 3-D plot, after its first item, from a task.
+   character(len=*), intent(in),  optional :: location   !< Compass point (default 'nw').
+   logical,          intent(in),  optional :: horizontal !< Entries in a row (default: a column).
+   logical,          intent(in),  optional :: no_buttons !< Entries do not hide their items.
+   integer(int32),   intent(out), optional :: stat       !< Status.
+   integer(c_int)                          :: loc        !< ImPlot3DLocation.
+   integer(c_int)                          :: flags      !< ImPlot3DLegendFlags.
+
+   if (figure_draw_refused('ip3_setup_legend', stat)) return ! a task does not draw
+   loc = ImPlot3DLocation_NorthWest
+   if (present(location)) then
+      select case (trim(location))
+      case ('n')
+         loc = ImPlot3DLocation_North
+      case ('ne')
+         loc = ImPlot3DLocation_NorthEast
+      case ('e')
+         loc = ImPlot3DLocation_East
+      case ('se')
+         loc = ImPlot3DLocation_SouthEast
+      case ('s')
+         loc = ImPlot3DLocation_South
+      case ('sw')
+         loc = ImPlot3DLocation_SouthWest
+      case ('w')
+         loc = ImPlot3DLocation_West
+      case ('nw')
+         loc = ImPlot3DLocation_NorthWest
+      case ('c')
+         loc = ImPlot3DLocation_Center
+      case default
+         call figure_fail(FIG_ERR_ARGUMENT, "ip3_setup_legend: unknown location '"//trim(location)//"' ('n', 'ne', "// &
+                          "'e', 'se', 's', 'sw', 'w', 'nw' or 'c')", stat)
+         return
+      endselect
+   endif
+   if (setup3d_refused('ip3_setup_legend', stat)) return
+   flags = ImPlot3DLegendFlags_None
+   if (opt(horizontal)) flags = ior(flags, ImPlot3DLegendFlags_Horizontal)
+   if (opt(no_buttons)) flags = ior(flags, ImPlot3DLegendFlags_NoButtons)
+   call ImPlot3D_SetupLegend(loc, flags)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_setup_legend
+
+   recursive function ip3_mouse_ray(origin, direction, stat) result(over)
+   !< The ray under the pointer, in the 3-D plot's coordinates (`PixelsToPlotRay`): every point of the box drawn under
+   !< the pointer is `origin + t direction` for some `t` (`direction` of length 1). True when the pointer is over the
+   !< plot. A program picks with it: where the ray meets a plane (the floor: `t = -origin(3) / direction(3)`), the
+   !< nearest of its points. Linear axes: on a log axis the ray is in the transformed space. Statuses:
+   !< `FIG_ERR_STATE` outside a 3-D plot, from a task.
+   real(real64),   intent(out)           :: origin(3)    !< A point of the ray.
+   real(real64),   intent(out)           :: direction(3) !< Its direction (unit).
+   integer(int32), intent(out), optional :: stat         !< Status.
+   logical                               :: over         !< The pointer is over the plot.
+   real(c_double)                        :: o(3), d(3)   !< C copies.
+
+   over = .false.
+   origin = 0.0_real64
+   direction = 0.0_real64
+   if (figure_draw_refused('ip3_mouse_ray', stat)) return ! a task does not draw
+   if (outside_plot('ip3_mouse_ray', stat)) return
+   over = fig_plot3d_mouse_ray(o, d) /= 0_c_int
+   origin = real(o, real64)
+   direction = real(d, real64)
+   call figure_check(FIG_OK, stat)
+   endfunction ip3_mouse_ray
+
+   recursive subroutine ip3_plot_to_pixels(x, y, z, px, py, stat)
+   !< The pixel (px, py) where the point (x, y, z) of the 3-D plot being declared is drawn (`PlotToPixels`), as the
+   !< box is turned now: a label beside a point, a test's click. Statuses: `FIG_ERR_STATE` outside a 3-D plot, from a
+   !< task.
+   real(real64),   intent(in)            :: x    !< Abscissa.
+   real(real64),   intent(in)            :: y    !< Ordinate.
+   real(real64),   intent(in)            :: z    !< Height.
+   real(real64),   intent(out)           :: px   !< Pixel abscissa.
+   real(real64),   intent(out)           :: py   !< Pixel ordinate.
+   integer(int32), intent(out), optional :: stat !< Status.
+   type(im_vec2)                         :: p    !< The pixel.
+
+   px = 0.0_real64
+   py = 0.0_real64
+   if (figure_draw_refused('ip3_plot_to_pixels', stat)) return ! a task does not draw
+   if (outside_plot('ip3_plot_to_pixels', stat)) return
+   p = ImPlot3D_PlotToPixels_double(real(x, c_double), real(y, c_double), real(z, c_double))
+   px = real(p%x, real64)
+   py = real(p%y, real64)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_plot_to_pixels
+
+   recursive function setup3d_refused(caller, stat) result(refused)
+   !< True (a usage error reported) outside a 3-D plot or after its first item.
+   character(len=*), intent(in)            :: caller  !< The procedure.
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: refused !< Refused: return.
+
+   refused = .true.
+   select case (fig_plot3d_state())
+   case (0_c_int)
+      call figure_usage_error(caller//': no 3-D plot is being declared (call it after ip3_begin_plot returned '// &
+                              'true)', stat)
+      return
+   case (2_c_int)
+      call figure_usage_error(caller//': the setup of the 3-D plot is over (call it before the first item)', stat)
+      return
+   endselect
+   refused = .false.
+   endfunction setup3d_refused
+
+   pure function opt(x) result(on)
+   !< An optional flag, false when absent.
+   logical, intent(in), optional :: x  !< Flag.
+   logical                       :: on !< Its value.
+
+   on = .false.
+   if (present(x)) on = x
+   endfunction opt
+
+   recursive subroutine ip3_triangles_r64(label, x, y, z, spec, stat)
+   !< Triangles: points 1-3, 4-6, ... each one (`PlotTriangle`), double precision; read in place with any stride.
+   !< Filled with the spec's `fill_color` (default: the item's colour), edged with its `line_color`. Statuses:
+   !< `FIG_ERR_ARGUMENT` for series of different sizes or a size not a multiple of 3; `FIG_ERR_STATE` outside a 3-D
+   !< plot, from a task.
+   character(len=*),         intent(in)                       :: label !< Legend label.
+   real(real64),                 intent(in), target, asynchronous :: x(:)  !< Abscissae of the vertices.
+   real(real64),                 intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real64),                 intent(in), target, asynchronous :: z(:)  !< Heights.
+   type(plot3d_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot3D's).
+   integer(int32),           intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                  :: d     !< Where ImPlot3D reads the arrays.
+   character(len=24)                                          :: t     !< The size, printed.
+
+   if (item_refused('ip3_triangles', size(x, kind=int64), size(y, kind=int64), size(z, kind=int64), stat)) return
+   if (mod(size(x), 3) /= 0) then
+      write(t, '(I0)') size(x)
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip3_triangles: '//trim(t)//' vertices are not a whole number of triangles (3 '// &
+                       'each)', stat)
+      return
+   endif
+   call series_lead(d, 1, x)
+   call series_put(d, 2, y)
+   call series_put(d, 3, z)
+   call ImPlot3D_PlotTriangle_doublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), spec_at(d%stride, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_triangles_r64
+
+   recursive subroutine ip3_quads_r64(label, x, y, z, spec, stat)
+   !< Quadrilaterals: points 1-4, 5-8, ... each one (`PlotQuad`), double precision; read in place with any stride.
+   !< Filled with the spec's `fill_color` (default: the item's colour), edged with its `line_color`. Statuses:
+   !< `FIG_ERR_ARGUMENT` for series of different sizes or a size not a multiple of 4; `FIG_ERR_STATE` outside a 3-D
+   !< plot, from a task.
+   character(len=*),         intent(in)                       :: label !< Legend label.
+   real(real64),                 intent(in), target, asynchronous :: x(:)  !< Abscissae of the vertices.
+   real(real64),                 intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real64),                 intent(in), target, asynchronous :: z(:)  !< Heights.
+   type(plot3d_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot3D's).
+   integer(int32),           intent(out), optional            :: stat  !< Status.
+   type(series_r64), target                                  :: d     !< Where ImPlot3D reads the arrays.
+   character(len=24)                                          :: t     !< The size, printed.
+
+   if (item_refused('ip3_quads', size(x, kind=int64), size(y, kind=int64), size(z, kind=int64), stat)) return
+   if (mod(size(x), 4) /= 0) then
+      write(t, '(I0)') size(x)
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip3_quads: '//trim(t)//' vertices are not a whole number of quads (4 '// &
+                       'each)', stat)
+      return
+   endif
+   call series_lead(d, 1, x)
+   call series_put(d, 2, y)
+   call series_put(d, 3, z)
+   call ImPlot3D_PlotQuad_doublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), spec_at(d%stride, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_quads_r64
+
+   recursive subroutine ip3_triangles_r32(label, x, y, z, spec, stat)
+   !< Triangles: points 1-3, 4-6, ... each one (`PlotTriangle`), single precision; read in place with any stride.
+   !< Filled with the spec's `fill_color` (default: the item's colour), edged with its `line_color`. Statuses:
+   !< `FIG_ERR_ARGUMENT` for series of different sizes or a size not a multiple of 3; `FIG_ERR_STATE` outside a 3-D
+   !< plot, from a task.
+   character(len=*),         intent(in)                       :: label !< Legend label.
+   real(real32),                 intent(in), target, asynchronous :: x(:)  !< Abscissae of the vertices.
+   real(real32),                 intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real32),                 intent(in), target, asynchronous :: z(:)  !< Heights.
+   type(plot3d_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot3D's).
+   integer(int32),           intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                  :: d     !< Where ImPlot3D reads the arrays.
+   character(len=24)                                          :: t     !< The size, printed.
+
+   if (item_refused('ip3_triangles', size(x, kind=int64), size(y, kind=int64), size(z, kind=int64), stat)) return
+   if (mod(size(x), 3) /= 0) then
+      write(t, '(I0)') size(x)
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip3_triangles: '//trim(t)//' vertices are not a whole number of triangles (3 '// &
+                       'each)', stat)
+      return
+   endif
+   call series_lead(d, 1, x)
+   call series_put(d, 2, y)
+   call series_put(d, 3, z)
+   call ImPlot3D_PlotTriangle_FloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), spec_at(d%stride, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_triangles_r32
+
+   recursive subroutine ip3_quads_r32(label, x, y, z, spec, stat)
+   !< Quadrilaterals: points 1-4, 5-8, ... each one (`PlotQuad`), single precision; read in place with any stride.
+   !< Filled with the spec's `fill_color` (default: the item's colour), edged with its `line_color`. Statuses:
+   !< `FIG_ERR_ARGUMENT` for series of different sizes or a size not a multiple of 4; `FIG_ERR_STATE` outside a 3-D
+   !< plot, from a task.
+   character(len=*),         intent(in)                       :: label !< Legend label.
+   real(real32),                 intent(in), target, asynchronous :: x(:)  !< Abscissae of the vertices.
+   real(real32),                 intent(in), target, asynchronous :: y(:)  !< Ordinates.
+   real(real32),                 intent(in), target, asynchronous :: z(:)  !< Heights.
+   type(plot3d_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot3D's).
+   integer(int32),           intent(out), optional            :: stat  !< Status.
+   type(series_r32), target                                  :: d     !< Where ImPlot3D reads the arrays.
+   character(len=24)                                          :: t     !< The size, printed.
+
+   if (item_refused('ip3_quads', size(x, kind=int64), size(y, kind=int64), size(z, kind=int64), stat)) return
+   if (mod(size(x), 4) /= 0) then
+      write(t, '(I0)') size(x)
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip3_quads: '//trim(t)//' vertices are not a whole number of quads (4 '// &
+                       'each)', stat)
+      return
+   endif
+   call series_lead(d, 1, x)
+   call series_put(d, 2, y)
+   call series_put(d, 3, z)
+   call ImPlot3D_PlotQuad_FloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), spec_at(d%stride, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_quads_r32
 
    recursive function outside_plot(caller, stat) result(refused)
    !< True (a usage error reported) when no 3-D plot is being declared: ImPlot3D asserts there.

@@ -359,6 +359,12 @@ asserts on an item outside a plot and on a setup after the first item):
 | `limits` without 6 values, or a minimum not below its maximum; one angle | `FIG_ERR_ARGUMENT` | `ip3_setup_axes: limits needs 6 values (xmin, xmax, ymin, ymax, zmin, zmax)`, `ip3_setup_axes: each minimum of limits must be below its maximum`, `ip3_setup_axes: give both elevation and azimuth, or neither` |
 | a NaN position, an offset without 2 values | `FIG_ERR_ARGUMENT` | `ip3_text: x, y and z must not be NaN`, `ip3_text: the offset needs 2 components (x, y)` |
 | a colour without 4 values | `FIG_ERR_ARGUMENT` | `ip3_spec: a colour needs 4 components (RGBA)` |
+| triangles or quads of a vertex count not a multiple of 3 or 4 | `FIG_ERR_ARGUMENT` | `ip3_triangles: <n> vertices are not a whole number of triangles (3 each)`, `ip3_quads: <n> vertices are not a whole number of quads (4 each)` |
+| an image's corners not 3 × 4, a tint without 4 values, a texture not initialized | `FIG_ERR_ARGUMENT` | `ip3_image: corners must be 3 x 4 (x, y, z of four corners)`, `ip3_image: a colour needs 4 components (RGBA)`, `ip3_image: the texture is not initialized (texture%init)` |
+| an unknown axis, scale or legend location | `FIG_ERR_ARGUMENT` | `ip3_setup_axis: unknown axis '<a>' ('x', 'y' or 'z')`, `ip3_setup_axis: unknown scale '<s>' ('linear', 'log' or 'symlog')`, `ip3_setup_legend: unknown location '<l>' ('n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw' or 'c')` |
+| a box scale without 3 positive values; one angle | `FIG_ERR_ARGUMENT` | `ip3_setup_box: scale needs 3 values (x, y, z)`, `ip3_setup_box: each value of scale must be above 0`, `ip3_setup_box: give both elevation and azimuth, or neither` |
+| `ip3_setup_axis`, `ip3_setup_box`, `ip3_setup_legend` outside a 3-D plot or after an item | `FIG_ERR_STATE` | as `ip3_setup_axes` |
+| `ip3_image`, `ip3_mouse_ray`, `ip3_plot_to_pixels` outside a 3-D plot | `FIG_ERR_STATE` | as the items |
 
 A refused item draws nothing; the plot goes on. An `ip3_end_plot` without a true `ip3_begin_plot` is a pairing error
 ([below](#pairing-and-frames)).

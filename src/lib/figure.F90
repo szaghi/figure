@@ -132,6 +132,8 @@ use figure_editor, only : code_editor_object, language_object, code_language, co
 use figure_markdown, only : ig_markdown, markdown_view_object
 use figure_implot3d, only : ip3_begin_plot, ip3_end_plot, ip3_setup_axes, ip3_line, ip3_scatter, ip3_surface, ip3_mesh, &
                             ip3_text, ip3_spec, plot3d_spec_object, ImPlot3DMarker_None, ImPlot3DMarker_Auto,       &
+                            ip3_triangles, ip3_quads, ip3_image, ip3_setup_axis, ip3_setup_box, ip3_setup_legend, &
+                            ip3_mouse_ray, ip3_plot_to_pixels,                                                    &
                             ImPlot3DMarker_Circle, ImPlot3DMarker_Square, ImPlot3DMarker_Diamond, ImPlot3DMarker_Up, &
                             ImPlot3DMarker_Down, ImPlot3DMarker_Left, ImPlot3DMarker_Right, ImPlot3DMarker_Cross,   &
                             ImPlot3DMarker_Plus, ImPlot3DMarker_Asterisk, ImPlot3DItemFlags_None,                   &
@@ -244,6 +246,8 @@ public :: ImPlotColormap_Twilight, ImPlotColormap_RdBu, ImPlotColormap_BrBG, ImP
 public :: ImPlotColormap_Greys
 public :: ip3_begin_plot, ip3_end_plot, ip3_setup_axes, ip3_line, ip3_scatter, ip3_surface, ip3_mesh, ip3_text
 public :: ip3_spec, plot3d_spec_object
+public :: ip3_triangles, ip3_quads, ip3_image, ip3_setup_axis, ip3_setup_box, ip3_setup_legend, ip3_mouse_ray
+public :: ip3_plot_to_pixels
 public :: ImPlot3DMarker_None, ImPlot3DMarker_Auto, ImPlot3DMarker_Circle, ImPlot3DMarker_Square
 public :: ImPlot3DMarker_Diamond, ImPlot3DMarker_Up, ImPlot3DMarker_Down, ImPlot3DMarker_Left, ImPlot3DMarker_Right
 public :: ImPlot3DMarker_Cross, ImPlot3DMarker_Plus, ImPlot3DMarker_Asterisk

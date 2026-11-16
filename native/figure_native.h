@@ -251,6 +251,9 @@ void   fig_multi_select_end(bool *flags, int count);
 int    fig_multi_select_item(int index, int *count);
 void   fig_multi_select_reset(void);
 void   fig_clipper_include(void *clipper, int index);
+/* 3-D plots (figure_plot3d_pick.cpp): the ray under the pointer in the 3-D plot's coordinates, origin[3] and a unit
+ * direction[3]; 1 when the pointer is over the plot. */
+int    fig_plot3d_mouse_ray(double *origin, double *direction);
 int    fig_file_browser_get(int what, int index, char *buf, int buf_len, int *len, int *count);
 int    fig_file_browser_rect(const char *part, int part_len, float *rect, int *found);
 /* Internal (figure_native.cpp): a browser open with this id; its answer, as fig_file_dialog_result; draw the front

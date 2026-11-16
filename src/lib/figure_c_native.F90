@@ -42,6 +42,7 @@ public :: fig_make_folder, fig_remove, fig_set_file_time, fig_file_time, fig_fil
 public :: fig_dnd_source, fig_dnd_target, fig_dnd_plot_target, fig_dnd_payload, fig_dnd_dragging
 public :: fig_plot_link, fig_aligned_open
 public :: fig_multi_select_begin, fig_multi_select_end, fig_multi_select_item, fig_clipper_include
+public :: fig_plot3d_mouse_ray
 public :: fig_set_checks, fig_checks, fig_draw_refuse, fig_scope_open, fig_scope_close, fig_scope_report
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_notification_alpha
@@ -733,6 +734,15 @@ interface
    type(c_ptr), value    :: clipper !< Clipper.
    integer(c_int), value :: index   !< Row.
    endsubroutine fig_clipper_include
+
+   function fig_plot3d_mouse_ray(origin, direction) result(over) bind(C, name='fig_plot3d_mouse_ray')
+   !< The ray under the pointer in the 3-D plot's coordinates (direction normalized); 1 over the plot, else 0.
+   import :: c_double, c_int
+   implicit none
+   real(c_double), intent(out) :: origin(3)    !< Origin.
+   real(c_double), intent(out) :: direction(3) !< Direction.
+   integer(c_int)              :: over         !< 1 or 0.
+   endfunction fig_plot3d_mouse_ray
 
    subroutine fig_scope_open(kind, who, who_len, label, label_len, returned, aux) bind(C, name='fig_scope_open')
    !< A begin or a push, after it: its scope in the record of the frame.

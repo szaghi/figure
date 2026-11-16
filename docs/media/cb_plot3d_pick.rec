@@ -1,0 +1,11 @@
+#! program build/docs-examples/bin/cb_plot3d_pick
+#! from    5
+#! frames  160
+#! poster  70
+# the pointer over the floor: a marker where its ray meets z = 0, and the readout of x and y; then off the floor
+0   move 600 520
+10  move 220 330 25
+40  move 330 300 25
+70  move 450 345 25
+100 move 320 400 25
+130 move 560 470 20
