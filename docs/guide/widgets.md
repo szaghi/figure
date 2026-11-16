@@ -822,7 +822,7 @@ Strings are passed verbatim, trailing blanks included: `'Run'` and `'Run   '` ar
 A list of thousands of rows draws only those in view with a `list_clipper_object`, rows of equal height (lines of
 text, selectables, a table's rows of fields): `call clip%begin(n)`, then `do while (clip%step())` draws rows
 `clip%first` to `clip%last`. The loop ends by itself (a few steps); left early, the clipper is closed by the next
-`begin` or when it goes out of scope. `clip%item_height` is the distance between rows [pixels], given to `begin` or
+`begin` or when it goes out of scope. `clip%begin(n [, item_height] [, keep])`: `clip%item_height` is the distance between rows [pixels], given to `begin` or
 measured on the first row: [Scrolling and focus](#scrolling-and-focus) reaches a row not drawn with it. `keep` (a row, 0 none) is drawn wherever it is: a [multi-selection](#selecting-many-items)'s `sel%keep`.
 
 <<< @/examples/snippets/cb_controls-clipper.F90{fortran}
@@ -1132,9 +1132,9 @@ draws `selected` from them.
 
 - **Clipped lists.** A `list_clipper_object` draws only the lines in view, but a shift+click extends from the item
   clicked before, which may have scrolled away: `clip%begin(n, keep=sel%keep)` keeps that one line drawn wherever it
-  is, as Dear ImGui's documentation of `BeginMultiSelect` asks. A mouse shift+click past a source scrolled away was
-  measured to select the same range without it (`figure_test_select`), so FIGURE's tests do not tell what it
-  guards; pass it all the same.
+  is. Pass it: Dear ImGui's documentation of `BeginMultiSelect` requires the source to be submitted (for keyboard
+  ranges from it, as its notes put it). A mouse shift+click past a source scrolled away selects the right range
+  without it, which is all FIGURE's tests measure.
 - **Tables and trees.** In a table the selectable spans its row (`ig_selectable` in the first column, the values in
   the next); tree nodes take `index` the same way, numbered in the order they are drawn, and a range selects the
   nodes between, open or not as drawn.

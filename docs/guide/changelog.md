@@ -8,6 +8,19 @@ Every release, and what is done since the last one (Unreleased). The state of th
 The list is generated from the commit messages by git-cliff (`git cliff -o CHANGELOG.md`; `scripts/release.sh`
 regenerates it for each release).
 
+## Migration to v0.7.0
+
+What a program written for v0.6.0 meets in v0.7.0, with a link to the section that has the details. Nothing a v0.6.0
+program calls changed its meaning; the entries below are new optional arguments and what the build installs.
+
+| Change | What to do |
+|---|---|
+| [Lists and trees](widgets#selecting-many-items): `ig_selectable` and `ig_tree_node` take two more optional arguments at the end, `index` and `stat`; `list_clipper_object%begin` takes `keep` | nothing; a call by position keeps its meaning |
+| [Frame checks](errors#the-rules-checked): three more pairs are checked, `ip_begin_aligned` / `ip_end_aligned`, `ip_begin_legend_popup` / `ip_end_legend_popup` (end only after a true begin) and `ig_begin_multi_select` / `ig_end_multi_select` (always paired) | nothing; a program that drives these through the raw layer (`ImPlot_BeginAlignedPlots`, `igBeginMultiSelect`) is not checked, as before |
+| [Plots](plots#grouped-bars-and-digital-signals): FIGURE patches one line of ImPlot (`native/patches/implot-0001-digital-rect-order.patch`): its digital bars drew nothing with Dear ImGui 1.93 | nothing; a program that called `ImPlot_PlotDigital_*` through the raw layer now sees its bars |
+| [Installation](install#from-cmake): the installer also writes a CMake package (`lib/cmake/figure-<tag>/`), and builds with Intel ifx (`--intel`); each release has a sources archive for machines without network ([Building without network](install#building-without-network)) | nothing; a CMake project that wrote its own `pkg_check_modules` recipe can use `find_package(figure CONFIG)` and `figure::figure` instead |
+| New public names of `use figure`: the [file API](frame-loop#files-and-folders) (`figure_make_folder`, `figure_remove`, `figure_set_file_time`, `figure_file_time`, `figure_file_exists`), [drag and drop](widgets#drag-and-drop) (`ig_drag_source`, `ig_drop_target`, `ig_dragging`, `ip_drop_target`), [plots across plots](plots#plots-across-plots) (`ip_link_axis`, `ip_begin_aligned`, ...), [multi-selection](widgets#selecting-many-items) (`selection_object`, `ig_begin_multi_select`, ...) and [3-D plots](plots#_3-d-plots) (`ip3_triangles`, `ip3_image`, `ip3_mouse_ray`, ...) | a program with its own procedure of one of these names imports `figure` with `only:` (as it would for any new name) |
+
 ## Migration to v0.6.0
 
 What a program written for v0.5.0 meets in v0.6.0, with a link to the section that has the details.

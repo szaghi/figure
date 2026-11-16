@@ -65,7 +65,8 @@ marks with its call ([Marks in a plot](#marks-in-a-plot)):
 
 ### Grouped bars and digital signals
 
-`ip_bar_groups` draws several items over the same categories: group `g` (a case, a block) at `x = g - 1`, its items
+`ip_bar_groups` draws several items over the same categories, `values(g, i)` being item `i` in group `g` (so
+`size(labels) == size(values, 2)`): group `g` (a case, a block) at `x = g - 1`, its items
 (the phases of a run) side by side within `group_size` of the unit (default 0.67), or stacked with `stacked=.true.`
 (negative values below 0); `horizontal=.true.` lays the groups along y. `labels(i)` is item `i`'s legend entry, its
 colour the plot's next line colour, or `colormap`'s `i`-th (an id of [`ip_colormap`](colormaps)); `spec`'s
@@ -73,7 +74,8 @@ colour the plot's next line colour, or `colormap`'s `i`-th (an id of [`ip_colorm
 
 <<< @/examples/snippets/cb_bar_groups-groups.F90{fortran}
 
-`ip_digital` draws a state over time: 0 and 1 (a solver writing its output, a valve open), held from one abscissa to
+`ip_digital` draws a state over time: 0 and 1 as low and high, larger values as taller steps (a solver writing its
+output, a valve open), held from one abscissa to
 the next, in a band at the bottom of the plot that the y axis does not scale: it sits under a residual whatever the
 residual's range. Its x values take part in fitting x, its y values in nothing; `spec`'s `size` is the band's height.
 
@@ -681,7 +683,7 @@ plot, a text at a point, a rectangle the user drags. With the drag tools and ann
 
 | Procedure | Notes |
 |---|---|
-| `ip_drop_target(type, payload [, axis] [, legend] [, x] [, y] [, stat])` → `logical` | Makes the plot a target of payloads of type `type` dragged from an [`ig_drag_source`](widgets#drag-and-drop) (`BeginDragDropTargetPlot`): `.true.` on the frame one is dropped, `payload` then holding it and `x`, `y` the point it landed on, in plot units. With `axis` (`'x1'`..`'y3'`, set up on this frame) only that axis receives (`BeginDragDropTargetAxis`), with `legend=.true.` only the legend (`BeginDragDropTargetLegend`). |
+| `ip_drop_target(type, payload [, axis] [, legend] [, x] [, y] [, stat])` → `logical` | Makes the plot a target of payloads of type `type` dragged from an [`ig_drag_source`](widgets#drag-and-drop) (`BeginDragDropTargetPlot`): `.true.` on the frame one is dropped, `payload` then holding it and `x`, `y` the point it landed on, in plot units (not set for the legend). With `axis` (`'x1'`..`'y3'`, set up on this frame) only that axis receives (`BeginDragDropTargetAxis`), with `legend=.true.` only the legend (`BeginDragDropTargetLegend`). |
 
 <<< @/examples/snippets/cb_dnd-plot.F90{fortran}
 
@@ -728,7 +730,7 @@ Take ImPlot3D for a figure that a 2-D plot would draw if it had a third axis; ta
 | `ip3_setup_axis(axis [, label] [, scale] [, auto_fit] [, invert] [, lock] [, no_grid] [, stat])` | One axis, `'x'`, `'y'` or `'z'` (`SetupAxis`, `SetupAxisScale`): `scale` `'linear'`, `'log'` (values <= 0 not shown) or `'symlog'`; fit every frame, inverted, locked against the mouse, without grid lines. After `ip3_setup_axes` (which it overrides for that axis), before any item. |
 | `ip3_setup_box([scale] [, elevation] [, azimuth] [, animate] [, stat])` | The box's proportions, `scale = [x, y, z]` relative sides (`SetupBoxScale`; default a cube), and a view the program turns it to on this frame, `elevation` and `azimuth` [degrees] (`SetupBoxRotation`; `animate`: smoothly). A "top view" button calls it once; called every frame, the user cannot turn the box. |
 | `ip3_setup_legend([location] [, horizontal] [, no_buttons] [, stat])` | Where the legend goes (`SetupLegend`): a compass point, `'n'` .. `'nw'` (default) or `'c'`; entries in a row; entries that do not hide their items. |
-| `ip3_mouse_ray(origin, direction [, stat])` → `logical` | The ray under the pointer in plot coordinates (`PixelsToPlotRay`): every point of the box drawn there is `origin + t direction` (`direction` of length 1); `.true.` over the plot. A program picks with it: where the ray meets a plane, the nearest of its points. Linear axes: on a log axis the ray is in the transformed space. |
+| `ip3_mouse_ray(origin, direction [, stat])` → `logical` | The ray under the pointer in plot coordinates (`PixelsToPlotRay`): every point of the box drawn there is `origin + t direction` (`direction` of length 1); `.true.` over the plot. A program picks with it: where the ray meets a plane, or the point of a set nearest to the ray. Linear axes: on a log axis the ray is in the transformed space. |
 | `ip3_plot_to_pixels(x, y, z, px, py [, stat])` | The pixel where a point is drawn now (`PlotToPixels`): a label beside it, a test's click. |
 | `ip3_end_plot()` | Only when `ip3_begin_plot` returned `.true.`. |
 
@@ -759,10 +761,13 @@ floor's two large triangles are nearer the eye than a point lying on them. The r
   ([Known issues](known-issues#implot3d)).
 - Statuses: `FIG_ERR_ARGUMENT` for series of different sizes, `x` and `y` that do not match `z`'s shape,
   `triangles` without 3 rows or with a vertex outside `[1, size(x)]`, `limits` without 6 values or a minimum not
-  below its maximum, one angle or one scale end without the other, a colormap not registered, a colour without 4
-  values, a NaN position of a text, a text's `offset` without 2 values, a surface's `scale_min` not below its
-  `scale_max`; `FIG_ERR_STATE` for an item, a text or `ip3_setup_axes` outside a 3-D plot,
-  `ip3_setup_axes` after the first item, and any of them from a [task](processes#tasks). `stat` is optional (absent:
+  below its maximum, one angle without the other (`ip3_setup_axes`, `ip3_setup_box`), a surface's `scale_min`
+  without `scale_max` or not below it, a colormap not registered, a colour without 4 values, a NaN position of a
+  text, a text's `offset` without 2 values, triangles or quads of a vertex count not a multiple of 3 or 4, an image's
+  `corners` not 3 × 4 or its texture not initialized, a box `scale` not 3 positive values, an unknown axis, scale or
+  legend location; `FIG_ERR_STATE` for an item, a text, `ip3_mouse_ray`, `ip3_plot_to_pixels` or a setup call
+  outside a 3-D plot, a setup call (`ip3_setup_axes`, `ip3_setup_axis`, `ip3_setup_box`, `ip3_setup_legend`) after
+  the first item, and any of them from a [task](processes#tasks). `stat` is optional (absent:
   `error stop` with the message; a usage error as `app%set_checks` says). [Errors](errors#implot3d) lists the
   messages.
 - Modes: the same in **window**, **headless** and **remote** mode: ImPlot3D draws through Dear ImGui's draw lists

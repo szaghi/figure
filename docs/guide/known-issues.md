@@ -468,6 +468,23 @@ its ImGradient, with FIGURE's glue:
   moved point kept per editor and its press taken by an item (they were statics shared by every editor, and a drag
   moved the window).
 
+## A log axis on a plot that starts empty
+
+A plot set up with `ip_setup_axes(..., auto_fit=.true., ylog=.true.)` whose first frames had no item drew nothing once
+its lines arrived: the axes stayed at their empty range (found 2026-11-16 writing the drag and drop example, where the
+plot fills as cases are dropped; not investigated). The same plot on linear axes is right; so is a log plot whose
+first frame has its data. Until it is understood, give a plot that starts empty linear axes, or limits
+(`ip_setup_axes_limits`) to start from.
+
+## ImPlot's digital signals
+
+FIGURE patches one line of ImPlot (`native/patches/implot-0001-digital-rect-order.patch`): `PlotDigital` gives
+`AddRectFilled` its corners with the top below the bottom, and Dear ImGui 1.93's anti-aliased `AddRectFilled` returns
+at once for a negative height, so every digital bar was missing (`ip_digital`, [Grouped bars and digital
+signals](plots#grouped-bars-and-digital-signals)). The patch orders the corners. Found and checked 2026-11-16
+(ImPlot `72de278`, Dear ImGui `cf53467`); `src/tests/figure_test_plot_links.F90` fails without it. A program on the
+raw layer (`ImPlot_PlotDigital_*`) gets the fix too. The report for ImPlot is the owner's to file (#8).
+
 ## ImPlot3D
 
 The [3-D plots](plots#_3-d-plots) are ImPlot3D's, which draws every primitive as Dear ImGui triangles:
@@ -478,6 +495,11 @@ The [3-D plots](plots#_3-d-plots) are ImPlot3D's, which draws every primitive as
   passes in front (the golden picture of `figure_test_plot3d` shows a transparent mesh crossing a surface). Plots
   without intersections (a trajectory, probes, one surface) are drawn right; meshes that cross belong to
   [`view3d_object`](view3d), which has a depth buffer.
+  A small item on a large one is the same case: a marker lying on an image of the floor (`ip3_image`) is hidden,
+  the floor's two triangles having centres nearer the eye (checked 2026-11-16, the picking example of
+  [3-D plots](plots#_3-d-plots)).
+- **Picking on log axes.** `ip3_mouse_ray` gives the ray in the box's transformed space: on a log or symlog axis it is
+  not a straight line in plot units; pick on linear axes.
 - **Remote bandwidth.** In remote mode every vertex of every plot goes to the browser each frame, as for any widget:
   a surface of 100 × 100 with its grid lines is about 65 000 vertices (39 208 for the fill, 26 328 for the lines,
   measured), some 1 MB a frame before deflate, against one image for a `view3d_object`. Keep remote 3-D plots near

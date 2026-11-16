@@ -483,16 +483,45 @@ between. The plan, step by step, is [issue #10](https://github.com/szaghi/figure
   moves and free their vertex caches at rest ([3-D views](view3d#how-a-view-is-rendered)): done.
 - **The documentation pass** (S17): the migration notes, this section, the known issues dated: done.
 
-## Next: v0.7.0
+## v0.7.0 — in progress
 
-The steps v0.6.0's plan held and the owner moved (2026-11-14), so that v0.6.0 ships its fixes:
+The plan is [#12](https://github.com/szaghi/figure/issues/12): the steps v0.6.0 moved (2026-11-14), the findings of
+v0.6.0, and the features no application had asked for, which the owner took in without waiting for one (2026-11-16).
 
-- **The showcase's pictures from FIGURE's renderer** (#10 S3): xall_figure's recordings, made on a GPU, are the one
+- **Consumers** (S1): an installed CMake package, `find_package(figure)` and the imported target `figure::figure`,
+  one per compiler ([From CMake](install#from-cmake)); the installer builds with Intel ifx (`--intel`); a sources
+  archive per release, `figure-<version>-sources.tar.gz`, with every source the native build fetches, built in CI
+  with the network cut ([Building without network](install#building-without-network)): done.
+- **Portable example cases** (S2): a small file API, `figure_make_folder`, `figure_remove`, `figure_set_file_time`,
+  `figure_file_time`, `figure_file_exists` ([Files and folders](frame-loop#files-and-folders)); the studio tutorials
+  write their cases with it, and their pictures are checked on Windows too: done.
+- **`tut12_field`'s macOS glyph** (S3): a picture that fails keeps the font atlas it was drawn with
+  (`FIGURE_CAPTURE_ATLAS`, [Variables](capture#variables)), so the next variation on macOS brings its evidence: done;
+  the cause waits for that evidence.
+- **Compiler oddities reduced** (S4): nvfortran's `select case` on a deferred-length function result and its internal
+  error on a local named `size`, each in a few lines with a canary ([Known issues](known-issues)); two older findings
+  could not be reduced (their code is gone). Posted on #4; filing is the owner's: done.
+- **Upstream drafts** (S5): ImPlot's defects (#8), the patches to ImGuizmo and ImPlot3D (#9) and Dear ImGui's 0 / 0
+  (#11) reproduced on the libraries' heads without FIGURE, each with its draft; filing is the owner's: done.
+- **Drag and drop** (S7): `ig_drag_source`, `ig_drop_target`, `ig_dragging`, `ip_drop_target`
+  ([Drag and drop](widgets#drag-and-drop), [A plot as a drop target](plots#a-plot-as-a-drop-target)): done.
+- **Plots across plots** (S8): linked axes by group name, aligned plots, the legend's hover and popup, hidden items,
+  digital signals and grouped bars ([Plots across plots](plots#plots-across-plots),
+  [Grouped bars and digital signals](plots#grouped-bars-and-digital-signals)). ImPlot's digital bars drew nothing
+  with Dear ImGui 1.93; FIGURE patches the one line until ImPlot changes it: done.
+- **Multi-selection** (S9): `selection_object`, `ig_begin_multi_select`, `ig_end_multi_select`, `index=` on
+  `ig_selectable` and `ig_tree_node`, the clipper's `keep` ([Selecting many items](widgets#selecting-many-items)):
+  done.
+- **ImPlot3D's remaining items** (S10): triangles, quads, images in the box, one axis's scale, the box's proportions
+  and view, the legend's place, the pointer's ray ([3-D plots](plots#_3-d-plots)); no depth buffer until
+  brenocq/implot3d#151 merges: done.
+- **The documentation pass** (S11): the migration notes, this section, the pages above read afresh.
+
+## Next
+
+- **The showcase's pictures from FIGURE's renderer** (#12 S6): xall_figure's recordings, made on a GPU, are the one
   exception to "every picture from one renderer"; it waits on xall_figure recording headless.
-- **Compiler oddities reduced to reproducers** (#10 S4), for the compiler reports of #4.
-- **Upstream reports against the current heads** (#10 S9), for #8 and #9; filing them is the owner's.
-- **Consumers** (#10 S11): a CMake package, an offline build, the installer's gaps.
-- **Portable example cases:** the studio tutorials write their cases with POSIX shell commands, so Windows cannot
-  check their pictures; a small file API (make a folder, remove a file, set a file's time) would let them be portable.
-- **Features no application has asked for yet** (#10 S13–S16): drag and drop, linked and aligned plots, and the rest
-  of block D. Each waits for an application that needs it.
+- **A log axis on a plot that starts empty**: a plot set up with `auto_fit` and a log y axis, whose first frames have
+  no item, drew nothing once its lines arrived ([Known issues](known-issues#a-log-axis-on-a-plot-that-starts-empty), not
+  investigated).
+- **The upstream reports** of #4, #8, #9 and #11, filed by the owner; FIGURE's patches stay until each lands.

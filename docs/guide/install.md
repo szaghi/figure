@@ -137,7 +137,7 @@ requirements below apply); `fobis build` then rebuilds nothing that is up to dat
 ## Building without network
 
 A cluster's compute or login node often reaches no outside network, and the native build downloads SDL3, cimplot,
-cimplot3d and miniz the first time. Each release (since v0.7.0) also publishes `figure-<version>-sources.tar.gz`: the
+cimplot3d and miniz the first time. Each release (since v0.7.0) also publishes `figure-<version>-sources.tar.gz` (`<version>` with its `v`, as `figure-v0.7.0-sources.tar.gz`): the
 repository's files and those four sources, in `third_party/fetched/`. Copy it to the machine, unpack it, and build there:
 `scripts/build_native.sh` finds `third_party/fetched/` and downloads nothing (it says `offline, from
 third_party/fetched/`).
