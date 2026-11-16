@@ -226,7 +226,8 @@ rule = bash docs/examples/build.sh
 [scaffold]
 apt_packages       = cmake ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev
                      libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
-toolchain_image    = ghcr.io/szaghi/fortran-toolchains:gnu-16.2
+toolchain          = linux-gnu
 toolchain_packages = ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev
                      libxtst-dev libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
-skip               = LICENSE.gpl3.md .github/workflows/install.yml scripts/install.sh
+skip               = LICENSE.gpl3.md .github/workflows/install.yml scripts/install.sh .github/workflows/fpm.yml
+                     .github/actions/setup-build-env/action.yml
