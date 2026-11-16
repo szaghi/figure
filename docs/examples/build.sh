@@ -90,12 +90,17 @@ done
 extra_path=""
 [[ $varset == windows ]] && extra_path=":$PATH" # MSYS2: the runtime's DLLs (gfortran, the C++ library) are on the PATH
 failed=()
+# a run that never ends fails after 10 minutes (exit status 124), with its output so far, instead of holding the job
+# until the CI's limit (a detached process never seen ended hung the docs job for hours, #12); macOS has no timeout
+limit=()
+command -v timeout > /dev/null && limit=(timeout -k 10 600)
 run() { # run STATUS ID COMMAND: the run's output in output/ID.txt; a status other than STATUS is a failure
    local expect=$1 id=$2 status=0; shift 2
    {
       printf '$ %s\n' "$*"
       (cd "$build/bin" && env -i PATH="$build/bin:/usr/bin:/bin$extra_path" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" LC_ALL=C \
-                          GFORTRAN_UNBUFFERED_PRECONNECTED=y GFORTRAN_ERROR_BACKTRACE=0 bash -c "$*" 2>&1 < /dev/null) || status=$?
+                          GFORTRAN_UNBUFFERED_PRECONNECTED=y GFORTRAN_ERROR_BACKTRACE=0 \
+                          ${limit[@]+"${limit[@]}"} bash -c "$*" 2>&1 < /dev/null) || status=$?
       if ((status != 0)); then printf '[exit status %d]\n' "$status"; fi
    } > "$ex/output/$id.txt"
    if ((status == expect)); then
