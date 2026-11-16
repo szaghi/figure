@@ -18,11 +18,13 @@ trailing blanks included: pass `trim(...)` of a fixed-length buffer.
 
 ## nvfortran 26.9: internal compiler error on `size`
 
-A local variable named `size` in one procedure and the intrinsic `size()` called in another procedure of the same
-module make nvfortran 26.9 fail with "ILM file: can't find intrinsic size" (an internal compiler error). The code is
-legal Fortran. FIGURE names such locals `extent`; avoid naming a local `size` in modules of your own built with
-nvfortran 26.9 if you hit the same error. **Checked 2026-11-12:** a minimal module of that shape compiles with nvfortran
-26.9, so the trigger is not reduced yet. No canary: the defect is a build failure, which a test cannot report.
+A local variable of a derived type named `size`, given a value by a structure constructor (`size = vec2(w, h)`), makes
+nvfortran 26.9 fail with "ILM file: can't find intrinsic size" (an internal compiler error), at any optimisation
+level. The code is legal Fortran (`size` is not reserved); gfortran 16.2 and ifx 2026.2 compile it. Setting the
+components one by one (`size%x = w`) compiles, and so does an integer local named `size`; the intrinsic `size()` need
+not be called anywhere. FIGURE names such locals `extent`; do the same in modules of your own built with nvfortran 26.9.
+**Reduced 2026-11-16** to a module of 13 lines (#4). No canary: the defect is a build failure, which a test cannot
+report.
 
 ## nvfortran: `-Munixlogical`
 
