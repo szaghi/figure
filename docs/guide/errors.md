@@ -213,6 +213,18 @@ and axis give the messages of [Plot axes](#plot-axes) and the [pairs](#pairing-a
 | no values | `FIG_ERR_ARGUMENT` | `ip_bar_groups: no values` |
 | `group_size` outside (0, 1] | `FIG_ERR_ARGUMENT` | `ip_bar_groups: group_size must be in (0, 1]` |
 
+### Multi-selection
+
+`ig_begin_multi_select`, `ig_end_multi_select` and the `index` of `ig_selectable` and `ig_tree_node`
+([Selecting many items](widgets#selecting-many-items)); a wrong end gives the messages of the
+[pairs](#pairing-and-frames).
+
+| Failure | Status | Message |
+|---|---|---|
+| a multi-selection inside another | `FIG_ERR_STATE` | `ig_begin_multi_select: a multi-selection is open (Dear ImGui allows one at a time)` |
+| `index` with none open | `FIG_ERR_STATE` | `<p>: index is given, but no multi-selection is open (ig_begin_multi_select)` |
+| `index` outside the items | `FIG_ERR_ARGUMENT` | `<p>: index <i> is out of 1 to <n>` |
+
 ### Fields
 
 `ip_field_image`, `ip_colormap_legend` and `ip_colormap_legend_edit` ([Fields](plots#fields)) check their arguments
@@ -372,7 +384,7 @@ stops. `app%set_checks('abort')` stops at the faulty call itself.
 
 | Rule | Pairs |
 |---|---|
-| **Always paired:** the end follows every begin, whatever it returned | `ig_begin`, `ig_begin_side_bar` / `ig_end`; `ig_begin_child` / `ig_end_child`; `ig_push_id` / `ig_pop_id`; `ig_begin_disabled` / `ig_end_disabled`; `ig_push_font` / `ig_pop_font`; `ig_push_style_color`, `ip_push_style_color` / `ig_pop_style_color`, `ip_pop_style_color`; `ig_push_style_var`, `ip_push_style_var` / `ig_pop_style_var`, `ip_pop_style_var`; `ig_begin_group` / `ig_end_group`; `ig_align_begin` / `ig_align_end`; `ig_push_item_width` / `ig_pop_item_width` |
+| **Always paired:** the end follows every begin, whatever it returned | `ig_begin`, `ig_begin_side_bar` / `ig_end`; `ig_begin_child` / `ig_end_child`; `ig_push_id` / `ig_pop_id`; `ig_begin_disabled` / `ig_end_disabled`; `ig_push_font` / `ig_pop_font`; `ig_push_style_color`, `ip_push_style_color` / `ig_pop_style_color`, `ip_pop_style_color`; `ig_push_style_var`, `ip_push_style_var` / `ig_pop_style_var`, `ip_pop_style_var`; `ig_begin_group` / `ig_end_group`; `ig_align_begin` / `ig_align_end`; `ig_begin_multi_select` / `ig_end_multi_select`; `ig_push_item_width` / `ig_pop_item_width` |
 | **End only after a true begin** | `ig_begin_tab_bar` / `ig_end_tab_bar`; `ig_begin_tab` / `ig_end_tab`; `ig_begin_table` / `ig_end_table`; `ig_tree_node` / `ig_tree_pop`; `ig_begin_main_menu_bar` / `ig_end_main_menu_bar`; `ig_begin_menu_bar` / `ig_end_menu_bar`; `ig_begin_menu` / `ig_end_menu`; `ig_begin_popup`, `ig_begin_popup_context`, `ig_begin_popup_modal` / `ig_end_popup`; `ig_begin_tooltip`, `ig_begin_item_tooltip` / `ig_end_tooltip`; `ip_begin_plot` / `ip_end_plot`; `ip_begin_subplots` / `ip_end_subplots`; `ip3_begin_plot` / `ip3_end_plot`; `ip_begin_aligned` / `ip_end_aligned`; `ip_begin_legend_popup` / `ip_end_legend_popup`; `ig_dock_layout_begin` / `ig_dock_layout_end` |
 
 - **Scopes nest.** Windows, child regions, tab bars, tabs, tables, tree nodes, menu bars, menus, popups (context

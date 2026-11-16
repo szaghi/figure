@@ -6,7 +6,7 @@ module figure_c_native
 !< (window, OpenGL context) and calls the cimgui/cimplot functions Fortran cannot call directly (structs larger than
 !< `ImVec2` passed by value); the direct ones are generated in figure_cimgui and figure_cimplot. Strings passed to
 !< the glue are (pointer, length), not NUL-terminated.
-use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_funptr, c_int, c_long_long, c_ptr
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_funptr, c_int, c_long_long, c_ptr
 
 implicit none
 private
@@ -41,6 +41,7 @@ public :: fig_usage_error, fig_time, fig_add_fallback_font, fig_test_glyph
 public :: fig_make_folder, fig_remove, fig_set_file_time, fig_file_time, fig_file_exists
 public :: fig_dnd_source, fig_dnd_target, fig_dnd_plot_target, fig_dnd_payload, fig_dnd_dragging
 public :: fig_plot_link, fig_aligned_open
+public :: fig_multi_select_begin, fig_multi_select_end, fig_multi_select_item, fig_clipper_include
 public :: fig_set_checks, fig_checks, fig_draw_refuse, fig_scope_open, fig_scope_close, fig_scope_report
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_notification_alpha
@@ -693,6 +694,45 @@ interface
    implicit none
    integer(c_int) :: open !< 1 or 0.
    endfunction fig_aligned_open
+
+   function fig_multi_select_begin(ms_flags, flags, count, range_source) result(status) &
+      bind(C, name='fig_multi_select_begin')
+   !< Begin a multi-selection over `count` items, their flags updated by the begin's requests; FIG_ERR_STATE inside
+   !< another.
+   import :: c_bool, c_int
+   implicit none
+   integer(c_int), value                 :: ms_flags     !< ImGuiMultiSelectFlags.
+   logical(c_bool),        intent(inout) :: flags(*)     !< One per item: selected.
+   integer(c_int), value                 :: count        !< Items.
+   integer(c_int),         intent(out)   :: range_source !< The item a shift+click extends from (0-based), -1 none.
+   integer(c_int)                        :: status       !< Status.
+   endfunction fig_multi_select_begin
+
+   subroutine fig_multi_select_end(flags, count) bind(C, name='fig_multi_select_end')
+   !< End the multi-selection, its flags updated by the end's requests.
+   import :: c_bool, c_int
+   implicit none
+   logical(c_bool), intent(inout) :: flags(*) !< One per item: selected.
+   integer(c_int), value          :: count    !< Items.
+   endsubroutine fig_multi_select_end
+
+   function fig_multi_select_item(index, count) result(status) bind(C, name='fig_multi_select_item')
+   !< The next item's index (0-based) in the open multi-selection; FIG_ERR_STATE none open, FIG_ERR_ARGUMENT out of
+   !< range; count: the selection's items.
+   import :: c_int
+   implicit none
+   integer(c_int), value       :: index  !< 0-based.
+   integer(c_int), intent(out) :: count  !< Items of the selection open (-1: none).
+   integer(c_int)              :: status !< Status.
+   endfunction fig_multi_select_item
+
+   subroutine fig_clipper_include(clipper, index) bind(C, name='fig_clipper_include')
+   !< Keep row `index` (0-based) drawn by the clipper.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr), value    :: clipper !< Clipper.
+   integer(c_int), value :: index   !< Row.
+   endsubroutine fig_clipper_include
 
    subroutine fig_scope_open(kind, who, who_len, label, label_len, returned, aux) bind(C, name='fig_scope_open')
    !< A begin or a push, after it: its scope in the record of the frame.

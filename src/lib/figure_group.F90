@@ -27,10 +27,14 @@ use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_scope_open, figure_scope_refused, &
                         figure_usage_error,                                                                         &
                         SCOPE_ALIGN, SCOPE_CHILD, SCOPE_DISABLED, SCOPE_GROUP, SCOPE_ID, SCOPE_TAB, SCOPE_TAB_BAR,      &
-                        SCOPE_TABLE, SCOPE_TREE
+                        SCOPE_TABLE, SCOPE_TREE, SCOPE_MULTI_SELECT
 use figure_c_native, only : fig_align_begin, fig_align_end, fig_align_next, fig_clipper_begin, fig_clipper_delete, &
                             fig_clipper_new, fig_clipper_step, fig_table_column_enabled, fig_table_hovered_column, &
-                            fig_table_row_color, fig_table_sort, FIG_ERR_ARGUMENT, FIG_OK
+                            fig_table_row_color, fig_table_sort, FIG_ERR_ARGUMENT, FIG_OK, &
+                            fig_multi_select_begin, fig_multi_select_end, fig_clipper_include
+use figure_imgui, only : item_index_refused
+use figure_cimgui_enums, only : ImGuiMultiSelectFlags_SingleSelect, ImGuiMultiSelectFlags_BoxSelect1d, &
+                                ImGuiMultiSelectFlags_ClearOnEscape, ImGuiMultiSelectFlags_NoSelectAll
 use figure_cimgui, only : igBeginGroup, igEndGroup, &
                           igBeginChild_Str, igEndChild, im_vec2, igBeginDisabled, igBeginTabBar, igBeginTabItem, &
                           igBeginTable,                                                                         &
@@ -59,7 +63,7 @@ public :: ig_table_next_column, ig_table_set_column, ig_begin_child, ig_end_chil
 public :: ig_table_sort, ig_table_row_color, ig_table_hovered_column, ig_table_column_enabled
 public :: ig_tree_node, ig_tree_pop, ig_set_next_item_open
 public :: ig_begin_group, ig_end_group, ig_align_begin, ig_align_end, ig_align_next
-public :: list_clipper_object
+public :: list_clipper_object, selection_object, ig_begin_multi_select, ig_end_multi_select
 
 type :: list_clipper_object
    !< Only the rows of a long list that are in view are drawn: `call clip%begin(n)`, then
@@ -78,17 +82,37 @@ type :: list_clipper_object
       final                 :: clipper_final
 endtype list_clipper_object
 
+type :: selection_object
+   !< What is selected in a list, a table or a tree of `n` items (`call sel%resize(n)`), under a multi-selection
+   !< (`ig_begin_multi_select(sel)` ... `ig_end_multi_select(sel)`): one flag per item, updated by the user's clicks,
+   !< shift and ctrl clicks, ctrl+a and box-selection; the program reads them (`is_selected`, `indices`) and may set
+   !< them (`set`, `clear`).
+   integer(int32)               :: keep = 0_int32 !< The item a shift+click extends from (from 1; 0 none): a clipper
+                                                  !< keeps it drawn (`clip%begin(n, keep=sel%keep)`).
+   logical(c_bool), allocatable, private :: flag(:) !< One per item.
+   contains
+      procedure, pass(self) :: resize => selection_resize               !< Number of items (flags kept).
+      procedure, pass(self) :: is_selected => selection_is_selected     !< Item i is selected.
+      procedure, pass(self) :: set => selection_set                     !< Select or deselect item i.
+      procedure, pass(self) :: clear => selection_clear                 !< Deselect all.
+      procedure, pass(self) :: selected_count => selection_count        !< Items selected.
+      procedure, pass(self) :: indices => selection_indices             !< The items selected, in order.
+      procedure, pass(self) :: flags => selection_flags                 !< One logical per item.
+endtype selection_object
+
 interface ig_push_id
    !< Open an id scope, by a string or an integer.
    module procedure ig_push_id_str, ig_push_id_i32
 endinterface ig_push_id
 
 contains
-   recursive subroutine clipper_begin(self, count, item_height)
-   !< Start clipping `count` rows; `item_height` [pixels] (default: measured on the first row drawn).
+   recursive subroutine clipper_begin(self, count, item_height, keep)
+   !< Start clipping `count` rows; `item_height` [pixels] (default: measured on the first row drawn). `keep`: a row
+   !< (from 1; 0 none) drawn whether in view or not, a multi-selection's range source (`sel%keep`).
    class(list_clipper_object), intent(inout)        :: self        !< Clipper.
    integer(int32),             intent(in)           :: count       !< Rows.
    real(real64),               intent(in), optional :: item_height !< Row height.
+   integer(int32),             intent(in), optional :: keep        !< A row always drawn (from 1; 0 none).
    real(c_double)                                   :: h           !< C copy.
 
    if (figure_draw_refused('list_clipper_object%begin')) return ! a task does not draw
@@ -100,6 +124,9 @@ contains
       self%item_height = item_height
    endif
    call fig_clipper_begin(self%p, int(max(count, 0_int32), c_int), h)
+   if (present(keep)) then
+      if (keep >= 1_int32 .and. keep <= count) call fig_clipper_include(self%p, int(keep, c_int) - 1_c_int)
+   endif
    self%first = 1_int32
    self%last = 0_int32
    endsubroutine clipper_begin
@@ -125,6 +152,135 @@ contains
       self%p = c_null_ptr
    endif
    endfunction clipper_step
+
+   subroutine selection_resize(self, n)
+   !< `n` items: the flags of items 1..min(n, old n) kept, new items not selected.
+   class(selection_object), intent(inout) :: self !< Selection.
+   integer(int32),          intent(in)    :: n    !< Items.
+   logical(c_bool), allocatable           :: f(:) !< New flags.
+   integer(int32)                         :: m    !< Kept.
+
+   allocate(f(max(n, 0_int32)))
+   f = .false._c_bool
+   if (allocated(self%flag)) then
+      m = min(size(self%flag, kind=int32), max(n, 0_int32))
+      f(1:m) = self%flag(1:m)
+   endif
+   call move_alloc(f, self%flag)
+   if (self%keep > n) self%keep = 0_int32
+   endsubroutine selection_resize
+
+   pure function selection_is_selected(self, i) result(on)
+   !< Item `i` (from 1) is selected (false outside 1..n).
+   class(selection_object), intent(in) :: self !< Selection.
+   integer(int32),          intent(in) :: i    !< Item.
+   logical                             :: on   !< Selected.
+
+   on = .false.
+   if (.not. allocated(self%flag)) return
+   if (i >= 1_int32 .and. i <= size(self%flag, kind=int32)) on = logical(self%flag(i))
+   endfunction selection_is_selected
+
+   subroutine selection_set(self, i, on)
+   !< Select (`on`) or deselect item `i` (from 1; ignored outside 1..n).
+   class(selection_object), intent(inout) :: self !< Selection.
+   integer(int32),          intent(in)    :: i    !< Item.
+   logical,                 intent(in)    :: on   !< Selected.
+
+   if (.not. allocated(self%flag)) return
+   if (i >= 1_int32 .and. i <= size(self%flag, kind=int32)) self%flag(i) = logical(on, c_bool)
+   endsubroutine selection_set
+
+   subroutine selection_clear(self)
+   !< Deselect every item.
+   class(selection_object), intent(inout) :: self !< Selection.
+
+   if (allocated(self%flag)) self%flag = .false._c_bool
+   endsubroutine selection_clear
+
+   pure function selection_count(self) result(n)
+   !< The number of items selected.
+   class(selection_object), intent(in) :: self !< Selection.
+   integer(int32)                      :: n    !< Items selected.
+
+   n = 0_int32
+   if (allocated(self%flag)) n = int(count(logical(self%flag)), int32)
+   endfunction selection_count
+
+   pure function selection_indices(self) result(idx)
+   !< The items selected (from 1), in increasing order.
+   class(selection_object), intent(in) :: self   !< Selection.
+   integer(int32), allocatable         :: idx(:) !< Items selected.
+   integer(int32)                      :: i      !< Item.
+
+   allocate(idx(0))
+   if (.not. allocated(self%flag)) return
+   idx = pack([(i, i = 1_int32, size(self%flag, kind=int32))], logical(self%flag))
+   endfunction selection_indices
+
+   pure function selection_flags(self) result(f)
+   !< One logical per item: selected.
+   class(selection_object), intent(in) :: self !< Selection.
+   logical, allocatable                :: f(:) !< Flags.
+
+   allocate(f(0))
+   if (allocated(self%flag)) f = logical(self%flag)
+   endfunction selection_flags
+
+   recursive subroutine ig_begin_multi_select(sel, single, box_select, clear_on_escape, no_select_all, stat)
+   !< Begin a multi-selection (`BeginMultiSelect`) over the items of `sel` (`sel%resize(n)` first): the items drawn
+   !< until `ig_end_multi_select(sel)` with `index=` (`ig_selectable`, `ig_tree_node`) are selected as in a file
+   !< manager: a click selects one, shift+click a range, ctrl+click (cmd on macOS) toggles one, ctrl+a all, the
+   !< arrows move with shift extending; `box_select` adds selection by a drag from an empty part of the window,
+   !< `clear_on_escape` lets escape deselect all, `single` keeps one item at most, `no_select_all` refuses ctrl+a.
+   !< Always paired with `ig_end_multi_select`. One at a time. Statuses: `FIG_ERR_STATE` inside another, outside a
+   !< frame or from a task.
+   type(selection_object), intent(inout)         :: sel             !< What is selected.
+   logical,                intent(in),  optional :: single          !< One item at most (default: many).
+   logical,                intent(in),  optional :: box_select      !< Selection by a box (default: no).
+   logical,                intent(in),  optional :: clear_on_escape !< Escape deselects all (default: no).
+   logical,                intent(in),  optional :: no_select_all   !< No ctrl+a (default: ctrl+a selects all).
+   integer(int32),         intent(out), optional :: stat            !< Status.
+   integer(c_int)                                :: flags           !< ImGuiMultiSelectFlags.
+   integer(c_int)                                :: src             !< Range source (0-based, -1 none).
+   integer(c_int)                                :: s               !< Status.
+
+   if (figure_draw_refused('ig_begin_multi_select', stat)) return ! a task does not draw
+   if (.not. allocated(sel%flag)) call sel%resize(0_int32)
+   flags = 0_c_int
+   if (opt(single)) flags = ior(flags, ImGuiMultiSelectFlags_SingleSelect)
+   if (opt(box_select)) flags = ior(flags, ImGuiMultiSelectFlags_BoxSelect1d)
+   if (opt(clear_on_escape)) flags = ior(flags, ImGuiMultiSelectFlags_ClearOnEscape)
+   if (opt(no_select_all)) flags = ior(flags, ImGuiMultiSelectFlags_NoSelectAll)
+   s = fig_multi_select_begin(flags, sel%flag, int(size(sel%flag), c_int), src)
+   if (s /= FIG_OK) then
+      call figure_usage_error('ig_begin_multi_select: a multi-selection is open (Dear ImGui allows one at a time)', &
+                              stat)
+      return
+   endif
+   sel%keep = int(src, int32) + 1_int32
+   call figure_scope_open(SCOPE_MULTI_SELECT, 'ig_begin_multi_select', '')
+   if (present(stat)) stat = FIG_OK
+   contains
+      pure logical function opt(x)
+      !< An optional flag, false when absent.
+      logical, intent(in), optional :: x !< Flag.
+
+      opt = .false.
+      if (present(x)) opt = x
+      endfunction opt
+   endsubroutine ig_begin_multi_select
+
+   recursive subroutine ig_end_multi_select(sel, stat)
+   !< End the multi-selection begun with `ig_begin_multi_select(sel)`: what the user did on its items is in `sel`.
+   type(selection_object), intent(inout)         :: sel  !< What is selected.
+   integer(int32),         intent(out), optional :: stat !< Status: `FIG_ERR_STATE` with none open.
+
+   if (figure_scope_refused(SCOPE_MULTI_SELECT, 'ig_end_multi_select', stat=stat)) return
+   if (.not. allocated(sel%flag)) call sel%resize(0_int32)
+   call fig_multi_select_end(sel%flag, int(size(sel%flag), c_int))
+   if (present(stat)) stat = FIG_OK
+   endsubroutine ig_end_multi_select
 
    subroutine clipper_final(self)
    !< A clipper going out of scope: freed.
@@ -181,13 +337,15 @@ contains
    open = logical(igCollapsingHeader_TreeNodeFlags(cstr(label), flags))
    endfunction ig_collapsing_header
 
-   recursive function ig_tree_node(label, default_open, selected, leaf, span_full_width, clicked, span_all_columns) &
-      result(open)
+   recursive function ig_tree_node(label, default_open, selected, leaf, span_full_width, clicked, span_all_columns, &
+                                   index, stat) result(open)
    !< A node of a tree (`TreeNodeEx`); true while open: draw its children, then `ig_tree_pop` (only after true).
    !< The arrow, or a double-click on the label, opens and closes the node; a single click on the label is reported
    !< by `clicked` (`IsItemClicked` and not `IsItemToggledOpen`), so choosing a node and expanding it stay different.
    !< A leaf has no arrow and is always open: it too is popped. In a table, `span_all_columns` makes the node's row
-   !< its hit area and highlight across every column (a hierarchy with values in the columns to its right).
+   !< its hit area and highlight across every column (a hierarchy with values in the columns to its right). With
+   !< `index` (from 1) the node is item `index` of the multi-selection open (`ig_begin_multi_select`), as
+   !< `ig_selectable`'s; statuses then as `ig_selectable`'s.
    character(len=*), intent(in)            :: label           !< Label (also its id).
    logical,          intent(in),  optional :: default_open    !< Open the first time it is shown (default: closed).
    logical,          intent(in),  optional :: selected        !< Highlighted as selected (the program keeps it).
@@ -196,12 +354,17 @@ contains
    logical,          intent(out), optional :: clicked         !< The label was clicked this frame (not the arrow).
    logical,          intent(in),  optional :: span_all_columns !< In a table: hit and highlight every column of the
                                                                !< row (default: false).
+   integer(int32),   intent(in),  optional :: index           !< The item in the multi-selection open (from 1).
+   integer(int32),   intent(out), optional :: stat            !< Status (with `index`).
    logical                                 :: open            !< The node is open: draw its children, then pop.
    integer(c_int)                          :: flags           !< ImGuiTreeNodeFlags.
 
    open = .false.
    if (present(clicked)) clicked = .false.
-   if (figure_draw_refused('ig_tree_node')) return ! a task does not draw
+   if (figure_draw_refused('ig_tree_node', stat)) return ! a task does not draw
+   if (present(index)) then
+      if (item_index_refused('ig_tree_node', index, stat)) return
+   endif
    flags = ior(ImGuiTreeNodeFlags_OpenOnArrow, ImGuiTreeNodeFlags_OpenOnDoubleClick)
    if (present(default_open)) then
       if (default_open) flags = ior(flags, ImGuiTreeNodeFlags_DefaultOpen)
@@ -221,6 +384,7 @@ contains
    open = logical(igTreeNodeEx_Str(cstr(label), flags))
    call figure_scope_open(SCOPE_TREE, 'ig_tree_node', label, open)
    if (present(clicked)) clicked = logical(igIsItemClicked(0_c_int)) .and. .not. logical(igIsItemToggledOpen())
+   if (present(stat)) stat = FIG_OK
    endfunction ig_tree_node
 
    recursive subroutine ig_tree_pop()

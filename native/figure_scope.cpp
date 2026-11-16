@@ -25,7 +25,7 @@ namespace {
 enum kind_t {
    K_WINDOW = 1, K_CHILD, K_TAB_BAR, K_TAB, K_TABLE, K_TREE, K_MAIN_MENU_BAR, K_MENU_BAR, K_MENU, K_POPUP, K_PLOT,
    K_SUBPLOTS, K_DOCK_LAYOUT, K_ID, K_DISABLED, K_FONT, K_STYLE_COLOR, K_STYLE_VAR, K_GROUP, K_ALIGN, K_ITEM_WIDTH,
-   K_TOOLTIP, K_PLOT3D, K_ALIGNED, K_LEGEND_POPUP, K_COUNT
+   K_TOOLTIP, K_PLOT3D, K_ALIGNED, K_LEGEND_POPUP, K_MULTI_SELECT, K_COUNT
 };
 
 struct kind_info_t {
@@ -63,6 +63,7 @@ const kind_info_t KINDS[K_COUNT] = {
    {"ip3_begin_plot", "ip3_end_plot", true, true, false},          // an ImPlot3D plot
    {"ip_begin_aligned", "ip_end_aligned", true, true, false},      // plots aligned by ImPlot (one group at a time)
    {"ip_begin_legend_popup", "ip_end_legend_popup", true, true, true}, // a popup of a legend entry: a window
+   {"ig_begin_multi_select", "ig_end_multi_select", true, false, false}, // a multi-selection (always paired)
 };
 
 constexpr int CHECKS_ABORT = 0, CHECKS_REPORT = 1, CHECKS_RECOVER = 2;
@@ -258,6 +259,7 @@ void close_entry(const entry_t &e) {
    case K_PLOT3D: fig_plot3d_end(); break;
    case K_ALIGNED: ImPlot::EndAlignedPlots(); break;
    case K_LEGEND_POPUP: ImPlot::EndLegendPopup(); break;
+   case K_MULTI_SELECT: ImGui::EndMultiSelect(); fig_multi_select_reset(); break; // its requests dropped
    default: break;
    }
 }

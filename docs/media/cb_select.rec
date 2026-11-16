@@ -1,0 +1,37 @@
+#! program build/docs-examples/bin/cb_select
+#! frames  260
+#! poster  150
+#! keys
+# click block 3, shift+click block 8: 3 to 8; ctrl+click block 11 (added) and block 5 (removed); Freeze marks them;
+# back in the list (ctrl+click block 1), ctrl+a selects all 2000; escape clears
+0   move 300 300
+5   move 80 93 15
+25  down
+27  up
+45  move 80 188 15
+60  key shift down
+62  down
+64  up
+66  key shift up
+85  move 80 245 15
+100 key ctrl down
+102 down
+104 up
+106 key ctrl up
+115 move 80 131 10
+125 key ctrl down
+127 down
+129 up
+131 key ctrl up
+150 move 38 415 15
+170 down
+172 up
+180 move 80 55 10
+188 key ctrl down
+190 down
+192 up
+194 key ctrl up
+205 key shortcut down
+207 key a
+209 key shortcut up
+235 key escape

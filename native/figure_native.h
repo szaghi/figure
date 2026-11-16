@@ -9,6 +9,10 @@
 #ifndef FIGURE_NATIVE_H
 #define FIGURE_NATIVE_H
 
+#ifndef __cplusplus
+#include <stdbool.h> /* bool: the flags of a multi-selection (Fortran's logical(c_bool)) */
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -238,6 +242,15 @@ int    fig_dnd_dragging(const char *type, int type_len);
 int    fig_plot_link(int axis, const char *name, int name_len);
 void   fig_plot_links_reset(void);
 int    fig_aligned_open(void);
+/* Multi-selection (figure_select.cpp): begin over `count` items whose flags (bools) the begin's and the end's
+ * requests update (FIG_ERR_STATE: one is open); *range_source the item (0-based) a shift+click extends from, -1 none;
+ * the next item's index (FIG_ERR_STATE none open, FIG_ERR_ARGUMENT out of [0, count)); forget the open one (FIGURE's
+ * recovery); keep a clipper's row drawn. */
+int    fig_multi_select_begin(int ms_flags, bool *flags, int count, int *range_source);
+void   fig_multi_select_end(bool *flags, int count);
+int    fig_multi_select_item(int index, int *count);
+void   fig_multi_select_reset(void);
+void   fig_clipper_include(void *clipper, int index);
 int    fig_file_browser_get(int what, int index, char *buf, int buf_len, int *len, int *count);
 int    fig_file_browser_rect(const char *part, int part_len, float *rect, int *found);
 /* Internal (figure_native.cpp): a browser open with this id; its answer, as fig_file_dialog_result; draw the front

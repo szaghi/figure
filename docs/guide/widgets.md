@@ -816,14 +816,14 @@ Strings are passed verbatim, trailing blanks included: `'Run'` and `'Run   '` ar
 
 | Procedure | Notes |
 |---|---|
-| `ig_selectable(label, selected)` → `logical` | A line of a list, highlighted when `selected`; `.true.` on the frame it is clicked. The program keeps the selection: the line does not change `selected`. |
+| `ig_selectable(label, selected [, index] [, stat])` → `logical` | A line of a list, highlighted when `selected`; `.true.` on the frame it is clicked. The program keeps the selection: the line does not change `selected`. With `index`, an item of a [multi-selection](#selecting-many-items). |
 | `ig_begin_child(id [, width] [, height] [, border])` → `logical`, `ig_end_child()` | A region of the window that scrolls on its own. Always paired, like `ig_begin`/`ig_end`. `width` and `height` in pixels: absent or 0 fills what is left, negative leaves that much. |
 
 A list of thousands of rows draws only those in view with a `list_clipper_object`, rows of equal height (lines of
 text, selectables, a table's rows of fields): `call clip%begin(n)`, then `do while (clip%step())` draws rows
 `clip%first` to `clip%last`. The loop ends by itself (a few steps); left early, the clipper is closed by the next
 `begin` or when it goes out of scope. `clip%item_height` is the distance between rows [pixels], given to `begin` or
-measured on the first row: [Scrolling and focus](#scrolling-and-focus) reaches a row not drawn with it.
+measured on the first row: [Scrolling and focus](#scrolling-and-focus) reaches a row not drawn with it. `keep` (a row, 0 none) is drawn wherever it is: a [multi-selection](#selecting-many-items)'s `sel%keep`.
 
 <<< @/examples/snippets/cb_controls-clipper.F90{fortran}
 
@@ -1074,7 +1074,7 @@ click was on ([Context menus](menus#context-menus)).
 
 | Procedure | Notes |
 |---|---|
-| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked] [, span_all_columns])` → `logical` | A node of a tree (`TreeNodeEx`); `.true.` while open: draw its children, then `ig_tree_pop`. |
+| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked] [, span_all_columns] [, index] [, stat])` → `logical` | A node of a tree (`TreeNodeEx`); `.true.` while open: draw its children, then `ig_tree_pop`. |
 | `ig_tree_pop()` | Closes the children of a node: only after `ig_tree_node` returned `.true.`. |
 | `ig_set_next_item_open(open [, always])` | Opens or closes the next node from the program: the first time it is shown, or with `always` on this frame whatever its state. |
 
@@ -1110,6 +1110,43 @@ closes, and clips that list.
 <Media name="cb_tree" alt="A table of grids: the wing open with three blocks; block 2 is chosen by a click on its cells and highlighted across its row, the fuselage opened by its arrow shows two more blocks, then the background node opens on a region of 20000 blocks that scrolls" caption="docs/examples/src/cb_tree.F90" />
 
 Trees are drawn the same in window, headless and remote modes; they have no failure status.
+
+## Selecting many items
+
+| Procedure | Notes |
+|---|---|
+| `selection_object` | What is selected among `n` items: `call sel%resize(n)` (the flags of the first items kept), `sel%is_selected(i)`, `sel%set(i, on)`, `sel%clear()`, `sel%selected_count()`, `sel%indices()` (the items selected, in order), `sel%flags()` (one logical per item); `sel%keep`, the item a shift+click extends from. |
+| `ig_begin_multi_select(sel [, single] [, box_select] [, clear_on_escape] [, no_select_all] [, stat])`, `ig_end_multi_select(sel [, stat])` | A multi-selection (`BeginMultiSelect`, `EndMultiSelect`) over the items drawn in between with `index=`: what the user does on them is in `sel` after the end. Always paired; one at a time. |
+| `ig_selectable(label, selected [, index] [, stat])` → `logical`, `ig_tree_node(... [, index] [, stat])` → `logical` | With `index` (from 1), the line or node is item `index` of the multi-selection open (`SetNextItemSelectionUserData`); `selected` is then `sel%is_selected(index)`. |
+
+The user selects as in a file manager: a click selects one item, shift+click the range from the last one clicked,
+ctrl+click (cmd on macOS) adds or removes one, ctrl+a selects all (`no_select_all` refuses it), the arrow keys move
+with shift extending; `box_select` adds a box dragged from an empty part of the window or region, `clear_on_escape`
+lets escape deselect all, `single` keeps one item at most. Dear ImGui turns these into requests ("all", "the range a
+to b"); FIGURE applies them to `sel`'s flags at the begin and at the end, so the program reads plain logicals and
+draws `selected` from them.
+
+<<< @/examples/snippets/cb_select-select.F90{fortran}
+
+<Media name="cb_select" video alt="A list of 2000 blocks with their cells. Block 3 is clicked, then shift+click on block 8 selects 3 to 8; ctrl+click adds block 11 and removes block 5; the total under the list follows: blocks selected and their cells. Freeze marks the selected blocks frozen; back in the list, ctrl+a selects all 2000; escape clears." caption="docs/examples/src/cb_select.F90" />
+
+- **Clipped lists.** A `list_clipper_object` draws only the lines in view, but a shift+click extends from the item
+  clicked before, which may have scrolled away: `clip%begin(n, keep=sel%keep)` keeps that one line drawn wherever it
+  is, as Dear ImGui's documentation of `BeginMultiSelect` asks. A mouse shift+click past a source scrolled away was
+  measured to select the same range without it (`figure_test_select`), so FIGURE's tests do not tell what it
+  guards; pass it all the same.
+- **Tables and trees.** In a table the selectable spans its row (`ig_selectable` in the first column, the values in
+  the next); tree nodes take `index` the same way, numbered in the order they are drawn, and a range selects the
+  nodes between, open or not as drawn.
+- **Keys act on the focused selection.** ctrl+a, escape and the arrows apply to the selection whose window or region
+  has the keyboard focus: after a click elsewhere (a button) the user clicks back into the list first.
+- **The program's own changes.** `sel%set`, `sel%clear` and `sel%resize` between frames are what the next frame
+  draws; a list that changes length resizes its selection first (new items unselected).
+- Statuses: `FIG_ERR_STATE` for `ig_begin_multi_select` inside another, an end with none open (as the other
+  [pairs](errors#pairing-and-frames)), `index` with no multi-selection open; `FIG_ERR_ARGUMENT` for an `index` outside
+  1 to the selection's items. `stat` is optional (absent: `error stop` with the message).
+- Modes: the same in **window**, **headless** (`test_click`, `test_key('shift', down=.true.)`, `test_key('shortcut',
+  ...)` for ctrl+a: `src/tests/figure_test_select.F90`) and **remote** mode.
 
 ## Not bound yet
 

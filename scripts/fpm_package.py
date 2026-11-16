@@ -76,7 +76,7 @@ MD4C_FILES = ["md4c.c", "md4c.h"]
 IMPLOT_FILES = ["implot.cpp", "implot_items.cpp", "implot_demo.cpp", "implot.h", "implot_internal.h", "LICENSE"]
 NATIVE_FILES = [
     "figure_native.cpp", "figure_native.h", "figure_process.cpp", "figure_task.cpp", "figure_scope.cpp", "figure_canvas.cpp",
-    "figure_files.cpp", "figure_dnd.cpp", "figure_plot_links.cpp", "figure_app.cpp",
+    "figure_files.cpp", "figure_dnd.cpp", "figure_plot_links.cpp", "figure_select.cpp", "figure_app.cpp",
     "figure_remote.cpp", "figure_image.cpp", "figure_image.h", "figure_items.cpp", "figure_items.h",
     "figure_swrast.cpp", "figure_swrast.h", "figure_editor.cpp", "figure_plot3d.cpp",
     "figure_markdown.cpp", "figure_fonts.h", "figure_rich_md_stb.h",

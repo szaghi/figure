@@ -16,12 +16,13 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
-                        figure_scope_refused, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP, SCOPE_WINDOW
+                        figure_scope_refused, figure_usage_error, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP, SCOPE_WINDOW
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, fig_item_status, fig_last_item, fig_mark_last_item_edited, &
-                            fig_items_tooltip, fig_splitter, fig_window_open_flag, FIG_ERR_ARGUMENT, FIG_OK, &
-                            fig_dnd_source, fig_dnd_target, fig_dnd_payload, fig_dnd_dragging
+                            fig_items_tooltip, fig_splitter, fig_window_open_flag, FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, &
+                            fig_dnd_source, fig_dnd_target, fig_dnd_payload, fig_dnd_dragging, &
+                            fig_multi_select_item
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : igGetTime, igProgressBar, &
                           im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
@@ -51,7 +52,7 @@ public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_in
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
 public :: ig_progress_bar, ig_splitter
-public :: ig_drag_source, ig_drop_target, ig_dragging, take_payload
+public :: ig_drag_source, ig_drop_target, ig_dragging, take_payload, item_index_refused
 public :: ig_color_edit
 public :: ig_input_text_multiline, text_buffer_object
 public :: ig_set_clipboard, ig_get_clipboard
@@ -639,17 +640,26 @@ contains
    endif
    endsubroutine ig_same_line
 
-   recursive function ig_selectable(label, selected) result(clicked)
+   recursive function ig_selectable(label, selected, index, stat) result(clicked)
    !< A line of a list, highlighted when `selected`; true on the frame it is clicked (the program then updates what is
-   !< selected: the line does not change `selected` itself).
-   character(len=*), intent(in) :: label    !< Label (also its id).
-   logical,          intent(in) :: selected !< Highlighted.
-   logical                      :: clicked  !< Clicked this frame.
+   !< selected: the line does not change `selected` itself). With `index` (from 1), the line is item `index` of the
+   !< multi-selection open (`ig_begin_multi_select`): clicks, shift and ctrl clicks, ctrl+a and box-selection update
+   !< the selection object, and `selected` is its `is_selected(index)`. Statuses (only with `index`):
+   !< `FIG_ERR_STATE` with no multi-selection open, `FIG_ERR_ARGUMENT` for an index outside the selection's items.
+   character(len=*), intent(in)            :: label    !< Label (also its id).
+   logical,          intent(in)            :: selected !< Highlighted.
+   integer(int32),   intent(in),  optional :: index    !< The item in the multi-selection open (from 1).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   logical                                 :: clicked  !< Clicked this frame.
 
    clicked = .false.
-   if (figure_draw_refused('ig_selectable')) return ! a task does not draw
+   if (figure_draw_refused('ig_selectable', stat)) return ! a task does not draw
+   if (present(index)) then
+      if (item_index_refused('ig_selectable', index, stat)) return
+   endif
    clicked = logical(igSelectable_Bool(cstr(label), logical(selected, c_bool), 0_c_int, &
                                        im_vec2(0.0_c_float, 0.0_c_float)))
+   if (present(stat)) stat = FIG_OK
    endfunction ig_selectable
 
    recursive function ig_drag_source(type, payload, preview, stat) result(dragging)
@@ -1262,6 +1272,28 @@ contains
    call igImage(texture_ref(tex), extent, im_vec2(0.0_c_float, 0.0_c_float), im_vec2(1.0_c_float, 1.0_c_float))
    call fig_texture_sampling(0_c_int, 0_c_int)
    endsubroutine ig_image
+   recursive function item_index_refused(who, index, stat) result(refused)
+   !< Give the next item its index (from 1) in the multi-selection open; true, reported, when none is open
+   !< (`FIG_ERR_STATE`) or the index is outside its items (`FIG_ERR_ARGUMENT`).
+   character(len=*), intent(in)            :: who     !< The procedure.
+   integer(int32),   intent(in)            :: index   !< The item, from 1.
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   logical                                 :: refused !< Refused: return.
+   integer(c_int)                          :: n       !< The selection's items.
+   integer(c_int)                          :: s       !< Status.
+   character(len=12)                       :: t1, t2  !< Numbers, printed.
+
+   s = fig_multi_select_item(int(index, c_int) - 1_c_int, n)
+   refused = s /= FIG_OK
+   if (s == FIG_ERR_STATE) then
+      call figure_usage_error(who//': index is given, but no multi-selection is open (ig_begin_multi_select)', stat)
+   elseif (s /= FIG_OK) then
+      write(t1, '(I0)') index
+      write(t2, '(I0)') n
+      call figure_fail(FIG_ERR_ARGUMENT, who//': index '//trim(t1)//' is out of 1 to '//trim(t2), stat)
+   endif
+   endfunction item_index_refused
+
    recursive subroutine take_payload(n, payload)
    !< The payload delivered last, `n` characters, into `payload` (reallocated).
    integer(c_int),                intent(in)    :: n       !< Its length.

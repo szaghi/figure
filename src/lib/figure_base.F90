@@ -21,7 +21,7 @@ public :: figure_draw_refused, figure_scope_open, figure_scope_refused, figure_u
 public :: SCOPE_WINDOW, SCOPE_CHILD, SCOPE_TAB_BAR, SCOPE_TAB, SCOPE_TABLE, SCOPE_TREE, SCOPE_MAIN_MENU_BAR, SCOPE_MENU_BAR
 public :: SCOPE_MENU, SCOPE_POPUP, SCOPE_PLOT, SCOPE_SUBPLOTS, SCOPE_DOCK_LAYOUT, SCOPE_ID, SCOPE_DISABLED, SCOPE_FONT
 public :: SCOPE_STYLE_COLOR, SCOPE_STYLE_VAR, SCOPE_GROUP, SCOPE_ALIGN, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP
-public :: SCOPE_PLOT3D, SCOPE_ALIGNED, SCOPE_LEGEND_POPUP
+public :: SCOPE_PLOT3D, SCOPE_ALIGNED, SCOPE_LEGEND_POPUP, SCOPE_MULTI_SELECT
 
 integer(int32), parameter :: FORMAT_INTEGER = 1_int32 !< A printf format of an integer value: d, i, u.
 integer(int32), parameter :: FORMAT_REAL = 2_int32    !< A printf format of a real value: f, F, e, E, g, G, a, A.
@@ -53,6 +53,7 @@ integer(c_int), parameter :: SCOPE_TOOLTIP = 22_c_int       !< ig_begin_tooltip,
 integer(c_int), parameter :: SCOPE_PLOT3D = 23_c_int        !< ip3_begin_plot / ip3_end_plot (after true).
 integer(c_int), parameter :: SCOPE_ALIGNED = 24_c_int       !< ip_begin_aligned / ip_end_aligned (after true).
 integer(c_int), parameter :: SCOPE_LEGEND_POPUP = 25_c_int  !< ip_begin_legend_popup / ip_end_legend_popup (after true).
+integer(c_int), parameter :: SCOPE_MULTI_SELECT = 26_c_int  !< ig_begin_multi_select / ig_end_multi_select (always paired).
 
 contains
    recursive function figure_time() result(seconds)
