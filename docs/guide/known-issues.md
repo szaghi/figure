@@ -222,7 +222,8 @@ works with MSVC), and Intel ships no ifx for macOS.
   ([Intel ifx](install#intel-ifx)). fpm does not add it for ifx: pass `--flag "-fpscomp logicals"` to `fpm build`,
   `fpm test` or `fpm run`, also for a project that depends on FIGURE; without it ifx warns (#5472) and passes
   `.true.` as -1 to Dear ImGui.
-- **The installer** does not take ifx ([below](#the-one-line-installer)): build with FoBiS (`figure-static-ifx`) or fpm.
+- **The installer** takes ifx since v0.7.0 (`--intel`, Linux): its `.pc` and its CMake target add `-fpscomp logicals`
+  to a program's compile line ([The one-line installer](install#the-one-line-installer)).
 
 ## The window's frame drawn by FIGURE
 
@@ -511,8 +512,8 @@ What [the installer](install#the-one-line-installer) does not cover:
 
 - **Windows:** it runs on Linux and macOS only. On Windows, build under MSYS2 UCRT64 by hand
   ([Other platforms](install#other-platforms)).
-- **Compilers:** gfortran and nvfortran only; any other `--fc` (Intel ifx included) is refused. nvfortran itself is
-  not installed: `--deps` installs only packages of the distribution (`apt-get`, `dnf`) or of Homebrew, and only
+- **Compilers:** gfortran, nvfortran and (since v0.7.0, Linux) ifx; any other `--fc` is refused. nvfortran and ifx
+  are not installed: `--deps` installs only packages of the distribution (`apt-get`, `dnf`) or of Homebrew, and only
   gfortran among the Fortran compilers.
 - **Distributions:** the package command is written for `apt-get` (Debian, Ubuntu) and `dnf` (Fedora, RHEL). Elsewhere
   the script names the missing `pkg-config` modules and stops: install their development packages by hand.

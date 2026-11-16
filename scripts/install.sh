@@ -3,11 +3,13 @@
 #
 #   curl -fsSL https://github.com/szaghi/figure/releases/latest/download/install.sh | bash -s -- --gnu
 #
-# Usage: install.sh (--gnu | --nvidia | --fc FC) [options]
-#        install.sh --uninstall [--gnu | --nvidia | --fc FC] [--prefix DIR]
+# Usage: install.sh (--gnu | --nvidia | --intel | --fc FC) [options]
+#        install.sh --uninstall [--gnu | --nvidia | --intel | --fc FC] [--prefix DIR]
 #
 #   --gnu             gfortran, with the gcc and g++ beside it (Apple clang on macOS)
 #   --nvidia          nvfortran, with gcc and g++ (the C++ runtime is libstdc++)
+#   --intel           ifx (Linux; Intel ships no ifx for macOS), with gcc and g++; its programs compile with
+#                     -fpscomp logicals, which the .pc and the CMake target carry
 #   --fc FC           a Fortran compiler by name or path (gfortran or nvfortran, any version)
 #   --prefix DIR      where to install (default: ~/.local)
 #   --tag TAG         the release to build (default: the latest)
@@ -61,6 +63,7 @@ while [[ $# -gt 0 ]]; do
    case "$1" in
       --gnu)       family="gnu"; fc_arg=""; shift ;;
       --nvidia)    family="nvidia"; fc_arg=""; shift ;;
+      --intel)     family="intel"; fc_arg=""; shift ;;
       --fc)        [[ $# -ge 2 ]] || die "--fc needs a compiler"; family=""; fc_arg="$2"; shift 2 ;;
       --prefix)    [[ $# -ge 2 ]] || die "--prefix needs a directory"; prefix="$2"; shift 2 ;;
       --tag)       [[ $# -ge 2 ]] || die "--tag needs a tag"; tag="$2"; shift 2 ;;
@@ -118,7 +121,7 @@ fail_build() {
 }
 
 # ---- stage 1: toolchain --------------------------------------------------------------------------------------------
-# Sets fc, fc_family (gnu|nvidia), fc_version, cc, cxx, compiler_tag. Missing tools are collected into the
+# Sets fc, fc_family (gnu|nvidia|intel), fc_version, cc, cxx, compiler_tag. Missing tools are collected into the
 # package lists (pkgs_apt, pkgs_dnf, pkgs_brew) for stage 2.
 pkgs_apt=""; pkgs_dnf=""; pkgs_brew=""; missing=""
 need_pkg() { # need_pkg WHAT APT DNF BREW
@@ -140,6 +143,10 @@ find_compiler() {
          fc="$newest"
       fi
       [[ -n "$fc" ]] || die "nvfortran not found: install the NVIDIA HPC SDK (https://developer.nvidia.com/hpc-sdk) and put its compilers/bin in PATH"
+   elif [[ "$family" == "intel" ]]; then
+      [[ "$platform" != "macos" ]] || die "--intel: Intel ships no ifx for macOS"
+      fc="$(command -v ifx 2> /dev/null)" \
+         || die "ifx not found: install Intel's oneAPI Fortran compiler and source its setvars.sh (ifx and its runtime in PATH and LD_LIBRARY_PATH)"
    else
       fc="$(command -v gfortran 2> /dev/null)" || fc=""
       if [[ -z "$fc" ]]; then # gfortran-14 and the like (GitHub's macOS images, Homebrew's gcc@N)
@@ -162,8 +169,11 @@ find_compiler() {
    elif [[ "$banner" == *nvfortran* ]]; then
       fc_family="nvidia"
       fc_version="$(printf '%s\n' "$banner" | sed -n 's/^nvfortran \([0-9][0-9.]*\).*/\1/p' | head -n 1)"
+   elif [[ "$banner" == ifx* ]]; then # "ifx (IFX) 2026.2.0 20260601"
+      fc_family="intel"
+      fc_version="$(printf '%s\n' "$banner" | sed -n 's/^ifx ([^)]*) \([0-9][0-9.]*\).*/\1/p' | head -n 1)"
    else
-      die "$fc is neither gfortran nor nvfortran: FIGURE's builds are verified with those two"
+      die "$fc is neither gfortran, nvfortran nor ifx: FIGURE's builds are verified with those three"
    fi
    [[ -n "$fc_version" ]] || die "cannot read the version of $fc"
    [[ -z "$family" || "$family" == "$fc_family" ]] || die "$fc is not a $family compiler"
@@ -182,7 +192,7 @@ find_c_compilers() {
       if [[ -x "$dir/gcc$suffix" && -x "$dir/g++$suffix" ]]; then cc="$dir/gcc$suffix"; cxx="$dir/g++$suffix"
       else cc="gcc"; cxx="g++"; fi
    else
-      cc="gcc"; cxx="g++" # nvfortran links libstdc++
+      cc="gcc"; cxx="g++" # nvfortran and ifx link libstdc++
    fi
    have "$cc" || need_pkg "$cc" gcc gcc ""
    have "$cxx" || need_pkg "$cxx" g++ gcc-c++ ""
@@ -365,6 +375,7 @@ build() {
    setup_fobis
    local mode="figure-static-gnu" varset=()
    [[ "$fc_family" == "nvidia" ]] && mode="figure-static-nvf"
+   [[ "$fc_family" == "intel" ]] && mode="figure-static-ifx"
    [[ "$platform" == "macos" ]] && varset=(--varset macos)
    # not in a subshell: a failure must reach this shell, which keeps the build directory
    cd "$tree"
@@ -439,8 +450,10 @@ uninstall_tag() { # uninstall_tag TAG
 # with several compilers installed CMake takes the matching one. The target figure::figure carries the module folder
 # and the link line of the .pc.
 write_cmake_config() { # write_cmake_config LIBS
-   local t="$compiler_tag" cm_rel="lib/cmake/figure-$compiler_tag" id libs_list
-   case "$fc_family" in gnu) id="GNU" ;; nvidia) id="NVHPC" ;; *) id="$fc_family" ;; esac
+   local t="$compiler_tag" cm_rel="lib/cmake/figure-$compiler_tag" id libs_list fflags_cmake=""
+   # ifx: .true. passed to C must be 1 (-fpscomp logicals), in the program's own files too
+   [[ "$fc_family" == "intel" ]] && fflags_cmake='$<$<COMPILE_LANGUAGE:Fortran>:SHELL:-fpscomp logicals>'
+   case "$fc_family" in gnu) id="GNU" ;; nvidia) id="NVHPC" ;; intel) id="IntelLLVM" ;; *) id="$fc_family" ;; esac
    # shellcheck disable=SC2086 # the link line's words, one per list element
    libs_list="$(printf '%s;' -lfigure $1)"
    record_dirs "$cm_rel"
@@ -452,7 +465,8 @@ if(NOT TARGET figure::figure)
    set_target_properties(figure::figure PROPERTIES
       INTERFACE_INCLUDE_DIRECTORIES "\${_figure_prefix}/include/figure/$t"
       INTERFACE_LINK_DIRECTORIES "\${_figure_prefix}/lib/figure/$t"
-      INTERFACE_LINK_LIBRARIES "${libs_list%;}")
+      INTERFACE_LINK_LIBRARIES "${libs_list%;}"
+      INTERFACE_COMPILE_OPTIONS "$fflags_cmake")
 endif()
 set(figure_COMPILER "$t")
 unset(_figure_prefix)
@@ -479,7 +493,8 @@ EOF
 
 install_files() {
    stage "4. Install into $prefix"
-   local t="$compiler_tag" libs pc_rel lib_rel inc_rel share_rel f
+   local t="$compiler_tag" libs pc_rel lib_rel inc_rel share_rel f fflags_pc=""
+   [[ "$fc_family" == "intel" ]] && fflags_pc=" -fpscomp logicals" # ifx: .true. passed to C must be 1
    lib_rel="lib/figure/$t"; inc_rel="include/figure/$t"; share_rel="share/figure/$t"; pc_rel="lib/pkgconfig/figure-$t.pc"
    if [[ -f "$prefix/$(manifest_rel "$t")" ]]; then
       info "replacing the previous $t install"
@@ -510,7 +525,7 @@ Name: figure
 Description: FIGURE, Fortran Immediate-mode GUI (Dear ImGui, ImPlot, SDL3/OpenGL); modules of $t: $fc
 URL: $github
 Version: ${version#v}
-Cflags: -I\${includedir}
+Cflags: -I\${includedir}$fflags_pc
 Libs: -L\${libdir} -lfigure $libs
 EOF
    echo "f $pc_rel" >> "$manifest_tmp"
@@ -578,7 +593,7 @@ if [[ $uninstall -eq 1 ]]; then
    exit 0
 fi
 
-[[ -n "$family" || -n "$fc_arg" ]] || die "choose the compiler: --gnu, --nvidia or --fc FC (see --help)"
+[[ -n "$family" || -n "$fc_arg" ]] || die "choose the compiler: --gnu, --nvidia, --intel or --fc FC (see --help)"
 check_toolchain
 check_packages
 if [[ $dry_run -eq 1 ]]; then

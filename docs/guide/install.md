@@ -32,10 +32,11 @@ For the [tutorial](/manual/), the one-line installer is enough.
 
 `scripts/install.sh`, attached to every release, works in five stages and stops at the first that fails:
 
-1. **Toolchain.** The Fortran compiler (`--gnu`: `gfortran`; `--nvidia`: `nvfortran`; `--fc FC`: either, by name or
-   path), the C and C++ compilers that go with it, CMake 3.24 or newer, `pkg-config`, Python 3.11 or newer, and
+1. **Toolchain.** The Fortran compiler (`--gnu`: `gfortran`; `--nvidia`: `nvfortran`; `--intel`: `ifx`, Linux only;
+   `--fc FC`: any of them, by name or path), the C and C++ compilers that go with it, CMake 3.24 or newer, `pkg-config`, Python 3.11 or newer, and
    `curl` or `git`. With `--gnu`, the C and C++ compilers are the `gcc` and `g++` beside `gfortran` (on macOS, Apple
-   clang, whose C++ runtime the link line uses); with `--nvidia`, `gcc` and `g++` (nvfortran links `libstdc++`);
+   clang, whose C++ runtime the link line uses); with `--nvidia` and `--intel`, `gcc` and `g++` (nvfortran and ifx link
+   `libstdc++`; ifx's programs compile with `-fpscomp logicals`, which the `.pc` and the CMake target carry);
    `CC` and `CXX`, when both are set, override them. Every version is printed.
 2. **System packages.** On Linux, SDL3 enables X11, Wayland (with libdecor) and DBus only when their development
    packages are present when it is configured. The script checks them by their `pkg-config` names, and the missing
@@ -65,7 +66,7 @@ For the [tutorial](/manual/), the one-line installer is enough.
 
 | Option | Meaning |
 |---|---|
-| `--gnu`, `--nvidia`, `--fc FC` | the Fortran compiler (one is required) |
+| `--gnu`, `--nvidia`, `--intel`, `--fc FC` | the Fortran compiler (one is required); `--intel` needs ifx and its runtime in `PATH` and `LD_LIBRARY_PATH` (Intel's `setvars.sh`) |
 | `--prefix DIR` | where to install (default `~/.local`) |
 | `--tag TAG` | the release to build (default the latest) |
 | `--source DIR` | build a local FIGURE tree instead of a release |
