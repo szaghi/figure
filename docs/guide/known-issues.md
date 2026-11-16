@@ -80,7 +80,8 @@ prev_size`). Seen with gfortran 16.2 (valgrind reports the write in the construc
 `process_object%start` are the usual victim: fill a fixed-length array element by element instead, as
 `docs/examples/src/tut11_run.F90` does. Checked 2026-11-12: gfortran 16.2 still aborts (`malloc(): corrupted top
 size`); nvfortran 26.9 and ifx 2026.2 are right. Canary: [`figure_test_canaries`](testing#canaries), which runs
-the case in a child process (#4 Bug B).
+the case in a child process (#4 Bug B), not on Windows: there such a child can hang instead of ending (it did on CI,
+2026-11-15), so the canary says "not probed".
 
 ## gfortran: a component passed to a `bind(C)` assumed-shape dummy
 

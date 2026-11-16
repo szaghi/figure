@@ -6,7 +6,8 @@ program figure_test_canaries
 !< workaround to remove (known-issues.md; szaghi/figure#4). Each one knows the compilers the defect was seen on: there
 !< it prints "still needed" (the defect is there) or "fixed: remove ..." (a failure); on another compiler it prints "not
 !< affected", or fails with "new on this compiler" when the defect appears there too. A defect that corrupts the heap
-!< (Bug B) is run in a child process: this program again, with the argument `--probe-ctor`.
+!< (Bug B) is run in a child process: this program again, with the argument `--probe-ctor`; not on Windows, where such a
+!< child can hang instead of ending (Platforms run 43749233755: the job hung until it was cancelled).
 use, intrinsic :: iso_fortran_env, only : compiler_version, output_unit
 
 implicit none
@@ -30,8 +31,13 @@ contains
    write(output_unit, '(A)') 'figure_test_canaries on '//compiler//' ('//compiler_version()//')'
    call report('Bug A, a section of a deferred-length character array', ['gfortran'], section_defect(), &
                'the fixed-length copies of ip_colormap_names'' sections (docs/examples/src/gallery.F90)')
-   call report('Bug B, a constructor over a deferred-length string, as an argument', ['gfortran'], ctor_defect(), &
-               'process arguments filled element by element (docs/examples/src/tut11_run.F90)')
+   if (on_windows()) then ! its child corrupts its heap: on Windows it may never end (Platforms run 43749233755)
+      write(output_unit, '(A)') '  not probed on Windows: Bug B, a constructor over a deferred-length string, as an '// &
+                                'argument (its child can hang there)'
+   else
+      call report('Bug B, a constructor over a deferred-length string, as an argument', ['gfortran'], ctor_defect(), &
+                  'process arguments filled element by element (docs/examples/src/tut11_run.F90)')
+   endif
    call report('char(i) of a variable i, assigned to a deferred-length string', ['nvfortran'], char_defect(), &
                'the fixed-length buffer of the utf8 helpers (docs/examples/src/gallery.F90, src/tests/figure_test_text.F90)')
    call report('execute_command_line(wait=.true.) under -Munixlogical', ['nvfortran'], wait_defect(), &
@@ -39,6 +45,17 @@ contains
    write(output_unit, '(A,L1)') 'Are all tests passed? ', .not. failed
    if (failed) error stop 1
    endsubroutine canaries
+
+   function on_windows() result(windows)
+   !< Windows, by its OS variable (set in every Windows process, MSYS2's included).
+   logical            :: windows !< It is Windows.
+   character(len=32)  :: os      !< The variable.
+   integer            :: length  !< Its length.
+   integer            :: status  !< 0: set.
+
+   call get_environment_variable('OS', os, length, status)
+   windows = status == 0 .and. trim(os) == 'Windows_NT'
+   endfunction on_windows
 
    function compiler_name() result(name)
    !< The compiler, from compiler_version().

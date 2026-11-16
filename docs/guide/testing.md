@@ -323,5 +323,6 @@ the other tests on every compiler. Each canary states the defect, the compilers 
 To add one: a function that runs the defect's smallest case and returns `.true.` when the result is wrong, and a
 `report` call with the defect, the compilers (`gfortran`, `nvfortran`, `ifx`, from `compiler_version()`) and the
 workaround with its file. A case that crashes or corrupts memory runs in a child process: the program calls itself
-with an argument (`--probe-ctor` for Bug B) and reads the child's exit status. A defect a test cannot see (a build
+with an argument (`--probe-ctor` for Bug B) and reads the child's exit status; not on Windows, where a child that
+corrupts its heap can hang instead of ending (the canary prints "not probed on Windows"). A defect a test cannot see (a build
 failure, a flag missing at the link) gets no canary: its note in Known issues says why.
