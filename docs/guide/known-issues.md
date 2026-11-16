@@ -306,6 +306,13 @@ POSIX):
   `p%killed()` instead.
 - **A crashed program** (killed by a signal) cannot kill its captured children; they end when they next write to the
   closed pipe, or by themselves.
+- **No init to reap a detached child:** a detached child belongs to the system's init, which reaps it when it ends.
+  In a container whose first process is not an init (Docker without `--init`, GitHub's job containers, whose first
+  process is `tail -f /dev/null`), nothing reaped it: the ended child stayed a zombie, and until v0.7.0
+  `p%running()` stayed true forever (a loop waiting for it never ended). FIGURE now reaps it itself where the
+  program is that first process, and counts a zombie as ended where another process holds it (Linux, from
+  `/proc`). Found 2026-11-16: it hung the documentation's CI job on `tut16_tested`; `figure_test_process` runs the
+  case as PID 1 of a new namespace (`unshare -rpf`, where the system allows it).
 
 ## Tasks
 

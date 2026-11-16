@@ -23,7 +23,7 @@ endinterface
 character(len=1), parameter :: LF = achar(10) !< Newline.
 character(len=512)          :: self_path      !< This program.
 character(len=64)           :: mode           !< Child mode.
-logical                     :: test_passed(16) !< Per-check outcome.
+logical                     :: test_passed(17) !< Per-check outcome.
 
 call get_command_argument(0, self_path)
 call get_command_argument(1, mode)
@@ -43,6 +43,7 @@ call environment(test_passed(8))
 call working_directory(test_passed(9))
 call refused(test_passed(10))
 call log_view(test_passed(11:16))
+call detached_unreaped(test_passed(17))
 
 write(output_unit, '(A,*(L2))') 'figure_test_process checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
@@ -97,6 +98,15 @@ contains
    case ('late')                                      ! a line after 0.5 s (detached: after its parent object ended)
       call pause(0.5_real64)
       write(output_unit, '(A)') 'survived'
+   case ('reaper')                                    ! a detached child's end seen by a reaper (PID 1, no init)
+      block
+         type(process_object) :: d                    ! the detached child
+         call d%start([character(len=512) :: self_path, '--child', 'lines', '1'], detached=.true., &
+                      log_file='figure_test_process.reaper.log')
+         call wait_end(d, 20.0_real64)
+         if (d%running()) call c_exit(5_c_int)          ! never seen ended: the hang of #12's CI (a zombie)
+      endblock
+      write(output_unit, '(A)') 'reaped'
    endselect
    flush(output_unit)
    endsubroutine child
@@ -301,6 +311,48 @@ contains
    ok = trim(text) == 'survived' .and. pid > 0_int64
    if (.not. ok) write(error_unit, '(A,A,A,I0)') 'detached survives: log "', trim(text), '", pid ', pid
    endsubroutine detached_survives
+
+   subroutine detached_unreaped(ok)
+   !< A detached child's end is seen where init does not reap it: this program, started as PID 1 of a new PID
+   !< namespace (`unshare -rpf --mount-proc`, Linux), starts one and waits for it. Its grandchild is then the program's
+   !< own child and stays a zombie unless FIGURE reaps it (as in a job container whose PID 1 is not an init). Not
+   !< probed where `unshare` is absent or user namespaces are refused (macOS, Windows, some kernels).
+   logical, intent(out)          :: ok       !< Outcome.
+   type(process_object)          :: p        !< The namespace's PID 1.
+   character(len=:), allocatable :: lines(:) !< Its output.
+   integer(int32)                :: code     !< Its exit code.
+   integer(int32)                :: stat     !< Status.
+   integer(int32)                :: u, ios   !< Unit, I/O status.
+   logical                       :: there    !< unshare exists.
+
+   ok = .true.
+   inquire(file='/usr/bin/unshare', exist=there)
+   if (.not. there) then
+      write(output_unit, '(A)') '  not probed: a detached child under a PID 1 that does not reap (no unshare)'
+      return
+   endif
+   allocate(character(len=0) :: lines(0))
+   call p%start([character(len=512) :: '/usr/bin/unshare', '-rpf', '--mount-proc', self_path, '--child', 'reaper'], &
+                stat=stat)
+   if (stat /= FIG_OK) return
+   call wait_end(p, 40.0_real64, lines)
+   if (p%running()) then
+      call p%kill(force=.true.)
+      ok = .false.
+      write(error_unit, '(A)') 'detached unreaped: the namespace did not end in 40 s'
+      return
+   endif
+   code = p%exit_code()
+   open(newunit=u, file='figure_test_process.reaper.log', iostat=ios)
+   if (ios == 0) close(u, status='delete')
+   if (code /= 0_int32 .and. code /= 5_int32) then              ! unshare itself refused (no user namespaces)
+      write(output_unit, '(A,I0,A)') '  not probed: a detached child under a PID 1 that does not reap (unshare: ', &
+                                     code, ')'
+      return
+   endif
+   ok = code == 0_int32 .and. any(lines == 'reaped')
+   if (.not. ok) write(error_unit, '(A,I0)') 'detached unreaped: exit code ', code
+   endsubroutine detached_unreaped
 
    subroutine detached_poll(ok)
    !< A detached process is followed through its log file; its exit code is refused.

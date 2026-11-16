@@ -8,7 +8,8 @@
 //
 // Detached: the child's output goes to a log file and the child survives the program. On POSIX FIGURE starts it
 // itself with a double fork (setsid, then the grandchild execs): the grandchild belongs to init, which reaps it, so
-// no zombie is left, and its pid is known on every system (SDL's background mode on macOS does not report it). On
+// no zombie is left, and its pid is known on every system (SDL's background mode on macOS does not report it). Where
+// init does not reap (PID 1 of a container without one), check_exit reaps it itself or reads it as a zombie. On
 // Windows SDL's background mode is used, with the log file opened shared so that the program can read it while the
 // child writes it. The program follows the file (fig_process_take reads what was appended).
 //
@@ -96,6 +97,22 @@ std::shared_ptr<process_t> find(int id) {
    return it == reg->end() ? nullptr : it->second;
 }
 
+#ifndef _WIN32
+// A process that has ended but not been reaped (Linux: state Z in /proc/<pid>/stat); false where /proc is absent.
+bool zombie(long long pid) {
+   char path[64];
+   std::snprintf(path, sizeof(path), "/proc/%lld/stat", pid);
+   FILE *f = std::fopen(path, "r");
+   if (!f) return false;
+   char buf[512];
+   const size_t n = std::fread(buf, 1, sizeof(buf) - 1, f);
+   std::fclose(f);
+   buf[n] = '\0';
+   const char *close = std::strrchr(buf, ')'); // the command may hold blanks and parentheses: the state follows the last
+   return close && close[1] == ' ' && close[2] == 'Z';
+}
+#endif
+
 // The child's end, without blocking (captured: reaps it). Called with q.m held.
 void check_exit(process_t &q) {
    if (q.exited) return;
@@ -110,7 +127,25 @@ void check_exit(process_t &q) {
 #ifdef _WIN32
    if (!q.handle || WaitForSingleObject(q.handle, 0) == WAIT_OBJECT_0) q.exited = true;
 #else
-   if (q.pid <= 0 || (::kill(static_cast<pid_t>(q.pid), 0) != 0 && errno == ESRCH)) q.exited = true;
+   if (q.pid <= 0) {
+      q.exited = true;
+      return;
+   }
+   // The grandchild belongs to init, which reaps it. Where the program is itself the reaper (PID 1 of a container
+   // without an init, as GitHub's job containers; a subreaper), the grandchild is its child: reap it here, its code
+   // with it. Where another process holds it unreaped, it is a zombie: ended all the same (Linux: /proc).
+   int         st = 0;
+   const pid_t w = ::waitpid(static_cast<pid_t>(q.pid), &st, WNOHANG);
+   if (w == static_cast<pid_t>(q.pid)) {
+      q.exited = true;
+      q.code = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+      return;
+   }
+   if (::kill(static_cast<pid_t>(q.pid), 0) != 0 && errno == ESRCH) {
+      q.exited = true;
+      return;
+   }
+   if (zombie(q.pid)) q.exited = true;
 #endif
 }
 
