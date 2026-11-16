@@ -50,6 +50,16 @@ is 206 for `i = 206`), where the standard gives 1; `char(206)` with a constant i
 give 1. FIGURE's UTF-8 helpers build the character in a fixed-length buffer (`utf8` in `docs/examples/src/gallery.F90`
 and `src/tests/figure_test_text.F90`). Checked 2026-11-12; canary: [`figure_test_canaries`](testing#canaries).
 
+## nvfortran: `select case` on a function result of deferred length
+
+In a module that has a character parameter array built with a typed array constructor
+(`character(len=8), parameter :: NAMES(3) = [character(len=8) :: 'Controls', 'Plots', 'Log']`), nvfortran 26.9 takes
+the selector of `select case (f(...))` as empty when `f` returns `character(len=:), allocatable`: no case but `('')`
+(or `default`) matches. Any optimisation level; gfortran 16.2 and ifx 2026.2 are right; the untyped constructor
+(`['Controls', 'Plots   ', 'Log     ']`) or no such parameter avoids it. **Workaround:** assign the result to a variable
+and select on the variable (`name = app%layout()`, then `select case (name)`, as `src/tests/figure_test_app.F90` does).
+Checked 2026-11-16 (nvfortran 26.9); canary: [`figure_test_canaries`](testing#canaries) (#4).
+
 ## nvfortran: `system_clock` is the wall clock
 
 nvfortran's `system_clock` (26.9, any integer kind) reads `gettimeofday`, the wall clock, not a monotonic clock:

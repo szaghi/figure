@@ -1,3 +1,37 @@
+!< figure_test_canaries_select, the case of an nvfortran defect a canary needs at module level: a character parameter
+!< array built with a typed array constructor makes `select case` on a function result of deferred length, in the same
+!< module, see an empty selector (nvfortran 26.9, -O0 and -O2; #4).
+module figure_test_canaries_select
+!< figure_test_canaries_select, the module-level case of the nvfortran select-case canary.
+implicit none
+private
+public :: selector_empty
+
+character(len=8), parameter :: NAMES(3) = [character(len=8) :: 'Controls', 'Plots', 'Log'] !< The trigger.
+
+contains
+   function name_of(s) result(name)
+   !< `s`, as a result of deferred length.
+   character(len=*), intent(in)  :: s    !< A name.
+   character(len=:), allocatable :: name !< The same.
+
+   name = s
+   endfunction name_of
+
+   function selector_empty(s) result(empty)
+   !< `select case` on `name_of(s)` (s not blank) took the case of an empty selector.
+   character(len=*), intent(in) :: s     !< A non-blank name.
+   logical                      :: empty !< The defect.
+
+   select case (name_of(s))
+   case ('')
+      empty = .true.
+   case default
+      empty = .false.
+   endselect
+   endfunction selector_empty
+endmodule figure_test_canaries_select
+
 !< figure_test_canaries, the compiler defects FIGURE works around, checked on the compiler at hand.
 program figure_test_canaries
 !< figure_test_canaries, the compiler defects FIGURE works around, checked on the compiler at hand.
@@ -9,6 +43,7 @@ program figure_test_canaries
 !< (Bug B) is run in a child process: this program again, with the argument `--probe-ctor`; not on Windows, where such a
 !< child can hang instead of ending (Platforms run 43749233755: the job hung until it was cancelled).
 use, intrinsic :: iso_fortran_env, only : compiler_version, output_unit
+use figure_test_canaries_select, only : selector_empty
 
 implicit none
 character(len=:), allocatable :: compiler  !< The compiler's name: gfortran, nvfortran, ifx, other.
@@ -40,6 +75,9 @@ contains
    endif
    call report('char(i) of a variable i, assigned to a deferred-length string', ['nvfortran'], char_defect(), &
                'the fixed-length buffer of the utf8 helpers (docs/examples/src/gallery.F90, src/tests/figure_test_text.F90)')
+   call report('select case on a deferred-length function result, with a typed character constructor in the module', &
+               ['nvfortran'], selector_empty('Plots only'), &
+               'the layout''s name assigned before select case (src/tests/figure_test_app.F90)')
    call report('execute_command_line(wait=.true.) under -Munixlogical', ['nvfortran'], wait_defect(), &
                'the waits left out in src/tests/figure_test_files.F90')
    write(output_unit, '(A,L1)') 'Are all tests passed? ', .not. failed

@@ -47,8 +47,9 @@ contains
    endif
    s%root = ig_dock_id('main')
    if (ig_dock_layout_begin(s%root)) then
-      name = app%layout()                                  ! nvfortran 26.9 -O2: select case on the call itself
-      select case (name)                                   ! took 'Plots only' for the default case here
+      name = app%layout()                                  ! nvfortran 26.9 (any -O): select case on the call itself
+      select case (name)                                   ! sees an empty selector here, NAMES' typed constructor
+                                                           ! being in this module (#4; figure_test_canaries)
       case ('Plots only')
          s%built_plots = s%built_plots + 1_int32
          call ig_dock_window('Plots', s%root)
