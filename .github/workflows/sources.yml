@@ -1,0 +1,68 @@
+# The sources archive (scripts/source_archive.sh): FIGURE's files and every source the native build downloads (SDL3,
+# cimplot, cimplot3d, miniz), for machines with no network (#12 S1). Each run builds the archive, unpacks it and builds
+# its native layer with the network cut (a network namespace with no interface but lo), so an archive that would still
+# download something fails here:
+#   - push (when the native build or the archive's script changes) and a dispatch with no tag: this commit, checked;
+#   - "Release figure" once it has published a release (workflow_run, as installer.yml), or a dispatch with a tag: that
+#     tag, checked, then attached to its release as figure-<version>-sources.tar.gz. release.yml stays the FoBiS
+#     scaffold's.
+name: Sources archive
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["**"]
+    paths:
+      - scripts/source_archive.sh
+      - scripts/build_native.sh
+      - native/CMakeLists.txt
+      - .github/workflows/sources.yml
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build the archive of and attach it to (empty, this commit, checked only)
+        type: string
+        default: ""
+  workflow_run:
+    workflows: ["Release figure"]
+    types: [completed]
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    permissions:
+      contents: write   # gh release upload
+    env:
+      TAG: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || inputs.tag }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TAG }}   # the release's tree; empty: the event's commit
+
+    - name: Fetch the native build's sources (CMake's configure step)
+      run: cmake -S native -B build/native
+
+    - name: Build the archive
+      run: |
+        bash scripts/source_archive.sh "$RUNNER_TEMP"
+        echo "ARCHIVE=$RUNNER_TEMP/figure-$(tr -d ' \n' < VERSION)-sources.tar.gz" >> "$GITHUB_ENV"
+
+    - name: Its native layer builds with no network
+      run: |
+        mkdir "$RUNNER_TEMP/unpacked"
+        tar -xzf "$ARCHIVE" -C "$RUNNER_TEMP/unpacked"
+        tree="$(ls -d "$RUNNER_TEMP"/unpacked/figure-*-sources)"
+        # unprivileged user namespaces are restricted on GitHub's Ubuntu images: the network namespace through sudo
+        sudo unshare --net -- bash -c "
+          if curl -sS -m 5 https://github.com > /dev/null 2>&1; then echo 'the network is reachable'; exit 1; fi
+          cd '$tree' && bash scripts/build_native.sh"
+        test -f "$tree/lib/libfigure_native.a" && test -f "$tree/lib/libSDL3.a"
+
+    - name: Attach it to the release
+      if: env.TAG != ''
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh release upload "$TAG" "$ARCHIVE" --clobber

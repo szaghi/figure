@@ -152,7 +152,8 @@ bash scripts/install.sh --gnu --source "$PWD" --prefix "$HOME/.local"   # or: sc
 - **System packages:** SDL3's X11, Wayland and DBus development headers come from the system's packages, as for any
   build ([Linux packages](#linux-packages)); headless and remote programs need none of them.
 - **Making one:** `scripts/source_archive.sh [OUTDIR]` writes the archive of a tree whose native layer was built (or
-  configured) once, with the network; the release workflow runs it for every release.
+  configured) once, with the network; the `Sources archive` workflow runs it after every release, builds the result
+  with the network cut, and attaches it to the release.
 
 ## Building from the repository
 

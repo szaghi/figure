@@ -16,7 +16,7 @@ work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
 
 mkdir -p "$work/$name"
-# the tracked files as they are in the tree (in the release workflow, the tag's checkout: the tag itself)
+# the tracked files as they are in the tree (in the Sources archive workflow, the tag's checkout: the tag itself)
 (cd "$root" && git ls-files -z | tar --null -T - -c) | tar -x -C "$work/$name"
 for dep in sdl3 cimplot cimplot3d miniz; do
    [[ -d "$deps/$dep-src" ]] || { echo "source_archive.sh: $deps/$dep-src missing: run scripts/build_native.sh" >&2; exit 1; }

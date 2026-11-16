@@ -31,14 +31,6 @@ jobs:
             *
           echo "TARBALL=${REPO_NAME}-${VERSION}.tar.gz" >> $GITHUB_ENV
 
-      - name: Build the sources archive (offline builds)
-        # every source the native build downloads (SDL3, cimplot, cimplot3d, miniz), fetched by CMake's configure step,
-        # put beside the tree in third_party/fetched/: build_native.sh then downloads nothing (#12 S1)
-        run: |
-          cmake -S native -B build/native
-          bash scripts/source_archive.sh
-          echo "SOURCES=figure-$(tr -d ' \n' < VERSION)-sources.tar.gz" >> "$GITHUB_ENV"
-
       - name: Extract release notes from CHANGELOG.md
         run: |
           python3 - "${{ github.ref_name }}" CHANGELOG.md > release_notes.md <<'PYEOF'
@@ -62,7 +54,6 @@ jobs:
           generate_release_notes: false
           files: |
             ${{ env.TARBALL }}
-            ${{ env.SOURCES }}
             scripts/install.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
