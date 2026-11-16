@@ -503,6 +503,8 @@ v0.6.0, and the features no application had asked for, which the owner took in w
   could not be reduced (their code is gone). Posted on #4; filing is the owner's: done.
 - **Upstream drafts** (S5): ImPlot's defects (#8), the patches to ImGuizmo and ImPlot3D (#9) and Dear ImGui's 0 / 0
   (#11) reproduced on the libraries' heads without FIGURE, each with its draft; filing is the owner's: done.
+- **The showcase's pictures from FIGURE's renderer** (S6): six of the eight copied again from xall_figure, which now
+  records headless ([Showcase](showcase)); the two that race the wall clock remain a GPU's (below): done.
 - **Drag and drop** (S7): `ig_drag_source`, `ig_drop_target`, `ig_dragging`, `ip_drop_target`
   ([Drag and drop](widgets#drag-and-drop), [A plot as a drop target](plots#a-plot-as-a-drop-target)): done.
 - **Plots across plots** (S8): linked axes by group name, aligned plots, the legend's hover and popup, hidden items,
@@ -524,8 +526,9 @@ v0.6.0, and the features no application had asked for, which the owner took in w
 
 ## Next
 
-- **The showcase's pictures from FIGURE's renderer** (#12 S6): xall_figure's recordings, made on a GPU, are the one
-  exception to "every picture from one renderer"; it waits on xall_figure recording headless.
+- **The showcase's last two GPU pictures** (#12 S6): the run checker on growing files and the solvers run from the
+  window, which race the wall clock; xall_figure records them again with the capture's `wait`, then FIGURE copies
+  them.
 - **A log axis on a plot that starts empty**: a plot set up with `auto_fit` and a log y axis, whose first frames have
   no item, drew nothing once its lines arrived ([Known issues](known-issues#a-log-axis-on-a-plot-that-starts-empty), not
   investigated).

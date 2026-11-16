@@ -5,13 +5,20 @@ title: Showcase
 # Showcase: tools for a CFD solver
 
 <!-- docs/public/media/showcase_*.{png,mp4} are copies of the recordings of xall_figure (its docs/media, made by its
-scripts/media.sh): copy them again when they are redone. -->
+scripts/media.sh): copy them again when they are redone, and say below which commit they are from. -->
 
 FIGURE's first application outside this repository is a set of tools for **Xall**, a CFD solver, and for
 **OverSet**, the code that prepares its overset (chimera) grids. Each tool is a FIGURE program that opens a window on
 a workstation or, with `--remote`, serves its interface to a web browser from a cluster node, through an SSH tunnel
 ([Remote UI](remote)). The tools live in a private repository; this page shows what they look like and which parts of
 FIGURE they are built from.
+
+The pictures are xall_figure's own recordings, of synthetic cases. Six are drawn by FIGURE's CPU renderer, headless,
+as every other picture of this site (xall_figure `d8acb5f`, 2026-11-14). Two were recorded in a window on a GPU,
+before xall_figure recorded headless: the run checker following growing files (`2f9dbf5`, 2026-11-06) and the
+solvers run from the window (`c936995`, 2026-11-09). Each races the wall clock (a writer appending lines, a stand-in
+solver printing them), which a headless recording, faster than a window, does not keep in step; they wait for
+xall_figure to record them with the capture's `wait`.
 
 ## The Xall input editor
 
@@ -20,7 +27,7 @@ repeat as many times as a counter says (one per level-set file), parameters that
 parameter says (one per multigrid level, per actuator disk, per species). It replaces a Tkinter editor and writes
 byte for byte what that editor writes; a search field finds a parameter among all the sections.
 
-<Media name="showcase_xall_edit" video alt="The Xall input editor: a search for cfl lists the CFL number, which is set to 0.7; in the level-set section the number of files is set to 1 and the new block is filled; ctrl+s saves" caption="xall_edit: a search, a value set from its results, a level-set file added and filled, ctrl+s" />
+<Media name="showcase_xall_edit" video alt="The Xall input editor: a search for cfl lists the CFL number, which is set to 0.7; in the level-set section the number of files is set to 1 and the new block is filled; ctrl+s lists the changes, then saves" caption="xall_edit: a search, a value set from its results, a level-set file added and filled, ctrl+s" />
 
 Built from: a laid-out dock space ([Docking](docking)); the main menu bar with ctrl+s and ctrl+o
 ([Menus and popups](menus)); tables of check boxes, text fields with the default as a hint, combos and tooltips
@@ -34,7 +41,7 @@ title showing the file and a mark while it is edited (`app%set_title`).
 `overset_edit` edits `overset.input`, the pre-processor's input: scalar sections like the solver's, and two list
 sections, the boundary-condition patches and boxes, edited as tables with a row per line of the file.
 
-<Media name="showcase_overset_edit" video alt="The OverSet input editor: a value changed, a boundary patch added and its block set, ctrl+s lists the entries with problems before saving the rest" caption="overset_edit: a value changed, a boundary patch added, ctrl+s" />
+<Media name="showcase_overset_edit" video alt="The OverSet input editor: a value changed, a boundary patch added and its block set, ctrl+s lists the entries with problems, then the changes, before saving the rest" caption="overset_edit: a value changed, a boundary patch added, ctrl+s" />
 
 Built from the same parts, plus tables whose rows are added, copied, moved and deleted with buttons.
 
