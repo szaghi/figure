@@ -91,7 +91,7 @@ Every mode: a window's frames come from the GPU, headless and remote modes' from
 | `FIGURE_CAPTURE_FPS=<f>` | the frame time Dear ImGui sees, `1/f` seconds (default 30): animations advance by frames, not by wall-clock time |
 | `FIGURE_CAPTURE_INPUT=<file>` | replay a script of mouse and keyboard input (below) |
 | `FIGURE_CAPTURE_HEADLESS=1` | `app%init` starts headless mode instead of a window (with `FIGURE_CAPTURE` only) |
-| `FIGURE_CAPTURE_ATLAS=<n>` | also write the font atlas as the `n`-th written frame was drawn with it: each page's coverage to `<prefix>NNNNN-atlasK.pgm` (binary PGM); `docs_media.py --check` keeps it with a picture that fails, to tell a glyph drawn differently from a different text |
+| `FIGURE_CAPTURE_ATLAS=<n>` | also write the font atlas the written frame `n` was drawn with (counted from 0, as the frames' files are: `n` is their `NNNNN`): each page's coverage to `<prefix>NNNNN-atlasK.pgm` (binary PGM, `K` from 0). `docs_media.py --check` sets it to a recording's poster and, when that picture fails, keeps the pages as `docs/public/media/<name>.atlasK.png` beside its `.new.png` and `.diff.png` (CI uploads them): a glyph drawn differently tells itself from a different text by its atlas |
 | `FIGURE_RENDER_THREADS=<n>` | the CPU renderer's threads, 1-64 (any time, not only in a capture) |
 
 While capturing, lazy redraw is off (every frame is drawn), the content scale is 1 (sizes in pixels do not depend on

@@ -23,7 +23,8 @@ nvfortran 26.9 fail with "ILM file: can't find intrinsic size" (an internal comp
 level. The code is legal Fortran (`size` is not reserved); gfortran 16.2 and ifx 2026.2 compile it. Setting the
 components one by one (`size%x = w`) compiles, and so does an integer local named `size`; the intrinsic `size()` need
 not be called anywhere. FIGURE names such locals `extent`; do the same in modules of your own built with nvfortran 26.9.
-**Reduced 2026-11-16** to a module of 13 lines (#4). No canary: the defect is a build failure, which a test cannot
+**Reduced 2026-11-16** to a module of 13 lines (#4), re-run that day at `-O0` and `-O2` with the three compilers,
+the two workarounds included. No canary: the defect is a build failure, which a test cannot
 report.
 
 ## nvfortran: `-Munixlogical`
@@ -60,7 +61,8 @@ the selector of `select case (f(...))` as empty when `f` returns `character(len=
 (or `default`) matches. Any optimisation level; gfortran 16.2 and ifx 2026.2 are right; the untyped constructor
 (`['Controls', 'Plots   ', 'Log     ']`) or no such parameter avoids it. **Workaround:** assign the result to a variable
 and select on the variable (`name = app%layout()`, then `select case (name)`, as `src/tests/figure_test_app.F90` does).
-Checked 2026-11-16 (nvfortran 26.9); canary: [`figure_test_canaries`](testing#canaries) (#4).
+Checked 2026-11-16 (nvfortran 26.9, ifx 2026.2 and gfortran 16.2 at `-O0` and `-O2`, the untyped constructor
+included); canary: [`figure_test_canaries`](testing#canaries) (#4).
 
 ## nvfortran: `system_clock` is the wall clock
 
@@ -365,16 +367,23 @@ renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
   log, a plot fitted to data that arrived later. Such a recording is deterministic in each mode, not across them.
 - **Draw callbacks:** a program's own `ImDrawList` callback (raw bindings) is not run by the CPU renderer.
 - **Other platforms:** the CPU renderer draws the same pixels on macOS (arm64, Apple clang, gfortran 16) and Windows
-  (MSYS2 UCRT64, gfortran) as on Linux (on CI, 2026-11-15: of the documentation's 94 recordings, 86 pass on macOS
-  with its overrides, all 94 on Windows with its own, 73 with none); what differs is the program's own arithmetic,
-  FIGURE's title bar on macOS, and a path shown natively on Windows:
+  (MSYS2 UCRT64, gfortran) as on Linux (on CI, run 43822162486, 2026-11-16: of the documentation's 96 recordings,
+  2 skipped everywhere, 86 pass on macOS with its overrides and 8 more skipped there, all 94 others on Windows with
+  its own; 72 have no per-platform override; the five recordings v0.7.0 adds are measured by the push that brings
+  them); what differs is the program's own arithmetic, FIGURE's title bar on macOS, a path shown natively on
+  Windows, and one glyph on macOS:
   - the C library's maths (glibc on Linux, not elsewhere) and, on arm64, multiply-adds the compiler may fuse move
     what a program computes: a rounded border or a plotted value by a pixel (5 and 104 pixels in two recordings, the
     same counts on macOS and Windows; 62 in a third on macOS), a fractal by much more (the Mandelbrot example: 44443
     pixels on macOS, 30727 on Windows);
   - FIGURE's title bar (`decorations='figure'`) has its buttons on the left on macOS, the menus after them: every
     picture of a window with it differs there (about 1400 pixels), and an input script that clicks the bar or its
-    menus at fixed coordinates plays something else.
+    menus at fixed coordinates plays something else;
+  - one glyph: in `tut12_field` the `7` of a value is drawn differently on macOS in about one run in three (12
+    pixels, its top-left edge, by up to 25 levels; run 43702518123, 2026-11-15), where Linux draws the same text alike
+    after three atlas histories and under full load. Its cause is not found; 32 pixels are allowed there, and since
+    v0.7.0 a picture that fails keeps the font atlas it was drawn with (`FIGURE_CAPTURE_ATLAS`,
+    [Variables](capture#variables)), uploaded by CI, for the next time it happens.
 
   The studio tutorials wrote their example cases with POSIX shell commands, which `cmd.exe` refuses, so v0.6.0 did not
   compare their pictures on Windows; since v0.7.0 they use [FIGURE's file API](frame-loop#files-and-folders) and
