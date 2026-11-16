@@ -186,6 +186,18 @@ up, no plot being declared give the messages there). `<p>` is the procedure.
 | series of different sizes | `FIG_ERR_ARGUMENT` | `<p>: the series have different sizes` |
 | a colormap not registered | `FIG_ERR_ARGUMENT` | `ip_histogram2d: the colormap <id> is not registered (see ip_colormap)` |
 
+### Drag and drop
+
+`ig_drag_source`, `ig_drop_target` and `ip_drop_target` ([Drag and drop](widgets#drag-and-drop),
+[A plot as a drop target](plots#a-plot-as-a-drop-target)); `ip_drop_target`'s place and axis give the messages of
+[Plot axes](#plot-axes). `<p>` is the procedure.
+
+| Failure | Status | Message |
+|---|---|---|
+| a type of no or more than 32 characters | `FIG_ERR_ARGUMENT` | `<p>: type '<type>' must have 1 to 32 characters` |
+| a type starting with `_` | `FIG_ERR_ARGUMENT` | `<p>: type '<type>' starts with '_' (Dear ImGui's own types)` |
+| `ip_drop_target` with both `axis` and `legend` | `FIG_ERR_ARGUMENT` | `ip_drop_target: give axis or legend, not both` |
+
 ### Fields
 
 `ip_field_image`, `ip_colormap_legend` and `ip_colormap_legend_edit` ([Fields](plots#fields)) check their arguments

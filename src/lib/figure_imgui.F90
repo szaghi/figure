@@ -20,7 +20,8 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, fi
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, fig_item_status, fig_last_item, fig_mark_last_item_edited, &
-                            fig_items_tooltip, fig_splitter, fig_window_open_flag, FIG_ERR_ARGUMENT, FIG_OK
+                            fig_items_tooltip, fig_splitter, fig_window_open_flag, FIG_ERR_ARGUMENT, FIG_OK, &
+                            fig_dnd_source, fig_dnd_target, fig_dnd_payload, fig_dnd_dragging
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : igGetTime, igProgressBar, &
                           im_vec2, igBegin, igBeginCombo, igBeginItemTooltip, igEndCombo, igEndTooltip, igPopID, &
@@ -50,6 +51,7 @@ public :: ig_show_demo_window, ig_set_next_window, ig_item_rect, ig_image, ig_in
 public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
 public :: ig_progress_bar, ig_splitter
+public :: ig_drag_source, ig_drop_target, ig_dragging, take_payload
 public :: ig_color_edit
 public :: ig_input_text_multiline, text_buffer_object
 public :: ig_set_clipboard, ig_get_clipboard
@@ -650,6 +652,63 @@ contains
                                        im_vec2(0.0_c_float, 0.0_c_float)))
    endfunction ig_selectable
 
+   recursive function ig_drag_source(type, payload, preview, stat) result(dragging)
+   !< Make the last item a source of drag and drop: pressed and dragged, it carries `payload` (text: an id, a name, a
+   !< path) under the type `type`, shown under the pointer as `preview` (default: the payload itself). Call it right
+   !< after the item, every frame. Only a target of the same type (`ig_drop_target`, `ip_drop_target`) receives the
+   !< payload. Items without an id (`ig_text`) can be sources too. Statuses: `FIG_ERR_ARGUMENT` for a type of no or
+   !< more than 32 characters, or one starting with `_` (Dear ImGui's own); `FIG_ERR_STATE` outside a frame or from a
+   !< task.
+   character(len=*), intent(in)            :: type     !< Type of the payload (1 to 32 characters).
+   character(len=*), intent(in)            :: payload  !< Payload carried.
+   character(len=*), intent(in),  optional :: preview  !< Text under the pointer (default: the payload).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   logical                                 :: dragging !< The item is being dragged this frame.
+   integer(c_int)                          :: d        !< C copy of dragging.
+   integer(c_int)                          :: s        !< Status.
+
+   dragging = .false.
+   if (figure_draw_refused('ig_drag_source', stat)) return ! a task does not draw
+   if (present(preview)) then
+      s = fig_dnd_source(type, len(type, c_int), payload, len(payload, c_int), preview, len(preview, c_int), d)
+   else
+      s = fig_dnd_source(type, len(type, c_int), payload, len(payload, c_int), '', -1_c_int, d)
+   endif
+   call figure_check(s, stat)
+   dragging = d /= 0_c_int
+   endfunction ig_drag_source
+
+   recursive function ig_drop_target(type, payload, stat) result(dropped)
+   !< Make the last item a target of drag and drop for payloads of type `type`: true on the frame one is dropped on it,
+   !< `payload` then holding it (as `ig_drag_source` gave it). While a payload of the type is dragged over the item,
+   !< Dear ImGui outlines it. Call it right after the item, every frame. Statuses: as `ig_drag_source`.
+   character(len=*),              intent(in)            :: type    !< Type accepted (1 to 32 characters).
+   character(len=:), allocatable, intent(inout)         :: payload !< The payload dropped (unchanged otherwise).
+   integer(int32),                intent(out), optional :: stat    !< Status.
+   logical                                              :: dropped !< A payload was dropped this frame.
+   integer(c_int)                                       :: n       !< Payload length.
+   integer(c_int)                                       :: s       !< Status.
+
+   dropped = .false.
+   if (figure_draw_refused('ig_drop_target', stat)) return ! a task does not draw
+   s = fig_dnd_target(type, len(type, c_int), n)
+   call figure_check(s, stat)
+   if (s == FIG_OK .and. n >= 0_c_int) then
+      call take_payload(n, payload)
+      dropped = .true.
+   endif
+   endfunction ig_drop_target
+
+   recursive function ig_dragging(type) result(dragging)
+   !< True while a payload of type `type` is being dragged (anywhere): a program can show its drop zones then.
+   character(len=*), intent(in) :: type     !< Type.
+   logical                      :: dragging !< A payload of the type is dragged.
+
+   dragging = .false.
+   if (figure_draw_refused('ig_dragging')) return ! a task does not draw
+   dragging = fig_dnd_dragging(type, len(type, c_int)) /= 0_c_int
+   endfunction ig_dragging
+
    recursive subroutine ig_text_wrapped(text)
    !< Text wrapped at the right edge of the window or region (help text, long messages).
    character(len=*), intent(in) :: text !< Text.
@@ -1203,4 +1262,13 @@ contains
    call igImage(texture_ref(tex), extent, im_vec2(0.0_c_float, 0.0_c_float), im_vec2(1.0_c_float, 1.0_c_float))
    call fig_texture_sampling(0_c_int, 0_c_int)
    endsubroutine ig_image
+   recursive subroutine take_payload(n, payload)
+   !< The payload delivered last, `n` characters, into `payload` (reallocated).
+   integer(c_int),                intent(in)    :: n       !< Its length.
+   character(len=:), allocatable, intent(inout) :: payload !< The payload.
+
+   if (allocated(payload)) deallocate(payload)
+   allocate(character(len=n) :: payload)
+   if (n > 0_c_int) call fig_dnd_payload(payload, n)
+   endsubroutine take_payload
 endmodule figure_imgui

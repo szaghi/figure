@@ -221,6 +221,17 @@ int    fig_remove(const char *path, int path_len, int recursive);
 int    fig_set_file_time(const char *path, int path_len, const char *when, int when_len);
 int    fig_file_time(const char *path, int path_len, char *out);
 int    fig_file_exists(const char *path, int path_len);
+/* Drag and drop (main thread, inside a frame; figure_dnd.cpp): the last item as a source of a text payload of `type`
+ * (preview_len < 0: the payload is the preview), *dragging 1 while it is dragged; the last item, or a plot's part
+ * (where 1 the plot, 2 the axis `axis`, 3 the legend) as a target accepting `type`: on a delivery *len is the
+ * payload's length, read with fig_dnd_payload, and (x, y) the pointer in plot units (where 1, 2); else *len -1. FIG_ERR_ARGUMENT for a type
+ * of no or more than 32 characters, or starting with '_'. fig_dnd_dragging: 1 while a payload of `type` is dragged. */
+int    fig_dnd_source(const char *type, int type_len, const char *payload, int payload_len, const char *preview,
+                      int preview_len, int *dragging);
+int    fig_dnd_target(const char *type, int type_len, int *len);
+int    fig_dnd_plot_target(int where, int axis, const char *type, int type_len, int *len, double *x, double *y);
+void   fig_dnd_payload(char *buf, int len);
+int    fig_dnd_dragging(const char *type, int type_len);
 int    fig_file_browser_get(int what, int index, char *buf, int buf_len, int *len, int *count);
 int    fig_file_browser_rect(const char *part, int part_len, float *rect, int *found);
 /* Internal (figure_native.cpp): a browser open with this id; its answer, as fig_file_dialog_result; draw the front

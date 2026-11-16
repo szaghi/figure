@@ -39,6 +39,7 @@ public :: fig_task_start, fig_task_state, fig_task_report, fig_task_fail, fig_ta
 public :: fig_task_finish, fig_task_release, fig_task_on_worker, fig_task_refuse
 public :: fig_usage_error, fig_time, fig_add_fallback_font, fig_test_glyph
 public :: fig_make_folder, fig_remove, fig_set_file_time, fig_file_time, fig_file_exists
+public :: fig_dnd_source, fig_dnd_target, fig_dnd_plot_target, fig_dnd_payload, fig_dnd_dragging
 public :: fig_set_checks, fig_checks, fig_draw_refuse, fig_scope_open, fig_scope_close, fig_scope_report
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_notification_alpha
@@ -616,6 +617,64 @@ interface
    integer(c_int), value              :: path_len !< Its length.
    integer(c_int)                     :: exists   !< 1 or 0.
    endfunction fig_file_exists
+
+   function fig_dnd_source(type, type_len, payload, payload_len, preview, preview_len, dragging) result(status) &
+      bind(C, name='fig_dnd_source')
+   !< The last item as a drag source of a text payload; dragging 1 while it is dragged.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: type(*)     !< Type of the payload.
+   integer(c_int), value               :: type_len    !< Its length.
+   character(kind=c_char), intent(in)  :: payload(*)  !< Payload.
+   integer(c_int), value               :: payload_len !< Its length.
+   character(kind=c_char), intent(in)  :: preview(*)  !< Text shown under the pointer.
+   integer(c_int), value               :: preview_len !< Its length (negative: the payload is shown).
+   integer(c_int),         intent(out) :: dragging    !< 1 while dragged.
+   integer(c_int)                      :: status      !< Status.
+   endfunction fig_dnd_source
+
+   function fig_dnd_target(type, type_len, len) result(status) bind(C, name='fig_dnd_target')
+   !< The last item as a drop target; len the payload's length on a delivery, else -1.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: type(*)  !< Type accepted.
+   integer(c_int), value               :: type_len !< Its length.
+   integer(c_int),         intent(out) :: len      !< Payload length, -1 when nothing is delivered.
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_dnd_target
+
+   function fig_dnd_plot_target(where, axis, type, type_len, len, x, y) result(status) &
+      bind(C, name='fig_dnd_plot_target')
+   !< A plot's part as a drop target (1 the plot, 2 an axis, 3 the legend); len the payload's length on a delivery,
+   !< else -1; (x, y) the pointer in plot units.
+   import :: c_char, c_double, c_int
+   implicit none
+   integer(c_int), value               :: where    !< What receives.
+   integer(c_int), value               :: axis     !< ImAxis (where 2).
+   character(kind=c_char), intent(in)  :: type(*)  !< Type accepted.
+   integer(c_int), value               :: type_len !< Its length.
+   integer(c_int),         intent(out) :: len      !< Payload length, -1 when nothing is delivered.
+   real(c_double),         intent(out) :: x        !< Pointer abscissa [plot units].
+   real(c_double),         intent(out) :: y        !< Pointer ordinate [plot units].
+   integer(c_int)                      :: status   !< Status.
+   endfunction fig_dnd_plot_target
+
+   subroutine fig_dnd_payload(buf, len) bind(C, name='fig_dnd_payload')
+   !< Copy the payload delivered last (len bytes) and forget it.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(out) :: buf(*) !< Payload.
+   integer(c_int), value               :: len    !< Its length.
+   endsubroutine fig_dnd_payload
+
+   function fig_dnd_dragging(type, type_len) result(dragging) bind(C, name='fig_dnd_dragging')
+   !< 1 while a payload of `type` is dragged.
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in) :: type(*)  !< Type.
+   integer(c_int), value              :: type_len !< Its length.
+   integer(c_int)                     :: dragging !< 1 or 0.
+   endfunction fig_dnd_dragging
 
    subroutine fig_scope_open(kind, who, who_len, label, label_len, returned, aux) bind(C, name='fig_scope_open')
    !< A begin or a push, after it: its scope in the record of the frame.

@@ -553,6 +553,35 @@ fields' own copy and paste (ctrl+c, ctrl+x, ctrl+v; cmd on macOS) use the same c
 `stat` is optional (absent: `error stop` with the message). `ig_get_clipboard` cannot fail: `''` before `init*` and
 from a task.
 
+## Drag and drop
+
+| Procedure | Notes |
+|---|---|
+| `ig_drag_source(type, payload [, preview] [, stat])` → `logical` | Makes the last item a source (`BeginDragDropSource`): pressed and dragged, it carries the text `payload` under the type `type`, shown under the pointer as `preview` (default: the payload). `.true.` in the frames it is dragged. |
+| `ig_drop_target(type, payload [, stat])` → `logical` | Makes the last item a target of payloads of type `type` (`BeginDragDropTarget`, `AcceptDragDropPayload`): `.true.` on the frame one is dropped on it, `payload` (`character(len=:), allocatable`) then holding it. |
+| `ig_dragging(type)` → `logical` | `.true.` while a payload of type `type` is dragged, wherever: a program shows its drop zones then. |
+
+The payload is text: an id, a name, a path, what the target needs to find the thing in the program's own data; the
+program, not Dear ImGui, keeps the things themselves. The type pairs sources with targets: a target receives only the
+payloads of its type, and outlines itself while one of them is held over it. A plot is a target too, of its area, an
+axis or its legend ([`ip_drop_target`](plots#a-plot-as-a-drop-target)). Each is called right after its item, on every
+frame; any item is a source, text and other items without an id included.
+
+<<< @/examples/snippets/cb_dnd-source.F90{fortran}
+
+<Media name="cb_dnd" video alt="A tree of four cases beside an empty plot. re1e5-coarse is dragged from the tree, its name under the pointer, the plot outlined while it is held over it: dropped, its residual history is plotted. re1e6-fine follows. Then re1e5-coarse is dragged back onto the Bin button and leaves the plot." caption="docs/examples/src/cb_dnd.F90" />
+
+- **A drop is one frame.** The target returns `.true.` once, on the frame of the release; the payload stays in the
+  variable until the next drop. A release anywhere else, or over a target of another type, delivers nothing.
+- **Types.** 1 to 32 characters, not starting with `_` (Dear ImGui's own types, as its colour drags'). Two parts of a
+  program that should not exchange things use two types.
+- **Within the program.** A payload moves between the items of one program: files dragged in from the system are
+  [dropped files](frame-loop#drops) (`app%dropped`), a drag out of the window carries nothing to other programs.
+- Statuses: `FIG_ERR_ARGUMENT` for a type of no or more than 32 characters, or starting with `_`; `FIG_ERR_STATE`
+  outside a frame or from a [task](processes#tasks). `stat` is optional (absent: `error stop` with the message).
+- Modes: the same in **window**, **headless** (`test_mouse_button` and `test_mouse_move` drag, a frame apart:
+  `src/tests/figure_test_dnd.F90`) and **remote** mode (the browser's pointer).
+
 ## Text and layout
 
 | Procedure | Notes |

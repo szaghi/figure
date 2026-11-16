@@ -622,6 +622,19 @@ plot, a text at a point, a rectangle the user drags. With the drag tools and ann
   drag tools' flags (`ImPlotDragToolFlags_*`: no cursors, no fit, delayed, no move, no resize), and `out_clicked`,
   `out_hovered` of the drag tools.
 
+## A plot as a drop target
+
+| Procedure | Notes |
+|---|---|
+| `ip_drop_target(type, payload [, axis] [, legend] [, x] [, y] [, stat])` → `logical` | Makes the plot a target of payloads of type `type` dragged from an [`ig_drag_source`](widgets#drag-and-drop) (`BeginDragDropTargetPlot`): `.true.` on the frame one is dropped, `payload` then holding it and `x`, `y` the point it landed on, in plot units. With `axis` (`'x1'`..`'y3'`, set up on this frame) only that axis receives (`BeginDragDropTargetAxis`), with `legend=.true.` only the legend (`BeginDragDropTargetLegend`). |
+
+<<< @/examples/snippets/cb_dnd-plot.F90{fortran}
+
+- Called after the plot's items, before `ip_end_plot`, on every frame. Several targets in one plot (its area, an
+  axis) each receive what is dropped on their own part: a series dropped on the y2 axis can be plotted against it.
+- Statuses: those of `ig_drop_target`, plus `FIG_ERR_ARGUMENT` for an unknown axis or both `axis` and `legend`,
+  `FIG_ERR_STATE` outside a plot or for an axis not set up.
+
 ## 3-D plots
 
 `figure_implot3d` binds [ImPlot3D](https://github.com/brenocq/implot3d) (0.6 WIP): small 3-D figures that are plots,

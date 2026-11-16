@@ -107,6 +107,7 @@ A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) 
 | `ig_begin_item_tooltip()` → `logical`, `ig_begin_tooltip()` → `logical`, `ig_end_tooltip()` | a tooltip with any content (a table, a plot): on the item just drawn after the hover delay, or now wherever the pointer is; end only after a true begin ([Tooltips](widgets#tooltips)) <!-- visual --> |
 | `ig_text_link(label)` → `logical`, `ig_text_link_url(label, url)` | text drawn as a link, `.true.` when clicked; a link that opens `url` in the browser (remote mode: the page opens it) ([Links](widgets#links)) |
 | `ig_set_clipboard(text [, stat])`, `ig_get_clipboard()` → `character` | put a text on the clipboard; read it (window: the system's; headless: the program's own; remote: the program's, joined to the browser's where it allows it) ([Clipboard](widgets#clipboard)) |
+| `ig_drag_source(type, payload [, preview] [, stat])` → `logical`, `ig_drop_target(type, payload [, stat])` → `logical`, `ig_dragging(type)` → `logical` | drag and drop of a text payload between items, matched by type ([Drag and drop](widgets#drag-and-drop)) <!-- visual --> |
 | `ig_collapsing_header(label [, default_open])` → `logical` | a header that shows or hides what follows; `.true.` while open (no end call) ([Groups](widgets#groups-headers-tabs-tables)) |
 | `ig_begin_tab_bar(id)` → `logical`, `ig_end_tab_bar()` | a bar of tabs; end it only when the begin returned `.true.` ([Groups](widgets#groups-headers-tabs-tables)) |
 | `ig_begin_tab(label [, open])` → `logical`, `ig_end_tab()` | a tab; `.true.` when selected: draw its content, then end it (only then) ([Groups](widgets#groups-headers-tabs-tables)) |
@@ -236,6 +237,7 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_plot_to_pixels(x, y, px, py [, xaxis] [, yaxis] [, stat])`, `ip_pixels_to_plot(px, py, x, y ...)` | plot units to display pixels and back ([plots](plots#reading-a-plot)) <!-- visual --> |
 | `ip_plot_selection(xmin, xmax, ymin, ymax [, xaxis] [, yaxis] [, stat])` → `logical`, `ip_cancel_selection([stat])` | the box the user drags with the right button; ended without the zoom ([plots](plots#reading-a-plot)) <!-- visual --> |
 | `ip_drag_rect(id, xmin, xmax, ymin, ymax [, color] [, stat])` → `logical` | a rectangle the user moves and resizes; the values updated in place ([plots](plots#marks-in-a-plot)) <!-- visual --> |
+| `ip_drop_target(type, payload [, axis] [, legend] [, x] [, y] [, stat])` → `logical` | a plot, one of its axes or its legend as a drop target; where the payload landed ([plots](plots#a-plot-as-a-drop-target)) |
 | `ip_tag(axis, value [, color] [, text] [, stat])` | a box on an axis at a value, with a text or the axis's label ([plots](plots#marks-in-a-plot)) <!-- visual --> |
 | `ip_text(text, x, y [, offset] [, vertical] [, stat])` | a text at a plot point ([plots](plots#marks-in-a-plot)) <!-- visual --> |
 | `ip_end_plot()` | end the plot (only if `ip_begin_plot` returned `.true.`) ([plots](plots#a-plot)) |

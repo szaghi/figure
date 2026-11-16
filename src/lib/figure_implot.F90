@@ -33,9 +33,10 @@ use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, fi
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
                             fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag, &
-                            fig_field_image, fig_gradient_edit, fig_colormap_stops
+                            fig_field_image, fig_gradient_edit, fig_colormap_stops, fig_dnd_plot_target
 use figure_cimgui, only : im_vec2, im_vec4, igGetFrameCount, igIsMousePosValid
 use figure_texture, only : texture_object, texture_ref
+use figure_imgui, only : take_payload
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot,             &
                            ImPlot_PlotBars_doublePtrdoublePtr, ImPlot_PlotBars_FloatPtrFloatPtr,                   &
                            ImPlot_PlotLine_doublePtrdoublePtr, ImPlot_PlotLine_FloatPtrFloatPtr,                   &
@@ -114,6 +115,7 @@ public :: ip_setup_legend
 ! The items' stride helpers, for the 3-D items of figure_implot3d (not re-exported by figure)
 public :: series_r32, series_r64, series_lead, series_put, series_scratch, series_gap
 public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, ip_cancel_selection
+public :: ip_drop_target
 public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -2630,6 +2632,53 @@ contains
    endif
    call figure_check(FIG_OK, stat)
    endfunction ip_drag_rect
+
+   recursive function ip_drop_target(type, payload, axis, legend, x, y, stat) result(dropped)
+   !< Make the plot being declared a target of drag and drop for payloads of type `type` (as `ig_drop_target`): true
+   !< on the frame one is dropped, `payload` then holding it and (x, y) the point it was dropped at, in plot units.
+   !< With `axis` (`'x1'`, ..., `'y3'`) only that axis receives it, with `legend` only the legend. Call it after the
+   !< plot's items, before `ip_end_plot`, every frame. Statuses: `FIG_ERR_ARGUMENT` for a bad type (as
+   !< `ig_drag_source`), an unknown axis or both `axis` and `legend`; `FIG_ERR_STATE` outside a plot, for an axis not
+   !< set up, or from a task.
+   character(len=*),              intent(in)              :: type    !< Type accepted (1 to 32 characters).
+   character(len=:), allocatable, intent(inout)           :: payload !< The payload dropped (unchanged otherwise).
+   character(len=*),              intent(in),    optional :: axis    !< Only this axis receives (default: the plot).
+   logical,                       intent(in),    optional :: legend  !< Only the legend receives (default: false).
+   real(real64),                  intent(inout), optional :: x       !< Abscissa of the drop [plot units].
+   real(real64),                  intent(inout), optional :: y       !< Ordinate of the drop [plot units].
+   integer(int32),                intent(out),   optional :: stat    !< Status.
+   logical                                                :: dropped !< A payload was dropped this frame.
+   integer(c_int)                                         :: code    !< ImAxis.
+   integer(c_int)                                         :: where   !< 1 the plot, 2 the axis, 3 the legend.
+   integer(c_int)                                         :: n       !< Payload length.
+   integer(c_int)                                         :: s       !< Status.
+   real(c_double)                                         :: px, py  !< Where it landed [plot units].
+   logical                                                :: leg     !< The legend receives.
+
+   dropped = .false.
+   if (figure_draw_refused('ip_drop_target', stat)) return ! a task does not draw
+   leg = .false.
+   if (present(legend)) leg = legend
+   code = 0_c_int
+   if (present(axis)) then
+      if (leg) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip_drop_target: give axis or legend, not both', stat)
+         return
+      endif
+      if (axis_refused('ip_drop_target', axis, code, .false., stat)) return
+      where = 2_c_int
+   else
+      if (plot_refused('ip_drop_target', .false., stat)) return
+      where = merge(3_c_int, 1_c_int, leg)
+   endif
+   s = fig_dnd_plot_target(where, code, type, len(type, c_int), n, px, py)
+   call figure_check(s, stat)
+   if (s /= FIG_OK .or. n < 0_c_int) return
+   call take_payload(n, payload)
+   if (where /= 3_c_int .and. present(x)) x = real(px, real64)
+   if (where /= 3_c_int .and. present(y)) y = real(py, real64)
+   dropped = .true.
+   endfunction ip_drop_target
 
    recursive subroutine ip_tag(axis, value, color, text, stat)
    !< A tag on an axis of the current plot (`TagX`, `TagY`): a box at `value` over the axis, holding `text` or, without

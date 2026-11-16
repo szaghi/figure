@@ -70,7 +70,7 @@ use figure_menu, only : ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar
                         ig_begin_popup, ig_begin_popup_modal, ig_end_popup, ig_close_current_popup, &
                         ig_begin_popup_context
 use figure_imgui, only : ig_begin, ig_begin_side_bar, ig_splitter, ig_button, ig_checkbox, ig_end, ig_image, &
-                         ig_item_rect, ig_same_line, &
+                         ig_item_rect, ig_same_line, ig_drag_source, ig_drop_target, ig_dragging, &
                          ig_separator, ig_set_next_window, ig_show_demo_window, ig_text, ig_input_text,  &
                          ig_set_next_item_width, ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped,      &
                          ig_text_disabled, ig_text_colored, ig_tool_button, ig_focus_window,            &
@@ -104,7 +104,8 @@ use figure_implot, only : ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_
                           ip_contour_lines, ip_contour_levels, ip_colormap_legend, &
                           ip_colormap_legend_edit, ip_field_image
 use figure_implot, only : ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, &
-                          ip_cancel_selection, ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems,     &
+                          ip_cancel_selection, ip_drop_target, ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, &
+                          ip_stems, &
                           ip_histogram, ip_histogram2d, ImPlotStairsFlags_PreStep, ImPlotStairsFlags_Shaded,         &
                           ImPlotStemsFlags_Horizontal, ImPlotInfLinesFlags_Horizontal,                               &
                           ImPlotHistogramFlags_Horizontal, ImPlotHistogramFlags_Cumulative,                          &
@@ -148,6 +149,7 @@ public :: ig_drag, ig_slider_angle, ig_drag_range, ig_radio, ig_list_box
 public :: canvas_event_object, ig_canvas, ig_cursor_screen_pos, ig_invisible_button
 public :: ig_draw_line, ig_draw_rect, ig_draw_circle, ig_draw_polyline, ig_draw_polygon, ig_draw_text, ig_draw_image
 public :: ig_input_text, ig_set_next_item_width, ig_combo, ig_tooltip
+public :: ig_drag_source, ig_drop_target, ig_dragging
 public :: ig_selectable, ig_text_wrapped, ig_text_disabled, ig_text_colored, ig_begin_child, ig_end_child
 public :: ig_collapsing_header, ig_begin_tab_bar, ig_end_tab_bar, ig_begin_tab, ig_end_tab, ig_push_id, ig_pop_id
 public :: ig_begin_disabled, ig_end_disabled
@@ -225,6 +227,7 @@ public :: ImPlotItemFlags_None, ImPlotItemFlags_NoLegend, ImPlotItemFlags_NoFit
 public :: ImPlotLineFlags_Segments, ImPlotLineFlags_Loop, ImPlotLineFlags_SkipNaN, ImPlotLineFlags_NoClip
 public :: ImPlotLineFlags_Shaded, ImPlotScatterFlags_NoClip, ImPlotBarsFlags_Horizontal
 public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, ip_cancel_selection
+public :: ip_drop_target
 public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
 public :: ImPlotStairsFlags_PreStep, ImPlotStairsFlags_Shaded, ImPlotStemsFlags_Horizontal, ImPlotInfLinesFlags_Horizontal
 public :: ImPlotHistogramFlags_Horizontal, ImPlotHistogramFlags_Cumulative, ImPlotHistogramFlags_Density

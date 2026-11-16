@@ -1,0 +1,20 @@
+#! program build/docs-examples/bin/cb_dnd
+#! frames  230
+#! poster  150
+# drag re1e5-coarse onto the plot, then re1e6-fine: each is plotted where it lands; drag re1e5-coarse back to the bin
+0   move 300 300
+5   move 100 68 15
+25  down
+30  move 300 150 20
+55  move 450 200 10
+70  up
+80  move 100 125 15
+100 down
+105 move 300 220 20
+130 move 470 230 10
+145 up
+160 move 100 68 15
+180 down
+185 move 60 120 10
+198 move 36 147 8
+212 up
