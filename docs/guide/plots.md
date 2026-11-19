@@ -195,7 +195,9 @@ ImPlot's assertion aborted the program in these cases.
 and a double click fits again; X2 and X3 fit the abscissae of the items on them. An axis with nothing to fit, unused
 or set up with no item on it, keeps its range: ImPlot would compute `inf - inf` there (a NaN, which traps under
 `-ffpe-trap=invalid`), so `ip_end_plot` cancels the fit of every empty axis, and the first frame of a subplot figure
-asks every axis to fit and keeps only those with data.
+asks every axis to fit and keeps only those with data. A plot that starts empty fits its items from the frame they
+arrive, on a log axis as on a linear one. A log axis fits only the positive values: values <= 0 have no place on it
+and are not drawn, and an axis whose items have no positive value keeps its range, as an empty one does.
 
 Statuses: `FIG_ERR_ARGUMENT`, nothing set up, for an unknown axis, scale or location, an axis of the wrong direction
 in `ip_set_axes` or `ip_plot_limits`, `'time'` on a y axis, a format refused, `vmin >= vmax` or a NaN end, ticks with

@@ -483,14 +483,6 @@ its ImGradient, with FIGURE's glue:
   moved point kept per editor and its press taken by an item (they were statics shared by every editor, and a drag
   moved the window).
 
-## A log axis on a plot that starts empty
-
-A plot set up with `ip_setup_axes(..., auto_fit=.true., ylog=.true.)` whose first frames had no item drew nothing once
-its lines arrived: the axes stayed at their empty range (found 2026-11-16 writing the drag and drop example, where the
-plot fills as cases are dropped; not investigated). The same plot on linear axes is right; so is a log plot whose
-first frame has its data. Until it is understood, give a plot that starts empty linear axes, or limits
-(`ip_setup_axes_limits`) to start from.
-
 ## ImPlot's digital signals
 
 FIGURE patches one line of ImPlot (`native/patches/implot-0001-digital-rect-order.patch`): `PlotDigital` gives

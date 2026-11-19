@@ -16,7 +16,9 @@ program figure_test_plot_axes
 !< 6. a constrained x axis zoomed out with the wheel stays within its bounds, zoomed in stays wider than its narrowest
 !<    width; a locked y axis does not move; the same wheel on an unconstrained plot goes past those bounds (control);
 !< 7. wrong calls: unknown axes, scales, locations; 'time' on y; an axis not set up; setup after an item; outside a
-!<    plot; labels not one per value; bad constraints: refused with their statuses, nothing aborts.
+!<    plot; labels not one per value; bad constraints: refused with their statuses, nothing aborts;
+!< 8. an auto-fitting log axis on a plot that starts empty fits its line once the line arrives (#13 S1: reported as
+!<    drawing nothing, not reproduced), and a log axis whose line has no positive value keeps a finite positive range.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_end,      &
@@ -35,13 +37,15 @@ real(real64)                  :: x(N)                   !< Abscissae.
 real(real64)                  :: res(N)                 !< A residual in [0, 1].
 real(real64)                  :: coef(N)                !< A coefficient in [1000, 5000].
 real(real64)                  :: signed(N)              !< A signed quantity in [-1000, 1000].
-logical                       :: ok(16)                 !< Per-check outcome.
+logical                       :: ok(18)                 !< Per-check outcome.
 real(real64)                  :: y1lim(2), y2lim(2)     !< Limits of Y1 and Y2 in phase 1.
 real(real64)                  :: ctl(2)                 !< Y1 limits with both lines on Y1 (control).
 real(real64)                  :: wide(2), narrow(2)     !< x limits of the constrained plot, zoomed out and in.
 real(real64)                  :: ylock(2)               !< y limits of the locked axis, after the wheel.
 real(real64)                  :: free_x(2)              !< x limits of the unconstrained plot, zoomed out.
 real(real64)                  :: y3lim(2)               !< Limits of an axis set up and not used.
+real(real64)                  :: late(4)                !< Limits of the log plot that started empty (x, y).
+real(real64)                  :: nonpos(2)              !< y limits of the log plot with no positive value.
 real(real64)                  :: sizes(2, 3)            !< Plot areas of the three legend plots [pixels].
 real(real64)                  :: centre(2)              !< Centre of the plot area [pixels].
 character(len=32)             :: ticks_log(2, 12)       !< Tick labels of the two log plots.
@@ -80,7 +84,7 @@ ticks_log = ''
 centre = 0.0_real64
 
 call app%init_headless(800_int32, 600_int32)
-do frame = 1_int32, 110_int32
+do frame = 1_int32, 124_int32
    if (.not. app%next_frame()) error stop 'figure_test_plot_axes: next_frame returned false in headless mode'
    call ig_set_next_window(10.0_real64, 10.0_real64, 700.0_real64, 560.0_real64, always=.true.)
    if (ig_begin('Axes')) then
@@ -99,8 +103,10 @@ do frame = 1_int32, 110_int32
          call constrained(frame)
       case (80_int32:105_int32)
          call unconstrained(frame)
-      case default
+      case (106_int32:110_int32)
          call wrong_calls(frame == 106_int32)
+      case default
+         call log_late(frame)
       endselect
    endif
    call ig_end()
@@ -141,6 +147,11 @@ ok(16) = index(msg(5), "ip_setup_axis_limits: axis 'y2' is not set up") == 1 .an
          index(msg(17), 'ip_setup_axis: no plot is being declared') == 1 .and.                              &
          index(msg(3), "ip_setup_axis: scale 'time' on axis 'y1' is refused") == 1 .and.                    &
          index(msg(15), "test_plot_tick: axis 'y3' is not set up") == 1
+! 8. a log axis that starts empty fits its line; a line with no positive value leaves a finite positive range
+ok(17) = abs(late(1) - x(1)) < 1.0e-9_real64 .and. abs(late(2) - x(N)) < 1.0e-9_real64 .and.                  &
+         abs(late(3) - minval(coef)) < 1.0e-6_real64 * 5000.0_real64 .and.                                    &
+         abs(late(4) - maxval(coef)) < 1.0e-6_real64 * 5000.0_real64
+ok(18) = all(ieee_is_finite(nonpos)) .and. nonpos(1) > 0.0_real64 .and. nonpos(1) < nonpos(2)
 
 write(output_unit, '(A,2(ES12.4))') 'Y1 limits                 ', y1lim
 write(output_unit, '(A,2(ES12.4))') 'Y2 limits                 ', y2lim
@@ -149,6 +160,8 @@ write(output_unit, '(A,2(ES12.4))') 'constrained x, zoomed out ', wide
 write(output_unit, '(A,2(ES12.4))') 'constrained x, zoomed in  ', narrow
 write(output_unit, '(A,2(ES12.4))') 'free x, zoomed out        ', free_x
 write(output_unit, '(A,6(F8.1))')   'legend plot areas (w, h)  ', sizes
+write(output_unit, '(A,4(ES12.4))') 'log plot started empty    ', late
+write(output_unit, '(A,2(ES12.4))') 'log plot, no positive y   ', nonpos
 do i = 1_int32, NE
    if (st(i) /= want(i)) write(output_unit, '(A,I0,A,I0,A,I0,A)') 'wrong call ', i, ': stat ', st(i), ' (want ', &
                                                                     want(i), ') '//trim(msg(i))
@@ -430,4 +443,24 @@ contains
    call ip_plot_limits(d(1), d(2), d(3), d(4), stat=st(22))
    msg(22) = figure_last_error()
    endsubroutine outside_plot
+
+   subroutine log_late(frame)
+   !< Phase 8: two auto-fitting plots on a log y axis, empty for five frames; then one gets the coefficient (positive),
+   !< the other the negated residual (no positive value: nothing a log axis can show).
+   integer(int32), intent(in) :: frame !< Frame (111-124); the limits are read on the last.
+   real(real64)               :: d1, d2 !< Unused x limits.
+
+   if (ip_begin_plot('log late', width=640.0_real64, height=200.0_real64)) then
+      call ip_setup_axes('x', 'coefficient', auto_fit=.true., yscale='log')
+      if (frame > 115_int32) call ip_line('coefficient', x, coef)
+      if (frame == 124_int32) call ip_plot_limits(late(1), late(2), late(3), late(4))
+      call ip_end_plot()
+   endif
+   if (ip_begin_plot('log none', width=640.0_real64, height=200.0_real64)) then
+      call ip_setup_axes('x', 'minus the residual', auto_fit=.true., yscale='log')
+      if (frame > 115_int32) call ip_line('minus', x, -res)
+      if (frame == 124_int32) call ip_plot_limits(d1, d2, nonpos(1), nonpos(2))
+      call ip_end_plot()
+   endif
+   endsubroutine log_late
 endprogram figure_test_plot_axes

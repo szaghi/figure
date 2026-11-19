@@ -529,7 +529,4 @@ v0.6.0, and the features no application had asked for, which the owner took in w
 - **The showcase's last two GPU pictures** (#12 S6): the run checker on growing files and the solvers run from the
   window, which race the wall clock; xall_figure records them again with the capture's `wait`, then FIGURE copies
   them.
-- **A log axis on a plot that starts empty**: a plot set up with `auto_fit` and a log y axis, whose first frames have
-  no item, drew nothing once its lines arrived ([Known issues](known-issues#a-log-axis-on-a-plot-that-starts-empty), not
-  investigated).
 - **The upstream reports** of #4, #8, #9 and #11, filed by the owner; FIGURE's patches stay until each lands.
