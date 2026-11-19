@@ -554,6 +554,25 @@ v0.6.0, and the features no application had asked for, which the owner took in w
 
 ## v0.8.0 — in progress
 
-The plan is [#13](https://github.com/szaghi/figure/issues/13): v0.7.0's leftovers, the colour picker, pies, bubbles and
-error bars along x, ImPlot3D's per-point colours and sizes, ticks, formats and style (S1 to S7, done), FIGURE's
-patches against upstream (S8); the documentation pass is [#14](https://github.com/szaghi/figure/issues/14).
+The plan is [#13](https://github.com/szaghi/figure/issues/13); the documentation pass is
+[#14](https://github.com/szaghi/figure/issues/14).
+
+- **S1, a log axis on a plot that starts empty:** not reproduced. Every log axis fits its line from the frame it
+  arrives; a line with no positive value leaves the empty range, as it should. A test keeps it so
+  ([Axes](plots#axes)).
+- **S2, the clipper's `keep`:** a test that fails without it. Dear ImGui forgets a range source that is not drawn,
+  and the clipper draws the focused line anyway, so `keep` matters when the source and the focus differ
+  ([Clipped lists](widgets#selecting-many-items)).
+- **S3, the showcase:** the solvers run from the window recorded headless, each run waited for. The run checker on
+  growing files stays a GPU recording ([Next](#next)).
+- **S4:** `find_package(figure 0.7)`; the changelog's entries keep the case of a name written in lower case.
+- **S5, the colour picker:** `ig_color_picker`, drawn in place, with a hue bar or a hue wheel
+  ([Colour editing](widgets#colour-editing)).
+- **S6, plots:** pie charts (`ip_pie_chart`), bubbles (`ip_bubbles`), error bars along x (`horizontal`)
+  ([Pies and bubbles](plots#pies-and-bubbles)). Custom scales and tick formatters stay out: they are callbacks.
+- **S7, ImPlot3D:** colours and sizes per point, the axes' formats and ticks, its style by name
+  ([3-D plots](plots#_3-d-plots)).
+- **S8, upstream:** FIGURE's patches stay until the owner's reports (#4, #8, #9, #11) land.
+- **The documentation (#14):** a chapter on building and running the studio, the tutorial as a build-along, the
+  install page in one order, the reference pages completed and ordered for a learner, the cookbook regrouped, the
+  known issues as a table, and `check_docs.py` keeping all of it checked.
