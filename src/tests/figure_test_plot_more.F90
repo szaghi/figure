@@ -33,7 +33,7 @@ integer(int32)          :: st(6)                        !< Statuses of the wrong
 character(len=160)      :: msg(5)                       !< Their messages.
 integer(int32)          :: f                            !< Frame.
 integer(int32)          :: u                            !< Unit of the colormaps' files.
-character(len=*), parameter :: DIR = '/tmp/figure_test_plot_more_' !< Prefix of the colormaps' files.
+character(len=*), parameter :: DIR = 'figure_test_plot_more.' !< Prefix of the colormaps' files (working folder).
 
 x = [1.0_real64, 2.0_real64, 3.0_real64]
 y = x
@@ -44,16 +44,20 @@ r4 = real(r, real32)
 ok = .false.
 st = -1_int32
 msg = ''
-open(newunit=u, file=DIR//'pie1.csv', status='replace', action='write')
+open(newunit=u, file=DIR//'pie1.csv.tmp', status='replace', action='write')
 write(u, '(3(F5.2,:,","))') PIE(1:3)
 write(u, '(3(F5.2,:,","))') PIE2(1:3)
 close(u)
-open(newunit=u, file=DIR//'pie2.csv', status='replace', action='write')
+open(newunit=u, file=DIR//'pie2.csv.tmp', status='replace', action='write')
 write(u, '(3(F5.2,:,","))') PIE2(1:3)
 write(u, '(3(F5.2,:,","))') PIE(1:3)
 close(u)
-call ip_load_colormap('figure-test-pie1', DIR//'pie1.csv')
-call ip_load_colormap('figure-test-pie2', DIR//'pie2.csv')
+call ip_load_colormap('figure-test-pie1', DIR//'pie1.csv.tmp')
+call ip_load_colormap('figure-test-pie2', DIR//'pie2.csv.tmp')
+open(newunit=u, file=DIR//'pie1.csv.tmp', status='old')
+close(u, status='delete')
+open(newunit=u, file=DIR//'pie2.csv.tmp', status='old')
+close(u, status='delete')
 call app%init_headless(900_int32, 900_int32)
 do f = 1_int32, 6_int32
    if (.not. app%next_frame()) exit
