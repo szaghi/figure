@@ -5,8 +5,8 @@ title: 23. The field and its snapshots
 # 23. The field and its snapshots
 
 This chapter changes how the studio draws its result. The field is coloured through the colormap
-once, into a texture, and coloured again only when something changed; its legend becomes the colour scale's control,
-dragged and zoomed by the user; and a player steps through the snapshots the solver wrote during the run, the
+once, into a [texture](/guide/images#textures), and coloured again only when something changed; its legend becomes
+the colour scale's control, dragged and zoomed by the user; and a player steps through the snapshots the solver wrote during the run, the
 converged field last.
 
 <Media name="tut23_player" video alt="F5 runs the plate case; the solver writes the field every 4 iterations. The Result panel shows the converged field and, above it, a player: a step-back button, a play button, a step-forward button and a slider reading converged. Play: the slider reads iteration 4, 8, 16 and on, and the field, its contour lines with it, takes each snapshot's values, again and again from the start; pause, then step back twice. The legend beside the field is dragged down: its range moves, and the field is coloured again with it; two wheel steps over the legend zoom the range; Reset range gives back 0 to 100" caption="docs/examples/src/tut23_player.F90, run as tut23_player --examples /tmp/figure-studio --case /tmp/figure-studio/plate" />

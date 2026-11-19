@@ -1,3 +1,10 @@
+subroutine start_run()
+!< Start the solver on the case, saved first.
+character(len=512) :: args(4) !< The solver and its arguments.
+integer(int32)     :: stat    !< Status of the start.
+
+if (edited) call save_case()                      ! the solver reads the file: save the edits first
+if (edited) return
 call output%clear()
 deallocate(iters, res)
 allocate(iters(0), res(0))
@@ -12,3 +19,4 @@ if (stat /= FIG_OK) then
 endif
 started = .true.
 run_status = 'running'
+endsubroutine start_run

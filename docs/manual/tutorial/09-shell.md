@@ -59,6 +59,9 @@ The whole program: [tut09_shell.F90](https://github.com/szaghi/figure/blob/main/
 
 <<< @/examples/snippets/tut09_shell-panels.F90{fortran}
 
+- `ig_dock_id('studio')` is the dock space's id: the same name gives the same id in every frame and every run
+  ([A dock space](/guide/docking#a-dock-space)). `ig_dock_layout_end(root)` finishes the layout begun by
+  `ig_dock_layout_begin(root)` (below), inside the `if`.
 - `ig_dock_space(root)` fills what the title bar and the side bar leave with a dock space, every frame and before
   the panels. The user drags panels by their tabs to dock them elsewhere, side by side or as tabs, or out to float.
 - `ig_dock_layout_begin(root)` is `.true.` when the dock space has no layout yet: the program then splits it

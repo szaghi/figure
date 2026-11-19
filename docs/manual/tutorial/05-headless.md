@@ -18,7 +18,8 @@ procedure in headless mode and clicks its button with synthetic mouse input.
 - `init_headless(400, 300)` creates the contexts on a virtual 400 x 300 display: no window, no GPU, no display
   server.
 - Every iteration is a frame: `next_frame` delivers the input queued before it, then `draw_panel` declares the
-  panel, and `ig_item_rect` (inside it) records where the button is.
+  panel, and `ig_item_rect` (inside it) records where the button is. `always=.true.` on `ig_set_next_window`
+  places and sizes the panel every frame, not only the first time ([Windows](/guide/widgets#windows)).
 - `test_click(x, y)`, from the module `figure_testing`, queues a click there in the second frame, once the window
   has its size: the move, a frame with the pointer resting on the button, the press and the release reach the panel over the next four frames,
   as a real click would, and `ig_button` returns `.true.` once. Leave a test enough frames after its last input.

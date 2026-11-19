@@ -10,6 +10,8 @@ title: 1. A first window
 
 - `app_object` is the application: one per program. `init` opens a 640 x 360 window titled "FIGURE: first window"
   and creates the Dear ImGui and ImPlot contexts.
+- `640_int32` is the literal 640 of kind `int32`, from `iso_fortran_env`: FIGURE's integer and real arguments have
+  that module's kinds ([Feature map](/guide/features)), and the next chapters write a real as `0.5_real64`.
 - `next_frame()` renders the previous frame, waits for input, and opens the next frame; it returns `.false.` when the
   user closes the window.
 - Between two `next_frame` calls the program declares the interface. Here, one Dear ImGui window named "Hello" with

@@ -23,17 +23,21 @@ a tool from a button and shows what it prints, then runs a computation of the pr
   `['sbatch', 'case.sh']`.
 - `ig_begin_disabled(tool%running())` greys the button out while the tool runs: one object runs one process at a
   time.
-- FIGURE reads the tool's output on a thread of its own as the tool writes, and wakes the frame loop: the window does
-  not freeze, and the tool never waits for the program.
-- `tool%poll(lines)`, every frame, gives the complete lines printed since the last poll; `output%add(lines)` appends
-  them to a `log_view_object`, and `output%draw('output')` draws the lines in view, following the end.
+- FIGURE reads the tool's output on a thread of its own as the tool writes, and wakes the frame loop
+  ([Waking the loop](/guide/frame-loop#waking-the-loop)): the window does not freeze, and the tool never waits for
+  the program.
+- `tool%poll(lines)`, every frame once the tool was started (`started`), gives the complete lines printed since the
+  last poll; before the first `start` a poll is a failure (`FIG_ERR_STATE`), which stops a program that passes no
+  `stat` ([Statuses](/guide/processes#statuses)). `output%add(lines)` appends them to a `log_view_object`, and
+  `output%draw('output')` draws the lines in view, following the end.
 - A tool still running when the program ends is stopped with it. A run that must outlive the program is started with
   `detached=.true.` and a `log_file`.
 
 ## A computation as a task
 
 The program's own long computations run as tasks: a Fortran procedure on a thread of its own. The work is a
-module procedure with a fixed interface; its data is any type, here a field to smooth:
+module procedure with a fixed interface, declared `recursive`, as is every procedure it calls, since two tasks may run
+it at once ([Tasks](/guide/processes#tasks)); its data is any type, here a field to smooth:
 
 <<< @/examples/snippets/tut06_work-work.F90{fortran}
 

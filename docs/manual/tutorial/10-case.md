@@ -76,7 +76,8 @@ Neither blocks the program: the window keeps drawing, and the answer comes on a 
 
 - `app%file_dialog_result('case', path, done, cancelled, stat)`, every frame, is `done` once, on the frame the user
   answered, whichever kind of dialog was opened with the id `'case'`. A system dialog that could not be shown
-  answers with a failure; the studio shows `figure_last_error()` in a notification.
+  answers with a failure in `stat`; the studio shows `figure_last_error()` in a notification
+  ([When a call fails](./07-building#when-a-call-fails)).
 - `app%dropped(paths)` is `.true.` on the frame after files or folders were dropped on the window, with their
   absolute paths ([Drops](/guide/frame-loop#drops)). The studio takes the first: a case folder, or a `heat.inp`,
   whose folder is the case.
@@ -109,7 +110,9 @@ there are unsaved changes ([The window's title](/guide/menus#the-window-s-title)
 
 - Opening another case and quitting both go through `request`: with no unsaved change it acts at once (the studio
   quits without a question now: there is nothing to lose); with one, it remembers the action and asks.
-- The question is a modal with three answers: Save, then go on; Discard, go on; Cancel, nothing happens. The
+- The question is a modal with three answers: Save, then go on; Discard, go on; Cancel, nothing happens.
+  `app%message_box` would ask it in one call, with three buttons
+  ([chapter 8](./08-window#a-question-before-the-window-closes)). The
   close button, File > Quit and ctrl+q all reach it, since `app%set_confirm_quit(.true.)` turns the close button into
   a request ([Ask before quitting](/guide/menus#ask-before-quitting)).
 - The recent cases, in File > Recent cases, are the studio's own list, for this session; the browser's recent

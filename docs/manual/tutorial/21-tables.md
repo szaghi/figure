@@ -30,7 +30,8 @@ chapter 20's studio with the changes below.
 ## The session's runs
 
 When a run ends, `follow_run` adds it to `runs`, an array of `run_t`: its number, the case's title, the iterations,
-the last residual, the outcome and its residual history. The Run panel has two tabs now: *This run* (the log and the
+the last residual, the outcome and its residual history. The Run panel has two tabs now, in a tab bar as chapter 11's
+Input panel ([Groups: headers, tabs, tables](/guide/widgets#groups-headers-tabs-tables)): *This run* (the log and the
 live plot of chapter 12) and *Runs*:
 
 <<< @/examples/snippets/tut21_tables-runs.F90{fortran}
@@ -43,6 +44,9 @@ live plot of chapter 12) and *Runs*:
   in that order. A run added later takes its place by the same sort.
 - **Colour with a mark.** A run that did not converge has its row shaded in the palette's error colour, and its
   outcome reads `[!!] stopped` or `[!!] failed`: the colour is never the only sign.
+- **A selectable per row.** The run's number is drawn with `ig_selectable(label, selected)`, a line of a list:
+  highlighted while `selected`, `.true.` on the frame it is clicked. The program keeps the choice, `picked_run`
+  ([Lists and regions](/guide/widgets#lists-and-regions)).
 - Each row's widgets are in an id scope of the run's number (`ig_push_id`), so that the rows' menus and selectables
   are told apart.
 

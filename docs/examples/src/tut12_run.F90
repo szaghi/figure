@@ -646,6 +646,7 @@ contains
    if (len(case_dir) > 0) can_run = .not. solver%running()
    endfunction can_run
 
+   !region start
    subroutine start_run()
    !< Start the solver on the case, saved first.
    character(len=512) :: args(4) !< The solver and its arguments.
@@ -653,7 +654,6 @@ contains
 
    if (edited) call save_case()                      ! the solver reads the file: save the edits first
    if (edited) return
-   !region start
    call output%clear()
    deallocate(iters, res)
    allocate(iters(0), res(0))
@@ -668,8 +668,8 @@ contains
    endif
    started = .true.
    run_status = 'running'
-   !endregion start
    endsubroutine start_run
+   !endregion start
 
    subroutine follow_run()
    !< Every frame, whichever panel is shown: the lines the solver printed since the last frame, and its end.

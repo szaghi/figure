@@ -35,6 +35,9 @@ From this chapter on, `--case DIR` opens a case at the start.
 <<< @/examples/snippets/tut11_input-tree.F90{fortran}
 
 - The tree is in a child region of its own (`ig_begin_child`, 170 pixels wide, framed); the form goes beside it.
+- Beside the tree, a tab bar (`ig_begin_tab_bar('views')`) holds two tabs, *Form* and *heat.inp*
+  (`ig_begin_tab`): only the selected tab's content is drawn, and `ig_end_tab` and `ig_end_tab_bar` follow only a
+  begin that returned `.true.` ([Groups: headers, tabs, tables](/guide/widgets#groups-headers-tabs-tables)).
 - `ig_tree_node(label, default_open=, selected=, leaf=, span_full_width=, clicked=)` is `.true.` while the node is
   open: its children are drawn, then `ig_tree_pop()` closes it, only after a `.true.`. A `leaf` has no arrow and no
   children ([Trees](/guide/widgets#trees)).

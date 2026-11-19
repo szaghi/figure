@@ -36,6 +36,8 @@ studio changes for it, except two lines that remember where the title field and 
 - `init_headless(width, height, decorations='figure')` creates the contexts on a virtual display, without a window
   or a GPU, and draws the title bar FIGURE draws in a window: the frame is tested too
   ([Headless testing](/guide/testing)).
+- `init_headless` takes no title: `app%title()` is `''` until `app%set_title` gives one
+  ([The window's title](/guide/menus#the-window-s-title)).
 - Every call of `frames(n)` draws `n` frames, as the main loop does; input queued by `figure_testing` reaches the
   studio in those frames. Headless, every frame advances Dear ImGui's clock by 1/60 s, whatever the wall time.
 
@@ -44,7 +46,9 @@ studio changes for it, except two lines that remember where the title field and 
 <<< @/examples/snippets/tut17_tested-frame.F90{fortran}
 
 `test_frame_rect(part, ...)` gives a part of the title bar as drawn in the last frame, and `test_frame_hit(x, y)`
-what the system is told there (chapter 8): the title drags the window.
+what the system is told there (chapter 8): the title drags the window. `check(passed, what)` is the test's own
+helper, not FIGURE's: it prints `what` after `[ok]` or `[FAILED]` and counts the failures, and the test ends with
+`error stop` if one failed.
 
 ## Keys and the file browser
 

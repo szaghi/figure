@@ -46,7 +46,8 @@ The whole program: [tut08_window.F90](https://github.com/szaghi/figure/blob/main
 - `stat=stat` keeps the program going where the system has no window icons (a Wayland compositor without the
   `xdg-toplevel-icon` protocol, SDL's offscreen driver): `set_icon` then returns `FIG_ERR_FAILED` with SDL's reason in
   `figure_last_error()`, and the bar shows the icon all the same. Without `stat` the program would stop there
-  ([known issues](/guide/known-issues#the-window-s-frame-drawn-by-figure)). Chapter 16 comes back to `stat`.
+  ([known issues](/guide/known-issues#the-window-s-frame-drawn-by-figure)).
+  [When a call fails](./07-building#when-a-call-fails) has the rule; chapter 16 comes back to `stat`.
 - `app%set_confirm_quit(.true.)`: the close button no longer ends the program; it asks the program first (below).
 
 ## The menus inside the title bar
@@ -63,7 +64,9 @@ the centre. Chapter 9 fills the menus.
 
 - `app%quit_requested()` is `.true.` once per click on the close button (or Alt+F4, or the dock's Quit).
 - The question is a modal popup ([Popups and modals](/guide/menus#popups-and-modals)): `ig_open_popup` once, on the
-  event; `ig_begin_popup_modal` every frame, which is `.true.` while it is open.
+  event; `ig_begin_popup_modal` every frame, which is `.true.` while it is open. FIGURE's `app%message_box` asks
+  such a question in one call ([Message boxes](/guide/menus#message-boxes)); the studio draws its own, to learn
+  popups.
 - `app%quit()` ends the loop below: the next `next_frame` returns `.false.`.
 - File > Quit asks the same question, but it does not open the popup from inside the menu: a popup's name is
   scoped by the window it is opened in, and inside the menu it would name another popup than the modal declared at

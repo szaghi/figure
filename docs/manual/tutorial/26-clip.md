@@ -73,8 +73,10 @@ is open and its field read, with a picture committed beside the example, `docs/e
   FIGURE's own renderer draws it, the same on any machine, without a GPU ([Capture](/guide/capture)).
 - `test_compare_image(file, golden, masks=...)` is true when no pixel differs by more than 2 levels per channel,
   outside the masks ([Pictures as tests](/guide/testing#pictures-as-tests)); on a mismatch it writes
-  `tut26_clip.new.png` and `tut26_clip.diff.png` beside the committed picture, to look at. The mask is the case's path in the Case panel: the
-  folder the test runs in is this machine's.
+  `tut26_clip.new.png` and `tut26_clip.diff.png` beside the committed picture, to look at. The first mask is the
+  case's path in the Case panel: the folder the test runs in is this machine's. The second is the title bar where its
+  buttons are on the left (the close button left of the menus, by `test_frame_rect`): on macOS, while the committed
+  picture has them on the right; elsewhere it is an empty rectangle, which masks nothing.
 - **Wait for what the picture shows.** The field is read by a task, at a time of the task's; the test draws until it
   is there, then 360 frames, for the notifications to fade (5 s of frame time each). Then nothing on the screen
   depends on the clock.

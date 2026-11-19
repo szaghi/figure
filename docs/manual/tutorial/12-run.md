@@ -39,11 +39,13 @@ lines in bursts. `--pace 3` slows this small case down (3 ms a line), so that a 
 
 - `solver%start(args)` starts the program `args(1)` with the other elements as its arguments: an array, without a
   shell, so a case folder with blanks in its name needs no quoting ([Arguments: no shell](/guide/processes#arguments-no-shell)).
-  The solver is looked for next to the studio's own executable (`get_command_argument(0)`).
+  `solver_path`, set once at the program's start from `get_command_argument(0)`, is `tut12_heat` next to the
+  studio's own executable.
 - `stat` tells a start that failed (no such program), with `figure_last_error()`'s message.
 - The arguments are copied into a fixed-length array first: gfortran 16 writes past the end of an array built by a
   constructor with a type-spec, `[character(len=512) :: path, dir]`, from deferred-length variables.
-- The studio saves the case first: the solver reads the file, not the form.
+- The studio saves the case first: the solver reads the file, not the form. A save that fails leaves the case
+  edited, and the solver is not started.
 
 ## Following it
 
