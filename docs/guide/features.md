@@ -11,130 +11,102 @@ A few names are public in their module for FIGURE's other modules only, not API,
 `test_plot_copies` and `test_plot_stride`), and `texture_ref` of `figure_texture` (for the modules that draw a
 texture).
 
-All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional arguments are in brackets.
+How to read a row: the call, its optional arguments in brackets (`→` gives a function's result); what it is for;
+and, in parentheses, the section that documents it, with its statuses and an example. All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional arguments are in brackets.
 A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) is found in the
 [name map](imgui-names), with the FIGURE call that exposes it.
 
 ## Application: `app_object`
 
-| Procedure | Purpose | Details |
-|---|---|---|
-| `app%init(title, width, height [, vsync] [, stat] [, ini_file] [, decorations] [, buttons])` | open the window (`decorations='figure'`: its frame drawn by FIGURE, the menus in the title bar), create the ImGui and ImPlot contexts | [frame loop](frame-loop#the-application), [the window's frame](frame-loop#the-window-s-frame) |
-| `app%init_headless(width, height [, stat] [, decorations] [, buttons])` | contexts only, on a virtual display: no window, no GPU (`decorations='figure'`: the title bar drawn, for tests) | [headless testing](testing) |
-| `app%set_icon(image [, stat])`, `app%set_icon(icon [, stat])` | the window's icon: an RGBA image `integer(int8) :: image(4, width, height)`, or an `ICON_*` (window mode) | [the window's frame](frame-loop#the-window-s-frame) <!-- visual --> |
-| `app%init_remote([port] [, host] ...)` | the interface in a web browser: no window, display or GPU on the program's side | [remote UI](remote) <!-- visual --> |
-| `app%next_frame([stat])` → `logical` | render the open frame, wait for input, open the next; `.false.` on quit | [frame loop](frame-loop#next-frame) |
-| `app%set_checks(mode [, stat])` | what a usage error (a wrong end, a scope left open, a drawing call with no frame open) does: `'abort'`, `'report'` (default), `'recover'` | [usage checks](frame-loop#usage-checks) |
-| `app%set_lazy(enabled [, max_wait])` | lazy redraw on/off, longest sleep (default 0.5 s) | [lazy redraw](frame-loop#lazy-redraw) |
-| `app%request_frames(n)` | draw at least `n` more frames without waiting for input | [lazy redraw](frame-loop#lazy-redraw) |
-| `app%wake()` | the next frame starts without waiting for input or `max_wait`, from any thread | [waking the loop](frame-loop#waking-the-loop) |
-| `app%set_confirm_quit(enabled)` | the close button reports a request instead of ending the loop | [ask before quitting](menus#ask-before-quitting) <!-- visual --> |
-| `app%quit_requested()` → `logical` | the user asked to quit, once per request | [ask before quitting](menus#ask-before-quitting) <!-- visual --> |
-| `app%dropped(paths [, x] [, y] [, stat])` → `logical` | the files and folders dropped on the window since the last frame, and the point of the drop; `.true.` on that frame only | [drops](frame-loop#drops) <!-- visual --> |
-| `app%quit()` | the next `next_frame` returns `.false.` | [next_frame](frame-loop#next-frame) |
-| `app%set_title(text [, stat])`, `app%title()` → `character` | the window's title after `init` (window mode shows it; every mode keeps it) | [the window's title](menus#the-window-s-title) |
-| `app%open_file_dialog(id [, filters] [, default_path] [, stat] [, prefer])`, `app%save_file_dialog(...)`, `app%open_folder_dialog(id [, default_path] [, stat] [, prefer])` | the system's file dialogs (window mode), answered on a later frame; `prefer='figure'`: FIGURE's browser instead, in every mode | [file dialogs](frame-loop#file-dialogs) <!-- visual --> |
-| `app%open_file_browser(id [, filters] [, default_path] [, folders])`, `app%save_file_browser(id [, filters] [, default_path])` | FIGURE's file browser, drawn in Dear ImGui, the same in every mode (remote included): a file to open, a folder, where to save | [file browser](frame-loop#figure-s-file-browser) <!-- visual --> |
-| `app%file_dialog_result(id, path, done [, cancelled])` | the answer to a dialog or a browser, once | [file dialogs](frame-loop#file-dialogs) <!-- visual --> |
-| `app%save_image(path, xmin, ymin, xmax, ymax)` | a rectangle of the window as a PNG file (every mode: the GPU's pixels in a window, the CPU renderer's in headless and remote modes) | [save an image](capture#save-an-image-from-the-program) |
-| `app%image_result(path, done)` | the outcome of `save_image`, once | [save an image](capture#save-an-image-from-the-program) |
-| `app%save_layout(path [, comment])` | the arrangement of the windows (docking included) to a file | [layouts](docking#save-and-load-a-layout) |
-| `app%load_layout(path)` | an arrangement from a file, before the next frame | [layouts](docking#save-and-load-a-layout) |
-| `app%add_window(name [, visible] [, closable] [, in_view_menu] [, remember] [, stat])` | register a window (its `ig_begin` name): listed in the View menu, a close button that hides it, its visibility kept between runs | [windows and layouts](docking#windows-and-layouts) |
-| `app%window_visible(name [, stat])` → `logical`, `app%set_window_visible(name, visible [, stat])` | a registered window is shown (draw it then); show or hide it | [windows and layouts](docking#windows-and-layouts) |
-| `app%view_menu([label] [, stat])` | the View menu, in a menu bar: the registered windows, the layouts, Reset layout | [windows and layouts](docking#windows-and-layouts) |
-| `app%add_layout(name [, windows] [, stat])`, `app%layout()` → `character` | declare a layout of the dock space (and the windows it shows); the current one, which the program builds when `ig_dock_layout_begin` is true | [windows and layouts](docking#windows-and-layouts) |
-| `app%switch_layout(name [, stat])`, `app%reset_layout([stat])` | make a layout current (as the user left it, or built again); lay the current one out again | [windows and layouts](docking#windows-and-layouts) |
-| `app%open_prefs(name [, file] [, stat])`, `app%prefs_file()` → `character` | keep the preferences in the program's file (the platform's folder for `name`): read now, written every 30 s when changed and at `destroy`, through a temporary file | [preferences](frame-loop#preferences) |
-| `app%save_pref(key, value [, stat])`, `app%load_pref(key, value [, default] [, stat])` → `logical` | keep a text, an integer, a real or a logical by key; read it back, or the default | [preferences](frame-loop#preferences) |
-| `app%set_size_limits(min_width, min_height [, max_width] [, max_height] [, stat])` | the window's least and greatest size (window mode) | [preferences](frame-loop#preferences) |
-| `app%message_box(id, title, text [, buttons] [, stat])` → `integer(int32)` | a question in a modal box drawn by FIGURE: 0 while open, then the button chosen; several at once | [message boxes](menus#message-boxes) |
-| `app%notify(text [, kind] [, seconds] [, stat])` | tell the user something in a notification drawn by FIGURE (bottom-right, stacked): `'info'`, `'success'`, `'warning'`, `'error'`; it fades after `seconds` (default 5; 0: until clicked) | [notifications](frame-loop#notifications) <!-- visual --> |
-| `app%notifications(list [, kinds] [, shown])` | the notifications kept (the last 100), oldest first | [notifications](frame-loop#notifications) <!-- visual --> |
-| `app%content_scale()` → `real(real64)` | display content scale | [frame loop](frame-loop#content-scale) |
-| `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (default, 15 px), `'plex-mono'` (monospace), `'proggy'`, or a TTF/OTF file | [styles](styles#fonts) |
-| `app%add_fallback_font(file [, stat])` | a TTF/OTF file asked for the glyphs every text font lacks, after Plex, the icons and the bundled Noto Sans Math (Greek, `∇`, the operators) | [the fallback fonts](styles#symbols-the-fallback-fonts) |
-| `app%load_style(file [, stat])`, `app%save_style(file [, stat])` | apply a theme file; write the style in effect as one | [styles](styles#load-tune-and-save) <!-- visual --> |
-| `app%set_docking(enabled [, stat])` | docking on (default) or off | [docking](docking) <!-- visual --> |
-| `app%set_style([name] [, lines] [, stat] [, look] [, palette] [, auto_dark] [, auto_light])` | the style by name (`'seal'`, default, `'seal-light'`, `'paper'`, `'high-contrast'`, `'dark'`, `'light'`, `'classic'`), or by parts: a look (geometry) and a palette (colours, or `'auto'`: the system's light or dark setting); `lines='okabe-ito'` | [styles](styles#looks-and-palettes) <!-- visual --> |
-| `app%palette_color(role, rgba [, stat])` | the colour of a palette role in effect (`'text'`, `'accent'`, `'error'`, ...) as `[r, g, b, a]` in [0, 1] | [palette roles](styles#palette-roles) |
-| `app%destroy()` | close the window, destroy the contexts | [frame loop](frame-loop#the-application) |
-| `figure_time()` → `real(real64)` | seconds since its first call on a monotonic clock (not stepped by the system, unlike nvfortran's `system_clock`); before `init*` and from any thread | [time](frame-loop#time) |
-| `figure_make_folder(path [, parents] [, stat])` | a folder and its missing parents, on every platform (no shell) | [files and folders](frame-loop#files-and-folders) |
-| `figure_remove(path [, recursive] [, stat])` | remove a file, an empty folder or (`recursive`) a tree; a missing path is no error | [files and folders](frame-loop#files-and-folders) |
-| `figure_set_file_time(path, time [, stat])` | a file's or folder's modification time, as a local `'YYYY-MM-DD hh:mm[:ss]'` | [files and folders](frame-loop#files-and-folders) |
-| `figure_file_time(path [, stat])` → `character(len=19)` | its modification time, local `'YYYY-MM-DD hh:mm:ss'` | [files and folders](frame-loop#files-and-folders) |
-| `figure_file_exists(path)` → `logical` | a file or a folder is there | [files and folders](frame-loop#files-and-folders) |
+| Procedure | Purpose |
+|---|---|
+| `app%init(title, width, height [, vsync] [, stat] [, ini_file] [, decorations] [, buttons])` | open the window (`decorations='figure'`: its frame drawn by FIGURE, the menus in the title bar), create the ImGui and ImPlot contexts ([frame loop](frame-loop#the-application), [the window's frame](frame-loop#the-window-s-frame)) |
+| `app%init_headless(width, height [, stat] [, decorations] [, buttons])` | contexts only, on a virtual display: no window, no GPU (`decorations='figure'`: the title bar drawn, for tests) ([headless testing](testing)) |
+| `app%set_icon(image [, stat])`, `app%set_icon(icon [, stat])` | the window's icon: an RGBA image `integer(int8) :: image(4, width, height)`, or an `ICON_*` (window mode) ([the window's frame](frame-loop#the-window-s-frame)) <!-- visual --> |
+| `app%init_remote([port] [, host] ...)` | the interface in a web browser: no window, display or GPU on the program's side ([remote UI](remote)) <!-- visual --> |
+| `app%next_frame([stat])` → `logical` | render the open frame, wait for input, open the next; `.false.` on quit ([frame loop](frame-loop#next-frame)) |
+| `app%set_checks(mode [, stat])` | what a usage error (a wrong end, a scope left open, a drawing call with no frame open) does: `'abort'`, `'report'` (default), `'recover'` ([usage checks](frame-loop#usage-checks)) |
+| `app%set_lazy(enabled [, max_wait])` | lazy redraw on/off, longest sleep (default 0.5 s) ([lazy redraw](frame-loop#lazy-redraw)) |
+| `app%request_frames(n)` | draw at least `n` more frames without waiting for input ([lazy redraw](frame-loop#lazy-redraw)) |
+| `app%wake()` | the next frame starts without waiting for input or `max_wait`, from any thread ([waking the loop](frame-loop#waking-the-loop)) |
+| `app%set_confirm_quit(enabled)` | the close button reports a request instead of ending the loop ([ask before quitting](menus#ask-before-quitting)) <!-- visual --> |
+| `app%quit_requested()` → `logical` | the user asked to quit, once per request ([ask before quitting](menus#ask-before-quitting)) <!-- visual --> |
+| `app%dropped(paths [, x] [, y] [, stat])` → `logical` | the files and folders dropped on the window since the last frame, and the point of the drop; `.true.` on that frame only ([drops](frame-loop#drops)) <!-- visual --> |
+| `app%quit()` | the next `next_frame` returns `.false.` ([next_frame](frame-loop#next-frame)) |
+| `app%set_title(text [, stat])`, `app%title()` → `character` | the window's title after `init` (window mode shows it; every mode keeps it) ([the window's title](menus#the-window-s-title)) |
+| `app%open_file_dialog(id [, filters] [, default_path] [, stat] [, prefer])`, `app%save_file_dialog(...)`, `app%open_folder_dialog(id [, default_path] [, stat] [, prefer])` | the system's file dialogs (window mode), answered on a later frame; `prefer='figure'`: FIGURE's browser instead, in every mode ([file dialogs](frame-loop#file-dialogs)) <!-- visual --> |
+| `app%open_file_browser(id [, filters] [, default_path] [, folders])`, `app%save_file_browser(id [, filters] [, default_path])` | FIGURE's file browser, drawn in Dear ImGui, the same in every mode (remote included): a file to open, a folder, where to save ([file browser](frame-loop#figure-s-file-browser)) <!-- visual --> |
+| `app%file_dialog_result(id, path, done [, cancelled])` | the answer to a dialog or a browser, once ([file dialogs](frame-loop#file-dialogs)) <!-- visual --> |
+| `app%save_image(path, xmin, ymin, xmax, ymax)` | a rectangle of the window as a PNG file (every mode: the GPU's pixels in a window, the CPU renderer's in headless and remote modes) ([save an image](capture#save-an-image-from-the-program)) |
+| `app%image_result(path, done)` | the outcome of `save_image`, once ([save an image](capture#save-an-image-from-the-program)) |
+| `app%save_layout(path [, comment])` | the arrangement of the windows (docking included) to a file ([layouts](docking#save-and-load-a-layout)) |
+| `app%load_layout(path)` | an arrangement from a file, before the next frame ([layouts](docking#save-and-load-a-layout)) |
+| `app%add_window(name [, visible] [, closable] [, in_view_menu] [, remember] [, stat])` | register a window (its `ig_begin` name): listed in the View menu, a close button that hides it, its visibility kept between runs ([windows and layouts](docking#windows-and-layouts)) |
+| `app%window_visible(name [, stat])` → `logical`, `app%set_window_visible(name, visible [, stat])` | a registered window is shown (draw it then); show or hide it ([windows and layouts](docking#windows-and-layouts)) |
+| `app%view_menu([label] [, stat])` | the View menu, in a menu bar: the registered windows, the layouts, Reset layout ([windows and layouts](docking#windows-and-layouts)) |
+| `app%add_layout(name [, windows] [, stat])`, `app%layout()` → `character` | declare a layout of the dock space (and the windows it shows); the current one, which the program builds when `ig_dock_layout_begin` is true ([windows and layouts](docking#windows-and-layouts)) |
+| `app%switch_layout(name [, stat])`, `app%reset_layout([stat])` | make a layout current (as the user left it, or built again); lay the current one out again ([windows and layouts](docking#windows-and-layouts)) |
+| `app%open_prefs(name [, file] [, stat])`, `app%prefs_file()` → `character` | keep the preferences in the program's file (the platform's folder for `name`): read now, written every 30 s when changed and at `destroy`, through a temporary file ([preferences](frame-loop#preferences)) |
+| `app%save_pref(key, value [, stat])`, `app%load_pref(key, value [, default] [, stat])` → `logical` | keep a text, an integer, a real or a logical by key; read it back, or the default ([preferences](frame-loop#preferences)) |
+| `app%set_size_limits(min_width, min_height [, max_width] [, max_height] [, stat])` | the window's least and greatest size (window mode) ([preferences](frame-loop#preferences)) |
+| `app%message_box(id, title, text [, buttons] [, stat])` → `integer(int32)` | a question in a modal box drawn by FIGURE: 0 while open, then the button chosen; several at once ([message boxes](menus#message-boxes)) |
+| `app%notify(text [, kind] [, seconds] [, stat])` | tell the user something in a notification drawn by FIGURE (bottom-right, stacked): `'info'`, `'success'`, `'warning'`, `'error'`; it fades after `seconds` (default 5; 0: until clicked) ([notifications](frame-loop#notifications)) <!-- visual --> |
+| `app%notifications(list [, kinds] [, shown])` | the notifications kept (the last 100), oldest first ([notifications](frame-loop#notifications)) <!-- visual --> |
+| `app%content_scale()` → `real(real64)` | display content scale ([frame loop](frame-loop#content-scale)) |
+| `app%set_font(font [, size] [, stat])` | the default font: `'plex-sans'` (default, 15 px), `'plex-mono'` (monospace), `'proggy'`, or a TTF/OTF file ([styles](styles#fonts)) |
+| `app%add_fallback_font(file [, stat])` | a TTF/OTF file asked for the glyphs every text font lacks, after Plex, the icons and the bundled Noto Sans Math (Greek, `∇`, the operators) ([the fallback fonts](styles#symbols-the-fallback-fonts)) |
+| `app%load_style(file [, stat])`, `app%save_style(file [, stat])` | apply a theme file; write the style in effect as one ([styles](styles#load-tune-and-save)) <!-- visual --> |
+| `app%set_docking(enabled [, stat])` | docking on (default) or off ([docking](docking)) <!-- visual --> |
+| `app%set_style([name] [, lines] [, stat] [, look] [, palette] [, auto_dark] [, auto_light])` | the style by name (`'seal'`, default, `'seal-light'`, `'paper'`, `'high-contrast'`, `'dark'`, `'light'`, `'classic'`), or by parts: a look (geometry) and a palette (colours, or `'auto'`: the system's light or dark setting); `lines='okabe-ito'` ([styles](styles#looks-and-palettes)) <!-- visual --> |
+| `app%palette_color(role, rgba [, stat])` | the colour of a palette role in effect (`'text'`, `'accent'`, `'error'`, ...) as `[r, g, b, a]` in [0, 1] ([palette roles](styles#palette-roles)) |
+| `app%destroy()` | close the window, destroy the contexts ([frame loop](frame-loop#the-application)) |
+| `figure_time()` → `real(real64)` | seconds since its first call on a monotonic clock (not stepped by the system, unlike nvfortran's `system_clock`); before `init*` and from any thread ([time](frame-loop#time)) |
+| `figure_make_folder(path [, parents] [, stat])` | a folder and its missing parents, on every platform (no shell) ([files and folders](frame-loop#files-and-folders)) |
+| `figure_remove(path [, recursive] [, stat])` | remove a file, an empty folder or (`recursive`) a tree; a missing path is no error ([files and folders](frame-loop#files-and-folders)) |
+| `figure_set_file_time(path, time [, stat])` | a file's or folder's modification time, as a local `'YYYY-MM-DD hh:mm[:ss]'` ([files and folders](frame-loop#files-and-folders)) |
+| `figure_file_time(path [, stat])` → `character(len=19)` | its modification time, local `'YYYY-MM-DD hh:mm:ss'` ([files and folders](frame-loop#files-and-folders)) |
+| `figure_file_exists(path)` → `logical` | a file or a folder is there ([files and folders](frame-loop#files-and-folders)) |
 
 ## Widgets: `ig_*`
+
+Grouped as [Widgets](widgets) is, in its order; menus, popups and shortcuts last ([Menus and shortcuts](menus)).
+
+### Windows
 
 | Procedure | Purpose |
 |---|---|
 | `ig_begin(name [, open] [, flags])` → `logical` | begin a window (`ImGuiWindowFlags_*`); `.false.` when collapsed or clipped ([Windows](widgets#windows)) |
 | `ig_begin_side_bar(name, side, size)` | a bar along one side of the display (a toolbar), left out of the dock space ([Docking](docking#a-bar-along-a-side)) |
 | `ig_end()` | end the window (always, whatever `ig_begin` returned) ([Windows](widgets#windows)) |
-| `ig_splitter(id, sizes [, vertical] [, min_size] [, stat])` → `logical` | a bar between two panes the user drags: their sizes [pixels] change ([Splitters](widgets#splitters)) |
 | `ig_set_next_window(x, y [, width, height] [, always])` | place (and size) the next window ([Windows](widgets#windows)) |
 | `ig_focus_window(name)` → `logical` | bring a window forward (a docked one: its tab); refused (`.false.`) while a popup is open ([Windows](widgets#windows)) |
+
+### Controls
+
+| Procedure | Purpose |
+|---|---|
 | `ig_button(label [, width] [, height])` → `logical` | a button; `.true.` on the frame it is clicked ([Controls](widgets#controls)) |
 | `ig_tool_button(label, icon [, width] [, height] [, selected] [, accent])` → `logical` | a workspace button: an icon above the label, framed; `selected` tinted in the accent ([Controls](widgets#controls)) |
 | `ig_checkbox(label, value)` → `logical` | a check box bound to a `logical`; `.true.` when toggled ([Controls](widgets#controls)) |
-| `ig_input(label, value [, step] [, format] [, enter_returns] [, read_only] [, stat])` → `logical` | a field for an `int32`, `int64`, `real32` or `real64`, scalar or vector, typed; `-`/`+` buttons with `step`; `.true.` when changed ([Numbers](widgets#numbers)) <!-- visual --> |
-| `ig_drag(label, value [, speed] [, vmin] [, vmax] [, format] [, scale] [, clamp] [, stat])` → `logical` | a drag box for a number or a vector of any of the four kinds: `speed` per pixel, bounds, `'log'` scale ([Numbers](widgets#numbers)) <!-- visual --> |
-| `ig_slider(label, value, vmin, vmax [, format] [, scale] [, clamp] [, stat])` → `logical` | a slider for a number or a vector of any of the four kinds; `'log'` scale, typed values clamped with `clamp` ([Numbers](widgets#numbers)) <!-- visual --> |
-| `ig_slider_angle(label, radians [, deg_min] [, deg_max] [, format] [, stat])` → `logical` | an angle kept in radians, shown and set in degrees ([Numbers](widgets#numbers)) <!-- visual --> |
-| `ig_drag_range(label, lo, hi [, speed] [, vmin] [, vmax] [, format] [, stat])` → `logical` | two drag boxes for the ends of a range, `lo <= hi` kept ([Numbers](widgets#numbers)) <!-- visual --> |
-| `ig_radio(label, current, value [, stat])` → `logical` | a radio button of a group sharing `current`; a click sets `current = value` ([Choices](widgets#choices)) <!-- visual --> |
-| `ig_list_box(label, current, items [, height] [, stat])` → `logical` | a list of the `character` array `items` that stays open and scrolls; `current` the index chosen ([Choices](widgets#choices)) <!-- visual --> |
-| `ig_player(id, player [, labels] [, stat])` → `logical` | a player for snapshots: previous, play/pause, next, a slider (showing `labels(index)`), a right-click menu for the speed and the mode; plays on the frame clock and asks for frames while playing; `.true.` when `player%index` changed ([Players](widgets#players)) <!-- visual --> |
-| `player_object`: `%index`, `%count`, `%playing`, `%speed`, `%mode` | the state of a player: the snapshot shown (1 to `count`), playing or not, snapshots per second, `'once'`, `'loop'` or `'bounce'` ([Players](widgets#players)) <!-- visual --> |
 | `ig_input_text(label, value [, hint] [, flags])` → `logical` | a text field bound to a `character` variable, whose length is the field's capacity; `.true.` when edited ([Controls](widgets#controls)) |
-| `ig_input_text_multiline(label, buffer [, width] [, height] [, read_only] [, tab_input] [, flags])` → `logical` | a field of several lines over a `text_buffer_object`, of any length; Enter a newline, undo and redo; `.true.` when edited ([Multi-line text](widgets#multi-line-text)) <!-- visual --> |
-| `text_buffer_object`: `buf%set(text [, stat])`, `buf%text()` → `character`, `buf%length()` → `int64` | the text of a multi-line field, kept by the native layer and grown as needed: replace it (CRLF becomes LF), copy it out, its length in bytes ([Multi-line text](widgets#multi-line-text)) <!-- visual --> |
-| `ig_combo(label, current, items)` → `logical` | a drop-down list of the `character` array `items`; `current` is the index chosen; `.true.` when the user picks one ([Choices](widgets#choices)) <!-- visual --> |
-| `ig_selectable(label, selected [, index] [, stat])` → `logical` | a line of a list, highlighted when `selected`; `.true.` when clicked; `index`: an item of a multi-selection ([Lists and regions](widgets#lists-and-regions)) <!-- visual --> |
-| `ig_text_wrapped(text)`, `ig_text_disabled(text)`, `ig_text_colored(text, color)` | text wrapped at the region's edge, in the disabled colour, in a given colour ([Text and layout](widgets#text-and-layout)) |
-| `ig_begin_child(id [, width] [, height] [, border])` → `logical`, `ig_end_child()` | a region that scrolls on its own; always paired ([Lists and regions](widgets#lists-and-regions)) <!-- visual --> |
-| `list_clipper_object`: `clip%begin(count [, item_height] [, keep])`, `clip%step()` → `logical`, `clip%first`, `clip%last`, `clip%item_height` | a long list: only the rows in view are drawn; `item_height` the distance between rows [pixels]; `keep` a row drawn wherever it is (a multi-selection's range source) ([Lists and regions](widgets#lists-and-regions)) <!-- visual --> |
-| `ig_begin_main_menu_bar()` → `logical`, `ig_end_main_menu_bar()` | the menu bar along the top of the display; end only after a true begin ([Menus](menus#menus)) |
-| `ig_begin_menu_bar()` → `logical`, `ig_end_menu_bar()` | a window's own menu bar (`ImGuiWindowFlags_MenuBar`) ([Menus](menus#menus)) |
-| `ig_begin_menu(label [, enabled])` → `logical`, `ig_end_menu()` | a menu or submenu; `.true.` while open ([Menus](menus#menus)) |
-| `ig_menu_item(label [, shortcut] [, selected] [, enabled])` → `logical` | a menu item; `.true.` when picked; a check mark with `selected` ([Menus](menus#menus)) |
-| `ig_open_popup(id)`, `ig_close_current_popup()` | open a popup (once, on an event); close the one being declared ([Popups](menus#popups-and-modals)) |
-| `ig_begin_popup(id)` → `logical`, `ig_begin_popup_modal(title [, open])` → `logical`, `ig_end_popup()` | a popup, a modal dialog; end only after a true begin ([Popups](menus#popups-and-modals)) |
-| `ig_begin_popup_context(id [, on] [, button] [, stat])` → `logical` | a context menu, opened by a right click on the item just drawn (`on='item'`), a window's empty space (`'window'`) or the background (`'void'`); closed with `ig_end_popup` after a true begin ([Context menus](menus#context-menus)) <!-- visual --> |
-| `ig_shortcut(keys [, scope] [, repeat] [, stat])` → `logical` | a key chord such as `'ctrl+s'` pressed this frame (cmd on macOS), routed: `'focused'` (default) only in the focused window, `'global'`, `'item'`; or `'always'`, not routed: every call fires ([Shortcuts](menus#shortcuts)) <!-- visual --> |
-| `ig_set_next_item_shortcut(keys [, scope] [, stat])` | the next item owns a chord: the chord presses it, its tooltip shows it ([Shortcuts](menus#a-button-that-owns-a-key)) |
-| `ig_tooltip(text)` | a tooltip on the previous widget, shown while the pointer rests on it ([Tooltips](widgets#tooltips)) <!-- visual --> |
-| `ig_begin_item_tooltip()` → `logical`, `ig_begin_tooltip()` → `logical`, `ig_end_tooltip()` | a tooltip with any content (a table, a plot): on the item just drawn after the hover delay, or now wherever the pointer is; end only after a true begin ([Tooltips](widgets#tooltips)) <!-- visual --> |
-| `ig_text_link(label)` → `logical`, `ig_text_link_url(label, url)` | text drawn as a link, `.true.` when clicked; a link that opens `url` in the browser (remote mode: the page opens it) ([Links](widgets#links)) |
-| `ig_set_clipboard(text [, stat])`, `ig_get_clipboard()` → `character` | put a text on the clipboard; read it (window: the system's; headless: the program's own; remote: the program's, joined to the browser's where it allows it) ([Clipboard](widgets#clipboard)) |
-| `ig_drag_source(type, payload [, preview] [, stat])` → `logical`, `ig_drop_target(type, payload [, stat])` → `logical`, `ig_dragging(type)` → `logical` | drag and drop of a text payload between items, matched by type ([Drag and drop](widgets#drag-and-drop)) <!-- visual --> |
-| `ig_collapsing_header(label [, default_open])` → `logical` | a header that shows or hides what follows; `.true.` while open (no end call) ([Groups](widgets#groups-headers-tabs-tables)) |
-| `ig_begin_tab_bar(id)` → `logical`, `ig_end_tab_bar()` | a bar of tabs; end it only when the begin returned `.true.` ([Groups](widgets#groups-headers-tabs-tables)) |
-| `ig_begin_tab(label [, open])` → `logical`, `ig_end_tab()` | a tab; `.true.` when selected: draw its content, then end it (only then) ([Groups](widgets#groups-headers-tabs-tables)) |
-| `ig_begin_table(id, columns [, flags] [, height] [, freeze_rows] [, freeze_cols] [, sortable] [, hideable] [, reorderable] [, scroll_x] [, stat])` → `logical`, `ig_end_table()` | a table (every `ImGuiTableFlags_*` exported); rows or columns frozen in view while the rest scrolls; end it only when the begin returned `.true.` ([Tables](widgets#tables)) <!-- visual --> |
-| `ig_table_setup_column(label [, width] [, stretch] [, sort] [, default_sort] [, descending] [, hidden] [, no_hide] [, stat])`, `ig_table_headers_row()` | declare a column (fixed `width`, or a `stretch` weight of the rest; how it sorts and hides); a row of their labels ([Tables](widgets#tables)) <!-- visual --> |
-| `ig_table_sort(column, descending [, stat])` → `logical` | `.true.` on the frame the user asks a new order of a sortable table: its key `column` and direction; the program sorts ([Tables](widgets#tables)) <!-- visual --> |
-| `ig_table_row_color(rgba [, cell] [, stat])` | a colour behind the current row, or one of its cells ([Tables](widgets#tables)) <!-- visual --> |
-| `ig_table_hovered_column([stat])` → `integer(int32)` | the column under the pointer, 0 when none ([Tables](widgets#tables)) <!-- visual --> |
-| `ig_table_column_enabled(column, enabled [, stat])` | show or hide a column of a hideable table from the program ([Tables](widgets#tables)) <!-- visual --> |
-| `ig_table_next_row()`, `ig_table_next_column()`, `ig_table_set_column(column)` | start a row; move to the next cell, or to cell `column` (1-based) ([Tables](widgets#tables)) <!-- visual --> |
-| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked] [, span_all_columns] [, index] [, stat])` → `logical`, `ig_tree_pop()` | a tree node; `.true.` while open: draw its children, then pop (only then); `clicked`: the label, not the arrow; in a table, `span_all_columns`: its whole row ([Trees](widgets#trees)) <!-- visual --> |
-| `selection_object`, `sel%resize(n)`, `sel%is_selected(i)` → `logical`, `sel%set(i, on)`, `sel%clear()`, `sel%selected_count()` → `integer`, `sel%indices()` → `integer(:)`, `sel%flags()` → `logical(:)` | what is selected among n items, read and set by the program ([Selecting many items](widgets#selecting-many-items)) |
-| `ig_begin_multi_select(sel [, single] [, box_select] [, clear_on_escape] [, no_select_all] [, stat])`, `ig_end_multi_select(sel [, stat])` | a multi-selection over the lines and nodes drawn with `index=`: clicks, shift, ctrl, ctrl+a, box ([Selecting many items](widgets#selecting-many-items)) <!-- visual --> |
-| `ig_set_next_item_open(open [, always])` | open or close the next tree node or header from the program: first time only, or with `always` now ([Trees](widgets#trees)) <!-- visual --> |
-| `ig_push_id(id)`, `ig_pop_id()` | an id scope (`character` or `int32`): the same label in two scopes is two widgets (rows, loops) ([Groups](widgets#groups-headers-tabs-tables)) |
-| `ig_begin_disabled([disabled])`, `ig_end_disabled()` | the widgets in between are greyed out and ignore input ([Groups](widgets#groups-headers-tabs-tables)) |
 | `ig_set_next_item_width(width)` | width of the next widget's field [pixels]; negative: up to that distance from the right edge ([Controls](widgets#controls)) |
+
+### Text and layout
+
+| Procedure | Purpose |
+|---|---|
+| `ig_text_wrapped(text)`, `ig_text_disabled(text)`, `ig_text_colored(text, color)` | text wrapped at the region's edge, in the disabled colour, in a given colour ([Text and layout](widgets#text-and-layout)) |
 | `ig_text(text)` | plain text ([Text and layout](widgets#text-and-layout)) |
-| `ig_progress_bar(fraction [, label] [, width])` | a progress bar, `fraction` in [0, 1]; `fraction` < 0: indeterminate ([Progress bars](widgets#progress-bars)) <!-- visual --> |
-| `ig_color_edit(label, rgba [, alpha] [, stat])` → `logical` | a colour editor with a picker, bound to `real(real64)` RGB or RGBA ([Colour editing](widgets#colour-editing)) <!-- visual --> |
-| `ig_color_picker(label, rgba [, alpha] [, wheel] [, inputs] [, stat])` → `logical` | a colour picker drawn in place, a hue bar or a hue wheel ([Colour editing](widgets#colour-editing)) <!-- visual --> |
 | `ig_same_line([offset])` | put the next item on the same line; with `offset`, at that distance from the left edge ([Text and layout](widgets#text-and-layout)) |
 | `ig_align_text_to_frame_padding()` | the text that follows on the line is level with the text of fields and buttons ([Text and layout](widgets#text-and-layout)) |
 | `ig_text_size(text)` → `real(real64)(2)` | width and height of a text in the current font [pixels] (a label: the part before `##`) ([Text and layout](widgets#text-and-layout)) |
 | `ig_separator()` | horizontal separator ([Text and layout](widgets#text-and-layout)) |
+| `ig_show_demo_window([open])` | the Dear ImGui demo window ([Text and layout](widgets#text-and-layout)) |
+
+### Layout
+
+| Procedure | Purpose |
+|---|---|
 | `ig_separator_text(label)` | a separator with a title at its left ([Layout](widgets#layout)) <!-- visual --> |
 | `ig_font_size()` → `real(real64)` | the current font size [pixels]: one em ([Layout](widgets#layout)) <!-- visual --> |
 | `ig_em(x)` → `real(real64)` | `x` em [pixels] (`x` `real64` or `int32`): a size that follows the font ([Layout](widgets#layout)) <!-- visual --> |
@@ -146,11 +118,26 @@ A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) 
 | `ig_align_begin(id, where [, stat])`, `ig_align_end()` | always paired: a group centred (`'centre'`) or right-aligned (`'right'`) on the line; its width from the previous frame ([Layout](widgets#layout)) <!-- visual --> |
 | `ig_align_next(width, where [, stat])` | centre or right-align the next item, `width` [pixels] wide ([Layout](widgets#layout)) <!-- visual --> |
 | `ig_push_item_width(w)`, `ig_pop_item_width()` | always paired: the fields' width [pixels] up to the pop ([Layout](widgets#layout)) <!-- visual --> |
-| `ig_show_demo_window([open])` | the Dear ImGui demo window ([Text and layout](widgets#text-and-layout)) |
-| `ig_item_rect(xmin, ymin, xmax, ymax)` | screen rectangle of the last item ([What happened to an item](widgets#what-happened-to-an-item)) <!-- visual --> |
-| `ig_last_item()` → `item_status_object` | what happened to the item drawn last, in one snapshot: `hovered`, `active`, `focused`, `visible`, `activated`, `edited`, `deactivated`, `deactivated_after_edit`, `toggled_open`, `clicked(3)`, `double_clicked(3)`, `rect(4)` ([What happened to an item](widgets#what-happened-to-an-item)) <!-- visual --> |
-| `ig_item_hovered([delay] [, stat])` → `logical` | the pointer is over the item drawn last; `delay` `'none'`, `'short'` (0.15 s) or `'normal'` (0.40 s) ([What happened to an item](widgets#what-happened-to-an-item)) <!-- visual --> |
-| `ig_any_item_hovered()` → `logical`, `ig_any_item_active()` → `logical` | the pointer is over some item; some item is held or edited ([What happened to an item](widgets#what-happened-to-an-item)) <!-- visual --> |
+
+### Progress bars
+
+| Procedure | Purpose |
+|---|---|
+| `ig_progress_bar(fraction [, label] [, width])` | a progress bar, `fraction` in [0, 1]; `fraction` < 0: indeterminate ([Progress bars](widgets#progress-bars)) <!-- visual --> |
+
+### Lists and regions
+
+| Procedure | Purpose |
+|---|---|
+| `ig_splitter(id, sizes [, vertical] [, min_size] [, stat])` → `logical` | a bar between two panes the user drags: their sizes [pixels] change ([Splitters](widgets#splitters)) |
+| `ig_selectable(label, selected [, index] [, stat])` → `logical` | a line of a list, highlighted when `selected`; `.true.` when clicked; `index`: an item of a multi-selection ([Lists and regions](widgets#lists-and-regions)) <!-- visual --> |
+| `ig_begin_child(id [, width] [, height] [, border])` → `logical`, `ig_end_child()` | a region that scrolls on its own; always paired ([Lists and regions](widgets#lists-and-regions)) <!-- visual --> |
+| `list_clipper_object`: `clip%begin(count [, item_height] [, keep])`, `clip%step()` → `logical`, `clip%first`, `clip%last`, `clip%item_height` | a long list: only the rows in view are drawn; `item_height` the distance between rows [pixels]; `keep` a row drawn wherever it is (a multi-selection's range source) ([Lists and regions](widgets#lists-and-regions)) <!-- visual --> |
+
+### Scrolling and focus
+
+| Procedure | Purpose |
+|---|---|
 | `ig_scroll_here([ratio] [, axis] [, stat])` | after an item: scroll its line to `ratio` of the visible height (0 top, 0.5 centre, 1 bottom), on the next frame ([Scrolling and focus](widgets#scrolling-and-focus)) <!-- visual --> |
 | `ig_scroll_to_pos(pos [, ratio] [, axis] [, stat])` | scroll the point `pos` [pixels] of the content to `ratio` of the visible height: a row a clipper does not draw ([Scrolling and focus](widgets#scrolling-and-focus)) <!-- visual --> |
 | `ig_get_scroll(y, ymax [, x] [, xmax])` | the scroll of the current window or region and its largest value [pixels] ([Scrolling and focus](widgets#scrolling-and-focus)) <!-- visual --> |
@@ -158,11 +145,132 @@ A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) 
 | `ig_focus_here([offset] [, stat])` | the next item takes the keyboard focus (a field is edited, as if clicked) ([Scrolling and focus](widgets#scrolling-and-focus)) <!-- visual --> |
 | `ig_default_focus()` | the item drawn last has the focus when its window (a modal, a popup) appears ([Scrolling and focus](widgets#scrolling-and-focus)) <!-- visual --> |
 
-Details: [Widgets](widgets).
+### Groups: headers, tabs, tables
+
+| Procedure | Purpose |
+|---|---|
+| `ig_collapsing_header(label [, default_open])` → `logical` | a header that shows or hides what follows; `.true.` while open (no end call) ([Groups](widgets#groups-headers-tabs-tables)) |
+| `ig_begin_tab_bar(id)` → `logical`, `ig_end_tab_bar()` | a bar of tabs; end it only when the begin returned `.true.` ([Groups](widgets#groups-headers-tabs-tables)) |
+| `ig_begin_tab(label [, open])` → `logical`, `ig_end_tab()` | a tab; `.true.` when selected: draw its content, then end it (only then) ([Groups](widgets#groups-headers-tabs-tables)) |
+| `ig_push_id(id)`, `ig_pop_id()` | an id scope (`character` or `int32`): the same label in two scopes is two widgets (rows, loops) ([Groups](widgets#groups-headers-tabs-tables)) |
+| `ig_begin_disabled([disabled])`, `ig_end_disabled()` | the widgets in between are greyed out and ignore input ([Groups](widgets#groups-headers-tabs-tables)) |
+
+### Tables
+
+| Procedure | Purpose |
+|---|---|
+| `ig_begin_table(id, columns [, flags] [, height] [, freeze_rows] [, freeze_cols] [, sortable] [, hideable] [, reorderable] [, scroll_x] [, stat])` → `logical`, `ig_end_table()` | a table (every `ImGuiTableFlags_*` exported); rows or columns frozen in view while the rest scrolls; end it only when the begin returned `.true.` ([Tables](widgets#tables)) <!-- visual --> |
+| `ig_table_setup_column(label [, width] [, stretch] [, sort] [, default_sort] [, descending] [, hidden] [, no_hide] [, stat])`, `ig_table_headers_row()` | declare a column (fixed `width`, or a `stretch` weight of the rest; how it sorts and hides); a row of their labels ([Tables](widgets#tables)) <!-- visual --> |
+| `ig_table_sort(column, descending [, stat])` → `logical` | `.true.` on the frame the user asks a new order of a sortable table: its key `column` and direction; the program sorts ([Tables](widgets#tables)) <!-- visual --> |
+| `ig_table_row_color(rgba [, cell] [, stat])` | a colour behind the current row, or one of its cells ([Tables](widgets#tables)) <!-- visual --> |
+| `ig_table_hovered_column([stat])` → `integer(int32)` | the column under the pointer, 0 when none ([Tables](widgets#tables)) <!-- visual --> |
+| `ig_table_column_enabled(column, enabled [, stat])` | show or hide a column of a hideable table from the program ([Tables](widgets#tables)) <!-- visual --> |
+| `ig_table_next_row()`, `ig_table_next_column()`, `ig_table_set_column(column)` | start a row; move to the next cell, or to cell `column` (1-based) ([Tables](widgets#tables)) <!-- visual --> |
+
+### Trees
+
+| Procedure | Purpose |
+|---|---|
+| `ig_tree_node(label [, default_open] [, selected] [, leaf] [, span_full_width] [, clicked] [, span_all_columns] [, index] [, stat])` → `logical`, `ig_tree_pop()` | a tree node; `.true.` while open: draw its children, then pop (only then); `clicked`: the label, not the arrow; in a table, `span_all_columns`: its whole row ([Trees](widgets#trees)) <!-- visual --> |
+| `ig_set_next_item_open(open [, always])` | open or close the next tree node or header from the program: first time only, or with `always` now ([Trees](widgets#trees)) <!-- visual --> |
+
+### Numbers
+
+| Procedure | Purpose |
+|---|---|
+| `ig_input(label, value [, step] [, format] [, enter_returns] [, read_only] [, stat])` → `logical` | a field for an `int32`, `int64`, `real32` or `real64`, scalar or vector, typed; `-`/`+` buttons with `step`; `.true.` when changed ([Numbers](widgets#numbers)) <!-- visual --> |
+| `ig_drag(label, value [, speed] [, vmin] [, vmax] [, format] [, scale] [, clamp] [, stat])` → `logical` | a drag box for a number or a vector of any of the four kinds: `speed` per pixel, bounds, `'log'` scale ([Numbers](widgets#numbers)) <!-- visual --> |
+| `ig_slider(label, value, vmin, vmax [, format] [, scale] [, clamp] [, stat])` → `logical` | a slider for a number or a vector of any of the four kinds; `'log'` scale, typed values clamped with `clamp` ([Numbers](widgets#numbers)) <!-- visual --> |
+| `ig_slider_angle(label, radians [, deg_min] [, deg_max] [, format] [, stat])` → `logical` | an angle kept in radians, shown and set in degrees ([Numbers](widgets#numbers)) <!-- visual --> |
+| `ig_drag_range(label, lo, hi [, speed] [, vmin] [, vmax] [, format] [, stat])` → `logical` | two drag boxes for the ends of a range, `lo <= hi` kept ([Numbers](widgets#numbers)) <!-- visual --> |
+
+### Choices
+
+| Procedure | Purpose |
+|---|---|
+| `ig_radio(label, current, value [, stat])` → `logical` | a radio button of a group sharing `current`; a click sets `current = value` ([Choices](widgets#choices)) <!-- visual --> |
+| `ig_list_box(label, current, items [, height] [, stat])` → `logical` | a list of the `character` array `items` that stays open and scrolls; `current` the index chosen ([Choices](widgets#choices)) <!-- visual --> |
+| `ig_combo(label, current, items)` → `logical` | a drop-down list of the `character` array `items`; `current` is the index chosen; `.true.` when the user picks one ([Choices](widgets#choices)) <!-- visual --> |
+
+### Multi-line text
+
+| Procedure | Purpose |
+|---|---|
+| `ig_input_text_multiline(label, buffer [, width] [, height] [, read_only] [, tab_input] [, flags])` → `logical` | a field of several lines over a `text_buffer_object`, of any length; Enter a newline, undo and redo; `.true.` when edited ([Multi-line text](widgets#multi-line-text)) <!-- visual --> |
+| `text_buffer_object`: `buf%set(text [, stat])`, `buf%text()` → `character`, `buf%length()` → `int64` | the text of a multi-line field, kept by the native layer and grown as needed: replace it (CRLF becomes LF), copy it out, its length in bytes ([Multi-line text](widgets#multi-line-text)) <!-- visual --> |
+
+### Clipboard
+
+| Procedure | Purpose |
+|---|---|
+| `ig_set_clipboard(text [, stat])`, `ig_get_clipboard()` → `character` | put a text on the clipboard; read it (window: the system's; headless: the program's own; remote: the program's, joined to the browser's where it allows it) ([Clipboard](widgets#clipboard)) |
+
+### What happened to an item
+
+| Procedure | Purpose |
+|---|---|
+| `ig_item_rect(xmin, ymin, xmax, ymax)` | screen rectangle of the last item ([What happened to an item](widgets#what-happened-to-an-item)) <!-- visual --> |
+| `ig_last_item()` → `item_status_object` | what happened to the item drawn last, in one snapshot: `hovered`, `active`, `focused`, `visible`, `activated`, `edited`, `deactivated`, `deactivated_after_edit`, `toggled_open`, `clicked(3)`, `double_clicked(3)`, `rect(4)` ([What happened to an item](widgets#what-happened-to-an-item)) <!-- visual --> |
+| `ig_item_hovered([delay] [, stat])` → `logical` | the pointer is over the item drawn last; `delay` `'none'`, `'short'` (0.15 s) or `'normal'` (0.40 s) ([What happened to an item](widgets#what-happened-to-an-item)) <!-- visual --> |
+| `ig_any_item_hovered()` → `logical`, `ig_any_item_active()` → `logical` | the pointer is over some item; some item is held or edited ([What happened to an item](widgets#what-happened-to-an-item)) <!-- visual --> |
+
+### Tooltips
+
+| Procedure | Purpose |
+|---|---|
+| `ig_tooltip(text)` | a tooltip on the previous widget, shown while the pointer rests on it ([Tooltips](widgets#tooltips)) <!-- visual --> |
+| `ig_begin_item_tooltip()` → `logical`, `ig_begin_tooltip()` → `logical`, `ig_end_tooltip()` | a tooltip with any content (a table, a plot): on the item just drawn after the hover delay, or now wherever the pointer is; end only after a true begin ([Tooltips](widgets#tooltips)) <!-- visual --> |
+
+### Links
+
+| Procedure | Purpose |
+|---|---|
+| `ig_text_link(label)` → `logical`, `ig_text_link_url(label, url)` | text drawn as a link, `.true.` when clicked; a link that opens `url` in the browser (remote mode: the page opens it) ([Links](widgets#links)) |
+
+### Players
+
+| Procedure | Purpose |
+|---|---|
+| `ig_player(id, player [, labels] [, stat])` → `logical` | a player for snapshots: previous, play/pause, next, a slider (showing `labels(index)`), a right-click menu for the speed and the mode; plays on the frame clock and asks for frames while playing; `.true.` when `player%index` changed ([Players](widgets#players)) <!-- visual --> |
+| `player_object`: `%index`, `%count`, `%playing`, `%speed`, `%mode` | the state of a player: the snapshot shown (1 to `count`), playing or not, snapshots per second, `'once'`, `'loop'` or `'bounce'` ([Players](widgets#players)) <!-- visual --> |
+
+### Colour editing
+
+| Procedure | Purpose |
+|---|---|
+| `ig_color_edit(label, rgba [, alpha] [, stat])` → `logical` | a colour editor with a picker, bound to `real(real64)` RGB or RGBA ([Colour editing](widgets#colour-editing)) <!-- visual --> |
+| `ig_color_picker(label, rgba [, alpha] [, wheel] [, inputs] [, stat])` → `logical` | a colour picker drawn in place, a hue bar or a hue wheel ([Colour editing](widgets#colour-editing)) <!-- visual --> |
+
+### Drag and drop
+
+| Procedure | Purpose |
+|---|---|
+| `ig_drag_source(type, payload [, preview] [, stat])` → `logical`, `ig_drop_target(type, payload [, stat])` → `logical`, `ig_dragging(type)` → `logical` | drag and drop of a text payload between items, matched by type ([Drag and drop](widgets#drag-and-drop)) <!-- visual --> |
+
+### Selecting many items
+
+| Procedure | Purpose |
+|---|---|
+| `selection_object`, `sel%resize(n)`, `sel%is_selected(i)` → `logical`, `sel%set(i, on)`, `sel%clear()`, `sel%selected_count()` → `integer`, `sel%indices()` → `integer(:)`, `sel%flags()` → `logical(:)` | what is selected among n items, read and set by the program ([Selecting many items](widgets#selecting-many-items)) |
+| `ig_begin_multi_select(sel [, single] [, box_select] [, clear_on_escape] [, no_select_all] [, stat])`, `ig_end_multi_select(sel [, stat])` | a multi-selection over the lines and nodes drawn with `index=`: clicks, shift, ctrl, ctrl+a, box ([Selecting many items](widgets#selecting-many-items)) <!-- visual --> |
+
+### Menus, popups and shortcuts
+
+| Procedure | Purpose |
+|---|---|
+| `ig_begin_main_menu_bar()` → `logical`, `ig_end_main_menu_bar()` | the menu bar along the top of the display; end only after a true begin ([Menus](menus#menus)) |
+| `ig_begin_menu_bar()` → `logical`, `ig_end_menu_bar()` | a window's own menu bar (`ImGuiWindowFlags_MenuBar`) ([Menus](menus#menus)) |
+| `ig_begin_menu(label [, enabled])` → `logical`, `ig_end_menu()` | a menu or submenu; `.true.` while open ([Menus](menus#menus)) |
+| `ig_menu_item(label [, shortcut] [, selected] [, enabled])` → `logical` | a menu item; `.true.` when picked; a check mark with `selected` ([Menus](menus#menus)) |
+| `ig_open_popup(id)`, `ig_close_current_popup()` | open a popup (once, on an event); close the one being declared ([Popups](menus#popups-and-modals)) |
+| `ig_begin_popup(id)` → `logical`, `ig_begin_popup_modal(title [, open])` → `logical`, `ig_end_popup()` | a popup, a modal dialog; end only after a true begin ([Popups](menus#popups-and-modals)) |
+| `ig_begin_popup_context(id [, on] [, button] [, stat])` → `logical` | a context menu, opened by a right click on the item just drawn (`on='item'`), a window's empty space (`'window'`) or the background (`'void'`); closed with `ig_end_popup` after a true begin ([Context menus](menus#context-menus)) <!-- visual --> |
+| `ig_shortcut(keys [, scope] [, repeat] [, stat])` → `logical` | a key chord such as `'ctrl+s'` pressed this frame (cmd on macOS), routed: `'focused'` (default) only in the focused window, `'global'`, `'item'`; or `'always'`, not routed: every call fires ([Shortcuts](menus#shortcuts)) <!-- visual --> |
+| `ig_set_next_item_shortcut(keys [, scope] [, stat])` | the next item owns a chord: the chord presses it, its tooltip shows it ([Shortcuts](menus#a-button-that-owns-a-key)) |
 
 ## Docking: `ig_dock_*`
 
-| Procedure | Does |
+| Procedure | Purpose |
 |---|---|
 | `ig_dock_id(name)` → `integer(int32)` | the dock id of a name ([Docking](docking#a-layout-set-by-the-program)) |
 | `ig_dock_space(id [, flags] [, stat])` | a dock space over the display, every frame, before its windows ([Docking](docking#a-layout-set-by-the-program)) |
@@ -177,7 +285,7 @@ Details: [Docking](docking).
 
 ## Styles: `ig_/ip_ set_/get_ style_color`, `style_var`
 
-| Procedure | Does |
+| Procedure | Purpose |
 |---|---|
 | `ig_set_style_color(name, color [, stat])`, `ip_set_style_color(...)` | a colour by name (`'#rrggbb[aa]'` or components) ([Styles](styles#colours-and-variables-by-name)) <!-- visual --> |
 | `ig_get_style_color(name, rgba [, stat])`, `ip_get_style_color(...)` | a colour by name ([Styles](styles#colours-and-variables-by-name)) <!-- visual --> |
@@ -359,34 +467,34 @@ Details: [3-D views](view3d).
 
 ## Code editor: `code_editor_object`, `code_diff`
 
-| Procedure | Purpose | Details |
-|---|---|---|
-| `ed%init([language] [, stat])`, `ed%destroy()`, `ed%is_initialized()` → `logical`, `ed%set_language(language [, stat])` | create a code editor (ImGuiColorTextEdit, drawn through Dear ImGui: the same in every mode), highlighting a language; release it; whether it exists; another language | [code editor](editor#procedures) |
-| `ed%set_text(text [, stat])`, `ed%text()` → `character`, `ed%line_count()` → `int32` | replace the text (marks and undo history go); the text, every line ended by LF; its lines | [code editor](editor#procedures) |
-| `ed%draw(id [, width] [, height] [, stat])` → `logical` | the editor as a widget, in IBM Plex Mono with the fallback symbols; `.true.` on the frame the user changed the text | [code editor](editor) <!-- visual --> |
-| `ed%mark(line, severity, message [, stat])`, `ed%clear_marks([stat])`, `ed%mark_of(line [, message])` → `character` | a finding on its line: `'error'`, `'warning'`, `'info'`, a tint, an icon and a tooltip; remove them; read one back | [marks](editor#marks) |
-| `ed%goto(line [, column] [, focus] [, stat])`, `ed%focus([stat])`, `ed%cursor(line, column)`, `ed%selection(first_line, first_column, last_line, last_column [, text])` → `logical`, `ed%select(first_line, first_column, last_line, last_column [, stat])` | move the cursor, give the editor the keyboard; where the cursor is; the selection; select a range | [code editor](editor#procedures) |
-| `ed%insert(text [, stat])`, `ed%word_at_cursor()` → `character`, `ed%undo([stat])` → `logical`, `ed%redo([stat])` → `logical` | insert at the cursor; the word the cursor is in; undo, redo a change | [code editor](editor#procedures) |
-| `ed%find(text [, case_sensitive] [, whole_word] [, stat])` → `logical`, `ed%replace(text, by [, case_sensitive] [, whole_word] [, stat])` → `int32` | select the next occurrence; replace every one, in one undo | [find and replace](editor#find-and-replace) |
-| `ed%set_completions(words [, stat])`, `ed%completing([words])` → `logical` | the words completion offers (keys of several words in a key = value language); whether the popup is open, with what it offers | [completion](editor#completion) |
-| `ed%read_only(on [, stat])`, `ed%is_read_only()` → `logical`, `ed%set_options([line_numbers] [, tab_size] [, whitespace] [, line_highlight] [, stat])`, `ed%line_rect(line, x0, y0, x1, y1)` → `logical` | read-only or editable; the editor's options; a line's rectangle on the last draw | [code editor](editor#procedures) |
-| `code_language(name [, stat])` → `language_object`, `lang%init(name [, keywords] [, types] [, comment] [, comment_alt] [, block_comment] [, preprocessor] [, single_quotes] [, double_quotes] [, numbers] [, case_sensitive] [, key_value] [, stat])`, `lang%name()` → `character` | the shipped languages (`'fortran'`, `'input'`, `'text'`, the fork's thirteen); a language of the program's own | [languages](editor#languages) <!-- visual --> |
-| `code_diff(id, left, right [, side_by_side] [, language] [, width] [, height] [, stat])` | the difference of two texts as a widget, one column or side by side | [the diff](editor#the-diff) <!-- visual --> |
-| `code_diff_lines(left, right, added, removed [, stat])` | the lines added and removed, without drawing; a task may call it | [the diff](editor#the-diff) |
+| Procedure | Purpose |
+|---|---|
+| `ed%init([language] [, stat])`, `ed%destroy()`, `ed%is_initialized()` → `logical`, `ed%set_language(language [, stat])` | create a code editor (ImGuiColorTextEdit, drawn through Dear ImGui: the same in every mode), highlighting a language; release it; whether it exists; another language ([code editor](editor#procedures)) |
+| `ed%set_text(text [, stat])`, `ed%text()` → `character`, `ed%line_count()` → `int32` | replace the text (marks and undo history go); the text, every line ended by LF; its lines ([code editor](editor#procedures)) |
+| `ed%draw(id [, width] [, height] [, stat])` → `logical` | the editor as a widget, in IBM Plex Mono with the fallback symbols; `.true.` on the frame the user changed the text ([code editor](editor)) <!-- visual --> |
+| `ed%mark(line, severity, message [, stat])`, `ed%clear_marks([stat])`, `ed%mark_of(line [, message])` → `character` | a finding on its line: `'error'`, `'warning'`, `'info'`, a tint, an icon and a tooltip; remove them; read one back ([marks](editor#marks)) |
+| `ed%goto(line [, column] [, focus] [, stat])`, `ed%focus([stat])`, `ed%cursor(line, column)`, `ed%selection(first_line, first_column, last_line, last_column [, text])` → `logical`, `ed%select(first_line, first_column, last_line, last_column [, stat])` | move the cursor, give the editor the keyboard; where the cursor is; the selection; select a range ([code editor](editor#procedures)) |
+| `ed%insert(text [, stat])`, `ed%word_at_cursor()` → `character`, `ed%undo([stat])` → `logical`, `ed%redo([stat])` → `logical` | insert at the cursor; the word the cursor is in; undo, redo a change ([code editor](editor#procedures)) |
+| `ed%find(text [, case_sensitive] [, whole_word] [, stat])` → `logical`, `ed%replace(text, by [, case_sensitive] [, whole_word] [, stat])` → `int32` | select the next occurrence; replace every one, in one undo ([find and replace](editor#find-and-replace)) |
+| `ed%set_completions(words [, stat])`, `ed%completing([words])` → `logical` | the words completion offers (keys of several words in a key = value language); whether the popup is open, with what it offers ([completion](editor#completion)) |
+| `ed%read_only(on [, stat])`, `ed%is_read_only()` → `logical`, `ed%set_options([line_numbers] [, tab_size] [, whitespace] [, line_highlight] [, stat])`, `ed%line_rect(line, x0, y0, x1, y1)` → `logical` | read-only or editable; the editor's options; a line's rectangle on the last draw ([code editor](editor#procedures)) |
+| `code_language(name [, stat])` → `language_object`, `lang%init(name [, keywords] [, types] [, comment] [, comment_alt] [, block_comment] [, preprocessor] [, single_quotes] [, double_quotes] [, numbers] [, case_sensitive] [, key_value] [, stat])`, `lang%name()` → `character` | the shipped languages (`'fortran'`, `'input'`, `'text'`, the fork's thirteen); a language of the program's own ([languages](editor#languages)) <!-- visual --> |
+| `code_diff(id, left, right [, side_by_side] [, language] [, width] [, height] [, stat])` | the difference of two texts as a widget, one column or side by side ([the diff](editor#the-diff)) <!-- visual --> |
+| `code_diff_lines(left, right, added, removed [, stat])` | the lines added and removed, without drawing; a task may call it ([the diff](editor#the-diff)) |
 
 ## Markdown: `ig_markdown`, `markdown_view_object`
 
-| Procedure | Purpose | Details |
-|---|---|---|
-| `ig_markdown(text [, link] [, stat])` → `logical` | a Markdown text at the cursor (imgui_rich_md, drawn through Dear ImGui: the same in every mode): headings, emphasis, lists, tables, code in IBM Plex Mono, quotes, images from files; `.true.` on the frame a link is clicked, its URL in `link`, nothing opened | [Markdown](widgets#markdown) <!-- visual --> |
-| `md%init([toc] [, search] [, stat])`, `md%destroy()`, `md%is_initialized()` → `logical` | create a document (`markdown_view_object`) with a table of contents and a find bar; release it; whether it exists | [Markdown](widgets#markdown) |
-| `md%set_text(text [, stat])`, `md%load(path [, stat])`, `md%text()` → `character` | the document's text, given or read from a file; a copy of it | [Markdown](widgets#markdown) |
-| `md%draw(id [, link] [, width] [, height] [, stat])` → `logical` | the document as a widget with its own scroll; `.true.` on the frame a link is clicked, its URL in `link`; a link to a heading scrolls there | [Markdown](widgets#markdown) <!-- visual --> |
-| `md%find(text [, stat])`, `md%matches()` → `int32`, `md%current_match()` → `int32`, `md%scroll_to(heading [, stat])` | search as the find bar does, its matches and the current one; scroll to a heading by its text or anchor | [Markdown](widgets#markdown) |
+| Procedure | Purpose |
+|---|---|
+| `ig_markdown(text [, link] [, stat])` → `logical` | a Markdown text at the cursor (imgui_rich_md, drawn through Dear ImGui: the same in every mode): headings, emphasis, lists, tables, code in IBM Plex Mono, quotes, images from files; `.true.` on the frame a link is clicked, its URL in `link`, nothing opened ([Markdown](widgets#markdown)) <!-- visual --> |
+| `md%init([toc] [, search] [, stat])`, `md%destroy()`, `md%is_initialized()` → `logical` | create a document (`markdown_view_object`) with a table of contents and a find bar; release it; whether it exists ([Markdown](widgets#markdown)) |
+| `md%set_text(text [, stat])`, `md%load(path [, stat])`, `md%text()` → `character` | the document's text, given or read from a file; a copy of it ([Markdown](widgets#markdown)) |
+| `md%draw(id [, link] [, width] [, height] [, stat])` → `logical` | the document as a widget with its own scroll; `.true.` on the frame a link is clicked, its URL in `link`; a link to a heading scrolls there ([Markdown](widgets#markdown)) <!-- visual --> |
+| `md%find(text [, stat])`, `md%matches()` → `int32`, `md%current_match()` → `int32`, `md%scroll_to(heading [, stat])` | search as the find bar does, its matches and the current one; scroll to a heading by its text or anchor ([Markdown](widgets#markdown)) |
 
 ## Testing: `figure_testing`
 
-| Procedure | Does |
+| Procedure | Purpose |
 |---|---|
 | `test_click(x, y [, button])`, `test_drag(x0, y0, x1, y1)` | queue a click, a drag ([synthetic input](testing#synthetic-input)) |
 | `test_mouse_move`, `test_mouse_button`, `test_wheel` | queue mouse input, one part at a time ([synthetic input](testing#synthetic-input)) |
