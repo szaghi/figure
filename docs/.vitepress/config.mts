@@ -6,9 +6,10 @@ const docs = [
   {
     text: 'Start here',
     items: [
-      { text: 'About',        link: '/guide/' },
-      { text: 'Installation', link: '/guide/install' },
-      { text: 'Showcase',     link: '/guide/showcase' },
+      { text: 'About',              link: '/guide/' },
+      { text: 'Why immediate mode', link: '/guide/why' },
+      { text: 'Installation',       link: '/guide/install' },
+      { text: 'Showcase',           link: '/guide/showcase' },
     ],
   },
   {
@@ -89,7 +90,6 @@ const docs = [
   {
     text: 'Project',
     items: [
-      { text: 'Why immediate mode', link: '/guide/why' },
       { text: 'Roadmap',            link: '/guide/roadmap' },
       { text: 'API Reference',      link: '/api/' },
       { text: 'Contributing',       link: '/guide/contributing' },
@@ -127,7 +127,7 @@ export default withMermaid({
     logo: { light: '/logo.svg', dark: '/logo-dark.svg', alt: 'FIGURE logo' },
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Start here', link: '/guide/', activeMatch: '^/guide/(index|install|showcase)?$' },
+      { text: 'Start here', link: '/guide/', activeMatch: '^/guide/(index|why|install|showcase)?$' },
       { text: 'Tutorial', link: '/manual/tutorial/01-first-window', activeMatch: '^/manual/(index|tutorial/)' },
       { text: 'Cookbook', link: '/manual/cookbook', activeMatch: '^/manual/cookbook' },
       {
@@ -139,7 +139,6 @@ export default withMermaid({
       {
         text: 'Project',
         items: [
-          { text: 'Why immediate mode', link: '/guide/why' },
           { text: 'Roadmap',            link: '/guide/roadmap' },
           { text: 'Contributing',       link: '/guide/contributing' },
           { text: 'Changelog',          link: '/guide/changelog' },

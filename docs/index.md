@@ -4,18 +4,18 @@ layout: home
 hero:
   name: FIGURE
   text: Immediate-mode GUIs from Fortran
-  tagline: Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration. Dear ImGui widgets and ImPlot plots, declared every frame from ordinary Fortran variables, on SDL3 and OpenGL 3.
+  tagline: "Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration. FIGURE is Dear ImGui widgets and ImPlot plots for Fortran programs, declared every frame from ordinary Fortran variables, on SDL3 and OpenGL 3. It is not a retained-mode toolkit (no widget tree, no event callbacks into Fortran: a widget call returns what the user did), has no windows outside the main one (multi-viewports), and does not support calls to its raw C bindings. Start with Install, then the Tutorial."
   image:
     light: /logo.svg
     dark: /logo-dark.svg
     alt: the FIGURE logo, a window and its plot drafted with a brush, signed with a vermilion seal carved with an F
   actions:
     - theme: brand
-      text: Tutorial
-      link: /manual/tutorial/01-first-window
-    - theme: alt
       text: Install
       link: /guide/install
+    - theme: alt
+      text: Tutorial
+      link: /manual/tutorial/01-first-window
     - theme: alt
       text: Reference
       link: /guide/features
@@ -99,10 +99,14 @@ is released under the MIT licence.
 <<< @/examples/snippets/tut01_window-loop.F90{fortran}
 
 ```bash
-scripts/build_native.sh                                       # native layer into lib/ (once)
-fobis build --mode examples-gnu && exe/examples/figure_hello  # the example program
-fobis build --mode tests-gnu && exe/figure_test_headless      # the headless test: no display needed
+curl -fsSL https://github.com/szaghi/figure/releases/latest/download/install.sh | bash -s -- --gnu
 ```
+
+The [one-line installer](./guide/install#the-one-line-installer) builds the latest release with gfortran, installs it
+into `~/.local` and prints the line that compiles a program against it. [Chapter 1 of the
+tutorial](./manual/tutorial/01-first-window) is the whole program around the loop above, and its build. The
+requirements and the other routes (fpm, FoBiS, [building from the
+repository](./guide/install#building-from-the-repository)) are in [Installation](./guide/install).
 
 ## Authors
 

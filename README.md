@@ -54,10 +54,10 @@ call app%destroy()
 endprogram readme
 ```
 
-Built against the static library (below), it is `docs/examples/src/readme.F90`:
+It is `docs/examples/src/readme.F90`. With FIGURE installed (below; `PKG_CONFIG_PATH` as the installer prints it):
 
 ```sh
-gfortran -I lib/mod readme.F90 lib/libfigure.a -L lib $(python3 scripts/check_sync.py --link-flags) -o readme
+gfortran readme.F90 $(pkg-config --cflags --libs figure) -o readme
 ```
 
 ## What it does
@@ -97,27 +97,19 @@ editors.
 curl -fsSL https://github.com/szaghi/figure/releases/latest/download/install.sh | bash -s -- --gnu
 ```
 
-builds the latest release with gfortran (`--nvidia` for nvfortran), installs it into `~/.local` and compiles a test
-program with `pkg-config --cflags --libs figure`, the line your programs use. On Linux, when SDL3's development
+builds the latest release with gfortran (`--nvidia` for nvfortran), installs it into `~/.local`, compiles and runs a
+test program against it, and prints the line your programs compile with (`pkg-config --cflags --libs figure`). On Linux, when SDL3's development
 packages are missing, it prints the `apt`/`dnf` command that installs them and stops; `--deps` runs that command
 (with `sudo`, after showing it). Options, what is installed and `--uninstall`:
 [installation guide](https://szaghi.github.io/figure/guide/install#the-one-line-installer).
 
-**By hand:** FIGURE has a **native layer** (C/C++: Dear ImGui and its extensions, SDL3 and FIGURE's glue; the parts and
-their pins are in the [installation guide](https://szaghi.github.io/figure/guide/install#the-native-layer)), built by
-CMake, and the **Fortran library**, built by [FoBiS](https://github.com/szaghi/FoBiS) or
-[fpm](https://fpm.fortran-lang.org). Linux needs the X11/Wayland/DBus development packages for SDL3 windows
-([installation guide](https://szaghi.github.io/figure/guide/install)).
-
-**FoBiS** (the primary build):
-
-```sh
-git clone https://github.com/szaghi/figure && cd figure
-scripts/build_native.sh                                       # once: the native layer, into lib/
-fobis build --mode figure-static-gnu                          # lib/libfigure.a and lib/mod/ (or figure-static-nvf)
-fobis build --mode tests-gnu && scripts/run_tests.sh          # the tests, headless
-fobis build --mode examples-gnu && exe/examples/figure_hello  # the examples, in exe/examples/ (also figure_mandelbrot)
-```
+The requirements, Linux's packages and the other routes (FIGURE as an fpm or a FoBiS dependency,
+[building from the repository](https://szaghi.github.io/figure/guide/install#building-from-the-repository)) are in the
+[installation guide](https://szaghi.github.io/figure/guide/install). The repository's build, for work on FIGURE
+itself, its tests and examples, has two layers: a **native layer** (C/C++: Dear ImGui and its extensions, SDL3 and
+FIGURE's glue; [the parts and their pins](https://szaghi.github.io/figure/guide/install#the-native-layer)) built by
+CMake, and the **Fortran library** built by [FoBiS](https://github.com/szaghi/FoBiS) or
+[fpm](https://fpm.fortran-lang.org).
 
 **fpm**, as a dependency of your project: each release publishes a self-contained package as the tag
 `vX.Y.Z-fpm`, where fpm compiles the native layer itself; only SDL3 comes from the system (`libsdl3-dev`,
@@ -128,17 +120,16 @@ fobis build --mode examples-gnu && exe/examples/figure_hello  # the examples, in
 figure = { git = "https://github.com/szaghi/figure", tag = "v0.7.0-fpm" }
 ```
 
-Inside this repository, `scripts/fpm.sh test` runs fpm on the native layer CMake built.
-
 **WSL2 (WSLg):** set `GALLIUM_DRIVER=d3d12` (e.g. in `~/.bashrc`), or Mesa renders in software and every frame costs
 CPU ([details](https://szaghi.github.io/figure/guide/install#wsl2-wslg)).
 
 ## Documentation
 
-[szaghi.github.io/figure](https://szaghi.github.io/figure): a [tutorial](https://szaghi.github.io/figure/manual/),
-a [cookbook](https://szaghi.github.io/figure/manual/cookbook), the [guide](https://szaghi.github.io/figure/guide/features)
-(widgets, plots, styles, docking, remote mode, [performance](https://szaghi.github.io/figure/guide/performance),
-testing) and the API reference. Every picture there is recorded from the program it describes.
+[szaghi.github.io/figure](https://szaghi.github.io/figure): the [Tutorial](https://szaghi.github.io/figure/manual/),
+the [Cookbook](https://szaghi.github.io/figure/manual/cookbook), the
+[Reference](https://szaghi.github.io/figure/guide/features) (widgets, plots, styles, docking, remote mode,
+[performance](https://szaghi.github.io/figure/guide/performance), testing) and the
+[API](https://szaghi.github.io/figure/api/). Every picture there is recorded from the program it describes.
 
 **Status:** v0.7.0, released 2026-11-16 ([changelog](CHANGELOG.md),
 [roadmap](https://szaghi.github.io/figure/guide/roadmap)); the API can still change before v1.0.

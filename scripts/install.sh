@@ -380,7 +380,7 @@ build() {
    # not in a subshell: a failure must reach this shell, which keeps the build directory
    cd "$tree"
    export CC="$cc" CXX="$cxx"
-   run_logged "native layer (CMake: Dear ImGui, ImPlot, cimgui, cimplot, SDL3; the first build downloads them)" \
+   run_logged "native layer (CMake: Dear ImGui and its extensions, SDL3; the first build downloads SDL3, cimplot, cimplot3d and miniz)" \
       bash scripts/build_native.sh
    run_logged "libfigure.a (FoBiS, $mode)" \
       "$fobis_cmd" build --mode "$mode" --fc "$fc" ${varset[@]+"${varset[@]}"}

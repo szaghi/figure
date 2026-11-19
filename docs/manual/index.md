@@ -12,7 +12,8 @@ reported, keys routed by the focus, fields committed when left, sizes in em, tab
 canvas, a monitor with two axes, a field coloured once and a player of snapshots. Each chapter is a complete program of
 [`docs/examples/src`](https://github.com/szaghi/figure/tree/main/docs/examples/src), compiled against the library by
 `docs/examples/build.sh`; in part two each chapter's program is the previous one with something added, and the page
-shows what is new.
+shows what is new. The first step comes before chapter 1: install FIGURE with the [one-line
+installer](/guide/install#the-one-line-installer).
 
 ## Part one: the basics
 
@@ -77,9 +78,9 @@ flowchart LR
 Every chapter builds the same way, as chapter 1 shows: with FIGURE installed by the
 [one-line installer](/guide/install), `gfortran tut01_window.F90 $(pkg-config --cflags --libs figure) -o tut01_window`;
 the testing module of chapter 5 (`figure_testing`) is in the same library. In a clone of the repository, all of them
-at once, from its root, with `bash docs/examples/build.sh`: it needs FoBiS and the native layer
-(`scripts/build_native.sh` first), puts the programs in `build/docs-examples/bin`, runs the headless ones, and
-regenerates the snippets and outputs these pages include (`docs/examples/snippets`, `docs/examples/output`).
+at once, from its root, with `bash docs/examples/build.sh`: it needs FoBiS and the native layer built
+([The native layer](/guide/install#the-native-layer)), puts the programs in `build/docs-examples/bin`,
+runs the headless ones, and regenerates the snippets and outputs these pages include (`docs/examples/snippets`, `docs/examples/output`).
 
 Part two's solver, `tut12_heat`, and part three's, `tut22_heat`, are programs of their own, built next to the studio;
 run a chapter's studio from that folder, with `--examples DIR` to write the example cases and `--case DIR/plate` to

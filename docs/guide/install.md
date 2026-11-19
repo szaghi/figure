@@ -4,47 +4,78 @@ title: Installation
 
 # Installation
 
-```bash
-curl -fsSL https://github.com/szaghi/figure/releases/latest/download/install.sh | bash -s -- --gnu
-```
-
-This builds the latest release with gfortran, installs it into `~/.local` and checks it with a test program. Then
-compile any program against it:
-
-```bash
-export PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}
-gfortran my_program.F90 $(pkg-config --cflags --libs figure) -o my_program
-```
-
 FIGURE is always built from source: `.mod` files work only with the compiler, and the compiler version, that wrote
-them, so there are no prebuilt binaries. Four routes lead to a usable library:
+them, so there are no prebuilt binaries. Check the [requirements](#requirements) first; then four routes lead to a
+usable library:
 
 | Route | Use it when | Section |
 |---|---|---|
 | The one-line installer | your program is built by anything (Make, CMake, a shell line, FoBiS) and you want FIGURE installed once per compiler, found by `pkg-config` | [The one-line installer](#the-one-line-installer) |
 | fpm | your program is an fpm project: fpm compiles FIGURE, native layer included, as one of its dependencies | [FIGURE as an fpm dependency](#figure-as-an-fpm-dependency) |
 | FoBiS fetch | your program is a FoBiS project and should pin FIGURE's version in its own fobos | [FIGURE as a FoBiS dependency](#figure-as-a-fobis-dependency) |
-| Manual build | you work on FIGURE itself, run its tests and examples, or need a modified FIGURE | [Building from the repository](#building-from-the-repository) |
+| From the repository | you work on FIGURE itself, run its tests and examples, or need a modified FIGURE | [Building from the repository](#building-from-the-repository) |
 
-For the [tutorial](/manual/), the one-line installer is enough.
+For the [tutorial](/manual/), the one-line installer is enough. What a program's build then adds, for each route, is
+in [Use the library](#use-the-library); the platforms follow, and last a build on a machine without network.
+
+## Requirements
+
+- A Fortran 2018 compiler. Verified on the development machines: gfortran 16.2, nvfortran 26.9 and Intel ifx 2026.2
+  (Linux); the CI's versions (its ifx is the newest setup-fortran installs, 2026.1) are in [Verified platforms and compilers](#verified-platforms-and-compilers).
+- A C++17 compiler whose C++ runtime is the one the Fortran link line uses: `libstdc++` with gfortran and nvfortran
+  on Linux and with MinGW on Windows, `libc++` (Apple clang) on macOS. Verified: g++ 16.2.
+- CMake 3.24 or newer; Ninja is used when present.
+- Network access for the first native build: CMake downloads the pinned sources ([Building without
+  network](#building-without-network) when there is none).
+- FoBiS 3.8 or newer, or fpm. The installer installs FoBiS in a private virtual environment when it is missing (with
+  Python's `venv`).
+- Python 3.11 or newer, for the scripts: `check_sync.py` (which `fpm.sh` runs), the remote test's client, the fpm
+  package and the measurement and documentation scripts.
+- For the installer: `pkg-config`, and `curl` or `git` to download the release.
+
+An fpm project depending on FIGURE needs only fpm, the compilers and SDL3 ([FIGURE as an fpm
+dependency](#figure-as-an-fpm-dependency)).
+
+### Linux packages
+
+SDL3 enables its X11, Wayland and DBus support only when their development packages are present when CMake
+configures it. Without them it silently builds X11 only, and without DBus there are no XDG-portal file dialogs
+([file dialogs](frame-loop#file-dialogs) then need `zenity` at run time). On Ubuntu 24.04:
+
+```bash
+sudo apt install libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
+                 libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
+```
+
+If you install them after a first native build, rebuild it with `--clean` (the CMake cache keeps the old choice). A
+machine that cannot have the X11 or Wayland headers builds without a video driver: [A node without a
+display](#a-node-without-a-display).
+
+**File dialogs at run time** (`app%open_file_dialog` and the others): SDL3 asks the desktop's XDG portal through DBus
+(`xdg-desktop-portal` with a backend such as `xdg-desktop-portal-gtk`, present on most desktops and on WSLg) or, when
+there is none, runs `zenity`. Without either, the dialog fails with that reason in its status.
 
 ## The one-line installer
 
-`scripts/install.sh`, attached to every release, runs on Linux and macOS (on Windows, build under MSYS2: [Other
-platforms](#other-platforms)). It works in five stages and stops at the first that fails:
+```bash
+curl -fsSL https://github.com/szaghi/figure/releases/latest/download/install.sh | bash -s -- --gnu
+```
+
+`scripts/install.sh`, attached to every release, runs on Linux and macOS (on Windows, build under MSYS2:
+[Windows](#windows)). It builds the latest release, installs it into `~/.local` and checks it with a test program, in
+five stages; it stops at the first that fails:
 
 1. **Toolchain.** The Fortran compiler (`--gnu`: `gfortran`; `--nvidia`: `nvfortran`; `--intel`: `ifx`, Linux only;
-   `--fc FC`: any of them, by name or path), the C and C++ compilers that go with it, CMake 3.24 or newer, `pkg-config`, Python 3.11 or newer, and
-   `curl` or `git`. With `--gnu`, the C and C++ compilers are the `gcc` and `g++` beside `gfortran` (on macOS, Apple
-   clang, whose C++ runtime the link line uses); with `--nvidia` and `--intel`, `gcc` and `g++` (nvfortran and ifx link
-   `libstdc++`; ifx's programs compile with `-fpscomp logicals`, which the `.pc` and the CMake target carry);
-   `CC` and `CXX`, when both are set, override them. Every version is printed.
-2. **System packages.** On Linux, SDL3 enables X11, Wayland (with libdecor) and DBus only when their development
-   packages are present when it is configured. The script checks them by their `pkg-config` names, and the missing
-   tools with them; if anything is missing, it prints the exact `apt-get` or `dnf` command that installs it and
-   stops (exit status 3). **It never runs `sudo` by itself:** run that command, or run the script again with
-   `--deps`, which shows the command and then runs it. On macOS, SDL needs only the system's frameworks: `--deps`
-   runs `brew install` for missing tools (no `sudo`).
+   `--fc FC`: any of them, by name or path), the C and C++ compilers that go with it, and the other tools of the
+   [requirements](#requirements). With `--gnu`, the C and C++ compilers are the `gcc` and `g++` beside `gfortran` (on
+   macOS, Apple clang, whose C++ runtime the link line uses); with `--nvidia` and `--intel`, `gcc` and `g++`
+   (nvfortran and ifx link `libstdc++`; ifx's programs compile with `-fpscomp logicals`, which the `.pc` and the
+   CMake target carry); `CC` and `CXX`, when both are set, override them. Every version is printed.
+2. **System packages.** On Linux, the script checks SDL3's development packages ([Linux packages](#linux-packages)) by
+   their `pkg-config` names, and the missing tools with them; if anything is missing, it prints the exact `apt-get`
+   or `dnf` command that installs it and stops (exit status 3). **It never runs `sudo` by itself:** run that command,
+   or run the script again with `--deps`, which shows the command and then runs it. On macOS, SDL needs only the
+   system's frameworks: `--deps` runs `brew install` for missing tools (no `sudo`).
 3. **Download and build.** The release (`--tag`, default the latest) is downloaded and built in a temporary
    directory: the native layer with CMake (whose first build downloads the parts [the native layer's
    table](#the-native-layer) marks as fetched), then `libfigure.a` with FoBiS. When FoBiS 3.8 or newer is not on `PATH`, it is installed in a private
@@ -54,7 +85,8 @@ platforms](#other-platforms)). It works in five stages and stops at the first th
    (table below). Installs for different compilers live side by side; installing the same compiler again replaces
    its previous install.
 5. **Proof.** A ten-line program that draws three frames headless is compiled with
-   `pkg-config --cflags --libs figure-<tag>` and run; then the compile line for your programs is printed.
+   `pkg-config --cflags --libs figure-<tag>` and run; then the compile line for your programs is printed ([With
+   pkg-config](#with-pkg-config)).
 
 | Installed | What |
 |---|---|
@@ -77,8 +109,6 @@ platforms](#other-platforms)). It works in five stages and stops at the first th
 | `--keep` | keep the build directory (a failed stage always keeps it, and prints the path of its log) |
 | `--verbose` | show the build's output (otherwise written to the log) |
 
-With two compilers installed, choose one by its `.pc`: `pkg-config --cflags --libs figure-nvidia-26.9`.
-
 To remove an install, run the script with `--uninstall` (and the same `--prefix`):
 
 ```bash
@@ -88,227 +118,11 @@ curl -fsSL https://github.com/szaghi/figure/releases/latest/download/install.sh 
 It removes exactly the files and directories listed in the manifests, and nothing else in the prefix. What the
 installer does not cover is listed in the [known issues](known-issues#the-one-line-installer).
 
-### From CMake
-
-A CMake project finds an installed FIGURE with `find_package` and links the imported target `figure::figure`, which
-carries the modules' folder and the whole link line (the native layer, SDL3, the platform's libraries):
-
-```cmake
-cmake_minimum_required(VERSION 3.24)
-project(my_program LANGUAGES Fortran)
-find_package(figure 0.7 CONFIG REQUIRED)
-add_executable(my_program my_program.F90)
-target_link_libraries(my_program PRIVATE figure::figure)
-```
-
-```bash
-cmake -S . -B build -DCMAKE_PREFIX_PATH=$HOME/.local   # the installer's --prefix
-cmake --build build
-```
-
-- **The compiler decides:** a `.mod` file works only with the compiler that wrote it, so each install's version file
-  accepts only a project whose Fortran compiler is that install's (`GNU 16.2.0` for `gnu-16.2.0`, `NVHPC 26.9` for
-  `nvidia-26.9`). With several compilers installed, CMake takes the matching one; with none matching, it says which
-  installs it considered and why each was refused (`figure_COMPILER` names the one found).
-- **No FoBiS, no fpm:** the project is built by CMake alone, against the static libraries the installer put in
-  `lib/figure/<tag>/`. `scripts/cmake_consumer/` is such a project, built by the installer's CI on Ubuntu and macOS.
-
-## FIGURE as a FoBiS dependency
-
-A FoBiS project fetches and builds FIGURE with its own fobos (`use=fobos`, the static-library mode of your
-compiler: `figure-static-gnu`, `figure-static-nvf` or `figure-static-ifx`), then links the native layer from the
-clone's `lib/`:
-
-```ini
-[dependencies]
-figure = https://github.com/szaghi/figure :: semver=* :: use=fobos :: mode=figure-static-gnu
-```
-
-`semver=*` follows the latest release (`fobis fetch --update` moves it); `branch=main` follows the development head.
-
-```ini
-[gnu]
-; ... your mode: FoBiS adds FIGURE's modules and libfigure.a; the native layer and the platform's libraries are yours
-lib_dir  = .fobis_deps/figure/lib
-ext_libs = figure_native SDL3 stdc++ dl pthread m
-```
-
-`fobis fetch` clones the tag and builds it (the mode's `pre_build` runs the native build, with CMake, so the
-requirements below apply); `fobis build` then rebuilds nothing that is up to date. `ext_libs` is the Linux link line;
-`python3 .fobis_deps/figure/scripts/check_sync.py --link-flags` prints that of the platform it runs on.
-
-## Building without network
-
-A cluster's compute or login node often reaches no outside network, and the native build downloads the parts [the
-native layer's table](#the-native-layer) marks as fetched the first time. Each release (since v0.7.0) also publishes `figure-<version>-sources.tar.gz` (`<version>` with its `v`, as `figure-v0.7.0-sources.tar.gz`): the
-repository's files and the fetched sources, in `third_party/fetched/`. Copy it to the machine, unpack it, and build there:
-`scripts/build_native.sh` finds `third_party/fetched/` and downloads nothing (it says `offline, from
-third_party/fetched/`).
-
-```bash
-tar -xzf figure-v0.7.0-sources.tar.gz && cd figure-v0.7.0-sources
-bash scripts/install.sh --gnu --source "$PWD" --prefix "$HOME/.local"   # or: scripts/build_native.sh, then FoBiS
-```
-
-- **FoBiS:** the installer installs FoBiS from PyPI when it is missing: on such a machine, install FoBiS first (from a
-  wheel copied there, `pip install FoBiS.py-<version>.whl`).
-- **System packages:** SDL3's X11, Wayland and DBus development headers come from the system's packages, as for any
-  build ([Linux packages](#linux-packages)). Headless and remote programs use none of them when they run, but SDL3
-  refuses to configure without X11 or Wayland headers. A node without them builds the console variant, with no
-  video driver at all (no window can open): `scripts/build_native.sh -- -DSDL_UNIX_CONSOLE_BUILD=ON`, then FoBiS.
-  The installer has no option for it.
-- **Making one:** `scripts/source_archive.sh [OUTDIR]` writes the archive of a tree whose native layer was built (or
-  configured) once, with the network; the `Sources archive` workflow runs it after every release, builds the result
-  with the network cut, and attaches it to the release.
-
-## Building from the repository
-
-FIGURE has two layers, built separately:
-
-- the **native layer** (C and C++): Dear ImGui and its extensions, SDL3 and FIGURE's glue ([the parts](#the-native-layer)),
-  built by CMake into two static libraries, `lib/libfigure_native.a` and `lib/libSDL3.a`;
-- the **Fortran library** (`src/lib`), built by [FoBiS](https://github.com/szaghi/FoBiS) (the primary build) or
-  [fpm](https://fpm.fortran-lang.org). Neither compiles C++ in this repository: both only link the native layer.
-  For another fpm project, FIGURE can also be [a self-contained fpm package](#figure-as-an-fpm-dependency), where fpm
-  compiles the native layer itself.
-
-## Requirements
-
-- A Fortran 2018 compiler. Verified on the development machines: gfortran 16.2, nvfortran 26.9 and Intel ifx 2026.2
-  (Linux); the CI's versions (its ifx is the newest setup-fortran installs, 2026.1) are in [Verified platforms and compilers](#verified-platforms-and-compilers).
-- A C++17 compiler whose C++ runtime is the one the Fortran link line uses: `libstdc++` with gfortran and nvfortran
-  on Linux and with MinGW on Windows, `libc++` (Apple clang) on macOS. Verified: g++ 16.2.
-- CMake 3.24 or newer; Ninja is used when present.
-- Network access for the first native build: CMake downloads the pinned sources.
-- FoBiS 3.8 or newer, or fpm.
-- Python 3.11 or newer, for the scripts: `check_sync.py` (which `fpm.sh` runs), the remote test's client, the fpm
-  package and the measurement and documentation scripts.
-
-Platforms: Linux is verified locally (X11 and Wayland, under WSL2/WSLg). macOS (gfortran with Apple clang) and
-Windows (MSYS2 UCRT64 gfortran) are built, tested and opened in a window by the `Platforms` CI workflow (see
-[Verified platforms and compilers](#verified-platforms-and-compilers)).
-
-### Linux packages
-
-SDL3 enables its X11, Wayland and DBus support only when their development packages are present when CMake
-configures it. Without them it silently builds X11 only, and without DBus there are no XDG-portal file dialogs
-([file dialogs](frame-loop#file-dialogs) then need `zenity` at run time). On Ubuntu 24.04:
-
-```bash
-sudo apt install libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
-                 libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
-```
-
-**File dialogs at run time** (`app%open_file_dialog` and the others): SDL3 asks the desktop's XDG portal through DBus
-(`xdg-desktop-portal` with a backend such as `xdg-desktop-portal-gtk`, present on most desktops and on WSLg) or, when
-there is none, runs `zenity`. Without either, the dialog fails with that reason in its status.
-
-If you install them after a first native build, rebuild it with `--clean` (the CMake cache keeps the old choice).
-SDL3 refuses to configure on Linux without X11 or Wayland headers; a build without any video driver, for the
-headless test only, is possible with `scripts/build_native.sh -- -DSDL_UNIX_CONSOLE_BUILD=ON`.
-
-## The native layer
-
-```bash
-git clone https://github.com/szaghi/figure
-cd figure
-scripts/build_native.sh
-```
-
-`scripts/build_native.sh [--prefix DIR] [--build-type Release|Debug] [--clean] [-- EXTRA_CMAKE_ARGS...]` configures
-`native/CMakeLists.txt` in `build/native`, builds it and installs the libraries into `lib/` (and `figure_native.h`
-into `include/`, and the licences of the code compiled into the libraries into `share/licenses/`: see
-[THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)). The C and C++ compilers are CMake's
-defaults; choose them with `CC` and `CXX`:
-
-```bash
-CC=gcc CXX=g++ scripts/build_native.sh --clean
-```
-
-The third-party parts are pinned as a matched set (the table is generated from `native/CMakeLists.txt`; the
-licences are in [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)):
-
-<!--@include: ./_generated/native.md-->
-
-The parts marked "fetched" are downloaded by the first build (miniz as a release archive checked by its SHA-256); the
-others are in the repository. cimplot's, cimplot3d's and SDL's pins are CMake cache variables (`FIGURE_CIMPLOT_TAG`,
-`FIGURE_CIMPLOT3D_TAG`, `FIGURE_SDL_TAG`), but do not change cimplot alone: it is generated against a specific
-cimgui.
-
-## The Fortran library with FoBiS
-
-Every FoBiS mode runs `scripts/build_native.sh` first (`pre_build = native`): a no-op, a few seconds, once the native
-layer is built.
-
-```bash
-fobis build --mode tests-gnu && exe/figure_test_headless      # gfortran
-fobis build --mode examples-gnu && exe/examples/figure_hello  # the examples, in exe/examples/
-fobis build --mode tests-nvf                                  # nvfortran
-fobis build --mode tests-ifx                                  # Intel ifx (after: source /opt/intel/oneapi/setvars.sh)
-fobis rule --ex sync                                          # fobos and fpm.toml describe the same build
-```
-
-`fobis build --lmodes` lists the modes:
-
-| Mode | Builds |
-|---|---|
-| `tests-gnu`, `tests-nvf`, `tests-ifx` | the tests: `exe/figure_test_headless`, `figure_test_layout`, `figure_test_remote`, `figure_test_themes` |
-| `tests-gnu-debug` | the same with runtime checks and floating-point traps |
-| `examples-gnu`, `examples-nvf`, `examples-ifx` | the example programs in `exe/examples/` (`figure_hello`, `figure_mandelbrot`, `figure_bench_texture`, `figure_bench_redraw`), with OpenMP |
-| `figure-static-gnu`, `figure-static-nvf`, `figure-static-ifx` | the static library `lib/libfigure.a` (`figure` and `figure_testing`), modules in `lib/mod` |
-
-Two rules matter here: `fobis rule --ex native` builds the native layer, `fobis rule --ex sync` checks fobos against
-`fpm.toml`.
-
-The tests and the examples are kept apart: `scripts/run_tests.sh` runs every program in `exe/` (not in its
-subfolders), so an example, which waits on its window, is never run as a test.
-
-::: warning Switching compilers
-Test modes of every compiler write into `exe/`, example modes into `exe/examples/`. Run `rm -rf exe` before trusting
-a run after a switch: a stale binary of the other compiler can still be there.
-:::
-
-## The Fortran library with fpm
-
-`scripts/fpm.sh` runs fpm with the native layer on the link line. `fpm.toml` links `figure_native`, `SDL3` and
-`figure_platform`, after the program's objects; `fpm.sh` first runs `python3 scripts/check_sync.py --fpm-link`, which
-makes `lib/libfigure_platform.a` carry the platform libraries of the fobos varset. With GNU ld (Linux, Windows) it is a
-one-line linker script, `INPUT(-lstdc++ ...)`: fpm passes `--link-flag` before the objects, where archives (the C++
-runtime and Windows' import libraries) would resolve nothing. On macOS, where the linker does not depend on order, it
-is an empty archive from the native build and the libraries and frameworks go in `--link-flag`. `fpm.sh` stops if
-`lib/libfigure_native.a` is missing.
-
-fpm links a program again only when its own objects change, not when a library on its link line does. So `fpm.sh`
-removes the test, example and app binaries under `build/` that are older than `lib/libfigure_native.a`, `libSDL3.a`
-or `libfigure_platform.a`, and says how many: fpm then links them again with the native layer just rebuilt. A native
-build run by FoBiS (`pre_build`) writes `libfigure_native.a` again, so the next `fpm.sh` relinks; nothing is
-recompiled.
-
-```bash
-scripts/fpm.sh test
-scripts/fpm.sh run --example figure_hello
-FPM_FC=gfortran scripts/fpm.sh test
-scripts/fpm.sh test --compiler ifx --flag "-fpscomp logicals"
-scripts/fpm.sh test --compiler nvfortran --flag "-Mbackslash -Munixlogical -mp"
-```
-
-With ifx, pass `--flag "-fpscomp logicals"` (here and to an fpm project depending on FIGURE), as fobos does:
-[Intel ifx](#intel-ifx). With nvfortran, pass `--flag "-Mbackslash -Munixlogical -mp"`: `--flag` replaces fpm's own
-nvfortran flags, `-Mbackslash` among them; `-Munixlogical` makes `.true.` the value of a C `bool`, and fpm passes it
-to the link too, where it is needed ([Known issues](known-issues#nvfortran-munixlogical)); `-mp` makes nvfortran's
-I/O thread-safe, for [tasks](known-issues#tasks).
-
 ## FIGURE as an fpm dependency
 
-Another fpm project depends on FIGURE through the package published for each release, the tag `vX.Y.Z-fpm`:
-
-```toml
-[dependencies]
-figure = { git = "https://github.com/szaghi/figure", tag = "v0.7.0-fpm" }
-```
-
-A plain `fpm build` then compiles everything; only SDL3 comes from the system (on macOS fpm also needs
-`FPM_CXXFLAGS=-std=c++17`, below).
+Another fpm project depends on FIGURE through the package published for each release, the tag `vX.Y.Z-fpm` (the line
+of its manifest: [In fpm.toml](#in-fpm-toml)). A plain `fpm build` then compiles everything; only SDL3 comes from the
+system (on macOS fpm also needs `FPM_CXXFLAGS=-std=c++17`, below).
 
 fpm has no build hooks, so it cannot run CMake. `scripts/fpm_package.py` writes FIGURE as a **self-contained fpm
 package** instead: the Fortran library, FIGURE's glue and the pinned Dear ImGui, ImPlot, cimgui, cimplot and miniz
@@ -346,10 +160,146 @@ Without a package (Ubuntu 24.04), the static SDL3 the native build installs serv
 build's SDL3). The Platforms workflow runs it on macOS and Windows with the system's SDL3, and on Linux with the
 native build's. `scripts/check_sync.py` checks that the package compiles the same C and C++ sources as CMake.
 
+## FIGURE as a FoBiS dependency
+
+A FoBiS project fetches and builds FIGURE with FIGURE's own fobos (`use=fobos`, the static-library mode of your
+compiler: `figure-static-gnu`, `figure-static-nvf` or `figure-static-ifx`), then links the native layer from the
+clone's `lib/` (the lines of its fobos: [In a fobos](#in-a-fobos)). `fobis fetch` clones the tag and builds it (the
+mode's `pre_build` runs the native build, with CMake, so the [requirements](#requirements) apply); `fobis build` then
+rebuilds nothing that is up to date.
+
+## Building from the repository
+
+FIGURE has two layers, built separately:
+
+- the **native layer** (C and C++): Dear ImGui and its extensions, SDL3 and FIGURE's glue ([the parts](#the-native-layer)),
+  built by CMake into two static libraries, `lib/libfigure_native.a` and `lib/libSDL3.a`;
+- the **Fortran library** (`src/lib`), built by [FoBiS](https://github.com/szaghi/FoBiS) (the primary build) or
+  [fpm](https://fpm.fortran-lang.org). Neither compiles C++ in this repository: both only link the native layer.
+  For another fpm project, FIGURE can also be [a self-contained fpm package](#figure-as-an-fpm-dependency), where fpm
+  compiles the native layer itself.
+
+### The native layer
+
+```bash
+git clone https://github.com/szaghi/figure
+cd figure
+scripts/build_native.sh
+```
+
+`scripts/build_native.sh [--prefix DIR] [--build-type Release|Debug] [--clean] [-- EXTRA_CMAKE_ARGS...]` configures
+`native/CMakeLists.txt` in `build/native`, builds it and installs the libraries into `lib/` (and `figure_native.h`
+into `include/`, and the licences of the code compiled into the libraries into `share/licenses/`: see
+[THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)). The C and C++ compilers are CMake's
+defaults; choose them with `CC` and `CXX`:
+
+```bash
+CC=gcc CXX=g++ scripts/build_native.sh --clean
+```
+
+The third-party parts are pinned as a matched set (the table is generated from `native/CMakeLists.txt`; the
+licences are in [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)):
+
+<!--@include: ./_generated/native.md-->
+
+The parts marked "fetched" are downloaded by the first build (miniz as a release archive checked by its SHA-256); the
+others are in the repository. cimplot's, cimplot3d's and SDL's pins are CMake cache variables (`FIGURE_CIMPLOT_TAG`,
+`FIGURE_CIMPLOT3D_TAG`, `FIGURE_SDL_TAG`), but do not change cimplot alone: it is generated against a specific
+cimgui.
+
+### The Fortran library with FoBiS
+
+Every FoBiS mode runs `scripts/build_native.sh` first (`pre_build = native`): a no-op, a few seconds, once the native
+layer is built.
+
+```bash
+fobis build --mode tests-gnu && exe/figure_test_headless      # gfortran
+fobis build --mode examples-gnu && exe/examples/figure_hello  # the examples, in exe/examples/
+fobis build --mode tests-nvf                                  # nvfortran
+fobis build --mode tests-ifx                                  # Intel ifx (after: source /opt/intel/oneapi/setvars.sh)
+fobis rule --ex sync                                          # fobos and fpm.toml describe the same build
+```
+
+`fobis build --lmodes` lists the modes:
+
+| Mode | Builds |
+|---|---|
+| `tests-gnu`, `tests-nvf`, `tests-ifx` | the tests: `exe/figure_test_headless`, `figure_test_layout`, `figure_test_remote`, `figure_test_themes` |
+| `tests-gnu-debug` | the same with runtime checks and floating-point traps |
+| `examples-gnu`, `examples-nvf`, `examples-ifx` | the example programs in `exe/examples/` (`figure_hello`, `figure_mandelbrot`, `figure_bench_texture`, `figure_bench_redraw`), with OpenMP |
+| `figure-static-gnu`, `figure-static-nvf`, `figure-static-ifx` | the static library `lib/libfigure.a` (`figure` and `figure_testing`), modules in `lib/mod` |
+
+Two rules matter here: `fobis rule --ex native` builds the native layer, `fobis rule --ex sync` checks fobos against
+`fpm.toml`.
+
+The tests and the examples are kept apart: `scripts/run_tests.sh` runs every program in `exe/` (not in its
+subfolders), so an example, which waits on its window, is never run as a test.
+
+::: warning Switching compilers
+Test modes of every compiler write into `exe/`, example modes into `exe/examples/`. Run `rm -rf exe` before trusting
+a run after a switch: a stale binary of the other compiler can still be there.
+:::
+
+### The Fortran library with fpm
+
+`scripts/fpm.sh` runs fpm with the native layer on the link line. `fpm.toml` links `figure_native`, `SDL3` and
+`figure_platform`, after the program's objects; `fpm.sh` first runs `python3 scripts/check_sync.py --fpm-link`, which
+makes `lib/libfigure_platform.a` carry the platform libraries of the fobos varset. With GNU ld (Linux, Windows) it is a
+one-line linker script, `INPUT(-lstdc++ ...)`: fpm passes `--link-flag` before the objects, where archives (the C++
+runtime and Windows' import libraries) would resolve nothing. On macOS, where the linker does not depend on order, it
+is an empty archive from the native build and the libraries and frameworks go in `--link-flag`. `fpm.sh` stops if
+`lib/libfigure_native.a` is missing.
+
+fpm links a program again only when its own objects change, not when a library on its link line does. So `fpm.sh`
+removes the test, example and app binaries under `build/` that are older than `lib/libfigure_native.a`, `libSDL3.a`
+or `libfigure_platform.a`, and says how many: fpm then links them again with the native layer just rebuilt. A native
+build run by FoBiS (`pre_build`) writes `libfigure_native.a` again, so the next `fpm.sh` relinks; nothing is
+recompiled.
+
+```bash
+scripts/fpm.sh test
+scripts/fpm.sh run --example figure_hello
+FPM_FC=gfortran scripts/fpm.sh test
+scripts/fpm.sh test --compiler ifx --flag "-fpscomp logicals"
+scripts/fpm.sh test --compiler nvfortran --flag "-Mbackslash -Munixlogical -mp"
+```
+
+With ifx, pass `--flag "-fpscomp logicals"` (here and to an fpm project depending on FIGURE), as fobos does:
+[Intel ifx](#intel-ifx). With nvfortran, pass `--flag "-Mbackslash -Munixlogical -mp"`: `--flag` replaces fpm's own
+nvfortran flags, `-Mbackslash` among them; `-Munixlogical` makes `.true.` the value of a C `bool`, and fpm passes it
+to the link too, where it is needed ([Known issues](known-issues#nvfortran-munixlogical)); `-mp` makes nvfortran's
+I/O thread-safe, for [tasks](known-issues#tasks).
+
+### Build the documentation
+
+```bash
+cd docs
+npm install
+npm run docs:build      # regenerates the API pages with formal, then builds the site
+bash examples/build.sh  # compiles every example of the pages, runs the headless ones (from the repository root too)
+```
+
 ## Use the library
 
-From the repository's root, build the static library, then compile against its modules and link it together with
-the native layer (a program elsewhere gives the paths of the clone: `-I ~/figure/lib/mod`, and so on):
+In the program, `use figure` gives the whole public API (see the [feature map](features)). What the program's build
+adds depends on the route.
+
+### With pkg-config
+
+After the installer, a program compiles with:
+
+```bash
+export PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}
+gfortran my_program.F90 $(pkg-config --cflags --libs figure) -o my_program
+```
+
+The installer prints these lines at its end, with its `--prefix` and its compiler (the `export` only when
+`pkg-config` does not find that prefix already). `figure` is the compiler installed last; with two compilers
+installed, choose one by its `.pc`: `pkg-config --cflags --libs figure-nvidia-26.9`.
+
+A clone of the repository has no `.pc`. From its root, build the static library, then compile against its modules and
+link it together with the native layer (a program elsewhere gives the paths of the clone: `-I ~/figure/lib/mod`, and
+so on):
 
 ```bash
 fobis build --mode figure-static-gnu
@@ -359,8 +309,63 @@ gfortran -I lib/mod my_program.F90 lib/libfigure.a -L lib $(python3 scripts/chec
 
 `check_sync.py --link-flags` prints the native link line of the platform, in order: `figure_native SDL3` followed
 by the platform's libraries (on Linux `stdc++ dl pthread m`); the lists, with macOS's frameworks, are the fobos
-varsets (next section). Order matters where the system libraries are archives (Windows' import libraries). In the program, `use figure` gives the
-whole public API (see the [feature map](features)).
+varsets ([Other platforms](#other-platforms)). Order matters where the system libraries are archives (Windows' import
+libraries).
+
+### From CMake
+
+A CMake project finds an installed FIGURE with `find_package` and links the imported target `figure::figure`, which
+carries the modules' folder and the whole link line (the native layer, SDL3, the platform's libraries):
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(my_program LANGUAGES Fortran)
+find_package(figure 0.7 CONFIG REQUIRED)
+add_executable(my_program my_program.F90)
+target_link_libraries(my_program PRIVATE figure::figure)
+```
+
+```bash
+cmake -S . -B build -DCMAKE_PREFIX_PATH=$HOME/.local   # the installer's --prefix
+cmake --build build
+```
+
+- **The compiler decides:** a `.mod` file works only with the compiler that wrote it, so each install's version file
+  accepts only a project whose Fortran compiler is that install's (`GNU 16.2.0` for `gnu-16.2.0`, `NVHPC 26.9` for
+  `nvidia-26.9`). With several compilers installed, CMake takes the matching one; with none matching, it says which
+  installs it considered and why each was refused (`figure_COMPILER` names the one found).
+- **No FoBiS, no fpm:** the project is built by CMake alone, against the static libraries the installer put in
+  `lib/figure/<tag>/`. `scripts/cmake_consumer/` is such a project, built by the installer's CI on Ubuntu and macOS.
+
+### In fpm.toml
+
+```toml
+[dependencies]
+figure = { git = "https://github.com/szaghi/figure", tag = "v0.7.0-fpm" }
+```
+
+or the path of a package written by hand ([FIGURE as an fpm dependency](#figure-as-an-fpm-dependency), with the SDL3
+each platform needs). `fpm build` compiles FIGURE with the program; with ifx and nvfortran, pass the flags of
+[The Fortran library with fpm](#the-fortran-library-with-fpm).
+
+### In a fobos
+
+```ini
+[dependencies]
+figure = https://github.com/szaghi/figure :: semver=* :: use=fobos :: mode=figure-static-gnu
+```
+
+`semver=*` follows the latest release (`fobis fetch --update` moves it); `branch=main` follows the development head.
+
+```ini
+[gnu]
+; ... your mode: FoBiS adds FIGURE's modules and libfigure.a; the native layer and the platform's libraries are yours
+lib_dir  = .fobis_deps/figure/lib
+ext_libs = figure_native SDL3 stdc++ dl pthread m
+```
+
+`ext_libs` is the Linux link line; `python3 .fobis_deps/figure/scripts/check_sync.py --link-flags` prints that of the
+platform it runs on.
 
 ## Other platforms
 
@@ -373,16 +378,6 @@ per platform; `linux` is the default, the others are selected with `--varset`:
 | macOS | gfortran (Homebrew, `fortran-lang/setup-fortran`), Apple clang | `fobis build --mode tests-gnu --varset macos` |
 | Windows | MSYS2 UCRT64: `gcc-fortran`, `cmake`, `ninja`, `python`, `pkgconf` | `fobis build --mode tests-gnu --varset windows` |
 
-**Windows.** The installer does not run there; in an MSYS2 UCRT64 shell, the packages the `Platforms` workflow
-installs, then the repository build:
-
-```bash
-pacman -S --needed git mingw-w64-ucrt-x86_64-{gcc-fortran,cmake,ninja,pkgconf,python,python-pip,python-pydantic}
-python -m pip install --break-system-packages FoBiS.py   # python-pydantic first: pip cannot build it there
-git clone https://github.com/szaghi/figure && cd figure
-CC=gcc CXX=g++ scripts/build_native.sh && fobis build --mode figure-static-gnu --varset windows
-```
-
 The native build installs SDL's own description of its static link line, `lib/pkgconfig/sdl3.pc`.
 `fobis rule --ex sync` (`scripts/check_sync.py`) checks that the varset of the platform it runs on covers it: every
 library and framework SDL needs must be in the varset. The `Platforms` CI workflow runs that check on macOS and
@@ -391,10 +386,60 @@ Windows before linking anything, so a missing system library shows up as a named
 SDL is built with only the subsystems FIGURE uses (video, events, OpenGL, file dialogs): audio, game controllers,
 haptics, sensors, camera, GPU, render, power and tray are off, which keeps the link line short on every platform.
 
+### macOS
+
+The installer runs there. From the repository, the native layer is built with Apple clang (SDL needs clang on Apple,
+and the link line uses libc++), then FoBiS with `--varset macos`, as the installer does:
+
+```bash
+CC=clang CXX=clang++ scripts/build_native.sh && fobis build --mode figure-static-gnu --varset macos
+```
+
+### Windows
+
+The installer does not run there; in an MSYS2 UCRT64 shell, the packages the `Platforms` workflow installs, then the
+repository build:
+
+```bash
+pacman -S --needed git mingw-w64-ucrt-x86_64-{gcc-fortran,cmake,ninja,pkgconf,python,python-pip,python-pydantic}
+python -m pip install --break-system-packages FoBiS.py   # python-pydantic first: pip cannot build it there
+git clone https://github.com/szaghi/figure && cd figure
+CC=gcc CXX=g++ scripts/build_native.sh && fobis build --mode figure-static-gnu --varset windows
+```
+
+### WSL2 (WSLg)
+
+Set `GALLIUM_DRIVER=d3d12`, for example in `~/.bashrc`:
+
+```bash
+export GALLIUM_DRIVER=d3d12
+```
+
+Without it, recent Mesa (seen with 25.2) does not pick the GPU and renders in software (llvmpipe): FIGURE works, but
+every frame costs CPU. Check with `glxinfo -B`: the renderer must be `D3D12 (<your GPU>)` with `Accelerated: yes`.
+FIGURE does not set the variable itself: it is a property of the machine, and wrong outside WSL.
+
+SDL3 picks the X11 driver by default on WSLg; `SDL_VIDEO_DRIVER=wayland` also works (Mesa EGL prints harmless
+"failed to get driver name for fd -1" warnings). To see what a program costs while idle on your machine, and whether
+it renders on the GPU, use `scripts/measure_idle.py` (see [Frame loop and redraw](frame-loop#measuring-idle-cost)).
+
+### A node without a display
+
+A cluster's node often has no X11 or Wayland development headers, and SDL3 refuses to configure on Linux without them.
+Headless and remote programs use none of them when they run: such a machine builds the console variant, with no video
+driver at all (no window can open), then FoBiS as anywhere else:
+
+```bash
+scripts/build_native.sh -- -DSDL_UNIX_CONSOLE_BUILD=ON
+```
+
+The installer has no option for it.
+
 ## Verified platforms and compilers
 
-The `Platforms` CI workflow builds the native layer and the Fortran library, runs the headless tests with FoBiS and
-with fpm, builds the examples and builds FIGURE as an fpm dependency (`scripts/fpm_consumer.sh`), on:
+Linux is verified locally (X11 and Wayland, under WSL2/WSLg). The `Platforms` CI workflow builds the native layer and
+the Fortran library, runs the headless tests with FoBiS and with fpm, builds the examples and builds FIGURE as an fpm
+dependency (`scripts/fpm_consumer.sh`), on:
 
 | Platform | Fortran | C/C++ | fobos varset | A real window |
 |---|---|---|---|---|
@@ -441,27 +486,24 @@ built with `gcc` and `g++` as for gfortran (`CC=gcc CXX=g++ scripts/build_native
 - **Threads:** ifx links its thread-safe run-time library by default, so the tasks' Fortran I/O needs no OpenMP
   flag (unlike nvfortran's `-mp`, [Known issues](known-issues#tasks)).
 
-## WSL2 (WSLg)
+## Building without network
 
-Set `GALLIUM_DRIVER=d3d12`, for example in `~/.bashrc`:
-
-```bash
-export GALLIUM_DRIVER=d3d12
-```
-
-Without it, recent Mesa (seen with 25.2) does not pick the GPU and renders in software (llvmpipe): FIGURE works, but
-every frame costs CPU. Check with `glxinfo -B`: the renderer must be `D3D12 (<your GPU>)` with `Accelerated: yes`.
-FIGURE does not set the variable itself: it is a property of the machine, and wrong outside WSL.
-
-SDL3 picks the X11 driver by default on WSLg; `SDL_VIDEO_DRIVER=wayland` also works (Mesa EGL prints harmless
-"failed to get driver name for fd -1" warnings). To see what a program costs while idle on your machine, and whether
-it renders on the GPU, use `scripts/measure_idle.py` (see [Frame loop and redraw](frame-loop#measuring-idle-cost)).
-
-## Build the documentation
+A cluster's compute or login node often reaches no outside network, and the native build downloads the parts [the
+native layer's table](#the-native-layer) marks as fetched the first time. Each release (since v0.7.0) also publishes `figure-<version>-sources.tar.gz` (`<version>` with its `v`, as `figure-v0.7.0-sources.tar.gz`): the
+repository's files and the fetched sources, in `third_party/fetched/`. Copy it to the machine, unpack it, and build there:
+`scripts/build_native.sh` finds `third_party/fetched/` and downloads nothing (it says `offline, from
+third_party/fetched/`).
 
 ```bash
-cd docs
-npm install
-npm run docs:build      # regenerates the API pages with formal, then builds the site
-bash examples/build.sh  # compiles every example of the pages, runs the headless ones (from the repository root too)
+tar -xzf figure-v0.7.0-sources.tar.gz && cd figure-v0.7.0-sources
+bash scripts/install.sh --gnu --source "$PWD" --prefix "$HOME/.local"   # or: scripts/build_native.sh, then FoBiS
 ```
+
+- **FoBiS:** the installer installs FoBiS from PyPI when it is missing: on such a machine, install FoBiS first (from a
+  wheel copied there, `pip install FoBiS.py-<version>.whl`).
+- **System packages:** SDL3's X11, Wayland and DBus development headers come from the system's packages, as for any
+  build ([Linux packages](#linux-packages)); a node without them builds the console variant ([A node without a
+  display](#a-node-without-a-display)).
+- **Making one:** `scripts/source_archive.sh [OUTDIR]` writes the archive of a tree whose native layer was built (or
+  configured) once, with the network; the `Sources archive` workflow runs it after every release, builds the result
+  with the network cut, and attaches it to the release.

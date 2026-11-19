@@ -58,15 +58,24 @@ What exists today:
 
 The [feature map](features) lists every public procedure.
 
-## What it is not, yet
+## What it is not
 
-Multiple viewports (windows outside the main one) are not available, and only part of Dear ImGui's widgets have a
-Fortran wrapper: the generated raw layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal: programs call the wrappers, and a Dear ImGui or ImPlot function without one is listed as "raw only" in [Dear ImGui names](imgui-names). See [Known issues](known-issues) and the [roadmap](roadmap).
+- **Not a retained-mode toolkit:** there is no widget tree and no event callback into Fortran. A widget call returns
+  what the user did this frame, and the program asks ([Why immediate mode](why)). The one procedure of a program that
+  FIGURE runs is a [task](processes#tasks)'s work, on a thread of its own.
+- **No multi-viewports:** [docking](docking) is on, but a window cannot be dragged out of the main window into a
+  window of its own ([Known issues](known-issues#no-multi-viewports)).
+- **Not every Dear ImGui widget is wrapped,** and the generated raw layer (`figure_cimgui`, `figure_cimplot`,
+  `figure_cimplot3d` and their `_enums`) is internal: programs call the wrappers, and a Dear ImGui or ImPlot function
+  without one is listed as "raw only" in [Dear ImGui names](imgui-names).
+
+The other limits, by subject, are in [Known issues](known-issues); what comes next is in the [roadmap](roadmap).
 
 ## Where to start
 
-1. [Install](install) the native layer and build the library.
-2. Follow the [tutorial](/manual/): from a first window to a headless test.
+1. [Install](install) FIGURE with the [one-line installer](install#the-one-line-installer); the same page has the
+   other routes, [building from the repository](install#building-from-the-repository) among them.
+2. Follow the [tutorial](/manual/): from a first window to a finished application, the solver studio.
 3. Look up a task in the [cookbook](/manual/cookbook), a procedure in the [reference](features) or the
    [API](/api/).
 
