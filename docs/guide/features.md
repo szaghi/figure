@@ -126,6 +126,7 @@ A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) 
 | `ig_text(text)` | plain text ([Text and layout](widgets#text-and-layout)) |
 | `ig_progress_bar(fraction [, label] [, width])` | a progress bar, `fraction` in [0, 1]; `fraction` < 0: indeterminate ([Progress bars](widgets#progress-bars)) <!-- visual --> |
 | `ig_color_edit(label, rgba [, alpha] [, stat])` → `logical` | a colour editor with a picker, bound to `real(real64)` RGB or RGBA ([Colour editing](widgets#colour-editing)) <!-- visual --> |
+| `ig_color_picker(label, rgba [, alpha] [, wheel] [, inputs] [, stat])` → `logical` | a colour picker drawn in place, a hue bar or a hue wheel ([Colour editing](widgets#colour-editing)) <!-- visual --> |
 | `ig_same_line([offset])` | put the next item on the same line; with `offset`, at that distance from the left edge ([Text and layout](widgets#text-and-layout)) |
 | `ig_align_text_to_frame_padding()` | the text that follows on the line is level with the text of fields and buttons ([Text and layout](widgets#text-and-layout)) |
 | `ig_text_size(text)` → `real(real64)(2)` | width and height of a text in the current font [pixels] (a label: the part before `##`) ([Text and layout](widgets#text-and-layout)) |

@@ -114,7 +114,7 @@ use figure_implot, only : ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_
                           ImPlotHistogramFlags_Horizontal, ImPlotHistogramFlags_Cumulative,                          &
                           ImPlotHistogramFlags_Density, ImPlotHistogramFlags_NoOutliers, ImPlotBin_Sqrt,             &
                           ImPlotBin_Sturges, ImPlotBin_Rice, ImPlotBin_Scott
-use figure_imgui, only : ig_color_edit
+use figure_imgui, only : ig_color_edit, ig_color_picker
 use figure_numbers, only : ig_input, ig_drag, ig_slider, ig_slider_angle, ig_drag_range, ig_radio, ig_list_box
 use figure_canvas, only : canvas_event_object, ig_canvas, ig_cursor_screen_pos, ig_invisible_button, ig_draw_line, &
                           ig_draw_rect, ig_draw_circle, ig_draw_polyline, ig_draw_polygon, ig_draw_text, ig_draw_image
@@ -217,7 +217,7 @@ public :: ip_colormap, ip_colormap_names, ip_load_colormap, ip_colormap_stops, i
 public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point
 public :: ip_contour, ip_contour_lines, ip_contour_levels
 public :: ip_colormap_legend, ip_colormap_legend_edit, ip_field_image
-public :: ig_color_edit
+public :: ig_color_edit, ig_color_picker
 public :: process_object, log_view_object, task_object, task_handle_object, task_work
 public :: view3d_object
 public :: player_object, ig_player

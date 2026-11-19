@@ -785,6 +785,7 @@ frames later; next; previous):
 | Procedure | Notes |
 |---|---|
 | `ig_color_edit(label, rgba [, alpha] [, stat])` → `logical` | A colour editor (`ColorEdit4`) bound to `rgba`, `real(real64)`, components in [0, 1]: one field per component and a swatch that opens a picker when clicked. `.true.` on the frames the user changes the colour. |
+| `ig_color_picker(label, rgba [, alpha] [, wheel] [, inputs] [, stat])` → `logical` | The picker drawn in place (`ColorPicker4`), bound to `rgba` as `ig_color_edit`: a saturation-value square and a hue bar, or with `wheel=.true.` a hue wheel around a saturation-value triangle; an alpha bar for 4 components; a preview of the colour beside them; below, unless `inputs=.false.`, the fields of the components. `.true.` on the frames the user changes the colour. |
 
 <<< @/examples/snippets/cb_legend-color.F90{fortran}
 
@@ -792,13 +793,23 @@ frames later; next; previous):
 
 - `rgba` has 3 components (RGB, no alpha) or 4 (RGBA). With 4, the alpha has a field and a bar in the picker;
   `alpha=.false.` hides them and leaves `rgba(4)` alone.
+
+A picker of its own, always open in a panel, is `ig_color_picker`. Its width is the item width
+(`ig_push_item_width`), and its height follows; `wheel` given chooses its form and ignores the one the user picks in
+its right-click menu (absent: the hue bar, or the user's choice):
+
+<<< @/examples/snippets/cb_color_picker-picker.F90{fortran}
+
+<Media name="cb_color_picker" video alt="A window Surface colour: a check box hue wheel, below it a colour picker 260 pixels wide, a saturation-value square, a hue bar, an alpha bar and a preview swatch, with the fields R, G, B, A, H, S, V and the hexadecimal code below. A drag in the square towards its top right brightens the orange; a click on the hue bar turns it blue. The check box is ticked: the square becomes a triangle inside a hue ring, and a click on the ring down to the left turns the colour green; the text under the picker reads RGBA 0.12 0.92 0.12 1.00." caption="docs/examples/src/cb_color_picker.F90: a picker in the window, with a hue bar or a hue wheel" />
+
 - The fields show 0-255 and are dragged, or typed after a double-click; right-click on the swatch offers Dear ImGui's
   options (RGB, HSV or hexadecimal fields, copy the colour as text).
 - Dear ImGui edits single-precision values: `rgba` is written only on the frames the user changes it, so an untouched
   colour keeps its double-precision bits; a changed one has single precision.
-- Statuses: `FIG_ERR_ARGUMENT` for a size other than 3 or 4, `FIG_ERR_STATE` from a [task](processes#tasks); `stat` is
-  optional (absent: `error stop` with the message).
-- Modes: the same in **window**, **headless** and **remote** mode (the picker is a popup drawn by Dear ImGui).
+- Statuses (both): `FIG_ERR_ARGUMENT` for a size other than 3 or 4, `FIG_ERR_STATE` from a [task](processes#tasks);
+  `stat` is optional (absent: `error stop` with the message).
+- Modes: the same in **window**, **headless** and **remote** mode (`ig_color_edit`'s picker is a popup drawn by Dear
+  ImGui; `src/tests/figure_test_picker.F90` drives `ig_color_picker` headless).
 
 ## Labels and identifiers
 
@@ -1151,6 +1162,6 @@ draws `selected` from them.
 
 ## Not bound yet
 
-The colour picker as a widget of its own (`ColorPicker3`, `ColorPicker4`) has no wrapper yet: `ig_color_edit`
-opens Dear ImGui's picker from its colour button ([Colour editing](#colour-editing)). Menus are on their own page,
-[Menus and shortcuts](menus). The generated raw layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal ([Raw bindings](raw-bindings)): programs call the wrappers, and a Dear ImGui or ImPlot function without one is listed as "raw only" in [Dear ImGui names](imgui-names).
+The Dear ImGui functions without a wrapper are listed as "raw only" in [Dear ImGui names](imgui-names). The generated
+raw layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal ([Raw
+bindings](raw-bindings)): programs call the wrappers. Menus are on their own page, [Menus and shortcuts](menus).

@@ -1,0 +1,18 @@
+#! program build/docs-examples/bin/cb_color_picker
+#! frames  150
+#! poster  140
+# drag in the saturation-value square towards the top right, pick a blue hue on the bar, then switch to the hue wheel
+# and click its ring down to the left: green
+0   move 60 90 10
+15  down
+17  move 200 80 15
+35  up
+45  move 242 190 10
+57  down
+59  up
+70  move 28 49 10
+82  down
+84  up
+100 move 85 252 12
+115 down
+117 up

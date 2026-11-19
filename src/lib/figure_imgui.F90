@@ -32,6 +32,7 @@ use figure_cimgui, only : igGetTime, igProgressBar, &
                           igTextUnformatted, im_vec4, igGetStyleColorVec4, igPopStyleColor, &
                           igPopTextWrapPos, igPushStyleColor_Vec4, igPushTextWrapPos, igAlignTextToFramePadding, &
                           igIsPopupOpen_Str, igSetWindowFocus_Str, igCalcTextSize, igColorEdit4, igIsAnyItemActive, &
+                          igColorPicker4, &
                           igIsAnyItemHovered, igIsItemHovered, igGetCursorStartPos, igGetScrollMaxX, igGetScrollMaxY, &
                           igGetScrollX, igGetScrollY, igSetKeyboardFocusHere, igSetScrollFromPosX_Float,           &
                           igSetScrollFromPosY_Float, igSetScrollHereX, igSetScrollHereY, igSetScrollX_Float,       &
@@ -43,6 +44,8 @@ use figure_cimgui_enums, only : ImGuiCond_Always, ImGuiCond_FirstUseEver, &
                                 ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiPopupFlags_AnyPopup, &
                                 ImGuiInputTextFlags_AllowTabInput, ImGuiInputTextFlags_ReadOnly, &
                                 ImGuiColorEditFlags_AlphaBar, ImGuiColorEditFlags_NoAlpha, ImGuiHoveredFlags_DelayNormal, &
+                                ImGuiColorEditFlags_NoInputs, ImGuiColorEditFlags_PickerHueBar,                          &
+                                ImGuiColorEditFlags_PickerHueWheel, &
                                 ImGuiHoveredFlags_DelayShort, ImGuiHoveredFlags_None
 
 implicit none
@@ -53,7 +56,7 @@ public :: ig_combo, ig_tooltip, ig_selectable, ig_text_wrapped, ig_text_disabled
 public :: ig_tool_button, ig_focus_window, ig_align_text_to_frame_padding, ig_text_size
 public :: ig_progress_bar, ig_splitter
 public :: ig_drag_source, ig_drop_target, ig_dragging, take_payload, item_index_refused
-public :: ig_color_edit
+public :: ig_color_edit, ig_color_picker
 public :: ig_input_text_multiline, text_buffer_object
 public :: ig_set_clipboard, ig_get_clipboard
 public :: item_status_object, ig_last_item, ig_item_hovered, ig_any_item_hovered, ig_any_item_active
@@ -478,6 +481,57 @@ contains
    endif
    call figure_check(FIG_OK, stat)
    endfunction ig_color_edit
+
+   recursive function ig_color_picker(label, rgba, alpha, wheel, inputs, stat) result(changed)
+   !< A colour picker drawn in place (`ColorPicker4`), bound to `rgba`, components in [0, 1]: a saturation-value square
+   !< and a hue bar (or, `wheel=.true.`, a hue wheel around a saturation-value triangle), an alpha bar for a `rgba` of 4
+   !< components, a preview of the colour, and below, unless
+   !< `inputs=.false.`, the fields of the components (RGB, HSV or hexadecimal). A `rgba` of 3 components is RGB; of 4,
+   !< RGBA, with the alpha bar unless `alpha=.false.` (then `rgba(4)` is left alone). True on the frames the user changes
+   !< the colour; `rgba` is written only then (Dear ImGui edits single precision). `wheel` absent: the hue bar, or the
+   !< form the user chose in the picker's right-click menu; given, that form, the menu's choice ignored. The width is
+   !< the item width (`ig_push_item_width`); the height follows it. Statuses: `FIG_ERR_ARGUMENT` for a size other than
+   !< 3 or 4, `FIG_ERR_STATE` from a task. The same in every mode.
+   character(len=*), intent(in)            :: label   !< Label (also the id; '##id' hides it).
+   real(real64),     intent(inout)         :: rgba(:) !< Colour, RGB or RGBA in [0, 1].
+   logical,          intent(in), optional  :: alpha   !< Show and edit the alpha (default: when size(rgba) is 4).
+   logical,          intent(in), optional  :: wheel   !< A hue wheel and a triangle (`.true.`) or a hue bar (`.false.`).
+   logical,          intent(in), optional  :: inputs  !< The fields of the components below (default `.true.`).
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   logical                                 :: changed !< Changed this frame.
+   real(c_float), target                   :: c(4)    !< Single-precision copy for Dear ImGui.
+   integer(c_int)                          :: flags   !< ImGuiColorEditFlags.
+   integer(int32)                          :: n       !< Components.
+
+   changed = .false.
+   if (figure_draw_refused('ig_color_picker', stat)) return ! a task does not draw
+   n = size(rgba, kind=int32)
+   if (n /= 3_int32 .and. n /= 4_int32) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ig_color_picker: the colour needs 3 (RGB) or 4 (RGBA) components', stat)
+      return
+   endif
+   flags = ImGuiColorEditFlags_AlphaBar
+   if (n == 3_int32) flags = ImGuiColorEditFlags_NoAlpha
+   if (present(alpha)) then
+      if (.not. alpha) flags = ImGuiColorEditFlags_NoAlpha
+   endif
+   if (present(wheel)) flags = ior(flags, merge(ImGuiColorEditFlags_PickerHueWheel, ImGuiColorEditFlags_PickerHueBar, &
+                                                wheel))
+   if (present(inputs)) then
+      if (.not. inputs) flags = ior(flags, ImGuiColorEditFlags_NoInputs)
+   endif
+   c = 1.0_c_float
+   c(1:n) = real(rgba, c_float)
+   changed = logical(igColorPicker4(cstr(label), c_loc(c), flags, c_null_ptr))
+   if (changed) then
+      if (iand(flags, ImGuiColorEditFlags_NoAlpha) /= 0_c_int) then
+         rgba(1:3) = real(c(1:3), real64)
+      else
+         rgba = real(c, real64)
+      endif
+   endif
+   call figure_check(FIG_OK, stat)
+   endfunction ig_color_picker
 
    recursive function ig_combo(label, current, items) result(changed)
    !< A drop-down list of `items`; `current` is the index of the one chosen (1 to `size(items)`; any other value shows
