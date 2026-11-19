@@ -2632,6 +2632,8 @@ contains
    integer(c_int)                                   :: status       !< Native status.
    real(c_double)                                   :: p(1)         !< Probe.
    real(c_double)                                   :: q(3)         !< Probe.
+   real(real64), allocatable                        :: pos(:)       !< The stops' positions, until all is read.
+   real(real64), allocatable                        :: rgb(:,:)     !< Their colours, until all is read.
 
    allocate(positions(0), colours(3, 0))
    if (figure_refused('ip_colormap_stops', stat)) return
@@ -2641,10 +2643,14 @@ contains
       call figure_check(status, stat)
       return
    endif
-   deallocate(positions, colours)
-   allocate(positions(n), colours(3, n))
+   allocate(pos(n), rgb(3, n))
    cap = n
-   call figure_check(fig_colormap_stops(name, len_trim(name, c_int), positions, colours, cap, n), stat)
+   status = fig_colormap_stops(name, len_trim(name, c_int), pos, rgb, cap, n)
+   if (status == FIG_OK) then ! the arrays leave complete or not at all: on a failure they keep size 0
+      call move_alloc(pos, positions)
+      call move_alloc(rgb, colours)
+   endif
+   call figure_check(status, stat)
    endsubroutine ip_colormap_stops
 
    recursive subroutine ip_colormap_names(names)
