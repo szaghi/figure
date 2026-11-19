@@ -13,12 +13,12 @@ a workstation or, with `--remote`, serves its interface to a web browser from a 
 ([Remote UI](remote)). The tools live in a private repository; this page shows what they look like and which parts of
 FIGURE they are built from.
 
-The pictures are xall_figure's own recordings, of synthetic cases. Six are drawn by FIGURE's CPU renderer, headless,
-as every other picture of this site (xall_figure `d8acb5f`, 2026-11-14). Two were recorded in a window on a GPU,
-before xall_figure recorded headless: the run checker following growing files (`2f9dbf5`, 2026-11-06) and the
-solvers run from the window (`c936995`, 2026-11-09). Each races the wall clock (a writer appending lines, a stand-in
-solver printing them), which a headless recording, faster than a window, does not keep in step; they wait for
-xall_figure to record them with the capture's `wait`.
+The pictures are xall_figure's own recordings, of synthetic cases. Seven are drawn by FIGURE's CPU renderer, headless,
+as every other picture of this site (xall_figure `d8acb5f`, 2026-11-14; the solvers run from the window again on
+2026-11-19, each run waited for with the capture's `wait`). One was recorded in a window on a GPU, before
+xall_figure recorded headless: the run checker following growing files (`2f9dbf5`, 2026-11-06). Its files grow by
+a writer of their own, outside the program, by the wall clock, and the checker looks at them by the wall clock: a
+headless recording, faster than a window, keeps neither in step, and `wait` sees only the program's own processes.
 
 ## The Xall input editor
 

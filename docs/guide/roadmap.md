@@ -526,7 +526,7 @@ v0.6.0, and the features no application had asked for, which the owner took in w
 
 ## Next
 
-- **The showcase's last two GPU pictures** (#12 S6): the run checker on growing files and the solvers run from the
-  window, which race the wall clock; xall_figure records them again with the capture's `wait`, then FIGURE copies
-  them.
+- **The showcase's last GPU picture** (#12 S6, #13 S3): the run checker on growing files. Its writer and its polling
+  both follow the wall clock; a headless recording needs a capture clock for `figure_time` and a scripted writer (the
+  solvers run from the window were recorded headless on 2026-11-19, each run waited for).
 - **The upstream reports** of #4, #8, #9 and #11, filed by the owner; FIGURE's patches stay until each lands.
