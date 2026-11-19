@@ -1130,11 +1130,12 @@ draws `selected` from them.
 
 <Media name="cb_select" video alt="A list of 2000 blocks with their cells. Block 3 is clicked, then shift+click on block 8 selects 3 to 8; ctrl+click adds block 11 and removes block 5; the total under the list follows: blocks selected and their cells. Freeze marks the selected blocks frozen; back in the list, ctrl+a selects all 2000; escape clears." caption="docs/examples/src/cb_select.F90" />
 
-- **Clipped lists.** A `list_clipper_object` draws only the lines in view, but a shift+click extends from the item
-  clicked before, which may have scrolled away: `clip%begin(n, keep=sel%keep)` keeps that one line drawn wherever it
-  is. Pass it: Dear ImGui's documentation of `BeginMultiSelect` requires the source to be submitted (for keyboard
-  ranges from it, as its notes put it). A mouse shift+click past a source scrolled away selects the right range
-  without it, which is all FIGURE's tests measure.
+- **Clipped lists.** A `list_clipper_object` draws only the lines in view, but a shift+click extends from the range
+  source, `sel%keep`, which may have scrolled away: `clip%begin(n, keep=sel%keep)` keeps that one line drawn wherever
+  it is. Dear ImGui forgets a source that was not drawn, and the next range then starts at the line with the keyboard
+  focus. The clipper always draws the focused line, so after a plain click (source and focus on one line) nothing is
+  lost; after a click on 2 and a shift+click on 4 (source 2, focus 4) scrolled out of view, a shift+click on 25
+  selects 2..25 with `keep` and 4..25 without it (`src/tests/figure_test_select.F90`).
 - **Tables and trees.** In a table the selectable spans its row (`ig_selectable` in the first column, the values in
   the next); tree nodes take `index` the same way, numbered in the order they are drawn, and a range selects the
   nodes between, open or not as drawn.

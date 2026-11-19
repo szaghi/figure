@@ -6,8 +6,11 @@ program figure_test_select
 !<
 !< A list of 40 lines in a child region of 8 lines' height, clipped (`list_clipper_object`, the range source kept):
 !< a click on line 3 selects it alone; shift+click on 7 extends to 3..7; ctrl+click (cmd+click on macOS: the key
-!< `shortcut`) on 10 adds it, on 5 removes it; ctrl+a selects all 40; escape clears; a click on 2, the wheel (line 2
-!< out of view, kept drawn by the clipper), shift+click on a line in view: 2 to that line. A short list of 5 lines in
+!< `shortcut`) on 10 adds it, on 5 removes it; ctrl+a selects all 40; escape clears; a click on 2 and a shift+click on 4
+!< (the range source 2, the keyboard focus 4), the wheel (line 2 out of view, drawn by the clipper only through `keep`:
+!< the clipper always draws the focused line, so after a plain click the source needs no `keep`; Dear ImGui forgets a
+!< source not drawn and starts the next range at the focused line), shift+click on a line in view: 2 to that line, not
+!< 4 to it. A short list of 5 lines in
 !< a tall child: a drag from the void below the last line up to line 2 box-selects 2..5. A tree of 4 nodes: click
 !< node 2, shift+click node 4: 2..4. A single-selection list: ctrl+click two lines, the last one alone selected. The
 !< refusals with their statuses and messages.
@@ -150,6 +153,10 @@ do f = 1_int32, 200_int32
    case (65_int32)
       got(:, 6) = sel%flags()
       call click_on(line(:, 2))
+   case (70_int32)
+      call test_key('shift', down=.true.)                 ! the source stays 2, the focus moves to 4
+      call click_on(line(:, 4))
+      call test_key('shift', down=.false.)
    case (75_int32)
       call test_wheel(-4.0_real64)                         ! line 2 scrolls out of view
    case (85_int32)
@@ -196,7 +203,7 @@ ok(3) = count(got(:, 3)) == 6 .and. got(10, 3)                               ! c
 ok(4) = count(got(:, 4)) == 5 .and. .not. got(5, 4)                          ! ctrl+click: 5 removed
 ok(5) = all(got(:, 5))                                                       ! ctrl+a: all
 ok(6) = .not. any(got(:, 6))                                                 ! escape: none
-ok(7) = first_view > 2_int32 .and. count(got(:, 7)) == target - 1 .and. all(got(2:target, 7)) ! past the clipped source
+ok(7) = first_view > 4_int32 .and. count(got(:, 7)) == target - 1 .and. all(got(2:target, 7)) ! past the clipped source
 ok(8) = all(box%flags() .eqv. [.false., .true., .true., .true., .true.])     ! box-selection: 2..5
 ok(9) = all(tree%flags() .eqv. [.false., .true., .true., .true.])            ! a tree: 2..4
 ok(10) = all(one%flags() .eqv. [.false., .false., .true.])                   ! single: the last one alone
