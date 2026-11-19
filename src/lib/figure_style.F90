@@ -1,6 +1,6 @@
-!< figure_style, every colour and variable of the Dear ImGui and ImPlot styles, by name.
+!< figure_style, every colour and variable of the Dear ImGui, ImPlot and ImPlot3D styles, by name.
 module figure_style
-!< figure_style, every colour and variable of the Dear ImGui and ImPlot styles, by name.
+!< figure_style, every colour and variable of the Dear ImGui, ImPlot and ImPlot3D styles, by name.
 !<
 !< Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md. The scoped
 !< changes (`*_push_*`/`*_pop_*`, fonts) also need a frame open, and register in the scope record of the frame: a
@@ -14,7 +14,9 @@ module figure_style
 !<   `ImPlotCol_*` without the prefix (`PlotBg`, `AxisGrid`, `LegendBg`, ...);
 !< - variables: the fields of `ImGuiStyle` (`WindowRounding`, `FramePadding`, `ItemSpacing`, ...) and of `ImPlotStyle`
 !<   (`PlotBorderSize`, `PlotPadding`, `MajorGridSize`, ...), each a number, a pair of numbers, a logical or an integer.
-!<   Line weights and marker sizes are per item in ImPlot 1.2: `ip_spec`.
+!<   Line weights and marker sizes are per item in ImPlot 1.2: `ip_spec`;
+!< - ImPlot3D (`ip3_push_style_*` only): `ImPlot3DCol_*` without the prefix (`PlotBg`, `AxisGrid`, `LegendBg`, ...) and
+!<   the fields of `ImPlot3DStyle` (`LineWeight`, `MarkerSize`, `PlotPadding`, `ViewScaleFactor`, ...).
 !<
 !< Colours are given as `'#rrggbb'` or `'#rrggbbaa'`, or as `[r, g, b]` / `[r, g, b, a]` in [0, 1]. Variables in
 !< pixels hold the values Dear ImGui uses, already multiplied by the display's content scale (`app%content_scale()`).
@@ -32,9 +34,11 @@ public :: ip_set_style_color, ip_get_style_color, ip_set_style_var, ip_get_style
 public :: hex_color, ig_show_style_editor, ig_push_font, ig_pop_font
 public :: ig_push_style_color, ig_pop_style_color, ig_push_style_var, ig_pop_style_var
 public :: ip_push_style_color, ip_pop_style_color, ip_push_style_var, ip_pop_style_var
+public :: ip3_push_style_color, ip3_pop_style_color, ip3_push_style_var, ip3_pop_style_var
 
 integer(c_int), parameter :: LIB_IMGUI  = 0_c_int !< Dear ImGui.
 integer(c_int), parameter :: LIB_IMPLOT = 1_c_int !< ImPlot.
+integer(c_int), parameter :: LIB_IMPLOT3D = 2_c_int !< ImPlot3D.
 
 interface ig_set_style_color
    !< Set a Dear ImGui colour, by hex string or by components.
@@ -70,6 +74,16 @@ interface ig_push_style_var
    !< Change a Dear ImGui style variable until `ig_pop_style_var`: a number, a pair, a logical or an integer.
    module procedure ig_push_style_var_r64, ig_push_style_var_vec2, ig_push_style_var_logical, ig_push_style_var_i32
 endinterface ig_push_style_var
+
+interface ip3_push_style_color
+   !< Change an ImPlot3D colour until `ip3_pop_style_color`: hex text or RGBA components.
+   module procedure ip3_push_style_color_hex, ip3_push_style_color_rgba
+endinterface ip3_push_style_color
+
+interface ip3_push_style_var
+   !< Change an ImPlot3D style variable until `ip3_pop_style_var`: a number or a pair.
+   module procedure ip3_push_style_var_r64, ip3_push_style_var_vec2
+endinterface ip3_push_style_var
 
 interface ip_push_style_var
    !< Change an ImPlot style variable until `ip_pop_style_var`: a number, a pair or a logical.
@@ -317,6 +331,79 @@ contains
    if (figure_scope_refused(SCOPE_STYLE_VAR, 'ip_pop_style_var', n, stat)) return ! task, no frame, too few pushes
    call pop(1_c_int, n, stat)
    endsubroutine ip_pop_style_var
+
+   recursive subroutine ip3_push_style_color_hex(name, color, stat)
+   !< Change the ImPlot3D colour `name` (`'#rrggbb'` or `'#rrggbbaa'`) until `ip3_pop_style_color`: the 3-D plots drawn
+   !< meanwhile use it. Statuses: `FIG_ERR_ARGUMENT` for an unknown name or a malformed colour; `FIG_ERR_STATE` outside
+   !< a frame, from a task.
+   character(len=*), intent(in)            :: name  !< Colour name (`ImPlot3DCol_*` without the prefix).
+   character(len=*), intent(in)            :: color !< Hex colour.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(int32)                          :: s     !< Status of the push.
+
+   if (figure_draw_refused('ip3_push_style_color', stat)) return ! a task does not draw, nor outside a frame
+   call push_color_hex(LIB_IMPLOT3D, 'ip3_push_style_color', name, color, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_COLOR, 'ip3_push_style_color', name)
+   call figure_check(int(s, c_int), stat)
+   endsubroutine ip3_push_style_color_hex
+
+   recursive subroutine ip3_push_style_color_rgba(name, rgba, stat)
+   !< Change the ImPlot3D colour `name` (`[r, g, b(, a)]` in [0, 1]) until `ip3_pop_style_color`.
+   character(len=*), intent(in)            :: name    !< Colour name (`ImPlot3DCol_*` without the prefix).
+   real(real64),     intent(in)            :: rgba(:) !< Components.
+   integer(int32),   intent(out), optional :: stat    !< Status.
+   integer(int32)                          :: s       !< Status of the push.
+
+   if (figure_draw_refused('ip3_push_style_color', stat)) return ! a task does not draw, nor outside a frame
+   call push_color(LIB_IMPLOT3D, 'ip3_push_style_color', name, rgba, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_COLOR, 'ip3_push_style_color', name)
+   call figure_check(int(s, c_int), stat)
+   endsubroutine ip3_push_style_color_rgba
+
+   recursive subroutine ip3_pop_style_color(n, stat)
+   !< Undo the `n` newest colour pushes (default 1): the same stack as `ig_pop_style_color` and `ip_pop_style_color`.
+   integer(int32), intent(in),  optional :: n    !< How many.
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
+
+   if (figure_scope_refused(SCOPE_STYLE_COLOR, 'ip3_pop_style_color', n, stat)) return ! task, no frame, too few pushes
+   call pop(0_c_int, n, stat)
+   endsubroutine ip3_pop_style_color
+
+   recursive subroutine ip3_push_style_var_r64(name, value, stat)
+   !< Change an ImPlot3D style variable holding one number until `ip3_pop_style_var`. Statuses: `FIG_ERR_ARGUMENT` for
+   !< an unknown name or a pair's name; `FIG_ERR_STATE` outside a frame, from a task.
+   character(len=*), intent(in)            :: name  !< Variable name (a field of `ImPlot3DStyle`).
+   real(real64),     intent(in)            :: value !< Value.
+   integer(int32),   intent(out), optional :: stat  !< Status.
+   integer(int32)                          :: s     !< Status of the push.
+
+   if (figure_draw_refused('ip3_push_style_var', stat)) return ! a task does not draw, nor outside a frame
+   call push_var(LIB_IMPLOT3D, name, [value, 0.0_real64], 1_c_int, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_VAR, 'ip3_push_style_var', name)
+   call figure_check(int(s, c_int), stat)
+   endsubroutine ip3_push_style_var_r64
+
+   recursive subroutine ip3_push_style_var_vec2(name, value, stat)
+   !< Change an ImPlot3D style variable holding a pair until `ip3_pop_style_var`.
+   character(len=*), intent(in)            :: name     !< Variable name (a field of `ImPlot3DStyle`).
+   real(real64),     intent(in)            :: value(2) !< Values (x, y).
+   integer(int32),   intent(out), optional :: stat     !< Status.
+   integer(int32)                          :: s        !< Status of the push.
+
+   if (figure_draw_refused('ip3_push_style_var', stat)) return ! a task does not draw, nor outside a frame
+   call push_var(LIB_IMPLOT3D, name, value, 2_c_int, s)
+   if (s == FIG_OK) call figure_scope_open(SCOPE_STYLE_VAR, 'ip3_push_style_var', name)
+   call figure_check(int(s, c_int), stat)
+   endsubroutine ip3_push_style_var_vec2
+
+   recursive subroutine ip3_pop_style_var(n, stat)
+   !< Undo the `n` newest variable pushes (default 1): the same stack as `ig_pop_style_var` and `ip_pop_style_var`.
+   integer(int32), intent(in),  optional :: n    !< How many.
+   integer(int32), intent(out), optional :: stat !< Status: `FIG_ERR_STATE` for more pops than pushes.
+
+   if (figure_scope_refused(SCOPE_STYLE_VAR, 'ip3_pop_style_var', n, stat)) return ! task, no frame, too few pushes
+   call pop(1_c_int, n, stat)
+   endsubroutine ip3_pop_style_var
 
    recursive subroutine ig_show_style_editor(open, stat)
    !< Dear ImGui's and ImPlot's style editors, in a window titled "Style editor": every colour and size, live; with

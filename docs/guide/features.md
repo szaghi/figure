@@ -183,6 +183,8 @@ Details: [Docking](docking).
 | `ig_push_font(font [, size] [, stat])`, `ig_pop_font([stat])` | another font (`'plex-mono'` for columns that line up) or size for a block of widgets ([Fonts](styles#fonts)) |
 | `ig_push_style_color(name, color [, stat])`, `ig_pop_style_color([n] [, stat])` | a colour for a block of widgets ([Styles](styles#changes-for-a-block)) <!-- visual --> |
 | `ip_push_style_color(name, color [, stat])`, `ip_pop_style_color([n] [, stat])` | a colour for a block of plots ([Styles](styles#changes-for-a-block)) <!-- visual --> |
+| `ip3_push_style_color(name, color [, stat])`, `ip3_pop_style_color([n] [, stat])` | an ImPlot3D colour for a block of 3-D plots ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_push_style_var(name, value [, stat])`, `ip3_pop_style_var([n] [, stat])` | an ImPlot3D style variable for a block of 3-D plots ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
 | `ig_push_style_var(name, value [, stat])`, `ig_pop_style_var([n] [, stat])` | a style variable for a block of widgets ([Styles](styles#changes-for-a-block)) <!-- visual --> |
 | `ip_push_style_var(name, value [, stat])`, `ip_pop_style_var([n] [, stat])` | a style variable for a block of plots ([Styles](styles#changes-for-a-block)) <!-- visual --> |
 | `ICON_*` (`ICON_PLAY`, `ICON_FILE_PEN`, ... 2171 Lucide icons) | an icon as a UTF-8 string, for any label: `ICON_PLAY//' Run'` ([Icons](styles#icons)) |
@@ -259,14 +261,15 @@ Items take `real(real32)` or `real(real64)` arrays. Details: [Plots](plots), [Co
 |---|---|
 | `ip3_begin_plot(title [, width] [, height] [, equal])` → `logical` | begin a 3-D plot (ImPlot3D): a box the user turns (right drag), pans and zooms; `.true.` when visible ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
 | `ip3_setup_axes(xlabel, ylabel, zlabel [, auto_fit] [, limits] [, elevation] [, azimuth] [, stat])` | labels of the three axes, their initial ranges, the box's initial rotation; fit every frame with `auto_fit=.true.` ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
-| `ip3_line(label, x, y, z [, spec] [, stat])` | a line through `(x(i), y(i), z(i))`; arrays of any stride read in place ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
-| `ip3_scatter(label, x, y, z [, spec] [, stat])` | markers at `(x(i), y(i), z(i))` ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_line(label, x, y, z [, spec] [, colors] [, stat])` | a line through `(x(i), y(i), z(i))`, a colour per segment; arrays of any stride read in place ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
+| `ip3_scatter(label, x, y, z [, spec] [, colors] [, sizes] [, stat])` | markers at `(x(i), y(i), z(i))`, a colour and a radius per point ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
 | `ip3_surface(label, x, y, z [, colormap] [, scale_min] [, scale_max] [, spec] [, stat])` | a field `z(i, j)` as a height surface over `x(i)`, `y(j)` or a grid `x(i, j)`, `y(i, j)`, coloured by a FIGURE colormap ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
 | `ip3_mesh(label, x, y, z, triangles [, spec] [, stat])` | triangles over vertices, `triangles(1:3, k)` from 1 ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
 | `ip3_text(text, x, y, z [, angle] [, offset] [, stat])` | a text at a point of the box ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
 | `ip3_triangles(label, x, y, z [, spec] [, stat])`, `ip3_quads(label, x, y, z [, spec] [, stat])` | triangles (each 3 points in a row) and quadrilaterals (each 4) as items of their own ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
 | `ip3_image(label, texture, corners [, tint] [, stat])` | an image on a quadrilateral of the box: a field on a plane ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
-| `ip3_setup_axis(axis [, label] [, scale] [, auto_fit] [, invert] [, lock] [, no_grid] [, stat])` | one axis: its scale (`'log'`, `'symlog'`), fit, direction, lock, grid ([3-D plots](plots#_3-d-plots)) |
+| `ip3_setup_axis(axis [, label] [, scale] [, auto_fit] [, invert] [, lock] [, no_grid] [, format] [, stat])` | one axis: its scale (`'log'`, `'symlog'`), fit, direction, lock, grid, tick format ([3-D plots](plots#_3-d-plots)) |
+| `ip3_setup_axis_ticks(axis, values [, labels] [, stat])` | the ticks of one axis at given values, with labels ([3-D plots](plots#_3-d-plots)) <!-- visual --> |
 | `ip3_setup_box([scale] [, elevation] [, azimuth] [, animate] [, stat])` | the box's proportions; turned to a view by the program ([3-D plots](plots#_3-d-plots)) |
 | `ip3_setup_legend([location] [, horizontal] [, no_buttons] [, stat])` | where the legend goes ([3-D plots](plots#_3-d-plots)) |
 | `ip3_mouse_ray(origin, direction [, stat])` → `logical`, `ip3_plot_to_pixels(x, y, z, px, py [, stat])` | the ray under the pointer, for picking; the pixel of a point ([3-D plots](plots#_3-d-plots)) |

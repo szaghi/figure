@@ -1526,7 +1526,7 @@ flowchart LR
   click changed href "figure_view3d.html#changed" "changed"
   click clear href "figure_view3d.html#clear" "clear"
   click clip href "figure_view3d.html#clip" "clip"
-  click draw href "figure_canvas.html#draw" "draw"
+  click draw href "figure_view3d.html#draw" "draw"
   click editor_clear_marks href "#editor-clear-marks" "editor_clear_marks"
   click editor_completing href "#editor-completing" "editor_completing"
   click editor_cursor href "#editor-cursor" "editor_cursor"

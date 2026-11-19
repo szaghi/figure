@@ -121,6 +121,7 @@ use figure_canvas, only : canvas_event_object, ig_canvas, ig_cursor_screen_pos, 
                           ig_draw_rect, ig_draw_circle, ig_draw_polyline, ig_draw_polygon, ig_draw_text, ig_draw_image
 use figure_style, only : ig_pop_style_color, ig_pop_style_var, ig_push_style_color, ig_push_style_var,        &
                          ip_pop_style_color, ip_pop_style_var, ip_push_style_color, ip_push_style_var,        &
+                         ip3_pop_style_color, ip3_pop_style_var, ip3_push_style_color, ip3_push_style_var,    &
                          ig_get_style_color, ig_get_style_var, ig_pop_font, ig_push_font, ig_set_style_color,    &
                          ig_set_style_var, ig_show_style_editor, ip_get_style_color, ip_get_style_var,                 &
                          ip_set_style_color, ip_set_style_var
@@ -134,7 +135,7 @@ use figure_markdown, only : ig_markdown, markdown_view_object
 use figure_implot3d, only : ip3_begin_plot, ip3_end_plot, ip3_setup_axes, ip3_line, ip3_scatter, ip3_surface, ip3_mesh, &
                             ip3_text, ip3_spec, plot3d_spec_object, ImPlot3DMarker_None, ImPlot3DMarker_Auto,       &
                             ip3_triangles, ip3_quads, ip3_image, ip3_setup_axis, ip3_setup_box, ip3_setup_legend, &
-                            ip3_mouse_ray, ip3_plot_to_pixels,                                                    &
+                            ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axis_ticks,                              &
                             ImPlot3DMarker_Circle, ImPlot3DMarker_Square, ImPlot3DMarker_Diamond, ImPlot3DMarker_Up, &
                             ImPlot3DMarker_Down, ImPlot3DMarker_Left, ImPlot3DMarker_Right, ImPlot3DMarker_Cross,   &
                             ImPlot3DMarker_Plus, ImPlot3DMarker_Asterisk, ImPlot3DItemFlags_None,                   &
@@ -196,6 +197,7 @@ public :: ig_get_style_color, ig_get_style_var, ig_set_style_color, ig_set_style
 public :: ig_push_font, ig_pop_font
 public :: ig_push_style_color, ig_pop_style_color, ig_push_style_var, ig_pop_style_var
 public :: ip_push_style_color, ip_pop_style_color, ip_push_style_var, ip_pop_style_var
+public :: ip3_push_style_color, ip3_pop_style_color, ip3_push_style_var, ip3_pop_style_var
 public :: ImGuiWindowFlags_None, ImGuiWindowFlags_NoTitleBar, ImGuiWindowFlags_NoResize, ImGuiWindowFlags_NoMove
 public :: ImGuiWindowFlags_NoScrollbar, ImGuiWindowFlags_NoScrollWithMouse, ImGuiWindowFlags_NoCollapse
 public :: ImGuiWindowFlags_AlwaysAutoResize
@@ -249,6 +251,7 @@ public :: ImPlotColormap_Greys
 public :: ip3_begin_plot, ip3_end_plot, ip3_setup_axes, ip3_line, ip3_scatter, ip3_surface, ip3_mesh, ip3_text
 public :: ip3_spec, plot3d_spec_object
 public :: ip3_triangles, ip3_quads, ip3_image, ip3_setup_axis, ip3_setup_box, ip3_setup_legend, ip3_mouse_ray
+public :: ip3_setup_axis_ticks
 public :: ip3_plot_to_pixels
 public :: ImPlot3DMarker_None, ImPlot3DMarker_Auto, ImPlot3DMarker_Circle, ImPlot3DMarker_Square
 public :: ImPlot3DMarker_Diamond, ImPlot3DMarker_Up, ImPlot3DMarker_Down, ImPlot3DMarker_Left, ImPlot3DMarker_Right

@@ -126,6 +126,8 @@ graph LR
 - [ip_bars](#ip-bars)
 - [ip_field_image](#ip-field-image)
 - [ip_heatmap](#ip-heatmap)
+- [ip_bubbles](#ip-bubbles)
+- [ip_pie_chart](#ip-pie-chart)
 - [ip_error_bars](#ip-error-bars)
 - [ip_contour](#ip-contour)
 - [ip_contour_lines](#ip-contour-lines)
@@ -179,6 +181,10 @@ graph LR
 - [ip_scatter_r64](#ip-scatter-r64)
 - [ip_scatter_i32_r64](#ip-scatter-i32-r64)
 - [ip_scatter_i64_r64](#ip-scatter-i64-r64)
+- [ip_bubbles_r32](#ip-bubbles-r32)
+- [ip_pie_chart_r32](#ip-pie-chart-r32)
+- [ip_bubbles_r64](#ip-bubbles-r64)
+- [ip_pie_chart_r64](#ip-pie-chart-r64)
 - [ip_bars_r64](#ip-bars-r64)
 - [ip_bars_i32_r64](#ip-bars-i32-r64)
 - [ip_bars_i64_r64](#ip-bars-i64-r64)
@@ -438,9 +444,22 @@ A 2D field f(i, j) as coloured cells: i along x, j along y, j = 1 at the bottom.
 
 **Module procedures**: [`ip_heatmap_r32`](/api/src/lib/figure_implot#ip-heatmap-r32), [`ip_heatmap_r64`](/api/src/lib/figure_implot#ip-heatmap-r64)
 
+### ip_bubbles
+
+Circles at the points (x(i), y(i)) of radius radii(i), in plot units along both axes (`PlotBubbles`).
+
+**Module procedures**: [`ip_bubbles_r32`](/api/src/lib/figure_implot#ip-bubbles-r32), [`ip_bubbles_r64`](/api/src/lib/figure_implot#ip-bubbles-r64)
+
+### ip_pie_chart
+
+A pie chart: one slice per value, labelled in the legend, centred at (x, y) with a radius in plot units.
+
+**Module procedures**: [`ip_pie_chart_r32`](/api/src/lib/figure_implot#ip-pie-chart-r32), [`ip_pie_chart_r64`](/api/src/lib/figure_implot#ip-pie-chart-r64)
+
 ### ip_error_bars
 
-Vertical error bars at the points (x(i), y(i)): from y(i) - err(i) to y(i) + err(i), or to y(i) + err_high(i).
+Error bars at the points (x(i), y(i)): from y(i) - err(i) to y(i) + err(i), or to y(i) + err_high(i); along x
+ with `horizontal=.true.`.
 
 **Module procedures**: [`ip_error_bars_r32`](/api/src/lib/figure_implot#ip-error-bars-r32), [`ip_error_bars_r64`](/api/src/lib/figure_implot#ip-error-bars-r64), [`ip_error_bars_i32_r32`](/api/src/lib/figure_implot#ip-error-bars-i32-r32), [`ip_error_bars_i64_r32`](/api/src/lib/figure_implot#ip-error-bars-i64-r32), [`ip_error_bars_i32_r64`](/api/src/lib/figure_implot#ip-error-bars-i32-r64), [`ip_error_bars_i64_r64`](/api/src/lib/figure_implot#ip-error-bars-i64-r64)
 
@@ -1718,13 +1737,14 @@ flowchart LR
 
 ### ip_error_bars_r32
 
-Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
- err_high(i), single precision; read in place with any stride (plots.md, "Data in place").
+Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+ err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), single precision; read in place
+ with any stride (plots.md, "Data in place").
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, stat)
+subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, horizontal, stat)
 ```
 
 **Arguments**
@@ -1734,9 +1754,10 @@ subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, stat)
 | `label` | character(len=*) | in |  | Legend label. |
 | `x` | real(kind=real32) | in | target, asynchronous | Abscissae. |
 | `y` | real(kind=real32) | in | target, asynchronous | Ordinates. |
-| `err` | real(kind=real32) | in | target, asynchronous | Error below (and above) [y units]. |
-| `err_high` | real(kind=real32) | in | target, asynchronous, optional | Error above [y units]. |
+| `err` | real(kind=real32) | in | target, asynchronous | Error below (and above) [y units, or x]. |
+| `err_high` | real(kind=real32) | in | target, asynchronous, optional | Error above [y units, or x]. |
 | `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `horizontal` | logical | in | optional | Bars along x (`err` in x units). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -1758,23 +1779,24 @@ flowchart LR
   click series_ok href "#series-ok" "series_ok"
   click series_lead href "#series-lead" "series_lead"
   click series_put href "#series-put" "series_put"
+  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr href "figure_cimplot.html#implot-ploterrorbars-floatptrfloatptrfloatptrfloatptr" "ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt href "figure_cimplot.html#implot-ploterrorbars-floatptrfloatptrfloatptrint" "ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip_error_bars_i32_r32
 
-Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
- err_high(i), single precision, abscissae `integer(int32)`: converted into one temporary, the ordinates read in
+Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+ err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), single precision, abscissae
+ `integer(int32)`: converted into one temporary, the ordinates read in
  place (plots.md, "Data in place").
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip_error_bars_i32_r32(label, x, y, err, err_high, spec, stat)
+subroutine ip_error_bars_i32_r32(label, x, y, err, err_high, spec, horizontal, stat)
 ```
 
 **Arguments**
@@ -1784,9 +1806,10 @@ subroutine ip_error_bars_i32_r32(label, x, y, err, err_high, spec, stat)
 | `label` | character(len=*) | in |  | Legend label. |
 | `x` | integer(kind=int32) | in | target, asynchronous | Abscissae. |
 | `y` | real(kind=real32) | in | target, asynchronous | Ordinates. |
-| `err` | real(kind=real32) | in | target, asynchronous | Error below (and above) [y units]. |
-| `err_high` | real(kind=real32) | in | target, asynchronous, optional | Error above [y units]. |
+| `err` | real(kind=real32) | in | target, asynchronous | Error below (and above) [y units, or x]. |
+| `err_high` | real(kind=real32) | in | target, asynchronous, optional | Error above [y units, or x]. |
 | `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `horizontal` | logical | in | optional | Bars along x (`err` in x units). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -1808,23 +1831,24 @@ flowchart LR
   click series_ok href "#series-ok" "series_ok"
   click series_lead href "#series-lead" "series_lead"
   click series_put href "#series-put" "series_put"
+  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr href "figure_cimplot.html#implot-ploterrorbars-floatptrfloatptrfloatptrfloatptr" "ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt href "figure_cimplot.html#implot-ploterrorbars-floatptrfloatptrfloatptrint" "ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip_error_bars_i64_r32
 
-Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
- err_high(i), single precision, abscissae `integer(int64)`: converted into one temporary, the ordinates read in
+Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+ err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), single precision, abscissae
+ `integer(int64)`: converted into one temporary, the ordinates read in
  place (plots.md, "Data in place").
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip_error_bars_i64_r32(label, x, y, err, err_high, spec, stat)
+subroutine ip_error_bars_i64_r32(label, x, y, err, err_high, spec, horizontal, stat)
 ```
 
 **Arguments**
@@ -1834,9 +1858,10 @@ subroutine ip_error_bars_i64_r32(label, x, y, err, err_high, spec, stat)
 | `label` | character(len=*) | in |  | Legend label. |
 | `x` | integer(kind=int64) | in | target, asynchronous | Abscissae. |
 | `y` | real(kind=real32) | in | target, asynchronous | Ordinates. |
-| `err` | real(kind=real32) | in | target, asynchronous | Error below (and above) [y units]. |
-| `err_high` | real(kind=real32) | in | target, asynchronous, optional | Error above [y units]. |
+| `err` | real(kind=real32) | in | target, asynchronous | Error below (and above) [y units, or x]. |
+| `err_high` | real(kind=real32) | in | target, asynchronous, optional | Error above [y units, or x]. |
 | `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `horizontal` | logical | in | optional | Bars along x (`err` in x units). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -1858,9 +1883,9 @@ flowchart LR
   click series_ok href "#series-ok" "series_ok"
   click series_lead href "#series-lead" "series_lead"
   click series_put href "#series-put" "series_put"
+  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr href "figure_cimplot.html#implot-ploterrorbars-floatptrfloatptrfloatptrfloatptr" "ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt href "figure_cimplot.html#implot-ploterrorbars-floatptrfloatptrfloatptrint" "ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
@@ -2130,6 +2155,220 @@ flowchart LR
   click ImPlot_PlotScatter_doublePtrdoublePtr href "figure_cimplot.html#implot-plotscatter-doubleptrdoubleptr" "ImPlot_PlotScatter_doublePtrdoublePtr"
   click cstr href "figure_base.html#cstr" "cstr"
   click series_spec href "#series-spec" "series_spec"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+```
+
+### ip_bubbles_r32
+
+Circles at the points (x(i), y(i)) of radius radii(i) (`PlotBubbles`), single precision: the radius is in plot
+ units along both axes (a circle on equal axes; an ellipse where their scales differ), filled with the item's fill colour
+ (`ip_spec(fill_color=..., fill_alpha=...)`) and outlined with its line colour. Read in place with any stride
+ (plots.md, "Data in place").
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_bubbles_r32(label, x, y, radii, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `x` | real(kind=real32) | in | target, asynchronous | Abscissae. |
+| `y` | real(kind=real32) | in | target, asynchronous | Ordinates. |
+| `radii` | real(kind=real32) | in | target, asynchronous | Radii [plot units]. |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  ip_bubbles_r32["ip_bubbles_r32"] --> ImPlot_PlotBubbles_FloatPtrFloatPtrFloatPtr["ImPlot_PlotBubbles_FloatPtrFloatPtrFloatPtr"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> cstr["cstr"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> figure_check["figure_check"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> figure_draw_refused["figure_draw_refused"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> series_lead["series_lead"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> series_ok["series_ok"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> series_put["series_put"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> series_spec["series_spec"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_bubbles_r32 focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click series_ok href "#series-ok" "series_ok"
+  click series_lead href "#series-lead" "series_lead"
+  click series_put href "#series-put" "series_put"
+  click ImPlot_PlotBubbles_FloatPtrFloatPtrFloatPtr href "figure_cimplot.html#implot-plotbubbles-floatptrfloatptrfloatptr" "ImPlot_PlotBubbles_FloatPtrFloatPtrFloatPtr"
+  click cstr href "figure_base.html#cstr" "cstr"
+  click series_spec href "#series-spec" "series_spec"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+```
+
+### ip_pie_chart_r32
+
+A pie chart (`PlotPieChart`), single precision: one slice per value, its label in the legend, centred at (x, y) with
+ `radius`, all in plot units (equal axes keep it round: `ip_begin_plot(..., equal=.true.)`). The slices start at
+ `angle0` degrees (default 90, the top) and go clockwise. Each slice shows its value with `label_format`, a C
+ printf format of one real (default `'%.1f'`; `''` shows none). Values summing to 1 or more make a full circle;
+ below 1, the slices are fractions of one and the circle is partial, unless `normalize=.true.`, which always makes
+ a full circle. The slices' colours are the colormap's, in order: the plot's, or `colormap` (`ip_colormap`); a
+ spec's colours do not apply to them. Statuses: `FIG_ERR_ARGUMENT` for labels not one per value, a radius not
+ above 0, a value below 0 or not finite, a format refused, a colormap not registered; `FIG_ERR_STATE` from a task.
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_pie_chart_r32(labels, values, x, y, radius, label_format, angle0, normalize, colormap, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `labels` | character(len=*) | in |  | One label per slice (trailing blanks are not shown). |
+| `values` | real(kind=real32) | in |  | Slice values (0 or more). |
+| `x` | real(kind=real64) | in |  | Centre's abscissa [plot units]. |
+| `y` | real(kind=real64) | in |  | Centre's ordinate [plot units]. |
+| `radius` | real(kind=real64) | in |  | Radius [plot units]. |
+| `label_format` | character(len=*) | in | optional | printf format of a slice's value (default '%.1f'). |
+| `angle0` | real(kind=real64) | in | optional | Where the first slice starts [degrees]. |
+| `normalize` | logical | in | optional | Always a full circle (default `.false.`). |
+| `colormap` | integer(kind=int32) | in | optional | The slices' colours (default: the plot's colormap). |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> ImPlot_PlotPieChart_FloatPtrStr["ImPlot_PlotPieChart_FloatPtrStr"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> ImPlot_PopColormap["ImPlot_PopColormap"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> ImPlot_PushColormap_PlotColormap["ImPlot_PushColormap_PlotColormap"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> colormap_ok["colormap_ok"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> figure_check["figure_check"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> figure_draw_refused["figure_draw_refused"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> figure_fail["figure_fail"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> format_refused["format_refused"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> spec_c["spec_c"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_pie_chart_r32 focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click colormap_ok href "#colormap-ok" "colormap_ok"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click format_refused href "figure_base.html#format-refused" "format_refused"
+  click spec_c href "#spec-c" "spec_c"
+  click ImPlot_PushColormap_PlotColormap href "figure_cimplot.html#implot-pushcolormap-plotcolormap" "ImPlot_PushColormap_PlotColormap"
+  click ImPlot_PlotPieChart_FloatPtrStr href "figure_cimplot.html#implot-plotpiechart-floatptrstr" "ImPlot_PlotPieChart_FloatPtrStr"
+  click ImPlot_PopColormap href "figure_cimplot.html#implot-popcolormap" "ImPlot_PopColormap"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+```
+
+### ip_bubbles_r64
+
+Circles at the points (x(i), y(i)) of radius radii(i) (`PlotBubbles`), double precision: the radius is in plot
+ units along both axes (a circle on equal axes; an ellipse where their scales differ), filled with the item's fill colour
+ (`ip_spec(fill_color=..., fill_alpha=...)`) and outlined with its line colour. Read in place with any stride
+ (plots.md, "Data in place").
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_bubbles_r64(label, x, y, radii, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Legend label. |
+| `x` | real(kind=real64) | in | target, asynchronous | Abscissae. |
+| `y` | real(kind=real64) | in | target, asynchronous | Ordinates. |
+| `radii` | real(kind=real64) | in | target, asynchronous | Radii [plot units]. |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  ip_bubbles_r64["ip_bubbles_r64"] --> ImPlot_PlotBubbles_doublePtrdoublePtrdoublePtr["ImPlot_PlotBubbles_doublePtrdoublePtrdoublePtr"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> cstr["cstr"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> figure_check["figure_check"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> figure_draw_refused["figure_draw_refused"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> series_lead["series_lead"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> series_ok["series_ok"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> series_put["series_put"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> series_spec["series_spec"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_bubbles_r64 focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click series_ok href "#series-ok" "series_ok"
+  click series_lead href "#series-lead" "series_lead"
+  click series_put href "#series-put" "series_put"
+  click ImPlot_PlotBubbles_doublePtrdoublePtrdoublePtr href "figure_cimplot.html#implot-plotbubbles-doubleptrdoubleptrdoubleptr" "ImPlot_PlotBubbles_doublePtrdoublePtrdoublePtr"
+  click cstr href "figure_base.html#cstr" "cstr"
+  click series_spec href "#series-spec" "series_spec"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+```
+
+### ip_pie_chart_r64
+
+A pie chart (`PlotPieChart`), double precision: one slice per value, its label in the legend, centred at (x, y) with
+ `radius`, all in plot units (equal axes keep it round: `ip_begin_plot(..., equal=.true.)`). The slices start at
+ `angle0` degrees (default 90, the top) and go clockwise. Each slice shows its value with `label_format`, a C
+ printf format of one real (default `'%.1f'`; `''` shows none). Values summing to 1 or more make a full circle;
+ below 1, the slices are fractions of one and the circle is partial, unless `normalize=.true.`, which always makes
+ a full circle. The slices' colours are the colormap's, in order: the plot's, or `colormap` (`ip_colormap`); a
+ spec's colours do not apply to them. Statuses: `FIG_ERR_ARGUMENT` for labels not one per value, a radius not
+ above 0, a value below 0 or not finite, a format refused, a colormap not registered; `FIG_ERR_STATE` from a task.
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip_pie_chart_r64(labels, values, x, y, radius, label_format, angle0, normalize, colormap, spec, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `labels` | character(len=*) | in |  | One label per slice (trailing blanks are not shown). |
+| `values` | real(kind=real64) | in |  | Slice values (0 or more). |
+| `x` | real(kind=real64) | in |  | Centre's abscissa [plot units]. |
+| `y` | real(kind=real64) | in |  | Centre's ordinate [plot units]. |
+| `radius` | real(kind=real64) | in |  | Radius [plot units]. |
+| `label_format` | character(len=*) | in | optional | printf format of a slice's value (default '%.1f'). |
+| `angle0` | real(kind=real64) | in | optional | Where the first slice starts [degrees]. |
+| `normalize` | logical | in | optional | Always a full circle (default `.false.`). |
+| `colormap` | integer(kind=int32) | in | optional | The slices' colours (default: the plot's colormap). |
+| `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> ImPlot_PlotPieChart_doublePtrStr["ImPlot_PlotPieChart_doublePtrStr"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> ImPlot_PopColormap["ImPlot_PopColormap"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> ImPlot_PushColormap_PlotColormap["ImPlot_PushColormap_PlotColormap"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> colormap_ok["colormap_ok"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> figure_check["figure_check"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> figure_draw_refused["figure_draw_refused"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> figure_fail["figure_fail"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> format_refused["format_refused"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> spec_c["spec_c"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_pie_chart_r64 focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click colormap_ok href "#colormap-ok" "colormap_ok"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click format_refused href "figure_base.html#format-refused" "format_refused"
+  click spec_c href "#spec-c" "spec_c"
+  click ImPlot_PushColormap_PlotColormap href "figure_cimplot.html#implot-pushcolormap-plotcolormap" "ImPlot_PushColormap_PlotColormap"
+  click ImPlot_PlotPieChart_doublePtrStr href "figure_cimplot.html#implot-plotpiechart-doubleptrstr" "ImPlot_PlotPieChart_doublePtrStr"
+  click ImPlot_PopColormap href "figure_cimplot.html#implot-popcolormap" "ImPlot_PopColormap"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
@@ -2549,13 +2788,14 @@ flowchart LR
 
 ### ip_error_bars_r64
 
-Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
- err_high(i), double precision; read in place with any stride (plots.md, "Data in place").
+Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+ err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), double precision; read in place
+ with any stride (plots.md, "Data in place").
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, stat)
+subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, horizontal, stat)
 ```
 
 **Arguments**
@@ -2565,9 +2805,10 @@ subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, stat)
 | `label` | character(len=*) | in |  | Legend label. |
 | `x` | real(kind=real64) | in | target, asynchronous | Abscissae. |
 | `y` | real(kind=real64) | in | target, asynchronous | Ordinates. |
-| `err` | real(kind=real64) | in | target, asynchronous | Error below (and above) [y units]. |
-| `err_high` | real(kind=real64) | in | target, asynchronous, optional | Error above [y units]. |
+| `err` | real(kind=real64) | in | target, asynchronous | Error below (and above) [y units, or x]. |
+| `err_high` | real(kind=real64) | in | target, asynchronous, optional | Error above [y units, or x]. |
 | `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `horizontal` | logical | in | optional | Bars along x (`err` in x units). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -2589,23 +2830,24 @@ flowchart LR
   click series_ok href "#series-ok" "series_ok"
   click series_lead href "#series-lead" "series_lead"
   click series_put href "#series-put" "series_put"
+  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr href "figure_cimplot.html#implot-ploterrorbars-doubleptrdoubleptrdoubleptrdoubleptr" "ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt href "figure_cimplot.html#implot-ploterrorbars-doubleptrdoubleptrdoubleptrint" "ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip_error_bars_i32_r64
 
-Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
- err_high(i), double precision, abscissae `integer(int32)`: converted into one temporary, the ordinates read in
+Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+ err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), double precision, abscissae
+ `integer(int32)`: converted into one temporary, the ordinates read in
  place (plots.md, "Data in place").
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip_error_bars_i32_r64(label, x, y, err, err_high, spec, stat)
+subroutine ip_error_bars_i32_r64(label, x, y, err, err_high, spec, horizontal, stat)
 ```
 
 **Arguments**
@@ -2615,9 +2857,10 @@ subroutine ip_error_bars_i32_r64(label, x, y, err, err_high, spec, stat)
 | `label` | character(len=*) | in |  | Legend label. |
 | `x` | integer(kind=int32) | in | target, asynchronous | Abscissae. |
 | `y` | real(kind=real64) | in | target, asynchronous | Ordinates. |
-| `err` | real(kind=real64) | in | target, asynchronous | Error below (and above) [y units]. |
-| `err_high` | real(kind=real64) | in | target, asynchronous, optional | Error above [y units]. |
+| `err` | real(kind=real64) | in | target, asynchronous | Error below (and above) [y units, or x]. |
+| `err_high` | real(kind=real64) | in | target, asynchronous, optional | Error above [y units, or x]. |
 | `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `horizontal` | logical | in | optional | Bars along x (`err` in x units). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -2639,23 +2882,24 @@ flowchart LR
   click series_ok href "#series-ok" "series_ok"
   click series_lead href "#series-lead" "series_lead"
   click series_put href "#series-put" "series_put"
+  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr href "figure_cimplot.html#implot-ploterrorbars-doubleptrdoubleptrdoubleptrdoubleptr" "ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt href "figure_cimplot.html#implot-ploterrorbars-doubleptrdoubleptrdoubleptrint" "ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip_error_bars_i64_r64
 
-Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
- err_high(i), double precision, abscissae `integer(int64)`: converted into one temporary, the ordinates read in
+Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+ err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), double precision, abscissae
+ `integer(int64)`: converted into one temporary, the ordinates read in
  place (plots.md, "Data in place").
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip_error_bars_i64_r64(label, x, y, err, err_high, spec, stat)
+subroutine ip_error_bars_i64_r64(label, x, y, err, err_high, spec, horizontal, stat)
 ```
 
 **Arguments**
@@ -2665,9 +2909,10 @@ subroutine ip_error_bars_i64_r64(label, x, y, err, err_high, spec, stat)
 | `label` | character(len=*) | in |  | Legend label. |
 | `x` | integer(kind=int64) | in | target, asynchronous | Abscissae. |
 | `y` | real(kind=real64) | in | target, asynchronous | Ordinates. |
-| `err` | real(kind=real64) | in | target, asynchronous | Error below (and above) [y units]. |
-| `err_high` | real(kind=real64) | in | target, asynchronous, optional | Error above [y units]. |
+| `err` | real(kind=real64) | in | target, asynchronous | Error below (and above) [y units, or x]. |
+| `err_high` | real(kind=real64) | in | target, asynchronous, optional | Error above [y units, or x]. |
 | `spec` | type([plot_spec_object](/api/src/lib/figure_implot#plot-spec-object)) | in | optional | Style (default: ImPlot's). |
+| `horizontal` | logical | in | optional | Bars along x (`err` in x units). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -2689,9 +2934,9 @@ flowchart LR
   click series_ok href "#series-ok" "series_ok"
   click series_lead href "#series-lead" "series_lead"
   click series_put href "#series-put" "series_put"
+  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr href "figure_cimplot.html#implot-ploterrorbars-doubleptrdoubleptrdoubleptrdoubleptr" "ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click series_spec href "#series-spec" "series_spec"
   click ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt href "figure_cimplot.html#implot-ploterrorbars-doubleptrdoubleptrdoubleptrint" "ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
@@ -3031,7 +3276,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class ip_image focus
   click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
-  click is_initialized href "figure_texture.html#is-initialized" "is_initialized"
+  click is_initialized href "figure_view3d.html#is-initialized" "is_initialized"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
   click fig_texture_sampling href "figure_c_native.html#fig-texture-sampling" "fig_texture_sampling"
   click ImPlot_PlotImage href "figure_cimplot.html#implot-plotimage" "ImPlot_PlotImage"
@@ -7106,6 +7351,8 @@ flowchart LR
   ip_heatmap_r64["ip_heatmap_r64"] --> colormap_ok["colormap_ok"]
   ip_histogram2d_r32["ip_histogram2d_r32"] --> colormap_ok["colormap_ok"]
   ip_histogram2d_r64["ip_histogram2d_r64"] --> colormap_ok["colormap_ok"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> colormap_ok["colormap_ok"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> colormap_ok["colormap_ok"]
   colormap_ok["colormap_ok"] --> ImPlot_GetColormapCount["ImPlot_GetColormapCount"]
   colormap_ok["colormap_ok"] --> figure_fail["figure_fail"]
   classDef focus stroke-width:3px,font-weight:bold
@@ -7119,6 +7366,8 @@ flowchart LR
   click ip_heatmap_r64 href "#ip-heatmap-r64" "ip_heatmap_r64"
   click ip_histogram2d_r32 href "#ip-histogram2d-r32" "ip_histogram2d_r32"
   click ip_histogram2d_r64 href "#ip-histogram2d-r64" "ip_histogram2d_r64"
+  click ip_pie_chart_r32 href "#ip-pie-chart-r32" "ip_pie_chart_r32"
+  click ip_pie_chart_r64 href "#ip-pie-chart-r64" "ip_pie_chart_r64"
   click ImPlot_GetColormapCount href "figure_cimplot.html#implot-getcolormapcount" "ImPlot_GetColormapCount"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
 ```
@@ -7787,6 +8036,8 @@ flowchart LR
   ip_bars_i64_r64["ip_bars_i64_r64"] --> series_ok["series_ok"]
   ip_bars_r32["ip_bars_r32"] --> series_ok["series_ok"]
   ip_bars_r64["ip_bars_r64"] --> series_ok["series_ok"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> series_ok["series_ok"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> series_ok["series_ok"]
   ip_digital_r32["ip_digital_r32"] --> series_ok["series_ok"]
   ip_digital_r64["ip_digital_r64"] --> series_ok["series_ok"]
   ip_error_bars_i32_r32["ip_error_bars_i32_r32"] --> series_ok["series_ok"]
@@ -7850,6 +8101,8 @@ flowchart LR
   click ip_bars_i64_r64 href "#ip-bars-i64-r64" "ip_bars_i64_r64"
   click ip_bars_r32 href "#ip-bars-r32" "ip_bars_r32"
   click ip_bars_r64 href "#ip-bars-r64" "ip_bars_r64"
+  click ip_bubbles_r32 href "#ip-bubbles-r32" "ip_bubbles_r32"
+  click ip_bubbles_r64 href "#ip-bubbles-r64" "ip_bubbles_r64"
   click ip_digital_r32 href "#ip-digital-r32" "ip_digital_r32"
   click ip_digital_r64 href "#ip-digital-r64" "ip_digital_r64"
   click ip_error_bars_i32_r32 href "#ip-error-bars-i32-r32" "ip_error_bars_i32_r32"
@@ -8159,6 +8412,8 @@ flowchart LR
   ip_image["ip_image"] --> spec_c["spec_c"]
   ip_line_row_r32["ip_line_row_r32"] --> spec_c["spec_c"]
   ip_line_row_r64["ip_line_row_r64"] --> spec_c["spec_c"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> spec_c["spec_c"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> spec_c["spec_c"]
   spec_stride_r32["spec_stride_r32"] --> spec_c["spec_c"]
   spec_stride_r64["spec_stride_r64"] --> spec_c["spec_c"]
   spec_c["spec_c"] --> figure_ImPlotSpec_default["figure_ImPlotSpec_default"]
@@ -8171,6 +8426,8 @@ flowchart LR
   click ip_image href "#ip-image" "ip_image"
   click ip_line_row_r32 href "#ip-line-row-r32" "ip_line_row_r32"
   click ip_line_row_r64 href "#ip-line-row-r64" "ip_line_row_r64"
+  click ip_pie_chart_r32 href "#ip-pie-chart-r32" "ip_pie_chart_r32"
+  click ip_pie_chart_r64 href "#ip-pie-chart-r64" "ip_pie_chart_r64"
   click spec_stride_r32 href "#spec-stride-r32" "spec_stride_r32"
   click spec_stride_r64 href "#spec-stride-r64" "spec_stride_r64"
   click figure_ImPlotSpec_default href "figure_cimplot.html#figure-implotspec-default" "figure_ImPlotSpec_default"

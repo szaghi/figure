@@ -363,7 +363,10 @@ asserts on an item outside a plot and on a setup after the first item):
 | an image's corners not 3 × 4, a tint without 4 values, a texture not initialized | `FIG_ERR_ARGUMENT` | `ip3_image: corners must be 3 x 4 (x, y, z of four corners)`, `ip3_image: a colour needs 4 components (RGBA)`, `ip3_image: the texture is not initialized (texture%init)` |
 | an unknown axis, scale or legend location | `FIG_ERR_ARGUMENT` | `ip3_setup_axis: unknown axis '<a>' ('x', 'y' or 'z')`, `ip3_setup_axis: unknown scale '<s>' ('linear', 'log' or 'symlog')`, `ip3_setup_legend: unknown location '<l>' ('n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw' or 'c')` |
 | a box scale without 3 positive values; one angle | `FIG_ERR_ARGUMENT` | `ip3_setup_box: scale needs 3 values (x, y, z)`, `ip3_setup_box: each value of scale must be above 0`, `ip3_setup_box: give both elevation and azimuth, or neither` |
-| `ip3_setup_axis`, `ip3_setup_box`, `ip3_setup_legend` outside a 3-D plot or after an item | `FIG_ERR_STATE` | as `ip3_setup_axes` |
+| per-point colours not `(4, size(x))` or out of [0, 1], sizes not one per point or below 0 | `FIG_ERR_ARGUMENT` | `ip3_scatter: colors must be (4, size(x)): one RGBA per point`, `ip3_scatter: colour components must be in [0, 1]`, `ip3_scatter: sizes must be one per point`, `ip3_scatter: sizes must be finite and not below 0` (and `ip3_line`'s colours) |
+| a format that is not one real's; tick labels not one per value, values not finite | `FIG_ERR_ARGUMENT` | `ip3_setup_axis: format '<f>' is not a format of a real: ...`, `ip3_setup_axis_ticks: labels must be one per value`, `ip3_setup_axis_ticks: values must be finite` |
+| an unknown ImPlot3D colour or variable (`ip3_push_style_*`) | `FIG_ERR_ARGUMENT` | `push style colour: unknown name "<n>"`, `push style variable: unknown name "<n>"` |
+| `ip3_setup_axis`, `ip3_setup_axis_ticks`, `ip3_setup_box`, `ip3_setup_legend` outside a 3-D plot or after an item | `FIG_ERR_STATE` | as `ip3_setup_axes` |
 | `ip3_image`, `ip3_mouse_ray`, `ip3_plot_to_pixels` outside a 3-D plot | `FIG_ERR_STATE` | as the items |
 
 A refused item draws nothing; the plot goes on. An `ip3_end_plot` without a true `ip3_begin_plot` is a pairing error

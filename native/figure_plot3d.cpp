@@ -14,6 +14,7 @@
 #include "implot3d.h"
 #include "implot3d_internal.h"
 
+#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -22,7 +23,24 @@ int fail(int status, const std::string &msg) {
    fig_set_last_error(msg.c_str(), static_cast<int>(msg.size()));
    return status;
 }
+
+// The printf formats of the current 3-D plot's axes (x, y, z), kept until the next plot sets its own: ImPlot3D calls
+// the formatter when the plot ends, after its setup, with the format as its user data.
+std::string axis_format[3];
+
+int format_value(double value, char *buff, int size, void *user_data) {
+   return std::snprintf(buff, static_cast<size_t>(size), static_cast<const char *>(user_data), value);
+}
 } // namespace
+
+int fig_plot3d_axis_format(int axis, const char *fmt, int fmt_len) {
+   if (!ImPlot3D::GetCurrentContext() || !ImPlot3D::GImPlot3D->CurrentPlot)
+      return fail(FIG_ERR_STATE, "ip3_setup_axis: no 3-D plot is being declared");
+   if (axis < 0 || axis > 2) return fail(FIG_ERR_ARGUMENT, "ip3_setup_axis: unknown axis");
+   axis_format[axis].assign(fmt, fmt_len > 0 ? static_cast<size_t>(fmt_len) : 0);
+   ImPlot3D::SetupAxisFormat(axis, format_value, const_cast<char *>(axis_format[axis].c_str()));
+   return FIG_OK;
+}
 
 int fig_plot3d_colormap(int implot_id, int *id) {
    *id = -1;

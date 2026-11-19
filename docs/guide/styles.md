@@ -301,6 +301,7 @@ pair like `ig_begin` and `ig_end`; one stack holds the colours of both libraries
 | `ig_push_style_var(name, value [, stat])` | change a Dear ImGui style variable until its pop |
 | `ig_pop_style_var([n] [, stat])` | undo the `n` newest variable pushes (default 1) |
 | `ip_push_style_color`, `ip_pop_style_color`, `ip_push_style_var`, `ip_pop_style_var` | the same for ImPlot |
+| `ip3_push_style_color`, `ip3_pop_style_color`, `ip3_push_style_var`, `ip3_pop_style_var` | the same for ImPlot3D: `ImPlot3DCol_*` without the prefix, the fields of `ImPlot3DStyle` (a number or a pair) ([3-D plots](plots#_3-d-plots)) |
 
 Every colour and every variable of the [name tables](#colours-and-variables-by-name) can be pushed, not only those
 Dear ImGui's own `PushStyleVar` covers. More pops than pushes are `FIG_ERR_STATE`.

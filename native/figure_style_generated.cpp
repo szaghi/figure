@@ -1,11 +1,13 @@
 // FIGURE generated style tables (scripts/gen_bindings.py: do not edit).
 //
-// Every plain field of ImGuiStyle and ImPlotStyle (float, ImVec2, bool, enumeration), by name, offset and kind:
-// what figure_style reads and writes by name. Colours (the Colors arrays) are reached through each library's
-// colour names, the font fields through the font API; private fields (leading underscore) are left out.
+// Every plain field of ImGuiStyle, ImPlotStyle and ImPlot3DStyle (float, ImVec2, bool, enumeration), by name,
+// offset and kind: what figure_style reads and writes by name. Colours (the Colors arrays) are reached through
+// each library's colour names, the font fields through the font API; private fields (leading underscore) are
+// left out.
 #include "figure_style.h"
 #include "imgui.h"
 #include "implot.h"
+#include "implot3d.h"
 
 #include <cstddef>
 
@@ -115,5 +117,20 @@ const field IMPLOT_FIELDS[] = {
    {"Use24HourClock", offsetof(ImPlotStyle, Use24HourClock), FIG_STYLE_BOOL},
 };
 const int IMPLOT_FIELDS_COUNT = 23;
+
+const field IMPLOT3D_FIELDS[] = {
+   {"LineWeight", offsetof(ImPlot3DStyle, LineWeight), FIG_STYLE_FLOAT},
+   {"MarkerSize", offsetof(ImPlot3DStyle, MarkerSize), FIG_STYLE_FLOAT},
+   {"FillAlpha", offsetof(ImPlot3DStyle, FillAlpha), FIG_STYLE_FLOAT},
+   {"PlotDefaultSize", offsetof(ImPlot3DStyle, PlotDefaultSize), FIG_STYLE_VEC2},
+   {"PlotMinSize", offsetof(ImPlot3DStyle, PlotMinSize), FIG_STYLE_VEC2},
+   {"PlotPadding", offsetof(ImPlot3DStyle, PlotPadding), FIG_STYLE_VEC2},
+   {"LabelPadding", offsetof(ImPlot3DStyle, LabelPadding), FIG_STYLE_VEC2},
+   {"ViewScaleFactor", offsetof(ImPlot3DStyle, ViewScaleFactor), FIG_STYLE_FLOAT},
+   {"LegendPadding", offsetof(ImPlot3DStyle, LegendPadding), FIG_STYLE_VEC2},
+   {"LegendInnerPadding", offsetof(ImPlot3DStyle, LegendInnerPadding), FIG_STYLE_VEC2},
+   {"LegendSpacing", offsetof(ImPlot3DStyle, LegendSpacing), FIG_STYLE_VEC2},
+};
+const int IMPLOT3D_FIELDS_COUNT = 11;
 
 } // namespace figure_style

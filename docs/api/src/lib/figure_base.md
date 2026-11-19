@@ -148,6 +148,7 @@ flowchart LR
   ig_align_begin["ig_align_begin"] --> figure_check["figure_check"]
   ig_canvas["ig_canvas"] --> figure_check["figure_check"]
   ig_color_edit["ig_color_edit"] --> figure_check["figure_check"]
+  ig_color_picker["ig_color_picker"] --> figure_check["figure_check"]
   ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_check["figure_check"]
   ig_dock_layout_end["ig_dock_layout_end"] --> figure_check["figure_check"]
   ig_dock_space["ig_dock_space"] --> figure_check["figure_check"]
@@ -190,12 +191,17 @@ flowchart LR
   ip3_mesh_r64["ip3_mesh_r64"] --> figure_check["figure_check"]
   ip3_mouse_ray["ip3_mouse_ray"] --> figure_check["figure_check"]
   ip3_plot_to_pixels["ip3_plot_to_pixels"] --> figure_check["figure_check"]
+  ip3_push_style_color_hex["ip3_push_style_color_hex"] --> figure_check["figure_check"]
+  ip3_push_style_color_rgba["ip3_push_style_color_rgba"] --> figure_check["figure_check"]
+  ip3_push_style_var_r64["ip3_push_style_var_r64"] --> figure_check["figure_check"]
+  ip3_push_style_var_vec2["ip3_push_style_var_vec2"] --> figure_check["figure_check"]
   ip3_quads_r32["ip3_quads_r32"] --> figure_check["figure_check"]
   ip3_quads_r64["ip3_quads_r64"] --> figure_check["figure_check"]
   ip3_scatter_r32["ip3_scatter_r32"] --> figure_check["figure_check"]
   ip3_scatter_r64["ip3_scatter_r64"] --> figure_check["figure_check"]
   ip3_setup_axes["ip3_setup_axes"] --> figure_check["figure_check"]
   ip3_setup_axis["ip3_setup_axis"] --> figure_check["figure_check"]
+  ip3_setup_axis_ticks["ip3_setup_axis_ticks"] --> figure_check["figure_check"]
   ip3_setup_box["ip3_setup_box"] --> figure_check["figure_check"]
   ip3_setup_legend["ip3_setup_legend"] --> figure_check["figure_check"]
   ip3_spec["ip3_spec"] --> figure_check["figure_check"]
@@ -217,6 +223,8 @@ flowchart LR
   ip_bars_r64["ip_bars_r64"] --> figure_check["figure_check"]
   ip_begin_aligned["ip_begin_aligned"] --> figure_check["figure_check"]
   ip_begin_legend_popup["ip_begin_legend_popup"] --> figure_check["figure_check"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> figure_check["figure_check"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> figure_check["figure_check"]
   ip_cancel_selection["ip_cancel_selection"] --> figure_check["figure_check"]
   ip_colormap["ip_colormap"] --> figure_check["figure_check"]
   ip_colormap_scale["ip_colormap_scale"] --> figure_check["figure_check"]
@@ -259,6 +267,8 @@ flowchart LR
   ip_line_values_r64["ip_line_values_r64"] --> figure_check["figure_check"]
   ip_link_axis["ip_link_axis"] --> figure_check["figure_check"]
   ip_load_colormap["ip_load_colormap"] --> figure_check["figure_check"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> figure_check["figure_check"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> figure_check["figure_check"]
   ip_pixels_to_plot["ip_pixels_to_plot"] --> figure_check["figure_check"]
   ip_plot_hovered["ip_plot_hovered"] --> figure_check["figure_check"]
   ip_plot_limits["ip_plot_limits"] --> figure_check["figure_check"]
@@ -423,7 +433,7 @@ flowchart LR
   click colormap3d_ok href "figure_implot3d.html#colormap3d-ok" "colormap3d_ok"
   click contour_draw href "figure_implot.html#contour-draw" "contour_draw"
   click drag_core href "figure_numbers.html#drag-core" "drag_core"
-  click draw href "figure_canvas.html#draw" "draw"
+  click draw href "figure_view3d.html#draw" "draw"
   click editor_clear_marks href "figure_editor.html#editor-clear-marks" "editor_clear_marks"
   click editor_draw href "figure_editor.html#editor-draw" "editor_draw"
   click editor_find href "figure_editor.html#editor-find" "editor_find"
@@ -460,6 +470,7 @@ flowchart LR
   click ig_align_begin href "figure_group.html#ig-align-begin" "ig_align_begin"
   click ig_canvas href "figure_canvas.html#ig-canvas" "ig_canvas"
   click ig_color_edit href "figure_imgui.html#ig-color-edit" "ig_color_edit"
+  click ig_color_picker href "figure_imgui.html#ig-color-picker" "ig_color_picker"
   click ig_dock_layout_begin href "figure_dock.html#ig-dock-layout-begin" "ig_dock_layout_begin"
   click ig_dock_layout_end href "figure_dock.html#ig-dock-layout-end" "ig_dock_layout_end"
   click ig_dock_space href "figure_dock.html#ig-dock-space" "ig_dock_space"
@@ -500,12 +511,17 @@ flowchart LR
   click ip3_mesh_r64 href "figure_implot3d.html#ip3-mesh-r64" "ip3_mesh_r64"
   click ip3_mouse_ray href "figure_implot3d.html#ip3-mouse-ray" "ip3_mouse_ray"
   click ip3_plot_to_pixels href "figure_implot3d.html#ip3-plot-to-pixels" "ip3_plot_to_pixels"
+  click ip3_push_style_color_hex href "figure_style.html#ip3-push-style-color-hex" "ip3_push_style_color_hex"
+  click ip3_push_style_color_rgba href "figure_style.html#ip3-push-style-color-rgba" "ip3_push_style_color_rgba"
+  click ip3_push_style_var_r64 href "figure_style.html#ip3-push-style-var-r64" "ip3_push_style_var_r64"
+  click ip3_push_style_var_vec2 href "figure_style.html#ip3-push-style-var-vec2" "ip3_push_style_var_vec2"
   click ip3_quads_r32 href "figure_implot3d.html#ip3-quads-r32" "ip3_quads_r32"
   click ip3_quads_r64 href "figure_implot3d.html#ip3-quads-r64" "ip3_quads_r64"
   click ip3_scatter_r32 href "figure_implot3d.html#ip3-scatter-r32" "ip3_scatter_r32"
   click ip3_scatter_r64 href "figure_implot3d.html#ip3-scatter-r64" "ip3_scatter_r64"
   click ip3_setup_axes href "figure_implot3d.html#ip3-setup-axes" "ip3_setup_axes"
   click ip3_setup_axis href "figure_implot3d.html#ip3-setup-axis" "ip3_setup_axis"
+  click ip3_setup_axis_ticks href "figure_implot3d.html#ip3-setup-axis-ticks" "ip3_setup_axis_ticks"
   click ip3_setup_box href "figure_implot3d.html#ip3-setup-box" "ip3_setup_box"
   click ip3_setup_legend href "figure_implot3d.html#ip3-setup-legend" "ip3_setup_legend"
   click ip3_spec href "figure_implot3d.html#ip3-spec" "ip3_spec"
@@ -527,6 +543,8 @@ flowchart LR
   click ip_bars_r64 href "figure_implot.html#ip-bars-r64" "ip_bars_r64"
   click ip_begin_aligned href "figure_implot.html#ip-begin-aligned" "ip_begin_aligned"
   click ip_begin_legend_popup href "figure_implot.html#ip-begin-legend-popup" "ip_begin_legend_popup"
+  click ip_bubbles_r32 href "figure_implot.html#ip-bubbles-r32" "ip_bubbles_r32"
+  click ip_bubbles_r64 href "figure_implot.html#ip-bubbles-r64" "ip_bubbles_r64"
   click ip_cancel_selection href "figure_implot.html#ip-cancel-selection" "ip_cancel_selection"
   click ip_colormap href "figure_implot.html#ip-colormap" "ip_colormap"
   click ip_colormap_scale href "figure_implot.html#ip-colormap-scale" "ip_colormap_scale"
@@ -569,6 +587,8 @@ flowchart LR
   click ip_line_values_r64 href "figure_implot.html#ip-line-values-r64" "ip_line_values_r64"
   click ip_link_axis href "figure_implot.html#ip-link-axis" "ip_link_axis"
   click ip_load_colormap href "figure_implot.html#ip-load-colormap" "ip_load_colormap"
+  click ip_pie_chart_r32 href "figure_implot.html#ip-pie-chart-r32" "ip_pie_chart_r32"
+  click ip_pie_chart_r64 href "figure_implot.html#ip-pie-chart-r64" "ip_pie_chart_r64"
   click ip_pixels_to_plot href "figure_implot.html#ip-pixels-to-plot" "ip_pixels_to_plot"
   click ip_plot_hovered href "figure_implot.html#ip-plot-hovered" "ip_plot_hovered"
   click ip_plot_limits href "figure_implot.html#ip-plot-limits" "ip_plot_limits"
@@ -771,6 +791,7 @@ flowchart LR
   ig_begin_table["ig_begin_table"] --> figure_fail["figure_fail"]
   ig_canvas["ig_canvas"] --> figure_fail["figure_fail"]
   ig_color_edit["ig_color_edit"] --> figure_fail["figure_fail"]
+  ig_color_picker["ig_color_picker"] --> figure_fail["figure_fail"]
   ig_dock_split["ig_dock_split"] --> figure_fail["figure_fail"]
   ig_draw_circle["ig_draw_circle"] --> figure_fail["figure_fail"]
   ig_draw_image["ig_draw_image"] --> figure_fail["figure_fail"]
@@ -788,6 +809,7 @@ flowchart LR
   ip3_quads_r64["ip3_quads_r64"] --> figure_fail["figure_fail"]
   ip3_setup_axes["ip3_setup_axes"] --> figure_fail["figure_fail"]
   ip3_setup_axis["ip3_setup_axis"] --> figure_fail["figure_fail"]
+  ip3_setup_axis_ticks["ip3_setup_axis_ticks"] --> figure_fail["figure_fail"]
   ip3_setup_box["ip3_setup_box"] --> figure_fail["figure_fail"]
   ip3_setup_legend["ip3_setup_legend"] --> figure_fail["figure_fail"]
   ip3_spec["ip3_spec"] --> figure_fail["figure_fail"]
@@ -803,6 +825,8 @@ flowchart LR
   ip_drop_target["ip_drop_target"] --> figure_fail["figure_fail"]
   ip_image["ip_image"] --> figure_fail["figure_fail"]
   ip_link_axis["ip_link_axis"] --> figure_fail["figure_fail"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> figure_fail["figure_fail"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> figure_fail["figure_fail"]
   ip_pixels_to_plot["ip_pixels_to_plot"] --> figure_fail["figure_fail"]
   ip_plot_to_pixels["ip_plot_to_pixels"] --> figure_fail["figure_fail"]
   ip_setup_axes["ip_setup_axes"] --> figure_fail["figure_fail"]
@@ -822,6 +846,7 @@ flowchart LR
   no_components["no_components"] --> figure_fail["figure_fail"]
   notify["notify"] --> figure_fail["figure_fail"]
   pair_ok["pair_ok"] --> figure_fail["figure_fail"]
+  per_point_ok["per_point_ok"] --> figure_fail["figure_fail"]
   points_ok["points_ok"] --> figure_fail["figure_fail"]
   process_exit_code["process_exit_code"] --> figure_fail["figure_fail"]
   process_kill["process_kill"] --> figure_fail["figure_fail"]
@@ -881,7 +906,7 @@ flowchart LR
   click coordinates_ok href "figure_canvas.html#coordinates-ok" "coordinates_ok"
   click drag_core href "figure_numbers.html#drag-core" "drag_core"
   click drag_ok href "figure_implot.html#drag-ok" "drag_ok"
-  click draw href "figure_canvas.html#draw" "draw"
+  click draw href "figure_view3d.html#draw" "draw"
   click editor_set_options href "figure_editor.html#editor-set-options" "editor_set_options"
   click ends_ok href "figure_implot.html#ends-ok" "ends_ok"
   click field_image href "figure_implot.html#field-image" "field_image"
@@ -896,6 +921,7 @@ flowchart LR
   click ig_begin_table href "figure_group.html#ig-begin-table" "ig_begin_table"
   click ig_canvas href "figure_canvas.html#ig-canvas" "ig_canvas"
   click ig_color_edit href "figure_imgui.html#ig-color-edit" "ig_color_edit"
+  click ig_color_picker href "figure_imgui.html#ig-color-picker" "ig_color_picker"
   click ig_dock_split href "figure_dock.html#ig-dock-split" "ig_dock_split"
   click ig_draw_circle href "figure_canvas.html#ig-draw-circle" "ig_draw_circle"
   click ig_draw_image href "figure_canvas.html#ig-draw-image" "ig_draw_image"
@@ -913,6 +939,7 @@ flowchart LR
   click ip3_quads_r64 href "figure_implot3d.html#ip3-quads-r64" "ip3_quads_r64"
   click ip3_setup_axes href "figure_implot3d.html#ip3-setup-axes" "ip3_setup_axes"
   click ip3_setup_axis href "figure_implot3d.html#ip3-setup-axis" "ip3_setup_axis"
+  click ip3_setup_axis_ticks href "figure_implot3d.html#ip3-setup-axis-ticks" "ip3_setup_axis_ticks"
   click ip3_setup_box href "figure_implot3d.html#ip3-setup-box" "ip3_setup_box"
   click ip3_setup_legend href "figure_implot3d.html#ip3-setup-legend" "ip3_setup_legend"
   click ip3_spec href "figure_implot3d.html#ip3-spec" "ip3_spec"
@@ -928,6 +955,8 @@ flowchart LR
   click ip_drop_target href "figure_implot.html#ip-drop-target" "ip_drop_target"
   click ip_image href "figure_implot.html#ip-image" "ip_image"
   click ip_link_axis href "figure_implot.html#ip-link-axis" "ip_link_axis"
+  click ip_pie_chart_r32 href "figure_implot.html#ip-pie-chart-r32" "ip_pie_chart_r32"
+  click ip_pie_chart_r64 href "figure_implot.html#ip-pie-chart-r64" "ip_pie_chart_r64"
   click ip_pixels_to_plot href "figure_implot.html#ip-pixels-to-plot" "ip_pixels_to_plot"
   click ip_plot_to_pixels href "figure_implot.html#ip-plot-to-pixels" "ip_plot_to_pixels"
   click ip_setup_axes href "figure_implot.html#ip-setup-axes" "ip_setup_axes"
@@ -947,6 +976,7 @@ flowchart LR
   click no_components href "figure_numbers.html#no-components" "no_components"
   click notify href "figure_app.html#notify" "notify"
   click pair_ok href "figure_implot.html#pair-ok" "pair_ok"
+  click per_point_ok href "figure_implot3d.html#per-point-ok" "per_point_ok"
   click points_ok href "figure_view3d.html#points-ok" "points_ok"
   click process_exit_code href "figure_process.html#process-exit-code" "process_exit_code"
   click process_kill href "figure_process.html#process-kill" "process_kill"
@@ -970,7 +1000,7 @@ flowchart LR
   click set_icon_image href "figure_app.html#set-icon-image" "set_icon_image"
   click set_mesh href "figure_view3d.html#set-mesh" "set_mesh"
   click show_dialog href "figure_app.html#show-dialog" "show_dialog"
-  click speed_ok href "figure_numbers.html#speed-ok" "speed_ok"
+  click speed_ok href "figure_player.html#speed-ok" "speed_ok"
   click style_new href "figure_view3d.html#style-new" "style_new"
   click surface href "figure_view3d.html#surface" "surface"
   click surface_ok href "figure_implot3d.html#surface-ok" "surface_ok"
@@ -1032,7 +1062,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class figure_usage_error focus
   click axis_refused href "figure_implot.html#axis-refused" "axis_refused"
-  click draw href "figure_canvas.html#draw" "draw"
+  click draw href "figure_view3d.html#draw" "draw"
   click ig_begin_multi_select href "figure_group.html#ig-begin-multi-select" "ig_begin_multi_select"
   click ip3_setup_axes href "figure_implot3d.html#ip3-setup-axes" "ip3_setup_axes"
   click ip_begin_aligned href "figure_implot.html#ip-begin-aligned" "ip_begin_aligned"
@@ -1101,6 +1131,10 @@ flowchart LR
   ig_push_style_var_vec2["ig_push_style_var_vec2"] --> figure_scope_open["figure_scope_open"]
   ig_tree_node["ig_tree_node"] --> figure_scope_open["figure_scope_open"]
   ip3_begin_plot["ip3_begin_plot"] --> figure_scope_open["figure_scope_open"]
+  ip3_push_style_color_hex["ip3_push_style_color_hex"] --> figure_scope_open["figure_scope_open"]
+  ip3_push_style_color_rgba["ip3_push_style_color_rgba"] --> figure_scope_open["figure_scope_open"]
+  ip3_push_style_var_r64["ip3_push_style_var_r64"] --> figure_scope_open["figure_scope_open"]
+  ip3_push_style_var_vec2["ip3_push_style_var_vec2"] --> figure_scope_open["figure_scope_open"]
   ip_begin_aligned["ip_begin_aligned"] --> figure_scope_open["figure_scope_open"]
   ip_begin_legend_popup["ip_begin_legend_popup"] --> figure_scope_open["figure_scope_open"]
   ip_begin_plot["ip_begin_plot"] --> figure_scope_open["figure_scope_open"]
@@ -1144,6 +1178,10 @@ flowchart LR
   click ig_push_style_var_vec2 href "figure_style.html#ig-push-style-var-vec2" "ig_push_style_var_vec2"
   click ig_tree_node href "figure_group.html#ig-tree-node" "ig_tree_node"
   click ip3_begin_plot href "figure_implot3d.html#ip3-begin-plot" "ip3_begin_plot"
+  click ip3_push_style_color_hex href "figure_style.html#ip3-push-style-color-hex" "ip3_push_style_color_hex"
+  click ip3_push_style_color_rgba href "figure_style.html#ip3-push-style-color-rgba" "ip3_push_style_color_rgba"
+  click ip3_push_style_var_r64 href "figure_style.html#ip3-push-style-var-r64" "ip3_push_style_var_r64"
+  click ip3_push_style_var_vec2 href "figure_style.html#ip3-push-style-var-vec2" "ip3_push_style_var_vec2"
   click ip_begin_aligned href "figure_implot.html#ip-begin-aligned" "ip_begin_aligned"
   click ip_begin_legend_popup href "figure_implot.html#ip-begin-legend-popup" "ip_begin_legend_popup"
   click ip_begin_plot href "figure_implot.html#ip-begin-plot" "ip_begin_plot"
@@ -1512,6 +1550,7 @@ flowchart LR
   ig_close_current_popup["ig_close_current_popup"] --> figure_draw_refused["figure_draw_refused"]
   ig_collapsing_header["ig_collapsing_header"] --> figure_draw_refused["figure_draw_refused"]
   ig_color_edit["ig_color_edit"] --> figure_draw_refused["figure_draw_refused"]
+  ig_color_picker["ig_color_picker"] --> figure_draw_refused["figure_draw_refused"]
   ig_combo["ig_combo"] --> figure_draw_refused["figure_draw_refused"]
   ig_cursor_screen_pos["ig_cursor_screen_pos"] --> figure_draw_refused["figure_draw_refused"]
   ig_default_focus["ig_default_focus"] --> figure_draw_refused["figure_draw_refused"]
@@ -1631,8 +1670,13 @@ flowchart LR
   ip3_image["ip3_image"] --> figure_draw_refused["figure_draw_refused"]
   ip3_mouse_ray["ip3_mouse_ray"] --> figure_draw_refused["figure_draw_refused"]
   ip3_plot_to_pixels["ip3_plot_to_pixels"] --> figure_draw_refused["figure_draw_refused"]
+  ip3_push_style_color_hex["ip3_push_style_color_hex"] --> figure_draw_refused["figure_draw_refused"]
+  ip3_push_style_color_rgba["ip3_push_style_color_rgba"] --> figure_draw_refused["figure_draw_refused"]
+  ip3_push_style_var_r64["ip3_push_style_var_r64"] --> figure_draw_refused["figure_draw_refused"]
+  ip3_push_style_var_vec2["ip3_push_style_var_vec2"] --> figure_draw_refused["figure_draw_refused"]
   ip3_setup_axes["ip3_setup_axes"] --> figure_draw_refused["figure_draw_refused"]
   ip3_setup_axis["ip3_setup_axis"] --> figure_draw_refused["figure_draw_refused"]
+  ip3_setup_axis_ticks["ip3_setup_axis_ticks"] --> figure_draw_refused["figure_draw_refused"]
   ip3_setup_box["ip3_setup_box"] --> figure_draw_refused["figure_draw_refused"]
   ip3_setup_legend["ip3_setup_legend"] --> figure_draw_refused["figure_draw_refused"]
   ip3_text["ip3_text"] --> figure_draw_refused["figure_draw_refused"]
@@ -1649,6 +1693,8 @@ flowchart LR
   ip_begin_legend_popup["ip_begin_legend_popup"] --> figure_draw_refused["figure_draw_refused"]
   ip_begin_plot["ip_begin_plot"] --> figure_draw_refused["figure_draw_refused"]
   ip_begin_subplots["ip_begin_subplots"] --> figure_draw_refused["figure_draw_refused"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> figure_draw_refused["figure_draw_refused"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> figure_draw_refused["figure_draw_refused"]
   ip_cancel_selection["ip_cancel_selection"] --> figure_draw_refused["figure_draw_refused"]
   ip_colormap_scale["ip_colormap_scale"] --> figure_draw_refused["figure_draw_refused"]
   ip_contour_r32["ip_contour_r32"] --> figure_draw_refused["figure_draw_refused"]
@@ -1690,6 +1736,8 @@ flowchart LR
   ip_line_values_r32["ip_line_values_r32"] --> figure_draw_refused["figure_draw_refused"]
   ip_line_values_r64["ip_line_values_r64"] --> figure_draw_refused["figure_draw_refused"]
   ip_link_axis["ip_link_axis"] --> figure_draw_refused["figure_draw_refused"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> figure_draw_refused["figure_draw_refused"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> figure_draw_refused["figure_draw_refused"]
   ip_pixels_to_plot["ip_pixels_to_plot"] --> figure_draw_refused["figure_draw_refused"]
   ip_plot_hovered["ip_plot_hovered"] --> figure_draw_refused["figure_draw_refused"]
   ip_plot_limits["ip_plot_limits"] --> figure_draw_refused["figure_draw_refused"]
@@ -1756,7 +1804,7 @@ flowchart LR
   click clipper_begin href "figure_group.html#clipper-begin" "clipper_begin"
   click clipper_step href "figure_group.html#clipper-step" "clipper_step"
   click code_diff href "figure_editor.html#code-diff" "code_diff"
-  click draw href "figure_canvas.html#draw" "draw"
+  click draw href "figure_view3d.html#draw" "draw"
   click editor_draw href "figure_editor.html#editor-draw" "editor_draw"
   click field_image href "figure_implot.html#field-image" "field_image"
   click gizmo href "figure_view3d.html#gizmo" "gizmo"
@@ -1789,6 +1837,7 @@ flowchart LR
   click ig_close_current_popup href "figure_menu.html#ig-close-current-popup" "ig_close_current_popup"
   click ig_collapsing_header href "figure_group.html#ig-collapsing-header" "ig_collapsing_header"
   click ig_color_edit href "figure_imgui.html#ig-color-edit" "ig_color_edit"
+  click ig_color_picker href "figure_imgui.html#ig-color-picker" "ig_color_picker"
   click ig_combo href "figure_imgui.html#ig-combo" "ig_combo"
   click ig_cursor_screen_pos href "figure_canvas.html#ig-cursor-screen-pos" "ig_cursor_screen_pos"
   click ig_default_focus href "figure_imgui.html#ig-default-focus" "ig_default_focus"
@@ -1908,8 +1957,13 @@ flowchart LR
   click ip3_image href "figure_implot3d.html#ip3-image" "ip3_image"
   click ip3_mouse_ray href "figure_implot3d.html#ip3-mouse-ray" "ip3_mouse_ray"
   click ip3_plot_to_pixels href "figure_implot3d.html#ip3-plot-to-pixels" "ip3_plot_to_pixels"
+  click ip3_push_style_color_hex href "figure_style.html#ip3-push-style-color-hex" "ip3_push_style_color_hex"
+  click ip3_push_style_color_rgba href "figure_style.html#ip3-push-style-color-rgba" "ip3_push_style_color_rgba"
+  click ip3_push_style_var_r64 href "figure_style.html#ip3-push-style-var-r64" "ip3_push_style_var_r64"
+  click ip3_push_style_var_vec2 href "figure_style.html#ip3-push-style-var-vec2" "ip3_push_style_var_vec2"
   click ip3_setup_axes href "figure_implot3d.html#ip3-setup-axes" "ip3_setup_axes"
   click ip3_setup_axis href "figure_implot3d.html#ip3-setup-axis" "ip3_setup_axis"
+  click ip3_setup_axis_ticks href "figure_implot3d.html#ip3-setup-axis-ticks" "ip3_setup_axis_ticks"
   click ip3_setup_box href "figure_implot3d.html#ip3-setup-box" "ip3_setup_box"
   click ip3_setup_legend href "figure_implot3d.html#ip3-setup-legend" "ip3_setup_legend"
   click ip3_text href "figure_implot3d.html#ip3-text" "ip3_text"
@@ -1926,6 +1980,8 @@ flowchart LR
   click ip_begin_legend_popup href "figure_implot.html#ip-begin-legend-popup" "ip_begin_legend_popup"
   click ip_begin_plot href "figure_implot.html#ip-begin-plot" "ip_begin_plot"
   click ip_begin_subplots href "figure_implot.html#ip-begin-subplots" "ip_begin_subplots"
+  click ip_bubbles_r32 href "figure_implot.html#ip-bubbles-r32" "ip_bubbles_r32"
+  click ip_bubbles_r64 href "figure_implot.html#ip-bubbles-r64" "ip_bubbles_r64"
   click ip_cancel_selection href "figure_implot.html#ip-cancel-selection" "ip_cancel_selection"
   click ip_colormap_scale href "figure_implot.html#ip-colormap-scale" "ip_colormap_scale"
   click ip_contour_r32 href "figure_implot.html#ip-contour-r32" "ip_contour_r32"
@@ -1967,6 +2023,8 @@ flowchart LR
   click ip_line_values_r32 href "figure_implot.html#ip-line-values-r32" "ip_line_values_r32"
   click ip_line_values_r64 href "figure_implot.html#ip-line-values-r64" "ip_line_values_r64"
   click ip_link_axis href "figure_implot.html#ip-link-axis" "ip_link_axis"
+  click ip_pie_chart_r32 href "figure_implot.html#ip-pie-chart-r32" "ip_pie_chart_r32"
+  click ip_pie_chart_r64 href "figure_implot.html#ip-pie-chart-r64" "ip_pie_chart_r64"
   click ip_pixels_to_plot href "figure_implot.html#ip-pixels-to-plot" "ip_pixels_to_plot"
   click ip_plot_hovered href "figure_implot.html#ip-plot-hovered" "ip_plot_hovered"
   click ip_plot_limits href "figure_implot.html#ip-plot-limits" "ip_plot_limits"
@@ -2081,6 +2139,8 @@ flowchart LR
   ig_pop_style_var["ig_pop_style_var"] --> figure_scope_refused["figure_scope_refused"]
   ig_tree_pop["ig_tree_pop"] --> figure_scope_refused["figure_scope_refused"]
   ip3_end_plot["ip3_end_plot"] --> figure_scope_refused["figure_scope_refused"]
+  ip3_pop_style_color["ip3_pop_style_color"] --> figure_scope_refused["figure_scope_refused"]
+  ip3_pop_style_var["ip3_pop_style_var"] --> figure_scope_refused["figure_scope_refused"]
   ip_end_aligned["ip_end_aligned"] --> figure_scope_refused["figure_scope_refused"]
   ip_end_legend_popup["ip_end_legend_popup"] --> figure_scope_refused["figure_scope_refused"]
   ip_end_plot["ip_end_plot"] --> figure_scope_refused["figure_scope_refused"]
@@ -2113,6 +2173,8 @@ flowchart LR
   click ig_pop_style_var href "figure_style.html#ig-pop-style-var" "ig_pop_style_var"
   click ig_tree_pop href "figure_group.html#ig-tree-pop" "ig_tree_pop"
   click ip3_end_plot href "figure_implot3d.html#ip3-end-plot" "ip3_end_plot"
+  click ip3_pop_style_color href "figure_style.html#ip3-pop-style-color" "ip3_pop_style_color"
+  click ip3_pop_style_var href "figure_style.html#ip3-pop-style-var" "ip3_pop_style_var"
   click ip_end_aligned href "figure_implot.html#ip-end-aligned" "ip_end_aligned"
   click ip_end_legend_popup href "figure_implot.html#ip-end-legend-popup" "ip_end_legend_popup"
   click ip_end_plot href "figure_implot.html#ip-end-plot" "ip_end_plot"
@@ -2189,9 +2251,12 @@ function format_refused(name, argument, fmt, family, stat, text) result(refused)
 flowchart LR
   angle_core["angle_core"] --> format_refused["format_refused"]
   c_format["c_format"] --> format_refused["format_refused"]
+  ip3_setup_axis["ip3_setup_axis"] --> format_refused["format_refused"]
   ip_colormap_scale["ip_colormap_scale"] --> format_refused["format_refused"]
   ip_heatmap_r32["ip_heatmap_r32"] --> format_refused["format_refused"]
   ip_heatmap_r64["ip_heatmap_r64"] --> format_refused["format_refused"]
+  ip_pie_chart_r32["ip_pie_chart_r32"] --> format_refused["format_refused"]
+  ip_pie_chart_r64["ip_pie_chart_r64"] --> format_refused["format_refused"]
   ip_setup_axes["ip_setup_axes"] --> format_refused["format_refused"]
   ip_setup_axis["ip_setup_axis"] --> format_refused["format_refused"]
   legend["legend"] --> format_refused["format_refused"]
@@ -2201,9 +2266,12 @@ flowchart LR
   class format_refused focus
   click angle_core href "figure_numbers.html#angle-core" "angle_core"
   click c_format href "figure_numbers.html#c-format" "c_format"
+  click ip3_setup_axis href "figure_implot3d.html#ip3-setup-axis" "ip3_setup_axis"
   click ip_colormap_scale href "figure_implot.html#ip-colormap-scale" "ip_colormap_scale"
   click ip_heatmap_r32 href "figure_implot.html#ip-heatmap-r32" "ip_heatmap_r32"
   click ip_heatmap_r64 href "figure_implot.html#ip-heatmap-r64" "ip_heatmap_r64"
+  click ip_pie_chart_r32 href "figure_implot.html#ip-pie-chart-r32" "ip_pie_chart_r32"
+  click ip_pie_chart_r64 href "figure_implot.html#ip-pie-chart-r64" "ip_pie_chart_r64"
   click ip_setup_axes href "figure_implot.html#ip-setup-axes" "ip_setup_axes"
   click ip_setup_axis href "figure_implot.html#ip-setup-axis" "ip_setup_axis"
   click legend href "figure_implot.html#legend" "legend"
@@ -2248,6 +2316,7 @@ flowchart LR
   ig_checkbox["ig_checkbox"] --> cstr["cstr"]
   ig_collapsing_header["ig_collapsing_header"] --> cstr["cstr"]
   ig_color_edit["ig_color_edit"] --> cstr["cstr"]
+  ig_color_picker["ig_color_picker"] --> cstr["cstr"]
   ig_combo["ig_combo"] --> cstr["cstr"]
   ig_focus_window["ig_focus_window"] --> cstr["cstr"]
   ig_list_box["ig_list_box"] --> cstr["cstr"]
@@ -2299,6 +2368,8 @@ flowchart LR
   ip_begin_legend_popup["ip_begin_legend_popup"] --> cstr["cstr"]
   ip_begin_plot["ip_begin_plot"] --> cstr["cstr"]
   ip_begin_subplots["ip_begin_subplots"] --> cstr["cstr"]
+  ip_bubbles_r32["ip_bubbles_r32"] --> cstr["cstr"]
+  ip_bubbles_r64["ip_bubbles_r64"] --> cstr["cstr"]
   ip_colormap_scale["ip_colormap_scale"] --> cstr["cstr"]
   ip_digital_r32["ip_digital_r32"] --> cstr["cstr"]
   ip_digital_r64["ip_digital_r64"] --> cstr["cstr"]
@@ -2383,6 +2454,7 @@ flowchart LR
   click ig_checkbox href "figure_imgui.html#ig-checkbox" "ig_checkbox"
   click ig_collapsing_header href "figure_group.html#ig-collapsing-header" "ig_collapsing_header"
   click ig_color_edit href "figure_imgui.html#ig-color-edit" "ig_color_edit"
+  click ig_color_picker href "figure_imgui.html#ig-color-picker" "ig_color_picker"
   click ig_combo href "figure_imgui.html#ig-combo" "ig_combo"
   click ig_focus_window href "figure_imgui.html#ig-focus-window" "ig_focus_window"
   click ig_list_box href "figure_numbers.html#ig-list-box" "ig_list_box"
@@ -2434,6 +2506,8 @@ flowchart LR
   click ip_begin_legend_popup href "figure_implot.html#ip-begin-legend-popup" "ip_begin_legend_popup"
   click ip_begin_plot href "figure_implot.html#ip-begin-plot" "ip_begin_plot"
   click ip_begin_subplots href "figure_implot.html#ip-begin-subplots" "ip_begin_subplots"
+  click ip_bubbles_r32 href "figure_implot.html#ip-bubbles-r32" "ip_bubbles_r32"
+  click ip_bubbles_r64 href "figure_implot.html#ip-bubbles-r64" "ip_bubbles_r64"
   click ip_colormap_scale href "figure_implot.html#ip-colormap-scale" "ip_colormap_scale"
   click ip_digital_r32 href "figure_implot.html#ip-digital-r32" "ip_digital_r32"
   click ip_digital_r64 href "figure_implot.html#ip-digital-r64" "ip_digital_r64"

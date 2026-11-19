@@ -16,7 +16,7 @@
 | `figure_numbers` | numbers and choices: fields, drag boxes and sliders for integers and reals, scalar or vector; angles; |
 | `figure_player` | a player for snapshots: previous, play, next, a slider, a speed and a loop mode. |
 | `figure_process` | programs started from the program (process_object) and a view of their output (log_view_object). |
-| `figure_style` | every colour and variable of the Dear ImGui and ImPlot styles, by name. |
+| `figure_style` | every colour and variable of the Dear ImGui, ImPlot and ImPlot3D styles, by name. |
 | `figure_task` | background tasks: Fortran procedures run on a worker thread, with progress and cooperative cancel. |
 | `figure_texture` | RGBA images on the GPU, drawn by `ig_image` and `ip_image`, and PNG or JPEG files read into pixels. |
 | `figure_view3d` | a 3-D view of meshes (view3d_object), drawn by FIGURE's software rasterizer in every mode. |

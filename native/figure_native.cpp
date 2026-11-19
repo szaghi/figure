@@ -15,6 +15,7 @@
 #include "implot.h"
 #include "implot_internal.h" // GetStyleColorVec4: ImPlot's automatic colours resolved
 #include "implot3d.h"        // ImPlot3D's context, beside ImPlot's
+#include "implot3d_internal.h" // ImPlot3D::GetStyleColorName (style colours by name)
 // stb_truetype, as Dear ImGui bundles it, private to this file: an ICON_* rendered as the window's icon (set_icon)
 #define STBRP_STATIC
 #define STB_RECT_PACK_IMPLEMENTATION
@@ -868,16 +869,21 @@ void destroy_contexts() {
 // lib 0: Dear ImGui (ImGuiStyle), 1: ImPlot (ImPlotStyle). Colours by the libraries' own names (GetStyleColorName);
 // the other fields by the generated tables of figure_style_generated.cpp.
 
+// The libraries a style name belongs to: 0 Dear ImGui, 1 ImPlot, 2 ImPlot3D.
 int style_color_index(int lib, const std::string &name) {
-   const int n = lib == 0 ? static_cast<int>(ImGuiCol_COUNT) : static_cast<int>(ImPlotCol_COUNT);
+   const int n = lib == 0 ? static_cast<int>(ImGuiCol_COUNT)
+                 : lib == 1 ? static_cast<int>(ImPlotCol_COUNT) : static_cast<int>(ImPlot3DCol_COUNT);
    for (int i = 0; i < n; ++i)
-      if (name == (lib == 0 ? ImGui::GetStyleColorName(i) : ImPlot::GetStyleColorName(i))) return i;
+      if (name == (lib == 0 ? ImGui::GetStyleColorName(i)
+                   : lib == 1 ? ImPlot::GetStyleColorName(i) : ImPlot3D::GetStyleColorName(i))) return i;
    return -1;
 }
 
 const figure_style::field *style_field(int lib, const std::string &name) {
-   const figure_style::field *t = lib == 0 ? figure_style::IMGUI_FIELDS : figure_style::IMPLOT_FIELDS;
-   const int n = lib == 0 ? figure_style::IMGUI_FIELDS_COUNT : figure_style::IMPLOT_FIELDS_COUNT;
+   const figure_style::field *t = lib == 0 ? figure_style::IMGUI_FIELDS
+                                  : lib == 1 ? figure_style::IMPLOT_FIELDS : figure_style::IMPLOT3D_FIELDS;
+   const int n = lib == 0 ? figure_style::IMGUI_FIELDS_COUNT
+                 : lib == 1 ? figure_style::IMPLOT_FIELDS_COUNT : figure_style::IMPLOT3D_FIELDS_COUNT;
    for (int i = 0; i < n; ++i)
       if (name == t[i].name) return &t[i];
    return nullptr;
@@ -885,7 +891,8 @@ const figure_style::field *style_field(int lib, const std::string &name) {
 
 unsigned char *style_base(int lib) {
    return lib == 0 ? reinterpret_cast<unsigned char *>(&ImGui::GetStyle())
-                   : reinterpret_cast<unsigned char *>(&ImPlot::GetStyle());
+          : lib == 1 ? reinterpret_cast<unsigned char *>(&ImPlot::GetStyle())
+                     : reinterpret_cast<unsigned char *>(&ImPlot3D::GetStyle());
 }
 
 // ---- Styles ---------------------------------------------------------------------------------------------------
@@ -2511,13 +2518,13 @@ void remember(std::vector<state_t::saved_t> &stack, unsigned char *where, size_t
 int fig_push_style_color(int lib, const char *name, int name_len, const float *rgba) {
    FIG_TRY
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
-   if (lib != 0 && lib != 1) return fail(FIG_ERR_ARGUMENT, "push style colour: unknown library");
+   if (lib < 0 || lib > 2) return fail(FIG_ERR_ARGUMENT, "push style colour: unknown library");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
    const int i = style_color_index(lib, n);
    if (i < 0) return fail(FIG_ERR_ARGUMENT, "push style colour: unknown name \"" + n + "\"");
    for (int k = 0; k < 4; ++k)
       if (!(rgba[k] >= 0.0f && rgba[k] <= 1.0f)) return fail(FIG_ERR_ARGUMENT, "push style colour: components must be in [0, 1]");
-   ImVec4 &c = lib == 0 ? ImGui::GetStyle().Colors[i] : ImPlot::GetStyle().Colors[i];
+   ImVec4 &c = lib == 0 ? ImGui::GetStyle().Colors[i] : lib == 1 ? ImPlot::GetStyle().Colors[i] : ImPlot3D::GetStyle().Colors[i];
    remember(st.pushed_colors, reinterpret_cast<unsigned char *>(&c), sizeof(ImVec4));
    c = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
    return FIG_OK;
@@ -2527,7 +2534,7 @@ int fig_push_style_color(int lib, const char *name, int name_len, const float *r
 int fig_push_style_var(int lib, const char *name, int name_len, const double *values, int count) {
    FIG_TRY
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
-   if (lib != 0 && lib != 1) return fail(FIG_ERR_ARGUMENT, "push style variable: unknown library");
+   if (lib < 0 || lib > 2) return fail(FIG_ERR_ARGUMENT, "push style variable: unknown library");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
    const figure_style::field *f = style_field(lib, n);
    if (!f) return fail(FIG_ERR_ARGUMENT, "push style variable: unknown name \"" + n + "\"");

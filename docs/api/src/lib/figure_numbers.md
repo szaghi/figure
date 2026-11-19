@@ -2089,5 +2089,5 @@ flowchart LR
   click real_range href "#real-range" "real_range"
   click save_pref_real32 href "figure_app.html#save-pref-real32" "save_pref_real32"
   click save_pref_real64 href "figure_app.html#save-pref-real64" "save_pref_real64"
-  click speed_ok href "#speed-ok" "speed_ok"
+  click speed_ok href "figure_player.html#speed-ok" "speed_ok"
 ```

@@ -20,13 +20,14 @@ module figure_implot3d
 !< outside a 3-D plot, and `ip3_setup_axes` after the plot's first item, are usage errors (`FIG_ERR_STATE`, as
 !< `app%set_checks` says). The begin/end pair registers in the scope record of the frame (errors.md, "Pairing and
 !< frames").
-use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_int, c_loc, c_null_ptr, c_ptr
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_int, c_loc, c_null_char, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_scope_open, figure_scope_refused, &
-                        figure_usage_error, SCOPE_PLOT3D
+                        figure_usage_error, SCOPE_PLOT3D, FORMAT_REAL, format_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_plot3d_colormap, fig_plot3d_end, fig_plot3d_state, &
-                            fig_plot3d_mouse_ray
+                            fig_plot3d_mouse_ray, fig_plot3d_axis_format
+use figure_cimplot3d, only : ImPlot3D_SetupAxisTicks_doublePtr
 use figure_texture, only : texture_object, texture_ref
 use figure_cimplot3d, only : im_plot3d_point, ImPlot3D_PlotTriangle_doublePtr, ImPlot3D_PlotTriangle_FloatPtr,  &
                              ImPlot3D_PlotQuad_doublePtr, ImPlot3D_PlotQuad_FloatPtr, ImPlot3D_PlotImage_Plot3DPoint, &
@@ -68,6 +69,7 @@ private
 public :: ip3_begin_plot, ip3_end_plot, ip3_setup_axes, ip3_line, ip3_scatter, ip3_surface, ip3_mesh, ip3_text
 public :: ip3_spec, plot3d_spec_object
 public :: ip3_triangles, ip3_quads, ip3_image, ip3_setup_axis, ip3_setup_box, ip3_setup_legend, ip3_mouse_ray
+public :: ip3_setup_axis_ticks
 public :: ip3_plot_to_pixels
 ! ImPlot3D's marker and item-flag constants (values generated from the cimplot3d metadata), for `ip3_spec`
 public :: ImPlot3DMarker_None, ImPlot3DMarker_Auto, ImPlot3DMarker_Circle, ImPlot3DMarker_Square
@@ -249,41 +251,70 @@ contains
 
    ! items, single precision
 
-   recursive subroutine ip3_line_r32(label, x, y, z, spec, stat)
-   !< A line through the points (x(i), y(i), z(i)), single precision; read in place with any stride. Statuses:
-   !< `FIG_ERR_ARGUMENT` for series of different sizes; `FIG_ERR_STATE` outside a 3-D plot, from a task.
+   recursive subroutine ip3_line_r32(label, x, y, z, spec, colors, stat)
+   !< A line through the points (x(i), y(i), z(i)), single precision; read in place with any stride. `colors`: the
+   !< segment from point i in `colors(:, i)` (RGBA in [0, 1]). Statuses: `FIG_ERR_ARGUMENT` for series of different
+   !< sizes, colours not (4, size(x)) or out of [0, 1]; `FIG_ERR_STATE` outside a 3-D plot, from a task.
    character(len=*),         intent(in)                       :: label !< Legend label.
    real(real32),             intent(in), target, asynchronous :: x(:)  !< Abscissae.
    real(real32),             intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real32),             intent(in), target, asynchronous :: z(:)  !< Heights.
    type(plot3d_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot3D's).
+   real(real64),             intent(in), optional             :: colors(:,:) !< Per-point RGBA, (4, size(x)).
    integer(int32),           intent(out), optional            :: stat  !< Status.
    type(series_r32), target                                   :: d     !< Where ImPlot3D reads the arrays.
+   type(im_plot3d_spec)                                       :: cs    !< The C spec, with the per-point arrays.
+   integer(c_int), allocatable, target                        :: cu(:) !< Per-point colours, packed (ImU32).
+   real(c_float), allocatable, target                         :: su(:) !< Per-point radii.
 
    if (item_refused('ip3_line', size(x, kind=int64), size(y, kind=int64), size(z, kind=int64), stat)) return
+   if (.not. per_point_ok('ip3_line', size(x, kind=int64), colors, stat=stat)) return
    call series_lead(d, 1, x)
    call series_put(d, 2, y)
    call series_put(d, 3, z)
-   call ImPlot3D_PlotLine_FloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), spec_at(d%stride, spec))
+   cs = spec_at(d%stride, spec)
+   if (present(colors)) then
+      cu = packed_colors(colors)
+      cs%LineColors = c_loc(cu)
+   endif
+   call ImPlot3D_PlotLine_FloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), cs)
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_line_r32
 
-   recursive subroutine ip3_scatter_r32(label, x, y, z, spec, stat)
-   !< Markers at the points (x(i), y(i), z(i)), single precision; read in place with any stride. Statuses as
-   !< `ip3_line`.
+   recursive subroutine ip3_scatter_r32(label, x, y, z, spec, colors, sizes, stat)
+   !< Markers at the points (x(i), y(i), z(i)), single precision; read in place with any stride. `colors`: each marker
+   !< filled and outlined in its own colour, `colors(:, i)` RGBA in [0, 1]; `sizes`: each its own radius [pixels].
+   !< Statuses as `ip3_line`, and `FIG_ERR_ARGUMENT` for colours not (4, size(x)) or out of [0, 1], sizes not one per
+   !< point or below 0.
    character(len=*),         intent(in)                       :: label !< Legend label.
    real(real32),             intent(in), target, asynchronous :: x(:)  !< Abscissae.
    real(real32),             intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real32),             intent(in), target, asynchronous :: z(:)  !< Heights.
    type(plot3d_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot3D's).
+   real(real64),             intent(in), optional             :: colors(:,:) !< Per-point RGBA, (4, size(x)).
+   real(real64),             intent(in), optional             :: sizes(:)    !< Per-point marker radii [pixels].
    integer(int32),           intent(out), optional            :: stat  !< Status.
    type(series_r32), target                                   :: d     !< Where ImPlot3D reads the arrays.
+   type(im_plot3d_spec)                                       :: cs    !< The C spec, with the per-point arrays.
+   integer(c_int), allocatable, target                        :: cu(:) !< Per-point colours, packed (ImU32).
+   real(c_float), allocatable, target                         :: su(:) !< Per-point radii.
 
    if (item_refused('ip3_scatter', size(x, kind=int64), size(y, kind=int64), size(z, kind=int64), stat)) return
+   if (.not. per_point_ok('ip3_scatter', size(x, kind=int64), colors, sizes, stat)) return
    call series_lead(d, 1, x)
    call series_put(d, 2, y)
    call series_put(d, 3, z)
-   call ImPlot3D_PlotScatter_FloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), spec_at(d%stride, spec))
+   cs = spec_at(d%stride, spec)
+   if (present(colors)) then
+      cu = packed_colors(colors)
+      cs%MarkerFillColors = c_loc(cu)
+      cs%MarkerLineColors = c_loc(cu)
+   endif
+   if (present(sizes)) then
+      su = real(sizes, c_float)
+      cs%MarkerSizes = c_loc(su)
+   endif
+   call ImPlot3D_PlotScatter_FloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), cs)
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_scatter_r32
 
@@ -397,41 +428,70 @@ contains
 
    ! items, double precision
 
-   recursive subroutine ip3_line_r64(label, x, y, z, spec, stat)
-   !< A line through the points (x(i), y(i), z(i)), double precision; read in place with any stride. Statuses:
-   !< `FIG_ERR_ARGUMENT` for series of different sizes; `FIG_ERR_STATE` outside a 3-D plot, from a task.
+   recursive subroutine ip3_line_r64(label, x, y, z, spec, colors, stat)
+   !< A line through the points (x(i), y(i), z(i)), double precision; read in place with any stride. `colors`: the
+   !< segment from point i in `colors(:, i)` (RGBA in [0, 1]). Statuses: `FIG_ERR_ARGUMENT` for series of different
+   !< sizes, colours not (4, size(x)) or out of [0, 1]; `FIG_ERR_STATE` outside a 3-D plot, from a task.
    character(len=*),         intent(in)                       :: label !< Legend label.
    real(real64),             intent(in), target, asynchronous :: x(:)  !< Abscissae.
    real(real64),             intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real64),             intent(in), target, asynchronous :: z(:)  !< Heights.
    type(plot3d_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot3D's).
+   real(real64),             intent(in), optional             :: colors(:,:) !< Per-point RGBA, (4, size(x)).
    integer(int32),           intent(out), optional            :: stat  !< Status.
    type(series_r64), target                                   :: d     !< Where ImPlot3D reads the arrays.
+   type(im_plot3d_spec)                                       :: cs    !< The C spec, with the per-point arrays.
+   integer(c_int), allocatable, target                        :: cu(:) !< Per-point colours, packed (ImU32).
+   real(c_float), allocatable, target                         :: su(:) !< Per-point radii.
 
    if (item_refused('ip3_line', size(x, kind=int64), size(y, kind=int64), size(z, kind=int64), stat)) return
+   if (.not. per_point_ok('ip3_line', size(x, kind=int64), colors, stat=stat)) return
    call series_lead(d, 1, x)
    call series_put(d, 2, y)
    call series_put(d, 3, z)
-   call ImPlot3D_PlotLine_doublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), spec_at(d%stride, spec))
+   cs = spec_at(d%stride, spec)
+   if (present(colors)) then
+      cu = packed_colors(colors)
+      cs%LineColors = c_loc(cu)
+   endif
+   call ImPlot3D_PlotLine_doublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), cs)
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_line_r64
 
-   recursive subroutine ip3_scatter_r64(label, x, y, z, spec, stat)
-   !< Markers at the points (x(i), y(i), z(i)), double precision; read in place with any stride. Statuses as
-   !< `ip3_line`.
+   recursive subroutine ip3_scatter_r64(label, x, y, z, spec, colors, sizes, stat)
+   !< Markers at the points (x(i), y(i), z(i)), double precision; read in place with any stride. `colors`: each marker
+   !< filled and outlined in its own colour, `colors(:, i)` RGBA in [0, 1]; `sizes`: each its own radius [pixels].
+   !< Statuses as `ip3_line`, and `FIG_ERR_ARGUMENT` for colours not (4, size(x)) or out of [0, 1], sizes not one per
+   !< point or below 0.
    character(len=*),         intent(in)                       :: label !< Legend label.
    real(real64),             intent(in), target, asynchronous :: x(:)  !< Abscissae.
    real(real64),             intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real64),             intent(in), target, asynchronous :: z(:)  !< Heights.
    type(plot3d_spec_object), intent(in), optional             :: spec  !< Style (default: ImPlot3D's).
+   real(real64),             intent(in), optional             :: colors(:,:) !< Per-point RGBA, (4, size(x)).
+   real(real64),             intent(in), optional             :: sizes(:)    !< Per-point marker radii [pixels].
    integer(int32),           intent(out), optional            :: stat  !< Status.
    type(series_r64), target                                   :: d     !< Where ImPlot3D reads the arrays.
+   type(im_plot3d_spec)                                       :: cs    !< The C spec, with the per-point arrays.
+   integer(c_int), allocatable, target                        :: cu(:) !< Per-point colours, packed (ImU32).
+   real(c_float), allocatable, target                         :: su(:) !< Per-point radii.
 
    if (item_refused('ip3_scatter', size(x, kind=int64), size(y, kind=int64), size(z, kind=int64), stat)) return
+   if (.not. per_point_ok('ip3_scatter', size(x, kind=int64), colors, sizes, stat)) return
    call series_lead(d, 1, x)
    call series_put(d, 2, y)
    call series_put(d, 3, z)
-   call ImPlot3D_PlotScatter_doublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), spec_at(d%stride, spec))
+   cs = spec_at(d%stride, spec)
+   if (present(colors)) then
+      cu = packed_colors(colors)
+      cs%MarkerFillColors = c_loc(cu)
+      cs%MarkerLineColors = c_loc(cu)
+   endif
+   if (present(sizes)) then
+      su = real(sizes, c_float)
+      cs%MarkerSizes = c_loc(su)
+   endif
+   call ImPlot3D_PlotScatter_doublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), cs)
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_scatter_r64
 
@@ -625,13 +685,13 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_image
 
-   recursive subroutine ip3_setup_axis(axis, label, scale, auto_fit, invert, lock, no_grid, stat)
+   recursive subroutine ip3_setup_axis(axis, label, scale, auto_fit, invert, lock, no_grid, format, stat)
    !< Set up one axis of the 3-D plot being declared (`SetupAxis`, `SetupAxisScale`): `axis` `'x'`, `'y'` or `'z'`;
    !< `scale` `'linear'` (default), `'log'` (base 10: values <= 0 are not shown) or `'symlog'`; `auto_fit` fits the data
    !< every frame; `invert` grows the axis the other way; `lock` fixes its range against the mouse; `no_grid`: no grid
-   !< lines. After `ip3_begin_plot` (and `ip3_setup_axes`, which it overrides for that axis), before any item.
-   !< Statuses: `FIG_ERR_ARGUMENT` for an unknown axis or scale; `FIG_ERR_STATE` outside a 3-D plot, after its first
-   !< item, from a task.
+   !< lines; `format` a C printf format of one real for the tick labels (`'%.1f m'`, `'%.0e'`). After `ip3_begin_plot` (and
+   !< `ip3_setup_axes`, which it overrides for that axis), before any item. Statuses: `FIG_ERR_ARGUMENT` for an unknown
+   !< axis or scale, a format refused; `FIG_ERR_STATE` outside a 3-D plot, after its first item, from a task.
    character(len=*), intent(in)            :: axis     !< 'x', 'y' or 'z'.
    character(len=*), intent(in),  optional :: label    !< Label (default: none).
    character(len=*), intent(in),  optional :: scale    !< 'linear' (default), 'log', 'symlog'.
@@ -639,6 +699,7 @@ contains
    logical,          intent(in),  optional :: invert   !< Values grow the other way.
    logical,          intent(in),  optional :: lock     !< No pan or zoom by the user.
    logical,          intent(in),  optional :: no_grid  !< No grid lines.
+   character(len=*), intent(in),  optional :: format   !< printf format of the tick labels (one real).
    integer(int32),   intent(out), optional :: stat     !< Status.
    integer(c_int)                          :: code     !< ImAxis3D.
    integer(c_int)                          :: sc       !< ImPlot3DScale.
@@ -673,6 +734,9 @@ contains
          return
       endselect
    endif
+   if (present(format)) then
+      if (format_refused('ip3_setup_axis', 'format', format, FORMAT_REAL, stat)) return
+   endif
    if (setup3d_refused('ip3_setup_axis', stat)) return
    flags = ImPlot3DAxisFlags_None
    if (opt(auto_fit)) flags = ior(flags, ImPlot3DAxisFlags_AutoFit)
@@ -686,8 +750,79 @@ contains
    endif
    call ImPlot3D_SetupAxis(code, plabel, flags)
    if (sc /= ImPlot3DScale_Linear) call ImPlot3D_SetupAxisScale_Plot3DScale(code, sc)
+   if (present(format)) then
+      call figure_check(fig_plot3d_axis_format(code, format, len(format, c_int)), stat)
+      return
+   endif
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_setup_axis
+
+   recursive subroutine ip3_setup_axis_ticks(axis, values, labels, stat)
+   !< Ticks of one axis of the 3-D plot being declared at the given values instead of the automatic ones
+   !< (`SetupAxisTicks`), labelled `labels` (one per value; trailing blanks are not shown) or, without them, by the
+   !< axis's format. Before any item. Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, values not finite, labels not
+   !< one per value, more values than a C `int` counts; `FIG_ERR_STATE` outside a 3-D plot, after its first item, from
+   !< a task.
+   character(len=*), intent(in)            :: axis      !< 'x', 'y' or 'z'.
+   real(real64),     intent(in)            :: values(:) !< Tick positions.
+   character(len=*), intent(in),  optional :: labels(:) !< One label per value.
+   integer(int32),   intent(out), optional :: stat      !< Status.
+   real(c_double), allocatable, target     :: v(:)      !< The values, contiguous.
+   character(kind=c_char), allocatable, target :: ch(:) !< The labels, each NUL-terminated, one after the other.
+   type(c_ptr), allocatable, target        :: pl(:)     !< Their addresses.
+   type(c_ptr)                             :: pv, pls   !< Addresses of the values and of the label addresses.
+   integer(c_int)                          :: code      !< ImAxis3D.
+   integer(int64)                          :: n, k, j, at !< Values, counters, position in `ch`.
+
+   if (figure_draw_refused('ip3_setup_axis_ticks', stat)) return ! a task does not draw
+   select case (axis)
+   case ('x')
+      code = ImAxis3D_X
+   case ('y')
+      code = ImAxis3D_Y
+   case ('z')
+      code = ImAxis3D_Z
+   case default
+      call figure_fail(FIG_ERR_ARGUMENT, "ip3_setup_axis_ticks: unknown axis '"//axis//"' ('x', 'y' or 'z')", stat)
+      return
+   endselect
+   n = size(values, kind=int64)
+   if (n > int(huge(1_c_int), int64)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip3_setup_axis_ticks: more values than a C int counts', stat)
+      return
+   endif
+   if (.not. all(ieee_is_finite(values))) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip3_setup_axis_ticks: values must be finite', stat)
+      return
+   endif
+   if (present(labels)) then
+      if (size(labels, kind=int64) /= n) then
+         call figure_fail(FIG_ERR_ARGUMENT, 'ip3_setup_axis_ticks: labels must be one per value', stat)
+         return
+      endif
+   endif
+   if (setup3d_refused('ip3_setup_axis_ticks', stat)) return
+   v = real(values, c_double)
+   pv = c_null_ptr
+   if (n > 0_int64) pv = c_loc(v)
+   pls = c_null_ptr
+   if (present(labels)) then
+      allocate(ch(n * (int(len(labels), int64) + 1_int64) + 1_int64), pl(max(n, 1_int64)))
+      at = 1_int64
+      do k = 1_int64, n
+         pl(k) = c_loc(ch(at))
+         do j = 1_int64, int(len_trim(labels(k)), int64)
+            ch(at + j - 1_int64) = labels(k)(j:j)
+         enddo
+         at = at + int(len_trim(labels(k)), int64)
+         ch(at) = c_null_char
+         at = at + 1_int64
+      enddo
+      if (n > 0_int64) pls = c_loc(pl)
+   endif
+   call ImPlot3D_SetupAxisTicks_doublePtr(code, pv, int(n, c_int), pls, .false._c_bool)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip3_setup_axis_ticks
 
    recursive subroutine ip3_setup_box(scale, elevation, azimuth, animate, stat)
    !< The box of the 3-D plot being declared: `scale` its x, y, z sides relative to each other (`SetupBoxScale`,
@@ -1251,6 +1386,55 @@ contains
    c%Stride = int(stride, c_int)
    plot_stride = stride
    endfunction spec_at
+
+   function per_point_ok(who, n, colors, sizes, stat) result(ok)
+   !< Whether the per-point colours, (4, n) in [0, 1], and radii, n finite values >= 0, fit an item of n points.
+   character(len=*), intent(in)            :: who         !< Calling procedure, for the message.
+   integer(int64),   intent(in)            :: n           !< Points.
+   real(real64),     intent(in), optional  :: colors(:,:) !< Per-point RGBA.
+   real(real64),     intent(in), optional  :: sizes(:)    !< Per-point radii [pixels].
+   integer(int32),   intent(out), optional :: stat        !< Status, on a failure.
+   logical                                 :: ok          !< Acceptable.
+
+   ok = .false.
+   if (present(colors)) then
+      if (size(colors, 1, kind=int64) /= 4_int64 .or. size(colors, 2, kind=int64) /= n) then
+         call figure_fail(FIG_ERR_ARGUMENT, who//': colors must be (4, size(x)): one RGBA per point', stat)
+         return
+      endif
+      if (.not. all(colors >= 0.0_real64 .and. colors <= 1.0_real64)) then
+         call figure_fail(FIG_ERR_ARGUMENT, who//': colour components must be in [0, 1]', stat)
+         return
+      endif
+   endif
+   if (present(sizes)) then
+      if (size(sizes, kind=int64) /= n) then
+         call figure_fail(FIG_ERR_ARGUMENT, who//': sizes must be one per point', stat)
+         return
+      endif
+      if (.not. all(sizes >= 0.0_real64 .and. sizes <= huge(1.0_real32))) then
+         call figure_fail(FIG_ERR_ARGUMENT, who//': sizes must be finite and not below 0', stat)
+         return
+      endif
+   endif
+   ok = .true.
+   endfunction per_point_ok
+
+   pure function packed_colors(colors) result(u)
+   !< RGBA colours in [0, 1], one per column, packed as Dear ImGui's ImU32 (R in the low byte, A in the high one).
+   real(real64), intent(in) :: colors(:,:) !< RGBA, (4, n).
+   integer(c_int)           :: u(size(colors, 2)) !< Packed colours.
+   integer(int64)           :: c(4)        !< Components, 0-255.
+   integer(int64)           :: w           !< Packed, unsigned.
+   integer                  :: i           !< Counter.
+
+   do i = 1, size(colors, 2)
+      c = int(min(max(colors(:, i), 0.0_real64), 1.0_real64) * 255.0_real64 + 0.5_real64, int64)
+      w = c(1) + c(2) * 256_int64 + c(3) * 65536_int64 + c(4) * 16777216_int64
+      if (w >= 2147483648_int64) w = w - 4294967296_int64 ! the same bits as a signed C int
+      u(i) = int(w, c_int)
+   enddo
+   endfunction packed_colors
 
    pure function rgba_ok(color) result(ok)
    !< Whether an optional colour is absent or has 4 components.

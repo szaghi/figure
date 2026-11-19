@@ -654,7 +654,7 @@ def glue_cpp(glue: list[Function], structs: dict) -> str:
     return "\n".join(out) + "\n"
 
 
-# Style fields reachable by name (figure_style): plain values of ImGuiStyle and ImPlotStyle. Colours are reached
+# Style fields reachable by name (figure_style): plain values of ImGuiStyle, ImPlotStyle and ImPlot3DStyle. Colours are reached
 # through each library's own colour names; fonts belong to the font API; private fields (`_x`) are not public.
 STYLE_KINDS = {
     "float": "FIG_STYLE_FLOAT",
@@ -669,12 +669,14 @@ def style_tables(structs: dict) -> str:
     out = [
         "// FIGURE generated style tables (scripts/gen_bindings.py: do not edit).",
         "//",
-        "// Every plain field of ImGuiStyle and ImPlotStyle (float, ImVec2, bool, enumeration), by name, offset and kind:",
-        "// what figure_style reads and writes by name. Colours (the Colors arrays) are reached through each library's",
-        "// colour names, the font fields through the font API; private fields (leading underscore) are left out.",
+        "// Every plain field of ImGuiStyle, ImPlotStyle and ImPlot3DStyle (float, ImVec2, bool, enumeration), by name,",
+        "// offset and kind: what figure_style reads and writes by name. Colours (the Colors arrays) are reached through",
+        "// each library's colour names, the font fields through the font API; private fields (leading underscore) are",
+        "// left out.",
         '#include "figure_style.h"',
         '#include "imgui.h"',
         '#include "implot.h"',
+        '#include "implot3d.h"',
         "",
         "#include <cstddef>",
         "",
@@ -684,6 +686,7 @@ def style_tables(structs: dict) -> str:
     for struct, table in (
         ("ImGuiStyle", "IMGUI_FIELDS"),
         ("ImPlotStyle", "IMPLOT_FIELDS"),
+        ("ImPlot3DStyle", "IMPLOT3D_FIELDS"),
     ):
         rows = []
         for f in structs[struct]:

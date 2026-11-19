@@ -1,0 +1,6 @@
+#! program build/docs-examples/bin/cb_plot3d_style
+#! frames  8
+#! poster  7
+#! video   no
+# a still: the probes, their colours and sizes, the formats and ticks of the axes, the plot's style
+0   move 5 5

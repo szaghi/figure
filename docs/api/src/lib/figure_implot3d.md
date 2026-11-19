@@ -107,6 +107,7 @@ graph LR
 - [ip3_text](#ip3-text)
 - [ip3_image](#ip3-image)
 - [ip3_setup_axis](#ip3-setup-axis)
+- [ip3_setup_axis_ticks](#ip3-setup-axis-ticks)
 - [ip3_setup_box](#ip3-setup-box)
 - [ip3_setup_legend](#ip3-setup-legend)
 - [ip3_plot_to_pixels](#ip3-plot-to-pixels)
@@ -130,6 +131,8 @@ graph LR
 - [colormap3d_ok](#colormap3d-ok)
 - [triangles_ok](#triangles-ok)
 - [spec_at](#spec-at)
+- [per_point_ok](#per-point-ok)
+- [packed_colors](#packed-colors)
 - [rgba_ok](#rgba-ok)
 - [rgba](#rgba)
 
@@ -279,13 +282,14 @@ flowchart LR
 
 ### ip3_line_r32
 
-A line through the points (x(i), y(i), z(i)), single precision; read in place with any stride. Statuses:
- `FIG_ERR_ARGUMENT` for series of different sizes; `FIG_ERR_STATE` outside a 3-D plot, from a task.
+A line through the points (x(i), y(i), z(i)), single precision; read in place with any stride. `colors`: the
+ segment from point i in `colors(:, i)` (RGBA in [0, 1]). Statuses: `FIG_ERR_ARGUMENT` for series of different
+ sizes, colours not (4, size(x)) or out of [0, 1]; `FIG_ERR_STATE` outside a 3-D plot, from a task.
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip3_line_r32(label, x, y, z, spec, stat)
+subroutine ip3_line_r32(label, x, y, z, spec, colors, stat)
 ```
 
 **Arguments**
@@ -297,6 +301,7 @@ subroutine ip3_line_r32(label, x, y, z, spec, stat)
 | `y` | real(kind=real32) | in | target, asynchronous | Ordinates. |
 | `z` | real(kind=real32) | in | target, asynchronous | Heights. |
 | `spec` | type([plot3d_spec_object](/api/src/lib/figure_implot3d#plot3d-spec-object)) | in | optional | Style (default: ImPlot3D's). |
+| `colors` | real(kind=real64) | in | optional | Per-point RGBA, (4, size(x)). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -307,29 +312,35 @@ flowchart LR
   ip3_line_r32["ip3_line_r32"] --> cstr["cstr"]
   ip3_line_r32["ip3_line_r32"] --> figure_check["figure_check"]
   ip3_line_r32["ip3_line_r32"] --> item_refused["item_refused"]
+  ip3_line_r32["ip3_line_r32"] --> packed_colors["packed_colors"]
+  ip3_line_r32["ip3_line_r32"] --> per_point_ok["per_point_ok"]
   ip3_line_r32["ip3_line_r32"] --> series_lead["series_lead"]
   ip3_line_r32["ip3_line_r32"] --> series_put["series_put"]
   ip3_line_r32["ip3_line_r32"] --> spec_at["spec_at"]
   classDef focus stroke-width:3px,font-weight:bold
   class ip3_line_r32 focus
   click item_refused href "#item-refused" "item_refused"
+  click per_point_ok href "#per-point-ok" "per_point_ok"
   click series_lead href "figure_implot.html#series-lead" "series_lead"
   click series_put href "figure_implot.html#series-put" "series_put"
+  click spec_at href "#spec-at" "spec_at"
+  click packed_colors href "#packed-colors" "packed_colors"
   click ImPlot3D_PlotLine_FloatPtr href "figure_cimplot3d.html#implot3d-plotline-floatptr" "ImPlot3D_PlotLine_FloatPtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click spec_at href "#spec-at" "spec_at"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip3_scatter_r32
 
-Markers at the points (x(i), y(i), z(i)), single precision; read in place with any stride. Statuses as
- `ip3_line`.
+Markers at the points (x(i), y(i), z(i)), single precision; read in place with any stride. `colors`: each marker
+ filled and outlined in its own colour, `colors(:, i)` RGBA in [0, 1]; `sizes`: each its own radius [pixels].
+ Statuses as `ip3_line`, and `FIG_ERR_ARGUMENT` for colours not (4, size(x)) or out of [0, 1], sizes not one per
+ point or below 0.
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip3_scatter_r32(label, x, y, z, spec, stat)
+subroutine ip3_scatter_r32(label, x, y, z, spec, colors, sizes, stat)
 ```
 
 **Arguments**
@@ -341,6 +352,8 @@ subroutine ip3_scatter_r32(label, x, y, z, spec, stat)
 | `y` | real(kind=real32) | in | target, asynchronous | Ordinates. |
 | `z` | real(kind=real32) | in | target, asynchronous | Heights. |
 | `spec` | type([plot3d_spec_object](/api/src/lib/figure_implot3d#plot3d-spec-object)) | in | optional | Style (default: ImPlot3D's). |
+| `colors` | real(kind=real64) | in | optional | Per-point RGBA, (4, size(x)). |
+| `sizes` | real(kind=real64) | in | optional | Per-point marker radii [pixels]. |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -351,17 +364,21 @@ flowchart LR
   ip3_scatter_r32["ip3_scatter_r32"] --> cstr["cstr"]
   ip3_scatter_r32["ip3_scatter_r32"] --> figure_check["figure_check"]
   ip3_scatter_r32["ip3_scatter_r32"] --> item_refused["item_refused"]
+  ip3_scatter_r32["ip3_scatter_r32"] --> packed_colors["packed_colors"]
+  ip3_scatter_r32["ip3_scatter_r32"] --> per_point_ok["per_point_ok"]
   ip3_scatter_r32["ip3_scatter_r32"] --> series_lead["series_lead"]
   ip3_scatter_r32["ip3_scatter_r32"] --> series_put["series_put"]
   ip3_scatter_r32["ip3_scatter_r32"] --> spec_at["spec_at"]
   classDef focus stroke-width:3px,font-weight:bold
   class ip3_scatter_r32 focus
   click item_refused href "#item-refused" "item_refused"
+  click per_point_ok href "#per-point-ok" "per_point_ok"
   click series_lead href "figure_implot.html#series-lead" "series_lead"
   click series_put href "figure_implot.html#series-put" "series_put"
+  click spec_at href "#spec-at" "spec_at"
+  click packed_colors href "#packed-colors" "packed_colors"
   click ImPlot3D_PlotScatter_FloatPtr href "figure_cimplot3d.html#implot3d-plotscatter-floatptr" "ImPlot3D_PlotScatter_FloatPtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click spec_at href "#spec-at" "spec_at"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
@@ -531,13 +548,14 @@ flowchart LR
 
 ### ip3_line_r64
 
-A line through the points (x(i), y(i), z(i)), double precision; read in place with any stride. Statuses:
- `FIG_ERR_ARGUMENT` for series of different sizes; `FIG_ERR_STATE` outside a 3-D plot, from a task.
+A line through the points (x(i), y(i), z(i)), double precision; read in place with any stride. `colors`: the
+ segment from point i in `colors(:, i)` (RGBA in [0, 1]). Statuses: `FIG_ERR_ARGUMENT` for series of different
+ sizes, colours not (4, size(x)) or out of [0, 1]; `FIG_ERR_STATE` outside a 3-D plot, from a task.
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip3_line_r64(label, x, y, z, spec, stat)
+subroutine ip3_line_r64(label, x, y, z, spec, colors, stat)
 ```
 
 **Arguments**
@@ -549,6 +567,7 @@ subroutine ip3_line_r64(label, x, y, z, spec, stat)
 | `y` | real(kind=real64) | in | target, asynchronous | Ordinates. |
 | `z` | real(kind=real64) | in | target, asynchronous | Heights. |
 | `spec` | type([plot3d_spec_object](/api/src/lib/figure_implot3d#plot3d-spec-object)) | in | optional | Style (default: ImPlot3D's). |
+| `colors` | real(kind=real64) | in | optional | Per-point RGBA, (4, size(x)). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -559,29 +578,35 @@ flowchart LR
   ip3_line_r64["ip3_line_r64"] --> cstr["cstr"]
   ip3_line_r64["ip3_line_r64"] --> figure_check["figure_check"]
   ip3_line_r64["ip3_line_r64"] --> item_refused["item_refused"]
+  ip3_line_r64["ip3_line_r64"] --> packed_colors["packed_colors"]
+  ip3_line_r64["ip3_line_r64"] --> per_point_ok["per_point_ok"]
   ip3_line_r64["ip3_line_r64"] --> series_lead["series_lead"]
   ip3_line_r64["ip3_line_r64"] --> series_put["series_put"]
   ip3_line_r64["ip3_line_r64"] --> spec_at["spec_at"]
   classDef focus stroke-width:3px,font-weight:bold
   class ip3_line_r64 focus
   click item_refused href "#item-refused" "item_refused"
+  click per_point_ok href "#per-point-ok" "per_point_ok"
   click series_lead href "figure_implot.html#series-lead" "series_lead"
   click series_put href "figure_implot.html#series-put" "series_put"
+  click spec_at href "#spec-at" "spec_at"
+  click packed_colors href "#packed-colors" "packed_colors"
   click ImPlot3D_PlotLine_doublePtr href "figure_cimplot3d.html#implot3d-plotline-doubleptr" "ImPlot3D_PlotLine_doublePtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click spec_at href "#spec-at" "spec_at"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip3_scatter_r64
 
-Markers at the points (x(i), y(i), z(i)), double precision; read in place with any stride. Statuses as
- `ip3_line`.
+Markers at the points (x(i), y(i), z(i)), double precision; read in place with any stride. `colors`: each marker
+ filled and outlined in its own colour, `colors(:, i)` RGBA in [0, 1]; `sizes`: each its own radius [pixels].
+ Statuses as `ip3_line`, and `FIG_ERR_ARGUMENT` for colours not (4, size(x)) or out of [0, 1], sizes not one per
+ point or below 0.
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip3_scatter_r64(label, x, y, z, spec, stat)
+subroutine ip3_scatter_r64(label, x, y, z, spec, colors, sizes, stat)
 ```
 
 **Arguments**
@@ -593,6 +618,8 @@ subroutine ip3_scatter_r64(label, x, y, z, spec, stat)
 | `y` | real(kind=real64) | in | target, asynchronous | Ordinates. |
 | `z` | real(kind=real64) | in | target, asynchronous | Heights. |
 | `spec` | type([plot3d_spec_object](/api/src/lib/figure_implot3d#plot3d-spec-object)) | in | optional | Style (default: ImPlot3D's). |
+| `colors` | real(kind=real64) | in | optional | Per-point RGBA, (4, size(x)). |
+| `sizes` | real(kind=real64) | in | optional | Per-point marker radii [pixels]. |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -603,17 +630,21 @@ flowchart LR
   ip3_scatter_r64["ip3_scatter_r64"] --> cstr["cstr"]
   ip3_scatter_r64["ip3_scatter_r64"] --> figure_check["figure_check"]
   ip3_scatter_r64["ip3_scatter_r64"] --> item_refused["item_refused"]
+  ip3_scatter_r64["ip3_scatter_r64"] --> packed_colors["packed_colors"]
+  ip3_scatter_r64["ip3_scatter_r64"] --> per_point_ok["per_point_ok"]
   ip3_scatter_r64["ip3_scatter_r64"] --> series_lead["series_lead"]
   ip3_scatter_r64["ip3_scatter_r64"] --> series_put["series_put"]
   ip3_scatter_r64["ip3_scatter_r64"] --> spec_at["spec_at"]
   classDef focus stroke-width:3px,font-weight:bold
   class ip3_scatter_r64 focus
   click item_refused href "#item-refused" "item_refused"
+  click per_point_ok href "#per-point-ok" "per_point_ok"
   click series_lead href "figure_implot.html#series-lead" "series_lead"
   click series_put href "figure_implot.html#series-put" "series_put"
+  click spec_at href "#spec-at" "spec_at"
+  click packed_colors href "#packed-colors" "packed_colors"
   click ImPlot3D_PlotScatter_doublePtr href "figure_cimplot3d.html#implot3d-plotscatter-doubleptr" "ImPlot3D_PlotScatter_doublePtr"
   click cstr href "figure_base.html#cstr" "cstr"
-  click spec_at href "#spec-at" "spec_at"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
@@ -868,7 +899,7 @@ flowchart LR
   class ip3_image focus
   click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
-  click is_initialized href "figure_texture.html#is-initialized" "is_initialized"
+  click is_initialized href "figure_view3d.html#is-initialized" "is_initialized"
   click outside_plot href "#outside-plot" "outside_plot"
   click ImPlot3D_PlotImage_Plot3DPoint href "figure_cimplot3d.html#implot3d-plotimage-plot3dpoint" "ImPlot3D_PlotImage_Plot3DPoint"
   click cstr href "figure_base.html#cstr" "cstr"
@@ -882,14 +913,14 @@ flowchart LR
 Set up one axis of the 3-D plot being declared (`SetupAxis`, `SetupAxisScale`): `axis` `'x'`, `'y'` or `'z'`;
  `scale` `'linear'` (default), `'log'` (base 10: values <= 0 are not shown) or `'symlog'`; `auto_fit` fits the data
  every frame; `invert` grows the axis the other way; `lock` fixes its range against the mouse; `no_grid`: no grid
- lines. After `ip3_begin_plot` (and `ip3_setup_axes`, which it overrides for that axis), before any item.
- Statuses: `FIG_ERR_ARGUMENT` for an unknown axis or scale; `FIG_ERR_STATE` outside a 3-D plot, after its first
- item, from a task.
+ lines; `format` a C printf format of one real for the tick labels (`'%.1f m'`, `'%.0e'`). After `ip3_begin_plot` (and
+ `ip3_setup_axes`, which it overrides for that axis), before any item. Statuses: `FIG_ERR_ARGUMENT` for an unknown
+ axis or scale, a format refused; `FIG_ERR_STATE` outside a 3-D plot, after its first item, from a task.
 
 **Attributes**: recursive
 
 ```fortran
-subroutine ip3_setup_axis(axis, label, scale, auto_fit, invert, lock, no_grid, stat)
+subroutine ip3_setup_axis(axis, label, scale, auto_fit, invert, lock, no_grid, format, stat)
 ```
 
 **Arguments**
@@ -903,6 +934,7 @@ subroutine ip3_setup_axis(axis, label, scale, auto_fit, invert, lock, no_grid, s
 | `invert` | logical | in | optional | Values grow the other way. |
 | `lock` | logical | in | optional | No pan or zoom by the user. |
 | `no_grid` | logical | in | optional | No grid lines. |
+| `format` | character(len=*) | in | optional | printf format of the tick labels (one real). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
@@ -912,20 +944,65 @@ flowchart LR
   ip3_setup_axis["ip3_setup_axis"] --> ImPlot3D_SetupAxis["ImPlot3D_SetupAxis"]
   ip3_setup_axis["ip3_setup_axis"] --> ImPlot3D_SetupAxisScale_Plot3DScale["ImPlot3D_SetupAxisScale_Plot3DScale"]
   ip3_setup_axis["ip3_setup_axis"] --> cstr["cstr"]
+  ip3_setup_axis["ip3_setup_axis"] --> fig_plot3d_axis_format["fig_plot3d_axis_format"]
   ip3_setup_axis["ip3_setup_axis"] --> figure_check["figure_check"]
   ip3_setup_axis["ip3_setup_axis"] --> figure_draw_refused["figure_draw_refused"]
   ip3_setup_axis["ip3_setup_axis"] --> figure_fail["figure_fail"]
+  ip3_setup_axis["ip3_setup_axis"] --> format_refused["format_refused"]
   ip3_setup_axis["ip3_setup_axis"] --> opt["opt"]
   ip3_setup_axis["ip3_setup_axis"] --> setup3d_refused["setup3d_refused"]
   classDef focus stroke-width:3px,font-weight:bold
   class ip3_setup_axis focus
   click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click format_refused href "figure_base.html#format-refused" "format_refused"
   click setup3d_refused href "#setup3d-refused" "setup3d_refused"
   click opt href "#opt" "opt"
   click cstr href "figure_base.html#cstr" "cstr"
   click ImPlot3D_SetupAxis href "figure_cimplot3d.html#implot3d-setupaxis" "ImPlot3D_SetupAxis"
   click ImPlot3D_SetupAxisScale_Plot3DScale href "figure_cimplot3d.html#implot3d-setupaxisscale-plot3dscale" "ImPlot3D_SetupAxisScale_Plot3DScale"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_plot3d_axis_format href "figure_c_native.html#fig-plot3d-axis-format" "fig_plot3d_axis_format"
+```
+
+### ip3_setup_axis_ticks
+
+Ticks of one axis of the 3-D plot being declared at the given values instead of the automatic ones
+ (`SetupAxisTicks`), labelled `labels` (one per value; trailing blanks are not shown) or, without them, by the
+ axis's format. Before any item. Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, values not finite, labels not
+ one per value, more values than a C `int` counts; `FIG_ERR_STATE` outside a 3-D plot, after its first item, from
+ a task.
+
+**Attributes**: recursive
+
+```fortran
+subroutine ip3_setup_axis_ticks(axis, values, labels, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `axis` | character(len=*) | in |  | 'x', 'y' or 'z'. |
+| `values` | real(kind=real64) | in |  | Tick positions. |
+| `labels` | character(len=*) | in | optional | One label per value. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  ip3_setup_axis_ticks["ip3_setup_axis_ticks"] --> ImPlot3D_SetupAxisTicks_doublePtr["ImPlot3D_SetupAxisTicks_doublePtr"]
+  ip3_setup_axis_ticks["ip3_setup_axis_ticks"] --> figure_check["figure_check"]
+  ip3_setup_axis_ticks["ip3_setup_axis_ticks"] --> figure_draw_refused["figure_draw_refused"]
+  ip3_setup_axis_ticks["ip3_setup_axis_ticks"] --> figure_fail["figure_fail"]
+  ip3_setup_axis_ticks["ip3_setup_axis_ticks"] --> setup3d_refused["setup3d_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip3_setup_axis_ticks focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click setup3d_refused href "#setup3d-refused" "setup3d_refused"
+  click ImPlot3D_SetupAxisTicks_doublePtr href "figure_cimplot3d.html#implot3d-setupaxisticks-doubleptr" "ImPlot3D_SetupAxisTicks_doublePtr"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
@@ -1518,6 +1595,7 @@ function setup3d_refused(caller, stat) result(refused)
 ```mermaid
 flowchart LR
   ip3_setup_axis["ip3_setup_axis"] --> setup3d_refused["setup3d_refused"]
+  ip3_setup_axis_ticks["ip3_setup_axis_ticks"] --> setup3d_refused["setup3d_refused"]
   ip3_setup_box["ip3_setup_box"] --> setup3d_refused["setup3d_refused"]
   ip3_setup_legend["ip3_setup_legend"] --> setup3d_refused["setup3d_refused"]
   setup3d_refused["setup3d_refused"] --> fig_plot3d_state["fig_plot3d_state"]
@@ -1525,6 +1603,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class setup3d_refused focus
   click ip3_setup_axis href "#ip3-setup-axis" "ip3_setup_axis"
+  click ip3_setup_axis_ticks href "#ip3-setup-axis-ticks" "ip3_setup_axis_ticks"
   click ip3_setup_box href "#ip3-setup-box" "ip3_setup_box"
   click ip3_setup_legend href "#ip3-setup-legend" "ip3_setup_legend"
   click fig_plot3d_state href "figure_c_native.html#fig-plot3d-state" "fig_plot3d_state"
@@ -1884,6 +1963,78 @@ flowchart LR
   click ip3_triangles_r32 href "#ip3-triangles-r32" "ip3_triangles_r32"
   click ip3_triangles_r64 href "#ip3-triangles-r64" "ip3_triangles_r64"
   click figure_ImPlot3DSpec_default href "figure_cimplot3d.html#figure-implot3dspec-default" "figure_ImPlot3DSpec_default"
+```
+
+### per_point_ok
+
+Whether the per-point colours, (4, n) in [0, 1], and radii, n finite values >= 0, fit an item of n points.
+
+**Returns**: `logical`
+
+```fortran
+function per_point_ok(who, n, colors, sizes, stat) result(ok)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `who` | character(len=*) | in |  | Calling procedure, for the message. |
+| `n` | integer(kind=int64) | in |  | Points. |
+| `colors` | real(kind=real64) | in | optional | Per-point RGBA. |
+| `sizes` | real(kind=real64) | in | optional | Per-point radii [pixels]. |
+| `stat` | integer(kind=int32) | out | optional | Status, on a failure. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  ip3_line_r32["ip3_line_r32"] --> per_point_ok["per_point_ok"]
+  ip3_line_r64["ip3_line_r64"] --> per_point_ok["per_point_ok"]
+  ip3_scatter_r32["ip3_scatter_r32"] --> per_point_ok["per_point_ok"]
+  ip3_scatter_r64["ip3_scatter_r64"] --> per_point_ok["per_point_ok"]
+  per_point_ok["per_point_ok"] --> figure_fail["figure_fail"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class per_point_ok focus
+  click ip3_line_r32 href "#ip3-line-r32" "ip3_line_r32"
+  click ip3_line_r64 href "#ip3-line-r64" "ip3_line_r64"
+  click ip3_scatter_r32 href "#ip3-scatter-r32" "ip3_scatter_r32"
+  click ip3_scatter_r64 href "#ip3-scatter-r64" "ip3_scatter_r64"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+```
+
+### packed_colors
+
+RGBA colours in [0, 1], one per column, packed as Dear ImGui's ImU32 (R in the low byte, A in the high one).
+
+**Attributes**: pure
+
+**Returns**: `integer(kind=c_int)`
+
+```fortran
+function packed_colors(colors) result(u)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `colors` | real(kind=real64) | in |  | RGBA, (4, n). |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  ip3_line_r32["ip3_line_r32"] --> packed_colors["packed_colors"]
+  ip3_line_r64["ip3_line_r64"] --> packed_colors["packed_colors"]
+  ip3_scatter_r32["ip3_scatter_r32"] --> packed_colors["packed_colors"]
+  ip3_scatter_r64["ip3_scatter_r64"] --> packed_colors["packed_colors"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class packed_colors focus
+  click ip3_line_r32 href "#ip3-line-r32" "ip3_line_r32"
+  click ip3_line_r64 href "#ip3-line-r64" "ip3_line_r64"
+  click ip3_scatter_r32 href "#ip3-scatter-r32" "ip3_scatter_r32"
+  click ip3_scatter_r64 href "#ip3-scatter-r64" "ip3_scatter_r64"
 ```
 
 ### rgba_ok

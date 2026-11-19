@@ -187,6 +187,8 @@ const char *opener_of(const entry_t &e) { return e.who.empty() ? KINDS[e.kind].o
 std::string closer_of(const entry_t &e) {
    if ((e.kind == K_STYLE_COLOR || e.kind == K_STYLE_VAR) && e.who.rfind("ip_", 0) == 0)
       return std::string("ip_") + (KINDS[e.kind].closer + 3);
+   if ((e.kind == K_STYLE_COLOR || e.kind == K_STYLE_VAR) && e.who.rfind("ip3_", 0) == 0)
+      return std::string("ip3_") + (KINDS[e.kind].closer + 3);
    return KINDS[e.kind].closer;
 }
 

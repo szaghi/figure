@@ -25,7 +25,7 @@ public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_shor
 public :: fig_app_wake, fig_set_next_item_shortcut, fig_last_item, fig_item_status, fig_mark_last_item_edited
 public :: fig_drag_range, fig_list_box
 public :: fig_align_begin, fig_align_end, fig_align_next, fig_plot_end, fig_plot_state, fig_plot_axis_constraints
-public :: fig_plot3d_colormap, fig_plot3d_end, fig_plot3d_state
+public :: fig_plot3d_colormap, fig_plot3d_end, fig_plot3d_state, fig_plot3d_axis_format
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
 public :: fig_test_capture, fig_render_threads
@@ -1606,6 +1606,16 @@ interface
    integer(c_int), intent(out) :: id        !< ImPlot3D colormap id (-1 on a failure).
    integer(c_int)              :: status    !< FIG_OK or an error code.
    endfunction fig_plot3d_colormap
+
+   function fig_plot3d_axis_format(axis, fmt, fmt_len) result(status) bind(C, name='fig_plot3d_axis_format')
+   !< The printf format of the tick labels of axis `axis` (0 x, 1 y, 2 z) of the 3-D plot being declared.
+   import :: c_char, c_int
+   implicit none
+   integer(c_int), value              :: axis    !< ImAxis3D.
+   character(kind=c_char), intent(in) :: fmt(*)  !< Format (not NUL-terminated).
+   integer(c_int), value              :: fmt_len !< Its length.
+   integer(c_int)                     :: status  !< FIG_OK or an error code.
+   endfunction fig_plot3d_axis_format
 
    subroutine fig_plot3d_end() bind(C, name='fig_plot3d_end')
    !< End the current 3-D plot (ImPlot3D's EndPlot).

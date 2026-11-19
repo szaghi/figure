@@ -153,7 +153,7 @@ flowchart LR
   class ig_canvas focus
   click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
   click coordinates_ok href "#coordinates-ok" "coordinates_ok"
-  click is_initialized href "figure_texture.html#is-initialized" "is_initialized"
+  click is_initialized href "figure_view3d.html#is-initialized" "is_initialized"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
   click texture_ref href "figure_texture.html#texture-ref" "texture_ref"
   click fig_canvas href "figure_c_native.html#fig-canvas" "fig_canvas"
@@ -446,7 +446,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class ig_draw_image focus
   click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
-  click is_initialized href "figure_texture.html#is-initialized" "is_initialized"
+  click is_initialized href "figure_view3d.html#is-initialized" "is_initialized"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
   click texture_ref href "figure_texture.html#texture-ref" "texture_ref"
   click draw href "#draw" "draw"
@@ -591,7 +591,7 @@ flowchart LR
   coordinates_ok["coordinates_ok"] --> figure_fail["figure_fail"]
   classDef focus stroke-width:3px,font-weight:bold
   class coordinates_ok focus
-  click draw href "#draw" "draw"
+  click draw href "figure_view3d.html#draw" "draw"
   click ig_canvas href "#ig-canvas" "ig_canvas"
   click ig_invisible_button href "#ig-invisible-button" "ig_invisible_button"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
@@ -624,6 +624,6 @@ flowchart LR
   ig_draw_circle["ig_draw_circle"] --> length_ok["length_ok"]
   classDef focus stroke-width:3px,font-weight:bold
   class length_ok focus
-  click draw href "#draw" "draw"
+  click draw href "figure_view3d.html#draw" "draw"
   click ig_draw_circle href "#ig-draw-circle" "ig_draw_circle"
 ```

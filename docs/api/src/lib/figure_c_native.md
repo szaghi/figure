@@ -152,6 +152,7 @@ graph LR
 - [fig_list_box](#fig-list-box)
 - [fig_plot_state](#fig-plot-state)
 - [fig_plot3d_colormap](#fig-plot3d-colormap)
+- [fig_plot3d_axis_format](#fig-plot3d-axis-format)
 - [fig_plot3d_state](#fig-plot3d-state)
 - [fig_align_begin](#fig-align-begin)
 - [fig_widget_input_text](#fig-widget-input-text)
@@ -559,6 +560,8 @@ The event of a canvas in a frame, as native/figure_native.h's `fig_canvas_event`
 ### fig_plot_state
 
 ### fig_plot3d_colormap
+
+### fig_plot3d_axis_format
 
 ### fig_plot3d_state
 

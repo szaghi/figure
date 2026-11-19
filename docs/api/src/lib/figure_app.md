@@ -2352,7 +2352,7 @@ flowchart LR
   click real_range href "figure_numbers.html#real-range" "real_range"
   click save_pref_real32 href "#save-pref-real32" "save_pref_real32"
   click save_pref_real64 href "#save-pref-real64" "save_pref_real64"
-  click speed_ok href "figure_numbers.html#speed-ok" "speed_ok"
+  click speed_ok href "figure_player.html#speed-ok" "speed_ok"
 ```
 
 ### pref_text

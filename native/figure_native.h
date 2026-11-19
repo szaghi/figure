@@ -474,6 +474,9 @@ unsigned fig_colormap_generation(void);
 int    fig_plot3d_colormap(int implot_id, int *id);
 void   fig_plot3d_end(void);
 int    fig_plot3d_state(void);
+/* fig_plot3d_axis_format: the printf format (one real, checked by the caller) of the tick labels of axis 0-2 of the
+ * 3-D plot being declared (SetupAxisFormat with a C formatter; the format kept until the next plot sets one). */
+int    fig_plot3d_axis_format(int axis, const char *fmt, int fmt_len);
 /* A colour-scale legend: a bar of the colormap cmap from vmin to vmax (bottom to top, or left to right when horizontal),
  * ticks and their values (fmt, printf; empty: %g); levels > 0: that many bands; width, height [pixels]: > 0 given,
  * < 0 the space left, 0 the default. An ImGui item of the current window. */

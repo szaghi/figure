@@ -92,6 +92,7 @@ graph LR
 - [text_buffer_text](#text-buffer-text)
 - [text_buffer_length](#text-buffer-length)
 - [ig_color_edit](#ig-color-edit)
+- [ig_color_picker](#ig-color-picker)
 - [ig_combo](#ig-combo)
 - [ig_begin_tooltip](#ig-begin-tooltip)
 - [ig_begin_item_tooltip](#ig-begin-item-tooltip)
@@ -1772,6 +1773,55 @@ flowchart LR
   click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
   click igColorEdit4 href "figure_cimgui.html#igcoloredit4" "igColorEdit4"
+  click cstr href "figure_base.html#cstr" "cstr"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+```
+
+### ig_color_picker
+
+A colour picker drawn in place (`ColorPicker4`), bound to `rgba`, components in [0, 1]: a saturation-value square
+ and a hue bar (or, `wheel=.true.`, a hue wheel around a saturation-value triangle), an alpha bar for a `rgba` of 4
+ components, a preview of the colour, and below, unless
+ `inputs=.false.`, the fields of the components (RGB, HSV or hexadecimal). A `rgba` of 3 components is RGB; of 4,
+ RGBA, with the alpha bar unless `alpha=.false.` (then `rgba(4)` is left alone). True on the frames the user changes
+ the colour; `rgba` is written only then (Dear ImGui edits single precision). `wheel` absent: the hue bar, or the
+ form the user chose in the picker's right-click menu; given, that form, the menu's choice ignored. The width is
+ the item width (`ig_push_item_width`); the height follows it. Statuses: `FIG_ERR_ARGUMENT` for a size other than
+ 3 or 4, `FIG_ERR_STATE` from a task. The same in every mode.
+
+**Attributes**: recursive
+
+**Returns**: `logical`
+
+```fortran
+function ig_color_picker(label, rgba, alpha, wheel, inputs, stat) result(changed)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `label` | character(len=*) | in |  | Label (also the id; '##id' hides it). |
+| `rgba` | real(kind=real64) | inout |  | Colour, RGB or RGBA in [0, 1]. |
+| `alpha` | logical | in | optional | Show and edit the alpha (default: when size(rgba) is 4). |
+| `wheel` | logical | in | optional | A hue wheel and a triangle (`.true.`) or a hue bar (`.false.`). |
+| `inputs` | logical | in | optional | The fields of the components below (default `.true.`). |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  ig_color_picker["ig_color_picker"] --> cstr["cstr"]
+  ig_color_picker["ig_color_picker"] --> figure_check["figure_check"]
+  ig_color_picker["ig_color_picker"] --> figure_draw_refused["figure_draw_refused"]
+  ig_color_picker["ig_color_picker"] --> figure_fail["figure_fail"]
+  ig_color_picker["ig_color_picker"] --> igColorPicker4["igColorPicker4"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_color_picker focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click igColorPicker4 href "figure_cimgui.html#igcolorpicker4" "igColorPicker4"
   click cstr href "figure_base.html#cstr" "cstr"
   click figure_check href "figure_base.html#figure-check" "figure_check"
 ```

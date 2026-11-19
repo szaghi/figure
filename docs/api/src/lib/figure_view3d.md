@@ -1523,7 +1523,7 @@ flowchart LR
   click changed href "#changed" "changed"
   click clear href "#clear" "clear"
   click clip href "#clip" "clip"
-  click draw href "figure_canvas.html#draw" "draw"
+  click draw href "#draw" "draw"
   click editor_clear_marks href "figure_editor.html#editor-clear-marks" "editor_clear_marks"
   click editor_completing href "figure_editor.html#editor-completing" "editor_completing"
   click editor_cursor href "figure_editor.html#editor-cursor" "editor_cursor"
