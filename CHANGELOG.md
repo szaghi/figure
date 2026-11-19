@@ -4,6 +4,61 @@ All notable changes to this project are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.8.0] — 2026-11-19
+### Added
+- **widgets**: ig_color_picker, the colour picker drawn in place
+
+- **plots**: Pie charts, bubbles and error bars along x
+
+- **plot3d**: Colours and sizes per point, axis formats and ticks, ImPlot3D's style by name
+
+
+### Documentation
+- The contradictions with the code, in one sweep
+
+- **showcase**: The solvers run from the window, recorded headless
+
+- **tutorial**: A build-along, a chapter on building and running the studio
+
+- One first step, Install reordered
+
+- Known issues as an answer, the roadmap's Next first
+
+- **tutorial**: Concepts explained where they are first used
+
+- Widgets, menus, docking, styles, frame loop and errors, in a learner's order
+
+- Plots, images, colormaps, 3-D views, editor and canvas, completed
+
+- Processes, remote, testing, capture, performance and architecture, completed
+
+- **features**: The feature map as a lookup
+
+- **cookbook**: Regrouped, seven programs made recipes, the rows in view
+
+- v0.8.0's roadmap section and migration notes
+
+- Every public name called by a docs program and named in a sentence
+
+- **remote**: The page called Remote mode, as the rest of the docs call it
+
+- The API pages built, not committed; two items deferred on the roadmap
+
+
+### Fixed
+- **docs**: The raw-binding policy sentence written by the generator
+
+- **build**: Declare the three v0.8.0 tests in fpm.toml
+
+- **tests**: plot_more writes its colormaps in the working folder
+
+- **plots**: A 2-D item outside a plot is a usage error, not a crash
+
+- **images**: tex%destroy from a task is refused, as init, update and load
+
+- **colormaps**: ip_colormap_stops returns complete arrays or none
+
+
 ## [0.7.0] — 2026-11-16
 ### Added
 - **files**: Make, remove, date and test files and folders on every platform

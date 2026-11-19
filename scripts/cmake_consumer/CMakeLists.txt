@@ -4,7 +4,7 @@
 #   cmake --build build/cmake_consumer && build/cmake_consumer/figure_cmake_consumer
 cmake_minimum_required(VERSION 3.24)
 project(figure_cmake_consumer LANGUAGES Fortran)
-find_package(figure 0.7 CONFIG REQUIRED)
+find_package(figure 0.8 CONFIG REQUIRED)
 message(STATUS "FIGURE ${figure_VERSION} for ${figure_COMPILER}, from ${figure_DIR}")
 add_executable(figure_cmake_consumer figure_cmake_consumer.F90)
 target_link_libraries(figure_cmake_consumer PRIVATE figure::figure)

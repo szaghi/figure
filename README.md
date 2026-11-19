@@ -117,7 +117,7 @@ CMake, and the **Fortran library** built by [FoBiS](https://github.com/szaghi/Fo
 
 ```toml
 [dependencies]
-figure = { git = "https://github.com/szaghi/figure", tag = "v0.7.0-fpm" }
+figure = { git = "https://github.com/szaghi/figure", tag = "v0.8.0-fpm" }
 ```
 
 **WSL2 (WSLg):** set `GALLIUM_DRIVER=d3d12` (e.g. in `~/.bashrc`), or Mesa renders in software and every frame costs
@@ -131,7 +131,7 @@ the [Cookbook](https://szaghi.github.io/figure/manual/cookbook), the
 [performance](https://szaghi.github.io/figure/guide/performance), testing) and the
 [API](https://szaghi.github.io/figure/api/). Every picture there is recorded from the program it describes.
 
-**Status:** v0.7.0, released 2026-11-16 ([changelog](CHANGELOG.md),
+**Status:** v0.8.0, released 2026-11-19 ([changelog](CHANGELOG.md),
 [roadmap](https://szaghi.github.io/figure/guide/roadmap)); the API can still change before v1.0.
 
 ## Copyrights

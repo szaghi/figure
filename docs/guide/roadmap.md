@@ -550,7 +550,7 @@ v0.6.0, and the features no application had asked for, which the owner took in w
   (GitHub's job containers, Docker without `--init`): FIGURE reaps it, or reads it as a zombie
   ([Known issues](known-issues#processes)), and the examples' runs stop after 10 minutes: done.
 
-## v0.8.0 — in progress
+## v0.8.0 — released 2026-11-19
 
 The plan is [#13](https://github.com/szaghi/figure/issues/13); the documentation pass is
 [#14](https://github.com/szaghi/figure/issues/14).

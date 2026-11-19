@@ -4,7 +4,7 @@ title: Contributing
 
 # Contributing
 
-FIGURE is at v0.7.0; the API can still change before v1.0 ([roadmap](roadmap)).
+FIGURE is at v0.8.0; the API can still change before v1.0 ([roadmap](roadmap)).
 
 ## Reporting issues
 
