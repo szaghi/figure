@@ -71,7 +71,7 @@ pixels only when they change, and draws the texture every frame for nothing.
 | `tex%init(width, height [, smooth] [, stat])` | create a `width` x `height` texture (after `app%init`); an existing one is destroyed first |
 | `tex%update(rgba [, stat])` | upload all the pixels, `integer(int8) :: rgba(4, width, height)`, in place: one GPU upload, no copy |
 | `tex%load(path [, smooth] [, stat])` | create the texture from a PNG or JPEG file, its size the image's, and upload it ([Reading images](#reading-images)) |
-| `tex%destroy()` | release it; safe in any state. `app%destroy` releases the textures left |
+| `tex%destroy()` | release it; safe in any state, refused from a task. `app%destroy` releases the textures left |
 | `tex%width()`, `tex%height()`, `tex%is_initialized()` | size and state |
 | `ig_image(tex [, width] [, height])` | the texture in the window, pixel row 1 at the **top** (default size: the texture's) |
 | `ip_image(label, tex, xmin, xmax, ymin, ymax [, spec] [, stat])` | the texture in a plot over `[xmin, xmax] x [ymin, ymax]`, pixel row 1 at the **bottom** (`ymin`) |
@@ -103,8 +103,9 @@ headless mode the textures keep their pixels, and FIGURE's CPU renderer draws th
   frames as well as inside one. `ig_image` and `ip_image` draw inside a frame, as every widget.
 - Modes: **window**, the texture on the GPU; **headless**, its pixels kept for the CPU renderer (transparent until
   the first `update`); **remote**, sent to the browser with the next frame.
-- Threads: the main thread only. From a task `init`, `update` and `load` are refused (`FIG_ERR_STATE`, the task
-  asked to stop); `destroy` is not checked: call it on the main thread.
+- Threads: the main thread only. From a task `init`, `update`, `load` and `destroy` are refused (`FIG_ERR_STATE`, the
+  task asked to stop; `destroy` keeps the texture). Until v0.8.0 `destroy` was not checked: from a task in window mode
+  it deleted the texture off the GL context's thread.
 
 ## Reading images
 

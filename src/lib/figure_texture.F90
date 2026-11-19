@@ -114,10 +114,12 @@ contains
    call figure_check(int(s, c_int), stat)
    endsubroutine load
 
-   subroutine destroy(self)
-   !< Release the texture (safe in any state).
+   recursive subroutine destroy(self)
+   !< Release the texture (safe in any state). From a task: refused, the texture kept (the GPU texture belongs to the
+   !< main thread), the task's status `FIG_ERR_STATE` naming `texture_object%destroy`.
    class(texture_object), intent(inout) :: self !< Texture.
 
+   if (figure_refused('texture_object%destroy')) return ! a task does not release GPU resources
    if (self%id /= 0_c_long_long) call fig_texture_destroy(self%id)
    self%id = 0_c_long_long
    self%nx = 0_int32

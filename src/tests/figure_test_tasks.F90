@@ -5,11 +5,12 @@ use, intrinsic :: iso_fortran_env, only : int32, int64, real64
 use figure, only : figure_time
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_color_edit, ig_end, ig_input, ig_push_style_color, &
                    ig_same_line, ig_separator, ig_slider, ig_text, ip_begin_plot, ip_colormap_legend, ip_line, &
-                   ip_setup_axes, list_clipper_object, task_handle_object
+                   ip_setup_axes, list_clipper_object, task_handle_object, texture_object
 
 implicit none
 private
 public :: sum_job, sum_work, forever_work, draw_work, drop_work, fail_work, pause, ended_by_object
+public :: texture_job, texture_work
 public :: clock_job, clock_work, clock_calls
 public :: wake_job, waker_work, WAKE_BY_REQUEST, WAKE_BY_WAKE, WAKE_BY_QUIT
 
@@ -25,6 +26,12 @@ type :: sum_job
    integer(int32) :: stats(6) = -1_int32 !< Statuses of the widgets and style calls made from the task.
    integer(int32) :: stat = -1_int32   !< Status of a call that must refuse.
 endtype sum_job
+
+type :: texture_job
+   !< A texture the program created, released from a task (which must refuse it).
+   type(texture_object) :: tex           !< The texture (a copy of the program's: the same GPU texture).
+   logical              :: kept = .false. !< Still initialized after the task's tex%destroy.
+endtype texture_job
 
 type :: wake_job
    !< A call from a task to the application at a given time (`at`), then a hold until cancelled (or `hold` seconds).
@@ -147,6 +154,18 @@ contains
    endselect
    endsubroutine draw_work
 
+   recursive subroutine texture_work(h, data)
+   !< Breaks the threading rule: releases a texture, which must refuse (the GPU texture belongs to the main thread).
+   type(task_handle_object), intent(inout) :: h    !< Handle.
+   class(*),                 intent(inout) :: data !< A texture_job.
+
+   select type (data)
+   type is (texture_job)
+      call data%tex%destroy()
+      data%kept = data%tex%is_initialized() .and. h%cancelled() ! refused, and the refusal asked the task to stop
+   endselect
+   endsubroutine texture_work
+
    recursive subroutine drop_work(h, data)
    !< Breaks the threading rule: asks for the frame's drops, which must refuse with FIG_ERR_STATE.
    type(task_handle_object), intent(inout) :: h        !< Handle.
@@ -242,6 +261,8 @@ program figure_test_tasks
 !< monotonic clock (figure_time): before init, across destroy and init, against a sleep of the system, from a task.
 use, intrinsic :: iso_fortran_env, only : error_unit, int32, int64, output_unit, real64
 use figure, only : app_object, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, figure_last_error, figure_time, task_object
+use figure, only : texture_object
+use figure_test_tasks_work, only : texture_job, texture_work
 use figure_test_tasks_work, only : draw_work, drop_work, ended_by_object, fail_work, forever_work, pause, &
                                   sum_job, sum_work, wake_job, waker_work, WAKE_BY_QUIT, WAKE_BY_REQUEST, WAKE_BY_WAKE
 use figure_test_tasks_work, only : clock_calls, clock_job, clock_work
@@ -250,7 +271,7 @@ use, intrinsic :: iso_c_binding, only : c_int
 
 implicit none
 type(app_object)              :: app             !< Application.
-logical                       :: test_passed(18) !< Per-check outcome.
+logical                       :: test_passed(19) !< Per-check outcome.
 integer(int32)                :: port            !< Remote mode's port.
 real(real64)                  :: clock(4)        !< figure_time: before init, before destroy, after init, at the end [s].
 
@@ -285,6 +306,7 @@ call refused_while_running(test_passed(7))
 call object_end(test_passed(8))
 call progress_before(test_passed(9))
 call drop_refused(test_passed(10))
+call texture_kept(test_passed(19))
 call clock_monotonic(test_passed(16))
 call clock_sleep(test_passed(17))
 call clock_in_task(test_passed(18))
@@ -491,6 +513,34 @@ contains
    endselect
    if (.not. ok) write(error_unit, '(A,I0,A,A)') 'drawing refused: stat ', stat, ', ', msg
    endsubroutine drawing_refused
+
+   subroutine texture_kept(ok)
+   !< tex%destroy from a task refuses: the texture stays (on the GPU and in the task's copy), the task's status is
+   !< FIG_ERR_STATE naming texture_object%destroy; on the main thread the same call releases it.
+   logical, intent(out)          :: ok     !< Outcome.
+   type(task_object)             :: t      !< Task.
+   type(texture_object)          :: tex    !< The program's texture.
+   class(*), allocatable         :: data   !< Result.
+   character(len=:), allocatable :: msg    !< Message.
+   integer(int32)                :: frames !< Frames.
+   integer(int32)                :: stat   !< Status.
+
+   call tex%init(4_int32, 4_int32)
+   call t%start(texture_work, texture_job(tex=tex))
+   frames = frames_until_done(t, 10.0_real64)
+   call t%result(data, stat)
+   msg = figure_last_error()
+   ok = stat == FIG_ERR_STATE .and. index(msg, 'texture_object%destroy') > 0 .and. tex%is_initialized()
+   select type (data)
+   type is (texture_job)
+      ok = ok .and. data%kept
+   class default
+      ok = .false.
+   endselect
+   call tex%destroy()
+   ok = ok .and. .not. tex%is_initialized()
+   if (.not. ok) write(error_unit, '(A,I0,A,A)') 'texture kept: stat ', stat, ', ', msg
+   endsubroutine texture_kept
 
    subroutine drop_refused(ok)
    !< app%dropped from a task refuses: its stat and the task's status are FIG_ERR_STATE, named in the message; it
