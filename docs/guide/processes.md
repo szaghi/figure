@@ -20,7 +20,7 @@ browser stops receiving frames and looks dead. FIGURE runs two kinds of work bes
 | `p%start(args [, cwd] [, env] [, merge_stderr] [, detached] [, log_file] [, stat])` | Start the program `args(1)` with the arguments `args(2:)`. |
 | `p%poll(lines [, stat])` | The complete lines printed since the last poll, oldest first; no element when there is nothing new. |
 | `p%running()` → `logical` | `.true.` while the process runs (captured: until FIGURE has read all its output). |
-| `p%exit_code([stat])` → `int32` | The exit code of a captured process that has ended. |
+| `p%exit_code([stat])` → `int32` | The exit code of a captured process that has ended (after `kill`: the negative signal number on POSIX, 1 on Windows). |
 | `p%killed()` → `logical` | `.true.` when the process ended after `p%kill`. |
 | `p%pid()` → `int64` | The process id the system gave it (0 before `start`). |
 | `p%kill([force] [, stat])` | Ask the process to end; with `force`, at once. |
@@ -53,6 +53,10 @@ truncated at `start`. Its end is seen in every case on Linux: the program reaps 
 of a container without an init), and a zombie that another process holds unreaped counts as ended (read from `/proc`).
 Elsewhere such a zombie keeps `p%running()` true ([Known issues](known-issues#processes)). The
 program follows it with `p%poll` while it runs, and can start a new GUI later that reads the same file.
+
+`p%pid()` is the started program's process id, a detached one's included (0 before `start`): for a line in the
+program's own log, or a `kill` from another tool. `p%exit_code()` tells how a captured process ended; a detached
+one's is not known (its own log tells).
 
 ### Arguments: no shell
 
@@ -97,6 +101,15 @@ gives otherwise ([Error handling](errors)). `kill` on a process that has ended d
   browser's. The reader ends the remote loop's wait on the network at once (a datagram to a socket the loop waits
   on), so that new output is sent at once.
 
+### Threads
+
+- `p%start`, `p%poll`, `p%running`, `p%exit_code`, `p%killed`, `p%pid` and `p%kill` are not refused on a
+  [task](#tasks)'s thread: the native layer keeps each process's state behind a lock of its own, so a task may run
+  a tool with a `process_object` of its own and read its output.
+- One `process_object` belongs to one thread at a time: two threads calling the same object race on the object
+  itself, which is the program's to protect ([What code is safe on a worker](#what-code-is-safe-on-a-worker)).
+- A failure's message, `figure_last_error()`, is kept per thread: a task reads its own.
+
 ### Limits
 
 - `kill` stops the program started, not the programs it started itself: `sh -c 'a; b'` killed leaves `a` running. Write
@@ -111,11 +124,11 @@ gives otherwise ([Error handling](errors)). `kill` on a process that has ended d
 |---|---|
 | `log%add(line)`, `log%add(lines)` | Add one line or an array of lines (as `p%poll` gives them); trailing blanks are removed. |
 | `log%clear()` | Remove every line. |
-| `log%set_cap(cap [, stat])` | Keep at most `cap` lines (default 10000): the oldest go first. |
+| `log%set_cap(cap [, stat])` | Keep at most `cap` lines (default 10000): the oldest go first. The cap counts lines, not bytes. |
 | `log%draw(id [, height])` | Draw the lines in a region of their own; `height` in pixels (absent or 0: the rest of the window, negative: leave that much below). |
-| `log%count()` → `int32`, `log%line(i)` → `character` | The lines kept, and line `i` (1 is the oldest kept). |
+| `log%count()` → `int32`, `log%line(i)` → `character` | The lines kept, and line `i` (1 is the oldest kept; `''` outside 1 to `count()`). |
 | `log%following()` → `logical` | `.true.` while the view follows the end. |
-| `log%in_view(first, last)` | The kept lines drawn by the last `draw`. |
+| `log%in_view(first, last)` | The kept lines drawn by the last `draw` (`last < first` when none was). |
 | `log%copy([all])` → `character` | The chosen lines (with `all`, every line), joined by newlines. |
 
 `log` is a `log_view_object`: a ring buffer of lines with a cap, drawn with a
@@ -135,21 +148,27 @@ the documentation's build):
   copies the chosen lines, and the right-click menu has *Copy* and *Copy all*. The clipboard is the system's in a
   window; in headless and remote modes it is Dear ImGui's own, inside the program (the browser's clipboard is not
   reached).
+- **Reading it back:** the example's second part reads what a test checks: `log%line` the kept lines, `log%in_view`
+  the ones on screen, `log%following` whether new lines will scroll the view; `log%copy` gives the text ctrl+c
+  copies.
 - `set_cap` with fewer lines than kept drops the oldest; `cap` below 1 is refused with `FIG_ERR_ARGUMENT`.
 - The same in window, headless and remote modes.
+- **Threads:** `log%draw` draws, and is refused on a task's thread like every drawing procedure
+  ([the threading rule](#tasks)); the other procedures work on the object alone, so a log the frame loop draws is
+  filled and read on the frame loop's thread.
 
 ## Tasks
 
 | Procedure | Notes |
 |---|---|
-| `t%start(work, data [, stat])` | Run `work(h, data)` on a worker thread; `data` (any type) is copied into the task. |
+| `t%start(work, data [, stat])` | Run `work(h, data)` on a worker thread; `data` (any type) is copied into the task. A finished task whose result was not taken is discarded. |
 | `t%running()` → `logical`, `t%done()` → `logical` | It runs; it has ended and its result waits for `t%result`. |
-| `t%progress(fraction [, message])` | The last progress the task reported: `fraction` in [0, 1] (-1 before its first report). |
+| `t%progress(fraction [, message])` | The last progress the task reported: `fraction` in [0, 1] (-1 before its first report) ([Reports and failures](#reports-and-failures)). |
 | `t%cancel([stat])` | Ask the task to stop at its next safe point. |
 | `t%result(data [, stat])` | Once done, the task's data, moved out (no copy); the object is free for another `start`. |
 | `h%report(fraction [, message])` | In the task: post its progress, `fraction` in [0, 1]; the frame loop is woken to show it. |
 | `h%cancelled()` → `logical` | In the task: `.true.` once the program asked it to stop. |
-| `h%fail(message)` | In the task: report a failure (the task then returns). |
+| `h%fail(message)` | In the task: report a failure, which `t%result` gives; the task still returns by itself. |
 
 `t` is a `task_object`, `h` the `task_handle_object` FIGURE gives to `work`, a subroutine with the interface
 `task_work`: `subroutine work(h, data)`, with `type(task_handle_object), intent(inout) :: h` and
@@ -221,6 +240,16 @@ Before v0.3.1 these flags were plain fields: `quit` and `request_frames` from a 
 none since), and a request
 from a task waited for the loop's next input or `max_wait` (0.5 s by default) before its frame.
 
+### Reports and failures
+
+`h%report` clamps `fraction` to [0, 1] and, without `message`, keeps the previous message; each report wakes the
+frame loop, so a few reports a second are plenty. `t%progress` reads the last one from the program's side: its
+`message` is cut at 512 characters (`''` before the first message).
+
+`h%fail(message)` records a failure and does not stop the task: `work` returns by itself, at once or at its next safe
+point, and `t%result` then gives `FIG_ERR_FAILED` with the message. Only the first failure is kept; a later `h%fail`
+is ignored.
+
 ### Cancelling
 
 Cancellation is cooperative: `t%cancel()` sets a flag, and the task returns at its next safe point, where `data` is
@@ -265,7 +294,17 @@ to its next safe point: a task with no safe point is waited for until its end.
   network at once (a datagram to a socket the loop waits on), so that its progress is sent at once. A long read no
   longer stops the streaming, so the browser stays alive.
 
-Several tasks may run at once, each with its own object. Tasks do not start tasks.
+### Threads
+
+- `h%report`, `h%cancelled` and `h%fail` are the task's own: called inside `work`, on its thread (the handle exists
+  only there).
+- `t%start` is refused on a task's thread (`FIG_ERR_STATE`): tasks do not start tasks. Several tasks may run at
+  once, each with its own object.
+- `t%running`, `t%done`, `t%progress`, `t%cancel` and `t%result` are the program's side, called where the object
+  lives (the frame loop's thread, in practice): the native layer keeps the task's state behind a lock, so they read
+  it while the task runs.
+- A task may use a [process](#threads) and the
+  [thread-safe calls of the application](#calling-the-application-from-a-task); nothing that draws.
 
 ## Feedback
 

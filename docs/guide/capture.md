@@ -29,6 +29,10 @@ blending and 8-bit frame buffer. It needs no GPU, no display, no Mesa and no lib
 program records its frames on a laptop, a CI runner or a cluster node, in any of the three modes. The same applies to
 `app%save_image` (below) and to [`test_capture`](testing#pictures-as-tests).
 
+It is not the 3-D views' rasterizer (`native/figure_view3d.cpp`), which draws a `view3d_object`'s meshes into an image
+in every mode, window included: that image is one texture of the draw data, drawn by the GPU or by the CPU renderer
+like any other ([Modes and renderers](architecture#modes-and-renderers)).
+
 `FIGURE_CAPTURE_HEADLESS=1` runs a window program (`app%init`) in headless mode for its capture: no window is opened,
 SDL is not started, and the frames come from the CPU renderer, at the window's size. This is how
 `scripts/docs_media.py --check` renders the documentation's recordings in CI-like conditions.
@@ -70,14 +74,17 @@ A headless picture depends only on the program and on FIGURE:
 - the same program built with gfortran, nvfortran or ifx gives the same pictures;
 - headless and remote modes give the same pictures, and a window program run with `FIGURE_CAPTURE_HEADLESS` gives
   the pictures of the same program written for headless mode;
+- the text is drawn with FIGURE's embedded fonts (IBM Plex Sans and Mono, Noto Sans Math, the Lucide icons), or the
+  font files the program names: no font is looked up on the system ([Fonts](styles#fonts));
 - the native layer is compiled with `-ffp-contract=off` (no fused multiply-add: GCC and Clang contract by default
   where the processor has FMA, on aarch64 and on x86-64 built for a recent processor). Without it a build with FMA
   moved an axis of a plot by one pixel row: Dear ImGui's and ImPlot's layout arithmetic rounds differently, upstream of
   any renderer. The fpm package sets the same with pragmas.
 
 What can still differ between platforms: the C library's `sin`, `cos`, `log10` and `pow` (rounded corners, circles,
-tick positions). macOS and Windows were not measured; [Pictures as tests](testing#pictures-as-tests) allows a
-per-platform tolerance where one is measured.
+tick positions), measured on macOS and Windows in [Pictures without a GPU](known-issues#pictures-without-a-gpu);
+a test sets a per-platform tolerance where one is measured
+([A tolerance per platform](testing#a-tolerance-per-platform)).
 
 ## Variables
 
@@ -168,6 +175,12 @@ variables above and `FIGURE_STYLE=seal` (the default [style](styles), set explic
 what differs from the window background, and writes
 `docs/public/media/<name>.png` and, for animations, `<name>.mp4`. Pages show them with the `<Media>` component.
 
+The script is FIGURE's own: it reads `docs/media`, writes `docs/public/media` and finds the programs and the
+captions' font from the repository's root (`RECS`, `OUT`, `ROOT` and `CAPTION_FONT` at its top). A project records
+its own pictures with the [variables](#variables) and ffmpeg, as above, or copies the script and changes those paths.
+It needs ffmpeg and ImageMagick (`--check` only ImageMagick), and for `#! remote` ([Remote UI](remote)) a headless Chromium: `$CHROME`, or
+the newest one puppeteer installed.
+
 The tutorial's chapter 17 is recorded by this script, `docs/media/tut17_tested.rec`:
 
 <<< @/media/tut17_tested.rec{text}
@@ -195,12 +208,10 @@ documentation pass of v0.5.0 recorded them all again in one pass, the GPU's and 
 replaced.
 `--check` renders each recording headless (`FIGURE_CAPTURE_HEADLESS=1`) with the CPU renderer, crops its poster the
 same way and compares it with the committed one by [`test_compare_image`](testing#pictures-as-tests)'s rule: a channel
-may differ by 2 levels, no pixel by more. A header line `#! mask x y w h` leaves a rectangle of the poster out (a
-clock, anything drawn from the wall time), `#! check threshold=N max_failed=M` changes the tolerance, and
-`#! check.linux`, `#! check.darwin`, `#! check.win32` change it on one platform only, where a difference was measured
-there. `#! fresh /tmp/<folder>` removes a folder before the program starts, so that what it writes there (the tutorial's
-`--examples /tmp/figure-studio`) does not depend on the recordings run before it. A failure writes `docs/public/media/<name>.new.png` and `<name>.diff.png` (failed pixels red, those within the
-tolerance dark red, masked ones blue); `--update` makes each `.new.png` the poster. Remote recordings are not checked.
+may differ by 2 levels, no pixel by more, except where the `#! mask` and `#! check` lines of the table say otherwise
+(on one platform only with their `.linux`, `.darwin`, `.win32` forms). A failure writes
+`docs/public/media/<name>.new.png` and `<name>.diff.png` (failed pixels red, those within the tolerance dark red,
+masked ones blue); `--update` makes each `.new.png` the poster. Remote recordings are not checked.
 
 **In CI:** the Checks workflow runs `--check` on every push, in the toolchain image of `ci.yml` (gfortran 16.2, the
 compiler the recordings are made with), after the examples are built; on a failure it keeps the `.new.png` and
@@ -211,9 +222,6 @@ looking at the `.new.png`), and its commit says why.
 the tutorial, a file read in the background) waits for its result before the poster frame: the script leaves the
 frames it needs, and the program shows the same picture once the work is done, however long it took. What depends on
 the wall time itself (a run's duration, a clock) is left out with `#! mask`.
-
-A recording with `#! remote <width> <height>` starts the program with `--remote` and takes the picture with a
-headless Chromium instead ([Remote UI](remote)).
 
 A video shows what the user did, not only what the program drew: the program's back buffer has no pointer, so the
 recorder draws one where the script puts it (the glide of `move` replayed), ringed while a button is held; with

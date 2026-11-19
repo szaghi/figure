@@ -26,6 +26,7 @@ flowchart TD
     GLUE --> CPP
     GLUE --> SDL["SDL3 + OpenGL 3<br/>window, input, GL context"]
     GLUE --> REMOTE["figure_remote.cpp<br/>HTTP + WebSocket server: the UI in a browser"]
+    GLUE --> SWRAST["figure_swrast.cpp<br/>CPU renderer: headless and remote pictures"]
     CPP --> BACK["imgui_impl_sdl3 + imgui_impl_opengl3<br/>backends"]
     BACK --> SDL
 ```
@@ -45,11 +46,38 @@ flowchart TD
 - **C APIs** (cimgui, cimplot): the C functions generated from Dear ImGui and ImPlot, compiled into
   `libfigure_native.a`.
 - **Glue** (`native/figure_native.cpp`, `native/figure_native.h`): what the C APIs cannot offer to Fortran directly
-  (see below), and everything the platform needs.
+  (see below), and everything the platform needs: the three modes, the frame loop, the input, the capture. Beside it,
+  one file per subsystem, among them `figure_swrast.cpp` (the CPU renderer of the frame's draw data,
+  [below](#modes-and-renderers)), `figure_remote.cpp` (the remote mode's server), `figure_process.cpp` and
+  `figure_task.cpp` (programs started from the program and their reader threads, tasks on worker threads:
+  [Processes and tasks](processes)), `figure_items.cpp` (the items of each frame, for the paths of
+  [Headless testing](testing#finding-items-by-path)) and `figure_view3d.cpp` (the 3-D views' rasterizer,
+  [3-D views](view3d)).
 - **Styles and themes** (`native/figure_theme.cpp`, `native/figure_style_generated.cpp`): the theme files of
   `themes/`, embedded at build time and parsed by the glue; every style colour and variable reached by name, through
   a table of the style fields generated from the libraries' metadata ([Styles](styles)).
-- **Platform**: SDL3 (window, input, display scale) and OpenGL 3, through the official Dear ImGui backends.
+- **Platform**: SDL3 (window, input, display scale) and OpenGL 3, through the official Dear ImGui backends, in
+  window mode. Headless and remote modes open no window and do not start SDL (no `SDL_Init`): SDL3 serves them for
+  its portable threads, locks and processes.
+
+### Modes and renderers
+
+The program draws the same way in the three modes; what differs is who turns Dear ImGui's draw data into pixels:
+
+| Mode | Started by | Draws the frame | Pictures (`save_image`, `test_capture`, `FIGURE_CAPTURE`) |
+|---|---|---|---|
+| window | `app%init` | the GPU, through SDL3 and Dear ImGui's OpenGL 3 backend | read back from the GPU |
+| headless | `app%init_headless` | nothing: the draw data is built and dropped | the CPU renderer, `native/figure_swrast.cpp` |
+| remote | `app%init_remote` | the browser: the draw lists go to the page, which draws them with WebGL | the CPU renderer, on the program's side |
+
+FIGURE has two CPU rasterizers, which do different work:
+
+- **The CPU renderer** (`native/figure_swrast.cpp`) draws a frame's draw data, the whole interface, as the OpenGL 3
+  backend asks a GPU to; it runs only for a picture of headless or remote mode
+  ([Screenshots and videos](capture#three-modes-two-renderers)).
+- **The 3-D views' rasterizer** (`native/figure_view3d.cpp`) draws a `view3d_object`'s meshes into an RGBA image, in
+  every mode, window included; the image is then one texture in the draw data, which the GPU, the browser or the CPU
+  renderer draws like any other ([Why a software renderer](view3d#why-a-software-renderer)).
 
 ### The modules
 

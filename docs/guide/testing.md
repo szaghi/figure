@@ -4,10 +4,10 @@ title: Headless testing
 
 # Headless testing
 
-`app%init_headless(width, height [, stat])` creates the Dear ImGui and ImPlot contexts on a virtual display of
-`width` x `height` pixels, without a window, without OpenGL and without a GPU. The frame loop is the same: widgets
-and plots run their full logic (layout, hit testing, state), only nothing is drawn on screen. A headless program needs
-no display server: it runs in CI as is, without Xvfb.
+`app%init_headless(width, height [, stat] [, decorations] [, buttons])` creates the Dear ImGui and ImPlot contexts on
+a virtual display of `width` x `height` pixels, without a window, without OpenGL and without a GPU. The frame loop is
+the same: widgets and plots run their full logic (layout, hit testing, state), only nothing is drawn on screen. A
+headless program needs no display server: it runs in CI as is, without Xvfb.
 
 Differences from window mode:
 
@@ -19,98 +19,19 @@ Differences from window mode:
 - `content_scale()` is 1;
 - the input is what the program queues.
 
-## Synthetic input
+`decorations='figure'` draws the title bar of [the window's frame](frame-loop#the-window-s-frame) as `app%init` does,
+to test it: its buttons' actions are recorded as state (`test_frame_state`, [below](#probes-of-the-last-frame)) and
+close takes the quit path; `buttons` puts them on the `'right'` or the `'left'` (default: the platform's side, left
+on macOS). Statuses: `FIG_ERR_ARGUMENT` for a size that is not positive or an unknown `decorations` or `buttons`,
+`FIG_ERR_STATE` when FIGURE is already initialized or when called from a [task](processes#tasks).
 
-The module `figure_testing` queues input as a user would produce it; the program draws its next frames as usual, and
-the input reaches the widgets there. A test queues, draws a few frames, then checks the program's variables:
-
-<<< @/examples/snippets/tut05_headless-test.F90{fortran}
-
-<<< @/examples/output/tut05.txt{text}
-
-| Procedure | Queues |
-|---|---|
-| `test_click(x, y [, button] [, stat])` | a click at (x, y): move, a frame resting there, press, release (`button`: `'left'`, default, `'right'`, `'middle'`) |
-| `test_drag(x0, y0, x1, y1 [, stat])` | a drag with the left button: a slider grab moved, a window dragged by its title bar |
-| `test_mouse_move(x, y [, stat])`, `test_mouse_button(down [, button] [, stat])` | the parts of a click, one by one |
-| `test_wheel(dy [, dx] [, stat])` | a turn of the wheel; positive `dy` away from the user (zoom in, in a plot) |
-| `test_key(name [, down] [, stat])` | a key, pressed and released (or only pressed or released with `down`): `a`-`z`, `0`-`9`, `enter`, `tab`, `backspace`, `delete`, `escape`, `space`, `left`, `right`, `up`, `down`, `home`, `end`, `pageup`, `pagedown`, `f1`-`f12`, and the modifiers `ctrl`, `shift`, `alt`, `super` |
-| `test_type(text [, stat])` | typed characters, into the focused field |
-| `test_next_frame([stat])` | a frame boundary: what is queued after it arrives one frame later |
-| `test_drop(paths, x, y [, stat])` | files or folders dropped at (x, y): `app%dropped` reports them together on the next frame ([Drops](frame-loop#drops)); no path is `FIG_ERR_ARGUMENT` |
-
-A plot's box selection is a drag with the right button, which `test_drag` does not do: queue its parts with
-`test_mouse_move`, `test_mouse_button(.true., 'right')`, `test_next_frame` and, after the frames that read it,
-`test_mouse_button(.false., 'right')`. To aim inside a plot, take the pixel of a plot point with
-[`ip_plot_to_pixels`](plots#reading-a-plot) on an earlier frame.
-
-And to aim and to check:
-
-| Procedure | Gives |
-|---|---|
-| `test_item_center(x, y)` | the centre of the last widget drawn (call it right after the widget) |
-| `test_quit([stat])` | a quit request, as the window's close button makes it |
-| `test_plot_tick(axis, index, label [, count] [, stat])` | the label of tick `index` on an axis of the plot being declared, `'x1'`, `'x2'`, `'x3'`, `'y1'`, `'y2'` or `'y3'` (`'x'`, `'y'`: X1, Y1; an axis not set up is `FIG_ERR_STATE`; [Axes](plots#axes)) (between `ip_begin_plot` and `ip_end_plot`, after an item), and the number of ticks |
-| `test_plot_copies()` → `int64` | how many arrays the plot items copied since the program started because ImPlot could not read them in place: an array whose stride differs from the ordinates' (or is negative), integer abscissae (converted); read it before and after an item ([Data in place](plots#data-in-place)) |
-| `test_plot_stride()` → `int64` | the byte stride the last plot item gave ImPlot: the element size for contiguous data, more for data read in place from a strided section, 0 before any item. It reports what the item received: a compiler that copies a strided actual argument into a temporary gives a contiguous one ([Data in place](plots#data-in-place)) |
-| `test_field_uploads()` → `int64` | how many times [`ip_field_image`](plots#fields) coloured a field and uploaded it since the program started: read it before and after frames to check that a field is not coloured again when nothing changed |
-| `test_field_textures()` → `int32` | how many field textures `ip_field_image` keeps: one per field drawn in the last 10 s |
-| `test_field_time()` → `real64` | the time the last colouring took, range, colours and upload [ms] |
-| `test_field_pixel(label, i, j, rgba [, stat])` | the colour, RGBA in [0, 1], the last colouring gave the value (i, j) of the field `label`; `FIG_ERR_ARGUMENT` for a label not drawn in the last 10 s or (i, j) outside the field |
-| `test_frame_hit(x, y)` → `character` | the hit test of the window's frame (`decorations='figure'`) at (x, y), from the last frame: `'client'`, `'drag'`, or a resize edge or corner (`'resize-top-left'`, `'resize-top'`, ..., `'resize-left'`) |
-| `test_frame_rect(part, x0, y0, x1, y1 [, found] [, stat])` | a part of the title bar in the last frame (`'bar'`, `'icon'`, `'menus'`, `'title'`, `'minimize'`, `'maximize'`, `'close'`), to click its buttons |
-| `test_frame_state(minimized, maximized [, stat])` | minimized and maximized: the window's, or in headless mode what the bar's buttons recorded |
-| `test_system_theme(theme [, stat])` | the system's light or dark setting changes at the next frame, as SDL's event reports it: `'light'`, `'dark'`, or `'system'` (the real setting again); for [`palette='auto'`](styles#follow-the-system-s-light-or-dark-setting) |
-| `test_notification_rect(index, x0, y0, x1, y1 [, found] [, alpha])` | the rectangle of a [notification](frame-loop#notifications) shown in the last frame: 1 the newest (at the bottom), 2 the one above; `found` false past the last; `alpha` the largest alpha of its vertices in the draw data, in [0, 1]: 1 while shown in full, falling to 0 as it fades out |
-| `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat] [, layer] [, vertices])` | the extent of what was drawn so far in the current window in Dear ImGui's style colour `color`, by name, or in an RGBA colour (`real(real64)`, 4 values: an item drawn with `ip_spec(line_color=...)`): call it right after a widget, or after `ip_end_plot` for what a plot draws at its end (annotations) (`'PlotHistogram'` measures a progress bar's fill). Antialiased edges have other colours: the extent is that of the lines' cores. For an RGBA colour, `layer='foreground'` or `'background'` looks on those layers of the [canvas primitives](canvas#layers), and `vertices` counts the vertices in the colour (a filled shape has one per corner) ([Testing a canvas](canvas#testing-a-canvas)) |
-| `test_file_browser(shown [, folder] [, entries] [, error] [, asking] [, path_field] [, name_field] [, recent])` | the [file browser](frame-loop#figure-s-file-browser) in front, after the last frame: the folder listed, the entries in the order shown (folders ending in `/`), the error shown (`''` none), whether a replace is asked, the texts of the path and name fields, the recent folders (newest first; also without a browser) |
-| `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser as drawn in the last frame, to click it: `'entry:NAME'` (a row in view), `'parent'`, `'refresh'`, `'path'`, `'new folder'`, `'new folder name'`, `'create'`, `'sort:name'`, `'sort:size'`, `'sort:modified'`, `'place:home'`, `'place:cwd'`, `'place:root:N'`, `'place:recent:N'`, `'name'`, `'filter'`, `'filter:N'` (its list open), `'hidden'`, `'cancel'`, `'ok'`, and while a replace is asked `'replace'`, `'keep'` |
-| `test_settings_file(path [, stat])` | the file that keeps the browser's recent folders, until the program ends: a test reads and writes its own (`''`: memory only, the default in headless mode) |
-| `test_window_rect(name, xmin, ymin, xmax, ymax [, found] [, stat])` | a window's rectangle, by its name, as drawn in the last frame |
-| `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | the rectangle of the innermost open popup (a menu, a [context menu](menus#context-menus), a combo's list, `ig_color_edit`'s picker), as drawn in the last frame; `found` false when none is open |
-| `test_opened_url()` → `character` | the URL the last click on an [`ig_text_link_url`](widgets#links) asked to open, in any mode (headless opens nothing); `''` before one |
-| `test_glyph(text, font, source, pixels [, width] [, height] [, checksum] [, stat])` | one character of a text font at the current size, as Dear ImGui draws it: the font that gives it, `source` (`'IBM Plex Mono'`, `'Noto Sans Math'`, a fallback file's name; `''` when none has it), the pixels of its bitmap that are not empty, its advance and height [pixels], a checksum of the bitmap ([Glyphs](#glyphs)) |
-
-**Timing.** Everything queued reaches Dear ImGui at the next frame, up to a `test_next_frame` boundary; Dear ImGui then
-applies one change of each kind per frame (its input trickling), so a click queued at once still takes the frames a
-real one takes. Draw a few frames after queuing (four for a click, more for a drag, which `test_drag` spreads with its
-own boundaries) before checking, or draw until the interface is idle with [`test_run`](#running-until-idle). Editing a
-numeric field, for example:
-
-<<< @/examples/snippets/cb_controls-edit_field.F90{fortran}
-
-`cfl_at` and `monitor_at` are the centres of the field and of a button, from `ig_item_rect` where the program drew
-them (`docs/examples/src/cb_controls.F90`); the run prints what the clicks and the keys changed:
-
-<<< @/examples/output/cb_controls.txt{text}
-
-**Aim from the second frame on.** A new window that sizes itself to its content is measured during its first frame
-and shown from the second: positions read in the first frame are not where the widgets end up (place windows with
-`ig_set_next_window` to have them from the first frame).
-
-Coordinates are display pixels, as `ig_item_rect` gives them. The module works in every mode; headless needs no
-display, so tests run in CI as is. It is a separate module: `use figure_testing` where the tests are, `use figure` in
-the application. Both are in the library (`lib/libfigure.a` and `lib/mod`, from `fobis build --mode figure-static-gnu`
-or `fobis fetch`), so a project that depends on FIGURE tests its own interface the same way.
-
-`test_click` and `test_drag` let the pointer rest one frame on the item before pressing, as a user's hand does:
-Dear ImGui's tabs (and other items that may overlap) take a press only once they were hovered in the frame before. A
-click therefore lands over the next four frames (move, rest, press, release), a drag over the next five.
-
-To press a shortcut, hold `'shortcut'`: the platform's shortcut key, cmd on macOS and ctrl elsewhere, the one that
-select-all (`a`) and `ig_shortcut('ctrl+s')` mean there. `'ctrl'` is the physical ctrl key, which macOS does not use for
-shortcuts: Dear ImGui swaps the two as the events arrive.
-
-### Glyphs
-
-`test_glyph` tells which font of a text font's stack ([the fallback fonts](styles#symbols-the-fallback-fonts)) draws a
-character, and what it draws: a test that a label's symbols are not missing-glyph boxes checks that `source` is not
-empty and `pixels` is positive. `font` is a name of `app%set_font` (`'plex-sans'`, `'plex-mono'`, `'proggy'`) or a
-file; the glyph is rasterised at the current font size if it was not yet. In a frame (`FIG_ERR_STATE` otherwise);
-`text` must be one character of the Basic Multilingual Plane in UTF-8, and `font` a font (`FIG_ERR_ARGUMENT`); a file
-that cannot be read is `FIG_ERR_FAILED`. The same in every mode, on the frame loop's thread.
-
-<<< @/examples/snippets/cb_fallback_font-report.F90{fortran}
+The module `figure_testing` drives a program as a user does: it names items by [path](#finding-items-by-path), queues
+input, draws frames [until the interface is idle](#running-until-idle), then checks the program's variables or
+[its pictures](#pictures-as-tests). Coordinates are display pixels, as `ig_item_rect` gives them. The module works in
+every mode; headless needs no display, so tests run in CI as is. It is a separate module: `use figure_testing` where
+the tests are, `use figure` in the application. Both are in the library (`lib/libfigure.a` and `lib/mod`, from
+`fobis build --mode figure-static-gnu` or `fobis fetch`), so a project that depends on FIGURE tests its own interface
+the same way.
 
 ## Finding items by path
 
@@ -133,6 +54,11 @@ text it shows. The procedures read the last frame drawn.
 | `test_item_value(path, text [, shown] [, stat])` → `logical` | true when the item showed `text` as its value: the text drawn inside its rectangle, its label taken out (a field's text, a slider's number as its format writes it, a combo's choice), blanks collapsed; `shown` gives what it showed |
 | `test_menu_click(path [, stat])` | queues a click through a menu path: the first menu now, each following level once its menu has opened, over the next frames; a menu already open is pointed at, not clicked again |
 | `test_record_items(on [, stat])` | records the items of each frame from the next frame on (the default, in every mode), or stops |
+
+The example picks a recent file through the File menu, types into a field with `test_item_type_text`, opens a tree
+node and ticks a checkbox, all by their paths;
+[Checks](#checks) then reads the results with `test_item_checked` and `test_item_value`, from the last frame, without a
+pixel.
 
 (Dear ImGui's test engine has the like as `ItemExists`, `ItemClick`, `ItemInputValue` and `MenuClick`, run from a
 test coroutine; FIGURE's queue input that the program's own frame loop then draws, as every `test_*` procedure.)
@@ -158,8 +84,8 @@ the menu or the combo (`'File/Recent/notes.txt'`, `'Panel/Mode/Beta mode'`). Tra
 
 **Frames.** The procedures read the last frame drawn: call them between frames or inside one, after the frame that
 drew the item. A window that sizes itself is placed from its second frame: its items are not visible before
-(`test_item_click` refuses them). An action is queued input: it lands over the next frames, as `test_click` does (four
-for a click); draw them with [`test_run`](#running-until-idle). A menu path takes the frames its menus need to open; a
+(`test_item_click` refuses them). An action is queued input: it lands over the next frames, as a click by coordinates does
+([Synthetic input](#synthetic-input): four for a click); draw them with [`test_run`](#running-until-idle). A menu path takes the frames its menus need to open; a
 level that does not appear within 20 frames ends the queued input, and the next `test_run` reports it.
 
 **Status.** `stat` is optional; absent, a failure stops the program with the message.
@@ -217,6 +143,70 @@ that never appeared is reported here, `test_menu_click: no item ...`, with `FIG_
 `FIG_ERR_ARGUMENT`. The count restarts after each `.false.`. The same in every mode; in window mode a lazy loop does
 not wait for events while input is queued.
 
+## Synthetic input
+
+Raw input, by coordinates and key names, for what a path does not reach: a drag, the wheel, a key, a position
+inside a plot or a canvas. `figure_testing` queues it as a user would produce it; the program draws its next frames
+as usual, and the input reaches the widgets there. A test queues, draws a few frames, then checks the program's
+variables:
+
+<<< @/examples/snippets/tut05_headless-test.F90{fortran}
+
+<<< @/examples/output/tut05.txt{text}
+
+| Procedure | Queues |
+|---|---|
+| `test_click(x, y [, button] [, stat])` | a click at (x, y): move, a frame resting there, press, release (`button`: `'left'`, default, `'right'`, `'middle'`) |
+| `test_drag(x0, y0, x1, y1 [, stat])` | a drag with the left button: a slider grab moved, a window dragged by its title bar |
+| `test_mouse_move(x, y [, stat])`, `test_mouse_button(down [, button] [, stat])` | the parts of a click, one by one |
+| `test_wheel(dy [, dx] [, stat])` | a turn of the wheel; positive `dy` away from the user (zoom in, in a plot) |
+| `test_key(name [, down] [, stat])` | a key, pressed and released (or only pressed or released with `down`): `a`-`z`, `0`-`9`, `enter`, `tab`, `backspace`, `delete`, `escape`, `space`, `left`, `right`, `up`, `down`, `home`, `end`, `pageup`, `pagedown`, `f1`-`f12`, the modifiers `ctrl`, `shift`, `alt`, `super`, and `shortcut`, the platform's shortcut key (below) |
+| `test_type(text [, stat])` | typed characters, into the focused field |
+| `test_next_frame([stat])` | a frame boundary: what is queued after it arrives one frame later |
+| `test_drop(paths, x, y [, stat])` | files or folders dropped at (x, y): `app%dropped` reports them together on the next frame ([Drops](frame-loop#drops)); no path is `FIG_ERR_ARGUMENT` |
+| `test_system_theme(theme [, stat])` | the system's light or dark setting, changed at the next frame as SDL's event reports it: `'light'`, `'dark'`, or `'system'` (the real setting again: in headless and remote modes it is unknown, so dark); for [`palette='auto'`](styles#follow-the-system-s-light-or-dark-setting) |
+
+Keys (`test_key`) and characters (`test_type`) go to the item that has the focus, a turn of the wheel
+(`test_wheel`) to the window or the plot under the pointer, and `test_drop`'s files to the program. A plot's box selection is a drag with the right button, which `test_drag` does not do: queue
+its parts with `test_mouse_move`, `test_mouse_button(.true., 'right')`, `test_next_frame` and, after the frames that
+read it, `test_mouse_button(.false., 'right')`. To aim inside a plot, take the pixel of a plot point with
+[`ip_plot_to_pixels`](plots#reading-a-plot) on an earlier frame.
+
+And to aim, and to quit:
+
+| Procedure | Does |
+|---|---|
+| `test_item_center(x, y)` | gives the centre of the last widget drawn (call it right after the widget) |
+| `test_quit([stat])` | queues a quit request, as the window's close button makes it |
+
+The click `test_item_center` aims is queued for the frames after the one that drew the widget. What the last frame
+drew, windows and popups included, is under [Probes of the last frame](#probes-of-the-last-frame).
+
+**Timing.** Everything queued reaches Dear ImGui at the next frame, up to a `test_next_frame` boundary; Dear ImGui then
+applies one change of each kind per frame (its input trickling), so a click queued at once still takes the frames a
+real one takes. Draw a few frames after queuing (four for a click, more for a drag, which `test_drag` spreads with its
+own boundaries) before checking, or draw until the interface is idle with [`test_run`](#running-until-idle). Editing a
+numeric field, for example:
+
+<<< @/examples/snippets/cb_controls-edit_field.F90{fortran}
+
+`cfl_at` and `monitor_at` are the centres of the field and of a button, from `ig_item_rect` where the program drew
+them (`docs/examples/src/cb_controls.F90`); the run prints what the clicks and the keys changed:
+
+<<< @/examples/output/cb_controls.txt{text}
+
+**Aim from the second frame on.** A new window that sizes itself to its content is measured during its first frame
+and shown from the second: positions read in the first frame are not where the widgets end up (place windows with
+`ig_set_next_window` to have them from the first frame).
+
+`test_click` and `test_drag` let the pointer rest one frame on the item before pressing, as a user's hand does:
+Dear ImGui's tabs (and other items that may overlap) take a press only once they were hovered in the frame before. A
+click therefore lands over the next four frames (move, rest, press, release), a drag over the next five.
+
+To press a shortcut, hold `'shortcut'`: the platform's shortcut key, cmd on macOS and ctrl elsewhere, the one that
+select-all (`a`) and `ig_shortcut('ctrl+s')` mean there. `'ctrl'` is the physical ctrl key, which macOS does not use for
+shortcuts: Dear ImGui swaps the two as the events arrive.
+
 ## Checks
 
 | Procedure | Gives |
@@ -229,7 +219,7 @@ while the pointer is over one of them; `test_id_conflicts` finds every one in th
 label has no visible text (`'##save'`) or only icons (Lucide's private-use characters), and it has no tooltip
 (`ig_tooltip`, `ig_begin_item_tooltip`, a shortcut's tooltip): an icon-only button a screen reader, or a reader of
 the interface, cannot name. Interactive items only: text and separators are not items. `list` is blank-padded to the
-longest path.
+longest path. `test_unnamed_items` gives their count and paths as `test_id_conflicts` does for the conflicts.
 
 <<< @/examples/snippets/cb_paths-check.F90{fortran}
 
@@ -246,7 +236,7 @@ so no GPU, display or tolerance for a driver is needed.
 | Procedure | Does |
 |---|---|
 | `test_capture(path [, stat])` | the whole frame as a PNG file `path`, written when the current frame is rendered (the next `app%next_frame`) |
-| `test_compare_image(path, golden [, threshold] [, max_failed] [, masks] [, failed] [, stat])` → `logical` | the picture `path` matches `golden` |
+| `test_compare_image(path, golden [, threshold] [, max_failed] [, masks] [, failed] [, stat])` → `logical` | the picture `path` (a `test_capture`'s, or an [`app%save_image`](capture#save-an-image-from-the-program)'s) matches `golden` |
 
 <<< @/examples/snippets/cb_golden-capture.F90{fortran}
 
@@ -278,6 +268,63 @@ the same frame twice and on 1 and 7 threads, a committed golden, textures filter
 linear, a field through a colormap), a glyph of the bitmap font pixel for pixel, `save_image` in headless and remote
 modes.
 
+### A tolerance per platform
+
+The goldens are made on one platform. On another, the C library's maths (`sin`, `cos`, `log10`, `pow`) and the
+compiler's fused multiply-adds can move a pixel of what the program computes, a rounded border or a plotted value
+([Pictures without a GPU](known-issues#pictures-without-a-gpu) has the counts measured on macOS and Windows).
+`test_compare_image` has no platform argument, and the compiler names no platform by itself (gfortran 16.2 on Linux
+predefines no `__linux__`), so the test takes its tolerance from the environment, which the CI job sets for its
+platform, and keeps `test_compare_image`'s defaults where the goldens are made:
+
+<<< @/examples/snippets/cb_golden_platform-tolerance.F90{fortran}
+
+`env_int` reads an integer variable, with a default when it is not set (`docs/examples/src/cb_golden_platform.F90`).
+Raise a tolerance to what was measured on that platform, or mask the region that differs (`masks`), which keeps every
+other pixel exact.
+
+## Probes of the last frame
+
+What a test reads of what was drawn, to aim at it or to check it. Most read the last frame drawn; `test_plot_tick`,
+`test_drawn_extent` and `test_glyph` read the frame being drawn, where they are called. The rectangles
+(`test_window_rect`, `test_popup_rect`, `test_frame_rect`, `test_file_browser_rect`) are where a click by
+coordinates aims: a window, a popup, the title bar's buttons, a part of the file browser. `test_frame_state` reads what
+the title bar's buttons did, and `test_settings_file` gives a test a recent-folders file of its own, so that a run
+does not read another's.
+
+| Procedure | Gives |
+|---|---|
+| `test_plot_tick(axis, index, label [, count] [, stat])` | the label of tick `index` on an axis of the plot being declared, `'x1'`, `'x2'`, `'x3'`, `'y1'`, `'y2'` or `'y3'` (`'x'`, `'y'`: X1, Y1; an axis not set up is `FIG_ERR_STATE`; [Axes](plots#axes)) (between `ip_begin_plot` and `ip_end_plot`, after an item), and the number of ticks |
+| `test_plot_copies()` → `int64` | how many arrays the plot items copied since the program started because ImPlot could not read them in place: an array whose stride differs from the ordinates' (or is negative), integer abscissae (converted); read it before and after an item ([Data in place](plots#data-in-place)) |
+| `test_plot_stride()` → `int64` | the byte stride the last plot item gave ImPlot: the element size for contiguous data, more for data read in place from a strided section, 0 before any item. It reports what the item received: a compiler that copies a strided actual argument into a temporary gives a contiguous one ([Data in place](plots#data-in-place)) |
+| `test_field_uploads()` → `int64` | how many times [`ip_field_image`](plots#fields) coloured a field and uploaded it since the program started: read it before and after frames to check that a field is not coloured again when nothing changed |
+| `test_field_textures()` → `int32` | how many field textures `ip_field_image` keeps: one per field drawn in the last 10 s |
+| `test_field_time()` → `real64` | the time the last colouring took, range, colours and upload [ms] |
+| `test_field_pixel(label, i, j, rgba [, stat])` | the colour, RGBA in [0, 1], the last colouring gave the value (i, j) of the field `label`; `FIG_ERR_ARGUMENT` for a label not drawn in the last 10 s or (i, j) outside the field |
+| `test_frame_hit(x, y)` → `character` | the hit test of the window's frame (`decorations='figure'`) at (x, y), from the last frame: `'client'`, `'drag'`, or a resize edge or corner (`'resize-top-left'`, `'resize-top'`, ..., `'resize-left'`) |
+| `test_frame_rect(part, x0, y0, x1, y1 [, found] [, stat])` | a part of the title bar in the last frame (`'bar'`, `'icon'`, `'menus'`, `'title'`, `'minimize'`, `'maximize'`, `'close'`), to click its buttons |
+| `test_frame_state(minimized, maximized [, stat])` | minimized and maximized: the window's, or in headless mode what the bar's buttons recorded |
+| `test_notification_rect(index, x0, y0, x1, y1 [, found] [, alpha])` | the rectangle of a [notification](frame-loop#notifications) shown in the last frame: 1 the newest (at the bottom), 2 the one above; `found` false past the last; `alpha` the largest alpha of its vertices in the draw data, in [0, 1]: 1 while shown in full, falling to 0 as it fades out |
+| `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat] [, layer] [, vertices])` | the extent of what was drawn so far in the current window in Dear ImGui's style colour `color`, by name, or in an RGBA colour (`real(real64)`, 4 values: an item drawn with `ip_spec(line_color=...)`): call it right after a widget, or after `ip_end_plot` for what a plot draws at its end (annotations) (`'PlotHistogram'` measures a progress bar's fill). Antialiased edges have other colours: the extent is that of the lines' cores. For an RGBA colour, `layer='foreground'` or `'background'` looks on those layers of the [canvas primitives](canvas#layers), and `vertices` counts the vertices in the colour (a filled shape has one per corner) ([Testing a canvas](canvas#testing-a-canvas)) |
+| `test_file_browser(shown [, folder] [, entries] [, error] [, asking] [, path_field] [, name_field] [, recent])` | the [file browser](frame-loop#figure-s-file-browser) in front, after the last frame: the folder listed, the entries in the order shown (folders ending in `/`), the error shown (`''` none), whether a replace is asked, the texts of the path and name fields, the recent folders (newest first; also without a browser) |
+| `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser as drawn in the last frame, to click it: `'entry:NAME'` (a row in view), `'parent'`, `'refresh'`, `'path'`, `'new folder'`, `'new folder name'`, `'create'`, `'sort:name'`, `'sort:size'`, `'sort:modified'`, `'place:home'`, `'place:cwd'`, `'place:root:N'`, `'place:recent:N'`, `'name'`, `'filter'`, `'filter:N'` (its list open), `'hidden'`, `'cancel'`, `'ok'`, and while a replace is asked `'replace'`, `'keep'` |
+| `test_settings_file(path [, stat])` | sets the file that keeps the browser's recent folders, until the program ends: a test reads and writes its own (`''`: memory only, the default in headless mode) |
+| `test_window_rect(name, xmin, ymin, xmax, ymax [, found] [, stat])` | a window's rectangle, by its name, as drawn in the last frame |
+| `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | the rectangle of the innermost open popup (a menu, a [context menu](menus#context-menus), a combo's list, `ig_color_edit`'s picker), as drawn in the last frame; `found` false when none is open |
+| `test_opened_url()` → `character` | the URL the last click on an [`ig_text_link_url`](widgets#links) asked to open, in any mode (headless opens nothing); `''` before one |
+| `test_glyph(text, font, source, pixels [, width] [, height] [, checksum] [, stat])` | one character of a text font at the current size, as Dear ImGui draws it: the font that gives it, `source` (`'IBM Plex Mono'`, `'Noto Sans Math'`, a fallback file's name; `''` when none has it), the pixels of its bitmap that are not empty, its advance and height [pixels], a checksum of the bitmap ([Glyphs](#glyphs)) |
+
+### Glyphs
+
+`test_glyph` tells which font of a text font's stack ([the fallback fonts](styles#symbols-the-fallback-fonts)) draws a
+character, and what it draws: a test that a label's symbols are not missing-glyph boxes checks that `source` is not
+empty and `pixels` is positive. `font` is a name of `app%set_font` (`'plex-sans'`, `'plex-mono'`, `'proggy'`) or a
+file; the glyph is rasterised at the current font size if it was not yet. In a frame (`FIG_ERR_STATE` otherwise);
+`text` must be one character of the Basic Multilingual Plane in UTF-8, and `font` a font (`FIG_ERR_ARGUMENT`); a file
+that cannot be read is `FIG_ERR_FAILED`. The same in every mode, on the frame loop's thread.
+
+<<< @/examples/snippets/cb_fallback_font-report.F90{fortran}
+
 ## Test the interface you ship
 
 Put the interface in a procedure that the application calls every frame, and call the same procedure from the test:
@@ -286,6 +333,43 @@ chapter 5 of the [tutorial](/manual/tutorial/05-headless) does this with a modul
 Call `app%set_checks('abort')` after `init_headless`: a misplaced end in the interface then stops the test at the
 faulty call, with a message naming it, even where the test passes a `stat` to `next_frame`
 ([Usage checks](frame-loop#usage-checks)).
+
+**In CI.** A project that depends on FIGURE through fpm
+([FIGURE as an fpm dependency](install#figure-as-an-fpm-dependency)) runs its headless tests on a hosted runner as
+they are: no display, no GPU. On macOS, with Homebrew's SDL3, the steps
+are those FIGURE's own release workflow (`fpm.yml`) builds a consumer project with:
+
+```yaml
+name: tests
+on: [push, pull_request]
+jobs:
+  headless:
+    runs-on: macos-15
+    env:
+      GOLDEN_MAX_FAILED: 0   # the pixels measured to differ on macOS, if any (A tolerance per platform)
+    steps:
+    - uses: actions/checkout@v4
+    - uses: fortran-lang/setup-fortran@v1
+      with: {compiler: gcc, version: 16}
+    - uses: fortran-lang/setup-fpm@v9
+      with: {fpm-version: v0.12.0, github-token: "${{ secrets.GITHUB_TOKEN }}"}
+    - name: Tests, headless
+      run: |
+        brew install sdl3
+        export CPATH="$(brew --prefix)/include" LIBRARY_PATH="$(brew --prefix)/lib" FPM_CXXFLAGS="-std=c++17"
+        fpm test --compiler "$FC" --c-compiler clang --cxx-compiler clang++
+    - uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: pictures
+        path: |
+          **/*.new.png
+          **/*.diff.png
+```
+
+A failed comparison leaves its `.new.png` and `.diff.png` beside the golden; the last step keeps them as an artifact.
+On Linux SDL3 comes from the distribution (`libsdl3-dev` from Debian 13 and Ubuntu 25.04 on; GitHub's
+`ubuntu-24.04` runner has none: [the SDL3 table](install#figure-as-an-fpm-dependency)).
 
 ## The repository's tests
 

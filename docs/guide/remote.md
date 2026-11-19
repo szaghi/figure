@@ -31,9 +31,9 @@ Try it with the example: `exe/examples/figure_hello --remote 8080`, then open th
 | `width`, `height` | display size until a browser connects and sends its own (default 1280 x 800) |
 | `port_used` | the port listened on |
 | `quiet` | do not print the address to open |
-| `max_fps` | most frames per second (default 60; `0`: no cap): a browser has no vsync to pace the program |
-| `token` | the access token the address must carry (default: 32 random hex digits; `''`: none) |
-| `url` | the address to open, with the token: `http://localhost:8080/?token=...` |
+| `max_fps` | most frames per second, `real64` (default 60; `0`: no cap): a browser has no vsync to pace the program |
+| `token` | the access token the address must carry (default: 32 random hex digits; `''`: none, [below](#access-token)) |
+| `url` | the address to open, with the token: `http://localhost:8080/?token=...`, into a `character` variable of your length, blank-padded (`trim` it); at most `16 + len_trim(host) + len(token)` characters plus the port's digits, 61 with the defaults (`localhost`, 8080, 32 digits); a shorter variable gets it cut |
 | `compress` | deflate frames and textures: `'auto'` (default) only while the browser cannot keep up, `'always'`, `'never'` |
 | `lossy` | an image that changes in consecutive frames goes as JPEG while it changes, exact once it is still (default `.true.`); `.false.`: always exact ([Changing images](#changing-images)) |
 | `stat` | `FIG_ERR_FAILED` if the port cannot be opened (in use, not permitted); `FIG_ERR_ARGUMENT` for a bad `port`, size, `compress` or `token`; `FIG_ERR_STATE` if FIGURE is already initialized |
@@ -52,7 +52,8 @@ FIGURE: open http://localhost:8080/?token=95f45b3f811f0d5505f5f227eb9be619 in a 
 The page and its connection are refused (`403`) without the token, so only who has the address controls the
 program: on a shared machine, the other users logged into it can reach the port, but not guess 128 random bits. The
 token is made anew at each start from the system's cryptographic generator (`/dev/urandom`, `rand_s` on Windows);
-`init_remote(token='...')` sets your own (letters, digits, `-._~`, at most 256), `token=''` turns the check off.
+`init_remote(token='...')` sets your own (letters, digits, `-._~`, at most 256), `token=''` turns the check off:
+anyone who reaches the port then controls the program, on a shared machine every user logged into it.
 Reloading the page keeps the token (it is in the address); `url` returns the address for a program that prints it
 elsewhere (a log, a job's output).
 
@@ -73,19 +74,54 @@ shared machine: the token would then travel unencrypted over the network.
 ## Behaviour
 
 - **One browser at a time.** A new one replaces the previous one; the browser can be closed, reloaded or opened later
-  while the program runs: it receives the textures again, then the frames. The page reconnects by itself if the
-  connection drops.
+  while the program runs: it receives the textures again, then the frames. The page reconnects by itself, a second
+  after the connection drops. So a second page opened with the address takes the program over, and the first page,
+  disconnected, takes it back a second later: two open pages take turns. Close the one you leave.
 - **The program does not wait for a browser.** Without one, frames are drawn and dropped; the computation goes on.
 - **Closing the browser does not end the program**: `next_frame` keeps returning `.true.`; the program ends itself.
 - **Frames are paced.** At most `max_fps` per second, and a frame is sent only once the previous one has left the
   program: on a slow link the newest frame goes and the ones drawn meanwhile are skipped, so the interface lags by one
   frame at most, never by a growing queue.
+- **Latency.** An input event goes to the program as a short text message, Dear ImGui sees it at the next frame, and
+  that frame's draw lists come back: a click shows after one round trip and one frame, plus the time the frame takes
+  on the link.
 - **Input**: mouse (position, buttons, wheel), keyboard (navigation and editing keys, Ctrl/Shift/Alt/Super, typed
   characters), and the size of the browser's window, which becomes the display size.
 - **Shortcuts stay in the page**: with the interface focused, ctrl (cmd) combinations go to the program, not to the
   browser (ctrl+s does not open the browser's save dialog), except copy, paste and cut. On a Mac the client sends cmd
   as ctrl, so the program's `ig_shortcut('ctrl+s')` is cmd+s there, as in a window on macOS
-  ([Menus and shortcuts](menus#shortcuts)).
+  ([Menus and shortcuts](menus#shortcuts)). Some chords never reach a page (ctrl+w among them), and the function keys
+  act in the browser too: [Shortcuts in a browser](known-issues#shortcuts-in-a-browser).
+
+## Browsers
+
+The page draws with WebGL 1, which every current desktop browser has; where the browser offers none (hardware
+acceleration and its software fallback both off), the page cannot draw. The browser tested is Chromium: the
+documentation's remote pictures are taken with headless Chromium, and `figure_test_remote` talks to the server with a
+client of its own, not a browser. Firefox and Safari are not tested; what is known to differ there is the chords
+they keep, the pop-ups they allow and the clipboard ([Shortcuts in a browser](known-issues#shortcuts-in-a-browser),
+[Links in a browser](known-issues#links-in-a-browser), [The clipboard and drops](known-issues#the-clipboard-and-drops)).
+
+**High-DPI screens.** The page sends the size of its canvas in CSS pixels, which becomes the program's display size,
+and `app%content_scale()` is 1: the program lays out in CSS pixels, as on a standard display. The page draws each
+frame at the screen's resolution, scaled by the browser's `devicePixelRatio` (2 on most high-DPI screens, and
+changed by the browser's zoom): text and anti-aliased edges are magnified from their 1x rendering, softer than in a
+native window on the same screen.
+
+## Not in remote mode
+
+What a window has and the browser's page does not:
+
+- **The window's frame:** no title bar is drawn in the page, and `init_remote` has no `decorations`
+  ([The window's frame](frame-loop#the-window-s-frame)); `app%set_title` is kept (read back by `app%title`) and shown
+  nowhere.
+- **The window's icon:** `app%set_icon` is refused with `FIG_ERR_STATE`.
+- **Size limits:** `app%set_size_limits` does nothing: the browser's window decides the display size.
+- **`ini_file`:** `init_remote` has none, so Dear ImGui keeps no window places between runs.
+- **The content scale:** `app%content_scale()` is 1 (above).
+- **The system's file dialogs:** refused ([below](#opening-and-saving-files)); FIGURE's file browser takes their place.
+- **The system's light or dark setting:** unknown, so `palette='auto'` is dark
+  ([Styles](styles#follow-the-system-s-light-or-dark-setting)).
 
 ## The clipboard and drops
 
@@ -105,7 +141,8 @@ What the browser allows decides what crosses between the page and the program:
   not a path: the page refuses them (its status line says so, for 8 seconds) and `app%dropped` stays `.false.`. Open the server's
   files with the file browser (below).
 
-[Clipboard](widgets#clipboard) and [Drops](frame-loop#drops) have the rest.
+[Clipboard](widgets#clipboard) and [Drops](frame-loop#drops) have the rest; what differs between browsers is in
+[Known issues](known-issues#the-clipboard-and-drops).
 
 ## Opening and saving files
 
@@ -161,7 +198,8 @@ whole image at every frame: `4 * width * height` bytes, 1.6 MB for an 800 x 500 
 second. So a texture updated in **two consecutive frames** goes as a **JPEG** (quality 75) for as long as it keeps
 changing, and once it has been **still for 150 ms** its exact pixels replace it, with the next frame or on their own.
 A still picture, a capture and a texture updated now and then are always exact; the browser shows a JPEG only while
-the image moves.
+the image moves, with JPEG's artefacts (blur around edges and grid lines, banding in smooth gradients:
+[Known issues](known-issues#_3-d-views)).
 
 - **Exact when:** `lossy=.false.`; an image with transparent pixels (JPEG has no alpha); a JPEG that would not be
   smaller; the first update after a still period (a change is not yet a motion).

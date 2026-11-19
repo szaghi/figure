@@ -13,7 +13,7 @@ Runs ``figure_bench_redraw`` (src/examples) through a list of cases. For each ca
 Usage::
 
     python3 scripts/measure_redraw.py [--program exe/examples/figure_bench_redraw] [--seconds 10] [--only NAME ...]
-                                      [--json results.json] [--port PORT] [--connect HOST:PORT]
+                                      [--json results.json] [--connect HOST:PORT [--pointer] [--token TOKEN]]
 
 ``--connect`` measures a program already running elsewhere (for example on a cluster node, through an SSH tunnel):
 the script records the stream only; CPU and frame counts then come from that program's own output. Results print as

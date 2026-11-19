@@ -8,7 +8,9 @@ An immediate-mode interface rebuilds every frame from the program's state. What 
 low? This page answers with measurements: every number below was measured with `scripts/measure_redraw.py` running
 `src/examples/figure_bench_redraw.F90` (the data is in `docs/data/performance.json`, the charts are drawn from it by
 `scripts/perf_charts.py`). They are one machine's numbers (WSL2/WSLg, x86-64 with 16 hardware threads, RTX 4070
-through D3D12, gfortran 16.2), so read the ratios, not the absolute values.
+through D3D12, gfortran 16.2), so read the ratios, not the absolute values. Under WSLg the GPU is reached only with
+`GALLIUM_DRIVER=d3d12`, else Mesa renders in software ([Installation](install#wsl2-wslg)). macOS and Windows were
+not measured ([Platforms](known-issues#platforms)).
 
 ## In a window
 
@@ -110,7 +112,8 @@ place too, on gfortran, nvfortran and ifx alike (from v0.5.0: nvfortran copied e
 exceptions: an item copies `x` when its stride differs from the ordinates' (or converts it when it is an integer), and
 gfortran and nvfortran copy a component of an array of derived types before the call. At a million points a stride
 costs about 7 % of the item, a copy by FIGURE 20 %, the compiler's temporaries of `runs%t` and `runs%cl` 40 to 60 %
-(double at ten million): keep a long series in its own contiguous array. With nvfortran 26.9 at ten million points,
+(double at ten million): keep a long series in its own contiguous array
+([Known issues](known-issues#strided-plot-data-copied-by-the-compiler)). With nvfortran 26.9 at ten million points,
 a matrix row went from 139 to 77 ms per item in v0.5.0, contiguous data take 70 ms
 ([Data in place](plots#data-in-place)).
 
@@ -219,16 +222,25 @@ the frame rate: live data at 60 updates per second still arrives at 60 frames pe
 line at 5 frames per second deflated. Decimate lines and use textures for fields, as above, and refresh live data at
 the rate you need, not faster (`max_wait`, or `max_fps` for the whole program).
 
+A picture the program saves (`app%save_image`) is drawn on the CPU in remote and headless modes, about 1 ns a pixel
+per thread: a few milliseconds for a whole window, paid only on the frame that saves
+([Pictures without a GPU](known-issues#pictures-without-a-gpu)).
+
 ## Measure your own
 
 - `FIGURE_DEBUG_REDRAW=1` prints, once per second, the frames drawn and where the time went (waiting, building,
-  rendering): [redraw diagnostics](frame-loop#redraw-diagnostics).
+  rendering): [redraw diagnostics](frame-loop#redraw-diagnostics). Window mode only: `app%init` reads it when it
+  opens the window, headless and remote modes ignore it.
 - `scripts/measure_idle.py` measures the CPU of an idle program ([measuring idle cost](frame-loop#measuring-idle-cost)).
 - `scripts/measure_redraw.py` runs `figure_bench_redraw` through every case of this page, in a window and in remote
   mode, and prints the tables (`--json` writes them for `scripts/perf_charts.py`). In remote mode it records the
   stream like a browser would and analyses it: identical frames, the share of vertices, deflate's saving. With
   `--connect HOST:PORT --token TOKEN` it records a program served elsewhere, such as one on a cluster node reached
-  through an SSH tunnel.
+  through an SSH tunnel (`--pointer` moves the pointer over it meanwhile). `--program` runs another build of the
+  benchmark (default `exe/examples/figure_bench_redraw`), `--seconds` sets each case's length (default 10),
+  `--only` names the cases (or their prefixes), `--env VAR=value` passes variables to the program, `--compress`
+  sets the remote mode's compression, and `--gpu` samples the utilisation of GPU 0 with `nvidia-smi` in window mode.
+  Linux only (the CPU time comes from the kernel's accounting of the finished process).
 
 ```bash
 python3 scripts/measure_redraw.py --env GALLIUM_DRIVER=d3d12 --json results.json

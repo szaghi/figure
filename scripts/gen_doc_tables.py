@@ -81,14 +81,18 @@ def rec_keys() -> str:
     doc = (ROOT / "scripts" / "docs_media.py").read_text().split('"""', 2)[1]
     entries: list[list[str]] = []
     col = 0  # the meanings' column, from the first header line (the docstring aligns them)
+    open_ = False  # the last line belongs to an entry
     for line in doc.splitlines():
         m = re.match(r"^\s+#! (\S+)", line)
         if m:
             if not col:
                 col = len(line) - len(re.split(r"\s{2,}", line.strip())[-1])
             entries.append([m.group(1), line[m.end() : col].strip(), line[col:].strip()])
-        elif entries and len(line) > col and not line[:col].strip():
+            open_ = True
+        elif open_ and len(line) > col and not line[:col].strip():  # a continuation of the last entry
             entries[-1][2] += " " + line.strip()
+        else:
+            open_ = False  # any other line ends the entry: the header list is over or interrupted
     rows = []
     for key, value, what in entries:
         what = re.sub(r"``([^`]*)``", r"`\1`", what)
