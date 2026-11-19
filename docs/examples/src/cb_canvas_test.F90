@@ -6,7 +6,7 @@ program cb_canvas_test
 use, intrinsic :: iso_fortran_env, only : int32, int64, output_unit, real64
 use figure, only : app_object, ig_begin, ig_cursor_screen_pos, ig_draw_rect, ig_end, ig_invisible_button, &
                    ig_set_next_window, ig_text
-use figure_testing, only : test_click, test_drawn_extent
+use figure_testing, only : test_click, test_drawn_extent, test_record_items
 
 implicit none
 real(real64), parameter :: FILL(4) = [0.20_real64, 0.60_real64, 0.85_real64, 1.0_real64] !< The bar's colour.
@@ -19,6 +19,7 @@ integer(int32)   :: vertices              !< How many vertices have FILL.
 integer(int32)   :: frame                 !< Frame counter.
 !run cb_canvas_test ./cb_canvas_test
 
+call test_record_items(.false.)                              ! clicks by pixel, no item found by path
 call app%init_headless(400_int32, 240_int32)
 do frame = 1_int32, 8_int32
    if (.not. app%next_frame()) exit

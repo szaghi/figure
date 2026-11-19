@@ -4,3 +4,5 @@ layout: Monitor
 shown: Case, Residuals, Log: T T T
 Log shown after View/Log: F
 layouts built: 3, Log shown again: T
+layout: Input
+layouts built: 4

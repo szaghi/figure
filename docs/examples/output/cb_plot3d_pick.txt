@@ -1,0 +1,2 @@
+$ ./cb_plot3d_pick --check
+pointer over the plot: T, readout: floor at x =   0.50, y =   0.50

@@ -10,7 +10,7 @@ if (ip3_begin_plot('core', width=-1.0_real64, height=-1.0_real64)) then
                       1.0_real64]
       sizes(i) = 2.0_real64 + 6.0_real64 * (t(i) - 300.0_real64) / 90.0_real64
    enddo
-   call ip3_scatter('probes', x, y, z, spec=ip3_spec(flags=ImPlot3DItemFlags_NoLegend), colors=colors, sizes=sizes)
+   call ip3_scatter('probes', x, y, z, spec=unlisted, colors=colors, sizes=sizes)
    call ip3_end_plot()
 endif
 call ip3_pop_style_var()

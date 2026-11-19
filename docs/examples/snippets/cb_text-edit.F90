@@ -1,5 +1,6 @@
 if (ig_button(ICON_SAVE//' Save')) then
    call write_text(trim(file), buffer%text())
+   write(output_unit, '(A,I0,A)') 'saved '//trim(file)//': ', buffer%length(), ' bytes' ! UTF-8: bytes, not characters
    modified = .false.
 endif
 call ig_same_line()

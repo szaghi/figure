@@ -307,6 +307,9 @@ zero line weight would draw nothing).
 |---|---|
 | `ip_begin_subplots(title, rows, cols [, width] [, height] [, link_x] [, link_y])` → `logical`, `ip_end_subplots()` | A grid of plots; the plots inside it (`ip_begin_plot`/`ip_end_plot`) fill the cells row by row. End only after a true begin. |
 
+`ip_begin_subplots` opens a grid of `rows` x `cols` plots in one figure, a drag and a moment history over one
+abscissa, and `ip_end_subplots` closes it, only after a true begin.
+
 - `link_x` (`link_y`): the plots share the x (y) range, so panning or zooming one moves all.
 - The first time a figure is drawn its plots fit to their data; linked axes then take the range of the last plot
   (the common abscissa, in practice). ImPlot itself gives linked axes no initial fit.
@@ -335,9 +338,12 @@ A recipe for this: [Stack plots over one iteration axis](/manual/cookbook#stack-
   Fortran program names a group, it keeps no variables with a fixed address for ImPlot), and a new group is not linked
   on its first frame: each of its plots fits its own data there, and from the next frame the group takes the range of
   the first plot that named it. Groups live as long as the application; a new `init` starts without them.
-- **Aligned, not linked.** Alignment is about pixels, linking about values: plots over different abscissae can be
+- **Aligned, not linked.** `ip_end_aligned` closes the group `ip_begin_aligned` opened, only after a true begin.
+  Alignment is about pixels, linking about values: plots over different abscissae can be
   aligned, and linked plots in different windows are not aligned.
-- **Legends.** The hover and the popup are asked after the item is drawn, before `ip_end_plot`; the popup is a window
+- **Legends.** `ip_begin_legend_popup` opens a popup on an item's legend entry (its last value, a checkbox, a colour)
+  and `ip_end_legend_popup` closes it, only after a true begin. The hover and the popup are asked after the item is
+  drawn, before `ip_end_plot`; the popup is a window
   of its own, its widgets drawn in it (a tooltip from `ip_legend_hovered` likewise, with `ig_begin_tooltip`). A left
   click on an entry still hides its item, as ImPlot does; `ip_hide_next_item(..., always=.true.)` overrides it each
   frame.
@@ -406,11 +412,13 @@ plot, a text at a point, a rectangle the user drags. With the drag tools and ann
   edge, `xmin` exceeds `xmax` while the button is held; FIGURE puts them back in order when it is released. A
   rectangle of no width and no height cannot be grabbed. Its corners take part in fitting the axes. `id` as the other
   [drag tools](#error-bars-annotations-and-drag-tools), unique among them in the plot.
-- **Tags** are drawn on the axis whichever axes the items use, after the plot's items, so a tag added late in the
+- **Tags** (`ip_tag`) are drawn on the axis whichever axes the items use, after the plot's items, so a tag added late in the
   plot still lands on its axis. A tag outside the axis's range is not shown. A tag wider than the axis's tick labels
   widens the axis on the next frame, and the plot area shifts: a readout that follows the pointer writes a long value
   beside the point instead (`ip_annotation`), as the readout of [Reading a plot](#reading-a-plot) does.
 - **Infinite lines** are not fitted: they take the axes' range, whatever it is.
+- **Texts** (`ip_text`) label a point of the plot (a probe, a peak): not an item, so no legend entry, but their
+  point takes part in fitting the axes.
 - **Order and frames.** Between `ip_begin_plot` and `ip_end_plot`, after the setup (each ends it), on every frame
   they are to be seen.
 - Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, a colour without 4 components, an offset without 2, a NaN value,
@@ -558,7 +566,9 @@ ImPlotExtra.jl's `image!` and `colorbar!`.
   registered, more than 16 384 values a side; `FIG_ERR_STATE` outside a plot (`ip_field_image: no plot is being
   declared (...)`) and from a [task](processes#tasks). `stat` is optional ([Errors](errors#fields)).
 - Modes: **window**, the texture on the GPU; **headless**, coloured and checked (the colours can be read back with
-  `test_field_pixel`, the colourings counted with `test_field_uploads`: [Testing](testing#synthetic-input)) but not drawn;
+  `test_field_pixel`, the colourings counted with `test_field_uploads`, the textures kept counted with
+  `test_field_textures`, the last colouring timed with `test_field_time`: [Testing](testing#synthetic-input)) but not
+  drawn;
   **remote**, the texture goes to the browser through FIGURE's texture path ([Remote](remote)): exact when coloured
   once, as JPEG while it is coloured on consecutive frames (a range dragged on the legend, a field changing every
   frame), exact again when it stops. Threads: a task does not draw.
@@ -570,8 +580,10 @@ ImPlotExtra.jl's `image!` and `colorbar!`.
 
 ## Reading a plot
 
-A program reads where the user points in plot units, converts between plot units and display pixels, and takes the
-box the user drags with the right button: the readout of a monitor, a window chosen by hand.
+A program reads where the user points in plot units (`ip_plot_mouse`, with `ip_plot_hovered` telling whether the
+pointer is over the plot's data area), converts between plot units and display pixels (`ip_plot_to_pixels` and its
+inverse `ip_pixels_to_plot`), and takes the box the user drags with the right button: the readout of a monitor, a
+window chosen by hand.
 
 | Procedure | Notes |
 |---|---|
@@ -617,7 +629,9 @@ box the user drags with the right button: the readout of a monitor, a window cho
 
 A recipe for this: [Drag a case onto a plot](/manual/cookbook#drag-a-case-onto-a-plot).
 
-- Called after the plot's items, before `ip_end_plot`, on every frame. Several targets in one plot (its area, an
+- `ip_drop_target` makes the plot being declared (its area, one axis, or its legend) a target of drag and drop, as
+  `ig_drop_target` makes an item one; on the frame of a drop it also gives the point dropped at, in plot units.
+  Called after the plot's items, before `ip_end_plot`, on every frame. Several targets in one plot (its area, an
   axis) each receive what is dropped on their own part: a series dropped on the y2 axis can be plotted against it.
 - Statuses: those of `ig_drop_target`, plus `FIG_ERR_ARGUMENT` for an unknown axis or both `axis` and `legend`,
   `FIG_ERR_STATE` outside a plot or for an axis not set up.
@@ -766,6 +780,11 @@ labelled axes and a legend, which the user turns with the mouse.
 
 Take ImPlot3D for a figure that a 2-D plot would draw if it had a third axis; take `view3d_object` for geometry.
 
+The items: `ip3_line`, a line through points; `ip3_scatter`, markers at them; `ip3_surface`, heights over a grid;
+`ip3_mesh`, triangles over shared vertices; `ip3_triangles` and `ip3_quads`, faces of three or four points in a row;
+`ip3_image`, a texture on a quadrilateral. `ip3_text` writes a label at a point of the box and is not an item. An
+item's look is a `plot3d_spec_object`, built by `ip3_spec` from ImPlot3D's defaults, as `ip_spec` builds a 2-D item's.
+
 <<< @/examples/snippets/gallery-plot3d.F90{fortran}
 
 <Media name="plot3d" alt="Three 3-D plots side by side, each in a box with grid planes and labelled axes, titled with its calls. Left, ip3_line, ip3_scatter, ip3_text: a red spiral rising from a point labelled release, past three blue diamond markers, axes x [m], y [m], z [m]. Middle, ip3_surface: a field as heights, a bump and a hollow over a square grid, coloured blue to red by the cool-warm map, its grid lines drawn. Right, ip3_mesh: an octahedron of blue triangles with light edges, seen from above its equator." caption="docs/examples/src/gallery.F90, run with plot3d" />
@@ -802,9 +821,12 @@ below it); `azimuth` [degrees] turns the box about z, counterclockwise seen from
 **Colours and sizes per point, formats and ticks, the style.** A set of probes coloured and sized by their readings,
 the x and y tick labels in metres, the height's ticks named, and the plot's background and padding changed for this
 plot only. `ip3_push_style_color` and `ip3_push_style_var` change ImPlot3D's style by name, as
-[`ip_push_style_color`](styles#changes-for-a-block) does ImPlot's, until the matching pop: the colours are
+[`ip_push_style_color`](styles#changes-for-a-block) does ImPlot's, until the matching pop, `ip3_pop_style_color` or
+`ip3_pop_style_var` (the colour pushes of the three libraries share one stack, their variable pushes another): the
+colours are
 `ImPlot3DCol_*` without the prefix (`PlotBg`, `AxisText`, `AxisGrid`, `LegendBg`, ...), the variables the fields of
-`ImPlot3DStyle` (`PlotPadding`, `LegendPadding`, `ViewScaleFactor`, `LineWeight`, ...).
+`ImPlot3DStyle` (`PlotPadding`, `LegendPadding`, `ViewScaleFactor`, `LineWeight`, ...). `ip3_setup_axis_ticks` puts an
+axis's ticks at the program's values, named by its labels.
 
 <<< @/examples/snippets/cb_plot3d_style-style.F90{fortran}
 

@@ -8,6 +8,7 @@ program cb_open_browser
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure, only : app_object, FIG_OK, ig_begin, ig_button, ig_end, ig_same_line, ig_set_next_window, ig_text
 use figure, only : figure_make_folder, figure_set_file_time
+use figure_testing, only : test_settings_file
 
 implicit none
 type(app_object)              :: app       !< Application.
@@ -22,6 +23,8 @@ logical                       :: cancelled !< ... by Cancel.
 call get_command_argument(1, cases)
 if (len_trim(cases) == 0) cases = 'figure-cases'
 call write_cases(trim(cases))
+call test_settings_file('')                     ! the recent folders in memory only: the same pictures at every run,
+                                                ! and the user's own list without the example's folder
 path = ''
 saved = ''
 call app%init('FIGURE: open a file', 900_int32, 560_int32)

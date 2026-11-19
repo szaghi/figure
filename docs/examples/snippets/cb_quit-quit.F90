@@ -15,5 +15,6 @@ if (ig_begin_popup_modal('Discard changes?')) then
    if (ig_button('Discard')) call app%quit()
    call ig_same_line()
    if (ig_button('Cancel')) call ig_close_current_popup()
+   call ig_default_focus()                         ! the safe button: enter or space presses it
    call ig_end_popup()
 endif

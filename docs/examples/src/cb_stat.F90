@@ -3,7 +3,7 @@ program cb_stat
 !< cb_stat, cookbook: handle failures with `stat` instead of stopping.
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
 use figure, only : app_object, figure_last_error, FIG_OK, FIG_ERR_ARGUMENT, FIG_ERR_STATE, ig_begin, ig_end, &
-                   ig_input, ip_begin_plot, ip_end_plot, ip_line
+                   ig_input, ip_begin_plot, ip_end_plot, ip_get_style_color, ip_line
 
 implicit none
 type(app_object) :: app    !< Application.
@@ -12,6 +12,7 @@ real(real64)     :: x(3)   !< Abscissae.
 real(real64)     :: y(2)   !< Ordinates: one too few.
 real(real64)     :: v      !< A field's value.
 logical          :: edited !< The field was edited.
+real(real64)     :: rgba(4) !< A colour.
 !run cb_stat ./cb_stat
 
 !region stat
@@ -49,5 +50,8 @@ if (app%next_frame(stat=stat)) then
    call ig_end()
    !endregion format
 endif
+call ip_get_style_color('PlotBackground', rgba, stat=stat)     ! ImPlot names it PlotBg
+if (stat == FIG_ERR_ARGUMENT) write(output_unit, '(A,I0,A)') 'ip_get_style_color: stat = ', stat, &
+                                                          ', "'//figure_last_error()//'"'
 call app%destroy()
 endprogram cb_stat

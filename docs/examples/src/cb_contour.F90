@@ -2,10 +2,10 @@
 program cb_contour
 !< cb_contour, cookbook: contour lines over a field, a hole where the field is undefined, and probes the user drags.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
-use, intrinsic :: iso_fortran_env, only : int32, real64
+use, intrinsic :: iso_fortran_env, only : int32, int64, output_unit, real64
 use figure, only : app_object, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_annotation, ip_begin_plot, &
-                   ip_colormap, ip_contour, ip_drag_line_x, ip_drag_point, ip_end_plot, ip_error_bars, ip_heatmap, &
-                   ip_line, ip_setup_axes, ip_setup_axes_limits, ip_spec
+                   ip_colormap, ip_contour, ip_contour_levels, ip_contour_lines, ip_drag_line_x, ip_drag_point, &
+                   ip_end_plot, ip_error_bars, ip_heatmap, ip_line, ip_setup_axes, ip_setup_axes_limits, ip_spec
 
 implicit none
 integer(int32), parameter :: NX = 161_int32    !< Samples along x, over [0, 2].
@@ -23,6 +23,9 @@ real(real64)              :: ey(9)             !< Ordinates of the profile's sam
 real(real64)              :: eg(9)             !< Their values.
 real(real64)              :: ee(9)             !< Their uncertainty.
 integer(int32)            :: cmap              !< The diverging colormap.
+real(real64), allocatable :: levels(:)         !< The levels of f's lines.
+real(real64), allocatable :: sx(:), sy(:)      !< Their segments' ends.
+integer(int64), allocatable :: first(:)        !< Where each level's segments start.
 integer(int32)            :: i, j              !< Counters.
 character(len=32)         :: text              !< The probe's value.
 
@@ -36,6 +39,13 @@ do j = 1_int32, NY
    enddo
 enddo
 ee = 0.05_real64
+!region levels
+levels = ip_contour_levels(f, 8_int32)                  ! about 8 round numbers inside f's range, as nlevels=8 picks
+call ip_contour_lines(f, 0.0_real64, 2.0_real64, 0.0_real64, 1.0_real64, levels, sx, sy, first) ! the lines, not drawn
+do i = 1_int32, size(levels, kind=int32)
+   write(output_unit, '(A,F6.2,A,I0,A)') 'level ', levels(i), ': ', (first(i + 1) - first(i)) / 2, ' segments'
+enddo
+!endregion levels
 
 call app%init('FIGURE: contour lines', 1100_int32, 760_int32)
 cmap = ip_colormap('vik')
@@ -48,7 +58,7 @@ do while (app%next_frame())
          ! the heatmap's bounds are the cells' outer edges: half a spacing beyond the first and last samples
          call ip_heatmap('##f', f, -0.5_real64 * DX, 2.0_real64 + 0.5_real64 * DX, -0.5_real64 * DY, &
                          1.0_real64 + 0.5_real64 * DY, scale_min=-1.0_real64, scale_max=1.0_real64, colormap=cmap)
-         call ip_contour('f', f, 0.0_real64, 2.0_real64, 0.0_real64, 1.0_real64, nlevels=8_int32, &
+         call ip_contour('f', f, 0.0_real64, 2.0_real64, 0.0_real64, 1.0_real64, levels=levels, &
                          color=[0.1_real64, 0.1_real64, 0.1_real64, 1.0_real64], labels=.true.)
          call ip_end_plot()
       endif

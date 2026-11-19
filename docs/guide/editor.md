@@ -79,6 +79,9 @@ stands for ctrl.
 with the [fallback font](styles#symbols-the-fallback-fonts)'s symbols, `ρ∞ ∇`. Its colours follow the style: the
 text, the selection, the line numbers and the background are the style's; keywords, types, numbers, strings and
 comments take the fork's dark or light palette, chosen by the window background's lightness.
+`ed%set_options` turns the line numbers, the blanks and tabs shown as dots and arrows, and the current line's
+highlight on or off, and sets the tab size; `ed%set_language` changes the colouring of an editor already made,
+keeping its text, its marks and its undo history.
 
 **Statuses.** `FIG_ERR_STATE`: a procedure before `init` (the queries `text`, `line_count`, `mark_of`, `cursor`,
 `selection`, `word_at_cursor`, `completing`, `is_read_only` and `line_rect` return their empty value instead), `draw`
@@ -98,7 +101,8 @@ them.
 ## Languages
 
 A `language_object` is data: the words the editor colours, its comments and strings, whether numbers are coloured,
-whether case counts. `code_language(name)` gives the shipped ones, by name in any case:
+whether case counts. `lang%name()` is its name (`'Fortran'`, `'Input'`, a fork language's in lower case, the one
+given to `lang%init`; `''` for plain text). `code_language(name)` gives the shipped ones, by name in any case:
 
 | Name | What it colours |
 |---|---|

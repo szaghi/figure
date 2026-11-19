@@ -2,11 +2,13 @@
 !< the floor under the pointer, from the pointer's ray.
 program cb_plot3d_pick
 !< cb_plot3d_pick, cookbook: a body of triangles and quads over a field image on the floor of a 3-D plot; the point of
-!< the floor under the pointer, from the pointer's ray.
-use, intrinsic :: iso_fortran_env, only : int8, int32, real64
+!< the floor under the pointer, from the pointer's ray. `cb_plot3d_pick --check` opens no window: it moves the pointer to
+!< the floor's point (0.5, 0.5) with FIGURE's scripted input and prints what the readout shows.
+use, intrinsic :: iso_fortran_env, only : int8, int32, output_unit, real64
 use figure, only : app_object, ig_begin, ig_end, ig_set_next_window, ig_text, ig_text_disabled, ip3_begin_plot,     &
-                   ip3_end_plot, ip3_image, ip3_mouse_ray, ip3_quads, ip3_setup_axes, ip3_setup_box,  &
-                   ip3_setup_legend, ip3_triangles, texture_object
+                   ip3_end_plot, ip3_image, ip3_mouse_ray, ip3_plot_to_pixels, ip3_quads, ip3_setup_axes,          &
+                   ip3_setup_box, ip3_setup_legend, ip3_triangles, texture_object
+use figure_testing, only : test_mouse_move
 
 implicit none
 integer(int32), parameter :: M = 64_int32 !< Pixels of the floor's image, per side.
@@ -22,6 +24,11 @@ real(real64)              :: t            !< Its parameter there.
 logical                   :: over         !< The pointer is over the plot.
 character(len=64)         :: line         !< A formatted readout.
 integer(int32)            :: i, j         !< Pixels.
+character(len=16)         :: arg          !< First argument.
+logical                   :: check        !< --check: headless, scripted pointer.
+real(real64)              :: px, py       !< A plot point [pixels].
+integer(int32)            :: frame        !< Frame counter.
+!run cb_plot3d_pick ./cb_plot3d_pick --check
 
 do j = 1_int32, M
    do i = 1_int32, M                                    ! a field: a ring of high values
@@ -38,10 +45,19 @@ back = reshape([-0.5_real64, -0.3_real64, 0.1_real64, -0.5_real64, 0.3_real64, 0
                 -0.5_real64, 0.3_real64, 0.5_real64, -0.5_real64, -0.3_real64, 0.5_real64], [3, 4])
 hit = 0.0_real64
 over = .false.
-call app%init('FIGURE: picking in a 3-D plot', 640_int32, 560_int32)
+call get_command_argument(1, arg)
+check = trim(arg) == '--check'
+if (check) then
+   call app%init_headless(640_int32, 560_int32)
+else
+   call app%init('FIGURE: picking in a 3-D plot', 640_int32, 560_int32)
+endif
 call floor%init(M, M)
 call floor%update(rgba)
+line = ''
+frame = 0_int32
 do while (app%next_frame())
+   frame = frame + 1_int32
    call ig_set_next_window(10.0_real64, 10.0_real64, 620.0_real64, 540.0_real64)
    if (ig_begin('Body')) then
       !region pick
@@ -58,6 +74,12 @@ do while (app%next_frame())
             t = -o(3) / d(3)                                              ! ... meets z = 0 there
             hit = o + t * d
          endif
+         !endregion pick
+         if (check .and. frame == 4_int32) then                          ! --check: the pointer to (0.5, 0.5, 0)
+            call ip3_plot_to_pixels(0.5_real64, 0.5_real64, 0.0_real64, px, py) ! as the box is turned now
+            call test_mouse_move(px, py)
+         endif
+         !region pick
          call ip3_end_plot()
       endif
       if (over .and. all(abs(hit(1:2)) <= 1.0_real64)) then
@@ -69,9 +91,11 @@ do while (app%next_frame())
       !endregion pick
    endif
    call ig_end()
+   if (check .and. frame == 8_int32) exit
 enddo
 call floor%destroy()
 call app%destroy()
+if (check) write(output_unit, '(A,L1,A)') 'pointer over the plot: ', over, ', readout: '//trim(line)
 contains
    elemental function byte(v) result(b)
    !< A 0-255 value as the signed byte a texture holds.

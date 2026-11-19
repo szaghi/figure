@@ -9,9 +9,9 @@ program cb_table_sort
 !< `cb_table_sort --check` opens no window: it clicks the headers, turns the wheel, and prints what it sees.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_begin_table, ig_em, ig_end, ig_end_table, ig_item_rect,               &
-                   ig_set_next_window, ig_table_headers_row, ig_table_next_column, ig_table_next_row,             &
-                   ig_table_row_color, ig_table_setup_column, ig_table_sort, ig_text, ig_text_disabled,           &
-                   list_clipper_object
+                   ig_set_next_window, ig_table_column_enabled, ig_table_headers_row, ig_table_hovered_column,  &
+                   ig_table_next_column, ig_table_next_row, ig_table_row_color, ig_table_set_column,             &
+                   ig_table_setup_column, ig_table_sort, ig_text, ig_text_disabled, list_clipper_object
 use figure_testing, only : test_click, test_mouse_move, test_wheel
 implicit none
 integer(int32),   parameter :: ROWS = 200_int32                                  !< Blocks.
@@ -38,6 +38,8 @@ real(real64)                :: header(4)       !< The headers row's rectangle (-
 real(real64)                :: cells_x         !< Centre of the cells column (--check).
 real(real64)                :: header_top      !< The header's top before the wheel (--check).
 integer(int32)              :: first_shown     !< The first row in view (--check).
+integer(int32)              :: over_column     !< The column under the pointer (0: none).
+logical                     :: show_patch      !< Show the patch column on this frame (as the headers' menu does).
 !run cb_table_sort ./cb_table_sort --check
 do k = 1_int32, ROWS                                ! a grid: deterministic values
    bodies(k) = BODY(1_int32 + mod(k, 3_int32))
@@ -52,6 +54,8 @@ header = 0.0_real64
 cells_x = 0.0_real64
 header_top = 0.0_real64
 first_shown = 0_int32
+over_column = 0_int32
+show_patch = .false.
 call get_command_argument(1, arg)
 check = trim(arg) == '--check'
 if (check) then
@@ -78,6 +82,10 @@ do while (app%next_frame())
          if (check) call ig_item_rect(header(1), header(2), header(3), header(4))
          !region table
          if (ig_table_sort(column, descending)) call sort_rows(column, descending) ! a new order asked
+         !endregion table
+         if (show_patch) call ig_table_column_enabled(5_int32, .true.) ! shown from the next frame, kept by Dear ImGui
+         show_patch = .false.
+         !region table
          call clip%begin(ROWS)
          do while (clip%step())
             do i = clip%first, clip%last
@@ -102,10 +110,11 @@ do while (app%next_frame())
                else
                   call ig_text_disabled(trim(adjustl(text)))
                endif
-               call ig_table_next_column()
+               call ig_table_set_column(5_int32)                ! a cell by its column: the patch
                call ig_text(trim(patches(k)))
             enddo
          enddo
+         over_column = ig_table_hovered_column()               ! 0 when the pointer is over no column
          call ig_end_table()
       endif
       !endregion table
@@ -202,6 +211,12 @@ contains
    case (40_int32)
       write(output_unit, '(A,I0,A,I0,A,L1)') 'frame ', f, ': the wheel scrolled to row ', first_shown, &
          ', the header in place: ', abs(header(2) - header_top) < 0.5_real64
+      write(output_unit, '(A,I0,A,I0)') 'frame ', f, ': the pointer over column ', over_column
+      show_patch = .true.
+   case (45_int32)
+      call test_mouse_move(header(3) - 40.0_real64, header(4) + 120.0_real64) ! the last column
+   case (50_int32)
+      write(output_unit, '(A,I0,A,I0)') 'frame ', f, ': the patch column shown, the pointer over column ', over_column
    endselect
    endsubroutine script
 endprogram cb_table_sort

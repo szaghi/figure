@@ -12,7 +12,7 @@ program cb_field_scale
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_end, ig_item_rect, ig_same_line, ig_set_next_window, &
                    ip_begin_plot, ip_colormap, ip_colormap_legend_edit, ip_end_plot, ip_field_image, ip_setup_axes
-use figure_testing, only : test_drag, test_field_uploads
+use figure_testing, only : test_drag, test_field_pixel, test_field_textures, test_field_time, test_field_uploads
 implicit none
 integer(int32), parameter :: NX = 400_int32  !< Values along x.
 integer(int32), parameter :: NY = 300_int32  !< Values along y.
@@ -101,10 +101,15 @@ contains
 
    subroutine report(when)
    !< The range and the colourings so far, for --check.
-   character(len=*), intent(in) :: when !< 'before' or 'after' the drag.
+   character(len=*), intent(in) :: when    !< 'before' or 'after' the drag.
+   real(real64)                 :: rgba(4) !< The colour of the blob's peak.
 
    write(output_unit, '(A,A,ES10.3,A,ES10.3,A,I0)') when, ' the drag: range ', vmin, ' to ', vmax, &
                                                    ', colourings since the start of the check ', &
                                                    test_field_uploads() - uploads
+   call test_field_pixel('rho', 150_int32, 150_int32, rgba)   ! the peak, as the last colouring made it
+   write(output_unit, '(A,3(1X,I0),A,I0,A,L1)') '   the peak in [0, 255]:', nint(255.0_real64 * rgba(1:3)), &
+                                                ', textures kept ', test_field_textures(), &
+                                                ', the last colouring under 1 s: ', test_field_time() < 1000.0_real64
    endsubroutine report
 endprogram cb_field_scale

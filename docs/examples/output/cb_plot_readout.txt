@@ -2,3 +2,5 @@ $ ./cb_plot_readout --check
 pointer over the plot: T
 nearest iteration:     250
 residual shown:        1.13E-04
+pixel to iteration 250 and back within a pixel: T, a data area: T
+box taken: iterations 250 to 300, the x axis not zoomed: T

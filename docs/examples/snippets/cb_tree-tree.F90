@@ -3,9 +3,11 @@ if (ig_begin_table('grids', 3_int32)) then
    call ig_table_setup_column('cells', width=90.0_real64)
    call ig_table_setup_column('first patch', width=110.0_real64)
    call ig_table_headers_row()
+   expand = ig_shortcut('ctrl+e')                         ! ctrl+e: every body open
    do b = 1_int32, BODIES
       call ig_table_next_row()
       call ig_table_next_column()
+      if (expand) call ig_set_next_item_open(.true., always=.true.) ! on this frame, whatever its state
       open = ig_tree_node(trim(BODY(b)), default_open=(b == 1_int32), span_all_columns=.true.)
       call ig_table_next_column()
       write(line, '(I0)') sum(CELLS(FIRST(b):LAST(b)))     ! the body's values, open or not

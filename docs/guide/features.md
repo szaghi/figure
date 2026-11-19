@@ -408,6 +408,7 @@ Details: [Heatmaps and images](images).
 | Procedure | Purpose |
 |---|---|
 | `ig_canvas(id, width, height, ev [, texture] [, stat])` | an area taking the mouse; `ev` a `canvas_event_object`: hovered, active, clicked, double-clicked, down and released per button, the pointer in canvas pixels, the drag, the wheel (owned while hovered), the modifiers, the canvas's origin and size ([Canvas](canvas#the-canvas)) <!-- visual --> |
+| `canvas_event_object`: `%hovered`, `%active`, `%clicked(3)`, `%double_clicked(3)`, `%down(3)`, `%released(3)`, `%mouse(2)`, `%drag(2)`, `%delta(2)`, `%wheel`, `%wheel_h`, `%ctrl`, `%shift`, `%alt`, `%super`, `%origin(2)`, `%size(2)` | what happened over a canvas on a frame, a plain value; per button (left, right, middle) ([The canvas](canvas#the-canvas)) |
 | `ig_draw_line(x1, y1, x2, y2, color [, thickness] [, layer] [, stat])` | a segment ([Primitives](canvas#primitives)) <!-- visual --> |
 | `ig_draw_rect(x1, y1, x2, y2, color [, thickness] [, filled] [, layer] [, stat])` | a rectangle, outline or filled ([Primitives](canvas#primitives)) <!-- visual --> |
 | `ig_draw_circle(x, y, radius, color [, thickness] [, filled] [, layer] [, stat])` | a circle, its radius in pixels ([Primitives](canvas#primitives)) <!-- visual --> |
@@ -440,6 +441,7 @@ Details: [Processes and tasks](processes).
 | Procedure | Purpose |
 |---|---|
 | `t%start(work, data [, stat])` | run `work(h, data)` (a `task_work` module procedure) on a worker thread, on a copy of `data` (`class(*)`) ([tasks](processes#tasks)) <!-- visual --> |
+| `task_work(h, data)` | the abstract interface of a task's procedure: `type(task_handle_object), intent(inout) :: h`, `class(*), intent(inout) :: data` (its own copy) ([tasks](processes#tasks)) |
 | `t%running()` → `logical`, `t%done()` → `logical`, `t%progress(fraction [, message])` | it runs; it has ended (its result waits); its last progress in [0, 1] and message ([tasks](processes#tasks)) <!-- visual --> |
 | `t%cancel([stat])`, `t%result(data [, stat])` | ask it to stop at its next safe point; once done, its data moved out (`class(*), allocatable`) ([tasks](processes#tasks)) <!-- visual --> |
 | `h%report(fraction [, message])`, `h%cancelled()` → `logical`, `h%fail(message)` | in the task: post progress (wakes the frame loop), the program asked it to stop, report a failure ([tasks](processes#tasks)) <!-- visual --> |

@@ -3,7 +3,8 @@ program cb_tree
 !< cb_tree, cookbook: a hierarchy of bodies and blocks with values in columns, and a node with thousands of children.
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure, only : app_object, ig_begin, ig_begin_child, ig_begin_table, ig_end, ig_end_child, ig_end_table,       &
-                   ig_pop_id, ig_push_id, ig_separator, ig_set_next_window, ig_table_headers_row,                &
+                   ig_pop_id, ig_push_id, ig_separator, ig_set_next_item_open, ig_set_next_window, ig_shortcut,  &
+                   ig_table_headers_row,                                                                         &
                    ig_table_next_column, ig_table_next_row, ig_table_setup_column, ig_text, ig_text_disabled,  &
                    ig_tree_node, ig_tree_pop, list_clipper_object
 
@@ -23,6 +24,7 @@ integer(int32)              :: b        !< Body.
 integer(int32)              :: k        !< Block.
 logical                     :: clicked  !< A node's label was clicked.
 logical                     :: open     !< A body's node is open.
+logical                     :: expand   !< Open every body on this frame (ctrl+e).
 character(len=48)           :: line     !< A formatted value.
 
 chosen = 0_int32
@@ -35,9 +37,11 @@ do while (app%next_frame())
          call ig_table_setup_column('cells', width=90.0_real64)
          call ig_table_setup_column('first patch', width=110.0_real64)
          call ig_table_headers_row()
+         expand = ig_shortcut('ctrl+e')                         ! ctrl+e: every body open
          do b = 1_int32, BODIES
             call ig_table_next_row()
             call ig_table_next_column()
+            if (expand) call ig_set_next_item_open(.true., always=.true.) ! on this frame, whatever its state
             open = ig_tree_node(trim(BODY(b)), default_open=(b == 1_int32), span_all_columns=.true.)
             call ig_table_next_column()
             write(line, '(I0)') sum(CELLS(FIRST(b):LAST(b)))     ! the body's values, open or not

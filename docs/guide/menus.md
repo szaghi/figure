@@ -157,7 +157,10 @@ A popup is opened once, by an event, and declared every frame:
 | `ig_begin_popup_modal(title [, open])` → `logical`, `ig_end_popup()` | A modal dialog: the rest of the interface is greyed out and ignores input while it is open. Its size fits its content; with `open`, a close button. |
 | `ig_close_current_popup()` | Close the popup or modal being declared: call it inside, on its OK or Cancel. |
 
-`ig_end_popup` follows only a begin that returned `.true.`. Open and begin use the same id, in the same window (the
+`ig_begin_popup` is a popup that a click outside closes; `ig_begin_popup_modal` is a modal dialog, titled, that
+keeps the rest of the interface from taking input until the program closes it with `ig_close_current_popup` (or the
+user with its close button, given `open`): a question that needs an answer. `ig_end_popup` follows only a begin that
+returned `.true.`, of either kind. Open and begin use the same id, in the same window (the
 id is scoped like a widget's label). A menu that opens on a right click, with no `ig_open_popup`, is a
 [context menu](#context-menus). A wrong end (after a false begin, or with another scope innermost) is refused
 and reported: [Pairing and frames](errors#pairing-and-frames).

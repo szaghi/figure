@@ -41,7 +41,7 @@ program cb_golden
 !< cb_golden, cookbook: test what a window looks like, headless, against a committed picture (a golden).
 use, intrinsic :: iso_fortran_env, only : int32, int64, output_unit, real64
 use figure, only : app_object, figure_last_error
-use figure_testing, only : test_capture, test_compare_image, test_run
+use figure_testing, only : test_capture, test_compare_image, test_record_items, test_run
 use cb_golden_ui, only : draw, settings
 
 implicit none
@@ -54,6 +54,7 @@ logical            :: same   !< The picture matches.
 !run cb_golden ./cb_golden ../../../docs/examples/data/cb_golden.png
 
 call get_command_argument(1, golden)
+call test_record_items(.false.)             ! no item found by its path here: no recording (before init*)
 call app%init_headless(320_int32, 160_int32)
 call settle()
 !region capture

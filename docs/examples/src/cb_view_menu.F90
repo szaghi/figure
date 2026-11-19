@@ -38,8 +38,16 @@ write(output_unit, '(A,L2)') 'Log shown after View/Log:', app%window_visible('Lo
 call test_menu_click('View/Reset layout')
 call draw(60_int32)
 write(output_unit, '(A,I0,A,L2)') 'layouts built: ', builds, ', Log shown again:', app%window_visible('Log')
+!region switch
+call app%switch_layout('Input')                            ! as View/Input does; as the user left it: not built again
+call draw(60_int32)
+write(output_unit, '(A)') 'layout: '//app%layout()
+call app%reset_layout()                                    ! as View/Reset layout does
+call draw(60_int32)
+!endregion switch
+write(output_unit, '(A,I0)') 'layouts built: ', builds
 call app%destroy()
-if (builds /= 3_int32) error stop 'cb_view_menu: a layout was not built'
+if (builds /= 4_int32) error stop 'cb_view_menu: a layout was not built'
 
 contains
    subroutine draw(frames)

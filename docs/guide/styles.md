@@ -496,6 +496,9 @@ The built-in styles' theme files: [`seal`](https://github.com/szaghi/figure/blob
 | `app%save_style(file [, stat])` | write the style in effect as a theme file: its look and palette (or its base), background and line colours, and every colour and variable that differs from what they give, including the changes made by name or in the style editor |
 | `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's own style editors in a window, "Style editor": every colour and size, live; inside a frame (outside one: `FIG_ERR_STATE`) |
 
+`ig_show_style_editor` opens Dear ImGui's and ImPlot's style editors in a window of their own: every colour and size
+changes the interface live, and `app%save_style` keeps the result as a theme file that `app%load_style` reads back.
+
 `FIGURE_STYLE` also takes a file: a value with a `/` or ending in `.toml` is loaded as a theme
 (`FIGURE_STYLE=./my-theme.toml exe/examples/figure_hello`).
 

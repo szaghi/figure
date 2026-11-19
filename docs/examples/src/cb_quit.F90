@@ -3,7 +3,7 @@ program cb_quit
 !< cb_quit, cookbook: ask before discarding changes when the window is closed; a popup of options.
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure, only : app_object, ig_begin, ig_begin_popup, ig_begin_popup_modal, ig_button, ig_checkbox, &
-                   ig_close_current_popup, ig_end, ig_end_popup, ig_input_text, ig_open_popup, ig_same_line, &
+                   ig_close_current_popup, ig_default_focus, ig_end, ig_end_popup, ig_input_text, ig_open_popup, ig_same_line, &
                    ig_set_next_window, ig_text
 
 implicit none
@@ -47,6 +47,7 @@ do while (app%next_frame())
          if (ig_button('Discard')) call app%quit()
          call ig_same_line()
          if (ig_button('Cancel')) call ig_close_current_popup()
+         call ig_default_focus()                         ! the safe button: enter or space presses it
          call ig_end_popup()
       endif
       !endregion quit

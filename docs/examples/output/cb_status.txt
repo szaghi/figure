@@ -1,0 +1,2 @@
+$ ./cb_status --check
+notification shown: T, alpha 1.0, in the bottom right quarter: T

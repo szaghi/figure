@@ -8,8 +8,9 @@ program cb_context_menu
 !< a line of help; another opens FIGURE's documentation in the browser.
 !< `cb_context_menu --check` opens no window: it clicks headless and prints the rows after each action.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
-use figure, only : app_object, ig_begin, ig_begin_item_tooltip, ig_begin_popup_context, ig_begin_table, ig_em,     &
-                   ig_end, ig_end_popup, ig_end_table, ig_end_tooltip, ig_menu_item, ig_pop_id, ig_push_id,           &
+use figure, only : app_object, ig_any_item_hovered, ig_begin, ig_begin_item_tooltip, ig_begin_popup_context,      &
+                   ig_begin_table, ig_em, ig_end, ig_end_popup, ig_end_table, ig_end_tooltip, ig_get_clipboard,      &
+                   ig_item_hovered, ig_menu_item, ig_pop_id, ig_push_id,                                             &
                    ig_same_line, ig_selectable, ig_separator, ig_set_clipboard, ig_set_next_window,                   &
                    ig_table_next_column, ig_table_next_row, ig_text, ig_text_disabled, ig_text_link, ig_text_link_url, &
                    ig_text_wrapped
@@ -29,6 +30,8 @@ integer(int32)                :: frame                !< Frame counter.
 logical                       :: help                 !< The help line is shown.
 logical                       :: check                !< --check: headless, scripted input.
 logical                       :: tooltip              !< A row's tooltip was drawn this frame.
+logical                       :: over_item            !< The pointer is over an item of the list (a row).
+integer(int32)                :: over_row             !< The row under the pointer (0: none).
 character(len=16)             :: arg                  !< First argument.
 character(len=64)             :: label                !< A value written.
 real(real64)                  :: row_at(2, MAX_ROWS)  !< Centre of each row.
@@ -56,12 +59,14 @@ frame = 0_int32
 do while (app%next_frame())
    frame = frame + 1_int32
    tooltip = .false.
+   over_row = 0_int32
    call ig_set_next_window(10.0_real64, 10.0_real64, 300.0_real64, 300.0_real64)
    if (ig_begin('Patches')) then
       do i = 1_int32, rows
          call ig_push_id(i)                                ! each row's menu has its own id
          if (ig_selectable(trim(names(i)), .false.)) continue
          if (check) call test_item_center(row_at(1, i), row_at(2, i))
+         if (ig_item_hovered()) over_row = i               ! the row just drawn is under the pointer
          if (ig_begin_popup_context('row')) then          ! a right click on the row just drawn
             call ig_text_disabled(trim(names(i)))
             call ig_separator()
@@ -91,6 +96,7 @@ do while (app%next_frame())
          call ig_pop_id()
       enddo
       call apply()                                       ! the list changes after it is drawn, not while
+      over_item = ig_any_item_hovered()                  ! false over the empty space, where the list's menu opens
       if (ig_begin_popup_context('list', on='window')) then ! the window's empty space, not over a row
          if (ig_menu_item('Add a row', enabled=rows < MAX_ROWS)) call ask('add', rows)
          call keep_entry(1)
@@ -213,6 +219,7 @@ contains
       call test_click(entry_at(1, 4), entry_at(2, 4))  ! Delete 'inlet'
    case (36_int32)
       call report('Delete on inlet')
+      write(output_unit, '(A,I0,A,L1)') 'frame ', f, ': pointer over a row: ', over_item
       call test_click(150.0_real64, 220.0_real64, button='right') ! below the rows: the list's menu
    case (44_int32)
       call test_popup_rect(r(1), r(2), r(3), r(4), open)
@@ -222,7 +229,8 @@ contains
       call report('Add a row')
       call test_mouse_move(row_at(1, 1), row_at(2, 1))  ! rest on the first row
    case (53_int32, 60_int32, 75_int32)
-      write(output_unit, '(A,I0,A,L1)') 'frame ', f, ': pointer on '//trim(names(1))//', tooltip shown: ', tooltip
+      write(output_unit, '(A,I0,A,L1,A,I0)') 'frame ', f, ': pointer on '//trim(names(1))//', tooltip shown: ', tooltip, &
+                                             ', row under the pointer: ', over_row
    case (80_int32)
       call test_click(link_at(1), link_at(2))
    case (88_int32)
@@ -230,6 +238,11 @@ contains
       call test_click(docs_at(1), docs_at(2))
    case (96_int32)
       write(output_unit, '(A,I0,A)') 'frame ', f, ': documentation link clicked, opened: '//test_opened_url()
+      call test_click(row_at(1, 2), row_at(2, 2), button='right')
+   case (104_int32)
+      call test_click(entry_at(1, 3), entry_at(2, 3))  ! Copy name
+   case (112_int32)
+      write(output_unit, '(A,I0,A)') 'frame ', f, ': Copy name on row 2, the clipboard: '//ig_get_clipboard()
    endselect
    endsubroutine script
 endprogram cb_context_menu

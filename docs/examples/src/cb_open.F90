@@ -28,6 +28,7 @@ if (trim(arg) == '--remote') then
 else
    call app%init('FIGURE: open a file', 800_int32, 500_int32)
 endif
+call app%set_docking(.false.)                                 ! one window: nothing to dock it into
 do while (app%next_frame())
    call ig_set_next_window(10.0_real64, 10.0_real64, 620.0_real64, 180.0_real64)
    if (ig_begin('Input file')) then
@@ -43,6 +44,11 @@ do while (app%next_frame())
       call ig_same_line()
       if (ig_button('Open with FIGURE''s browser...')) call app%open_file_dialog('open', FILTERS, prefer='figure')
       !endregion prefer
+      !region save
+      if (ig_button('Save as...')) call app%save_file_dialog('save', FILTERS, default_path='case.input')
+      call app%file_dialog_result('save', chosen, done, cancelled, stat=stat)
+      if (done .and. .not. cancelled .and. stat == FIG_OK) path = chosen  ! the file to write; it may exist
+      !endregion save
       call ig_text('file: '//path)
    endif
    call ig_end()

@@ -121,6 +121,10 @@ item does. Outside a plot it is a usage error, `FIG_ERR_STATE`.
 
 <Media name="canvas_primitives" alt="A window Canvas primitives with eight cells in two rows, each a framed canvas with its call in grey below: a thick amber line (ig_draw_line(..., thickness=3)); an amber rectangle outline and a teal filled square (ig_draw_rect(..., filled=.true.)); an amber circle outline and a teal filled disc (ig_draw_circle(x, y, radius, ...)); an amber sine polyline (ig_draw_polyline(x(:), y(:), ...)); an amber heptagon outline and a teal filled arrow-head polygon (ig_draw_polygon(..., filled=.true.)); amber text 'inlet, u = 1 m/s' and teal text 'wall' over 'no slip' (ig_draw_text(x, y, text, ...)); a colour-gradient image twice, the second tinted red (ig_draw_image(tex, ..., color)); teal cross-hairs with an amber dot at the centre labelled ev%origin + [cx, cy] (ig_canvas(id, w, h, ev)). Below, under the heading layer='plot': plot units, clipped to the plot, a plot from 0 to 4 m with a red sine line, a teal rectangle from (0, 0) to (4, 1) and an amber disc at (1, 0.5) labelled probe at (1, 0.5) m" caption="docs/examples/src/gallery.F90, run with canvas_primitives" />
 
+`ig_draw_line` draws a segment, `ig_draw_rect` a rectangle and `ig_draw_circle` a circle (outlines, or filled),
+`ig_draw_polyline` a line through arrays of points (closed with `closed=.true.`), `ig_draw_polygon` a polygon,
+`ig_draw_text` a text from its top-left corner in the current font, and `ig_draw_image` a texture stretched over a
+rectangle, its pixels multiplied by `color` (default white: as they are).
 Coordinates are `real(real64)`: screen pixels, or plot units on the plot layer ([Coordinates](#coordinates)).
 `thickness` is in pixels, default 1; `filled` defaults to the outline. `x(:)` and `y(:)` of a polyline or a polygon are
 arrays of the same size, at least 2 and 3 points: a contiguous array goes to the native layer without a copy (a

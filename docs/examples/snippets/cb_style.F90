@@ -1,6 +1,7 @@
 !< cb_style, cookbook: change a few colours and variables of the whole interface (run with "plain" to skip them).
 program cb_style
-!< cb_style, cookbook: change a few colours and variables of the whole interface (run with "plain" to skip them).
+!< cb_style, cookbook: change a few colours and variables of the whole interface (run with "plain" to skip them, with
+!< a theme file, e.g. the my-theme.toml that cb_tune saves, to apply that instead).
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_end, ig_set_next_window, ig_set_style_color, &
                    ig_set_style_var, ig_slider, ip_begin_plot, ip_end_plot, ip_line, ip_set_style_color
@@ -12,7 +13,7 @@ real(real64)              :: x(N)          !< Abscissae.
 real(real64)              :: level         !< A value.
 logical                   :: on            !< A flag.
 integer(int32)            :: i             !< Counter.
-character(len=8)          :: arg           !< Command argument.
+character(len=256)        :: arg           !< Command argument.
 
 x = [(real(i - 1, real64) / real(N - 1, real64), i = 1_int32, N)]
 level = 0.6_real64
@@ -20,7 +21,9 @@ on = .true.
 call get_command_argument(1, arg)
 
 call app%init('FIGURE: style', 720_int32, 420_int32)
-if (trim(arg) /= 'plain') then
+if (trim(arg) /= 'plain' .and. len_trim(arg) > 0) then
+   call app%load_style(trim(arg))                          ! a theme file: what it does not set comes from its base
+elseif (trim(arg) /= 'plain') then
    call ig_set_style_color('Button', '#2f5d50')            ! colours: hex or [r, g, b(, a)] in [0, 1]
    call ig_set_style_color('ButtonHovered', '#3d7a69')
    call ig_set_style_color('SliderGrab', '#e0b04c')

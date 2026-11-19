@@ -15,6 +15,7 @@ r(3:4) = ig_text_size('Restore defaults')
 w = max(r(1), r(3))                                     ! the widest label
 if (ig_button('Apply', width=w + ig_em(1))) continue    ! two buttons of one width
 call ig_same_line()
+call ig_align_next(w + ig_em(1), 'right')               ! the next one at the right edge: its width is known
 if (ig_button('Restore defaults', width=w + ig_em(1))) cfl = 0.5_real64
 call ig_text_wrapped('The CFL number bounds the time step: dt = CFL dx / max|u|. Values above 1 make the ' // &
                      'explicit scheme unstable; 0.5 is a safe start for a new case.')

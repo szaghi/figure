@@ -30,6 +30,7 @@ call log%in_view(first, last)
 write(output_unit, '(A,I0,A,A)') 'kept: ', log%count(), ', the oldest: ', log%line(1_int32)
 write(output_unit, '(A,L1,A,I0,A,I0,A,A)') 'following: ', log%following(), ', in view: ', first, ' to ', last, &
                                            ', the newest: ', log%line(log%count())
+write(output_unit, '(A,I0,A)') 'copied, every line kept: ', len(log%copy(all=.true.)), ' characters' ! without all: the chosen
 call app%destroy()
 if (log%count() /= 1000_int32 .or. last /= 1000_int32 .or. .not. log%following()) error stop 'cb_log_view: not kept'
 endprogram cb_log_view

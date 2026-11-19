@@ -1,3 +1,5 @@
 $ ./cb_view3d_render
 renders after: the first draw, 3 idle frames, a clip, a change: 1 1 2 3
 the last render: 624 x 443 pixels
+at the centre: mesh 1 (the bump is 1), element 230, at  -0.42   1.42   1.75
+read back: 624 x 443 pixels

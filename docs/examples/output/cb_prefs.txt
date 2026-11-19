@@ -1,4 +1,5 @@
 $ ./cb_prefs
+preferences kept in cb_prefs.ini
 run 1: case naca0012.inp, cfl 0.80, grid T
 run 2: case rae2822.inp, cfl 1.20, grid F
 cb_prefs.ini, without the arrangement:

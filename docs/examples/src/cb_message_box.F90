@@ -5,7 +5,7 @@ program cb_message_box
 !< the question again; the answers polled frame by frame; checked headless by clicking the buttons by their paths.
 use, intrinsic :: iso_fortran_env, only : int32, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_end
-use figure_testing, only : test_item_click, test_quit, test_run
+use figure_testing, only : test_item_click, test_item_exists, test_quit, test_run
 
 implicit none
 type(app_object) :: app              !< Application.
@@ -18,6 +18,7 @@ call app%init_headless(800_int32, 500_int32)
 call app%set_confirm_quit(.true.)                          ! the close button asks first
 call test_quit()                                           ! the user closes the window
 call draw(30_int32)
+if (.not. test_item_exists('Quit?/Save first')) error stop 'cb_message_box: the question is not shown'
 call test_item_click('Quit?/Save first')                   ! the case saved, a message box
 call draw(30_int32)
 call test_item_click('Saving/OK')

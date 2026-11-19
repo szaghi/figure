@@ -28,9 +28,10 @@ if (ig_begin_table('blocks', 5_int32, height=ig_em(18.0_real64), freeze_rows=1_i
          else
             call ig_text_disabled(trim(adjustl(text)))
          endif
-         call ig_table_next_column()
+         call ig_table_set_column(5_int32)                ! a cell by its column: the patch
          call ig_text(trim(patches(k)))
       enddo
    enddo
+   over_column = ig_table_hovered_column()               ! 0 when the pointer is over no column
    call ig_end_table()
 endif

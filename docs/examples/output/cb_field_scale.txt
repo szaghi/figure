@@ -1,3 +1,5 @@
 $ ./cb_field_scale --check
 before the drag: range  1.000E-01 to  1.000E+02, colourings since the start of the check 0
+   the peak in [0, 255]: 251 254 163, textures kept 1, the last colouring under 1 s: T
 after the drag: range  3.771E-02 to  3.771E+01, colourings since the start of the check 1
+   the peak in [0, 255]: 252 255 164, textures kept 1, the last colouring under 1 s: T

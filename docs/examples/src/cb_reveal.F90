@@ -9,9 +9,9 @@ program cb_reveal
 !< `cb_reveal --check` opens no window: it picks and types headless and prints what each list shows.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_begin_child, ig_begin_popup_modal, ig_button, ig_close_current_popup, &
-                   ig_end, ig_end_child, ig_end_popup, ig_focus_here, ig_input_text, ig_last_item, ig_open_popup, &
-                   ig_same_line, ig_scroll_here, ig_scroll_to_pos, ig_selectable, ig_set_next_window, ig_text, &
-                   ig_text_disabled, item_status_object, list_clipper_object
+                   ig_end, ig_end_child, ig_end_popup, ig_focus_here, ig_get_scroll, ig_input_text, ig_last_item, &
+                   ig_open_popup, ig_same_line, ig_scroll_here, ig_scroll_to_pos, ig_selectable, ig_set_next_window, &
+                   ig_set_scroll, ig_shortcut, ig_text, ig_text_disabled, item_status_object, list_clipper_object
 use figure_testing, only : test_click, test_item_center, test_key, test_type
 implicit none
 integer(int32), parameter :: BLOCKS = 2000_int32   !< Blocks of the grid.
@@ -30,6 +30,7 @@ real(real64)              :: pick_at(2, 3)         !< Centre of each pick button
 real(real64)              :: goto_at(2)            !< Centre of the "Go to..." button.
 real(real64)              :: shown(4)              !< The selected block's row (x, y, w, h), when drawn.
 real(real64)              :: list(4)               !< The Blocks list's rectangle.
+real(real64)              :: scroll, scroll_max    !< Its scroll, its largest [pixels].
 integer(int32)            :: picks(3)              !< The blocks of the pick buttons.
 integer(int32)            :: frame                 !< Frame counter.
 integer(int32)            :: i                     !< Row.
@@ -100,6 +101,8 @@ do while (app%next_frame())
          enddo
          if (reveal .and. block > 0_int32) &                 ! row `block` starts (block - 1) rows down
             call ig_scroll_to_pos((real(block, real64) - 0.5_real64) * clip%item_height, 0.5_real64)
+         if (ig_shortcut('ctrl+home', scope='global')) call ig_set_scroll(y=0.0_real64) ! the top, on the next frame
+         call ig_get_scroll(scroll, scroll_max)               ! where the list is: 0 (top) to scroll_max (bottom)
       endif
       call ig_end_child()
       !endregion clipped
@@ -174,8 +177,9 @@ contains
    else
       where = 'drawn, off the middle'
    endif
-   write(output_unit, '(A,I0,A,I0,A,I0,A)') 'frame ', frame, ': block ', block, ' (body ', body_of(block), &
-                                             '): '//trim(where)
+   write(output_unit, '(A,I0,A,I0,A,I0,A,I0,A)') 'frame ', frame, ': block ', block, ' (body ', body_of(block), &
+                                                 '): '//trim(where)//', the list ', nint(100.0_real64 * scroll / scroll_max), &
+                                                 '% down'
    endsubroutine report
 
    subroutine script(f)
@@ -196,6 +200,11 @@ contains
       call test_type('333')
       call test_key('enter')
    case (50_int32)
+      call report()
+      call test_key('ctrl', down=.true.)   ! ctrl+home: the list's top
+      call test_key('home')
+      call test_key('ctrl', down=.false.)
+   case (60_int32)
       call report()
    endselect
    endsubroutine script

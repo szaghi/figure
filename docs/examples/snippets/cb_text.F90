@@ -4,7 +4,7 @@ program cb_text
 !<
 !< `cb_text [FILE]` first writes an example input file (default `figure-overset.input` in the working directory), so
 !< that its pictures are the same at every run; then it shows the file as text, editable, with a button that saves it.
-use, intrinsic :: iso_fortran_env, only : int32, real64
+use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
 use figure, only : app_object, ICON_SAVE, ig_begin, ig_button, ig_end, ig_input_text_multiline, ig_pop_font, &
                    ig_push_font, ig_same_line, ig_set_next_window, ig_text, text_buffer_object
 
@@ -25,6 +25,7 @@ do while (app%next_frame())
    if (ig_begin('Input file')) then
       if (ig_button(ICON_SAVE//' Save')) then
          call write_text(trim(file), buffer%text())
+         write(output_unit, '(A,I0,A)') 'saved '//trim(file)//': ', buffer%length(), ' bytes' ! UTF-8: bytes, not characters
          modified = .false.
       endif
       call ig_same_line()

@@ -143,9 +143,11 @@ besides its colour, two buttons of one width (the widest label's), and a paragra
 
 <<< @/examples/snippets/cb_controls-text.F90{fortran}
 
-`ig_text` draws its text as it is, `ig_text_wrapped` wraps it, `ig_text_disabled` dims it and `ig_text_colored`
-colours it; `ig_separator` draws a line between two parts of a window. Gaps, groups, alignment, widths and sizes that
-follow the font: [Layout](#layout).
+`ig_text` draws its text as it is, `ig_text_wrapped` wraps it, `ig_text_disabled` dims it and `ig_text_colored` colours
+it; `ig_separator` draws a line between two parts of a window. `ig_align_text_to_frame_padding` lowers the text that
+follows on the line to the level of a field's text, for a label before a field. `ig_show_demo_window` opens Dear ImGui's
+own demo window, a live catalogue of its widgets, bound or not. Gaps, groups, alignment, widths and sizes that follow
+the font: [Layout](#layout).
 
 ## Layout
 
@@ -180,7 +182,14 @@ size: the column where the fields start (`ig_same_line(ig_em(7))`), the fields' 
 the window's width (`ig_set_next_window(..., ig_em(24), ...)`). The rule: lengths that hold text in em, gaps in the
 style's own spacing (`ig_spacing`, `ig_same_line()`), the window's height left to its content (0 to
 `ig_set_next_window`). The style's paddings and spacings are pixels scaled by the display's content scale, not by the
-font: a window whose height is given in em gets too small for its content at small fonts.
+font: a window whose height is given in em gets too small for its content at small fonts. `ig_font_size()` is
+one em in pixels, and `ig_line_height()` a line of text's height (with `spacing=.true.`, the distance from one line's
+top to the next one's).
+
+**Gaps and space.** `ig_dummy(w, h)` is an empty item of a given size: a gap, or a place kept for something drawn
+later; `ig_new_line()` ends a line begun with `ig_same_line`, or adds an empty one; `ig_available(w, h)` gives the
+space left from where the next item goes to the right and bottom edges, for an item that fills it;
+`ig_separator_text(label)` is a separator with a title at its left, the heading of a part of a form.
 
 <<< @/examples/snippets/cb_layout-label.F90{fortran}
 
@@ -333,7 +342,9 @@ Every one acts on the **current window or region**: call it between `ig_begin` a
 **One frame late.** A scroll asked for is applied when its window or region is begun on the next frame, when its
 size is known: on the frame of the call nothing moves, `ig_get_scroll` still gives the old values, and an item's
 `visible` and `rect` ([What happened to an item](#what-happened-to-an-item)) are the old ones. One frame later the
-item is in place. `ig_focus_here` is one frame late too: typed keys go into the field from the next frame. Ask once,
+item is in place. `ig_set_scroll(y, x)` sets the scroll directly, in pixels (clamped to [0, the largest scroll] when
+applied), and is one frame late in the same way: restoring a list's place read earlier with `ig_get_scroll`.
+`ig_focus_here` is one frame late too: typed keys go into the field from the next frame. Ask once,
 on the frame something happens (a pick, a button, a dialog that opens), not on every frame: a scroll asked on every
 frame holds the list still against the user's wheel.
 
@@ -394,6 +405,11 @@ gives zeros; without `stat` the error is reported by the next `app%next_frame`
 | `ig_begin_table(id, columns [, ...])`, `ig_end_table()` | End only when the begin returned `.true.`; the rest in [Tables](#tables). |
 | `ig_push_id(id)`, `ig_pop_id()` | Always paired: an id scope, by `character` or `int32`. |
 | `ig_begin_disabled([disabled])`, `ig_end_disabled()` | Always paired: the widgets in between are greyed out and ignore input. |
+
+`ig_collapsing_header` shows or hides what follows it, a section of a form folded away; `ig_begin_tab_bar` opens a bar
+whose tabs (`ig_begin_tab`, true for the selected one) each hold a page of widgets, one shown at a time; a disabled
+block (`ig_begin_disabled` ... `ig_end_disabled`) holds settings that do not apply now, and with `disabled=.false.`
+draws them as usual, so one pair serves both states.
 
 Tabs and tables follow Dear ImGui's rule, which differs from windows: `ig_end` follows every `ig_begin`, whatever it
 returned, while `ig_end_tab`, `ig_end_tab_bar` and `ig_end_table` follow only a begin that returned `.true.`. FIGURE
@@ -714,7 +730,8 @@ The program checks itself headless (a click on TVD, the wheel over the list, a c
 | `buf%text()` → `character(len=:), allocatable` | A copy of the text (`''` before any `set` or edit). |
 | `buf%length()` → `integer(int64)` | The length of the text, in bytes (UTF-8). |
 
-A `text_buffer_object` holds text of any length: a file shown or edited as text, notes, a log kept for reading. The
+`ig_input_text_multiline` draws the field, a box of several lines over the text of a buffer. A `text_buffer_object`
+holds text of any length: a file shown or edited as text, notes, a log kept for reading. The
 text is kept by FIGURE's native layer, not in a Fortran variable, and grows while the user types or pastes (through
 Dear ImGui's resize callback): there is no capacity to choose, as there is for `ig_input_text`, and nothing is copied
 per frame. `buf%text()` copies it out when the program needs it (to save it, to parse it). The object releases its
@@ -824,7 +841,9 @@ the user left the field, double-clicked a row, holds the pointer over a button. 
   any widget) becomes "the last item", and a later call answers about that one. The `item_status_object` the call
   returns is a plain value: it keeps the states of the item it was taken after, whatever is drawn next, so take it
   once and test its components where the program needs them. `ig_item_hovered` has no snapshot: it answers at once,
-  about the item drawn last.
+  about the item drawn last. `ig_any_item_hovered` and `ig_any_item_active` answer about every item of the frame
+  so far: the pointer is over some widget, or some widget is held or edited, so that a click or a key on the window's
+  background, or a shortcut of the program's own, can be told apart from one that goes to a widget.
 - **The one-frame rule.** `activated`, `edited`, `deactivated`, `deactivated_after_edit`, `toggled_open`, `clicked`
   and `double_clicked` are events: true on the one frame the event happens, false on the next. Test them on every
   frame, as a button's result. `hovered`, `active`, `focused` and `visible` are states: true on every frame while
@@ -1130,11 +1149,12 @@ in code blocks, no file included into a page (`![[file]]`), no footnotes; nothin
 | `ig_drop_target(type, payload [, stat])` → `logical` | Makes the last item a target of payloads of type `type` (`BeginDragDropTarget`, `AcceptDragDropPayload`): `.true.` on the frame one is dropped on it, `payload` (`character(len=:), allocatable`) then holding it. |
 | `ig_dragging(type)` → `logical` | `.true.` while a payload of type `type` is dragged, wherever: a program shows its drop zones then. |
 
-The payload is text: an id, a name, a path, what the target needs to find the thing in the program's own data; the
-program, not Dear ImGui, keeps the things themselves. The type pairs sources with targets: a target receives only the
-payloads of its type, and outlines itself while one of them is held over it. A plot is a target too, of its area, an
-axis or its legend ([`ip_drop_target`](plots#a-plot-as-a-drop-target)). Each is called right after its item, on every
-frame; any item is a source, text and other items without an id included.
+`ig_drag_source` makes an item draggable, `ig_drop_target` makes one receive what is dropped on it, and `ig_dragging`
+tells while a drag of a type is under way, anywhere. The payload is text: an id, a name, a path, what the target needs
+to find the thing in the program's own data; the program, not Dear ImGui, keeps the things themselves. The type pairs
+sources with targets: a target receives only the payloads of its type, and outlines itself while one of them is held
+over it. A plot is a target too, of its area, an axis or its legend ([`ip_drop_target`](plots#a-plot-as-a-drop-target)).
+Each is called right after its item, on every frame; any item is a source, text and other items without an id included.
 
 <<< @/examples/snippets/cb_dnd-source.F90{fortran}
 

@@ -4,8 +4,8 @@ program cb_controls
 !< cb_controls, reference example: workspace buttons, text and layout, icons and fonts, and a headless test that
 !< clicks a button and edits a field as a user does.
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
-use figure, only : app_object, ig_align_text_to_frame_padding, ig_begin, ig_begin_child, ig_button, ig_em, ig_end, &
-                   ig_end_child, ig_input, ig_item_rect, ig_pop_font, ig_push_font, ig_same_line, ig_selectable, &
+use figure, only : app_object, ig_align_next, ig_align_text_to_frame_padding, ig_begin, ig_begin_child, ig_button, ig_em, ig_end, &
+                   ig_end_child, ig_input, ig_item_rect, ig_new_line, ig_pop_font, ig_push_font, ig_same_line, ig_selectable, &
                    ig_separator, ig_set_next_item_width, ig_set_next_window, ig_text, ig_text_colored, &
                    ig_text_disabled, ig_text_size, ig_text_wrapped, ig_tool_button, ig_tooltip, list_clipper_object, &
                    ICON_ACTIVITY, ICON_CHART_LINE, ICON_FILE_PEN, ICON_PLAY, ICON_TRIANGLE_ALERT
@@ -89,6 +89,7 @@ contains
       w = max(r(1), r(3))                                     ! the widest label
       if (ig_button('Apply', width=w + ig_em(1))) continue    ! two buttons of one width
       call ig_same_line()
+      call ig_align_next(w + ig_em(1), 'right')               ! the next one at the right edge: its width is known
       if (ig_button('Restore defaults', width=w + ig_em(1))) cfl = 0.5_real64
       call ig_text_wrapped('The CFL number bounds the time step: dt = CFL dx / max|u|. Values above 1 make the ' // &
                            'explicit scheme unstable; 0.5 is a safe start for a new case.')
@@ -108,6 +109,7 @@ contains
       call ig_text('    100   1.25e-03')
       call ig_text('   1000   4.10e-07')
       call ig_pop_font()
+      call ig_new_line()                                      ! an empty line, of the text's height
       call ig_push_font('', 28.0_real64)                      ! a big value, in the current font
       call ig_text('3.1416')
       call ig_pop_font()

@@ -28,6 +28,7 @@ do run = 1_int32, 2_int32
    !region open
    call app%open_prefs('cb-prefs', file='cb_prefs.ini')    ! in a window: app%open_prefs('cb-prefs'), the platform's folder
    !endregion open
+   if (run == 1_int32) write(output_unit, '(A)') 'preferences kept in '//app%prefs_file()
    !region load
    found = app%load_pref('case', case_file, default='naca0012.inp')
    found = app%load_pref('cfl', cfl, default=0.8_real64)

@@ -264,7 +264,9 @@ machine is longer than asked.
 Standard Fortran opens, reads and writes files, and `inquire` tests one; it cannot make a folder, remove one or set a
 file's time. `execute_command_line('mkdir -p ...')` does where a POSIX shell runs it, not on Windows, where it runs
 `cmd.exe`, which refuses `mkdir -p`, `rm -f` and `touch`. These procedures do it in the native layer, the same on
-Linux, macOS and Windows; they need no window, so they work before `init*` and from any thread.
+Linux, macOS and Windows: `figure_make_folder` makes a folder, `figure_remove` removes a path, `figure_set_file_time`
+sets a modification time that `figure_file_time` reads back, and `figure_file_exists` tells whether a file or a folder
+is there. They need no window, so they work before `init*` and from any thread.
 
 | Procedure | Notes |
 |---|---|
@@ -387,9 +389,10 @@ A modal drawn by FIGURE (Dear ImGui's popup modal) over the program's windows, i
 - **One at a time.** Browsers opened together are shown one after the other, in the order opened. Opening one closes
   the program's popups and menus open at that moment, as Dear ImGui does for any modal opened at the top level.
 
-**Modes.** Window and remote: the same browser, listing the files of the machine the program runs on (in remote
-mode, the server's, not the browser's computer). Headless: the same, driven by [`figure_testing`](testing); the recent
-folders in memory, or in a file a test names (`test_settings_file`).
+**Modes.** Window and remote: the same browser, listing the files of the machine the program runs on (in remote mode,
+the server's, not the browser's computer). Headless: the same, driven by [`figure_testing`](testing), where
+`test_file_browser` reads the browser as it stands after the last frame (the folder listed, the entries shown, the
+error, the fields, the recent folders); the recent folders in memory, or in a file a test names (`test_settings_file`).
 
 ## The window's frame
 
@@ -493,9 +496,11 @@ frames that draw it, even with lazy redraw, and for the frames of the fade.
 
 <Media name="cb_status_end" alt="The run has ended: the status bar reads done, residual 9.88E-08; in the bottom-right corner two notifications are stacked, the warning levels is 0 above and, under it, the newest, Run finished: 240 iterations, residual 9.88E-08, with a check mark" caption="docs/examples/src/cb_status.F90" />
 
-Statuses: `FIG_ERR_STATE` before `init*` and from a [task](processes#tasks) (a task does not draw: the program
-notifies when it sees the task done), `FIG_ERR_ARGUMENT` for an unknown kind; `stat` is optional (absent: `error
-stop` with the message). The same in window, headless and remote modes.
+Statuses: `FIG_ERR_STATE` before `init*` and from a [task](processes#tasks) (a task does not draw: the program notifies
+when it sees the task done), `FIG_ERR_ARGUMENT` for an unknown kind; `stat` is optional (absent: `error stop` with the
+message). The same in window, headless and remote modes. A headless test finds a notification on the screen with
+`test_notification_rect` ([Testing](testing)): its rectangle in the last frame and its alpha, which falls to 0 as it
+fades.
 
 ## Drops
 

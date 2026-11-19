@@ -23,6 +23,7 @@ do run = 1_int32, 2_int32
    call app%set_style('seal')                              ! the program's default, before the user's
    call app%set_size_limits(640_int32, 400_int32)          ! a window no smaller than this (headless: nothing)
    call app%open_prefs('cb-prefs', file='cb_prefs.ini')    ! in a window: app%open_prefs('cb-prefs'), the platform's folder
+   if (run == 1_int32) write(output_unit, '(A)') 'preferences kept in '//app%prefs_file()
    found = app%load_pref('case', case_file, default='naca0012.inp')
    found = app%load_pref('cfl', cfl, default=0.8_real64)
    found = app%load_pref('grid', grid, default=.true.)

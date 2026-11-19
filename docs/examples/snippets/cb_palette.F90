@@ -2,10 +2,12 @@
 program cb_palette
 !< cb_palette, cookbook: a look and a palette, the system's light or dark setting, a status in the palette's colours.
 !<
-!< Run with "auto" to follow the system's light or dark setting instead of a fixed palette.
+!< Run with "auto" to follow the system's light or dark setting instead of a fixed palette, with "light" to see the
+!< light one of that pair whatever the system's setting (as a test does).
 use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure, only : app_object, ig_begin, ig_button, ig_checkbox, ig_end, ig_same_line, ig_separator, &
                    ig_set_next_window, ig_slider, ig_text, ig_text_colored, ip_begin_plot, ip_end_plot, ip_line
+use figure_testing, only : test_system_theme
 
 implicit none
 integer(int32), parameter :: N = 200_int32 !< Points.
@@ -25,8 +27,9 @@ on = .true.
 call get_command_argument(1, arg)
 
 call app%init('FIGURE: palette', 720_int32, 440_int32)
-if (trim(arg) == 'auto') then
+if (trim(arg) == 'auto' .or. trim(arg) == 'light') then
    call app%set_style(palette='auto', auto_dark='nord', auto_light='solarized-light') ! follows the system
+   if (trim(arg) == 'light') call test_system_theme('light') ! as if the system turned light: solarized-light
 else
    call app%set_style(look='fluent', palette='nord')    ! the geometry of Windows 11, the colours of Nord
 endif

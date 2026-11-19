@@ -1,6 +1,7 @@
 $ ./cb_reveal --check
-frame 8: block 0 (body 0): not drawn
-frame 9: block 1240 (body 19): not drawn
-frame 10: block 1240 (body 19): in the middle
-frame 25: block 1873 (body 29): in the middle
-frame 50: block 333 (body 5): in the middle
+frame 8: block 0 (body 0): not drawn, the list 0% down
+frame 9: block 1240 (body 19): not drawn, the list 0% down
+frame 10: block 1240 (body 19): in the middle, the list 62% down
+frame 25: block 1873 (body 29): in the middle, the list 94% down
+frame 50: block 333 (body 5): in the middle, the list 16% down
+frame 60: block 333 (body 5): not drawn, the list 0% down
