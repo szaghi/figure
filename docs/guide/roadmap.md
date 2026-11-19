@@ -14,10 +14,6 @@ each release, summarised from its issue; the [changelog](changelog) lists the co
 
 ## Next
 
-- **The documentation pass** ([#14](https://github.com/szaghi/figure/issues/14), #13 S9): in progress.
-- **The showcase's last GPU picture** (#12 S6, #13 S3): the run checker on growing files. Its writer and its polling
-  both follow the wall clock; a headless recording needs a capture clock for `figure_time` and a scripted writer (the
-  solvers run from the window were recorded headless on 2026-11-19, each run waited for).
 - **The upstream reports** of #4, #8, #9 and #11, filed by the owner; FIGURE's patches stay until each lands, then go
   with the test that needed them kept (#13 S8).
 - **Release v0.8.0** (#13 R1): the version and the date are the owner's.
@@ -31,6 +27,8 @@ each release, summarised from its issue; the [changelog](changelog) lists the co
 | The whole application compiled to WebAssembly | deferred | An experiment: a patched flang and Emscripten SDL3, no OpenMP and no MPI there |
 | The 3-D view rendered on the GPU in a window | deferred | Until an application draws more than about 10⁶ triangles in a window ([why](view3d#why-a-software-renderer)) |
 | A depth buffer in ImPlot3D's plots | deferred | Until brenocq/implot3d#151 merges ([Known issues](known-issues#implot3d)) |
+| The showcase's run checker recorded headless | deferred | After v0.8.0: it needs `figure_time` on the capture's clock and a command run at a frame of a recording, two capture features for one picture ([Showcase](showcase)) |
+| Multi-viewports: windows dragged out of the main window | deferred | Until an application asks: window mode only, remote and headless modes cannot have them ([Known issues](known-issues#no-multi-viewports)) |
 | A WebGL renderer of the 3-D view in the browser | not planned | A third renderer, and no pixels on the program's side for tests and captures ([why](view3d#why-a-software-renderer)) |
 | Dear ImGui's context thread-local | not planned | A crash in place of a race, not a refusal ([Known issues](known-issues#tasks)) |
 | Callbacks into Fortran: custom axis scales and tick formatters | not planned | FIGURE calls no Fortran from C; formats, ticks and fixed scales cover them as data ([Plots](plots#not-bound-yet)) |
@@ -564,7 +562,7 @@ The plan is [#13](https://github.com/szaghi/figure/issues/13); the documentation
   and the clipper draws the focused line anyway, so `keep` matters when the source and the focus differ
   ([Clipped lists](widgets#selecting-many-items)).
 - **S3, the showcase:** the solvers run from the window recorded headless, each run waited for. The run checker on
-  growing files stays a GPU recording ([Next](#next)).
+  growing files stays a GPU recording, deferred ([Planned, deferred, not planned](#planned-deferred-not-planned)).
 - **S4:** `find_package(figure 0.7)`; the changelog's entries keep the case of a name written in lower case.
 - **S5, the colour picker:** `ig_color_picker`, drawn in place, with a hue bar or a hue wheel
   ([Colour editing](widgets#colour-editing)).
