@@ -33,7 +33,7 @@ Everything is polled, as every FIGURE widget: `ed%draw` returns `.true.` on the 
 | `ed%undo([stat])` → `logical`, `ed%redo([stat])` → `logical` | undo, redo a change (as ctrl+z and ctrl+y) |
 | `ed%read_only(on [, stat])`, `ed%is_read_only()` → `logical` | make it read-only or editable again |
 | `ed%set_options([line_numbers] [, tab_size] [, whitespace] [, line_highlight] [, stat])` | line numbers (default on), tab size [characters] (default 4), blanks and tabs shown (default off), the current line highlighted (default on) |
-| `ed%line_rect(line, x0, y0, x1, y1)` → `logical` | a line's text area on the last draw [pixels]: for a popup beside it, or a test |
+| `ed%line_rect(line, x0, y0, x1, y1)` → `logical` | a line's text area on the last draw [pixels], from the left of its text to the editor's right edge: for a popup beside it, or a test; `.true.` only when the line was in view on that draw (`.false.` before the first draw) |
 | `code_language(name [, stat])` → `language_object`, `lang%init(name [, keywords] [, ...])`, `lang%name()` → `character` | a shipped language; one of the program's own ([Languages](#languages)) |
 | `code_diff(id, left, right [, side_by_side] [, language] [, width] [, height] [, stat])`, `code_diff_lines(left, right, added, removed [, stat])` | the difference of two texts, drawn; its lines ([The diff](#the-diff)) |
 
@@ -60,6 +60,14 @@ the [name map](imgui-names), which covers Dear ImGui and ImPlot.
 bytes or screen columns. `width` and `height` are pixels: 0 the available region, negative up to that distance from
 its edge (`height=-30.0_real64` leaves a line of text below), as `ig_begin_child`'s. Text is UTF-8 throughout;
 `text()` ends every line with LF, so a file that ends with LF comes back as it was.
+
+**Cursor and selection.** `ed%goto(line [, column])` moves the cursor (column 1 by default, both clamped to the text)
+and scrolls to it at the next draw; with `focus=.true.` it also gives the editor the keyboard, which `ed%focus` does
+alone, at the next draw, as a click in it would. A range is half-open: `ed%select` selects from (`first_line`,
+`first_column`) to just before (`last_line`, `last_column`), clamped to the text, and `ed%selection` gives the
+selection the same way, with its `text`; it is `.false.` when nothing is selected, and the four positions are then
+the cursor's. `ed%undo` and `ed%redo` are `.true.` when there was a change to undo or redo; `undo` changes nothing in
+a read-only editor.
 
 **Mouse and keyboard.** A click places the cursor, a drag selects, a double click selects a word, a triple click a
 line, ctrl+click (alt+click on macOS) adds a cursor, the wheel scrolls; arrows, home, end, page up and down move;
@@ -123,12 +131,14 @@ one character.
 its number (vermilion, orange, blue: the Okabe-Ito colours) and put an icon beside the number (a crossed circle, a
 triangle, an "i"), so the colour is not the only sign; the message, after its severity's word (`error: ...`), is the
 tooltip of the line and of its number. A second mark on a line joins the messages, one per line, and keeps the
-gravest severity. `ed%mark_of(line [, message])` reads a line's back (`''` for none).
+gravest severity. `ed%mark_of(line [, message])` reads a line's mark back: the result is its severity, `'error'`,
+`'warning'` or `'info'` (`''` for none, or a line out of range), and `message` the text of its tooltip (each message
+after its severity's word, LF between two).
 
 A mark moves with its line as lines are inserted or deleted above it, and goes with the line. **Deleting text in a
 marked line removes its mark** (the fork's rule: the finding was about the old text); typing in it keeps it. A
 validator run on each change (`if (ed%draw('editor')) call validate(ed)`) marks the lines again in any case: clear
-the marks, then mark what it finds. `set_text` removes them all.
+the marks (`ed%clear_marks`), then mark what it finds. `set_text` removes them all.
 
 <<< @/examples/snippets/cb_editor-validate.F90{fortran}
 

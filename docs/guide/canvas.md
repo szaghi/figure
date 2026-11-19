@@ -115,7 +115,7 @@ item does. Outside a plot it is a usage error, `FIG_ERR_STATE`.
 | `ig_draw_rect(x1, y1, x2, y2, color [, thickness] [, filled] [, layer] [, stat])` | a rectangle with opposite corners in any order, outline or filled (`AddRect`, `AddRectFilled`) |
 | `ig_draw_circle(x, y, radius, color [, thickness] [, filled] [, layer] [, stat])` | a circle, its centre at the point and its radius in pixels, outline or filled (`AddCircle`, `AddCircleFilled`) |
 | `ig_draw_polyline(x, y, color [, thickness] [, closed] [, layer] [, stat])` | a polyline through `x(i)`, `y(i)`; `closed` joins the last point to the first (`AddPolyline`) |
-| `ig_draw_polygon(x, y, color [, thickness] [, filled] [, layer] [, stat])` | a closed polygon, outline or filled, convex or not (`AddPolyline` closed, `AddConcavePolyFilled`) |
+| `ig_draw_polygon(x, y, color [, thickness] [, filled] [, layer] [, stat])` | a closed polygon, outline or filled, convex or not, its sides not crossing when filled (`AddPolyline` closed, `AddConcavePolyFilled`) |
 | `ig_draw_text(x, y, text, color [, layer] [, stat])` | `text` in the current font, its top-left at the point; a line per LF (`AddText`) |
 | `ig_draw_image(texture, x1, y1, x2, y2 [, color] [, layer] [, stat])` | a [texture](images) stretched over a rectangle, pixel row 1 at the top, multiplied by `color` (default white) (`AddImage`) |
 
@@ -124,8 +124,10 @@ item does. Outside a plot it is a usage error, `FIG_ERR_STATE`.
 Coordinates are `real(real64)`: screen pixels, or plot units on the plot layer ([Coordinates](#coordinates)).
 `thickness` is in pixels, default 1; `filled` defaults to the outline. `x(:)` and `y(:)` of a polyline or a polygon are
 arrays of the same size, at least 2 and 3 points: a contiguous array goes to the native layer without a copy (a
-strided section is packed by the compiler). A circle's radius is pixels on every layer: a marker. A circle in plot
-units is a polygon through its points.
+strided section is packed by the compiler). A filled `ig_draw_polygon` must be simple, its sides not crossing and
+without holes: Dear ImGui triangulates it by ear clipping (`AddConcavePolyFilled`), which assumes so and costs O(n²)
+in its points; a polygon whose sides cross is not filled correctly. A circle's radius is pixels on every layer: a
+marker. A circle in plot units is a polygon through its points.
 
 <<< @/examples/snippets/cb_canvas-draw.F90{fortran}
 

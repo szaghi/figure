@@ -11,7 +11,8 @@ drawn inside any window, beside other widgets.
 
 FIGURE renders the view itself, on the CPU: a **software rasterizer** in the native layer draws the triangles into an
 image, which is shown as a [texture](images). So the pixels are the same in window, remote and headless modes, and
-tests check them one by one.
+tests check them one by one. This rasterizer is the view's own, not the CPU renderer that draws a whole frame in
+headless and remote modes ([Modes and renderers](architecture#modes-and-renderers) tells them apart).
 
 For a figure that is a plot with a third axis (a trajectory, probes, a small surface over labelled axes), the
 [3-D plots](plots#_3-d-plots) of ImPlot3D are lighter; [3-D plots](plots#_3-d-plots) has the rule for choosing.
@@ -26,9 +27,9 @@ For a figure that is a plot with a third axis (a trajectory, probes, a small sur
 | `v%destroy()`, `v%is_initialized()` → `logical` | release the view and its textures (any state); whether it exists |
 | `v%triangles(xyz, tri [, scalar] [, cell_scalar] [, colormap] [, color] [, edges] [, flat] [, stat])` → `int32` | add triangles: `real(real64) :: xyz(3, nv)`, `integer(int32) :: tri(3, nt)` (from 1); the mesh's id |
 | `v%quads(xyz, quad [, ...])` → `int32` | add quadrilaterals, `quad(4, nq)`, each drawn as two triangles |
-| `v%surface(xyz [, scalar] [, cell_scalar] [, ...])` → `int32` | add a structured surface, `xyz(3, ni, nj)`; `scalar(ni, nj)` per node, `cell_scalar(ni-1, nj-1)` per cell; `edges` draws its grid lines |
+| `v%surface(xyz [, scalar] [, cell_scalar] [, ...])` → `int32` | add a structured surface, `xyz(3, ni, nj)`; `scalar(ni, nj)` per node, `cell_scalar(ni-1, nj-1)` per cell (rank 2 here, rank 1 in `set_mesh`); `edges` draws its grid lines |
 | `v%lines(xyz [, seg] [, scalar] [, cell_scalar] [, colormap] [, color] [, stat])` → `int32` | add lines: the segments `seg(2, ns)`, or the polyline through the points |
-| `v%set_mesh(mesh [, scalar] [, cell_scalar] [, no_scalar] [, colormap] [, vmin, vmax] [, auto_range] [, color] [, edges] [, edge_color] [, flat] [, visible] [, stat])` | change a mesh's field, colormap, range, colours, edges, shading or visibility |
+| `v%set_mesh(mesh [, scalar] [, cell_scalar] [, no_scalar] [, colormap] [, vmin, vmax] [, auto_range] [, color] [, edges] [, edge_color] [, flat] [, visible] [, stat])` | change a mesh's field (`scalar(:)`, `cell_scalar(:)`: rank 1 for every kind of mesh), colormap, range, colours, edges and their colour, shading or visibility ([Fields and colours](#fields-and-colours)) |
 | `v%changed([mesh] [, stat])` | the program changed the mesh's arrays in place: derive it again and render |
 | `v%remove(mesh [, stat])`, `v%clear([stat])` | remove a mesh, every mesh |
 | `v%set_camera([target] [, distance] [, azimuth] [, elevation] [, fov] [, stat])`, `v%get_camera(...)` | the camera: the point looked at, the distance to it, the direction [degrees], the vertical field of view [degrees] |
@@ -38,13 +39,15 @@ For a figure that is a plot with a third axis (a trajectory, probes, a small sur
 | `v%draw(id [, width] [, height] [, stat])` | draw the view as a widget, `width` x `height` pixels (0: the available region; negative: up to that distance from its edge) |
 | `v%pick(x, y, mesh, element [, point] [, stat])` → `logical` | the element under a pixel of the view (from its top-left corner) |
 | `v%hovered(mesh, element [, point] [, stat])` → `logical`, `v%clicked(...)` → `logical` | the element under the mouse, the element clicked, in the last `draw` |
-| `v%image(rgba [, stat])` | the pixels of the last render, `integer(int8), allocatable :: rgba(:,:,:)`, as `tex%update` takes them |
+| `v%image(rgba [, stat])` | the pixels of the last render, `integer(int8), allocatable :: rgba(:,:,:)`, as `tex%update` takes them: half the view's size when that render was made while the camera moved (`fast_moves`), unallocated before the first render |
 | `v%render_info([count] [, milliseconds] [, width] [, height] [, half] [, cache_bytes] [, stat])` | the renders so far, the time and size of the last one, whether it was at half resolution, the bytes the vertex caches hold (`int64`; see [Meshes](#meshes)) |
 | `v%view_cube([size] [, corner] [, stat])` | a view cube over the view, after `draw`: a click on a face, an edge or a corner turns the camera to it, a drag orbits ([Gizmos](#gizmos)) |
 | `v%gizmo(id, matrix [, mode] [, space] [, snap] [, stat])` → `logical` | handles over the view, after `draw`, moving `matrix` (`real(real64) :: matrix(4, 4)`): `'translate'`, `'rotate'` or `'scale'`; `.true.` on the frames the user moved it ([Gizmos](#gizmos)) |
 | `v%view_matrix(m [, stat])`, `v%projection_matrix(m [, stat])` | the camera's view and projection matrices, `real(real64) :: m(4, 4)`, column-major as OpenGL's ([Matrices](#matrices)) |
 
 Every procedure is refused from a [task](processes#tasks) (`FIG_ERR_STATE`), as the other drawing procedures are.
+`v%destroy` releases the view and its textures in any state, leaving the program's arrays as they are;
+`v%is_initialized` tells whether the view exists.
 
 ## Meshes
 
@@ -75,16 +78,17 @@ then returns the freed memory to the system (`malloc_trim`). A mesh of 3.4 M ver
 moves than while it rests. `v%render_info(cache_bytes=b)` reports what they hold.
 
 **Kinds.**
-- **Triangles** and **quads** take a connectivity from 1, `tri(3, nt)` or `quad(4, nq)`; a quad's vertices go around
-  it in order.
-- **A structured surface** `xyz(3, ni, nj)` joins node `(i, j)` to its neighbours: a face of a structured block, an
-  OverSet patch. Its cell `(i, j)` lies between nodes `(i, j)` and `(i+1, j+1)`.
-- **Lines** are one pixel wide. They are drawn after the surfaces, slightly in front of them so that a line lying on a
-  surface shows, and neither hide anything nor are picked.
+- **Triangles** (`v%triangles`) and **quads** (`v%quads`) take a connectivity from 1, `tri(3, nt)` or
+  `quad(4, nq)`; a quad's vertices go around it in order.
+- **A structured surface** (`v%surface`) `xyz(3, ni, nj)` joins node `(i, j)` to its neighbours: a face of a
+  structured block, an OverSet patch. Its cell `(i, j)` lies between nodes `(i, j)` and `(i+1, j+1)`.
+- **Lines** (`v%lines`) are one pixel wide. They are drawn after the surfaces, slightly in front of them so that a
+  line lying on a surface shows, and neither hide anything nor are picked.
 
 Coordinates are `real(real64)` in any units; connectivity is `integer(int32)`.
 
-**Edges.** `edges=.true.` draws a surface's grid lines (the cells' sides), in `edge_color` (default near black).
+**Edges.** `edges=.true.` draws a surface's grid lines (the cells' sides), in `edge_color` (default near black),
+which only `v%set_mesh` sets: `v%triangles`, `v%quads` and `v%surface` take `edges` alone.
 
 ## Fields and colours
 
@@ -94,6 +98,13 @@ one colour. The colormap is any name [`ip_colormap`](colormaps) knows (default `
 `levels` not taken here). The range mapped onto it is the data's (finite values) unless `vmin`, `vmax` are given;
 values outside it take the map's end colours, NaN is grey. Without a scalar the mesh is drawn in `color` (default
 light grey).
+
+`v%set_mesh(mesh, ...)` changes a mesh after it was added; an argument absent leaves its property as it is. Its
+`scalar` and `cell_scalar` are rank 1 for every kind of mesh: a structured surface, added with `scalar(ni, nj)`,
+passes `ni*nj` contiguous values (`(ni-1)*(nj-1)` per cell), through a rank-1 pointer onto the same storage rather
+than a copy, since the mesh keeps the address ([Meshes](#meshes)). `no_scalar=.true.` drops the scalar, the mesh then
+drawn in its `color`; `vmin` and `vmax`, given together, fix the range, and `auto_range=.true.` gives it back to the
+data's; `visible=.false.` hides the mesh and keeps it, with its id.
 
 **Light.** By default a light at the eye shades the surfaces: a face seen straight on has its colour, a face seen
 edge-on a quarter of it. Both sides of a surface are lit the same (grid faces are open). Shading is smooth (the light
@@ -140,9 +151,10 @@ down with x to the right and y up, `'-z'` looks up. The standard views are fitte
 The view keeps, beside each render's colours, which triangle covers each pixel. So picking costs nothing: `v%pick(x,
 y, ...)` reads it at a pixel, `v%hovered` at the mouse, `v%clicked` at a click (the left button released less than 3
 pixels from where it was pressed, so that a drag is not a click). Each gives:
-- the mesh's id;
-- the element, from 1: the triangle, the quad, or the structured cell `i + (j - 1) * (ni - 1)`;
-- the point hit, in world units, from the depth of that pixel.
+- the mesh's id, `integer(int32)` (0: none);
+- the element, from 1, `integer(int64)` (0: none): the triangle, the quad, or the structured cell
+  `i + (j - 1) * (ni - 1)`;
+- the point hit, `real(real64) :: point(3)`, in world units, from the depth of that pixel.
 
 `v%clicked` is true only in the frame of the click.
 

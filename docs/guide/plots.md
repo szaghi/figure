@@ -23,7 +23,9 @@ title: Plots
 
 Unlike `ig_begin`/`ig_end`, the plot pair is conditional: call `ip_end_plot` inside the `if` (an `ip_end_plot` after
 a false begin, or with another scope innermost, is refused and reported: [Pairing and frames](errors#pairing-and-frames)).
-A title that starts with `##` hides the title and keeps the identifier:
+A title that starts with `##` hides the title and keeps the identifier. The first plot below also shows that
+`ip_setup_axes` is optional: without it the axes X1 and Y1 have no label, a linear scale, and fit the data on first
+use.
 
 <<< @/examples/snippets/tut03_plots-untitled.F90{fortran}
 
@@ -32,9 +34,12 @@ by clicking its legend entry; these are ImPlot's interactions, kept by ImPlot fr
 
 ## Items
 
-Every item is generic over `real(real32)` and `real(real64)` (all its arrays of the same kind; the abscissae may also
-be `integer(int32)` or `integer(int64)`), reads arrays of any stride in place ([Data in place](#data-in-place)), takes
-a legend `label`, an optional [`spec`](#item-style) and an optional [`stat`](errors).
+Every item is generic over `real(real32)` and `real(real64)` (all its arrays of the same kind), takes a legend
+`label`, an optional [`spec`](#item-style) and an optional [`stat`](errors); the 1-D items read arrays of any stride in
+place ([Data in place](#data-in-place) lists them). Integer abscissae, `integer(int32)` or `integer(int64)`
+(iterations), are taken by `ip_line(label, x, y)`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`,
+`ip_stairs` and `ip_stems`, integer positions by `ip_inf_lines`; not by `ip_digital`, `ip_bubbles`, `ip_pie_chart`,
+`ip_bar_groups` or the histograms, whose arrays are real.
 
 | Procedure | Draws |
 |---|---|
@@ -47,7 +52,7 @@ a legend `label`, an optional [`spec`](#item-style) and an optional [`stat`](err
 | `ip_shaded(label, x, y, yref [, spec] [, stat])` | the area between the curve `y(x)` and the line `y = yref` (`real(real64)`) |
 | `ip_stairs(label, x, y [, spec] [, stat])` | a staircase (`PlotStairs`): `y(i)` held from `x(i)` to `x(i+1)`; with `ip_spec(flags=ImPlotStairsFlags_PreStep)` from `x(i-1)` to `x(i)`, with `ImPlotStairsFlags_Shaded` filled down to 0 |
 | `ip_stems(label, x, y [, ref] [, spec] [, stat])` | a stem from `y = ref` (`real(real64)`, default 0) to each point, with a marker (`PlotStems`); `ImPlotStemsFlags_Horizontal` from `x = ref` |
-| `ip_inf_lines(label, values [, horizontal] [, spec] [, stat])` | lines across the whole plot (`PlotInfLines`) at `x = values(i)`, or at `y = values(i)` with `horizontal=.true.`; `values` may also be `integer(int32)` or `integer(int64)` (iterations) ([Marks in a plot](#marks-in-a-plot)) |
+| `ip_inf_lines(label, values [, horizontal] [, spec] [, stat])` | lines across the whole plot (`PlotInfLines`) at `x = values(i)`, or at `y = values(i)` with `horizontal=.true.` (the same as `ip_spec(flags=ImPlotInfLinesFlags_Horizontal)`); `values` may also be `integer(int32)` or `integer(int64)` (iterations) ([Marks in a plot](#marks-in-a-plot)) |
 | `ip_histogram(label, values [, bins] [, vmin] [, vmax] [, bar_scale] [, max_count] [, spec] [, stat])` | a histogram (`PlotHistogram`) ([Histograms](#histograms)) |
 | `ip_histogram2d(label, x, y [, xbins] [, ybins] [, xmin] [, xmax] [, ymin] [, ymax] [, colormap] [, max_count] [, spec] [, stat])` | a 2-D histogram (`PlotHistogram2D`), cells coloured by count ([Histograms](#histograms)) |
 | `ip_digital(label, x, y [, spec] [, stat])` | a digital signal (`PlotDigital`): `y(i)` held from `x(i)` to `x(i+1)`, drawn in a band of its own at the bottom of the plot whatever the y axis ([Grouped bars and digital signals](#grouped-bars-and-digital-signals)) |
@@ -65,10 +70,22 @@ marks with its call ([Marks in a plot](#marks-in-a-plot)):
 
 <Media name="plot_marks" alt="Eight plots in a grid. A residual on a log axis with a tag of its last value on the y axis and a tag 'now' on the x axis; a coefficient with three vertical lines at the level changes and a horizontal line at the target 0.8; two texts, one horizontal and one vertical, and an annotation in an amber box with a leader line; a coefficient with an amber rectangle over part of it; two staircases, one shaded; twelve stems with markers, decaying; a histogram of 2000 near-normal samples in 30 bins; a 2-D histogram of correlated pairs, an inclined ellipse of cells." caption="docs/examples/src/gallery.F90 plot_marks: each plot's title names its call" />
 
+**A label is the item's id** in its plot (ImPlot hashes it, `GetItemID`): two items of one plot with one label are one
+item, with one colour and one legend entry, hidden together by a click on it. A loop that calls `ip_line('run', ...)`
+for each of several runs draws them all in one colour under one entry; give each its own label, as the loop over the
+modes in [A plot](#a-plot) does (`write(label, '(A,I0)') 'mode ', k`). What follows `##` is part of the id and not of
+the legend: `'run##2'` is another item whose entry reads `run`, and a label that starts with `##` (`'##cursor'`) has
+no legend entry. The same label in two plots names two items.
+
+Fields are items too: `ip_heatmap` colours the cells of a 2D array through a colormap, and `ip_colormap_scale` draws
+its colour bar ([Heatmaps](images#heatmaps)); the colormap is chosen by name with `ip_colormap`, among the bundled
+scientific maps, ImPlot's own and the user's ([Colormaps](colormaps)).
+
 ### Grouped bars and digital signals
 
 `ip_bar_groups` draws several items over the same categories, `values(g, i)` being item `i` in group `g` (so
-`size(labels) == size(values, 2)`): group `g` (a case, a block) at `x = g - 1`, its items
+`size(labels) == size(values, 2)`): group `g` (a case, a block) at `x = g - 1 + shift` (`shift` [x units], default
+0), its items
 (the phases of a run) side by side within `group_size` of the unit (default 0.67), or stacked with `stacked=.true.`
 (negative values below 0); `horizontal=.true.` lays the groups along y. `labels(i)` is item `i`'s legend entry, its
 colour the plot's next line colour, or `colormap`'s `i`-th (an id of [`ip_colormap`](colormaps)); `spec`'s
@@ -80,6 +97,10 @@ colour the plot's next line colour, or `colormap`'s `i`-th (an id of [`ip_colorm
 output, a valve open), held from one abscissa to
 the next, in a band at the bottom of the plot that the y axis does not scale: it sits under a residual whatever the
 residual's range. Its x values take part in fitting x, its y values in nothing; `spec`'s `size` is the band's height.
+`x` and `y` are real, read in place with any stride ([Data in place](#data-in-place)). ImPlot draws the band with
+FIGURE's one-line patch (`native/patches/implot-0001-digital-rect-order.patch`): unpatched, ImPlot 1.2 WIP gives each
+rectangle its top below its bottom, which Dear ImGui 1.93 draws as nothing
+([THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)).
 
 <<< @/examples/snippets/cb_bar_groups-digital.F90{fortran}
 
@@ -114,56 +135,6 @@ line colour (`ip_spec(fill_alpha=0.5_real64)` lets the overlaps show); the axes 
   series of different sizes; both `FIG_ERR_STATE` from a [task](processes#tasks). `stat` is optional (absent:
   `error stop` with the message).
 - Modes: the same in **window**, **headless** and **remote** mode (`src/tests/figure_test_plot_more.F90`).
-
-Fields are items too: `ip_heatmap` colours the cells of a 2D array through a colormap, and `ip_colormap_scale` draws
-its colour bar ([Heatmaps](images#heatmaps)); the colormap is chosen by name with `ip_colormap`, among the bundled
-scientific maps, ImPlot's own and the user's ([Colormaps](colormaps)).
-
-### Formats
-
-Labels of numbers take a C `printf` format: the tick labels (`ip_setup_axes`' `xformat` and `yformat`), the values in
-a heatmap's cells and on its colour bar (`label_format` of `ip_heatmap`, `ip_colormap_scale`,
-`ip_colormap_legend`), and the number widgets (`ig_input`, `ig_drag`, `ig_slider`, `ig_slider_angle`,
-`ig_drag_range`: [Numbers](widgets#numbers)). The plots print reals, and FIGURE checks the format before Dear ImGui or
-ImPlot uses it:
-
-- **exactly one conversion of a real:** `f` or `F` (fixed point), `e` or `E` (exponent), `g` or `G` (the shorter of
-  the two), `a` or `A` (hexadecimal);
-- before the conversion letter, optional **flags** (`-` left-justified, `+` sign always, a blank for a positive
-  sign, `#`, `0` zero-padded), a **width** and a **precision** (`.` and digits), all as digits, never `*`;
-- **any other text** around it, and any number of `%%` (a percent sign).
-
-| Format | Prints 1234.5678 as | Resembles Fortran's |
-|---|---|---|
-| `'%.2f'` | `1234.57` | `F0.2` |
-| `'%10.3f'` | `  1234.568` | `F10.3` |
-| `'%.3e'` | `1.235e+03` | `ES10.3` |
-| `'%g'` | `1234.57` | `G0` (6 significant digits) |
-| `'T = %.1f K'` | `T = 1234.6 K` | `'T = ', F0.1, ' K'` |
-| `'%.0f%%'` | `1235%` | `F0.0, '%'` |
-
-Refused with `FIG_ERR_ARGUMENT` (`stat` absent: `error stop`), nothing drawn: a conversion of an integer or of
-text (`'%d'`, `'%i'`, `'%s'`), `%n`, `*` (`'%*f'`, `'%.*f'`), a length modifier (`'%lf'`, `'%Lg'`), no conversion
-(`'no conversion'`, `''`) or more than one (`'%f %f'`), a `%` at the end. One exception, kept from v0.3.0:
-`ip_colormap_legend` takes a `label_format` without conversion as text, printed as it is, and `''` as its default
-([Colormaps](colormaps#a-colour-scale-legend)). The message names the procedure, the
-argument and the format: `ip_setup_axes: xformat '%s' is not a format of a real: one conversion %f, %e, %g or %a (or
-%F, %E, %G, %A) expected, with optional flags, width and precision` ([Errors](errors)).
-
-The number widgets take a format of their value's family: a real's as above, and for `int32` and `int64` values one
-conversion `d`, `i` or `u` under the same rules (`'%5d'`, `'%d cells'`); an `int64`'s is written as an `int32`'s,
-and FIGURE adds the length modifier C needs (`'%lld'`). A conversion longer than 24 characters is refused too (Dear
-ImGui copies it into a buffer of 32 bytes).
-
-A format of the wrong family is refused before Dear ImGui sees it, and the program goes on
-(`docs/examples/src/cb_stat.F90`, run by the documentation's build, [Errors](errors#stat-or-error-stop)):
-
-<<< @/examples/snippets/cb_stat-format.F90{fortran}
-
-C's formatter reads the value as the format says, and a format that does not match it is undefined behaviour: before
-v0.3.1 a `'%d'` given for a real printed a wrong label, and a `'%n'` for a heatmap's labels stopped the program
-(`%n in writable segment detected`, glibc on Linux). The same in every mode: **window**,
-**headless** and **remote**.
 
 ## Axes
 
@@ -254,6 +225,52 @@ synonym of `'log'` (deprecated, to be removed in a later release): every v0.3.1 
 first frame, not only X1 and Y1. `test_plot_tick` takes the six axis names.
 :::
 
+### Formats
+
+Labels of numbers take a C `printf` format: the tick labels (`ip_setup_axes`' `xformat` and `yformat`), the values in
+a heatmap's cells and on its colour bar (`label_format` of `ip_heatmap`, `ip_colormap_scale`,
+`ip_colormap_legend`), and the number widgets (`ig_input`, `ig_drag`, `ig_slider`, `ig_slider_angle`,
+`ig_drag_range`: [Numbers](widgets#numbers)). The plots print reals, and FIGURE checks the format before Dear ImGui or
+ImPlot uses it:
+
+- **exactly one conversion of a real:** `f` or `F` (fixed point), `e` or `E` (exponent), `g` or `G` (the shorter of
+  the two), `a` or `A` (hexadecimal);
+- before the conversion letter, optional **flags** (`-` left-justified, `+` sign always, a blank for a positive
+  sign, `#`, `0` zero-padded), a **width** and a **precision** (`.` and digits), all as digits, never `*`;
+- **any other text** around it, and any number of `%%` (a percent sign).
+
+| Format | Prints 1234.5678 as | Resembles Fortran's |
+|---|---|---|
+| `'%.2f'` | `1234.57` | `F0.2` |
+| `'%10.3f'` | `  1234.568` | `F10.3` |
+| `'%.3e'` | `1.235e+03` | `ES10.3` |
+| `'%g'` | `1234.57` | `G0` (6 significant digits) |
+| `'T = %.1f K'` | `T = 1234.6 K` | `'T = ', F0.1, ' K'` |
+| `'%.0f%%'` | `1235%` | `F0.0, '%'` |
+
+Refused with `FIG_ERR_ARGUMENT` (`stat` absent: `error stop`), nothing drawn: a conversion of an integer or of
+text (`'%d'`, `'%i'`, `'%s'`), `%n`, `*` (`'%*f'`, `'%.*f'`), a length modifier (`'%lf'`, `'%Lg'`), no conversion
+(`'no conversion'`, `''`) or more than one (`'%f %f'`), a `%` at the end. One exception, kept from v0.3.0:
+`ip_colormap_legend` takes a `label_format` without conversion as text, printed as it is, and `''` as its default
+([Colormaps](colormaps#a-colour-scale-legend)). The message names the procedure, the
+argument and the format: `ip_setup_axes: xformat '%s' is not a format of a real: one conversion %f, %e, %g or %a (or
+%F, %E, %G, %A) expected, with optional flags, width and precision` ([Errors](errors)).
+
+The number widgets take a format of their value's family: a real's as above, and for `int32` and `int64` values one
+conversion `d`, `i` or `u` under the same rules (`'%5d'`, `'%d cells'`); an `int64`'s is written as an `int32`'s,
+and FIGURE adds the length modifier C needs (`'%lld'`). A conversion longer than 24 characters is refused too (Dear
+ImGui copies it into a buffer of 32 bytes).
+
+A format of the wrong family is refused before Dear ImGui sees it, and the program goes on
+(`docs/examples/src/cb_stat.F90`, run by the documentation's build, [Errors](errors#stat-or-error-stop)):
+
+<<< @/examples/snippets/cb_stat-format.F90{fortran}
+
+C's formatter reads the value as the format says, and a format that does not match it is undefined behaviour: before
+v0.3.1 a `'%d'` given for a real printed a wrong label, and a `'%n'` for a heatmap's labels stopped the program
+(`%n in writable segment detected`, glibc on Linux). The same in every mode: **window**,
+**headless** and **remote**.
+
 ## Item style
 
 `ip_spec(...)` returns a `plot_spec_object`: ImPlot's defaults (colours from the colormap, no markers on lines),
@@ -271,139 +288,12 @@ with the properties you pass overridden. Build it once, outside the loop, or inl
 | `marker_size` | `real(real64)` | marker radius [pixels] |
 | `marker_line_color`, `marker_fill_color` | `real(real64)`, 4 values | marker outline and fill colours, RGBA |
 | `size` | `real(real64)` | error-bar whisker and digital-bar size [pixels] |
-| `flags` | `integer(int32)` | `ImPlotItemFlags_NoLegend`, `_NoFit`, and the item's own: `ImPlotLineFlags_Segments`, `_Loop`, `_SkipNaN`, `_NoClip`, `_Shaded`; `ImPlotScatterFlags_NoClip`; `ImPlotBarsFlags_Horizontal`; combine with `ior` |
+| `flags` | `integer(int32)` | `ImPlotItemFlags_NoLegend`, `_NoFit`, and the item's own: `ImPlotLineFlags_Segments`, `_Loop`, `_SkipNaN`, `_NoClip`, `_Shaded`; `ImPlotScatterFlags_NoClip`; `ImPlotBarsFlags_Horizontal`; `ImPlotStairsFlags_PreStep`, `_Shaded`; `ImPlotStemsFlags_Horizontal`; `ImPlotInfLinesFlags_Horizontal`; `ImPlotHistogramFlags_*` ([Histograms](#histograms)); combine with `ior` |
 | `stat` | `integer(int32)`, out | `FIG_ERR_ARGUMENT` when a colour does not have 4 values |
 
 The constants are ImPlot's own names, exported by `figure`; their values are generated from the cimplot metadata.
 `plot_spec_object` has no public components: a spec always starts from ImPlot's defaults, never from zeros (a
 zero line weight would draw nothing).
-
-## Data in place
-
-The 1-D items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`, `ip_stairs`, `ip_stems`,
-`ip_inf_lines`, `ip_histogram2d`) read the program's arrays where they are, during the call, and keep no pointer to
-them afterwards. They go to ImPlot's `float*` or `double*` items with ImPlot's
-byte stride (`ImPlotSpec::Stride`), so an array does not have to be contiguous:
-
-| What the program passes | Stride ImPlot reads with | Copied by FIGURE |
-|---|---|---|
-| a whole array, `a(1:n)`, a matrix column `a(:, j)` | the element size | nothing |
-| `a(::2)`, a matrix row `a(i, :)`, `q(1, :, k)`, `runs%cl` (a component of an array of derived types) | the distance between two elements [bytes] | nothing, when `x` and the ordinates have the same stride |
-| `x` and `y` with different strides (`ip_line(label, t, history(i, :))`) | the stride of `y` | `x`, laid out at the stride of `y` |
-| integer abscissae, `integer(int32)` or `integer(int64)` (`ip_line(label, runs%iter, runs%cl)`) | the stride of `y` | `x`, converted to the kind of `y` |
-| a reversed section, `a(n:1:-1)` (negative stride) | the element size | every array of the item |
-
-The ordinates (`y`, `y1`, `err` ...) set the stride: ImPlot has one stride for all the arrays of an item, so an array
-whose stride differs is copied, once per call, laid out at the ordinates' stride (as large as the ordinates' span: `n`
-times the stride). An item copies at most its abscissae when the ordinates share a stride. Integer abscissae are
-always converted (ImPlot reads `x` and `y` of one type); the ordinates stay in place. A reversed section is copied
-contiguous: ImPlot's indexer computes `(size_t)idx * stride`, which turns a negative stride into a wrapped-around
-unsigned offset, undefined behaviour in C++. `test_plot_copies()` counts the arrays FIGURE copied and `test_plot_stride()` gives the
-stride of the last item ([Testing](testing)).
-
-FIGURE copies into a scratch array per slot of the item (x, y and two more ordinates) and precision, kept from call to
-call and from frame to frame: grown by half again when too short, freed by the first item drawn after a frame in which
-no item copied. An item that allocated and freed its own temporary at every call paid the memory's first touch every
-frame (nvfortran 26.9 with glibc: 2.4 ms against 1.0 ms to copy 10⁶ doubles). The memory kept is that of the largest
-item copied, until a frame copies nothing.
-
-Records of a run (`runs%iter`, `runs%cl`: components of an array of derived types) and the rows of a matrix, plotted
-where they are, with the copies counted (`docs/examples/src/cb_in_place.F90`, run headless by the documentation's
-build):
-
-<<< @/examples/snippets/cb_in_place-records.F90{fortran}
-
-<<< @/examples/snippets/cb_in_place-rows.F90{fortran}
-
-<<< @/examples/output/cb_in_place.txt{text}
-
-**What arrives is the compiler's choice.** A Fortran compiler may copy a non-contiguous actual argument into a
-contiguous temporary before the call, and then FIGURE reads that copy (contiguous, nothing more to copy). The items'
-array dummies are `asynchronous` (from v0.5.0), and nvfortran then passes sections in place:
-
-| Actual argument | gfortran 16.2 | nvfortran 26.9 | ifx 2026.2 |
-|---|---|---|---|
-| `a(::2)`, `a(i, :)`, `q(1, :, k)` | in place | in place (v0.4.0: copied by the compiler) | in place |
-| `a(n:1:-1)` | in place, copied by FIGURE | in place, copied by FIGURE (v0.4.0: copied by the compiler) | in place, copied by FIGURE |
-| `runs%cl` (a component of an array of derived types) | copied by the compiler | copied by the compiler | in place |
-
-(measured with `figure_test_plot_data`, which prints what each compiler passed). The plot is the same in every case;
-the cost is not.
-
-Why `asynchronous`: nvfortran 26.9 copies a strided section passed to an assumed-shape dummy, except when the dummy is
-`asynchronous` (an attribute that tells the compiler the array may be in use by something else during the call, which
-a copy would break). The attribute changes nothing else: the items still read the arrays during the call only, and
-gfortran and ifx compile the same code. Passing sections in place is nvfortran's behaviour, not a rule of the standard
-for an assumed-shape dummy, so `figure_test_plot_data` holds what each supported compiler passes and fails when it
-changes: its last frame draws every 1-D item specific (both precisions, real and integer abscissae) with strided
-ordinates and checks the stride each gave ImPlot. A compiler FIGURE does not know is probed instead.
-
-::: warning A component of an array of derived types is still copied
-`runs%cl`, where `runs` is an array of a derived type, is copied into a temporary by gfortran 16.2 and nvfortran 26.9
-at every call, whatever the dummy's attributes (C descriptors were measured too: nvfortran copies before it builds
-the descriptor, and gfortran 16.2 miscompiles a component passed to a `bind(C)` descriptor dummy). It costs 40 to
-60 % of the item at 10⁶ points and doubles it at 10⁷. To plot a long series every frame on those compilers, keep it in its own contiguous
-`real` array, or in a column of a matrix (`hist(:, j)`, contiguous). On nvfortran a pointer `p => runs%cl` is passed
-in place; gfortran 16.2 copies it too when `runs` is allocatable.
-:::
-
-**Measured cost** of one `ip_line` per frame, headless, gfortran 16.2 `-O2`, i9-13900KF (`ip_setup_axes_limits` fixed,
-so ImPlot draws every point):
-
-| Data | 100 000 points [ms/frame] | 1 000 000 points [ms/frame] |
-|---|---|---|
-| contiguous `x`, `y` | 0.60 | 7.3 |
-| `x(::2)`, `y(::2)`, read in place with a stride | 0.69 | 7.8–8.2 |
-| integer `x` (converted), contiguous `y` | 0.62 | 7.8–8.3 |
-| contiguous `x`, `y(::2)` (`x` copied at the stride of `y`) | 0.77 | 8.9–9.5 |
-| `runs%t`, `runs%cl` (both copied by gfortran into temporaries) | 0.76 | 11.4–11.7 |
-| `x(::2)`, `y(::2)` packed by the program into buffers allocated once | 0.71 | 9.6–10.0 |
-
-**Per compiler, v0.4.0 against v0.5.0**: one `ip_line` call, the same headless program on each (median of 5 runs ×
-20 frames at 10⁶ points, 7 × 40 for the contiguous and reversed rows, 2 × 6 frames at 10⁷; the machine was shared,
-so the medians carry about ±0.5 ms at 10⁶):
-
-| Data | nvfortran 26.9, 10⁶ [ms] | nvfortran 26.9, 10⁷ [ms] | gfortran 16.2, 10⁷ [ms] | ifx 2026.2, 10⁷ [ms] |
-|---|---|---|---|---|
-| contiguous `x`, `y` | 8.5 → 8.5 | 73 → 70 | 70 → 69 | 75 → 72 |
-| `a(1, :)`, `a(2, :)` (rows of `a(4, n)`) | 13.1 → 9.8 | 139 → 77 | 78 → 77 | 81 → 80 |
-| `w(::2)`, `v(::2)` | 11.2 → 9.5 | 122 → 74 | 73 → 74 | 77 → 77 |
-| `t(n:1:-1)`, `c(n:1:-1)` | 10.0 → 10.0 | 114 → 85 | 118 → 85 | 123 → 88 |
-| integer `x` (converted), contiguous `y` | 12.0 → 10.9 | 97 → 95 | 94 → 76 | 95 → 79 |
-| `runs%t`, `runs%cl` (copied by the compiler) | 12.5 → 12.8 | 137 → 143 | 150 → 148 | 81 → 80 (in place) |
-
-nvfortran's rows and strided sections now cost what they cost on the other compilers. A reversed section costs what
-nvfortran's own copy cost at 10⁶ points (1.4 against 1.5 ms over contiguous data, 7 runs × 40 frames) and less at 10⁷,
-where the scratch saves the first touch of fresh memory on every compiler, as it does for integer abscissae.
-
-ImPlot's own work dominates: a stride costs about 7 % over contiguous data, a copy made by FIGURE 20 %, the compiler's
-temporaries of a derived type's components 55 % (allocated and freed at every call). Over a few hundred thousand
-points, decimate before plotting ([Performance](performance#large-data)).
-
-::: warning Changed in v0.4.0
-Until v0.3.1 the items' arrays were `contiguous` dummies: every non-contiguous actual argument (`a(i, :)`, `a(::2)`,
-`runs%cl`) was copied by the compiler at every call, and integer abscissae did not compile. From v0.4.0 the dummies
-are assumed-shape without `contiguous` and `target`, the stride goes to ImPlot, and `ip_line`, `ip_scatter`,
-`ip_bars`, `ip_shaded` and `ip_error_bars` accept `integer(int32)` and `integer(int64)` abscissae. Every v0.3.1 call
-compiles and draws as before. `ip_line(label, y, row)` stays: it reads a row of a contiguous matrix in place on every
-compiler, where `ip_line(label, y(row, :))` depends on the compiler.
-:::
-
-What it does not do:
-- integer ordinates: `y` is `real(real32)` or `real(real64)`;
-- abscissae of one real kind and ordinates of the other: both `real(real32)` or both `real(real64)`;
-- the fields (`ip_heatmap`, `ip_contour`) are rank-2 and keep their contract: a contiguous field is read in place, a
-  section of one is copied by the compiler.
-
-`real(real32)`/`real(real64)` passed as `float`/`double` rely on being the same types as `real(c_float)`/
-`real(c_double)`, true on every compiler FIGURE supports; their addresses are passed with `c_loc` of their first
-element, the stride from the addresses of the first two.
-
-Series of different sizes are an error (`FIG_ERR_ARGUMENT`, message `<item>: the series have different sizes`, see
-[Error handling](errors)): nothing is drawn. Empty series draw nothing and are not an error.
-
-Modes: the same in window, headless and remote mode (the data become vertices on the CPU). Threads: a task does not
-draw (`FIG_ERR_STATE`, see [processes](processes)). Example: [Plot the history a solver keeps, in place](/manual/cookbook#plot-the-history-a-solver-keeps-in-place).
 
 ## Several plots in one figure
 
@@ -489,6 +379,45 @@ aborted.
 :::
 - Modes: the same in **window**, **headless** and **remote** mode. In headless mode the drag tools answer synthetic
   input (`test_drag`, [Testing](testing)); in remote mode the browser's pointer drags them.
+
+## Marks in a plot
+
+Marks are drawn in plot units and are not items, except the infinite lines: a tag on an axis, a line across the
+plot, a text at a point, a rectangle the user drags. With the drag tools and annotations of
+[Error bars, annotations and drag tools](#error-bars-annotations-and-drag-tools) they mark what a program wants seen.
+
+| Procedure | Notes |
+|---|---|
+| `ip_tag(axis, value [, color] [, text] [, stat])` | A box on an axis at `value` (`TagX`, `TagY`): `axis` one of `'x1'`..`'x3'`, `'y1'`..`'y3'`, set up on this frame; it holds `text` or, without it, the value labelled as the axis labels its ticks (its `format`). `color`: RGBA in [0, 1], the text black or white for contrast; default, the colour of the last item drawn (a tag right after a line marks the line's last value in its colour). Drawn when the plot ends, over the axis's tick labels. |
+| `ip_inf_lines(label, values [, horizontal] [, spec] [, stat])` | Lines across the whole plot area (`PlotInfLines`), vertical at `x = values(i)` or horizontal at `y = values(i)`: an item, with a legend entry; `values` `real(real32)`, `real(real64)`, `integer(int32)` or `integer(int64)`, read in place. |
+| `ip_text(text, x, y [, offset] [, vertical] [, stat])` | A text centred on the plot point `(x, y)` (`PlotText`), in the plot's inlay text colour (`ip_push_style_color('InlayText', ...)` changes it), clipped to the plot area; `offset`: `[dx, dy]` [pixels], x right, y down; `vertical=.true.`: written bottom to top. It takes part in fitting the axes. |
+| `ip_drag_rect(id, xmin, xmax, ymin, ymax [, color] [, stat])` → `logical` | A rectangle the user drags (`DragRect`): by its centre to move it, by a corner or an edge to resize it; the four `real(real64)` values updated in place, `.true.` in the frames it changes. |
+
+<<< @/examples/snippets/cb_plot_window-window.F90{fortran}
+
+<Media name="cb_plot_window" video alt="A lift coefficient oscillating and settling near 0.8 over 600 iterations, an amber rectangle from iteration 300 to 450 across the plot's height, an amber segment at the mean over it and an amber tag 'mean 0.79..' on the y axis. The rectangle is dragged right by its centre: the segment and the tag follow, the mean changes. Then its right edge is dragged further right: the window widens and the mean changes again." caption="docs/examples/src/cb_plot_window.F90: the mean over a window the user drags" />
+
+- **A rectangle of the program's.** `ip_drag_rect` only moves its variables: constraints are the program's (above,
+  the window kept on the data and as high as the plot). ImPlot moves each edge on its own: dragged past the opposite
+  edge, `xmin` exceeds `xmax` while the button is held; FIGURE puts them back in order when it is released. A
+  rectangle of no width and no height cannot be grabbed. Its corners take part in fitting the axes. `id` as the other
+  [drag tools](#error-bars-annotations-and-drag-tools), unique among them in the plot.
+- **Tags** are drawn on the axis whichever axes the items use, after the plot's items, so a tag added late in the
+  plot still lands on its axis. A tag outside the axis's range is not shown. A tag wider than the axis's tick labels
+  widens the axis on the next frame, and the plot area shifts: a readout that follows the pointer writes a long value
+  beside the point instead (`ip_annotation`), as the readout of [Reading a plot](#reading-a-plot) does.
+- **Infinite lines** are not fitted: they take the axes' range, whatever it is.
+- **Order and frames.** Between `ip_begin_plot` and `ip_end_plot`, after the setup (each ends it), on every frame
+  they are to be seen.
+- Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, a colour without 4 components, an offset without 2, a NaN value,
+  coordinate or edge; `FIG_ERR_STATE` outside a plot (`<procedure>: no plot is being declared (...)`), for an axis not
+  set up, from a [task](processes#tasks). `stat` is optional ([Errors](errors#plot-queries-and-marks)).
+- Modes: the same in **window**, **headless** and **remote** mode; the rectangle answers `test_drag` headless and the
+  browser's pointer in remote mode. Threads: a task does not draw.
+- What they do not do: the tag's `round` option and printf-formatted tags (`TagX(x, col, fmt, ...)`: a Fortran program
+  writes the text itself, as the example does); a text in a colour of its own other than through the style; the
+  drag tools' flags (`ImPlotDragToolFlags_*`: no cursors, no fit, delayed, no move, no resize), and `out_clicked`,
+  `out_hovered` of the drag tools.
 
 ## Contour lines
 
@@ -674,45 +603,6 @@ box the user drags with the right button: the readout of a monitor, a window cho
 - What they do not do: report the pointer over an axis (`IsAxisHovered`), over a subplot figure
   (`IsSubplotsHovered`) or over a legend entry; change the buttons ImPlot uses (`GetInputMap`, raw only).
 
-## Marks in a plot
-
-Marks are drawn in plot units and are not items, except the infinite lines: a tag on an axis, a line across the
-plot, a text at a point, a rectangle the user drags. With the drag tools and annotations of
-[Error bars, annotations and drag tools](#error-bars-annotations-and-drag-tools) they mark what a program wants seen.
-
-| Procedure | Notes |
-|---|---|
-| `ip_tag(axis, value [, color] [, text] [, stat])` | A box on an axis at `value` (`TagX`, `TagY`): `axis` one of `'x1'`..`'x3'`, `'y1'`..`'y3'`, set up on this frame; it holds `text` or, without it, the value labelled as the axis labels its ticks (its `format`). `color`: RGBA in [0, 1], the text black or white for contrast; default, the colour of the last item drawn (a tag right after a line marks the line's last value in its colour). Drawn when the plot ends, over the axis's tick labels. |
-| `ip_inf_lines(label, values [, horizontal] [, spec] [, stat])` | Lines across the whole plot area (`PlotInfLines`), vertical at `x = values(i)` or horizontal at `y = values(i)`: an item, with a legend entry; `values` `real(real32)`, `real(real64)`, `integer(int32)` or `integer(int64)`, read in place. |
-| `ip_text(text, x, y [, offset] [, vertical] [, stat])` | A text centred on the plot point `(x, y)` (`PlotText`), in the plot's inlay text colour (`ip_push_style_color('InlayText', ...)` changes it), clipped to the plot area; `offset`: `[dx, dy]` [pixels], x right, y down; `vertical=.true.`: written bottom to top. It takes part in fitting the axes. |
-| `ip_drag_rect(id, xmin, xmax, ymin, ymax [, color] [, stat])` → `logical` | A rectangle the user drags (`DragRect`): by its centre to move it, by a corner or an edge to resize it; the four `real(real64)` values updated in place, `.true.` in the frames it changes. |
-
-<<< @/examples/snippets/cb_plot_window-window.F90{fortran}
-
-<Media name="cb_plot_window" video alt="A lift coefficient oscillating and settling near 0.8 over 600 iterations, an amber rectangle from iteration 300 to 450 across the plot's height, an amber segment at the mean over it and an amber tag 'mean 0.79..' on the y axis. The rectangle is dragged right by its centre: the segment and the tag follow, the mean changes. Then its right edge is dragged further right: the window widens and the mean changes again." caption="docs/examples/src/cb_plot_window.F90: the mean over a window the user drags" />
-
-- **A rectangle of the program's.** `ip_drag_rect` only moves its variables: constraints are the program's (above,
-  the window kept on the data and as high as the plot). ImPlot moves each edge on its own: dragged past the opposite
-  edge, `xmin` exceeds `xmax` while the button is held; FIGURE puts them back in order when it is released. A
-  rectangle of no width and no height cannot be grabbed. Its corners take part in fitting the axes. `id` as the other
-  [drag tools](#error-bars-annotations-and-drag-tools), unique among them in the plot.
-- **Tags** are drawn on the axis whichever axes the items use, after the plot's items, so a tag added late in the
-  plot still lands on its axis. A tag outside the axis's range is not shown. A tag wider than the axis's tick labels
-  widens the axis on the next frame, and the plot area shifts: a readout that follows the pointer writes a long value
-  beside the point instead (`ip_annotation`), as [the readout above](#reading-a-plot) does.
-- **Infinite lines** are not fitted: they take the axes' range, whatever it is.
-- **Order and frames.** Between `ip_begin_plot` and `ip_end_plot`, after the setup (each ends it), on every frame
-  they are to be seen.
-- Statuses: `FIG_ERR_ARGUMENT` for an unknown axis, a colour without 4 components, an offset without 2, a NaN value,
-  coordinate or edge; `FIG_ERR_STATE` outside a plot (`<procedure>: no plot is being declared (...)`), for an axis not
-  set up, from a [task](processes#tasks). `stat` is optional ([Errors](errors#plot-queries-and-marks)).
-- Modes: the same in **window**, **headless** and **remote** mode; the rectangle answers `test_drag` headless and the
-  browser's pointer in remote mode. Threads: a task does not draw.
-- What they do not do: the tag's `round` option and printf-formatted tags (`TagX(x, col, fmt, ...)`: a Fortran program
-  writes the text itself, as the example does); a text in a colour of its own other than through the style; the
-  drag tools' flags (`ImPlotDragToolFlags_*`: no cursors, no fit, delayed, no move, no resize), and `out_clicked`,
-  `out_hovered` of the drag tools.
-
 ## A plot as a drop target
 
 | Procedure | Notes |
@@ -725,6 +615,132 @@ plot, a text at a point, a rectangle the user drags. With the drag tools and ann
   axis) each receive what is dropped on their own part: a series dropped on the y2 axis can be plotted against it.
 - Statuses: those of `ig_drop_target`, plus `FIG_ERR_ARGUMENT` for an unknown axis or both `axis` and `legend`,
   `FIG_ERR_STATE` outside a plot or for an axis not set up.
+
+## Data in place
+
+The 1-D items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`, `ip_stairs`, `ip_stems`,
+`ip_inf_lines`, `ip_digital`, `ip_bubbles`, `ip_histogram2d`) read the program's arrays where they are, during the
+call, and keep no pointer to them afterwards. They go to ImPlot's `float*` or `double*` items with ImPlot's byte stride (`ImPlotSpec::Stride`), so an array does not have to be contiguous:
+
+| What the program passes | Stride ImPlot reads with | Copied by FIGURE |
+|---|---|---|
+| a whole array, `a(1:n)`, a matrix column `a(:, j)` | the element size | nothing |
+| `a(::2)`, a matrix row `a(i, :)`, `q(1, :, k)`, `runs%cl` (a component of an array of derived types) | the distance between two elements [bytes] | nothing, when `x` and the ordinates have the same stride |
+| `x` and `y` with different strides (`ip_line(label, t, history(i, :))`) | the stride of `y` | `x`, laid out at the stride of `y` |
+| integer abscissae, `integer(int32)` or `integer(int64)` (`ip_line(label, runs%iter, runs%cl)`) | the stride of `y` | `x`, converted to the kind of `y` |
+| a reversed section, `a(n:1:-1)` (negative stride) | the element size | every array of the item |
+
+The ordinates (`y`, `y1`, `err` ...) set the stride: ImPlot has one stride for all the arrays of an item, so an array
+whose stride differs is copied, once per call, laid out at the ordinates' stride (as large as the ordinates' span: `n`
+times the stride). An item copies at most its abscissae when the ordinates share a stride. Integer abscissae are
+always converted (ImPlot reads `x` and `y` of one type); the ordinates stay in place. A reversed section is copied
+contiguous: ImPlot's indexer computes `(size_t)idx * stride`, which turns a negative stride into a wrapped-around
+unsigned offset, undefined behaviour in C++. `test_plot_copies()` counts the arrays FIGURE copied and `test_plot_stride()` gives the
+stride of the last item ([Testing](testing)).
+
+FIGURE copies into a scratch array per slot of the item (x, y and two more ordinates) and precision, kept from call to
+call and from frame to frame: grown by half again when too short, freed by the first item drawn after a frame in which
+no item copied. An item that allocated and freed its own temporary at every call paid the memory's first touch every
+frame (nvfortran 26.9 with glibc: 2.4 ms against 1.0 ms to copy 10⁶ doubles). The memory kept is that of the largest
+item copied, until a frame copies nothing.
+
+Records of a run (`runs%iter`, `runs%cl`: components of an array of derived types) and the rows of a matrix, plotted
+where they are, with the copies counted (`docs/examples/src/cb_in_place.F90`, run headless by the documentation's
+build):
+
+<<< @/examples/snippets/cb_in_place-records.F90{fortran}
+
+<<< @/examples/snippets/cb_in_place-rows.F90{fortran}
+
+<<< @/examples/output/cb_in_place.txt{text}
+
+**What arrives is the compiler's choice.** A Fortran compiler may copy a non-contiguous actual argument into a
+contiguous temporary before the call, and then FIGURE reads that copy (contiguous, nothing more to copy). The items'
+array dummies are `asynchronous` (from v0.5.0), and nvfortran then passes sections in place:
+
+| Actual argument | gfortran 16.2 | nvfortran 26.9 | ifx 2026.2 |
+|---|---|---|---|
+| `a(::2)`, `a(i, :)`, `q(1, :, k)` | in place | in place (v0.4.0: copied by the compiler) | in place |
+| `a(n:1:-1)` | in place, copied by FIGURE | in place, copied by FIGURE (v0.4.0: copied by the compiler) | in place, copied by FIGURE |
+| `runs%cl` (a component of an array of derived types) | copied by the compiler | copied by the compiler | in place |
+
+(measured with `figure_test_plot_data`, which prints what each compiler passed). The plot is the same in every case;
+the cost is not.
+
+Why `asynchronous`: nvfortran 26.9 copies a strided section passed to an assumed-shape dummy, except when the dummy is
+`asynchronous` (an attribute that tells the compiler the array may be in use by something else during the call, which
+a copy would break). The attribute changes nothing else: the items still read the arrays during the call only, and
+gfortran and ifx compile the same code. Passing sections in place is nvfortran's behaviour, not a rule of the standard
+for an assumed-shape dummy, so `figure_test_plot_data` holds what each supported compiler passes and fails when it
+changes: its last frame draws every 1-D item specific (both precisions, real and integer abscissae) with strided
+ordinates and checks the stride each gave ImPlot. A compiler FIGURE does not know is probed instead.
+
+::: warning A component of an array of derived types is still copied
+`runs%cl`, where `runs` is an array of a derived type, is copied into a temporary by gfortran 16.2 and nvfortran 26.9
+at every call, whatever the dummy's attributes (C descriptors were measured too: nvfortran copies before it builds
+the descriptor, and gfortran 16.2 miscompiles a component passed to a `bind(C)` descriptor dummy). It costs 40 to
+60 % of the item at 10⁶ points and doubles it at 10⁷. To plot a long series every frame on those compilers, keep it in its own contiguous
+`real` array, or in a column of a matrix (`hist(:, j)`, contiguous). On nvfortran a pointer `p => runs%cl` is passed
+in place; gfortran 16.2 copies it too when `runs` is allocatable.
+:::
+
+**Measured cost** of one `ip_line` per frame, headless, gfortran 16.2 `-O2`, i9-13900KF (`ip_setup_axes_limits` fixed,
+so ImPlot draws every point):
+
+| Data | 100 000 points [ms/frame] | 1 000 000 points [ms/frame] |
+|---|---|---|
+| contiguous `x`, `y` | 0.60 | 7.3 |
+| `x(::2)`, `y(::2)`, read in place with a stride | 0.69 | 7.8–8.2 |
+| integer `x` (converted), contiguous `y` | 0.62 | 7.8–8.3 |
+| contiguous `x`, `y(::2)` (`x` copied at the stride of `y`) | 0.77 | 8.9–9.5 |
+| `runs%t`, `runs%cl` (both copied by gfortran into temporaries) | 0.76 | 11.4–11.7 |
+| `x(::2)`, `y(::2)` packed by the program into buffers allocated once | 0.71 | 9.6–10.0 |
+
+**Per compiler, v0.4.0 against v0.5.0**: one `ip_line` call, the same headless program on each (median of 5 runs ×
+20 frames at 10⁶ points, 7 × 40 for the contiguous and reversed rows, 2 × 6 frames at 10⁷; the machine was shared,
+so the medians carry about ±0.5 ms at 10⁶):
+
+| Data | nvfortran 26.9, 10⁶ [ms] | nvfortran 26.9, 10⁷ [ms] | gfortran 16.2, 10⁷ [ms] | ifx 2026.2, 10⁷ [ms] |
+|---|---|---|---|---|
+| contiguous `x`, `y` | 8.5 → 8.5 | 73 → 70 | 70 → 69 | 75 → 72 |
+| `a(1, :)`, `a(2, :)` (rows of `a(4, n)`) | 13.1 → 9.8 | 139 → 77 | 78 → 77 | 81 → 80 |
+| `w(::2)`, `v(::2)` | 11.2 → 9.5 | 122 → 74 | 73 → 74 | 77 → 77 |
+| `t(n:1:-1)`, `c(n:1:-1)` | 10.0 → 10.0 | 114 → 85 | 118 → 85 | 123 → 88 |
+| integer `x` (converted), contiguous `y` | 12.0 → 10.9 | 97 → 95 | 94 → 76 | 95 → 79 |
+| `runs%t`, `runs%cl` (copied by the compiler) | 12.5 → 12.8 | 137 → 143 | 150 → 148 | 81 → 80 (in place) |
+
+nvfortran's rows and strided sections now cost what they cost on the other compilers. A reversed section costs what
+nvfortran's own copy cost at 10⁶ points (1.4 against 1.5 ms over contiguous data, 7 runs × 40 frames) and less at 10⁷,
+where the scratch saves the first touch of fresh memory on every compiler, as it does for integer abscissae.
+
+ImPlot's own work dominates: a stride costs about 7 % over contiguous data, a copy made by FIGURE 20 %, the compiler's
+temporaries of a derived type's components 55 % (allocated and freed at every call). Over a few hundred thousand
+points, decimate before plotting ([Performance](performance#large-data)).
+
+::: warning Changed in v0.4.0
+Until v0.3.1 the items' arrays were `contiguous` dummies: every non-contiguous actual argument (`a(i, :)`, `a(::2)`,
+`runs%cl`) was copied by the compiler at every call, and integer abscissae did not compile. From v0.4.0 the dummies
+are assumed-shape without `contiguous` and `target`, the stride goes to ImPlot, and `ip_line`, `ip_scatter`,
+`ip_bars`, `ip_shaded` and `ip_error_bars` accept `integer(int32)` and `integer(int64)` abscissae. Every v0.3.1 call
+compiles and draws as before. `ip_line(label, y, row)` stays: it reads a row of a contiguous matrix in place on every
+compiler, where `ip_line(label, y(row, :))` depends on the compiler.
+:::
+
+What it does not do:
+- integer ordinates: `y` is `real(real32)` or `real(real64)`;
+- abscissae of one real kind and ordinates of the other: both `real(real32)` or both `real(real64)`;
+- the fields (`ip_heatmap`, `ip_contour`) are rank-2 and keep their contract: a contiguous field is read in place, a
+  section of one is copied by the compiler.
+
+`real(real32)`/`real(real64)` passed as `float`/`double` rely on being the same types as `real(c_float)`/
+`real(c_double)`, true on every compiler FIGURE supports; their addresses are passed with `c_loc` of their first
+element, the stride from the addresses of the first two.
+
+Series of different sizes are an error (`FIG_ERR_ARGUMENT`, message `<item>: the series have different sizes`, see
+[Error handling](errors)): nothing is drawn. Empty series draw nothing and are not an error.
+
+Modes: the same in window, headless and remote mode (the data become vertices on the CPU). Threads: a task does not
+draw (`FIG_ERR_STATE`, see [processes](processes)). Example: [Plot the history a solver keeps, in place](/manual/cookbook#plot-the-history-a-solver-keeps-in-place).
 
 ## 3-D plots
 
@@ -747,6 +763,12 @@ Take ImPlot3D for a figure that a 2-D plot would draw if it had a third axis; ta
 <<< @/examples/snippets/gallery-plot3d.F90{fortran}
 
 <Media name="plot3d" alt="Three 3-D plots side by side, each in a box with grid planes and labelled axes, titled with its calls. Left, ip3_line, ip3_scatter, ip3_text: a red spiral rising from a point labelled release, past three blue diamond markers, axes x [m], y [m], z [m]. Middle, ip3_surface: a field as heights, a bump and a hollow over a square grid, coloured blue to red by the cool-warm map, its grid lines drawn. Right, ip3_mesh: an octahedron of blue triangles with light edges, seen from above its equator." caption="docs/examples/src/gallery.F90, run with plot3d" />
+
+**The box.** x, y and z are right-handed, z up. `elevation` [degrees] raises the eye above the x-y plane (negative:
+below it); `azimuth` [degrees] turns the box about z, counterclockwise seen from above for a positive angle. At 0 and
+0 the eye looks along +y, x to the right; at `azimuth` a the eye sits at -90° - a from +x toward +y, so the gallery's
+`azimuth=-50` puts it at -40°, between +x and -y. ImPlot3D's angles turn the box; the
+[3-D view's](view3d#the-camera) `azimuth` is the eye's own direction, so the same number gives another view.
 
 | Procedure | Notes |
 |---|---|
@@ -829,3 +851,22 @@ Custom scales and tick formatters are not wrapped: ImPlot takes them as callback
 `SetupAxisFormat` with a formatter), and FIGURE calls no Fortran from C. What they are used for is covered as data:
 a `printf` format per axis ([Formats](#formats)), ticks at given values with given labels (`ip_setup_axis_ticks`),
 and the fixed scales `'log'`, `'symlog'` and `'time'` ([Axes](#axes)).
+
+Of ImPlot's plot and axis flags, few have an argument, and `figure` exports none of the `ImPlotFlags_*` and
+`ImPlotAxisFlags_*` constants, since no call takes them. `ip_begin_plot` takes `equal` (`ImPlotFlags_Equal`), and a
+title that starts with `##` is hidden (`ImPlotFlags_NoTitle`); `ip_setup_axis` takes `auto_fit`, `opposite`,
+`invert`, `lock` and `no_grid` (`ImPlotAxisFlags_AutoFit`, `_Opposite`, `_Invert`, `_Lock`, `_NoGridLines`), and an
+axis without `label` has none (`_NoLabel`). The other flags, and what comes closest:
+
+| Flag | What comes closest |
+|---|---|
+| `ImPlotFlags_NoLegend` | each item without an entry: `ip_spec(flags=ImPlotItemFlags_NoLegend)`, or a label that starts with `##` ([Items](#items)) |
+| `ImPlotFlags_NoBoxSelect` | `ip_cancel_selection` on the frame `ip_plot_selection` is `.true.`: the box ends and the release zooms nothing ([Reading a plot](#reading-a-plot)) |
+| `ImPlotFlags_Crosshairs` | `ip_plot_mouse` while `ip_plot_hovered`, and `ip_inf_lines` at the pointer, as `cb_plot_readout` does ([Reading a plot](#reading-a-plot)) |
+| `ImPlotFlags_NoInputs` | `ip_setup_axis(..., lock=.true.)` on every axis: no pan, no zoom, the box spans the locked axes; a click on the legend still hides an item, unless `ip_hide_next_item(..., always=.true.)` |
+| `ImPlotFlags_NoMenus`, `_NoMouseText`, `_NoFrame`, `_CanvasOnly` | none |
+| `ImPlotAxisFlags_NoTickLabels` | fixed ticks with blank labels: `ip_setup_axis_ticks(axis, values, labels)` |
+| `ImPlotAxisFlags_NoTickMarks` | none alone; `ip_setup_axis_ticks` with no values (`[real(real64) ::]`) leaves the axis without ticks, labels and grid lines |
+| `ImPlotAxisFlags_NoInitialFit` | `ip_setup_axis_limits` or `ip_setup_axes_limits`: the first range given instead of fitted |
+| `ImPlotAxisFlags_LockMin`, `_LockMax` | `ip_setup_axis_constraints`: bounds the range cannot pass, not a fixed end |
+| `ImPlotAxisFlags_NoMenus`, `_NoSideSwitch`, `_NoHighlight`, `_Foreground`, `_RangeFit`, `_PanStretch`, `_TickLabelsInside` | none |

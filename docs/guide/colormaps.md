@@ -20,7 +20,7 @@ CSV table or a ParaView preset. All of them are chosen **by name**, reversed or 
 | `ip_load_colormap(name, file [, stat])` | read a map from a CSV table or a ParaView JSON preset and register it as `name` |
 | `ip_colormap_names(names)` | the names `ip_colormap` knows, `character(len=:), allocatable :: names(:)` |
 | `ig_gradient_edit(id, colormap [, width] [, height] [, stat])` → `logical` | a gradient editor of the map named `colormap`: its stops dragged, added, recoloured, removed; `.true.` on the frame the map changed ([Editing a colormap](#editing-a-colormap)) |
-| `ip_colormap_stops(name, positions, colours [, stat])` | the map's stops, `real(real64), allocatable :: positions(:), colours(:,:)` ([Editing a colormap](#editing-a-colormap)) |
+| `ip_colormap_stops(name, positions, colours [, stat])` | the map's stops in order of position, `real(real64), allocatable :: positions(:), colours(:,:)`: `positions(k)` in [0, 1], `colours(3, k)` the RGB of stop `k`, in [0, 1]; both of size 0 on a failure ([Editing a colormap](#editing-a-colormap)) |
 
 <<< @/examples/snippets/cb_colormap-diverging.F90{fortran}
 

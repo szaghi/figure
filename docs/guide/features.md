@@ -6,6 +6,10 @@ title: Feature map
 
 `use figure` exports everything below except the testing procedures (`use figure_testing`). The modules it re-exports
 ([the modules](architecture#the-modules)) can also be used directly; `figure_c_native` and the generated raw layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal: programs call the wrappers, and a Dear ImGui or ImPlot function without one is listed as "raw only" in [Dear ImGui names](imgui-names) ([Raw bindings](raw-bindings)).
+A few names are public in their module for FIGURE's other modules only, not API, and `figure` does not re-export them:
+`plot_copies`, `plot_stride` and the `series_*` helpers of `figure_implot` (for `figure_implot3d`, and for
+`test_plot_copies` and `test_plot_stride`), and `texture_ref` of `figure_texture` (for the modules that draw a
+texture).
 
 All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional arguments are in brackets.
 A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) is found in the
@@ -390,7 +394,7 @@ Details: [3-D views](view3d).
 | `test_drop(paths, x, y [, stat])` | queue a drop of files or folders at (x, y), reported by `app%dropped` on the next frame ([synthetic input](testing#synthetic-input)) |
 | `test_next_frame()` | a frame boundary in the queued input ([synthetic input](testing#synthetic-input)) |
 | `test_item_center(x, y)`, `test_window_rect(name, ...)` | where a widget or a window is ([synthetic input](testing#synthetic-input)) |
-| `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | where the open popup is (a menu, a context menu, a combo's list, a colour picker) ([synthetic input](testing#synthetic-input)) |
+| `test_popup_rect(xmin, ymin, xmax, ymax [, found] [, stat])` | where the open popup is (a menu, a context menu, a combo's list, a colour picker) ([probes](testing#probes-of-the-last-frame)) |
 | `test_opened_url()` → `character` | the URL the last click on an `ig_text_link_url` asked to open (headless mode opens nothing) ([Links](widgets#links)) |
 | `test_quit()` | a quit request, as the window's close button makes it ([synthetic input](testing#synthetic-input)) |
 | `test_plot_tick(axis, index, label [, count] [, stat])` | a tick label of any of the six axes of the plot being declared (`'x1'`..`'y3'`; `'x'`, `'y'`) ([plots](plots#axes)) <!-- visual --> |
@@ -401,8 +405,8 @@ Details: [3-D views](view3d).
 | `test_field_time()` → `real64` | the last colouring's time [ms] ([fields](plots#fields)) <!-- visual --> |
 | `test_field_pixel(label, i, j, rgba [, stat])` | the colour a field's value got ([fields](plots#fields)) <!-- visual --> |
 | `test_frame_hit(x, y)` → `character` | what the frame of `decorations='figure'` does at a point: `'client'`, `'drag'`, `'resize-top-left'`, ... ([the window's frame](frame-loop#the-window-s-frame)) <!-- visual --> |
-| `test_frame_rect(part, x0, y0, x1, y1 [, found] [, stat])` | a part of its title bar in the last frame: `'bar'`, `'icon'`, `'menus'`, `'title'`, `'minimize'`, `'maximize'`, `'close'` ([synthetic input](testing#synthetic-input)) |
-| `test_frame_state(minimized, maximized [, stat])` | the window minimized, maximized (headless: as the bar's buttons recorded it) ([synthetic input](testing#synthetic-input)) |
+| `test_frame_rect(part, x0, y0, x1, y1 [, found] [, stat])` | a part of its title bar in the last frame: `'bar'`, `'icon'`, `'menus'`, `'title'`, `'minimize'`, `'maximize'`, `'close'` ([probes](testing#probes-of-the-last-frame)) |
+| `test_frame_state(minimized, maximized [, stat])` | the window minimized, maximized (headless: as the bar's buttons recorded it) ([probes](testing#probes-of-the-last-frame)) |
 | `test_system_theme(theme [, stat])` | the system's light or dark setting changes (`'light'`, `'dark'`, `'system'`), at the next frame: tests of `palette='auto'` ([styles](styles#follow-the-system-s-light-or-dark-setting)) |
 | `test_notification_rect(index, x0, y0, x1, y1 [, found] [, alpha])` | a notification shown in the last frame, 1 the newest, and the alpha it was drawn with ([notifications](frame-loop#notifications)) <!-- visual --> |
 | `test_capture(path [, stat])` | the whole frame as a PNG file, written when it is rendered: the CPU renderer's pixels headless ([pictures as tests](testing#pictures-as-tests)) |
@@ -410,7 +414,7 @@ Details: [3-D views](view3d).
 | `test_glyph(text, font, source, pixels [, width] [, height] [, checksum] [, stat])` | the font of a text font's stack that draws a character, its bitmap's pixels, advance, height and checksum ([Glyphs](testing#glyphs)) |
 | `test_drawn_extent(color, x0, y0, x1, y1 [, found] [, stat] [, layer] [, vertices])` | the extent drawn so far in the current window in a style colour by name (`'PlotHistogram'`: a progress bar's fill) or an RGBA colour (an item's `ip_spec` colour); with `layer`, the foreground or background layer; `vertices`, how many ([Canvas](canvas#testing-a-canvas)) |
 | `test_file_browser(shown [, folder] [, entries] [, error] [, asking] [, path_field] [, name_field] [, recent])` | the file browser in front: its folder, the entries in the order shown, the error shown, the replace question, the fields, the recent folders ([file browser](frame-loop#figure-s-file-browser)) <!-- visual --> |
-| `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser in the last frame (`'entry:NAME'`, `'ok'`, `'cancel'`, `'path'`, ...), to click it ([synthetic input](testing#synthetic-input)) |
+| `test_file_browser_rect(part, x0, y0, x1, y1 [, found])` | a part of the file browser in the last frame (`'entry:NAME'`, `'ok'`, `'cancel'`, `'path'`, ...), to click it ([probes](testing#probes-of-the-last-frame)) |
 | `test_item_exists(path [, stat])` → `logical` | an item or a window of the last frame named by a path: `Window/Label`, `//Window`, `##id`, `*`, `$$n` ([finding items by path](testing#finding-items-by-path)) |
 | `test_item_rect(path, x, y, w, h [, stat])` → `logical` | the rectangle of the item a path names, in the last frame; false when there is none ([finding items by path](testing#finding-items-by-path)) |
 | `test_item_click(path [, button] [, stat])` | queue a click on the item a path names; a missing path names the nearest item ([finding items by path](testing#finding-items-by-path)) |
@@ -422,7 +426,7 @@ Details: [3-D views](view3d).
 | `test_run(max_frames [, stat])` → `logical` | true while input is queued or frames are asked for: the loop of a test, `do while (test_run(60))` ([running until idle](testing#running-until-idle)) |
 | `test_id_conflicts([list])` → `int32` | the ids two items shared in the last frame, found without the pointer over them, and their paths ([checks](testing#checks)) |
 | `test_unnamed_items([list])` → `int32` | the items with no visible name and no tooltip (icon-only buttons, `'##id'` labels), and their paths ([checks](testing#checks)) |
-| `test_settings_file(path [, stat])` | the file keeping the browser's recent folders, instead of FIGURE's own (`''`: memory only) ([synthetic input](testing#synthetic-input)) |
+| `test_settings_file(path [, stat])` | the file keeping the browser's recent folders, instead of FIGURE's own (`''`: memory only) ([probes](testing#probes-of-the-last-frame)) |
 
 Details: [Headless testing](testing#synthetic-input).
 

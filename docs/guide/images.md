@@ -37,11 +37,27 @@ draws `f(:, :)` (`real(real32)` or `real(real64)`, contiguous) over the rectangl
 - **colormap**: an id from [`ip_colormap`](colormaps), by name (`colormap=ip_colormap('batlow')`, reversed
   `'batlow_r'`, in discrete bands with `levels`), or one of ImPlot's constants (`ImPlotColormap_Viridis`, ...), for
   this item only; default: Viridis. An id that is not registered is refused with `FIG_ERR_ARGUMENT`. Which map suits
-  which data, and why not Jet: [Colormaps](colormaps).
+  which data, and why not Jet: [Colormaps](colormaps);
+- **legend and fit**: a heatmap is an item, as `ip_image` is: `label` is its id in the plot and its legend entry (a
+  click on it hides the heatmap; a label that starts with `##` has none, [Items](plots#items)), and the axes fit its
+  rectangle. Of `spec` only the flags act, `ImPlotItemFlags_NoLegend` and `ImPlotItemFlags_NoFit`: the colours come
+  from the colormap, and those of `ip_spec` are not used.
 
 `ip_colormap_scale(label, scale_min, scale_max [, width] [, height] [, label_format] [, colormap] [, stat])` draws the
-matching colour bar. It is a widget of its own: call it outside `ip_begin_plot`/`ip_end_plot`, typically after `ig_same_line`,
-with the same scale and colormap as the heatmap. A label starting with `##` is hidden.
+matching colour bar. It is a widget of its own: call it outside `ip_begin_plot`/`ip_end_plot`, typically after
+`ig_same_line`, with the same scale and colormap as the heatmap. `label` is the widget's id and is written vertically
+beside the bar; a label starting with `##` is hidden. `width` and `height` [pixels]: by default the bar with its tick
+labels, and ImPlot's plot height; a negative `height` fills the space left. `label_format` (default `'%g'`) prints
+the tick labels.
+
+- Statuses: `FIG_ERR_ARGUMENT`, nothing drawn, for `scale_min` without `scale_max` or the reverse, more cells than a C
+  `int` counts, a colormap not registered, a `label_format` refused ([Formats](plots#formats)); `FIG_ERR_STATE` with
+  no frame open and from a [task](processes#tasks), and for `ip_image` a texture not initialized. `stat` is optional
+  (absent: `error stop` with the message). An `ip_heatmap` or `ip_image` outside a plot is not checked by FIGURE: it
+  reaches ImPlot's own check ([What is not checked](errors#what-is-not-checked-and-what-recovery-cannot-repair)).
+- Modes: the same in **window**, **headless** and **remote** mode: a heatmap's cells are vertices, rebuilt every
+  frame; an image is a [texture](#textures).
+- Threads: a task does not draw (`FIG_ERR_STATE`).
 
 ## Textures
 
@@ -77,6 +93,18 @@ instead (linear filtering), better for photographs.
 **Lifetime.** `texture_object` has no finaliser on purpose: an assignment or a function result would finalise a copy
 and destroy the texture the original still uses. Destroy textures explicitly, or let `app%destroy` release them. In
 headless mode the textures keep their pixels, and FIGURE's CPU renderer draws them ([Screenshots and videos](capture)).
+
+- Statuses: `tex%init`: `FIG_ERR_ARGUMENT` for a width or height not above 0, `FIG_ERR_STATE` before `app%init*`,
+  `FIG_ERR_FAILED` when OpenGL gives no texture (window mode); `tex%update`: `FIG_ERR_STATE` for a texture not
+  initialized or destroyed and before `app%init*`, `FIG_ERR_ARGUMENT` for pixels not `rgba(4, width, height)`; both
+  `FIG_ERR_STATE` from a [task](processes#tasks). `stat` is optional (absent: `error stop` with the message). Before
+  `init` and after `destroy`, `tex%width()` and `tex%height()` are 0 and `tex%is_initialized()` is `.false.`.
+- Frames: `init`, `update`, `load` and `destroy` need no frame open: a texture is created and updated between two
+  frames as well as inside one. `ig_image` and `ip_image` draw inside a frame, as every widget.
+- Modes: **window**, the texture on the GPU; **headless**, its pixels kept for the CPU renderer (transparent until
+  the first `update`); **remote**, sent to the browser with the next frame.
+- Threads: the main thread only. From a task `init`, `update` and `load` are refused (`FIG_ERR_STATE`, the task
+  asked to stop); `destroy` is not checked: call it on the main thread.
 
 ## Reading images
 
