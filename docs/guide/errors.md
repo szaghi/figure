@@ -431,7 +431,7 @@ the default.
 **`'report'` without a `stat` stops the program.** The plain loop `do while (app%next_frame())` in the default mode
 ends with `error stop` at the frame after a usage error, its messages on standard error, as every FIGURE failure
 without a `stat` does. A program that must go on either passes `stat` and decides (the studio of the tutorial reports
-the messages in a notification and draws on: [chapter 18](/manual/tutorial/18-checks)), or chooses `'recover'`, which
+the messages in a notification and draws on: [chapter 19](/manual/tutorial/19-checks)), or chooses `'recover'`, which
 goes on by itself and shows them in a notification:
 
 | Loop | `'report'` (default) | `'recover'` |

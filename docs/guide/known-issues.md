@@ -92,7 +92,7 @@ An array constructor with a type-spec whose values are deferred-length character
 memory and written past its end: the program crashes later, in an unrelated allocation (`corrupted size vs.
 prev_size`). Seen with gfortran 16.2 (valgrind reports the write in the constructor). The arguments of
 `process_object%start` are the usual victim: fill a fixed-length array element by element instead, as
-`docs/examples/src/tut11_run.F90` does. Checked 2026-11-12: gfortran 16.2 still aborts (`malloc(): corrupted top
+`docs/examples/src/tut12_run.F90` does. Checked 2026-11-12: gfortran 16.2 still aborts (`malloc(): corrupted top
 size`); nvfortran 26.9 and ifx 2026.2 are right. Canary: [`figure_test_canaries`](testing#canaries), which runs
 the case in a child process (#4 Bug B), not on Windows: there such a child can hang instead of ending (it did on CI,
 2026-11-15), so the canary says "not probed".
@@ -311,7 +311,7 @@ POSIX):
   process is `tail -f /dev/null`), nothing reaped it: the ended child stayed a zombie, and until v0.7.0
   `p%running()` stayed true forever (a loop waiting for it never ended). FIGURE now reaps it itself where the
   program is that first process, and counts a zombie as ended where another process holds it (Linux, from
-  `/proc`). Found 2026-11-16: it hung the documentation's CI job on `tut16_tested`; `figure_test_process` runs the
+  `/proc`). Found 2026-11-16: it hung the documentation's CI job on `tut17_tested`; `figure_test_process` runs the
   case as PID 1 of a new namespace (`unshare -rpf`, where the system allows it).
 
 ## Tasks
@@ -385,7 +385,7 @@ renderer ([Screenshots and videos](capture#three-modes-two-renderers)):
   - FIGURE's title bar (`decorations='figure'`) has its buttons on the left on macOS, the menus after them: every
     picture of a window with it differs there (about 1400 pixels), and an input script that clicks the bar or its
     menus at fixed coordinates plays something else;
-  - one glyph: in `tut12_field` the `7` of a value is drawn differently on macOS in about one run in three (12
+  - one glyph: in `tut13_field` the `7` of a value is drawn differently on macOS in about one run in three (12
     pixels, its top-left edge, by up to 25 levels; run 43702518123, 2026-11-15), where Linux draws the same text alike
     after three atlas histories and under full load. Its cause is not found; 32 pixels are allowed there, and since
     v0.7.0 a picture that fails keeps the font atlas it was drawn with (`FIGURE_CAPTURE_ATLAS`,

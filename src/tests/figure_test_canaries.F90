@@ -71,7 +71,7 @@ contains
                                 'argument (its child can hang there)'
    else
       call report('Bug B, a constructor over a deferred-length string, as an argument', ['gfortran'], ctor_defect(), &
-                  'process arguments filled element by element (docs/examples/src/tut11_run.F90)')
+                  'process arguments filled element by element (docs/examples/src/tut12_run.F90)')
    endif
    call report('char(i) of a variable i, assigned to a deferred-length string', ['nvfortran'], char_defect(), &
                'the fixed-length buffer of the utf8 helpers (docs/examples/src/gallery.F90, src/tests/figure_test_text.F90)')

@@ -1,4 +1,4 @@
-$ ./tut22_player --test tut22-cases
+$ ./tut22_monitor --test tut22-cases
 [ok]     the title bar holds the studio's menus
 [ok]     the title drags the window
 [ok]     ctrl+o shows the file browser on the example cases
@@ -12,8 +12,6 @@ $ ./tut22_player --test tut22-cases
 [ok]     right moves the probe line while Result has the focus
 [ok]     and not while the title field is edited
 [ok]     nor while another panel has the focus
-[ok]     the run's snapshots are listed; a frame with nothing changed colours nothing
-[ok]     playing steps through the snapshots, each coloured once
 [ok]     the pointer over the monitor reads iteration 111: residual  3.91E-05, mean 20.615 C
 [ok]     the averaging window spans the run: its mean is the mean of every iteration
 [ok]     two runs in the table, sorted by iterations on a click of its header
@@ -28,4 +26,4 @@ $ ./tut22_player --test tut22-cases
          ig_end_tab: no ig_begin_tab is open (no scope is open)
 [ok]     no other frame of the test had a usage error
 [ok]     the title bar's close button ends the studio
-28 of 28 checks passed
+26 of 26 checks passed

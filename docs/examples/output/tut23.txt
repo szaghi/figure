@@ -1,4 +1,4 @@
-$ ./tut23_windows --test tut23-cases
+$ ./tut23_player --test tut23-cases
 [ok]     the title bar holds the studio's menus
 [ok]     the title drags the window
 [ok]     ctrl+o shows the file browser on the example cases
@@ -19,10 +19,6 @@ $ ./tut23_windows --test tut23-cases
 [ok]     two runs in the table, sorted by iterations on a click of its header
 [ok]     a second click reverses the order
 [ok]     a right click on a run opens its menu
-[ok]     View > Analysis: Input hidden, Messages shown beside Run
-[ok]     the 3-D view docked on the right of the result
-[ok]     View > Input shows the panel the layout hid
-[ok]     View > Setup gives back the input's layout
 [ok]     a click on a problem shows the Body section, the radius in keys
 [ok]     a click on the sketch's east side chooses it
 [ok]     an input with the body out of the plate is refused
@@ -32,4 +28,4 @@ $ ./tut23_windows --test tut23-cases
          ig_end_tab: no ig_begin_tab is open (no scope is open)
 [ok]     no other frame of the test had a usage error
 [ok]     the title bar's close button ends the studio
-32 of 32 checks passed
+28 of 28 checks passed

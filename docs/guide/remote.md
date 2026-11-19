@@ -9,9 +9,9 @@ browser shows it and sends the input back. The program needs no display, no GPU 
 where computations run, a cluster node or a workstation without a screen, and keep everything native (OpenMP, MPI,
 GPUs); the browser only draws.
 
-<<< @/examples/snippets/tut17_remote-open.F90{fortran}
+<<< @/examples/snippets/tut18_remote-open.F90{fortran}
 
-(The tutorial's studio with a `--remote PORT` option, [chapter 17](/manual/tutorial/17-remote): everything after this
+(The tutorial's studio with a `--remote PORT` option, [chapter 18](/manual/tutorial/18-remote): everything after this
 call is the program as it is in a window.)
 
 Try it with the example: `exe/examples/figure_hello --remote 8080`, then open the address it prints (with its

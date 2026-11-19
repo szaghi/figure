@@ -264,9 +264,9 @@ A test makes the request with `test_quit()` ([Headless testing](testing#syntheti
 An editor shows the document in the window's title, with a mark while it has unsaved changes. Set it whenever it
 changes (the call is cheap; doing it every frame is fine):
 
-<<< @/examples/snippets/tut09_case-title.F90{fortran}
+<<< @/examples/snippets/tut10_case-title.F90{fortran}
 
-(The tutorial's studio, [chapter 9](/manual/tutorial/09-case), calls it whenever the case is opened, edited or saved.)
+(The tutorial's studio, [chapter 10](/manual/tutorial/10-case), calls it whenever the case is opened, edited or saved.)
 
 | Procedure | Notes |
 |---|---|

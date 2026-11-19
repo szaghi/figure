@@ -1,0 +1,39 @@
+#! program build/docs-examples/bin/tut10_case
+#! fresh   /tmp/figure-studio
+#! args    --examples /tmp/figure-studio
+#! frames  330
+#! poster  248
+# --check on macOS: the script clicks the title bar or its menus, laid out the other way there (buttons on the
+# left): it plays something else, not compared (run 43649582637, 2026-11-14)
+#! check.darwin skip
+# --check on Windows: the Case panel shows the case's native path (D:\tmp\figure-studio\plate) where Linux shows
+# /tmp/figure-studio/plate: 934 to 966 pixel(s) over 2 there (run 43744364220, 2026-11-15); the path's line masked
+#! mask.win32 96 50 156 17
+# File > Open case shows FIGURE's file browser on the example cases; a double-click enters plate, Choose opens it;
+# the title edited (the window's title gets a *); the folder channel dropped on the window: Discard changes?, Discard
+0   move 500 300
+5   move 45 11 10
+20  down
+22  up
+30  move 85 37 10
+45  down
+47  up
+60  move 481 255 15
+80  down
+82  up
+84  down
+86  up
+100 move 864 526 15
+118 down
+120 up
+150 move 200 80 15
+168 down
+170 up
+175 key end
+180 text  (draft)
+200 move 700 250 25
+230 drop 700 250 /tmp/figure-studio/channel
+260 move 517 360 15
+280 down
+282 up
+300 move 700 250 20

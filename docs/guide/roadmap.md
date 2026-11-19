@@ -309,7 +309,7 @@ step by step, is [issue #6](https://github.com/szaghi/figure/issues/6):
   by `scripts/gen_names.py`: every Dear ImGui and ImPlot function, linked to its header line at the vendored commit,
   with the FIGURE call that reaches it, or "raw only". The recorder draws the pointer in videos and, with `#! keys`,
   captions each key chord ([Screenshots and videos](capture#the-documentation-s-recordings)); the v0.4.0 videos
-  recorded again with them. Tutorial [part three](/manual/tutorial/18-checks), chapters 18 to 22: the solver studio
+  recorded again with them. Tutorial [part three](/manual/tutorial/19-checks), chapters 18 to 22: the solver studio
   grows the v0.4.0 features, each chapter a compiled program tested headless by the documentation's build and
   recorded. A fresh reader's pass over the installation and part one; the [migration notes](changelog#migration-to-v0-4-0): done.
 - **A fallback font for symbols Plex lacks** (S10): moved to v0.5.0.
@@ -495,7 +495,7 @@ v0.6.0, and the features no application had asked for, which the owner took in w
 - **Portable example cases** (S2): a small file API, `figure_make_folder`, `figure_remove`, `figure_set_file_time`,
   `figure_file_time`, `figure_file_exists` ([Files and folders](frame-loop#files-and-folders)); the studio tutorials
   write their cases with it, and their pictures are checked on Windows too: done.
-- **`tut12_field`'s macOS glyph** (S3): a picture that fails keeps the font atlas it was drawn with
+- **`tut13_field`'s macOS glyph** (S3): a picture that fails keeps the font atlas it was drawn with
   (`FIGURE_CAPTURE_ATLAS`, [Variables](capture#variables)), so the next variation on macOS brings its evidence: done;
   the cause waits for that evidence.
 - **Compiler oddities reduced** (S4): nvfortran's `select case` on a deferred-length function result and its internal

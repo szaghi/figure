@@ -21,7 +21,8 @@ Default checks (exit 1 and a list of what is missing):
 - **Links:** every internal link ``[text](page#anchor)`` of those pages names a page that exists and, with an anchor,
   a heading of it (VitePress's slugs, a repeated heading's ``-1``, ``{#id}``), or a file docs/public serves.
 - **Generated tables:** docs/guide/_generated/*.md (the modules, the native layer, a recording's header lines) equal
-  what scripts/gen_doc_tables.py writes now.
+  what scripts/gen_doc_tables.py writes now, and each studio chapter's "What this chapter adds" and run regions what
+  scripts/gen_tutorial_adds.py writes.
 - **README:** README.md's first ```fortran block equals docs/examples/src/readme.F90, which docs/examples/build.sh
   compiles.
 - **Version:** the version strings of the docs (``VERSIONED``: the status lines of README.md, docs/index.md and
@@ -767,11 +768,16 @@ def check_examples() -> list[str]:
 
 # ---------------------------------------------------------------------------------------------- the name map, the media
 def check_generated() -> list[str]:
-    """The generated tables (scripts/gen_doc_tables.py) regenerated and compared with the committed ones."""
+    """The generated tables (scripts/gen_doc_tables.py) and the tutorial's "What this chapter adds" and run regions
+    (scripts/gen_tutorial_adds.py) regenerated and compared with the committed ones."""
     sys.path.insert(0, str(ROOT / "scripts"))
     import gen_doc_tables  # noqa: PLC0415
+    import gen_tutorial_adds  # noqa: PLC0415
 
-    return gen_doc_tables.problems()
+    pages = gen_tutorial_adds.generated()
+    stale = [f"{p.relative_to(ROOT)}: its generated regions are not current: run python3 scripts/gen_tutorial_adds.py"
+             for p, t in pages.items() if p.read_text() != t]
+    return gen_doc_tables.problems() + stale
 
 
 def check_names() -> list[str]:

@@ -46,8 +46,8 @@ Without an ini file (the default) every run starts from the program's layout.
 ImGui's choice: it depends on how the windows took the focus as they first appeared, and follows neither the order of
 the `ig_dock_window` calls nor that of the `ig_begin` calls. To choose it, call `ig_focus_window(name)` on the frame
 after the layout was built (the window must have been drawn once, with `ig_begin`): its tab comes to the front. The
-[tutorial's shell](/manual/tutorial/08-shell#docked-panels-kept-between-runs) does so for its Input tab
-(`docs/examples/src/tut08_shell.F90`, region `layout`).
+[tutorial's shell](/manual/tutorial/09-shell#docked-panels-kept-between-runs) does so for its Input tab
+(`docs/examples/src/tut09_shell.F90`, region `layout`).
 
 ## A window that appears later
 

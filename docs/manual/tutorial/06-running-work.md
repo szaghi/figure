@@ -60,4 +60,5 @@ in a progress bar and its end in a notification; and why the window does not fre
 [Notifications](/guide/frame-loop#notifications).
 :::
 
-**Next:** part two, [7. The studio's own window](./07-window): one application, a solver studio, grown chapter by chapter.
+**Next:** part two, [7. Building and running the studio](./07-building): one application, a solver studio, grown
+chapter by chapter, and how to build and run each chapter's program.

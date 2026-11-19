@@ -1,10 +1,8 @@
-$ ./tut25_clip --test tut25-cases ../../../docs/examples/data/tut25_clip.png
+$ ./tut25_editor --test tut25-cases
 [ok]     the title bar holds the studio's menus
 [ok]     the title drags the window
 [ok]     ctrl+o shows the file browser on the example cases
 [ok]     Choose opens the case, the window's title says which
-[ok]     the main window looks as committed (docs/examples/data/tut25_clip.png)
-[ok]     no two items of the main window share an id
 [ok]     escape leaves the title as it was, unedited
 [ok]     enter commits the title, one undo step, and the window's title marks it unsaved
 [ok]     a drop asks before discarding the edit
@@ -21,8 +19,6 @@ $ ./tut25_clip --test tut25-cases ../../../docs/examples/data/tut25_clip.png
 [ok]     two runs in the table, sorted by iterations on a click of its header
 [ok]     a second click reverses the order
 [ok]     a right click on a run opens its menu
-[ok]     the clip box, clicked by its path, is checked
-[ok]     the gizmo's arrow, dragged, moves the plane along x
 [ok]     View > Analysis: Input hidden, Messages shown beside Run
 [ok]     the 3-D view docked on the right of the result
 [ok]     View > Input shows the panel the layout hid
@@ -40,4 +36,4 @@ $ ./tut25_clip --test tut25-cases ../../../docs/examples/data/tut25_clip.png
          ig_end_tab: no ig_begin_tab is open (no scope is open)
 [ok]     no other frame of the test had a usage error
 [ok]     the title bar's close button ends the studio
-40 of 40 checks passed
+36 of 36 checks passed

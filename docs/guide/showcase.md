@@ -166,4 +166,4 @@ files); help pages in [Markdown](widgets#markdown); a window registry with a Vie
 plane or a probe placed by hand with a [gizmo](view3d#gizmos); small [3-D plots](plots#_3-d-plots) of probes and
 trajectories; and tests that find items by [path](testing#finding-items-by-path) and compare what a window
 [looks like](testing#pictures-as-tests). The tutorial's studio uses them all
-([chapters 23 to 25](/manual/tutorial/23-windows)).
+([chapters 24 to 26](/manual/tutorial/24-windows)).

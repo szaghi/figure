@@ -168,6 +168,15 @@ variables above and `FIGURE_STYLE=seal` (the default [style](styles), set explic
 what differs from the window background, and writes
 `docs/public/media/<name>.png` and, for animations, `<name>.mp4`. Pages show them with the `<Media>` component.
 
+The tutorial's chapter 17 is recorded by this script, `docs/media/tut17_tested.rec`:
+
+<<< @/media/tut17_tested.rec{text}
+
+The `#!` lines name the program and its arguments, the frames to record and the one kept as the picture; the other
+lines are the input, one event per frame number ([Input scripts](#input-scripts)). While recording, FIGURE
+ignores the real mouse and keyboard, fixes the frame time and reads nothing of the user's (no ini file, no recent
+folders), so a recording made again gives the same picture.
+
 The header lines, from the script's own documentation:
 
 <!--@include: ./_generated/rec-keys.md-->

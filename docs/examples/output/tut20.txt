@@ -1,4 +1,4 @@
-$ ./tut20_tables --test tut20-cases
+$ ./tut20_layout --test tut20-cases
 [ok]     the title bar holds the studio's menus
 [ok]     the title drags the window
 [ok]     ctrl+o shows the file browser on the example cases
@@ -12,9 +12,6 @@ $ ./tut20_tables --test tut20-cases
 [ok]     right moves the probe line while Result has the focus
 [ok]     and not while the title field is edited
 [ok]     nor while another panel has the focus
-[ok]     two runs in the table, sorted by iterations on a click of its header
-[ok]     a second click reverses the order
-[ok]     a right click on a run opens its menu
 [ok]     a click on a problem shows the Body section, the radius in keys
 [ok]     an input with the body out of the plate is refused
 [ok]     and accepted once corrected
@@ -23,4 +20,4 @@ $ ./tut20_tables --test tut20-cases
          ig_end_tab: no ig_begin_tab is open (no scope is open)
 [ok]     no other frame of the test had a usage error
 [ok]     the title bar's close button ends the studio
-23 of 23 checks passed
+20 of 20 checks passed

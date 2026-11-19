@@ -66,6 +66,6 @@ that has the details: the old behaviour, the new one, and why.
 | [Data in place](plots#data-in-place): the plot items take arrays of any stride and integer abscissae; the dummies are no longer `contiguous` | nothing: every v0.3.1 call compiles and draws as before |
 | [Drag tools](plots#error-bars-annotations-and-drag-tools): `ip_drag_line_x`, `ip_drag_line_y`, `ip_drag_point` outside a plot are usage errors | call them between `ip_begin_plot` and `ip_end_plot` (it aborted before) |
 
-The tutorial's [part three](/manual/tutorial/18-checks) shows the new calls in the solver studio of part two.
+The tutorial's [part three](/manual/tutorial/19-checks) shows the new calls in the solver studio of part two.
 
 <!--@include: ../../CHANGELOG.md{3,}-->

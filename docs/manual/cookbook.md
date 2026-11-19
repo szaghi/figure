@@ -105,7 +105,7 @@ or dark setting, and to colour the program's own messages with the palette:
 
 [Styles](/guide/styles#looks-and-palettes) lists the looks, the palettes and their roles.
 
-Used in context: [chapter 8](./tutorial/08-shell) of the tutorial.
+Used in context: [chapter 9](./tutorial/09-shell) of the tutorial.
 
 ### Change one colour of the whole interface
 
@@ -144,7 +144,7 @@ theme file, which `app%load_style` (or `FIGURE_STYLE=my-theme.toml`) applies in 
 The layout is built on the first frame only (`ig_dock_layout_begin`); the dock space is declared every frame,
 before its windows. The user can rearrange everything afterwards. [Docking](/guide/docking) has the details.
 
-Used in context: [chapter 8](./tutorial/08-shell) of the tutorial.
+Used in context: [chapter 9](./tutorial/09-shell) of the tutorial.
 
 ### A View menu and a reset layout
 
@@ -179,7 +179,7 @@ The bar between the two regions changes `sizes` when the user drags it; the regi
 The menu item shows the shortcut; `ig_shortcut`, called every frame outside the menu, reads the keys (cmd+s on
 macOS). [Menus and shortcuts](/guide/menus) has the rules.
 
-Used in context: [chapter 8](./tutorial/08-shell) of the tutorial.
+Used in context: [chapter 9](./tutorial/09-shell) of the tutorial.
 
 ### Keys that act only where the user is
 
@@ -224,7 +224,7 @@ The main menu bar moves into the title bar; the bar drags the window, its edges 
 `app%set_confirm_quit(.true.)`. Under WSLg, where the system's frame cannot be styled, this gives the window a frame
 that matches the program. [The window's frame](/guide/frame-loop#the-window-s-frame) has the details.
 
-Used in context: [chapter 7](./tutorial/07-window) of the tutorial.
+Used in context: [chapter 8](./tutorial/08-window) of the tutorial.
 
 ### Open a file
 
@@ -246,7 +246,7 @@ The browser lists folders first, sorts by a click on a column's header, filters 
 keeps the recent folders between runs, makes folders and asks before a save replaces a file.
 [File dialogs](/guide/frame-loop#file-dialogs) has the details.
 
-Used in context: [chapter 9](./tutorial/09-case) of the tutorial.
+Used in context: [chapter 10](./tutorial/10-case) of the tutorial.
 
 ### Open what the user drops
 
@@ -264,7 +264,7 @@ In remote mode nothing can be dropped (the files are on the browser's computer):
 file browser, as in the recipe above.
 [Drops](/guide/frame-loop#drops) and [Clipboard](/guide/widgets#clipboard) have the details.
 
-Used in context: [chapter 9](./tutorial/09-case) of the tutorial.
+Used in context: [chapter 10](./tutorial/10-case) of the tutorial.
 
 ### Ask before discarding changes
 
@@ -275,7 +275,7 @@ Used in context: [chapter 9](./tutorial/09-case) of the tutorial.
 `app%set_confirm_quit(.true.)` makes the close button a request; the program opens a modal when there is something to
 lose, and quits at once otherwise. [Menus, popups and shortcuts](/guide/menus#ask-before-quitting) has the details.
 
-Used in context: [chapter 9](./tutorial/09-case) of the tutorial.
+Used in context: [chapter 10](./tutorial/10-case) of the tutorial.
 
 ### Ask a question in a box
 
@@ -331,7 +331,7 @@ node and `ig_tree_pop`. With `span_all_columns`, a node's row is its click area 
 a click anywhere on a block's row chooses it (`clicked`), the arrow opens the body: the two never mix. The node of
 20000 blocks clips its children with a `list_clipper_object`. [Trees](/guide/widgets#trees) has the rules.
 
-Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
+Used in context: [chapter 11](./tutorial/11-input) of the tutorial.
 
 ### A sortable table with a fixed header
 
@@ -366,7 +366,7 @@ a drop-down list. The rows of the table repeat the same widgets, each in its own
 tables end only when their begin returned `.true.`. [Widgets](/guide/widgets#groups-headers-tabs-tables) has the
 rules.
 
-Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
+Used in context: [chapter 11](./tutorial/11-input) of the tutorial.
 
 ### Edit a text file
 
@@ -381,7 +381,7 @@ types or pastes, and `buffer%text()` copies them out to save. IBM Plex Mono (`'p
 field, keeps the columns of the input file aligned; `tab_input` lets Tab insert a tab. The program reads and writes the
 file in stream access, so line ends stay LF. [Multi-line text](/guide/widgets#multi-line-text) has the rules.
 
-Used in context: [chapter 10](./tutorial/10-input) of the tutorial.
+Used in context: [chapter 11](./tutorial/11-input) of the tutorial.
 
 ### Edit an input file with its errors marked
 
@@ -654,7 +654,7 @@ side; larger ones are [the recipe above](#show-a-2-d-field-with-its-colour-scale
 along x and `j` along y, `j = 1` at the bottom; the bounds are the outer edges of the cells. Fix the scale (`scale_min`, `scale_max`) when the field changes over time, or the colours rescale every frame.
 [Heatmaps and images](/guide/images) has every argument.
 
-Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
+Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
 
 ### Contour lines over a field
 
@@ -667,7 +667,7 @@ half a spacing more on each side, and the lines fall on the colours they bound. 
 round values inside the field's range are chosen. Where the field is NaN (a body, cells outside the domain) the lines
 stop: a hole, not a line to a meaningless value. [Contour lines](/guide/plots#contour-lines) has every argument.
 
-Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
+Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
 
 ### A colour-scale legend beside a plot
 
@@ -679,7 +679,7 @@ Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
 then the heatmap's, labelled at their edges. [A colour-scale legend](/guide/colormaps#a-colour-scale-legend) has
 every argument.
 
-Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
+Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
 
 ### Let the user choose a colour
 
@@ -715,7 +715,7 @@ The drag tools update `probe_x`, `px` and `py` in place and return `.true.` whil
 The profile is the row `i` of `g`, read in place with a stride (`ip_line(label, g, i)`); a NaN in it draws a gap.
 [Error bars, annotations and drag tools](/guide/plots#error-bars-annotations-and-drag-tools) has the details.
 
-Used in context: [chapter 12](./tutorial/12-field) of the tutorial.
+Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
 
 ### Show a surface coloured by a field
 
@@ -730,7 +730,7 @@ mesh exists; after changing their values, call `view%changed(hull)`. The view is
 changed, so a still view costs nothing per frame. A click on the surface gives the cell `i + (j - 1) * (ni - 1)` and
 the point hit. [3-D views](/guide/view3d) has the camera, clipping planes and the cost per mode.
 
-Used in context: [chapter 13](./tutorial/13-view3d) of the tutorial.
+Used in context: [chapter 14](./tutorial/14-view3d) of the tutorial.
 
 ### A trajectory in 3-D
 
@@ -935,7 +935,7 @@ keeps answering and the tool never waits for the program; every frame the progra
 the bottom. Stop asks the tool to end; a tool still running when the program ends is stopped. A run that must outlive
 the program is started `detached=.true.` with a `log_file`. [Processes and tasks](/guide/processes) has the details.
 
-Used in context: [chapter 11](./tutorial/11-run) of the tutorial.
+Used in context: [chapter 12](./tutorial/12-run) of the tutorial.
 
 ### Read a large file without freezing the window
 
@@ -950,7 +950,7 @@ receiving frames. The task opens its own unit, reports after each block and chec
 stops it between two blocks with consistent statistics. Every frame the program shows the progress; once the task is
 done it takes the result, once. The task never draws: [the threading rule](/guide/processes#tasks).
 
-Used in context: [chapter 14](./tutorial/14-task) of the tutorial.
+Used in context: [chapter 15](./tutorial/15-task) of the tutorial.
 
 ### Redraw when a worker has news
 
@@ -978,7 +978,7 @@ A status bar is a [bar along the bottom](/guide/docking#a-bar-along-a-side) (`ig
 own: a line of text, and a progress bar beside it (`ig_same_line(offset=...)` puts it at a fixed place). The work area
 leaves the bar out, so dock spaces, windows placed with the work area and notifications stay above it.
 
-Used in context: [chapter 11](./tutorial/11-run) of the tutorial.
+Used in context: [chapter 12](./tutorial/12-run) of the tutorial.
 
 ### Tell the user a run has finished
 
@@ -990,7 +990,7 @@ The user may be looking at another window, or another program: a notification st
 (here the default 5 s; `seconds=0` until clicked), in the colour and with the icon of its kind, and the last 100 are
 kept (`app%notifications`). [Notifications](/guide/frame-loop#notifications) has the details.
 
-Used in context: [chapter 11](./tutorial/11-run) of the tutorial.
+Used in context: [chapter 12](./tutorial/12-run) of the tutorial.
 
 ## Errors
 
@@ -1005,7 +1005,7 @@ With `stat`, nothing stops: check it against `FIG_OK` and read `figure_last_erro
 
 <<< @/examples/snippets/cb_stat-line.F90{fortran}
 
-Used in context: [chapter 15](./tutorial/15-robust) of the tutorial.
+Used in context: [chapter 16](./tutorial/16-robust) of the tutorial.
 
 ### Let a failure stop the program
 
@@ -1041,7 +1041,7 @@ See [tutorial chapter 5](./tutorial/05-headless): `init_headless`, `ig_item_rect
 button, `test_click` from `figure_testing`, then a few frames before checking. [Headless
 testing](/guide/testing#synthetic-input) has drags, keys and typing.
 
-Used in context: [chapter 16](./tutorial/16-tested) of the tutorial.
+Used in context: [chapter 17](./tutorial/17-tested) of the tutorial.
 
 ### Click through a menu and type into a field by their paths
 
