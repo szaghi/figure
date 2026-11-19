@@ -21,6 +21,13 @@ scripts/fpm.sh test
 fobis rule --ex sync                                             # fobos and fpm.toml in sync
 ```
 
+CI runs the tests with coverage on every push (`fobis rule --ex makecoverage-analysis`: the `tests-gnu-debug` mode,
+gfortran, Linux), and after a push to `main` the site publishes the [coverage
+report](https://szaghi.github.io/figure/guide/coverage-analysis): the lines executed in each source file, with a page
+per file. The report (`docs/guide/coverage-analysis.md`, `docs/guide/*.gcov.md`) is written by FoBiS's gcov analyzer
+and the badge's percentage (`docs/public/coverage.json`) by `scripts/compute-coverage.sh`; they are CI outputs, not in
+the repository. The same rule run locally writes them into `docs/guide`.
+
 ## Rules of the code base
 
 - **Two builds, one truth.** fobos is the primary build; `fpm.toml` mirrors it. A new program under `src/examples` or

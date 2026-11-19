@@ -4,15 +4,43 @@ title: Roadmap
 
 # Roadmap
 
-The plan of each release is tracked step by step in an issue: v0.1.0 in
-[issue #1](https://github.com/szaghi/figure/issues/1), v0.2.0 in [issue #2](https://github.com/szaghi/figure/issues/2),
-v0.3.0 in [issue #3](https://github.com/szaghi/figure/issues/3), v0.3.1 in [issue #5](https://github.com/szaghi/figure/issues/5),
-v0.4.0 in [issue #6](https://github.com/szaghi/figure/issues/6), v0.5.0 in [issue #7](https://github.com/szaghi/figure/issues/7),
-v0.6.0 in [issue #10](https://github.com/szaghi/figure/issues/10),
-each step with its tasks, its checks, the documentation and the pictures it updates, and a log of the work. This page
-summarises them.
+The plan of each release is tracked step by step in an issue: v0.1.0 in [#1](https://github.com/szaghi/figure/issues/1), v0.2.0 in
+[#2](https://github.com/szaghi/figure/issues/2), v0.3.0 in [#3](https://github.com/szaghi/figure/issues/3), v0.3.1 in [#5](https://github.com/szaghi/figure/issues/5),
+v0.4.0 in [#6](https://github.com/szaghi/figure/issues/6), v0.5.0 in [#7](https://github.com/szaghi/figure/issues/7), v0.6.0 in
+[#10](https://github.com/szaghi/figure/issues/10), v0.7.0 in [#12](https://github.com/szaghi/figure/issues/12), v0.8.0 in
+[#13](https://github.com/szaghi/figure/issues/13); each step with its tasks, its checks, the documentation and the pictures it updates,
+and a log of the work. This page gives what comes next and what is planned, deferred or not planned, then the log of
+each release, summarised from its issue; the [changelog](changelog) lists the commits.
 
-## M1: build chain and first widgets — done on Linux
+## Next
+
+- **The documentation pass** ([#14](https://github.com/szaghi/figure/issues/14), #13 S9): in progress.
+- **The showcase's last GPU picture** (#12 S6, #13 S3): the run checker on growing files. Its writer and its polling
+  both follow the wall clock; a headless recording needs a capture clock for `figure_time` and a scripted writer (the
+  solvers run from the window were recorded headless on 2026-11-19, each run waited for).
+- **The upstream reports** of #4, #8, #9 and #11, filed by the owner; FIGURE's patches stay until each lands, then go
+  with the test that needed them kept (#13 S8).
+- **Release v0.8.0** (#13 R1): the version and the date are the owner's.
+
+## Planned, deferred, not planned
+
+| Item | Status | Why, or until when |
+|---|---|---|
+| The items of [Next](#next) | planned | v0.8.0: [#13](https://github.com/szaghi/figure/issues/13), [#14](https://github.com/szaghi/figure/issues/14) |
+| The functions listed "raw only" in [Dear ImGui names](imgui-names) wrapped | deferred | Until an application asks |
+| The whole application compiled to WebAssembly | deferred | An experiment: a patched flang and Emscripten SDL3, no OpenMP and no MPI there |
+| The 3-D view rendered on the GPU in a window | deferred | Until an application draws more than about 10⁶ triangles in a window ([why](view3d#why-a-software-renderer)) |
+| A depth buffer in ImPlot3D's plots | deferred | Until brenocq/implot3d#151 merges ([Known issues](known-issues#implot3d)) |
+| A WebGL renderer of the 3-D view in the browser | not planned | A third renderer, and no pixels on the program's side for tests and captures ([why](view3d#why-a-software-renderer)) |
+| Dear ImGui's context thread-local | not planned | A crash in place of a race, not a refusal ([Known issues](known-issues#tasks)) |
+| Callbacks into Fortran: custom axis scales and tick formatters | not planned | FIGURE calls no Fortran from C; formats, ticks and fixed scales cover them as data ([Plots](plots#not-bound-yet)) |
+| The raw bindings called by applications | not planned | The generated layer is internal ([Raw bindings](raw-bindings)) |
+
+## Release logs
+
+The milestones before v0.1.0, then one section per release, oldest first.
+
+### M1: build chain and first widgets — done on Linux
 
 - Native layer: CMake, pinned sources, static `libfigure_native.a` and `libSDL3.a`.
 - Fortran: `figure_app` (loop, lazy redraw), `figure_imgui` (windows, button, check box, sliders for `int32`,
@@ -25,7 +53,7 @@ summarises them.
 - Idle cost of lazy redraw measured and explained ([Frame loop](frame-loop#what-idle-costs)); default `max_wait`
   kept at 0.5 s.
 
-## M2: generated raw layer — done
+### M2: generated raw layer — done
 
 - `scripts/gen_bindings.py` generates the `bind(C)` interfaces and the enumeration parameters from cimgui's and
   cimplot's metadata (`definitions.json`, `structs_and_enums.json`) and classifies every public function as direct,
@@ -35,7 +63,7 @@ summarises them.
 - The C++ glue for the functions that pass structs by value (above all the ImPlot items, `ImPlotSpec`) is generated
   too, with `bind(C)` mirror types for the structs, size-checked by `figure_test_layout`.
 
-## M3: images and speed — done
+### M3: images and speed — done
 
 - Textures from contiguous `integer(int8)` RGBA arrays, uploaded without intermediate copies: done
   (`texture_object`, `ig_image`, `ip_image`).
@@ -50,7 +78,7 @@ summarises them.
   (`src/examples/figure_bench_texture.F90`): about 100 frames/s with a new 3840 x 2160 image every frame
   ([measurements](images#speed-a-new-4k-image-every-frame)).
 
-## M4: platforms and CI — done
+### M4: platforms and CI — done
 
 - GitHub Actions: `ci.yml` (Linux, gfortran, coverage, from the FoBiS scaffold) and `platforms.yml`: macOS (gfortran
   and Apple clang), Windows (MSYS2 UCRT64 gfortran), Linux with nvfortran. Each builds the native layer, checks the
@@ -61,7 +89,7 @@ summarises them.
 - Platform link lines in fobos varsets (`--varset macos|windows`), checked against `lib/pkgconfig/sdl3.pc`; fpm reads
   them through `scripts/fpm.sh` ([Other platforms](install#other-platforms)).
 
-## M5: remote and web — remote done, WebAssembly to try
+### M5: remote and web — remote done, WebAssembly to try
 
 - Remote UI: done ([Remote UI](remote)). `app%init_remote` serves the interface to a web browser over a built-in
   WebSocket server; the program needs no display or GPU and stays native (OpenMP, MPI, GPU), e.g. on a cluster node
@@ -69,7 +97,7 @@ summarises them.
 - Experiment, **deferred**: the whole application compiled to WebAssembly with a patched flang and Emscripten SDL3
   (no OpenMP, no MPI there).
 
-## Documentation with real pictures — done
+### Documentation with real pictures — done
 
 - Frame capture with scripted input (`FIGURE_CAPTURE`, [Screenshots and videos](capture)); every picture of this
   site is a recording of the program it describes, made by `scripts/docs_media.py`.
@@ -504,7 +532,7 @@ v0.6.0, and the features no application had asked for, which the owner took in w
 - **Upstream drafts** (S5): ImPlot's defects (#8), the patches to ImGuizmo and ImPlot3D (#9) and Dear ImGui's 0 / 0
   (#11) reproduced on the libraries' heads without FIGURE, each with its draft; filing is the owner's: done.
 - **The showcase's pictures from FIGURE's renderer** (S6): six of the eight copied again from xall_figure, which now
-  records headless ([Showcase](showcase)); the two that race the wall clock remain a GPU's (below): done.
+  records headless ([Showcase](showcase)); the two that race the wall clock remain a GPU's ([Next](#next)): done.
 - **Drag and drop** (S7): `ig_drag_source`, `ig_drop_target`, `ig_dragging`, `ip_drop_target`
   ([Drag and drop](widgets#drag-and-drop), [A plot as a drop target](plots#a-plot-as-a-drop-target)): done.
 - **Plots across plots** (S8): linked axes by group name, aligned plots, the legend's hover and popup, hidden items,
@@ -524,9 +552,8 @@ v0.6.0, and the features no application had asked for, which the owner took in w
   (GitHub's job containers, Docker without `--init`): FIGURE reaps it, or reads it as a zombie
   ([Known issues](known-issues#processes)), and the examples' runs stop after 10 minutes: done.
 
-## Next
+## v0.8.0 — in progress
 
-- **The showcase's last GPU picture** (#12 S6, #13 S3): the run checker on growing files. Its writer and its polling
-  both follow the wall clock; a headless recording needs a capture clock for `figure_time` and a scripted writer (the
-  solvers run from the window were recorded headless on 2026-11-19, each run waited for).
-- **The upstream reports** of #4, #8, #9 and #11, filed by the owner; FIGURE's patches stay until each lands.
+The plan is [#13](https://github.com/szaghi/figure/issues/13): v0.7.0's leftovers, the colour picker, pies, bubbles and
+error bars along x, ImPlot3D's per-point colours and sizes, ticks, formats and style (S1 to S7, done), FIGURE's
+patches against upstream (S8); the documentation pass is [#14](https://github.com/szaghi/figure/issues/14).
