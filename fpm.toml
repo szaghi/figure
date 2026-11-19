@@ -236,3 +236,18 @@ main = "figure_test_fields.F90"
 name = "figure_test_player"
 source-dir = "src/tests"
 main = "figure_test_player.F90"
+
+[[test]]
+name = "figure_test_picker"
+source-dir = "src/tests"
+main = "figure_test_picker.F90"
+
+[[test]]
+name = "figure_test_plot_more"
+source-dir = "src/tests"
+main = "figure_test_plot_more.F90"
+
+[[test]]
+name = "figure_test_plot3d_more"
+source-dir = "src/tests"
+main = "figure_test_plot3d_more.F90"
