@@ -23,6 +23,11 @@ Default checks (exit 1 and a list of what is missing):
 - **Generated tables:** docs/guide/_generated/*.md (the modules, the native layer, a recording's header lines) equal
   what scripts/gen_doc_tables.py writes now, and each studio chapter's "What this chapter adds" and run regions what
   scripts/gen_tutorial_adds.py writes.
+- **Prose:** every public name (a procedure, or a type-bound one as ``var%proc``) is named by a sentence: a line
+  outside tables, fenced blocks and headings of the page its feature-map row links to, or of a page the linked section
+  links to (a type-bound name counts as ``%proc`` or as code starting with ``proc``).
+- **Example calls:** every public name is called by a program of docs/examples/src (``use`` statements and comments
+  left out); ``EXAMPLE_EXEMPT`` lists the names no docs program can sensibly call, each with its reason.
 - **README:** README.md's first ```fortran block equals docs/examples/src/readme.F90, which docs/examples/build.sh
   compiles.
 - **Version:** the version strings of the docs (``VERSIONED``: the status lines of README.md, docs/index.md and
@@ -37,18 +42,12 @@ Options:
 - ``--media``: fail if the media a page shows (``<Media name>``: docs/public/media/<name>.png, .mp4, .gif) weigh more
   than 5 MB in all on that page, or if a ``<Media>`` names a recording that does not exist.
 
-- ``--prose``: fail for a public name (a procedure, or a type-bound one as ``var%proc``) that no sentence names: no
-  line outside tables, fenced blocks and headings of the page its feature-map row links to, nor of a page the linked
-  section links to (a type-bound name counts as ``%proc`` or as code starting with ``proc``).
-- ``--examples``: fail for a public name that no program of docs/examples/src calls (``use`` statements and comments
-  left out); ``EXAMPLE_EXEMPT`` lists the names no docs program can sensibly call, each with its reason.
-
 - ``--bump vX.Y.Z [--dry-run]``: write that version and today's date into the version strings (the roadmap's
   ``## vX.Y.Z — in progress`` or ``— planned`` becomes ``— released <date>``), print the files changed, run no
   check; ``--dry-run`` writes nothing. Fails if a string is not found (a section of the roadmap for the version
   included).
 
-Usage: python3 scripts/check_docs.py [--names] [--media] [--prose] [--examples] | --bump vX.Y.Z [--dry-run]. Standard library only; run
+Usage: python3 scripts/check_docs.py [--names] [--media] | --bump vX.Y.Z [--dry-run]. Standard library only; run
 from anywhere.
 """
 
@@ -815,35 +814,31 @@ def check_media() -> list[str]:
 
 def main(argv: list[str]) -> int:
     """Run the checks asked for; print what is missing."""
-    usage = "usage: check_docs.py [--names] [--media] [--prose] [--examples] | --bump vX.Y.Z [--dry-run]"
+    usage = "usage: check_docs.py [--names] [--media] | --bump vX.Y.Z [--dry-run]"
     if argv[:1] == ["--bump"]:
         if len(argv) not in (2, 3) or argv[2:] not in ([], ["--dry-run"]):
             print(f"check_docs: {usage}", file=sys.stderr)
             return 2
         return bump_version(argv[1], argv[2:] == ["--dry-run"])
-    unknown = [a for a in argv if a not in ("--names", "--media", "--prose", "--examples")]
+    unknown = [a for a in argv if a not in ("--names", "--media")]
     if unknown:
         print(f"check_docs: unknown option {unknown[0]} ({usage})", file=sys.stderr)
         return 2
     missing = (check_feature_map() + check_comments() + check_rows() + check_code_blocks() + check_readme()
-               + check_version() + check_tables() + check_links() + check_generated())
+               + check_version() + check_tables() + check_links() + check_generated() + check_prose()
+               + check_examples())
     done = ["the feature map lists every public procedure", "every public entity and argument has a doc comment",
             "every row's section has a compiled example", "no hand-written Fortran block",
             "README.md's example is the compiled one", "the docs say the version in VERSION",
             "every table row has its header's cells", "every internal link and anchor exists",
-            "the generated tables are current"]
+            "the generated tables are current", "every public name is in a sentence of its page",
+            "every public name is called by a docs program"]
     if "--names" in argv:
         missing += check_names()
         done.append("the name map is current")
     if "--media" in argv:
         missing += check_media()
         done.append("every page's media under 5 MB")
-    if "--prose" in argv:
-        missing += check_prose()
-        done.append("every public name is in a sentence of its page")
-    if "--examples" in argv:
-        missing += check_examples()
-        done.append("every public name is called by a docs program")
     for m in missing:
         print(f"check_docs: {m}", file=sys.stderr)
     if not missing:

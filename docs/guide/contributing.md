@@ -69,6 +69,11 @@ Every run is a test. A `!run` must exit with status 0: a `--test` or `--check` s
 `build.sh` goes through every run, then names each one that failed and its output file (written all the same, to be
 read) and exits with status 1.
 
+`python3 scripts/check_docs.py` (CI runs it with `--names --media`) checks the pages against the code: a new public
+procedure needs a row in the [feature map](features), a `!<` doc comment, a sentence on the page that row links to and
+a call in a program of `docs/examples/src`. It also checks that every table row has its header's cells, every internal
+link and anchor exists and the generated pages are current; its docstring lists each check.
+
 ```bash
 bash docs/examples/build.sh     # compile every example against src/lib, run the headless ones,
                                 # regenerate docs/examples/snippets and docs/examples/output

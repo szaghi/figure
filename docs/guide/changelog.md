@@ -19,7 +19,7 @@ program calls changed its meaning; the entries below are new optional arguments,
 | [3-D plots](plots#_3-d-plots): `ip3_line` takes `colors`, `ip3_scatter` `colors` and `sizes`, `ip3_setup_axis` `format`, each before `stat` | as above |
 | New public names of `use figure`: [`ig_color_picker`](widgets#colour-editing), [`ip_pie_chart` and `ip_bubbles`](plots#pies-and-bubbles), [`ip3_setup_axis_ticks`](plots#_3-d-plots), [`ip3_push_style_color`, `ip3_pop_style_color`, `ip3_push_style_var`, `ip3_pop_style_var`](styles#changes-for-a-block) | nothing: a program with a name of its own that clashes renames it, or uses `figure` with `only` |
 | The [tutorial](/manual/) has a new chapter 7, [Building and running the studio](/manual/tutorial/07-building); chapters 7 to 25 are now 8 to 26, and their programs `tut07_*` to `tut25_*` are `tut08_*` to `tut26_*` | a bookmark to a chapter, or a copy of a program, takes the new number |
-| The documentation's own tooling: `scripts/check_docs.py` checks tables, links and generated pages by default, and `--prose` and `--examples` (every public name in a sentence of its page and in a compiled program) | nothing for a program; a contribution keeps them green ([Contributing](contributing)) |
+| The documentation's own tooling: `scripts/check_docs.py` also checks tables, links, generated pages, and that every public name is in a sentence of its page and called by a compiled program | nothing for a program; a contribution keeps them green ([Contributing](contributing)) |
 
 ## Migration to v0.7.0
 
