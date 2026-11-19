@@ -194,8 +194,9 @@ off.
 
 ### What is not checked, and what recovery cannot repair
 
-- **Calls that are not pairs** are not checked against the record: an `ig_table_next_column` outside a table, an
-  `ip_line` outside a plot (`ip_annotation` alone refuses it, with `FIG_ERR_STATE`).
+- **Calls that are not pairs** are not checked against the record: an `ig_table_next_column` outside a table. The
+  plot items and queries check themselves that a plot is being declared ([Plot queries and
+  marks](#plot-queries-and-marks)), as the 3-D ones do ([ImPlot3D](#implot3d)).
 - **Raw calls** are caught when they leave something open, and only when a FIGURE end or the frame's end compares the
   stacks, not at the raw call. A raw call that closes what FIGURE opened (a raw `igEnd` for an `ig_begin`) is not
   caught by the record, which compares what is left open; Dear ImGui's own checks see it or not (in mode `'abort'`
@@ -323,10 +324,11 @@ are usage errors with the messages above.
 
 ### Plot queries and marks
 
-The calls that read a plot ([Reading a plot](plots#reading-a-plot)), its marks ([Marks in a plot](plots#marks-in-a-plot)),
-the drag tools and the items of v0.4.0 (`ip_stairs`, `ip_stems`, `ip_inf_lines`, [histograms](plots#histograms))
-check their arguments and their place as the axis calls do ([Plot axes](#plot-axes): the axis names, an axis not set
-up, no plot being declared give the messages there). `<p>` is the procedure.
+The calls that read a plot ([Reading a plot](plots#reading-a-plot)), its marks ([Marks in a
+plot](plots#marks-in-a-plot)), the drag tools and every item (from v0.8.0; until then an item outside a plot reached
+ImPlot, which dereferenced a null plot in modes `'report'` and `'recover'`) check their arguments and their place as the
+axis calls do ([Plot axes](#plot-axes): the axis names, an axis not set up, no plot being declared give the messages
+there). `<p>` is the procedure.
 
 | Failure | Status | Message |
 |---|---|---|

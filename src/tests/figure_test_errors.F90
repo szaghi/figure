@@ -25,6 +25,7 @@ use figure, only : app_object, figure_last_error, FIG_ERR_ARGUMENT, FIG_ERR_STAT
                    ig_tree_node, ig_tree_pop, ip_begin_plot, ip_begin_subplots, ip_end_plot, ip_end_subplots, &
                    ig_align_begin, ig_align_end, ig_begin_group, ig_end_group, ig_pop_item_width, ig_push_item_width, &
                    ig_begin_item_tooltip, ig_begin_popup_context, ig_begin_tooltip, ig_end_tooltip
+use figure, only : ip_drag_point, ip_line, ip_pie_chart, ip_plot_hovered, ip_setup_axes, ip_text
 use figure_testing, only : test_item_center, test_mouse_move
 use figure_cimgui, only : igBegin, igPopID, igPushID_Int, igSetNextWindowCollapsed, igTextUnformatted
 use figure_cimgui_enums, only : ImGuiCond_Always
@@ -62,7 +63,7 @@ integer(int32), parameter :: KIND_OF(NKIND) = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
                                                 21, 22, K_POPUP, K_TOOLTIP] !< The record's kind of each pair.
 type(app_object)              :: app          !< Application (headless).
 logical                       :: passed(NKIND, 4) !< Per pair and fault (true where not applicable).
-logical                       :: test_passed(11) !< The other checks.
+logical                       :: test_passed(12) !< The other checks.
 character(len=:), allocatable :: msg          !< A frame's report.
 character(len=:), allocatable :: expect       !< What it must contain.
 character(len=256)            :: arg          !< This program's argument (a child run).
@@ -195,6 +196,13 @@ test_passed(11) = msg == '' .and. index(figure_last_error(), 'ig_pop_style_color
 if (.not. test_passed(11)) write(error_unit, '(A)') 'recover kept styles: "'//figure_last_error()//'"'
 call app%set_checks('report')
 
+! 5c. plot items and queries outside a plot: refused (FIG_ERR_STATE) in 'recover' and 'report', where Dear ImGui's and
+!     ImPlot's assertions are off and ImPlot would dereference a null plot
+call app%set_checks('recover')
+test_passed(12) = outside_plot_refused()
+call app%set_checks('report')
+test_passed(12) = test_passed(12) .and. outside_plot_refused()
+
 ! 6. an unknown mode
 call app%set_checks('ignore', stat=stat)
 test_passed(6) = stat == FIG_ERR_ARGUMENT .and. index(figure_last_error(), "not 'ignore'") > 0
@@ -210,11 +218,43 @@ call app%destroy()
 if (all(passed) .and. all(test_passed)) then
    write(output_unit, '(A)') 'figure_test_errors: all tests passed'
 else
-   write(error_unit, '(A,11L2)') 'figure_test_errors: failed, checks ', test_passed
+   write(error_unit, '(A,12L2)') 'figure_test_errors: failed, checks ', test_passed
    error stop 1
 endif
 
 contains
+   function outside_plot_refused() result(refused)
+   !< Six plot procedures (items of three kinds, an axis setup, a drag tool, a query) called in a window, outside any
+   !< plot: each refused with `FIG_ERR_STATE` and its message, the program alive, the next frame clean.
+   logical        :: refused !< All refused.
+   real(real64)   :: x(3), px, py !< A series; a point.
+   integer(int32) :: st(6)  !< Their statuses.
+   logical        :: ok(6)  !< Their messages.
+   logical        :: l      !< A result.
+
+   x = [1.0_real64, 2.0_real64, 3.0_real64]
+   px = 1.0_real64
+   py = 1.0_real64
+   st = FIG_OK
+   if (ig_begin('No plot')) then
+      call ip_line('l', x, x, stat=st(1))
+      ok(1) = index(figure_last_error(), 'ip_line: no plot is being declared') > 0
+      call ip_pie_chart(['a', 'b', 'c'], x, 0.5_real64, 0.5_real64, 0.4_real64, stat=st(2))
+      ok(2) = index(figure_last_error(), 'ip_pie_chart: no plot is being declared') > 0
+      call ip_text('t', 1.0_real64, 1.0_real64, stat=st(3))
+      ok(3) = index(figure_last_error(), 'ip_text: no plot is being declared') > 0
+      call ip_setup_axes('x', 'y', stat=st(4))
+      ok(4) = index(figure_last_error(), 'ip_setup_axes: no plot is being declared') > 0
+      l = ip_drag_point(1_int32, px, py, stat=st(5))
+      ok(5) = index(figure_last_error(), 'ip_drag_point: no plot is being declared') > 0
+      l = ip_plot_hovered(stat=st(6))
+      ok(6) = index(figure_last_error(), 'ip_plot_hovered: no plot is being declared') > 0
+   endif
+   call ig_end()
+   refused = all(st == FIG_ERR_STATE) .and. all(ok) .and. report() == ''
+   if (.not. refused) write(error_unit, '(A,6I3,6L2)') 'outside a plot: ', st, ok
+   endfunction outside_plot_refused
+
    function report() result(text)
    !< Close the frame, open the next: '' when it had no usage error, else the messages.
    character(len=:), allocatable :: text !< The report.

@@ -134,7 +134,8 @@ line colour (`ip_spec(fill_alpha=0.5_real64)` lets the overlaps show); the axes 
 
 - Statuses: `ip_pie_chart`: `FIG_ERR_ARGUMENT` for labels not one per value, a radius not above 0, a value below 0
   or not finite, a format that is not one real's, a colormap not registered; `ip_bubbles`: `FIG_ERR_ARGUMENT` for
-  series of different sizes; both `FIG_ERR_STATE` from a [task](processes#tasks). `stat` is optional (absent:
+  series of different sizes; both `FIG_ERR_STATE` outside a plot and from a [task](processes#tasks). `stat` is
+  optional (absent:
   `error stop` with the message).
 - Modes: the same in **window**, **headless** and **remote** mode (`src/tests/figure_test_plot_more.F90`).
 
@@ -377,10 +378,9 @@ Timings with their spread along x, `horizontal=.true.` (the third plot of [Pies 
 - A drag tool only moves its variable; constraints are the program's: clamp the value when the result is `.true.`,
   as the example does. Without `color`, a drag tool is drawn in the style's text colour.
 - An annotation is not an item either: no legend entry, and it does not take part in fitting the axes.
-- Statuses: `FIG_ERR_ARGUMENT` for a colour without 4 components, an offset without 2, error-bar arrays of
-  different sizes; `FIG_ERR_STATE` for `ip_annotation` and the drag tools outside a plot, and for any of them from a
-  [task](processes#tasks). `stat` is optional (absent: `error stop` with the message). A rectangle the user drags,
-  `ip_drag_rect`, is in [Marks in a plot](#marks-in-a-plot).
+- Statuses: `FIG_ERR_ARGUMENT` for a colour without 4 components, an offset without 2, error-bar arrays of different
+  sizes; `FIG_ERR_STATE` for any of them outside a plot or from a [task](processes#tasks). `stat` is optional (absent:
+  `error stop` with the message). A rectangle the user drags, `ip_drag_rect`, is in [Marks in a plot](#marks-in-a-plot).
 
 ::: warning Changed in v0.4.0
 `ip_drag_line_x`, `ip_drag_line_y` and `ip_drag_point` outside a plot are usage errors (`FIG_ERR_STATE`,
@@ -468,7 +468,8 @@ segments.
   compute the segments once with `ip_contour_lines` and draw each level with `ip_line` and
   `ip_spec(flags=ImPlotLineFlags_Segments)`.
 - Statuses: `FIG_ERR_ARGUMENT` for a colour without 4 components, a colormap that is not registered, `nlevels` < 1,
-  or a level with more segment ends than a C `int` counts; `FIG_ERR_STATE` from a [task](processes#tasks).
+  or a level with more segment ends than a C `int` counts; `FIG_ERR_STATE` outside a plot and from a
+  [task](processes#tasks).
 - Modes: the same in **window**, **headless** and **remote** mode.
 - Not done: filled contours (bands between levels: a heatmap of a discrete colormap, `ip_colormap(name, levels)`,
   shows them), smoothing of the lines, labels following the lines' direction.
@@ -757,7 +758,10 @@ What it does not do:
 element, the stride from the addresses of the first two.
 
 Series of different sizes are an error (`FIG_ERR_ARGUMENT`, message `<item>: the series have different sizes`, see
-[Error handling](errors)): nothing is drawn. Empty series draw nothing and are not an error.
+[Error handling](errors)): nothing is drawn. Empty series draw nothing and are not an error. An item outside a plot is
+a usage error (`FIG_ERR_STATE`, `<item>: no plot is being declared (...)`), in every [checks
+mode](errors#the-three-modes); until v0.8.0 it reached ImPlot, which in modes `'report'` and `'recover'` dereferenced a
+null plot.
 
 Modes: the same in window, headless and remote mode (the data become vertices on the CPU). Threads: a task does not
 draw (`FIG_ERR_STATE`, see [processes](processes)). Example: [Plot the history a solver keeps, in place](/manual/cookbook#plot-the-history-a-solver-keeps-in-place).

@@ -874,6 +874,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_r32
@@ -892,6 +893,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_i32_r32
@@ -910,6 +912,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_i64_r32
@@ -927,6 +930,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_scatter', stat)) return
    call ImPlot_PlotScatter_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_scatter_r32
@@ -945,6 +949,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_scatter', stat)) return
    call ImPlot_PlotScatter_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_scatter_i32_r32
@@ -963,6 +968,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_scatter', stat)) return
    call ImPlot_PlotScatter_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_scatter_i64_r32
@@ -982,6 +988,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_bars', stat)) return
    call ImPlot_PlotBars_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(bar_size, c_double), &
                                          series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1002,6 +1009,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_bars', stat)) return
    call ImPlot_PlotBars_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(bar_size, c_double), &
                                          series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1022,6 +1030,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_bars', stat)) return
    call ImPlot_PlotBars_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(bar_size, c_double), &
                                          series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1044,6 +1053,7 @@ contains
    call series_lead(d, 2, y1)
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
                                                    series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1066,6 +1076,7 @@ contains
    call series_lead(d, 2, y1)
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
                                                    series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1088,6 +1099,7 @@ contains
    call series_lead(d, 2, y1)
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
                                                    series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1108,6 +1120,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(yref, c_double), &
                                               series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1128,6 +1141,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(yref, c_double), &
                                               series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1148,6 +1162,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(yref, c_double), &
                                               series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1181,6 +1196,7 @@ contains
    if (present(horizontal)) then
       if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
    endif
+   if (outside_plot('ip_error_bars', stat)) return
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
@@ -1222,6 +1238,7 @@ contains
    if (present(horizontal)) then
       if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
    endif
+   if (outside_plot('ip_error_bars', stat)) return
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
@@ -1263,6 +1280,7 @@ contains
    if (present(horizontal)) then
       if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
    endif
+   if (outside_plot('ip_error_bars', stat)) return
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
@@ -1288,6 +1306,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_r64
@@ -1306,6 +1325,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_i32_r64
@@ -1324,6 +1344,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_i64_r64
@@ -1341,6 +1362,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_scatter', stat)) return
    call ImPlot_PlotScatter_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_scatter_r64
@@ -1359,6 +1381,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_scatter', stat)) return
    call ImPlot_PlotScatter_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_scatter_i32_r64
@@ -1377,6 +1400,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_scatter', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_scatter', stat)) return
    call ImPlot_PlotScatter_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_scatter_i64_r64
@@ -1400,6 +1424,7 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    call series_put(d, 3, radii)
+   if (outside_plot('ip_bubbles', stat)) return
    call ImPlot_PlotBubbles_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
                                                     series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1483,6 +1508,7 @@ contains
       if (normalize) cs%Flags = ior(cs%Flags, ImPlotPieChartFlags_Normalize)
    endif
    if (present(colormap)) call ImPlot_PushColormap_PlotColormap(cmap)
+   if (outside_plot('ip_pie_chart', stat)) return
    if (n > 0_int64) call ImPlot_PlotPieChart_FloatPtrStr(c_loc(pl), c_loc(v), int(n, c_int), x, y, radius, c_loc(fmt), a0, cs)
    if (present(colormap)) call ImPlot_PopColormap(1_c_int)
    call figure_check(FIG_OK, stat)
@@ -1507,6 +1533,7 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    call series_put(d, 3, radii)
+   if (outside_plot('ip_bubbles', stat)) return
    call ImPlot_PlotBubbles_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
                                                        series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1590,6 +1617,7 @@ contains
       if (normalize) cs%Flags = ior(cs%Flags, ImPlotPieChartFlags_Normalize)
    endif
    if (present(colormap)) call ImPlot_PushColormap_PlotColormap(cmap)
+   if (outside_plot('ip_pie_chart', stat)) return
    if (n > 0_int64) call ImPlot_PlotPieChart_doublePtrStr(c_loc(pl), c_loc(v), int(n, c_int), x, y, radius, c_loc(fmt), &
                                                           a0, cs)
    if (present(colormap)) call ImPlot_PopColormap(1_c_int)
@@ -1611,6 +1639,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_bars', stat)) return
    call ImPlot_PlotBars_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(bar_size, c_double), &
                                            series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1631,6 +1660,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_bars', stat)) return
    call ImPlot_PlotBars_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(bar_size, c_double), &
                                            series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1651,6 +1681,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bars', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_bars', stat)) return
    call ImPlot_PlotBars_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(bar_size, c_double), &
                                            series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1673,6 +1704,7 @@ contains
    call series_lead(d, 2, y1)
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
                                                       series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1695,6 +1727,7 @@ contains
    call series_lead(d, 2, y1)
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
                                                       series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1717,6 +1750,7 @@ contains
    call series_lead(d, 2, y1)
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
                                                       series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1737,6 +1771,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), &
                                                 real(yref, c_double), &
                                                 series_spec(d, spec))
@@ -1758,6 +1793,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), &
                                                 real(yref, c_double), &
                                                 series_spec(d, spec))
@@ -1779,6 +1815,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_shaded', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_shaded', stat)) return
    call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), &
                                                 real(yref, c_double), &
                                                 series_spec(d, spec))
@@ -1813,6 +1850,7 @@ contains
    if (present(horizontal)) then
       if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
    endif
+   if (outside_plot('ip_error_bars', stat)) return
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
@@ -1854,6 +1892,7 @@ contains
    if (present(horizontal)) then
       if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
    endif
+   if (outside_plot('ip_error_bars', stat)) return
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
@@ -1895,6 +1934,7 @@ contains
    if (present(horizontal)) then
       if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
    endif
+   if (outside_plot('ip_error_bars', stat)) return
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
@@ -1923,6 +1963,7 @@ contains
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_FloatPtrInt(cstr(label), d%p(2), int(size(y), c_int), uniform(xscale, 1.0_real64), &
                                     uniform(xstart, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1948,6 +1989,7 @@ contains
    c%Stride = int(size(y, 1, kind=int64) * storage_size(y, kind=int64) / 8_int64, c_int) ! bytes between y(row,j), y(row,j+1)
    p = c_null_ptr
    if (size(y, 2) > 0) p = c_loc(y(row, 1))
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_FloatPtrInt(cstr(label), p, int(size(y, 2), c_int), uniform(xscale, 1.0_real64), &
                                     uniform(xstart, 0.0_real64), c)
    call figure_check(FIG_OK, stat)
@@ -1998,6 +2040,7 @@ contains
    call ImPlot_PushColormap_PlotColormap(cmap)
    ! rows = size(f, 2) along y, cols = size(f, 1) along x: ImPlot's row-major cell (r, c) is f(c + 1, r + 1). ImPlot
    ! draws row 0 at bounds_max%y: the y bounds are swapped so that it lands at ymin.
+   if (outside_plot('ip_heatmap', stat)) return
    call ImPlot_PlotHeatmap_FloatPtr(cstr(label), p, int(size(f, 2), c_int), int(size(f, 1), c_int), smin, smax, pfmt, &
                                     im_plot_point(xmin, ymax), im_plot_point(xmax, ymin), spec_c(spec))
    call ImPlot_PopColormap(1_c_int)
@@ -2018,6 +2061,7 @@ contains
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_doublePtrInt(cstr(label), d%p(2), int(size(y), c_int), uniform(xscale, 1.0_real64), &
                                      uniform(xstart, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -2043,6 +2087,7 @@ contains
    c%Stride = int(size(y, 1, kind=int64) * storage_size(y, kind=int64) / 8_int64, c_int) ! bytes between y(row,j), y(row,j+1)
    p = c_null_ptr
    if (size(y, 2) > 0) p = c_loc(y(row, 1))
+   if (outside_plot('ip_line', stat)) return
    call ImPlot_PlotLine_doublePtrInt(cstr(label), p, int(size(y, 2), c_int), uniform(xscale, 1.0_real64), &
                                      uniform(xstart, 0.0_real64), c)
    call figure_check(FIG_OK, stat)
@@ -2093,6 +2138,7 @@ contains
    call ImPlot_PushColormap_PlotColormap(cmap)
    ! rows = size(f, 2) along y, cols = size(f, 1) along x: ImPlot's row-major cell (r, c) is f(c + 1, r + 1). ImPlot
    ! draws row 0 at bounds_max%y: the y bounds are swapped so that it lands at ymin.
+   if (outside_plot('ip_heatmap', stat)) return
    call ImPlot_PlotHeatmap_doublePtr(cstr(label), p, int(size(f, 2), c_int), int(size(f, 1), c_int), smin, smax, pfmt, &
                                      im_plot_point(xmin, ymax), im_plot_point(xmax, ymin), spec_c(spec))
    call ImPlot_PopColormap(1_c_int)
@@ -2119,6 +2165,7 @@ contains
    endif
    ! ImPlot maps uv0 to (xmin, ymax) and uv1 to (xmax, ymin): v = 1 at the top puts the first uploaded row at ymin
    call fig_texture_sampling(1_c_int, 1_c_int) ! the texture's own filter (nearest unless created smooth)
+   if (outside_plot('ip_image', stat)) return
    call ImPlot_PlotImage(cstr(label), texture_ref(tex), im_plot_point(xmin, ymin), im_plot_point(xmax, ymax), &
                          im_vec2(0.0_c_float, 1.0_c_float), im_vec2(1.0_c_float, 0.0_c_float),                    &
                          im_vec4(1.0_c_float, 1.0_c_float, 1.0_c_float, 1.0_c_float), spec_c(spec))
@@ -3123,6 +3170,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_digital', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_digital', stat)) return
    call ImPlot_PlotDigital_doublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_digital_r64
@@ -3198,6 +3246,7 @@ contains
       if (stacked) c%Flags = ior(c%Flags, ImPlotBarGroupsFlags_Stacked)
    endif
    if (present(colormap)) call ImPlot_PushColormap_PlotColormap(cmap)
+   if (outside_plot('ip_bar_groups', stat)) return
    call ImPlot_PlotBarGroups_doublePtr(c_loc(ptr), d%p(1), int(size(values, 2), c_int), int(size(values, 1), c_int), gs, &
                                   sh, c)
    if (present(colormap)) call ImPlot_PopColormap(1_c_int)
@@ -3221,6 +3270,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_digital', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_digital', stat)) return
    call ImPlot_PlotDigital_FloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_digital_r32
@@ -3296,6 +3346,7 @@ contains
       if (stacked) c%Flags = ior(c%Flags, ImPlotBarGroupsFlags_Stacked)
    endif
    if (present(colormap)) call ImPlot_PushColormap_PlotColormap(cmap)
+   if (outside_plot('ip_bar_groups', stat)) return
    call ImPlot_PlotBarGroups_FloatPtr(c_loc(ptr), d%p(1), int(size(values, 2), c_int), int(size(values, 1), c_int), gs, &
                                   sh, c)
    if (present(colormap)) call ImPlot_PopColormap(1_c_int)
@@ -3365,6 +3416,7 @@ contains
    if (present(offset)) d = im_vec2(real(offset(1), c_float), real(offset(2), c_float))
    call figure_ImPlotSpec_default(c)
    call set_flag(c%Flags, ImPlotTextFlags_Vertical, vertical)
+   if (outside_plot('ip_text', stat)) return
    call ImPlot_PlotText(cstr(text), real(x, c_double), real(y, c_double), d, c)
    call figure_check(FIG_OK, stat)
    endsubroutine ip_text
@@ -3387,6 +3439,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stairs', stat)) return
    call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_r32
@@ -3407,6 +3460,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stairs', stat)) return
    call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_i32_r32
@@ -3427,6 +3481,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stairs', stat)) return
    call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_i64_r32
@@ -3447,6 +3502,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stairs', stat)) return
    call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_r64
@@ -3467,6 +3523,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stairs', stat)) return
    call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_i32_r64
@@ -3487,6 +3544,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stairs', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stairs', stat)) return
    call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_i64_r64
@@ -3507,6 +3565,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stems', stat)) return
    call ImPlot_PlotStems_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), &
                                           int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -3529,6 +3588,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stems', stat)) return
    call ImPlot_PlotStems_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), &
                                           int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -3551,6 +3611,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stems', stat)) return
    call ImPlot_PlotStems_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), &
                                           int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -3572,6 +3633,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stems', stat)) return
    call ImPlot_PlotStems_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), &
                                             int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -3594,6 +3656,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stems', stat)) return
    call ImPlot_PlotStems_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), &
                                             int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -3616,6 +3679,7 @@ contains
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_stems', stat)) return
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
+   if (outside_plot('ip_stems', stat)) return
    call ImPlot_PlotStems_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), &
                                             int(size(x), c_int), uniform(ref, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -3635,6 +3699,7 @@ contains
    if (plot_refused('ip_inf_lines', .false., stat)) return
    if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_inf_lines', stat)) return
    call series_lead(d, 2, values)
+   if (outside_plot('ip_inf_lines', stat)) return
    call ImPlot_PlotInfLines_FloatPtr(cstr(label), d%p(2), &
                                      int(size(values), c_int), inf_spec(series_spec(d, spec), horizontal))
    call figure_check(FIG_OK, stat)
@@ -3654,6 +3719,7 @@ contains
    if (plot_refused('ip_inf_lines', .false., stat)) return
    if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_inf_lines', stat)) return
    call series_lead(d, 2, values)
+   if (outside_plot('ip_inf_lines', stat)) return
    call ImPlot_PlotInfLines_doublePtr(cstr(label), d%p(2), &
                                       int(size(values), c_int), inf_spec(series_spec(d, spec), horizontal))
    call figure_check(FIG_OK, stat)
@@ -3673,6 +3739,7 @@ contains
    if (plot_refused('ip_inf_lines', .false., stat)) return
    if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_inf_lines', stat)) return
    call series_put(d, 2, values)
+   if (outside_plot('ip_inf_lines', stat)) return
    call ImPlot_PlotInfLines_doublePtr(cstr(label), d%p(2), &
                                       int(size(values), c_int), inf_spec(series_spec(d, spec), horizontal))
    call figure_check(FIG_OK, stat)
@@ -3692,6 +3759,7 @@ contains
    if (plot_refused('ip_inf_lines', .false., stat)) return
    if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_inf_lines', stat)) return
    call series_put(d, 2, values)
+   if (outside_plot('ip_inf_lines', stat)) return
    call ImPlot_PlotInfLines_doublePtr(cstr(label), d%p(2), &
                                       int(size(values), c_int), inf_spec(series_spec(d, spec), horizontal))
    call figure_check(FIG_OK, stat)
@@ -3763,6 +3831,7 @@ contains
    c%Offset = 0_c_int
    c%Stride = -1_c_int ! IMPLOT_AUTO: the values are contiguous, and the bars ImPlot draws from its counts are too
    plot_stride = int(storage_size(values) / 8, int64)
+   if (outside_plot('ip_histogram', stat)) return
    top = ImPlot_PlotHistogram_FloatPtr(cstr(label), p, int(n, c_int), nb, uniform(bar_scale, 1.0_real64), r, c)
    if (present(max_count)) max_count = real(top, real64)
    call figure_check(FIG_OK, stat)
@@ -3854,6 +3923,7 @@ contains
    nby = rule_bins(nby, n, r%Y, sy)
    c = series_spec(d, spec)
    call ImPlot_PushColormap_PlotColormap(cmap)
+   if (outside_plot('ip_histogram2d', stat)) return
    top = ImPlot_PlotHistogram2D_FloatPtr(cstr(label), d%p(1), d%p(2), int(n, c_int), nbx, nby, r, c)
    call ImPlot_PopColormap(1_c_int)
    if (present(max_count)) max_count = real(top, real64)
@@ -3926,6 +3996,7 @@ contains
    c%Offset = 0_c_int
    c%Stride = -1_c_int ! IMPLOT_AUTO: the values are contiguous, and the bars ImPlot draws from its counts are too
    plot_stride = int(storage_size(values) / 8, int64)
+   if (outside_plot('ip_histogram', stat)) return
    top = ImPlot_PlotHistogram_doublePtr(cstr(label), p, int(n, c_int), nb, uniform(bar_scale, 1.0_real64), r, c)
    if (present(max_count)) max_count = real(top, real64)
    call figure_check(FIG_OK, stat)
@@ -4017,6 +4088,7 @@ contains
    nby = rule_bins(nby, n, r%Y, sy)
    c = series_spec(d, spec)
    call ImPlot_PushColormap_PlotColormap(cmap)
+   if (outside_plot('ip_histogram2d', stat)) return
    top = ImPlot_PlotHistogram2D_doublePtr(cstr(label), d%p(1), d%p(2), int(n, c_int), nbx, nby, r, c)
    call ImPlot_PopColormap(1_c_int)
    if (present(max_count)) max_count = real(top, real64)
@@ -4059,6 +4131,7 @@ contains
    endif
    call ip_contour_lines(f, x0, x1, y0, y1, lev, xs, ys, first)
    call finite_range_r32(f, fmin, fmax, found)
+   if (outside_plot('ip_contour', stat)) return
    call contour_draw(label, lev, xs, ys, first, fmin, fmax, present(colormap), cmap, color, labels, line_weight, stat)
    endsubroutine ip_contour_r32
 
@@ -4106,6 +4179,7 @@ contains
    endif
    call ip_contour_lines(f, x0, x1, y0, y1, lev, xs, ys, first)
    call finite_range_r64(f, fmin, fmax, found)
+   if (outside_plot('ip_contour', stat)) return
    call contour_draw(label, lev, xs, ys, first, fmin, fmax, present(colormap), cmap, color, labels, line_weight, stat)
    endsubroutine ip_contour_r64
 
@@ -4895,6 +4969,20 @@ contains
       flags = iand(flags, not(flag))
    endif
    endsubroutine set_flag
+
+   recursive function outside_plot(caller, stat) result(refused)
+   !< True (a usage error reported) when no plot is being declared: ImPlot's items need one (with its assertions off,
+   !< as in the 'report' and 'recover' checks modes, an item outside a plot dereferences a null plot).
+   character(len=*), intent(in)            :: caller  !< The procedure.
+   integer(int32),   intent(out), optional :: stat    !< Status, on a refusal.
+   logical                                 :: refused !< Refused: return.
+   integer(c_int)                          :: on(ImAxis_COUNT) !< Axes enabled (unused).
+   integer(c_int)                          :: sc(ImAxis_COUNT) !< Axes' scales (unused).
+
+   refused = fig_plot_state(on, sc) == 0_c_int
+   if (refused) call figure_usage_error(caller//': no plot is being declared (call it between a true ip_begin_plot '// &
+                                        'and ip_end_plot)', stat)
+   endfunction outside_plot
 
    function series_ok(nx, ny, item, stat) result(ok)
    !< Whether two series can be plotted together: same size, and a size ImPlot's `int` count holds.
