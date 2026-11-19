@@ -7,7 +7,7 @@ title: Tutorial
 Three parts. **Part one**, six short programs, goes from an empty window to a tested panel and work run beside the
 window. **Part two** grows one application, a small *solver studio*, chapter by chapter: it opens a case, edits its
 input, runs a solver, follows its residuals, shows the field it computed in 2-D and 3-D, and runs on a cluster with
-its interface in a browser. **Part three** grows the same studio with what FIGURE v0.4.0 added: usage errors
+its interface in a browser. **Part three** makes the same studio a finished application: usage errors
 reported, keys routed by the focus, fields committed when left, sizes in em, tables that sort and have menus, a
 canvas, a monitor with two axes, a field coloured once and a player of snapshots. Each chapter is a complete program of
 [`docs/examples/src`](https://github.com/szaghi/figure/tree/main/docs/examples/src), compiled against the library by

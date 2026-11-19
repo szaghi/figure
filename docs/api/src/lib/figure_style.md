@@ -1,12 +1,16 @@
 ---
 title: figure_style
+outline: [2, 4]
 ---
 
 # figure_style
 
 > figure_style, every colour and variable of the Dear ImGui and ImPlot styles, by name.
 
- Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+ Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md. The scoped
+ changes (`*_push_*`/`*_pop_*`, fonts) also need a frame open, and register in the scope record of the frame: a
+ pop without its push is a usage error (`app%set_checks`; errors.md, "Pairing and frames"). Reading and setting
+ the style (`*_get_*`, `*_set_*`) work outside a frame.
 
  The style is global: a change applies to everything drawn afterwards, until it is changed again (or a new style is
  chosen with `app%set_style`, which resets every colour and variable). Names are the libraries' own:
@@ -30,6 +34,8 @@ graph LR
   figure_style["figure_style"] --> figure_c_native["figure_c_native"]
   figure_style["figure_style"] --> iso_c_binding["iso_c_binding"]
   figure_style["figure_style"] --> iso_fortran_env["iso_fortran_env"]
+  click figure_base href "figure_base.html" "figure_base"
+  click figure_c_native href "figure_c_native.html" "figure_c_native"
 ```
 
 ## Contents
@@ -166,14 +172,21 @@ subroutine push_color(lib, who, name, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_push_style_color_rgba["ig_push_style_color_rgba"] --> push_color["push_color"]
   ip_push_style_color_rgba["ip_push_style_color_rgba"] --> push_color["push_color"]
   push_color_hex["push_color_hex"] --> push_color["push_color"]
   push_color["push_color"] --> fig_push_style_color["fig_push_style_color"]
   push_color["push_color"] --> figure_check["figure_check"]
   push_color["push_color"] --> figure_fail["figure_fail"]
-  style push_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class push_color focus
+  click ig_push_style_color_rgba href "#ig-push-style-color-rgba" "ig_push_style_color_rgba"
+  click ip_push_style_color_rgba href "#ip-push-style-color-rgba" "ip_push_style_color_rgba"
+  click push_color_hex href "#push-color-hex" "push_color_hex"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_push_style_color href "figure_c_native.html#fig-push-style-color" "fig_push_style_color"
 ```
 
 ### push_color_hex
@@ -197,13 +210,19 @@ subroutine push_color_hex(lib, who, name, color, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_push_style_color_hex["ig_push_style_color_hex"] --> push_color_hex["push_color_hex"]
   ip_push_style_color_hex["ip_push_style_color_hex"] --> push_color_hex["push_color_hex"]
   push_color_hex["push_color_hex"] --> figure_fail["figure_fail"]
   push_color_hex["push_color_hex"] --> hex_color["hex_color"]
   push_color_hex["push_color_hex"] --> push_color["push_color"]
-  style push_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class push_color_hex focus
+  click ig_push_style_color_hex href "#ig-push-style-color-hex" "ig_push_style_color_hex"
+  click ip_push_style_color_hex href "#ip-push-style-color-hex" "ip_push_style_color_hex"
+  click hex_color href "#hex-color" "hex_color"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click push_color href "#push-color" "push_color"
 ```
 
 ### push_var
@@ -227,7 +246,7 @@ subroutine push_var(lib, name, values, n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_push_style_var_i32["ig_push_style_var_i32"] --> push_var["push_var"]
   ig_push_style_var_logical["ig_push_style_var_logical"] --> push_var["push_var"]
   ig_push_style_var_r64["ig_push_style_var_r64"] --> push_var["push_var"]
@@ -237,7 +256,17 @@ flowchart TD
   ip_push_style_var_vec2["ip_push_style_var_vec2"] --> push_var["push_var"]
   push_var["push_var"] --> fig_push_style_var["fig_push_style_var"]
   push_var["push_var"] --> figure_check["figure_check"]
-  style push_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class push_var focus
+  click ig_push_style_var_i32 href "#ig-push-style-var-i32" "ig_push_style_var_i32"
+  click ig_push_style_var_logical href "#ig-push-style-var-logical" "ig_push_style_var_logical"
+  click ig_push_style_var_r64 href "#ig-push-style-var-r64" "ig_push_style_var_r64"
+  click ig_push_style_var_vec2 href "#ig-push-style-var-vec2" "ig_push_style_var_vec2"
+  click ip_push_style_var_logical href "#ip-push-style-var-logical" "ip_push_style_var_logical"
+  click ip_push_style_var_r64 href "#ip-push-style-var-r64" "ip_push_style_var_r64"
+  click ip_push_style_var_vec2 href "#ip-push-style-var-vec2" "ip_push_style_var_vec2"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_push_style_var href "figure_c_native.html#fig-push-style-var" "fig_push_style_var"
 ```
 
 ### pop
@@ -259,14 +288,21 @@ subroutine pop(vars, n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_pop_style_color["ig_pop_style_color"] --> pop["pop"]
   ig_pop_style_var["ig_pop_style_var"] --> pop["pop"]
   ip_pop_style_color["ip_pop_style_color"] --> pop["pop"]
   ip_pop_style_var["ip_pop_style_var"] --> pop["pop"]
   pop["pop"] --> fig_pop_style["fig_pop_style"]
   pop["pop"] --> figure_check["figure_check"]
-  style pop fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class pop focus
+  click ig_pop_style_color href "#ig-pop-style-color" "ig_pop_style_color"
+  click ig_pop_style_var href "#ig-pop-style-var" "ig_pop_style_var"
+  click ip_pop_style_color href "#ip-pop-style-color" "ip_pop_style_color"
+  click ip_pop_style_var href "#ip-pop-style-var" "ip_pop_style_var"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_pop_style href "figure_c_native.html#fig-pop-style" "fig_pop_style"
 ```
 
 ### ig_push_style_color_hex
@@ -290,10 +326,17 @@ subroutine ig_push_style_color_hex(name, color, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ig_push_style_color_hex["ig_push_style_color_hex"] --> figure_refused["figure_refused"]
+flowchart LR
+  ig_push_style_color_hex["ig_push_style_color_hex"] --> figure_check["figure_check"]
+  ig_push_style_color_hex["ig_push_style_color_hex"] --> figure_draw_refused["figure_draw_refused"]
+  ig_push_style_color_hex["ig_push_style_color_hex"] --> figure_scope_open["figure_scope_open"]
   ig_push_style_color_hex["ig_push_style_color_hex"] --> push_color_hex["push_color_hex"]
-  style ig_push_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_push_style_color_hex focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_color_hex href "#push-color-hex" "push_color_hex"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ig_push_style_color_rgba
@@ -317,10 +360,17 @@ subroutine ig_push_style_color_rgba(name, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ig_push_style_color_rgba["ig_push_style_color_rgba"] --> figure_refused["figure_refused"]
+flowchart LR
+  ig_push_style_color_rgba["ig_push_style_color_rgba"] --> figure_check["figure_check"]
+  ig_push_style_color_rgba["ig_push_style_color_rgba"] --> figure_draw_refused["figure_draw_refused"]
+  ig_push_style_color_rgba["ig_push_style_color_rgba"] --> figure_scope_open["figure_scope_open"]
   ig_push_style_color_rgba["ig_push_style_color_rgba"] --> push_color["push_color"]
-  style ig_push_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_push_style_color_rgba focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_color href "#push-color" "push_color"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ig_pop_style_color
@@ -344,10 +394,13 @@ subroutine ig_pop_style_color(n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ig_pop_style_color["ig_pop_style_color"] --> figure_refused["figure_refused"]
+flowchart LR
+  ig_pop_style_color["ig_pop_style_color"] --> figure_scope_refused["figure_scope_refused"]
   ig_pop_style_color["ig_pop_style_color"] --> pop["pop"]
-  style ig_pop_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_pop_style_color focus
+  click figure_scope_refused href "figure_base.html#figure-scope-refused" "figure_scope_refused"
+  click pop href "#pop" "pop"
 ```
 
 ### ig_push_style_var_r64
@@ -371,10 +424,17 @@ subroutine ig_push_style_var_r64(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ig_push_style_var_r64["ig_push_style_var_r64"] --> figure_refused["figure_refused"]
+flowchart LR
+  ig_push_style_var_r64["ig_push_style_var_r64"] --> figure_check["figure_check"]
+  ig_push_style_var_r64["ig_push_style_var_r64"] --> figure_draw_refused["figure_draw_refused"]
+  ig_push_style_var_r64["ig_push_style_var_r64"] --> figure_scope_open["figure_scope_open"]
   ig_push_style_var_r64["ig_push_style_var_r64"] --> push_var["push_var"]
-  style ig_push_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_push_style_var_r64 focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_var href "#push-var" "push_var"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ig_push_style_var_vec2
@@ -398,10 +458,17 @@ subroutine ig_push_style_var_vec2(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ig_push_style_var_vec2["ig_push_style_var_vec2"] --> figure_refused["figure_refused"]
+flowchart LR
+  ig_push_style_var_vec2["ig_push_style_var_vec2"] --> figure_check["figure_check"]
+  ig_push_style_var_vec2["ig_push_style_var_vec2"] --> figure_draw_refused["figure_draw_refused"]
+  ig_push_style_var_vec2["ig_push_style_var_vec2"] --> figure_scope_open["figure_scope_open"]
   ig_push_style_var_vec2["ig_push_style_var_vec2"] --> push_var["push_var"]
-  style ig_push_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_push_style_var_vec2 focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_var href "#push-var" "push_var"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ig_push_style_var_logical
@@ -425,10 +492,17 @@ subroutine ig_push_style_var_logical(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ig_push_style_var_logical["ig_push_style_var_logical"] --> figure_refused["figure_refused"]
+flowchart LR
+  ig_push_style_var_logical["ig_push_style_var_logical"] --> figure_check["figure_check"]
+  ig_push_style_var_logical["ig_push_style_var_logical"] --> figure_draw_refused["figure_draw_refused"]
+  ig_push_style_var_logical["ig_push_style_var_logical"] --> figure_scope_open["figure_scope_open"]
   ig_push_style_var_logical["ig_push_style_var_logical"] --> push_var["push_var"]
-  style ig_push_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_push_style_var_logical focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_var href "#push-var" "push_var"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ig_push_style_var_i32
@@ -452,10 +526,17 @@ subroutine ig_push_style_var_i32(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ig_push_style_var_i32["ig_push_style_var_i32"] --> figure_refused["figure_refused"]
+flowchart LR
+  ig_push_style_var_i32["ig_push_style_var_i32"] --> figure_check["figure_check"]
+  ig_push_style_var_i32["ig_push_style_var_i32"] --> figure_draw_refused["figure_draw_refused"]
+  ig_push_style_var_i32["ig_push_style_var_i32"] --> figure_scope_open["figure_scope_open"]
   ig_push_style_var_i32["ig_push_style_var_i32"] --> push_var["push_var"]
-  style ig_push_style_var_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_push_style_var_i32 focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_var href "#push-var" "push_var"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ig_pop_style_var
@@ -479,10 +560,13 @@ subroutine ig_pop_style_var(n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ig_pop_style_var["ig_pop_style_var"] --> figure_refused["figure_refused"]
+flowchart LR
+  ig_pop_style_var["ig_pop_style_var"] --> figure_scope_refused["figure_scope_refused"]
   ig_pop_style_var["ig_pop_style_var"] --> pop["pop"]
-  style ig_pop_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_pop_style_var focus
+  click figure_scope_refused href "figure_base.html#figure-scope-refused" "figure_scope_refused"
+  click pop href "#pop" "pop"
 ```
 
 ### ip_push_style_color_hex
@@ -506,10 +590,17 @@ subroutine ip_push_style_color_hex(name, color, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ip_push_style_color_hex["ip_push_style_color_hex"] --> figure_refused["figure_refused"]
+flowchart LR
+  ip_push_style_color_hex["ip_push_style_color_hex"] --> figure_check["figure_check"]
+  ip_push_style_color_hex["ip_push_style_color_hex"] --> figure_draw_refused["figure_draw_refused"]
+  ip_push_style_color_hex["ip_push_style_color_hex"] --> figure_scope_open["figure_scope_open"]
   ip_push_style_color_hex["ip_push_style_color_hex"] --> push_color_hex["push_color_hex"]
-  style ip_push_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_push_style_color_hex focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_color_hex href "#push-color-hex" "push_color_hex"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip_push_style_color_rgba
@@ -533,10 +624,17 @@ subroutine ip_push_style_color_rgba(name, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ip_push_style_color_rgba["ip_push_style_color_rgba"] --> figure_refused["figure_refused"]
+flowchart LR
+  ip_push_style_color_rgba["ip_push_style_color_rgba"] --> figure_check["figure_check"]
+  ip_push_style_color_rgba["ip_push_style_color_rgba"] --> figure_draw_refused["figure_draw_refused"]
+  ip_push_style_color_rgba["ip_push_style_color_rgba"] --> figure_scope_open["figure_scope_open"]
   ip_push_style_color_rgba["ip_push_style_color_rgba"] --> push_color["push_color"]
-  style ip_push_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_push_style_color_rgba focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_color href "#push-color" "push_color"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip_pop_style_color
@@ -559,10 +657,13 @@ subroutine ip_pop_style_color(n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ip_pop_style_color["ip_pop_style_color"] --> figure_refused["figure_refused"]
+flowchart LR
+  ip_pop_style_color["ip_pop_style_color"] --> figure_scope_refused["figure_scope_refused"]
   ip_pop_style_color["ip_pop_style_color"] --> pop["pop"]
-  style ip_pop_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_pop_style_color focus
+  click figure_scope_refused href "figure_base.html#figure-scope-refused" "figure_scope_refused"
+  click pop href "#pop" "pop"
 ```
 
 ### ip_push_style_var_r64
@@ -586,10 +687,17 @@ subroutine ip_push_style_var_r64(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ip_push_style_var_r64["ip_push_style_var_r64"] --> figure_refused["figure_refused"]
+flowchart LR
+  ip_push_style_var_r64["ip_push_style_var_r64"] --> figure_check["figure_check"]
+  ip_push_style_var_r64["ip_push_style_var_r64"] --> figure_draw_refused["figure_draw_refused"]
+  ip_push_style_var_r64["ip_push_style_var_r64"] --> figure_scope_open["figure_scope_open"]
   ip_push_style_var_r64["ip_push_style_var_r64"] --> push_var["push_var"]
-  style ip_push_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_push_style_var_r64 focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_var href "#push-var" "push_var"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip_push_style_var_vec2
@@ -613,10 +721,17 @@ subroutine ip_push_style_var_vec2(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ip_push_style_var_vec2["ip_push_style_var_vec2"] --> figure_refused["figure_refused"]
+flowchart LR
+  ip_push_style_var_vec2["ip_push_style_var_vec2"] --> figure_check["figure_check"]
+  ip_push_style_var_vec2["ip_push_style_var_vec2"] --> figure_draw_refused["figure_draw_refused"]
+  ip_push_style_var_vec2["ip_push_style_var_vec2"] --> figure_scope_open["figure_scope_open"]
   ip_push_style_var_vec2["ip_push_style_var_vec2"] --> push_var["push_var"]
-  style ip_push_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_push_style_var_vec2 focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_var href "#push-var" "push_var"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip_push_style_var_logical
@@ -640,10 +755,17 @@ subroutine ip_push_style_var_logical(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ip_push_style_var_logical["ip_push_style_var_logical"] --> figure_refused["figure_refused"]
+flowchart LR
+  ip_push_style_var_logical["ip_push_style_var_logical"] --> figure_check["figure_check"]
+  ip_push_style_var_logical["ip_push_style_var_logical"] --> figure_draw_refused["figure_draw_refused"]
+  ip_push_style_var_logical["ip_push_style_var_logical"] --> figure_scope_open["figure_scope_open"]
   ip_push_style_var_logical["ip_push_style_var_logical"] --> push_var["push_var"]
-  style ip_push_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_push_style_var_logical focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click push_var href "#push-var" "push_var"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ip_pop_style_var
@@ -666,10 +788,13 @@ subroutine ip_pop_style_var(n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ip_pop_style_var["ip_pop_style_var"] --> figure_refused["figure_refused"]
+flowchart LR
+  ip_pop_style_var["ip_pop_style_var"] --> figure_scope_refused["figure_scope_refused"]
   ip_pop_style_var["ip_pop_style_var"] --> pop["pop"]
-  style ip_pop_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_pop_style_var focus
+  click figure_scope_refused href "figure_base.html#figure-scope-refused" "figure_scope_refused"
+  click pop href "#pop" "pop"
 ```
 
 ### ig_show_style_editor
@@ -693,11 +818,15 @@ subroutine ig_show_style_editor(open, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_show_style_editor["ig_show_style_editor"] --> fig_show_style_editor["fig_show_style_editor"]
   ig_show_style_editor["ig_show_style_editor"] --> figure_check["figure_check"]
-  ig_show_style_editor["ig_show_style_editor"] --> figure_refused["figure_refused"]
-  style ig_show_style_editor fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ig_show_style_editor["ig_show_style_editor"] --> figure_draw_refused["figure_draw_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_show_style_editor focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_show_style_editor href "figure_c_native.html#fig-show-style-editor" "fig_show_style_editor"
 ```
 
 ### ig_push_font
@@ -722,12 +851,19 @@ subroutine ig_push_font(font, size, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_push_font["ig_push_font"] --> fig_push_font["fig_push_font"]
   ig_push_font["ig_push_font"] --> figure_check["figure_check"]
+  ig_push_font["ig_push_font"] --> figure_draw_refused["figure_draw_refused"]
   ig_push_font["ig_push_font"] --> figure_fail["figure_fail"]
-  ig_push_font["ig_push_font"] --> figure_refused["figure_refused"]
-  style ig_push_font fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ig_push_font["ig_push_font"] --> figure_scope_open["figure_scope_open"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_push_font focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click fig_push_font href "figure_c_native.html#fig-push-font" "fig_push_font"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### ig_pop_font
@@ -749,11 +885,15 @@ subroutine ig_pop_font(stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_pop_font["ig_pop_font"] --> fig_pop_font["fig_pop_font"]
   ig_pop_font["ig_pop_font"] --> figure_check["figure_check"]
-  ig_pop_font["ig_pop_font"] --> figure_refused["figure_refused"]
-  style ig_pop_font fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ig_pop_font["ig_pop_font"] --> figure_scope_refused["figure_scope_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_pop_font focus
+  click figure_scope_refused href "figure_base.html#figure-scope-refused" "figure_scope_refused"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_pop_font href "figure_c_native.html#fig-pop-font" "fig_pop_font"
 ```
 
 ### hex_color
@@ -777,11 +917,14 @@ subroutine hex_color(text, rgba, ok)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   push_color_hex["push_color_hex"] --> hex_color["hex_color"]
   set_color_hex["set_color_hex"] --> hex_color["hex_color"]
   hex_color["hex_color"] --> digit["digit"]
-  style hex_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class hex_color focus
+  click push_color_hex href "#push-color-hex" "push_color_hex"
+  click set_color_hex href "#set-color-hex" "set_color_hex"
 ```
 
 ### set_color
@@ -805,14 +948,21 @@ subroutine set_color(lib, who, name, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_set_style_color_rgba["ig_set_style_color_rgba"] --> set_color["set_color"]
   ip_set_style_color_rgba["ip_set_style_color_rgba"] --> set_color["set_color"]
   set_color_hex["set_color_hex"] --> set_color["set_color"]
   set_color["set_color"] --> fig_style_color["fig_style_color"]
   set_color["set_color"] --> figure_check["figure_check"]
   set_color["set_color"] --> figure_fail["figure_fail"]
-  style set_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class set_color focus
+  click ig_set_style_color_rgba href "#ig-set-style-color-rgba" "ig_set_style_color_rgba"
+  click ip_set_style_color_rgba href "#ip-set-style-color-rgba" "ip_set_style_color_rgba"
+  click set_color_hex href "#set-color-hex" "set_color_hex"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_style_color href "figure_c_native.html#fig-style-color" "fig_style_color"
 ```
 
 ### set_color_hex
@@ -836,13 +986,19 @@ subroutine set_color_hex(lib, who, name, color, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_set_style_color_hex["ig_set_style_color_hex"] --> set_color_hex["set_color_hex"]
   ip_set_style_color_hex["ip_set_style_color_hex"] --> set_color_hex["set_color_hex"]
   set_color_hex["set_color_hex"] --> figure_fail["figure_fail"]
   set_color_hex["set_color_hex"] --> hex_color["hex_color"]
   set_color_hex["set_color_hex"] --> set_color["set_color"]
-  style set_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class set_color_hex focus
+  click ig_set_style_color_hex href "#ig-set-style-color-hex" "ig_set_style_color_hex"
+  click ip_set_style_color_hex href "#ip-set-style-color-hex" "ip_set_style_color_hex"
+  click hex_color href "#hex-color" "hex_color"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click set_color href "#set-color" "set_color"
 ```
 
 ### get_color
@@ -865,12 +1021,17 @@ subroutine get_color(lib, name, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_get_style_color["ig_get_style_color"] --> get_color["get_color"]
   ip_get_style_color["ip_get_style_color"] --> get_color["get_color"]
   get_color["get_color"] --> fig_style_color["fig_style_color"]
   get_color["get_color"] --> figure_check["figure_check"]
-  style get_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class get_color focus
+  click ig_get_style_color href "#ig-get-style-color" "ig_get_style_color"
+  click ip_get_style_color href "#ip-get-style-color" "ip_get_style_color"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_style_color href "figure_c_native.html#fig-style-color" "fig_style_color"
 ```
 
 ### ig_set_style_color_hex
@@ -894,10 +1055,13 @@ subroutine ig_set_style_color_hex(name, color, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_set_style_color_hex["ig_set_style_color_hex"] --> figure_refused["figure_refused"]
   ig_set_style_color_hex["ig_set_style_color_hex"] --> set_color_hex["set_color_hex"]
-  style ig_set_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_set_style_color_hex focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_color_hex href "#set-color-hex" "set_color_hex"
 ```
 
 ### ig_set_style_color_rgba
@@ -921,10 +1085,13 @@ subroutine ig_set_style_color_rgba(name, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_set_style_color_rgba["ig_set_style_color_rgba"] --> figure_refused["figure_refused"]
   ig_set_style_color_rgba["ig_set_style_color_rgba"] --> set_color["set_color"]
-  style ig_set_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_set_style_color_rgba focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_color href "#set-color" "set_color"
 ```
 
 ### ig_get_style_color
@@ -948,10 +1115,13 @@ subroutine ig_get_style_color(name, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_get_style_color["ig_get_style_color"] --> figure_refused["figure_refused"]
   ig_get_style_color["ig_get_style_color"] --> get_color["get_color"]
-  style ig_get_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_get_style_color focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click get_color href "#get-color" "get_color"
 ```
 
 ### ip_set_style_color_hex
@@ -975,10 +1145,13 @@ subroutine ip_set_style_color_hex(name, color, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ip_set_style_color_hex["ip_set_style_color_hex"] --> figure_refused["figure_refused"]
   ip_set_style_color_hex["ip_set_style_color_hex"] --> set_color_hex["set_color_hex"]
-  style ip_set_style_color_hex fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_set_style_color_hex focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_color_hex href "#set-color-hex" "set_color_hex"
 ```
 
 ### ip_set_style_color_rgba
@@ -1002,10 +1175,13 @@ subroutine ip_set_style_color_rgba(name, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ip_set_style_color_rgba["ip_set_style_color_rgba"] --> figure_refused["figure_refused"]
   ip_set_style_color_rgba["ip_set_style_color_rgba"] --> set_color["set_color"]
-  style ip_set_style_color_rgba fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_set_style_color_rgba focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_color href "#set-color" "set_color"
 ```
 
 ### ip_get_style_color
@@ -1030,10 +1206,13 @@ subroutine ip_get_style_color(name, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ip_get_style_color["ip_get_style_color"] --> figure_refused["figure_refused"]
   ip_get_style_color["ip_get_style_color"] --> get_color["get_color"]
-  style ip_get_style_color fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_get_style_color focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click get_color href "#get-color" "get_color"
 ```
 
 ### set_var
@@ -1057,7 +1236,7 @@ subroutine set_var(lib, name, values, n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_set_style_var_i32["ig_set_style_var_i32"] --> set_var["set_var"]
   ig_set_style_var_logical["ig_set_style_var_logical"] --> set_var["set_var"]
   ig_set_style_var_r64["ig_set_style_var_r64"] --> set_var["set_var"]
@@ -1067,7 +1246,17 @@ flowchart TD
   ip_set_style_var_vec2["ip_set_style_var_vec2"] --> set_var["set_var"]
   set_var["set_var"] --> fig_style_var["fig_style_var"]
   set_var["set_var"] --> figure_check["figure_check"]
-  style set_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class set_var focus
+  click ig_set_style_var_i32 href "#ig-set-style-var-i32" "ig_set_style_var_i32"
+  click ig_set_style_var_logical href "#ig-set-style-var-logical" "ig_set_style_var_logical"
+  click ig_set_style_var_r64 href "#ig-set-style-var-r64" "ig_set_style_var_r64"
+  click ig_set_style_var_vec2 href "#ig-set-style-var-vec2" "ig_set_style_var_vec2"
+  click ip_set_style_var_logical href "#ip-set-style-var-logical" "ip_set_style_var_logical"
+  click ip_set_style_var_r64 href "#ip-set-style-var-r64" "ip_set_style_var_r64"
+  click ip_set_style_var_vec2 href "#ip-set-style-var-vec2" "ip_set_style_var_vec2"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_style_var href "figure_c_native.html#fig-style-var" "fig_style_var"
 ```
 
 ### get_var
@@ -1091,12 +1280,17 @@ subroutine get_var(lib, name, values, n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_get_style_var["ig_get_style_var"] --> get_var["get_var"]
   ip_get_style_var["ip_get_style_var"] --> get_var["get_var"]
   get_var["get_var"] --> fig_style_var["fig_style_var"]
   get_var["get_var"] --> figure_check["figure_check"]
-  style get_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class get_var focus
+  click ig_get_style_var href "#ig-get-style-var" "ig_get_style_var"
+  click ip_get_style_var href "#ip-get-style-var" "ip_get_style_var"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_style_var href "figure_c_native.html#fig-style-var" "fig_style_var"
 ```
 
 ### ig_set_style_var_r64
@@ -1120,10 +1314,13 @@ subroutine ig_set_style_var_r64(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_set_style_var_r64["ig_set_style_var_r64"] --> figure_refused["figure_refused"]
   ig_set_style_var_r64["ig_set_style_var_r64"] --> set_var["set_var"]
-  style ig_set_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_set_style_var_r64 focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_var href "#set-var" "set_var"
 ```
 
 ### ig_set_style_var_vec2
@@ -1147,10 +1344,13 @@ subroutine ig_set_style_var_vec2(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_set_style_var_vec2["ig_set_style_var_vec2"] --> figure_refused["figure_refused"]
   ig_set_style_var_vec2["ig_set_style_var_vec2"] --> set_var["set_var"]
-  style ig_set_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_set_style_var_vec2 focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_var href "#set-var" "set_var"
 ```
 
 ### ig_set_style_var_logical
@@ -1174,10 +1374,13 @@ subroutine ig_set_style_var_logical(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_set_style_var_logical["ig_set_style_var_logical"] --> figure_refused["figure_refused"]
   ig_set_style_var_logical["ig_set_style_var_logical"] --> set_var["set_var"]
-  style ig_set_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_set_style_var_logical focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_var href "#set-var" "set_var"
 ```
 
 ### ig_set_style_var_i32
@@ -1201,10 +1404,13 @@ subroutine ig_set_style_var_i32(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_set_style_var_i32["ig_set_style_var_i32"] --> figure_refused["figure_refused"]
   ig_set_style_var_i32["ig_set_style_var_i32"] --> set_var["set_var"]
-  style ig_set_style_var_i32 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_set_style_var_i32 focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_var href "#set-var" "set_var"
 ```
 
 ### ig_get_style_var
@@ -1229,10 +1435,13 @@ subroutine ig_get_style_var(name, values, n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_get_style_var["ig_get_style_var"] --> figure_refused["figure_refused"]
   ig_get_style_var["ig_get_style_var"] --> get_var["get_var"]
-  style ig_get_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_get_style_var focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click get_var href "#get-var" "get_var"
 ```
 
 ### ip_set_style_var_r64
@@ -1256,10 +1465,13 @@ subroutine ip_set_style_var_r64(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ip_set_style_var_r64["ip_set_style_var_r64"] --> figure_refused["figure_refused"]
   ip_set_style_var_r64["ip_set_style_var_r64"] --> set_var["set_var"]
-  style ip_set_style_var_r64 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_set_style_var_r64 focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_var href "#set-var" "set_var"
 ```
 
 ### ip_set_style_var_vec2
@@ -1283,10 +1495,13 @@ subroutine ip_set_style_var_vec2(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ip_set_style_var_vec2["ip_set_style_var_vec2"] --> figure_refused["figure_refused"]
   ip_set_style_var_vec2["ip_set_style_var_vec2"] --> set_var["set_var"]
-  style ip_set_style_var_vec2 fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_set_style_var_vec2 focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_var href "#set-var" "set_var"
 ```
 
 ### ip_set_style_var_logical
@@ -1310,10 +1525,13 @@ subroutine ip_set_style_var_logical(name, value, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ip_set_style_var_logical["ip_set_style_var_logical"] --> figure_refused["figure_refused"]
   ip_set_style_var_logical["ip_set_style_var_logical"] --> set_var["set_var"]
-  style ip_set_style_var_logical fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_set_style_var_logical focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click set_var href "#set-var" "set_var"
 ```
 
 ### ip_get_style_var
@@ -1338,8 +1556,11 @@ subroutine ip_get_style_var(name, values, n, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ip_get_style_var["ip_get_style_var"] --> figure_refused["figure_refused"]
   ip_get_style_var["ip_get_style_var"] --> get_var["get_var"]
-  style ip_get_style_var fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ip_get_style_var focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click get_var href "#get-var" "get_var"
 ```

@@ -90,7 +90,7 @@ const docs = [
     items: [
       { text: 'Why immediate mode', link: '/guide/why' },
       { text: 'Roadmap',            link: '/guide/roadmap' },
-      { text: 'API Reference',      link: '/guide/api-reference' },
+      { text: 'API Reference',      link: '/api/' },
       { text: 'Contributing',       link: '/guide/contributing' },
       { text: 'Changelog',          link: '/guide/changelog' },
     ],

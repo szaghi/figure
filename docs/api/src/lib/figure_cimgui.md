@@ -1,5 +1,6 @@
 ---
 title: figure_cimgui
+outline: [2, 4]
 ---
 
 # figure_cimgui
@@ -412,7 +413,7 @@ ImVec2_c: a 2D vector of floats, passed by value.
 
 **Attributes**: bind(C)
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
@@ -425,7 +426,7 @@ ImVec2_c: a 2D vector of floats, passed by value.
 
 **Attributes**: bind(C)
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
@@ -440,7 +441,7 @@ ImVec2_c: a 2D vector of floats, passed by value.
 
 **Attributes**: bind(C)
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|

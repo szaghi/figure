@@ -262,8 +262,10 @@ segments: about 130 ms a render with them, 25 ms without), and draw only a tint;
 the button released, or a frame without a wheel step. A drag held still keeps the half-size image, without
 rendering, until it moves again or ends. `fast_moves=.false.` at `init` keeps full size.
 
-**Threads.** `threads` (at most 4) splits each render over that many threads: bands of rows, each walking every
-triangle. It pays for large views and many triangles; beyond 4 it gains nothing with this split (see below).
+**Threads.** `threads` (1 to 16) splits each render over that many threads: the vertices in ranges, then blocks of
+rows shared out among the threads (no pixel drawn by two). It pays for large views and many triangles; the table
+below measures 1 and 4 (the first split, one band of rows per thread, gained nothing beyond 4; the blocks let more
+threads help a large model).
 
 ## Performance
 

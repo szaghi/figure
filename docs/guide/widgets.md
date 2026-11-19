@@ -1151,6 +1151,6 @@ draws `selected` from them.
 
 ## Not bound yet
 
-Colour pickers have no wrapper yet; menus are on their own page,
-[Menus and shortcuts](menus). Their raw interfaces are generated
-([Raw bindings](raw-bindings)); the Fortran wrappers are still to be written ([roadmap](roadmap)).
+The colour picker as a widget of its own (`ColorPicker3`, `ColorPicker4`) has no wrapper yet: `ig_color_edit`
+opens Dear ImGui's picker from its colour button ([Colour editing](#colour-editing)). Menus are on their own page,
+[Menus and shortcuts](menus). The generated raw layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal ([Raw bindings](raw-bindings)): programs call the wrappers, and a Dear ImGui or ImPlot function without one is listed as "raw only" in [Dear ImGui names](imgui-names).

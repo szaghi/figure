@@ -83,3 +83,6 @@ types over it, as the user would; `source%mark_of(line)` reads the mark back. It
 `replace` and `mark_of`; `markdown_view_object`: `set_text`, `draw` with the link clicked, `scroll_to`, `find` and
 `matches`. Reference: [Code editor](/guide/editor), [Markdown](/guide/widgets#markdown).
 :::
+
+**Next:** [25. A clip plane by hand, the studio as a picture](./25-clip): a plane the user places in the 3-D view, and the
+studio tested by paths and by its picture.

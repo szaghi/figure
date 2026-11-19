@@ -4,7 +4,7 @@ title: 22. The field and its snapshots
 
 # 22. The field and its snapshots
 
-The last chapter of part three changes how the studio draws its result. The field is coloured through the colormap
+This chapter changes how the studio draws its result. The field is coloured through the colormap
 once, into a texture, and coloured again only when something changed; its legend becomes the colour scale's control,
 dragged and zoomed by the user; and a player steps through the snapshots the solver wrote during the run, the
 converged field last.

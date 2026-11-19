@@ -1,5 +1,6 @@
 ---
 title: figure_view3d
+outline: [2, 4]
 ---
 
 # figure_view3d
@@ -38,6 +39,8 @@ graph LR
   figure_view3d["figure_view3d"] --> figure_c_native["figure_c_native"]
   figure_view3d["figure_view3d"] --> iso_c_binding["iso_c_binding"]
   figure_view3d["figure_view3d"] --> iso_fortran_env["iso_fortran_env"]
+  click figure_base href "figure_base.html" "figure_base"
+  click figure_c_native href "figure_c_native.html" "figure_c_native"
 ```
 
 ## Contents
@@ -58,7 +61,11 @@ graph LR
 - [fig_view3d_draw](#fig-view3d-draw)
 - [fig_view3d_pick](#fig-view3d-pick)
 - [fig_view3d_image](#fig-view3d-image)
+- [fig_view3d_matrices](#fig-view3d-matrices)
+- [fig_view3d_cube](#fig-view3d-cube)
+- [fig_view3d_gizmo](#fig-view3d-gizmo)
 - [fig_view3d_info](#fig-view3d-info)
+- [fig_view3d_cache](#fig-view3d-cache)
 - [fig_view3d_destroy](#fig-view3d-destroy)
 - [init](#init)
 - [destroy](#destroy)
@@ -78,6 +85,9 @@ graph LR
 - [draw](#draw)
 - [image](#image)
 - [render_info](#render-info)
+- [view_cube](#view-cube)
+- [view_matrix](#view-matrix)
+- [projection_matrix](#projection-matrix)
 - [style_new](#style-new)
 - [is_initialized](#is-initialized)
 - [triangles](#triangles)
@@ -87,6 +97,7 @@ graph LR
 - [pick](#pick)
 - [hovered](#hovered)
 - [clicked](#clicked)
+- [gizmo](#gizmo)
 - [alive](#alive)
 - [points_ok](#points-ok)
 - [connectivity_ok](#connectivity-ok)
@@ -110,42 +121,46 @@ graph LR
 
 A 3-D view: `v%init`, meshes added, then `v%draw` every frame. Not to be copied (the copy would share the view).
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
 | `handle` | integer(kind=c_int) |  | Native handle (0: none). |
 
-#### Type-Bound Procedures
+**Type-Bound Procedures**
 
 | Name | Attributes | Description |
 |------|------------|-------------|
-| `init` | pass(self) | Create the view. |
-| `destroy` | pass(self) | Release it. |
-| `is_initialized` | pass(self) | Whether it exists. |
-| `triangles` | pass(self) | Add a triangle mesh. |
-| `quads` | pass(self) | Add a quad mesh. |
-| `surface` | pass(self) | Add a structured surface. |
-| `lines` | pass(self) | Add lines. |
-| `set_mesh` | pass(self) | Change a mesh's scalar or style. |
-| `remove` | pass(self) | Remove a mesh. |
-| `clear` | pass(self) | Remove every mesh. |
-| `changed` | pass(self) | The data of a mesh changed in place. |
-| `set_camera` | pass(self) | Set the camera. |
-| `get_camera` | pass(self) | Read the camera. |
-| `fit` | pass(self) | Fit the meshes in the view. |
-| `view` | pass(self) | One of the six standard views. |
-| `orbit` | pass(self) | Turn the camera around its target. |
-| `pan` | pass(self) | Move the camera and its target across the screen. |
-| `zoom` | pass(self) | Move the camera toward its target. |
-| `clip` | pass(self) | Add a clipping plane. |
-| `unclip` | pass(self) | Remove the clipping planes. |
-| `draw` | pass(self) | Draw the view as a widget. |
-| `pick` | pass(self) | The element under a pixel. |
-| `hovered` | pass(self) | The element under the mouse. |
-| `clicked` | pass(self) | The element clicked. |
-| `image` | pass(self) | The pixels of the last render. |
-| `render_info` | pass(self) | Renders so far, the last one's time and size. |
+| [`init`](/api/src/lib/figure_view3d#init) | pass(self) | Create the view. |
+| [`destroy`](/api/src/lib/figure_view3d#destroy) | pass(self) | Release it. |
+| [`is_initialized`](/api/src/lib/figure_view3d#is-initialized) | pass(self) | Whether it exists. |
+| [`triangles`](/api/src/lib/figure_view3d#triangles) | pass(self) | Add a triangle mesh. |
+| [`quads`](/api/src/lib/figure_view3d#quads) | pass(self) | Add a quad mesh. |
+| [`surface`](/api/src/lib/figure_view3d#surface) | pass(self) | Add a structured surface. |
+| [`lines`](/api/src/lib/figure_view3d#lines) | pass(self) | Add lines. |
+| [`set_mesh`](/api/src/lib/figure_view3d#set-mesh) | pass(self) | Change a mesh's scalar or style. |
+| [`remove`](/api/src/lib/figure_view3d#remove) | pass(self) | Remove a mesh. |
+| [`clear`](/api/src/lib/figure_view3d#clear) | pass(self) | Remove every mesh. |
+| [`changed`](/api/src/lib/figure_view3d#changed) | pass(self) | The data of a mesh changed in place. |
+| [`set_camera`](/api/src/lib/figure_view3d#set-camera) | pass(self) | Set the camera. |
+| [`get_camera`](/api/src/lib/figure_view3d#get-camera) | pass(self) | Read the camera. |
+| [`fit`](/api/src/lib/figure_view3d#fit) | pass(self) | Fit the meshes in the view. |
+| [`view`](/api/src/lib/figure_view3d#view) | pass(self) | One of the six standard views. |
+| [`orbit`](/api/src/lib/figure_view3d#orbit) | pass(self) | Turn the camera around its target. |
+| [`pan`](/api/src/lib/figure_view3d#pan) | pass(self) | Move the camera and its target across the screen. |
+| [`zoom`](/api/src/lib/figure_view3d#zoom) | pass(self) | Move the camera toward its target. |
+| [`clip`](/api/src/lib/figure_view3d#clip) | pass(self) | Add a clipping plane. |
+| [`unclip`](/api/src/lib/figure_view3d#unclip) | pass(self) | Remove the clipping planes. |
+| [`draw`](/api/src/lib/figure_view3d#draw) | pass(self) | Draw the view as a widget. |
+| [`pick`](/api/src/lib/figure_view3d#pick) | pass(self) | The element under a pixel. |
+| [`hovered`](/api/src/lib/figure_view3d#hovered) | pass(self) | The element under the mouse. |
+| [`clicked`](/api/src/lib/figure_view3d#clicked) | pass(self) | The element clicked. |
+| [`image`](/api/src/lib/figure_view3d#image) | pass(self) | The pixels of the last render. |
+| [`render_info`](/api/src/lib/figure_view3d#render-info) | pass(self) | Renders so far, the last one's time and size. |
+| [`view_cube`](/api/src/lib/figure_view3d#view-cube) | pass(self) | A view cube over the view, turning the camera. |
+| [`gizmo`](/api/src/lib/figure_view3d#gizmo) | pass(self) | A gizmo moving a matrix, over the view. |
+| [`view_matrix`](/api/src/lib/figure_view3d#view-matrix) | pass(self) | The camera's view matrix. |
+| [`projection_matrix`](/api/src/lib/figure_view3d#projection-matrix) | pass(self) | The camera's projection matrix. |
 
 ## Interfaces
 
@@ -179,7 +194,15 @@ A 3-D view: `v%init`, meshes added, then `v%draw` every frame. Not to be copied 
 
 ### fig_view3d_image
 
+### fig_view3d_matrices
+
+### fig_view3d_cube
+
+### fig_view3d_gizmo
+
 ### fig_view3d_info
+
+### fig_view3d_cache
 
 ### fig_view3d_destroy
 
@@ -188,7 +211,7 @@ A 3-D view: `v%init`, meshes added, then `v%draw` every frame. Not to be copied 
 ### init
 
 Create the view (an existing one is destroyed first). After `app%init*`. Statuses: `FIG_ERR_ARGUMENT` for
- `threads` outside [1, 4]; `FIG_ERR_STATE` from a task. The same in every mode.
+ `threads` outside [1, 16]; `FIG_ERR_STATE` from a task. The same in every mode.
 
 **Attributes**: recursive
 
@@ -201,21 +224,30 @@ subroutine init(self, threads, fast_moves, lighting, background, stat)
 | Name | Type | Intent | Attributes | Description |
 |------|------|--------|------------|-------------|
 | `self` | class([view3d_object](/api/src/lib/figure_view3d#view3d-object)) | inout |  | View. |
-| `threads` | integer(kind=int32) | in | optional | Threads rendering bands of rows, in [1, 4] (default 1). |
-| `fast_moves` | logical | in | optional | Half resolution while the user moves the camera |
-| `lighting` | logical | in | optional | Shade by a light at the eye (default true); off: the |
-| `background` | real(kind=real64) | in | target, optional | Background `[r, g, b]` in [0, 1] (default: |
+| `threads` | integer(kind=int32) | in | optional | Threads rendering blocks of rows, in [1, 16] (default 1). |
+| `fast_moves` | logical | in | optional | Half resolution while the user moves the camera (default true). |
+| `lighting` | logical | in | optional | Shade by a light at the eye (default true); off: the colours as given. |
+| `background` | real(kind=real64) | in | target, optional | Background `[r, g, b]` in [0, 1] (default: the style's window background). |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
+  code_language["code_language"] --> init["init"]
+  load["load"] --> init["init"]
   init["init"] --> destroy["destroy"]
   init["init"] --> fig_view3d_create["fig_view3d_create"]
   init["init"] --> figure_check["figure_check"]
   init["init"] --> figure_refused["figure_refused"]
-  style init fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class init focus
+  click code_language href "figure_editor.html#code-language" "code_language"
+  click load href "figure_texture.html#load" "load"
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click destroy href "figure_app.html#destroy" "destroy"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_create href "#fig-view3d-create" "fig_view3d_create"
 ```
 
 ### destroy
@@ -235,11 +267,18 @@ subroutine destroy(self)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
+  editor_init["editor_init"] --> destroy["destroy"]
   init["init"] --> destroy["destroy"]
   init["init"] --> destroy["destroy"]
+  view_init["view_init"] --> destroy["destroy"]
   destroy["destroy"] --> fig_view3d_destroy["fig_view3d_destroy"]
-  style destroy fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class destroy focus
+  click editor_init href "figure_editor.html#editor-init" "editor_init"
+  click init href "figure_app.html#init" "init"
+  click view_init href "figure_markdown.html#view-init" "view_init"
+  click fig_view3d_destroy href "#fig-view3d-destroy" "fig_view3d_destroy"
 ```
 
 ### set_mesh
@@ -278,7 +317,7 @@ subroutine set_mesh(self, mesh, scalar, cell_scalar, no_scalar, colormap, vmin, 
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   style_new["style_new"] --> set_mesh["set_mesh"]
   set_mesh["set_mesh"] --> alive["alive"]
   set_mesh["set_mesh"] --> fig_view3d_style["fig_view3d_style"]
@@ -287,7 +326,16 @@ flowchart TD
   set_mesh["set_mesh"] --> figure_refused["figure_refused"]
   set_mesh["set_mesh"] --> flag["flag"]
   set_mesh["set_mesh"] --> scalar_set["scalar_set"]
-  style set_mesh fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class set_mesh focus
+  click style_new href "#style-new" "style_new"
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click scalar_set href "#scalar-set" "scalar_set"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click flag href "#flag" "flag"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_style href "#fig-view3d-style" "fig_view3d_style"
 ```
 
 ### remove
@@ -311,13 +359,19 @@ subroutine remove(self, mesh, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   remove["remove"] --> alive["alive"]
   remove["remove"] --> fig_view3d_remove["fig_view3d_remove"]
   remove["remove"] --> figure_check["figure_check"]
   remove["remove"] --> figure_fail["figure_fail"]
   remove["remove"] --> figure_refused["figure_refused"]
-  style remove fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class remove focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_remove href "#fig-view3d-remove" "fig_view3d_remove"
 ```
 
 ### clear
@@ -340,12 +394,17 @@ subroutine clear(self, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   clear["clear"] --> alive["alive"]
   clear["clear"] --> fig_view3d_remove["fig_view3d_remove"]
   clear["clear"] --> figure_check["figure_check"]
   clear["clear"] --> figure_refused["figure_refused"]
-  style clear fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class clear focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_remove href "#fig-view3d-remove" "fig_view3d_remove"
 ```
 
 ### changed
@@ -371,12 +430,17 @@ subroutine changed(self, mesh, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   changed["changed"] --> alive["alive"]
   changed["changed"] --> fig_view3d_changed["fig_view3d_changed"]
   changed["changed"] --> figure_check["figure_check"]
   changed["changed"] --> figure_refused["figure_refused"]
-  style changed fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class changed focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_changed href "#fig-view3d-changed" "fig_view3d_changed"
 ```
 
 ### set_camera
@@ -407,12 +471,17 @@ subroutine set_camera(self, target, distance, azimuth, elevation, fov, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   set_camera["set_camera"] --> alive["alive"]
   set_camera["set_camera"] --> fig_view3d_camera["fig_view3d_camera"]
   set_camera["set_camera"] --> figure_check["figure_check"]
   set_camera["set_camera"] --> figure_refused["figure_refused"]
-  style set_camera fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class set_camera focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_camera href "#fig-view3d-camera" "fig_view3d_camera"
 ```
 
 ### get_camera
@@ -440,12 +509,17 @@ subroutine get_camera(self, target, distance, azimuth, elevation, fov, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   get_camera["get_camera"] --> alive["alive"]
   get_camera["get_camera"] --> fig_view3d_camera["fig_view3d_camera"]
   get_camera["get_camera"] --> figure_check["figure_check"]
   get_camera["get_camera"] --> figure_refused["figure_refused"]
-  style get_camera fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class get_camera focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_camera href "#fig-view3d-camera" "fig_view3d_camera"
 ```
 
 ### fit
@@ -469,12 +543,17 @@ subroutine fit(self, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   fit["fit"] --> alive["alive"]
   fit["fit"] --> fig_view3d_fit["fig_view3d_fit"]
   fit["fit"] --> figure_check["figure_check"]
   fit["fit"] --> figure_refused["figure_refused"]
-  style fit fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class fit focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_fit href "#fig-view3d-fit" "fig_view3d_fit"
 ```
 
 ### view
@@ -500,13 +579,19 @@ subroutine view(self, name, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   view["view"] --> alive["alive"]
   view["view"] --> fig_view3d_standard["fig_view3d_standard"]
   view["view"] --> figure_check["figure_check"]
   view["view"] --> figure_fail["figure_fail"]
   view["view"] --> figure_refused["figure_refused"]
-  style view fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class view focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_standard href "#fig-view3d-standard" "fig_view3d_standard"
 ```
 
 ### orbit
@@ -532,12 +617,17 @@ subroutine orbit(self, azimuth, elevation, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   orbit["orbit"] --> alive["alive"]
   orbit["orbit"] --> fig_view3d_move["fig_view3d_move"]
   orbit["orbit"] --> figure_check["figure_check"]
   orbit["orbit"] --> figure_refused["figure_refused"]
-  style orbit fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class orbit focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_move href "#fig-view3d-move" "fig_view3d_move"
 ```
 
 ### pan
@@ -563,12 +653,17 @@ subroutine pan(self, right, up, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   pan["pan"] --> alive["alive"]
   pan["pan"] --> fig_view3d_move["fig_view3d_move"]
   pan["pan"] --> figure_check["figure_check"]
   pan["pan"] --> figure_refused["figure_refused"]
-  style pan fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class pan focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_move href "#fig-view3d-move" "fig_view3d_move"
 ```
 
 ### zoom
@@ -593,12 +688,17 @@ subroutine zoom(self, factor, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   zoom["zoom"] --> alive["alive"]
   zoom["zoom"] --> fig_view3d_move["fig_view3d_move"]
   zoom["zoom"] --> figure_check["figure_check"]
   zoom["zoom"] --> figure_refused["figure_refused"]
-  style zoom fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class zoom focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_move href "#fig-view3d-move" "fig_view3d_move"
 ```
 
 ### clip
@@ -625,12 +725,17 @@ subroutine clip(self, normal, point, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   clip["clip"] --> alive["alive"]
   clip["clip"] --> fig_view3d_clip["fig_view3d_clip"]
   clip["clip"] --> figure_check["figure_check"]
   clip["clip"] --> figure_refused["figure_refused"]
-  style clip fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class clip focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_clip href "#fig-view3d-clip" "fig_view3d_clip"
 ```
 
 ### unclip
@@ -653,12 +758,17 @@ subroutine unclip(self, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   unclip["unclip"] --> alive["alive"]
   unclip["unclip"] --> fig_view3d_unclip["fig_view3d_unclip"]
   unclip["unclip"] --> figure_check["figure_check"]
   unclip["unclip"] --> figure_refused["figure_refused"]
-  style unclip fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class unclip focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_unclip href "#fig-view3d-unclip" "fig_view3d_unclip"
 ```
 
 ### draw
@@ -690,12 +800,31 @@ subroutine draw(self, id, width, height, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
+  ig_draw_circle["ig_draw_circle"] --> draw["draw"]
+  ig_draw_image["ig_draw_image"] --> draw["draw"]
+  ig_draw_line["ig_draw_line"] --> draw["draw"]
+  ig_draw_polygon["ig_draw_polygon"] --> draw["draw"]
+  ig_draw_polyline["ig_draw_polyline"] --> draw["draw"]
+  ig_draw_rect["ig_draw_rect"] --> draw["draw"]
+  ig_draw_text["ig_draw_text"] --> draw["draw"]
   draw["draw"] --> alive["alive"]
   draw["draw"] --> fig_view3d_draw["fig_view3d_draw"]
   draw["draw"] --> figure_check["figure_check"]
-  draw["draw"] --> figure_refused["figure_refused"]
-  style draw fill:#3e63dd,stroke:#99b,stroke-width:2px
+  draw["draw"] --> figure_draw_refused["figure_draw_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class draw focus
+  click ig_draw_circle href "figure_canvas.html#ig-draw-circle" "ig_draw_circle"
+  click ig_draw_image href "figure_canvas.html#ig-draw-image" "ig_draw_image"
+  click ig_draw_line href "figure_canvas.html#ig-draw-line" "ig_draw_line"
+  click ig_draw_polygon href "figure_canvas.html#ig-draw-polygon" "ig_draw_polygon"
+  click ig_draw_polyline href "figure_canvas.html#ig-draw-polyline" "ig_draw_polyline"
+  click ig_draw_rect href "figure_canvas.html#ig-draw-rect" "ig_draw_rect"
+  click ig_draw_text href "figure_canvas.html#ig-draw-text" "ig_draw_text"
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_draw href "#fig-view3d-draw" "fig_view3d_draw"
 ```
 
 ### image
@@ -720,22 +849,28 @@ subroutine image(self, rgba, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   image["image"] --> alive["alive"]
   image["image"] --> fig_view3d_image["fig_view3d_image"]
   image["image"] --> figure_check["figure_check"]
   image["image"] --> figure_refused["figure_refused"]
-  style image fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class image focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click fig_view3d_image href "#fig-view3d-image" "fig_view3d_image"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### render_info
 
-The renders so far, the last one's time [ms] and size [pixels], and whether it was at half resolution.
+The renders so far, the last one's time [ms] and size [pixels], whether it was at half resolution, and the bytes
+ the per-render caches hold (64 a vertex, and the bands' triangle lists; freed after 30 draws without a render).
 
 **Attributes**: recursive
 
 ```fortran
-subroutine render_info(self, count, milliseconds, width, height, half, stat)
+subroutine render_info(self, count, milliseconds, width, height, half, cache_bytes, stat)
 ```
 
 **Arguments**
@@ -748,17 +883,142 @@ subroutine render_info(self, count, milliseconds, width, height, half, stat)
 | `width` | integer(kind=int32) | out | optional | Its width [pixels]. |
 | `height` | integer(kind=int32) | out | optional | Its height [pixels]. |
 | `half` | logical | out | optional | At half resolution (the camera was moving). |
+| `cache_bytes` | integer(kind=int64) | out | optional | The per-render caches' bytes. |
 | `stat` | integer(kind=int32) | out | optional | Status. |
 
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   render_info["render_info"] --> alive["alive"]
+  render_info["render_info"] --> fig_view3d_cache["fig_view3d_cache"]
   render_info["render_info"] --> fig_view3d_info["fig_view3d_info"]
   render_info["render_info"] --> figure_check["figure_check"]
   render_info["render_info"] --> figure_refused["figure_refused"]
-  style render_info fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class render_info focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_info href "#fig-view3d-info" "fig_view3d_info"
+  click fig_view3d_cache href "#fig-view3d-cache" "fig_view3d_cache"
+```
+
+### view_cube
+
+A view cube (ImGuizmo's `ViewManipulate`) in a corner of the view, drawn over its image: call it after `draw`,
+ in the same window and frame. A click on a face turns the camera to look at it (the eye on that side), a click on
+ an edge or a corner between the faces it touches, over 40 frames; a drag on the cube orbits the camera. The
+ camera's target and distance are kept. The faces take the gizmos' axis colours: red the two of x, green of y,
+ blue of z. While the pointer is over the cube, the view does not take the mouse. Polled: the camera changes, as
+ `get_camera` reads. Statuses: `FIG_ERR_STATE` if the view was not drawn in this frame and window, outside a
+ frame and from a task; `FIG_ERR_ARGUMENT` for a size not above 0 or an unknown corner. The same in every mode.
+
+**Attributes**: recursive
+
+```fortran
+subroutine view_cube(self, size, corner, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([view3d_object](/api/src/lib/figure_view3d#view3d-object)) | in |  | View. |
+| `size` | real(kind=real64) | in | optional | Side [pixels] (default 96; at most the view's). |
+| `corner` | character(len=*) | in | optional | `'top-right'` (default), `'top-left'`, `'bottom-right'`, `'bottom-left'`. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  view_cube["view_cube"] --> alive["alive"]
+  view_cube["view_cube"] --> fig_view3d_cube["fig_view3d_cube"]
+  view_cube["view_cube"] --> figure_check["figure_check"]
+  view_cube["view_cube"] --> figure_draw_refused["figure_draw_refused"]
+  view_cube["view_cube"] --> figure_fail["figure_fail"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class view_cube focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click alive href "#alive" "alive"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_cube href "#fig-view3d-cube" "fig_view3d_cube"
+```
+
+### view_matrix
+
+The camera's view matrix: world to eye coordinates, column-major 4x4 with column vectors (OpenGL's convention,
+ and ImGuizmo's): `m(1:3, 1:3)` the rotation, whose rows are the screen's right, up and the direction from the
+ target to the eye, `m(1:3, 4)` the translation; the eye looks down its -z. As the camera is now (`set_camera`,
+ `orbit`, a view cube); a camera never set is first fitted to the meshes.
+
+**Attributes**: recursive
+
+```fortran
+subroutine view_matrix(self, m, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([view3d_object](/api/src/lib/figure_view3d#view3d-object)) | in |  | View. |
+| `m` | real(kind=real64) | out |  | View matrix. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  view_matrix["view_matrix"] --> alive["alive"]
+  view_matrix["view_matrix"] --> fig_view3d_matrices["fig_view3d_matrices"]
+  view_matrix["view_matrix"] --> figure_check["figure_check"]
+  view_matrix["view_matrix"] --> figure_refused["figure_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class view_matrix focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_matrices href "#fig-view3d-matrices" "fig_view3d_matrices"
+```
+
+### projection_matrix
+
+The camera's perspective projection: eye to clip coordinates, column-major 4x4 (OpenGL's convention: clip z in
+ [-w, w], `m(4, 3)` = -1), for the view's size at its last `draw` (1 x 1 before the first) and its vertical field
+ of view; the near and far planes enclose the visible meshes' bounding sphere, so they change with the meshes and
+ the camera. The image is `projection_matrix * view_matrix` applied to world points.
+
+**Attributes**: recursive
+
+```fortran
+subroutine projection_matrix(self, m, stat)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([view3d_object](/api/src/lib/figure_view3d#view3d-object)) | in |  | View. |
+| `m` | real(kind=real64) | out |  | Projection matrix. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  projection_matrix["projection_matrix"] --> alive["alive"]
+  projection_matrix["projection_matrix"] --> fig_view3d_matrices["fig_view3d_matrices"]
+  projection_matrix["projection_matrix"] --> figure_check["figure_check"]
+  projection_matrix["projection_matrix"] --> figure_refused["figure_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class projection_matrix focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_matrices href "#fig-view3d-matrices" "fig_view3d_matrices"
 ```
 
 ### style_new
@@ -786,7 +1046,7 @@ subroutine style_new(self, mesh, scalar, cell_scalar, colormap, color, edges, fl
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   lines["lines"] --> style_new["style_new"]
   quads["quads"] --> style_new["style_new"]
   surface["surface"] --> style_new["style_new"]
@@ -796,7 +1056,17 @@ flowchart TD
   style_new["style_new"] --> figure_fail["figure_fail"]
   style_new["style_new"] --> scalar_set["scalar_set"]
   style_new["style_new"] --> set_mesh["set_mesh"]
-  style style_new fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class style_new focus
+  click lines href "#lines" "lines"
+  click quads href "#quads" "quads"
+  click surface href "#surface" "surface"
+  click triangles href "#triangles" "triangles"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click scalar_set href "#scalar-set" "scalar_set"
+  click set_mesh href "#set-mesh" "set_mesh"
+  click fig_view3d_remove href "#fig-view3d-remove" "fig_view3d_remove"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ## Functions
@@ -822,9 +1092,17 @@ function is_initialized(self) result(yes)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
+  ig_canvas["ig_canvas"] --> is_initialized["is_initialized"]
+  ig_draw_image["ig_draw_image"] --> is_initialized["is_initialized"]
+  ip3_image["ip3_image"] --> is_initialized["is_initialized"]
   ip_image["ip_image"] --> is_initialized["is_initialized"]
-  style is_initialized fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class is_initialized focus
+  click ig_canvas href "figure_canvas.html#ig-canvas" "ig_canvas"
+  click ig_draw_image href "figure_canvas.html#ig-draw-image" "ig_draw_image"
+  click ip3_image href "figure_implot3d.html#ip3-image" "ip3_image"
+  click ip_image href "figure_implot.html#ip-image" "ip_image"
 ```
 
 ### triangles
@@ -860,12 +1138,17 @@ function triangles(self, xyz, tri, scalar, cell_scalar, colormap, color, edges, 
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   triangles["triangles"] --> add_mesh["add_mesh"]
   triangles["triangles"] --> connectivity_ok["connectivity_ok"]
   triangles["triangles"] --> figure_refused["figure_refused"]
   triangles["triangles"] --> style_new["style_new"]
-  style triangles fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class triangles focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click connectivity_ok href "#connectivity-ok" "connectivity_ok"
+  click add_mesh href "#add-mesh" "add_mesh"
+  click style_new href "#style-new" "style_new"
 ```
 
 ### quads
@@ -899,12 +1182,17 @@ function quads(self, xyz, quad, scalar, cell_scalar, colormap, color, edges, fla
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   quads["quads"] --> add_mesh["add_mesh"]
   quads["quads"] --> connectivity_ok["connectivity_ok"]
   quads["quads"] --> figure_refused["figure_refused"]
   quads["quads"] --> style_new["style_new"]
-  style quads fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class quads focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click connectivity_ok href "#connectivity-ok" "connectivity_ok"
+  click add_mesh href "#add-mesh" "add_mesh"
+  click style_new href "#style-new" "style_new"
 ```
 
 ### surface
@@ -938,13 +1226,19 @@ function surface(self, xyz, scalar, cell_scalar, colormap, color, edges, flat, s
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   surface["surface"] --> add_mesh["add_mesh"]
   surface["surface"] --> figure_fail["figure_fail"]
   surface["surface"] --> figure_refused["figure_refused"]
   surface["surface"] --> scalar_set["scalar_set"]
   surface["surface"] --> style_new["style_new"]
-  style surface fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class surface focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click add_mesh href "#add-mesh" "add_mesh"
+  click scalar_set href "#scalar-set" "scalar_set"
+  click style_new href "#style-new" "style_new"
 ```
 
 ### lines
@@ -977,13 +1271,19 @@ function lines(self, xyz, seg, scalar, cell_scalar, colormap, color, stat) resul
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   lines["lines"] --> add_mesh["add_mesh"]
   lines["lines"] --> connectivity_ok["connectivity_ok"]
   lines["lines"] --> figure_refused["figure_refused"]
   lines["lines"] --> points_ok["points_ok"]
   lines["lines"] --> style_new["style_new"]
-  style lines fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class lines focus
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click connectivity_ok href "#connectivity-ok" "connectivity_ok"
+  click add_mesh href "#add-mesh" "add_mesh"
+  click points_ok href "#points-ok" "points_ok"
+  click style_new href "#style-new" "style_new"
 ```
 
 ### pick
@@ -1014,9 +1314,11 @@ function pick(self, x, y, mesh, element, point, stat) result(hit)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   pick["pick"] --> query["query"]
-  style pick fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class pick focus
+  click query href "#query" "query"
 ```
 
 ### hovered
@@ -1044,9 +1346,11 @@ function hovered(self, mesh, element, point, stat) result(hit)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   hovered["hovered"] --> query["query"]
-  style hovered fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class hovered focus
+  click query href "#query" "query"
 ```
 
 ### clicked
@@ -1074,9 +1378,66 @@ function clicked(self, mesh, element, point, stat) result(hit)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   clicked["clicked"] --> query["query"]
-  style clicked fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class clicked focus
+  click query href "#query" "query"
+```
+
+### gizmo
+
+A gizmo (ImGuizmo's `Manipulate`) moving `matrix`, drawn over the view's image at the point the matrix places:
+ call it after `draw`, in the same window and frame, once a frame for as long as the gizmo is shown. `mode`
+ `'translate'` shows three arrows (along an axis) and three squares (in a plane), `'rotate'` three circles (about
+ an axis) and one facing the eye, `'scale'` three handles; `space` `'world'` orients them along the world's axes,
+ `'local'` along the matrix's own (scale is always local). `snap` rounds the motion of a drag to a step: world
+ units, degrees or a scale step. True on the frames the user moved it, with `matrix` updated; untouched on the
+ others. While the pointer is over a handle (from the frame after it reaches it) or a drag goes on, the view does
+ not take the mouse. `matrix` is column-major as the view's (`view_matrix`): `matrix(1:3, 1:3)` the rotation and
+ scale, `matrix(1:3, 4)` the translation, `matrix(4, :)` = (0, 0, 0, 1); a clipping plane at `matrix(1:3, 4)` with
+ normal `matrix(1:3, 3)` follows it (`unclip`, then `clip`). ImGuizmo works in single precision: a moved matrix is
+ rounded to real32 relative to the camera's target (about 1e-7 of the scene's size). Statuses: `FIG_ERR_STATE` if
+ the view was not drawn in this frame and window, outside a frame and from a task; `FIG_ERR_ARGUMENT` for an
+ unknown mode or space, a snap not above 0, a matrix not finite or whose last row is not (0, 0, 0, 1). The same in
+ every mode.
+
+**Attributes**: recursive
+
+**Returns**: `logical`
+
+```fortran
+function gizmo(self, id, matrix, mode, space, snap, stat) result(changed)
+```
+
+**Arguments**
+
+| Name | Type | Intent | Attributes | Description |
+|------|------|--------|------------|-------------|
+| `self` | class([view3d_object](/api/src/lib/figure_view3d#view3d-object)) | in |  | View. |
+| `id` | character(len=*) | in |  | Gizmo id (unique in the window). |
+| `matrix` | real(kind=real64) | inout |  | The placement moved [world units]. |
+| `mode` | character(len=*) | in | optional | `'translate'` (default), `'rotate'`, `'scale'`. |
+| `space` | character(len=*) | in | optional | `'world'` (default), `'local'`. |
+| `snap` | real(kind=real64) | in | optional | Step of a drag [world units, degrees or factor]. |
+| `stat` | integer(kind=int32) | out | optional | Status. |
+
+**Call graph**
+
+```mermaid
+flowchart LR
+  gizmo["gizmo"] --> alive["alive"]
+  gizmo["gizmo"] --> fig_view3d_gizmo["fig_view3d_gizmo"]
+  gizmo["gizmo"] --> figure_check["figure_check"]
+  gizmo["gizmo"] --> figure_draw_refused["figure_draw_refused"]
+  gizmo["gizmo"] --> figure_fail["figure_fail"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class gizmo focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click alive href "#alive" "alive"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_gizmo href "#fig-view3d-gizmo" "fig_view3d_gizmo"
 ```
 
 ### alive
@@ -1100,17 +1461,43 @@ function alive(self, name, stat) result(ok)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   add_mesh["add_mesh"] --> alive["alive"]
   changed["changed"] --> alive["alive"]
   clear["clear"] --> alive["alive"]
   clip["clip"] --> alive["alive"]
   draw["draw"] --> alive["alive"]
+  editor_clear_marks["editor_clear_marks"] --> alive["alive"]
+  editor_completing["editor_completing"] --> alive["alive"]
+  editor_cursor["editor_cursor"] --> alive["alive"]
+  editor_draw["editor_draw"] --> alive["alive"]
+  editor_find["editor_find"] --> alive["alive"]
+  editor_focus["editor_focus"] --> alive["alive"]
+  editor_goto["editor_goto"] --> alive["alive"]
+  editor_insert["editor_insert"] --> alive["alive"]
+  editor_is_read_only["editor_is_read_only"] --> alive["alive"]
+  editor_line_count["editor_line_count"] --> alive["alive"]
+  editor_line_rect["editor_line_rect"] --> alive["alive"]
+  editor_mark["editor_mark"] --> alive["alive"]
+  editor_mark_of["editor_mark_of"] --> alive["alive"]
+  editor_read_only["editor_read_only"] --> alive["alive"]
+  editor_redo["editor_redo"] --> alive["alive"]
+  editor_replace["editor_replace"] --> alive["alive"]
+  editor_select["editor_select"] --> alive["alive"]
+  editor_selection["editor_selection"] --> alive["alive"]
+  editor_set_completions["editor_set_completions"] --> alive["alive"]
+  editor_set_language["editor_set_language"] --> alive["alive"]
+  editor_set_options["editor_set_options"] --> alive["alive"]
+  editor_set_text["editor_set_text"] --> alive["alive"]
+  editor_string["editor_string"] --> alive["alive"]
+  editor_undo["editor_undo"] --> alive["alive"]
   fit["fit"] --> alive["alive"]
   get_camera["get_camera"] --> alive["alive"]
+  gizmo["gizmo"] --> alive["alive"]
   image["image"] --> alive["alive"]
   orbit["orbit"] --> alive["alive"]
   pan["pan"] --> alive["alive"]
+  projection_matrix["projection_matrix"] --> alive["alive"]
   query["query"] --> alive["alive"]
   remove["remove"] --> alive["alive"]
   render_info["render_info"] --> alive["alive"]
@@ -1118,9 +1505,75 @@ flowchart TD
   set_mesh["set_mesh"] --> alive["alive"]
   unclip["unclip"] --> alive["alive"]
   view["view"] --> alive["alive"]
+  view_cube["view_cube"] --> alive["alive"]
+  view_current_match["view_current_match"] --> alive["alive"]
+  view_draw["view_draw"] --> alive["alive"]
+  view_find["view_find"] --> alive["alive"]
+  view_load["view_load"] --> alive["alive"]
+  view_matches["view_matches"] --> alive["alive"]
+  view_matrix["view_matrix"] --> alive["alive"]
+  view_scroll_to["view_scroll_to"] --> alive["alive"]
+  view_set_text["view_set_text"] --> alive["alive"]
+  view_text["view_text"] --> alive["alive"]
   zoom["zoom"] --> alive["alive"]
   alive["alive"] --> figure_fail["figure_fail"]
-  style alive fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class alive focus
+  click add_mesh href "#add-mesh" "add_mesh"
+  click changed href "#changed" "changed"
+  click clear href "#clear" "clear"
+  click clip href "#clip" "clip"
+  click draw href "figure_canvas.html#draw" "draw"
+  click editor_clear_marks href "figure_editor.html#editor-clear-marks" "editor_clear_marks"
+  click editor_completing href "figure_editor.html#editor-completing" "editor_completing"
+  click editor_cursor href "figure_editor.html#editor-cursor" "editor_cursor"
+  click editor_draw href "figure_editor.html#editor-draw" "editor_draw"
+  click editor_find href "figure_editor.html#editor-find" "editor_find"
+  click editor_focus href "figure_editor.html#editor-focus" "editor_focus"
+  click editor_goto href "figure_editor.html#editor-goto" "editor_goto"
+  click editor_insert href "figure_editor.html#editor-insert" "editor_insert"
+  click editor_is_read_only href "figure_editor.html#editor-is-read-only" "editor_is_read_only"
+  click editor_line_count href "figure_editor.html#editor-line-count" "editor_line_count"
+  click editor_line_rect href "figure_editor.html#editor-line-rect" "editor_line_rect"
+  click editor_mark href "figure_editor.html#editor-mark" "editor_mark"
+  click editor_mark_of href "figure_editor.html#editor-mark-of" "editor_mark_of"
+  click editor_read_only href "figure_editor.html#editor-read-only" "editor_read_only"
+  click editor_redo href "figure_editor.html#editor-redo" "editor_redo"
+  click editor_replace href "figure_editor.html#editor-replace" "editor_replace"
+  click editor_select href "figure_editor.html#editor-select" "editor_select"
+  click editor_selection href "figure_editor.html#editor-selection" "editor_selection"
+  click editor_set_completions href "figure_editor.html#editor-set-completions" "editor_set_completions"
+  click editor_set_language href "figure_editor.html#editor-set-language" "editor_set_language"
+  click editor_set_options href "figure_editor.html#editor-set-options" "editor_set_options"
+  click editor_set_text href "figure_editor.html#editor-set-text" "editor_set_text"
+  click editor_string href "figure_editor.html#editor-string" "editor_string"
+  click editor_undo href "figure_editor.html#editor-undo" "editor_undo"
+  click fit href "#fit" "fit"
+  click get_camera href "#get-camera" "get_camera"
+  click gizmo href "#gizmo" "gizmo"
+  click image href "#image" "image"
+  click orbit href "#orbit" "orbit"
+  click pan href "#pan" "pan"
+  click projection_matrix href "#projection-matrix" "projection_matrix"
+  click query href "#query" "query"
+  click remove href "#remove" "remove"
+  click render_info href "#render-info" "render_info"
+  click set_camera href "#set-camera" "set_camera"
+  click set_mesh href "#set-mesh" "set_mesh"
+  click unclip href "#unclip" "unclip"
+  click view href "#view" "view"
+  click view_cube href "#view-cube" "view_cube"
+  click view_current_match href "figure_markdown.html#view-current-match" "view_current_match"
+  click view_draw href "figure_markdown.html#view-draw" "view_draw"
+  click view_find href "figure_markdown.html#view-find" "view_find"
+  click view_load href "figure_markdown.html#view-load" "view_load"
+  click view_matches href "figure_markdown.html#view-matches" "view_matches"
+  click view_matrix href "#view-matrix" "view_matrix"
+  click view_scroll_to href "figure_markdown.html#view-scroll-to" "view_scroll_to"
+  click view_set_text href "figure_markdown.html#view-set-text" "view_set_text"
+  click view_text href "figure_markdown.html#view-text" "view_text"
+  click zoom href "#zoom" "zoom"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
 ```
 
 ### points_ok
@@ -1144,11 +1597,15 @@ function points_ok(name, xyz, stat) result(ok)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   connectivity_ok["connectivity_ok"] --> points_ok["points_ok"]
   lines["lines"] --> points_ok["points_ok"]
   points_ok["points_ok"] --> figure_fail["figure_fail"]
-  style points_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class points_ok focus
+  click connectivity_ok href "#connectivity-ok" "connectivity_ok"
+  click lines href "#lines" "lines"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
 ```
 
 ### connectivity_ok
@@ -1174,13 +1631,19 @@ function connectivity_ok(name, xyz, conn, per, stat) result(ok)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   lines["lines"] --> connectivity_ok["connectivity_ok"]
   quads["quads"] --> connectivity_ok["connectivity_ok"]
   triangles["triangles"] --> connectivity_ok["connectivity_ok"]
   connectivity_ok["connectivity_ok"] --> figure_fail["figure_fail"]
   connectivity_ok["connectivity_ok"] --> points_ok["points_ok"]
-  style connectivity_ok fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class connectivity_ok focus
+  click lines href "#lines" "lines"
+  click quads href "#quads" "quads"
+  click triangles href "#triangles" "triangles"
+  click points_ok href "#points-ok" "points_ok"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
 ```
 
 ### add_mesh
@@ -1210,7 +1673,7 @@ function add_mesh(self, kind, xyz, nv, conn, ncell, ni, nj, stat) result(mesh)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   lines["lines"] --> add_mesh["add_mesh"]
   quads["quads"] --> add_mesh["add_mesh"]
   surface["surface"] --> add_mesh["add_mesh"]
@@ -1218,7 +1681,15 @@ flowchart TD
   add_mesh["add_mesh"] --> alive["alive"]
   add_mesh["add_mesh"] --> fig_view3d_mesh["fig_view3d_mesh"]
   add_mesh["add_mesh"] --> figure_check["figure_check"]
-  style add_mesh fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class add_mesh focus
+  click lines href "#lines" "lines"
+  click quads href "#quads" "quads"
+  click surface href "#surface" "surface"
+  click triangles href "#triangles" "triangles"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_mesh href "#fig-view3d-mesh" "fig_view3d_mesh"
 ```
 
 ### scalar_set
@@ -1245,13 +1716,19 @@ function scalar_set(self, mesh, values, n, on_cells, stat) result(ok)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   set_mesh["set_mesh"] --> scalar_set["scalar_set"]
   style_new["style_new"] --> scalar_set["scalar_set"]
   surface["surface"] --> scalar_set["scalar_set"]
   scalar_set["scalar_set"] --> fig_view3d_scalar["fig_view3d_scalar"]
   scalar_set["scalar_set"] --> figure_check["figure_check"]
-  style scalar_set fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class scalar_set focus
+  click set_mesh href "#set-mesh" "set_mesh"
+  click style_new href "#style-new" "style_new"
+  click surface href "#surface" "surface"
+  click fig_view3d_scalar href "#fig-view3d-scalar" "fig_view3d_scalar"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### flag
@@ -1273,9 +1750,13 @@ function flag(value) result(f)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
+  add_window["add_window"] --> flag["flag"]
   set_mesh["set_mesh"] --> flag["flag"]
-  style flag fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class flag focus
+  click add_window href "figure_app.html#add-window" "add_window"
+  click set_mesh href "#set-mesh" "set_mesh"
 ```
 
 ### query
@@ -1307,7 +1788,7 @@ function query(self, name, what, x, y, mesh, element, point, stat) result(hit)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   clicked["clicked"] --> query["query"]
   hovered["hovered"] --> query["query"]
   pick["pick"] --> query["query"]
@@ -1315,5 +1796,13 @@ flowchart TD
   query["query"] --> fig_view3d_pick["fig_view3d_pick"]
   query["query"] --> figure_check["figure_check"]
   query["query"] --> figure_refused["figure_refused"]
-  style query fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class query focus
+  click clicked href "#clicked" "clicked"
+  click hovered href "#hovered" "hovered"
+  click pick href "#pick" "pick"
+  click figure_refused href "figure_base.html#figure-refused" "figure_refused"
+  click alive href "#alive" "alive"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_view3d_pick href "#fig-view3d-pick" "fig_view3d_pick"
 ```

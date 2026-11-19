@@ -20,6 +20,10 @@
         "link": "/api/src/lib/figure_c_native"
       },
       {
+        "text": "figure_canvas",
+        "link": "/api/src/lib/figure_canvas"
+      },
+      {
         "text": "figure_cimgui",
         "link": "/api/src/lib/figure_cimgui"
       },
@@ -32,12 +36,28 @@
         "link": "/api/src/lib/figure_cimplot"
       },
       {
+        "text": "figure_cimplot3d",
+        "link": "/api/src/lib/figure_cimplot3d"
+      },
+      {
+        "text": "figure_cimplot3d_enums",
+        "link": "/api/src/lib/figure_cimplot3d_enums"
+      },
+      {
         "text": "figure_cimplot_enums",
         "link": "/api/src/lib/figure_cimplot_enums"
       },
       {
         "text": "figure_dock",
         "link": "/api/src/lib/figure_dock"
+      },
+      {
+        "text": "figure_editor",
+        "link": "/api/src/lib/figure_editor"
+      },
+      {
+        "text": "figure_files",
+        "link": "/api/src/lib/figure_files"
       },
       {
         "text": "figure_group",
@@ -56,12 +76,28 @@
         "link": "/api/src/lib/figure_implot"
       },
       {
+        "text": "figure_implot3d",
+        "link": "/api/src/lib/figure_implot3d"
+      },
+      {
         "text": "figure_library",
         "link": "/api/src/lib/figure_library"
       },
       {
+        "text": "figure_markdown",
+        "link": "/api/src/lib/figure_markdown"
+      },
+      {
         "text": "figure_menu",
         "link": "/api/src/lib/figure_menu"
+      },
+      {
+        "text": "figure_numbers",
+        "link": "/api/src/lib/figure_numbers"
+      },
+      {
+        "text": "figure_player",
+        "link": "/api/src/lib/figure_player"
       },
       {
         "text": "figure_process",

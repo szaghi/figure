@@ -1,5 +1,6 @@
 ---
 title: figure_icons
+outline: [2, 4]
 ---
 
 # figure_icons

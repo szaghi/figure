@@ -103,7 +103,8 @@ packages are missing, it prints the `apt`/`dnf` command that installs them and s
 (with `sudo`, after showing it). Options, what is installed and `--uninstall`:
 [installation guide](https://szaghi.github.io/figure/guide/install#the-one-line-installer).
 
-**By hand:** FIGURE has a **native layer** (C/C++: Dear ImGui, ImPlot, cimgui, cimplot, miniz, SDL3 and FIGURE's glue), built by
+**By hand:** FIGURE has a **native layer** (C/C++: Dear ImGui and its extensions, SDL3 and FIGURE's glue; the parts and
+their pins are in the [installation guide](https://szaghi.github.io/figure/guide/install#the-native-layer)), built by
 CMake, and the **Fortran library**, built by [FoBiS](https://github.com/szaghi/FoBiS) or
 [fpm](https://fpm.fortran-lang.org). Linux needs the X11/Wayland/DBus development packages for SDL3 windows
 ([installation guide](https://szaghi.github.io/figure/guide/install)).

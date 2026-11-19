@@ -1,5 +1,6 @@
 ---
 title: figure_task
+outline: [2, 4]
 ---
 
 # figure_task
@@ -27,6 +28,8 @@ graph LR
   figure_task["figure_task"] --> figure_c_native["figure_c_native"]
   figure_task["figure_task"] --> iso_c_binding["iso_c_binding"]
   figure_task["figure_task"] --> iso_fortran_env["iso_fortran_env"]
+  click figure_base href "figure_base.html" "figure_base"
+  click figure_c_native href "figure_c_native.html" "figure_c_native"
 ```
 
 ## Contents
@@ -53,25 +56,25 @@ graph LR
 
 What a running task knows of itself: given to its `work` procedure.
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
 | `id` | integer(kind=c_int) |  | Native handle. |
 
-#### Type-Bound Procedures
+**Type-Bound Procedures**
 
 | Name | Attributes | Description |
 |------|------------|-------------|
-| `report` | pass(self) | Post progress. |
-| `cancelled` | pass(self) | The program asked the task to stop. |
-| `fail` | pass(self) | Report a failure. |
+| [`report`](/api/src/lib/figure_task#handle-report) | pass(self) | Post progress. |
+| [`cancelled`](/api/src/lib/figure_task#handle-cancelled) | pass(self) | The program asked the task to stop. |
+| [`fail`](/api/src/lib/figure_task#handle-fail) | pass(self) | Report a failure. |
 
 ### task_record
 
 What the worker thread reaches: the procedure, the data, the handle (at a fixed address while it runs).
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
@@ -84,23 +87,23 @@ What the worker thread reaches: the procedure, the data, the handle (at a fixed 
 A procedure of the program run on a worker thread. Not to be copied. An object that ends while its task runs
  asks the task to stop and waits for it (until its next safe point).
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
 | `rec` | type([task_record](/api/src/lib/figure_task#task-record)) | pointer | The running task's record. |
 | `id` | integer(kind=c_int) |  | Native handle (0: none). |
 
-#### Type-Bound Procedures
+**Type-Bound Procedures**
 
 | Name | Attributes | Description |
 |------|------------|-------------|
-| `start` | pass(self) | Start a task. |
-| `running` | pass(self) | It runs. |
-| `done` | pass(self) | It has ended (its result is waiting). |
-| `progress` | pass(self) | Its last progress and message. |
-| `cancel` | pass(self) | Ask it to stop. |
-| `result` | pass(self) | Its data, once done. |
+| [`start`](/api/src/lib/figure_task#task-start) | pass(self) | Start a task. |
+| [`running`](/api/src/lib/figure_task#task-running) | pass(self) | It runs. |
+| [`done`](/api/src/lib/figure_task#task-done) | pass(self) | It has ended (its result is waiting). |
+| [`progress`](/api/src/lib/figure_task#task-progress) | pass(self) | Its last progress and message. |
+| [`cancel`](/api/src/lib/figure_task#task-cancel) | pass(self) | Ask it to stop. |
+| [`result`](/api/src/lib/figure_task#task-result) | pass(self) | Its data, once done. |
 
 ## Subroutines
 
@@ -142,9 +145,11 @@ subroutine handle_report(self, fraction, message)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   handle_report["handle_report"] --> fig_task_report["fig_task_report"]
-  style handle_report fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class handle_report focus
+  click fig_task_report href "figure_c_native.html#fig-task-report" "fig_task_report"
 ```
 
 ### handle_fail
@@ -168,9 +173,11 @@ subroutine handle_fail(self, message)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   handle_fail["handle_fail"] --> fig_task_fail["fig_task_fail"]
-  style handle_fail fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class handle_fail focus
+  click fig_task_fail href "figure_c_native.html#fig-task-fail" "fig_task_fail"
 ```
 
 ### task_start
@@ -196,13 +203,18 @@ subroutine task_start(self, work, data, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   task_start["task_start"] --> fig_task_start["fig_task_start"]
   task_start["task_start"] --> figure_check["figure_check"]
   task_start["task_start"] --> figure_fail["figure_fail"]
   task_start["task_start"] --> release["release"]
   task_start["task_start"] --> running["running"]
-  style task_start fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class task_start focus
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click release href "#release" "release"
+  click fig_task_start href "figure_c_native.html#fig-task-start" "fig_task_start"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### task_progress
@@ -225,9 +237,11 @@ subroutine task_progress(self, fraction, message)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   task_progress["task_progress"] --> fig_task_state["fig_task_state"]
-  style task_progress fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class task_progress focus
+  click fig_task_state href "figure_c_native.html#fig-task-state" "fig_task_state"
 ```
 
 ### task_cancel
@@ -249,11 +263,15 @@ subroutine task_cancel(self, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   task_cancel["task_cancel"] --> fig_task_cancel["fig_task_cancel"]
   task_cancel["task_cancel"] --> figure_check["figure_check"]
   task_cancel["task_cancel"] --> figure_fail["figure_fail"]
-  style task_cancel fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class task_cancel focus
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_task_cancel href "figure_c_native.html#fig-task-cancel" "fig_task_cancel"
 ```
 
 ### task_result
@@ -278,13 +296,18 @@ subroutine task_result(self, data, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   task_result["task_result"] --> done["done"]
   task_result["task_result"] --> fig_task_finish["fig_task_finish"]
   task_result["task_result"] --> figure_check["figure_check"]
   task_result["task_result"] --> figure_fail["figure_fail"]
   task_result["task_result"] --> release["release"]
-  style task_result fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class task_result focus
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click fig_task_finish href "figure_c_native.html#fig-task-finish" "fig_task_finish"
+  click release href "#release" "release"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### release
@@ -304,12 +327,17 @@ subroutine release(self)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   task_final["task_final"] --> release["release"]
   task_result["task_result"] --> release["release"]
   task_start["task_start"] --> release["release"]
   release["release"] --> fig_task_release["fig_task_release"]
-  style release fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class release focus
+  click task_final href "#task-final" "task_final"
+  click task_result href "#task-result" "task_result"
+  click task_start href "#task-start" "task_start"
+  click fig_task_release href "figure_c_native.html#fig-task-release" "fig_task_release"
 ```
 
 ### task_final
@@ -329,9 +357,11 @@ subroutine task_final(self)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   task_final["task_final"] --> release["release"]
-  style task_final fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class task_final focus
+  click release href "#release" "release"
 ```
 
 ## Functions
@@ -358,9 +388,11 @@ function handle_cancelled(self) result(cancelled)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   handle_cancelled["handle_cancelled"] --> fig_task_cancelled["fig_task_cancelled"]
-  style handle_cancelled fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class handle_cancelled focus
+  click fig_task_cancelled href "figure_c_native.html#fig-task-cancelled" "fig_task_cancelled"
 ```
 
 ### task_running
@@ -382,9 +414,10 @@ function task_running(self) result(running)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   task_running["task_running"] --> done["done"]
-  style task_running fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class task_running focus
 ```
 
 ### task_done
@@ -407,7 +440,9 @@ function task_done(self) result(done)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   task_done["task_done"] --> fig_task_state["fig_task_state"]
-  style task_done fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class task_done focus
+  click fig_task_state href "figure_c_native.html#fig-task-state" "fig_task_state"
 ```

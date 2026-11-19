@@ -58,7 +58,7 @@ calls in a frame does not matter, except between two `'global'` calls (below). `
 - **Text fields keep their keys.** While a text field is edited, a `'focused'` chord of one key alone or with shift,
   such as `'down'`, `'enter'`, `'escape'`, `'home'` or `'shift+left'`, does not fire: the field uses them (left,
   right, home and end move its cursor, enter and escape end the edit; in a one-line field, up and down move Dear
-  ImGui's keyboard navigation to the widget above or below, ending the edit). Chords with ctrl, alt or super, and the function keys f1 to f24, still fire. Keys that type a
+  ImGui's keyboard navigation to the widget above or below, ending the edit). Chords with ctrl, alt or super, and the function keys (`'f1'` to `'f12'`, the names a chord can use), still fire. Keys that type a
   character (`'a'`, `'space'`, `'shift+1'`) do not fire for `'global'` calls either (Dear ImGui's own rule). The
   chords a field routes itself (enter, ctrl+enter, shift+enter, ctrl+a, ctrl+c, ctrl+v, ctrl+x, ctrl+z, ctrl+y)
   stay the field's, for every routed scope. Keys for the field being edited go to an `'item'` call after it. An

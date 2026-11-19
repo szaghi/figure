@@ -11,7 +11,9 @@ no display server: it runs in CI as is, without Xvfb.
 
 Differences from window mode:
 
-- `next_frame` never returns `.false.`: the program decides how many frames to run;
+- no window to close: `next_frame` returns `.false.` only on a quit request, `app%quit` or `test_quit` (the close
+  button's), or when `FIGURE_CAPTURE_FRAMES` frames are written ([Capture](capture)); otherwise the program decides
+  how many frames to run;
 - every frame advances Dear ImGui's clock by 1/60 s, whatever the wall time;
 - no `imgui.ini` is read or written;
 - `content_scale()` is 1;

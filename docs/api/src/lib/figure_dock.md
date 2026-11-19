@@ -1,12 +1,16 @@
 ---
 title: figure_dock
+outline: [2, 4]
 ---
 
 # figure_dock
 
 > figure_dock, docking: windows docked into one another or into a dock space, and layouts set by the program.
 
- Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md.
+ Every drawing procedure of this module refuses a call from a task (`FIG_ERR_STATE`): see processes.md; and a call
+ with no frame open, a usage error (`FIG_ERR_STATE`, `<procedure>: no frame open`). Every begin/end and push/pop
+ pair registers in the scope record of the frame, which checks each end before Dear ImGui sees it: a wrong end is
+ refused and reported by `app%next_frame` (`app%set_checks`; errors.md, "Pairing and frames").
 
  Docking is on by default (`app%set_docking` turns it off): the user drags a window by its title bar onto another
  window, or onto a dock space, and drops it as a tab or a split. A dock space over the whole display is declared
@@ -42,6 +46,10 @@ graph LR
   figure_dock["figure_dock"] --> figure_cimgui_enums["figure_cimgui_enums"]
   figure_dock["figure_dock"] --> iso_c_binding["iso_c_binding"]
   figure_dock["figure_dock"] --> iso_fortran_env["iso_fortran_env"]
+  click figure_base href "figure_base.html" "figure_base"
+  click figure_c_native href "figure_c_native.html" "figure_c_native"
+  click figure_cimgui href "figure_cimgui.html" "figure_cimgui"
+  click figure_cimgui_enums href "figure_cimgui_enums.html" "figure_cimgui_enums"
 ```
 
 ## Contents
@@ -79,11 +87,15 @@ subroutine ig_dock_space(id, flags, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_dock_space["ig_dock_space"] --> fig_dock_space["fig_dock_space"]
   ig_dock_space["ig_dock_space"] --> figure_check["figure_check"]
-  ig_dock_space["ig_dock_space"] --> figure_refused["figure_refused"]
-  style ig_dock_space fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ig_dock_space["ig_dock_space"] --> figure_draw_refused["figure_draw_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_dock_space focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_dock_space href "figure_c_native.html#fig-dock-space" "fig_dock_space"
 ```
 
 ### ig_dock_split
@@ -111,12 +123,17 @@ subroutine ig_dock_split(id, direction, fraction, id_at_dir, id_other, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_dock_split["ig_dock_split"] --> fig_dock_split["fig_dock_split"]
   ig_dock_split["ig_dock_split"] --> figure_check["figure_check"]
+  ig_dock_split["ig_dock_split"] --> figure_draw_refused["figure_draw_refused"]
   ig_dock_split["ig_dock_split"] --> figure_fail["figure_fail"]
-  ig_dock_split["ig_dock_split"] --> figure_refused["figure_refused"]
-  style ig_dock_split fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_dock_split focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_dock_split href "figure_c_native.html#fig-dock-split" "fig_dock_split"
 ```
 
 ### ig_dock_window
@@ -140,11 +157,15 @@ subroutine ig_dock_window(name, id, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_dock_window["ig_dock_window"] --> fig_dock_window["fig_dock_window"]
   ig_dock_window["ig_dock_window"] --> figure_check["figure_check"]
-  ig_dock_window["ig_dock_window"] --> figure_refused["figure_refused"]
-  style ig_dock_window fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ig_dock_window["ig_dock_window"] --> figure_draw_refused["figure_draw_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_dock_window focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_dock_window href "figure_c_native.html#fig-dock-window" "fig_dock_window"
 ```
 
 ### ig_dock_layout_end
@@ -167,11 +188,15 @@ subroutine ig_dock_layout_end(id, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_dock_layout_end["ig_dock_layout_end"] --> fig_dock_layout_end["fig_dock_layout_end"]
   ig_dock_layout_end["ig_dock_layout_end"] --> figure_check["figure_check"]
-  ig_dock_layout_end["ig_dock_layout_end"] --> figure_refused["figure_refused"]
-  style ig_dock_layout_end fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ig_dock_layout_end["ig_dock_layout_end"] --> figure_scope_refused["figure_scope_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_dock_layout_end focus
+  click figure_scope_refused href "figure_base.html#figure-scope-refused" "figure_scope_refused"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_dock_layout_end href "figure_c_native.html#fig-dock-layout-end" "fig_dock_layout_end"
 ```
 
 ### ig_window_dock
@@ -194,10 +219,13 @@ subroutine ig_window_dock(id, docked)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_window_dock["ig_window_dock"] --> fig_window_dock["fig_window_dock"]
-  ig_window_dock["ig_window_dock"] --> figure_refused["figure_refused"]
-  style ig_window_dock fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ig_window_dock["ig_window_dock"] --> figure_draw_refused["figure_draw_refused"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_window_dock focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click fig_window_dock href "figure_c_native.html#fig-window-dock" "fig_window_dock"
 ```
 
 ### ig_set_next_window_dock
@@ -221,10 +249,13 @@ subroutine ig_set_next_window_dock(id, always)
 **Call graph**
 
 ```mermaid
-flowchart TD
-  ig_set_next_window_dock["ig_set_next_window_dock"] --> figure_refused["figure_refused"]
+flowchart LR
+  ig_set_next_window_dock["ig_set_next_window_dock"] --> figure_draw_refused["figure_draw_refused"]
   ig_set_next_window_dock["ig_set_next_window_dock"] --> igSetNextWindowDockID["igSetNextWindowDockID"]
-  style ig_set_next_window_dock fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_set_next_window_dock focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click igSetNextWindowDockID href "figure_cimgui.html#igsetnextwindowdockid" "igSetNextWindowDockID"
 ```
 
 ## Functions
@@ -248,15 +279,19 @@ function ig_dock_id(name) result(id)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_dock_id["ig_dock_id"] --> fig_dock_id["fig_dock_id"]
-  style ig_dock_id fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_dock_id focus
+  click fig_dock_id href "figure_c_native.html#fig-dock-id" "fig_dock_id"
 ```
 
 ### ig_dock_layout_begin
 
-True when the dock space `id` has no layout yet (its first frame, without an ini file keeping one): then lay it
- out with `ig_dock_split` and `ig_dock_window`, and close with `ig_dock_layout_end`. Call it before `ig_dock_space`.
+True when the dock space `id` has no layout yet (its first frame, without an ini file keeping one), or must be
+ laid out again (`app%switch_layout` to a layout not arranged yet, `app%reset_layout`): then lay it out (the
+ layout `app%layout()`, if the program has several) with `ig_dock_split` and `ig_dock_window`, and close with
+ `ig_dock_layout_end`. Call it before `ig_dock_space`.
 
 **Attributes**: recursive
 
@@ -276,9 +311,15 @@ function ig_dock_layout_begin(id, stat) result(needed)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   ig_dock_layout_begin["ig_dock_layout_begin"] --> fig_dock_layout_begin["fig_dock_layout_begin"]
   ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_check["figure_check"]
-  ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_refused["figure_refused"]
-  style ig_dock_layout_begin fill:#3e63dd,stroke:#99b,stroke-width:2px
+  ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_draw_refused["figure_draw_refused"]
+  ig_dock_layout_begin["ig_dock_layout_begin"] --> figure_scope_open["figure_scope_open"]
+  classDef focus stroke-width:3px,font-weight:bold
+  class ig_dock_layout_begin focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_dock_layout_begin href "figure_c_native.html#fig-dock-layout-begin" "fig_dock_layout_begin"
+  click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"
 ```

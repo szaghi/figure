@@ -1,5 +1,6 @@
 ---
 title: figure_process
+outline: [2, 4]
 ---
 
 # figure_process
@@ -29,8 +30,15 @@ graph LR
   figure_process["figure_process"] --> figure_cimgui["figure_cimgui"]
   figure_process["figure_process"] --> figure_cimgui_enums["figure_cimgui_enums"]
   figure_process["figure_process"] --> figure_group["figure_group"]
+  figure_process["figure_process"] --> figure_imgui["figure_imgui"]
   figure_process["figure_process"] --> iso_c_binding["iso_c_binding"]
   figure_process["figure_process"] --> iso_fortran_env["iso_fortran_env"]
+  click figure_base href "figure_base.html" "figure_base"
+  click figure_c_native href "figure_c_native.html" "figure_c_native"
+  click figure_cimgui href "figure_cimgui.html" "figure_cimgui"
+  click figure_cimgui_enums href "figure_cimgui_enums.html" "figure_cimgui_enums"
+  click figure_group href "figure_group.html" "figure_group"
+  click figure_imgui href "figure_imgui.html" "figure_imgui"
 ```
 
 ## Contents
@@ -66,29 +74,29 @@ graph LR
 A program started from the program: `p%start(args)`, then `p%poll(lines)` every frame while `p%running()`.
  Not to be copied: the copy would own the same child.
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
 | `id` | integer(kind=c_int) |  | Native handle (0: none). |
 
-#### Type-Bound Procedures
+**Type-Bound Procedures**
 
 | Name | Attributes | Description |
 |------|------------|-------------|
-| `start` | pass(self) | Start a program. |
-| `poll` | pass(self) | The complete lines since the last poll. |
-| `running` | pass(self) | It runs (or output is still to be read). |
-| `exit_code` | pass(self) | Its exit code (captured, ended). |
-| `killed` | pass(self) | It ended after `kill`. |
-| `pid` | pass(self) | Its process id. |
-| `kill` | pass(self) | Ask it to end. |
+| [`start`](/api/src/lib/figure_process#process-start) | pass(self) | Start a program. |
+| [`poll`](/api/src/lib/figure_process#process-poll) | pass(self) | The complete lines since the last poll. |
+| [`running`](/api/src/lib/figure_process#process-running) | pass(self) | It runs (or output is still to be read). |
+| [`exit_code`](/api/src/lib/figure_process#process-exit-code) | pass(self) | Its exit code (captured, ended). |
+| [`killed`](/api/src/lib/figure_process#process-killed) | pass(self) | It ended after `kill`. |
+| [`pid`](/api/src/lib/figure_process#process-pid) | pass(self) | Its process id. |
+| [`kill`](/api/src/lib/figure_process#process-kill) | pass(self) | Ask it to end. |
 
 ### log_line_object
 
 One line of a log view.
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
@@ -100,7 +108,7 @@ Lines of text kept in a ring buffer (`set_cap`, default 10000 lines: the oldest 
  of their own, only those in view. The view follows the end while it is scrolled to the bottom; a click chooses a
  line, shift+click extends the choice, ctrl+c (cmd+c on macOS) or the right-click menu copies it.
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
@@ -113,21 +121,21 @@ Lines of text kept in a ring buffer (`set_cap`, default 10000 lines: the oldest 
 | `follow` | logical |  | The view follows the end. |
 | `view` | integer(kind=int32) |  | Kept lines in view on the last draw. |
 
-#### Type-Bound Procedures
+**Type-Bound Procedures**
 
 | Name | Attributes | Description |
 |------|------------|-------------|
-| `add_lines` | pass(self) |  |
-| `add_line` | pass(self) |  |
-| `add` |  | Add one line or several. |
-| `clear` | pass(self) | Remove every line. |
-| `set_cap` | pass(self) | The number of lines kept. |
-| `count` | pass(self) | Lines kept. |
-| `line` | pass(self) | A kept line. |
-| `draw` | pass(self) | Draw the view. |
-| `following` | pass(self) | The view follows the end. |
-| `in_view` | pass(self) | The lines in view on the last draw. |
-| `copy` | pass(self) | The chosen lines, joined by newlines. |
+| [`add_lines`](/api/src/lib/figure_process#add-lines) | pass(self) | Add lines, oldest first (as `p%poll` gives them). |
+| [`add_line`](/api/src/lib/figure_process#add-line) | pass(self) | Add a line (trailing blanks removed); with the buffer full, the oldest line goes. |
+| `add` |  | Add one line or several. Generic: [`add_line`](/api/src/lib/figure_process#add-line), [`add_lines`](/api/src/lib/figure_process#add-lines) |
+| [`clear`](/api/src/lib/figure_process#log-clear) | pass(self) | Remove every line. |
+| [`set_cap`](/api/src/lib/figure_process#log-set-cap) | pass(self) | The number of lines kept. |
+| [`count`](/api/src/lib/figure_process#log-count) | pass(self) | Lines kept. |
+| [`line`](/api/src/lib/figure_process#log-line) | pass(self) | A kept line. |
+| [`draw`](/api/src/lib/figure_process#log-draw) | pass(self) | Draw the view. |
+| [`following`](/api/src/lib/figure_process#log-following) | pass(self) | The view follows the end. |
+| [`in_view`](/api/src/lib/figure_process#log-in-view) | pass(self) | The lines in view on the last draw. |
+| [`copy`](/api/src/lib/figure_process#log-copy) | pass(self) | The chosen lines, joined by newlines. |
 
 ## Subroutines
 
@@ -162,7 +170,7 @@ subroutine process_start(self, args, cwd, env, merge_stderr, detached, log_file,
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   process_start["process_start"] --> fig_process_release["fig_process_release"]
   process_start["process_start"] --> fig_process_start["fig_process_start"]
   process_start["process_start"] --> figure_check["figure_check"]
@@ -170,7 +178,13 @@ flowchart TD
   process_start["process_start"] --> merge_env["merge_env"]
   process_start["process_start"] --> pack_strings["pack_strings"]
   process_start["process_start"] --> running["running"]
-  style process_start fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class process_start focus
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click fig_process_release href "figure_c_native.html#fig-process-release" "fig_process_release"
+  click pack_strings href "#pack-strings" "pack_strings"
+  click fig_process_start href "figure_c_native.html#fig-process-start" "fig_process_start"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### process_poll
@@ -195,13 +209,19 @@ subroutine process_poll(self, lines, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   process_poll["process_poll"] --> fig_process_pending["fig_process_pending"]
   process_poll["process_poll"] --> fig_process_take["fig_process_take"]
   process_poll["process_poll"] --> figure_check["figure_check"]
   process_poll["process_poll"] --> figure_fail["figure_fail"]
   process_poll["process_poll"] --> split_lines["split_lines"]
-  style process_poll fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class process_poll focus
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click fig_process_pending href "figure_c_native.html#fig-process-pending" "fig_process_pending"
+  click fig_process_take href "figure_c_native.html#fig-process-take" "fig_process_take"
+  click split_lines href "#split-lines" "split_lines"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
 ```
 
 ### process_kill
@@ -226,11 +246,15 @@ subroutine process_kill(self, force, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   process_kill["process_kill"] --> fig_process_kill["fig_process_kill"]
   process_kill["process_kill"] --> figure_check["figure_check"]
   process_kill["process_kill"] --> figure_fail["figure_fail"]
-  style process_kill fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class process_kill focus
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_process_kill href "figure_c_native.html#fig-process-kill" "fig_process_kill"
 ```
 
 ### process_final
@@ -250,9 +274,11 @@ subroutine process_final(self)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   process_final["process_final"] --> fig_process_release["fig_process_release"]
-  style process_final fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class process_final focus
+  click fig_process_release href "figure_c_native.html#fig-process-release" "fig_process_release"
 ```
 
 ### pack_strings
@@ -276,9 +302,11 @@ subroutine pack_strings(s, packed, lens)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   process_start["process_start"] --> pack_strings["pack_strings"]
-  style pack_strings fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class pack_strings focus
+  click process_start href "#process-start" "process_start"
 ```
 
 ### split_lines
@@ -301,9 +329,13 @@ subroutine split_lines(buf, lines)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
+  editor_completing["editor_completing"] --> split_lines["split_lines"]
   process_poll["process_poll"] --> split_lines["split_lines"]
-  style split_lines fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class split_lines focus
+  click editor_completing href "figure_editor.html#editor-completing" "editor_completing"
+  click process_poll href "#process-poll" "process_poll"
 ```
 
 ### add_line
@@ -324,9 +356,11 @@ subroutine add_line(self, line)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   add_lines["add_lines"] --> add_line["add_line"]
-  style add_line fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class add_line focus
+  click add_lines href "#add-lines" "add_lines"
 ```
 
 ### add_lines
@@ -347,9 +381,11 @@ subroutine add_lines(self, lines)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   add_lines["add_lines"] --> add_line["add_line"]
-  style add_lines fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class add_lines focus
+  click add_line href "#add-line" "add_line"
 ```
 
 ### log_clear
@@ -385,10 +421,12 @@ subroutine log_set_cap(self, cap, stat)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   log_set_cap["log_set_cap"] --> figure_fail["figure_fail"]
   log_set_cap["log_set_cap"] --> line["line"]
-  style log_set_cap fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class log_set_cap focus
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
 ```
 
 ### log_in_view
@@ -432,19 +470,17 @@ subroutine log_draw(self, id, height)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   log_draw["log_draw"] --> begin["begin"]
   log_draw["log_draw"] --> clipboard["clipboard"]
   log_draw["log_draw"] --> copy["copy"]
   log_draw["log_draw"] --> cstr["cstr"]
-  log_draw["log_draw"] --> figure_refused["figure_refused"]
+  log_draw["log_draw"] --> figure_draw_refused["figure_draw_refused"]
   log_draw["log_draw"] --> igBeginChild_Str["igBeginChild_Str"]
   log_draw["log_draw"] --> igBeginPopupContextWindow["igBeginPopupContextWindow"]
   log_draw["log_draw"] --> igEndChild["igEndChild"]
   log_draw["log_draw"] --> igEndPopup["igEndPopup"]
   log_draw["log_draw"] --> igGetCursorPosX["igGetCursorPosX"]
-  log_draw["log_draw"] --> igGetScrollMaxY["igGetScrollMaxY"]
-  log_draw["log_draw"] --> igGetScrollY["igGetScrollY"]
   log_draw["log_draw"] --> igGetTextLineHeightWithSpacing["igGetTextLineHeightWithSpacing"]
   log_draw["log_draw"] --> igIsKeyChordPressed_Nil["igIsKeyChordPressed_Nil"]
   log_draw["log_draw"] --> igIsKeyDown_Nil["igIsKeyDown_Nil"]
@@ -454,11 +490,32 @@ flowchart TD
   log_draw["log_draw"] --> igPushID_Int["igPushID_Int"]
   log_draw["log_draw"] --> igSameLine["igSameLine"]
   log_draw["log_draw"] --> igSelectable_Bool["igSelectable_Bool"]
-  log_draw["log_draw"] --> igSetScrollHereY["igSetScrollHereY"]
   log_draw["log_draw"] --> igTextUnformatted["igTextUnformatted"]
+  log_draw["log_draw"] --> ig_get_scroll["ig_get_scroll"]
+  log_draw["log_draw"] --> ig_scroll_here["ig_scroll_here"]
   log_draw["log_draw"] --> line["line"]
   log_draw["log_draw"] --> step["step"]
-  style log_draw fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class log_draw focus
+  click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
+  click igBeginChild_Str href "figure_cimgui.html#igbeginchild-str" "igBeginChild_Str"
+  click cstr href "figure_base.html#cstr" "cstr"
+  click ig_get_scroll href "figure_imgui.html#ig-get-scroll" "ig_get_scroll"
+  click igGetTextLineHeightWithSpacing href "figure_cimgui.html#iggettextlineheightwithspacing" "igGetTextLineHeightWithSpacing"
+  click igPushID_Int href "figure_cimgui.html#igpushid-int" "igPushID_Int"
+  click igGetCursorPosX href "figure_cimgui.html#iggetcursorposx" "igGetCursorPosX"
+  click igSelectable_Bool href "figure_cimgui.html#igselectable-bool" "igSelectable_Bool"
+  click igIsKeyDown_Nil href "figure_cimgui.html#igiskeydown-nil" "igIsKeyDown_Nil"
+  click igSameLine href "figure_cimgui.html#igsameline" "igSameLine"
+  click igTextUnformatted href "figure_cimgui.html#igtextunformatted" "igTextUnformatted"
+  click igPopID href "figure_cimgui.html#igpopid" "igPopID"
+  click ig_scroll_here href "figure_imgui.html#ig-scroll-here" "ig_scroll_here"
+  click igIsWindowFocused href "figure_cimgui.html#igiswindowfocused" "igIsWindowFocused"
+  click igIsKeyChordPressed_Nil href "figure_cimgui.html#igiskeychordpressed-nil" "igIsKeyChordPressed_Nil"
+  click igBeginPopupContextWindow href "figure_cimgui.html#igbeginpopupcontextwindow" "igBeginPopupContextWindow"
+  click igMenuItem_Bool href "figure_cimgui.html#igmenuitem-bool" "igMenuItem_Bool"
+  click igEndPopup href "figure_cimgui.html#igendpopup" "igEndPopup"
+  click igEndChild href "figure_cimgui.html#igendchild" "igEndChild"
 ```
 
 ## Functions
@@ -483,9 +540,11 @@ function process_running(self) result(running)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   process_running["process_running"] --> fig_process_info["fig_process_info"]
-  style process_running fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class process_running focus
+  click fig_process_info href "figure_c_native.html#fig-process-info" "fig_process_info"
 ```
 
 ### process_exit_code
@@ -510,11 +569,15 @@ function process_exit_code(self, stat) result(code)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   process_exit_code["process_exit_code"] --> fig_process_info["fig_process_info"]
   process_exit_code["process_exit_code"] --> figure_check["figure_check"]
   process_exit_code["process_exit_code"] --> figure_fail["figure_fail"]
-  style process_exit_code fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class process_exit_code focus
+  click figure_fail href "figure_base.html#figure-fail" "figure_fail"
+  click figure_check href "figure_base.html#figure-check" "figure_check"
+  click fig_process_info href "figure_c_native.html#fig-process-info" "fig_process_info"
 ```
 
 ### process_killed
@@ -537,9 +600,11 @@ function process_killed(self) result(killed)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   process_killed["process_killed"] --> fig_process_info["fig_process_info"]
-  style process_killed fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class process_killed focus
+  click fig_process_info href "figure_c_native.html#fig-process-info" "fig_process_info"
 ```
 
 ### process_pid
@@ -561,9 +626,11 @@ function process_pid(self) result(pid)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   process_pid["process_pid"] --> fig_process_info["fig_process_info"]
-  style process_pid fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class process_pid focus
+  click fig_process_info href "figure_c_native.html#fig-process-info" "fig_process_info"
 ```
 
 ### log_count
@@ -641,7 +708,8 @@ function log_copy(self, all) result(text)
 **Call graph**
 
 ```mermaid
-flowchart TD
+flowchart LR
   log_copy["log_copy"] --> line["line"]
-  style log_copy fill:#3e63dd,stroke:#99b,stroke-width:2px
+  classDef focus stroke-width:3px,font-weight:bold
+  class log_copy focus
 ```

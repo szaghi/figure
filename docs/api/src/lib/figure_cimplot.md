@@ -1,5 +1,6 @@
 ---
 title: figure_cimplot
+outline: [2, 4]
 ---
 
 # figure_cimplot
@@ -19,6 +20,7 @@ title: figure_cimplot
 graph LR
   figure_cimplot["figure_cimplot"] --> figure_cimgui["figure_cimgui"]
   figure_cimplot["figure_cimplot"] --> iso_c_binding["iso_c_binding"]
+  click figure_cimgui href "figure_cimgui.html" "figure_cimgui"
 ```
 
 ## Contents
@@ -409,7 +411,7 @@ graph LR
 
 **Attributes**: bind(C)
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
@@ -422,7 +424,7 @@ graph LR
 
 **Attributes**: bind(C)
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
@@ -435,7 +437,7 @@ graph LR
 
 **Attributes**: bind(C)
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|
@@ -448,7 +450,7 @@ graph LR
 
 **Attributes**: bind(C)
 
-#### Components
+**Components**
 
 | Name | Type | Attributes | Description |
 |------|------|------------|-------------|

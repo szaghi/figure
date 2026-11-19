@@ -5,9 +5,7 @@ title: Feature map
 # Feature map
 
 `use figure` exports everything below except the testing procedures (`use figure_testing`). The modules it re-exports
-(`figure_app`, `figure_imgui`, `figure_implot`, `figure_dock`, `figure_style`, `figure_texture`, `figure_icons`,
-`figure_base`) can also be used directly; `figure_c_native` and the generated raw modules (`figure_cimgui`,
-`figure_cimplot` and their `_enums`) are internal and change without notice ([Raw bindings](raw-bindings)).
+([the modules](architecture#the-modules)) can also be used directly; `figure_c_native` and the generated raw layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal: programs call the wrappers, and a Dear ImGui or ImPlot function without one is listed as "raw only" in [Dear ImGui names](imgui-names) ([Raw bindings](raw-bindings)).
 
 All kinds are those of `iso_fortran_env`: `int32`, `real32`, `real64`. Optional arguments are in brackets.
 A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) is found in the
@@ -439,5 +437,6 @@ Details: [Error handling](errors).
 | `FIGURE_DEBUG_WAKE` | any value: each wake-up sent and what ended each wait of the loop, on standard error (window and remote modes) — see [frame loop](frame-loop#what-ended-a-wait) |
 | `FIGURE_STYLE` | the style at initialisation: a name of `app%set_style`, or a theme file — see [styles](styles) |
 | `FIGURE_CAPTURE`, `FIGURE_CAPTURE_*` | record the frames of a window to image files, with scripted input — see [screenshots and videos](capture) |
+| `FIGURE_RENDER_THREADS` | the CPU renderer's threads, 1-64 (default: the hardware's, at most 8; headless and remote frames, pictures) — see [screenshots and videos](capture) |
 | `GALLIUM_DRIVER=d3d12` | not read by FIGURE: on WSL2, makes Mesa render on the GPU — see [installation](install#wsl2-wslg) |
 | `SDL_VIDEO_DRIVER` | read by SDL3: `x11` or `wayland` to choose the video driver |

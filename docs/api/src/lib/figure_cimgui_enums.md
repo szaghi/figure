@@ -1,5 +1,6 @@
 ---
 title: figure_cimgui_enums
+outline: [2, 4]
 ---
 
 # figure_cimgui_enums

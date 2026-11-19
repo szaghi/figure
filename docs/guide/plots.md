@@ -646,7 +646,7 @@ box the user drags with the right button: the readout of a monitor, a window cho
 
 Marks are drawn in plot units and are not items, except the infinite lines: a tag on an axis, a line across the
 plot, a text at a point, a rectangle the user drags. With the drag tools and annotations of
-[the next section](#error-bars-annotations-and-drag-tools) they mark what a program wants seen.
+[Error bars, annotations and drag tools](#error-bars-annotations-and-drag-tools) they mark what a program wants seen.
 
 | Procedure | Notes |
 |---|---|

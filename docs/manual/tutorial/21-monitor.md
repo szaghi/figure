@@ -55,7 +55,8 @@ mean temperature's line. A monitor of a real solver averages a lift coefficient 
 
 - `ig_canvas(id, width, height, ev)` places an area that takes the mouse; `ev` tells what happened over it on this
   frame: `hovered`, `clicked(1)`, the pointer `mouse` from its top-left corner, its `origin` on the screen and its
-  `size` ([Canvas](/guide/canvas)). A width of -1 is the width of the form, less one pixel.
+  `size` ([Canvas](/guide/canvas)). A width of 0 or below is the space left plus it: -1, as here, is all of the
+  form's width but one pixel.
 - The primitives draw in screen pixels: the program maps the plate's metres to pixels itself, y up on the plate and
   down on the screen.
 - **Hit testing is the program's:** the canvas reports the pointer, and `segment_distance` finds the side within 6

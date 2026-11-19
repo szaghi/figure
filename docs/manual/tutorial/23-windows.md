@@ -90,3 +90,6 @@ is idle with `test_run` ([Finding items by path](/guide/testing#finding-items-by
 FIGURE draws; `app%open_prefs`, `app%save_pref` and `app%load_pref`, the user's settings kept. Reference:
 [Windows and layouts](/guide/docking#windows-and-layouts), [Preferences](/guide/frame-loop#preferences).
 :::
+
+**Next:** [24. The input in an editor, the help in Markdown](./24-editor): the input in a code editor with each mistake
+marked on its line, and help pages in Markdown.

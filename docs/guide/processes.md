@@ -47,8 +47,11 @@ releases it), at `app%destroy`, and when the program exits normally (`stop`, `er
 program): first politely, then by force after 0.1 s. A program killed by a signal cannot kill its children: they go on
 until they end or write to the closed pipe.
 
-A **detached** child is started in a session of its own (POSIX: `setsid`, after a double fork, so the system's
-init process reaps it: no zombie is left); its output goes to `log_file`, created or truncated at `start`. The
+A **detached** child is started in a session of its own (POSIX: `setsid`, after a double fork, so that it is not the
+program's child: the system's init process, or a subreaper, reaps it); its output goes to `log_file`, created or
+truncated at `start`. Its end is seen in every case on Linux: the program reaps it when it is itself the reaper (PID 1
+of a container without an init), and a zombie that another process holds unreaped counts as ended (read from `/proc`).
+Elsewhere such a zombie keeps `p%running()` true ([Known issues](known-issues#processes)). The
 program follows it with `p%poll` while it runs, and can start a new GUI later that reads the same file.
 
 ### Arguments: no shell

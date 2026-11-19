@@ -354,7 +354,7 @@ contains
    integer(int32),   intent(in)           :: rows    !< Rows of plots.
    integer(int32),   intent(in)           :: cols    !< Columns of plots.
    real(real64),     intent(in), optional :: width   !< Width [pixels] (default: full width).
-   real(real64),     intent(in), optional :: height  !< Height [pixels] (default: ImPlot's for one plot per row).
+   real(real64),     intent(in), optional :: height  !< Height [pixels] (default: 300 per row).
    logical,          intent(in), optional :: link_x  !< Share the x range.
    logical,          intent(in), optional :: link_y  !< Share the y range.
    logical                                :: visible !< The figure is drawn.

@@ -586,7 +586,8 @@ are drawn. The program checks itself headless:
 
 <Media name="cb_canvas" video alt="A window Domain: a grey channel, its inlet on the left in blue, its outlet on the right in orange, the bottom and top walls and a cylinder in grey, each named by a word in its colour. The pointer rests on the top wall: it is drawn thicker and a tooltip reads top: no-slip wall (click to change). A click on the cylinder's edge selects it, and a row of radio buttons appears under the sketch; a click on slip wall turns the cylinder and its word green. A click on the inlet selects it" caption="docs/examples/src/cb_canvas.F90" />
 
-`ig_canvas` places an area as wide as the window and 200 pixels high that takes the mouse; its event gives the
+`ig_canvas` places an area that takes the mouse, 200 pixels high and as wide as the space left in the window (a width
+of 0: [Canvas](/guide/canvas)); its event gives the
 pointer in the canvas's pixels, from its top-left. The program maps its metres to those pixels (`px`, `py`, y up),
 finds the boundary within 6 pixels of the pointer, and draws every boundary with the primitives at the canvas's
 origin plus its own coordinates: the one under the pointer, or selected, thicker. Each boundary carries its condition

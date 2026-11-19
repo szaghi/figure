@@ -1,5 +1,6 @@
 ---
 title: figure_library
+outline: [2, 4]
 ---
 
 # figure_library
@@ -16,4 +17,6 @@ title: figure_library
 graph LR
   figure_library["figure_library"] --> figure["figure"]
   figure_library["figure_library"] --> figure_testing["figure_testing"]
+  click figure href "figure.html" "figure"
+  click figure_testing href "figure_testing.html" "figure_testing"
 ```

@@ -30,7 +30,8 @@ For the [tutorial](/manual/), the one-line installer is enough.
 
 ## The one-line installer
 
-`scripts/install.sh`, attached to every release, works in five stages and stops at the first that fails:
+`scripts/install.sh`, attached to every release, runs on Linux and macOS (on Windows, build under MSYS2: [Other
+platforms](#other-platforms)). It works in five stages and stops at the first that fails:
 
 1. **Toolchain.** The Fortran compiler (`--gnu`: `gfortran`; `--nvidia`: `nvfortran`; `--intel`: `ifx`, Linux only;
    `--fc FC`: any of them, by name or path), the C and C++ compilers that go with it, CMake 3.24 or newer, `pkg-config`, Python 3.11 or newer, and
@@ -45,8 +46,8 @@ For the [tutorial](/manual/), the one-line installer is enough.
    `--deps`, which shows the command and then runs it. On macOS, SDL needs only the system's frameworks: `--deps`
    runs `brew install` for missing tools (no `sudo`).
 3. **Download and build.** The release (`--tag`, default the latest) is downloaded and built in a temporary
-   directory: the native layer with CMake (whose first build downloads Dear ImGui, ImPlot, cimgui, cimplot, SDL3 and
-   miniz), then `libfigure.a` with FoBiS. When FoBiS 3.8 or newer is not on `PATH`, it is installed in a private
+   directory: the native layer with CMake (whose first build downloads the parts [the native layer's
+   table](#the-native-layer) marks as fetched), then `libfigure.a` with FoBiS. When FoBiS 3.8 or newer is not on `PATH`, it is installed in a private
    virtual environment inside that directory, removed at the end. `--source DIR` builds a local FIGURE tree instead
    (a copy of it: the tree itself is not written).
 4. **Install** into `--prefix` (default `~/.local`), under the compiler's tag, such as `gnu-16.2.0` or `nvidia-26.9`
@@ -120,8 +121,10 @@ clone's `lib/`:
 
 ```ini
 [dependencies]
-figure = https://github.com/szaghi/figure :: tag=v0.3.1 :: use=fobos :: mode=figure-static-gnu
+figure = https://github.com/szaghi/figure :: semver=* :: use=fobos :: mode=figure-static-gnu
 ```
+
+`semver=*` follows the latest release (`fobis fetch --update` moves it); `branch=main` follows the development head.
 
 ```ini
 [gnu]
@@ -136,9 +139,9 @@ requirements below apply); `fobis build` then rebuilds nothing that is up to dat
 
 ## Building without network
 
-A cluster's compute or login node often reaches no outside network, and the native build downloads SDL3, cimplot,
-cimplot3d and miniz the first time. Each release (since v0.7.0) also publishes `figure-<version>-sources.tar.gz` (`<version>` with its `v`, as `figure-v0.7.0-sources.tar.gz`): the
-repository's files and those four sources, in `third_party/fetched/`. Copy it to the machine, unpack it, and build there:
+A cluster's compute or login node often reaches no outside network, and the native build downloads the parts [the
+native layer's table](#the-native-layer) marks as fetched the first time. Each release (since v0.7.0) also publishes `figure-<version>-sources.tar.gz` (`<version>` with its `v`, as `figure-v0.7.0-sources.tar.gz`): the
+repository's files and the fetched sources, in `third_party/fetched/`. Copy it to the machine, unpack it, and build there:
 `scripts/build_native.sh` finds `third_party/fetched/` and downloads nothing (it says `offline, from
 third_party/fetched/`).
 
@@ -150,7 +153,10 @@ bash scripts/install.sh --gnu --source "$PWD" --prefix "$HOME/.local"   # or: sc
 - **FoBiS:** the installer installs FoBiS from PyPI when it is missing: on such a machine, install FoBiS first (from a
   wheel copied there, `pip install FoBiS.py-<version>.whl`).
 - **System packages:** SDL3's X11, Wayland and DBus development headers come from the system's packages, as for any
-  build ([Linux packages](#linux-packages)); headless and remote programs need none of them.
+  build ([Linux packages](#linux-packages)). Headless and remote programs use none of them when they run, but SDL3
+  refuses to configure without X11 or Wayland headers. A node without them builds the console variant, with no
+  video driver at all (no window can open): `scripts/build_native.sh -- -DSDL_UNIX_CONSOLE_BUILD=ON`, then FoBiS.
+  The installer has no option for it.
 - **Making one:** `scripts/source_archive.sh [OUTDIR]` writes the archive of a tree whose native layer was built (or
   configured) once, with the network; the `Sources archive` workflow runs it after every release, builds the result
   with the network cut, and attaches it to the release.
@@ -159,9 +165,8 @@ bash scripts/install.sh --gnu --source "$PWD" --prefix "$HOME/.local"   # or: sc
 
 FIGURE has two layers, built separately:
 
-- the **native layer** (C and C++): Dear ImGui, ImPlot, cimgui, cimplot, miniz, SDL3 and FIGURE's glue, built by CMake
-  into
-  two static libraries, `lib/libfigure_native.a` and `lib/libSDL3.a`;
+- the **native layer** (C and C++): Dear ImGui and its extensions, SDL3 and FIGURE's glue ([the parts](#the-native-layer)),
+  built by CMake into two static libraries, `lib/libfigure_native.a` and `lib/libSDL3.a`;
 - the **Fortran library** (`src/lib`), built by [FoBiS](https://github.com/szaghi/FoBiS) (the primary build) or
   [fpm](https://fpm.fortran-lang.org). Neither compiles C++ in this repository: both only link the native layer.
   For another fpm project, FIGURE can also be [a self-contained fpm package](#figure-as-an-fpm-dependency), where fpm
@@ -169,8 +174,8 @@ FIGURE has two layers, built separately:
 
 ## Requirements
 
-- A Fortran 2018 compiler. Verified: gfortran 16.2, nvfortran 26.9 and Intel ifx 2026.2 (Linux); the CI's versions
-  are in [Verified platforms and compilers](#verified-platforms-and-compilers).
+- A Fortran 2018 compiler. Verified on the development machines: gfortran 16.2, nvfortran 26.9 and Intel ifx 2026.2
+  (Linux); the CI's versions (its ifx is the newest setup-fortran installs, 2026.1) are in [Verified platforms and compilers](#verified-platforms-and-compilers).
 - A C++17 compiler whose C++ runtime is the one the Fortran link line uses: `libstdc++` with gfortran and nvfortran
   on Linux and with MinGW on Windows, `libc++` (Apple clang) on macOS. Verified: g++ 16.2.
 - CMake 3.24 or newer; Ninja is used when present.
@@ -220,12 +225,15 @@ defaults; choose them with `CC` and `CXX`:
 CC=gcc CXX=g++ scripts/build_native.sh --clean
 ```
 
-The third-party versions are pinned as a matched set: Dear ImGui 1.93.1 WIP (docking branch, commit `cf53467`) with
-its C API cimgui, generated by FIGURE and vendored in `third_party/cimgui` (`scripts/gen_cimgui.sh`: cimgui publishes
-generated sources only at its tags); cimplot `v1.1` (ImPlot 1.2 WIP, generated against the same Dear ImGui 1.93 API) and
-SDL `release-3.4.20`; miniz `3.0.2` (deflate, for the remote mode) is fetched as a release archive checked by its
-SHA-256. cimplot's and SDL's are CMake cache variables (`FIGURE_CIMPLOT_TAG`, `FIGURE_SDL_TAG`), but do not change cimplot
-alone: it is generated against a specific cimgui.
+The third-party parts are pinned as a matched set (the table is generated from `native/CMakeLists.txt`; the
+licences are in [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)):
+
+<!--@include: ./_generated/native.md-->
+
+The parts marked "fetched" are downloaded by the first build (miniz as a release archive checked by its SHA-256); the
+others are in the repository. cimplot's, cimplot3d's and SDL's pins are CMake cache variables (`FIGURE_CIMPLOT_TAG`,
+`FIGURE_CIMPLOT3D_TAG`, `FIGURE_SDL_TAG`), but do not change cimplot alone: it is generated against a specific
+cimgui.
 
 ## The Fortran library with FoBiS
 
@@ -364,6 +372,16 @@ per platform; `linux` is the default, the others are selected with `--varset`:
 | Linux | gfortran or nvfortran, g++ | `fobis build --mode tests-gnu` |
 | macOS | gfortran (Homebrew, `fortran-lang/setup-fortran`), Apple clang | `fobis build --mode tests-gnu --varset macos` |
 | Windows | MSYS2 UCRT64: `gcc-fortran`, `cmake`, `ninja`, `python`, `pkgconf` | `fobis build --mode tests-gnu --varset windows` |
+
+**Windows.** The installer does not run there; in an MSYS2 UCRT64 shell, the packages the `Platforms` workflow
+installs, then the repository build:
+
+```bash
+pacman -S --needed git mingw-w64-ucrt-x86_64-{gcc-fortran,cmake,ninja,pkgconf,python,python-pip,python-pydantic}
+python -m pip install --break-system-packages FoBiS.py   # python-pydantic first: pip cannot build it there
+git clone https://github.com/szaghi/figure && cd figure
+CC=gcc CXX=g++ scripts/build_native.sh && fobis build --mode figure-static-gnu --varset windows
+```
 
 The native build installs SDL's own description of its static link line, `lib/pkgconfig/sdl3.pc`.
 `fobis rule --ex sync` (`scripts/check_sync.py`) checks that the varset of the platform it runs on covers it: every

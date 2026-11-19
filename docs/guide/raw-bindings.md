@@ -15,8 +15,8 @@ generated **glue**
 struct result through `res`; the Fortran interface keeps the C API name, with the struct as a `bind(C)` mirror
 type (`im_vec4`, `im_plot_spec`, ...) passed by reference. `src/tests/figure_test_layout.F90` checks that each
 mirror has the size of its C struct. Variadic functions and functions taking callbacks are **skipped**.
-Enumerators are in `figure_cimgui_enums` / `figure_cimplot_enums` / `figure_cimplot3d_enums`. These modules
-are private to the library: programs use the wrappers (`ig_*`, `ip_*`, `ip3_*`).
+Enumerators are in `figure_cimgui_enums` / `figure_cimplot_enums` / `figure_cimplot3d_enums`. The generated raw layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal: programs call the wrappers (`ig_*`, `ip_*`, `ip3_*`), and a Dear ImGui or ImPlot function without one is listed as "raw only" in [Dear ImGui names](imgui-names). Their module files are installed (FIGURE's own tests use them), and they change
+without notice.
 
 | Library | Public functions | Direct | Glue (generated) | Skipped |
 |---|---|---|---|---|

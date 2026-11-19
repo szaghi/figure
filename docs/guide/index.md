@@ -24,7 +24,7 @@ respect to retained-mode toolkits.
 ## Status
 
 FIGURE v0.7.0 is released (2026-11-16), grown from its applications outside this repository, tools and a GUI for a
-CFD solver ([showcase](showcase)); v0.4.0 is in progress ([roadmap](roadmap)). The API can still change before v1.0 ([roadmap](roadmap)).
+CFD solver ([showcase](showcase)). The API can still change before v1.0 ([roadmap](roadmap)).
 
 What exists today:
 
@@ -53,7 +53,6 @@ What exists today:
 - pictures: a rectangle of the window saved as a PNG by the program; every frame recorded, with scripted input, for
   documentation;
 - headless testing with synthetic input (`figure_testing`, in the library);
-- every Dear ImGui and ImPlot function through the generated [raw bindings](raw-bindings);
 - CI on Linux, macOS and Windows with gfortran, on Linux with nvfortran and Intel ifx; builds with FoBiS and fpm; a
   real window opened and its frames checked on the three systems.
 
@@ -61,9 +60,8 @@ The [feature map](features) lists every public procedure.
 
 ## What it is not, yet
 
-Colour pickers and multiple viewports are not available, and only part of Dear ImGui's widgets
-have a Fortran wrapper (the rest are reachable through the raw bindings). See [Known issues](known-issues) and the
-[roadmap](roadmap).
+Multiple viewports (windows outside the main one) are not available, and only part of Dear ImGui's widgets have a
+Fortran wrapper: the generated raw layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal: programs call the wrappers, and a Dear ImGui or ImPlot function without one is listed as "raw only" in [Dear ImGui names](imgui-names). See [Known issues](known-issues) and the [roadmap](roadmap).
 
 ## Where to start
 

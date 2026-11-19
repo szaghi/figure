@@ -1,5 +1,6 @@
 ---
 title: figure_cimplot_enums
+outline: [2, 4]
 ---
 
 # figure_cimplot_enums
