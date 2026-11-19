@@ -97,13 +97,18 @@ const docs = [
   },
 ]
 
+// the nav's Reference entry is active on every page of the sidebar's Reference group: derived, so that a page added
+// to the group cannot be left out of the nav
+const referencePages = docs.find((g) => g.text === 'Reference')!.items.map((i) => i.link.replace('/guide/', ''))
+const referenceMatch = `^/guide/(${referencePages.join('|')})`
+
 export default withMermaid({
   title: 'FIGURE',
   description: 'Fortran Immediate-mode GUI for User interfaces, Rendering and Exploration',
   base: '/figure/',
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/figure/favicon.svg' }]],
   // ford.md is the formal project file, not a page; the examples are included by the pages, not pages themselves
-  srcExclude: ['ford.md', 'examples/**'],
+  srcExclude: ['ford.md', 'examples/**', '**/_generated/**'],
 
   markdown: {
     math: true,
@@ -127,7 +132,7 @@ export default withMermaid({
       {
         text: 'Reference',
         link: '/guide/features',
-        activeMatch: '^/guide/(features|frame-loop|widgets|menus|docking|styles|plots|images|view3d|editor|canvas|remote|performance|errors|testing|capture|architecture|raw-bindings|imgui-names|known-issues)',
+        activeMatch: referenceMatch,
       },
       { text: 'API', link: '/api/' },
       {

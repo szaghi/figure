@@ -168,6 +168,10 @@ variables above and `FIGURE_STYLE=seal` (the default [style](styles), set explic
 what differs from the window background, and writes
 `docs/public/media/<name>.png` and, for animations, `<name>.mp4`. Pages show them with the `<Media>` component.
 
+The header lines, from the script's own documentation:
+
+<!--@include: ./_generated/rec-keys.md-->
+
 ```bash
 bash docs/examples/build.sh && fobis build --mode examples-gnu   # the programs
 python3 scripts/docs_media.py --headless                          # all recordings (or name some), by the CPU renderer

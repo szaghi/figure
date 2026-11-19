@@ -69,7 +69,7 @@ A name of Dear ImGui's or ImPlot's documentation (`SetScrollHereY`, `PlotLine`) 
 | Procedure | Purpose |
 |---|---|
 | `ig_begin(name [, open] [, flags])` → `logical` | begin a window (`ImGuiWindowFlags_*`); `.false.` when collapsed or clipped ([Windows](widgets#windows)) |
-| `ig_begin_side_bar(name, side, size)` | a bar along one side of the display (a toolbar), left out of the dock space | [Docking](docking#a-bar-along-a-side) |
+| `ig_begin_side_bar(name, side, size)` | a bar along one side of the display (a toolbar), left out of the dock space ([Docking](docking#a-bar-along-a-side)) |
 | `ig_end()` | end the window (always, whatever `ig_begin` returned) ([Windows](widgets#windows)) |
 | `ig_splitter(id, sizes [, vertical] [, min_size] [, stat])` → `logical` | a bar between two panes the user drags: their sizes [pixels] change ([Splitters](widgets#splitters)) |
 | `ig_set_next_window(x, y [, width, height] [, always])` | place (and size) the next window ([Windows](widgets#windows)) |
