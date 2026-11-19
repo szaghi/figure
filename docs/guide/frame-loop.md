@@ -278,6 +278,8 @@ A solver's case prepared by a GUI (`docs/examples/src/cb_files.F90`, run by the 
 
 <<< @/examples/snippets/cb_files-files.F90{fortran}
 
+A recipe for this: [the cookbook](/manual/cookbook#make-a-case-folder-and-clear-old-results-on-every-platform).
+
 - **Paths:** UTF-8, with `/` separators everywhere (Windows also takes `\`); a relative path starts at the working
   folder, as `open` does.
 - **Times:** local, as `touch -t` takes them and as a file browser shows them: a time set on one machine reads the same

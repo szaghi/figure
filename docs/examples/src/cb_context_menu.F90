@@ -63,23 +63,36 @@ do while (app%next_frame())
       do i = 1_int32, rows
          call ig_push_id(i)                                ! each row's menu has its own id
          if (ig_selectable(trim(names(i)), .false.)) continue
+         !endregion rows
          if (check) call test_item_center(row_at(1, i), row_at(2, i))
+         !region rows
          if (ig_begin_popup_context('row')) then          ! a right click on the row just drawn
             call ig_text_disabled(trim(names(i)))
             call ig_separator()
             if (ig_menu_item('Insert below', enabled=rows < MAX_ROWS)) call ask('insert', i)
+            !endregion rows
             call keep_entry(1)                             ! --check: where the entry is
+            !region rows
             if (ig_menu_item('Duplicate', enabled=rows < MAX_ROWS)) call ask('duplicate', i)
+            !endregion rows
             call keep_entry(2)
+            !region rows
             if (ig_menu_item('Copy name')) call ig_set_clipboard(trim(names(i)))
+            !endregion rows
             call keep_entry(3)
+            !region rows
             if (ig_menu_item('Delete')) call ask('delete', i)
+            !endregion rows
             call keep_entry(4)
+            !region rows
             call ig_end_popup()
          endif
+         !endregion rows
          !region tooltip
          if (ig_begin_item_tooltip()) then                ! the pointer rests on the row
-            tooltip = .true.
+            !endregion tooltip
+            tooltip = .true.                               ! --check: the tooltip was drawn
+            !region tooltip
             if (ig_begin_table('values', 2_int32)) then
                call cell('patch', trim(names(i)))
                call cell('condition', trim(kinds(i)))
@@ -90,6 +103,7 @@ do while (app%next_frame())
             call ig_end_tooltip()
          endif
          !endregion tooltip
+         !region rows
          call ig_same_line(ig_em(8.0_real64))             ! the condition in a column of its own
          call ig_text_disabled(trim(kinds(i)))
          call ig_pop_id()
@@ -99,7 +113,9 @@ do while (app%next_frame())
       !region space
       if (ig_begin_popup_context('list', on='window')) then ! the window's empty space, not over a row
          if (ig_menu_item('Add a row', enabled=rows < MAX_ROWS)) call ask('add', rows)
+         !endregion space
          call keep_entry(1)
+         !region space
          call ig_end_popup()
       endif
       call apply()
@@ -107,11 +123,13 @@ do while (app%next_frame())
       !region links
       call ig_separator()
       if (ig_text_link('What is a patch?')) help = .not. help
+      !endregion links
       if (check) call test_item_center(link_at(1), link_at(2))
+      !region links
       if (help) call ig_text_wrapped('A patch is a set of faces of the grid that share one boundary condition.')
       call ig_text_link_url('Documentation', 'https://szaghi.github.io/figure/')
-      if (check) call test_item_center(docs_at(1), docs_at(2))
       !endregion links
+      if (check) call test_item_center(docs_at(1), docs_at(2))
    endif
    call ig_end()
    if (check) then

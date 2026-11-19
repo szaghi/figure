@@ -58,7 +58,9 @@ do while (app%next_frame())
                                   scale='log', label_format='%g kg/m3')) then
          ! vmin and vmax changed: the next ip_field_image colours the field again
       endif
-      call ig_item_rect(x0, y0, x1, y1)
+      !endregion field
+      call ig_item_rect(x0, y0, x1, y1)                ! --check: the legend's rectangle
+      !region field
       if (ig_button('reset range')) then
          vmin = 0.1_real64
          vmax = 100.0_real64

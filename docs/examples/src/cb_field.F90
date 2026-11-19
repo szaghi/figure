@@ -54,7 +54,9 @@ do while (app%next_frame())
       call ig_same_line()
       call ig_text('ig_image:')
       call ig_same_line()
+      !region image
       call ig_image(tex, 64.0_real64, 64.0_real64)                                   ! row 1 at the top
+      !endregion image
    endif
    call ig_end()
 enddo

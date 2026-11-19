@@ -2,8 +2,6 @@ call ig_push_item_width(ig_em(12))                ! every field 12 em wide
 call ig_separator_text('Grid')
 call label('name')
 if (ig_input_text('##name', case_name)) continue
-s = ig_last_item()
-field = s%rect
 call label('cells')
 if (ig_input('##cells', cells, step=16_int32)) continue
 call ig_separator_text('Run')

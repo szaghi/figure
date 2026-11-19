@@ -51,7 +51,7 @@ The program checks itself headless (`cb_time --check`):
 
 `init` creates the window `content_scale()` times larger than asked and scales the Dear ImGui style; the sizes the
 program passes are not scaled. Multiplying them by `content_scale()` keeps their proportion to the window on high-DPI
-displays.
+displays. [Content scale](/guide/frame-loop#content-scale) has the details.
 
 ### Remember the user's settings
 
@@ -69,7 +69,46 @@ file every 30 s when something changed and at `destroy`, through a temporary fil
 
 <<< @/examples/output/cb_prefs.txt{text}
 
-## Windows
+### Let a failure stop the program
+
+<<< @/examples/snippets/cb_error_stop-stop.F90{fortran}
+
+<<< @/examples/output/cb_error_stop.txt{text}
+
+Without `stat`, the message goes to standard error and the program ends with `error stop 1`. See
+[Error handling](/guide/errors).
+
+### Handle a failure instead of stopping
+
+<<< @/examples/snippets/cb_stat-stat.F90{fortran}
+
+<<< @/examples/output/cb_stat.txt{text}
+
+With `stat`, nothing stops: check it against `FIG_OK` and read `figure_last_error()`. The full program also checks
+`ip_line`:
+
+<<< @/examples/snippets/cb_stat-line.F90{fortran}
+
+Used in context: [chapter 16](./tutorial/16-robust) of the tutorial.
+
+### Find a misplaced end
+
+A table of blocks with a tree in its first cell, whose `ig_tree_pop` was forgotten:
+
+<<< @/examples/snippets/cb_scope_error-grid.F90{fortran}
+
+In mode `'report'` (the default) the frame goes on and the next `next_frame(stat)` returns `FIG_ERR_STATE`, every
+error on its own line. The first line is the bug, the ones after it are what followed from it:
+
+<<< @/examples/snippets/cb_scope_error-wrong.F90{fortran}
+
+<<< @/examples/output/cb_scope_error.txt{text}
+
+With `ig_tree_pop` back the frame reports nothing; in mode `'recover'` the table's end closes the tree first, the
+program goes on (`FIG_OK`) and the message is in a notification. In a test, `app%set_checks('abort')` stops at the
+faulty call. [Pairing and frames](/guide/errors#pairing-and-frames) has every rule and message.
+
+## Windows and style
 
 ### Pair begin and end, skip what is hidden
 
@@ -146,6 +185,13 @@ before its windows. The user can rearrange everything afterwards. [Docking](/gui
 
 Used in context: [chapter 9](./tutorial/09-shell) of the tutorial.
 
+### Split a window in two panes
+
+<<< @/examples/snippets/cb_splitter-panes.F90{fortran}
+
+The bar between the two regions changes `sizes` when the user drags it; the regions take their widths from it.
+[Splitters](/guide/widgets#splitters) has the details.
+
 ### A View menu and a reset layout
 
 <<< @/examples/snippets/cb_view_menu-register.F90{fortran}
@@ -163,12 +209,45 @@ user has not arranged yet, and after a reset. A window's close button hides it, 
 
 <<< @/examples/output/cb_view_menu.txt{text}
 
-### Split a window in two panes
+### A toolbar, a dock space and a window that appears later
 
-<<< @/examples/snippets/cb_splitter-panes.F90{fortran}
+<<< @/examples/snippets/cb_workspace-bars.F90{fortran}
 
-The bar between the two regions changes `sizes` when the user drags it; the regions take their widths from it.
-[Splitters](/guide/widgets#splitters) has the details.
+`ig_begin_side_bar` begins a bar along a side of the display, a window without a title bar that the dock space leaves
+free: a toolbar of `ig_tool_button`s here, a status bar along the bottom likewise. It is declared every frame after
+the main menu bar and before the dock space, and always ended with `ig_end`. The dock space's layout is built once, on
+the first frame; a window that appears later (a result computed after the start) is put in a node of it with
+`ig_set_next_window_dock`, right before its `ig_begin`. It lands there the first time it appears, then stays where the
+user moves it:
+
+<<< @/examples/snippets/cb_workspace-later.F90{fortran}
+
+The arrangement (where each window is docked, the sizes of the splits) goes to a file and comes back while the program
+runs; the `comment` lines are the program's own, for it to read back:
+
+<<< @/examples/snippets/cb_workspace-layout.F90{fortran}
+
+`cb_workspace` runs headless and checks where the window landed:
+
+<<< @/examples/output/cb_workspace.txt{text}
+
+[A bar along a side](/guide/docking#a-bar-along-a-side), [A window that appears
+later](/guide/docking#a-window-that-appears-later) and [Save and load a layout](/guide/docking#save-and-load-a-layout)
+have the details.
+
+### A window whose frame FIGURE draws
+
+<<< @/examples/snippets/cb_frame-frame.F90{fortran}
+
+<Media name="frame" video :width="600" alt="A window with FIGURE's title bar: the icon, the File and View menus, the title centred and three buttons; the File menu opens from the bar, then the buttons are hovered, close in red" caption="docs/examples/src/cb_frame.F90" />
+
+The main menu bar moves into the title bar; the bar drags the window, its edges resize it, close asks first with
+`app%set_confirm_quit(.true.)`. Under WSLg, where the system's frame cannot be styled, this gives the window a frame
+that matches the program. [The window's frame](/guide/frame-loop#the-window-s-frame) has the details.
+
+Used in context: [chapter 8](./tutorial/08-window) of the tutorial.
+
+## Menus, keys and files
 
 ### A File menu and its shortcut
 
@@ -180,6 +259,33 @@ The menu item shows the shortcut; `ig_shortcut`, called every frame outside the 
 macOS). [Menus and shortcuts](/guide/menus) has the rules.
 
 Used in context: [chapter 9](./tutorial/09-shell) of the tutorial.
+
+### A menu bar inside a window
+
+<<< @/examples/snippets/cb_workspace-menubar.F90{fortran}
+
+A window begun with `ImGuiWindowFlags_MenuBar` has a bar of its own under its title: `ig_begin_menu_bar` ...
+`ig_end_menu_bar`, the end only after a true begin. It holds menus (`ig_begin_menu`) or, as Reload here, items
+straight in the bar. [Menus](/guide/menus#menus) has the rules.
+
+### Act on a row with a right click
+
+<<< @/examples/snippets/cb_context_menu-rows.F90{fortran}
+
+<Media name="cb_context_menu" video alt="A right click on the row outlet opens its menu: Duplicate adds outlet-copy below it; a right click on inlet, then Delete removes it; a right click below the rows opens the list's menu: Add a row appends patch-1" caption="docs/examples/src/cb_context_menu.F90" />
+
+Each row is followed by `ig_begin_popup_context('row')`: a right click on the row opens the menu, and its entries act
+on that row. The rows share the menu's id, so each is drawn inside `ig_push_id(i)`. An entry does not change the list
+while the loop draws it: it records what to do (`ask`), and `apply` does it after the loop. The list's own menu (add a
+row) opens on the window's empty space, not over a row, with `on='window'`:
+
+<<< @/examples/snippets/cb_context_menu-space.F90{fortran}
+
+The program checks itself headless:
+
+<<< @/examples/output/cb_context_menu.txt{text}
+
+[Context menus](/guide/menus#context-menus) has the places a menu opens on and when it closes.
 
 ### Keys that act only where the user is
 
@@ -214,17 +320,26 @@ edited, then f12):
 
 [Shortcuts](/guide/menus#shortcuts) compares the four scopes.
 
-### A window whose frame FIGURE draws
+### Ask a question in a box
 
-<<< @/examples/snippets/cb_frame-frame.F90{fortran}
+<<< @/examples/snippets/cb_message_box-ask.F90{fortran}
 
-<Media name="frame" video :width="600" alt="A window with FIGURE's title bar: the icon, the File and View menus, the title centred and three buttons; the File menu opens from the bar, then the buttons are hovered, close in red" caption="docs/examples/src/cb_frame.F90" />
+Call `app%message_box` every frame while the question is open: 0 until the user answers, then the button's number,
+once. Boxes asked while one is open stack over it, each answering its own question; one id is one box at a time.
+[Message boxes](/guide/menus#message-boxes) has the details.
 
-The main menu bar moves into the title bar; the bar drags the window, its edges resize it, close asks first with
-`app%set_confirm_quit(.true.)`. Under WSLg, where the system's frame cannot be styled, this gives the window a frame
-that matches the program. [The window's frame](/guide/frame-loop#the-window-s-frame) has the details.
+<<< @/examples/output/cb_message_box.txt{text}
 
-Used in context: [chapter 8](./tutorial/08-window) of the tutorial.
+### Ask before discarding changes
+
+<<< @/examples/snippets/cb_quit-quit.F90{fortran}
+
+<Media name="cb_quit" alt="A modal asks Save, Discard or Cancel when the window of an edited document is closed" caption="docs/examples/src/cb_quit.F90" />
+
+`app%set_confirm_quit(.true.)` makes the close button a request; the program opens a modal when there is something to
+lose, and quits at once otherwise. [Menus, popups and shortcuts](/guide/menus#ask-before-quitting) has the details.
+
+Used in context: [chapter 10](./tutorial/10-case) of the tutorial.
 
 ### Open a file
 
@@ -266,26 +381,22 @@ file browser, as in the recipe above.
 
 Used in context: [chapter 10](./tutorial/10-case) of the tutorial.
 
-### Ask before discarding changes
+### Make a case folder and clear old results, on every platform
 
-<<< @/examples/snippets/cb_quit-quit.F90{fortran}
+<<< @/examples/snippets/cb_files-files.F90{fortran}
 
-<Media name="cb_quit" alt="A modal asks Save, Discard or Cancel when the window of an edited document is closed" caption="docs/examples/src/cb_quit.F90" />
+Standard Fortran writes the input file; it cannot make a folder, remove one or set a file's time. A shell command
+(`execute_command_line('mkdir -p ...')`) does it where a POSIX shell runs it, not on Windows, where `cmd.exe` refuses
+`mkdir -p`, `rm -f` and `touch`. These calls do it in FIGURE's native layer, the same on Linux, macOS and Windows,
+and need no window (this program opens none). `figure_make_folder` makes the missing parents too; `figure_remove` of a
+path that is not there is no error, so a program clears without testing first; `figure_set_file_time` takes a local
+time, as `touch -t` does. The program checks what it made:
 
-`app%set_confirm_quit(.true.)` makes the close button a request; the program opens a modal when there is something to
-lose, and quits at once otherwise. [Menus, popups and shortcuts](/guide/menus#ask-before-quitting) has the details.
+<<< @/examples/output/cb_files.txt{text}
 
-Used in context: [chapter 10](./tutorial/10-case) of the tutorial.
+[Files and folders](/guide/frame-loop#files-and-folders) has the statuses and what is not covered.
 
-### Ask a question in a box
-
-<<< @/examples/snippets/cb_message_box-ask.F90{fortran}
-
-Call `app%message_box` every frame while the question is open: 0 until the user answers, then the button's number,
-once. Boxes asked while one is open stack over it, each answering its own question; one id is one box at a time.
-[Message boxes](/guide/menus#message-boxes) has the details.
-
-<<< @/examples/output/cb_message_box.txt{text}
+## Lists, tables and forms
 
 ### A list and a help panel
 
@@ -295,6 +406,172 @@ once. Boxes asked while one is open stack over it, each answering its own questi
 
 Two regions side by side (`ig_begin_child`, `ig_same_line`), each scrolling on its own: the list keeps the selection
 in a program variable, the values sit in one column (`ig_same_line(offset=...)`), the help wraps at the region's edge.
+[Lists and regions](/guide/widgets#lists-and-regions) has the rules.
+
+### Choose a scheme
+
+<<< @/examples/snippets/cb_scheme-radio.F90{fortran}
+
+<<< @/examples/snippets/cb_scheme-list.F90{fortran}
+
+<Media name="cb_scheme" video alt="A window Numerics: a click on TVD chooses it and shows the limiter combo; the combo opens and superbee is picked; the list of 64 blocks scrolls under the wheel and a click chooses block 17, named in the line below" caption="docs/examples/src/cb_scheme.F90" />
+
+Three schemes, all worth seeing: radio buttons, one per scheme, sharing `scheme`; a click sets it and returns
+`.true.`. The limiter, one of seven and needed only for TVD: a combo, one line until it is opened. The block the
+scheme applies to, one of 64 and picked again and again: a list box that stays open and scrolls; only the rows in view
+are drawn. The program checks itself headless:
+
+<<< @/examples/output/cb_scheme.txt{text}
+
+[Choices](/guide/widgets#choices) has the rules: indices, heights, when to use which.
+
+### A vector parameter with units
+
+<<< @/examples/snippets/cb_vector-vector.F90{fortran}
+
+<Media name="cb_vector" video alt="A window Case: the pointer drags the third box of gravity from -9.81 to -10.81 m/s² and the first one from 0.00 to 1.50 m/s², the norm below following; it types 0.25 into the second field of probe; it drags the wind slider from 45 to 120 deg" caption="docs/examples/src/cb_vector.F90" />
+
+A `real64` array of rank 1 is one widget with a box per component, one label for the whole vector. `ig_drag` changes
+a component by `speed` per pixel (here 0.01 m/s² per pixel), and stops at `vmin` and `vmax`; `ig_input` takes a
+typed value in any component, which changes only that one. The format prints the unit in every box (`'%.2f m/s²'`),
+and the drag rounds the value to what the format shows, hundredths here. The wind is kept in radians, as the program
+computes with it, and shown and set in degrees by `ig_slider_angle`. The program checks itself headless:
+
+<<< @/examples/output/cb_vector.txt{text}
+
+[Numbers](/guide/widgets#numbers) has the kinds, the formats and their Fortran equivalents, the speed, the bounds and
+the log scale.
+
+### Let the user choose a colour
+
+<<< @/examples/snippets/cb_legend-color.F90{fortran}
+
+The editor writes `line_color` on the frames the user changes it; the plot reads it every frame. The swatch opens a
+picker; the fields are dragged, or typed after a double-click. A picker always open in a panel is
+`ig_color_picker`, as wide as the item width:
+
+<<< @/examples/snippets/cb_color_picker-picker.F90{fortran}
+
+<Media name="cb_color_picker" video alt="A window Surface colour: a check box hue wheel, below it a colour picker 260 pixels wide, a saturation-value square, a hue bar, an alpha bar and a preview swatch, with the fields R, G, B, A, H, S, V and the hexadecimal code below. A drag in the square towards its top right brightens the orange; a click on the hue bar turns it blue. The check box is ticked: the square becomes a triangle inside a hue ring, and a click on the ring down to the left turns the colour green; the text under the picker reads RGBA 0.12 0.92 0.12 1.00." caption="docs/examples/src/cb_color_picker.F90: a picker in the window, with a hue bar or a hue wheel" />
+
+`wheel` chooses its form, a hue bar or a hue wheel, whatever the user picked in its right-click menu.
+[Colour editing](/guide/widgets#colour-editing) has the rules.
+
+### An input-file editor: fields, a list, tabs and a table
+
+<<< @/examples/snippets/cb_form-table.F90{fortran}
+
+<Media name="cb_form" alt="An input-file editor: fields, a drop-down list, a restart option, a table of boundary conditions" caption="docs/examples/src/cb_form.F90" />
+
+Each field edits a Fortran variable in place: a `character` for text (its length is the capacity), an `int32` index for
+a drop-down list. The rows of the table repeat the same widgets, each in its own id scope (`ig_push_id(r)`). Tabs and
+tables end only when their begin returned `.true.`. [Widgets](/guide/widgets#groups-headers-tabs-tables) has the
+rules.
+
+Used in context: [chapter 11](./tutorial/11-input) of the tutorial.
+
+### A hierarchy with values in columns
+
+<<< @/examples/snippets/cb_tree-tree.F90{fortran}
+
+<Media name="cb_tree" video alt="A table of grids with the bodies as tree nodes: a click on the cells of block 2 chooses it and highlights its whole row, the fuselage opened by its arrow, then a node of 20000 blocks opened and scrolled" caption="docs/examples/src/cb_tree.F90" />
+
+Each body is a node in the table's first column with its total in the next cell; its blocks are leaf rows between the
+node and `ig_tree_pop`. With `span_all_columns`, a node's row is its click area and its highlight across every column: a
+click anywhere on a block's row chooses it (`clicked`), the arrow opens the body: the two never mix. The node of 20000
+blocks clips its children: [Draw only the rows in view](#draw-only-the-rows-in-view). [Trees](/guide/widgets#trees) has
+the rules.
+
+Used in context: [chapter 11](./tutorial/11-input) of the tutorial.
+
+### Draw only the rows in view
+
+<<< @/examples/snippets/cb_tree-large.F90{fortran}
+
+A list of 20000 rows costs a frame what the rows in view cost when a `list_clipper_object` draws them: `call
+clip%begin(n)`, then `do while (clip%step())` draws rows `clip%first` to `clip%last`, and the loop ends by itself. The
+rows are of equal height (lines of text, selectables, a table's rows, leaf nodes); the clipper measures the first one
+(`clip%item_height`, in pixels). Here the 20000 children of one tree node are clipped in a region of their own
+(`ig_begin_child`), between the node and its `ig_tree_pop`: a whole tree with nodes open in the middle is not a run of
+equal rows ([Trees](/guide/widgets#trees) shows how to flatten one).
+
+A row the clipper did not draw is no item on that frame: nothing scrolls to it and nothing extends from it. The
+program reaches it by its place, `(i - 1) * clip%item_height` below the top ([Reveal an item picked
+elsewhere](#reveal-an-item-picked-elsewhere)), and keeps one row drawn wherever it is with `clip%begin(n, keep=k)`: the
+row a shift+click extends from, `sel%keep` ([Select many rows at once](#select-many-rows-at-once)). [The table below](#a-sortable-table-with-a-fixed-header)
+clips its 200 rows the same way. [Lists and regions](/guide/widgets#lists-and-regions) has the rules.
+
+### A sortable table with a fixed header
+
+<<< @/examples/snippets/cb_table_sort-table.F90{fortran}
+
+<Media name="cb_table_sort" video alt="A table of 200 grid blocks: a click on the header cells sorts them largest first, a second click smallest first; a click on residual puts the largest residuals on top, their rows coloured and marked with an exclamation mark; the wheel scrolls the rows and the header stays in place" caption="docs/examples/src/cb_table_sort.F90" />
+
+`freeze_rows=1` keeps the headers row in view while the 200 rows scroll inside the table (`height`, in em so that it
+follows the font); a `list_clipper_object` draws [only the rows in view](#draw-only-the-rows-in-view). `sortable=.true.`
+makes the headers ask an order; `ig_table_sort` is `.true.` on the frame one is asked, the first frame included, and the
+program sorts. It sorts `order`, a permutation of the block numbers, and draws row `i` as block `order(i)`: the data
+never move, so a block chosen elsewhere is still the same block. A row above the tolerance is coloured with
+`ig_table_row_color` and its residual marked `!`. With `hideable=.true.` a right click on the headers opens the menu of
+the columns, where the user hides and shows them; the patch column is hidden at first (`hidden=.true.`).
+
+<<< @/examples/snippets/cb_table_sort-sort.F90{fortran}
+
+The program checks itself headless:
+
+<<< @/examples/output/cb_table_sort.txt{text}
+
+[Tables](/guide/widgets#tables) has the rules: what the program sorts, the frozen rows and columns, the hidden
+columns.
+
+### Select many rows at once
+
+<<< @/examples/snippets/cb_select-select.F90{fortran}
+
+<Media name="cb_select" video alt="A list of 2000 blocks with their cells. Block 3 is clicked, then shift+click on block 8 selects 3 to 8; ctrl+click adds block 11 and removes block 5; the total under the list follows: blocks selected and their cells. Freeze marks the selected blocks frozen; back in the list, ctrl+a selects all 2000; escape clears." caption="docs/examples/src/cb_select.F90" />
+
+The user selects as in a file manager: a click, shift+click for a range, ctrl+click (cmd on macOS) to add or remove
+one, ctrl+a for all, a box dragged from an empty part of the list (`box_select`), escape to clear
+(`clear_on_escape`). The program keeps a `selection_object`, one flag per row (`sel%resize(n)`, once). The rows drawn
+between `ig_begin_multi_select(sel)` and `ig_end_multi_select(sel)` with `index=i` take the clicks and keys, and after
+the end the flags hold what the user did; each row is drawn `selected` from `sel%is_selected(i)`. The line under the
+list and the Freeze button read the flags back: `sel%selected_count()`, `sel%flags()` as a mask, `sel%indices()` as
+the rows to act on. The list draws only [the rows in view](#draw-only-the-rows-in-view), and a shift+click extends
+from the row last clicked, which may have scrolled away: `keep=sel%keep` keeps that row drawn.
+[Selecting many items](/guide/widgets#selecting-many-items) has the keys, the statuses, tables and trees.
+
+## Text and editors
+
+### Edit a text file
+
+<<< @/examples/snippets/cb_text-load.F90{fortran}
+
+<<< @/examples/snippets/cb_text-edit.F90{fortran}
+
+<Media name="cb_text" video alt="An input file shown as text in a monospace font: a click at the end of the iterations line, Enter opens a new line, a cfl entry is typed in the same columns and the status reads (!) modified, then Save writes the file and the status reads saved" caption="docs/examples/src/cb_text.F90" />
+
+The file's bytes go into a `text_buffer_object` once; the field edits them in place, growing the buffer as the user
+types or pastes, and `buffer%text()` copies them out to save. IBM Plex Mono (`'plex-mono'`), pushed around the
+field, keeps the columns of the input file aligned; `tab_input` lets Tab insert a tab. The program reads and writes the
+file in stream access, so line ends stay LF. [Multi-line text](/guide/widgets#multi-line-text) has the rules.
+
+Used in context: [chapter 11](./tutorial/11-input) of the tutorial.
+
+### Greek letters and operators in a monospace table
+
+<<< @/examples/snippets/cb_fallback_font-table.F90{fortran}
+
+IBM Plex Mono has no Greek letters and no `∇`: FIGURE's bundled fallback, Noto Sans Math, gives them in every text
+font, with no call. A font of the program's own gives what both lack (a CJK font, a font of its own symbols):
+
+<<< @/examples/snippets/cb_fallback_font-own.F90{fortran}
+
+The program prints which font draws each symbol (`cb_fallback_font --check FILE`):
+
+<<< @/examples/output/cb_fallback_font.txt{text}
+
+A Greek letter from the fallback keeps its own width: in a monospace column it can shift what follows by a fraction
+of a character. [The fallback fonts](/guide/styles#symbols-the-fallback-fonts) has the order and the limits.
 
 ### A help window from a Markdown file
 
@@ -319,69 +596,6 @@ The same page runs headless as a test: a search counted, a scroll to a heading.
 <<< @/examples/output/cb_markdown.txt{text}
 
 [Markdown](/guide/widgets#markdown) has what a page may hold, and what it may not.
-
-### A hierarchy with values in columns
-
-<<< @/examples/snippets/cb_tree-tree.F90{fortran}
-
-<Media name="cb_tree" video alt="A table of grids with the bodies as tree nodes: a click on the cells of block 2 chooses it and highlights its whole row, the fuselage opened by its arrow, then a node of 20000 blocks opened and scrolled" caption="docs/examples/src/cb_tree.F90" />
-
-Each body is a node in the table's first column with its total in the next cell; its blocks are leaf rows between the
-node and `ig_tree_pop`. With `span_all_columns`, a node's row is its click area and its highlight across every column:
-a click anywhere on a block's row chooses it (`clicked`), the arrow opens the body: the two never mix. The node of
-20000 blocks clips its children with a `list_clipper_object`. [Trees](/guide/widgets#trees) has the rules.
-
-Used in context: [chapter 11](./tutorial/11-input) of the tutorial.
-
-### A sortable table with a fixed header
-
-<<< @/examples/snippets/cb_table_sort-table.F90{fortran}
-
-<Media name="cb_table_sort" video alt="A table of 200 grid blocks: a click on the header cells sorts them largest first, a second click smallest first; a click on residual puts the largest residuals on top, their rows coloured and marked with an exclamation mark; the wheel scrolls the rows and the header stays in place" caption="docs/examples/src/cb_table_sort.F90" />
-
-`freeze_rows=1` keeps the headers row in view while the 200 rows scroll inside the table (`height`, in em so that it
-follows the font); the `list_clipper_object` draws only the rows in view. `sortable=.true.` makes the headers ask an
-order; `ig_table_sort` is `.true.` on the frame one is asked, the first frame included, and the program sorts. It
-sorts `order`, a permutation of the block numbers, and draws row `i` as block `order(i)`: the data never move, so a
-block chosen elsewhere is still the same block. A row above the tolerance is coloured with `ig_table_row_color` and its
-residual marked `!`. The patch column is hidden at first (`hidden`); a right click on the headers shows it.
-
-<<< @/examples/snippets/cb_table_sort-sort.F90{fortran}
-
-The program checks itself headless:
-
-<<< @/examples/output/cb_table_sort.txt{text}
-
-[Tables](/guide/widgets#tables) has the rules: what the program sorts, the frozen rows and columns, the hidden
-columns.
-
-### An input-file editor: fields, a list, tabs and a table
-
-<<< @/examples/snippets/cb_form-table.F90{fortran}
-
-<Media name="cb_form" alt="An input-file editor: fields, a drop-down list, a restart option, a table of boundary conditions" caption="docs/examples/src/cb_form.F90" />
-
-Each field edits a Fortran variable in place: a `character` for text (its length is the capacity), an `int32` index for
-a drop-down list. The rows of the table repeat the same widgets, each in its own id scope (`ig_push_id(r)`). Tabs and
-tables end only when their begin returned `.true.`. [Widgets](/guide/widgets#groups-headers-tabs-tables) has the
-rules.
-
-Used in context: [chapter 11](./tutorial/11-input) of the tutorial.
-
-### Edit a text file
-
-<<< @/examples/snippets/cb_text-load.F90{fortran}
-
-<<< @/examples/snippets/cb_text-edit.F90{fortran}
-
-<Media name="cb_text" video alt="An input file shown as text in a monospace font: a click at the end of the iterations line, Enter opens a new line, a cfl entry is typed in the same columns and the status reads (!) modified, then Save writes the file and the status reads saved" caption="docs/examples/src/cb_text.F90" />
-
-The file's bytes go into a `text_buffer_object` once; the field edits them in place, growing the buffer as the user
-types or pastes, and `buffer%text()` copies them out to save. IBM Plex Mono (`'plex-mono'`), pushed around the
-field, keeps the columns of the input file aligned; `tab_input` lets Tab insert a tab. The program reads and writes the
-file in stream access, so line ends stay LF. [Multi-line text](/guide/widgets#multi-line-text) has the rules.
-
-Used in context: [chapter 11](./tutorial/11-input) of the tutorial.
 
 ### Edit an input file with its errors marked
 
@@ -421,21 +635,18 @@ task or a test can use them:
 
 [The diff](/guide/editor#the-diff) has the details.
 
-### Greek letters and operators in a monospace table
+## Layout and item state
 
-<<< @/examples/snippets/cb_fallback_font-table.F90{fortran}
+### A tooltip with a table in it
 
-IBM Plex Mono has no Greek letters and no `∇`: FIGURE's bundled fallback, Noto Sans Math, gives them in every text
-font, with no call. A font of the program's own gives what both lack (a CJK font, a font of its own symbols):
+<<< @/examples/snippets/cb_context_menu-tooltip.F90{fortran}
 
-<<< @/examples/snippets/cb_fallback_font-own.F90{fortran}
+<Media name="cb_context_menu_tooltip" alt="The pointer rests on the row wall: a tooltip holds a table, patch wall, condition no-slip, value 0.0" caption="docs/examples/src/cb_context_menu.F90" />
 
-The program prints which font draws each symbol (`cb_fallback_font --check FILE`):
-
-<<< @/examples/output/cb_fallback_font.txt{text}
-
-A Greek letter from the fallback keeps its own width: in a monospace column it can shift what follows by a fraction
-of a character. [The fallback fonts](/guide/styles#symbols-the-fallback-fonts) has the order and the limits.
+`ig_begin_item_tooltip()` right after the row is `.true.` while the pointer rests on it, after the tooltip delay;
+between it and `ig_end_tooltip()` goes any content, here a table of two columns. In the output of [the right-click
+recipe](#act-on-a-row-with-a-right-click), the pointer arrived on frame 53 and the tooltip showed by frame 75.
+[Tooltips](/guide/widgets#tooltips) has the delay and `ig_begin_tooltip`, the tooltip without an item.
 
 ### Check a value when the user leaves the field
 
@@ -465,63 +676,6 @@ double click with the left button, opens it. The first click of the double click
 `clicked(2)` is a right click on the row. Take the status right after the row's widget, before the next row is
 drawn: [the snapshot rule](/guide/widgets#what-happened-to-an-item).
 
-### Act on a row with a right click
-
-<<< @/examples/snippets/cb_context_menu-rows.F90{fortran}
-
-<Media name="cb_context_menu" video alt="A right click on the row outlet opens its menu: Duplicate adds outlet-copy below it; a right click on inlet, then Delete removes it; a right click below the rows opens the list's menu: Add a row appends patch-1" caption="docs/examples/src/cb_context_menu.F90" />
-
-Each row is followed by `ig_begin_popup_context('row')`: a right click on the row opens the menu, and its entries act
-on that row. The rows share the menu's id, so each is drawn inside `ig_push_id(i)`. An entry does not change the list
-while the loop draws it: it records what to do (`ask`), and `apply` does it after the loop. The list's own menu (add a
-row) opens on the window's empty space, not over a row, with `on='window'`:
-
-<<< @/examples/snippets/cb_context_menu-space.F90{fortran}
-
-The program checks itself headless:
-
-<<< @/examples/output/cb_context_menu.txt{text}
-
-[Context menus](/guide/menus#context-menus) has the places a menu opens on and when it closes.
-
-### A tooltip with a table in it
-
-<<< @/examples/snippets/cb_context_menu-tooltip.F90{fortran}
-
-<Media name="cb_context_menu_tooltip" alt="The pointer rests on the row wall: a tooltip holds a table, patch wall, condition no-slip, value 0.0" caption="docs/examples/src/cb_context_menu.F90" />
-
-`ig_begin_item_tooltip()` right after the row is `.true.` while the pointer rests on it, after the tooltip delay;
-between it and `ig_end_tooltip()` goes any content, here a table of two columns. In the output above, the pointer
-arrived on frame 53 and the tooltip showed by frame 75. [Tooltips](/guide/widgets#tooltips) has the delay and
-`ig_begin_tooltip`, the tooltip without an item.
-
-### Reveal an item picked elsewhere
-
-<<< @/examples/snippets/cb_reveal-clipped.F90{fortran}
-
-<Media name="cb_reveal" video alt="A pick of block 1240 in a bar standing for a 3-D view scrolls the list of 2000 blocks so that block 1240 is highlighted in its middle, and the list of bodies to body 19; Go to... opens a dialog whose field takes 333 and enter without a click, and both lists scroll to block 333" caption="docs/examples/src/cb_reveal.F90" />
-
-The user picks a block somewhere else (a 3-D view, a search, a message), and the list must show it. The program sets
-the selection and a flag `reveal` for one frame. The list of blocks draws only the rows in view (a
-`list_clipper_object`), so the picked row may not be drawn: after the clipper's loop, inside the region,
-`ig_scroll_to_pos` scrolls to its place, `(block - 0.5) * clip%item_height` pixels below the top of the list, at the
-middle of the region (`ratio` 0.5). A list drawn whole (the bodies) needs no arithmetic: `ig_scroll_here(0.5)` right
-after the row.
-
-<<< @/examples/snippets/cb_reveal-here.F90{fortran}
-
-The scroll happens one frame later, when the region is begun again; the program checks itself headless:
-
-<<< @/examples/output/cb_reveal.txt{text}
-
-A dialog whose field takes the keys at once calls `ig_focus_here()` before the field, on the frame the dialog opens
-only:
-
-<<< @/examples/snippets/cb_reveal-dialog.F90{fortran}
-
-[Scrolling and focus](/guide/widgets#scrolling-and-focus) has the rules: the one-frame delay, the clipper, focus and
-modals.
-
 ### A form that keeps its proportions at any font size
 
 <<< @/examples/snippets/cb_layout-form.F90{fortran}
@@ -544,39 +698,32 @@ The program checks itself headless, at 15 and at 24 pixels:
 
 [Layout](/guide/widgets#layout) has the rules: the em, groups, alignment and its first frame.
 
-### A vector parameter with units
+### Reveal an item picked elsewhere
 
-<<< @/examples/snippets/cb_vector-vector.F90{fortran}
+<<< @/examples/snippets/cb_reveal-clipped.F90{fortran}
 
-<Media name="cb_vector" video alt="A window Case: the pointer drags the third box of gravity from -9.81 to -10.81 m/s² and the first one from 0.00 to 1.50 m/s², the norm below following; it types 0.25 into the second field of probe; it drags the wind slider from 45 to 120 deg" caption="docs/examples/src/cb_vector.F90" />
+<Media name="cb_reveal" video alt="A pick of block 1240 in a bar standing for a 3-D view scrolls the list of 2000 blocks so that block 1240 is highlighted in its middle, and the list of bodies to body 19; Go to... opens a dialog whose field takes 333 and enter without a click, and both lists scroll to block 333" caption="docs/examples/src/cb_reveal.F90" />
 
-A `real64` array of rank 1 is one widget with a box per component, one label for the whole vector. `ig_drag` changes
-a component by `speed` per pixel (here 0.01 m/s² per pixel), and stops at `vmin` and `vmax`; `ig_input` takes a
-typed value in any component, which changes only that one. The format prints the unit in every box (`'%.2f m/s²'`),
-and the drag rounds the value to what the format shows, hundredths here. The wind is kept in radians, as the program
-computes with it, and shown and set in degrees by `ig_slider_angle`. The program checks itself headless:
+The user picks a block somewhere else (a 3-D view, a search, a message), and the list must show it. The program sets
+the selection and a flag `reveal` for one frame. The list of blocks draws [only the rows in
+view](#draw-only-the-rows-in-view), so the picked row may not be drawn: after the clipper's loop, inside the region,
+`ig_scroll_to_pos` scrolls to its place, `(block - 0.5) * clip%item_height` pixels below the top of the list, at the
+middle of the region (`ratio` 0.5). A list drawn whole (the bodies) needs no arithmetic: `ig_scroll_here(0.5)` right
+after the row.
 
-<<< @/examples/output/cb_vector.txt{text}
+<<< @/examples/snippets/cb_reveal-here.F90{fortran}
 
-[Numbers](/guide/widgets#numbers) has the kinds, the formats and their Fortran equivalents, the speed, the bounds and
-the log scale.
+The scroll happens one frame later, when the region is begun again; the program checks itself headless:
 
-### Choose a scheme
+<<< @/examples/output/cb_reveal.txt{text}
 
-<<< @/examples/snippets/cb_scheme-radio.F90{fortran}
+A dialog whose field takes the keys at once calls `ig_focus_here()` before the field, on the frame the dialog opens
+only:
 
-<<< @/examples/snippets/cb_scheme-list.F90{fortran}
+<<< @/examples/snippets/cb_reveal-dialog.F90{fortran}
 
-<Media name="cb_scheme" video alt="A window Numerics: a click on TVD chooses it and shows the limiter combo; the combo opens and superbee is picked; the list of 64 blocks scrolls under the wheel and a click chooses block 17, named in the line below" caption="docs/examples/src/cb_scheme.F90" />
-
-Three schemes, all worth seeing: radio buttons, one per scheme, sharing `scheme`; a click sets it and returns
-`.true.`. The limiter, one of seven and needed only for TVD: a combo, one line until it is opened. The block the
-scheme applies to, one of 64 and picked again and again: a list box that stays open and scrolls; only the rows in view
-are drawn. The program checks itself headless:
-
-<<< @/examples/output/cb_scheme.txt{text}
-
-[Choices](/guide/widgets#choices) has the rules: indices, heights, when to use which.
+[Scrolling and focus](/guide/widgets#scrolling-and-focus) has the rules: the one-frame delay, the clipper, focus and
+modals.
 
 ### Draw a domain sketch with clickable boundaries
 
@@ -609,7 +756,8 @@ The program checks itself headless:
 
 <<< @/examples/snippets/cb_rows-columns.F90{fortran}
 
-A column of a Fortran array is contiguous: ImPlot reads it in place.
+A column of a Fortran array is contiguous: ImPlot reads it in place. [Data in place](/guide/plots#data-in-place) has
+the rows, the strides and what is copied.
 
 ### Combine items and styles in one plot
 
@@ -623,187 +771,33 @@ The `x(::5)` sections are not contiguous: ImPlot reads them in place with a stri
 ([Data in place](/guide/plots#data-in-place)).
 [Plots](/guide/plots#item-style) lists every `ip_spec` argument.
 
-### Show a 2-D field with its colour scale
+### Compare the cost of each phase across cases
 
-<<< @/examples/snippets/cb_field_scale-field.F90{fortran}
+<<< @/examples/snippets/cb_bar_groups-groups.F90{fortran}
 
-<Media name="cb_field_scale" video alt="A density field over three decades, a bright blob on dark ground, in the inferno colormap on a log scale, with a vertical legend beside it labelled at 0.1, 1, 10 and 100 kg/m3. The pointer drags the legend upwards: the labels slide up, the range moves towards smaller values and the field brightens; the wheel over the legend narrows the range about the pointer; the reset button puts the range back." caption="docs/examples/src/cb_field_scale.F90" />
+<Media name="cb_bar_groups" alt="Three plots. The cost of four cases, three bars per case: solver, I/O and overset side by side, the solver's growing from 12 to 104 seconds. The same costs stacked, one bar per case. A residual decaying over 300 iterations, and under it a digital signal high for 8 iterations in every 50, when the solver writes its output." caption="docs/examples/src/cb_bar_groups.F90" />
 
-`ip_field_image` colours the field through the colormap into a texture and draws it as one image: the colours are
-computed when something changes, not every frame, so a field of a million values costs a frame no more than a
-picture. `f(i, j)` is read in place, `i` along x and `j` along y, `j = 1` at the bottom; the edges are the outer
-edges of the values. The scale is logarithmic: the legend beside it, on the same scale, has its ticks at the
-decades. `ip_colormap_legend_edit` lets the user move the range (drag) and zoom it (wheel): `vmin` and `vmax` change
-in place and the next `ip_field_image` colours the field again. A time step that rewrites `rho` in place says so
-with `changed=.true.`: FIGURE cannot see it. `cb_field_scale --check` drags the legend 60 pixels up with
-`test_drag` and prints the range before and after, and how many times the field was coloured:
+`COST(g, i)` holds the seconds of phase `i` in case `g`: `ip_bar_groups` draws one group per case, at x = 0, 1, 2, ...,
+its phases side by side within `group_size` of the unit, or on top of each other with `stacked=.true.`. Each phase is
+one item, named by `PHASE(i)` in the legend and coloured with the plot's line colours in order. Where the time of one
+run went is a pie:
 
-<<< @/examples/output/cb_field_scale.txt{text}
+<<< @/examples/snippets/cb_pie_bubbles-pie.F90{fortran}
 
-[Fields](/guide/plots#fields) has every argument, the speed and the remote mode; [Colormaps](/guide/colormaps#scales)
-the scales.
-
-### Show a small field cell by cell
-
-<<< @/examples/snippets/cb_field-heatmap.F90{fortran}
-
-<Media name="cb_field" alt="A heatmap of a Gaussian bump with a colour bar, an image drawn inside the plot and the same image as a widget" caption="docs/examples/src/cb_field.F90: a heatmap with its colour scale, and an image as a plot item and as a widget" />
-
-A heatmap draws each cell, and can print its value in it (`label_format`): for fields of up to a few hundred cells a
-side; larger ones are [the recipe above](#show-a-2-d-field-with-its-colour-scale). `f(i, j)` is read in place, `i`
-along x and `j` along y, `j = 1` at the bottom; the bounds are the outer edges of the cells. Fix the scale (`scale_min`, `scale_max`) when the field changes over time, or the colours rescale every frame.
-[Heatmaps and images](/guide/images) has every argument.
-
-Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
-
-### Contour lines over a field
-
-<<< @/examples/snippets/cb_contour-contour.F90{fortran}
-
-<Media name="cb_contour" alt="Two vortices as a heatmap with black contour lines labelled with their values; beside it the same lines coloured by value around a hole marked NaN, with a drag line and a drag point; below, the field along the drag line with error bars" caption="docs/examples/src/cb_contour.F90" />
-
-`ip_contour` takes the positions of the first and last samples; a heatmap takes the outer edges of its cells: give it
-half a spacing more on each side, and the lines fall on the colours they bound. Without `levels`, about `nlevels`
-round values inside the field's range are chosen. Where the field is NaN (a body, cells outside the domain) the lines
-stop: a hole, not a line to a meaningless value. [Contour lines](/guide/plots#contour-lines) has every argument.
-
-Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
-
-### A colour-scale legend beside a plot
-
-<<< @/examples/snippets/cb_legend-legend.F90{fortran}
-
-<Media name="cb_legend" alt="A field in eight blue-to-red bands with contour lines, a vertical legend of the same eight bands on its right, a horizontal continuous legend below" caption="docs/examples/src/cb_legend.F90" />
-
-`ig_same_line` puts the legend beside the plot. Give it the continuous map and the heatmap's `levels`: its bands are
-then the heatmap's, labelled at their edges. [A colour-scale legend](/guide/colormaps#a-colour-scale-legend) has
+`normalize=.true.` makes the slices fractions of their sum, whatever it is; `equal=.true.` keeps the pie round, its
+centre and radius being in plot units. [Grouped bars and digital
+signals](/guide/plots#grouped-bars-and-digital-signals) and [Pies and bubbles](/guide/plots#pies-and-bubbles) have
 every argument.
 
-Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
+### Mark when the solver writes, under its residual
 
-### Let the user choose a colour
+<<< @/examples/snippets/cb_bar_groups-digital.F90{fortran}
 
-<<< @/examples/snippets/cb_legend-color.F90{fortran}
-
-The editor writes `line_color` on the frames the user changes it; the plot reads it every frame. The swatch opens a
-picker; the fields are dragged, or typed after a double-click. [Colour editing](/guide/widgets#colour-editing).
-
-### Edit a colormap and save it
-
-<<< @/examples/snippets/cb_gradient-edit.F90{fortran}
-
-<<< @/examples/snippets/cb_gradient-save.F90{fortran}
-
-<Media name="cb_gradient" video alt="A strip of the cool-warm map over a row of its stops, a Save button, and a field drawn with the map beside its legend. The white stop is dragged right and the field's white band widens; a light blue stop is selected, its colour button opens the picker, a click on the hue bar turns it green, and a green band appears in the strip, the field and the legend." caption="docs/examples/src/cb_gradient.F90" />
-
-`ig_gradient_edit` edits the map by its stops: drag one, double-click the row to add one, click one to recolour or
-remove it. The map itself changes, so the field, the legend and anything else drawn with `cool-warm` follow on the
-same frame. `ip_colormap_stops` gives the stops; written as `x, r, g, b` rows they are a CSV that
-`ip_load_colormap` reads back as the same map, which the test checks:
-
-<<< @/examples/output/cb_gradient.txt{text}
-
-[Editing a colormap](/guide/colormaps#editing-a-colormap) has the rules.
-
-### Probe a field with lines and points the user drags
-
-<<< @/examples/snippets/cb_contour-probes.F90{fortran}
-
-<<< @/examples/snippets/cb_contour-profile.F90{fortran}
-
-The drag tools update `probe_x`, `px` and `py` in place and return `.true.` while they move: clamp the values there.
-The profile is the row `i` of `g`, read in place with a stride (`ip_line(label, g, i)`); a NaN in it draws a gap.
-[Error bars, annotations and drag tools](/guide/plots#error-bars-annotations-and-drag-tools) has the details.
-
-Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
-
-### Show a surface coloured by a field
-
-<<< @/examples/snippets/cb_view3d-setup.F90{fortran}
-
-<<< @/examples/snippets/cb_view3d-draw.F90{fortran}
-
-<Media name="cb_view3d" alt="A slender body with its grid lines, coloured from blue at the middle to red at both ends, a yellow line along its axis; above it buttons for the standard views, check boxes 'grid' and 'cut at z = 0', and the text of the cell clicked with its value and position. In the video a drag turns the body, the wheel brings it closer, a click fills the text, the check box cuts the body in half." caption="docs/examples/src/cb_view3d.F90" />
-
-The arrays are read in place at every render: give them the `target` attribute and keep them allocated while the
-mesh exists; after changing their values, call `view%changed(hull)`. The view is rendered only when something
-changed, so a still view costs nothing per frame. A click on the surface gives the cell `i + (j - 1) * (ni - 1)` and
-the point hit. [3-D views](/guide/view3d) has the camera, clipping planes and the cost per mode.
-
-Used in context: [chapter 14](./tutorial/14-view3d) of the tutorial.
-
-### A trajectory in 3-D
-
-<<< @/examples/snippets/cb_trajectory-setup.F90{fortran}
-
-<<< @/examples/snippets/cb_trajectory-draw.F90{fortran}
-
-<Media name="cb_trajectory" video alt="A 3-D plot titled trajectory: a red path of the Lorenz system grows inside a box with grid planes and labelled axes x, y and z, a blue marker at its newest point; the count of points below rises. A right drag across the plot turns the box to the right and back, its two wings coming into view; a turn of the wheel zooms in." caption="docs/examples/src/cb_trajectory.F90" />
-
-The solver keeps the path as the columns of a `3 × n` matrix and the plot reads its three rows where they are: one
-stride (24 bytes) for the three arrays, no copy. `auto_fit=.true.` refits the box as the path grows; `elevation` and
-`azimuth` are the box's first rotation, which the user changes with a right drag and gets back with a right double
-click. The test runs 200 frames headless, then turns the box with a right drag:
-
-<<< @/examples/output/cb_trajectory.txt{text}
-
-For meshes of many faces, a field on a body, cuts and clipping planes, take a [3-D view](/guide/view3d) instead:
-[3-D plots](/guide/plots#_3-d-plots) has the rule.
-
-### Place a clipping plane by hand
-
-<<< @/examples/snippets/cb_gizmo-start.F90{fortran}
-
-<<< @/examples/snippets/cb_gizmo-draw.F90{fortran}
-
-<<< @/examples/snippets/cb_gizmo-cut.F90{fortran}
-
-<Media name="cb_gizmo" video alt="A slender body cut by a plane drawn as a yellow square, a gizmo of three arrows at the plane's centre and a view cube in the corner. The red arrow is dragged and the cut moves toward the tail; Turn shows the rings, the blue one is dragged and the plane turns about z; a click on the cube's green face turns the camera to look from -y." caption="docs/examples/src/cb_gizmo.F90" />
-
-The plane is a 4x4 placement: its third column the normal, its fourth the point. `view%gizmo` draws handles there,
-over the view (after `view%draw`, in the same window), and returns `.true.` on the frames the user drags one, the
-matrix updated: cut again then. `view%view_cube` turns the camera to the face clicked. With the camera's matrices the
-program finds where a point is on the screen; the test drags the plane's arrow that way and clicks the cube:
-
-<<< @/examples/snippets/cb_gizmo-pixel.F90{fortran}
-
-<<< @/examples/snippets/cb_gizmo-test.F90{fortran}
-
-<<< @/examples/output/cb_gizmo.txt{text}
-
-[Gizmos](/guide/view3d#gizmos) has the modes, the matrices' conventions and the mouse.
-
-### Show an image computed by the program
-
-<<< @/examples/snippets/cb_field-texture.F90{fortran}
-
-Upload once, draw every frame: `tex%update` only when the pixels change (a new iteration of a computation), `ig_image`
-or `ip_image` in the loop.
-
-### Show a photograph beside a field
-
-<<< @/examples/snippets/cb_photo-work.F90{fortran}
-
-<<< @/examples/snippets/cb_photo-start.F90{fortran}
-
-<<< @/examples/snippets/cb_photo-take.F90{fortran}
-
-<<< @/examples/snippets/cb_photo-draw.F90{fortran}
-
-The photograph is decoded in a task: `fig_read_image` draws nothing, so a worker may call it, and a large JPEG does
-not freeze the window (the window says "reading ..." meanwhile). Once the task is done, the main thread puts the
-pixels on the GPU, once, with `tex%init` and `tex%update`; `smooth=.true.` blends pixels when the photograph is
-scaled, better for a photograph than the sharp squares a measured field wants. `ig_image` shows row 1 at the top,
-the file's top row, at the plot's height and in the photograph's proportions. For a small file the task is not
-worth it: `call photo%load('schlieren.jpg', smooth=.true.)` reads and uploads in one call, on the main thread.
-`cb_photo --check FILE` reads FILE headless and prints its size and centre pixel, then the refusal of a file that
-does not exist:
-
-<<< @/examples/output/cb_photo.txt{text}
-
-The picture is `docs/examples/data/schlieren.jpg`, a synthetic schlieren of a bow shock written by
-`scripts/gen_photo.py`. [Reading images](/guide/images#reading-images) has the layout, the formats, the statuses and
-the limits.
+`writing` is 1 on the iterations the solver writes its output, 0 elsewhere (the third plot of the picture above).
+`ip_digital` draws it as a signal held from one abscissa to the next, in a band of its own at the bottom of the plot:
+the y axis does not fit it, so the band stays under the residual whatever the residual's range; the x axis does.
+[Grouped bars and digital signals](/guide/plots#grouped-bars-and-digital-signals) has the band's height and the
+strides.
 
 ### Several plots sharing the x axis
 
@@ -830,6 +824,21 @@ draws the plot headless and prints what each axis shows:
 
 [Axes](/guide/plots#axes) has the six axes, the scales, fixed ticks and constraints.
 
+### Stack plots over one iteration axis
+
+<<< @/examples/snippets/cb_linked-linked.F90{fortran}
+
+<Media name="cb_linked" video alt="Three plots stacked over 400 iterations: a residual, a CFL number rising to 5, and the lift and drag coefficients, their plot areas starting at the same pixel although their tick labels differ in width. The wheel over the forces zooms all three to the same iterations; a pan drags all three. A right click on the drag entry of the legend opens a popup with its last value and a shown checkbox, which hides the drag line when cleared." caption="docs/examples/src/cb_linked.F90: three plots over one iteration axis" />
+
+A residual, a CFL number and the forces, each a plot with its own height, legend and y axis, over the same iterations.
+`ip_link_axis('x1', 'iteration')` in each plot's setup puts the three x axes in one group: a pan or a zoom in any of
+them moves all three. `ip_begin_aligned` ... `ip_end_aligned` starts their plot areas at the same pixel whatever the
+width of their tick labels, so an iteration is at the same place down the column. On the forces' legend a right click on
+the drag entry opens a popup (`ip_begin_legend_popup`) with its last value and a check box; `ip_hide_next_item(...,
+always=.true.)` before the item hides or shows the line every frame as the check box says. The pointer on the lift entry
+shows a tooltip (`ip_legend_hovered`). Plots of one size in a grid are [subplots](#several-plots-sharing-the-x-axis).
+[Plots across plots](/guide/plots#plots-across-plots) has the details, the first frame of a group among them.
+
 ### Read the value under the pointer
 
 <<< @/examples/snippets/cb_plot_readout-readout.F90{fortran}
@@ -837,12 +846,12 @@ draws the plot headless and prints what each axis shows:
 <Media name="cb_plot_readout" video alt="A residual falling over six decades on a log axis. The pointer moves across the plot: an amber vertical line follows it at the nearest iteration, an amber dot sits on the curve, an amber tag shows the iteration on the x axis and an amber box beside the dot the residual. The pointer leaves the plot and the marks disappear." caption="docs/examples/src/cb_plot_readout.F90" />
 
 While `ip_plot_hovered()` is true, `ip_plot_mouse` gives the pointer in plot units; the program rounds its x to the
-nearest iteration and marks it: `ip_inf_lines` at that integer draws a line across the plot, a one-point
-`ip_scatter` a dot on the curve, `ip_tag` puts the iteration on the x axis (labelled as the axis labels its ticks,
-`'%.0f'`), and `ip_annotation` writes the residual beside the dot. A tag on the y axis would hold it too, but a tag
-wider than the tick labels widens the axis, and the plot would shift under the pointer as it enters. The marks are
-drawn only on the frames the pointer is over the plot, so they vanish when it leaves. `cb_plot_readout --check` moves the pointer to
-iteration 250 with the testing module (the pixel from `ip_plot_to_pixels`) and prints what the readout shows:
+nearest iteration and marks it: `ip_inf_lines` at that integer draws a line across the plot, a one-point `ip_scatter` a
+dot on the curve, `ip_tag` puts the iteration on the x axis (labelled as the axis labels its ticks, `'%.0f'`), and
+`ip_annotation` writes the residual beside the dot. A tag on the y axis would hold it too, but a tag wider than the tick
+labels widens the axis, and the plot would shift under the pointer as it enters. The marks are drawn only on the frames
+the pointer is over the plot, so they vanish when it leaves. `cb_plot_readout --check` moves the pointer to iteration
+250 with the testing module (the pixel from `ip_plot_to_pixels`) and prints what the readout shows:
 
 <<< @/examples/output/cb_plot_readout.txt{text}
 
@@ -867,41 +876,22 @@ ImPlot's box selection (right button) chooses a window too, once: [Reading a plo
 shows how to keep the box without the zoom. [Marks in a plot](/guide/plots#marks-in-a-plot) has the rectangle, tags,
 infinite lines and text.
 
-### Plot the rows of a matrix
+### Drag a case onto a plot
 
-A row of a column-major matrix is strided. When its abscissae are uniform, `ip_line(label, y, row [, xscale]
-[, xstart])` plots it in place: ImPlot reads `y(row, j)` with a stride of `size(y, 1)` elements, no copy at all.
+<<< @/examples/snippets/cb_dnd-source.F90{fortran}
 
-<<< @/examples/snippets/cb_rows-rows.F90{fortran}
+<<< @/examples/snippets/cb_dnd-plot.F90{fortran}
 
-With arbitrary abscissae, `ip_line(label, t, history(i, :))` reads the row in place and copies `t` at the row's
-stride (ImPlot applies one stride to both `x` and `y`), on compilers that pass the section in place (gfortran, ifx);
-nvfortran copies the row into a temporary before the call. Copying the row yourself into a buffer allocated once is
-the same on every compiler. Storing series as columns avoids the question ([Data in place](/guide/plots#data-in-place)).
+<Media name="cb_dnd" video alt="A tree of four cases beside an empty plot. re1e5-coarse is dragged from the tree, its name under the pointer, the plot outlined while it is held over it: dropped, its residual history is plotted. re1e6-fine follows. Then re1e5-coarse is dragged back onto the Bin button and leaves the plot." caption="docs/examples/src/cb_dnd.F90" />
 
-<<< @/examples/snippets/cb_rows-rows-copied.F90{fortran}
-
-<Media name="cb_rows" :width="620" alt="Three plots of the same two probes: columns read in place, rows read in place with a stride, rows copied" caption="docs/examples/src/cb_rows.F90: the three ways give the same plot" />
-
-### Plot the history a solver keeps, in place
-
-<<< @/examples/snippets/cb_in_place-records.F90{fortran}
-
-A solver keeps one record per iteration: `runs%cl` is a component of an array of derived types, strided by the size of
-a record, and `runs%iter` is an integer. The item reads the coefficients where they are, with ImPlot's stride, and
-converts the iterations into one temporary (ImPlot reads `x` and `y` of one type).
-
-<<< @/examples/snippets/cb_in_place-rows.F90{fortran}
-
-A row of a matrix is read with the matrix's stride; `time` is contiguous, so it is copied at that stride (one stride
-per item). With uniform abscissae nothing is copied, and `probes(3, ::10)` plots every tenth sample in place.
-`cb_in_place --check` prints what was copied, built with gfortran:
-
-<<< @/examples/output/cb_in_place.txt{text}
-
-gfortran copies a component of an array of derived types into a temporary before the call: the first item reads that
-copy (stride 8 bytes); ifx passes it in place (stride of a record), nvfortran copies every strided section
-([Data in place](/guide/plots#data-in-place) has the table and the measured costs).
+Each case of the tree is a drag source (`ig_drag_source`, right after its node): pressed and dragged, it carries its
+name under the type `'case'`. The plot is a target of that type (`ip_drop_target`, after its items and before
+`ip_end_plot`): on the frame a case is dropped on it, the call is `.true.` and `payload` holds the name, which the
+program finds in its own data. The Bin button is a target too (`ig_drop_target`, right after the button): a case dragged
+onto it leaves the plot. While a case is held, `ig_dragging('case')` is `.true.` and the program says where to drop it.
+The payload is text: the program, not Dear ImGui, keeps the cases. [Drag and drop](/guide/widgets#drag-and-drop) has the
+types and the rules; [A plot as a drop target](/guide/plots#a-plot-as-a-drop-target) an axis or the legend as the
+target.
 
 ### Step through saved solutions
 
@@ -921,7 +911,290 @@ previous:
 
 [Players](/guide/widgets#players) has the controls, the clock and the modes.
 
-## Running work
+### Save a plot as a PNG file
+
+<<< @/examples/snippets/cb_save_image-save.F90{fortran}
+
+`save_now` is the result of a button above the plot. `ig_item_rect` right after `ip_end_plot` gives the plot's
+rectangle; `app%save_image` writes that rectangle of the window as a PNG file, at the screen's resolution, when the
+frame is rendered. The outcome comes once, on a later frame: `app%image_result`, called every frame, sets `done` with
+the file written, or `stat` to `FIG_ERR_FAILED` with the reason. A button rather than a menu: a menu still open on the
+frame of the request would be in the picture. [Save an image from the
+program](/guide/capture#save-an-image-from-the-program) has the modes and the rules
+(`docs/examples/src/cb_save_image.F90`).
+
+### Plot the rows of a matrix
+
+A row of a column-major matrix is strided. When its abscissae are uniform, `ip_line(label, y, row [, xscale]
+[, xstart])` plots it in place: ImPlot reads `y(row, j)` with a stride of `size(y, 1)` elements, no copy at all.
+
+<<< @/examples/snippets/cb_rows-rows.F90{fortran}
+
+With arbitrary abscissae, `ip_line(label, t, history(i, :))` reads the row with its stride and copies `t` at that
+stride (ImPlot applies one stride to both `x` and `y`); a row copied by the program into a buffer allocated once draws
+the same:
+
+<<< @/examples/snippets/cb_rows-rows-copied.F90{fortran}
+
+<Media name="cb_rows" :width="620" alt="Three plots of the same two probes: columns read in place, rows read in place with a stride, rows copied" caption="docs/examples/src/cb_rows.F90: the three ways give the same plot" />
+
+Storing series as columns avoids the question. What a compiler passes for a section, and what each way costs, is in
+[Data in place](/guide/plots#data-in-place).
+
+### Plot the history a solver keeps, in place
+
+<<< @/examples/snippets/cb_in_place-records.F90{fortran}
+
+A solver keeps one record per iteration: `runs%cl` is a component of an array of derived types, strided by the size of
+a record, and `runs%iter` is an integer. The item reads the coefficients as the compiler passes them, with their
+stride, and converts the iterations into one temporary (ImPlot reads `x` and `y` of one type).
+
+<<< @/examples/snippets/cb_in_place-rows.F90{fortran}
+
+A row of a matrix is read with the matrix's stride; `time` is contiguous, so it is copied at that stride (one stride
+per item). With uniform abscissae nothing is copied, and `probes(3, ::10)` plots every tenth sample in place.
+`cb_in_place --check` prints what was copied, built with gfortran, which passes `runs%cl` as a contiguous copy of its
+own (stride 8 bytes; ifx passes it in place, with the stride of a record):
+
+<<< @/examples/output/cb_in_place.txt{text}
+
+What each compiler passes, and what it costs, is in [Data in place](/guide/plots#data-in-place).
+
+## Fields and images
+
+### Show a small field cell by cell
+
+<<< @/examples/snippets/cb_field-heatmap.F90{fortran}
+
+<Media name="cb_field" alt="A heatmap of a Gaussian bump with a colour bar, an image drawn inside the plot and the same image as a widget" caption="docs/examples/src/cb_field.F90: a heatmap with its colour scale, and an image as a plot item and as a widget" />
+
+A heatmap draws each cell, and can print its value in it (`label_format`): for fields of up to a few hundred cells a
+side; larger ones are [the next recipe](#show-a-2-d-field-with-its-colour-scale). `f(i, j)` is read in place, `i` along
+x and `j` along y, `j = 1` at the bottom; the bounds are the outer edges of the cells. Fix the scale (`scale_min`,
+`scale_max`) when the field changes over time, or the colours rescale every frame. [Heatmaps and images](/guide/images)
+has every argument.
+
+Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
+
+### Show a 2-D field with its colour scale
+
+<<< @/examples/snippets/cb_field_scale-field.F90{fortran}
+
+<Media name="cb_field_scale" video alt="A density field over three decades, a bright blob on dark ground, in the inferno colormap on a log scale, with a vertical legend beside it labelled at 0.1, 1, 10 and 100 kg/m3. The pointer drags the legend upwards: the labels slide up, the range moves towards smaller values and the field brightens; the wheel over the legend narrows the range about the pointer; the reset button puts the range back." caption="docs/examples/src/cb_field_scale.F90" />
+
+`ip_field_image` colours the field through the colormap into a texture and draws it as one image: the colours are
+computed when something changes, not every frame, so a field of a million values costs a frame no more than a
+picture. `f(i, j)` is read in place, `i` along x and `j` along y, `j = 1` at the bottom; the edges are the outer
+edges of the values. The scale is logarithmic: the legend beside it, on the same scale, has its ticks at the
+decades. `ip_colormap_legend_edit` lets the user move the range (drag) and zoom it (wheel): `vmin` and `vmax` change
+in place and the next `ip_field_image` colours the field again. A time step that rewrites `rho` in place says so
+with `changed=.true.`: FIGURE cannot see it. `cb_field_scale --check` drags the legend 60 pixels up with
+`test_drag` and prints the range before and after, and how many times the field was coloured:
+
+<<< @/examples/output/cb_field_scale.txt{text}
+
+[Fields](/guide/plots#fields) has every argument, the speed and the remote mode; [Colormaps](/guide/colormaps#scales)
+the scales.
+
+### Colour a field with a map by name, reversed or in bands
+
+<<< @/examples/snippets/cb_colormap-diverging.F90{fortran}
+
+`ip_colormap(name)` gives the id that heatmaps, fields and legends take as `colormap`; `levels=10` cuts the map into ten
+bands of equal width. A signed field (a vorticity) wants a diverging map over a range symmetric about 0: with an even
+number of bands, 0 falls between two of them. A map of the program's own is a CSV table loaded once under a new name,
+and `<name>_r` is any map reversed:
+
+<<< @/examples/snippets/cb_colormap-load.F90{fortran}
+
+<<< @/examples/snippets/cb_colormap-reversed.F90{fortran}
+
+Names are case-sensitive. `ip_colormap_names` lists those known; a name that is not one of them is refused with
+`FIG_ERR_ARGUMENT` and the id -1 (`cb_colormap` runs headless):
+
+<<< @/examples/snippets/cb_colormap-names.F90{fortran}
+
+<<< @/examples/snippets/cb_colormap-unknown.F90{fortran}
+
+<<< @/examples/output/cb_colormap.txt{text}
+
+[Colormaps](/guide/colormaps) has the bundled maps, how to choose one, the file formats and the scales.
+
+### A colour-scale legend beside a plot
+
+<<< @/examples/snippets/cb_legend-legend.F90{fortran}
+
+<Media name="cb_legend" alt="A field in eight blue-to-red bands with contour lines, a vertical legend of the same eight bands on its right, a horizontal continuous legend below" caption="docs/examples/src/cb_legend.F90" />
+
+`ig_same_line` puts the legend beside the plot. Give it the continuous map and the heatmap's `levels`: its bands are
+then the heatmap's, labelled at their edges. [A colour-scale legend](/guide/colormaps#a-colour-scale-legend) has
+every argument.
+
+Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
+
+### Contour lines over a field
+
+<<< @/examples/snippets/cb_contour-contour.F90{fortran}
+
+<Media name="cb_contour" alt="Two vortices as a heatmap with black contour lines labelled with their values; beside it the same lines coloured by value around a hole marked NaN, with a drag line and a drag point; below, the field along the drag line with error bars" caption="docs/examples/src/cb_contour.F90" />
+
+`ip_contour` takes the positions of the first and last samples; a heatmap takes the outer edges of its cells: give it
+half a spacing more on each side, and the lines fall on the colours they bound. Without `levels`, about `nlevels`
+round values inside the field's range are chosen. Where the field is NaN (a body, cells outside the domain) the lines
+stop: a hole, not a line to a meaningless value. [Contour lines](/guide/plots#contour-lines) has every argument.
+
+Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
+
+### Probe a field with lines and points the user drags
+
+<<< @/examples/snippets/cb_contour-probes.F90{fortran}
+
+<<< @/examples/snippets/cb_contour-profile.F90{fortran}
+
+The drag tools update `probe_x`, `px` and `py` in place and return `.true.` while they move: clamp the values there.
+The profile is the row `i` of `g`, read in place with a stride (`ip_line(label, g, i)`); a NaN in it draws a gap.
+[Error bars, annotations and drag tools](/guide/plots#error-bars-annotations-and-drag-tools) has the details.
+
+Used in context: [chapter 13](./tutorial/13-field) of the tutorial.
+
+### Edit a colormap and save it
+
+<<< @/examples/snippets/cb_gradient-edit.F90{fortran}
+
+<<< @/examples/snippets/cb_gradient-save.F90{fortran}
+
+<Media name="cb_gradient" video alt="A strip of the cool-warm map over a row of its stops, a Save button, and a field drawn with the map beside its legend. The white stop is dragged right and the field's white band widens; a light blue stop is selected, its colour button opens the picker, a click on the hue bar turns it green, and a green band appears in the strip, the field and the legend." caption="docs/examples/src/cb_gradient.F90" />
+
+`ig_gradient_edit` edits the map by its stops: drag one, double-click the row to add one, click one to recolour or
+remove it. The map itself changes, so the field, the legend and anything else drawn with `cool-warm` follow on the
+same frame. `ip_colormap_stops` gives the stops; written as `x, r, g, b` rows they are a CSV that
+`ip_load_colormap` reads back as the same map, which the test checks:
+
+<<< @/examples/output/cb_gradient.txt{text}
+
+[Editing a colormap](/guide/colormaps#editing-a-colormap) has the rules.
+
+### Show an image computed by the program
+
+<<< @/examples/snippets/cb_field-texture.F90{fortran}
+
+<<< @/examples/snippets/cb_field-image.F90{fortran}
+
+Upload once, draw every frame: `tex%update` only when the pixels change (a new iteration of a computation), `ig_image`
+in the loop, or `ip_image` inside a plot (`docs/examples/src/cb_field.F90` draws both). `ig_image` shows pixel row 1 at
+the top, `ip_image` at the bottom. [Textures](/guide/images#textures) has the layout of the pixels and the sizes.
+
+### Show a photograph beside a field
+
+<<< @/examples/snippets/cb_photo-work.F90{fortran}
+
+<<< @/examples/snippets/cb_photo-start.F90{fortran}
+
+<<< @/examples/snippets/cb_photo-take.F90{fortran}
+
+<<< @/examples/snippets/cb_photo-draw.F90{fortran}
+
+The photograph is decoded in a task: `fig_read_image` draws nothing, so a worker may call it, and a large JPEG does
+not freeze the window (the window says "reading ..." meanwhile). Once the task is done, the main thread puts the
+pixels on the GPU, once, with `tex%init` and `tex%update`; `smooth=.true.` blends pixels when the photograph is
+scaled, better for a photograph than the sharp squares a measured field wants. `ig_image` shows row 1 at the top,
+the file's top row, at the plot's height and in the photograph's proportions. For a small file the task is not
+worth it: `call photo%load('schlieren.jpg', smooth=.true.)` reads and uploads in one call, on the main thread.
+`cb_photo --check FILE` reads FILE headless and prints its size and centre pixel, then the refusal of a file that
+does not exist:
+
+<<< @/examples/output/cb_photo.txt{text}
+
+The picture is `docs/examples/data/schlieren.jpg`, a synthetic schlieren of a bow shock written by
+`scripts/gen_photo.py`. [Reading images](/guide/images#reading-images) has the layout, the formats, the statuses and
+the limits.
+
+## 3-D
+
+### A trajectory in 3-D
+
+<<< @/examples/snippets/cb_trajectory-setup.F90{fortran}
+
+<<< @/examples/snippets/cb_trajectory-draw.F90{fortran}
+
+<Media name="cb_trajectory" video alt="A 3-D plot titled trajectory: a red path of the Lorenz system grows inside a box with grid planes and labelled axes x, y and z, a blue marker at its newest point; the count of points below rises. A right drag across the plot turns the box to the right and back, its two wings coming into view; a turn of the wheel zooms in." caption="docs/examples/src/cb_trajectory.F90" />
+
+The solver keeps the path as the columns of a `3 × n` matrix and the plot reads its three rows where they are: one
+stride (24 bytes) for the three arrays, no copy. `auto_fit=.true.` refits the box as the path grows; `elevation` and
+`azimuth` are the box's first rotation, which the user changes with a right drag and gets back with a right double
+click. The test runs 200 frames headless, then turns the box with a right drag:
+
+<<< @/examples/output/cb_trajectory.txt{text}
+
+For meshes of many faces, a field on a body, cuts and clipping planes, take a [3-D view](/guide/view3d) instead:
+[3-D plots](/guide/plots#_3-d-plots) has the rule.
+
+### Colour and size 3-D points by their readings
+
+<<< @/examples/snippets/cb_plot3d_style-style.F90{fortran}
+
+<Media name="cb_plot3d_style" alt="A 3-D plot titled core: sixty probes on a helix around a vertical axis, coloured from blue at the base and the top to red in the middle, the red ones larger. The x and y tick labels read -0.3 m to 0.3 m; the height axis has three ticks, base, core and top; the plot area is dark, with a margin around it." caption="docs/examples/src/cb_plot3d_style.F90: colours and sizes per point, formats and named ticks, ImPlot3D's style for one plot" />
+
+`ip3_scatter` takes a colour (`colors(:, i)`, RGBA in [0, 1]) and a radius in pixels (`sizes(i)`) for each point: here
+the temperature of each probe, blue to red and small to large. `ip3_setup_axis` gives an axis a `printf` format for its
+tick labels (`'%.1f m'`) and `ip3_setup_axis_ticks` puts its ticks at given values, with names; both come after
+`ip3_setup_axes` and before the first item. `ip3_push_style_color` and `ip3_push_style_var` change ImPlot3D's style
+until the matching pop: here the background and the padding of this plot only, as [one red
+button](#one-red-button) does for a widget. [3-D plots](/guide/plots#_3-d-plots) has every argument.
+
+### Point at the floor of a 3-D plot
+
+<<< @/examples/snippets/cb_plot3d_pick-pick.F90{fortran}
+
+<Media name="cb_plot3d_pick" video alt="A 3-D plot of a wedge of two triangles and a quad over a floor image, a ring of warm colours on a cool field, in a flattened box with its legend in the north-east corner. The pointer moves over the floor: the readout under the plot gives the x and y where the pointer's ray meets the floor, the same as ImPlot3D's own readout of the point under the pointer." caption="docs/examples/src/cb_plot3d_pick.F90: picking with the pointer's ray" />
+
+A wedge of two triangles (`ip3_triangles`: each three points in a row are one) and its back face (`ip3_quads`: each
+four) stand on a field drawn on the floor (`ip3_image`, a texture on four corners in the box). `ip3_mouse_ray` gives the
+ray under the pointer, every point drawn there being `o + t d`, and the program meets it with what it knows: here the
+plane z = 0, at `t = -o(3) / d(3)`. A marker drawn at that point would be hidden: ImPlot3D sorts each triangle by its
+centre, and the floor's two large triangles come nearer the eye than a point lying on them. The readout under the plot
+shows the point instead. [3-D plots](/guide/plots#_3-d-plots) has the items, the box and the mouse.
+
+### Show a surface coloured by a field
+
+<<< @/examples/snippets/cb_view3d-setup.F90{fortran}
+
+<<< @/examples/snippets/cb_view3d-draw.F90{fortran}
+
+<Media name="cb_view3d" alt="A slender body with its grid lines, coloured from blue at the middle to red at both ends, a yellow line along its axis; above it buttons for the standard views, check boxes 'grid' and 'cut at z = 0', and the text of the cell clicked with its value and position. In the video a drag turns the body, the wheel brings it closer, a click fills the text, the check box cuts the body in half." caption="docs/examples/src/cb_view3d.F90" />
+
+The arrays are read in place at every render: give them the `target` attribute and keep them allocated while the mesh
+exists. The yellow line, `stream`, is a mesh of its own (`view%lines`). The view is rendered only when something changed
+([How a view is rendered](/guide/view3d#how-a-view-is-rendered)), so a still view costs nothing per frame. A click on
+the surface gives the cell `i + (j - 1) * (ni - 1)` and the point hit. [3-D views](/guide/view3d) has the camera,
+clipping planes and the cost per mode.
+
+Used in context: [chapter 14](./tutorial/14-view3d) of the tutorial.
+
+### Place a clipping plane by hand
+
+<<< @/examples/snippets/cb_gizmo-start.F90{fortran}
+
+<<< @/examples/snippets/cb_gizmo-draw.F90{fortran}
+
+<<< @/examples/snippets/cb_gizmo-cut.F90{fortran}
+
+<Media name="cb_gizmo" video alt="A slender body cut by a plane drawn as a yellow square, a gizmo of three arrows at the plane's centre and a view cube in the corner. The red arrow is dragged and the cut moves toward the tail; Turn shows the rings, the blue one is dragged and the plane turns about z; a click on the cube's green face turns the camera to look from -y." caption="docs/examples/src/cb_gizmo.F90" />
+
+The plane is a 4x4 placement: its third column the normal, its fourth the point. `view%gizmo` draws handles there,
+over the view (after `view%draw`, in the same window), and returns `.true.` on the frames the user drags one, the
+matrix updated: cut again then. `view%view_cube` turns the camera to the face clicked. With the camera's matrices the
+program finds where a point is on the screen; the test drags the plane's arrow that way and clicks the cube:
+
+<<< @/examples/snippets/cb_gizmo-pixel.F90{fortran}
+
+<<< @/examples/snippets/cb_gizmo-test.F90{fortran}
+
+<<< @/examples/output/cb_gizmo.txt{text}
+
+[Gizmos](/guide/view3d#gizmos) has the modes, the matrices' conventions and the mouse.
+
+## Processes and tasks
 
 ### Run a tool and show its output
 
@@ -934,6 +1207,47 @@ keeps answering and the tool never waits for the program; every frame the progra
 (`poll`) and adds them to a log view, which draws only the lines in view and follows the end while it is scrolled to
 the bottom. Stop asks the tool to end; a tool still running when the program ends is stopped. A run that must outlive
 the program is started `detached=.true.` with a `log_file`. [Processes and tasks](/guide/processes) has the details.
+
+Used in context: [chapter 12](./tutorial/12-run) of the tutorial.
+
+### Keep the last lines of a long log
+
+<<< @/examples/snippets/cb_log_view-log.F90{fortran}
+
+A `log_view_object` keeps lines up to a cap (`set_cap`, 10000 by default), the oldest going first, and `draw` shows them
+in a region of their own, only the lines in view: a log of thousands of lines costs a frame what the lines in view cost.
+While the view is scrolled to the bottom it follows the end as lines arrive; scrolled up, it stays where it is. A click
+chooses a line, shift+click extends the choice, ctrl+c (cmd+c on macOS) or the right-click menu copies it. What the view
+keeps and shows can be read back; after 1200 lines into a cap of 1000, headless:
+
+<<< @/examples/snippets/cb_log_view-read.F90{fortran}
+
+<<< @/examples/output/cb_log_view.txt{text}
+
+[The log view](/guide/processes#the-log-view) has every procedure; [the recipe above](#run-a-tool-and-show-its-output)
+fills one from a running tool.
+
+### A status bar
+
+<<< @/examples/snippets/cb_status-status.F90{fortran}
+
+<Media name="cb_status" video alt="Run is clicked: the status bar along the bottom counts the iterations beside a progress bar; Check input shows a warning notification; at the end of the run a success notification appears under it" caption="docs/examples/src/cb_status.F90" />
+
+A status bar is a [bar along the bottom](/guide/docking#a-bar-along-a-side) (`ig_begin_side_bar`), not a widget of its
+own: a line of text, and a progress bar beside it (`ig_same_line(offset=...)` puts it at a fixed place). The work area
+leaves the bar out, so dock spaces, windows placed with the work area and notifications stay above it.
+
+Used in context: [chapter 12](./tutorial/12-run) of the tutorial.
+
+### Tell the user a run has finished
+
+<<< @/examples/snippets/cb_status-notify.F90{fortran}
+
+<Media name="cb_status_end" alt="Two notifications in the bottom-right corner: a warning, levels is 0, above; the newest, Run finished, with a check mark, under it" caption="docs/examples/src/cb_status.F90" />
+
+The user may be looking at another window, or another program: a notification stays in the corner for its time
+(here the default 5 s; `seconds=0` until clicked), in the colour and with the icon of its kind, and the last 100 are
+kept (`app%notifications`). [Notifications](/guide/frame-loop#notifications) has the details.
 
 Used in context: [chapter 12](./tutorial/12-run) of the tutorial.
 
@@ -967,71 +1281,6 @@ loop by itself; `wake` is for news left elsewhere, such as a file, and for threa
 `app%request_frames(n)` does the same and asks for `n` frames. The output above is from headless mode, which never
 waits; in a window and in remote mode each snapshot is drawn when it is written.
 [Waking the loop](/guide/frame-loop#waking-the-loop) has the details.
-
-### A status bar
-
-<<< @/examples/snippets/cb_status-status.F90{fortran}
-
-<Media name="cb_status" video alt="Run is clicked: the status bar along the bottom counts the iterations beside a progress bar; Check input shows a warning notification; at the end of the run a success notification appears under it" caption="docs/examples/src/cb_status.F90" />
-
-A status bar is a [bar along the bottom](/guide/docking#a-bar-along-a-side) (`ig_begin_side_bar`), not a widget of its
-own: a line of text, and a progress bar beside it (`ig_same_line(offset=...)` puts it at a fixed place). The work area
-leaves the bar out, so dock spaces, windows placed with the work area and notifications stay above it.
-
-Used in context: [chapter 12](./tutorial/12-run) of the tutorial.
-
-### Tell the user a run has finished
-
-<<< @/examples/snippets/cb_status-notify.F90{fortran}
-
-<Media name="cb_status_end" alt="Two notifications in the bottom-right corner: a warning, levels is 0, above; the newest, Run finished, with a check mark, under it" caption="docs/examples/src/cb_status.F90" />
-
-The user may be looking at another window, or another program: a notification stays in the corner for its time
-(here the default 5 s; `seconds=0` until clicked), in the colour and with the icon of its kind, and the last 100 are
-kept (`app%notifications`). [Notifications](/guide/frame-loop#notifications) has the details.
-
-Used in context: [chapter 12](./tutorial/12-run) of the tutorial.
-
-## Errors
-
-### Handle a failure instead of stopping
-
-<<< @/examples/snippets/cb_stat-stat.F90{fortran}
-
-<<< @/examples/output/cb_stat.txt{text}
-
-With `stat`, nothing stops: check it against `FIG_OK` and read `figure_last_error()`. The full program also checks
-`ip_line`:
-
-<<< @/examples/snippets/cb_stat-line.F90{fortran}
-
-Used in context: [chapter 16](./tutorial/16-robust) of the tutorial.
-
-### Let a failure stop the program
-
-<<< @/examples/snippets/cb_error_stop-stop.F90{fortran}
-
-<<< @/examples/output/cb_error_stop.txt{text}
-
-Without `stat`, the message goes to standard error and the program ends with `error stop 1`. See
-[Error handling](/guide/errors).
-
-### Find a misplaced end
-
-A table of blocks with a tree in its first cell, whose `ig_tree_pop` was forgotten:
-
-<<< @/examples/snippets/cb_scope_error-grid.F90{fortran}
-
-In mode `'report'` (the default) the frame goes on and the next `next_frame(stat)` returns `FIG_ERR_STATE`, every
-error on its own line. The first line is the bug, the ones after it are what followed from it:
-
-<<< @/examples/snippets/cb_scope_error-wrong.F90{fortran}
-
-<<< @/examples/output/cb_scope_error.txt{text}
-
-With `ig_tree_pop` back the frame reports nothing; in mode `'recover'` the table's end closes the tree first, the
-program goes on (`FIG_OK`) and the message is in a notification. In a test, `app%set_checks('abort')` stops at the
-faulty call. [Pairing and frames](/guide/errors#pairing-and-frames) has every rule and message.
 
 ## Testing
 

@@ -140,6 +140,8 @@ the documentation's build):
 
 <<< @/examples/snippets/cb_log_view-read.F90{fortran}
 
+A recipe for this: [the cookbook](/manual/cookbook#keep-the-last-lines-of-a-long-log).
+
 <<< @/examples/output/cb_log_view.txt{text}
 
 - **Following the end:** while the view is scrolled to the bottom, new lines scroll it; scrolled up (wheel,

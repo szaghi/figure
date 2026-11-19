@@ -106,6 +106,8 @@ rectangle its top below its bottom, which Dear ImGui 1.93 draws as nothing
 
 <Media name="cb_bar_groups" alt="Three plots. The cost of four cases, three bars per case: solver, I/O and overset side by side, the solver's growing from 12 to 104 seconds. The same costs stacked, one bar per case. A residual decaying over 300 iterations, and under it a digital signal high for 8 iterations in every 50, when the solver writes its output." caption="docs/examples/src/cb_bar_groups.F90" />
 
+Recipes for this: [Compare the cost of each phase across cases](/manual/cookbook#compare-the-cost-of-each-phase-across-cases), [Mark when the solver writes, under its residual](/manual/cookbook#mark-when-the-solver-writes-under-its-residual).
+
 - Statuses: `FIG_ERR_ARGUMENT` for `size(labels)` not `size(values, 2)`, no values, `group_size` outside (0, 1], an
   unknown colormap, series of different sizes (`ip_digital`); `FIG_ERR_STATE` outside a plot or from a
   [task](processes#tasks).
@@ -326,6 +328,8 @@ CFL number and the forces, each with its own height, legend and axes) are linked
 <<< @/examples/snippets/cb_linked-linked.F90{fortran}
 
 <Media name="cb_linked" video alt="Three plots stacked over 400 iterations: a residual, a CFL number rising to 5, and the lift and drag coefficients, their plot areas starting at the same pixel although their tick labels differ in width. The wheel over the forces zooms all three to the same iterations; a pan drags all three. A right click on the drag entry of the legend opens a popup with its last value and a shown checkbox, which hides the drag line when cleared." caption="docs/examples/src/cb_linked.F90: three plots over one iteration axis" />
+
+A recipe for this: [Stack plots over one iteration axis](/manual/cookbook#stack-plots-over-one-iteration-axis).
 
 - **A group's first frame.** ImPlot gives linked axes no initial fit. FIGURE keeps each group's range itself (a
   Fortran program names a group, it keeps no variables with a fixed address for ImPlot), and a new group is not linked
@@ -611,6 +615,8 @@ box the user drags with the right button: the readout of a monitor, a window cho
 
 <<< @/examples/snippets/cb_dnd-plot.F90{fortran}
 
+A recipe for this: [Drag a case onto a plot](/manual/cookbook#drag-a-case-onto-a-plot).
+
 - Called after the plot's items, before `ip_end_plot`, on every frame. Several targets in one plot (its area, an
   axis) each receive what is dropped on their own part: a series dropped on the y2 axis can be plotted against it.
 - Statuses: those of `ig_drop_target`, plus `FIG_ERR_ARGUMENT` for an unknown axis or both `axis` and `legend`,
@@ -808,6 +814,8 @@ A marker drawn at the point picked on the floor would be hidden: ImPlot3D sorts 
 floor's two large triangles are nearer the eye than a point lying on them. The readout shows the point instead.
 
 <Media name="cb_plot3d_pick" video alt="A 3-D plot of a wedge of two triangles and a quad over a floor image, a ring of warm colours on a cool field, in a flattened box with its legend in the north-east corner. The pointer moves over the floor: the readout under the plot gives the x and y where the pointer's ray meets the floor, the same as ImPlot3D's own readout of the point under the pointer." caption="docs/examples/src/cb_plot3d_pick.F90: picking with the pointer's ray" />
+
+A recipe for this: [Point at the floor of a 3-D plot](/manual/cookbook#point-at-the-floor-of-a-3-d-plot).
 
 - **The mouse.** A right drag turns the box, a left drag pans, the wheel (or a middle drag) zooms, a right double
   click goes back to the initial rotation, a right click opens ImPlot3D's menu; a click on a legend entry hides its

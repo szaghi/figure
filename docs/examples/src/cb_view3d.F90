@@ -14,7 +14,7 @@ type(view3d_object)       :: view            !< The 3-D view.
 real(real64), target      :: body(3, NI, NJ) !< A slender body: node (i, j) at body(:, i, j).
 real(real64), target      :: cp(NI, NJ)      !< Its pressure coefficient, one value per node.
 real(real64), target      :: axis(3, 2)      !< The free stream's direction, drawn as a line.
-integer(int32)            :: hull, wake      !< Mesh ids.
+integer(int32)            :: hull, stream    !< Mesh ids.
 logical                   :: edges = .true.  !< Grid lines shown.
 logical                   :: cut = .false.   !< Half the body cut away.
 integer(int32)            :: mesh            !< The mesh picked.
@@ -40,7 +40,7 @@ call app%init('FIGURE: a 3-D view', 1000_int32, 640_int32)
 !region setup
 call view%init()                                                   ! after app%init
 hull = view%surface(body, scalar=cp, colormap='cool-warm', edges=.true.) ! the arrays are read in place
-wake = view%lines(axis, color=[0.9_real64, 0.75_real64, 0.2_real64])
+stream = view%lines(axis, color=[0.9_real64, 0.75_real64, 0.2_real64])
 call view%set_camera(azimuth=-55.0_real64, elevation=25.0_real64)
 !endregion setup
 do while (app%next_frame())

@@ -62,6 +62,7 @@ endif
 frame = 0_int32
 do while (app%next_frame())
    frame = frame + 1_int32
+   first_shown = 0_int32
    call ig_set_next_window(10.0_real64, 10.0_real64, 620.0_real64, 400.0_real64)
    if (ig_begin('Blocks')) then
       !region table
@@ -73,12 +74,12 @@ do while (app%next_frame())
          call ig_table_setup_column('residual', width=ig_em(7.0_real64), descending=.true.)
          call ig_table_setup_column('patch', width=ig_em(6.0_real64), hidden=.true.)
          call ig_table_headers_row()                           ! frozen: it stays while the rows scroll
+         !endregion table
          if (check) call ig_item_rect(header(1), header(2), header(3), header(4))
+         !region table
          if (ig_table_sort(column, descending)) call sort_rows(column, descending) ! a new order asked
-         first_shown = 0_int32
          call clip%begin(ROWS)
          do while (clip%step())
-            first_shown = max(first_shown, clip%first)
             do i = clip%first, clip%last
                k = order(i)                                    ! the row shown i is block k
                call ig_table_next_row()
@@ -91,7 +92,9 @@ do while (app%next_frame())
                call ig_table_next_column()
                write(text, '(I0)') cells(k)
                call ig_text(trim(text))
-               if (check .and. i == clip%first) call keep_cells_x()
+               !endregion table
+               if (check .and. i == clip%first) call keep_first_row(i)
+               !region table
                call ig_table_next_column()
                write(text, '(ES9.2)') residual(k)
                if (residual(k) > TOLERANCE) then
@@ -163,12 +166,14 @@ contains
    endfunction before
    !endregion sort
 
-   subroutine keep_cells_x()
-   !< In --check: the centre of the cells column, from the cell just drawn.
-   real(real64) :: r(4) !< The cell's text.
+   subroutine keep_first_row(row)
+   !< In --check: the centre of the cells column, from the cell just drawn, and the first row in view.
+   integer(int32), intent(in) :: row  !< The first row of the clipper's step.
+   real(real64)               :: r(4) !< The cell's text.
    call ig_item_rect(r(1), r(2), r(3), r(4))
    cells_x = 0.5_real64 * (r(1) + r(3))
-   endsubroutine keep_cells_x
+   first_shown = max(first_shown, row)
+   endsubroutine keep_first_row
 
    subroutine report(what)
    !< In --check: what happened, the order asked and the first rows shown.

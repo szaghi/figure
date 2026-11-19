@@ -4,7 +4,6 @@ if (ig_begin_child('blocks')) then
       do i = clip%first, clip%last
          write(label, '(A,I0,A,I0)') 'block ', i, '   body ', body_of(i)
          if (ig_selectable(trim(label), i == block)) call select(i)
-         if (i == block) call keep_row()
       enddo
    enddo
    if (reveal .and. block > 0_int32) &                 ! row `block` starts (block - 1) rows down

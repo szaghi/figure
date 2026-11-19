@@ -6,12 +6,9 @@ if (ig_begin_table('blocks', 5_int32, height=ig_em(18.0_real64), freeze_rows=1_i
    call ig_table_setup_column('residual', width=ig_em(7.0_real64), descending=.true.)
    call ig_table_setup_column('patch', width=ig_em(6.0_real64), hidden=.true.)
    call ig_table_headers_row()                           ! frozen: it stays while the rows scroll
-   if (check) call ig_item_rect(header(1), header(2), header(3), header(4))
    if (ig_table_sort(column, descending)) call sort_rows(column, descending) ! a new order asked
-   first_shown = 0_int32
    call clip%begin(ROWS)
    do while (clip%step())
-      first_shown = max(first_shown, clip%first)
       do i = clip%first, clip%last
          k = order(i)                                    ! the row shown i is block k
          call ig_table_next_row()
@@ -24,7 +21,6 @@ if (ig_begin_table('blocks', 5_int32, height=ig_em(18.0_real64), freeze_rows=1_i
          call ig_table_next_column()
          write(text, '(I0)') cells(k)
          call ig_text(trim(text))
-         if (check .and. i == clip%first) call keep_cells_x()
          call ig_table_next_column()
          write(text, '(ES9.2)') residual(k)
          if (residual(k) > TOLERANCE) then

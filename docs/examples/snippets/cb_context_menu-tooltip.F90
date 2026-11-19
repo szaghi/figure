@@ -1,5 +1,4 @@
 if (ig_begin_item_tooltip()) then                ! the pointer rests on the row
-   tooltip = .true.
    if (ig_begin_table('values', 2_int32)) then
       call cell('patch', trim(names(i)))
       call cell('condition', trim(kinds(i)))

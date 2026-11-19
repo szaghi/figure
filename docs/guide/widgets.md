@@ -1140,6 +1140,8 @@ frame; any item is a source, text and other items without an id included.
 
 <Media name="cb_dnd" video alt="A tree of four cases beside an empty plot. re1e5-coarse is dragged from the tree, its name under the pointer, the plot outlined while it is held over it: dropped, its residual history is plotted. re1e6-fine follows. Then re1e5-coarse is dragged back onto the Bin button and leaves the plot." caption="docs/examples/src/cb_dnd.F90" />
 
+A recipe for this: [Drag a case onto a plot](/manual/cookbook#drag-a-case-onto-a-plot).
+
 - **A drop is one frame.** The target returns `.true.` once, on the frame of the release; the payload stays in the
   variable until the next drop. A release anywhere else, or over a target of another type, delivers nothing.
 - **Types.** 1 to 32 characters, not starting with `_` (Dear ImGui's own types, as its colour drags'). Two parts of a
@@ -1169,6 +1171,8 @@ draws `selected` from them.
 <<< @/examples/snippets/cb_select-select.F90{fortran}
 
 <Media name="cb_select" video alt="A list of 2000 blocks with their cells. Block 3 is clicked, then shift+click on block 8 selects 3 to 8; ctrl+click adds block 11 and removes block 5; the total under the list follows: blocks selected and their cells. Freeze marks the selected blocks frozen; back in the list, ctrl+a selects all 2000; escape clears." caption="docs/examples/src/cb_select.F90" />
+
+A recipe for this: [Select many rows at once](/manual/cookbook#select-many-rows-at-once).
 
 - **Clipped lists.** A `list_clipper_object` draws only the lines in view, but a shift+click extends from the range
   source, `sel%keep`, which may have scrolled away: `clip%begin(n, keep=sel%keep)` keeps that one line drawn wherever

@@ -58,7 +58,9 @@ do while (app%next_frame())
          call ip_set_axes('x1', 'y2')                                 ! the next items on Y2
          call ip_line('cl', it, cl)
          call ip_line('cd', it, cd)
+         !endregion axes
          if (check .and. frame == 3_int32) call measure()             ! --check: what the axes show
+         !region axes
          call ip_end_plot()
       endif
       !endregion axes

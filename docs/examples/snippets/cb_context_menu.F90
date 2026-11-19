@@ -76,7 +76,7 @@ do while (app%next_frame())
             call ig_end_popup()
          endif
          if (ig_begin_item_tooltip()) then                ! the pointer rests on the row
-            tooltip = .true.
+            tooltip = .true.                               ! --check: the tooltip was drawn
             if (ig_begin_table('values', 2_int32)) then
                call cell('patch', trim(names(i)))
                call cell('condition', trim(kinds(i)))

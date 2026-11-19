@@ -100,6 +100,8 @@ columns) is saved to a file, and loaded back while the program runs:
 
 <<< @/examples/snippets/cb_workspace-layout.F90{fortran}
 
+A recipe for this: [the cookbook](/manual/cookbook#a-toolbar-a-dock-space-and-a-window-that-appears-later).
+
 - The file is Dear ImGui's settings text (`[Window][...]`, `[Docking][Data]`, ...). `comment` lines come first, led
   by `; `: Dear ImGui skips them, the program reads them back itself (which windows it opens on demand, which panels
   are shown: what it, not Dear ImGui, decides).

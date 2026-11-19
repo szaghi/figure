@@ -160,6 +160,8 @@ as `ig_item_rect` gives it for the widget drawn last (after `ip_end_plot` or `ip
 
 The whole program, with its Save button: `docs/examples/src/cb_save_image.F90`.
 
+A recipe for this: [Save a plot as a PNG file](/manual/cookbook#save-a-plot-as-a-png-file).
+
 - Ask for it on a frame where no menu or popup covers the rectangle: they would be in the picture. A menu item that
   saves is picked on a frame where its menu is still drawn: ask on the next frame.
 - **Every mode.** In a window the pixels are the GPU's; in headless and remote modes the CPU renderer draws the frame

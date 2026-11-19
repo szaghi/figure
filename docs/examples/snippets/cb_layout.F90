@@ -64,7 +64,7 @@ contains
    call ig_separator_text('Grid')
    call label('name')
    if (ig_input_text('##name', case_name)) continue
-   s = ig_last_item()
+   s = ig_last_item()                                ! --check: the field's rectangle
    field = s%rect
    call label('cells')
    if (ig_input('##cells', cells, step=16_int32)) continue

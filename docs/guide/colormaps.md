@@ -24,6 +24,8 @@ CSV table or a ParaView preset. All of them are chosen **by name**, reversed or 
 
 <<< @/examples/snippets/cb_colormap-diverging.F90{fortran}
 
+A recipe for this: [Colour a field with a map by name, reversed or in bands](/manual/cookbook#colour-a-field-with-a-map-by-name-reversed-or-in-bands).
+
 **Names.** Names are case-sensitive: the bundled maps are in lower case (`'cividis'`, `'cool-warm'`, and Crameri's
 `'romaO'`), ImPlot's own keep ImPlot's names (`'Viridis'`, `'Jet'`; the constants `ImPlotColormap_*` are their ids),
 a loaded map keeps the name it was given. So `'deep'` is cmocean's sequential map and `'Deep'` ImPlot's qualitative
