@@ -76,7 +76,7 @@ const docs = [
       { text: 'Code editor',             link: '/guide/editor' },
       { text: 'Canvas',                  link: '/guide/canvas' },
       { text: 'Processes and tasks',     link: '/guide/processes' },
-      { text: 'Remote UI',               link: '/guide/remote' },
+      { text: 'Remote mode',             link: '/guide/remote' },
       { text: 'Performance',             link: '/guide/performance' },
       { text: 'Error handling',          link: '/guide/errors' },
       { text: 'Headless testing',        link: '/guide/testing' },

@@ -91,7 +91,7 @@ empty text to find or replace, a tab size outside [1, 16], an unknown language n
 `stat` is optional: absent, a failure stops the program with its message ([Error handling](errors)).
 
 **Modes.** Window, headless and remote: the same editor and the same pixels (it draws through Dear ImGui's draw
-lists only). In remote mode the browser's keys reach it as any field's ([Remote UI](remote#behaviour)),
+lists only). In remote mode the browser's keys reach it as any field's ([Remote mode](remote#behaviour)),
 and its clipboard is the page's.
 
 **Threads.** The main thread only: from a task every procedure is refused (`FIG_ERR_STATE`, the task stopped), the

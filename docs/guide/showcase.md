@@ -10,7 +10,7 @@ scripts/media.sh): copy them again when they are redone, and say below which com
 FIGURE's first application outside this repository is a set of tools for **Xall**, a CFD solver, and for
 **OverSet**, the code that prepares its overset (chimera) grids. Each tool is a FIGURE program that opens a window on
 a workstation or, with `--remote`, serves its interface to a web browser from a cluster node, through an SSH tunnel
-([Remote UI](remote)). The tools live in a private repository; this page shows what they look like and which parts of
+([Remote mode](remote)). The tools live in a private repository; this page shows what they look like and which parts of
 FIGURE they are built from.
 
 The pictures are xall_figure's own recordings, of synthetic cases. Seven are drawn by FIGURE's CPU renderer, headless,

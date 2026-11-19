@@ -18,7 +18,7 @@ A program has one `app_object`. Its life is one loop:
 - `init_headless(width, height [, stat] [, decorations] [, buttons])` creates the contexts on a virtual display,
   without window or GPU: see [Headless testing](testing).
 - `init_remote([port] [, host] [, width, height] [, ...] [, url] [, stat])` creates them without a window and serves
-  the interface to a web browser, the program needing no display or GPU (a cluster node): see [Remote UI](remote).
+  the interface to a web browser, the program needing no display or GPU (a cluster node): see [Remote mode](remote).
 - `destroy()` closes the window and destroys the contexts. It is safe in any state, also without a previous `init`
   and inside an open frame.
 

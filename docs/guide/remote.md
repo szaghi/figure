@@ -1,8 +1,8 @@
 ---
-title: Remote UI
+title: Remote mode
 ---
 
-# Remote UI
+# Remote mode
 
 `app%init_remote` replaces the window with a small web server: the program draws its interface as usual, and a web
 browser shows it and sends the input back. The program needs no display, no GPU and no window system, so it can run

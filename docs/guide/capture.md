@@ -180,7 +180,7 @@ what differs from the window background, and writes
 The script is FIGURE's own: it reads `docs/media`, writes `docs/public/media` and finds the programs and the
 captions' font from the repository's root (`RECS`, `OUT`, `ROOT` and `CAPTION_FONT` at its top). A project records
 its own pictures with the [variables](#variables) and ffmpeg, as above, or copies the script and changes those paths.
-It needs ffmpeg and ImageMagick (`--check` only ImageMagick), and for `#! remote` ([Remote UI](remote)) a headless Chromium: `$CHROME`, or
+It needs ffmpeg and ImageMagick (`--check` only ImageMagick), and for `#! remote` ([Remote mode](remote)) a headless Chromium: `$CHROME`, or
 the newest one puppeteer installed.
 
 The tutorial's chapter 17 is recorded by this script, `docs/media/tut17_tested.rec`:

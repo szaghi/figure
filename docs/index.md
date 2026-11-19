@@ -46,7 +46,7 @@ features:
   - title: In a web browser
     details: init_remote serves the same interface to a browser, behind an access token. No display or GPU on the program's side, a cluster node through an SSH tunnel; unchanged frames are not sent.
     link: /guide/remote
-    linkText: Remote UI
+    linkText: Remote mode
   - title: Forms, menus and dialogs
     details: Text and numeric fields bound to your variables, drop-down lists, tables, tabs; menu bars and keyboard shortcuts; popups, modals and the system's file dialogs.
     link: /guide/menus
