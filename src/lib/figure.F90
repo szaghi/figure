@@ -87,6 +87,7 @@ use figure_implot, only : ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_s
                           ip_begin_subplots, ip_end_subplots,                                              &
                           ip_bars, ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_heatmap, ip_image, ip_line,     &
                           ip_plot_limits, ip_plot_size, ip_scatter, ip_setup_axes, ip_setup_axes_limits, ip_shaded,   &
+                          ip_bubbles, ip_pie_chart,                                                                    &
                           ip_spec, plot_spec_object, ip_colormap, ip_colormap_names, ip_load_colormap,                &
                           ip_colormap_stops, ig_gradient_edit,                                                        &
                           ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square,             &
@@ -212,6 +213,7 @@ public :: ip_get_style_color, ip_get_style_var, ip_set_style_color, ip_set_style
 public :: ImGuiDockNodeFlags_None, ImGuiDockNodeFlags_NoDockingOverCentralNode, ImGuiDockNodeFlags_NoDockingSplit
 public :: ImGuiDockNodeFlags_NoResize, ImGuiDockNodeFlags_AutoHideTabBar, ImGuiDockNodeFlags_NoUndocking
 public :: ip_bars, ip_begin_plot, ip_end_plot, ip_line, ip_scatter, ip_setup_axes, ip_shaded, ip_spec, plot_spec_object
+public :: ip_bubbles, ip_pie_chart
 public :: ip_colormap_scale, ip_heatmap, ip_image, texture_object
 public :: ip_colormap, ip_colormap_names, ip_load_colormap, ip_colormap_stops, ig_gradient_edit
 public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point

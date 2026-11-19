@@ -225,7 +225,9 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ig_gradient_edit(id, colormap [, width] [, height] [, stat])` → `logical` | a gradient editor of a colormap (ImGuizmo's ImGradient): stops dragged, added, recoloured, removed; the map, its variants and what is drawn with it follow ([editing a colormap](colormaps#editing-a-colormap)) <!-- visual --> |
 | `ip_colormap_stops(name, positions, colours [, stat])` | a colormap's stops, as the editor shows them; saved as a CSV, read back by `ip_load_colormap` ([editing a colormap](colormaps#editing-a-colormap)) |
 | `ip_image(label, tex, xmin, xmax, ymin, ymax ...)` | a texture in a plot, pixel row 1 at the bottom ([textures](images#textures)) |
-| `ip_error_bars(label, x, y, err [, err_high] [, spec] [, stat])` | vertical error bars, symmetric or not ([plots](plots#error-bars-annotations-and-drag-tools)) <!-- visual --> |
+| `ip_error_bars(label, x, y, err [, err_high] [, spec] [, horizontal] [, stat])` | error bars, symmetric or not, vertical or along x ([plots](plots#error-bars-annotations-and-drag-tools)) <!-- visual --> |
+| `ip_bubbles(label, x, y, radii [, spec] [, stat])` | circles of given radii in plot units ([plots](plots#pies-and-bubbles)) <!-- visual --> |
+| `ip_pie_chart(labels, values, x, y, radius [, label_format] [, angle0] [, normalize] [, colormap] [, spec] [, stat])` | a pie chart, one slice per value ([plots](plots#pies-and-bubbles)) <!-- visual --> |
 | `ip_annotation(x, y, text [, color] [, offset] [, stat])` | a text at a plot point, in a box of a colour or alone ([plots](plots#error-bars-annotations-and-drag-tools)) <!-- visual --> |
 | `ip_drag_line_x(id, x [, color] [, thickness] [, stat])` → `logical`, `ip_drag_line_y(...)` | a vertical (horizontal) line the user drags; the value updated in place ([plots](plots#error-bars-annotations-and-drag-tools)) <!-- visual --> |
 | `ip_drag_point(id, x, y [, color] [, radius] [, stat])` → `logical` | a point the user drags ([plots](plots#error-bars-annotations-and-drag-tools)) <!-- visual --> |

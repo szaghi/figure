@@ -52,6 +52,8 @@ a legend `label`, an optional [`spec`](#item-style) and an optional [`stat`](err
 | `ip_histogram2d(label, x, y [, xbins] [, ybins] [, xmin] [, xmax] [, ymin] [, ymax] [, colormap] [, max_count] [, spec] [, stat])` | a 2-D histogram (`PlotHistogram2D`), cells coloured by count ([Histograms](#histograms)) |
 | `ip_digital(label, x, y [, spec] [, stat])` | a digital signal (`PlotDigital`): `y(i)` held from `x(i)` to `x(i+1)`, drawn in a band of its own at the bottom of the plot whatever the y axis ([Grouped bars and digital signals](#grouped-bars-and-digital-signals)) |
 | `ip_bar_groups(labels, values [, group_size] [, shift] [, horizontal] [, stacked] [, colormap] [, spec] [, stat])` | items in groups of bars (`PlotBarGroups`): `values(g, i)` is item `i` in group `g`, side by side or stacked ([Grouped bars and digital signals](#grouped-bars-and-digital-signals)) |
+| `ip_bubbles(label, x, y, radii [, spec] [, stat])` | circles at `(x(i), y(i))` of radius `radii(i)` in plot units (`PlotBubbles`) ([Pies and bubbles](#pies-and-bubbles)) |
+| `ip_pie_chart(labels, values, x, y, radius [, label_format] [, angle0] [, normalize] [, colormap] [, spec] [, stat])` | a pie chart, one slice per value, centred at `(x, y)` (`PlotPieChart`) ([Pies and bubbles](#pies-and-bubbles)) |
 
 <<< @/examples/snippets/cb_items-items.F90{fortran}
 
@@ -86,6 +88,32 @@ residual's range. Its x values take part in fitting x, its y values in nothing; 
 - Statuses: `FIG_ERR_ARGUMENT` for `size(labels)` not `size(values, 2)`, no values, `group_size` outside (0, 1], an
   unknown colormap, series of different sizes (`ip_digital`); `FIG_ERR_STATE` outside a plot or from a
   [task](processes#tasks).
+
+### Pies and bubbles
+
+`ip_pie_chart(labels, values, x, y, radius)` draws one slice per value, its label in the legend (each slice is a
+legend entry), centred at `(x, y)` with `radius`, all in plot units: give the plot `equal=.true.` to keep it round.
+The slices start at `angle0` degrees (default 90, the top) and go clockwise. Values summing to 1 or more fill the
+circle; a sum below 1 draws them as fractions of one, a partial circle, unless `normalize=.true.`, which always fills
+it. Each slice shows its value in the `printf` format `label_format` (default `'%.1f'`, `''` none). The slices take
+the colours of the plot's colormap in order, or of `colormap` ([`ip_colormap`](colormaps)): a `spec`'s colours do
+not apply to them. `values` is `real(real32)` or `real(real64)`, 0 or more.
+
+`ip_bubbles(label, x, y, radii)` draws a circle at each point, `radii(i)` in plot units along both axes: round on
+equal axes, an ellipse where the axes' scales differ. It is filled with the item's fill colour and outlined with its
+line colour (`ip_spec(fill_alpha=0.5_real64)` lets the overlaps show); the axes fit the circles, centres and radii.
+
+<<< @/examples/snippets/cb_pie_bubbles-pie.F90{fortran}
+
+<<< @/examples/snippets/cb_pie_bubbles-bubbles.F90{fortran}
+
+<Media name="cb_pie_bubbles" alt="Three plots side by side. One run: a pie of four slices, solver 61 s in red, I/O 18 s, overset 9 s and boundary 12 s, the legend at the top left. Blocks: five translucent red circles of different sizes at the blocks' positions on equal axes in metres. A step: four timings, 1, 2, 4 and 8 nodes, each a dot with a horizontal error bar of its spread in seconds." caption="docs/examples/src/cb_pie_bubbles.F90: a pie, bubbles, and error bars along x" />
+
+- Statuses: `ip_pie_chart`: `FIG_ERR_ARGUMENT` for labels not one per value, a radius not above 0, a value below 0
+  or not finite, a format that is not one real's, a colormap not registered; `ip_bubbles`: `FIG_ERR_ARGUMENT` for
+  series of different sizes; both `FIG_ERR_STATE` from a [task](processes#tasks). `stat` is optional (absent:
+  `error stop` with the message).
+- Modes: the same in **window**, **headless** and **remote** mode (`src/tests/figure_test_plot_more.F90`).
 
 Fields are items too: `ip_heatmap` colours the cells of a 2D array through a colormap, and `ip_colormap_scale` draws
 its colour bar ([Heatmaps](images#heatmaps)); the colormap is chosen by name with `ip_colormap`, among the bundled
@@ -427,11 +455,15 @@ CFL number and the forces, each with its own height, legend and axes) are linked
 
 | Procedure | Notes |
 |---|---|
-| `ip_error_bars(label, x, y, err [, err_high] [, spec] [, stat])` | Vertical error bars (`PlotErrorBars`) at `(x(i), y(i))`, from `y(i) - err(i)` to `y(i) + err(i)`, or to `y(i) + err_high(i)` when given (asymmetric). Generic over `real(real32)` and `real(real64)`, read in place as the other items. The whisker width is `ip_spec(size=)` [pixels]. |
+| `ip_error_bars(label, x, y, err [, err_high] [, spec] [, horizontal] [, stat])` | Error bars (`PlotErrorBars`) at `(x(i), y(i))`, from `y(i) - err(i)` to `y(i) + err(i)`, or to `y(i) + err_high(i)` when given (asymmetric); with `horizontal=.true.`, along x instead, `err` in x units. Generic over `real(real32)` and `real(real64)`, read in place as the other items. The whisker width is `ip_spec(size=)` [pixels]. |
 | `ip_annotation(x, y, text [, color] [, offset] [, stat])` | A text (`Annotation`) at the plot point `(x, y)`, drawn when the plot ends, over the items, kept inside the plot area. Without `color`: the text alone in the plot's text colour; with it: in a box of that colour (RGBA in [0, 1]), the text black or white for contrast. `offset`: `[dx, dy]` [pixels], x right, y down, with a leader line to the point; a zero component centres the text on the point along that axis (the default). |
 | `ip_drag_line_x(id, x [, color] [, thickness] [, stat])` → `logical` | A vertical line at `x` that the user drags along x (`DragLineX`). `x` (`real(real64)`) is updated in place; `.true.` in the frames it moves. `thickness` [pixels], default 1. |
 | `ip_drag_line_y(id, y [, color] [, thickness] [, stat])` → `logical` | A horizontal line at `y`, dragged along y (`DragLineY`). |
 | `ip_drag_point(id, x, y [, color] [, radius] [, stat])` → `logical` | A point dragged in both directions (`DragPoint`); `radius` [pixels], default 4. |
+
+Timings with their spread along x, `horizontal=.true.` (the third plot of [Pies and bubbles](#pies-and-bubbles)):
+
+<<< @/examples/snippets/cb_pie_bubbles-xerr.F90{fortran}
 
 <<< @/examples/snippets/cb_contour-probes.F90{fortran}
 
@@ -781,6 +813,7 @@ floor's two large triangles are nearer the eye than a point lying on them. The r
 
 ## Not bound yet
 
-Custom scales and tick formatters, pie charts, bubbles and error
-bars along x are not wrapped yet. Their raw interfaces are generated ([Raw bindings](raw-bindings)); see the
-[roadmap](roadmap).
+Custom scales and tick formatters are not wrapped: ImPlot takes them as callbacks (`SetupAxisScale` with a transform,
+`SetupAxisFormat` with a formatter), and FIGURE calls no Fortran from C. What they are used for is covered as data:
+a `printf` format per axis ([Formats](#formats)), ticks at given values with given labels (`ip_setup_axis_ticks`),
+and the fixed scales `'log'`, `'symlog'` and `'time'` ([Axes](#axes)).

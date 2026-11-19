@@ -44,6 +44,9 @@ use figure_cimplot, only : ImPlot_BeginAlignedPlots, ImPlot_EndAlignedPlots, ImP
                            ImPlot_PlotDigital_doublePtr, ImPlot_PlotDigital_FloatPtr, ImPlot_PlotBarGroups_doublePtr, &
                            ImPlot_PlotBarGroups_FloatPtr
 use figure_cimplot_enums, only : ImPlotBarGroupsFlags_Horizontal, ImPlotBarGroupsFlags_Stacked
+use figure_cimplot_enums, only : ImPlotErrorBarsFlags_Horizontal, ImPlotPieChartFlags_Normalize
+use figure_cimplot, only : ImPlot_PlotBubbles_FloatPtrFloatPtrFloatPtr, ImPlot_PlotBubbles_doublePtrdoublePtrdoublePtr, &
+                          ImPlot_PlotPieChart_FloatPtrStr, ImPlot_PlotPieChart_doublePtrStr
 use figure_cimplot, only : figure_ImPlotSpec_default, im_plot_spec, ImPlot_BeginPlot,             &
                            ImPlot_PlotBars_doublePtrdoublePtr, ImPlot_PlotBars_FloatPtrFloatPtr,                   &
                            ImPlot_PlotLine_doublePtrdoublePtr, ImPlot_PlotLine_FloatPtrFloatPtr,                   &
@@ -110,7 +113,7 @@ integer(int32)                  :: fits_pending = 0  !< Plots of a new subplot f
 integer(int64), public          :: plot_copies = 0   !< Arrays the items copied because ImPlot could not read them in
                                                      !< place (strides, integer abscissae): `test_plot_copies`.
 integer(int64), public          :: plot_stride = 0   !< Byte stride given to ImPlot for the last item: `test_plot_stride`.
-public :: ip_bars, ip_line, ip_scatter, ip_shaded
+public :: ip_bars, ip_line, ip_scatter, ip_shaded, ip_bubbles, ip_pie_chart
 public :: ip_colormap_scale, ip_heatmap, ip_image, ip_plot_limits, ip_plot_size, ip_setup_axes_limits
 public :: ip_colormap, ip_colormap_names, ip_load_colormap, ip_colormap_stops, ig_gradient_edit
 public :: ip_error_bars, ip_annotation, ip_drag_line_x, ip_drag_line_y, ip_drag_point
@@ -191,8 +194,19 @@ interface ip_heatmap
    module procedure ip_heatmap_r32, ip_heatmap_r64
 endinterface ip_heatmap
 
+interface ip_bubbles
+   !< Circles at the points (x(i), y(i)) of radius radii(i), in plot units along both axes (`PlotBubbles`).
+   module procedure ip_bubbles_r32, ip_bubbles_r64
+endinterface ip_bubbles
+
+interface ip_pie_chart
+   !< A pie chart: one slice per value, labelled in the legend, centred at (x, y) with a radius in plot units.
+   module procedure ip_pie_chart_r32, ip_pie_chart_r64
+endinterface ip_pie_chart
+
 interface ip_error_bars
-   !< Vertical error bars at the points (x(i), y(i)): from y(i) - err(i) to y(i) + err(i), or to y(i) + err_high(i).
+   !< Error bars at the points (x(i), y(i)): from y(i) - err(i) to y(i) + err(i), or to y(i) + err_high(i); along x
+   !< with `horizontal=.true.`.
    module procedure ip_error_bars_r32, ip_error_bars_r64
    module procedure ip_error_bars_i32_r32, ip_error_bars_i64_r32, ip_error_bars_i32_r64, ip_error_bars_i64_r64
 endinterface ip_error_bars
@@ -1139,17 +1153,20 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_ref_i64_r32
 
-   recursive subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, stat)
-   !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
-   !< err_high(i), single precision; read in place with any stride (plots.md, "Data in place").
+   recursive subroutine ip_error_bars_r32(label, x, y, err, err_high, spec, horizontal, stat)
+   !< Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+   !< err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), single precision; read in place
+   !< with any stride (plots.md, "Data in place").
    character(len=*),       intent(in)                                 :: label       !< Legend label.
    real(real32),           intent(in), target, asynchronous           :: x(:)        !< Abscissae.
    real(real32),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
-   real(real32),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
-   real(real32),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   real(real32),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units, or x].
+   real(real32),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units, or x].
    type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   logical,                intent(in), optional                       :: horizontal  !< Bars along x (`err` in x units).
    integer(int32),         intent(out), optional                      :: stat        !< Status.
    type(series_r32), target                                           :: d           !< Where ImPlot reads the arrays.
+   type(im_plot_spec)                                                 :: cs          !< The C spec, with the horizontal flag.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1160,30 +1177,37 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    call series_put(d, 3, err)
+   cs = series_spec(d, spec)
+   if (present(horizontal)) then
+      if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
+   endif
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
                                                                  int(size(x), c_int), &
-                                                                 series_spec(d, spec))
+                                                                 cs)
    else
       call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), d%p(3), &
-                                                            int(size(x), c_int), series_spec(d, spec))
+                                                            int(size(x), c_int), cs)
    endif
    call figure_check(FIG_OK, stat)
    endsubroutine ip_error_bars_r32
 
-   recursive subroutine ip_error_bars_i32_r32(label, x, y, err, err_high, spec, stat)
-   !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
-   !< err_high(i), single precision, abscissae `integer(int32)`: converted into one temporary, the ordinates read in
+   recursive subroutine ip_error_bars_i32_r32(label, x, y, err, err_high, spec, horizontal, stat)
+   !< Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+   !< err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), single precision, abscissae
+   !< `integer(int32)`: converted into one temporary, the ordinates read in
    !< place (plots.md, "Data in place").
    character(len=*),       intent(in)                                 :: label       !< Legend label.
    integer(int32),         intent(in), target, asynchronous           :: x(:)        !< Abscissae.
    real(real32),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
-   real(real32),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
-   real(real32),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   real(real32),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units, or x].
+   real(real32),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units, or x].
    type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   logical,                intent(in), optional                       :: horizontal  !< Bars along x (`err` in x units).
    integer(int32),         intent(out), optional                      :: stat        !< Status.
    type(series_r32), target                                           :: d           !< Where ImPlot reads the arrays.
+   type(im_plot_spec)                                                 :: cs          !< The C spec, with the horizontal flag.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1194,30 +1218,37 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    call series_put(d, 3, err)
+   cs = series_spec(d, spec)
+   if (present(horizontal)) then
+      if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
+   endif
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
                                                                  int(size(x), c_int), &
-                                                                 series_spec(d, spec))
+                                                                 cs)
    else
       call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), d%p(3), &
-                                                            int(size(x), c_int), series_spec(d, spec))
+                                                            int(size(x), c_int), cs)
    endif
    call figure_check(FIG_OK, stat)
    endsubroutine ip_error_bars_i32_r32
 
-   recursive subroutine ip_error_bars_i64_r32(label, x, y, err, err_high, spec, stat)
-   !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
-   !< err_high(i), single precision, abscissae `integer(int64)`: converted into one temporary, the ordinates read in
+   recursive subroutine ip_error_bars_i64_r32(label, x, y, err, err_high, spec, horizontal, stat)
+   !< Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+   !< err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), single precision, abscissae
+   !< `integer(int64)`: converted into one temporary, the ordinates read in
    !< place (plots.md, "Data in place").
    character(len=*),       intent(in)                                 :: label       !< Legend label.
    integer(int64),         intent(in), target, asynchronous           :: x(:)        !< Abscissae.
    real(real32),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
-   real(real32),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
-   real(real32),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   real(real32),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units, or x].
+   real(real32),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units, or x].
    type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   logical,                intent(in), optional                       :: horizontal  !< Bars along x (`err` in x units).
    integer(int32),         intent(out), optional                      :: stat        !< Status.
    type(series_r32), target                                           :: d           !< Where ImPlot reads the arrays.
+   type(im_plot_spec)                                                 :: cs          !< The C spec, with the horizontal flag.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1228,14 +1259,18 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    call series_put(d, 3, err)
+   cs = series_spec(d, spec)
+   if (present(horizontal)) then
+      if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
+   endif
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
                                                                  int(size(x), c_int), &
-                                                                 series_spec(d, spec))
+                                                                 cs)
    else
       call ImPlot_PlotErrorBars_FloatPtrFloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), d%p(3), &
-                                                            int(size(x), c_int), series_spec(d, spec))
+                                                            int(size(x), c_int), cs)
    endif
    call figure_check(FIG_OK, stat)
    endsubroutine ip_error_bars_i64_r32
@@ -1345,6 +1380,221 @@ contains
    call ImPlot_PlotScatter_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_scatter_i64_r64
+
+   recursive subroutine ip_bubbles_r32(label, x, y, radii, spec, stat)
+   !< Circles at the points (x(i), y(i)) of radius radii(i) (`PlotBubbles`), single precision: the radius is in plot
+   !< units along both axes (a circle on equal axes; an ellipse where their scales differ), filled with the item's fill colour
+   !< (`ip_spec(fill_color=..., fill_alpha=...)`) and outlined with its line colour. Read in place with any stride
+   !< (plots.md, "Data in place").
+   character(len=*),       intent(in)                       :: label    !< Legend label.
+   real(real32),       intent(in), target, asynchronous :: x(:)     !< Abscissae.
+   real(real32),       intent(in), target, asynchronous :: y(:)     !< Ordinates.
+   real(real32),       intent(in), target, asynchronous :: radii(:) !< Radii [plot units].
+   type(plot_spec_object), intent(in), optional             :: spec     !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat     !< Status.
+   type(series_r32), target                                 :: d        !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_bubbles', stat)) return ! a task does not draw
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bubbles', stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(radii, kind=int64), 'ip_bubbles', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call series_put(d, 3, radii)
+   call ImPlot_PlotBubbles_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
+                                                    series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_bubbles_r32
+
+   recursive subroutine ip_pie_chart_r32(labels, values, x, y, radius, label_format, angle0, normalize, colormap, &
+                                       spec, stat)
+   !< A pie chart (`PlotPieChart`), single precision: one slice per value, its label in the legend, centred at (x, y) with
+   !< `radius`, all in plot units (equal axes keep it round: `ip_begin_plot(..., equal=.true.)`). The slices start at
+   !< `angle0` degrees (default 90, the top) and go clockwise. Each slice shows its value with `label_format`, a C
+   !< printf format of one real (default `'%.1f'`; `''` shows none). Values summing to 1 or more make a full circle;
+   !< below 1, the slices are fractions of one and the circle is partial, unless `normalize=.true.`, which always makes
+   !< a full circle. The slices' colours are the colormap's, in order: the plot's, or `colormap` (`ip_colormap`); a
+   !< spec's colours do not apply to them. Statuses: `FIG_ERR_ARGUMENT` for labels not one per value, a radius not
+   !< above 0, a value below 0 or not finite, a format refused, a colormap not registered; `FIG_ERR_STATE` from a task.
+   character(len=*),       intent(in)            :: labels(:)    !< One label per slice (trailing blanks are not shown).
+   real(real32),       intent(in)            :: values(:)    !< Slice values (0 or more).
+   real(real64),           intent(in)            :: x            !< Centre's abscissa [plot units].
+   real(real64),           intent(in)            :: y            !< Centre's ordinate [plot units].
+   real(real64),           intent(in)            :: radius       !< Radius [plot units].
+   character(len=*),       intent(in), optional  :: label_format !< printf format of a slice's value (default '%.1f').
+   real(real64),           intent(in), optional  :: angle0       !< Where the first slice starts [degrees].
+   logical,                intent(in), optional  :: normalize    !< Always a full circle (default `.false.`).
+   integer(int32),         intent(in), optional  :: colormap     !< The slices' colours (default: the plot's colormap).
+   type(plot_spec_object), intent(in), optional  :: spec         !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat         !< Status.
+   real(real32), allocatable, target         :: v(:)         !< The values, contiguous.
+   character(kind=c_char), allocatable, target   :: ch(:)        !< The labels, each NUL-terminated, one after the other.
+   type(c_ptr), allocatable, target              :: pl(:)        !< Their addresses.
+   character(len=:), allocatable, target         :: fmt          !< The format, NUL-terminated.
+   type(im_plot_spec)                            :: cs           !< The C spec.
+   real(real64)                                  :: a0           !< The first slice's start [degrees].
+   integer(int64)                                :: n, k, j, at  !< Slices, counters, position in `ch`.
+   integer(c_int)                                :: cmap         !< The colormap's id.
+
+   if (figure_draw_refused('ip_pie_chart', stat)) return ! a task does not draw
+   if (present(colormap)) then
+      if (.not. colormap_ok('ip_pie_chart', colormap, cmap, stat)) return
+   endif
+   n = size(values, kind=int64)
+   if (size(labels, kind=int64) /= n) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_pie_chart: labels must be one per value', stat)
+      return
+   endif
+   if (.not. (radius > 0.0_real64)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_pie_chart: the radius must be above 0', stat)
+      return
+   endif
+   if (n > int(huge(0_c_int), int64)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_pie_chart: more slices than a C int counts', stat)
+      return
+   endif
+   if (.not. all(values >= 0.0_real32 .and. values <= huge(1.0_real32))) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_pie_chart: a value is below 0 or not finite', stat)
+      return
+   endif
+   fmt = '%.1f'
+   if (present(label_format)) then
+      if (len(label_format) > 0) then
+         if (format_refused('ip_pie_chart', 'label_format', label_format, FORMAT_REAL, stat)) return
+      endif
+      fmt = label_format
+   endif
+   fmt = fmt//c_null_char
+   a0 = 90.0_real64
+   if (present(angle0)) a0 = angle0
+   v = values
+   allocate(ch(n * (int(len(labels), int64) + 1_int64) + 1_int64), pl(max(n, 1_int64)))
+   at = 1_int64
+   do k = 1_int64, n
+      pl(k) = c_loc(ch(at))
+      do j = 1_int64, int(len_trim(labels(k)), int64)
+         ch(at + j - 1_int64) = labels(k)(j:j)
+      enddo
+      at = at + int(len_trim(labels(k)), int64)
+      ch(at) = c_null_char
+      at = at + 1_int64
+   enddo
+   cs = spec_c(spec)
+   if (present(normalize)) then
+      if (normalize) cs%Flags = ior(cs%Flags, ImPlotPieChartFlags_Normalize)
+   endif
+   if (present(colormap)) call ImPlot_PushColormap_PlotColormap(cmap)
+   if (n > 0_int64) call ImPlot_PlotPieChart_FloatPtrStr(c_loc(pl), c_loc(v), int(n, c_int), x, y, radius, c_loc(fmt), a0, cs)
+   if (present(colormap)) call ImPlot_PopColormap(1_c_int)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_pie_chart_r32
+
+   recursive subroutine ip_bubbles_r64(label, x, y, radii, spec, stat)
+   !< Circles at the points (x(i), y(i)) of radius radii(i) (`PlotBubbles`), double precision: the radius is in plot
+   !< units along both axes (a circle on equal axes; an ellipse where their scales differ), filled with the item's fill colour
+   !< (`ip_spec(fill_color=..., fill_alpha=...)`) and outlined with its line colour. Read in place with any stride
+   !< (plots.md, "Data in place").
+   character(len=*),       intent(in)                       :: label    !< Legend label.
+   real(real64),       intent(in), target, asynchronous :: x(:)     !< Abscissae.
+   real(real64),       intent(in), target, asynchronous :: y(:)     !< Ordinates.
+   real(real64),       intent(in), target, asynchronous :: radii(:) !< Radii [plot units].
+   type(plot_spec_object), intent(in), optional             :: spec     !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional            :: stat     !< Status.
+   type(series_r64), target                                 :: d        !< Where ImPlot reads the arrays.
+
+   if (figure_draw_refused('ip_bubbles', stat)) return ! a task does not draw
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_bubbles', stat)) return
+   if (.not. series_ok(size(x, kind=int64), size(radii, kind=int64), 'ip_bubbles', stat)) return
+   call series_lead(d, 2, y)
+   call series_put(d, 1, x)
+   call series_put(d, 3, radii)
+   call ImPlot_PlotBubbles_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
+                                                       series_spec(d, spec))
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_bubbles_r64
+
+   recursive subroutine ip_pie_chart_r64(labels, values, x, y, radius, label_format, angle0, normalize, colormap, &
+                                       spec, stat)
+   !< A pie chart (`PlotPieChart`), double precision: one slice per value, its label in the legend, centred at (x, y) with
+   !< `radius`, all in plot units (equal axes keep it round: `ip_begin_plot(..., equal=.true.)`). The slices start at
+   !< `angle0` degrees (default 90, the top) and go clockwise. Each slice shows its value with `label_format`, a C
+   !< printf format of one real (default `'%.1f'`; `''` shows none). Values summing to 1 or more make a full circle;
+   !< below 1, the slices are fractions of one and the circle is partial, unless `normalize=.true.`, which always makes
+   !< a full circle. The slices' colours are the colormap's, in order: the plot's, or `colormap` (`ip_colormap`); a
+   !< spec's colours do not apply to them. Statuses: `FIG_ERR_ARGUMENT` for labels not one per value, a radius not
+   !< above 0, a value below 0 or not finite, a format refused, a colormap not registered; `FIG_ERR_STATE` from a task.
+   character(len=*),       intent(in)            :: labels(:)    !< One label per slice (trailing blanks are not shown).
+   real(real64),       intent(in)            :: values(:)    !< Slice values (0 or more).
+   real(real64),           intent(in)            :: x            !< Centre's abscissa [plot units].
+   real(real64),           intent(in)            :: y            !< Centre's ordinate [plot units].
+   real(real64),           intent(in)            :: radius       !< Radius [plot units].
+   character(len=*),       intent(in), optional  :: label_format !< printf format of a slice's value (default '%.1f').
+   real(real64),           intent(in), optional  :: angle0       !< Where the first slice starts [degrees].
+   logical,                intent(in), optional  :: normalize    !< Always a full circle (default `.false.`).
+   integer(int32),         intent(in), optional  :: colormap     !< The slices' colours (default: the plot's colormap).
+   type(plot_spec_object), intent(in), optional  :: spec         !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional :: stat         !< Status.
+   real(real64), allocatable, target         :: v(:)         !< The values, contiguous.
+   character(kind=c_char), allocatable, target   :: ch(:)        !< The labels, each NUL-terminated, one after the other.
+   type(c_ptr), allocatable, target              :: pl(:)        !< Their addresses.
+   character(len=:), allocatable, target         :: fmt          !< The format, NUL-terminated.
+   type(im_plot_spec)                            :: cs           !< The C spec.
+   real(real64)                                  :: a0           !< The first slice's start [degrees].
+   integer(int64)                                :: n, k, j, at  !< Slices, counters, position in `ch`.
+   integer(c_int)                                :: cmap         !< The colormap's id.
+
+   if (figure_draw_refused('ip_pie_chart', stat)) return ! a task does not draw
+   if (present(colormap)) then
+      if (.not. colormap_ok('ip_pie_chart', colormap, cmap, stat)) return
+   endif
+   n = size(values, kind=int64)
+   if (size(labels, kind=int64) /= n) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_pie_chart: labels must be one per value', stat)
+      return
+   endif
+   if (.not. (radius > 0.0_real64)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_pie_chart: the radius must be above 0', stat)
+      return
+   endif
+   if (n > int(huge(0_c_int), int64)) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_pie_chart: more slices than a C int counts', stat)
+      return
+   endif
+   if (.not. all(values >= 0.0_real64 .and. values <= huge(1.0_real64))) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'ip_pie_chart: a value is below 0 or not finite', stat)
+      return
+   endif
+   fmt = '%.1f'
+   if (present(label_format)) then
+      if (len(label_format) > 0) then
+         if (format_refused('ip_pie_chart', 'label_format', label_format, FORMAT_REAL, stat)) return
+      endif
+      fmt = label_format
+   endif
+   fmt = fmt//c_null_char
+   a0 = 90.0_real64
+   if (present(angle0)) a0 = angle0
+   v = values
+   allocate(ch(n * (int(len(labels), int64) + 1_int64) + 1_int64), pl(max(n, 1_int64)))
+   at = 1_int64
+   do k = 1_int64, n
+      pl(k) = c_loc(ch(at))
+      do j = 1_int64, int(len_trim(labels(k)), int64)
+         ch(at + j - 1_int64) = labels(k)(j:j)
+      enddo
+      at = at + int(len_trim(labels(k)), int64)
+      ch(at) = c_null_char
+      at = at + 1_int64
+   enddo
+   cs = spec_c(spec)
+   if (present(normalize)) then
+      if (normalize) cs%Flags = ior(cs%Flags, ImPlotPieChartFlags_Normalize)
+   endif
+   if (present(colormap)) call ImPlot_PushColormap_PlotColormap(cmap)
+   if (n > 0_int64) call ImPlot_PlotPieChart_doublePtrStr(c_loc(pl), c_loc(v), int(n, c_int), x, y, radius, c_loc(fmt), &
+                                                          a0, cs)
+   if (present(colormap)) call ImPlot_PopColormap(1_c_int)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_pie_chart_r64
 
    recursive subroutine ip_bars_r64(label, x, y, bar_size, spec, stat)
    !< Bars of height y(i) centred at x(i), `bar_size` wide (in x units), double precision; read in place with any stride
@@ -1535,17 +1785,20 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_ref_i64_r64
 
-   recursive subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, stat)
-   !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
-   !< err_high(i), double precision; read in place with any stride (plots.md, "Data in place").
+   recursive subroutine ip_error_bars_r64(label, x, y, err, err_high, spec, horizontal, stat)
+   !< Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+   !< err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), double precision; read in place
+   !< with any stride (plots.md, "Data in place").
    character(len=*),       intent(in)                                 :: label       !< Legend label.
    real(real64),           intent(in), target, asynchronous           :: x(:)        !< Abscissae.
    real(real64),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
-   real(real64),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
-   real(real64),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   real(real64),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units, or x].
+   real(real64),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units, or x].
    type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   logical,                intent(in), optional                       :: horizontal  !< Bars along x (`err` in x units).
    integer(int32),         intent(out), optional                      :: stat        !< Status.
    type(series_r64), target                                           :: d           !< Where ImPlot reads the arrays.
+   type(im_plot_spec)                                                 :: cs          !< The C spec, with the horizontal flag.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1556,30 +1809,37 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    call series_put(d, 3, err)
+   cs = series_spec(d, spec)
+   if (present(horizontal)) then
+      if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
+   endif
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
                                                                      int(size(x), c_int), &
-                                                                     series_spec(d, spec))
+                                                                     cs)
    else
       call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), d%p(3), &
-                                                               int(size(x), c_int), series_spec(d, spec))
+                                                               int(size(x), c_int), cs)
    endif
    call figure_check(FIG_OK, stat)
    endsubroutine ip_error_bars_r64
 
-   recursive subroutine ip_error_bars_i32_r64(label, x, y, err, err_high, spec, stat)
-   !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
-   !< err_high(i), double precision, abscissae `integer(int32)`: converted into one temporary, the ordinates read in
+   recursive subroutine ip_error_bars_i32_r64(label, x, y, err, err_high, spec, horizontal, stat)
+   !< Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+   !< err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), double precision, abscissae
+   !< `integer(int32)`: converted into one temporary, the ordinates read in
    !< place (plots.md, "Data in place").
    character(len=*),       intent(in)                                 :: label       !< Legend label.
    integer(int32),         intent(in), target, asynchronous           :: x(:)        !< Abscissae.
    real(real64),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
-   real(real64),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
-   real(real64),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   real(real64),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units, or x].
+   real(real64),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units, or x].
    type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   logical,                intent(in), optional                       :: horizontal  !< Bars along x (`err` in x units).
    integer(int32),         intent(out), optional                      :: stat        !< Status.
    type(series_r64), target                                           :: d           !< Where ImPlot reads the arrays.
+   type(im_plot_spec)                                                 :: cs          !< The C spec, with the horizontal flag.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1590,30 +1850,37 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    call series_put(d, 3, err)
+   cs = series_spec(d, spec)
+   if (present(horizontal)) then
+      if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
+   endif
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
                                                                      int(size(x), c_int), &
-                                                                     series_spec(d, spec))
+                                                                     cs)
    else
       call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), d%p(3), &
-                                                               int(size(x), c_int), series_spec(d, spec))
+                                                               int(size(x), c_int), cs)
    endif
    call figure_check(FIG_OK, stat)
    endsubroutine ip_error_bars_i32_r64
 
-   recursive subroutine ip_error_bars_i64_r64(label, x, y, err, err_high, spec, stat)
-   !< Vertical error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
-   !< err_high(i), double precision, abscissae `integer(int64)`: converted into one temporary, the ordinates read in
+   recursive subroutine ip_error_bars_i64_r64(label, x, y, err, err_high, spec, horizontal, stat)
+   !< Error bars at the points (x(i), y(i)), from y(i) - err(i) to y(i) + err(i); with `err_high`, to y(i) +
+   !< err_high(i); with `horizontal=.true.`, along x instead, from x(i) - err(i), double precision, abscissae
+   !< `integer(int64)`: converted into one temporary, the ordinates read in
    !< place (plots.md, "Data in place").
    character(len=*),       intent(in)                                 :: label       !< Legend label.
    integer(int64),         intent(in), target, asynchronous           :: x(:)        !< Abscissae.
    real(real64),           intent(in), target, asynchronous           :: y(:)        !< Ordinates.
-   real(real64),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units].
-   real(real64),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units].
+   real(real64),           intent(in), target, asynchronous           :: err(:)      !< Error below (and above) [y units, or x].
+   real(real64),           intent(in), target, optional, asynchronous :: err_high(:) !< Error above [y units, or x].
    type(plot_spec_object), intent(in), optional                       :: spec        !< Style (default: ImPlot's).
+   logical,                intent(in), optional                       :: horizontal  !< Bars along x (`err` in x units).
    integer(int32),         intent(out), optional                      :: stat        !< Status.
    type(series_r64), target                                           :: d           !< Where ImPlot reads the arrays.
+   type(im_plot_spec)                                                 :: cs          !< The C spec, with the horizontal flag.
 
    if (figure_draw_refused('ip_error_bars', stat)) return ! a task does not draw
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_error_bars', stat)) return
@@ -1624,14 +1891,18 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    call series_put(d, 3, err)
+   cs = series_spec(d, spec)
+   if (present(horizontal)) then
+      if (horizontal) cs%Flags = ior(cs%Flags, ImPlotErrorBarsFlags_Horizontal)
+   endif
    if (present(err_high)) then
       call series_put(d, 4, err_high)
       call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), d%p(4), &
                                                                      int(size(x), c_int), &
-                                                                     series_spec(d, spec))
+                                                                     cs)
    else
       call ImPlot_PlotErrorBars_doublePtrdoublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), d%p(3), &
-                                                               int(size(x), c_int), series_spec(d, spec))
+                                                               int(size(x), c_int), cs)
    endif
    call figure_check(FIG_OK, stat)
    endsubroutine ip_error_bars_i64_r64

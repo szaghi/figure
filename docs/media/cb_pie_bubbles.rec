@@ -1,0 +1,6 @@
+#! program build/docs-examples/bin/cb_pie_bubbles
+#! frames  8
+#! poster  7
+#! video   no
+# a still: the three plots as the program draws them
+0   move 5 5
