@@ -17,8 +17,14 @@ title: Menus, popups and shortcuts
 | `ig_begin_menu(label [, enabled])` → `logical`, `ig_end_menu()` | A menu of a bar, or a submenu of a menu; `.true.` while open. |
 | `ig_menu_item(label [, shortcut] [, selected] [, enabled])` → `logical` | `.true.` on the frame the item is picked; the menu closes. |
 
-Each end follows only a begin that returned `.true.` (Dear ImGui's rule for menus, as for tabs and tables; windows
-differ: `ig_end` follows every `ig_begin`).
+`ig_begin_main_menu_bar` ... `ig_end_main_menu_bar` is the bar of the display, `ig_begin_menu` ... `ig_end_menu` a
+menu in it, `ig_menu_item` an entry. Each end follows only a begin that returned `.true.` (Dear ImGui's rule for menus,
+as for tabs and tables; windows differ: `ig_end` follows every `ig_begin`).
+
+A window's own bar is `ig_begin_menu_bar` ... `ig_end_menu_bar`, inside a window begun with
+`ImGuiWindowFlags_MenuBar`; it holds menus, or items straight in the bar:
+
+<<< @/examples/snippets/cb_workspace-menubar.F90{fortran}
 
 - `shortcut` is text shown on the right of the item, nothing more: the keys are read by `ig_shortcut`.
 - With `selected`, the item shows a check mark when `.true.`, and picking it toggles the variable.
@@ -38,8 +44,14 @@ differ: `ig_end` follows every `ig_begin`).
 
 <<< @/examples/snippets/cb_shortcuts-keys.F90{fortran}
 
-`keys` is a chord: modifiers (`ctrl`, `shift`, `alt`, `super`) and one key, by the names of
-[`test_key`](testing#synthetic-input), joined by `+`: `'ctrl+s'`, `'ctrl+shift+z'`, `'f5'`, `'escape'`, `'down'`.
+`keys` is a chord: modifiers and one key, joined by `+`: `'ctrl+s'`, `'ctrl+shift+z'`, `'f5'`, `'escape'`, `'down'`.
+The names are those of [`test_key`](testing#synthetic-input):
+
+- keys: `a` to `z`, `0` to `9`, `f1` to `f12`, `enter`, `tab`, `backspace`, `delete`, `escape`, `space`, `left`,
+  `right`, `up`, `down`, `home`, `end`, `pageup`, `pagedown`;
+- modifiers: `ctrl`, `shift`, `alt`, `super`.
+
+Other keys (`f13` and up, the keypad, punctuation) have no name: a chord with one is refused (`FIG_ERR_ARGUMENT`).
 
 **Routing.** A chord goes to one place. Every routed call (`'focused'`, `'global'`, `'item'`) asks for the chord with
 a scope; Dear ImGui gives the chord, on the next frame, to the window (or the item) whose call matches best where the
@@ -50,7 +62,7 @@ calls in a frame does not matter, except between two `'global'` calls (below). `
 
 | `scope` | Who receives the chord | Two calls of one chord | While a text field is edited |
 |---|---|---|---|
-| `'focused'` (default) | The window the call is made in, while it has the keyboard focus, or a window inside it (a child region) does and does not take the chord itself. **Outside every window** (after the last `ig_end`, the place of an application's own keys): whatever window has the focus, unless the focused window asks for the same chord, so a panel overrides the application's key while it has the focus. | In two windows: the focused one's fires, the other does not. | A chord of one key alone or with shift, other than f1 to f24, does not fire (the field uses it); chords with ctrl, alt or super, and f1 to f24, fire. |
+| `'focused'` (default) | The window the call is made in, while it has the keyboard focus, or a window inside it (a child region) does and does not take the chord itself. **Outside every window** (after the last `ig_end`, the place of an application's own keys): whatever window has the focus, unless the focused window asks for the same chord, so a panel overrides the application's key while it has the focus. | In two windows: the focused one's fires, the other does not. | A chord of one key alone or with shift, other than the function keys, does not fire (the field uses it); chords with ctrl, alt or super, and the function keys, fire. |
 | `'global'` | Wherever the focus is, before the `'focused'` calls of the same chord. | The first `'global'` call of the frame fires; the others do not. | Keys that type a character do not fire (Dear ImGui's rule); the others fire. |
 | `'item'` | The item drawn just before the call, while it is active: a text field being edited, a button held down; before every other call of the chord. | Only the active item's call fires. | Fires: keys for the field being edited, such as f1 for its own help. |
 | `'always'` | Every call, wherever it is made: no route, whatever has the focus (v0.3's `ig_shortcut`). | Every call fires. | Fires, the field's own keys included: the field acts on the key too. |
@@ -58,7 +70,7 @@ calls in a frame does not matter, except between two `'global'` calls (below). `
 - **Text fields keep their keys.** While a text field is edited, a `'focused'` chord of one key alone or with shift,
   such as `'down'`, `'enter'`, `'escape'`, `'home'` or `'shift+left'`, does not fire: the field uses them (left,
   right, home and end move its cursor, enter and escape end the edit; in a one-line field, up and down move Dear
-  ImGui's keyboard navigation to the widget above or below, ending the edit). Chords with ctrl, alt or super, and the function keys (`'f1'` to `'f12'`, the names a chord can use), still fire. Keys that type a
+  ImGui's keyboard navigation to the widget above or below, ending the edit). Chords with ctrl, alt or super, and the function keys (`'f1'` to `'f12'`), still fire. Keys that type a
   character (`'a'`, `'space'`, `'shift+1'`) do not fire for `'global'` calls either (Dear ImGui's own rule). The
   chords a field routes itself (enter, ctrl+enter, shift+enter, ctrl+a, ctrl+c, ctrl+v, ctrl+x, ctrl+z, ctrl+y)
   stay the field's, for every routed scope. Keys for the field being edited go to an `'item'` call after it. An
@@ -256,7 +268,10 @@ the answer (`'Overwrite'`, not `'Yes'`).
 | `app%quit_requested()` → `logical` | `.true.` once per request: open the dialog then. |
 | `app%quit()` | The next `next_frame` returns `.false.` (every mode). |
 
-A test makes the request with `test_quit()` ([Headless testing](testing#synthetic-input)); a capture script with
+`app%set_confirm_quit(.true.)` turns the close button into a request: `app%quit_requested()` reports it once, the
+program asks (Save, Discard, Cancel), then calls `app%quit()` or carries on; from which threads they may be called:
+[next_frame](frame-loop#next-frame). A test makes the request with `test_quit()`
+([Headless testing](testing#synthetic-input)); a capture script with
 `<frame> close` ([Frame capture](capture)).
 
 ### The window's title
@@ -272,3 +287,6 @@ changes (the call is cheap; doing it every frame is fine):
 |---|---|
 | `app%set_title(text [, stat])` | The window's title after `init`. Shown in window mode; kept in remote and headless modes. |
 | `app%title()` → `character(len=:), allocatable` | The title: `init`'s, or the last `set_title` (`''` headless until set). |
+
+`app%set_title` shows the text in the window's title bar, or in FIGURE's own bar with `decorations='figure'`
+([The window's frame](frame-loop#the-window-s-frame)).

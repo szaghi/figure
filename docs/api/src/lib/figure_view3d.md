@@ -245,7 +245,7 @@ flowchart LR
   click code_language href "figure_editor.html#code-language" "code_language"
   click load href "figure_texture.html#load" "load"
   click figure_refused href "figure_base.html#figure-refused" "figure_refused"
-  click destroy href "figure_app.html#destroy" "destroy"
+  click destroy href "figure_texture.html#destroy" "destroy"
   click figure_check href "figure_base.html#figure-check" "figure_check"
   click fig_view3d_create href "#fig-view3d-create" "fig_view3d_create"
 ```
@@ -276,7 +276,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class destroy focus
   click editor_init href "figure_editor.html#editor-init" "editor_init"
-  click init href "figure_app.html#init" "init"
+  click init href "figure_texture.html#init" "init"
   click view_init href "figure_markdown.html#view-init" "view_init"
   click fig_view3d_destroy href "#fig-view3d-destroy" "fig_view3d_destroy"
 ```
@@ -1523,7 +1523,7 @@ flowchart LR
   click changed href "#changed" "changed"
   click clear href "#clear" "clear"
   click clip href "#clip" "clip"
-  click draw href "#draw" "draw"
+  click draw href "figure_canvas.html#draw" "draw"
   click editor_clear_marks href "figure_editor.html#editor-clear-marks" "editor_clear_marks"
   click editor_completing href "figure_editor.html#editor-completing" "editor_completing"
   click editor_cursor href "figure_editor.html#editor-cursor" "editor_cursor"

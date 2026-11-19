@@ -38,6 +38,21 @@ while `ig_dock_layout_begin` returns `.true.`: it splits the space into areas an
 `flags` are `ImGuiDockNodeFlags_*`, exported by `figure`: `NoDockingSplit`, `NoResize`, `AutoHideTabBar`,
 `NoUndocking`, `NoDockingOverCentralNode`.
 
+The builder runs inside `ig_dock_layout_begin` ... `ig_dock_layout_end`: `ig_dock_split` cuts a node in two, again on
+the new nodes for more areas, and `ig_dock_window` puts a window, by the name given to `ig_begin`, into a node.
+
+- **Order and pairing:** in each frame, `ig_dock_layout_begin` before `ig_dock_space` for the same id, then the
+  windows. `ig_dock_layout_end` only after a `.true.` `ig_dock_layout_begin` (the rule of tabs and tables); the
+  layout is a scope of the frame's record, so a wrong end is refused and reported
+  ([Pairing and frames](errors#pairing-and-frames)).
+- **Status:** `stat` is optional (absent: `error stop` with the message). `FIG_ERR_STATE` for `ig_dock_space` with
+  docking off (`ig_dock_space: docking is off (app%set_docking)`), and for `ig_dock_space`, `ig_dock_layout_begin` or
+  a builder call with no frame open or from a task; `FIG_ERR_ARGUMENT` for `ig_dock_split` with an unknown
+  `direction` or a `fraction` outside (0, 1) (`ig_dock_split: fraction must be in (0, 1)`), and for a node that does
+  not exist (`ig_dock_window: unknown dock node`).
+- **Modes:** the same in window, headless and remote mode. **Threads:** the frame loop's thread only; a task is
+  refused (`FIG_ERR_STATE`), as every drawing call.
+
 The layout is the starting point: the user then rearranges it freely. With `app%init(..., ini_file=...)` Dear ImGui
 keeps the user's arrangement across runs, and `ig_dock_layout_begin` returns `.false.` when a saved layout exists.
 Without an ini file (the default) every run starts from the program's layout.
@@ -68,10 +83,15 @@ A toolbar, an activity bar or a status bar is a bar along one side of the displa
 
 <<< @/examples/snippets/cb_workspace-bars.F90{fortran}
 
+| Procedure | Does |
+|---|---|
+| `ig_begin_side_bar(name, side, size)` → `logical` | begin the bar `name` along `side`, `'left'`, `'right'`, `'top'` or `'bottom'`, `size` [pixels] wide (left, right) or high (top, bottom); `.true.` when its content is drawn; always ended with `ig_end` |
+
 The bar is a window without title bar, not movable, resizable or dockable, at the side given and as wide (left,
 right) or as high (top, bottom) as `size`; the work area loses that strip, so the dock space and the windows placed in
 the work area do not cover it. Declare it every frame after the main menu bar and before the dock space, and always
-end it with `ig_end`. Several bars stack (a toolbar and a status bar).
+end it with `ig_end`. Several bars stack (a toolbar and a status bar). `ig_begin_side_bar` takes no `stat`: a `side`
+it does not know is taken as `'left'`.
 
 ## Save and load a layout
 
@@ -116,6 +136,10 @@ switch, a "reset layout" and the code that remembers what the user closed.
 
 <<< @/examples/snippets/cb_view_menu-layouts.F90{fortran}
 
+`app%add_window(name)` registers a window, after `init*`, before or after `app%open_prefs` (a window added after it
+takes the visibility the preferences kept when it is added); `app%set_window_visible(name, visible)` shows or hides it
+from the program. The arguments of `add_window`:
+
 - `visible` (default `.true.`): shown at the first run; then as the user left it, when the program keeps its
   [preferences](frame-loop#preferences) and `remember` is `.true.` (the default).
 - `closable` (default `.true.`): `ig_begin(name)` without `open` gets a close button, which hides the window
@@ -134,6 +158,9 @@ or a dock space was laid out with `ig_dock_layout_begin`.
 build it (no callbacks into Fortran: results are polled): the program builds `app%layout()` when
 `ig_dock_layout_begin` returns `.true.`, which it does on the dock space's first frame and, after `switch_layout` or
 `reset_layout`, on its next call, for every dock space the program laid out that way (the region `layouts` above).
+
+`app%add_layout(name [, windows])` declares a layout: the first added is current, unless the preferences kept
+another.
 
 - `windows`: the registered windows the layout shows; when it becomes current (switched to, or reset), these are
   shown and the other registered windows hidden. Without it, a switch leaves them as they are.

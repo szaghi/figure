@@ -4,9 +4,19 @@ title: Styles
 
 # Styles
 
-Every colour and size of the interface and of the plots can be chosen: a whole style by name; its two parts, a
-**look** (the geometry: rounding, padding, spacing, borders) and a **palette** (the colours), each by name; or any
-single colour or variable of Dear ImGui and ImPlot by its own name.
+Every colour and size of the interface and of the plots can be chosen. Four terms name what is chosen, and this page
+uses them in this sense only:
+
+- a **style**: every colour and size at once, chosen by a built-in name with `app%set_style` (`'seal'`, `'paper'`,
+  ...): a look and a palette, or Dear ImGui's own geometry and colours ([Named styles](#named-styles));
+- a **look**: the geometry alone, the rounding, padding, spacing and borders ([Looks](#looks));
+- a **palette**: the colours alone, twelve [colour roles](#palette-roles) from which every colour of Dear ImGui and
+  ImPlot is derived ([Palettes](#palettes));
+- a **theme file**: a TOML file that gives a style, a look and a palette (or a `base` of Dear ImGui's colours) with
+  single colours and variables over them, applied with `app%load_style` ([Theme files](#theme-files)); each built-in
+  style is one, embedded in the library.
+
+Over any of them, a single colour or variable of Dear ImGui and ImPlot is set by its own name.
 
 ## Named styles
 
@@ -165,7 +175,7 @@ They are now derived from the palette's roles:
 | `DragDropTarget`, `DragDropTargetBg` | (unchanged) | accent, accent at 10 % | the same |
 
 `paper` also has `MinorAlpha = 0.5` in effect (ImPlot's default is 0.25): the minor grid lines are drawn at half the
-alpha of the major ones, so they show on white, under the major ones. The line was in the theme before but never took
+alpha of the major ones, so they show on white, under the major ones. The line was in the theme file before but never took
 effect.
 
 ### Palette roles
@@ -259,9 +269,9 @@ The same program without those lines (`cb_style plain`), in the default style:
 |---|---|
 | `ig_set_style_color(name, color [, stat])` | a Dear ImGui colour; `color` is `'#rrggbb'`, `'#rrggbbaa'`, or `[r, g, b]` / `[r, g, b, a]` in [0, 1] |
 | `ig_get_style_color(name, rgba [, stat])` | a Dear ImGui colour, as `rgba(4)` in [0, 1] |
-| `ig_set_style_var(name, value [, stat])` | a Dear ImGui style variable: a `real(real64)`, a pair `real(real64) :: v(2)`, a `logical` or an `integer(int32)`, as the variable holds |
-| `ig_get_style_var(name, values, n [, stat])` | a Dear ImGui style variable: `values(2)`, and `n`, how many it holds (1 or 2) |
-| `ip_set_style_color`, `ip_get_style_color`, `ip_set_style_var`, `ip_get_style_var` | the same for ImPlot |
+| `ig_set_style_var(name, value [, stat])` | a Dear ImGui style variable: a `real(real64)`, a pair `real(real64) :: v(2)`, a `logical`, or an `integer(int32)` for an enumeration (`WindowMenuButtonPosition`), as the variable holds |
+| `ig_get_style_var(name, values, n [, stat])` | a Dear ImGui style variable: `values(2)`, and `n`, how many it holds (1 or 2); a logical reads 0 or 1 |
+| `ip_set_style_color`, `ip_get_style_color`, `ip_set_style_var`, `ip_get_style_var` | the same for ImPlot; a variable is a number, a pair or a `logical` (`UseLocalTime`, `UseISO8601`, `Use24HourClock`), none an integer |
 
 **Names** are the libraries' own:
 
@@ -282,6 +292,12 @@ An unknown name, a malformed colour, a component outside [0, 1] or a pair given 
 `FIG_ERR_ARGUMENT` (or a stop, without `stat`). Variables in pixels hold the values Dear ImGui uses, already
 multiplied by the display's content scale ([Content scale](frame-loop#content-scale)).
 
+`ig_set_style_color` and `ig_set_style_var` change a Dear ImGui colour or variable, `ip_set_style_color` and
+`ip_set_style_var` an ImPlot one; `ig_get_style_color`, `ig_get_style_var`, `ip_get_style_color` and
+`ip_get_style_var` read them back. `ip_get_style_color` gives ImPlot's automatic colours (derived from Dear ImGui's) as
+ImPlot draws them. Sets and gets need no frame: they work before the first `next_frame` and between frames, after
+`init*`.
+
 A change applies to everything drawn afterwards, globally, until it is changed again; `app%set_style` resets them
 all to the named style.
 
@@ -292,19 +308,23 @@ pair like `ig_begin` and `ig_end`; one stack holds the colours of both libraries
 
 <<< @/examples/snippets/cb_scoped-red.F90{fortran}
 
-<Media name="cb_scoped" :width="520" alt="A Start button in the theme's colour, a red Stop button, a value shown large, and an undecorated overlay" caption="docs/examples/src/cb_scoped.F90" />
+<Media name="cb_scoped" :width="520" alt="A Start button in the style's colour, a red Stop button, a value shown large, and an undecorated overlay" caption="docs/examples/src/cb_scoped.F90" />
 
 | Procedure | Does |
 |---|---|
 | `ig_push_style_color(name, color [, stat])` | change a Dear ImGui colour (`'#rrggbb[aa]'` or components) until its pop |
 | `ig_pop_style_color([n] [, stat])` | undo the `n` newest colour pushes (default 1) |
-| `ig_push_style_var(name, value [, stat])` | change a Dear ImGui style variable until its pop |
+| `ig_push_style_var(name, value [, stat])` | change a Dear ImGui style variable until its pop: a number, a pair, a `logical`, or an `integer(int32)` for an enumeration |
 | `ig_pop_style_var([n] [, stat])` | undo the `n` newest variable pushes (default 1) |
-| `ip_push_style_color`, `ip_pop_style_color`, `ip_push_style_var`, `ip_pop_style_var` | the same for ImPlot |
+| `ip_push_style_color`, `ip_pop_style_color`, `ip_push_style_var`, `ip_pop_style_var` | the same for ImPlot (a variable: a number, a pair or a `logical`) |
 | `ip3_push_style_color`, `ip3_pop_style_color`, `ip3_push_style_var`, `ip3_pop_style_var` | the same for ImPlot3D: `ImPlot3DCol_*` without the prefix, the fields of `ImPlot3DStyle` (a number or a pair) ([3-D plots](plots#_3-d-plots)) |
 
 Every colour and every variable of the [name tables](#colours-and-variables-by-name) can be pushed, not only those
-Dear ImGui's own `PushStyleVar` covers. More pops than pushes are `FIG_ERR_STATE`.
+Dear ImGui's own `PushStyleVar` covers. `ig_push_style_color`, `ig_push_style_var`, `ip_push_style_color` and `ip_push_style_var`
+(and the `ip3_` ones) change a value until `ig_pop_style_color` or `ig_pop_style_var` undoes it; `ip_pop_style_color` and `ip_pop_style_var`
+pop the same stacks. Unlike the sets, pushes and pops need a frame open: outside one they are refused with
+`FIG_ERR_STATE`, a usage error ([Pairing and frames](errors#pairing-and-frames)). More pops than pushes are
+`FIG_ERR_STATE`.
 
 ## Fonts
 
@@ -323,7 +343,7 @@ Mono, `∇` in both) come from a bundled fallback, Noto Sans Math ([below](#symb
 
 <<< @/examples/snippets/cb_controls-fonts.F90{fortran}
 
-`app%set_font('proggy')` gives Dear ImGui's classic look; a file is given by its path,
+`app%set_font('proggy')` gives Dear ImGui's classic bitmap font; a file is given by its path,
 `app%set_font('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16.0_real64)`.
 
 `'plex-mono'` gives every character the same advance, so the columns of a text line up; it is the font for a
@@ -449,10 +469,10 @@ TitleBarHeight = 40                            # the title bar of decorations='f
   `[imgui.colors]`, `[implot.vars]` and `[implot.colors]` override them. With a palette, `base` gives no colour.
 - **A `[palette]` table** gives roles: with `palette = "name"` it overrides single roles of that palette; without, it
   must give all twelve. Either way the [contrast rule](#the-contrast-rule) applies to the result.
-- Everything not given comes from the look, the palette or `base`: a theme lists only what it changes, and a newer
-  Dear ImGui adding style colours never leaves a theme incomplete.
-- Sizes are in logical pixels, multiplied by the display's content scale when the theme is applied.
-- ImPlot's colours not given are derived from Dear ImGui's (ImPlot's automatic colours), so a theme that sets only
+- Everything not given comes from the look, the palette or `base`: a theme file lists only what it changes, and a newer
+  Dear ImGui adding style colours never leaves a theme file incomplete.
+- Sizes are in logical pixels, multiplied by the display's content scale when the theme file is applied.
+- ImPlot's colours not given are derived from Dear ImGui's (ImPlot's automatic colours), so a theme file that sets only
   Dear ImGui colours gives matching plots.
 - A malformed file is reported with its line: `themes/x.toml:12: unknown Dear ImGui colour "Buton"`.
 
@@ -460,7 +480,7 @@ A look file (`themes/looks/`) holds `[imgui.vars]`, `[implot.vars]` and `[figure
 a complete `[palette]` table and, optionally, `background`, `lines`, `[imgui.colors]` and `[implot.colors]`. Adding a
 file there and rebuilding the native layer adds a look or a palette.
 
-The built-in themes: [`seal`](https://github.com/szaghi/figure/blob/main/themes/seal.toml),
+The built-in styles' theme files: [`seal`](https://github.com/szaghi/figure/blob/main/themes/seal.toml),
 [`seal-light`](https://github.com/szaghi/figure/blob/main/themes/seal-light.toml),
 [`dark`](https://github.com/szaghi/figure/blob/main/themes/dark.toml),
 [`light`](https://github.com/szaghi/figure/blob/main/themes/light.toml),
@@ -474,7 +494,7 @@ The built-in themes: [`seal`](https://github.com/szaghi/figure/blob/main/themes/
 |---|---|
 | `app%load_style(file [, stat])` | apply a theme file; `FIG_ERR_FAILED` if it cannot be read, `FIG_ERR_ARGUMENT` if it is malformed (the message gives file and line) |
 | `app%save_style(file [, stat])` | write the style in effect as a theme file: its look and palette (or its base), background and line colours, and every colour and variable that differs from what they give, including the changes made by name or in the style editor |
-| `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's own style editors in a window, "Style editor": every colour and size, live |
+| `ig_show_style_editor([open] [, stat])` | Dear ImGui's and ImPlot's own style editors in a window, "Style editor": every colour and size, live; inside a frame (outside one: `FIG_ERR_STATE`) |
 
 `FIGURE_STYLE` also takes a file: a value with a `/` or ending in `.toml` is loaded as a theme
 (`FIGURE_STYLE=./my-theme.toml exe/examples/figure_hello`).

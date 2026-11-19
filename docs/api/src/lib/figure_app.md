@@ -1919,7 +1919,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class destroy focus
   click editor_init href "figure_editor.html#editor-init" "editor_init"
-  click init href "#init" "init"
+  click init href "figure_texture.html#init" "init"
   click view_init href "figure_markdown.html#view-init" "view_init"
   click figure_refused href "figure_base.html#figure-refused" "figure_refused"
   click fig_shutdown href "figure_c_native.html#fig-shutdown" "fig_shutdown"
@@ -2065,7 +2065,7 @@ flowchart LR
   frame_options["frame_options"] --> fig_frame_options["fig_frame_options"]
   classDef focus stroke-width:3px,font-weight:bold
   class frame_options focus
-  click init href "#init" "init"
+  click init href "figure_texture.html#init" "init"
   click init_headless href "#init-headless" "init_headless"
   click fig_frame_options href "figure_c_native.html#fig-frame-options" "fig_frame_options"
 ```

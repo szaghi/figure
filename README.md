@@ -69,7 +69,7 @@ gfortran readme.F90 $(pkg-config --cflags --libs figure) -o readme
   file dialogs.
 - **Docking**: windows dock into one another as tabs and splits; layouts set by the program, or arranged by the user,
   saved to a file and loaded back.
-- **Themes**: seven built-in styles (`seal`, `paper` for publication, `high-contrast`, ...), every colour and size of
+- **Styles**: seven built-in styles (`seal`, `paper` for publication, `high-contrast`, ...), every colour and size of
   Dear ImGui and ImPlot by name, theme files, fonts and their size, changed at run time.
 - **Lazy redraw**: an idle window sleeps (about 0.4 % of a core); live data redraws when it changes.
 - **Remote mode**: `app%init_remote()` serves the same interface to a web browser, with an access token: no display or

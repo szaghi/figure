@@ -329,7 +329,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class editor_init focus
   click figure_refused href "figure_base.html#figure-refused" "figure_refused"
-  click destroy href "figure_app.html#destroy" "destroy"
+  click destroy href "figure_texture.html#destroy" "destroy"
   click figure_check href "figure_base.html#figure-check" "figure_check"
   click fig_editor_create href "#fig-editor-create" "fig_editor_create"
 ```
@@ -964,7 +964,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class code_language focus
   click lower href "#lower" "lower"
-  click init href "figure_app.html#init" "init"
+  click init href "figure_texture.html#init" "init"
   click fortran_keywords href "#fortran-keywords" "fortran_keywords"
   click fortran_types href "#fortran-types" "fortran_types"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
@@ -1526,7 +1526,7 @@ flowchart LR
   click changed href "figure_view3d.html#changed" "changed"
   click clear href "figure_view3d.html#clear" "clear"
   click clip href "figure_view3d.html#clip" "clip"
-  click draw href "figure_view3d.html#draw" "draw"
+  click draw href "figure_canvas.html#draw" "draw"
   click editor_clear_marks href "#editor-clear-marks" "editor_clear_marks"
   click editor_completing href "#editor-completing" "editor_completing"
   click editor_cursor href "#editor-cursor" "editor_cursor"

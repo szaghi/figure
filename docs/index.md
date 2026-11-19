@@ -51,7 +51,7 @@ features:
     details: Text and numeric fields bound to your variables, drop-down lists, tables, tabs; menu bars and keyboard shortcuts; popups, modals and the system's file dialogs.
     link: /guide/menus
     linkText: Menus and popups
-  - title: Docking and themes
+  - title: Docking and styles
     details: Windows dock into one another as tabs and splits, layouts saved and loaded at run time. Seven built-in styles, every colour and size by name, theme files, fonts.
     link: /guide/styles
     linkText: Styles

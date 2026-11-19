@@ -156,7 +156,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class view_init focus
   click figure_refused href "figure_base.html#figure-refused" "figure_refused"
-  click destroy href "figure_app.html#destroy" "destroy"
+  click destroy href "figure_texture.html#destroy" "destroy"
   click figure_check href "figure_base.html#figure-check" "figure_check"
   click fig_markdown_view_create href "#fig-markdown-view-create" "fig_markdown_view_create"
 ```
@@ -222,9 +222,10 @@ flowchart LR
 
 ### view_load
 
-Replace the text with the content of the file `path` (UTF-8 name and content). Its images are read from paths
- relative to the working directory, not to the file. Statuses: `FIG_ERR_ARGUMENT` for an empty name,
- `FIG_ERR_FAILED` if the file cannot be read (the text is kept); `FIG_ERR_STATE` before `init` and from a task.
+Replace the text with the content of the file `path` (UTF-8 name and content), keeping the scroll and the search
+ as `set_text` does. Its images are read from paths relative to the working directory, not to the file.
+ Statuses: `FIG_ERR_ARGUMENT` for an empty name, `FIG_ERR_FAILED` if the file cannot be read (the text is kept);
+ `FIG_ERR_STATE` before `init` and from a task.
 
 **Attributes**: recursive
 
@@ -610,7 +611,7 @@ flowchart LR
   click changed href "figure_view3d.html#changed" "changed"
   click clear href "figure_view3d.html#clear" "clear"
   click clip href "figure_view3d.html#clip" "clip"
-  click draw href "figure_view3d.html#draw" "draw"
+  click draw href "figure_canvas.html#draw" "draw"
   click editor_clear_marks href "figure_editor.html#editor-clear-marks" "editor_clear_marks"
   click editor_completing href "figure_editor.html#editor-completing" "editor_completing"
   click editor_cursor href "figure_editor.html#editor-cursor" "editor_cursor"

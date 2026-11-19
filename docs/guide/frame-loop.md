@@ -14,9 +14,11 @@ A program has one `app_object`. Its life is one loop:
   (with `decorations='figure'`, a window whose frame FIGURE draws: [below](#the-window-s-frame)) and creates the Dear
   ImGui and ImPlot contexts, with the `seal` style, docking and keyboard navigation enabled. `vsync` (default `.true.`) synchronizes the buffer
   swap with the display refresh. A second `init` without `destroy` fails with `FIG_ERR_STATE`; a non-positive size
-  with `FIG_ERR_ARGUMENT`.
+  with `FIG_ERR_ARGUMENT`; a system without a display, or without OpenGL 3, with `FIG_ERR_FAILED`.
 - `init_headless(width, height [, stat] [, decorations] [, buttons])` creates the contexts on a virtual display,
   without window or GPU: see [Headless testing](testing).
+- `init_remote([port] [, host] [, width, height] [, ...] [, url] [, stat])` creates them without a window and serves
+  the interface to a web browser, the program needing no display or GPU (a cluster node): see [Remote UI](remote).
 - `destroy()` closes the window and destroys the contexts. It is safe in any state, also without a previous `init`
   and inside an open frame.
 
@@ -46,46 +48,19 @@ decides how many frames to run.
 `app%quit()` ends the loop from the program: the next `next_frame` returns `.false.`, in every mode. With
 `app%set_confirm_quit(.true.)` the window's close button no longer ends the loop: `app%quit_requested()` reports the
 request, once, and the program answers it, typically with a "Discard changes?" dialog
-([Ask before quitting](menus#ask-before-quitting)). In remote mode closing the browser's tab never ends the program.
+([Ask before quitting](menus#ask-before-quitting)). `set_confirm_quit` and `quit_requested` may be called from any
+thread, a [task](processes#tasks) included; one caller gets each request. In remote mode closing the browser's tab
+never ends the program.
 
 ### Usage checks
 
-| Procedure | Notes |
-|---|---|
-| `app%set_checks(mode [, stat])` | What a usage error does: `'abort'`, `'report'` (the default) or `'recover'`. |
-
-A usage error is a begin/end pair used wrongly (an end that is not the innermost open scope's, an end after a begin
-that returned `.false.` where the rule is "end only after a true begin", a scope left open at the end of the frame) or
-a drawing call with no frame open. FIGURE checks every pair it wraps against a record of the frame's scopes
-([Pairing and frames](errors#pairing-and-frames) has the rules and every message); `next_frame` is where the errors of
-a frame are reported:
-
-- **`'abort'`**: the program stops (`error stop`, `FIGURE error: <message>` on standard error) at the call that breaks
-  the rule, or at `next_frame` for a scope left open.
-- **`'report'`** (default): the wrong call does nothing, the frame goes on, FIGURE closes what was left open, and
-  `next_frame(stat)` returns `FIG_ERR_STATE` with the messages (one per line) in `figure_last_error()`, the next frame
-  open. Without `stat`, `next_frame` stops the program with them, as any failure without `stat` does.
-- **`'recover'`**: as `'report'`, but an end whose own scope is open further down closes the scopes opened after it
-  first (the missing ends), `next_frame` returns `FIG_OK`, and the messages are in `figure_last_error()` and in a
-  [notification](#notifications), one per distinct set of messages:
+A usage error is a begin/end pair used wrongly or a drawing call with no frame open; `app%set_checks(mode [, stat])`
+chooses what it does, `'abort'` (stop at the call), `'report'` (the default: refuse the call and have the next
+`next_frame(stat)` return `FIG_ERR_STATE` with the messages) or `'recover'` (go on, the messages in a
+[notification](#notifications)). The rules, the modes, their statuses and every message are in
+[The three modes](errors#the-three-modes):
 
 <<< @/examples/snippets/cb_scope_error-recover.F90{fortran}
-
-The mode can be set before `init*`, and `destroy` restores the default. A call with a `stat` of its own (a style pop,
-`ig_dock_layout_end`) gets its usage error in that `stat`, in every mode. Statuses: `FIG_ERR_ARGUMENT` for another
-mode, `FIG_ERR_STATE` from a task (the mode belongs to the loop's thread). Modes: the same in **window**, **headless**
-and **remote** mode. Dear ImGui's names: its error recovery is `io.ConfigErrorRecovery*`; FIGURE sets it for the mode
-(assertions on in `'abort'`, off with FIGURE's callback in the others).
-
-**Tests run in `'abort'`.** A test should fail at the line of the fault, and a test that passes a `stat` to
-`next_frame` for another reason must not step over a usage error: `call app%set_checks('abort')` after
-`init_headless`. FIGURE's own test suite runs in the default mode, which stops a test just as well, one call later,
-because its loops pass no `stat` to `next_frame`; `src/tests/figure_test_errors.F90` checks the three modes.
-
-What the checks do not do: they cannot be turned off (they cost about 50 ns a pair: [What the checks
-cost](errors#what-the-checks-cost)); they do not check calls that are not pairs, nor raw calls that close what FIGURE
-opened; `'recover'` repairs the structure of the frame, not what the widgets drawn in the wrong scope showed in it
-([What is not checked](errors#what-is-not-checked-and-what-recovery-cannot-repair)).
 
 ## Lazy redraw
 
@@ -101,7 +76,7 @@ appear without input.
 | `app%request_frames(n)` | draw at least `n` more frames without waiting for input |
 | `app%wake()` | the next frame starts without waiting for input or `max_wait`, from any thread |
 
-`set_lazy` without `max_wait` sets it back to 0.5 s. `request_frames(n)` raises the count of frames still to draw to
+`set_lazy` may be called from any thread, a task included; without `max_wait` it sets the wait back to 0.5 s. `request_frames(n)` raises the count of frames still to draw to
 `n` (it never lowers it; an input event does not lower it either): call `request_frames(1)` in every frame in which something is changing, such as an
 animation or a computation that advances inside the loop, and the loop keeps drawing; stop calling it and the next
 `next_frame` sleeps again (the three-frame tail follows input events, not `request_frames`).
@@ -278,8 +253,9 @@ The program checks itself headless (it prints facts about the times, which chang
 <<< @/examples/output/cb_time.txt{text}
 
 **What it does not do:** no date or time of day (the origin is the first call, not an epoch: for a time stamp use
-`date_and_time`); no timers or callbacks (FIGURE calls no Fortran: poll the clock, and keep the loop running with
-`app%set_lazy(.false.)` or `app%request_frames` while something moves, as [lazy redraw](#lazy-redraw) explains); no
+`date_and_time`); no timers or callbacks (FIGURE calls no Fortran but a task's `work` procedure: poll the clock,
+and keep the loop running with `app%set_lazy(.false.)` or `app%request_frames` while something moves, as [lazy
+redraw](#lazy-redraw) explains); no
 pause of the clock. A sleep or a frame wait measured with it is as long as the system made it, which on a loaded
 machine is longer than asked.
 
@@ -580,6 +556,11 @@ the arrangement before the next frame: call `open_prefs` after `init*` and after
 (`set_style`), before the first frame, and `load_pref` after it. A value saved before `open_prefs` is kept over the
 file's.
 
+**What is read.** `open_prefs` of a file that does not exist yet is no error: the program starts from its defaults.
+`load_pref` into a `character` variable gives the text kept, cut to the
+variable's length or padded with blanks. `app%prefs_file()` names the file in use: `''` before `open_prefs`, when the
+preferences are kept in memory only, and from a task.
+
 **When it is written.** When something changed, every 30 s of frame time (the frame time of
 [notifications](#notifications): fixed in headless mode) and at `destroy`. Each write goes to `<file>.tmp`, which is
 then renamed over the file, so a crash leaves the file of the last save whole, never a half-written one;
@@ -634,7 +615,7 @@ last 30-second save.
 ## Content scale
 
 `content_scale()` returns the display content scale FIGURE read at `init` (1 on standard displays, 2 on most high-DPI
-ones; 1 in headless mode). FIGURE applies it at `init`: the window is created `width * scale` by `height * scale`,
+ones; 1 in headless mode), and may be called from any thread, a task included. FIGURE applies it at `init`: the window is created `width * scale` by `height * scale`,
 and the Dear ImGui style (spacing, fonts) is scaled by it. Positions and sizes the program passes
 (`ig_set_next_window`, button and plot sizes) are not scaled: multiply them by `content_scale()` to keep their
 proportion to the window ([cookbook](/manual/cookbook#size-in-proportion-to-the-display-scale)):

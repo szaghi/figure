@@ -407,7 +407,7 @@ contains
 
    recursive subroutine ig_show_style_editor(open, stat)
    !< Dear ImGui's and ImPlot's style editors, in a window titled "Style editor": every colour and size, live; with
-   !< `open`, the window has a close button that sets it false. Keep a look with `app%save_style`.
+   !< `open`, the window has a close button that sets it false. Keep the result as a theme file with `app%save_style`.
    logical,        intent(inout), optional :: open !< Window open.
    integer(int32), intent(out),   optional :: stat !< Status: `FIG_ERR_STATE` outside a frame.
    integer(c_int), target                  :: o    !< C copy of `open`.

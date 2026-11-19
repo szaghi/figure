@@ -3276,7 +3276,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class ip_image focus
   click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
-  click is_initialized href "figure_view3d.html#is-initialized" "is_initialized"
+  click is_initialized href "figure_texture.html#is-initialized" "is_initialized"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
   click fig_texture_sampling href "figure_c_native.html#fig-texture-sampling" "fig_texture_sampling"
   click ImPlot_PlotImage href "figure_cimplot.html#implot-plotimage" "ImPlot_PlotImage"

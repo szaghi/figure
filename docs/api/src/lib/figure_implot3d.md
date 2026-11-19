@@ -899,7 +899,7 @@ flowchart LR
   class ip3_image focus
   click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
   click figure_fail href "figure_base.html#figure-fail" "figure_fail"
-  click is_initialized href "figure_view3d.html#is-initialized" "is_initialized"
+  click is_initialized href "figure_texture.html#is-initialized" "is_initialized"
   click outside_plot href "#outside-plot" "outside_plot"
   click ImPlot3D_PlotImage_Plot3DPoint href "figure_cimplot3d.html#implot3d-plotimage-plot3dpoint" "ImPlot3D_PlotImage_Plot3DPoint"
   click cstr href "figure_base.html#cstr" "cstr"

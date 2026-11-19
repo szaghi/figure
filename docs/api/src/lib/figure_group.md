@@ -283,7 +283,7 @@ flowchart LR
   classDef focus stroke-width:3px,font-weight:bold
   class ig_begin_multi_select focus
   click figure_draw_refused href "figure_base.html#figure-draw-refused" "figure_draw_refused"
-  click opt href "figure_app.html#opt" "opt"
+  click opt href "figure_implot3d.html#opt" "opt"
   click fig_multi_select_begin href "figure_c_native.html#fig-multi-select-begin" "fig_multi_select_begin"
   click figure_usage_error href "figure_base.html#figure-usage-error" "figure_usage_error"
   click figure_scope_open href "figure_base.html#figure-scope-open" "figure_scope_open"

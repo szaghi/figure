@@ -4,10 +4,11 @@ program cb_workspace
 !< cb_workspace, reference example: a bar along a side, a dock space with a layout, a window that appears later in a
 !< node of it, and the arrangement saved to a file and loaded back; checked headless.
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
-use figure, only : app_object, FIG_OK, ig_begin, ig_begin_main_menu_bar, ig_begin_menu, ig_begin_side_bar, &
-                   ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, ig_dock_split, &
-                   ig_dock_window, ig_end, ig_end_main_menu_bar, ig_end_menu, ig_menu_item, ig_set_next_window_dock, &
-                   ig_text, ig_tool_button, ig_window_dock, ICON_ACTIVITY, ICON_FILE_PEN
+use figure, only : app_object, FIG_OK, ig_begin, ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar, &
+                   ig_begin_side_bar, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, &
+                   ig_dock_split, ig_dock_window, ig_end, ig_end_main_menu_bar, ig_end_menu, ig_end_menu_bar, &
+                   ig_menu_item, ig_set_next_window_dock, ig_text, ig_tool_button, ig_window_dock, ICON_ACTIVITY, &
+                   ICON_FILE_PEN, ImGuiWindowFlags_MenuBar
 
 implicit none
 type(app_object) :: app                  !< Application.
@@ -46,8 +47,16 @@ do frame = 1_int32, 12_int32
    endif
    call ig_dock_space(root)                                   ! fills what the bars leave
    !endregion bars
-   if (ig_begin('Case')) call ig_text('the case')
+   !region menubar
+   if (ig_begin('Case', flags=ImGuiWindowFlags_MenuBar)) then     ! the window has a bar of its own
+      if (ig_begin_menu_bar()) then
+         if (ig_menu_item('Reload')) continue                  ! an item in the bar, or a menu (ig_begin_menu)
+         call ig_end_menu_bar()                                ! only after a true ig_begin_menu_bar
+      endif
+      call ig_text('the case')
+   endif
    call ig_end()
+   !endregion menubar
    !region later
    if (show_result) then
       call ig_set_next_window_dock(right)                     ! the node from the layout, the first time only
