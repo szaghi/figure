@@ -95,7 +95,7 @@ carries the modules' folder and the whole link line (the native layer, SDL3, the
 ```cmake
 cmake_minimum_required(VERSION 3.24)
 project(my_program LANGUAGES Fortran)
-find_package(figure 0.6 CONFIG REQUIRED)
+find_package(figure 0.7 CONFIG REQUIRED)
 add_executable(my_program my_program.F90)
 target_link_libraries(my_program PRIVATE figure::figure)
 ```

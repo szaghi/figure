@@ -6,10 +6,11 @@ program figure_test_plot3d_items
 !<
 !< Plot A: two triangles and a quad in colours of their own, without legend entries (an icon would carry the colour),
 !< drawn; an image on the plane z = 0, drawn in its tint; the legend in the south-east corner (a quad with an entry:
-!< its colour's extent, icon included, reaches the box's bottom-right); the pointer moved to the pixel of a point: the ray under it passes through the point. Plot B: z on
-!< a log scale, so z = 10 lies halfway between z = 1 and z = 100 on the screen; its box stretched twice along x (the
-!< x edge longer on screen than in plot A, where the box is a cube). Plot C: rotated from the program (elevation
-!< 90: seen from above, the x and y axes on the screen's plane). The refusals with their statuses and messages.
+!< its colour's extent, icon included, reaches the box's bottom-right); the pointer moved to the pixel of a point: the
+!< ray under it passes through the point. Plot B: z on a log scale, so z = 10 lies halfway between z = 1 and z = 100 on
+!< the screen; its box stretched twice along x (the x edge longer on screen than in plot A, where the box is a cube).
+!< Plot C: rotated from the program (elevation 90: seen from above, the x and y axes on the screen's plane). The
+!< refusals with their statuses and messages.
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_end,        &
                    ig_same_line, ig_set_next_window, ip3_begin_plot, ip3_end_plot, ip3_image, ip3_mouse_ray, ip3_plot_to_pixels,  &

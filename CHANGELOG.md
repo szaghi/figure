@@ -30,19 +30,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 
 ### Documentation
-- **known-issues**: Nvfortran's internal error on a local named size, reduced
+- **known-issues**: nvfortran's internal error on a local named size, reduced
 
-- V0.7.0's documentation pass
+- v0.7.0's documentation pass
 
 - S3's additions read afresh, the known issues of v0.7.0 checked again
 
-- V0.7.0's pictures measured on the three platforms, the fixes after block D
+- v0.7.0's pictures measured on the three platforms, the fixes after block D
 
 - **showcase**: Six of the showcase's pictures from FIGURE's renderer
 
 
 ### Fixed
-- **ci**: Release.yml back to the scaffold's; the sources archive in its own workflow
+- **ci**: release.yml back to the scaffold's; the sources archive in its own workflow
 
 - **ci**: The installer's CMake check finds macOS's gfortran-N
 
@@ -71,13 +71,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **known-issues**: The pictures on macOS, measured
 
-- **changelog**: V0.6.0's migration notes for Dear ImGui, the raw layer, 3-D views
+- **changelog**: v0.6.0's migration notes for Dear ImGui, the raw layer, 3-D views
 
 - **known-issues**: The entries v0.6.0 touched, checked and dated
 
 - **frame-loop**: What ended a wait, read afresh
 
-- **roadmap**: V0.6.0's section and a real "Next"
+- **roadmap**: v0.6.0's section and a real "Next"
 
 
 ### Fixed
@@ -91,7 +91,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **capture**: Capture scripts know the shortcut key; recordings play alike
 
-- **native**: Fig_time keeps its C linkage under clang
+- **native**: fig_time keeps its C linkage under clang
 
 
 ### Performance
@@ -104,13 +104,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [0.5.0] — 2026-11-11
 ### Added
-- **imgui**: Ig_shortcut scope 'always', the unrouted chord of v0.3
+- **imgui**: ig_shortcut scope 'always', the unrouted chord of v0.3
 
-- **clock**: Figure_time, a monotonic clock in seconds
+- **clock**: figure_time, a monotonic clock in seconds
 
 - **fonts**: Noto Sans Math, the fallback font after Plex and Lucide
 
-- **images**: Fig_read_image and tex%load, PNG and JPEG files through stb_image
+- **images**: fig_read_image and tex%load, PNG and JPEG files through stb_image
 
 - **testing**: Items by path, a frame driver, id and label checks
 
@@ -176,7 +176,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [0.3.1] — 2026-11-09
 ### Documentation
-- **showcase**: Xall_gui's grid in the 3-D view, overset legacy's editor and the solvers run from the window
+- **showcase**: xall_gui's grid in the 3-D view, overset legacy's editor and the solvers run from the window
 
 
 ### Fixed
@@ -219,7 +219,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **view3d**: A 3-D view of meshes coloured by a field, drawn by a software rasterizer in every mode
 
-- **app**: Prefer='figure' for the file dialogs, a title bar height in looks, the notification fade tested
+- **app**: prefer='figure' for the file dialogs, a title bar height in looks, the notification fade tested
 
 - **remote**: An image changing frame after frame travels as JPEG, exact once it is still
 
@@ -298,7 +298,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **imgui**: Tables
 
-- **testing**: Test_click and test_drag let the pointer rest before pressing (F1)
+- **testing**: test_click and test_drag let the pointer rest before pressing (F1)
 
 - **imgui**: Selectable lines, wrapped/disabled/coloured text, child regions (F2)
 
@@ -326,7 +326,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 
 ### Changed
-- **imgui**: Ig_text_size's result named extent
+- **imgui**: ig_text_size's result named extent
 
 
 ### Documentation
@@ -342,9 +342,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - The overview pages catch up with v0.2.0 so far
 
-- **showcase**: Xall_gui, a case's input and run in one window
+- **showcase**: xall_gui, a case's input and run in one window
 
-- **showcase**: Xall_gui's case files, checked as the solver reads them
+- **showcase**: xall_gui's case files, checked as the solver reads them
 
 - **api**: The API pages regenerated for the new wrappers
 
@@ -362,7 +362,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **build**: Ship figure_testing in the static library
 
-- **app**: Set_font's size reaches the next frame
+- **app**: set_font's size reaches the next frame
 
 - **app**: File dialogs start from the program's working directory
 
