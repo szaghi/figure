@@ -126,9 +126,11 @@ system (on macOS fpm also needs `FPM_CXXFLAGS=-std=c++17`, below).
 
 fpm has no build hooks, so it cannot run CMake. `scripts/fpm_package.py` writes FIGURE as a **self-contained fpm
 package** instead: the Fortran library, FIGURE's glue and the pinned Dear ImGui, ImPlot, cimgui, cimplot and miniz
-sources (only the files FIGURE compiles, with their licences), and the files CMake generates (the browser page, the
-themes and the font, embedded). The sources come from CMake's fetched tree, or with `--fetch` from the network at the
-pins of `native/CMakeLists.txt`. For each release tag `vX.Y.Z` the workflow `fpm.yml` runs `scripts/fpm_publish.sh`,
+sources (only the files FIGURE compiles, with their licences), the files CMake generates (the browser page, the
+themes and the font, embedded), and the sources of the Fortran libraries FIGURE builds with (PENF, FACE, BeFoR64,
+StringiFor, FUNDAL: [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)). The sources come from
+CMake's fetched tree and `fobis fetch`'s `src/third_party/`, or with `--fetch` from the network at the pins of
+`native/CMakeLists.txt` and the branches of `fobos`. For each release tag `vX.Y.Z` the workflow `fpm.yml` runs `scripts/fpm_publish.sh`,
 which commits the package (one commit with no parent: the tag carries the package, not the repository's history) and
 pushes `vX.Y.Z-fpm`, after testing it as a path dependency and before testing it as a git dependency on Linux, macOS
 and Windows.
@@ -175,7 +177,9 @@ FIGURE has two layers, built separately:
 - the **native layer** (C and C++): Dear ImGui and its extensions, SDL3 and FIGURE's glue ([the parts](#the-native-layer)),
   built by CMake into two static libraries, `lib/libfigure_native.a` and `lib/libSDL3.a`;
 - the **Fortran library** (`src/lib`), built by [FoBiS](https://github.com/szaghi/FoBiS) (the primary build) or
-  [fpm](https://fpm.fortran-lang.org). Neither compiles C++ in this repository: both only link the native layer.
+  [fpm](https://fpm.fortran-lang.org). Neither compiles C++ in this repository: both only link the native layer. Both
+  also compile the author's Fortran libraries (PENF, FACE, BeFoR64, StringiFor, FUNDAL), from their sources, with
+  FIGURE's flags: `fobis fetch` clones them into `src/third_party/`, fpm takes them as git dependencies.
   For another fpm project, FIGURE can also be [a self-contained fpm package](#figure-as-an-fpm-dependency), where fpm
   compiles the native layer itself.
 
@@ -210,9 +214,11 @@ cimgui.
 ### The Fortran library with FoBiS
 
 Every FoBiS mode runs `scripts/build_native.sh` first (`pre_build = native`): a no-op, a few seconds, once the native
-layer is built.
+layer is built. `fobis fetch`, once, clones the Fortran libraries of `fobos`'s `[dependencies]` into `src/third_party/`
+(`fobis fetch --update` brings their default branches again); the modes compile them with FIGURE's flags.
 
 ```bash
+fobis fetch                                                   # once: the Fortran libraries, in src/third_party/
 fobis build --mode tests-gnu && exe/figure_test_headless      # gfortran
 fobis build --mode examples-gnu && exe/examples/figure_hello  # the examples, in exe/examples/
 fobis build --mode tests-nvf                                  # nvfortran
@@ -490,9 +496,10 @@ built with `gcc` and `g++` as for gfortran (`CC=gcc CXX=g++ scripts/build_native
 
 A cluster's compute or login node often reaches no outside network, and the native build downloads the parts [the
 native layer's table](#the-native-layer) marks as fetched the first time. Each release (since v0.7.0) also publishes `figure-<version>-sources.tar.gz` (`<version>` with its `v`, as `figure-v0.7.0-sources.tar.gz`): the
-repository's files and the fetched sources, in `third_party/fetched/`. Copy it to the machine, unpack it, and build there:
+repository's files and the fetched sources, in `third_party/fetched/`, with the Fortran libraries `fobis fetch` clones
+(in `src/third_party/`). Copy it to the machine, unpack it, and build there:
 `scripts/build_native.sh` finds `third_party/fetched/` and downloads nothing (it says `offline, from
-third_party/fetched/`).
+third_party/fetched/`), FoBiS finds the Fortran libraries, and the installer runs no `fobis fetch`.
 
 ```bash
 tar -xzf figure-v0.7.0-sources.tar.gz && cd figure-v0.7.0-sources

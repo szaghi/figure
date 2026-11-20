@@ -15,6 +15,7 @@ FIGURE is at v0.8.0; the API can still change before v1.0 ([roadmap](roadmap)).
 ## Before a pull request
 
 ```bash
+fobis fetch                                                      # once: the Fortran libraries (src/third_party/)
 fobis build --mode tests-gnu-debug && exe/figure_test_headless   # runtime checks and FPE traps
 fobis build --mode tests-nvf && exe/figure_test_headless         # rm -rf exe first when switching compilers
 scripts/fpm.sh test

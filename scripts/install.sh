@@ -22,8 +22,8 @@
 #   -h, --help        this help
 #
 # Stages: 1 toolchain; 2 system packages (SDL's X11, Wayland, libdecor and DBus headers on Linux); 3 download and
-# build (the native layer with CMake, libfigure.a with FoBiS, installed in a private virtual environment when
-# missing); 4 install into the prefix, with a manifest per compiler; 5 a test program compiled with pkg-config and
+# build (the native layer with CMake, the Fortran libraries with `fobis fetch` unless the tree has them, libfigure.a
+# with FoBiS, installed in a private virtual environment when missing); 4 install into the prefix, with a manifest per compiler; 5 a test program compiled with pkg-config and
 # run headless. Installed, for a compiler TAG such as gnu-16.2.0:
 #   lib/figure/TAG/          libfigure.a, libfigure_native.a, libSDL3.a (static)
 #   include/figure/TAG/      the .mod files
@@ -209,6 +209,10 @@ check_toolchain() {
    have cmake || need_pkg cmake cmake cmake cmake
    have pkg-config || need_pkg pkg-config pkg-config pkgconf-pkg-config pkg-config
    if [[ -z "$source_dir" ]] && ! have curl && ! have git; then need_pkg curl curl curl curl; fi
+   # git for `fobis fetch` (FIGURE's Fortran libraries), unless the tree brings them (a sources archive, a fetched tree)
+   if ! have git && [[ ! -f "${source_dir:-/nonexistent}/src/third_party/.deps_config.ini" ]]; then
+      need_pkg git git git git
+   fi
    if have python3; then
       python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2> /dev/null \
          || die "python3 is $(python3 -V 2>&1): FIGURE's scripts need Python 3.11 or newer"
@@ -330,6 +334,9 @@ fetch_source() {
          git -C "$source_dir" ls-files -z -co --exclude-standard -- . ':(exclude)docs' \
             | while IFS= read -r -d '' f; do [[ -e "$source_dir/$f" ]] && printf '%s\0' "$f"; done \
             | (cd "$source_dir" && tar -cf - --null -T -) | (cd "$tree" && tar -xf -)
+         if [[ -f "$source_dir/src/third_party/.deps_config.ini" ]]; then # the fetched Fortran libraries (ignored by git)
+            (cd "$source_dir" && tar --exclude=.git -cf - src/third_party) | (cd "$tree" && tar -xf -)
+         fi
       else
          (cd "$source_dir" && tar --exclude=./.git --exclude=./build --exclude=./exe --exclude=./mod --exclude=./obj \
             --exclude=./lib --exclude=./include --exclude=./share --exclude=./docs -cf - .) | (cd "$tree" && tar -xf -)
@@ -382,6 +389,9 @@ build() {
    export CC="$cc" CXX="$cxx"
    run_logged "native layer (CMake: Dear ImGui and its extensions, SDL3; the first build downloads SDL3, cimplot, cimplot3d and miniz)" \
       bash scripts/build_native.sh
+   if [[ ! -f src/third_party/.deps_config.ini ]]; then # a sources archive brings them: no network then
+      run_logged "Fortran libraries (fobis fetch: PENF, FACE, BeFoR64, StringiFor, FUNDAL)" "$fobis_cmd" fetch
+   fi
    run_logged "libfigure.a (FoBiS, $mode)" \
       "$fobis_cmd" build --mode "$mode" --fc "$fc" ${varset[@]+"${varset[@]}"}
    cd "$work"
@@ -511,6 +521,10 @@ install_files() {
       [[ -f "$tree/$f" ]] && put "$tree/$f" "$share_rel/$f"
    done
    [[ -d "$tree/themes" ]] && put_tree "$tree/themes" "$share_rel/themes"
+   for f in "$tree"/src/third_party/*/LICENSE.mit.md; do # the Fortran libraries, which FIGURE takes under MIT
+      [[ -f "$f" ]] || continue
+      put "$f" "$share_rel/licenses/$(basename "$(dirname "$f")" | tr '[:upper:]' '[:lower:]')/LICENSE.mit.md"
+   done
    # the native link line of the platform, with the fobos varset as the one source (figure_native SDL3 first)
    libs="$(cd "$tree" && python3 scripts/check_sync.py --link-flags "$platform")" || die "cannot read the link line"
    libs="$(printf '%s\n' "$libs" | sed 's/-framework \([A-Za-z]*\)/-Wl,-framework,\1/g')" # pkg-config merges repeated words

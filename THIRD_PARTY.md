@@ -45,9 +45,32 @@ compatible with FIGURE's. The native build installs each licence file under `sha
 | [Noto Sans Math](https://github.com/notofonts/math) | Regular 3.000, release `NotoSansMath-v3.000` (tag commit `00e9941`), `third_party/fonts/NotoSansMath-Regular.ttf` (unmodified, the unhinted TTF of the release archive `NotoSansMath-v3.000.zip`, SHA-256 `ac351837b41f8a897f020b97fb0f075ad574c1e9669fb5839ada1f92fd748356`), its licence `OFL.txt` as `LICENSE-NotoSansMath.txt` | OFL-1.1 | The Noto Project Authors | the fallback merged into every text font after Plex and Lucide: Greek, `∇`, the mathematical operators; embedded |
 | [Lucide](https://lucide.dev) | `lucide-static` 1.61.0 (npm), `third_party/fonts/lucide.ttf` and its code point map `lucide-info.json` (both unmodified, from `font/`) | ISC, and MIT for the icons derived from Feather | Lucide Icons and Contributors; Cole Bemis (Feather) | the icons (`ICON_*`), embedded and merged into every text font |
 
+## The Fortran libraries
+
+FIGURE's builds also compile the author's Fortran libraries below from source, with FIGURE's flags
+([szaghi/figure#15](https://github.com/szaghi/figure/issues/15), §6): `fobis fetch` clones each one's default branch
+(never a pinned tag or commit) into `src/third_party/` (not tracked), the fobos modes compile its `src/lib`, `fpm.toml`
+declares the same set as git dependencies, and `scripts/fpm_package.py` copies the sources into the fpm package
+(`src/<library>/`, its MIT licence in `LICENSES/`). `scripts/check_sync.py` checks that `fobos` and `fpm.toml` name the
+same set and that it is closed: every library one of them uses is listed too. Each is multi-licensed (GPL-3, BSD-2,
+BSD-3 and MIT): FIGURE takes them under MIT, as itself. FIGURE's library does not use them yet: the tests compile and
+call them (`src/tests/figure_test_sibling_libs.F90`), and the layers of #15 adopt them one step at a time.
+
+| Project | Version | Licence | Copyright | In FIGURE |
+|---|---|---|---|---|
+| [PENF](https://github.com/szaghi/PENF) | `master`, fetched; built without `PENF_R16P` (no quadruple precision) | MIT (multi-licensed) | Stefano Zaghi | portable kinds and number-to-text conversions; used by BeFoR64, StringiFor |
+| [FACE](https://github.com/szaghi/FACE) | `master`, fetched | MIT (multi-licensed) | Stefano Zaghi | ANSI colours of terminal text; used by StringiFor |
+| [BeFoR64](https://github.com/szaghi/BeFoR64) | `master`, fetched | MIT (multi-licensed) | Stefano Zaghi | base64 of any intrinsic type (the remote mode's WebSocket handshake, #15 P25); used by StringiFor |
+| [StringiFor](https://github.com/szaghi/StringiFor) | `master`, fetched | MIT (multi-licensed) | Stefano Zaghi | `type(string)`, UTF-8 throughout (Markdown, the code editor, text input: #15 P15, P16, P20) |
+| [FUNDAL](https://github.com/szaghi/FUNDAL) | `main`, fetched; its CPU mode (no backend macro), without its MPI handler (`fundal_mpih_object.F90`, excluded by `fobos`) | MIT (multi-licensed) | Stefano Zaghi | one device-memory API over OpenACC, OpenMP offload and the CPU (the reduction on the device, #15 P6) |
+
+[foresight](https://github.com/szaghi/foresight) (multi-licensed with MIT since 2026-11-20, `923c490`), whose formatter
+and tick locators #15 plans for the tick labels, joins the list once it compiles with nvfortran and ifx under FIGURE's
+flags.
+
 ## Distributing a program built with FIGURE
 
-- **MIT** (FIGURE, Dear ImGui, ImPlot, ImPlot3D, cimgui, cimplot, cimplot3d, miniz, stb_image, stb_image_write, ImGuiColorTextEdit, ImGuizmo, imgui_rich_md, imgui_md, md4c, the
+- **MIT** (FIGURE, the Fortran libraries PENF, FACE, BeFoR64, StringiFor and FUNDAL, Dear ImGui, ImPlot, ImPlot3D, cimgui, cimplot, cimplot3d, miniz, stb_image, stb_image_write, ImGuiColorTextEdit, ImGuizmo, imgui_rich_md, imgui_md, md4c, the
   Lucide icons derived from Feather, the palettes Nord, Solarized, Gruvbox, Dracula, Catppuccin, Tokyo Night and One Dark) and **ISC**
   (Lucide): the copyright notice and the permission notice must be included in all copies or substantial portions of
   the software. For a binary, ship the licence files with it (the `share/licenses/` tree, where the Lucide one is

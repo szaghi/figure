@@ -54,6 +54,11 @@ jobs:
     - name: Fetch the native build's sources (CMake's configure step)
       run: cmake -S native -B build/native
 
+    - name: Fetch the Fortran libraries (fobis fetch, into src/third_party)
+      run: |
+        python3 -m pip install FoBiS.py
+        fobis fetch
+
     - name: Build the archive
       run: |
         bash scripts/source_archive.sh "$RUNNER_TEMP"
@@ -69,6 +74,7 @@ jobs:
           if curl -sS -m 5 https://github.com > /dev/null 2>&1; then echo 'the network is reachable'; exit 1; fi
           cd '$tree' && bash scripts/build_native.sh"
         test -f "$tree/lib/libfigure_native.a" && test -f "$tree/lib/libSDL3.a"
+        test -f "$tree/src/third_party/.deps_config.ini"   # FoBiS builds the Fortran libraries with no fetch
 
     - name: Attach it to the release
       if: env.TAG != ''
