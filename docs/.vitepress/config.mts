@@ -91,6 +91,7 @@ const docs = [
     text: 'Project',
     items: [
       { text: 'Roadmap',            link: '/guide/roadmap' },
+      { text: 'ADR 0001: the Fortran stack', link: '/adr/0001-fortran-stack' },
       { text: 'API Reference',      link: '/api/' },
       { text: 'Contributing',       link: '/guide/contributing' },
       { text: 'Changelog',          link: '/guide/changelog' },
@@ -149,6 +150,7 @@ export default withMermaid({
     sidebar: {
       '/guide/': docs,
       '/manual/': docs,
+      '/adr/': docs,
       '/api/': [
         {
           text: 'API Reference',

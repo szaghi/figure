@@ -14,9 +14,9 @@ Default checks (exit 1 and a list of what is missing):
 - **Examples:** every section a feature-map row links to (``[text](page#anchor)``, or a whole page) includes a
   compiled example (``<<< @/examples/snippets/...``); a row marked ``<!-- visual -->`` also needs a ``<Media`` in
   each section it links to.
-- **Code:** no hand-written ```fortran block in docs/index.md, docs/guide and docs/manual (#6 §4.4), and every
+- **Code:** no hand-written ```fortran block in docs/index.md, docs/guide, docs/manual and docs/adr (#6 §4.4), and every
   ``<<< @/examples/...`` include names a file that exists.
-- **Tables:** every row of a table in docs/index.md, docs/guide and docs/manual has its header's cell count (GFM
+- **Tables:** every row of a table in docs/index.md, docs/guide, docs/manual and docs/adr has its header's cell count (GFM
   drops the cells beyond it, and their links with them).
 - **Links:** every internal link ``[text](page#anchor)`` of those pages names a page that exists and, with an anchor,
   a heading of it (VitePress's slugs, a repeated heading's ``-1``, ``{#id}``), or a file docs/public serves.
@@ -529,18 +529,18 @@ def bump_version(version: str, dry_run: bool) -> int:
 
 # ------------------------------------------------------------------------------------------- the pages: tables, links
 def pages() -> list[Path]:
-    """The documentation's pages under version control (docs/index.md, docs/guide, docs/manual): generated pages that
-    are ignored (the coverage reports) left out."""
+    """The documentation's pages under version control (docs/index.md, docs/guide, docs/manual, docs/adr): generated
+    pages that are ignored (the coverage reports) left out."""
     import subprocess  # noqa: PLC0415
 
     out = subprocess.run(
-        ["git", "-C", str(ROOT), "ls-files", "--", "docs/index.md", "docs/guide", "docs/manual"],
+        ["git", "-C", str(ROOT), "ls-files", "--", "docs/index.md", "docs/guide", "docs/manual", "docs/adr"],
         capture_output=True, text=True, check=False,
     )
     files = [ROOT / f for f in out.stdout.split() if f.endswith(".md")] if out.returncode == 0 else []
     if not files:  # not a git checkout (a sources archive): every page there
         files = [ROOT / "docs" / "index.md", *(ROOT / "docs" / "guide").rglob("*.md"),
-                 *(ROOT / "docs" / "manual").rglob("*.md")]
+                 *(ROOT / "docs" / "manual").rglob("*.md"), *(ROOT / "docs" / "adr").rglob("*.md")]
     return sorted(p for p in files if p.is_file() and "_generated" not in p.parts)
 
 

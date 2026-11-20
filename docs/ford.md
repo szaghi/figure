@@ -7,6 +7,7 @@ email: stefano.zaghi@cnr.it
 src_dir: ../src
 exclude_dir: ../src/tests
              ../src/examples
+             ../src/third_party
 output_dir: ./docs/ford
 project_github: https://github.com/szaghi/figure
 docmark: <

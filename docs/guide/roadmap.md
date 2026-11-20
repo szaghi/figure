@@ -14,6 +14,10 @@ each release, summarised from its issue; the [changelog](changelog) lists the co
 
 ## Next
 
+- **The Fortran stack** ([#15](https://github.com/szaghi/figure/issues/15)): FIGURE rebuilt from Fortran, SDL3 and
+  OpenGL 3, layer by layer, each block behind a gate of pictures, behaviour and speed, the current path kept until the
+  switch. Its goal and decisions are recorded in [ADR 0001: the Fortran stack](../adr/0001-fortran-stack); P3 compiles
+  the author's Fortran libraries in every build.
 - **The upstream reports** of #4, #8, #9 and #11, filed by the owner; FIGURE's patches stay until each lands, then go
   with the test that needed them kept (#13 S8).
 - **Release v0.8.0** (#13 R1): the version and the date are the owner's.
@@ -22,6 +26,7 @@ each release, summarised from its issue; the [changelog](changelog) lists the co
 
 | Item | Status | Why, or until when |
 |---|---|---|
+| The Fortran stack: no C++ in FIGURE's build | planned | [#15](https://github.com/szaghi/figure/issues/15), [ADR 0001](../adr/0001-fortran-stack) |
 | The items of [Next](#next) | planned | v0.8.0: [#13](https://github.com/szaghi/figure/issues/13), [#14](https://github.com/szaghi/figure/issues/14) |
 | The functions listed "raw only" in [Dear ImGui names](imgui-names) wrapped | deferred | Until an application asks |
 | The whole application compiled to WebAssembly | deferred | An experiment: a patched flang and Emscripten SDL3, no OpenMP and no MPI there |
