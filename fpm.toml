@@ -310,3 +310,8 @@ main = "figure_bench_scenes.F90"
 name = "figure_test_sibling_libs"
 source-dir = "src/tests"
 main = "figure_test_sibling_libs.F90"
+
+[[test]]
+name = "figure_test_string_sections"
+source-dir = "src/tests"
+main = "figure_test_string_sections.F90"
