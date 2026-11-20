@@ -271,3 +271,8 @@ main = "figure_test_table_layout.F90"
 name = "figure_test_menu_view"
 source-dir = "src/tests"
 main = "figure_test_menu_view.F90"
+
+[[test]]
+name = "figure_test_keyboard_nav"
+source-dir = "src/tests"
+main = "figure_test_keyboard_nav.F90"

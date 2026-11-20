@@ -112,7 +112,7 @@ CLASSES: tuple[Interaction, ...] = (
                 ((r"\big_get_clipboard\b|\big_set_clipboard\b|ClipboardText\b", r"\btest_key\b", r"\(\s*'[cvx]'\s*\)"),),
                 ((CHORD.format(k="[cvx]"), (r"\big_input|code_editor_object",)),)),
     Interaction("keyboard-nav", "keyboard navigation: focus moved by tab and the arrows, activation by enter or space",
-                ((r"\btest_key\s*\(\s*'(?:tab|up|down|left|right)'\s*\)", r"\big_(?:button|checkbox|selectable|radio|combo)"
+                ((r"\btest_key\b", r"\(\s*'(?:tab|up|down|left|right)'\s*\)", r"\big_(?:button|checkbox|selectable|radio|combo)"
                   r"|\big_tree_node\b|\big_menu_item\b|\big_begin_table\b"),),
                 ((r"key:(?:tab|up|down|left|right)\b", (r"\big_(?:button|checkbox|selectable|radio|tree_node)",)),)),
     Interaction("scrolling", "a region scrolled by the wheel or by the program",
