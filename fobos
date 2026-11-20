@@ -25,6 +25,7 @@ modes = tests-gnu tests-gnu-debug examples-gnu examples-gnu-traps
         tests-nvf examples-nvf
         tests-ifx examples-ifx
         figure-static-gnu figure-static-nvf figure-static-ifx
+        tests-gnu-fortran examples-gnu-fortran tests-nvf-fortran examples-nvf-fortran tests-ifx-fortran examples-ifx-fortran
 
 # The native layer (libfigure_native.a + libSDL3.a in lib/) is built by `fobis rule --ex native` (CMake), run
 # automatically before every build (pre_build): a no-op once built. Linking it needs platform libraries: one varset per
@@ -148,6 +149,30 @@ src       = src/lib/
 target    = src/lib/figure_library.F90
 output    = libfigure.a
 mklib     = static
+
+# the Fortran path (szaghi/figure#15 §2): each seam's Fortran implementation in a sibling directory of the current one,
+# under the same module names (src/lib/core_fortran/ beside src/lib/core_imgui/, ...), picked by a mode's `src`, with no
+# preprocessor macro. A -fortran mode builds the newest path: the layers already ported, the others from the current path.
+# No layer is ported yet: each mode takes its default mode as its template (every key, `src` included), so it builds
+# exactly what the default builds; a ported layer overrides `src` here. They build into the default's directories:
+# switching path, as switching compiler, needs `--force-compile` (or `rm -rf exe`)
+[tests-gnu-fortran]
+template  = tests-gnu
+
+[examples-gnu-fortran]
+template  = examples-gnu
+
+[tests-nvf-fortran]
+template  = tests-nvf
+
+[examples-nvf-fortran]
+template  = examples-nvf
+
+[tests-ifx-fortran]
+template  = tests-ifx
+
+[examples-ifx-fortran]
+template  = examples-ifx
 
 # templates
 [template-gnu]

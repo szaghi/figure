@@ -4,8 +4,10 @@
 #     interaction class checked by a picture and a behaviour, or exempt); every example compiled, the headless ones
 #     run; every picture of the site rendered headless by FIGURE's CPU renderer and compared with the committed one
 #     (#7 §4.6);
-#   - tsan: ThreadSanitizer on the calls a task may make (quit, request_frames, wake, ...): scripts/tsan_check.sh.
-# Both run in the toolchain image of ci.yml (fobos [scaffold] toolchain_image: gfortran 16.2, the compiler the pictures
+#   - tsan: ThreadSanitizer on the calls a task may make (quit, request_frames, wake, ...): scripts/tsan_check.sh;
+#   - fortran-path: the tests and the examples of the Fortran path (#15 §2, the -fortran modes of fobos), beside ci.yml's
+#     current path (the Platforms workflow builds nvfortran's and ifx's).
+# All run in the toolchain image of ci.yml (fobos [scaffold] toolchain_image: gfortran 16.2, the compiler the pictures
 # are rendered with), with the packages it lacks (fobos [scaffold] toolchain_packages, plus ImageMagick).
 name: Checks
 
@@ -94,3 +96,33 @@ jobs:
 
     - name: ThreadSanitizer check
       run: CC=gcc CXX=g++ scripts/tsan_check.sh
+
+  fortran-path:
+    runs-on: ubuntu-latest
+    container: ghcr.io/szaghi/fortran-toolchains:gnu-16.2
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Packages the toolchain image lacks
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ninja-build libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
+          libwayland-dev libxkbcommon-dev libegl-dev libdbus-1-dev libdecor-0-dev
+
+    - name: Native layer
+      run: scripts/build_native.sh
+
+    - name: Fortran libraries (fobis fetch)
+      run: fobis fetch
+
+    - name: Tests, the Fortran path (FoBiS)
+      run: |
+        fobis build --mode tests-gnu-fortran
+        bash scripts/run_tests.sh
+
+    - name: Examples, the Fortran path (FoBiS)
+      run: fobis build --mode examples-gnu-fortran

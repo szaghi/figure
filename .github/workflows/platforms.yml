@@ -341,6 +341,13 @@ jobs:
         fobis build --mode tests-nvf
         bash scripts/run_tests.sh
 
+    # the Fortran path (#15 §2): its modes build into exe/ as the defaults, so the tree is cleared first
+    - name: Tests, the Fortran path (FoBiS)
+      run: |
+        rm -rf exe
+        fobis build --mode tests-nvf-fortran
+        bash scripts/run_tests.sh
+
     - name: Examples (FoBiS)
       run: |
         rm -rf mod obj exe
@@ -419,6 +426,13 @@ jobs:
     - name: Tests (FoBiS)
       run: |
         fobis build --mode tests-ifx
+        bash scripts/run_tests.sh
+
+    # the Fortran path (#15 §2): its modes build into exe/ as the defaults, so the tree is cleared first
+    - name: Tests, the Fortran path (FoBiS)
+      run: |
+        rm -rf exe
+        fobis build --mode tests-ifx-fortran
         bash scripts/run_tests.sh
 
     - name: Static library (FoBiS)
