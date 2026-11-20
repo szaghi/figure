@@ -4,6 +4,10 @@ fpm has no build hooks, so it cannot run CMake. This script lays out, in OUTDIR,
 native layer itself, next to the Fortran library:
 
 - ``src/fortran/``: the Fortran library (src/lib);
+- ``src/<Library>/`` (``src/PENF/``, ``src/FACE/``, ``src/BeFoR64/``, ``src/StringiFor/``, ``src/FUNDAL/``): the owner's
+  Fortran libraries of fobos ``[dependencies]`` (szaghi/figure#15 §6), source-passed: the sources FIGURE's fobos modes
+  compile (each one's ``src=`` directories, fobos' ``$EXCLUDE`` left out: FUNDAL's MPI handler), copied from where
+  ``fobis fetch`` put them (fobos' ``deps_dir``, src/third_party), with their MIT licence;
 - ``src/native/``: FIGURE's C++ glue (native/), with the files CMake generates at configure time (the browser page,
   the themes, the colormaps and the font, embedded) written here by the same rules;
 - ``src/cimgui/`` (with ``imgui/``), ``src/cimplot/`` (with ``implot/``), ``src/cimplot3d/``, ``src/miniz/``: the pinned
@@ -33,7 +37,9 @@ Usage::
 
 ``--fetch`` takes the third-party sources from the network instead of CMake's tree: the pins (cimgui, cimplot and
 cimplot3d git tags, miniz's archive and SHA-256) are read from native/CMakeLists.txt, so both builds use the same versions, and
-CACHE (default: a temporary directory) keeps the downloads. Publishing needs no CMake and no SDL build that way.
+CACHE (default: a temporary directory) keeps the downloads. Publishing needs no CMake and no SDL build that way. The
+Fortran libraries are then cloned too, from the URL and branch of fobos ``[dependencies]`` (their default branches),
+instead of being taken from ``fobis fetch``'s directory.
 
 Then ``cd OUTDIR && fpm build``, or depend on it from another fpm project. Standard library only; run from anywhere.
 """
@@ -42,12 +48,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import io
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import types
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -114,7 +122,8 @@ MINIZ_WRAPPER = """// FIGURE (scripts/fpm_package.py): miniz with the options na
 
 MANIFEST = """# FIGURE as a self-contained fpm package, written by scripts/fpm_package.py from the repository at {commit}.
 # Do not edit: regenerate. fpm compiles the native layer itself (Dear ImGui, ImPlot, ImPlot3D, cimgui, cimplot,
-# cimplot3d, miniz, the vendored extensions and FIGURE's glue, all in src/); SDL3 comes from the system.
+# cimplot3d, miniz, the vendored extensions and FIGURE's glue) and the Fortran libraries FIGURE takes (PENF, FACE,
+# BeFoR64, StringiFor, FUNDAL), all in src/; SDL3 comes from the system.
 name = "figure"
 version = "{version}"
 license = "MIT"
@@ -128,6 +137,8 @@ auto-executables = false
 auto-examples = false
 auto-tests = false
 link = ["SDL3"]
+# FUNDAL's backend modules (fundal.H: `use :: DEVMODULE` names omp_lib or openacc): the compiler's, not sources
+external-modules = ["devmodule", "omp_lib", "openacc"]
 
 [fortran]
 implicit-typing = false
@@ -225,6 +236,39 @@ def fetch(cache: Path) -> Path:
     return cache
 
 
+def check_sync() -> types.ModuleType:
+    """scripts/check_sync.py, which reads the Fortran libraries of fobos [dependencies]."""
+    spec = importlib.util.spec_from_file_location("check_sync", ROOT / "scripts" / "check_sync.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def fortran_libraries(cache: Path | None) -> dict[str, tuple[Path, list[Path]]]:
+    """The Fortran libraries of fobos [dependencies]: name -> (its directory, the sources FIGURE compiles).
+
+    From fobos' ``deps_dir`` (``fobis fetch``), or, with a cache, cloned there from their URL and branch."""
+    sync = check_sync()
+    libraries, deps_dir, excluded = sync.fobos_libraries(ROOT / "fobos")
+    if cache is not None:
+        deps_dir = cache / "fortran"
+        for name, options in libraries.items():
+            dst = deps_dir / name
+            if not dst.is_dir():
+                subprocess.run(
+                    ["git", "-c", "advice.detachedHead=false", "clone", "--quiet", "--depth", "1", "--branch",
+                     options["branch"], options["url"], str(dst)],
+                    check=True,
+                )  # fmt: skip
+    sources = sync.library_sources(libraries, deps_dir, excluded)
+    missing = sorted(set(libraries) - set(sources))
+    if missing:
+        msg = f"fpm_package: {', '.join(missing)} missing in {deps_dir} (run fobis fetch first, or use --fetch)"
+        raise SystemExit(msg)
+    return {name: (deps_dir / name, files) for name, files in sources.items()}
+
+
 def cmake_embeds(out: Path) -> None:
     """The four files native/CMakeLists.txt generates at configure time, by the same rules."""
     html = (ROOT / "native" / "figure_remote_client.html").read_text()
@@ -285,14 +329,14 @@ def main(argv: list[str]) -> int:
             deps = Path(tmp.name)
         fetch(deps)
     try:
-        return write(a, deps)
+        return write(a, deps, fortran_libraries(deps if a.fetch is not None else None))
     finally:
         if tmp is not None:
             tmp.cleanup()
 
 
-def write(a: argparse.Namespace, deps: Path) -> int:
-    """Write the package from the sources in deps."""
+def write(a: argparse.Namespace, deps: Path, libraries: dict[str, tuple[Path, list[Path]]]) -> int:
+    """Write the package from the sources in deps and the Fortran libraries."""
     out = a.outdir.resolve()
     if out.exists() and any(out.iterdir()):
         if not (out / "fpm.toml").is_file():
@@ -307,6 +351,9 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     src = out / "src"
     for f in sorted([*(ROOT / "src" / "lib").glob("*.F90"), *(ROOT / "src" / "lib").glob("*.inc")]):
         copy(f, src / "fortran" / f.name)  # *.inc: figure_icons_public.inc, included by figure.F90
+    for name, (_, files) in libraries.items():  # the owner's Fortran libraries, source-passed
+        for f in files:
+            copy(f, src / name / f.name)
     for f in NATIVE_FILES:
         copy(ROOT / "native" / f, src / "native" / f)
     cmake_embeds(src / "native")
@@ -355,6 +402,8 @@ def write(a: argparse.Namespace, deps: Path) -> int:
     licences = out / "LICENSES"
     copy(ROOT / "LICENSE.mit.md", licences / "figure.md")
     copy(ROOT / "THIRD_PARTY.md", licences / "THIRD_PARTY.md")
+    for name, (folder, _) in libraries.items():  # multi-licensed: FIGURE takes them under MIT, as itself
+        copy(folder / "LICENSE.mit.md", licences / f"{name.lower()}.md")
     copy(cimgui / "imgui" / "LICENSE.txt", licences / "imgui.txt")
     copy(cimgui / "LICENSE", licences / "cimgui.txt")
     copy(cimplot / "implot" / "LICENSE", licences / "implot.txt")
@@ -386,8 +435,10 @@ def write(a: argparse.Namespace, deps: Path) -> int:
         ref = head.read_text().strip()
         p = ROOT / ".git" / ref.removeprefix("ref: ") if ref.startswith("ref: ") else None
         commit = (p.read_text().strip() if p and p.is_file() else ref)[:12]
+    include_dirs = INCLUDE_DIRS + [f"src/{name}" for name, (_, files) in libraries.items()
+                                   if any(f.suffix in (".h", ".H", ".inc", ".INC") for f in files)]  # fmt: skip
     (out / "fpm.toml").write_text(
-        MANIFEST.format(commit=commit, version=version, include_dirs=", ".join(f'"{d}"' for d in INCLUDE_DIRS))
+        MANIFEST.format(commit=commit, version=version, include_dirs=", ".join(f'"{d}"' for d in include_dirs))
     )
     n = sum(1 for p in src.rglob("*") if p.is_file())
     print(f"fpm_package: {out}: {n} source files")

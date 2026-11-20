@@ -11,6 +11,10 @@ Checked:
   - the static-library modes (``figure-static-*``) build from ``src/lib/figure_library.F90``, which uses every public
     module (``figure``, ``figure_testing``): FoBiS archives a target and what it uses, so a module left out of that
     root is missing from ``lib/libfigure.a`` and ``lib/mod`` (what ``fobis fetch`` gives a downstream project).
+  - the Fortran libraries (szaghi/figure#15 §6): fobos ``[dependencies]`` and fpm.toml ``[dependencies]`` name the same
+    set, each on the same branch and never pinned to a tag or commit; and the set is closed: every module a listed
+    library ``use``s (its sources fetched in fobos' ``deps_dir``, the files of fobos' ``$EXCLUDE`` left out) comes
+    from a listed library or the compiler (checked only when the libraries are fetched: ``fobis fetch``).
 
 ``--link-flags [PLATFORM]`` prints instead the platform's native link line: the varset's ``$NATIVE_LIBS`` as ``-l``
 options, in order (``figure_native SDL3`` first), then its ``$NATIVE_LFLAGS``, for scripts/fpm.sh and for linking a
@@ -36,6 +40,16 @@ PLATFORMS = ("linux", "macos", "windows")
 LIBRARY_ROOT = "src/lib/figure_library.F90"
 PUBLIC_MODULES = ("figure", "figure_testing")
 USE_RE = re.compile(r"^\s*use\s+(\w+)", re.IGNORECASE | re.MULTILINE)
+# a use statement of a library source: `use m`, `use :: m`, `use, intrinsic :: m`, `use, non_intrinsic :: m`
+LIB_USE_RE = re.compile(r"^\s*use\b\s*(?:,\s*(\w+)\s*)?(?:::)?\s*(\w+)", re.IGNORECASE | re.MULTILINE)
+MODULE_RE = re.compile(r"^\s*module\s+(?!procedure\b|function\b|subroutine\b)(\w+)\s*(?:!.*)?$", re.IGNORECASE | re.MULTILINE)
+# modules the compiler provides: the intrinsic ones, OpenMP's and OpenACC's (FUNDAL's backends; `devmodule` is its macro
+# naming one of the two, fundal.H)
+COMPILER_MODULES = {
+    "iso_fortran_env", "iso_c_binding", "ieee_arithmetic", "ieee_exceptions", "ieee_features", "omp_lib", "omp_lib_kinds",
+    "openacc", "devmodule",
+}  # fmt: skip
+LIB_SOURCE_SUFFIXES = (".f90", ".F90", ".inc", ".INC", ".h", ".H")  # sources and the files they include
 
 
 def current_platform() -> str:
@@ -278,6 +292,122 @@ def library_root() -> list[str]:
     return errors
 
 
+def fobos_libraries(fobos: Path) -> tuple[dict[str, dict[str, str]], Path, set[str]]:
+    """Return the Fortran libraries of fobos ``[dependencies]``, their directory and the files fobos excludes.
+
+    Parameters
+    ----------
+    fobos : Path
+        The fobos file.
+
+    Returns
+    -------
+    tuple[dict[str, dict[str, str]], Path, set[str]]
+        Library name -> its spec options (``url``, ``branch``, ``tag``, ``rev``, ``semver``, ``src``, ...), the
+        ``deps_dir`` (absolute) and the excluded files (``$EXCLUDE``, POSIX paths relative to ``deps_dir``).
+    """
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    parser.optionxform = str  # keep the case of the names
+    parser.read(fobos, encoding="utf-8")
+    libraries: dict[str, dict[str, str]] = {}
+    deps_dir = ROOT / ".fobis_deps"
+    if parser.has_section("dependencies"):
+        for name, spec in parser["dependencies"].items():
+            if name == "deps_dir":
+                deps_dir = ROOT / spec.strip()
+                continue
+            parts = [part.strip() for part in spec.split("::")]
+            options = {"url": parts[0]}
+            for part in parts[1:]:
+                key, _, value = part.partition("=")
+                options[key.strip()] = value.strip()
+            libraries[name] = options
+    excluded: set[str] = set()
+    for section in parser.sections():
+        if "$EXCLUDE" in parser[section]:
+            for path in parser[section]["$EXCLUDE"].split():
+                full = ROOT / path
+                excluded.add(full.relative_to(deps_dir).as_posix() if full.is_relative_to(deps_dir) else path)
+    return libraries, deps_dir, excluded
+
+
+def library_sources(libraries: dict[str, dict[str, str]], deps_dir: Path, excluded: set[str]) -> dict[str, list[Path]]:
+    """Return the sources FIGURE compiles of each fetched library: its ``src`` directories, fobos' exclusions left out.
+
+    Parameters
+    ----------
+    libraries : dict[str, dict[str, str]]
+        The libraries of fobos ``[dependencies]``.
+    deps_dir : Path
+        Where the libraries are, one directory each by name: fobos' ``deps_dir`` (``fobis fetch``) or another.
+    excluded : set[str]
+        Files fobos excludes (POSIX, relative to ``deps_dir``).
+
+    Returns
+    -------
+    dict[str, list[Path]]
+        Library name -> its source and include files; a library not fetched is missing.
+    """
+    found: dict[str, list[Path]] = {}
+    for name, options in libraries.items():
+        root = deps_dir / name
+        if not root.is_dir():
+            continue
+        files: list[Path] = []
+        for sub in options.get("src", ".").split(","):
+            files += [f for f in sorted((root / sub.strip()).rglob("*"))
+                      if f.suffix in LIB_SOURCE_SUFFIXES and f.relative_to(deps_dir).as_posix() not in excluded]  # fmt: skip
+        found[name] = files
+    return found
+
+
+def fortran_libraries() -> list[str]:
+    """Check the Fortran libraries: the same set in fobos and fpm.toml, never pinned, closed under ``use``.
+
+    Returns
+    -------
+    list[str]
+        The discrepancies.
+    """
+    errors: list[str] = []
+    libraries, deps_dir, excluded = fobos_libraries(ROOT / "fobos")
+    manifest = tomllib.loads((ROOT / "fpm.toml").read_text(encoding="utf-8"))
+    fpm_deps = manifest.get("dependencies", {})
+    errors.extend(f"library in fobos [dependencies], not in fpm.toml: {n}" for n in sorted(set(libraries) - set(fpm_deps)))
+    errors.extend(f"library in fpm.toml [dependencies], not in fobos: {n}" for n in sorted(set(fpm_deps) - set(libraries)))
+    for name in sorted(set(libraries) & set(fpm_deps)):
+        fobos_spec, fpm_spec = libraries[name], fpm_deps[name]
+        pins = [k for k in ("tag", "rev", "semver") if k in fobos_spec] + [k for k in ("tag", "rev") if k in fpm_spec]
+        if pins:
+            errors.append(f"library {name} is pinned ({', '.join(sorted(set(pins)))}): it tracks its default branch")
+        if fobos_spec["url"].removesuffix(".git") != str(fpm_spec.get("git", "")).removesuffix(".git"):
+            errors.append(f"library {name}: fobos URL {fobos_spec['url']}, fpm.toml git {fpm_spec.get('git')}")
+        if "branch" not in fobos_spec or fobos_spec["branch"] != fpm_spec.get("branch"):
+            errors.append(
+                f"library {name}: fobos branch {fobos_spec.get('branch')}, fpm.toml branch {fpm_spec.get('branch')}"
+            )
+    sources = library_sources(libraries, deps_dir, excluded)
+    missing = sorted(set(libraries) - set(sources))
+    if missing:
+        print(f"check_sync: {', '.join(missing)} not fetched (fobis fetch): the closure of the libraries is not checked")
+        return errors
+    defined: set[str] = set()
+    used: dict[str, set[str]] = {}
+    for name, files in sources.items():
+        for f in files:
+            text = f.read_text(encoding="utf-8", errors="replace")
+            defined |= {m.lower() for m in MODULE_RE.findall(text)}
+            for nature, module in LIB_USE_RE.findall(text):
+                if nature.lower() != "intrinsic":
+                    used.setdefault(module.lower(), set()).add(name)
+    for module in sorted(set(used) - defined - COMPILER_MODULES):
+        errors.append(
+            f"module {module}, used by {', '.join(sorted(used[module]))}, comes from no library of fobos [dependencies]"
+            " (the set must be closed: add the library that defines it, here and in fpm.toml)"
+        )
+    return errors
+
+
 def check() -> int:
     """Run the checks.
 
@@ -331,6 +461,7 @@ def check() -> int:
 
     errors.extend(package_sources())
     errors.extend(library_root())
+    errors.extend(fortran_libraries())
 
     for e in errors:
         print(f"check_sync: {e}", file=sys.stderr)
