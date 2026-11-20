@@ -22,7 +22,10 @@ under a ``--label`` such as ``wsl-gnu-window``):
   (of the frame time, and of the UI time) is worse than the baseline's by more than the baseline's spread (#15 §4),
   the spread taken at least ``--floor-rel`` of the baseline's value (default 0.05) and ``--floor-ms`` (default 0.05
   ms): five runs of a scene of a tenth of a millisecond can agree to the microsecond, which no later run repeats (the
-  clock's and the scheduler's jitter); exit status 1 if any fails. Faster is never a failure.
+  clock's and the scheduler's jitter); exit status 1 if any fails. Faster is never a failure. A scene measured over
+  other frames (or another warm-up, when the baseline records it) than the baseline's is not compared: it fails as
+  not comparable (a 99th percentile over 30 frames is not one over 300). A scene measured over fewer than 300 frames
+  (``FRAMES``) records ``p99_valid: false`` and a ``p99_note``: its ``_p99`` values are about the largest frame time.
 
 ``--json FILE`` also writes the run (every run's statistics) to FILE. ``--scenes a,b`` runs those only; ``--frames``
 and ``--warmup`` override the scene's defaults (300 measured frames after 30, except the largest scenes: 30 after 3,
@@ -68,6 +71,7 @@ FRAMES = {
     "window": {"line1e7": (30, 3), "scatter1e6": (30, 3), "heatmap4096": (30, 3)},
 }
 DEFAULT_FRAMES = (300, 30)
+P99_FRAMES = 300  # frames a 99th percentile needs (#15 P2): fewer, and a scene's record says what its '_p99' is
 # scenes not run in a mode, with the reason
 SKIP = {"window": {"line1e8": "8 GB of vertices a frame for the GPU: the baseline cannot draw it in a window"}}
 RETRIES = 1  # a scene's run that fails is run again once (a window closed under a long frame once, 2026-11-20)
@@ -80,6 +84,18 @@ def percentile(values: list[float], q: float) -> float:
     lo = int(pos)
     hi = min(lo + 1, len(v) - 1)
     return v[lo] + (v[hi] - v[lo]) * (pos - lo)
+
+
+def p99_valid(frames: int) -> bool:
+    """Whether a 99th percentile over `frames` frames is the one #15 P2 asks for (at least 300 frames)."""
+    return frames >= P99_FRAMES
+
+
+def p99_note(frames: int) -> str:
+    """What the '_p99' statistics are over fewer than 300 frames."""
+    kind = "the largest frame time" if frames <= 100 else "a 99th percentile of few frames"
+    return (f"over {frames} frames, not the {P99_FRAMES} #15 P2 asks for: the '_p99' values are {kind}, the time a "
+            "frame takes per FRAMES' reason; compare them as such")
 
 
 @dataclass
@@ -99,14 +115,20 @@ class SceneStats:
 
     runs: list[RunStats] = field(default_factory=list)
     retries: int = 0  # runs that failed and were run again
+    warmup: int = 0  # frames not measured before each run's measured ones
 
     def summary(self) -> dict[str, float | int]:
         """The scene's record: medians and spreads of the four statistics, the frames per run."""
-        out: dict[str, float | int] = {"frames": self.runs[0].frames, "runs": len(self.runs), "retries": self.retries}
+        frames = self.runs[0].frames
+        out: dict[str, float | int | str] = {"frames": frames, "runs": len(self.runs), "retries": self.retries,
+                                           "warmup": self.warmup}
         for key in ("frame_median", "frame_p99", "ui_median", "ui_p99"):
             vals = [getattr(r, key) for r in self.runs]
             out[key] = round(statistics.median(vals), 4)
             out[f"{key}_spread"] = round(max(vals) - min(vals), 4)
+        out["p99_valid"] = p99_valid(frames)
+        if not out["p99_valid"]:
+            out["p99_note"] = p99_note(frames)
         return out
 
 
@@ -166,6 +188,7 @@ def measure(program: Path, scenes: list[str], mode: str, runs: int, frames: int 
     for k in range(runs):
         for s in scenes:
             nf, nw = FRAMES[mode].get(s, DEFAULT_FRAMES)
+            out[s].warmup = nw if warmup is None else warmup
             for attempt in range(RETRIES + 1):
                 try:
                     stats = run_scene(program, s, mode, frames or nf, nw if warmup is None else warmup)
@@ -189,6 +212,10 @@ def compare(base: dict, run: dict[str, dict], floor_rel: float, floor_ms: float)
         ref = base["scenes"].get(scene)
         if ref is None:
             worse.append(f"{scene}: not in the baseline")
+            continue
+        if now["frames"] != ref["frames"] or now.get("warmup", ref.get("warmup")) != ref.get("warmup", now.get("warmup")):
+            worse.append(f"{scene}: not comparable: {now['frames']} frames after {now.get('warmup')}, the baseline "
+                         f"{ref['frames']} after {ref.get('warmup')} (a 99th percentile depends on the frames)")
             continue
         for key in ("frame_median", "frame_p99", "ui_median", "ui_p99"):
             excess = now[key] - ref[key]
@@ -260,8 +287,9 @@ def main(argv: list[str]) -> int:
         "per_run": {s: [vars(r) for r in st.runs] for s, st in stats.items()},
     }
     for s, rec in record["scenes"].items():
-        print(f"{s:12s} frame {rec['frame_median']:9.3f} ms (spread {rec['frame_median_spread']:.3f}), p99 "
-              f"{rec['frame_p99']:9.3f} ms; UI {rec['ui_median']:9.3f} ms, p99 {rec['ui_p99']:9.3f} ms")
+        tail = "p99" if rec["p99_valid"] else f"max-like ({rec['frames']} frames)"
+        print(f"{s:12s} frame {rec['frame_median']:9.3f} ms (spread {rec['frame_median_spread']:.3f}), {tail} "
+              f"{rec['frame_p99']:9.3f} ms; UI {rec['ui_median']:9.3f} ms, {tail} {rec['ui_p99']:9.3f} ms")
     if args.json:
         args.json.write_text(json.dumps(record, indent=1) + "\n")
         print(f"bench_scenes: written {args.json}")
