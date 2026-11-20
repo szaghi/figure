@@ -1,7 +1,9 @@
 # FIGURE's own checks, beside the FoBiS scaffold's ci.yml (kept verbatim, so that `fobis scaffold sync` updates it):
 #   - docs: the documentation's checks (#6 §4.10): the feature map, the doc comments, an example in every section,
-#     the docs' version strings, the name map, the media sizes; every example compiled, the headless ones run; every
-#     picture of the site rendered headless by FIGURE's CPU renderer and compared with the committed one (#7 §4.6);
+#     the docs' version strings, the name map, the media sizes; the oracle's coverage (#15 P1: every public name and
+#     interaction class checked by a picture and a behaviour, or exempt); every example compiled, the headless ones
+#     run; every picture of the site rendered headless by FIGURE's CPU renderer and compared with the committed one
+#     (#7 §4.6);
 #   - tsan: ThreadSanitizer on the calls a task may make (quit, request_frames, wake, ...): scripts/tsan_check.sh.
 # Both run in the toolchain image of ci.yml (fobos [scaffold] toolchain_image: gfortran 16.2, the compiler the pictures
 # are rendered with), with the packages it lacks (fobos [scaffold] toolchain_packages, plus ImageMagick).
@@ -46,6 +48,7 @@ jobs:
     - name: Docs checks
       run: |
         python3 scripts/check_docs.py --names --media
+        python3 scripts/oracle_coverage.py --check
         bash docs/examples/build.sh
 
     # each recording's poster, rendered headless (no display, no GPU) and compared with the committed one: per channel

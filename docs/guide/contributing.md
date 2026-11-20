@@ -19,7 +19,16 @@ fobis build --mode tests-gnu-debug && exe/figure_test_headless   # runtime check
 fobis build --mode tests-nvf && exe/figure_test_headless         # rm -rf exe first when switching compilers
 scripts/fpm.sh test
 fobis rule --ex sync                                             # fobos and fpm.toml in sync
+python3 scripts/oracle_coverage.py --check                       # every public name and interaction checked
 ```
+
+`scripts/oracle_coverage.py` measures the oracle (#15): which test programs and recordings check each public name and
+each interaction class (click, drag, text editing, tables, docking, plot interaction, the 3-D view, ...), by picture
+(a golden of `src/tests/data`, a recording `docs_media.py --check` compares) and by behaviour (a test program). A test
+claims the classes it exercises with a line `! oracle: <class>` (`<class>:picture` when its golden is captured after the
+interaction), a recording with `# oracle: <class>`; the script verifies each claim against the code. Without
+`--check` it writes the matrix, `docs/guide/_generated/oracle-coverage.md`; with it, CI fails on a name or a class that
+nothing checks and that no exemption in the script explains, and on a matrix that is not current.
 
 CI runs the tests with coverage on every push (`fobis rule --ex makecoverage-analysis`: the `tests-gnu-debug` mode,
 gfortran, Linux), and after a push to `main` the site publishes the [coverage
