@@ -18,11 +18,14 @@ under a ``--label`` such as ``wsl-gnu-window``):
 
 - ``--write LABEL``: record the run as the baseline LABEL; refused if LABEL exists (a baseline is never overwritten:
   new numbers get a new label);
-- ``--compare LABEL``: compare the run with the baseline LABEL: a scene fails when its median or its 99th percentile
-  (of the frame time, and of the UI time) is worse than the baseline's by more than the baseline's spread (#15 §4),
-  the spread taken at least ``--floor-rel`` of the baseline's value (default 0.05) and ``--floor-ms`` (default 0.05
-  ms): five runs of a scene of a tenth of a millisecond can agree to the microsecond, which no later run repeats (the
-  clock's and the scheduler's jitter); exit status 1 if any fails. Faster is never a failure. A scene measured over
+- ``--compare LABEL``: compare the run with the baseline LABEL (#15 §4, "at least the same speed"). The gate is the
+  medians: a scene fails when its median frame time or median UI time is worse than the baseline's by more than the
+  baseline's spread, taken at least ``--floor-rel`` of the baseline's value (default 0.05) and ``--floor-ms``
+  (default 0.05 ms): five runs of a scene of a tenth of a millisecond can agree to the microsecond, which no later run
+  repeats (the clock's and the scheduler's jitter); exit status 1 if any fails. The 99th percentiles are reported, not
+  gated: one worse than the baseline's by more than its spread, taken at least ``--p99-floor-rel`` (default 0.20) and
+  ``--floor-ms``, is a warning (window-mode percentiles carry the compositor's jitter: the first reruns of the
+  baselines, 2026-11-20, left the 5-run spread on 9 of 280 statistics, mostly window p99). Faster is never a failure. A scene measured over
   other frames (or another warm-up, when the baseline records it) than the baseline's is not compared: it fails as
   not comparable (a 99th percentile over 30 frames is not one over 300). A scene measured over fewer than 300 frames
   (``FRAMES``) records ``p99_valid: false`` and a ``p99_note``: its ``_p99`` values are about the largest frame time.
@@ -37,7 +40,7 @@ Usage::
     python3 scripts/bench_scenes.py [--program exe/figure_bench_scenes] [--mode headless|window] [--runs 5]
                                     [--scenes a,b] [--compiler NAME] [--file docs/data/bench-scenes.json]
                                     (--write LABEL | --compare LABEL) [--json FILE] [--allow-llvmpipe]
-                                    [--floor-rel 0.05] [--floor-ms 0.05]
+                                    [--floor-rel 0.05] [--floor-ms 0.05] [--p99-floor-rel 0.20]
 
 Standard library only (Python >= 3.11). Run from the repository root.
 """
@@ -204,10 +207,17 @@ def measure(program: Path, scenes: list[str], mode: str, runs: int, frames: int 
     return out
 
 
-def compare(base: dict, run: dict[str, dict], floor_rel: float, floor_ms: float) -> list[str]:
-    """The scenes of `run` worse than `base` by more than its spread (at least `floor_rel` of the baseline's value and
-    `floor_ms`), each with what and by how much."""
-    worse = []
+GATED = ("frame_median", "ui_median")  # the gate: "at least the same speed" (#15 §4)
+REPORTED = ("frame_p99", "ui_p99")     # warnings only
+
+
+def compare(base: dict, run: dict[str, dict], floor_rel: float, floor_ms: float,
+            p99_floor_rel: float = 0.20) -> tuple[list[str], list[str]]:
+    """The scenes of `run` worse than `base`: the failures (a median worse by more than the baseline's spread, at
+    least `floor_rel` of the baseline's value and `floor_ms`) and the warnings (a 99th percentile worse by more than
+    its spread, at least `p99_floor_rel` and `floor_ms`), each with what and by how much."""
+    worse: list[str] = []
+    warn: list[str] = []
     for scene, now in run.items():
         ref = base["scenes"].get(scene)
         if ref is None:
@@ -217,13 +227,14 @@ def compare(base: dict, run: dict[str, dict], floor_rel: float, floor_ms: float)
             worse.append(f"{scene}: not comparable: {now['frames']} frames after {now.get('warmup')}, the baseline "
                          f"{ref['frames']} after {ref.get('warmup')} (a 99th percentile depends on the frames)")
             continue
-        for key in ("frame_median", "frame_p99", "ui_median", "ui_p99"):
-            excess = now[key] - ref[key]
-            allowed = max(ref[f"{key}_spread"], floor_rel * ref[key], floor_ms)
-            if excess > allowed:
-                worse.append(f"{scene}: {key} {now[key]:.3f} ms, baseline {ref[key]:.3f} ms "
-                             f"(+{excess:.3f} ms, allowed {allowed:.3f} ms: spread {ref[f'{key}_spread']:.3f} ms)")
-    return worse
+        for keys, rel, out in ((GATED, floor_rel, worse), (REPORTED, p99_floor_rel, warn)):
+            for key in keys:
+                excess = now[key] - ref[key]
+                allowed = max(ref[f"{key}_spread"], rel * ref[key], floor_ms)
+                if excess > allowed:
+                    out.append(f"{scene}: {key} {now[key]:.3f} ms, baseline {ref[key]:.3f} ms "
+                               f"(+{excess:.3f} ms, allowed {allowed:.3f} ms: spread {ref[f'{key}_spread']:.3f} ms)")
+    return worse, warn
 
 
 def main(argv: list[str]) -> int:
@@ -244,6 +255,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--allow-llvmpipe", action="store_true")
     ap.add_argument("--floor-rel", type=float, default=0.05)
     ap.add_argument("--floor-ms", type=float, default=0.05)
+    ap.add_argument("--p99-floor-rel", type=float, default=0.20)
     args = ap.parse_args(argv)
     if not (args.write or args.compare or args.json):
         ap.error("one of --write, --compare, --json is required")
@@ -299,7 +311,10 @@ def main(argv: list[str]) -> int:
         args.file.write_text(json.dumps(data, indent=1) + "\n")
         print(f"bench_scenes: baseline {args.write} written to {args.file}")
     if args.compare:
-        worse = compare(data["baselines"][args.compare], record["scenes"], args.floor_rel, args.floor_ms)
+        worse, warn = compare(data["baselines"][args.compare], record["scenes"], args.floor_rel, args.floor_ms,
+                              args.p99_floor_rel)
+        for w in warn:
+            print(f"bench_scenes: warning (p99, not gated): {w}", file=sys.stderr)
         for w in worse:
             print(f"bench_scenes: worse: {w}", file=sys.stderr)
         print(f"bench_scenes: {len(scenes) - len({w.split(':')[0] for w in worse})} of {len(scenes)} scenes within "
