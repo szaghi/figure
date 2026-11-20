@@ -45,8 +45,8 @@ the new nodes for more areas, and `ig_dock_window` puts a window, by the name gi
   windows. `ig_dock_layout_end` only after a `.true.` `ig_dock_layout_begin` (the rule of tabs and tables); the
   layout is a scope of the frame's record, so a wrong end is refused and reported
   ([Pairing and frames](errors#pairing-and-frames)).
-- **Status:** `stat` is optional (absent: `error stop` with the message). `FIG_ERR_STATE` for `ig_dock_space` with
-  docking off (`ig_dock_space: docking is off (app%set_docking)`), and for `ig_dock_space`, `ig_dock_layout_begin` or
+- **Status:** `stat` is optional (absent: `error stop` with the message). `FIG_ERR_STATE` for `ig_dock_space` and
+  `ig_dock_layout_begin` with docking off (`ig_dock_space: docking is off (app%set_docking)`): no layout is built, and for `ig_dock_space`, `ig_dock_layout_begin` or
   a builder call with no frame open or from a task; `FIG_ERR_ARGUMENT` for `ig_dock_split` with an unknown
   `direction` or a `fraction` outside (0, 1) (`ig_dock_split: fraction must be in (0, 1)`), and for a node that does
   not exist (`ig_dock_window: unknown dock node`).

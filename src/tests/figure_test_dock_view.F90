@@ -14,7 +14,7 @@ program figure_test_dock_view
 !< 3. undocked by the pointer: the tab of 'Notes' dragged down out of the tab bar: 'Notes' floats again, 'Tree' alone
 !<    in its node;
 !< 4. docking off (`app%set_docking(.false.)`): 'Notes' dragged onto the same place stays floating; on again (the
-!<    program does not call `ig_dock_layout_begin` while docking is off: it crashes there today, a finding of #15 P1);
+!<    `ig_dock_layout_begin` is refused with `FIG_ERR_STATE` while docking is off, and returns `.false.`: no crash);
 !< 5. layouts: `app%switch_layout('Stacked')` lays the dock space out again: 'Tree' above 'Mesh'; the dock space
 !<    against the golden src/tests/data/figure_test_dock_view.stacked.golden.png ('Notes' floating over it, as the
 !<    undock left it, moved by the drag of step 4); `app%switch_layout('Wide')` and `app%reset_layout()` give back
@@ -24,7 +24,7 @@ program figure_test_dock_view
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, &
                    ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_set_next_window, ig_text,             &
-                   ig_window_dock, FIG_OK
+                   ig_window_dock, FIG_ERR_STATE, FIG_OK
 use figure_testing, only : test_capture, test_click, test_compare_image, test_mouse_button, test_mouse_move, &
                            test_next_frame, test_window_rect
 
@@ -51,6 +51,8 @@ real(real64)                :: a(2), b(2)      !< Pointer positions [pixels].
 integer(int32)              :: k               !< Counter.
 integer(int32)              :: st              !< Status.
 logical                     :: docking_on      !< Docking is on (`app%set_docking`).
+integer(int32)              :: layout_stat     !< Status of the frame's `ig_dock_layout_begin`.
+logical                     :: layout_needed   !< The last `ig_dock_layout_begin` while docking is off.
 integer(int32),   parameter :: GLIDE_FRAMES = 30_int32 !< Frames a glide's queued input takes (21), and some.
 real(real64),     parameter :: TAB_Y = 10.0_real64     !< A tab's centre below its node's top (the frame height's half).
 real(real64),     parameter :: LOG_TAB = 78.0_real64   !< The second tab's centre ('Log') right of its node's left edge,
@@ -60,6 +62,7 @@ character(len=16)           :: keep            !< FIGURE_TEST_KEEP.
 
 s = -1_int32
 docking_on = .true.
+layout_needed = .false.
 call app%init_headless(W, H)
 call app%add_layout('Wide')
 call app%add_layout('Stacked')
@@ -100,7 +103,8 @@ docking_on = .false.
 a = [rect(1, 4) + 60.0_real64, rect(2, 4) + TAB_Y]
 call glide(a, b, .true.)
 call run(GLIDE_FRAMES)
-test_passed(6) = st == FIG_OK .and. shown(4) .and. .not. docked(4)
+test_passed(6) = st == FIG_OK .and. shown(4) .and. .not. docked(4) .and. layout_stat == FIG_ERR_STATE .and. &
+                 .not. layout_needed
 if (.not. test_passed(6)) call print_state('docking off')
 call app%set_docking(.true.)
 docking_on = .true.
@@ -186,9 +190,9 @@ contains
    do f = 1_int32, n
       if (.not. app%next_frame()) error stop 'figure_test_dock_view: next_frame returned false in headless mode'
       root = ig_dock_id('main')
-      ! not while docking is off: ig_dock_layout_begin crashes then (a finding of #15 P1, left to the owner)
-      needed = .false.
-      if (docking_on) needed = ig_dock_layout_begin(root)
+      ! called while docking is off too: refused with FIG_ERR_STATE, .false. (it crashed before, a finding of #15 P1)
+      needed = ig_dock_layout_begin(root, stat=layout_stat)
+      if (.not. docking_on) layout_needed = needed
       if (needed) then
          if (app%layout() == 'Stacked') then
             call ig_dock_split(root, 'up', 0.5_real64, n1, n2)

@@ -72,7 +72,7 @@ contains
    !< layout `app%layout()`, if the program has several) with `ig_dock_split` and `ig_dock_window`, and close with
    !< `ig_dock_layout_end`. Call it before `ig_dock_space`.
    integer(int32), intent(in)            :: id     !< Dock id.
-   integer(int32), intent(out), optional :: stat   !< Status.
+   integer(int32), intent(out), optional :: stat   !< Status: `FIG_ERR_STATE` outside a frame or with docking off.
    logical                               :: needed !< Build the layout now.
    integer(c_int)                        :: n      !< 1: needed.
 

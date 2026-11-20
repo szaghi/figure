@@ -3333,6 +3333,8 @@ int fig_dock_layout_begin(unsigned int id, int *needed) {
    FIG_TRY
    *needed = 0;
    if (!st.in_frame) return fail(FIG_ERR_STATE, "ig_dock_layout_begin: no frame is open");
+   if (!(ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable)) // the dock nodes are gone: no builder call
+      return fail(FIG_ERR_STATE, "ig_dock_layout_begin: docking is off (app%set_docking)");
    const bool again = fig_app_layout_rebuild(id) == 1; // switch_layout, reset_layout: lay it out again
    if (!again && ImGui::DockBuilderGetNode(id) != nullptr) return FIG_OK; // laid out already (this run, an ini file)
    const ImGuiViewport *vp = ImGui::GetMainViewport();
