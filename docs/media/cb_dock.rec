@@ -2,6 +2,7 @@
 #! frames  230
 #! poster  220
 # drag "Notes" by its title bar onto the centre of the Log area: it docks there as a tab; then move the frequency
+# oracle: dock-in dock-split dock-tab
 0   move 500 330
 5   move 690 130 20
 30  down

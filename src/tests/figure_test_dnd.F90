@@ -11,6 +11,7 @@ program figure_test_dnd
 !< 'mesh-A' to the button, 'mesh-A' to the x axis (the axis target, not the area). `ig_dragging('case')` is true while
 !< a case is dragged and only then. Wrong types, a plot target outside a plot, an axis with the legend: refused with
 !< their statuses and messages.
+! oracle: drag
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_button,     &
                    ig_drag_source, ig_dragging, ig_drop_target, ig_end, ig_item_rect, ig_set_next_window,           &

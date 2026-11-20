@@ -4,6 +4,7 @@
 #! keys
 # click block 3, shift+click block 8: 3 to 8; ctrl+click (cmd on macOS) block 11 (added) and block 5 (removed); Freeze marks them;
 # back in the list (ctrl+click block 1), ctrl+a selects all 2000; escape clears
+# oracle: list-clipper
 0   move 300 300
 5   move 80 93 15
 25  down

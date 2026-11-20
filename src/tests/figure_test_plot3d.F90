@@ -20,6 +20,7 @@ program figure_test_plot3d
 !<    vertices, gives ImPlot3D the stride of its data and copies exactly the arrays it cannot read in place;
 !< 7. the statuses: outside a frame, outside a plot, a setup after an item, sizes, triangles, limits, scales, colours.
 !< The picture is `figure_test_plot3d.shot.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps it).
+! oracle: drag view3d-orbit
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value

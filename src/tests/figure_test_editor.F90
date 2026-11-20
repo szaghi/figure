@@ -12,6 +12,7 @@ program figure_test_editor
 !< and its drawing; the statuses; a fresh editor drawn twice under IEEE invalid traps, its heap filled with 0x7F bytes
 !< (FIGURE's patch 0002 of the fork: cursorWidth initialised; a child process, MALLOC_PERTURB_=128; Linux only). The
 !< pictures are `figure_test_editor.*.tmp`, removed at the end.
+! oracle: text-typing text-undo
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, output_unit, real64
 use, intrinsic :: ieee_exceptions, only : ieee_invalid, ieee_set_halting_mode
 use figure, only : app_object, code_diff, code_diff_lines, code_editor_object, code_language, FIG_ERR_ARGUMENT, &

@@ -2,6 +2,7 @@
 #! frames  200
 #! poster  135
 # edit the title, tick an option in the popup, close the window: the modal asks; Cancel; close again
+# oracle: modals
 0   move 300 150
 8   move 200 49 12
 22  down

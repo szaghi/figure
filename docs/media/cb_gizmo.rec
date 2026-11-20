@@ -5,6 +5,7 @@
 #! crop    0 0 720 540
 # a clipping plane placed by hand: its arrow dragged along the normal moves the cut toward the tail; Turn, then the
 # blue ring dragged turns the plane about z; a click on the view cube's green face (-y) turns the camera to it
+# oracle: view3d-gizmo view3d-cube
 0   move 600 450
 5   move 408 309 15
 28  down

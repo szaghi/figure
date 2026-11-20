@@ -10,6 +10,7 @@ program figure_test_canvas
 !< a scrolling child is the canvas's (the child does not scroll); beside it, the child scrolls. A polyline from
 !< (0, 0) to (1, 1) in plot units spans the plot area when x goes to 1 and half of it when x goes to 2. An invisible
 !< button is clicked. Wrong arguments are refused with their messages; no frame has a usage error.
+! oracle: click drag wheel scrolling
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int8, int32, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, canvas_event_object, figure_last_error, &

@@ -146,6 +146,7 @@ program figure_test_paths
 !< into, a slider typed and read back; a missing path naming the nearest match; a path naming several items; a menu path
 !< opening its submenus over several frames; test_run idle, past max_frames, reporting a menu level that never
 !< appears; an id conflict found without hovering; icon-only and unlabelled buttons found; the cost per frame measured.
+! oracle: click menus text-typing
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, FIG_OK, FIG_ERR_ARGUMENT, FIG_ERR_STATE, figure_last_error, figure_time
 use figure_testing, only : test_click, test_id_conflicts, test_item_checked, test_item_click, test_item_exists, &

@@ -14,6 +14,7 @@ program figure_test_text
 !< Plex's own glyphs ('A', '0') stay Plex's, their bitmaps unchanged by a program's fallback; Noto's letters as tall
 !< as Plex's; a program's own fallback gives only what the bundled fonts lack, also in a font loaded after it; the
 !< statuses of add_fallback_font.
+! oracle: click wheel scrolling text-typing text-undo text-clipboard
 use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_f_pointer, c_float, c_null_char, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK

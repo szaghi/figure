@@ -3,6 +3,7 @@
 #! poster  320
 # TVD clicked: chosen, and the limiter combo appears; the combo opened and superbee picked; the list of blocks scrolled
 # by the wheel and a block clicked: highlighted, and named in the line below.
+# oracle: click wheel scrolling
 0   move 330 300
 10  move 174 74 15
 35  down

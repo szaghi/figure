@@ -36,6 +36,7 @@ program figure_test_forms
 !< font changed; a right-aligned group and an item placed by `ig_align_next` end at the content's right edge; a
 !< pushed item width sets a field's width until popped; `ig_indent` and `ig_dummy` move and size as asked; an unknown
 !< `where` or a negative width is refused.
+! oracle: click text-typing text-selection keyboard-nav keys scrolling list-clipper modals
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_button, ig_combo, ig_end, ig_input, ig_input_text, ig_item_rect,   &

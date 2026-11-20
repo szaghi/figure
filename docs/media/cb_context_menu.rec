@@ -4,6 +4,7 @@
 # The pointer rests on 'outlet': its tooltip shows a table of the patch's values. A right click on 'outlet' opens its
 # menu: Duplicate inserts 'outlet-copy' below it. A right click on 'inlet', then Delete: the row goes. A right click
 # below the rows opens the list's menu: Add a row appends 'patch-1'. The link 'What is a patch?' shows a line of help.
+# oracle: popups
 0   move 400 300
 10  move 160 65 15
 60  down right

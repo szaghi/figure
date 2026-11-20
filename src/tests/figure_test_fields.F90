@@ -15,6 +15,7 @@ program figure_test_fields
 !< 5. the legend the user edits: a drag along the bar moves the range by the drag, the wheel zooms it about the value
 !<    under the pointer, on 'log' by factors; the legend reports a change only on the frames it happened;
 !< 6. wrong calls.
+! oracle: drag wheel
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: ieee_arithmetic, only : ieee_value, ieee_quiet_nan, ieee_positive_inf, ieee_negative_inf

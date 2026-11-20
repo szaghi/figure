@@ -2,6 +2,7 @@
 #! frames  270
 #! poster  262
 # type a title, save from the File menu; edit, save with ctrl+s; tick Autosave, edit: saved at once
+# oracle: keys menus text-typing
 0   move 300 200
 8   move 300 70 12
 24  down

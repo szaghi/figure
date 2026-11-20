@@ -4,6 +4,7 @@
 #! poster  112
 # The example input file shown as text in IBM Plex Mono; a click at the end of the iterations line, Enter opens a new
 # line, a cfl entry is typed in the same columns ("(!) modified"), then Save writes the file ("saved")
+# oracle: click text-typing
 0   move 400 300
 10  move 300 285 15
 30  down

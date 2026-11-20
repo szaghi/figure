@@ -20,6 +20,7 @@ program figure_test_view3d
 !< after 30 draws without one, and a render after that gives the same pixels. Then the refusals with their statuses,
 !< the mesh ids (each the next one, none given back by remove or clear), and the time of a 3.2e5-triangle render
 !< (printed, not checked).
+! oracle: drag wheel scrolling view3d-orbit
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
 use figure, only : app_object, ig_begin, ig_end, ig_item_rect, ig_set_next_window, ip_colormap, view3d_object, &

@@ -15,6 +15,7 @@ program figure_test_tools
 !< Drops (`app%dropped`, `test_drop`): two paths dropped at once reported together on the next frame, once, with the
 !< point of the drop; nothing on the other frames. The clipboard (`ig_set_clipboard`, `ig_get_clipboard`): a text of
 !< two lines set and read back, an empty one, and a field's copy (ctrl+a, ctrl+c) read by the program.
+! oracle: click list-clipper text-clipboard
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, ICON_ACTIVITY, ICON_HOUSE, ig_align_text_to_frame_padding, ig_begin, ig_begin_child, &
                    ig_begin_popup, ig_button, ig_end, ig_end_child, ig_end_popup, ig_focus_window, ig_item_rect, &

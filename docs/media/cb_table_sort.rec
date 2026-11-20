@@ -4,6 +4,7 @@
 # A click on the header 'cells' sorts the blocks by their cells, largest first; a second click, smallest first. A
 # click on 'residual' puts the largest residuals on top: their rows are coloured and marked '!'. The wheel scrolls the
 # rows down to the last coloured ones; the header stays in place.
+# oracle: click table-sort
 0   move 300 380
 10  move 430 48 15
 40  down

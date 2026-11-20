@@ -3,6 +3,7 @@
 #! frames  240
 #! poster  160
 # turn the body by a drag, zoom with the wheel, click a cell (its value shows above the view), then cut it at z = 0
+# oracle: view3d-orbit
 0   move 500 600
 5   move 640 420 15
 25  down

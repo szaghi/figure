@@ -12,6 +12,7 @@ program figure_test_numbers
 !< is far down the list. A range's lower end dragged past its upper end stops there. An angle slider at its centre
 !< is 90 degrees, pi/2 radians. With enter_returns a field is true only on enter; read_only does not change. Wrong
 !< arguments refused with their messages, the values untouched; no frame has a usage error.
+! oracle: click drag wheel text-typing text-clipboard
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_OK, app_object, figure_last_error, ig_begin, ig_drag, ig_drag_range, ig_end, &

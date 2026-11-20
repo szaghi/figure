@@ -4,6 +4,7 @@ program figure_test_menus
 !<
 !< A File menu in the main menu bar: opened by a click, an item picked, a check-mark item toggled, a disabled item that
 !< cannot be picked; a window's own menu bar; ctrl+s read once per press, not while held, not without ctrl; a bad name.
+! oracle: click keys menus
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : app_object, FIG_ERR_ARGUMENT, ig_begin, ig_begin_main_menu_bar, ig_begin_menu, ig_begin_menu_bar, &
                    ig_end, ig_end_main_menu_bar, ig_end_menu, ig_end_menu_bar, ig_menu_item, ig_set_next_window,   &

@@ -5,6 +5,7 @@
 # pick block 1240: the Blocks list scrolls to it (a row the clipper did not draw), Bodies to body 19; pick block
 # 1873: further down; Go to...: the dialog's field has the focus, 333 and enter are typed without a click, both lists
 # scroll to block 333; pick block 17: back near the top.
+# oracle: list-clipper
 0   move 600 250
 10  move 148 49 15
 28  down

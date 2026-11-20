@@ -4,6 +4,7 @@
 #! keys
 # Component 3 of gravity dragged 100 pixels left at 0.01 m/s^2 per pixel; component 1 dragged 150 pixels right; the
 # second field of probe clicked and 0.25 typed; the wind slider dragged from 45 to 120 degrees.
+# oracle: drag text-typing
 0   move 500 150
 10  move 320 49 15
 35  down

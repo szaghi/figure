@@ -20,6 +20,7 @@ program figure_test_gizmo
 !< - a golden picture of the view, its cube and a gizmo, and the gradient editor (src/tests/data, |d| <= 2);
 !< - the statuses: before the view is drawn, unknown modes and corners, a matrix with a bad last row.
 !< The pictures are `figure_test_gizmo.*.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
+! oracle: click drag view3d-orbit view3d-gizmo view3d-cube
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int8, int32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_end, ig_item_rect, ig_set_next_window, ip_begin_plot, ip_colormap, &

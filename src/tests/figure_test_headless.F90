@@ -4,6 +4,7 @@ program figure_test_headless
 !<
 !< A button is clicked by queuing mouse states frame by frame (hover, press, release), exactly as real input arrives;
 !< a check box is toggled the same way; a plot is drawn from Fortran arrays. Needs no display, so it runs in CI as is.
+! oracle: click drag dock-split dock-layout
 use, intrinsic :: iso_c_binding, only : c_bool, c_double, c_f_pointer, c_float, c_int, c_null_char, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, real32, real64
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_last_error, ig_begin, ig_begin_side_bar, &

@@ -11,6 +11,7 @@ program figure_test_popups
 !< a menu. A link's click returns true once; a URL link asks for its URL (read headless by test_opened_url). A tooltip
 !< on an item appears after the hover delay, not at once; a tooltip begun anywhere shows its content. No frame has a
 !< usage error; an unknown place or button is refused.
+! oracle: click popups modals
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_begin_popup,   &
                    ig_begin_popup_modal, ig_button, ig_checkbox, ig_close_current_popup, ig_end, ig_end_popup,      &

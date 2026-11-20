@@ -11,6 +11,7 @@ program figure_test_plot_links
 !< `ip_legend_hovered` says so; a right click on it opens its popup, whose contents are drawn. An item hidden by
 !< `ip_hide_next_item` is not drawn, the same item shown is. A digital signal and two items in three bar groups (side
 !< by side, then stacked) drawn in their colours where they belong. The refusals with their statuses and messages.
+! oracle: wheel plot-zoom plot-legend
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_end,         &
                    ip_colormap, ip_load_colormap, ig_begin_child, ig_end_child,                                     &

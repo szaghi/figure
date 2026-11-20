@@ -18,6 +18,7 @@ program figure_test_plot_marks
 !<    heights (cumulative, density, one bin, strided, with a NaN, default bins, constant data); a 2-D histogram of known
 !<    points, with and without a range; stairs and stems span their points;
 !< 6. wrong calls: inside a plot (unknown or not set up axes, bad arguments) and outside any plot (usage errors).
+! oracle: drag plot-box-select plot-drag-tools
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_value, ieee_quiet_nan
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_end,          &

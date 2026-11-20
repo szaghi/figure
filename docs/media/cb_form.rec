@@ -2,6 +2,7 @@
 #! frames  370
 #! poster  360
 # a field typed over (ctrl+a), a scheme picked, restart ticked, then a row added to the table and edited
+# oracle: text-typing text-selection
 0   move 450 300
 10  move 150 74 15
 28  down

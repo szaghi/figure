@@ -21,6 +21,7 @@ program figure_test_plots
 !< its centre, and the value 0.3 of [-1, 1] falls in the fourth; bad arguments refused. Labels, by the legends' widths:
 !< with levels, a band edge of 87.5 reads 87.5 under '%.0f' (and 87.5% under '%.0f%%'); a continuous bar's ticks keep
 !< the format ('%.0f': 0.25 reads 0).
+! oracle: drag plot-drag-tools dock-split
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value

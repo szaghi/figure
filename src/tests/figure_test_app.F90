@@ -121,6 +121,7 @@ program figure_test_app
 !< A restart is `destroy` then `init_headless` with the same preferences' file; a crash is this program run again by
 !< itself with the argument `crash`: it saves a preference, draws past the 30 s of frame time of the periodic save,
 !< saves another and stops with `error stop`, without `destroy`.
+! oracle: drag menus modals dock-split dock-layout
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use figure, only : app_object, FIG_OK, FIG_ERR_ARGUMENT, FIG_ERR_STATE, figure_last_error
 use figure_testing, only : test_item_click, test_item_exists, test_item_rect, test_drag, test_key, test_menu_click, &

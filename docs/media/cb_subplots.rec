@@ -2,6 +2,7 @@
 #! frames  160
 #! poster  95
 # zoom on the drag plot with the wheel: the moment plot follows (linked x); then zoom out on the moment plot
+# oracle: plot-zoom
 0   move 600 300
 10  move 400 150 15
 30  wheel 0 1

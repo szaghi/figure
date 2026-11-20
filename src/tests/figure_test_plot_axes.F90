@@ -19,6 +19,7 @@ program figure_test_plot_axes
 !<    plot; labels not one per value; bad constraints: refused with their statuses, nothing aborts;
 !< 8. an auto-fitting log axis on a plot that starts empty fits its line once the line arrives (#13 S1: reported as
 !<    drawing nothing, not reproduced), and a log axis whose line has no positive value keeps a finite positive range.
+! oracle: wheel plot-zoom
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_end,      &

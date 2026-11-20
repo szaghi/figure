@@ -14,6 +14,7 @@ program figure_test_select
 !< a tall child: a drag from the void below the last line up to line 2 box-selects 2..5. A tree of 4 nodes: click
 !< node 2, shift+click node 4: 2..4. A single-selection list: ctrl+click two lines, the last one alone selected. The
 !< refusals with their statuses and messages.
+! oracle: click drag wheel list-clipper
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_begin_child, &
                    ig_begin_multi_select, ig_end, ig_end_child, ig_end_multi_select, ig_item_rect, ig_push_id,     &

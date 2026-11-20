@@ -12,6 +12,7 @@ program figure_test_tables
 !< Usage errors and wrong arguments refused with their status; no frame has a usage error otherwise. A table sized in
 !< proportion to its content (`ImGuiTableFlags_SizingStretchProp`) from its first frame, with the floating-point traps
 !< of the debug build on: Dear ImGui divided 0 by 0 there (ocornut/imgui#8718), FIGURE's patch guards the division.
+! oracle: click wheel scrolling table-sort
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, ImGuiTableFlags_SizingStretchProp, app_object,           &
                    figure_last_error, ig_begin, ig_end,                                                              &

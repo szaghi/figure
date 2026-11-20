@@ -3,6 +3,7 @@
 #! poster  200
 # choose block 2 by a click in its cells column (the node spans the row), open fuselage by its arrow, open the
 # background node and scroll its 20000 blocks
+# oracle: list-clipper scrolling
 0   move 300 330
 5   move 440 105 15
 25  down
