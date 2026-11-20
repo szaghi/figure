@@ -173,8 +173,8 @@ FoXy, FLAP, forbear, FURY (no step needs them).
 with gfortran 16.2, nvfortran 26.9 and ifx 2026.2 (FUNDAL in its CPU mode, without its MPI handler), and shipped in the
 fpm package; FIGURE's library does not use them yet, the tests do. Arrays of `type(string)` do not hit #4's bug A
 (a section of a deferred-length character array taken at the array's first elements, gfortran) on any of the three
-compilers. foresight joins once it compiles with nvfortran and ifx under FIGURE's flags; FiNeR, VecFor and MORTIF
-join with the steps that need them.
+compilers. foresight joined on 2026-11-20, once it compiled with nvfortran and ifx under FIGURE's flags (v0.6.2,
+szaghi/foresight#2); FiNeR, VecFor and MORTIF join with the steps that need them.
 
 ## Consequences
 

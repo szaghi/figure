@@ -11,7 +11,7 @@ email      = stefano.zaghi@cnr.it
 # and fpm.toml are never read. The list is closed (§6's rule): every library a listed one uses is listed here too, and in
 # fpm.toml [dependencies] (scripts/check_sync.py checks both). PENF is built without PENF_R16P (no quadruple precision).
 # FUNDAL's fundal_mpih_object.F90 (the MPI handler, `use mpi`) is excluded by the templates: FIGURE has no MPI.
-# foresight (§6, K4) joins once it builds with nvfortran 26.9 and ifx under FIGURE's flags (P3's log).
+# foresight (§6, K4: its printf-subset formatter and tick locators) joined after szaghi/foresight#2 (v0.6.2).
 [dependencies]
 deps_dir   = src/third_party
 PENF       = https://github.com/szaghi/PENF :: branch=master :: src=src/lib
@@ -19,6 +19,7 @@ FACE       = https://github.com/szaghi/FACE :: branch=master :: src=src/lib
 BeFoR64    = https://github.com/szaghi/BeFoR64 :: branch=master :: src=src/lib
 StringiFor = https://github.com/szaghi/StringiFor :: branch=master :: src=src/lib
 FUNDAL     = https://github.com/szaghi/FUNDAL :: branch=main :: src=src/lib
+foresight  = https://github.com/szaghi/foresight :: branch=master :: src=src/lib
 
 [modes]
 modes = tests-gnu tests-gnu-debug examples-gnu examples-gnu-traps

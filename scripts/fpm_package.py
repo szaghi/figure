@@ -4,7 +4,7 @@ fpm has no build hooks, so it cannot run CMake. This script lays out, in OUTDIR,
 native layer itself, next to the Fortran library:
 
 - ``src/fortran/``: the Fortran library (src/lib);
-- ``src/<Library>/`` (``src/PENF/``, ``src/FACE/``, ``src/BeFoR64/``, ``src/StringiFor/``, ``src/FUNDAL/``): the owner's
+- ``src/<Library>/`` (``src/PENF/``, ``src/FACE/``, ``src/BeFoR64/``, ``src/StringiFor/``, ``src/FUNDAL/``, ``src/foresight/``): the owner's
   Fortran libraries of fobos ``[dependencies]`` (szaghi/figure#15 §6), source-passed: the sources FIGURE's fobos modes
   compile (each one's ``src=`` directories, fobos' ``$EXCLUDE`` left out: FUNDAL's MPI handler), copied from where
   ``fobis fetch`` put them (fobos' ``deps_dir``, src/third_party), with their MIT licence;
@@ -123,7 +123,7 @@ MINIZ_WRAPPER = """// FIGURE (scripts/fpm_package.py): miniz with the options na
 MANIFEST = """# FIGURE as a self-contained fpm package, written by scripts/fpm_package.py from the repository at {commit}.
 # Do not edit: regenerate. fpm compiles the native layer itself (Dear ImGui, ImPlot, ImPlot3D, cimgui, cimplot,
 # cimplot3d, miniz, the vendored extensions and FIGURE's glue) and the Fortran libraries FIGURE takes (PENF, FACE,
-# BeFoR64, StringiFor, FUNDAL), all in src/; SDL3 comes from the system.
+# BeFoR64, StringiFor, FUNDAL, foresight), all in src/; SDL3 comes from the system.
 name = "figure"
 version = "{version}"
 license = "MIT"

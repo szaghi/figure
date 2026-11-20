@@ -30,6 +30,7 @@ FACE = { git = "https://github.com/szaghi/FACE", branch = "master" }
 BeFoR64 = { git = "https://github.com/szaghi/BeFoR64", branch = "master" }
 StringiFor = { git = "https://github.com/szaghi/StringiFor", branch = "master" }
 FUNDAL = { git = "https://github.com/szaghi/FUNDAL", branch = "main" }
+foresight = { git = "https://github.com/szaghi/foresight", branch = "master" }
 
 [[example]]
 name = "figure_hello"

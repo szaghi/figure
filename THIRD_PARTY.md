@@ -63,14 +63,11 @@ call them (`src/tests/figure_test_sibling_libs.F90`), and the layers of #15 adop
 | [BeFoR64](https://github.com/szaghi/BeFoR64) | `master`, fetched | MIT (multi-licensed) | Stefano Zaghi | base64 of any intrinsic type (the remote mode's WebSocket handshake, #15 P25); used by StringiFor |
 | [StringiFor](https://github.com/szaghi/StringiFor) | `master`, fetched | MIT (multi-licensed) | Stefano Zaghi | `type(string)`, UTF-8 throughout (Markdown, the code editor, text input: #15 P15, P16, P20) |
 | [FUNDAL](https://github.com/szaghi/FUNDAL) | `main`, fetched; its CPU mode (no backend macro), without its MPI handler (`fundal_mpih_object.F90`, excluded by `fobos`) | MIT (multi-licensed) | Stefano Zaghi | one device-memory API over OpenACC, OpenMP offload and the CPU (the reduction on the device, #15 P6) |
-
-[foresight](https://github.com/szaghi/foresight) (multi-licensed with MIT since 2026-11-20, `923c490`), whose formatter
-and tick locators #15 plans for the tick labels, joins the list once it compiles with nvfortran and ifx under FIGURE's
-flags.
+| [foresight](https://github.com/szaghi/foresight) | `master`, fetched (v0.6.2 and later: it compiles with nvfortran and ifx under FIGURE's flags, szaghi/foresight#2) | MIT (multi-licensed since 2026-11-20, `923c490`) | Stefano Zaghi | its printf-subset formatter and tick locators: tick labels with the same digits on every compiler (#15 K4, P10) |
 
 ## Distributing a program built with FIGURE
 
-- **MIT** (FIGURE, the Fortran libraries PENF, FACE, BeFoR64, StringiFor and FUNDAL, Dear ImGui, ImPlot, ImPlot3D, cimgui, cimplot, cimplot3d, miniz, stb_image, stb_image_write, ImGuiColorTextEdit, ImGuizmo, imgui_rich_md, imgui_md, md4c, the
+- **MIT** (FIGURE, the Fortran libraries PENF, FACE, BeFoR64, StringiFor, FUNDAL and foresight, Dear ImGui, ImPlot, ImPlot3D, cimgui, cimplot, cimplot3d, miniz, stb_image, stb_image_write, ImGuiColorTextEdit, ImGuizmo, imgui_rich_md, imgui_md, md4c, the
   Lucide icons derived from Feather, the palettes Nord, Solarized, Gruvbox, Dracula, Catppuccin, Tokyo Night and One Dark) and **ISC**
   (Lucide): the copyright notice and the permission notice must be included in all copies or substantial portions of
   the software. For a binary, ship the licence files with it (the `share/licenses/` tree, where the Lucide one is

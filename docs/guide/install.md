@@ -128,7 +128,7 @@ fpm has no build hooks, so it cannot run CMake. `scripts/fpm_package.py` writes 
 package** instead: the Fortran library, FIGURE's glue and the pinned Dear ImGui, ImPlot, cimgui, cimplot and miniz
 sources (only the files FIGURE compiles, with their licences), the files CMake generates (the browser page, the
 themes and the font, embedded), and the sources of the Fortran libraries FIGURE builds with (PENF, FACE, BeFoR64,
-StringiFor, FUNDAL: [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)). The sources come from
+StringiFor, FUNDAL, foresight: [THIRD_PARTY.md](https://github.com/szaghi/figure/blob/main/THIRD_PARTY.md)). The sources come from
 CMake's fetched tree and `fobis fetch`'s `src/third_party/`, or with `--fetch` from the network at the pins of
 `native/CMakeLists.txt` and the branches of `fobos`. For each release tag `vX.Y.Z` the workflow `fpm.yml` runs `scripts/fpm_publish.sh`,
 which commits the package (one commit with no parent: the tag carries the package, not the repository's history) and
@@ -178,7 +178,7 @@ FIGURE has two layers, built separately:
   built by CMake into two static libraries, `lib/libfigure_native.a` and `lib/libSDL3.a`;
 - the **Fortran library** (`src/lib`), built by [FoBiS](https://github.com/szaghi/FoBiS) (the primary build) or
   [fpm](https://fpm.fortran-lang.org). Neither compiles C++ in this repository: both only link the native layer. Both
-  also compile the author's Fortran libraries (PENF, FACE, BeFoR64, StringiFor, FUNDAL), from their sources, with
+  also compile the author's Fortran libraries (PENF, FACE, BeFoR64, StringiFor, FUNDAL, foresight), from their sources, with
   FIGURE's flags: `fobis fetch` clones them into `src/third_party/`, fpm takes them as git dependencies.
   For another fpm project, FIGURE can also be [a self-contained fpm package](#figure-as-an-fpm-dependency), where fpm
   compiles the native layer itself.

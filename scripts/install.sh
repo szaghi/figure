@@ -390,7 +390,7 @@ build() {
    run_logged "native layer (CMake: Dear ImGui and its extensions, SDL3; the first build downloads SDL3, cimplot, cimplot3d and miniz)" \
       bash scripts/build_native.sh
    if [[ ! -f src/third_party/.deps_config.ini ]]; then # a sources archive brings them: no network then
-      run_logged "Fortran libraries (fobis fetch: PENF, FACE, BeFoR64, StringiFor, FUNDAL)" "$fobis_cmd" fetch
+      run_logged "Fortran libraries (fobis fetch: PENF, FACE, BeFoR64, StringiFor, FUNDAL, foresight)" "$fobis_cmd" fetch
    fi
    run_logged "libfigure.a (FoBiS, $mode)" \
       "$fobis_cmd" build --mode "$mode" --fc "$fc" ${varset[@]+"${varset[@]}"}

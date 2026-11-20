@@ -9,6 +9,8 @@ program figure_test_sibling_libs
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
 use befor64, only : b64_encode, b64_init
 use face, only : colorize
+use foresight, only : foresight_figure => figure_object
+use foresight_format, only : fixed
 use fundal, only : dev_alloc, dev_free
 use penf, only : I1P, I4P, R8P, penf_init, str
 use stringifor, only : string
@@ -20,7 +22,8 @@ type(string)                  :: csv           !< Text to split.
 type(string), allocatable     :: tokens(:)     !< Its fields.
 real(R8P), pointer            :: buffer(:)     !< FUNDAL buffer (CPU mode: host memory).
 integer(I4P)                  :: ierr          !< FUNDAL error status.
-logical                       :: test_passed(5) !< Per-check outcome.
+type(foresight_figure)        :: plot          !< A foresight figure (its root module compiles the whole library).
+logical                       :: test_passed(6) !< Per-check outcome.
 
 call penf_init
 test_passed(1) = trim(adjustl(str(n=42_I4P, no_sign=.true.))) == '42'
@@ -43,10 +46,12 @@ test_passed(5) = ierr == 0 .and. associated(buffer)
 if (test_passed(5)) test_passed(5) = all(buffer == 1._R8P)
 call dev_free(buffer)
 
-write(output_unit, '(A,5L2)') 'figure_test_sibling_libs checks:', test_passed
+test_passed(6) = fixed(1.25_R8P, 2_I4P) == '1.25' .and. fixed(-0.5_R8P, 1_I4P) == '-0.5'
+
+write(output_unit, '(A,6L2)') 'figure_test_sibling_libs checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
-   write(error_unit, '(A)') 'checks: penf str, befor64 encode, face colorize, stringifor split, fundal alloc'
+   write(error_unit, '(A)') 'checks: penf str, befor64 encode, face colorize, stringifor split, fundal alloc, foresight fixed'
    error stop 1
 endif
 endprogram figure_test_sibling_libs
