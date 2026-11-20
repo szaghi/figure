@@ -291,3 +291,8 @@ main = "figure_test_dock_view.F90"
 name = "figure_test_layout_view"
 source-dir = "src/tests"
 main = "figure_test_layout_view.F90"
+
+[[test]]
+name = "figure_bench_scenes"
+source-dir = "src/tests"
+main = "figure_bench_scenes.F90"
