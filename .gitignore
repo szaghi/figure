@@ -9,8 +9,10 @@
 /include/
 /share/
 /build_native.log
-# the Fortran libraries fetched by `fobis fetch` (fobos [dependencies]): sources, lock file and deps config
-/src/third_party/
+# the Fortran libraries fetched by `fobis fetch` (fobos [dependencies]): sources and lock file; the deps config is
+# tracked, as in the other FoBiS libraries: the CI's reusable workflow fetches only when a .deps_config.ini exists
+/src/third_party/*
+!/src/third_party/.deps_config.ini
 imgui.ini
 __pycache__/
 # VitePress (docs/examples/build.sh writes into build/docs-examples, ignored above)
