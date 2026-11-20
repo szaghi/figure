@@ -9,6 +9,8 @@
 /include/
 /share/
 /build_native.log
+# the Fortran libraries fetched by `fobis fetch` (fobos [dependencies]): sources, lock file and deps config
+/src/third_party/
 imgui.ini
 __pycache__/
 # VitePress (docs/examples/build.sh writes into build/docs-examples, ignored above)

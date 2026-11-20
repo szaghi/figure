@@ -22,6 +22,15 @@ source-form = "free"
 [library]
 source-dir = "src/lib"
 
+# The owner's Fortran libraries (szaghi/figure#15 §6): the set of fobos [dependencies], each tracking its default branch.
+# fpm builds them from their own manifests.
+[dependencies]
+PENF = { git = "https://github.com/szaghi/PENF", branch = "master" }
+FACE = { git = "https://github.com/szaghi/FACE", branch = "master" }
+BeFoR64 = { git = "https://github.com/szaghi/BeFoR64", branch = "master" }
+StringiFor = { git = "https://github.com/szaghi/StringiFor", branch = "master" }
+FUNDAL = { git = "https://github.com/szaghi/FUNDAL", branch = "main" }
+
 [[example]]
 name = "figure_hello"
 source-dir = "src/examples"
@@ -296,3 +305,8 @@ main = "figure_test_layout_view.F90"
 name = "figure_bench_scenes"
 source-dir = "src/tests"
 main = "figure_bench_scenes.F90"
+
+[[test]]
+name = "figure_test_sibling_libs"
+source-dir = "src/tests"
+main = "figure_test_sibling_libs.F90"

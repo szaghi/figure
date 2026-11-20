@@ -6,6 +6,20 @@ repository = https://github.com/szaghi/figure
 authors    = Stefano Zaghi
 email      = stefano.zaghi@cnr.it
 
+# The owner's Fortran libraries (szaghi/figure#15 §6), source-passed: `fobis fetch` clones each one's default branch into
+# src/third_party/ (git-ignored) and FIGURE's modes compile its src/lib with FIGURE's own flags; the libraries' own fobos
+# and fpm.toml are never read. The list is closed (§6's rule): every library a listed one uses is listed here too, and in
+# fpm.toml [dependencies]. PENF is built without PENF_R16P (no quadruple precision).
+# FUNDAL's fundal_mpih_object.F90 (the MPI handler, `use mpi`) is excluded by the templates: FIGURE has no MPI.
+# foresight (§6, K4) joins once it builds with nvfortran 26.9 and ifx under FIGURE's flags (P3's log).
+[dependencies]
+deps_dir   = src/third_party
+PENF       = https://github.com/szaghi/PENF :: branch=master :: src=src/lib
+FACE       = https://github.com/szaghi/FACE :: branch=master :: src=src/lib
+BeFoR64    = https://github.com/szaghi/BeFoR64 :: branch=master :: src=src/lib
+StringiFor = https://github.com/szaghi/StringiFor :: branch=master :: src=src/lib
+FUNDAL     = https://github.com/szaghi/FUNDAL :: branch=main :: src=src/lib
+
 [modes]
 modes = tests-gnu tests-gnu-debug examples-gnu examples-gnu-traps
         tests-nvf examples-nvf
@@ -40,6 +54,7 @@ $CGNU        = -c -std=f2018 -ffree-line-length-132 -fimplicit-none
 $CGNU_DEBUG  = -Og -g3 -fcheck=all -fbacktrace -Wall -Wimplicit-interface -Wimplicit-procedure -finit-real=nan -ffpe-trap=invalid,zero,overflow
 $CNVF        = -c -Mstandard -Mfree -Munixlogical
 $CIFX        = -c -stand f18 -free -fpscomp logicals
+$EXCLUDE     = src/third_party/FUNDAL/src/lib/fundal_mpih_object.F90
 
 # main modes: the tests build into exe/ (scripts/run_tests.sh runs every program there), the examples into exe/examples/
 # (with their own mod/ and obj/), which run_tests.sh does not enter
@@ -137,6 +152,7 @@ mklib     = static
 # templates
 [template-gnu]
 compiler  = gnu
+exclude   = $EXCLUDE
 mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib
@@ -149,6 +165,7 @@ jobs      = 4
 
 [template-nvf]
 compiler  = nvfortran
+exclude   = $EXCLUDE
 mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib
@@ -161,6 +178,7 @@ jobs      = 4
 
 [template-ifx]
 compiler  = intel_nextgen
+exclude   = $EXCLUDE
 mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib
@@ -198,12 +216,15 @@ rule_1 = fobis rule --ex delexe
 rule_2 = rm -rf mod/ obj/
 rule_3 = rm -f *.gcov
 
+# rule_4: the coverage is FIGURE's: the run data of the Fortran libraries (src/third_party, compiled for
+# figure_test_sibling_libs) is removed before compute-coverage.sh and the gcov pages read it
 [rule-makecoverage]
 help   = Perform coverage analysis (and check the generated bindings against the cimgui/cimplot metadata)
 rule_1 = fobis build --mode tests-gnu-debug --coverage --force-compile
 rule_2 = python3 scripts/gen_bindings.py --check --check-symbols lib/libfigure_native.a
 rule_3 = bash scripts/run_tests.sh
-rule_4 = ./scripts/compute-coverage.sh
+rule_4 = bash -c 'for f in src/third_party/*/src/lib/*.[Ff]90; do b="${f##*/}"; rm -f "exe/obj/${b%.*}.gcda"; done'
+rule_5 = ./scripts/compute-coverage.sh
 
 [rule-makecoverage-analysis]
 help   = Perform coverage analysis and saving reports in markdown

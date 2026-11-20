@@ -64,6 +64,11 @@ jobs:
         scripts/build_native.sh
         cat lib/pkgconfig/sdl3.pc
 
+    # the Fortran libraries of fobos [dependencies], into src/third_party (figure_test_sibling_libs uses them; check_sync.py
+    # checks their closure)
+    - name: Fortran libraries (fobis fetch)
+      run: fobis fetch
+
     - name: Link line of this platform (fobos varset vs SDL)
       run: python3 scripts/check_sync.py
 
@@ -184,6 +189,11 @@ jobs:
         gfortran --version && g++ --version && cmake --version
         CC=gcc CXX=g++ scripts/build_native.sh
         cat lib/pkgconfig/sdl3.pc
+
+    # the Fortran libraries of fobos [dependencies], into src/third_party (figure_test_sibling_libs uses them; check_sync.py
+    # checks their closure)
+    - name: Fortran libraries (fobis fetch)
+      run: fobis fetch
 
     - name: Link line of this platform (fobos varset vs SDL)
       run: python scripts/check_sync.py
@@ -318,6 +328,11 @@ jobs:
         nvfortran --version && g++ --version
         CC=gcc CXX=g++ scripts/build_native.sh
 
+    # the Fortran libraries of fobos [dependencies], into src/third_party (figure_test_sibling_libs uses them; check_sync.py
+    # checks their closure)
+    - name: Fortran libraries (fobis fetch)
+      run: fobis fetch
+
     - name: Link line of this platform (fobos varset vs SDL)
       run: python3 scripts/check_sync.py
 
@@ -392,6 +407,11 @@ jobs:
       run: |
         ifx --version && g++ --version
         CC=gcc CXX=g++ scripts/build_native.sh
+
+    # the Fortran libraries of fobos [dependencies], into src/third_party (figure_test_sibling_libs uses them; check_sync.py
+    # checks their closure)
+    - name: Fortran libraries (fobis fetch)
+      run: fobis fetch
 
     - name: Link line of this platform (fobos varset vs SDL)
       run: python3 scripts/check_sync.py
