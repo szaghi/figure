@@ -81,6 +81,8 @@ ys1 = tri(xs / 2.5_real64) - 1.0_real64
 ys2 = 0.5_real64 * tri(xs / 1.5_real64 + 0.5_real64)
 yline = 1.0_real64
 line_moved = .false.
+px_of = 0.0_real64 ! read by every frame of the interaction plot before probe_point sets it
+probe = 0.0_real64
 
 call app%init_headless(W, H)
 call ip_set_style_var('MinorAlpha', 0.5_real64)
