@@ -251,3 +251,8 @@ main = "figure_test_plot_more.F90"
 name = "figure_test_plot3d_more"
 source-dir = "src/tests"
 main = "figure_test_plot3d_more.F90"
+
+[[test]]
+name = "figure_test_plot_view"
+source-dir = "src/tests"
+main = "figure_test_plot_view.F90"
