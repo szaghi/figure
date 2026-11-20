@@ -261,3 +261,8 @@ main = "figure_test_plot_view.F90"
 name = "figure_test_text_edit"
 source-dir = "src/tests"
 main = "figure_test_text_edit.F90"
+
+[[test]]
+name = "figure_test_table_layout"
+source-dir = "src/tests"
+main = "figure_test_table_layout.F90"
