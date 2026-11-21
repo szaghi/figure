@@ -126,10 +126,32 @@ From FIGURE's history with three compilers (#4):
 - **No allocation per item per frame** in the core and the plot frame: labels, IDs and `##` suffixes are character
   slices hashed in place, not `type(string)` values.
 
-Found in P3 with nvfortran 26.9, to respect in the layers that hold arrays of `type(string)`: a section of an
-assumed-shape dummy array of a derived type with a deferred-length component, assigned to an allocatable
-(`inner = items(2:3)`), crashes; copy element by element. Defined output (`DT`) to an internal file is wrong; write
-to an external unit or use `%chars()`.
+nvfortran 26.9's defects, each with the form that avoids it (reproducers on #4; the last four have canaries in
+`figure_test_canaries`, which fail once a release fixes the defect):
+
+- **A section of an array of a derived type with a deferred-length component**, an assumed-shape dummy assigned to an
+  allocatable (`inner = items(2:3)`), crashes: copy element by element. (P3)
+- **Defined output (`DT`) to an internal file** writes garbage: write to an external unit or use `%chars()`. (P3)
+- **`ieee_is_nan` in a loop** is a call per element, which stops vectorization: test `v /= v`. (P4, 3× on 10^7 points)
+- **A `type(c_ptr)` through a procedure pointer of a `bind(C)` interface** (a result, or a by-value argument past the
+  eighth) arrives wrong: the OpenGL function pointers pass every pointer as an `integer(c_intptr_t)`. (P9)
+- **`move_alloc` into a local array of a procedure (or main program) that has internal procedures** leaves the
+  array's bounds undefined (any whole-array operation may read outside it): move into a module variable, a dummy or a
+  component.
+- **`size()` (or `allocated()`) of a host's array, tested in a loop of an internal procedure** whose calls reallocate
+  it, is read once before the loop at `-O2 -mp`: test it through a function, or keep the loop out of internal
+  procedures. A host dummy's component is affected as a host local is; a module variable is not.
+- **`x = [x, item]`, `x` an array of a derived type with allocatable or deferred-length components**, gives the
+  earlier elements wrong components: build into a temporary (`more = [x, item]; x = more`) or grow and assign.
+- **A character typed array constructor (`[character(len=9) :: ...]`) anywhere in a source file** makes, in that
+  file, `select case (f(...))` with `f`'s result of deferred length match no case, and a function whose result has
+  its dummy's length (`character(len=len(s))`) return nothing for a deferred-length actual: select on a variable, or
+  pass `trim(v)`. The trigger is narrower than this (foresight's `select case (extension(...))` is right), but not
+  known; the rule is the safe side of it. `[integer ::]` and `[real ::]` do not trigger it.
+
+The last four are checked in the sources by `scripts/check_nvf_patterns.py` (Checks), because a test catches them only
+on the paths it runs: the audit of 2026-11-21 found none in `src/lib` or `src/paths`, and the check keeps the layers to
+come so.
 
 ## The sibling libraries
 
