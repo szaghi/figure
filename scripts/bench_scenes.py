@@ -30,7 +30,8 @@ under a ``--label`` such as ``wsl-gnu-window``):
   not comparable (a 99th percentile over 30 frames is not one over 300). A scene measured over fewer than 300 frames
   (``FRAMES``) records ``p99_valid: false`` and a ``p99_note``: its ``_p99`` values are about the largest frame time.
 
-``--json FILE`` also writes the run (every run's statistics) to FILE. ``--scenes a,b`` runs those only; ``--frames``
+``--json FILE`` also writes the run (every run's statistics) to FILE. ``--scenes a,b`` runs those only (the
+``EXTRA`` scenes, line1e8c and device1e8, only so: no baseline of #15 P2 has them); ``--frames``
 and ``--warmup`` override the scene's defaults (300 measured frames after 30, except the largest scenes: 30 after 3,
 see ``FRAMES``; ``SKIP`` leaves ``line1e8`` out of a window). A run of a scene that fails is run again once
 (``RETRIES``), and counted in the scene's ``retries``.
@@ -65,6 +66,8 @@ SCENES = (
     "heatmap256", "heatmap512", "heatmap1024", "heatmap4096", "field512", "field1024", "field4096", "surface256",
     "editor10k",
 )
+# scenes run only when named (--scenes), not in the baselines of #15 P2: line1e8 cached (#15 P5) and on a device (P6)
+EXTRA = ("line1e8c", "device1e8")
 # measured frames and warm-up frames of the scenes that do not take the default (300 after 30), by mode: line1e8 takes
 # about 1.4 s and 14 GB a frame headless with ImPlot today (#15 G1: "where the baseline cannot"); in a window the
 # largest scenes take 0.5 to 0.9 s a frame (line1e7 520 ms, heatmap4096 840 ms, scatter1e6 600 ms on the WSL box):
@@ -261,7 +264,7 @@ def main(argv: list[str]) -> int:
         ap.error("one of --write, --compare, --json is required")
 
     scenes = [s for s in args.scenes.split(",") if s]
-    unknown = [s for s in scenes if s not in SCENES]
+    unknown = [s for s in scenes if s not in SCENES + EXTRA]
     skipped = {s: why for s, why in SKIP.get(args.mode, {}).items() if s in scenes}
     scenes = [s for s in scenes if s not in skipped]
     if unknown or args.runs < 1:

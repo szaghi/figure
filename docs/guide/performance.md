@@ -106,7 +106,22 @@ a frame, a million 24 ms. A plot is at most a few thousand pixels wide, so `ip_l
 decimate a series of more than 256 points per pixel column on average: at most 64 points a column reach ImPlot, the
 extremes of each sixteenth of a column kept ([Long series](plots#long-series)). What is left is one pass over the
 data per frame (are the abscissae sorted, where are the extremes of the ordinates), and the 64 points a column ImPlot
-draws.
+draws. The line scenes of `scripts/bench_scenes.py` (a plot over the whole 1280 × 800 window, sorted x, fitted), in a
+window on the GPU (renderer D3D12, NVIDIA GeForce RTX 4070), gfortran 16.2 `-O2`, i9-13900KF, median frame time of 5
+runs (300 frames each, 30 for 10⁷ points), 2026-11-20:
+
+| Points | Every point drawn (v0.8.0, baseline `wsl-gnu-window`) [ms] | Decimated [ms] |
+|---|---|---|
+| 100, 10 000, 100 000 (under 256 a column: every point drawn) | 1.63, 1.79, 4.55 | 1.53, 1.67, 4.07 |
+| 1 000 000 | 32.7 | 5.9 |
+| 10 000 000 | 472 | 22.2 |
+| 100 000 000 | not drawable in a window (about 8 GB of vertices a frame); 1346 headless | 24.9 after `ip_cache_next_item`; 12.2 on the GPU (`ip_line_device`) |
+
+At 10⁷ points the frame is 21 times faster. Unchanged data drawn after `ip_cache_next_item` skip the pass ([Long series](plots#long-series)), and a
+series on a GPU is decimated there ([Series on a device](plots#series-on-a-device)): 10⁸ doubles in device memory
+(nvfortran 26.9 `-acc`) take 12.2 ms a frame in a window, 6.8 ms headless, only the kept points copied back. With
+nvfortran 26.9 the decimation pass on the CPU is slower than with gfortran: at 10⁷ points 74.7 ms a frame in a window
+(the baseline `wsl-nvf-window`: 478), 71 ms of it the pass. Measured 2026-11-20/21 with the 1-minute load under 2.
 
 **Strided data.** Decimating in place costs no copy: `ip_line(label, y(::10), xscale=10 * dx)` reads every tenth
 sample with ImPlot's stride. Components of an array of derived types, matrix rows and integer abscissae are read in

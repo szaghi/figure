@@ -19,6 +19,9 @@ program figure_bench_scenes
 !< - `table`: a table of 10000 rows and 4 columns through the list clipper, scrolled by 3 rows a frame;
 !< - `line100`, `line1e4`, `line1e5`, `line1e6`, `line1e7`, `line1e8`: a line plot of that many points, x sorted,
 !<   fitted;
+!< - `line1e8c`: `line1e8` drawn after `ip_cache_next_item(changed=.false.)` (#15 P5: the data never change);
+!< - `device1e8`: `line1e8`'s points in device memory (FUNDAL's `dev_alloc`), drawn by `ip_line_device` (#15 P6: on
+!<   the GPU in the tests-nvf-acc build, FUNDAL's CPU mode elsewhere);
 !< - `scatter1e6`: 1e6 markers;
 !< - `heatmap256`, `heatmap512`, `heatmap1024`, `heatmap4096`: a field of n x n cells drawn by `ip_heatmap`, its values
 !<   changing every frame;
@@ -26,6 +29,7 @@ program figure_bench_scenes
 !< - `surface256`: a 3-D surface of 256 x 256 points (ImPlot3D), its heights changing every frame;
 !< - `editor10k`: the code editor showing a file of 10000 lines.
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit, error_unit
+use fundal, only : dev_alloc, dev_free, dev_init, dev_memcpy_to_device
 use figure, only : app_object, code_editor_object, ig_begin, ig_begin_main_menu_bar, ig_begin_menu, ig_begin_table, &
                    ig_tree_node, ig_button, ig_checkbox, ig_dock_id, ig_dock_layout_begin,                          &
                    ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_end_main_menu_bar, &
@@ -33,13 +37,14 @@ use figure, only : app_object, code_editor_object, ig_begin, ig_begin_main_menu_
                    ig_set_scroll, ig_slider, ig_table_next_row, ig_table_set_column, ig_table_setup_column,       &
                    ig_table_headers_row, ig_text, ig_tree_pop, ip3_begin_plot, ip3_end_plot, ip3_surface,          &
                    ip_begin_plot, ip_end_plot, ip_field_image, ip_heatmap, ip_line, ip_scatter, ip_setup_axes,    &
+                   ip_cache_next_item, ip_line_device,                                                              &
                    list_clipper_object, ImGuiWindowFlags_NoDecoration
 
 implicit none
-integer(int32), parameter     :: NSCENES = 18_int32 !< Scenes.
+integer(int32), parameter     :: NSCENES = 20_int32 !< Scenes.
 character(len=11), parameter  :: SCENES(NSCENES) = [character(len=11) :: 'widgets', 'table', 'line100', 'line1e4', &
    'line1e6', 'line1e7', 'line1e8', 'scatter1e6', 'heatmap512', 'heatmap1024', 'heatmap4096', 'field512',          &
-   'field1024', 'field4096', 'surface256', 'editor10k', 'line1e5', 'heatmap256'] !< Their names.
+   'field1024', 'field4096', 'surface256', 'editor10k', 'line1e5', 'heatmap256', 'line1e8c', 'device1e8'] !< Their names.
 integer(int32), parameter     :: SMOKE_FRAMES = 3_int32   !< Frames of each scene without a scene named.
 integer(int64), parameter     :: SMOKE_POINTS = 10000_int64 !< Largest data of a scene without a scene named.
 type(app_object)              :: app                 !< Application.
@@ -53,6 +58,8 @@ integer(int32)                :: width, height       !< Display [pixels].
 logical                       :: window              !< In a window.
 logical                       :: smoke               !< Every scene, a few frames.
 real(real64), allocatable     :: x(:), y(:)          !< A line's or a scatter's points.
+real(real64), pointer         :: xd(:) => null()     !< A line's points in device memory (device1e8).
+real(real64), pointer         :: yd(:) => null()     !< ... ordinates.
 real(real64), allocatable     :: f(:,:)              !< A field.
 real(real64), allocatable     :: gx(:), gy(:)        !< A surface's grid.
 real(real64), allocatable     :: t_frame(:), t_ui(:) !< Measured: frame time, UI time [ms].
@@ -198,6 +205,7 @@ contains
    character(len=:), allocatable :: line !< One of its lines.
    integer(int64)    :: pos  !< Its length so far.
    character(len=16) :: num  !< A number, written.
+   integer(int32)    :: ierr !< FUNDAL's status.
 
    frame = 0_int32
    select case (trim(scene))
@@ -209,7 +217,7 @@ contains
          rx(j) = real(j, real64)
          ry(j) = 1.0_real64 / real(j, real64)
       enddo
-   case ('line100', 'line1e4', 'line1e5', 'line1e6', 'line1e7', 'line1e8')
+   case ('line100', 'line1e4', 'line1e5', 'line1e6', 'line1e7', 'line1e8', 'line1e8c', 'device1e8')
       select case (trim(scene))
       case ('line100')
          n = sized(100_int64)
@@ -221,7 +229,7 @@ contains
          n = sized(1000000_int64)
       case ('line1e7')
          n = sized(10000000_int64)
-      case default
+      case default ! line1e8, line1e8c, device1e8
          n = sized(100000000_int64)
       endselect
       allocate(x(n), y(n))
@@ -229,6 +237,14 @@ contains
          x(j) = real(j - 1_int64, real64)
       enddo
       y = sin(x * (40.0_real64 / real(n, real64))) + 0.2_real64 * sin(x * (1000.0_real64 / real(n, real64)))
+      if (trim(scene) == 'device1e8') then
+         call dev_init()
+         call dev_alloc(fptr_dev=xd, ubounds=[int(n, int32)], ierr=ierr, label='bench: x')
+         if (ierr == 0_int32) call dev_alloc(fptr_dev=yd, ubounds=[int(n, int32)], ierr=ierr, label='bench: y')
+         if (ierr == 0_int32) call dev_memcpy_to_device(dst=xd, src=x, ierr=ierr)
+         if (ierr == 0_int32) call dev_memcpy_to_device(dst=yd, src=y, ierr=ierr)
+         if (ierr /= 0_int32) error stop 'figure_bench_scenes: device memory'
+      endif
    case ('scatter1e6')
       n = sized(1000000_int64)
       allocate(x(n), y(n))
@@ -284,6 +300,8 @@ contains
    if (allocated(x)) deallocate(x)
    if (allocated(y)) deallocate(y)
    if (allocated(f)) deallocate(f)
+   if (associated(xd)) call dev_free(xd)
+   if (associated(yd)) call dev_free(yd)
    if (allocated(gx)) deallocate(gx)
    if (allocated(gy)) deallocate(gy)
    if (ed%is_initialized()) call ed%destroy()
@@ -343,6 +361,11 @@ contains
                call field_values(frame)
                call ip_field_image('f', f, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, vmin=-1.0_real64, &
                                    vmax=1.0_real64, changed=.true.)
+            case ('line1e8c')
+               call ip_cache_next_item(changed=.false.) ! the data never change: the cache built on the first frame
+               call ip_line('signal', x, y)
+            case ('device1e8')
+               call ip_line_device('signal', xd, yd)
             case default
                call ip_line('signal', x, y)
             endselect
