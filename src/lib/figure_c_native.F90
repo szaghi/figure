@@ -29,7 +29,7 @@ public :: fig_plot_x_transform
 public :: fig_plot3d_colormap, fig_plot3d_end, fig_plot3d_state, fig_plot3d_axis_format
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
-public :: fig_test_capture, fig_render_threads, fig_set_frame_hook, fig_cpu_texture
+public :: fig_test_capture, fig_render_threads, fig_set_frame_hook, fig_set_cpu_renderer, fig_cpu_texture
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
 public :: fig_table_sort, fig_table_row_color, fig_table_column_enabled, fig_table_hovered_column
 public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_input_system_theme
@@ -981,6 +981,15 @@ interface
    type(c_funptr), value :: hook   !< `void (*)(int width, int height, const float *clear)`.
    integer(c_int)        :: status !< Status.
    endfunction fig_set_frame_hook
+
+   function fig_set_cpu_renderer(render) result(status) bind(C, name='fig_set_cpu_renderer')
+   !< The CPU renderer of the headless and remote modes' pictures (`c_null_funptr`: figure_swrast, the default), called
+   !< after each frame's Render to fill an RGB picture with the frame (the Fortran path's renderer seam, #15 P9).
+   import :: c_funptr, c_int
+   implicit none
+   type(c_funptr), value :: render !< `void (*)(int width, int height, const float *clear, unsigned char *rgb, int threads)`.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_set_cpu_renderer
 
    function fig_cpu_texture(id, width, height, channels, pixels, smooth) result(found) bind(C, name='fig_cpu_texture')
    !< A user texture's pixels as the CPU renderer reads them (RGBA, rows from the top) and its filter (1 linear):

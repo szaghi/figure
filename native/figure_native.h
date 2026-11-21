@@ -273,9 +273,13 @@ int    fig_test_capture(const char *path, int path_len);
 int    fig_render_threads(int threads);
 /* The Fortran path's renderer (szaghi/figure#15 P9). fig_set_frame_hook: a procedure called after each frame's
  * ImGui::Render in headless and remote modes, while the draw data are valid, given the size and clear colour of the
- * CPU renderer's picture (NULL: none). fig_cpu_texture: a user texture's pixels as the CPU renderer reads them (RGBA
- * rows from the top, the texture's filter): 1, or 0 without. */
+ * CPU renderer's picture (NULL: none). fig_set_cpu_renderer: the CPU renderer of the headless and remote modes'
+ * pictures (NULL: figure_swrast, the default), called after ImGui::Render to fill rgb (3 * width * height bytes, rows
+ * from the top) with the frame on the clear colour, threads as fig_render_threads (0: its default).
+ * fig_cpu_texture: a user texture's pixels as the CPU renderer reads them (RGBA rows from the top, the texture's
+ * filter): 1, or 0 without. */
 int    fig_set_frame_hook(void (*hook)(int width, int height, const float *clear));
+int    fig_set_cpu_renderer(void (*render)(int width, int height, const float *clear, unsigned char *rgb, int threads));
 int    fig_cpu_texture(unsigned long long id, int *width, int *height, int *channels, const unsigned char **pixels,
                        int *smooth);
 int    fig_save_layout(const char *path, int path_len, const char *comment, int comment_len);

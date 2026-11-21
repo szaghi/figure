@@ -56,13 +56,16 @@ program figure_test_render
 !< a line plot and a heatmap; a field image (`ip_field_image`: a texture and the samplers' callbacks); a user texture
 !< drawn nearest (scaled up 8 times) and linear; a drawing with a vertex far beyond the picture (the clipped path); a
 !< frame rendered with 1 and with 3 threads. Pixels of each scene are checked to be drawn (not the clear colour only).
+!< On the Fortran path the app's pictures are the Fortran renderer's (figure_renderer installs it): the test puts
+!< figure_swrast back for its reference (`fig_set_cpu_renderer(c_null_funptr)`) and the path's renderer at the end.
 !< The pictures are `figure_test_render.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_c_binding, only : c_funloc, c_null_funptr
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_button, ig_checkbox, ig_draw_line, ig_draw_polygon, &
                    ig_end, ig_image, ig_set_next_window, ig_text, ip_begin_plot, ip_end_plot, ip_field_image,       &
                    ip_heatmap, ip_line, texture_object, ImGuiWindowFlags_NoDecoration
-use figure_c_native, only : fig_set_frame_hook
+use figure_c_native, only : fig_set_cpu_renderer, fig_set_frame_hook
+use figure_renderer, only : renderer_install
 use figure_test_render_state, only : cpu, drawn, hook, shot, want
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 
@@ -107,6 +110,7 @@ call tex%update(rgba)
 call tex_smooth%init(8_int32, 6_int32, smooth=.true.)
 call tex_smooth%update(rgba)
 call test_mouse_move(-100.0_real64, -100.0_real64)
+s = fig_set_cpu_renderer(c_null_funptr) ! the reference: figure_swrast's pictures
 s = fig_set_frame_hook(c_funloc(hook))
 do scene = 1_int32, NSCENE
    cpu%threads = merge(3_int32, 1_int32, SCENES(scene) == 'threads')
@@ -128,6 +132,7 @@ do scene = 1_int32, NSCENE
                                                                          ' failed, drawn ', drawn, ': ', figure_last_error()
 enddo
 s = fig_set_frame_hook(c_null_funptr)
+call renderer_install()
 call tex%destroy()
 call tex_smooth%destroy()
 call app%destroy()

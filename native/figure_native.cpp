@@ -2052,12 +2052,21 @@ bool cpu_texture(ImTextureID id, figure_swrast::texture_t *t) {
    return true;
 }
 
+// The Fortran path's CPU renderer (fig_set_cpu_renderer, szaghi/figure#15 P9): when set, it draws the pictures of
+// cpu_frame in place of figure_swrast; none by default (the current path).
+void (*cpu_renderer)(int width, int height, const float *clear, unsigned char *rgb, int threads) = nullptr;
+
 // The frame just rendered (ImGui::Render), drawn by the CPU renderer: RGB, rows from the top, the frame buffer's size.
 int render_threads = 0; // fig_render_threads (tests): 0 the default
 void cpu_frame(std::vector<unsigned char> &rgb, int &w, int &h) {
    const ImGuiIO &io = ImGui::GetIO();
    w = static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x);
    h = static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y);
+   if (cpu_renderer) {
+      rgb.assign(static_cast<size_t>(std::max(w, 0)) * static_cast<size_t>(std::max(h, 0)) * 3, 0);
+      if (w > 0 && h > 0) cpu_renderer(w, h, st.clear, rgb.data(), render_threads);
+      return;
+   }
    figure_swrast::render(ImGui::GetDrawData(), w, h, st.clear, rgb, cpu_texture, render_threads, nullptr);
 }
 
@@ -3743,6 +3752,12 @@ int fig_test_capture(const char *path, int path_len) {
 // The procedure called after each frame's Render in headless and remote modes (nullptr: none).
 int fig_set_frame_hook(void (*hook)(int width, int height, const float *clear)) {
    frame_hook = hook;
+   return FIG_OK;
+}
+
+// The CPU renderer of headless and remote modes' pictures (nullptr: figure_swrast, the default).
+int fig_set_cpu_renderer(void (*render)(int width, int height, const float *clear, unsigned char *rgb, int threads)) {
+   cpu_renderer = render;
    return FIG_OK;
 }
 

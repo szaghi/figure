@@ -22,12 +22,21 @@
 # a fobos mode: the modes of fobos run the native build (pre_build) every time, while here the native layer must already
 # be in lib/ (scripts/build_native.sh).
 #
-# Usage: bash docs/examples/build.sh [--varset linux|macos|windows]
+# Usage: bash docs/examples/build.sh [--varset linux|macos|windows] [--path imgui|fortran]
 #   (FC=... for another gfortran; build products in build/docs-examples). The varset of fobos gives the native link line
-#   ($NATIVE_LIBS, $NATIVE_LFLAGS), as for the fobos modes: linux by default.
+#   ($NATIVE_LIBS, $NATIVE_LFLAGS), as for the fobos modes: linux by default. --path fortran builds the programs on the
+#   Fortran path (szaghi/figure#15 §2: its seams, fobos' $PATH_FORTRAN, as the -fortran modes), so that
+#   `docs_media.py --check` compares its pictures; the default is the current path (imgui).
 set -euo pipefail
 varset=linux
-if [[ ${1:-} == --varset ]]; then varset=${2:?build.sh: --varset needs a name}; shift 2; fi
+path=imgui
+while [[ $# -gt 0 ]]; do
+   case $1 in
+      --varset) varset=${2:?build.sh: --varset needs a name}; shift 2 ;;
+      --path) path=${2:?build.sh: --path needs imgui or fortran}; shift 2 ;;
+      *) echo "docs/examples/build.sh: unknown option $1" >&2; exit 2 ;;
+   esac
+done
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 ex=$root/docs/examples
@@ -76,9 +85,9 @@ ext_libs=()
 for lib in $native_libs; do ext_libs+=(--ext-libs "$lib"); done
 lflags=()
 [[ -n $native_lflags ]] && lflags=(--lflags "$native_lflags")
-# the library of the current path: src/lib and its seams (src/paths/imgui/, szaghi/figure#15 §2), as fpm's tree; the
-# .inc: included by figure.F90
-lib_sources=$(python3 "$root/scripts/check_sync.py" --path-sources imgui)
+# the library of the path: src/lib and its seams (szaghi/figure#15 §2; the current path's, src/paths/imgui/, by
+# default, as fpm's tree); the .inc: included by figure.F90
+lib_sources=$(python3 "$root/scripts/check_sync.py" --path-sources "$path")
 while IFS= read -r f; do cp "$root/${f%$'\r'}" "$build/src/"; done <<< "$lib_sources"
 cp "$ex"/src/*.F90 "$build/src/"
 # FUNDAL (szaghi/figure#15 P6: figure_decimate_device, ip_line_device), fetched by `fobis fetch` into src/third_party:
