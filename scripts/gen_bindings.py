@@ -78,6 +78,7 @@ MIRRORS: dict[str, tuple[str, str]] = {
     "ImPlot3DPoint": ("im_plot3d_point", "cimplot3d"),
     "ImPlot3DQuat": ("im_plot3d_quat", "cimplot3d"),
     "ImPlot3DSpec": ("im_plot3d_spec", "cimplot3d"),
+    "ImRect": ("im_rect", "cimgui"),
 }
 # Structs by value the mirrors do not cover -> why their functions are skipped (each has a sibling or an alternative).
 UNMIRRORED = {
@@ -92,16 +93,107 @@ SPEC_DEFAULTS = {"ImPlotSpec": "cimplot", "ImPlot3DSpec": "cimplot3d"}
 class Library:
     """One C library to bind (cimgui, cimplot or cimplot3d)."""
 
-    name: str  # cimgui | cimplot | cimplot3d
+    name: str  # cimgui | cimplot | cimplot3d | cimgui_core
     header: str  # public header location tag in the metadata: imgui | implot
     title: str  # human name for comments
     namespace: str  # C++ namespace of the free functions
+    # a selection instead of the public free functions: these C names (methods and internal functions included), with
+    # the enums `enums` (any header); the module goes to `subdir` of src/lib; callback arguments of a type in
+    # FUNPTRS are bound as `type(c_funptr)`
+    select: tuple[str, ...] = ()
+    enums: tuple[str, ...] = ()
+    meta: str = ""  # the library whose metadata it reads (default: its name)
+    subdir: str = ""
 
+
+# figure_core's implementation over Dear ImGui (szaghi/figure#15 P8, src/lib/core_imgui/): the ImDrawList methods and the
+# imgui_internal functions it calls, bound by the same rules as the public ones. Implementation A of the seam only: it
+# goes with Dear ImGui in P27.
+CORE_FUNCTIONS = (
+    "ImDrawList_AddCallback", "ImDrawList_AddCircle", "ImDrawList_AddCircleFilled", "ImDrawList_AddConvexPolyFilled",
+    "ImDrawList_AddDrawCmd", "ImDrawList_AddImage", "ImDrawList_AddLine", "ImDrawList_AddPolyline", "ImDrawList_AddRect",
+    "ImDrawList_AddRectFilled", "ImDrawList_AddRectFilledMultiColor", "ImDrawList_AddText_Vec2",
+    "ImDrawList_AddTriangleFilled",
+    "ImDrawList_GetClipRectMax", "ImDrawList_GetClipRectMin", "ImDrawList_PopClipRect", "ImDrawList_PopTexture",
+    "ImDrawList_PrimReserve", "ImDrawList_PrimUnreserve", "ImDrawList_PushClipRect", "ImDrawList_PushTexture",
+    "igButtonBehavior", "igCalcItemSize", "igClearActiveID", "igGetActiveID", "igGetCurrentWindow", "igGetHoveredID",
+    "igGetIDWithSeed_Int", "igGetIDWithSeed_Str", "igIsClippedEx", "igItemAdd", "igItemHoverable", "igItemSize_Rect",
+    "igItemSize_Vec2", "igKeepAliveID", "igPushOverrideID", "igRenderFrame", "igRenderTextClipped", "igSetActiveID",
+    "igSetHoveredID",
+)
+CORE_ENUMS = ("ImGuiButtonFlagsPrivate_", "ImGuiItemFlagsPrivate_")
+# callback types bound as procedure pointers (`type(c_funptr), value`) in the selected modules
+FUNPTRS = {"ImDrawCallback"}
+# figure_core's access to an ImDrawList that no C API function gives (#15 P8, implementation A): appending a batch of
+# vertices and indices built in Fortran, and the shared data its primitives read. Written into the glue with the
+# selected library's functions; bound in figure_cimgui_core.
+CORE_GLUE = """
+// figure_core's draw list (szaghi/figure#15 P8): a batch of n_vtx vertices (ImDrawVert's layout) and n_idx indices
+// (0-based in the batch) appended to an ImDrawList as one primitive (PrimReserve: a new command when the 16-bit
+// indices would wrap), and the state its primitives read: _FringeScale, the white pixel's and the anti-aliased line
+// textures' UVs (n_lines of them, u0 u1 v 1/thickness), the list's flags.
+void figure_ImDrawList_append(ImDrawList* dl, const ImDrawVert* vtx, int n_vtx, const int* idx, int n_idx) noexcept {
+   if (n_vtx <= 0 || n_idx <= 0) return;
+   dl->PrimReserve(n_idx, n_vtx);
+   const unsigned int base = dl->_VtxCurrentIdx;
+   std::memcpy(dl->_VtxWritePtr, vtx, sizeof(ImDrawVert) * (size_t)n_vtx);
+   for (int k = 0; k < n_idx; k++) dl->_IdxWritePtr[k] = (ImDrawIdx)(base + (unsigned int)idx[k]);
+   dl->_VtxWritePtr += n_vtx;
+   dl->_IdxWritePtr += n_idx;
+   dl->_VtxCurrentIdx += (unsigned int)n_vtx;
+}
+int figure_ImDrawList_shared(const ImDrawList* dl, float* fringe_scale, ImVec2_c* uv_white, ImVec4_c* uv_lines,
+                             int n_lines, int* flags) noexcept {
+   const int n = IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 1 + IM_DRAWLIST_TEX_LINES_DETAILED_WIDTH_COUNT;
+   *fringe_scale = dl->_FringeScale;
+   *uv_white = ImVec2_c{dl->_Data->TexUvWhitePixel.x, dl->_Data->TexUvWhitePixel.y};
+   *flags = dl->Flags;
+   if (dl->_Data->TexUvLines == NULL) return 0;
+   for (int k = 0; k < n && k < n_lines; k++) {
+      const ImVec4 u = dl->_Data->TexUvLines[k];
+      uv_lines[k] = ImVec4_c{u.x, u.y, u.z, u.w};
+   }
+   return n;
+}
+"""
+
+CORE_INTERFACES = [
+    "",
+    "   subroutine figure_ImDrawList_append(dl, vtx, n_vtx, idx, n_idx) bind(C, name='figure_ImDrawList_append')",
+    "   !< A batch of vertices (ImDrawVert's layout) and indices (0-based in the batch) appended to an ImDrawList as one",
+    "   !< primitive (CORE_GLUE in scripts/gen_bindings.py).",
+    "   import :: c_int, c_ptr",
+    "   implicit none",
+    "   type(c_ptr),    value      :: dl       !< C `ImDrawList*`.",
+    "   type(c_ptr),    value      :: vtx      !< C `const ImDrawVert*`.",
+    "   integer(c_int), value      :: n_vtx    !< Vertices.",
+    "   integer(c_int), intent(in) :: idx(*)   !< Indices, 0-based in the batch.",
+    "   integer(c_int), value      :: n_idx    !< Indices.",
+    "   endsubroutine figure_ImDrawList_append",
+    "",
+    "   function figure_ImDrawList_shared(dl, fringe_scale, uv_white, uv_lines, n_lines, flags) result(res) &",
+    "      bind(C, name='figure_ImDrawList_shared')",
+    "   !< An ImDrawList's state its primitives read: the fringe scale, the white pixel's UV, the anti-aliased line",
+    "   !< textures' UVs (u0, u1, v, 1/thickness; the number of them is the result, 0 before the atlas is built), the",
+    "   !< flags (CORE_GLUE in scripts/gen_bindings.py).",
+    "   import :: c_float, c_int, c_ptr, im_vec2, im_vec4",
+    "   implicit none",
+    "   type(c_ptr),    value         :: dl           !< C `const ImDrawList*`.",
+    "   real(c_float),  intent(out)   :: fringe_scale !< `_FringeScale`.",
+    "   type(im_vec2),  intent(out)   :: uv_white     !< `_Data->TexUvWhitePixel`.",
+    "   type(im_vec4),  intent(inout) :: uv_lines(*)  !< `_Data->TexUvLines`, up to n_lines.",
+    "   integer(c_int), value         :: n_lines      !< Room in uv_lines.",
+    "   integer(c_int), intent(out)   :: flags        !< `Flags`.",
+    "   integer(c_int)                :: res          !< Line textures (0: none yet).",
+    "   endfunction figure_ImDrawList_shared",
+]
 
 LIBRARIES = [
     Library("cimgui", "imgui", "Dear ImGui", "ImGui"),
     Library("cimplot", "implot", "ImPlot", "ImPlot"),
     Library("cimplot3d", "implot3d", "ImPlot3D", "ImPlot3D"),
+    Library("cimgui_core", "imgui", "Dear ImGui (figure_core's)", "ImGui", CORE_FUNCTIONS, CORE_ENUMS, "cimgui",
+            "core_imgui"),
 ]
 
 
@@ -162,7 +254,8 @@ def load(lib: Library) -> tuple[dict, dict, dict]:
     GenerationError
         If the metadata is missing (the native layer has not been built).
     """
-    base = CIMGUI if lib.name == "cimgui" else DEPS / f"{lib.name}-src"  # cimgui: vendored (scripts/gen_cimgui.sh)
+    meta = lib.meta or lib.name
+    base = CIMGUI if meta == "cimgui" else DEPS / f"{meta}-src"  # cimgui: vendored (scripts/gen_cimgui.sh)
     out = base / "generator" / "output"
     try:
         return tuple(  # type: ignore[return-value]
@@ -213,7 +306,7 @@ def fortran_name(name: str, taken: set[str]) -> str:
     return fname
 
 
-def classify(ov: dict, typedefs: dict[str, str]) -> Function:
+def classify(ov: dict, typedefs: dict[str, str], funptrs: bool = False) -> Function:
     """Classify one overload and map its arguments and result.
 
     Parameters
@@ -222,6 +315,8 @@ def classify(ov: dict, typedefs: dict[str, str]) -> Function:
         The overload entry of ``definitions.json``.
     typedefs : dict[str, str]
         Typedef map.
+    funptrs : bool
+        Bind the callback types of FUNPTRS as ``type(c_funptr), value`` (a selected library's).
 
     Returns
     -------
@@ -251,6 +346,10 @@ def classify(ov: dict, typedefs: dict[str, str]) -> Function:
         ctype = a["type"]
         if ctype in ("...", "va_list") or "va_list" in ctype:
             return _set(fn, "skipped", "variadic")
+        if funptrs and ctype in FUNPTRS:
+            name = fortran_name(a["name"], taken)
+            fn.args.append(Argument(name, ctype, "type(c_funptr), value", "c_funptr", f"C `{ctype}`"))
+            continue
         if "(*)" in ctype:
             return _set(fn, "skipped", "callback argument")
         base = resolve(ctype, typedefs)
@@ -345,7 +444,21 @@ def _set(fn: Function, status: str, reason: str) -> Function:
 def public_functions(
     lib: Library, definitions: dict, typedefs: dict[str, str]
 ) -> list[Function]:
-    """Classify every public free function of a library, sorted by C name."""
+    """Classify every public free function of a library (or its selection), sorted by C name."""
+    if lib.select:
+        fns = [
+            classify(ov, typedefs, funptrs=True)
+            for overloads in definitions.values()
+            for ov in overloads
+            if ov.get("ov_cimguiname") in lib.select
+            and not ov.get("constructor")
+            and not ov.get("destructor")
+        ]
+        missing = set(lib.select) - {f.cname for f in fns}
+        if missing:
+            msg = f"{lib.name}: selected functions not in the metadata: {', '.join(sorted(missing))}"
+            raise GenerationError(msg)
+        return sorted(fns, key=lambda f: f.cname.lower())
     fns = [
         classify(ov, typedefs)
         for overloads in definitions.values()
@@ -477,11 +590,17 @@ def function_module(
         kinds |= kinds_
     if mirrors:
         kinds.add("c_size_t")
+    which = (
+        f"the {len(fns)} functions of {lib.meta} selected for figure_core (szaghi/figure#15 P8: ImDrawList methods and "
+        "imgui_internal functions; implementation A of the seam)"
+        if lib.select
+        else f"the {len(fns)} public free functions of {lib.name}"
+    )
     lines = header(
         module,
         f"raw {lib.title} interfaces (generated by scripts/gen_bindings.py: do not edit).",
         [
-            f"Of the {len(fns)} public free functions of {lib.name}, {len(direct)} are bound directly (`bind(C)`) and "
+            f"Of {which}, {len(direct)} are bound directly (`bind(C)`) and "
             f"{len(glue)} through the generated C++ glue (native/figure_glue_generated.cpp: `figure_<name>`, structs "
             "passed by reference instead of by value, struct results through `res`); the rest are skipped: see "
             "docs/guide/raw-bindings.md. Private to the library: applications use the figure_* wrapper modules. Each "
@@ -489,8 +608,11 @@ def function_module(
         ],
     )
     lines.append(f"use, intrinsic :: iso_c_binding, only : {', '.join(sorted(kinds))}")
+    if lib.select:
+        kinds |= {"c_float", "c_int", "c_ptr"}
     if lib.name != "cimgui":  # the cimgui-owned types this module references
         body = "\n".join(type_lines) + "".join(a.decl for f in bound for a in f.args)
+        body += "type(im_vec2) type(im_vec4)" if lib.select else ""
         body += "".join(f.result[0] for f in bound if f.result)
         owned = ["im_vec2"] + [m for m, owner in MIRRORS.values() if owner == "cimgui"]
         used = [t for t in owned if f"type({t})" in body]
@@ -504,7 +626,8 @@ def function_module(
         lines.append(f"public :: {', '.join(types)}")
     specs = [s for s, owner in SPEC_DEFAULTS.items() if owner == lib.name]
     probes = [f"figure_sizeof_{c}_c" for c in mirrors] + [f"figure_{s}_default" for s in specs]
-    lines += _chunks([f.cname for f in bound] + probes, "public :: ")
+    extra = ["figure_ImDrawList_append", "figure_ImDrawList_shared"] if lib.select else []
+    lines += _chunks([f.cname for f in bound] + probes + extra, "public :: ")
     if lib.name == "cimgui":
         lines += [
             "",
@@ -541,6 +664,8 @@ def function_module(
             f"   type({m}), intent(out) :: res !< Default spec.",
             f"   endsubroutine figure_{s}_default",
         ]
+    if lib.select:
+        lines += CORE_INTERFACES
     lines += ["endinterface", f"endmodule {module}"]
     return "\n".join(lines) + "\n"
 
@@ -647,6 +772,7 @@ def glue_cpp(glue: list[Function], structs: dict) -> str:
             "   std::memcpy(res, &spec, sizeof(spec));",
             "}",
         ]
+    out += CORE_GLUE.rstrip("\n").split("\n")
     out += [
         "",
         '} // extern "C"',
@@ -785,7 +911,7 @@ def interface(f: Function, lib: Library) -> list[str]:
         if f.status == "glue"
         else ""
     )
-    lines += doc(f"{f.cpp}{f.signature}, {lib.header}.h.{via}", "   !< ")
+    lines += doc(f"{f.cpp}{f.signature}, {f.location.split(':')[0] or lib.header}.h.{via}", "   !< ")
     kinds = sorted(
         {a.kind for a in f.args if a.kind}
         | ({f.result[1]} if f.result and f.result[1] else set())
@@ -820,15 +946,15 @@ def enum_module(lib: Library, enums: dict, locations: dict[str, str]) -> str:
     public = {
         e: vs
         for e, vs in enums.items()
-        if locations.get(e, "").split(":")[0] == lib.header
+        if (e in lib.enums if lib.select else locations.get(e, "").split(":")[0] == lib.header)
     }
     count = sum(len(vs) for vs in public.values())
     lines = header(
         module,
         f"{lib.title} enumerators (generated by scripts/gen_bindings.py: do not edit).",
         [
-            f"The {count} enumerators of the {len(public)} public {lib.title} enums, values from the {lib.name} "
-            "metadata. Names are the C names; combine flags with `ior`.",
+            f"The {count} enumerators of the {len(public)} {'selected' if lib.select else 'public'} {lib.title} enums, "
+            f"values from the {lib.meta or lib.name} metadata. Names are the C names; combine flags with `ior`.",
         ],
     )
     lines += [
@@ -872,6 +998,9 @@ def report(results: list[tuple[Library, list[Function]]]) -> str:
         "struct result through `res`; the Fortran interface keeps the C API name, with the struct as a `bind(C)` mirror",
         "type (`im_vec4`, `im_plot_spec`, ...) passed by reference. `src/tests/figure_test_layout.F90` checks that each",
         "mirror has the size of its C struct. Variadic functions and functions taking callbacks are **skipped**.",
+        "`figure_cimgui_core` (and `figure_cimgui_core_enums`, in `src/lib/core_imgui/`) binds by the same rules a",
+        "selection beyond the public free functions: the `ImDrawList` methods and `imgui_internal` functions that",
+        "`figure_core`'s implementation over Dear ImGui calls (szaghi/figure#15 P8), its draw callbacks as `c_funptr`.",
         "Enumerators are in `figure_cimgui_enums` / `figure_cimplot_enums` / `figure_cimplot3d_enums`. The generated raw",
         "layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal: programs call the",
         "wrappers (`ig_*`, `ip_*`, `ip3_*`), and a Dear ImGui or ImPlot function without one is listed as \"raw only\" in",
@@ -925,12 +1054,14 @@ def generate() -> dict[Path, str]:
         fns = public_functions(lib, definitions, typedefs_all)
         results.append((lib, fns))
         structs_all.update(structs_enums["structs"])
-        outputs[ROOT / "src" / "lib" / f"figure_{lib.name}.F90"] = function_module(
+        lib_dir = ROOT / "src" / "lib" / lib.subdir if lib.subdir else ROOT / "src" / "lib"
+        outputs[lib_dir / f"figure_{lib.name}.F90"] = function_module(
             lib, fns, structs_all, typedefs_all
         )
-        outputs[ROOT / "src" / "lib" / f"figure_{lib.name}_enums.F90"] = enum_module(
-            lib, structs_enums["enums"], structs_enums.get("locations", {})
-        )
+        if lib.enums or not lib.select:
+            outputs[lib_dir / f"figure_{lib.name}_enums.F90"] = enum_module(
+                lib, structs_enums["enums"], structs_enums.get("locations", {})
+            )
     outputs[ROOT / "docs" / "guide" / "raw-bindings.md"] = report(results)
     glue = [f for _, fns in results for f in fns if f.status == "glue"]
     outputs[ROOT / "native" / "figure_glue_generated.cpp"] = glue_cpp(glue, structs_all)

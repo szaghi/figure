@@ -372,6 +372,13 @@ void figure_ImPlot3D_PushStyleColor_Vec4(ImPlot3DCol idx, const ImVec4_c* col) n
 void figure_ImPlot3D_SampleColormap(float t, ImPlot3DColormap cmap, ImVec4_c* res) noexcept { *res = ImPlot3D_SampleColormap(t, cmap); }
 void figure_ImPlot3D_SetupBoxInitialRotation_Plot3DQuat(const ImPlot3DQuat_c* rotation) noexcept { ImPlot3D_SetupBoxInitialRotation_Plot3DQuat(*rotation); }
 void figure_ImPlot3D_SetupBoxRotation_Plot3DQuat(const ImPlot3DQuat_c* rotation, bool animate, ImPlot3DCond cond) noexcept { ImPlot3D_SetupBoxRotation_Plot3DQuat(*rotation, animate, cond); }
+bool figure_igButtonBehavior(const ImRect_c* bb, ImGuiID id, bool* out_hovered, bool* out_held, ImGuiButtonFlags flags) noexcept { return igButtonBehavior(*bb, id, out_hovered, out_held, flags); }
+bool figure_igIsClippedEx(const ImRect_c* bb, ImGuiID id) noexcept { return igIsClippedEx(*bb, id); }
+bool figure_igItemAdd(const ImRect_c* bb, ImGuiID id, const ImRect* nav_bb, ImGuiItemFlags extra_flags) noexcept { return igItemAdd(*bb, id, nav_bb, extra_flags); }
+bool figure_igItemHoverable(const ImRect_c* bb, ImGuiID id, ImGuiItemFlags item_flags) noexcept { return igItemHoverable(*bb, id, item_flags); }
+void figure_igItemSize_Rect(const ImRect_c* bb, float text_baseline_y) noexcept { igItemSize_Rect(*bb, text_baseline_y); }
+void figure_ImDrawList_AddImage(ImDrawList* self, const ImTextureRef_c* tex_ref, const ImVec2_c p_min, const ImVec2_c p_max, const ImVec2_c uv_min, const ImVec2_c uv_max, ImU32 col) noexcept { ImDrawList_AddImage(self, *tex_ref, p_min, p_max, uv_min, uv_max, col); }
+void figure_ImDrawList_PushTexture(ImDrawList* self, const ImTextureRef_c* tex_ref) noexcept { ImDrawList_PushTexture(self, *tex_ref); }
 
 size_t figure_sizeof_ImVec4_c(void) noexcept { return sizeof(ImVec4_c); }
 size_t figure_sizeof_ImTextureRef_c(void) noexcept { return sizeof(ImTextureRef_c); }
@@ -382,6 +389,7 @@ size_t figure_sizeof_ImPlotSpec_c(void) noexcept { return sizeof(ImPlotSpec_c); 
 size_t figure_sizeof_ImPlot3DPoint_c(void) noexcept { return sizeof(ImPlot3DPoint_c); }
 size_t figure_sizeof_ImPlot3DQuat_c(void) noexcept { return sizeof(ImPlot3DQuat_c); }
 size_t figure_sizeof_ImPlot3DSpec_c(void) noexcept { return sizeof(ImPlot3DSpec_c); }
+size_t figure_sizeof_ImRect_c(void) noexcept { return sizeof(ImRect_c); }
 
 // ImPlotSpec's defaults from its C++ constructor (IMPLOT_AUTO, IMPLOT_AUTO_COL, ...), never copied by hand: the
 // C++ and C layouts are checked equal field by field, then the bytes are copied.
@@ -430,6 +438,34 @@ static_assert(offsetof(ImPlot3DSpec, Flags) == offsetof(ImPlot3DSpec_c, Flags), 
 void figure_ImPlot3DSpec_default(ImPlot3DSpec_c* res) noexcept {
    const ImPlot3DSpec spec;
    std::memcpy(res, &spec, sizeof(spec));
+}
+
+// figure_core's draw list (szaghi/figure#15 P8): a batch of n_vtx vertices (ImDrawVert's layout) and n_idx indices
+// (0-based in the batch) appended to an ImDrawList as one primitive (PrimReserve: a new command when the 16-bit
+// indices would wrap), and the state its primitives read: _FringeScale, the white pixel's and the anti-aliased line
+// textures' UVs (n_lines of them, u0 u1 v 1/thickness), the list's flags.
+void figure_ImDrawList_append(ImDrawList* dl, const ImDrawVert* vtx, int n_vtx, const int* idx, int n_idx) noexcept {
+   if (n_vtx <= 0 || n_idx <= 0) return;
+   dl->PrimReserve(n_idx, n_vtx);
+   const unsigned int base = dl->_VtxCurrentIdx;
+   std::memcpy(dl->_VtxWritePtr, vtx, sizeof(ImDrawVert) * (size_t)n_vtx);
+   for (int k = 0; k < n_idx; k++) dl->_IdxWritePtr[k] = (ImDrawIdx)(base + (unsigned int)idx[k]);
+   dl->_VtxWritePtr += n_vtx;
+   dl->_IdxWritePtr += n_idx;
+   dl->_VtxCurrentIdx += (unsigned int)n_vtx;
+}
+int figure_ImDrawList_shared(const ImDrawList* dl, float* fringe_scale, ImVec2_c* uv_white, ImVec4_c* uv_lines,
+                             int n_lines, int* flags) noexcept {
+   const int n = IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 1 + IM_DRAWLIST_TEX_LINES_DETAILED_WIDTH_COUNT;
+   *fringe_scale = dl->_FringeScale;
+   *uv_white = ImVec2_c{dl->_Data->TexUvWhitePixel.x, dl->_Data->TexUvWhitePixel.y};
+   *flags = dl->Flags;
+   if (dl->_Data->TexUvLines == NULL) return 0;
+   for (int k = 0; k < n && k < n_lines; k++) {
+      const ImVec4 u = dl->_Data->TexUvLines[k];
+      uv_lines[k] = ImVec4_c{u.x, u.y, u.z, u.w};
+   }
+   return n;
 }
 
 } // extern "C"

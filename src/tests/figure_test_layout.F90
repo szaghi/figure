@@ -6,7 +6,8 @@ program figure_test_layout
 !< compiled by the glue. A mismatch means the mirror and the C struct disagree: every call passing it is wrong.
 use, intrinsic :: iso_c_binding, only : c_sizeof
 use, intrinsic :: iso_fortran_env, only : error_unit, output_unit
-use figure_cimgui, only : im_vec4, figure_sizeof_ImVec4_c, im_texture_ref, figure_sizeof_ImTextureRef_c
+use figure_cimgui, only : im_vec4, figure_sizeof_ImVec4_c, im_texture_ref, figure_sizeof_ImTextureRef_c, im_rect, &
+                    figure_sizeof_ImRect_c
 use figure_cimplot, only : im_plot_point, figure_sizeof_ImPlotPoint_c, im_plot_range, figure_sizeof_ImPlotRange_c, im_plot_rect, &
                     figure_sizeof_ImPlotRect_c, im_plot_spec, figure_sizeof_ImPlotSpec_c
 use figure_cimplot3d, only : im_plot3d_point, figure_sizeof_ImPlot3DPoint_c, im_plot3d_quat, figure_sizeof_ImPlot3DQuat_c, &
@@ -22,7 +23,8 @@ type(im_plot_spec)    :: im_plot_spec_v          !< Mirror instance.
 type(im_plot3d_point) :: im_plot3d_point_v       !< Mirror instance.
 type(im_plot3d_quat)  :: im_plot3d_quat_v        !< Mirror instance.
 type(im_plot3d_spec)  :: im_plot3d_spec_v        !< Mirror instance.
-logical               :: test_passed(9) !< Per-check outcome.
+type(im_rect)         :: im_rect_v               !< Mirror instance.
+logical               :: test_passed(10) !< Per-check outcome.
 
 test_passed(1) = c_sizeof(im_vec4_v) == figure_sizeof_ImVec4_c()
 test_passed(2) = c_sizeof(im_texture_ref_v) == figure_sizeof_ImTextureRef_c()
@@ -33,8 +35,9 @@ test_passed(6) = c_sizeof(im_plot_spec_v) == figure_sizeof_ImPlotSpec_c()
 test_passed(7) = c_sizeof(im_plot3d_point_v) == figure_sizeof_ImPlot3DPoint_c()
 test_passed(8) = c_sizeof(im_plot3d_quat_v) == figure_sizeof_ImPlot3DQuat_c()
 test_passed(9) = c_sizeof(im_plot3d_spec_v) == figure_sizeof_ImPlot3DSpec_c()
+test_passed(10) = c_sizeof(im_rect_v) == figure_sizeof_ImRect_c()
 
-write(output_unit, '(A,9L2)') 'figure_test_layout checks:', test_passed
+write(output_unit, '(A,10L2)') 'figure_test_layout checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) then
    write(error_unit, '(A,I0,A,I0)') 'im_vec4: Fortran ', c_sizeof(im_vec4_v), ', C ', figure_sizeof_ImVec4_c()
@@ -47,6 +50,7 @@ if (.not. all(test_passed)) then
                                      figure_sizeof_ImPlot3DPoint_c()
    write(error_unit, '(A,I0,A,I0)') 'im_plot3d_quat: Fortran ', c_sizeof(im_plot3d_quat_v), ', C ', figure_sizeof_ImPlot3DQuat_c()
    write(error_unit, '(A,I0,A,I0)') 'im_plot3d_spec: Fortran ', c_sizeof(im_plot3d_spec_v), ', C ', figure_sizeof_ImPlot3DSpec_c()
+   write(error_unit, '(A,I0,A,I0)') 'im_rect: Fortran ', c_sizeof(im_rect_v), ', C ', figure_sizeof_ImRect_c()
    error stop 1
 endif
 endprogram figure_test_layout

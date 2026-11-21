@@ -10,7 +10,7 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_float, c_int
 
 implicit none
 private
-public :: im_vec2, im_vec4, im_texture_ref
+public :: im_vec2, im_vec4, im_texture_ref, im_rect
 public :: igAcceptDragDropPayload, igAlignTextToFramePadding, igArrowButton, igBegin, igBeginChild_ID, igBeginChild_Str
 public :: igBeginCombo, igBeginDisabled, igBeginDragDropSource, igBeginDragDropTarget, igBeginGroup, igBeginItemTooltip
 public :: igBeginListBox, igBeginMainMenuBar, igBeginMenu, igBeginMenuBar, igBeginMultiSelect, igBeginPopup, igBeginPopupContextItem
@@ -73,6 +73,7 @@ public :: igTableSetBgColor, igTableSetColumnEnabled, igTableSetColumnIndex, igT
 public :: igTextLink, igTextLinkOpenURL, igTextUnformatted, igTreeNode_Str, igTreeNodeEx_Str, igTreeNodeGetOpen, igTreePop
 public :: igTreePush_Ptr, igTreePush_Str, igUnindent, igUpdatePlatformWindows, igValue_Bool, igValue_Float, igValue_Int
 public :: igValue_Uint, igVSliderFloat, igVSliderInt, igVSliderScalar, figure_sizeof_ImVec4_c, figure_sizeof_ImTextureRef_c
+public :: figure_sizeof_ImRect_c
 
 type, bind(C) :: im_vec2
    !< ImVec2_c: a 2D vector of floats, passed by value.
@@ -93,6 +94,12 @@ type, bind(C) :: im_texture_ref
    type(c_ptr)          :: TexData = c_null_ptr  !< C `ImTextureData*`.
    integer(c_long_long) :: TexID = 0_c_long_long !< C `ImTextureID`.
 endtype im_texture_ref
+
+type, bind(C) :: im_rect
+   !< `ImRect_c`, the C layout of `ImRect`, zero-initialized (not the C++ defaults).
+   type(im_vec2) :: Min !< C `ImVec2`.
+   type(im_vec2) :: Max !< C `ImVec2`.
+endtype im_rect
 
 interface
    function igAcceptDragDropPayload(type, flags) result(res) bind(C, name='igAcceptDragDropPayload')
@@ -3222,5 +3229,12 @@ interface
    implicit none
    integer(c_size_t) :: res !< Size [bytes].
    endfunction figure_sizeof_ImTextureRef_c
+
+   function figure_sizeof_ImRect_c() result(res) bind(C, name='figure_sizeof_ImRect_c')
+   !< `sizeof(ImRect_c)` as compiled by the glue (layout check of `im_rect`).
+   import :: c_size_t
+   implicit none
+   integer(c_size_t) :: res !< Size [bytes].
+   endfunction figure_sizeof_ImRect_c
 endinterface
 endmodule figure_cimgui

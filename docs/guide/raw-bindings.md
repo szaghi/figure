@@ -15,6 +15,9 @@ generated **glue**
 struct result through `res`; the Fortran interface keeps the C API name, with the struct as a `bind(C)` mirror
 type (`im_vec4`, `im_plot_spec`, ...) passed by reference. `src/tests/figure_test_layout.F90` checks that each
 mirror has the size of its C struct. Variadic functions and functions taking callbacks are **skipped**.
+`figure_cimgui_core` (and `figure_cimgui_core_enums`, in `src/lib/core_imgui/`) binds by the same rules a
+selection beyond the public free functions: the `ImDrawList` methods and `imgui_internal` functions that
+`figure_core`'s implementation over Dear ImGui calls (szaghi/figure#15 P8), its draw callbacks as `c_funptr`.
 Enumerators are in `figure_cimgui_enums` / `figure_cimplot_enums` / `figure_cimplot3d_enums`. The generated raw
 layer (`figure_cimgui`, `figure_cimplot`, `figure_cimplot3d` and their `_enums`) is internal: programs call the
 wrappers (`ig_*`, `ip_*`, `ip3_*`), and a Dear ImGui or ImPlot function without one is listed as "raw only" in
@@ -26,6 +29,7 @@ without notice.
 | cimgui | 427 | 368 | 8 | 51 |
 | cimplot | 401 | 96 | 272 | 33 |
 | cimplot3d | 131 | 53 | 73 | 5 |
+| cimgui_core | 40 | 33 | 7 | 0 |
 
 ## cimgui: through the generated glue (8)
 
@@ -498,3 +502,20 @@ without notice.
 | `ImPlot3D_SetStyle` | `ImPlot3DStyle` by value (an array field; `ImPlot3D_GetStyle` gives a pointer) |
 | `ImPlot3D_SetupAxisFormat` | callback argument (`ImPlot3DFormatter`) |
 | `ImPlot3D_SetupAxisScale_Plot3DTransform` | callback argument (`ImPlot3DTransform`) |
+
+## cimgui_core: through the generated glue (7)
+
+| Function | Reason |
+|---|---|
+| `igButtonBehavior` | `const ImRect` by value |
+| `igIsClippedEx` | `const ImRect` by value |
+| `igItemAdd` | `const ImRect` by value |
+| `igItemHoverable` | `const ImRect` by value |
+| `igItemSize_Rect` | `const ImRect` by value |
+| `ImDrawList_AddImage` | `ImTextureRef` by value |
+| `ImDrawList_PushTexture` | `ImTextureRef` by value |
+
+## cimgui_core: skipped (0)
+
+| Function | Reason |
+|---|---|
