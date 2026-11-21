@@ -624,10 +624,10 @@ contains
 
    ok = .false.
    if (size(x) > 0) then
-      if (ieee_is_nan(x(1))) return
+      if (x(1) /= x(1)) return ! NaN (see extremes_of_r64)
    endif
    do i = 2_int64, size(x, kind=int64) ! NaNs tested first: an ordered comparison with a NaN raises IEEE invalid
-      if (ieee_is_nan(x(i))) return
+      if (x(i) /= x(i)) return ! NaN
       if (x(i) < x(i - 1_int64)) return ! unsorted
    enddo
    ok = .true.
@@ -641,10 +641,10 @@ contains
 
    ok = .false.
    if (size(x) > 0) then
-      if (ieee_is_nan(x(1))) return
+      if (x(1) /= x(1)) return ! NaN (see extremes_of_r64)
    endif
    do i = 2_int64, size(x, kind=int64) ! NaNs tested first: an ordered comparison with a NaN raises IEEE invalid
-      if (ieee_is_nan(x(i))) return
+      if (x(i) /= x(i)) return ! NaN
       if (x(i) < x(i - 1_int64)) return ! unsorted
    enddo
    ok = .true.
@@ -929,6 +929,12 @@ contains
    subroutine extremes_of_r64(y, s, e, imin, imax, gap)
    !< The points of the minimum and of the maximum of y(s:e) (the first of equal ones; 0 when all are NaN), and
    !< whether one is NaN.
+   !<
+   !< The NaN test of this loop and of `sorted_r64` is `v /= v`, a quiet comparison (no IEEE invalid, so no trap under
+   !< -ffpe-trap) true for a NaN only, as figure_decimate_device's kernels test it: `ieee_is_nan` is a call per point
+   !< with nvfortran 26.9 (`ieee_arithmetic_la_ieee_is_nanr8_`), which made this pass 3.5 times gfortran's (10**7
+   !< points), and `transfer` of the bits is a call too (`pghpf_transfer_i8`). Checked to skip NaNs with gfortran 16.2,
+   !< nvfortran 26.9 and ifx 2026.2 at FIGURE's flags (ifx's default fp-model fast included).
    real(real64),   intent(in)  :: y(:)       !< Ordinates.
    integer(int64), intent(in)  :: s, e       !< First, last point.
    integer(int64), intent(out) :: imin, imax !< Minimum's, maximum's point.
@@ -945,7 +951,7 @@ contains
    valid = 0_int64
    do i = s, e ! NaNs tested first: an ordered comparison with a NaN raises IEEE invalid (a trap under -ffpe-trap)
       v = y(i)
-      if (ieee_is_nan(v)) cycle
+      if (v /= v) cycle ! NaN
       valid = valid + 1_int64
       if (v < vmin) then
          vmin = v
@@ -980,7 +986,7 @@ contains
    valid = 0_int64
    do i = s, e ! NaNs tested first: an ordered comparison with a NaN raises IEEE invalid (a trap under -ffpe-trap)
       v = y(i)
-      if (ieee_is_nan(v)) cycle
+      if (v /= v) cycle ! NaN
       valid = valid + 1_int64
       if (v < vmin) then
          vmin = v
