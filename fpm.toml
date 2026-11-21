@@ -331,3 +331,8 @@ main = "figure_test_plot_cache.F90"
 name = "figure_test_device"
 source-dir = "src/tests"
 main = "figure_test_device.F90"
+
+[[test]]
+name = "figure_test_core"
+source-dir = "src/tests"
+main = "figure_test_core.F90"

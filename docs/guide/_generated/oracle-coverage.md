@@ -4,7 +4,7 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 
 | Interaction class | Picture | Behaviour |
 |---|---|---|
-| `click`: a click on a widget | `cb_scheme.rec`, `cb_table_sort.rec`, `cb_text.rec` (+1) | `figure_test_canvas`, `figure_test_dock_view`, `figure_test_forms` (+12) |
+| `click`: a click on a widget | `cb_scheme.rec`, `cb_table_sort.rec`, `cb_text.rec` (+1) | `figure_test_canvas`, `figure_test_core`, `figure_test_dock_view` (+13) |
 | `drag`: a drag with the pointer | `cb_vector.rec`, `hello.rec` | `figure_test_app`, `figure_test_canvas`, `figure_test_dnd` (+13) |
 | `wheel`: the mouse wheel | `cb_scheme.rec` | `figure_test_canvas`, `figure_test_fields`, `figure_test_numbers` (+7) |
 | `keys`: keys and shortcuts (ig_shortcut, a menu item's shortcut) | `cb_menu.rec`, `cb_shortcuts.rec` | `figure_test_forms`, `figure_test_menu_view`, `figure_test_menus` |
@@ -43,18 +43,18 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `app%add_layout` | `figure_test_dock_view`, `tut24_windows.rec`, `tut25_editor.rec` (+1) | `figure_test_app`, `figure_test_dock_view` |
 | `app%add_window` | `tut24_windows.rec`, `tut25_editor.rec`, `tut26_clip.rec` | `figure_test_app` |
 | `app%content_scale` | `cb_layout.rec` | `figure_test_forms` |
-| `app%destroy` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+112) | `figure_test_app`, `figure_test_canvas`, `figure_test_device` (+46) |
+| `app%destroy` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+112) | `figure_test_app`, `figure_test_canvas`, `figure_test_core` (+47) |
 | `app%dropped` | `cb_drop.rec`, `tut10_case.rec`, `tut11_input.rec` (+14) | `figure_test_tasks`, `figure_test_tools` |
 | `app%file_dialog_result` | `cb_open_browser.rec`, `tut10_case.rec`, `tut11_input.rec` (+14) | `figure_test_files`, `figure_test_popups` |
 | `app%image_result` | `figure_test_pixels` | `figure_test_headless`, `figure_test_pixels` |
 | `app%init` | `canvas_primitives.rec`, `cb_bar_groups.rec`, `cb_canvas.rec` (+99) | exempt: it opens a window: the tests run headless (app%init_headless); the window is pictured by the recordings' programs and opened by scripts/window_check.py in the Platforms workflow |
-| `app%init_headless` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+44) | `figure_test_app`, `figure_test_canvas`, `figure_test_device` (+45) |
+| `app%init_headless` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+44) | `figure_test_app`, `figure_test_canvas`, `figure_test_core` (+46) |
 | `app%init_remote` | `figure_test_pixels`, `cb_menu.rec`, `hello.rec` (+8) | `figure_test_pixels`, `figure_test_remote`, `figure_test_tasks` |
 | `app%layout` | `figure_test_dock_view`, `tut24_windows.rec`, `tut25_editor.rec` (+1) | `figure_test_app`, `figure_test_dock_view` |
 | `app%load_layout` | `tut09_shell.rec`, `tut10_case.rec`, `tut11_input.rec` (+11) | `figure_test_headless` |
 | `app%load_style` | `cb_style.rec`, `cb_style_plain.rec` | `figure_test_frame`, `figure_test_headless`, `figure_test_themes` |
 | `app%message_box` | `figure_test_menu_view` | `figure_test_app`, `figure_test_menu_view` |
-| `app%next_frame` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+112) | `figure_test_app`, `figure_test_canvas`, `figure_test_device` (+46) |
+| `app%next_frame` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+112) | `figure_test_app`, `figure_test_canvas`, `figure_test_core` (+47) |
 | `app%notifications` | `tut16_robust.rec`, `tut17_tested.rec`, `tut19_checks.rec` (+7) | `figure_test_errors`, `figure_test_tools` |
 | `app%notify` | `cb_status.rec`, `cb_status_end.rec`, `tut06_work.rec` (+16) | `figure_test_tools` |
 | `app%open_file_browser` | `cb_open_browser.rec`, `tut10_case.rec`, `tut11_input.rec` (+14) | `figure_test_files` |
@@ -126,7 +126,7 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `fig_read_image` | `figure_test_editor`, `figure_test_markdown`, `figure_test_pixels` | `figure_test_editor`, `figure_test_images`, `figure_test_markdown` (+1) |
 | `figure_file_exists` | `tut10_case.rec`, `tut11_input.rec`, `tut12_run.rec` (+13) | `figure_test_file_api` |
 | `figure_file_time` | exempt: a clock, a file's time: nothing drawn | `figure_test_file_api` |
-| `figure_last_error` | `figure_test_dock_view`, `figure_test_keyboard_nav`, `figure_test_layout_view` (+25) | `figure_test_app`, `figure_test_canvas`, `figure_test_device` (+30) |
+| `figure_last_error` | `figure_test_dock_view`, `figure_test_keyboard_nav`, `figure_test_layout_view` (+25) | `figure_test_app`, `figure_test_canvas`, `figure_test_core` (+31) |
 | `figure_make_folder` | `cb_open_browser.rec`, `tut10_case.rec`, `tut11_input.rec` (+14) | `figure_test_file_api` |
 | `figure_remove` | `tut13_field.rec`, `tut14_view3d.rec`, `tut15_task.rec` (+10) | `figure_test_file_api` |
 | `figure_set_file_time` | `cb_open_browser.rec`, `tut10_case.rec`, `tut11_input.rec` (+14) | `figure_test_file_api` |
@@ -141,7 +141,7 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `ig_any_item_active` | `tut13_field.rec`, `tut14_view3d.rec`, `tut15_task.rec` (+10) | `figure_test_forms` |
 | `ig_any_item_hovered` | `cb_context_menu.rec`, `cb_context_menu_tooltip.rec` | `figure_test_forms` |
 | `ig_available` | `canvas_primitives.rec`, `colormaps-jet.rec`, `colormaps.rec` (+17) | `figure_test_forms` |
-| `ig_begin` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+112) | `figure_test_app`, `figure_test_canvas`, `figure_test_device` (+44) |
+| `ig_begin` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+112) | `figure_test_app`, `figure_test_canvas`, `figure_test_core` (+45) |
 | `ig_begin_child` | `figure_test_layout_view`, `cb_drop.rec`, `cb_help.rec` (+18) | `figure_test_app`, `figure_test_canvas`, `figure_test_errors` (+8) |
 | `ig_begin_disabled` | `cb_drop.rec`, `cb_form.rec`, `cb_process.rec` (+20) | `figure_test_errors`, `figure_test_forms` |
 | `ig_begin_group` | `canvas_primitives.rec`, `colormaps-jet.rec`, `colormaps.rec` (+17) | `figure_test_errors`, `figure_test_forms` |
@@ -158,7 +158,7 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `ig_begin_tab_bar` | `cb_form.rec`, `tut11_input.rec`, `tut12_run.rec` (+13) | `figure_test_errors`, `figure_test_forms`, `figure_test_paths` |
 | `ig_begin_table` | `figure_test_table_layout`, `cb_context_menu.rec`, `cb_context_menu_tooltip.rec` (+19) | `figure_test_errors`, `figure_test_forms`, `figure_test_paths` (+2) |
 | `ig_begin_tooltip` | `cb_canvas.rec`, `cb_linked.rec` | `figure_test_errors`, `figure_test_popups` |
-| `ig_button` | `figure_test_keyboard_nav`, `figure_test_layout_view`, `figure_test_pixels` (+66) | `figure_test_app`, `figure_test_dnd`, `figure_test_errors` (+10) |
+| `ig_button` | `figure_test_keyboard_nav`, `figure_test_layout_view`, `figure_test_pixels` (+66) | `figure_test_app`, `figure_test_core`, `figure_test_dnd` (+11) |
 | `ig_canvas` | `canvas_primitives.rec`, `cb_canvas.rec`, `colormaps-jet.rec` (+23) | `figure_test_canvas` |
 | `ig_checkbox` | `figure_test_keyboard_nav`, `figure_test_pixels`, `canvas_primitives.rec` (+46) | `figure_test_headless`, `figure_test_keyboard_nav`, `figure_test_paths` (+3) |
 | `ig_close_current_popup` | `cb_quit.rec`, `cb_reveal.rec`, `tut08_left.rec` (+18) | `figure_test_forms`, `figure_test_popups` |
@@ -188,7 +188,7 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `ig_drop_target` | `cb_dnd.rec` | `figure_test_dnd` |
 | `ig_dummy` | `canvas_primitives.rec`, `colormaps-jet.rec`, `colormaps.rec` (+17) | `figure_test_canvas`, `figure_test_forms` |
 | `ig_em` | `canvas_primitives.rec`, `cb_context_menu.rec`, `cb_context_menu_tooltip.rec` (+30) | `figure_test_forms`, `figure_test_player` |
-| `ig_end` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+112) | `figure_test_app`, `figure_test_canvas`, `figure_test_device` (+44) |
+| `ig_end` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+112) | `figure_test_app`, `figure_test_canvas`, `figure_test_core` (+45) |
 | `ig_end_child` | `figure_test_layout_view`, `cb_drop.rec`, `cb_help.rec` (+18) | `figure_test_app`, `figure_test_canvas`, `figure_test_errors` (+8) |
 | `ig_end_disabled` | `cb_drop.rec`, `cb_form.rec`, `cb_process.rec` (+20) | `figure_test_errors`, `figure_test_forms` |
 | `ig_end_group` | `canvas_primitives.rec`, `colormaps-jet.rec`, `colormaps.rec` (+17) | `figure_test_errors`, `figure_test_forms` |
@@ -248,7 +248,7 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `ig_set_next_item_open` | `cb_tree.rec` | `figure_test_forms` |
 | `ig_set_next_item_shortcut` | `cb_shortcuts.rec`, `tut19_checks.rec`, `tut20_layout.rec` (+6) | `figure_test_forms` |
 | `ig_set_next_item_width` | `canvas_primitives.rec`, `cb_form.rec`, `cb_scheme.rec` (+35) | `figure_test_forms`, `figure_test_numbers`, `figure_test_player` |
-| `ig_set_next_window` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+110) | `figure_test_app`, `figure_test_canvas`, `figure_test_device` (+40) |
+| `ig_set_next_window` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+110) | `figure_test_app`, `figure_test_canvas`, `figure_test_core` (+41) |
 | `ig_set_next_window_dock` | `tut16_robust.rec`, `tut17_tested.rec`, `tut19_checks.rec` (+4) | `figure_test_plots` |
 | `ig_set_scroll` | `cb_reveal.rec` | `figure_test_forms` |
 | `ig_set_style_color` | `cb_style.rec`, `cb_style_plain.rec` | `figure_test_headless`, `figure_test_themes` |
@@ -418,9 +418,9 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `t%running` | `cb_task.rec`, `tut06_work.rec`, `tut15_task.rec` (+10) | `figure_test_tasks` |
 | `t%start` | `cb_task.rec`, `tut06_work.rec`, `tut15_task.rec` (+10) | `figure_test_images`, `figure_test_tasks` |
 | `task_work` | exempt: the abstract interface of a task's procedure: a program writes one, it never calls the interface | exempt: the abstract interface of a task's procedure: a program writes one, it never calls the interface |
-| `test_capture` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+11) | `figure_test_device`, `figure_test_dock_view`, `figure_test_editor` (+12) |
-| `test_click` | `figure_test_dock_view`, `figure_test_markdown`, `figure_test_menu_view` (+23) | `figure_test_canvas`, `figure_test_dock_view`, `figure_test_files` (+19) |
-| `test_compare_image` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+11) | `figure_test_device`, `figure_test_dock_view`, `figure_test_editor` (+12) |
+| `test_capture` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+11) | `figure_test_core`, `figure_test_device`, `figure_test_dock_view` (+13) |
+| `test_click` | `figure_test_dock_view`, `figure_test_markdown`, `figure_test_menu_view` (+23) | `figure_test_canvas`, `figure_test_core`, `figure_test_dock_view` (+20) |
+| `test_compare_image` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+11) | `figure_test_core`, `figure_test_device`, `figure_test_dock_view` (+13) |
 | `test_drag` | `figure_test_layout_view`, `figure_test_plot_view`, `figure_test_table_layout` (+3) | `figure_test_app`, `figure_test_canvas`, `figure_test_fields` (+8) |
 | `test_drawn_extent` | `figure_test_markdown`, `figure_test_plot3d`, `figure_test_plot_view` (+1) | `figure_test_canvas`, `figure_test_markdown`, `figure_test_plot3d` (+10) |
 | `test_drop` | `tut17_tested.rec`, `tut19_checks.rec`, `tut20_layout.rec` (+6) | `figure_test_tools` |
@@ -445,7 +445,7 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `test_key` | `figure_test_editor`, `figure_test_keyboard_nav`, `figure_test_menu_view` (+17) | `figure_test_app`, `figure_test_canvas`, `figure_test_editor` (+13) |
 | `test_menu_click` | `tut24_windows.rec`, `tut25_editor.rec`, `tut26_clip.rec` | `figure_test_app`, `figure_test_paths` |
 | `test_mouse_button` | `figure_test_dock_view`, `figure_test_gizmo`, `figure_test_plot3d` (+7) | `figure_test_canvas`, `figure_test_dnd`, `figure_test_dock_view` (+8) |
-| `test_mouse_move` | `figure_test_dock_view`, `figure_test_gizmo`, `figure_test_layout_view` (+19) | `figure_test_canvas`, `figure_test_dnd`, `figure_test_dock_view` (+20) |
+| `test_mouse_move` | `figure_test_dock_view`, `figure_test_gizmo`, `figure_test_layout_view` (+19) | `figure_test_canvas`, `figure_test_core`, `figure_test_dnd` (+21) |
 | `test_next_frame` | `figure_test_dock_view`, `figure_test_gizmo`, `figure_test_plot3d` (+5) | `figure_test_canvas`, `figure_test_dnd`, `figure_test_dock_view` (+8) |
 | `test_notification_rect` | `cb_status.rec`, `cb_status_end.rec` | `figure_test_tools` |
 | `test_opened_url` | `cb_context_menu.rec`, `cb_context_menu_tooltip.rec` | `figure_test_popups` |
