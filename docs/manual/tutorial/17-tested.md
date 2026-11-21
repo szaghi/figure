@@ -25,6 +25,7 @@ studio changes for it, except two lines that remember where the title field and 
 - `self_test`: The studio driven headless as a user would; one line per check, an error stop if one fails
 - `check`: One check
 - `frames`: Draw `n` frames of the studio, as the main loop does; `ended` once next_frame says the studio ends
+- `field_read`: The task's field has arrived
 - changed: `draw_case`, `draw_dialogs`
 
 <!-- adds: end -->

@@ -6,7 +6,7 @@ do k = 1_int32, 1000000_int32                     ! frames until the solver ends
 enddo
 call check(index(run_status, 'converged in') == 1, 'F5 runs the solver to convergence')
 do k = 1_int32, 1000000_int32                     ! and until the task has read its field
-   if (size(field) > 0) exit
+   if (field_read()) exit
    call frames(1_int32)
 enddo
 call check(size(field) == inp%nx * inp%ny, 'the task reads the field the solver wrote')

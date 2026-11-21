@@ -6,7 +6,7 @@ use figure, only : task_handle_object
 
 implicit none
 private
-public :: field_t, read_field
+public :: field_t, read_field, hand_over
 
 integer(int32), parameter, public :: MAX_SHOWN = 200_int32 !< Nodes per side of the copy drawn, at most.
 
@@ -59,6 +59,16 @@ contains
       data%coarse = data%values(1::data%stride, 1::data%stride) ! what is drawn: at most MAX_SHOWN a side
    endselect
    endsubroutine read_field
+
+   subroutine hand_over(from, to)
+   !< `to` takes the values of `from` without a copy (`move_alloc`). A procedure of this module, not a `move_alloc` in
+   !< the program: nvfortran 26.9 gets an array's size wrong after a `move_alloc` into a variable of a program unit that
+   !< has internal procedures, as the program has (known issues).
+   real(real64), allocatable, intent(inout) :: from(:,:) !< The values, deallocated on return.
+   real(real64), allocatable, intent(inout) :: to(:,:)   !< Their new owner.
+
+   call move_alloc(from, to)
+   endsubroutine hand_over
 endmodule tut15_tasks
 
 !< tut15_task, tutorial chapter 15: the studio reads a large result as a task, off the frame loop.
@@ -88,7 +98,7 @@ use figure, only : app_object, FIG_OK, figure_last_error, ICON_CHART_AREA, ICON_
                    ip_colormap_legend, ip_contour, ip_drag_line_x, ip_drag_point, ip_end_plot, ip_error_bars, &
                    ip_heatmap, ip_line, ip_setup_axes, ip_setup_axes_limits, ip_spec, log_view_object, &
                    process_object, task_object, text_buffer_object, view3d_object
-use tut15_tasks, only : field_t, read_field
+use tut15_tasks, only : field_t, hand_over, read_field
 
 implicit none
 character(len=*), parameter :: PANELS(5) = [character(len=6) :: 'Case', 'Input', 'Run', 'Result', '3-D'] !< Panels.
@@ -909,8 +919,8 @@ contains
    endif
    select type (data)
    type is (field_t)
-      call move_alloc(data%values, field)
-      call move_alloc(data%coarse, coarse)
+      call hand_over(data%values, field)
+      call hand_over(data%coarse, coarse)
       flx = data%lx
       fly = data%ly
       stride = data%stride

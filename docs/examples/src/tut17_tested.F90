@@ -6,7 +6,7 @@ use figure, only : task_handle_object
 
 implicit none
 private
-public :: field_t, read_field
+public :: field_t, read_field, hand_over
 
 integer(int32), parameter, public :: MAX_SHOWN = 200_int32 !< Nodes per side of the copy drawn, at most.
 
@@ -59,6 +59,16 @@ contains
       data%coarse = data%values(1::data%stride, 1::data%stride) ! what is drawn: at most MAX_SHOWN a side
    endselect
    endsubroutine read_field
+
+   subroutine hand_over(from, to)
+   !< `to` takes the values of `from` without a copy (`move_alloc`). A procedure of this module, not a `move_alloc` in
+   !< the program: nvfortran 26.9 gets an array's size wrong after a `move_alloc` into a variable of a program unit that
+   !< has internal procedures, as the program has (known issues).
+   real(real64), allocatable, intent(inout) :: from(:,:) !< The values, deallocated on return.
+   real(real64), allocatable, intent(inout) :: to(:,:)   !< Their new owner.
+
+   call move_alloc(from, to)
+   endsubroutine hand_over
 endmodule tut17_tasks
 
 !< tut15_task, tutorial chapter 15: the studio reads a large result as a task, off the frame loop.
@@ -90,7 +100,7 @@ use figure, only : app_object, FIG_ERR_ARGUMENT, FIG_ERR_EXCEPTION, FIG_ERR_FAIL
                    ip_drag_line_x, ip_drag_point, ip_end_plot, ip_error_bars, ip_heatmap, ip_line, ip_setup_axes, &
                    ip_setup_axes_limits, ip_spec, log_view_object, process_object, task_object, text_buffer_object, &
                    view3d_object
-use tut17_tasks, only : field_t, read_field
+use tut17_tasks, only : field_t, hand_over, read_field
 use figure_testing, only : test_click, test_drop, test_file_browser, test_file_browser_rect, test_frame_hit, &
                           test_frame_rect, test_key, test_popup_rect, test_type
 
@@ -954,8 +964,8 @@ contains
    endif
    select type (data)
    type is (field_t)
-      call move_alloc(data%values, field)
-      call move_alloc(data%coarse, coarse)
+      call hand_over(data%values, field)
+      call hand_over(data%coarse, coarse)
       flx = data%lx
       fly = data%ly
       stride = data%stride
@@ -1355,7 +1365,7 @@ contains
    enddo
    call check(index(run_status, 'converged in') == 1, 'F5 runs the solver to convergence')
    do k = 1_int32, 1000000_int32                     ! and until the task has read its field
-      if (size(field) > 0) exit
+      if (field_read()) exit
       call frames(1_int32)
    enddo
    call check(size(field) == inp%nx * inp%ny, 'the task reads the field the solver wrote')
@@ -1406,6 +1416,15 @@ contains
       call draw_studio()
    enddo
    endsubroutine frames
+
+   function field_read() result(read)
+   !< The task's field has arrived: `size(field) > 0`, asked through a function. Tested in a frame loop, the expression
+   !< itself is read once with nvfortran 26.9 (-mp -O2), before the loop: the frames that reallocate `field` are not
+   !< seen, and the loop runs to its end (known issues).
+   logical :: read !< The field is there.
+
+   read = size(field) > 0
+   endfunction field_read
 
    subroutine draw_dialogs()
    !< The questions and boxes the menus and the frame open, at the top level.

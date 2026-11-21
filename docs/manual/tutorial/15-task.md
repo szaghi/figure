@@ -21,6 +21,7 @@ frames only.
 **What this chapter adds** to [chapter 14's program](./14-view3d), `tut14_view3d.F90`:
 
 - `read_field`: Read a field.dat row by row, reporting the progress, stopping if asked; then make the coarse copy
+- `hand_over`: `to` takes the values of `from` without a copy (`move_alloc`)
 - `follow_load`: Every frame
 - `take_field`: Take the field the task read (no copy), or tell why there is none
 - `run_solver`: The solver run on the case `dir` to its end, with no shell (the same on every platform); its log, written in the case, removed after
@@ -62,8 +63,9 @@ negative and the bar slides to and fro.
 <<< @/examples/snippets/tut15_task-take.F90{fortran}
 
 - Once `loader%done()`, `loader%result(data)` moves the task's data out, without a copy, and frees the object for
-  the next task. `select type` gives it its type again, and `move_alloc` hands the arrays to the program, again
-  without a copy.
+  the next task. `select type` gives it its type again, and `hand_over`, a `move_alloc` in the tasks module, hands
+  the arrays to the program, again without a copy (a `move_alloc` written in the program is wrong with nvfortran 26.9:
+  [Known issues](/guide/known-issues#nvfortran-move-alloc-into-a-host-s-local)).
 - A task that called `h%fail` gives `FIG_ERR_FAILED` with its message in `figure_last_error()`.
 - A cancelled task is done like a finished one; the studio knows it asked, and drops what was read.
 

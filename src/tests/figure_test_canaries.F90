@@ -1,3 +1,107 @@
+!< figure_test_canaries_append, the case of an nvfortran defect: `items = [items, x]`, items an array of a derived type
+!< with allocatable components, gives the earlier elements wrong components (nvfortran 26.9, -O0 and -O2).
+module figure_test_canaries_append
+!< figure_test_canaries_append, the append canary's type and case.
+implicit none
+private
+public :: append_wrong
+
+type :: item_t
+   !< An element with allocatable components.
+   real, allocatable :: a(:) !< One component.
+   real, allocatable :: b(:) !< Another.
+endtype item_t
+
+contains
+   function append_wrong() result(wrong)
+   !< Three elements appended with `items = [items, x]`: an element's components are not the ones it was given.
+   logical                   :: wrong    !< The defect.
+   type(item_t), allocatable :: items(:) !< The array grown.
+   type(item_t)              :: x        !< An element.
+   integer                   :: k        !< Counter.
+
+   allocate(items(0))
+   do k = 1, 3
+      x%a = [real(k), real(k), real(k)]
+      x%b = [10.0 * k, 10.0 * k, 10.0 * k]
+      items = [items, x]
+   enddo
+   wrong = .false.
+   do k = 1, 3
+      wrong = wrong .or. any(items(k)%a /= real(k)) .or. any(items(k)%b /= 10.0 * k)
+   enddo
+   endfunction append_wrong
+endmodule figure_test_canaries_append
+
+!< figure_test_canaries_hoist, the case of an nvfortran defect a canary needs in a procedure of its own: with -mp at -O2,
+!< `size(a)` tested in a loop of an internal procedure, `a` an allocatable of the host reallocated by the loop's calls,
+!< is read once, before the loop (nvfortran 26.9).
+module figure_test_canaries_hoist
+!< figure_test_canaries_hoist, the size-hoisting canary's scoping unit: a procedure with internal procedures.
+implicit none
+private
+public :: size_hoisted
+
+contains
+   function size_hoisted() result(hoisted)
+   !< A loop that waits for `a` to grow (another internal procedure reallocates it at its 10th call) ran to its end.
+   logical              :: hoisted !< The defect.
+   real,    allocatable :: a(:)    !< The array waited for.
+   integer              :: calls   !< Calls of `grow`.
+   integer              :: k       !< Iterations of the loop.
+
+   allocate(a(0))
+   calls = 0
+   call wait_for_a()
+   hoisted = k > 11 ! 11: the 10th call grows it, the 11th test sees it
+   contains
+      subroutine wait_for_a()
+      !< The loop: the case of the docs' self-tests waiting for a task's field.
+      do k = 1, 100
+         if (size(a) > 0) exit
+         call grow()
+      enddo
+      endsubroutine wait_for_a
+
+      subroutine grow()
+      !< `a` reallocated, at the 10th call.
+      calls = calls + 1
+      if (calls < 10) return
+      deallocate(a)
+      allocate(a(6))
+      endsubroutine grow
+   endfunction size_hoisted
+endmodule figure_test_canaries_hoist
+
+!< figure_test_canaries_move, the case of an nvfortran defect a canary needs in a procedure of its own: a `move_alloc`
+!< into a local array of a program unit that has internal procedures leaves the array's size wrong (nvfortran 26.9, -O0
+!< and -O2).
+module figure_test_canaries_move
+!< figure_test_canaries_move, the move_alloc canary's scoping unit: a procedure with an internal procedure.
+implicit none
+private
+public :: moved_size_wrong
+
+contains
+   function moved_size_wrong() result(wrong)
+   !< `move_alloc(a, moved)`, `moved` a local of this function, which has an internal procedure: the elements arrive,
+   !< the size (and every reduction) is that of an empty array, or of a stale one.
+   logical              :: wrong    !< The defect.
+   real,    allocatable :: a(:)     !< The array moved.
+   real,    allocatable :: moved(:) !< Where it goes.
+   integer              :: i        !< Counter.
+
+   a = [(real(i), i = 1, 6)]
+   call move_alloc(a, moved)
+   wrong = size(moved) /= 6 .or. sum(moved) /= 21.0
+   call trigger()
+   contains
+      subroutine trigger()
+      !< Any internal procedure: its presence is the trigger.
+      endsubroutine trigger
+   endfunction moved_size_wrong
+endmodule figure_test_canaries_move
+
 !< figure_test_canaries_select, the case of an nvfortran defect a canary needs at module level: a character parameter
 !< array built with a typed array constructor makes `select case` on a function result of deferred length, in the same
 !< module, see an empty selector (nvfortran 26.9, -O0 and -O2; #4).
@@ -43,6 +147,9 @@ program figure_test_canaries
 !< (Bug B) is run in a child process: this program again, with the argument `--probe-ctor`; not on Windows, where such a
 !< child can hang instead of ending (Platforms run 43749233755: the job hung until it was cancelled).
 use, intrinsic :: iso_fortran_env, only : compiler_version, output_unit
+use figure_test_canaries_append, only : append_wrong
+use figure_test_canaries_hoist, only : size_hoisted
+use figure_test_canaries_move, only : moved_size_wrong
 use figure_test_canaries_select, only : selector_empty
 
 implicit none
@@ -77,12 +184,31 @@ contains
                'the fixed-length buffer of the utf8 helpers (docs/examples/src/gallery.F90, src/tests/figure_test_text.F90)')
    call report('select case on a deferred-length function result, with a typed character constructor in the module', &
                ['nvfortran'], selector_empty('Plots only'), &
-               'the layout''s name assigned before select case (src/tests/figure_test_app.F90)')
+               'the layout''s name assigned before select case (src/tests/figure_test_app.F90, '// &
+               'docs/examples/src/tut24_windows.F90 to tut26_clip.F90)')
+   call report('move_alloc into a local of a program unit with internal procedures: a wrong size', ['nvfortran'], &
+               moved_size_wrong(), 'the tasks modules'' hand_over (docs/examples/src/tut15_task.F90 to tut26_clip.F90)')
+   call report('items = [items, x], a derived type with allocatable components: wrong components', ['nvfortran'], &
+               append_wrong(), 'the runs appended through a copy (docs/examples/src/tut21_tables.F90 to tut26_clip.F90)')
+   if (openmp()) then ! the defect needs -mp: the modes without OpenMP (tests-nvf-acc) do not probe it
+      call report('size of a host''s array, tested in a loop whose calls reallocate it, read once (-mp)', ['nvfortran'], &
+                  size_hoisted(), 'the docs'' self-tests'' field_read (docs/examples/src/tut17_tested.F90 to tut26_clip.F90)')
+   else
+      write(output_unit, '(A)') '  not probed without OpenMP: the size of a host''s array read once in a loop (-mp)'
+   endif
    call report('execute_command_line(wait=.true.) under -Munixlogical', ['nvfortran'], wait_defect(), &
                'the waits left out in src/tests/figure_test_files.F90')
    write(output_unit, '(A,L1)') 'Are all tests passed? ', .not. failed
    if (failed) error stop 1
    endsubroutine canaries
+
+   function openmp() result(on)
+   !< Compiled with OpenMP (conditional compilation: the `!$` line is a statement only then).
+   logical :: on !< OpenMP on.
+
+   on = .false.
+   !$ on = .true.
+   endfunction openmp
 
    function on_windows() result(windows)
    !< Windows, by its OS variable (set in every Windows process, MSYS2's included).

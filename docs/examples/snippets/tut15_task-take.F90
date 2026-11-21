@@ -10,8 +10,8 @@ if (load_cancelled) then                          ! what was read is left as it 
 endif
 select type (data)
 type is (field_t)
-   call move_alloc(data%values, field)
-   call move_alloc(data%coarse, coarse)
+   call hand_over(data%values, field)
+   call hand_over(data%coarse, coarse)
    flx = data%lx
    fly = data%ly
    stride = data%stride

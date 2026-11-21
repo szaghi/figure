@@ -16,6 +16,9 @@ defect, the compiler versions it was seen with. The compiler defects FIGURE work
 | nvfortran | [`-Munixlogical` at the compile but not the link (or the reverse): `select type` matches no type; with it, `execute_command_line(wait=.true.)` does not wait](#nvfortran-munixlogical) | Both or neither; leave `wait` out | nvfortran 26.9 |
 | nvfortran | [`char(i)` of a variable, assigned to a deferred-length string, has length `i`](#nvfortran-char-i-of-a-variable) | A fixed-length buffer | nvfortran 26.9 |
 | nvfortran | [`select case` on a deferred-length function result matches no case](#nvfortran-select-case-on-a-function-result-of-deferred-length) | Select on a variable holding the result | nvfortran 26.9 |
+| nvfortran | [`move_alloc` into a local array of a program (or procedure) with internal procedures: the array's size is wrong](#nvfortran-move-alloc-into-a-host-s-local) | `move_alloc` in a module procedure, the destination its dummy argument | nvfortran 26.9 |
+| nvfortran | [With `-mp` at `-O2`, `size` of the host's array, tested in a loop of an internal procedure whose calls reallocate it, is read once](#nvfortran-size-of-a-host-s-array-read-once-in-a-loop) | Test it through a function | nvfortran 26.9 |
+| nvfortran | [`items = [items, x]`, `items` an array of a derived type with allocatable components: the earlier elements' components are wrong](#nvfortran-appending-to-an-array-of-derived-types-with-allocatable-components) | Through a copy: `more = [items, x]`, then `items = more` | nvfortran 26.9 |
 | nvfortran | [`system_clock` reads the wall clock: an interval jumps when the system steps its time](#nvfortran-system-clock-is-the-wall-clock) | `figure_time()` | nvfortran 26.9 |
 | gfortran | [A section of a deferred-length character array arrives as other elements (nvfortran: a strided one)](#gfortran-a-section-of-a-deferred-length-character-array) | Copy it into a fixed-length array | gfortran 15.2, nvfortran 26.9 |
 | gfortran | [An array constructor of deferred-length strings with a type-spec writes past its memory](#gfortran-an-array-constructor-of-deferred-length-strings) | Fill a fixed-length array element by element | gfortran 16.2 |
@@ -91,14 +94,58 @@ and `src/tests/figure_test_text.F90`). Checked 2026-11-12; canary: [`figure_test
 
 ### nvfortran: `select case` on a deferred-length function result matches no case {#nvfortran-select-case-on-a-function-result-of-deferred-length}
 
-In a module that has a character parameter array built with a typed array constructor
+In a module (or a program) that has a character parameter array built with a typed array constructor
 (`character(len=8), parameter :: NAMES(3) = [character(len=8) :: 'Controls', 'Plots', 'Log']`), nvfortran 26.9 takes
 the selector of `select case (f(...))` as empty when `f` returns `character(len=:), allocatable`: no case but `('')`
 (or `default`) matches. Any optimisation level; gfortran 16.2 and ifx 2026.2 are right; the untyped constructor
 (`['Controls', 'Plots   ', 'Log     ']`) or no such parameter avoids it. **Workaround:** assign the result to a variable
-and select on the variable (`name = app%layout()`, then `select case (name)`, as `src/tests/figure_test_app.F90` does).
+and select on the variable (`name = app%layout()`, then `select case (name)`, as `src/tests/figure_test_app.F90` and
+the docs' studio from tutorial chapter 24 on do: without it, nvfortran built them with no dock layout).
 Checked 2026-11-16 (nvfortran 26.9, ifx 2026.2 and gfortran 16.2 at `-O0` and `-O2`, the untyped constructor
 included); canary: [`figure_test_canaries`](testing#canaries) (#4).
+
+In a main program with such a constructor (even unused), a function whose result has the length of its dummy
+(`character(len=len(text)) :: low`) returns no characters when the actual argument is of deferred length; a
+fixed-length actual or a substring (`name(1:len(name))`) is right. The docs' studio of chapters 25 and 26 marked every
+name of its input as unknown that way: it now lower-cases a substring of the text (`mark_names`). Checked 2026-11-21
+(nvfortran 26.9 at `-O0` and `-O2`; gfortran 16.2 right). No canary: the case needs a main program holding the
+constructor, which would expose the canaries' other probes (deferred-length strings) to it.
+
+### nvfortran: `move_alloc` into a local of a program with internal procedures {#nvfortran-move-alloc-into-a-host-s-local}
+
+`call move_alloc(from, to)`, with `to` a local allocatable array of a main program or a procedure that has internal
+procedures (`contains`), leaves `to` wrong with nvfortran 26.9: its elements are there (`to(6)` reads right), but its
+size, as `size`, `sum`, `minval` and any whole-array operation see it, is a stale one (0 or 1): `minval` gives
+`Infinity`, `sum` gives 0. It does not matter whether the internal procedures use `to`, nor where the `move_alloc` is
+(the program itself or one of its internal procedures); `-O0` and `-O2` alike. A `to` that is a module variable, a
+dummy argument or a component (`field%v`) is right, and so is the same program without internal procedures; gfortran
+16.2 and ifx 2026.2 are right. FIGURE's own sources have no such `move_alloc`. The docs' studio (tutorial chapters 15
+to 26) took a task's field with one, into the program's `field`: under nvfortran its heatmap got an infinite range (a
+Dear ImGui assertion; `vmin must be finite` from chapter 23 on). **Workaround:** make the move in a module procedure,
+`to` its dummy argument (`hand_over` in the tasks module of `docs/examples/src/tut15_task.F90`). Checked 2026-11-21
+(nvfortran 26.9, gfortran 16.2, ifx 2026.2, at `-O0` and `-O2`); canary: [`figure_test_canaries`](testing#canaries).
+
+### nvfortran: with `-mp`, `size` of the host's array is read once in a loop {#nvfortran-size-of-a-host-s-array-read-once-in-a-loop}
+
+In an internal procedure, a loop that waits for an allocatable array of the host to change
+(`do k = 1, n; if (size(field) > 0) exit; call frames(1); enddo`, where the calls reallocate `field`) reads `size(field)`
+once, before the loop, with nvfortran 26.9 at `-O2` with `-mp` (OpenMP, which FIGURE's nvfortran modes use): the loop
+runs to its end. `allocated(field)` is read once the same way; a logical variable of the host is read at every
+iteration, as it should be. Not at `-O0` or `-O1`, nor without `-mp`, nor when the host is a module or the loop is in
+the host itself; gfortran 16.2 is right. The docs' self-tests (tutorial chapters 17 to 26) waited this way for a task's
+field: built with nvfortran they ran a million frames (minutes) at each wait. **Workaround:** test through a function
+(`if (field_read()) exit`, `field_read` an internal function returning `size(field) > 0`). Checked 2026-11-21;
+canary: [`figure_test_canaries`](testing#canaries), compiled with OpenMP only (the case needs `-mp`).
+
+### nvfortran: appending to an array of derived types with allocatable components {#nvfortran-appending-to-an-array-of-derived-types-with-allocatable-components}
+
+`items = [items, x]`, with `items` an allocatable array of a derived type that has allocatable components, gives the
+elements already there wrong components with nvfortran 26.9 (`-O0` and `-O2`): another element's values, or freed
+memory. The docs' studio (tutorial chapters 21 to 26) kept its runs that way, and the Runs table's tooltip drew the
+first run's residuals as its iteration numbers. gfortran 16.2 is right. **Workaround:** through a copy,
+`more = [items, x]`, then `items = more` (`add_run` in `docs/examples/src/tut21_tables.F90`). Removing an element
+(`items = [items(:k - 1), items(k + 1:)]`) was right in the same test. Checked 2026-11-21; canary:
+[`figure_test_canaries`](testing#canaries).
 
 ### nvfortran: `system_clock` jumps with the wall clock {#nvfortran-system-clock-is-the-wall-clock}
 

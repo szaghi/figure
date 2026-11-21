@@ -1,5 +1,5 @@
 do k = 1_int32, 1000000_int32                     ! the plate's field, read by a task: at a time of the task's
-   if (size(field) > 0) exit
+   if (field_read()) exit
    call frames(1_int32)
 enddo
 call frames(360_int32)                            ! the notifications gone (5 s of frame time), nothing moving

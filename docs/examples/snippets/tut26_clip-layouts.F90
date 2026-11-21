@@ -2,7 +2,8 @@ root = ig_dock_id('studio')
 if (ig_dock_layout_begin(root)) then              ! the first frame, after a switch of layout and after a reset
    call ig_dock_split(root, 'left', 0.25_real64, left, right)
    call ig_dock_window('Case', left)
-   select case (app%layout())                     ! the one the user chose
+   layout = app%layout()                          ! the one the user chose (a variable: nvfortran 26.9 selects
+   select case (layout)                           ! no case on the function's result here; known issues)
    case ('Setup')                                 ! the input in front, the run below
       call ig_dock_split(right, 'down', 0.45_real64, run, work)
       call ig_dock_window('3-D', work)

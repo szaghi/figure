@@ -7,7 +7,7 @@ use figure, only : task_handle_object
 
 implicit none
 private
-public :: field_t, read_field
+public :: field_t, read_field, hand_over
 
 integer(int32), parameter, public :: MAX_SHOWN = 200_int32 !< Nodes per side of the copy drawn, at most.
 
@@ -60,6 +60,16 @@ contains
       data%coarse = data%values(1::data%stride, 1::data%stride) ! what is drawn: at most MAX_SHOWN a side
    endselect
    endsubroutine read_field
+
+   subroutine hand_over(from, to)
+   !< `to` takes the values of `from` without a copy (`move_alloc`). A procedure of this module, not a `move_alloc` in
+   !< the program: nvfortran 26.9 gets an array's size wrong after a `move_alloc` into a variable of a program unit that
+   !< has internal procedures, as the program has (known issues).
+   real(real64), allocatable, intent(inout) :: from(:,:) !< The values, deallocated on return.
+   real(real64), allocatable, intent(inout) :: to(:,:)   !< Their new owner.
+
+   call move_alloc(from, to)
+   endsubroutine hand_over
 endmodule tut26_tasks
 
 program tut26_clip
@@ -100,7 +110,7 @@ use figure, only : app_object, ig_player, ip_colormap_legend_edit, ip_field_imag
                    ip_begin_plot, ip_colormap, ip_colormap_legend, ip_contour, ip_drag_line_x, ip_drag_point, &
                    ip_end_plot, ip_error_bars, ip_heatmap, ip_line, ip_setup_axes, ip_setup_axes_limits, ip_spec, &
                    log_view_object, process_object, task_object, view3d_object
-use tut26_tasks, only : field_t, read_field
+use tut26_tasks, only : field_t, hand_over, read_field
 use figure_testing, only : test_item_click, test_type
 use figure_testing, only : test_capture, test_compare_image, test_id_conflicts, test_item_checked, test_mouse_button, &
                           test_next_frame
@@ -708,6 +718,7 @@ contains
    integer(int32) :: run   !< Run, below them.
    integer(int32) :: view3 !< The 3-D view, beside the result.
    logical        :: laid_out !< The layout was built on this frame.
+   character(len=:), allocatable :: layout !< The layout the user chose.
 
    laid_out = .false.
    !region focus
@@ -720,7 +731,8 @@ contains
    if (ig_dock_layout_begin(root)) then              ! the first frame, after a switch of layout and after a reset
       call ig_dock_split(root, 'left', 0.25_real64, left, right)
       call ig_dock_window('Case', left)
-      select case (app%layout())                     ! the one the user chose
+      layout = app%layout()                          ! the one the user chose (a variable: nvfortran 26.9 selects
+      select case (layout)                           ! no case on the function's result here; known issues)
       case ('Setup')                                 ! the input in front, the run below
          call ig_dock_split(right, 'down', 0.45_real64, run, work)
          call ig_dock_window('3-D', work)
@@ -1112,6 +1124,7 @@ contains
    integer(int32)                :: line   !< The line of character k.
    integer(int32)                :: k, j   !< Characters.
    character(len=1)              :: quote  !< The quote of the string k is in (' ' none).
+   logical                       :: known  !< The name is one of &heat's.
 
    line = 1_int32
    quote = ' '
@@ -1132,13 +1145,14 @@ contains
             j = j + 1_int32
          enddo
          name = text(k:j)
-         k = j
+         known = any(NAMES == lower(text(k:j)))       ! of the text, not of name: nvfortran 26.9 gives lower(name) no
+         k = j                                       ! characters here, name being of deferred length (known issues)
          do while (j < len(text, int32))
             if (text(j + 1:j + 1) /= ' ') exit
             j = j + 1_int32
          enddo
          if (j < len(text, int32)) then
-            if (text(j + 1:j + 1) == '=' .and. all(NAMES /= lower(name))) then
+            if (text(j + 1:j + 1) == '=' .and. .not. known) then
                call source%mark(line, 'error', '"'//name//'" is not a name of &heat')
                text_errors = text_errors + 1_int32
             endif
@@ -1473,7 +1487,8 @@ contains
 
    subroutine add_run()
    !< The run that just ended, added to the session's runs; the table keeps its order.
-   type(run_t) :: r !< The run.
+   type(run_t)              :: r       !< The run.
+   type(run_t), allocatable :: more(:) !< The runs and r.
 
    r%number = size(runs, kind=int32) + 1_int32
    r%title = inp%title
@@ -1489,7 +1504,8 @@ contains
    endif
    r%it = iters
    r%res = res
-   runs = [runs, r]
+   more = [runs, r]                                  ! through a copy: nvfortran 26.9 gets `runs = [runs, r]` wrong,
+   runs = more                                       ! the earlier runs' histories lost (known issues)
    order = [order, r%number]
    call sort_runs()                                  ! a new row takes its place in the order asked
    endsubroutine add_run
@@ -1733,8 +1749,8 @@ contains
    endif
    select type (data)
    type is (field_t)
-      call move_alloc(data%values, field)
-      call move_alloc(data%coarse, coarse)
+      call hand_over(data%values, field)
+      call hand_over(data%coarse, coarse)
       flx = data%lx
       fly = data%ly
       stride = data%stride
@@ -2250,7 +2266,7 @@ contains
 
    !region picture
    do k = 1_int32, 1000000_int32                     ! the plate's field, read by a task: at a time of the task's
-      if (size(field) > 0) exit
+      if (field_read()) exit
       call frames(1_int32)
    enddo
    call frames(360_int32)                            ! the notifications gone (5 s of frame time), nothing moving
@@ -2303,7 +2319,7 @@ contains
    enddo
    call check(index(run_status, 'converged in') == 1, 'F5 runs the solver to convergence')
    do k = 1_int32, 1000000_int32                     ! and until the task has read its field
-      if (size(field) > 0) exit
+      if (field_read()) exit
       call frames(1_int32)
    enddo
    call check(size(field) == inp%nx * inp%ny, 'the task reads the field the solver wrote')
@@ -2359,7 +2375,7 @@ contains
       call frames(1_int32)
    enddo
    do k = 1_int32, 1000000_int32                     ! and its field read: the Result panel comes forward with it,
-      if (size(field) > 0) exit                      ! at a time of the task's, not of the test's
+      if (field_read()) exit                         ! at a time of the task's, not of the test's
       call frames(1_int32)
    enddo
    call test_click(runs_tab_at(1), runs_tab_at(2))   ! the Runs tab
@@ -2529,6 +2545,15 @@ contains
    enddo
    !endregion frames
    endsubroutine frames
+
+   function field_read() result(read)
+   !< The task's field has arrived: `size(field) > 0`, asked through a function. Tested in a frame loop, the expression
+   !< itself is read once with nvfortran 26.9 (-mp -O2), before the loop: the frames that reallocate `field` are not
+   !< seen, and the loop runs to its end (known issues).
+   logical :: read !< The field is there.
+
+   read = size(field) > 0
+   endfunction field_read
 
    subroutine settle()
    !< Draw the studio until its interface is idle: a menu path takes the frames its menus need to open (a level that
