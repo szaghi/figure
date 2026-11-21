@@ -35,6 +35,12 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    # the forms nvfortran 26.9 compiles wrong (docs/adr/0001-fortran-stack.md), kept out of the Fortran sources
+    - name: nvfortran patterns
+      run: |
+        python3 scripts/check_nvf_patterns.py --self-test
+        python3 scripts/check_nvf_patterns.py
+
     - name: Packages the toolchain image lacks
       run: |
         apt-get update

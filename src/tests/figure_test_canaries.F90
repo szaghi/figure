@@ -24,7 +24,7 @@ contains
    do k = 1, 3
       x%a = [real(k), real(k), real(k)]
       x%b = [10.0 * k, 10.0 * k, 10.0 * k]
-      items = [items, x]
+      items = [items, x] ! nvf-ok: the canary
    enddo
    wrong = .false.
    do k = 1, 3
@@ -57,7 +57,7 @@ contains
    contains
       subroutine wait_for_a()
       !< The loop: the case of the docs' self-tests waiting for a task's field.
-      do k = 1, 100
+      do k = 1, 100 ! nvf-ok: the canary
          if (size(a) > 0) exit
          call grow()
       enddo
@@ -92,7 +92,7 @@ contains
    integer              :: i        !< Counter.
 
    a = [(real(i), i = 1, 6)]
-   call move_alloc(a, moved)
+   call move_alloc(a, moved) ! nvf-ok: the canary
    wrong = size(moved) /= 6 .or. sum(moved) /= 21.0
    call trigger()
    contains
@@ -127,7 +127,7 @@ contains
    character(len=*), intent(in) :: s     !< A non-blank name.
    logical                      :: empty !< The defect.
 
-   select case (name_of(s))
+   select case (name_of(s)) ! nvf-ok: the canary
    case ('')
       empty = .true.
    case default
