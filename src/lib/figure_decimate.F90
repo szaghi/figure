@@ -321,8 +321,16 @@ contains
 
    subroutine bounds(kmin, kmax, n, fill, pixel_of)
    !< The first point of each part of the columns kmin..kmax + 1 (bound(SUB k + r), r = 0..SUB - 1: the column's r-th
-   !< part of 1/SUB pixel) and, for a fill, the first point at or right of each column's centre (centre(k)): binary
-   !< searches over the pixels, non-decreasing with the index.
+   !< part of 1/SUB pixel) and, for a fill, the first point at or right of each column's centre (centre(k)): searches
+   !< over the pixels, non-decreasing with the index, each one started where the bounds before it predict.
+   !<
+   !< A bound is searched from a guess, the previous bound plus the step between the two before (the points of a part
+   !< are about as many as those of the part before: on evenly spaced abscissae the guess is the bound or next to it),
+   !< by galloping away from the guess, then by halving. The result is the unique first point, whatever the guess;
+   !< what the guess saves is the probes, each a read of an abscissa far from the last one in a long series (a cache
+   !< miss): about 2 log2 of the points in a part with the previous bound as the only guess (#15 P5's cached path, 10**8
+   !< points: some 30 probes a bound), 2 or 3 with the prediction. A centre is the bound of the column's middle part
+   !< when SUB is even: that bound is its guess.
    integer(int64), intent(in) :: kmin   !< First column.
    integer(int64), intent(in) :: kmax   !< Last column.
    integer(int64), intent(in) :: n      !< Points.
@@ -336,44 +344,74 @@ contains
       endfunction pixel_of
    endinterface
    integer(int64)             :: k      !< Column.
-   integer(int64)             :: lo     !< Search's start.
+   integer(int64)             :: lo     !< The last bound found.
+   integer(int64)             :: step   !< The step between the last two.
 
    call reserve(bound, SUB * kmin, SUB * (kmax + 1_int64))
    if (fill) call reserve(centre, kmin, kmax)
    lo = 1_int64
+   step = 0_int64
    do k = SUB * kmin, SUB * (kmax + 1_int64)
-      lo = first_at(lo, real(k, real64) / real(SUB, real64))
-      bound(k) = lo
+      bound(k) = first_at(lo, real(k, real64) / real(SUB, real64), lo + step)
+      step = bound(k) - lo
+      lo = bound(k)
    enddo
    if (.not. fill) return
    do k = kmin, kmax
-      centre(k) = first_at(bound(SUB * k), real(k, real64) + 0.5_real64)
+      centre(k) = first_at(bound(SUB * k), real(k, real64) + 0.5_real64, bound(SUB * k + SUB / 2_int64))
    enddo
    contains
-      function first_at(from, p) result(j)
-      !< First point from `from` on whose pixel is at least p (n + 1: none): a galloping search, then a binary one.
-      integer(int64), intent(in) :: from !< First point searched.
-      real(real64),   intent(in) :: p    !< Pixel.
-      integer(int64)             :: j    !< Point.
-      integer(int64)             :: hi   !< Search's end (excluded).
-      integer(int64)             :: mid  !< Its middle.
+      function first_at(from, p, guess) result(j)
+      !< First point from `from` on whose pixel is at least p (n + 1: none), searched from `guess`: galloping away
+      !< from it, then halving.
+      integer(int64), intent(in) :: from  !< First point searched.
+      real(real64),   intent(in) :: p     !< Pixel.
+      integer(int64), intent(in) :: guess !< Where the search starts.
+      integer(int64)             :: j     !< Point.
+      integer(int64)             :: g     !< The guess, in from..n + 1.
+      integer(int64)             :: lo    !< The point is lo or after it.
+      integer(int64)             :: hi    !< ... hi or before it (pixel at least p, or n + 1).
+      integer(int64)             :: d     !< Gallop's stride.
+      integer(int64)             :: mid   !< Halving's middle.
 
-      j = from
-      hi = from + 1_int64 ! galloping: the bracket doubled from `from` (the columns' bounds are close to each other)
-      do while (hi <= n)
-         if (pixel_of(hi) >= p) exit
-         j = hi + 1_int64
-         hi = from + 2_int64 * (hi - from)
-      enddo
-      hi = min(hi, n + 1_int64)
-      do while (j < hi)
-         mid = j + (hi - j) / 2_int64
+      g = min(max(guess, from), n + 1_int64)
+      lo = from
+      if (g <= n) then
+         if (pixel_of(g) >= p) then ! the point is at g or before: gallop down
+            hi = g
+            d = 1_int64
+            do while (hi - d >= lo)
+               if (pixel_of(hi - d) < p) then
+                  lo = hi - d + 1_int64
+                  exit
+               endif
+               hi = hi - d
+               d = 2_int64 * d
+            enddo
+         else ! after g: gallop up
+            lo = g + 1_int64
+            d = 1_int64
+            hi = lo
+            do while (hi <= n)
+               if (pixel_of(hi) >= p) exit
+               lo = hi + 1_int64
+               d = 2_int64 * d
+               hi = g + d
+            enddo
+            hi = min(hi, n + 1_int64)
+         endif
+      else
+         hi = n + 1_int64
+      endif
+      do while (lo < hi) ! halving: pixel_of(hi) >= p (or hi = n + 1), the point at or after lo
+         mid = lo + (hi - lo) / 2_int64
          if (pixel_of(mid) >= p) then
             hi = mid
          else
-            j = mid + 1_int64
+            lo = mid + 1_int64
          endif
       enddo
+      j = lo
       endfunction first_at
    endsubroutine bounds
 
