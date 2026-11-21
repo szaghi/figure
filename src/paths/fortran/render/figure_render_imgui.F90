@@ -7,7 +7,7 @@ module figure_render_imgui
 !< command's clip rectangle, texture, offsets, count and kind (a draw, or one of the samplers' callbacks the backends
 !< register). Its `texture_of` finds the pixels of Dear ImGui's own textures (the font atlas: RGBA32 or Alpha8) and of
 !< the program's (headless and remote modes' copies, through the native layer's `fig_cpu_texture`). Part of
-!< implementation A of the seam (src/lib/core_imgui/): the Fortran core fills a frame from its own lists.
+!< implementation A of the seam (src/paths/imgui/core/): the Fortran core fills a frame from its own lists.
 use, intrinsic :: iso_c_binding, only : c_associated, c_f_pointer, c_float, c_int, c_long_long, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32
 use figure_c_native, only : fig_cpu_texture

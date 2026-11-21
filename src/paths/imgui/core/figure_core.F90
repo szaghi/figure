@@ -4,9 +4,9 @@ module figure_core
 !<
 !< szaghi/figure#15 P8. The layers above the core (plots, 3-D plots, gizmos, Markdown, the code editor: block D) are to
 !< talk to this interface only; it has two implementations under the same module name, chosen by a build mode's `src`
-!< (#15 §2): this one, `src/lib/core_imgui/`, a thin layer over Dear ImGui through the generated bindings
+!< (#15 §2): this one, `src/paths/imgui/core/`, a thin layer over Dear ImGui through the generated bindings
 !< (figure_cimgui, figure_cimgui_core), with no behaviour of its own; and the Fortran core of block E, later, in
-!< `src/lib/core_fortran/`. The groups, from what ImPlot, ImPlot3D, ImGuizmo, imgui_rich_md and ImGuiColorTextEdit call
+!< `src/paths/fortran/core/`. The groups, from what ImPlot, ImPlot3D, ImGuizmo, imgui_rich_md and ImGuiColorTextEdit call
 !< (the inventory of P8's log):
 !<
 !< - IDs and the ID stack: `core_get_id`, `core_push_id`, `core_pop_id`;

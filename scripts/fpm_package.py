@@ -3,7 +3,8 @@
 fpm has no build hooks, so it cannot run CMake. This script lays out, in OUTDIR, everything fpm needs to compile the
 native layer itself, next to the Fortran library:
 
-- ``src/fortran/``: the Fortran library (src/lib);
+- ``src/fortran/``: the Fortran library: src/lib and the current path's seams (src/paths/imgui/, szaghi/figure#15 §2;
+  the fobos variable ``$PATH_IMGUI``), assembled in one directory as scripts/fpm.sh assembles them;
 - ``src/<Library>/`` (``src/PENF/``, ``src/FACE/``, ``src/BeFoR64/``, ``src/StringiFor/``, ``src/FUNDAL/``, ``src/foresight/``): the owner's
   Fortran libraries of fobos ``[dependencies]`` (szaghi/figure#15 §6), source-passed: the sources FIGURE's fobos modes
   compile (each one's ``src=`` directories, fobos' ``$EXCLUDE`` left out: FUNDAL's MPI handler), copied from where
@@ -349,7 +350,7 @@ def write(a: argparse.Namespace, deps: Path, libraries: dict[str, tuple[Path, li
             elif p.exists():
                 p.unlink()
     src = out / "src"
-    for f in sorted([*(ROOT / "src" / "lib").glob("*.F90"), *(ROOT / "src" / "lib").glob("*.inc")]):
+    for f in check_sync().path_sources("imgui"):  # src/lib and the current path's seams (#15 §2), one directory
         copy(f, src / "fortran" / f.name)  # *.inc: figure_icons_public.inc, included by figure.F90
     for name, (_, files) in libraries.items():  # the owner's Fortran libraries, source-passed
         for f in files:

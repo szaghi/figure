@@ -1,6 +1,8 @@
 # fpm manifest, kept in sync with fobos (the primary build): scripts/check_sync.py verifies the link libraries and that
 # every program under src/examples/ and src/tests/ is declared here.
-# Build the native layer first (scripts/build_native.sh), then use scripts/fpm.sh, which adds -L lib/ to fpm.
+# Build the native layer first (scripts/build_native.sh), then use scripts/fpm.sh, which adds -L lib/ to fpm and
+# writes the library's tree (build/fpm-lib): src/lib and the current path's seams (src/paths/imgui/, szaghi/figure#15
+# §2) in one directory, since fpm takes one source directory and the two paths' seams share their module names.
 name = "figure"
 version = "0.8.0"
 license = "MIT"
@@ -20,7 +22,7 @@ implicit-external = false
 source-form = "free"
 
 [library]
-source-dir = "src/lib"
+source-dir = "build/fpm-lib"  # written by scripts/fpm.sh (check_sync.py --fpm-tree)
 
 # The owner's Fortran libraries (szaghi/figure#15 §6): the set of fobos [dependencies], each tracking its default branch.
 # fpm builds them from their own manifests.

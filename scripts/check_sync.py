@@ -7,6 +7,10 @@ Checked:
     (``lib/pkgconfig/sdl3.pc``, written by the native build): every ``-l`` library and every framework (checked only
     when the native layer is built);
   - every program under src/examples/ and src/tests/ is declared in fpm.toml (fobos discovers them by itself);
+  - the two paths (szaghi/figure#15 §2): every mode of fobos builds the library from ``src/lib`` and one path's set of
+    seam implementations, ``$PATH_IMGUI`` (the current path) or, for the ``-fortran`` modes, ``$PATH_FORTRAN``; each
+    set defines every module once (one implementation of each seam); fpm.toml's library is the assembled tree of the
+    current path (``[library] source-dir`` is ``build/fpm-lib``, written by ``--fpm-tree``);
   - every program declared in fpm.toml exists;
   - the static-library modes (``figure-static-*``) build from ``src/lib/figure_library.F90``, which uses every public
     module (``figure``, ``figure_testing``): FoBiS archives a target and what it uses, so a module left out of that
@@ -15,6 +19,11 @@ Checked:
     set, each on the same branch and never pinned to a tag or commit; and the set is closed: every module a listed
     library ``use``s (its sources fetched in fobos' ``deps_dir``, the files of fobos' ``$EXCLUDE`` left out) comes
     from a listed library or the compiler (checked only when the libraries are fetched: ``fobis fetch``).
+
+``--fpm-tree`` writes the current path's library, ``src/lib`` and ``$PATH_IMGUI`` in one directory (``build/fpm-lib``,
+the source-dir of fpm.toml's library: fpm takes one directory and scans it recursively), for scripts/fpm.sh;
+``--path-sources PATH`` prints the library sources of a path (``imgui`` or ``fortran``), one per line, for
+docs/examples/build.sh.
 
 ``--link-flags [PLATFORM]`` prints instead the platform's native link line: the varset's ``$NATIVE_LIBS`` as ``-l``
 options, in order (``figure_native SDL3`` first), then its ``$NATIVE_LFLAGS``, for scripts/fpm.sh and for linking a
@@ -50,6 +59,11 @@ COMPILER_MODULES = {
     "openacc", "devmodule",
 }  # fmt: skip
 LIB_SOURCE_SUFFIXES = (".f90", ".F90", ".inc", ".INC", ".h", ".H")  # sources and the files they include
+# the two paths (szaghi/figure#15 §2): the fobos variable naming each path's seam implementations, and the fpm tree
+PATH_VARIABLES = {"imgui": "$PATH_IMGUI", "fortran": "$PATH_FORTRAN"}
+FPM_TREE = "build/fpm-lib"
+PROGRAM_DIRS = ("src/tests", "src/examples")  # what a mode's `src` adds to the library: programs (and their modules)
+FORTRAN_SUFFIXES = (".f90", ".F90", ".inc")
 
 
 def current_platform() -> str:
@@ -408,6 +422,140 @@ def fortran_libraries() -> list[str]:
     return errors
 
 
+def fobos_parser() -> configparser.ConfigParser:
+    """Return the fobos file parsed (keys' case kept, no interpolation)."""
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    parser.optionxform = str
+    parser.read(ROOT / "fobos", encoding="utf-8")
+    return parser
+
+
+def fobos_variables(parser: configparser.ConfigParser) -> dict[str, str]:
+    """Return fobos' ``[common-variables]``, continuation lines joined."""
+    if not parser.has_section("common-variables"):
+        return {}
+    return {k: " ".join(v.split()) for k, v in parser["common-variables"].items()}
+
+
+def expand(value: str, variables: dict[str, str]) -> list[str]:
+    """Return a fobos value as its words, its ``$VARIABLES`` replaced (longest names first, as FoBiS does)."""
+    for name in sorted(variables, key=len, reverse=True):
+        value = value.replace(name, variables[name])
+    return value.split()
+
+
+def mode_options(parser: configparser.ConfigParser, mode: str) -> dict[str, str]:
+    """Return a mode's options, its templates' (recursively) under its own, as FoBiS reads them."""
+    options: dict[str, str] = {}
+    if parser.has_option(mode, "template"):
+        options.update(mode_options(parser, parser.get(mode, "template")))
+    options.update({k: v for k, v in parser[mode].items() if k != "template"})
+    return options
+
+
+def path_dirs(path: str) -> list[str]:
+    """Return the library directories of a path (``imgui`` or ``fortran``): ``src/lib`` and the path's seams."""
+    variables = fobos_variables(fobos_parser())
+    return ["src/lib", *(d.rstrip("/") for d in expand(PATH_VARIABLES[path], variables))]
+
+
+def sources_under(dirs: list[str], excluded: list[str] | None = None) -> list[Path]:
+    """Return the Fortran sources and include files under ``dirs`` (recursively), those under ``excluded`` left out."""
+    found: list[Path] = []
+    for d in dirs:
+        for f in sorted((ROOT / d).rglob("*")):
+            rel = f.relative_to(ROOT).as_posix()
+            if f.is_file() and f.suffix in FORTRAN_SUFFIXES and not any(rel.startswith(f"{x}/") for x in excluded or []):
+                found.append(f)
+    return found
+
+
+def path_sources(path: str) -> list[Path]:
+    """Return the library sources of a path (``imgui``: the current one; ``fortran``)."""
+    return sources_under(path_dirs(path))
+
+
+def duplicated_modules(files: list[Path]) -> dict[str, list[str]]:
+    """Return the modules defined by more than one of ``files``: name -> the files defining it."""
+    where: dict[str, list[str]] = {}
+    for f in files:
+        for m in MODULE_RE.findall(f.read_text(encoding="utf-8", errors="replace")):
+            where.setdefault(m.lower(), []).append(f.relative_to(ROOT).as_posix())
+    return {m: fs for m, fs in where.items() if len(fs) > 1}
+
+
+def paths() -> list[str]:
+    """Check the two paths: each mode's library is one path's set, defining each module once; fpm's is the current.
+
+    Returns
+    -------
+    list[str]
+        The discrepancies.
+    """
+    errors: list[str] = []
+    parser = fobos_parser()
+    variables = fobos_variables(parser)
+    missing = [v for v in PATH_VARIABLES.values() if v not in variables]
+    if missing:
+        return [f"fobos [common-variables] lacks {', '.join(missing)} (the two paths, #15 §2)"]
+    sets = {path: set(path_dirs(path)) for path in PATH_VARIABLES}
+    modes = parser.get("modes", "modes", fallback="").split() if parser.has_section("modes") else []
+    for mode in modes:
+        options = mode_options(parser, mode)
+        src = [d.rstrip("/") for d in expand(options.get("src", ""), variables)]
+        library = {d for d in src if not d.startswith(PROGRAM_DIRS)}
+        path = "fortran" if mode.endswith("-fortran") else "imgui"
+        if library != sets[path]:
+            errors.append(
+                f"fobos [{mode}]: its library is {' '.join(sorted(library))}, not src/lib and "
+                f"{PATH_VARIABLES[path]} ({' '.join(sorted(sets[path] - {'src/lib'}))})"
+            )
+        excluded = expand(options.get("exclude_dirs", ""), variables)
+        files = sources_under(src, [x.rstrip("/") for x in excluded])
+        for module, where in sorted(duplicated_modules(files).items()):
+            errors.append(f"fobos [{mode}]: module {module} defined {len(where)} times: {', '.join(where)}")
+    for path in PATH_VARIABLES:
+        names: dict[str, list[str]] = {}
+        for f in path_sources(path):
+            names.setdefault(f.name, []).append(f.relative_to(ROOT).as_posix())
+        errors.extend(
+            f"the {path} path has two files named {n} (an assembled tree is flat): {', '.join(fs)}"
+            for n, fs in sorted(names.items()) if len(fs) > 1
+        )  # fmt: skip
+    manifest = tomllib.loads((ROOT / "fpm.toml").read_text(encoding="utf-8"))
+    source_dir = manifest.get("library", {}).get("source-dir")
+    if source_dir != FPM_TREE:
+        errors.append(f"fpm.toml [library] source-dir must be {FPM_TREE} (the current path's tree), it is {source_dir}")
+    return errors
+
+
+def fpm_tree() -> int:
+    """Write the current path's library in one directory (``FPM_TREE``), the source-dir of fpm.toml's library.
+
+    The files are copied (not linked: Windows), each only when it changed; files no longer in the path are removed.
+
+    Returns
+    -------
+    int
+        Exit status: 0, or 1 when the path has two files of the same name.
+    """
+    tree = ROOT / FPM_TREE
+    sources = {f.name: f for f in path_sources("imgui")}
+    if len(sources) != len(path_sources("imgui")):
+        print("check_sync: the current path has two files of the same name: run check_sync.py", file=sys.stderr)
+        return 1
+    tree.mkdir(parents=True, exist_ok=True)
+    for old in tree.iterdir():
+        if old.name not in sources:
+            old.unlink()
+    for name, f in sources.items():
+        dst = tree / name
+        data = f.read_bytes()
+        if not dst.is_file() or dst.read_bytes() != data:
+            dst.write_bytes(data)
+    return 0
+
+
 def check() -> int:
     """Run the checks.
 
@@ -461,6 +609,7 @@ def check() -> int:
 
     errors.extend(package_sources())
     errors.extend(library_root())
+    errors.extend(paths())
     errors.extend(fortran_libraries())
 
     for e in errors:
@@ -496,11 +645,26 @@ def main(argv: list[str]) -> int:
         help="print the native link line of a platform varset (default: the current platform)",
     )
     parser.add_argument(
+        "--fpm-tree",
+        action="store_true",
+        help=f"write the current path's library sources into {FPM_TREE} (fpm.toml's library) for scripts/fpm.sh",
+    )
+    parser.add_argument(
+        "--path-sources",
+        choices=sorted(PATH_VARIABLES),
+        help="print the library sources of a path, one per line",
+    )
+    parser.add_argument(
         "--fpm-link",
         action="store_true",
         help="write lib/libfigure_platform.a if needed and print the --link-flag value for fpm (current platform)",
     )
     args = parser.parse_args(argv)
+    if args.fpm_tree:
+        return fpm_tree()
+    if args.path_sources:
+        print("\n".join(f.relative_to(ROOT).as_posix() for f in path_sources(args.path_sources)))
+        return 0
     if args.fpm_link:
         return fpm_link(current_platform())
     if args.link_flags is not None:

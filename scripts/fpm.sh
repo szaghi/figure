@@ -8,6 +8,9 @@ if [[ ! -f "$root/lib/libfigure_native.a" ]]; then
    echo "fpm.sh: lib/libfigure_native.a missing: run scripts/build_native.sh first" >&2
    exit 1
 fi
+# the library's sources: src/lib and the current path's seams (src/paths/imgui/, szaghi/figure#15 §2) in one directory,
+# build/fpm-lib, fpm.toml's library source-dir (fpm takes one directory; the two paths' seams share module names)
+python3 "$root/scripts/check_sync.py" --fpm-tree
 # writes lib/libfigure_platform.a (GNU ld: a linker script adding the platform libraries after fpm's objects) and
 # prints what goes in --link-flag (macOS: the platform libraries and frameworks; elsewhere: the varset's lflags)
 fpm_link="$(python3 "$root/scripts/check_sync.py" --fpm-link)"

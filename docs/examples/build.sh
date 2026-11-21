@@ -18,8 +18,9 @@
 # output file, which is written all the same, and exits with status 1. Nothing a failed run printed reaches the pages
 # unnoticed.
 #
-# The library is compiled from src/lib/ by FoBiS command-line options, not by a fobos mode: the modes of fobos run
-# the native build (pre_build) every time, while here the native layer must already be in lib/ (scripts/build_native.sh).
+# The library is compiled from src/lib/ (and the current path's src/paths/imgui/) by FoBiS command-line options, not by
+# a fobos mode: the modes of fobos run the native build (pre_build) every time, while here the native layer must already
+# be in lib/ (scripts/build_native.sh).
 #
 # Usage: bash docs/examples/build.sh [--varset linux|macos|windows]
 #   (FC=... for another gfortran; build products in build/docs-examples). The varset of fobos gives the native link line
@@ -75,7 +76,11 @@ ext_libs=()
 for lib in $native_libs; do ext_libs+=(--ext-libs "$lib"); done
 lflags=()
 [[ -n $native_lflags ]] && lflags=(--lflags "$native_lflags")
-cp "$root"/src/lib/*.F90 "$root"/src/lib/*.inc "$ex"/src/*.F90 "$build/src/" # the .inc: included by figure.F90
+# the library of the current path: src/lib and its seams (src/paths/imgui/, szaghi/figure#15 §2), as fpm's tree; the
+# .inc: included by figure.F90
+lib_sources=$(python3 "$root/scripts/check_sync.py" --path-sources imgui)
+while IFS= read -r f; do cp "$root/${f%$'\r'}" "$build/src/"; done <<< "$lib_sources"
+cp "$ex"/src/*.F90 "$build/src/"
 # FUNDAL (szaghi/figure#15 P6: figure_decimate_device, ip_line_device), fetched by `fobis fetch` into src/third_party:
 # its sources and the files they include, in its CPU mode; its MPI handler left out (fobos' $EXCLUDE)
 fundal=$root/src/third_party/FUNDAL/src/lib

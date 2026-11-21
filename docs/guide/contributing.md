@@ -52,13 +52,18 @@ the repository. The same rule run locally writes them into `docs/guide`.
   `ImVec2_c` (the generator decides); anything taking a larger structure by value goes through the glue. Glue functions are `extern "C"`,
   return a status, take strings as (pointer, length), and never let a C++ exception escape.
 - **Status codes** are defined twice, in `native/figure_native.h` and `src/lib/figure_c_native.F90`: change both.
+- **Two paths** ([#15](https://github.com/szaghi/figure/issues/15) §2). A seam the Fortran rewrite replaces (the core,
+  the renderer, ...) has two implementations under the same module names, outside `src/lib`: `src/paths/imgui/<seam>/`
+  (the current path) and `src/paths/fortran/<seam>/`. fobos' `$PATH_IMGUI` and `$PATH_FORTRAN` name each path's
+  directories (the `-fortran` modes build the second); the fpm builds assemble `src/lib` and the current path in one
+  directory. `scripts/check_sync.py` fails when a mode would compile a module twice.
 - **Pinned versions.** cimgui, cimplot and SDL3 are a matched set: do not bump one alone.
 - **Tests grow with bindings.** Every new widget or plot item gets a headless check driven by synthetic input, as in
   `src/tests/figure_test_headless.F90`.
 
 ## Fortran style
 
-- One module per file under `src/lib`, `.F90`.
+- One module per file under `src/lib` (and `src/paths`), `.F90`.
 - `!<` documentation comments (formal and FORD `docmark`), on the entity and on every dummy argument and local.
 - Kinds from `iso_fortran_env` and `iso_c_binding` only (`int32`, `real64`, `c_int`, ...); literals with their kind
   (`1.0_real64`).

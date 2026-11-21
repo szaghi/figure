@@ -57,9 +57,16 @@ $CGNU_DEBUG  = -Og -g3 -fcheck=all -fbacktrace -Wall -Wimplicit-interface -Wimpl
 $CNVF        = -c -Mstandard -Mfree -Munixlogical
 $CIFX        = -c -stand f18 -free -fpscomp logicals
 $EXCLUDE     = src/third_party/FUNDAL/src/lib/fundal_mpih_object.F90
-# the directories of the Fortran path only (szaghi/figure#15 §2), left out by the default modes: the renderers (P9) and
-# their tests
-$FORTRAN_ONLY = src/lib/render_fortran src/tests/fortran
+# the two paths (szaghi/figure#15 §2): each seam's implementations in sibling directories outside src/lib, under the same
+# module names, one directory per seam (src/paths/imgui/core/ and, in block E, src/paths/fortran/core/; ...); a mode
+# picks one implementation of each seam through its `src`, with no preprocessor macro. $PATH_IMGUI is the current path
+# (every seam over Dear ImGui); $PATH_FORTRAN the newest: the seams already ported (src/paths/fortran/: the renderers of
+# P9), the others still from the current path (src/paths/imgui/core/). The fpm builds use the same sets, assembled into
+# one tree (scripts/fpm.sh, scripts/fpm_package.py); scripts/check_sync.py checks each mode's set: one implementation
+# of each module. $FORTRAN_ONLY: the Fortran path's tests, left out by the default modes (the templates' exclude_dirs)
+$PATH_IMGUI   = src/paths/imgui/
+$PATH_FORTRAN = src/paths/imgui/core/ src/paths/fortran/
+$FORTRAN_ONLY = src/tests/fortran
 
 # main modes: the tests build into exe/ (scripts/run_tests.sh runs every program there), the examples into exe/examples/
 # (with their own mod/ and obj/), which run_tests.sh does not enter
@@ -67,20 +74,20 @@ $FORTRAN_ONLY = src/lib/render_fortran src/tests/fortran
 template  = template-gnu
 cflags    = $CGNU -O2
 build_dir = exe
-src       = src/lib/ src/tests/
+src       = src/lib/ $PATH_IMGUI src/tests/
 
 [tests-gnu-debug]
 template  = template-gnu
 cflags    = $CGNU $CGNU_DEBUG
 build_dir = exe
-src       = src/lib/ src/tests/
+src       = src/lib/ $PATH_IMGUI src/tests/
 
 [examples-gnu]
 template  = template-gnu
 cflags    = $CGNU -O2
 openmp    = True
 build_dir = exe/examples
-src       = src/lib/ src/examples/
+src       = src/lib/ $PATH_IMGUI src/examples/
 
 # examples-gnu-traps: the examples with gfortran's floating-point traps, run in a window by the Platforms workflow
 # (window_check.py, its Windows job: Mesa's llvmpipe): the native layer holds the FP environment around the GL driver,
@@ -92,7 +99,7 @@ openmp    = True
 build_dir = exe/examples-traps
 obj_dir   = obj-traps
 mod_dir   = mod-traps
-src       = src/lib/ src/examples/
+src       = src/lib/ $PATH_IMGUI src/examples/
 
 # nvfortran: -Munixlogical ($CNVF) makes .true. the C value 1 (the default is -1, not a C bool), as ifx's -fpscomp logicals;
 # it is also a link flag (template-nvf's lflags): it selects the run-time library's logical values, and code compiled
@@ -103,7 +110,7 @@ template  = template-nvf
 cflags    = $CNVF -O2
 openmp    = True
 build_dir = exe
-src       = src/lib/ src/tests/
+src       = src/lib/ $PATH_IMGUI src/tests/
 
 # tests-nvf-acc: the tests with OpenACC on the GPU (szaghi/figure#15 P6): FUNDAL and figure_decimate_device's kernels
 # compiled for the device (FUNDAL's -DDEV_OAC -DCOMPILER_NVF), for the RTX 4070 of the WSL box (-gpu=cc89; another GPU:
@@ -116,14 +123,14 @@ template  = template-nvf
 cflags    = $CNVF -O2 -acc -gpu=cc89 -DDEV_OAC -DCOMPILER_NVF
 lflags    = $NATIVE_LFLAGS -Munixlogical -acc -gpu=cc89
 build_dir = exe
-src       = src/lib/ src/tests/
+src       = src/lib/ $PATH_IMGUI src/tests/
 
 [examples-nvf]
 template  = template-nvf
 cflags    = $CNVF -O2
 openmp    = True
 build_dir = exe/examples
-src       = src/lib/ src/examples/
+src       = src/lib/ $PATH_IMGUI src/examples/
 
 # ifx (Intel oneAPI): -fpscomp logicals makes .true. the C value 1 (the default is -1, which is not a C bool); its
 # I/O runtime is thread-safe with no flag (ifx links libifcoremt by default), so tests-ifx needs no openmp
@@ -131,20 +138,20 @@ src       = src/lib/ src/examples/
 template  = template-ifx
 cflags    = $CIFX -O2
 build_dir = exe
-src       = src/lib/ src/tests/
+src       = src/lib/ $PATH_IMGUI src/tests/
 
 [examples-ifx]
 template  = template-ifx
 cflags    = $CIFX -O2
 openmp    = True
 build_dir = exe/examples
-src       = src/lib/ src/examples/
+src       = src/lib/ $PATH_IMGUI src/examples/
 
 [figure-static-gnu]
 template  = template-gnu
 cflags    = $CGNU -O2
 build_dir = lib
-src       = src/lib/
+src       = src/lib/ $PATH_IMGUI
 target    = src/lib/figure_library.F90
 output    = libfigure.a
 mklib     = static
@@ -153,7 +160,7 @@ mklib     = static
 template  = template-nvf
 cflags    = $CNVF -O2
 build_dir = lib
-src       = src/lib/
+src       = src/lib/ $PATH_IMGUI
 target    = src/lib/figure_library.F90
 output    = libfigure.a
 mklib     = static
@@ -162,43 +169,47 @@ mklib     = static
 template  = template-ifx
 cflags    = $CIFX -O2
 build_dir = lib
-src       = src/lib/
+src       = src/lib/ $PATH_IMGUI
 target    = src/lib/figure_library.F90
 output    = libfigure.a
 mklib     = static
 
-# the Fortran path (szaghi/figure#15 §2): each seam's Fortran implementation in a sibling directory of the current one,
-# under the same module names (src/lib/core_fortran/ beside src/lib/core_imgui/, ...), picked by a mode's `src` and
-# `exclude_dirs`, with no preprocessor macro. A -fortran mode builds the newest path: the layers already ported, the
-# others from the current path. Each takes its default mode as its template (every key) and builds, besides, what the
-# default modes leave out ($FORTRAN_ONLY, through the templates' exclude_dirs; empty here: nothing of the current path
-# is left out yet): today the renderers of P9 (the CPU renderer in Fortran) and their test. With ifx the Fortran path is
-# value-safe (-fp-model precise): the CPU renderer's picture is figure_swrast's to the bit only without the default fast
-# model's reassociation (as the native layer is built with -ffp-contract=off); the default modes keep their flags. They
-# build into the default's directories: switching path, as switching compiler, needs `--force-compile` (or `rm -rf exe`)
+# the Fortran path (szaghi/figure#15 §2): a -fortran mode builds the newest path, $PATH_FORTRAN in place of $PATH_IMGUI
+# (the seams already ported, the others from the current path). Each takes its default mode as its template (every
+# key but `src`) and builds, besides, the Fortran path's tests the default modes leave out ($FORTRAN_ONLY, through the
+# templates' exclude_dirs; emptied here). With ifx the Fortran path is value-safe (-fp-model precise): the CPU
+# renderer's picture is figure_swrast's to the bit only without the default fast model's reassociation (as the native
+# layer is built with -ffp-contract=off); the default modes keep their flags. They build into the default's
+# directories: switching path, as switching compiler, needs `--force-compile` (or `rm -rf exe`)
 [tests-gnu-fortran]
 template     = tests-gnu
+src          = src/lib/ $PATH_FORTRAN src/tests/
 exclude_dirs =
 
 [examples-gnu-fortran]
 template     = examples-gnu
+src          = src/lib/ $PATH_FORTRAN src/examples/
 exclude_dirs =
 
 [tests-nvf-fortran]
 template     = tests-nvf
+src          = src/lib/ $PATH_FORTRAN src/tests/
 exclude_dirs =
 
 [examples-nvf-fortran]
 template     = examples-nvf
+src          = src/lib/ $PATH_FORTRAN src/examples/
 exclude_dirs =
 
 [tests-ifx-fortran]
 template     = tests-ifx
+src          = src/lib/ $PATH_FORTRAN src/tests/
 cflags       = $CIFX -O2 -fp-model precise
 exclude_dirs =
 
 [examples-ifx-fortran]
 template     = examples-ifx
+src          = src/lib/ $PATH_FORTRAN src/examples/
 cflags       = $CIFX -O2 -fp-model precise
 exclude_dirs =
 

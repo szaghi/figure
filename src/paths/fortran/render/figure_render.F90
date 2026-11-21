@@ -8,8 +8,8 @@ module figure_render
 !< structure of arrays (clip rectangle, texture, vertex and index offsets, index count, and the callbacks a renderer
 !< knows: the samplers'). A texture is a `render_texture`: its pixels in place (8 bits a channel, rows from the top,
 !< RGBA or alpha only), its size and filter; the frame's `texture_of` finds the pixels of a command's texture.
-!< Today figure_render_imgui (src/lib/core_imgui/) fills a frame from Dear ImGui's draw data; the Fortran core will
-!< fill it from its own lists (block E).
+!< Today figure_render_imgui fills a frame from Dear ImGui's draw data (the core over Dear ImGui, src/paths/imgui/core/);
+!< the Fortran core will fill it from its own lists (block E).
 !<
 !< The contract is kept small enough that a further backend (SDL_GPU, K3, on demand) is one more module: `render`
 !< (indexed triangles with scissor rectangles, the samplers' callbacks), and textures created, updated and destroyed

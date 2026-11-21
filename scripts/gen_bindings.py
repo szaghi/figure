@@ -98,17 +98,17 @@ class Library:
     title: str  # human name for comments
     namespace: str  # C++ namespace of the free functions
     # a selection instead of the public free functions: these C names (methods and internal functions included), with
-    # the enums `enums` (any header); the module goes to `subdir` of src/lib; callback arguments of a type in
+    # the enums `enums` (any header); the module goes to `src_dir` (from the root); callback arguments of a type in
     # FUNPTRS are bound as `type(c_funptr)`
     select: tuple[str, ...] = ()
     enums: tuple[str, ...] = ()
     meta: str = ""  # the library whose metadata it reads (default: its name)
-    subdir: str = ""
+    src_dir: str = "src/lib"
 
 
-# figure_core's implementation over Dear ImGui (szaghi/figure#15 P8, src/lib/core_imgui/): the ImDrawList methods and the
-# imgui_internal functions it calls, bound by the same rules as the public ones. Implementation A of the seam only: it
-# goes with Dear ImGui in P27.
+# figure_core's implementation over Dear ImGui (szaghi/figure#15 P8, src/paths/imgui/core/): the ImDrawList methods and
+# the imgui_internal functions it calls, bound by the same rules as the public ones. Implementation A of the seam only:
+# it goes with Dear ImGui in P27.
 CORE_FUNCTIONS = (
     "ImDrawList_AddCallback", "ImDrawList_AddCircle", "ImDrawList_AddCircleFilled", "ImDrawList_AddConvexPolyFilled",
     "ImDrawList_AddDrawCmd", "ImDrawList_AddImage", "ImDrawList_AddLine", "ImDrawList_AddPolyline", "ImDrawList_AddRect",
@@ -287,7 +287,7 @@ LIBRARIES = [
     Library("cimplot", "implot", "ImPlot", "ImPlot"),
     Library("cimplot3d", "implot3d", "ImPlot3D", "ImPlot3D"),
     Library("cimgui_core", "imgui", "Dear ImGui (figure_core's)", "ImGui", CORE_FUNCTIONS, CORE_ENUMS, "cimgui",
-            "core_imgui"),
+            "src/paths/imgui/core"),
 ]
 
 
@@ -1097,7 +1097,7 @@ def report(results: list[tuple[Library, list[Function]]]) -> str:
         "struct result through `res`; the Fortran interface keeps the C API name, with the struct as a `bind(C)` mirror",
         "type (`im_vec4`, `im_plot_spec`, ...) passed by reference. `src/tests/figure_test_layout.F90` checks that each",
         "mirror has the size of its C struct. Variadic functions and functions taking callbacks are **skipped**.",
-        "`figure_cimgui_core` (and `figure_cimgui_core_enums`, in `src/lib/core_imgui/`) binds by the same rules a",
+        "`figure_cimgui_core` (and `figure_cimgui_core_enums`, in `src/paths/imgui/core/`) binds by the same rules a",
         "selection beyond the public free functions: the `ImDrawList` methods and `imgui_internal` functions that",
         "`figure_core`'s implementation over Dear ImGui calls (szaghi/figure#15 P8), its draw callbacks as `c_funptr`.",
         "Enumerators are in `figure_cimgui_enums` / `figure_cimplot_enums` / `figure_cimplot3d_enums`. The generated raw",
@@ -1153,7 +1153,7 @@ def generate() -> dict[Path, str]:
         fns = public_functions(lib, definitions, typedefs_all)
         results.append((lib, fns))
         structs_all.update(structs_enums["structs"])
-        lib_dir = ROOT / "src" / "lib" / lib.subdir if lib.subdir else ROOT / "src" / "lib"
+        lib_dir = ROOT / lib.src_dir
         outputs[lib_dir / f"figure_{lib.name}.F90"] = function_module(
             lib, fns, structs_all, typedefs_all
         )
