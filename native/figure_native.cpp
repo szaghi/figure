@@ -3985,6 +3985,28 @@ int fig_plot_state(int *enabled, int *scale) {
    return p.SetupLocked ? 2 : 1;
 }
 
+int fig_plot_x_transform(double *v, int *scale) {
+   // name map: implot_items.cpp Transformer1 (the pixel of an abscissa, as the items compute it)
+   for (int i = 0; i < 9; ++i) v[i] = 0.0;
+   *scale = ImPlotScale_Linear;
+   if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot) return 0;
+   ImPlot::SetupLock(); // as an item would: the ranges, the plot area and the transforms final for this frame
+   const ImPlotPlot &p = *GImPlot->CurrentPlot;
+   const ImPlotAxis &a = p.Axes[p.CurrentX];
+   v[0] = a.PixelMin;
+   v[1] = a.Range.Min;
+   v[2] = a.Range.Max;
+   v[3] = a.ScaleToPixel;
+   v[4] = a.ScaleMin;
+   v[5] = a.ScaleMax;
+   v[6] = p.PlotRect.Min.x;
+   v[7] = p.PlotRect.Max.x;
+   v[8] = ImGui::GetIO().DisplayFramebufferScale.x;
+   *scale = a.Scale;
+   if (a.TransformForward != nullptr && a.Scale != ImPlotScale_Log10 && a.Scale != ImPlotScale_SymLog) *scale = -1;
+   return 1;
+}
+
 void fig_plot_axis_constraints(int axis, int given, const double *v) {
    if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot || axis < 0 || axis >= ImAxis_COUNT) return;
    // name map: ImPlot::SetupAxisLimitsConstraints, ImPlot::SetupAxisZoomConstraints (each sets both ends at once)

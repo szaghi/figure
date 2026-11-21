@@ -5,9 +5,14 @@ program figure_test_plot_view
 !< legend), each against a golden, headless.
 !<
 !< 1. Zoom levels (#15 §4): a line of 200001 points (x from 0 to 1000, three triangle waves) in four plots, its x axis
-!<    over 1000, 100, 5 and 0.5 units: about 600, 60, 3 and 0.3 points per pixel (the last one deep enough that a
-!<    per-pixel decimation switches off); each plot's limits read back as set, and the four against the golden
-!<    src/tests/data/figure_test_plot_view.levels.golden.png (|d| <= 2).
+!<    over 1000, 100, 5 and 0.5 units: about 600, 60, 3 and 0.3 points per pixel (the last three below the decimation's
+!<    threshold, 64 per pixel); each plot's limits read back as set, and the four, every point drawn
+!<    (`ip_set_decimation(.false.)`), against the golden src/tests/data/figure_test_plot_view.levels.golden.png
+!<    (|d| <= 2). Then the same four decimated (#15 P4, the default): in the dense plot (600 per pixel) at most 64
+!<    points a pixel column kept, in the three others every point in view (20001, 1001 and 101: at most 64 a column)
+!<    and a few off the plot; the picture against the same golden at a loosened threshold (|d| <= 96): anti-aliased
+!<    strokes of the points kept cover a dense column otherwise than the full series' many, up to 87 levels apart on
+!<    2205 pixels of the dense plot (gfortran 16.2, 2026-11-20), the three others equal.
 !< 2. Interaction, in one plot whose style is pushed around it (a border of 3 pixels, a dark blue background) and with
 !<    the minor grid's alpha set: a horizontal drag line dragged 40 pixels down moves by 40 pixels' worth of y; a left
 !<    drag of (-100, +50) pixels pans the plot by that much (the ranges' widths kept); the wheel zooms in about the
@@ -24,9 +29,10 @@ use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
                    ip_drag_line_y, ip_end_plot, ip_get_style_color, ip_get_style_var, ip_legend_hovered, ip_line,    &
                    ip_pixels_to_plot, ip_plot_limits, ip_plot_selection, ip_plot_to_pixels, ip_pop_style_color,     &
-                   ip_pop_style_var,                                                                                 &
+                   ip_pop_style_var, ip_set_decimation,                                                              &
                    ip_push_style_color, ip_push_style_var, ip_set_style_var, ip_setup_axes_limits, ip_spec,         &
                    ImGuiWindowFlags_NoDecoration, FIG_ERR_STATE, FIG_OK
+use figure_implot, only : plot_decimated, plot_kept
 use figure_testing, only : test_capture, test_click, test_compare_image, test_drag, test_drawn_extent, &
                            test_mouse_button, test_mouse_move, test_next_frame, test_wheel
 
@@ -47,7 +53,7 @@ real(real64),     parameter :: BG(4) = [30.0_real64, 42.0_real64, 56.0_real64, 2
                                                                  !< background, '#1e2a38'.
 real(real64),     parameter :: TOL8 = 0.5_real64 / 255.0_real64 + 1.0e-6_real64 !< ImPlot keeps 8-bit colours.
 type(app_object)            :: app                               !< Application.
-logical                     :: test_passed(12)                   !< Per-check outcome.
+logical                     :: test_passed(14)                   !< Per-check outcome.
 real(real64), allocatable   :: x(:), y(:)                        !< The long line.
 real(real64)                :: xs(101), ys1(101), ys2(101)       !< The interaction plot's two items.
 real(real64)                :: lim(4, 4)                         !< Zoom levels' limits read back.
@@ -86,7 +92,10 @@ probe = 0.0_real64
 
 call app%init_headless(W, H)
 call ip_set_style_var('MinorAlpha', 0.5_real64)
-call levels(test_passed(1:2))
+call ip_set_decimation(.false.)
+call levels(test_passed(1:2), .false.)
+call ip_set_decimation(.true.)
+call levels(test_passed(13:14), .true.)
 call interaction(test_passed(3:9))
 call styles(test_passed(10:12))
 call app%destroy()
@@ -106,15 +115,22 @@ contains
    v = 1.0_real64 - 2.0_real64 * abs(modulo(t, 2.0_real64) - 1.0_real64)
    endfunction tri
 
-   subroutine levels(ok)
-   !< Phase 1: the line at four zoom levels, its limits read back, the picture against the golden.
-   logical, intent(out) :: ok(2) !< Outcomes: limits, picture.
-   integer(int32)       :: f     !< Frame.
-   integer(int32)       :: k     !< Plot.
-   integer(int32)       :: s     !< Status.
-   integer(int64)       :: nf    !< Pixels that failed.
+   subroutine levels(ok, decimated)
+   !< Phase 1: the line at four zoom levels, its limits read back, the picture against the golden; decimated: the two
+   !< dense plots decimated, the two others not, the picture within the loosened threshold.
+   logical, intent(out) :: ok(2)     !< Outcomes: limits (decimated: and which plots were), picture.
+   logical, intent(in)  :: decimated !< Decimation on.
+   integer(int32)       :: f         !< Frame.
+   integer(int32)       :: k         !< Plot.
+   integer(int32)       :: s         !< Status.
+   integer(int64)       :: nf        !< Pixels that failed.
+   integer(int64)       :: before    !< Items decimated before a plot's line.
+   logical              :: thinned(4) !< Each plot's line decimated, on the captured frame.
+   integer(int64)       :: kept(4)   !< Points it kept.
 
    s = -1_int32
+   thinned = .false.
+   kept = 0_int64
    do f = 1_int32, 4_int32
       if (.not. app%next_frame()) error stop 'figure_test_plot_view: next_frame returned false in headless mode'
       call ig_set_next_window(0.0_real64, 0.0_real64, real(W, real64), real(H, real64), always=.true.)
@@ -123,7 +139,10 @@ contains
             if (mod(k, 2_int32) == 0_int32) call ig_same_line()
             if (ip_begin_plot('##level'//achar(48 + k), width=388.0_real64, height=285.0_real64)) then
                call ip_setup_axes_limits(0.0_real64, XSPAN(k), -1.4_real64, 1.4_real64, always=.true.)
+               before = plot_decimated
                call ip_line('signal', x, y, spec=ip_spec(line_color=SIGNAL_C))
+               thinned(k) = plot_decimated > before
+               if (thinned(k)) kept(k) = plot_kept
                call ip_plot_limits(lim(1, k), lim(2, k), lim(3, k), lim(4, k))
                call ip_end_plot()
             endif
@@ -135,8 +154,23 @@ contains
    ok(1) = all(abs(lim(1, :)) < 1.0e-12_real64) .and. all(abs(lim(2, :) - XSPAN) < 1.0e-9_real64 * XSPAN) .and. &
            all(abs(lim(3, :) + 1.4_real64) < 1.0e-12_real64) .and. all(abs(lim(4, :) - 1.4_real64) < 1.0e-12_real64)
    if (.not. ok(1)) write(output_unit, '(A,16ES12.4)') 'levels: limits ', lim
+   if (decimated) then ! 388 pixels wide, about 340 of plot area: the dense plot at most 64 points a column, the others
+                       ! every point in view (x 0 to 100, 5, 0.5) and a few of the 200001 off the plot
+      ok(1) = ok(1) .and. all(thinned) .and. kept(1) <= 64_int64 * 400_int64 .and. kept(1) > 4_int64 * 300_int64 .and. &
+              kept(2) >= 20001_int64 .and. kept(2) < 20600_int64 .and. kept(3) >= 1001_int64 .and.                   &
+              kept(3) < 1100_int64 .and. kept(4) >= 101_int64 .and. kept(4) < 200_int64
+      if (.not. ok(1)) write(output_unit, '(A,4L2,4(1X,I0))') 'levels: decimated, kept ', thinned, kept
+   else
+      ok(1) = ok(1) .and. .not. any(thinned)
+   endif
    ok(2) = s == FIG_OK
-   if (ok(2)) ok(2) = test_compare_image(LEVELS_SHOT, LEVELS_GOLDEN, failed=nf, stat=s)
+   if (ok(2)) then
+      if (decimated) then ! loosened (#15 §4): the decimated strokes' anti-aliasing, see the header
+         ok(2) = test_compare_image(LEVELS_SHOT, LEVELS_GOLDEN, threshold=96_int32, failed=nf, stat=s)
+      else
+         ok(2) = test_compare_image(LEVELS_SHOT, LEVELS_GOLDEN, failed=nf, stat=s)
+      endif
+   endif
    if (.not. ok(2)) write(output_unit, '(A,I0,A,I0,A,A)') 'levels: status ', s, ', ', nf, ' failed: ', figure_last_error()
    endsubroutine levels
 

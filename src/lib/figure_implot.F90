@@ -24,8 +24,8 @@ module figure_implot
 !< call ip_line('residual', it, res, spec=ip_spec(line_color=[1.0_real64, 0.0_real64, 0.0_real64, 1.0_real64], &
 !<                                               line_weight=2.0_real64, marker=ImPlotMarker_Circle))
 !<```
-use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_intptr_t, c_loc, c_null_char, &
-                                         c_null_ptr, c_ptr
+use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_intptr_t, &
+                                         c_loc, c_null_char, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
@@ -35,7 +35,9 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colorma
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
                             fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag, &
                             fig_field_image, fig_gradient_edit, fig_colormap_stops, fig_dnd_plot_target, &
-                            fig_plot_link, fig_aligned_open
+                            fig_plot_link, fig_aligned_open, fig_plot_x_transform
+use figure_decimate, only : decimate_axis, decimate, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
+                            DECIMATE_THRESHOLD
 use figure_cimgui, only : im_vec2, im_vec4, igGetFrameCount, igIsMousePosValid
 use figure_texture, only : texture_object, texture_ref
 use figure_imgui, only : take_payload
@@ -128,6 +130,7 @@ public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, 
 public :: ip_drop_target
 public :: ip_link_axis, ip_begin_aligned, ip_end_aligned, ip_legend_hovered, ip_begin_legend_popup
 public :: ip_end_legend_popup, ip_hide_next_item, ip_digital, ip_bar_groups
+public :: ip_set_decimation
 public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -281,6 +284,7 @@ type :: series_r32
    !< share (ImPlot applies one stride to all the arrays of an item); an array copied is read from its slot's scratch.
    type(c_ptr)    :: p(4) = c_null_ptr !< Addresses: 1 x, 2 y (sets the stride), 3-4 the other ordinates.
    integer(int64) :: stride = 4_int64  !< Stride of every array [bytes].
+   integer(int64) :: n = 0_int64       !< Points (those kept, once decimated: `series_decimate`).
 endtype series_r32
 
 type :: series_r64
@@ -288,6 +292,7 @@ type :: series_r64
    !< share (ImPlot applies one stride to all the arrays of an item); an array copied is read from its slot's scratch.
    type(c_ptr)    :: p(4) = c_null_ptr !< Addresses: 1 x, 2 y (sets the stride), 3-4 the other ordinates.
    integer(int64) :: stride = 8_int64  !< Stride of every array [bytes].
+   integer(int64) :: n = 0_int64       !< Points (those kept, once decimated: `series_decimate`).
 endtype series_r64
 
 ! The items' scratch, one array per slot and precision, kept from item to item (an item's arrays are read by ImPlot
@@ -295,6 +300,19 @@ endtype series_r64
 type(buffer_r32), target :: scratch_r32(4)          !< Single precision.
 type(buffer_r64), target :: scratch_r64(4)          !< Double precision.
 integer(int32)           :: scratch_frame = -1_int32 !< Dear ImGui frame of the last copy into the scratch; -1: none kept.
+
+! The decimation of long line-like series (figure_decimate, szaghi/figure#15 P4): the points kept, gathered from the
+! item's arrays into these buffers (x, y, the second ordinates), kept from item to item and freed with the scratch.
+integer(int32), parameter :: ITEM_LINE = 1_int32      !< A line (`ip_line`): its flags Segments and Loop not decimated.
+integer(int32), parameter :: ITEM_STAIRS = 2_int32    !< A staircase (`ip_stairs`).
+integer(int32), parameter :: ITEM_SHADED = 3_int32    !< A shaded area (`ip_shaded`): a fill.
+type(buffer_r32), target    :: kept_r32(3)            !< The points kept, single precision.
+type(buffer_r64), target    :: kept_r64(3)            !< The points kept, double precision.
+integer(int64), allocatable :: kept(:)                !< Their indices.
+integer(int32)              :: kept_frame = -1_int32  !< Dear ImGui frame of the last decimation; -1: none kept.
+integer(int64), public      :: plot_decimated = 0     !< Items decimated so far (tests: `use figure_implot`).
+integer(int64), public      :: plot_kept = 0          !< Points the last decimated item kept.
+logical                     :: decimation_on = .true. !< Long series decimated (`ip_set_decimation`).
 
 interface series_lead
    !< Place the array that sets an item's stride.
@@ -310,6 +328,11 @@ interface series_spec
    !< The C spec of an item with its stride.
    module procedure spec_stride_r32, spec_stride_r64
 endinterface series_spec
+
+interface series_decimate
+   !< Decimate an item's arrays (figure_decimate): the points kept in its slots, `d%n` their number.
+   module procedure decimate_series_r32, decimate_series_r64
+endinterface series_decimate
 
 interface series_gap
    !< Bytes from one address to the next one: the stride of an array, from the addresses of two consecutive elements.
@@ -875,7 +898,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_line', stat)) return
-   call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_LINE, spec)
+   call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_r32
 
@@ -894,7 +918,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_line', stat)) return
-   call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_LINE, spec)
+   call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_i32_r32
 
@@ -913,7 +938,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_line', stat)) return
-   call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_LINE, spec)
+   call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_i64_r32
 
@@ -1054,7 +1080,8 @@ contains
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(d%n, c_int), &
                                                    series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_r32
@@ -1077,7 +1104,8 @@ contains
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(d%n, c_int), &
                                                    series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_i32_r32
@@ -1100,7 +1128,8 @@ contains
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_FloatPtrFloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), d%p(3), int(d%n, c_int), &
                                                    series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_i64_r32
@@ -1121,7 +1150,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(yref, c_double), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), int(d%n, c_int), real(yref, c_double), &
                                               series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_ref_r32
@@ -1142,7 +1172,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(yref, c_double), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), int(d%n, c_int), real(yref, c_double), &
                                               series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_ref_i32_r32
@@ -1163,7 +1194,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), real(yref, c_double), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_FloatPtrFloatPtrInt(cstr(label), d%p(1), d%p(2), int(d%n, c_int), real(yref, c_double), &
                                               series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_ref_i64_r32
@@ -1307,7 +1339,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_line', stat)) return
-   call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_LINE, spec)
+   call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_r64
 
@@ -1326,7 +1359,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_line', stat)) return
-   call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_LINE, spec)
+   call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_i32_r64
 
@@ -1345,7 +1379,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_line', stat)) return
-   call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_LINE, spec)
+   call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_i64_r64
 
@@ -1705,7 +1740,8 @@ contains
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(d%n, c_int), &
                                                       series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_r64
@@ -1728,7 +1764,8 @@ contains
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(d%n, c_int), &
                                                       series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_i32_r64
@@ -1751,7 +1788,8 @@ contains
    call series_put(d, 1, x)
    call series_put(d, 3, y2)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(size(x), c_int), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_doublePtrdoublePtrdoublePtr(cstr(label), d%p(1), d%p(2), d%p(3), int(d%n, c_int), &
                                                       series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_shaded_i64_r64
@@ -1772,7 +1810,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), int(d%n, c_int), &
                                                 real(yref, c_double), &
                                                 series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1794,7 +1833,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), int(d%n, c_int), &
                                                 real(yref, c_double), &
                                                 series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1816,7 +1856,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_shaded', stat)) return
-   call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), int(size(x), c_int), &
+   call series_decimate(d, ITEM_SHADED, spec)
+   call ImPlot_PlotShaded_doublePtrdoublePtrInt(cstr(label), d%p(1), d%p(2), int(d%n, c_int), &
                                                 real(yref, c_double), &
                                                 series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1959,11 +2000,18 @@ contains
    type(plot_spec_object), intent(in), optional             :: spec   !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional            :: stat   !< Status.
    type(series_r32), target                                 :: d      !< Where ImPlot reads the array.
+   logical                                                  :: dec    !< Decimated: abscissae of their own.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
    if (outside_plot('ip_line', stat)) return
+   call series_decimate(d, ITEM_LINE, spec, uniform(xstart, 0.0_real64), uniform(xscale, 1.0_real64), dec)
+   if (dec) then
+      call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
+      call figure_check(FIG_OK, stat)
+      return
+   endif
    call ImPlot_PlotLine_FloatPtrInt(cstr(label), d%p(2), int(size(y), c_int), uniform(xscale, 1.0_real64), &
                                     uniform(xstart, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -1981,6 +2029,8 @@ contains
    integer(int32),         intent(out), optional          :: stat   !< Status.
    type(im_plot_spec)                                     :: c      !< Spec with the row stride.
    type(c_ptr)                                            :: p      !< Address of y(row, 1), or null.
+   type(series_r32), target                               :: d      !< The row, for the decimation.
+   logical                                                :: dec    !< Decimated: abscissae of their own.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. row_ok(size(y, 1, kind=int64), size(y, 2, kind=int64), storage_size(y, kind=int64), row, stat)) return
@@ -1990,6 +2040,15 @@ contains
    p = c_null_ptr
    if (size(y, 2) > 0) p = c_loc(y(row, 1))
    if (outside_plot('ip_line', stat)) return
+   d%p(2) = p
+   d%stride = int(c%Stride, int64)
+   d%n = size(y, 2, kind=int64)
+   call series_decimate(d, ITEM_LINE, spec, uniform(xstart, 0.0_real64), uniform(xscale, 1.0_real64), dec)
+   if (dec) then
+      call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
+      call figure_check(FIG_OK, stat)
+      return
+   endif
    call ImPlot_PlotLine_FloatPtrInt(cstr(label), p, int(size(y, 2), c_int), uniform(xscale, 1.0_real64), &
                                     uniform(xstart, 0.0_real64), c)
    call figure_check(FIG_OK, stat)
@@ -2057,11 +2116,18 @@ contains
    type(plot_spec_object), intent(in), optional             :: spec   !< Style (default: ImPlot's).
    integer(int32),         intent(out), optional            :: stat   !< Status.
    type(series_r64), target                                 :: d      !< Where ImPlot reads the array.
+   logical                                                  :: dec    !< Decimated: abscissae of their own.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. series_ok(size(y, kind=int64), size(y, kind=int64), 'ip_line', stat)) return
    call series_lead(d, 2, y)
    if (outside_plot('ip_line', stat)) return
+   call series_decimate(d, ITEM_LINE, spec, uniform(xstart, 0.0_real64), uniform(xscale, 1.0_real64), dec)
+   if (dec) then
+      call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
+      call figure_check(FIG_OK, stat)
+      return
+   endif
    call ImPlot_PlotLine_doublePtrInt(cstr(label), d%p(2), int(size(y), c_int), uniform(xscale, 1.0_real64), &
                                      uniform(xstart, 0.0_real64), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
@@ -2079,6 +2145,8 @@ contains
    integer(int32),         intent(out), optional          :: stat   !< Status.
    type(im_plot_spec)                                     :: c      !< Spec with the row stride.
    type(c_ptr)                                            :: p      !< Address of y(row, 1), or null.
+   type(series_r64), target                               :: d      !< The row, for the decimation.
+   logical                                                :: dec    !< Decimated: abscissae of their own.
 
    if (figure_draw_refused('ip_line', stat)) return ! a task does not draw
    if (.not. row_ok(size(y, 1, kind=int64), size(y, 2, kind=int64), storage_size(y, kind=int64), row, stat)) return
@@ -2088,6 +2156,15 @@ contains
    p = c_null_ptr
    if (size(y, 2) > 0) p = c_loc(y(row, 1))
    if (outside_plot('ip_line', stat)) return
+   d%p(2) = p
+   d%stride = int(c%Stride, int64)
+   d%n = size(y, 2, kind=int64)
+   call series_decimate(d, ITEM_LINE, spec, uniform(xstart, 0.0_real64), uniform(xscale, 1.0_real64), dec)
+   if (dec) then
+      call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
+      call figure_check(FIG_OK, stat)
+      return
+   endif
    call ImPlot_PlotLine_doublePtrInt(cstr(label), p, int(size(y, 2), c_int), uniform(xscale, 1.0_real64), &
                                      uniform(xstart, 0.0_real64), c)
    call figure_check(FIG_OK, stat)
@@ -3136,6 +3213,21 @@ contains
    if (present(stat)) stat = FIG_OK
    endsubroutine ip_end_legend_popup
 
+   recursive subroutine ip_set_decimation(enabled, stat)
+   !< Decimate the long line-like series of the items drawn after it (the default) or draw every point of them.
+   !< `ip_line`, `ip_stairs` and `ip_shaded` with more than 256 points per pixel column of the plot on average (sorted
+   !< abscissae, no markers) draw, per sixteenth of a column of more than 64 points, its first, last, lowest and highest
+   !< points (M4): at most 64 points a column whatever the series' length. The picture stays close to the full one,
+   !< anti-aliasing apart (plots.md, "Long series"); `enabled=.false.` draws every point, as v0.8.0 did, for an exact picture. A
+   !< setting of the program, kept until changed, in every mode. Statuses: `FIG_ERR_STATE` from a task.
+   logical,        intent(in)            :: enabled !< Decimate (`.true.`, the default) or draw every point.
+   integer(int32), intent(out), optional :: stat    !< Status.
+
+   if (figure_refused('ip_set_decimation', stat)) return ! a task does not draw
+   decimation_on = enabled
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_set_decimation
+
    recursive subroutine ip_hide_next_item(hidden, always, stat)
    !< Hide (default) or show the next item (`HideNextItem`): its legend entry stays, greyed while hidden, and a click
    !< on it shows it again. The first time the item is drawn only, unless `always=.true.`: then on this frame, whatever
@@ -3446,7 +3538,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_stairs', stat)) return
-   call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_STAIRS, spec)
+   call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_r32
 
@@ -3467,7 +3560,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_stairs', stat)) return
-   call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_STAIRS, spec)
+   call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_i32_r32
 
@@ -3488,7 +3582,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_stairs', stat)) return
-   call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_STAIRS, spec)
+   call ImPlot_PlotStairs_FloatPtrFloatPtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_i64_r32
 
@@ -3509,7 +3604,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_stairs', stat)) return
-   call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_STAIRS, spec)
+   call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_r64
 
@@ -3530,7 +3626,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_stairs', stat)) return
-   call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_STAIRS, spec)
+   call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_i32_r64
 
@@ -3551,7 +3648,8 @@ contains
    call series_lead(d, 2, y)
    call series_put(d, 1, x)
    if (outside_plot('ip_stairs', stat)) return
-   call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(size(x), c_int), series_spec(d, spec))
+   call series_decimate(d, ITEM_STAIRS, spec)
+   call ImPlot_PlotStairs_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_stairs_i64_r64
 
@@ -5071,6 +5169,7 @@ contains
    call scratch_age()
    es = storage_size(a, kind=int64) / 8_int64
    d%stride = es
+   d%n = size(a, kind=int64)
    if (size(a) == 0) return
    s = es
    if (size(a) > 1) s = gap(c_loc(a(1)), c_loc(a(2)))
@@ -5165,6 +5264,7 @@ contains
    call scratch_age()
    es = storage_size(a, kind=int64) / 8_int64
    d%stride = es
+   d%n = size(a, kind=int64)
    if (size(a) == 0) return
    s = es
    if (size(a) > 1) s = gap(c_loc(a(1)), c_loc(a(2)))
@@ -5246,13 +5346,237 @@ contains
    plot_stride = d%stride
    endfunction spec_stride_r64
 
+   subroutine decimate_series_r32(d, item, spec, x0, dx, done)
+   !< Decimate the arrays of a single precision item (figure_decimate, M4 per pixel column) when it has more than
+   !< DECIMATE_THRESHOLD points per pixel column: the points kept gathered into the decimation's buffers, which take
+   !< the item's slots (x, y, the second ordinates) at their own stride, `d%n` their number. Not decimated (`.false.`,
+   !< `d` unchanged): fewer points, unsorted abscissae, markers, per-point colours or sizes, an offset, the line flags
+   !< Segments and Loop, a custom axis transform. With `x0` and `dx` the abscissae are x0 + (i - 1) dx (slot 1 unused
+   !< before, set after).
+   type(series_r32),       intent(inout)        :: d     !< The item's arrays.
+   integer(int32),         intent(in)           :: item  !< ITEM_LINE, ITEM_STAIRS or ITEM_SHADED.
+   type(plot_spec_object), intent(in), optional :: spec  !< Style.
+   real(c_double),         intent(in), optional :: x0    !< First abscissa (uniform abscissae).
+   real(c_double),         intent(in), optional :: dx    !< Their spacing.
+   logical,                intent(out), optional :: done !< Decimated.
+   logical                                      :: dec   !< Decimated.
+   type(decimate_axis)                          :: ax    !< The plot's x axis.
+   logical                                      :: fill  !< The item fills an area.
+   real(real32), pointer                        :: xa(:) !< Memory of the abscissae.
+   real(real32), pointer                        :: ya(:) !< ... of the ordinates.
+   real(real32), pointer                        :: za(:) !< ... of the second ordinates.
+   integer(int64)                               :: m     !< Stride [elements].
+   integer(int64)                               :: nk    !< Points kept.
+   integer(int64)                               :: j     !< Counter.
+   integer(int32)                               :: k     !< Slot.
+
+   dec = .false.
+   if (present(done)) done = .false.
+   if (.not. decimation_wanted(d%n, item, spec, ax, fill)) return
+   m = d%stride / 4_int64
+   call c_f_pointer(d%p(2), ya, [(d%n - 1_int64) * m + 1_int64])
+   if (c_associated(d%p(3))) call c_f_pointer(d%p(3), za, [(d%n - 1_int64) * m + 1_int64])
+   if (present(x0) .and. present(dx)) then
+      if (c_associated(d%p(3))) then
+         dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+      else
+         dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, fill=fill)
+      endif
+   else
+      call c_f_pointer(d%p(1), xa, [(d%n - 1_int64) * m + 1_int64])
+      if (c_associated(d%p(3))) then
+         dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+      else
+         dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, fill=fill)
+      endif
+   endif
+   if (.not. dec) return
+   do k = 1_int32, 3_int32
+      if (k == 3_int32 .and. .not. c_associated(d%p(3))) exit
+      if (allocated(kept_r32(k)%v)) then
+         if (size(kept_r32(k)%v, kind=int64) < nk) deallocate(kept_r32(k)%v)
+      endif
+      if (.not. allocated(kept_r32(k)%v)) allocate(kept_r32(k)%v(max(nk, 1024_int64)))
+   enddo
+   if (present(x0) .and. present(dx)) then
+      do j = 1_int64, nk
+         kept_r32(1)%v(j) = real(dx * real(kept(j) - 1_int64, c_double) + x0, real32)
+      enddo
+   else
+      do j = 1_int64, nk
+         kept_r32(1)%v(j) = xa((kept(j) - 1_int64) * m + 1_int64)
+      enddo
+   endif
+   do j = 1_int64, nk
+      kept_r32(2)%v(j) = ya((kept(j) - 1_int64) * m + 1_int64)
+   enddo
+   if (c_associated(d%p(3))) then
+      do j = 1_int64, nk
+         kept_r32(3)%v(j) = za((kept(j) - 1_int64) * m + 1_int64)
+      enddo
+      d%p(3) = c_loc(kept_r32(3)%v)
+   endif
+   d%p(1) = c_loc(kept_r32(1)%v)
+   d%p(2) = c_loc(kept_r32(2)%v)
+   d%stride = 4_int64
+   d%n = nk
+   kept_frame = int(igGetFrameCount(), int32)
+   plot_decimated = plot_decimated + 1_int64
+   plot_kept = nk
+   if (present(done)) done = dec
+   endsubroutine decimate_series_r32
+
+   subroutine decimate_series_r64(d, item, spec, x0, dx, done)
+   !< Decimate the arrays of a double precision item (figure_decimate, M4 per pixel column) when it has more than
+   !< DECIMATE_THRESHOLD points per pixel column: the points kept gathered into the decimation's buffers, which take
+   !< the item's slots (x, y, the second ordinates) at their own stride, `d%n` their number. Not decimated (`.false.`,
+   !< `d` unchanged): fewer points, unsorted abscissae, markers, per-point colours or sizes, an offset, the line flags
+   !< Segments and Loop, a custom axis transform. With `x0` and `dx` the abscissae are x0 + (i - 1) dx (slot 1 unused
+   !< before, set after).
+   type(series_r64),       intent(inout)        :: d     !< The item's arrays.
+   integer(int32),         intent(in)           :: item  !< ITEM_LINE, ITEM_STAIRS or ITEM_SHADED.
+   type(plot_spec_object), intent(in), optional :: spec  !< Style.
+   real(c_double),         intent(in), optional :: x0    !< First abscissa (uniform abscissae).
+   real(c_double),         intent(in), optional :: dx    !< Their spacing.
+   logical,                intent(out), optional :: done !< Decimated.
+   logical                                      :: dec   !< Decimated.
+   type(decimate_axis)                          :: ax    !< The plot's x axis.
+   logical                                      :: fill  !< The item fills an area.
+   real(real64), pointer                        :: xa(:) !< Memory of the abscissae.
+   real(real64), pointer                        :: ya(:) !< ... of the ordinates.
+   real(real64), pointer                        :: za(:) !< ... of the second ordinates.
+   integer(int64)                               :: m     !< Stride [elements].
+   integer(int64)                               :: nk    !< Points kept.
+   integer(int64)                               :: j     !< Counter.
+   integer(int32)                               :: k     !< Slot.
+
+   dec = .false.
+   if (present(done)) done = .false.
+   if (.not. decimation_wanted(d%n, item, spec, ax, fill)) return
+   m = d%stride / 8_int64
+   call c_f_pointer(d%p(2), ya, [(d%n - 1_int64) * m + 1_int64])
+   if (c_associated(d%p(3))) call c_f_pointer(d%p(3), za, [(d%n - 1_int64) * m + 1_int64])
+   if (present(x0) .and. present(dx)) then
+      if (c_associated(d%p(3))) then
+         dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+      else
+         dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, fill=fill)
+      endif
+   else
+      call c_f_pointer(d%p(1), xa, [(d%n - 1_int64) * m + 1_int64])
+      if (c_associated(d%p(3))) then
+         dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+      else
+         dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, fill=fill)
+      endif
+   endif
+   if (.not. dec) return
+   do k = 1_int32, 3_int32
+      if (k == 3_int32 .and. .not. c_associated(d%p(3))) exit
+      if (allocated(kept_r64(k)%v)) then
+         if (size(kept_r64(k)%v, kind=int64) < nk) deallocate(kept_r64(k)%v)
+      endif
+      if (.not. allocated(kept_r64(k)%v)) allocate(kept_r64(k)%v(max(nk, 1024_int64)))
+   enddo
+   if (present(x0) .and. present(dx)) then
+      do j = 1_int64, nk
+         kept_r64(1)%v(j) = dx * real(kept(j) - 1_int64, c_double) + x0
+      enddo
+   else
+      do j = 1_int64, nk
+         kept_r64(1)%v(j) = xa((kept(j) - 1_int64) * m + 1_int64)
+      enddo
+   endif
+   do j = 1_int64, nk
+      kept_r64(2)%v(j) = ya((kept(j) - 1_int64) * m + 1_int64)
+   enddo
+   if (c_associated(d%p(3))) then
+      do j = 1_int64, nk
+         kept_r64(3)%v(j) = za((kept(j) - 1_int64) * m + 1_int64)
+      enddo
+      d%p(3) = c_loc(kept_r64(3)%v)
+   endif
+   d%p(1) = c_loc(kept_r64(1)%v)
+   d%p(2) = c_loc(kept_r64(2)%v)
+   d%stride = 8_int64
+   d%n = nk
+   kept_frame = int(igGetFrameCount(), int32)
+   plot_decimated = plot_decimated + 1_int64
+   plot_kept = nk
+   if (present(done)) done = dec
+   endsubroutine decimate_series_r64
+
+   function decimation_wanted(n, item, spec, ax, fill) result(wanted)
+   !< Whether an item of n points may be decimated (its style, the plot's x axis), and the axis as its points map to
+   !< pixels; whether it fills an area.
+   integer(int64),         intent(in)           :: n      !< Points.
+   integer(int32),         intent(in)           :: item   !< ITEM_LINE, ITEM_STAIRS or ITEM_SHADED.
+   type(plot_spec_object), intent(in), optional :: spec   !< Style.
+   type(decimate_axis),    intent(out)          :: ax     !< The plot's x axis.
+   logical,                intent(out)          :: fill   !< The item fills an area.
+   logical                                      :: wanted !< Decimate.
+   type(im_plot_spec)                           :: c      !< The style passed.
+   real(c_double)                               :: v(9)   !< The axis's transform.
+   integer(c_int)                               :: sc     !< Its scale.
+
+   wanted = .false.
+   fill = .false.
+   if (.not. decimation_on .or. n <= int(DECIMATE_THRESHOLD, int64)) return
+   c = spec_c(spec)
+   if (c%Marker /= ImPlotMarker_None .or. c%Offset /= 0_c_int) return
+   if (c_associated(c%LineColors) .or. c_associated(c%FillColors) .or. c_associated(c%MarkerSizes) .or. &
+       c_associated(c%MarkerLineColors) .or. c_associated(c%MarkerFillColors)) return
+   select case (item)
+   case (ITEM_LINE)
+      if (iand(c%Flags, ior(ImPlotLineFlags_Segments, ImPlotLineFlags_Loop)) /= 0_c_int) return
+      fill = iand(c%Flags, ImPlotLineFlags_Shaded) /= 0_c_int
+   case (ITEM_STAIRS)
+      fill = iand(c%Flags, ImPlotStairsFlags_Shaded) /= 0_c_int
+   case default
+      fill = .true.
+   endselect
+   if (fig_plot_x_transform(v, sc) == 0_c_int) return
+   select case (sc)
+   case (ImPlotScale_Linear, ImPlotScale_Time)
+      ax%scale = DECIMATE_LINEAR
+   case (ImPlotScale_Log10)
+      ax%scale = DECIMATE_LOG10
+   case (ImPlotScale_SymLog)
+      ax%scale = DECIMATE_SYMLOG
+   case default
+      return
+   endselect
+   ax%pix_min = v(1)
+   ax%plt_min = v(2)
+   ax%plt_max = v(3)
+   ax%m = v(4)
+   ax%sca_min = v(5)
+   ax%sca_max = v(6)
+   ax%left = v(7)
+   ax%right = v(8)
+   ax%fb_scale = v(9)
+   ax%reach = 0.5_real64 * max(1.0_real64, real(c%LineWeight, real64)) + 1.5_real64
+   wanted = .true.
+   endfunction decimation_wanted
+
    subroutine scratch_age()
    !< Free the items' scratch (both precisions) when no item has copied into it in this frame or the one before: a
    !< program that stops plotting reversed or converted data gives the memory back at its next item. A new Dear ImGui
-   !< context (its frame count restarted) frees it too.
+   !< context (its frame count restarted) frees it too. The decimation's buffers likewise.
    integer(int32) :: k   !< Slot.
    integer(int32) :: age !< Frames since the last copy.
 
+   if (kept_frame >= 0_int32) then
+      age = int(igGetFrameCount(), int32) - kept_frame
+      if (age /= 0_int32 .and. age /= 1_int32) then
+         do k = 1_int32, 3_int32
+            if (allocated(kept_r32(k)%v)) deallocate(kept_r32(k)%v)
+            if (allocated(kept_r64(k)%v)) deallocate(kept_r64(k)%v)
+         enddo
+         if (allocated(kept)) deallocate(kept)
+         kept_frame = -1_int32
+      endif
+   endif
    if (scratch_frame < 0_int32) return
    age = int(igGetFrameCount(), int32) - scratch_frame
    if (age == 0_int32 .or. age == 1_int32) return

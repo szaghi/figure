@@ -25,6 +25,7 @@ public :: fig_window_rect, fig_input_next_frame, fig_widget_input_text, fig_shor
 public :: fig_app_wake, fig_set_next_item_shortcut, fig_last_item, fig_item_status, fig_mark_last_item_edited
 public :: fig_drag_range, fig_list_box
 public :: fig_align_begin, fig_align_end, fig_align_next, fig_plot_end, fig_plot_state, fig_plot_axis_constraints
+public :: fig_plot_x_transform
 public :: fig_plot3d_colormap, fig_plot3d_end, fig_plot3d_state, fig_plot3d_axis_format
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
@@ -1597,6 +1598,19 @@ interface
    integer(c_int), intent(out) :: scale(6)   !< Each axis's ImPlotScale.
    integer(c_int)              :: state      !< 0 no plot, 1 setup open, 2 setup over.
    endfunction fig_plot_state
+
+   function fig_plot_x_transform(v, scale) result(state) bind(C, name='fig_plot_x_transform')
+   !< The current x axis of the plot being declared, as its items map an abscissa p to a pixel: v(1) + v(4) (T(p) - v(2))
+   !< rounded to a C float, T the identity on a linear or time axis, else v(2) + (v(3) - v(2)) (F(p) - v(5)) /
+   !< (v(6) - v(5)) with F the scale's forward transform; v(7), v(8) the plot area's left and right [pixels], v(9) the
+   !< display's framebuffer scale. Locks the plot's setup, as an item does.
+   import :: c_double, c_int
+   implicit none
+   real(c_double), intent(out) :: v(9)  !< Pixel of the range's minimum, range min, max, pixels per unit, scale's
+                                        !< min, max, plot area's left, right [pixels], framebuffer scale.
+   integer(c_int), intent(out) :: scale !< The axis's ImPlotScale; -1 for a custom transform.
+   integer(c_int)              :: state !< 0 no plot is being declared (v zeroed), 1 otherwise.
+   endfunction fig_plot_x_transform
 
    function fig_plot3d_colormap(implot_id, id) result(status) bind(C, name='fig_plot3d_colormap')
    !< The ImPlot3D id of the ImPlot colormap `implot_id`, copied into ImPlot3D's registry (again when edited).

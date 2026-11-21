@@ -4,16 +4,17 @@ program figure_test_remote
 !<
 !< Serves the UI on a free port (no window, display or GPU), launches scripts/remote_client.py in the background, and
 !< draws frames until the client's click arrives (or 30 s pass). The client checks the page, the handshake, every
-!< message byte by byte (with a draw list over 65536 vertices: a 100000-point line, until the client presses Z), the
-!< resize event, the skipping of unchanged frames and the frame-rate cap, the clipboard message, and an image updated
-!< in consecutive frames (12 frames, once the client holds A down) arriving as JPEG, then exact once it stops; this
+!< message byte by byte (with a draw list over 65536 vertices: a 100000-point line, every point drawn, until the client
+!< presses Z), the resize event, the skipping of unchanged frames and the frame-rate cap, the clipboard message, and an
+!< image updated in consecutive frames (12 frames, once the client holds A down) arriving as JPEG, then exact once it
+!< stops; this
 !< program checks that the click arrived once, that the browser's paste reached its clipboard (it answers with a copy,
 !< which the client checks), that the program's first path call finds the button (items recorded from the first frame
 !< in every mode), and the client's verdict. Needs python3 (3.11+) on the PATH; run from the repository
 !< root, as scripts/run_tests.sh does.
 use, intrinsic :: iso_fortran_env, only : error_unit, int8, int32, output_unit, real64
 use figure, only : app_object, ig_begin, ig_button, ig_end, ig_get_clipboard, ig_image, ig_item_rect, ig_set_clipboard, &
-                   ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, texture_object, figure_time
+                   ig_set_next_window, ip_begin_plot, ip_end_plot, ip_line, ip_set_decimation, texture_object, figure_time
 use figure_cimgui, only : igIsKeyDown_Nil
 use figure_testing, only : test_item_exists
 use figure_cimgui_enums, only : ImGuiKey_A, ImGuiKey_Z
@@ -119,7 +120,9 @@ if (test_passed(1)) then
          call ig_set_next_window(340.0_real64, 20.0_real64, 280.0_real64, 220.0_real64, always=.true.)
          if (ig_begin('Long line')) then ! one draw list over 65536 vertices: indices relative to each command's offset
             if (ip_begin_plot('long', height=-1.0_real64)) then
+               call ip_set_decimation(.false.) ! every point drawn: decimated, the line would make 3000 vertices
                call ip_line('y', lx, ly)
+               call ip_set_decimation(.true.)
                call ip_end_plot()
             endif
          endif

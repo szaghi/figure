@@ -102,9 +102,11 @@ what costs is how many points the plots draw.
 ## Large data
 
 **Lines.** ImPlot's cost grows with the points drawn, about 0.2 ms per 10 000 points here: 100 000 points add 2 ms to
-a frame, a million 24 ms. A plot is at most a few thousand pixels wide, so draw at most a few points per pixel: keep
-one sample in N, or, to keep spikes visible, the minimum and maximum of each group of N consecutive samples (two
-points per group). A million samples shown 1000 pixels wide need 2000 points, not a million.
+a frame, a million 24 ms. A plot is at most a few thousand pixels wide, so `ip_line`, `ip_stairs` and `ip_shaded`
+decimate a series of more than 256 points per pixel column on average: at most 64 points a column reach ImPlot, the
+extremes of each sixteenth of a column kept ([Long series](plots#long-series)). What is left is one pass over the
+data per frame (are the abscissae sorted, where are the extremes of the ordinates), and the 64 points a column ImPlot
+draws.
 
 **Strided data.** Decimating in place costs no copy: `ip_line(label, y(::10), xscale=10 * dx)` reads every tenth
 sample with ImPlot's stride. Components of an array of derived types, matrix rows and integer abscissae are read in

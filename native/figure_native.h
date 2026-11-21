@@ -326,6 +326,13 @@ void   fig_plot_end(void);
 /* The plot being declared: 0 none, 1 its setup open, 2 its setup over (locked by an item, SetAxes, GetPlotLimits);
  * enabled[i] 1 for each axis (ImAxis i) set up (X1 and Y1 always), scale[i] its ImPlotScale. */
 int    fig_plot_state(int *enabled, int *scale);
+/* The current x axis of the plot being declared, as its items transform an abscissa p to a pixel
+ * (implot_items.cpp, Transformer1): (float)(v[0] + v[3] * (T(p) - v[1])), T the identity on a linear or time axis,
+ * else v[1] + (v[2] - v[1]) * (F(p) - v[4]) / (v[5] - v[4]) with F the scale's forward transform; v[6], v[7] the
+ * plot area's left and right [pixels], v[8] the display's framebuffer scale. scale: the axis's ImPlotScale, -1 for a
+ * custom transform. Locks the setup, as an item does. Returns 0 (v zeroed) when no plot is being declared, else 1.
+ * For the decimation of long series (figure_decimate). */
+int    fig_plot_x_transform(double *v, int *scale);
 /* Constraints of an axis of the plot being declared (setup open, axis set up): the ends whose bit is set in given
  * (1 range min, 2 range max, 4 zoom min, 8 zoom max) take v[0..3], the others keep theirs (a log axis keeps its
  * positive minimum). */

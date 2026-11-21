@@ -637,6 +637,44 @@ A recipe for this: [Drag a case onto a plot](/manual/cookbook#drag-a-case-onto-a
 - Statuses: those of `ig_drop_target`, plus `FIG_ERR_ARGUMENT` for an unknown axis or both `axis` and `legend`,
   `FIG_ERR_STATE` outside a plot or for an axis not set up.
 
+## Long series
+
+`ip_line`, `ip_stairs` and `ip_shaded` decimate a series that has more than 256 points per pixel column of the plot
+on average (below that, drawing every point costs less than the decimation's pass): ImPlot then gets at most 64
+points a column, whatever the series' length, and draws nearly the same picture
+([Performance](performance#large-data) has the costs). The reduction is M4 (Jugel et al., VLDB 2014) applied to each
+sixteenth of a dense pixel column: its first and last points, its lowest and its highest (of
+each curve, for `ip_shaded`), in their order, so that the strokes inside a column and the segments that join two
+columns stay. A filled area (`ip_shaded`, a staircase or a line with the `Shaded` flag) also keeps the two points about
+each column's centre, where the rasterizer samples it. It is decided per item and per frame, from the plot's current
+x range and width:
+
+- a column with at most 64 points keeps all of them: a sparse part of a dense series, or a zoom deep enough, is drawn
+  point by point;
+- the points left and right of the plot area are reduced to their first, last, lowest and highest each: the axes fit
+  to the same extremes, and the segment entering the plot is the same;
+- a NaN ordinate is a gap, kept with the points on each side of it;
+- not decimated, every point drawn as before: abscissae not sorted (non-decreasing; a NaN abscissa included: a
+  parametric curve, a scatter), markers, per-point colours or sizes, the line flags `Segments` and `Loop`, an inverted
+  x axis.
+
+Linear, log, symlog and time axes are decimated, in their own pixels (the abscissa through the axis's scale, as ImPlot
+places a point). The picture is not exact: ImPlot's lines are anti-aliased quads, and the many strokes of a dense
+column cover it, and the edges of its neighbours, a little otherwise than a few strokes do. On the line of
+`figure_test_plot_view` at 600 points per pixel, 2205 of 480 000 pixels differ from the full picture by more than 2
+levels of 255, at most by 87; M4 per whole column differed on 33 005 pixels, by up to 205, and much more on a steep
+line (the parts of a column decide where its strokes lie). For an exact picture, `ip_set_decimation(.false.)` draws
+every point of the items that follow it, until `ip_set_decimation(.true.)`:
+
+<<< @/examples/snippets/cb_long_series-plot.F90{fortran}
+
+<<< @/examples/output/cb_long_series.txt{text}
+
+The kept points are gathered from the item's arrays, read in place with their stride, into buffers of FIGURE's kept
+from item to item ([Data in place](#data-in-place)); a series of `int32` or `int64` abscissae is converted first, as
+without decimation. Modes: every mode (in remote mode, fewer vertices to send). Threads: `ip_set_decimation` from a
+task is refused (`FIG_ERR_STATE`).
+
 ## Data in place
 
 The 1-D items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`, `ip_stairs`, `ip_stems`,
@@ -735,8 +773,9 @@ nvfortran's own copy cost at 10⁶ points (1.4 against 1.5 ms over contiguous da
 where the scratch saves the first touch of fresh memory on every compiler, as it does for integer abscissae.
 
 ImPlot's own work dominates: a stride costs about 7 % over contiguous data, a copy made by FIGURE 20 %, the compiler's
-temporaries of a derived type's components 55 % (allocated and freed at every call). Over a few hundred thousand
-points, decimate before plotting ([Performance](performance#large-data)).
+temporaries of a derived type's components 55 % (allocated and freed at every call). These costs were measured with
+every point drawn (`ip_setup_axes_limits` fixed, the series under 256 points a pixel column, or before decimation):
+over 256 points a pixel column, the line-like items draw at most 64 per column ([Long series](#long-series)).
 
 ::: warning Changed in v0.4.0
 Until v0.3.1 the items' arrays were `contiguous` dummies: every non-contiguous actual argument (`a(i, :)`, `a(::2)`,
