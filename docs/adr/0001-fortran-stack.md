@@ -65,9 +65,13 @@ starts.
 The current path (Dear ImGui, ImPlot and the other C++ libraries) keeps working, unchanged for users, until the
 switch; the Fortran path grows beside it on `main`. There is no long-lived branch.
 
-- Each seam (`figure_core`, the renderer, each layer above Dear ImGui) has two implementations in sibling directories
-  under the same module names, e.g. `src/lib/core_imgui/figure_core.F90` and `src/lib/core_fortran/figure_core.F90`;
-  a `fobos` mode picks one through its `src` list, with no preprocessor macro.
+- Each seam (`figure_core`, the renderer, each layer above Dear ImGui) has two implementations under the same module
+  names, one per path, outside `src/lib`: `src/paths/imgui/<seam>/` and `src/paths/fortran/<seam>/` (today
+  `src/paths/imgui/core/`, `src/paths/imgui/render/` and `src/paths/fortran/render/`). A `fobos` mode picks one
+  through its `src` list (`$PATH_IMGUI`, `$PATH_FORTRAN`), with no preprocessor macro. fpm scans its library's
+  directory recursively and cannot exclude one, so the fpm builds compile an assembled tree (`build/fpm-lib`, written
+  by `scripts/fpm.sh`; the package by `scripts/fpm_package.py`) holding one implementation per module (decided
+  2026-11-21).
 - The default modes (`tests-gnu`, `examples-gnu`, ..., the fpm package, the installer) build the current path,
   unchanged until the switch.
 - The `-fortran` modes (`tests-gnu-fortran`, `tests-nvf-fortran`, `tests-ifx-fortran`, `examples-*-fortran`) build the
