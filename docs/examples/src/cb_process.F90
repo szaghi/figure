@@ -22,47 +22,47 @@ logical                       :: started  !< The tool was started.
 call get_command_argument(0, me)
 call get_command_argument(1, arg)
 if (trim(arg) == '--tool') then
-   call run_tool()
-   stop
-endif
-started = .false.
-call app%init('FIGURE: run a tool', 720_int32, 420_int32)
-do while (app%next_frame())
-   call ig_set_next_window(10.0_real64, 10.0_real64, 700.0_real64, 400.0_real64)
-   if (ig_begin('Tool')) then
-      !region run
-      call ig_begin_disabled(tool%running())                   ! one run at a time
-      if (ig_button(ICON_PLAY//' Run')) then
-         call output%clear()
-         call tool%start([character(len=512) :: me, '--tool'])  ! the program and its arguments: no shell
-         started = .true.
-      endif
-      call ig_end_disabled()
-      call ig_same_line()
-      call ig_begin_disabled(.not. tool%running())
-      if (ig_button(ICON_SQUARE//' Stop')) call tool%kill()
-      call ig_end_disabled()
-      call ig_same_line()
-      if (started) then
-         call tool%poll(lines)                                 ! the complete lines since the last frame
-         call output%add(lines)
-         if (tool%running()) then
-            write(status, '(A,I0)') 'running, pid ', tool%pid()
-         elseif (tool%killed()) then
-            status = 'stopped'
-         else
-            write(status, '(A,I0)') 'ended, exit code ', tool%exit_code()
+   call run_tool()                                   ! no stop: nvfortran's prints a note, into the log view
+else
+   started = .false.
+   call app%init('FIGURE: run a tool', 720_int32, 420_int32)
+   do while (app%next_frame())
+      call ig_set_next_window(10.0_real64, 10.0_real64, 700.0_real64, 400.0_real64)
+      if (ig_begin('Tool')) then
+         !region run
+         call ig_begin_disabled(tool%running())                   ! one run at a time
+         if (ig_button(ICON_PLAY//' Run')) then
+            call output%clear()
+            call tool%start([character(len=512) :: me, '--tool'])  ! the program and its arguments: no shell
+            started = .true.
          endif
-         call ig_text(trim(status))
-      else
-         call ig_text_disabled('not started')
+         call ig_end_disabled()
+         call ig_same_line()
+         call ig_begin_disabled(.not. tool%running())
+         if (ig_button(ICON_SQUARE//' Stop')) call tool%kill()
+         call ig_end_disabled()
+         call ig_same_line()
+         if (started) then
+            call tool%poll(lines)                                 ! the complete lines since the last frame
+            call output%add(lines)
+            if (tool%running()) then
+               write(status, '(A,I0)') 'running, pid ', tool%pid()
+            elseif (tool%killed()) then
+               status = 'stopped'
+            else
+               write(status, '(A,I0)') 'ended, exit code ', tool%exit_code()
+            endif
+            call ig_text(trim(status))
+         else
+            call ig_text_disabled('not started')
+         endif
+         call output%draw('output')                               ! only the lines in view; follows the end
+         !endregion run
       endif
-      call output%draw('output')                               ! only the lines in view; follows the end
-      !endregion run
-   endif
-   call ig_end()
-enddo
-call app%destroy()                                             ! a tool still running is stopped here
+      call ig_end()
+   enddo
+   call app%destroy()                                             ! a tool still running is stopped here
+endif
 
 contains
    subroutine run_tool()
