@@ -76,6 +76,12 @@ for lib in $native_libs; do ext_libs+=(--ext-libs "$lib"); done
 lflags=()
 [[ -n $native_lflags ]] && lflags=(--lflags "$native_lflags")
 cp "$root"/src/lib/*.F90 "$root"/src/lib/*.inc "$ex"/src/*.F90 "$build/src/" # the .inc: included by figure.F90
+# FUNDAL (szaghi/figure#15 P6: figure_decimate_device, ip_line_device), fetched by `fobis fetch` into src/third_party:
+# its sources and the files they include, in its CPU mode; its MPI handler left out (fobos' $EXCLUDE)
+fundal=$root/src/third_party/FUNDAL/src/lib
+[[ -f $fundal/fundal.F90 ]] || { echo "docs/examples/build.sh: $fundal missing: run fobis fetch first" >&2; exit 1; }
+cp "$fundal"/*.F90 "$fundal"/*.INC "$fundal"/*.H "$build/src/"
+rm -f "$build/src/fundal_mpih_object.F90"
 (cd "$build" && fobis build --compiler gnu --fc "$fc" --src src --build-dir bin --mod-dir mod --obj-dir obj \
                      --cflags "-c -std=f2018 -ffree-line-length-132 -fimplicit-none -O2" \
                      --lib-dir "$root/lib" "${ext_libs[@]}" ${lflags[@]+"${lflags[@]}"} --jobs 1) \

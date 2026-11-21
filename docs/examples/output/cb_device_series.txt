@@ -1,0 +1,2 @@
+$ ./cb_device_series --check
+the same picture as ip_line of the host copy: T

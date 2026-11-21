@@ -326,3 +326,8 @@ main = "figure_test_decimate.F90"
 name = "figure_test_plot_cache"
 source-dir = "src/tests"
 main = "figure_test_plot_cache.F90"
+
+[[test]]
+name = "figure_test_device"
+source-dir = "src/tests"
+main = "figure_test_device.F90"

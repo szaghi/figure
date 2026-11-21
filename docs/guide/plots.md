@@ -686,6 +686,31 @@ from item to item ([Data in place](#data-in-place)); a series of `int32` or `int
 without decimation. Modes: every mode (in remote mode, fewer vertices to send). Threads: `ip_set_decimation` from a
 task is refused (`FIG_ERR_STATE`).
 
+## Series on a device
+
+A solver whose data live on a GPU plots them there: `ip_line_device(label, x, y [, spec] [, stat])` takes `x` and `y`,
+`real(real32)` or `real(real64)`, in device memory, allocated by [FUNDAL](https://github.com/szaghi/FUNDAL)'s
+`dev_alloc` (or OpenACC device memory, as a `deviceptr`), and decimates the series where it lives, by the rules of
+[Long series](#long-series): the kernels, written once with FUNDAL's macros, find each part of a column and its
+extremes on the device, and only the points kept, at most 64 a pixel column, are copied to the host and drawn. No
+CUDA-OpenGL interoperation is involved: it works headless, in remote mode and on WSL alike. A series that is not
+decimated (unsorted abscissae, too few points, markers, `ip_set_decimation(.false.)`) is copied whole, then drawn as
+`ip_line`. The arrays stay the program's: FIGURE only reads them, and keeps its own work arrays in device memory from
+frame to frame.
+
+<<< @/examples/snippets/cb_device_series-device.F90{fortran}
+
+<<< @/examples/output/cb_device_series.txt{text}
+
+FIGURE compiles FUNDAL with its own flags (`fobis fetch`): the default modes build FUNDAL's CPU mode, where the device
+is the host (the documentation's example above runs so); `fobis build --mode tests-nvf-acc` builds OpenACC for an
+NVIDIA GPU (`-acc -gpu=cc89 -DDEV_OAC -DCOMPILER_NVF`; another GPU: its compute capability), where a program's
+`dev_alloc` arrays are GPU memory. On a GPU, `figure_test_device` plots 10⁸ doubles in under 50 ms a frame, the
+decimation and the copy back included (its check; [Performance](performance#large-data) has the measurement). Pass
+the device arrays themselves (a FUNDAL pointer), not sections of them: a compiler may copy a
+section into a host temporary before the call, reading device memory from the host. Statuses: `FIG_ERR_ARGUMENT`
+(sizes), `FIG_ERR_STATE` (outside a plot, from a task), `FIG_ERR_FAILED` (a copy from the device failed).
+
 ## Data in place
 
 The 1-D items (`ip_line`, `ip_scatter`, `ip_bars`, `ip_shaded`, `ip_error_bars`, `ip_stairs`, `ip_stems`,

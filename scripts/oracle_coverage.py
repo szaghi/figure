@@ -202,6 +202,8 @@ NO_PICTURE: tuple[tuple[str, str], ...] = (
     ("app%(?:set_size_limits|wake|set_checks)", "nothing drawn: the window manager's size limits, the frame loop's "
      "wake-up, what a usage error does"),
     ("ig_invisible_button", "invisible by definition: its click and hover are checked by behaviour"),
+    ("ip_line_device", "the arrays live on a device: figure_test_device compares its picture with ip_line's of the same "
+     "series copied to the host (ip_line's pictures are golden-checked), in FUNDAL's CPU mode and on the GPU"),
 )
 # names that need no behaviour check, each with its reason
 NO_BEHAVIOUR: tuple[tuple[str, str], ...] = (

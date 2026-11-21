@@ -47,6 +47,10 @@ jobs:
     - name: Native layer
       run: scripts/build_native.sh
 
+    # FUNDAL, which FIGURE's library uses (#15 P6), for docs/examples/build.sh
+    - name: Fortran libraries (fobis fetch)
+      run: fobis fetch
+
     - name: Docs checks
       run: |
         python3 scripts/check_docs.py --names --media

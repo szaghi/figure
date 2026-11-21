@@ -23,7 +23,7 @@ foresight  = https://github.com/szaghi/foresight :: branch=master :: src=src/lib
 
 [modes]
 modes = tests-gnu tests-gnu-debug examples-gnu examples-gnu-traps
-        tests-nvf examples-nvf
+        tests-nvf examples-nvf tests-nvf-acc
         tests-ifx examples-ifx
         figure-static-gnu figure-static-nvf figure-static-ifx
         tests-gnu-fortran examples-gnu-fortran tests-nvf-fortran examples-nvf-fortran tests-ifx-fortran examples-ifx-fortran
@@ -99,6 +99,19 @@ src       = src/lib/ src/examples/
 template  = template-nvf
 cflags    = $CNVF -O2
 openmp    = True
+build_dir = exe
+src       = src/lib/ src/tests/
+
+# tests-nvf-acc: the tests with OpenACC on the GPU (szaghi/figure#15 P6): FUNDAL and figure_decimate_device's kernels
+# compiled for the device (FUNDAL's -DDEV_OAC -DCOMPILER_NVF), for the RTX 4070 of the WSL box (-gpu=cc89; another GPU:
+# its compute capability). No OpenMP: FUNDAL's macros name OpenMP directives only in its OpenMP and CPU modes. The
+# other modes build FUNDAL's CPU mode, where the device is the host. The mode is for figure_test_device (10**8 points
+# on the GPU); two tests fail in it by construction: figure_test_tasks (nvfortran's I/O is thread-safe with -mp only)
+# and figure_test_sibling_libs (it reads FUNDAL's device memory from the host, as its CPU mode allows)
+[tests-nvf-acc]
+template  = template-nvf
+cflags    = $CNVF -O2 -acc -gpu=cc89 -DDEV_OAC -DCOMPILER_NVF
+lflags    = $NATIVE_LFLAGS -Munixlogical -acc -gpu=cc89
 build_dir = exe
 src       = src/lib/ src/tests/
 

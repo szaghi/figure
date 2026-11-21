@@ -31,11 +31,13 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
                         figure_scope_refused, figure_usage_error, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS, &
                         SCOPE_ALIGNED, SCOPE_LEGEND_POPUP
-use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_count, &
                             fig_colormap_name, fig_load_colormap, fig_texture_sampling, fig_plot_annotation, &
                             fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag, &
                             fig_field_image, fig_gradient_edit, fig_colormap_stops, fig_dnd_plot_target, &
                             fig_plot_link, fig_aligned_open, fig_plot_x_transform
+use figure_decimate_device, only : decimate_device_r32, decimate_device_r64
+use fundal, only : dev_memcpy_from_device
 use figure_decimate, only : decimate_axis, decimate_cache, decimate, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
                             DECIMATE_THRESHOLD
 use figure_cimgui, only : im_vec2, im_vec4, igGetFrameCount, igGetTime, igIsMousePosValid
@@ -130,7 +132,7 @@ public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, 
 public :: ip_drop_target
 public :: ip_link_axis, ip_begin_aligned, ip_end_aligned, ip_legend_hovered, ip_begin_legend_popup
 public :: ip_end_legend_popup, ip_hide_next_item, ip_digital, ip_bar_groups
-public :: ip_set_decimation, ip_cache_next_item
+public :: ip_set_decimation, ip_cache_next_item, ip_line_device
 public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -164,6 +166,12 @@ interface ip_line
    module procedure ip_line_r32, ip_line_r64, ip_line_values_r32, ip_line_values_r64, ip_line_row_r32, ip_line_row_r64
    module procedure ip_line_i32_r32, ip_line_i64_r32, ip_line_i32_r64, ip_line_i64_r64
 endinterface ip_line
+
+interface ip_line_device
+   !< A line through (x(i), y(i)) of arrays that live on a device (FUNDAL's `dev_alloc`, OpenACC device memory):
+   !< decimated there, only the points kept copied to the host.
+   module procedure ip_line_device_r32, ip_line_device_r64
+endinterface ip_line_device
 
 interface ip_scatter
    !< Markers at the points (x(i), y(i)).
@@ -1371,6 +1379,99 @@ contains
    call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), d%p(1), d%p(2), int(d%n, c_int), series_spec(d, spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_line_r64
+
+   recursive subroutine ip_line_device_r64(label, x, y, spec, stat)
+   !< Line through the points (x(i), y(i)) of two contiguous `real(real64)` arrays on a device: FUNDAL's `dev_alloc`
+   !< (or OpenACC device memory, as `deviceptr`), the program's, only read. The series is decimated where it lives, by
+   !< kernels written with FUNDAL (OpenACC with nvfortran, FUNDAL's CPU mode elsewhere: the device is then the host),
+   !< and only the points kept, at most 64 a pixel column, are copied to the host (plots.md, "Series on a device"). A
+   !< series that is not decimated (unsorted abscissae, too few points, markers, `ip_set_decimation(.false.)`) is
+   !< copied whole, then drawn as `ip_line`. Statuses: `FIG_ERR_ARGUMENT` (sizes), `FIG_ERR_STATE` (outside a plot,
+   !< from a task), `FIG_ERR_FAILED` (a copy from the device failed).
+   character(len=*),       intent(in)                     :: label !< Legend label.
+   real(real64),           intent(in), target             :: x(:)  !< Abscissae, on the device.
+   real(real64),           intent(in), target             :: y(:)  !< Ordinates, on the device.
+   type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional          :: stat  !< Status.
+   type(decimate_axis)                                    :: ax    !< The plot's x axis.
+   logical                                                :: fill  !< (A line: no fill.)
+   logical                                                :: done  !< Decimated.
+   integer(int64)                                         :: nk    !< Points drawn.
+   integer(int32)                                         :: ierr  !< FUNDAL's status.
+   type(im_plot_spec)                                     :: c     !< Spec, at the buffers' stride.
+
+   if (figure_draw_refused('ip_line_device', stat)) return ! a task does not draw
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line_device', stat)) return
+   if (outside_plot('ip_line_device', stat)) return
+   call scratch_age()
+   done = .false.
+   ierr = 0_int32
+   if (decimation_wanted(size(y, kind=int64), ITEM_LINE, spec, ax, fill)) &
+      done = decimate_device_r64(ax, x, y, kept_r64(1)%v, kept_r64(2)%v, nk, ierr)
+   if (.not. done .and. ierr == 0_int32) then ! every point, copied
+      nk = size(y, kind=int64)
+      call reserve_kept_r64(nk)
+      if (nk > 0_int64) call dev_memcpy_from_device(dst=kept_r64(1)%v(1:nk), src=x, ierr=ierr)
+      if (nk > 0_int64 .and. ierr == 0_int32) call dev_memcpy_from_device(dst=kept_r64(2)%v(1:nk), src=y, ierr=ierr)
+   elseif (done) then
+      plot_decimated = plot_decimated + 1_int64
+      plot_kept = nk
+   endif
+   if (ierr /= 0_int32) then
+      call figure_fail(FIG_ERR_FAILED, 'ip_line_device: a copy from the device failed', stat)
+      return
+   endif
+   kept_frame = int(igGetFrameCount(), int32)
+   c = spec_c(spec)
+   c%Stride = 8_c_int
+   c%Offset = 0_c_int
+   call ImPlot_PlotLine_doublePtrdoublePtr(cstr(label), c_loc(kept_r64(1)%v), c_loc(kept_r64(2)%v), int(nk, c_int), c)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_line_device_r64
+
+   recursive subroutine ip_line_device_r32(label, x, y, spec, stat)
+   !< Line through the points (x(i), y(i)) of two contiguous `real(real32)` arrays on a device, decimated there
+   !< (`ip_line_device`, double precision).
+   character(len=*),       intent(in)                     :: label !< Legend label.
+   real(real32),           intent(in), target             :: x(:)  !< Abscissae, on the device.
+   real(real32),           intent(in), target             :: y(:)  !< Ordinates, on the device.
+   type(plot_spec_object), intent(in), optional           :: spec  !< Style (default: ImPlot's).
+   integer(int32),         intent(out), optional          :: stat  !< Status.
+   type(decimate_axis)                                    :: ax    !< The plot's x axis.
+   logical                                                :: fill  !< (A line: no fill.)
+   logical                                                :: done  !< Decimated.
+   integer(int64)                                         :: nk    !< Points drawn.
+   integer(int32)                                         :: ierr  !< FUNDAL's status.
+   type(im_plot_spec)                                     :: c     !< Spec, at the buffers' stride.
+
+   if (figure_draw_refused('ip_line_device', stat)) return ! a task does not draw
+   if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_line_device', stat)) return
+   if (outside_plot('ip_line_device', stat)) return
+   call scratch_age()
+   done = .false.
+   ierr = 0_int32
+   if (decimation_wanted(size(y, kind=int64), ITEM_LINE, spec, ax, fill)) &
+      done = decimate_device_r32(ax, x, y, kept_r32(1)%v, kept_r32(2)%v, nk, ierr)
+   if (.not. done .and. ierr == 0_int32) then ! every point, copied
+      nk = size(y, kind=int64)
+      call reserve_kept_r32(nk)
+      if (nk > 0_int64) call dev_memcpy_from_device(dst=kept_r32(1)%v(1:nk), src=x, ierr=ierr)
+      if (nk > 0_int64 .and. ierr == 0_int32) call dev_memcpy_from_device(dst=kept_r32(2)%v(1:nk), src=y, ierr=ierr)
+   elseif (done) then
+      plot_decimated = plot_decimated + 1_int64
+      plot_kept = nk
+   endif
+   if (ierr /= 0_int32) then
+      call figure_fail(FIG_ERR_FAILED, 'ip_line_device: a copy from the device failed', stat)
+      return
+   endif
+   kept_frame = int(igGetFrameCount(), int32)
+   c = spec_c(spec)
+   c%Stride = 4_c_int
+   c%Offset = 0_c_int
+   call ImPlot_PlotLine_FloatPtrFloatPtr(cstr(label), c_loc(kept_r32(1)%v), c_loc(kept_r32(2)%v), int(nk, c_int), c)
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_line_device_r32
 
    recursive subroutine ip_line_i32_r64(label, x, y, spec, stat)
    !< Line through the points (x(i), y(i)), double precision, abscissae `integer(int32)`: converted into one temporary,
@@ -5715,6 +5816,32 @@ contains
       same = .not. c_associated(b)
    endif
    endfunction same_address
+
+   subroutine reserve_kept_r64(n)
+   !< The decimation's x and y buffers (double precision) at least n long (kept from item to item).
+   integer(int64), intent(in) :: n !< Points.
+   integer(int32)             :: k !< Slot.
+
+   do k = 1_int32, 2_int32
+      if (allocated(kept_r64(k)%v)) then
+         if (size(kept_r64(k)%v, kind=int64) < n) deallocate(kept_r64(k)%v)
+      endif
+      if (.not. allocated(kept_r64(k)%v)) allocate(kept_r64(k)%v(max(n, 1024_int64)))
+   enddo
+   endsubroutine reserve_kept_r64
+
+   subroutine reserve_kept_r32(n)
+   !< The decimation's x and y buffers (single precision) at least n long (kept from item to item).
+   integer(int64), intent(in) :: n !< Points.
+   integer(int32)             :: k !< Slot.
+
+   do k = 1_int32, 2_int32
+      if (allocated(kept_r32(k)%v)) then
+         if (size(kept_r32(k)%v, kind=int64) < n) deallocate(kept_r32(k)%v)
+      endif
+      if (.not. allocated(kept_r32(k)%v)) allocate(kept_r32(k)%v(max(n, 1024_int64)))
+   enddo
+   endsubroutine reserve_kept_r32
 
    function decimation_wanted(n, item, spec, ax, fill) result(wanted)
    !< Whether an item of n points may be decimated (its style, the plot's x axis), and the axis as its points map to

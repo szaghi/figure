@@ -38,7 +38,8 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 
 implicit none
 private
-public :: decimate_axis, decimate_cache, decimate, DECIMATE_THRESHOLD, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG
+public :: decimate_axis, decimate_cache, decimate, decimate_columns
+public :: DECIMATE_PARTS, DECIMATE_THRESHOLD, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG
 
 integer(int32), parameter :: DECIMATE_THRESHOLD = 64_int32 !< Points per pixel column above which a column is decimated
                                                           !< (4 per sixteenth: fewer, M4 keeps them all).
@@ -47,6 +48,7 @@ integer(int32), parameter :: DECIMATE_LOG10 = 1_int32     !< Base 10 logarithmic
 integer(int32), parameter :: DECIMATE_SYMLOG = 2_int32    !< Symmetric logarithmic axis.
 integer(int32), parameter :: GROUP_MAX = 24_int32         !< Indices a part of a column can keep (two ordinates, a fill).
 integer(int64), parameter :: SUB = 16_int64               !< Parts of a dense pixel column reduced each on its own.
+integer(int64), parameter :: DECIMATE_PARTS = SUB       !< ... (figure_decimate_device's kernels).
 integer(int64), parameter :: LEAF = 32_int64              !< Points of a block of a pyramid's first level.
 integer(int32), parameter :: DECIMATE_GATE = 4_int32      !< A series is decimated when it averages more than
                                                           !< DECIMATE_GATE * DECIMATE_THRESHOLD points a column: below,
@@ -278,6 +280,18 @@ contains
    endfunction decimate_uniform_r32
 
    ! the columns
+
+   function decimate_columns(axis, n, kmin, kmax) result(ok)
+   !< The display columns kmin..kmax a series of n points is decimated over (plot area and margins); `.false.` when it
+   !< is not (too few points per column, an axis that cannot be mapped). For figure_decimate_device.
+   type(decimate_axis), intent(in)  :: axis !< The x axis.
+   integer(int64),      intent(in)  :: n    !< Points.
+   integer(int64),      intent(out) :: kmin !< First column.
+   integer(int64),      intent(out) :: kmax !< Last column.
+   logical                          :: ok   !< Decimate.
+
+   ok = columns(axis, n, kmin, kmax)
+   endfunction decimate_columns
 
    function columns(axis, n, kmin, kmax) result(ok)
    !< The display columns of the plot area and its margins, kmin to kmax; `.false.` when the series is too short to
