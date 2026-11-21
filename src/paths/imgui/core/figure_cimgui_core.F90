@@ -20,7 +20,9 @@ public :: ImDrawList_AddImage, ImDrawList_AddLine, ImDrawList_AddPolyline, ImDra
 public :: ImDrawList_AddRectFilledMultiColor, ImDrawList_AddText_Vec2, ImDrawList_AddTriangleFilled, ImDrawList_GetClipRectMax
 public :: ImDrawList_GetClipRectMin, ImDrawList_PopClipRect, ImDrawList_PopTexture, ImDrawList_PrimReserve, ImDrawList_PrimUnreserve
 public :: ImDrawList_PushClipRect, ImDrawList_PushTexture, figure_ImDrawList_append, figure_ImDrawList_shared, figure_ImDrawData_get
-public :: figure_ImDrawData_list, figure_ImDrawData_cmd, figure_ImTextureData_pixels
+public :: figure_ImDrawData_list, figure_ImDrawData_cmd, figure_ImTextureData_pixels, figure_renderer_backend
+public :: figure_ImDrawData_textures, figure_ImDrawData_texture, figure_ImTextureData_state, figure_ImTextureData_rect
+public :: figure_ImTextureData_set, figure_ImTextureData_id, figure_ImDrawData_callback
 
 interface
    function igButtonBehavior(bb, id, out_hovered, out_held, flags) result(res) bind(C, name='figure_igButtonBehavior')
@@ -491,5 +493,88 @@ interface
    integer(c_int), intent(out) :: channels !< 4 (RGBA) or 1 (alpha).
    integer(c_int)              :: res      !< 1 with pixels.
    endfunction figure_ImTextureData_pixels
+
+   subroutine figure_renderer_backend(on, vtx_offset, max_texture, reset, from_tex, linear, nearest) &
+      bind(C, name='figure_renderer_backend')
+   !< A renderer back end registered in Dear ImGui (on 1: its name, flags, texture size limit, samplers' callbacks) or
+   !< unregistered (on 0), as imgui_impl_opengl3.cpp's Init and Shutdown (CORE_GLUE in scripts/gen_bindings.py).
+   import :: c_funptr, c_int
+   implicit none
+   integer(c_int), value :: on          !< 1 register, 0 unregister.
+   integer(c_int), value :: vtx_offset  !< 1: RendererHasVtxOffset.
+   integer(c_int), value :: max_texture !< Texture size limit [pixels].
+   type(c_funptr), value :: reset       !< The render state's reset callback.
+   type(c_funptr), value :: from_tex    !< The sampler from the texture's filter.
+   type(c_funptr), value :: linear      !< The linear sampler.
+   type(c_funptr), value :: nearest     !< The nearest sampler.
+   endsubroutine figure_renderer_backend
+
+   function figure_ImDrawData_textures(dd) result(res) bind(C, name='figure_ImDrawData_textures')
+   !< The textures the draw data ask for (ImDrawData::Textures); with a null `dd`, the platform's.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr), value :: dd  !< C `const ImDrawData*`, or null.
+   integer(c_int)     :: res !< Textures.
+   endfunction figure_ImDrawData_textures
+
+   function figure_ImDrawData_texture(dd, k) result(res) bind(C, name='figure_ImDrawData_texture')
+   !< Texture k (0-based) of figure_ImDrawData_textures.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: dd  !< C `const ImDrawData*`, or null.
+   integer(c_int), value :: k   !< Texture, 0-based.
+   type(c_ptr)           :: res !< C `ImTextureData*`.
+   endfunction figure_ImDrawData_texture
+
+   function figure_ImTextureData_state(tex_data, status, format, width, height, tex_id, unused_frames, ref_count) &
+      result(res) bind(C, name='figure_ImTextureData_state')
+   !< A texture's status, format, size, id, frames unused and references; the result: its update rectangles.
+   import :: c_int, c_long_long, c_ptr
+   implicit none
+   type(c_ptr),          value       :: tex_data      !< C `const ImTextureData*`.
+   integer(c_int),       intent(out) :: status        !< ImTextureStatus.
+   integer(c_int),       intent(out) :: format        !< ImTextureFormat.
+   integer(c_int),       intent(out) :: width         !< Width [pixels].
+   integer(c_int),       intent(out) :: height        !< Height [pixels].
+   integer(c_long_long), intent(out) :: tex_id        !< The renderer's id.
+   integer(c_int),       intent(out) :: unused_frames !< Frames unused.
+   integer(c_int),       intent(out) :: ref_count     !< References.
+   integer(c_int)                    :: res           !< Update rectangles.
+   endfunction figure_ImTextureData_state
+
+   subroutine figure_ImTextureData_rect(tex_data, k, rect) bind(C, name='figure_ImTextureData_rect')
+   !< A texture's update rectangle k (0-based): x, y, w, h [pixels].
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value       :: tex_data !< C `const ImTextureData*`.
+   integer(c_int), value       :: k        !< Rectangle, 0-based.
+   integer(c_int), intent(out) :: rect(4)  !< x, y, w, h.
+   endsubroutine figure_ImTextureData_rect
+
+   subroutine figure_ImTextureData_set(tex_data, tex_id, status) bind(C, name='figure_ImTextureData_set')
+   !< A texture's renderer id and status, set once the renderer handled its request.
+   import :: c_int, c_long_long, c_ptr
+   implicit none
+   type(c_ptr),          value :: tex_data !< C `ImTextureData*`.
+   integer(c_long_long), value :: tex_id   !< The renderer's id.
+   integer(c_int),       value :: status   !< ImTextureStatus.
+   endsubroutine figure_ImTextureData_set
+
+   function figure_ImTextureData_id(tex_data) result(res) bind(C, name='figure_ImTextureData_id')
+   !< A texture's renderer id (`TexID`).
+   import :: c_long_long, c_ptr
+   implicit none
+   type(c_ptr), value   :: tex_data !< C `const ImTextureData*`.
+   integer(c_long_long) :: res      !< The renderer's id.
+   endfunction figure_ImTextureData_id
+
+   subroutine figure_ImDrawData_callback(dd, l, c) bind(C, name='figure_ImDrawData_callback')
+   !< Command c of list l (0-based) of the draw data: its program's callback called with its list and command.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: dd !< C `const ImDrawData*`.
+   integer(c_int), value :: l  !< List, 0-based.
+   integer(c_int), value :: c  !< Command, 0-based.
+   endsubroutine figure_ImDrawData_callback
 endinterface
 endmodule figure_cimgui_core

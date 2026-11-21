@@ -280,6 +280,11 @@ int    fig_render_threads(int threads);
  * filter): 1, or 0 without. */
 int    fig_set_frame_hook(void (*hook)(int width, int height, const float *clear));
 int    fig_set_cpu_renderer(void (*render)(int width, int height, const float *clear, unsigned char *rgb, int threads));
+/* fig_set_gl_renderer: the OpenGL 3 renderer of the next window (NULLs: Dear ImGui's backend, the default): init (the
+ * GLSL version line; 0 when it cannot start), new_frame, render (the current draw data, into the bound framebuffer,
+ * cleared) and shutdown, called where the backend's Init, NewFrame, RenderDrawData and Shutdown are. */
+int    fig_set_gl_renderer(int (*init)(const char *glsl, int glsl_len), void (*new_frame)(void), void (*render)(void),
+                           void (*shutdown)(void));
 int    fig_cpu_texture(unsigned long long id, int *width, int *height, int *channels, const unsigned char **pixels,
                        int *smooth);
 int    fig_save_layout(const char *path, int path_len, const char *comment, int comment_len);

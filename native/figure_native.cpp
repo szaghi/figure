@@ -2056,6 +2056,18 @@ bool cpu_texture(ImTextureID id, figure_swrast::texture_t *t) {
 // cpu_frame in place of figure_swrast; none by default (the current path).
 void (*cpu_renderer)(int width, int height, const float *clear, unsigned char *rgb, int threads) = nullptr;
 
+// The Fortran path's OpenGL 3 renderer (fig_set_gl_renderer, szaghi/figure#15 P9): when set, a window's frames are
+// drawn by it in place of Dear ImGui's OpenGL 3 backend (its Init, NewFrame, RenderDrawData and Shutdown); none by
+// default (the current path).
+struct gl_renderer_t {
+   int (*init)(const char *glsl, int glsl_len) = nullptr;
+   void (*new_frame)() = nullptr;
+   void (*render)() = nullptr;
+   void (*shutdown)() = nullptr;
+};
+gl_renderer_t gl_renderer;
+bool gl_renderer_on = false; // the window's renderer is gl_renderer (set at init, until shutdown)
+
 // The frame just rendered (ImGui::Render), drawn by the CPU renderer: RGB, rows from the top, the frame buffer's size.
 int render_threads = 0; // fig_render_threads (tests): 0 the default
 void cpu_frame(std::vector<unsigned char> &rgb, int &w, int &h) {
@@ -2237,7 +2249,23 @@ int fig_init(const char *title, int title_len, int width, int height, int vsync)
    style.ScaleAllSizes(st.scale);
    style.FontScaleDpi = st.scale;
    ImGui_ImplSDL3_InitForOpenGL(st.window, st.gl);
-   ImGui_ImplOpenGL3_Init(glsl);
+   gl_renderer_on = gl_renderer.init != nullptr;
+   if (gl_renderer_on) {
+      if (!gl_renderer.init(glsl, static_cast<int>(std::strlen(glsl)))) {
+         gl_renderer_on = false;
+         ImGui_ImplSDL3_Shutdown();
+         destroy_contexts();
+         SDL_GL_DestroyContext(st.gl);
+         SDL_DestroyWindow(st.window);
+         st.gl = nullptr;
+         st.window = nullptr;
+         SDL_Quit();
+         sdl_events = false;
+         return fail(FIG_ERR_FAILED, "the OpenGL 3 renderer could not start (a GL function missing)");
+      }
+   } else {
+      ImGui_ImplOpenGL3_Init(glsl);
+   }
    take_open_in_shell(); // after the backend's: SDL_OpenURL kept as the handler of a window
    st.m = mode::window;
    loop_starts();
@@ -2959,7 +2987,8 @@ int fig_begin_frame(int *running) {
    }
    {
       fp_held_t held; // the backend's first frame compiles its shaders in the driver
-      ImGui_ImplOpenGL3_NewFrame();
+      if (gl_renderer_on) gl_renderer.new_frame();
+      else ImGui_ImplOpenGL3_NewFrame();
    }
    if (cap.on) { // what ImGui_ImplSDL3_NewFrame does, without the real mouse, keyboard focus or wall clock
       ImGuiIO &io = ImGui::GetIO();
@@ -3020,7 +3049,8 @@ int fig_end_frame(void) {
                    static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y));
       p_glClearColor(st.clear[0], st.clear[1], st.clear[2], 1.0f);
       p_glClear(GL_COLOR_BUFFER_BIT_);
-      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      if (gl_renderer_on) gl_renderer.render();
+      else ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
    }
    const bool due = cap.on && !cap.held && cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count);
    if (due || img.state == 1 || !test_capture_path.empty()) { // the GPU's pixels, read back once
@@ -3069,7 +3099,9 @@ void fig_shutdown(void) {
             const unsigned int name = static_cast<unsigned int>(t.first);
             p_glDeleteTextures(1, &name);
          }
-         ImGui_ImplOpenGL3_Shutdown();
+         if (gl_renderer_on) gl_renderer.shutdown();
+         else ImGui_ImplOpenGL3_Shutdown();
+         gl_renderer_on = false;
          ImGui_ImplSDL3_Shutdown();
       }
       destroy_contexts();
@@ -3752,6 +3784,17 @@ int fig_test_capture(const char *path, int path_len) {
 // The procedure called after each frame's Render in headless and remote modes (nullptr: none).
 int fig_set_frame_hook(void (*hook)(int width, int height, const float *clear)) {
    frame_hook = hook;
+   return FIG_OK;
+}
+
+// The OpenGL 3 renderer of a window's frames (nullptrs: Dear ImGui's backend, the default), for the next fig_init.
+int fig_set_gl_renderer(int (*init)(const char *glsl, int glsl_len), void (*new_frame)(void), void (*render)(void),
+                        void (*shutdown)(void)) {
+   if ((init == nullptr) != (render == nullptr) || (init == nullptr) != (new_frame == nullptr) ||
+       (init == nullptr) != (shutdown == nullptr))
+      return fail(FIG_ERR_ARGUMENT, "fig_set_gl_renderer: all four procedures, or none");
+   gl_renderer.init = init, gl_renderer.new_frame = new_frame, gl_renderer.render = render;
+   gl_renderer.shutdown = shutdown;
    return FIG_OK;
 }
 

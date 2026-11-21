@@ -197,6 +197,64 @@ int figure_ImTextureData_pixels(const void* tex_data, const unsigned char** pixe
    *channels = td->Format == ImTextureFormat_Alpha8 ? 1 : 4;
    return 1;
 }
+
+// The renderer back end's side of Dear ImGui (#15 P9: the Fortran path's OpenGL 3 renderer, figure_render_gl3): what
+// imgui_impl_opengl3.cpp's Init sets (on 1: the back end's name, the flags RendererHasTextures and, with vtx_offset,
+// RendererHasVtxOffset, the texture size limit, the samplers' callbacks) and its Shutdown clears (on 0); the textures
+// a frame asks for (ImDrawData::Textures; with no draw data the platform's, at shutdown), each one's state and update
+// rectangles, its GL name and status set once handled; a program's own callback called with its list and command.
+void figure_renderer_backend(int on, int vtx_offset, int max_texture, ImDrawCallback reset, ImDrawCallback from_tex,
+                             ImDrawCallback linear, ImDrawCallback nearest) noexcept {
+   ImGuiIO& io = ImGui::GetIO();
+   ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+   if (on) {
+      io.BackendRendererName = "figure_render_gl3";
+      if (vtx_offset) io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+      io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+      pio.Renderer_TextureMaxWidth = pio.Renderer_TextureMaxHeight = max_texture;
+      pio.DrawCallback_ResetRenderState = reset;
+      pio.DrawCallback_SetSamplerLinear = linear;
+      pio.DrawCallback_SetSamplerNearest = nearest;
+      pio.DrawCallback_SetSamplerFromTex = from_tex;
+   } else {
+      io.BackendRendererName = NULL;
+      io.BackendRendererUserData = NULL;
+      io.BackendFlags &= ~(ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasTextures |
+                           ImGuiBackendFlags_RendererHasViewports);
+      pio.ClearRendererHandlers();
+   }
+}
+int figure_ImDrawData_textures(const ImDrawData* dd) noexcept {
+   if (dd == NULL) return ImGui::GetPlatformIO().Textures.Size;
+   return dd->Textures != NULL ? dd->Textures->Size : 0;
+}
+void* figure_ImDrawData_texture(const ImDrawData* dd, int k) noexcept {
+   return dd == NULL ? ImGui::GetPlatformIO().Textures[k] : (*dd->Textures)[k];
+}
+int figure_ImTextureData_state(const void* tex_data, int* status, int* format, int* width, int* height,
+                               unsigned long long* tex_id, int* unused_frames, int* ref_count) noexcept {
+   const ImTextureData* td = (const ImTextureData*)tex_data;
+   *status = td->Status, *format = td->Format, *width = td->Width, *height = td->Height;
+   *tex_id = (unsigned long long)td->TexID, *unused_frames = td->UnusedFrames, *ref_count = td->RefCount;
+   return td->Updates.Size;
+}
+void figure_ImTextureData_rect(const void* tex_data, int k, int* rect) noexcept {
+   const ImTextureRect& r = ((const ImTextureData*)tex_data)->Updates[k];
+   rect[0] = r.x, rect[1] = r.y, rect[2] = r.w, rect[3] = r.h;
+}
+void figure_ImTextureData_set(void* tex_data, unsigned long long tex_id, int status) noexcept {
+   ImTextureData* td = (ImTextureData*)tex_data;
+   td->SetTexID((ImTextureID)tex_id);
+   td->SetStatus((ImTextureStatus)status);
+}
+unsigned long long figure_ImTextureData_id(const void* tex_data) noexcept {
+   return (unsigned long long)((const ImTextureData*)tex_data)->TexID;
+}
+void figure_ImDrawData_callback(const ImDrawData* dd, int l, int c) noexcept {
+   const ImDrawList* dl = dd->CmdLists[l];
+   const ImDrawCmd* cmd = &dl->CmdBuffer[c];
+   if (cmd->UserCallback != NULL) cmd->UserCallback(dl, cmd);
+}
 """
 
 CORE_INTERFACES = [
@@ -280,6 +338,89 @@ CORE_INTERFACES = [
     "   integer(c_int), intent(out) :: channels !< 4 (RGBA) or 1 (alpha).",
     "   integer(c_int)              :: res      !< 1 with pixels.",
     "   endfunction figure_ImTextureData_pixels",
+    '',
+    '   subroutine figure_renderer_backend(on, vtx_offset, max_texture, reset, from_tex, linear, nearest) &',
+    "      bind(C, name='figure_renderer_backend')",
+    "   !< A renderer back end registered in Dear ImGui (on 1: its name, flags, texture size limit, samplers' callbacks) or",
+    "   !< unregistered (on 0), as imgui_impl_opengl3.cpp's Init and Shutdown (CORE_GLUE in scripts/gen_bindings.py).",
+    '   import :: c_funptr, c_int',
+    '   implicit none',
+    '   integer(c_int), value :: on          !< 1 register, 0 unregister.',
+    '   integer(c_int), value :: vtx_offset  !< 1: RendererHasVtxOffset.',
+    '   integer(c_int), value :: max_texture !< Texture size limit [pixels].',
+    "   type(c_funptr), value :: reset       !< The render state's reset callback.",
+    "   type(c_funptr), value :: from_tex    !< The sampler from the texture's filter.",
+    '   type(c_funptr), value :: linear      !< The linear sampler.',
+    '   type(c_funptr), value :: nearest     !< The nearest sampler.',
+    '   endsubroutine figure_renderer_backend',
+    '',
+    "   function figure_ImDrawData_textures(dd) result(res) bind(C, name='figure_ImDrawData_textures')",
+    "   !< The textures the draw data ask for (ImDrawData::Textures); with a null `dd`, the platform's.",
+    '   import :: c_int, c_ptr',
+    '   implicit none',
+    '   type(c_ptr), value :: dd  !< C `const ImDrawData*`, or null.',
+    '   integer(c_int)     :: res !< Textures.',
+    '   endfunction figure_ImDrawData_textures',
+    '',
+    "   function figure_ImDrawData_texture(dd, k) result(res) bind(C, name='figure_ImDrawData_texture')",
+    '   !< Texture k (0-based) of figure_ImDrawData_textures.',
+    '   import :: c_int, c_ptr',
+    '   implicit none',
+    '   type(c_ptr),    value :: dd  !< C `const ImDrawData*`, or null.',
+    '   integer(c_int), value :: k   !< Texture, 0-based.',
+    '   type(c_ptr)           :: res !< C `ImTextureData*`.',
+    '   endfunction figure_ImDrawData_texture',
+    '',
+    '   function figure_ImTextureData_state(tex_data, status, format, width, height, tex_id, unused_frames, ref_count) &',
+    "      result(res) bind(C, name='figure_ImTextureData_state')",
+    "   !< A texture's status, format, size, id, frames unused and references; the result: its update rectangles.",
+    '   import :: c_int, c_long_long, c_ptr',
+    '   implicit none',
+    '   type(c_ptr),          value       :: tex_data      !< C `const ImTextureData*`.',
+    '   integer(c_int),       intent(out) :: status        !< ImTextureStatus.',
+    '   integer(c_int),       intent(out) :: format        !< ImTextureFormat.',
+    '   integer(c_int),       intent(out) :: width         !< Width [pixels].',
+    '   integer(c_int),       intent(out) :: height        !< Height [pixels].',
+    "   integer(c_long_long), intent(out) :: tex_id        !< The renderer's id.",
+    '   integer(c_int),       intent(out) :: unused_frames !< Frames unused.',
+    '   integer(c_int),       intent(out) :: ref_count     !< References.',
+    '   integer(c_int)                    :: res           !< Update rectangles.',
+    '   endfunction figure_ImTextureData_state',
+    '',
+    "   subroutine figure_ImTextureData_rect(tex_data, k, rect) bind(C, name='figure_ImTextureData_rect')",
+    "   !< A texture's update rectangle k (0-based): x, y, w, h [pixels].",
+    '   import :: c_int, c_ptr',
+    '   implicit none',
+    '   type(c_ptr),    value       :: tex_data !< C `const ImTextureData*`.',
+    '   integer(c_int), value       :: k        !< Rectangle, 0-based.',
+    '   integer(c_int), intent(out) :: rect(4)  !< x, y, w, h.',
+    '   endsubroutine figure_ImTextureData_rect',
+    '',
+    "   subroutine figure_ImTextureData_set(tex_data, tex_id, status) bind(C, name='figure_ImTextureData_set')",
+    "   !< A texture's renderer id and status, set once the renderer handled its request.",
+    '   import :: c_int, c_long_long, c_ptr',
+    '   implicit none',
+    '   type(c_ptr),          value :: tex_data !< C `ImTextureData*`.',
+    "   integer(c_long_long), value :: tex_id   !< The renderer's id.",
+    '   integer(c_int),       value :: status   !< ImTextureStatus.',
+    '   endsubroutine figure_ImTextureData_set',
+    '',
+    "   function figure_ImTextureData_id(tex_data) result(res) bind(C, name='figure_ImTextureData_id')",
+    "   !< A texture's renderer id (`TexID`).",
+    '   import :: c_long_long, c_ptr',
+    '   implicit none',
+    '   type(c_ptr), value   :: tex_data !< C `const ImTextureData*`.',
+    "   integer(c_long_long) :: res      !< The renderer's id.",
+    '   endfunction figure_ImTextureData_id',
+    '',
+    "   subroutine figure_ImDrawData_callback(dd, l, c) bind(C, name='figure_ImDrawData_callback')",
+    "   !< Command c of list l (0-based) of the draw data: its program's callback called with its list and command.",
+    '   import :: c_int, c_ptr',
+    '   implicit none',
+    '   type(c_ptr),    value :: dd !< C `const ImDrawData*`.',
+    '   integer(c_int), value :: l  !< List, 0-based.',
+    '   integer(c_int), value :: c  !< Command, 0-based.',
+    '   endsubroutine figure_ImDrawData_callback',
 ]
 
 LIBRARIES = [
@@ -720,12 +861,9 @@ def function_module(
         lines.append(f"public :: {', '.join(types)}")
     specs = [s for s, owner in SPEC_DEFAULTS.items() if owner == lib.name]
     probes = [f"figure_sizeof_{c}_c" for c in mirrors] + [f"figure_{s}_default" for s in specs]
-    extra = (
-        ["figure_ImDrawList_append", "figure_ImDrawList_shared", "figure_ImDrawData_get", "figure_ImDrawData_list",
-         "figure_ImDrawData_cmd", "figure_ImTextureData_pixels"]
-        if lib.select
-        else []
-    )
+    # the CORE_GLUE functions, in the order of their interfaces
+    glue_re = r"^\s*(?:function|subroutine) (figure_\w+)\("
+    extra = re.findall(glue_re, "\n".join(CORE_INTERFACES), re.M) if lib.select else []
     lines += _chunks([f.cname for f in bound] + probes + extra, "public :: ")
     if lib.name == "cimgui":
         lines += [

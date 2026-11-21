@@ -510,4 +510,62 @@ int figure_ImTextureData_pixels(const void* tex_data, const unsigned char** pixe
    return 1;
 }
 
+// The renderer back end's side of Dear ImGui (#15 P9: the Fortran path's OpenGL 3 renderer, figure_render_gl3): what
+// imgui_impl_opengl3.cpp's Init sets (on 1: the back end's name, the flags RendererHasTextures and, with vtx_offset,
+// RendererHasVtxOffset, the texture size limit, the samplers' callbacks) and its Shutdown clears (on 0); the textures
+// a frame asks for (ImDrawData::Textures; with no draw data the platform's, at shutdown), each one's state and update
+// rectangles, its GL name and status set once handled; a program's own callback called with its list and command.
+void figure_renderer_backend(int on, int vtx_offset, int max_texture, ImDrawCallback reset, ImDrawCallback from_tex,
+                             ImDrawCallback linear, ImDrawCallback nearest) noexcept {
+   ImGuiIO& io = ImGui::GetIO();
+   ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+   if (on) {
+      io.BackendRendererName = "figure_render_gl3";
+      if (vtx_offset) io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+      io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+      pio.Renderer_TextureMaxWidth = pio.Renderer_TextureMaxHeight = max_texture;
+      pio.DrawCallback_ResetRenderState = reset;
+      pio.DrawCallback_SetSamplerLinear = linear;
+      pio.DrawCallback_SetSamplerNearest = nearest;
+      pio.DrawCallback_SetSamplerFromTex = from_tex;
+   } else {
+      io.BackendRendererName = NULL;
+      io.BackendRendererUserData = NULL;
+      io.BackendFlags &= ~(ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasTextures |
+                           ImGuiBackendFlags_RendererHasViewports);
+      pio.ClearRendererHandlers();
+   }
+}
+int figure_ImDrawData_textures(const ImDrawData* dd) noexcept {
+   if (dd == NULL) return ImGui::GetPlatformIO().Textures.Size;
+   return dd->Textures != NULL ? dd->Textures->Size : 0;
+}
+void* figure_ImDrawData_texture(const ImDrawData* dd, int k) noexcept {
+   return dd == NULL ? ImGui::GetPlatformIO().Textures[k] : (*dd->Textures)[k];
+}
+int figure_ImTextureData_state(const void* tex_data, int* status, int* format, int* width, int* height,
+                               unsigned long long* tex_id, int* unused_frames, int* ref_count) noexcept {
+   const ImTextureData* td = (const ImTextureData*)tex_data;
+   *status = td->Status, *format = td->Format, *width = td->Width, *height = td->Height;
+   *tex_id = (unsigned long long)td->TexID, *unused_frames = td->UnusedFrames, *ref_count = td->RefCount;
+   return td->Updates.Size;
+}
+void figure_ImTextureData_rect(const void* tex_data, int k, int* rect) noexcept {
+   const ImTextureRect& r = ((const ImTextureData*)tex_data)->Updates[k];
+   rect[0] = r.x, rect[1] = r.y, rect[2] = r.w, rect[3] = r.h;
+}
+void figure_ImTextureData_set(void* tex_data, unsigned long long tex_id, int status) noexcept {
+   ImTextureData* td = (ImTextureData*)tex_data;
+   td->SetTexID((ImTextureID)tex_id);
+   td->SetStatus((ImTextureStatus)status);
+}
+unsigned long long figure_ImTextureData_id(const void* tex_data) noexcept {
+   return (unsigned long long)((const ImTextureData*)tex_data)->TexID;
+}
+void figure_ImDrawData_callback(const ImDrawData* dd, int l, int c) noexcept {
+   const ImDrawList* dl = dd->CmdLists[l];
+   const ImDrawCmd* cmd = &dl->CmdBuffer[c];
+   if (cmd->UserCallback != NULL) cmd->UserCallback(dl, cmd);
+}
+
 } // extern "C"
