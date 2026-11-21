@@ -327,6 +327,7 @@ Details: [Styles](styles), [Icons](styles#icons).
 | `ip_scatter(label, x, y [, spec] [, stat])` | markers at `(x(i), y(i))` ([plots](plots#items)) <!-- visual --> |
 | `ip_bars(label, x, y, bar_size [, spec] [, stat])` | bars of height `y(i)` at `x(i)` ([plots](plots#items)) <!-- visual --> |
 | `ip_shaded(label, x, y1, y2 [, spec] [, stat])`, `ip_shaded(label, x, y, yref ...)` | area between two curves, or a curve and `y = yref` ([plots](plots#items)) <!-- visual --> |
+| `ip_cache_next_item(changed [, stat])` | the next line, staircase or shaded area keeps its decimation's work between frames; `changed` says whether the data changed: a pan or zoom of 10⁸ points stays interactive ([plots](plots#long-series)) |
 | `ip_set_decimation(enabled [, stat])` | long lines, staircases and shaded areas decimated per pixel column (the default) or every point drawn ([plots](plots#long-series)) |
 | `ip_spec(...)` → `plot_spec_object` | item style: colours, line weight, markers, flags (`ImPlotMarker_*`, `ImPlot*Flags_*`) ([plots](plots#item-style)) |
 | `ip_heatmap(label, f, xmin, xmax, ymin, ymax ...)` | a field `f(i, j)` as coloured cells, read in place, j = 1 at the bottom ([heatmaps](images#heatmaps)) <!-- visual --> |

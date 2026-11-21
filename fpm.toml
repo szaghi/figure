@@ -321,3 +321,8 @@ main = "figure_test_string_sections.F90"
 name = "figure_test_decimate"
 source-dir = "src/tests"
 main = "figure_test_decimate.F90"
+
+[[test]]
+name = "figure_test_plot_cache"
+source-dir = "src/tests"
+main = "figure_test_plot_cache.F90"

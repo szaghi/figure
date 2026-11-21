@@ -670,6 +670,17 @@ every point of the items that follow it, until `ip_set_decimation(.true.)`:
 
 <<< @/examples/output/cb_long_series.txt{text}
 
+**Unchanged data, kept between frames.** The decimation reads every point of the series every frame (are the
+abscissae sorted, where are the extremes). When the data do not change from frame to frame,
+`ip_cache_next_item(changed)` before the item keeps what it computes of them: whether the abscissae are sorted, and a
+pyramid of the extremes of the ordinates by blocks of 32, 64, 128 ... points (about one index per 16 points). Each
+frame then finds a column's extremes in a few blocks, whatever the series' length: a pan or a zoom costs a few
+operations a pixel column, the same points kept as without the cache. `changed=.true.` on a frame where the program
+changed the values (in place) rebuilds it; so does an array at another address, of another size, stride or kind,
+whatever `changed` says. Values changed in place with `changed=.false.` are drawn as they were: the program's word is
+the cache's only evidence, as for [`ip_field_image`](#fields). A cache unused for 10 s is released. Without the call
+(the default) every frame decimates from the data.
+
 The kept points are gathered from the item's arrays, read in place with their stride, into buffers of FIGURE's kept
 from item to item ([Data in place](#data-in-place)); a series of `int32` or `int64` abscissae is converted first, as
 without decimation. Modes: every mode (in remote mode, fewer vertices to send). Threads: `ip_set_decimation` from a

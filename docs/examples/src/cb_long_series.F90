@@ -4,11 +4,12 @@ program cb_long_series
 !<
 !< A probe's pressure sampled a million times: in a plot 600 pixels wide, about 1700 points a pixel column. `ip_line`
 !< decimates it (plots.md, "Long series"): at most 64 points a column reach ImPlot, nearly the full picture. The check
-!< box draws every point instead (`ip_set_decimation(.false.)`). `cb_long_series --check` opens no window: it draws the
-!< plot headless both ways and compares the two pictures.
+!< box draws every point instead (`ip_set_decimation(.false.)`). The samples never change: `ip_cache_next_item` keeps
+!< what the decimation computes of them from frame to frame, and a pan or a zoom costs a few operations a column.
+!< `cb_long_series --check` opens no window: it draws the plot headless both ways and compares the two pictures.
 use, intrinsic :: iso_fortran_env, only : int32, int64, output_unit, real64
 use figure, only : app_object, ig_begin, ig_checkbox, ig_end, ig_item_rect, ig_set_next_window, ip_begin_plot, &
-                   ip_end_plot, ip_line, ip_set_decimation, ip_setup_axes
+                   ip_cache_next_item, ip_end_plot, ip_line, ip_set_decimation, ip_setup_axes
 use figure_testing, only : test_capture, test_compare_image
 
 implicit none
@@ -54,6 +55,7 @@ do while (app%next_frame())
       if (ip_begin_plot('Pressure at the probe', height=-1.0_real64)) then
          call ip_setup_axes('t [s]', 'p [Pa]')
          if (every) call ip_set_decimation(.false.) ! every point: the exact picture, at ImPlot's cost per point
+         call ip_cache_next_item(changed=.false.)   ! p never changes: its decimation's work kept between frames
          call ip_line('p', t, p)                    ! decimated by default: at most 64 points a pixel column
          if (every) call ip_set_decimation(.true.)
          call ip_end_plot()

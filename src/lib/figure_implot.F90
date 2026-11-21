@@ -36,9 +36,9 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_colorma
                             fig_colormap_legend, fig_plot_end, fig_plot_state, fig_plot_axis_constraints, fig_plot_tag, &
                             fig_field_image, fig_gradient_edit, fig_colormap_stops, fig_dnd_plot_target, &
                             fig_plot_link, fig_aligned_open, fig_plot_x_transform
-use figure_decimate, only : decimate_axis, decimate, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
+use figure_decimate, only : decimate_axis, decimate_cache, decimate, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
                             DECIMATE_THRESHOLD
-use figure_cimgui, only : im_vec2, im_vec4, igGetFrameCount, igIsMousePosValid
+use figure_cimgui, only : im_vec2, im_vec4, igGetFrameCount, igGetTime, igIsMousePosValid
 use figure_texture, only : texture_object, texture_ref
 use figure_imgui, only : take_payload
 use figure_cimplot, only : ImPlot_BeginAlignedPlots, ImPlot_EndAlignedPlots, ImPlot_IsLegendEntryHovered,           &
@@ -130,7 +130,7 @@ public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, 
 public :: ip_drop_target
 public :: ip_link_axis, ip_begin_aligned, ip_end_aligned, ip_legend_hovered, ip_begin_legend_popup
 public :: ip_end_legend_popup, ip_hide_next_item, ip_digital, ip_bar_groups
-public :: ip_set_decimation
+public :: ip_set_decimation, ip_cache_next_item
 public :: ip_drag_rect, ip_tag, ip_inf_lines, ip_text, ip_stairs, ip_stems, ip_histogram, ip_histogram2d
 ! ImPlot's marker and item-flag constants (values generated from the cimplot metadata), for `ip_spec`
 public :: ImPlotMarker_None, ImPlotMarker_Auto, ImPlotMarker_Circle, ImPlotMarker_Square, ImPlotMarker_Diamond
@@ -313,6 +313,34 @@ integer(int32)              :: kept_frame = -1_int32  !< Dear ImGui frame of the
 integer(int64), public      :: plot_decimated = 0     !< Items decimated so far (tests: `use figure_implot`).
 integer(int64), public      :: plot_kept = 0          !< Points the last decimated item kept.
 logical                     :: decimation_on = .true. !< Long series decimated (`ip_set_decimation`).
+
+! The caches of decimated series (szaghi/figure#15 P5): per series, the identity of its data and what `decimate` keeps
+! of them (sorted abscissae, the pyramids of the ordinates), used when the program says whether the data changed
+! (`ip_cache_next_item`); an entry not used for CACHE_IDLE seconds is released. Index handles, never pointers.
+type :: series_cache
+   !< A series' cache: its data's identity (addresses, points, stride, kind, item, uniform abscissae) and the cache.
+   logical              :: used = .false.        !< Holds a series.
+   type(c_ptr)          :: p(3) = c_null_ptr     !< Addresses of x, y, y2 (as the item's slots give them).
+   integer(int64)       :: n = 0_int64           !< Points.
+   integer(int64)       :: stride = 0_int64      !< Stride [bytes].
+   integer(int32)       :: kind = 0_int32        !< Bytes of a value (4, 8).
+   integer(int32)       :: item = 0_int32        !< ITEM_*.
+   logical              :: uniform = .false.     !< Abscissae x0 + (i - 1) dx.
+   real(c_double)       :: x0 = 0.0_c_double     !< ... x0.
+   real(c_double)       :: dx = 0.0_c_double     !< ... dx.
+   real(c_double)       :: last_time = 0.0_c_double !< Dear ImGui's time of its last use [s].
+   type(decimate_cache) :: dc                    !< What `decimate` keeps.
+endtype series_cache
+real(c_double), parameter       :: CACHE_IDLE = 10.0_c_double !< A cache not used for this long is released [s].
+integer(int32), parameter       :: CACHE_SLOTS = 32_int32  !< Caches at most (the least recently used one makes room).
+type(series_cache)              :: caches(CACHE_SLOTS)     !< The caches: a fixed table, its entries reset field by field
+                                                           !< (a growable table assigned whole and structure constructors
+                                                           !< failed on nvfortran 26.9: an ALLOCATE of 1.8e19 bytes; the
+                                                           !< statement not isolated).
+logical                         :: next_cached = .false.   !< The next line-like item uses its cache.
+logical                         :: next_changed = .false.  !< ... and its data changed.
+integer(int64), public          :: plot_cache_builds = 0   !< Caches built (data new or changed: tests).
+integer(int64), public          :: plot_cache_hits = 0     !< Caches reused (tests).
 
 interface series_lead
    !< Place the array that sets an item's stride.
@@ -3228,6 +3256,23 @@ contains
    call figure_check(FIG_OK, stat)
    endsubroutine ip_set_decimation
 
+   recursive subroutine ip_cache_next_item(changed, stat)
+   !< The next `ip_line`, `ip_stairs` or `ip_shaded` keeps what its decimation computes of its data between frames,
+   !< and `changed` says whether the program changed the values since that item's last frame (as `ip_field_image`'s
+   !< `changed`). Unchanged data then cost each frame a few operations per pixel column, not a pass over every point:
+   !< panning and zooming a series of 10**8 points stay interactive. A new address, size, stride or kind of an array
+   !< rebuilds the cache whatever `changed` says; values changed in place with `changed=.false.` are drawn as they
+   !< were. Without this call (the default) every frame decimates from the data. The cache is released 10 s after its
+   !< last use (plots.md, "Long series"). Statuses: `FIG_ERR_STATE` from a task.
+   logical,        intent(in)            :: changed !< The values changed since the item's last frame.
+   integer(int32), intent(out), optional :: stat    !< Status.
+
+   if (figure_refused('ip_cache_next_item', stat)) return ! a task does not draw
+   next_cached = .true.
+   next_changed = changed
+   call figure_check(FIG_OK, stat)
+   endsubroutine ip_cache_next_item
+
    recursive subroutine ip_hide_next_item(hidden, always, stat)
    !< Hide (default) or show the next item (`HideNextItem`): its legend entry stays, greyed while hidden, and a click
    !< on it shows it again. The first time the item is drawn only, unless `always=.true.`: then on this frame, whatever
@@ -5369,25 +5414,56 @@ contains
    integer(int64)                               :: nk    !< Points kept.
    integer(int64)                               :: j     !< Counter.
    integer(int32)                               :: k     !< Slot.
+   integer(int32)                               :: c     !< Cache, 0 none.
+   logical                                      :: fresh !< The cache's data changed.
 
    dec = .false.
    if (present(done)) done = .false.
-   if (.not. decimation_wanted(d%n, item, spec, ax, fill)) return
+   c = 0_int32
+   if (next_cached) then
+      fresh = next_changed
+      next_cached = .false.
+      if (decimation_wanted(d%n, item, spec, ax, fill)) &
+         c = cache_slot(d%p(1:3), d%n, d%stride, 4_int32, item, present(x0) .and. present(dx), x0, dx, fresh)
+   endif
+   if (c == 0_int32) then
+      if (.not. decimation_wanted(d%n, item, spec, ax, fill)) return
+   endif
    m = d%stride / 4_int64
    call c_f_pointer(d%p(2), ya, [(d%n - 1_int64) * m + 1_int64])
    if (c_associated(d%p(3))) call c_f_pointer(d%p(3), za, [(d%n - 1_int64) * m + 1_int64])
    if (present(x0) .and. present(dx)) then
       if (c_associated(d%p(3))) then
-         dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+         if (c > 0_int32) then
+            dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, y2=za(1::m), fill=fill, &
+                        cache=caches(c)%dc)
+         else
+            dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+         endif
       else
-         dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, fill=fill)
+         if (c > 0_int32) then
+            dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, fill=fill, &
+                        cache=caches(c)%dc)
+         else
+            dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, fill=fill)
+         endif
       endif
    else
       call c_f_pointer(d%p(1), xa, [(d%n - 1_int64) * m + 1_int64])
       if (c_associated(d%p(3))) then
-         dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+         if (c > 0_int32) then
+            dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, y2=za(1::m), fill=fill, &
+                        cache=caches(c)%dc)
+         else
+            dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+         endif
       else
-         dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, fill=fill)
+         if (c > 0_int32) then
+            dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, fill=fill, &
+                        cache=caches(c)%dc)
+         else
+            dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, fill=fill)
+         endif
       endif
    endif
    if (.not. dec) return
@@ -5449,25 +5525,56 @@ contains
    integer(int64)                               :: nk    !< Points kept.
    integer(int64)                               :: j     !< Counter.
    integer(int32)                               :: k     !< Slot.
+   integer(int32)                               :: c     !< Cache, 0 none.
+   logical                                      :: fresh !< The cache's data changed.
 
    dec = .false.
    if (present(done)) done = .false.
-   if (.not. decimation_wanted(d%n, item, spec, ax, fill)) return
+   c = 0_int32
+   if (next_cached) then
+      fresh = next_changed
+      next_cached = .false.
+      if (decimation_wanted(d%n, item, spec, ax, fill)) &
+         c = cache_slot(d%p(1:3), d%n, d%stride, 8_int32, item, present(x0) .and. present(dx), x0, dx, fresh)
+   endif
+   if (c == 0_int32) then
+      if (.not. decimation_wanted(d%n, item, spec, ax, fill)) return
+   endif
    m = d%stride / 8_int64
    call c_f_pointer(d%p(2), ya, [(d%n - 1_int64) * m + 1_int64])
    if (c_associated(d%p(3))) call c_f_pointer(d%p(3), za, [(d%n - 1_int64) * m + 1_int64])
    if (present(x0) .and. present(dx)) then
       if (c_associated(d%p(3))) then
-         dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+         if (c > 0_int32) then
+            dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, y2=za(1::m), fill=fill, &
+                        cache=caches(c)%dc)
+         else
+            dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+         endif
       else
-         dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, fill=fill)
+         if (c > 0_int32) then
+            dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, fill=fill, &
+                        cache=caches(c)%dc)
+         else
+            dec = decimate(ax, real(x0, real64), real(dx, real64), ya(1::m), kept, nk, fill=fill)
+         endif
       endif
    else
       call c_f_pointer(d%p(1), xa, [(d%n - 1_int64) * m + 1_int64])
       if (c_associated(d%p(3))) then
-         dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+         if (c > 0_int32) then
+            dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, y2=za(1::m), fill=fill, &
+                        cache=caches(c)%dc)
+         else
+            dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, y2=za(1::m), fill=fill)
+         endif
       else
-         dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, fill=fill)
+         if (c > 0_int32) then
+            dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, fill=fill, &
+                        cache=caches(c)%dc)
+         else
+            dec = decimate(ax, xa(1::m), ya(1::m), kept, nk, fill=fill)
+         endif
       endif
    endif
    if (.not. dec) return
@@ -5505,6 +5612,109 @@ contains
    plot_kept = nk
    if (present(done)) done = dec
    endsubroutine decimate_series_r64
+
+   function cache_slot(p, n, stride, kind, item, uniform, x0, dx, changed) result(c)
+   !< The cache of a series (found by its data's identity, else a new one: a free slot, or the least recently used),
+   !< invalidated when the data changed; the caches idle for CACHE_IDLE seconds released.
+   type(c_ptr),    intent(in)           :: p(3)    !< Addresses of x, y, y2.
+   integer(int64), intent(in)           :: n       !< Points.
+   integer(int64), intent(in)           :: stride  !< Stride [bytes].
+   integer(int32), intent(in)           :: kind    !< Bytes of a value.
+   integer(int32), intent(in)           :: item    !< ITEM_*.
+   logical,        intent(in)           :: uniform !< Abscissae x0 + (i - 1) dx.
+   real(c_double), intent(in), optional :: x0, dx  !< ... x0, dx.
+   logical,        intent(in)           :: changed !< The program changed the values.
+   integer(int32)                       :: c       !< Cache.
+   real(c_double)                       :: now     !< Dear ImGui's time.
+   real(c_double)                       :: ux0, udx !< Uniform abscissae, or 0.
+   integer(int32)                       :: k       !< Counter.
+   logical                              :: same    !< The same data.
+
+   now = igGetTime()
+   ux0 = 0.0_c_double
+   udx = 0.0_c_double
+   if (uniform) then
+      ux0 = x0
+      udx = dx
+   endif
+   c = 0_int32
+   do k = 1_int32, CACHE_SLOTS
+      if (.not. caches(k)%used) cycle
+      if (now - caches(k)%last_time > CACHE_IDLE .or. now < caches(k)%last_time) then ! idle (or a new context)
+         call cache_release(k)
+         cycle
+      endif
+      if (c == 0_int32) then
+         same = c_associated(caches(k)%p(2), p(2)) .and. caches(k)%n == n .and. caches(k)%stride == stride .and. &
+                caches(k)%kind == kind .and. caches(k)%item == item .and. (caches(k)%uniform .eqv. uniform)
+         if (same) same = same_address(caches(k)%p(1), p(1)) .and. same_address(caches(k)%p(3), p(3)) .and. &
+                          caches(k)%x0 == ux0 .and. caches(k)%dx == udx
+         if (same) c = k
+      endif
+   enddo
+   if (c > 0_int32) then
+      if (changed) then
+         caches(c)%dc%valid = .false.
+         plot_cache_builds = plot_cache_builds + 1_int64
+      else
+         plot_cache_hits = plot_cache_hits + 1_int64
+      endif
+      caches(c)%last_time = now
+      return
+   endif
+   c = 1_int32
+   do k = 1_int32, CACHE_SLOTS
+      if (.not. caches(k)%used) then
+         c = k
+         exit
+      endif
+      if (caches(k)%last_time < caches(c)%last_time) c = k
+   enddo
+   if (caches(c)%used) call cache_release(c)
+   caches(c)%used = .true.
+   caches(c)%p = p
+   caches(c)%n = n
+   caches(c)%stride = stride
+   caches(c)%kind = kind
+   caches(c)%item = item
+   caches(c)%uniform = uniform
+   caches(c)%x0 = ux0
+   caches(c)%dx = udx
+   caches(c)%last_time = now
+   caches(c)%dc%valid = .false.
+   plot_cache_builds = plot_cache_builds + 1_int64
+   endfunction cache_slot
+
+   subroutine cache_release(k)
+   !< Free a cache's memory and its slot.
+   integer(int32), intent(in) :: k !< Slot.
+   integer(int32)             :: o !< Ordinate.
+
+   do o = 1_int32, 2_int32
+      if (allocated(caches(k)%dc%py(o)%first)) deallocate(caches(k)%dc%py(o)%first)
+      if (allocated(caches(k)%dc%py(o)%imin)) deallocate(caches(k)%dc%py(o)%imin)
+      if (allocated(caches(k)%dc%py(o)%imax)) deallocate(caches(k)%dc%py(o)%imax)
+      if (allocated(caches(k)%dc%py(o)%gap)) deallocate(caches(k)%dc%py(o)%gap)
+      caches(k)%dc%py(o)%n = 0_int64
+   enddo
+   caches(k)%dc%valid = .false.
+   caches(k)%dc%sorted = .false.
+   caches(k)%used = .false.
+   caches(k)%p = c_null_ptr
+   caches(k)%n = 0_int64
+   endsubroutine cache_release
+
+   pure function same_address(a, b) result(same)
+   !< Two C addresses equal (both null included).
+   type(c_ptr), intent(in) :: a, b !< Addresses.
+   logical                 :: same !< Equal.
+
+   if (c_associated(a)) then
+      same = c_associated(a, b)
+   else
+      same = .not. c_associated(b)
+   endif
+   endfunction same_address
 
    function decimation_wanted(n, item, spec, ax, fill) result(wanted)
    !< Whether an item of n points may be decimated (its style, the plot's x axis), and the axis as its points map to

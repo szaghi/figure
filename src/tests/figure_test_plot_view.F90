@@ -12,7 +12,8 @@ program figure_test_plot_view
 !<    points a pixel column kept, in the three others every point in view (20001, 1001 and 101: at most 64 a column)
 !<    and a few off the plot; the picture against the same golden at a loosened threshold (|d| <= 96): anti-aliased
 !<    strokes of the points kept cover a dense column otherwise than the full series' many, up to 87 levels apart on
-!<    2205 pixels of the dense plot (gfortran 16.2, 2026-11-20), the three others equal.
+!<    2205 pixels of the dense plot (gfortran 16.2, 2026-11-20), the three others equal. The decimated line is cached
+!<    (`ip_cache_next_item`, #15 P5): one cache for the four plots of the same arrays, built on the first frame.
 !< 2. Interaction, in one plot whose style is pushed around it (a border of 3 pixels, a dark blue background) and with
 !<    the minor grid's alpha set: a horizontal drag line dragged 40 pixels down moves by 40 pixels' worth of y; a left
 !<    drag of (-100, +50) pixels pans the plot by that much (the ranges' widths kept); the wheel zooms in about the
@@ -29,7 +30,7 @@ use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
                    ip_drag_line_y, ip_end_plot, ip_get_style_color, ip_get_style_var, ip_legend_hovered, ip_line,    &
                    ip_pixels_to_plot, ip_plot_limits, ip_plot_selection, ip_plot_to_pixels, ip_pop_style_color,     &
-                   ip_pop_style_var, ip_set_decimation,                                                              &
+                   ip_pop_style_var, ip_set_decimation, ip_cache_next_item,                                          &
                    ip_push_style_color, ip_push_style_var, ip_set_style_var, ip_setup_axes_limits, ip_spec,         &
                    ImGuiWindowFlags_NoDecoration, FIG_ERR_STATE, FIG_OK
 use figure_implot, only : plot_decimated, plot_kept
@@ -140,6 +141,7 @@ contains
             if (ip_begin_plot('##level'//achar(48 + k), width=388.0_real64, height=285.0_real64)) then
                call ip_setup_axes_limits(0.0_real64, XSPAN(k), -1.4_real64, 1.4_real64, always=.true.)
                before = plot_decimated
+               if (decimated) call ip_cache_next_item(changed=f == 1_int32 .and. k == 1_int32) ! one cache, four views
                call ip_line('signal', x, y, spec=ip_spec(line_color=SIGNAL_C))
                thinned(k) = plot_decimated > before
                if (thinned(k)) kept(k) = plot_kept

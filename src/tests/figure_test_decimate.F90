@@ -14,11 +14,13 @@ program figure_test_decimate
 !< 4. a fill: the two points about each column's centre kept;
 !< 5. `real32` and `real64`, strided sections read in place (`y(::3)`), uniform abscissae (x0 + (i - 1) dx), a second
 !<    ordinate (its extremes kept too), a log10 axis;
+!< 7. with a cache (#15 P5): the same points kept as without, for views panned and zoomed over unchanged data (one
+!<    ordinate and two, NaN gaps, fills, single precision, uniform abscissae), and unsorted data refused as without;
 !< 6. not decimated (`.false.`): unsorted abscissae, a NaN abscissa, at most 256 points per pixel on average, an inverted
 !<    axis.
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan, ieee_quiet_nan, ieee_value
-use figure_decimate, only : decimate, decimate_axis, DECIMATE_LOG10
+use figure_decimate, only : decimate, decimate_axis, decimate_cache, DECIMATE_LOG10
 
 implicit none
 integer(int64), parameter   :: N = 300001_int64  !< Points of the long series.
@@ -33,7 +35,7 @@ integer(int64), allocatable :: keep(:)           !< Indices kept.
 integer(int64)              :: nkeep             !< ... how many.
 integer(int64)              :: s                 !< Pseudo-random state.
 integer(int64)              :: i                 !< Counter.
-logical                     :: test_passed(12)   !< Per-check outcome.
+logical                     :: test_passed(13)   !< Per-check outcome.
 logical                     :: done              !< Decimated.
 real(real64)                :: r1, r2            !< Pseudo-random numbers.
 
@@ -122,11 +124,72 @@ test_passed(11) = .not. decimate(ax, x(1:128000), y(1:128000), keep, nkeep) .and
 test_passed(12) = .not. decimate(decimate_axis(pix_min=510.0_real64, m=-500.0_real64, left=10.0_real64, &
                                                right=510.0_real64), x, y, keep, nkeep)
 
+! 7: a cache gives what no cache gives
+test_passed(13) = cached_ok()
+
 write(output_unit, '(A,*(L2))') 'figure_test_decimate checks:', test_passed
 write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function cached_ok() result(ok)
+   !< Invariant 7: with a cache, the points kept are those kept without, view after view.
+   logical                     :: ok          !< Holds.
+   type(decimate_cache)        :: c(5)        !< One per series.
+   type(decimate_axis)         :: v           !< A view.
+   integer(int64), allocatable :: k1(:), k2(:) !< Kept with and without the cache.
+   integer(int64)              :: n1, n2      !< ... how many.
+   real(real64),   allocatable :: g(:), w(:)  !< Ordinates with NaN gaps; second ordinates.
+   integer(int32)              :: f           !< View.
+   logical                     :: d1, d2      !< Decimated.
+
+   ok = .true.
+   allocate(g(N), w(N)) ! not by the assignments: nvfortran -Mstandard does not reallocate on assignment
+   g = y
+   g(5000:5003) = ieee_value(1.0_real64, ieee_quiet_nan)
+   g(150001) = ieee_value(1.0_real64, ieee_quiet_nan)
+   w = 0.5_real64 * cos(17.0_real64 * x)
+   do f = 1_int32, 12_int32
+      v = ax
+      v%plt_min = -0.2_real64 + 0.07_real64 * f            ! panned
+      v%plt_max = v%plt_min + 1.4_real64 / real(f, real64) ! and zoomed
+      v%m = 500.0_real64 / (v%plt_max - v%plt_min)
+      d1 = decimate(v, x, g, k1, n1, cache=c(1))
+      d2 = decimate(v, x, g, k2, n2)
+      ok = ok .and. same(d1, d2, k1, n1, k2, n2)
+      d1 = decimate(v, x, y, k1, n1, y2=w, fill=.true., cache=c(2))
+      d2 = decimate(v, x, y, k2, n2, y2=w, fill=.true.)
+      ok = ok .and. same(d1, d2, k1, n1, k2, n2)
+      d1 = decimate(v, xs, ys, k1, n1, cache=c(3))
+      d2 = decimate(v, xs, ys, k2, n2)
+      ok = ok .and. same(d1, d2, k1, n1, k2, n2)
+      d1 = decimate(v, -0.1_real64, 1.2_real64 / real(N, real64), g, k1, n1, cache=c(4))
+      d2 = decimate(v, -0.1_real64, 1.2_real64 / real(N, real64), g, k2, n2)
+      ok = ok .and. same(d1, d2, k1, n1, k2, n2)
+      if (.not. ok) then
+         write(output_unit, '(A,I0)') 'cached_ok fails at view ', f
+         return
+      endif
+   enddo
+   w = x
+   w(200) = w(199) - 1.0e-9_real64
+   ok = ok .and. .not. decimate(ax, w, y, k1, n1, cache=c(5)) .and. .not. decimate(ax, w, y, k1, n1, cache=c(5))
+   endfunction cached_ok
+
+   function same(d1, d2, k1, n1, k2, n2) result(eq)
+   !< Both decimated or neither, the same points kept.
+   logical,        intent(in) :: d1, d2  !< Decimated.
+   integer(int64), allocatable, intent(in) :: k1(:) !< Kept, one way.
+   integer(int64), intent(in) :: n1      !< ... how many.
+   integer(int64), allocatable, intent(in) :: k2(:) !< Kept, the other.
+   integer(int64), intent(in) :: n2      !< ... how many.
+   logical                    :: eq      !< Equal.
+
+   eq = d1 .eqv. d2
+   if (eq .and. d1) eq = n1 == n2
+   if (eq .and. d1) eq = all(k1(1:n1) == k2(1:n2))
+   endfunction same
+
    function rnd() result(r)
    !< A pseudo-random number in [0, 1) (an LCG: the same series everywhere).
    real(real64) :: r !< Number.

@@ -38,7 +38,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 
 implicit none
 private
-public :: decimate_axis, decimate, DECIMATE_THRESHOLD, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG
+public :: decimate_axis, decimate_cache, decimate, DECIMATE_THRESHOLD, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG
 
 integer(int32), parameter :: DECIMATE_THRESHOLD = 64_int32 !< Points per pixel column above which a column is decimated
                                                           !< (4 per sixteenth: fewer, M4 keeps them all).
@@ -47,6 +47,7 @@ integer(int32), parameter :: DECIMATE_LOG10 = 1_int32     !< Base 10 logarithmic
 integer(int32), parameter :: DECIMATE_SYMLOG = 2_int32    !< Symmetric logarithmic axis.
 integer(int32), parameter :: GROUP_MAX = 24_int32         !< Indices a part of a column can keep (two ordinates, a fill).
 integer(int64), parameter :: SUB = 16_int64               !< Parts of a dense pixel column reduced each on its own.
+integer(int64), parameter :: LEAF = 32_int64              !< Points of a block of a pyramid's first level.
 integer(int32), parameter :: DECIMATE_GATE = 4_int32      !< A series is decimated when it averages more than
                                                           !< DECIMATE_GATE * DECIMATE_THRESHOLD points a column: below,
                                                           !< what decimation saves ImPlot does not pay its own pass.
@@ -69,10 +70,33 @@ type :: decimate_axis
    integer(int32) :: scale = DECIMATE_LINEAR      !< DECIMATE_LINEAR, DECIMATE_LOG10 or DECIMATE_SYMLOG.
 endtype decimate_axis
 
+type :: decimate_pyramid
+   !< The extremes of a series' ordinates by blocks (szaghi/figure#15, P5): level 0 blocks of LEAF points, level l of
+   !< LEAF 2**l, each node the first lowest and the first highest point of its block (0 when every value is NaN) and
+   !< whether one is NaN. A range's extremes then take O(log n) nodes and two partial blocks, the same points a scan
+   !< finds (the first of equal values: nodes combined left to right with strict comparisons).
+   integer(int64)              :: n = 0_int64 !< Points.
+   integer(int64), allocatable :: first(:)    !< first(l): index of level l's first node in the arrays below.
+   integer(int64), allocatable :: imin(:)     !< Each node's lowest point.
+   integer(int64), allocatable :: imax(:)     !< Each node's highest point.
+   logical,        allocatable :: gap(:)      !< Each node has a NaN.
+endtype decimate_pyramid
+
+type :: decimate_cache
+   !< What `decimate` keeps of a series between frames while its data do not change (an item's cache, kept by the
+   !< caller with the data's identity): whether its abscissae are sorted, and a pyramid of each ordinate. Set
+   !< `valid = .false.` when the data change: the next `decimate` rebuilds it (O(n)); then each view costs O(w log n),
+   !< w the plot's width in pixels, n the points.
+   logical                :: valid = .false. !< Built for the current data.
+   logical                :: sorted = .false. !< The abscissae are sorted.
+   type(decimate_pyramid) :: py(2)           !< The ordinates' pyramids (the second one: a shaded item's y2).
+endtype decimate_cache
+
 interface decimate
-   !< The indices of the points of a series that draw it: `decimate(axis, x, y, keep, nkeep [, y2] [, fill])`,
-   !< x and y `real32` or `real64` arrays of any stride; or `decimate(axis, x0, dx, y, keep, nkeep [, y2] [,
-   !< fill])` for abscissae x0 + (i - 1) dx (computed as ImPlot does). `.false.`: not decimated, draw every point.
+   !< The indices of the points of a series that draw it: `decimate(axis, x, y, keep, nkeep [, y2] [, fill] [,
+   !< cache])`, x and y `real32` or `real64` arrays of any stride; or `decimate(axis, x0, dx, y, keep, nkeep [, y2] [,
+   !< fill] [, cache])` for abscissae x0 + (i - 1) dx (computed as ImPlot does). `.false.`: not decimated, draw every
+   !< point. With `cache`, what does not depend on the view is kept there (`decimate_cache`).
    module procedure decimate_r32, decimate_r64, decimate_uniform_r32, decimate_uniform_r64
 endinterface decimate
 
@@ -81,7 +105,7 @@ integer(int64), allocatable :: bound(:)  !< bound(k): first point in the pixel c
 integer(int64), allocatable :: centre(:) !< centre(k): first point at or right of the centre of column k.
 
 contains
-   function decimate_r64(axis, x, y, keep, nkeep, y2, fill) result(done)
+   function decimate_r64(axis, x, y, keep, nkeep, y2, fill, cache) result(done)
    !< Decimate a series of `real(real64)` points (x(i), y(i)) (and y2(i)): `.true.` with the kept indices, else draw
    !< every point (unsorted x, too few points per column).
    type(decimate_axis),         intent(in)           :: axis     !< The x axis.
@@ -91,6 +115,7 @@ contains
    integer(int64),              intent(out)          :: nkeep    !< Indices kept.
    real(real64),                intent(in), optional :: y2(:)    !< Second ordinates (a shaded item's), any stride.
    logical,                     intent(in), optional :: fill     !< Keep the points about each column's centre.
+   type(decimate_cache),        intent(inout), optional :: cache !< What is kept between frames (unchanged data).
    logical                                           :: done     !< Decimated.
    integer(int64)                                    :: n        !< Points.
    integer(int64)                                    :: kmin     !< First column (the left margin's).
@@ -100,12 +125,17 @@ contains
    done = .false.
    n = size(y, kind=int64)
    if (.not. columns(axis, n, kmin, kmax)) return
-   if (.not. sorted_r64(x)) return
+   if (present(cache)) then
+      if (.not. cache%valid) call build_r64(cache, sorted_r64(x), y, y2)
+      if (.not. cache%sorted) return
+   else
+      if (.not. sorted_r64(x)) return
+   endif
    call bounds(kmin, kmax, n, opt_fill(fill), pixel_of)
    if (present(y2)) then
-      call reduce_r64(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), y2)
+      call reduce_r64(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), y2, cache)
    else
-      call reduce_r64(kmin, kmax, n, y, keep, nkeep, opt_fill(fill))
+      call reduce_r64(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), cache=cache)
    endif
    done = .true.
    contains
@@ -118,7 +148,7 @@ contains
       endfunction pixel_of
    endfunction decimate_r64
 
-   function decimate_r32(axis, x, y, keep, nkeep, y2, fill) result(done)
+   function decimate_r32(axis, x, y, keep, nkeep, y2, fill, cache) result(done)
    !< Decimate a series of `real(real32)` points (x(i), y(i)) (and y2(i)): `.true.` with the kept indices, else draw
    !< every point (unsorted x, too few points per column).
    type(decimate_axis),         intent(in)           :: axis     !< The x axis.
@@ -128,6 +158,7 @@ contains
    integer(int64),              intent(out)          :: nkeep    !< Indices kept.
    real(real32),                intent(in), optional :: y2(:)    !< Second ordinates (a shaded item's), any stride.
    logical,                     intent(in), optional :: fill     !< Keep the points about each column's centre.
+   type(decimate_cache),        intent(inout), optional :: cache !< What is kept between frames (unchanged data).
    logical                                           :: done     !< Decimated.
    integer(int64)                                    :: n        !< Points.
    integer(int64)                                    :: kmin     !< First column (the left margin's).
@@ -137,12 +168,17 @@ contains
    done = .false.
    n = size(y, kind=int64)
    if (.not. columns(axis, n, kmin, kmax)) return
-   if (.not. sorted_r32(x)) return
+   if (present(cache)) then
+      if (.not. cache%valid) call build_r32(cache, sorted_r32(x), y, y2)
+      if (.not. cache%sorted) return
+   else
+      if (.not. sorted_r32(x)) return
+   endif
    call bounds(kmin, kmax, n, opt_fill(fill), pixel_of)
    if (present(y2)) then
-      call reduce_r32(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), y2)
+      call reduce_r32(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), y2, cache)
    else
-      call reduce_r32(kmin, kmax, n, y, keep, nkeep, opt_fill(fill))
+      call reduce_r32(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), cache=cache)
    endif
    done = .true.
    contains
@@ -155,7 +191,7 @@ contains
       endfunction pixel_of
    endfunction decimate_r32
 
-   function decimate_uniform_r64(axis, x0, dx, y, keep, nkeep, y2, fill) result(done)
+   function decimate_uniform_r64(axis, x0, dx, y, keep, nkeep, y2, fill, cache) result(done)
    !< Decimate a series of `real(real64)` ordinates at x = x0 + (i - 1) dx: `.true.` with the kept indices, else draw
    !< every point (dx < 0, too few points per column).
    type(decimate_axis),         intent(in)           :: axis     !< The x axis.
@@ -166,6 +202,7 @@ contains
    integer(int64),              intent(out)          :: nkeep    !< Indices kept.
    real(real64),                intent(in), optional :: y2(:)    !< Second ordinates, any stride.
    logical,                     intent(in), optional :: fill     !< Keep the points about each column's centre.
+   type(decimate_cache),        intent(inout), optional :: cache !< What is kept between frames (unchanged data).
    logical                                           :: done     !< Decimated.
    integer(int64)                                    :: n        !< Points.
    integer(int64)                                    :: kmin     !< First column (the left margin's).
@@ -177,11 +214,14 @@ contains
    if (ieee_is_nan(dx) .or. ieee_is_nan(x0)) return
    if (dx < 0.0_real64) return
    if (.not. columns(axis, n, kmin, kmax)) return
+   if (present(cache)) then
+      if (.not. cache%valid) call build_r64(cache, .true., y, y2)
+   endif
    call bounds(kmin, kmax, n, opt_fill(fill), pixel_of)
    if (present(y2)) then
-      call reduce_r64(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), y2)
+      call reduce_r64(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), y2, cache)
    else
-      call reduce_r64(kmin, kmax, n, y, keep, nkeep, opt_fill(fill))
+      call reduce_r64(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), cache=cache)
    endif
    done = .true.
    contains
@@ -194,7 +234,7 @@ contains
       endfunction pixel_of
    endfunction decimate_uniform_r64
 
-   function decimate_uniform_r32(axis, x0, dx, y, keep, nkeep, y2, fill) result(done)
+   function decimate_uniform_r32(axis, x0, dx, y, keep, nkeep, y2, fill, cache) result(done)
    !< Decimate a series of `real(real32)` ordinates at x = x0 + (i - 1) dx: `.true.` with the kept indices, else draw
    !< every point (dx < 0, too few points per column).
    type(decimate_axis),         intent(in)           :: axis     !< The x axis.
@@ -205,6 +245,7 @@ contains
    integer(int64),              intent(out)          :: nkeep    !< Indices kept.
    real(real32),                intent(in), optional :: y2(:)    !< Second ordinates, any stride.
    logical,                     intent(in), optional :: fill     !< Keep the points about each column's centre.
+   type(decimate_cache),        intent(inout), optional :: cache !< What is kept between frames (unchanged data).
    logical                                           :: done     !< Decimated.
    integer(int64)                                    :: n        !< Points.
    integer(int64)                                    :: kmin     !< First column (the left margin's).
@@ -216,11 +257,14 @@ contains
    if (ieee_is_nan(dx) .or. ieee_is_nan(x0)) return
    if (dx < 0.0_real64) return
    if (.not. columns(axis, n, kmin, kmax)) return
+   if (present(cache)) then
+      if (.not. cache%valid) call build_r32(cache, .true., y, y2)
+   endif
    call bounds(kmin, kmax, n, opt_fill(fill), pixel_of)
    if (present(y2)) then
-      call reduce_r32(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), y2)
+      call reduce_r32(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), y2, cache)
    else
-      call reduce_r32(kmin, kmax, n, y, keep, nkeep, opt_fill(fill))
+      call reduce_r32(kmin, kmax, n, y, keep, nkeep, opt_fill(fill), cache=cache)
    endif
    done = .true.
    contains
@@ -334,7 +378,7 @@ contains
 
    ! the reduction of the ordinates
 
-   subroutine reduce_r64(kmin, kmax, n, y, keep, nkeep, fill, y2)
+   subroutine reduce_r64(kmin, kmax, n, y, keep, nkeep, fill, y2, cache)
    !< The kept indices of a `real(real64)` series, its columns known (`bounds`).
    integer(int64),              intent(in)           :: kmin    !< First column.
    integer(int64),              intent(in)           :: kmax    !< Last column.
@@ -344,6 +388,7 @@ contains
    integer(int64),              intent(inout)        :: nkeep   !< Indices kept.
    logical,                     intent(in)           :: fill    !< Keep the points about each column's centre.
    real(real64),                intent(in), optional :: y2(:)   !< Second ordinates.
+   type(decimate_cache),        intent(in), optional :: cache   !< The ordinates' pyramids.
    integer(int64)                                    :: k       !< Column.
    integer(int64)                                    :: j       !< Part of a column.
    integer(int64)                                    :: c       !< First point at or right of its centre; 0 none.
@@ -423,13 +468,21 @@ contains
       integer(int64)                :: imin, imax !< Minimum's, maximum's point.
       logical                       :: gap2       !< A NaN found in the second ordinates.
 
-      call extremes_of_r64(y, s, e, imin, imax, gap)
+      if (present(cache)) then
+         call range_extremes_r64(y, s, e, cache%py(1), imin, imax, gap)
+      else
+         call extremes_of_r64(y, s, e, imin, imax, gap)
+      endif
       call add(cand, nc, s)
       call add(cand, nc, imin)
       call add(cand, nc, imax)
       call add(cand, nc, e)
       if (present(y2)) then
-         call extremes_of_r64(y2, s, e, imin, imax, gap2)
+         if (present(cache)) then
+            call range_extremes_r64(y2, s, e, cache%py(2), imin, imax, gap2)
+         else
+            call extremes_of_r64(y2, s, e, imin, imax, gap2)
+         endif
          call add(cand, nc, imin)
          call add(cand, nc, imax)
          gap = gap .or. gap2
@@ -437,7 +490,7 @@ contains
       endsubroutine extremes
    endsubroutine reduce_r64
 
-   subroutine reduce_r32(kmin, kmax, n, y, keep, nkeep, fill, y2)
+   subroutine reduce_r32(kmin, kmax, n, y, keep, nkeep, fill, y2, cache)
    !< The kept indices of a `real(real32)` series, its columns known (`bounds`).
    integer(int64),              intent(in)           :: kmin    !< First column.
    integer(int64),              intent(in)           :: kmax    !< Last column.
@@ -447,6 +500,7 @@ contains
    integer(int64),              intent(inout)        :: nkeep   !< Indices kept.
    logical,                     intent(in)           :: fill    !< Keep the points about each column's centre.
    real(real32),                intent(in), optional :: y2(:)   !< Second ordinates.
+   type(decimate_cache),        intent(in), optional :: cache   !< The ordinates' pyramids.
    integer(int64)                                    :: k       !< Column.
    integer(int64)                                    :: j       !< Part of a column.
    integer(int64)                                    :: c       !< First point at or right of its centre; 0 none.
@@ -526,13 +580,21 @@ contains
       integer(int64)                :: imin, imax !< Minimum's, maximum's point.
       logical                       :: gap2       !< A NaN found in the second ordinates.
 
-      call extremes_of_r32(y, s, e, imin, imax, gap)
+      if (present(cache)) then
+         call range_extremes_r32(y, s, e, cache%py(1), imin, imax, gap)
+      else
+         call extremes_of_r32(y, s, e, imin, imax, gap)
+      endif
       call add(cand, nc, s)
       call add(cand, nc, imin)
       call add(cand, nc, imax)
       call add(cand, nc, e)
       if (present(y2)) then
-         call extremes_of_r32(y2, s, e, imin, imax, gap2)
+         if (present(cache)) then
+            call range_extremes_r32(y2, s, e, cache%py(2), imin, imax, gap2)
+         else
+            call extremes_of_r32(y2, s, e, imin, imax, gap2)
+         endif
          call add(cand, nc, imin)
          call add(cand, nc, imax)
          gap = gap .or. gap2
@@ -573,6 +635,282 @@ contains
    enddo
    ok = .true.
    endfunction sorted_r32
+
+   subroutine build_r64(cache, sorted, y, y2)
+   !< A cache for new data: sortedness, the pyramids of the ordinates (of none when unsorted).
+   type(decimate_cache), intent(inout)        :: cache  !< Cache.
+   logical,              intent(in)           :: sorted !< The abscissae are sorted.
+   real(real64),         intent(in)           :: y(:)   !< Ordinates.
+   real(real64),         intent(in), optional :: y2(:)  !< Second ordinates.
+
+   cache%valid = .true.
+   cache%sorted = sorted
+   if (.not. sorted) return
+   call pyramid_r64(cache%py(1), y)
+   if (present(y2)) call pyramid_r64(cache%py(2), y2)
+   endsubroutine build_r64
+
+   subroutine pyramid_r64(py, y)
+   !< The pyramid of y: level 0 by scans of LEAF points, each level above from the one below.
+   type(decimate_pyramid), intent(inout) :: py   !< Pyramid.
+   real(real64),           intent(in)    :: y(:) !< Ordinates, any stride.
+   integer(int64)                        :: n    !< Points.
+   integer(int64)                        :: nb   !< Nodes of a level.
+   integer(int64)                        :: nodes !< Nodes of every level.
+   integer(int64)                        :: levels !< Levels.
+   integer(int64)                        :: l, j, a, b, c !< Level, node, children, this node.
+
+   n = size(y, kind=int64)
+   py%n = n
+   nb = max((n + LEAF - 1_int64) / LEAF, 1_int64)
+   levels = 1_int64
+   nodes = nb
+   do while (nb > 1_int64)
+      nb = (nb + 1_int64) / 2_int64
+      nodes = nodes + nb
+      levels = levels + 1_int64
+   enddo
+   if (allocated(py%first)) deallocate(py%first)
+   if (allocated(py%imin)) then
+      if (size(py%imin, kind=int64) < nodes) deallocate(py%imin, py%imax, py%gap)
+   endif
+   if (.not. allocated(py%imin)) allocate(py%imin(nodes), py%imax(nodes), py%gap(nodes))
+   allocate(py%first(0_int64:levels))
+   nb = max((n + LEAF - 1_int64) / LEAF, 1_int64)
+   py%first(0) = 1_int64
+   do j = 1_int64, nb
+      if (n == 0_int64) then
+         py%imin(j) = 0_int64
+         py%imax(j) = 0_int64
+         py%gap(j) = .false.
+      else
+         call extremes_of_r64(y, (j - 1_int64) * LEAF + 1_int64, min(j * LEAF, n), py%imin(j), py%imax(j), py%gap(j))
+      endif
+   enddo
+   do l = 1_int64, levels - 1_int64
+      py%first(l) = py%first(l - 1_int64) + nb
+      nb = (nb + 1_int64) / 2_int64
+      do j = 1_int64, nb
+         c = py%first(l) + j - 1_int64
+         a = py%first(l - 1_int64) + 2_int64 * (j - 1_int64)
+         b = a + 1_int64
+         py%imin(c) = py%imin(a)
+         py%imax(c) = py%imax(a)
+         py%gap(c) = py%gap(a)
+         if (b < py%first(l)) call merge_node_r64(y, py%imin(b), py%imax(b), py%gap(b), py%imin(c), py%imax(c), py%gap(c))
+      enddo
+   enddo
+   py%first(levels) = py%first(levels - 1_int64) + nb
+   endsubroutine pyramid_r64
+
+   pure subroutine merge_node_r64(y, bmin, bmax, bgap, imin, imax, gap)
+   !< Extremes so far (of points before) merged with those of the points after: the first of equal values kept.
+   real(real64),   intent(in)    :: y(:)       !< Ordinates.
+   integer(int64), intent(in)    :: bmin, bmax !< The points after: lowest, highest (0: none).
+   logical,        intent(in)    :: bgap       !< ... a NaN among them.
+   integer(int64), intent(inout) :: imin, imax !< So far.
+   logical,        intent(inout) :: gap        !< ... a NaN.
+
+   if (bmin > 0_int64) then
+      if (imin == 0_int64) then
+         imin = bmin
+      elseif (y(bmin) < y(imin)) then
+         imin = bmin
+      endif
+   endif
+   if (bmax > 0_int64) then
+      if (imax == 0_int64) then
+         imax = bmax
+      elseif (y(bmax) > y(imax)) then
+         imax = bmax
+      endif
+   endif
+   gap = gap .or. bgap
+   endsubroutine merge_node_r64
+
+   subroutine range_extremes_r64(y, s, e, py, imin, imax, gap)
+   !< The extremes of y(s:e) as `extremes_of_r64` finds them, through the pyramid: the partial blocks at the ends
+   !< scanned, the whole ones taken by the largest aligned nodes.
+   real(real64),           intent(in)  :: y(:)       !< Ordinates.
+   integer(int64),         intent(in)  :: s, e       !< First, last point.
+   type(decimate_pyramid), intent(in)  :: py         !< Their pyramid.
+   integer(int64),         intent(out) :: imin, imax !< Lowest, highest point (0: every value NaN).
+   logical,                intent(out) :: gap        !< A NaN among them.
+   integer(int64)                      :: a, z       !< First, last whole block.
+   integer(int64)                      :: bl, l, w   !< Block, level, its blocks.
+   integer(int64)                      :: c          !< Node.
+   integer(int64)                      :: pmin, pmax !< A part's extremes.
+   logical                             :: pgap       !< ... its NaN.
+
+   a = (s - 1_int64 + LEAF - 1_int64) / LEAF + 1_int64 ! first block starting at or after s
+   z = e / LEAF                                         ! last block ending at or before e
+   if (z < a .or. py%n /= size(y, kind=int64)) then
+      call extremes_of_r64(y, s, e, imin, imax, gap)
+      return
+   endif
+   imin = 0_int64
+   imax = 0_int64
+   gap = .false.
+   if (s <= (a - 1_int64) * LEAF) then
+      call extremes_of_r64(y, s, (a - 1_int64) * LEAF, imin, imax, gap)
+      if (imin == 0_int64 .and. imax == 0_int64 .and. .not. gap) gap = .false.
+   endif
+   bl = a
+   do while (bl <= z)
+      l = 0_int64
+      w = 1_int64
+      do while (mod(bl - 1_int64, 2_int64 * w) == 0_int64 .and. bl + 2_int64 * w - 1_int64 <= z .and. &
+                l + 1_int64 < size(py%first, kind=int64) - 1_int64)
+         w = 2_int64 * w
+         l = l + 1_int64
+      enddo
+      c = py%first(l) + (bl - 1_int64) / w
+      call merge_node_r64(y, py%imin(c), py%imax(c), py%gap(c), imin, imax, gap)
+      bl = bl + w
+   enddo
+   if (z * LEAF < e) then
+      call extremes_of_r64(y, z * LEAF + 1_int64, e, pmin, pmax, pgap)
+      call merge_node_r64(y, pmin, pmax, pgap, imin, imax, gap)
+   endif
+   endsubroutine range_extremes_r64
+
+   subroutine build_r32(cache, sorted, y, y2)
+   !< A cache for new data: sortedness, the pyramids of the ordinates (of none when unsorted).
+   type(decimate_cache), intent(inout)        :: cache  !< Cache.
+   logical,              intent(in)           :: sorted !< The abscissae are sorted.
+   real(real32),         intent(in)           :: y(:)   !< Ordinates.
+   real(real32),         intent(in), optional :: y2(:)  !< Second ordinates.
+
+   cache%valid = .true.
+   cache%sorted = sorted
+   if (.not. sorted) return
+   call pyramid_r32(cache%py(1), y)
+   if (present(y2)) call pyramid_r32(cache%py(2), y2)
+   endsubroutine build_r32
+
+   subroutine pyramid_r32(py, y)
+   !< The pyramid of y: level 0 by scans of LEAF points, each level above from the one below.
+   type(decimate_pyramid), intent(inout) :: py   !< Pyramid.
+   real(real32),           intent(in)    :: y(:) !< Ordinates, any stride.
+   integer(int64)                        :: n    !< Points.
+   integer(int64)                        :: nb   !< Nodes of a level.
+   integer(int64)                        :: nodes !< Nodes of every level.
+   integer(int64)                        :: levels !< Levels.
+   integer(int64)                        :: l, j, a, b, c !< Level, node, children, this node.
+
+   n = size(y, kind=int64)
+   py%n = n
+   nb = max((n + LEAF - 1_int64) / LEAF, 1_int64)
+   levels = 1_int64
+   nodes = nb
+   do while (nb > 1_int64)
+      nb = (nb + 1_int64) / 2_int64
+      nodes = nodes + nb
+      levels = levels + 1_int64
+   enddo
+   if (allocated(py%first)) deallocate(py%first)
+   if (allocated(py%imin)) then
+      if (size(py%imin, kind=int64) < nodes) deallocate(py%imin, py%imax, py%gap)
+   endif
+   if (.not. allocated(py%imin)) allocate(py%imin(nodes), py%imax(nodes), py%gap(nodes))
+   allocate(py%first(0_int64:levels))
+   nb = max((n + LEAF - 1_int64) / LEAF, 1_int64)
+   py%first(0) = 1_int64
+   do j = 1_int64, nb
+      if (n == 0_int64) then
+         py%imin(j) = 0_int64
+         py%imax(j) = 0_int64
+         py%gap(j) = .false.
+      else
+         call extremes_of_r32(y, (j - 1_int64) * LEAF + 1_int64, min(j * LEAF, n), py%imin(j), py%imax(j), py%gap(j))
+      endif
+   enddo
+   do l = 1_int64, levels - 1_int64
+      py%first(l) = py%first(l - 1_int64) + nb
+      nb = (nb + 1_int64) / 2_int64
+      do j = 1_int64, nb
+         c = py%first(l) + j - 1_int64
+         a = py%first(l - 1_int64) + 2_int64 * (j - 1_int64)
+         b = a + 1_int64
+         py%imin(c) = py%imin(a)
+         py%imax(c) = py%imax(a)
+         py%gap(c) = py%gap(a)
+         if (b < py%first(l)) call merge_node_r32(y, py%imin(b), py%imax(b), py%gap(b), py%imin(c), py%imax(c), py%gap(c))
+      enddo
+   enddo
+   py%first(levels) = py%first(levels - 1_int64) + nb
+   endsubroutine pyramid_r32
+
+   pure subroutine merge_node_r32(y, bmin, bmax, bgap, imin, imax, gap)
+   !< Extremes so far (of points before) merged with those of the points after: the first of equal values kept.
+   real(real32),   intent(in)    :: y(:)       !< Ordinates.
+   integer(int64), intent(in)    :: bmin, bmax !< The points after: lowest, highest (0: none).
+   logical,        intent(in)    :: bgap       !< ... a NaN among them.
+   integer(int64), intent(inout) :: imin, imax !< So far.
+   logical,        intent(inout) :: gap        !< ... a NaN.
+
+   if (bmin > 0_int64) then
+      if (imin == 0_int64) then
+         imin = bmin
+      elseif (y(bmin) < y(imin)) then
+         imin = bmin
+      endif
+   endif
+   if (bmax > 0_int64) then
+      if (imax == 0_int64) then
+         imax = bmax
+      elseif (y(bmax) > y(imax)) then
+         imax = bmax
+      endif
+   endif
+   gap = gap .or. bgap
+   endsubroutine merge_node_r32
+
+   subroutine range_extremes_r32(y, s, e, py, imin, imax, gap)
+   !< The extremes of y(s:e) as `extremes_of_r32` finds them, through the pyramid: the partial blocks at the ends
+   !< scanned, the whole ones taken by the largest aligned nodes.
+   real(real32),           intent(in)  :: y(:)       !< Ordinates.
+   integer(int64),         intent(in)  :: s, e       !< First, last point.
+   type(decimate_pyramid), intent(in)  :: py         !< Their pyramid.
+   integer(int64),         intent(out) :: imin, imax !< Lowest, highest point (0: every value NaN).
+   logical,                intent(out) :: gap        !< A NaN among them.
+   integer(int64)                      :: a, z       !< First, last whole block.
+   integer(int64)                      :: bl, l, w   !< Block, level, its blocks.
+   integer(int64)                      :: c          !< Node.
+   integer(int64)                      :: pmin, pmax !< A part's extremes.
+   logical                             :: pgap       !< ... its NaN.
+
+   a = (s - 1_int64 + LEAF - 1_int64) / LEAF + 1_int64 ! first block starting at or after s
+   z = e / LEAF                                         ! last block ending at or before e
+   if (z < a .or. py%n /= size(y, kind=int64)) then
+      call extremes_of_r32(y, s, e, imin, imax, gap)
+      return
+   endif
+   imin = 0_int64
+   imax = 0_int64
+   gap = .false.
+   if (s <= (a - 1_int64) * LEAF) then
+      call extremes_of_r32(y, s, (a - 1_int64) * LEAF, imin, imax, gap)
+      if (imin == 0_int64 .and. imax == 0_int64 .and. .not. gap) gap = .false.
+   endif
+   bl = a
+   do while (bl <= z)
+      l = 0_int64
+      w = 1_int64
+      do while (mod(bl - 1_int64, 2_int64 * w) == 0_int64 .and. bl + 2_int64 * w - 1_int64 <= z .and. &
+                l + 1_int64 < size(py%first, kind=int64) - 1_int64)
+         w = 2_int64 * w
+         l = l + 1_int64
+      enddo
+      c = py%first(l) + (bl - 1_int64) / w
+      call merge_node_r32(y, py%imin(c), py%imax(c), py%gap(c), imin, imax, gap)
+      bl = bl + w
+   enddo
+   if (z * LEAF < e) then
+      call extremes_of_r32(y, z * LEAF + 1_int64, e, pmin, pmax, pgap)
+      call merge_node_r32(y, pmin, pmax, pgap, imin, imax, gap)
+   endif
+   endsubroutine range_extremes_r32
 
    subroutine extremes_of_r64(y, s, e, imin, imax, gap)
    !< The points of the minimum and of the maximum of y(s:e) (the first of equal ones; 0 when all are NaN), and
