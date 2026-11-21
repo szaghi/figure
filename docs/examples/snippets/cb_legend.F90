@@ -17,7 +17,10 @@ character(len=48)         :: text = 'drag a field, or click the square for a pic
 h = 2.0_real64 / (N - 1)
 do j = 1_int32, N
    do i = 1_int32, N
-      p(i, j) = cos(3.0_real64 * (-1.0_real64 + (i - 1) * h)) * sin(2.0_real64 * (-1.0_real64 + (j - 1) * h))
+      ! x, y in [-1, 1] from integers: y = 0 exactly on the middle row, the zero contour's own, under any compiler
+      ! (-1 + (j - 1) * h, contracted to a fused multiply-add, leaves 1e-16 of either sign there: nvfortran -O2)
+      p(i, j) = cos(3.0_real64 * (real(2 * i - N - 1, real64) / (N - 1))) * &
+                sin(2.0_real64 * (real(2 * j - N - 1, real64) / (N - 1)))
    enddo
 enddo
 
