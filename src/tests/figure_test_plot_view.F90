@@ -10,10 +10,13 @@ program figure_test_plot_view
 !<    (`ip_set_decimation(.false.)`), against the golden src/tests/data/figure_test_plot_view.levels.golden.png
 !<    (|d| <= 2). Then the same four decimated (#15 P4, the default): in the dense plot (600 per pixel) at most 64
 !<    points a pixel column kept, in the three others every point in view (20001, 1001 and 101: at most 64 a column)
-!<    and a few off the plot; the picture against the same golden at a loosened threshold (|d| <= 96): anti-aliased
-!<    strokes of the points kept cover a dense column otherwise than the full series' many, up to 87 levels apart on
-!<    2205 pixels of the dense plot (gfortran 16.2, 2026-11-20), the three others equal. The decimated line is cached
-!<    (`ip_cache_next_item`, #15 P5): one cache for the four plots of the same arrays, built on the first frame.
+!<    and a few off the plot; the picture against a golden of its own,
+!<    src/tests/data/figure_test_plot_view.levels.decimated.golden.png (|d| <= 2): anti-aliased strokes of the points
+!<    kept cover a dense column otherwise than the full series' many (up to 87 levels apart on 2205 pixels of the dense
+!<    plot, gfortran 16.2, 2026-11-20; the three others equal), so the decimated picture is a reference of its own
+!<    (the owner's choice, 2026-11-21), and the first golden stays the picture of every point drawn. The decimated line
+!<    is cached (`ip_cache_next_item`, #15 P5): one cache for the four plots of the same arrays, built on the first
+!<    frame.
 !< 2. Interaction, in one plot whose style is pushed around it (a border of 3 pixels, a dark blue background) and with
 !<    the minor grid's alpha set: a horizontal drag line dragged 40 pixels down moves by 40 pixels' worth of y; a left
 !<    drag of (-100, +50) pixels pans the plot by that much (the ranges' widths kept); the wheel zooms in about the
@@ -39,6 +42,8 @@ use figure_testing, only : test_capture, test_click, test_compare_image, test_dr
 
 implicit none
 character(len=*), parameter :: LEVELS_GOLDEN = 'src/tests/data/figure_test_plot_view.levels.golden.png' !< Zoom levels.
+character(len=*), parameter :: DECIMATED_GOLDEN = 'src/tests/data/figure_test_plot_view.levels.decimated.golden.png' !< Ditto,
+                                                                                                                  !< decimated.
 character(len=*), parameter :: VIEW_GOLDEN = 'src/tests/data/figure_test_plot_view.view.golden.png'     !< Interaction.
 character(len=*), parameter :: LEVELS_SHOT = 'figure_test_plot_view.levels.png.tmp' !< The zoom levels' capture.
 character(len=*), parameter :: VIEW_SHOT = 'figure_test_plot_view.view.png.tmp'     !< The interaction's capture.
@@ -117,8 +122,8 @@ contains
    endfunction tri
 
    subroutine levels(ok, decimated)
-   !< Phase 1: the line at four zoom levels, its limits read back, the picture against the golden; decimated: the two
-   !< dense plots decimated, the two others not, the picture within the loosened threshold.
+   !< Phase 1: the line at four zoom levels, its limits read back, the picture against the golden; decimated: the four
+   !< plots decimated (the dense one thinned), the picture against the decimated golden.
    logical, intent(out) :: ok(2)     !< Outcomes: limits (decimated: and which plots were), picture.
    logical, intent(in)  :: decimated !< Decimation on.
    integer(int32)       :: f         !< Frame.
@@ -167,8 +172,8 @@ contains
    endif
    ok(2) = s == FIG_OK
    if (ok(2)) then
-      if (decimated) then ! loosened (#15 §4): the decimated strokes' anti-aliasing, see the header
-         ok(2) = test_compare_image(LEVELS_SHOT, LEVELS_GOLDEN, threshold=96_int32, failed=nf, stat=s)
+      if (decimated) then ! the decimated picture's own golden, at the defaults (see the header)
+         ok(2) = test_compare_image(LEVELS_SHOT, DECIMATED_GOLDEN, failed=nf, stat=s)
       else
          ok(2) = test_compare_image(LEVELS_SHOT, LEVELS_GOLDEN, failed=nf, stat=s)
       endif
