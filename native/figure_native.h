@@ -271,6 +271,13 @@ int    fig_save_image(const char *path, int path_len, double x0, double y0, doub
 int    fig_image_result(char *buf, int buf_len, int *state, int *path_len);
 int    fig_test_capture(const char *path, int path_len);
 int    fig_render_threads(int threads);
+/* The Fortran path's renderer (szaghi/figure#15 P9). fig_set_frame_hook: a procedure called after each frame's
+ * ImGui::Render in headless and remote modes, while the draw data are valid, given the size and clear colour of the
+ * CPU renderer's picture (NULL: none). fig_cpu_texture: a user texture's pixels as the CPU renderer reads them (RGBA
+ * rows from the top, the texture's filter): 1, or 0 without. */
+int    fig_set_frame_hook(void (*hook)(int width, int height, const float *clear));
+int    fig_cpu_texture(unsigned long long id, int *width, int *height, int *channels, const unsigned char **pixels,
+                       int *smooth);
 int    fig_save_layout(const char *path, int path_len, const char *comment, int comment_len);
 int    fig_load_layout(const char *path, int path_len);
 int    fig_begin_side_bar(const char *name, int name_len, int side, double size);

@@ -2061,9 +2061,19 @@ void cpu_frame(std::vector<unsigned char> &rgb, int &w, int &h) {
    figure_swrast::render(ImGui::GetDrawData(), w, h, st.clear, rgb, cpu_texture, render_threads, nullptr);
 }
 
+// A procedure of the Fortran path called after each frame's ImGui::Render in headless and remote modes, while the
+// draw data are valid, with the size and clear colour of the CPU renderer's picture (fig_set_frame_hook, szaghi/figure#15
+// P9: the Fortran renderer's test); none by default.
+void (*frame_hook)(int width, int height, const float *clear) = nullptr;
+
 // Headless and remote modes, after ImGui::Render and the textures' answers: the capture's frame and the pictures
 // asked for, rendered by the CPU once for all of them.
 void cpu_pictures() {
+   if (frame_hook) {
+      const ImGuiIO &io = ImGui::GetIO();
+      frame_hook(static_cast<int>(io.DisplaySize.x * io.DisplayFramebufferScale.x),
+                 static_cast<int>(io.DisplaySize.y * io.DisplayFramebufferScale.y), st.clear);
+   }
    const bool due = cap.on && !cap.held && cap.frame >= cap.from && (cap.count < 0 || cap.written < cap.count);
    if (due || img.state == 1 || !test_capture_path.empty()) {
       std::vector<unsigned char> rgb;
@@ -3728,6 +3738,22 @@ int fig_test_capture(const char *path, int path_len) {
    frames_at_least(2);
    return FIG_OK;
    FIG_CATCH
+}
+
+// The procedure called after each frame's Render in headless and remote modes (nullptr: none).
+int fig_set_frame_hook(void (*hook)(int width, int height, const float *clear)) {
+   frame_hook = hook;
+   return FIG_OK;
+}
+
+// A user texture's pixels as the CPU renderer reads them (RGBA, rows from the top), for the Fortran path's renderer
+// (#15 P9): 1 with them, 0 when the texture has none.
+int fig_cpu_texture(unsigned long long id, int *width, int *height, int *channels, const unsigned char **pixels,
+                    int *smooth) {
+   figure_swrast::texture_t t;
+   if (!cpu_texture(static_cast<ImTextureID>(id), &t) || !t.pixels) return 0;
+   *width = t.width, *height = t.height, *channels = t.channels, *pixels = t.pixels, *smooth = t.smooth ? 1 : 0;
+   return 1;
 }
 
 int fig_render_threads(int threads) {

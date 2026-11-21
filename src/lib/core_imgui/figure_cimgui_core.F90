@@ -7,7 +7,7 @@ module figure_cimgui_core
 !< generated C++ glue (native/figure_glue_generated.cpp: `figure_<name>`, structs passed by reference instead of by
 !< value, struct results through `res`); the rest are skipped: see docs/guide/raw-bindings.md. Private to the
 !< library: applications use the figure_* wrapper modules. Each dummy documents its C type and default.
-use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_float, c_funptr, c_int, c_ptr, c_size_t
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_float, c_funptr, c_int, c_long_long, c_ptr, c_size_t
 use figure_cimgui, only : im_vec2, im_vec4, im_texture_ref, im_rect
 
 implicit none
@@ -19,7 +19,8 @@ public :: ImDrawList_AddCircle, ImDrawList_AddCircleFilled, ImDrawList_AddConvex
 public :: ImDrawList_AddImage, ImDrawList_AddLine, ImDrawList_AddPolyline, ImDrawList_AddRect, ImDrawList_AddRectFilled
 public :: ImDrawList_AddRectFilledMultiColor, ImDrawList_AddText_Vec2, ImDrawList_AddTriangleFilled, ImDrawList_GetClipRectMax
 public :: ImDrawList_GetClipRectMin, ImDrawList_PopClipRect, ImDrawList_PopTexture, ImDrawList_PrimReserve, ImDrawList_PrimUnreserve
-public :: ImDrawList_PushClipRect, ImDrawList_PushTexture, figure_ImDrawList_append, figure_ImDrawList_shared
+public :: ImDrawList_PushClipRect, ImDrawList_PushTexture, figure_ImDrawList_append, figure_ImDrawList_shared, figure_ImDrawData_get
+public :: figure_ImDrawData_list, figure_ImDrawData_cmd, figure_ImTextureData_pixels
 
 interface
    function igButtonBehavior(bb, id, out_hovered, out_held, flags) result(res) bind(C, name='figure_igButtonBehavior')
@@ -438,5 +439,57 @@ interface
    integer(c_int), intent(out)   :: flags        !< `Flags`.
    integer(c_int)                :: res          !< Line textures (0: none yet).
    endfunction figure_ImDrawList_shared
+
+   function figure_ImDrawData_get(dd, view) result(res) bind(C, name='figure_ImDrawData_get')
+   !< The draw data's lists (-1: no valid data) and view: display position, size, framebuffer scale.
+   import :: c_float, c_int, c_ptr
+   implicit none
+   type(c_ptr),    value       :: dd      !< C `const ImDrawData*`.
+   real(c_float),  intent(out) :: view(6) !< Position (x, y), size (x, y), framebuffer scale (x, y).
+   integer(c_int)              :: res     !< Lists.
+   endfunction figure_ImDrawData_get
+
+   subroutine figure_ImDrawData_list(dd, l, vtx, n_vtx, idx, n_idx, n_cmd) bind(C, name='figure_ImDrawData_list')
+   !< List l's (0-based) buffers: vertices, indices (16-bit), commands.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value       :: dd    !< C `const ImDrawData*`.
+   integer(c_int), value       :: l     !< List, 0-based.
+   type(c_ptr),    intent(out) :: vtx   !< Vertices (ImDrawVert).
+   integer(c_int), intent(out) :: n_vtx !< ... how many.
+   type(c_ptr),    intent(out) :: idx   !< Indices (ImDrawIdx, 16-bit).
+   integer(c_int), intent(out) :: n_idx !< ... how many.
+   integer(c_int), intent(out) :: n_cmd !< Commands.
+   endsubroutine figure_ImDrawData_list
+
+   function figure_ImDrawData_cmd(dd, l, c, clip, tex_data, tex_id, offsets) result(res) &
+      bind(C, name='figure_ImDrawData_cmd')
+   !< Command c (0-based) of list l: its clip rectangle, texture, vertex and index offsets and index count; the
+   !< result 0 for a draw, 1 to 4 for the sampler callbacks (reset, from the texture, linear, nearest), 5 for a
+   !< program's own callback.
+   import :: c_float, c_int, c_long_long, c_ptr
+   implicit none
+   type(c_ptr),          value       :: dd         !< C `const ImDrawData*`.
+   integer(c_int),       value       :: l          !< List, 0-based.
+   integer(c_int),       value       :: c          !< Command, 0-based.
+   real(c_float),        intent(out) :: clip(4)    !< Clip rectangle: x0, y0, x1, y1.
+   type(c_ptr),          intent(out) :: tex_data   !< Dear ImGui's own texture (ImTextureData*), or null.
+   integer(c_long_long), intent(out) :: tex_id     !< Else the texture's id.
+   integer(c_int),       intent(out) :: offsets(3) !< Vertex offset, index offset, index count.
+   integer(c_int)                    :: res        !< Kind.
+   endfunction figure_ImDrawData_cmd
+
+   function figure_ImTextureData_pixels(tex_data, pixels, width, height, channels) result(res) &
+      bind(C, name='figure_ImTextureData_pixels')
+   !< A Dear ImGui texture's pixels (RGBA32 or Alpha8, rows from the top): 1, or 0 when it has none.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value       :: tex_data !< C `const ImTextureData*`.
+   type(c_ptr),    intent(out) :: pixels   !< Pixels.
+   integer(c_int), intent(out) :: width    !< Width [pixels].
+   integer(c_int), intent(out) :: height   !< Height [pixels].
+   integer(c_int), intent(out) :: channels !< 4 (RGBA) or 1 (alpha).
+   integer(c_int)              :: res      !< 1 with pixels.
+   endfunction figure_ImTextureData_pixels
 endinterface
 endmodule figure_cimgui_core

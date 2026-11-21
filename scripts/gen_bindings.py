@@ -155,6 +155,48 @@ int figure_ImDrawList_shared(const ImDrawList* dl, float* fringe_scale, ImVec2_c
    }
    return n;
 }
+
+// The draw data as a renderer reads them (#15 P9: the Fortran path's renderers, through figure_render_imgui): the
+// lists (-1: no valid data) and the view (display position, size, framebuffer scale), each list's buffers, each
+// command (clip rectangle, texture, offsets and count; the result: 0 a draw, 1-4 the sampler callbacks reset, from the
+// texture, linear, nearest, 5 a program's own callback), and the pixels of Dear ImGui's own textures.
+int figure_ImDrawData_get(const ImDrawData* dd, float* view) noexcept {
+   if (dd == NULL || !dd->Valid) return -1;
+   view[0] = dd->DisplayPos.x, view[1] = dd->DisplayPos.y, view[2] = dd->DisplaySize.x, view[3] = dd->DisplaySize.y;
+   view[4] = dd->FramebufferScale.x, view[5] = dd->FramebufferScale.y;
+   return dd->CmdLists.Size;
+}
+void figure_ImDrawData_list(const ImDrawData* dd, int l, const ImDrawVert** vtx, int* n_vtx, const ImDrawIdx** idx,
+                            int* n_idx, int* n_cmd) noexcept {
+   const ImDrawList* dl = dd->CmdLists[l];
+   *vtx = dl->VtxBuffer.Data, *n_vtx = dl->VtxBuffer.Size;
+   *idx = dl->IdxBuffer.Data, *n_idx = dl->IdxBuffer.Size;
+   *n_cmd = dl->CmdBuffer.Size;
+}
+int figure_ImDrawData_cmd(const ImDrawData* dd, int l, int c, float* clip, const void** tex_data,
+                          unsigned long long* tex_id, unsigned int* offsets) noexcept {
+   const ImDrawCmd& cmd = dd->CmdLists[l]->CmdBuffer[c];
+   clip[0] = cmd.ClipRect.x, clip[1] = cmd.ClipRect.y, clip[2] = cmd.ClipRect.z, clip[3] = cmd.ClipRect.w;
+   *tex_data = cmd.TexRef._TexData;
+   *tex_id = (unsigned long long)cmd.TexRef._TexID;
+   offsets[0] = cmd.VtxOffset, offsets[1] = cmd.IdxOffset, offsets[2] = cmd.ElemCount;
+   if (cmd.UserCallback == NULL) return 0;
+   const ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+   if (cmd.UserCallback == pio.DrawCallback_ResetRenderState) return 1;
+   if (cmd.UserCallback == pio.DrawCallback_SetSamplerFromTex) return 2;
+   if (cmd.UserCallback == pio.DrawCallback_SetSamplerLinear) return 3;
+   if (cmd.UserCallback == pio.DrawCallback_SetSamplerNearest) return 4;
+   return 5;
+}
+int figure_ImTextureData_pixels(const void* tex_data, const unsigned char** pixels, int* width, int* height,
+                                int* channels) noexcept {
+   const ImTextureData* td = (const ImTextureData*)tex_data;
+   if (td == NULL || td->Pixels == NULL) return 0;
+   if (td->Format != ImTextureFormat_RGBA32 && td->Format != ImTextureFormat_Alpha8) return 0;
+   *pixels = td->Pixels, *width = td->Width, *height = td->Height;
+   *channels = td->Format == ImTextureFormat_Alpha8 ? 1 : 4;
+   return 1;
+}
 """
 
 CORE_INTERFACES = [
@@ -186,6 +228,58 @@ CORE_INTERFACES = [
     "   integer(c_int), intent(out)   :: flags        !< `Flags`.",
     "   integer(c_int)                :: res          !< Line textures (0: none yet).",
     "   endfunction figure_ImDrawList_shared",
+    "",
+    "   function figure_ImDrawData_get(dd, view) result(res) bind(C, name='figure_ImDrawData_get')",
+    "   !< The draw data's lists (-1: no valid data) and view: display position, size, framebuffer scale.",
+    "   import :: c_float, c_int, c_ptr",
+    "   implicit none",
+    "   type(c_ptr),    value       :: dd      !< C `const ImDrawData*`.",
+    "   real(c_float),  intent(out) :: view(6) !< Position (x, y), size (x, y), framebuffer scale (x, y).",
+    "   integer(c_int)              :: res     !< Lists.",
+    "   endfunction figure_ImDrawData_get",
+    "",
+    "   subroutine figure_ImDrawData_list(dd, l, vtx, n_vtx, idx, n_idx, n_cmd) bind(C, name='figure_ImDrawData_list')",
+    "   !< List l's (0-based) buffers: vertices, indices (16-bit), commands.",
+    "   import :: c_int, c_ptr",
+    "   implicit none",
+    "   type(c_ptr),    value       :: dd    !< C `const ImDrawData*`.",
+    "   integer(c_int), value       :: l     !< List, 0-based.",
+    "   type(c_ptr),    intent(out) :: vtx   !< Vertices (ImDrawVert).",
+    "   integer(c_int), intent(out) :: n_vtx !< ... how many.",
+    "   type(c_ptr),    intent(out) :: idx   !< Indices (ImDrawIdx, 16-bit).",
+    "   integer(c_int), intent(out) :: n_idx !< ... how many.",
+    "   integer(c_int), intent(out) :: n_cmd !< Commands.",
+    "   endsubroutine figure_ImDrawData_list",
+    "",
+    "   function figure_ImDrawData_cmd(dd, l, c, clip, tex_data, tex_id, offsets) result(res) &",
+    "      bind(C, name='figure_ImDrawData_cmd')",
+    "   !< Command c (0-based) of list l: its clip rectangle, texture, vertex and index offsets and index count; the",
+    "   !< result 0 for a draw, 1 to 4 for the sampler callbacks (reset, from the texture, linear, nearest), 5 for a",
+    "   !< program's own callback.",
+    "   import :: c_float, c_int, c_long_long, c_ptr",
+    "   implicit none",
+    "   type(c_ptr),          value       :: dd         !< C `const ImDrawData*`.",
+    "   integer(c_int),       value       :: l          !< List, 0-based.",
+    "   integer(c_int),       value       :: c          !< Command, 0-based.",
+    "   real(c_float),        intent(out) :: clip(4)    !< Clip rectangle: x0, y0, x1, y1.",
+    "   type(c_ptr),          intent(out) :: tex_data   !< Dear ImGui's own texture (ImTextureData*), or null.",
+    "   integer(c_long_long), intent(out) :: tex_id     !< Else the texture's id.",
+    "   integer(c_int),       intent(out) :: offsets(3) !< Vertex offset, index offset, index count.",
+    "   integer(c_int)                    :: res        !< Kind.",
+    "   endfunction figure_ImDrawData_cmd",
+    "",
+    "   function figure_ImTextureData_pixels(tex_data, pixels, width, height, channels) result(res) &",
+    "      bind(C, name='figure_ImTextureData_pixels')",
+    "   !< A Dear ImGui texture's pixels (RGBA32 or Alpha8, rows from the top): 1, or 0 when it has none.",
+    "   import :: c_int, c_ptr",
+    "   implicit none",
+    "   type(c_ptr),    value       :: tex_data !< C `const ImTextureData*`.",
+    "   type(c_ptr),    intent(out) :: pixels   !< Pixels.",
+    "   integer(c_int), intent(out) :: width    !< Width [pixels].",
+    "   integer(c_int), intent(out) :: height   !< Height [pixels].",
+    "   integer(c_int), intent(out) :: channels !< 4 (RGBA) or 1 (alpha).",
+    "   integer(c_int)              :: res      !< 1 with pixels.",
+    "   endfunction figure_ImTextureData_pixels",
 ]
 
 LIBRARIES = [
@@ -607,9 +701,9 @@ def function_module(
             "dummy documents its C type and default.",
         ],
     )
+    if lib.select:  # CORE_INTERFACES' kinds
+        kinds |= {"c_float", "c_int", "c_long_long", "c_ptr"}
     lines.append(f"use, intrinsic :: iso_c_binding, only : {', '.join(sorted(kinds))}")
-    if lib.select:
-        kinds |= {"c_float", "c_int", "c_ptr"}
     if lib.name != "cimgui":  # the cimgui-owned types this module references
         body = "\n".join(type_lines) + "".join(a.decl for f in bound for a in f.args)
         body += "type(im_vec2) type(im_vec4)" if lib.select else ""
@@ -626,7 +720,12 @@ def function_module(
         lines.append(f"public :: {', '.join(types)}")
     specs = [s for s, owner in SPEC_DEFAULTS.items() if owner == lib.name]
     probes = [f"figure_sizeof_{c}_c" for c in mirrors] + [f"figure_{s}_default" for s in specs]
-    extra = ["figure_ImDrawList_append", "figure_ImDrawList_shared"] if lib.select else []
+    extra = (
+        ["figure_ImDrawList_append", "figure_ImDrawList_shared", "figure_ImDrawData_get", "figure_ImDrawData_list",
+         "figure_ImDrawData_cmd", "figure_ImTextureData_pixels"]
+        if lib.select
+        else []
+    )
     lines += _chunks([f.cname for f in bound] + probes + extra, "public :: ")
     if lib.name == "cimgui":
         lines += [

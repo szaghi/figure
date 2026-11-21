@@ -57,6 +57,9 @@ $CGNU_DEBUG  = -Og -g3 -fcheck=all -fbacktrace -Wall -Wimplicit-interface -Wimpl
 $CNVF        = -c -Mstandard -Mfree -Munixlogical
 $CIFX        = -c -stand f18 -free -fpscomp logicals
 $EXCLUDE     = src/third_party/FUNDAL/src/lib/fundal_mpih_object.F90
+# the directories of the Fortran path only (szaghi/figure#15 §2), left out by the default modes: the renderers (P9) and
+# their tests
+$FORTRAN_ONLY = src/lib/render_fortran src/tests/fortran
 
 # main modes: the tests build into exe/ (scripts/run_tests.sh runs every program there), the examples into exe/examples/
 # (with their own mod/ and obj/), which run_tests.sh does not enter
@@ -165,33 +168,45 @@ output    = libfigure.a
 mklib     = static
 
 # the Fortran path (szaghi/figure#15 §2): each seam's Fortran implementation in a sibling directory of the current one,
-# under the same module names (src/lib/core_fortran/ beside src/lib/core_imgui/, ...), picked by a mode's `src`, with no
-# preprocessor macro. A -fortran mode builds the newest path: the layers already ported, the others from the current path.
-# No layer is ported yet: each mode takes its default mode as its template (every key, `src` included), so it builds
-# exactly what the default builds; a ported layer overrides `src` here. They build into the default's directories:
-# switching path, as switching compiler, needs `--force-compile` (or `rm -rf exe`)
+# under the same module names (src/lib/core_fortran/ beside src/lib/core_imgui/, ...), picked by a mode's `src` and
+# `exclude_dirs`, with no preprocessor macro. A -fortran mode builds the newest path: the layers already ported, the
+# others from the current path. Each takes its default mode as its template (every key) and builds, besides, what the
+# default modes leave out ($FORTRAN_ONLY, through the templates' exclude_dirs; empty here: nothing of the current path
+# is left out yet): today the renderers of P9 (the CPU renderer in Fortran) and their test. With ifx the Fortran path is
+# value-safe (-fp-model precise): the CPU renderer's picture is figure_swrast's to the bit only without the default fast
+# model's reassociation (as the native layer is built with -ffp-contract=off); the default modes keep their flags. They
+# build into the default's directories: switching path, as switching compiler, needs `--force-compile` (or `rm -rf exe`)
 [tests-gnu-fortran]
-template  = tests-gnu
+template     = tests-gnu
+exclude_dirs =
 
 [examples-gnu-fortran]
-template  = examples-gnu
+template     = examples-gnu
+exclude_dirs =
 
 [tests-nvf-fortran]
-template  = tests-nvf
+template     = tests-nvf
+exclude_dirs =
 
 [examples-nvf-fortran]
-template  = examples-nvf
+template     = examples-nvf
+exclude_dirs =
 
 [tests-ifx-fortran]
-template  = tests-ifx
+template     = tests-ifx
+cflags       = $CIFX -O2 -fp-model precise
+exclude_dirs =
 
 [examples-ifx-fortran]
-template  = examples-ifx
+template     = examples-ifx
+cflags       = $CIFX -O2 -fp-model precise
+exclude_dirs =
 
 # templates
 [template-gnu]
 compiler  = gnu
 exclude   = $EXCLUDE
+exclude_dirs = $FORTRAN_ONLY
 mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib
@@ -205,6 +220,7 @@ jobs      = 4
 [template-nvf]
 compiler  = nvfortran
 exclude   = $EXCLUDE
+exclude_dirs = $FORTRAN_ONLY
 mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib
@@ -218,6 +234,7 @@ jobs      = 4
 [template-ifx]
 compiler  = intel_nextgen
 exclude   = $EXCLUDE
+exclude_dirs = $FORTRAN_ONLY
 mod_dir   = mod
 obj_dir   = obj
 lib_dir   = lib

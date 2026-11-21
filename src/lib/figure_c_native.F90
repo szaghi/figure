@@ -29,7 +29,7 @@ public :: fig_plot_x_transform
 public :: fig_plot3d_colormap, fig_plot3d_end, fig_plot3d_state, fig_plot3d_axis_format
 public :: fig_set_confirm_quit, fig_quit_requested, fig_quit, fig_input_quit, fig_file_dialog, fig_file_dialog_result
 public :: fig_save_image, fig_image_result, fig_save_layout, fig_load_layout, fig_begin_side_bar
-public :: fig_test_capture, fig_render_threads
+public :: fig_test_capture, fig_render_threads, fig_set_frame_hook, fig_cpu_texture
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
 public :: fig_table_sort, fig_table_row_color, fig_table_column_enabled, fig_table_hovered_column
 public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_input_system_theme
@@ -971,6 +971,30 @@ interface
    integer(c_int), value :: threads !< Threads, 0-64.
    integer(c_int)        :: status  !< Status.
    endfunction fig_render_threads
+
+   function fig_set_frame_hook(hook) result(status) bind(C, name='fig_set_frame_hook')
+   !< A procedure called after each frame's Render in headless and remote modes, while the draw data are valid, given
+   !< the size and clear colour of the CPU renderer's picture (`c_null_funptr`: none; the Fortran renderer's test, #15
+   !< P9).
+   import :: c_funptr, c_int
+   implicit none
+   type(c_funptr), value :: hook   !< `void (*)(int width, int height, const float *clear)`.
+   integer(c_int)        :: status !< Status.
+   endfunction fig_set_frame_hook
+
+   function fig_cpu_texture(id, width, height, channels, pixels, smooth) result(found) bind(C, name='fig_cpu_texture')
+   !< A user texture's pixels as the CPU renderer reads them (RGBA, rows from the top) and its filter (1 linear):
+   !< 1 with them, 0 when the texture has none.
+   import :: c_int, c_long_long, c_ptr
+   implicit none
+   integer(c_long_long), value :: id       !< Texture (`ImTextureID`).
+   integer(c_int)              :: width    !< Width [pixels].
+   integer(c_int)              :: height   !< Height [pixels].
+   integer(c_int)              :: channels !< Channels (4).
+   type(c_ptr)                 :: pixels   !< Pixels.
+   integer(c_int)              :: smooth   !< Linear filter (1) or nearest (0).
+   integer(c_int)              :: found    !< 1 found, 0 not.
+   endfunction fig_cpu_texture
 
    function fig_save_layout(path, path_len, comment, comment_len) result(status) bind(C, name='fig_save_layout')
    !< Write the layout (Dear ImGui's settings) to `path`, after the `comment` lines (newline-separated) as comments.

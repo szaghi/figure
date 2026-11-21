@@ -468,4 +468,46 @@ int figure_ImDrawList_shared(const ImDrawList* dl, float* fringe_scale, ImVec2_c
    return n;
 }
 
+// The draw data as a renderer reads them (#15 P9: the Fortran path's renderers, through figure_render_imgui): the
+// lists (-1: no valid data) and the view (display position, size, framebuffer scale), each list's buffers, each
+// command (clip rectangle, texture, offsets and count; the result: 0 a draw, 1-4 the sampler callbacks reset, from the
+// texture, linear, nearest, 5 a program's own callback), and the pixels of Dear ImGui's own textures.
+int figure_ImDrawData_get(const ImDrawData* dd, float* view) noexcept {
+   if (dd == NULL || !dd->Valid) return -1;
+   view[0] = dd->DisplayPos.x, view[1] = dd->DisplayPos.y, view[2] = dd->DisplaySize.x, view[3] = dd->DisplaySize.y;
+   view[4] = dd->FramebufferScale.x, view[5] = dd->FramebufferScale.y;
+   return dd->CmdLists.Size;
+}
+void figure_ImDrawData_list(const ImDrawData* dd, int l, const ImDrawVert** vtx, int* n_vtx, const ImDrawIdx** idx,
+                            int* n_idx, int* n_cmd) noexcept {
+   const ImDrawList* dl = dd->CmdLists[l];
+   *vtx = dl->VtxBuffer.Data, *n_vtx = dl->VtxBuffer.Size;
+   *idx = dl->IdxBuffer.Data, *n_idx = dl->IdxBuffer.Size;
+   *n_cmd = dl->CmdBuffer.Size;
+}
+int figure_ImDrawData_cmd(const ImDrawData* dd, int l, int c, float* clip, const void** tex_data,
+                          unsigned long long* tex_id, unsigned int* offsets) noexcept {
+   const ImDrawCmd& cmd = dd->CmdLists[l]->CmdBuffer[c];
+   clip[0] = cmd.ClipRect.x, clip[1] = cmd.ClipRect.y, clip[2] = cmd.ClipRect.z, clip[3] = cmd.ClipRect.w;
+   *tex_data = cmd.TexRef._TexData;
+   *tex_id = (unsigned long long)cmd.TexRef._TexID;
+   offsets[0] = cmd.VtxOffset, offsets[1] = cmd.IdxOffset, offsets[2] = cmd.ElemCount;
+   if (cmd.UserCallback == NULL) return 0;
+   const ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+   if (cmd.UserCallback == pio.DrawCallback_ResetRenderState) return 1;
+   if (cmd.UserCallback == pio.DrawCallback_SetSamplerFromTex) return 2;
+   if (cmd.UserCallback == pio.DrawCallback_SetSamplerLinear) return 3;
+   if (cmd.UserCallback == pio.DrawCallback_SetSamplerNearest) return 4;
+   return 5;
+}
+int figure_ImTextureData_pixels(const void* tex_data, const unsigned char** pixels, int* width, int* height,
+                                int* channels) noexcept {
+   const ImTextureData* td = (const ImTextureData*)tex_data;
+   if (td == NULL || td->Pixels == NULL) return 0;
+   if (td->Format != ImTextureFormat_RGBA32 && td->Format != ImTextureFormat_Alpha8) return 0;
+   *pixels = td->Pixels, *width = td->Width, *height = td->Height;
+   *channels = td->Format == ImTextureFormat_Alpha8 ? 1 : 4;
+   return 1;
+}
+
 } // extern "C"
