@@ -74,8 +74,9 @@ contains
 endmodule figure_test_canaries_hoist
 
 !< figure_test_canaries_move, the case of an nvfortran defect a canary needs in a procedure of its own: a `move_alloc`
-!< into a local array of a program unit that has internal procedures leaves the array's size wrong (nvfortran 26.9, -O0
-!< and -O2).
+!< into a local array of a program unit that has internal procedures leaves the array's bounds undefined
+!< (nvfortran 26.9, -O0 to -O2): its elements are read only once its size is right, or a whole-array operation reads
+!< outside it.
 module figure_test_canaries_move
 !< figure_test_canaries_move, the move_alloc canary's scoping unit: a procedure with an internal procedure.
 implicit none
@@ -84,8 +85,8 @@ public :: moved_size_wrong
 
 contains
    function moved_size_wrong() result(wrong)
-   !< `move_alloc(a, moved)`, `moved` a local of this function, which has an internal procedure: the elements arrive,
-   !< the size (and every reduction) is that of an empty array, or of a stale one.
+   !< `move_alloc(a, moved)`, `moved` a local of this function, which has an internal procedure: the bounds are garbage
+   !< (a size of 1, of thousands, negative), so `sum(moved)` is taken only when the size is right.
    logical              :: wrong    !< The defect.
    real,    allocatable :: a(:)     !< The array moved.
    real,    allocatable :: moved(:) !< Where it goes.
@@ -93,7 +94,8 @@ contains
 
    a = [(real(i), i = 1, 6)]
    call move_alloc(a, moved) ! nvf-ok: the canary
-   wrong = size(moved) /= 6 .or. sum(moved) /= 21.0
+   wrong = size(moved) /= 6
+   if (.not. wrong) wrong = sum(moved) /= 21.0
    call trigger()
    contains
       subroutine trigger()
@@ -146,7 +148,7 @@ program figure_test_canaries
 !< affected", or fails with "new on this compiler" when the defect appears there too. A defect that corrupts the heap
 !< (Bug B) is run in a child process: this program again, with the argument `--probe-ctor`; not on Windows, where such a
 !< child can hang instead of ending (Platforms run 43749233755: the job hung until it was cancelled).
-use, intrinsic :: iso_fortran_env, only : compiler_version, output_unit
+use, intrinsic :: iso_fortran_env, only : compiler_options, compiler_version, output_unit
 use figure_test_canaries_append, only : append_wrong
 use figure_test_canaries_hoist, only : size_hoisted
 use figure_test_canaries_move, only : moved_size_wrong
@@ -190,11 +192,12 @@ contains
                moved_size_wrong(), 'the tasks modules'' hand_over (docs/examples/src/tut15_task.F90 to tut26_clip.F90)')
    call report('items = [items, x], a derived type with allocatable components: wrong components', ['nvfortran'], &
                append_wrong(), 'the runs appended through a copy (docs/examples/src/tut21_tables.F90 to tut26_clip.F90)')
-   if (openmp()) then ! the defect needs -mp: the modes without OpenMP (tests-nvf-acc) do not probe it
+   if (openmp() .and. optimized()) then ! the defect needs -O2 and -mp: tests-nvf-acc (no OpenMP) and fpm (no -O) do not
+                                        ! probe it
       call report('size of a host''s array, tested in a loop whose calls reallocate it, read once (-mp)', ['nvfortran'], &
                   size_hoisted(), 'the docs'' self-tests'' field_read (docs/examples/src/tut17_tested.F90 to tut26_clip.F90)')
    else
-      write(output_unit, '(A)') '  not probed without OpenMP: the size of a host''s array read once in a loop (-mp)'
+      write(output_unit, '(A)') '  not probed without OpenMP and -O2: the size of a host''s array read once in a loop'
    endif
    call report('execute_command_line(wait=.true.) under -Munixlogical', ['nvfortran'], wait_defect(), &
                'the waits left out in src/tests/figure_test_files.F90')
@@ -209,6 +212,20 @@ contains
    on = .false.
    !$ on = .true.
    endfunction openmp
+
+   function optimized() result(on)
+   !< Compiled at -O2 or above (-O, -O2, -O3, -O4, -fast), by the options this file was compiled with.
+   logical                       :: on      !< Optimized.
+   character(len=:), allocatable :: options !< The options, blank-delimited.
+   integer                       :: k       !< Counter.
+   character(len=*), parameter   :: LEVELS(5) = [' -O   ', ' -O2  ', ' -O3  ', ' -O4  ', ' -fast'] !< Levels.
+
+   options = ' '//compiler_options()//' '
+   on = .false.
+   do k = 1, size(LEVELS)
+      on = on .or. index(options, trim(LEVELS(k))//' ') > 0
+   enddo
+   endfunction optimized
 
    function on_windows() result(windows)
    !< Windows, by its OS variable (set in every Windows process, MSYS2's included).
