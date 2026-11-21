@@ -9,6 +9,7 @@ exclude_dir: ../src/tests
              ../src/examples
              ../src/third_party
 output_dir: ./docs/ford
+include: ../src/third_party/FUNDAL/src/lib
 project_github: https://github.com/szaghi/figure
 docmark: <
 display: public
