@@ -95,6 +95,19 @@ PINNED = {  # mappings the generator must keep finding (check_docs.py --names fa
     "ImGui::GetBackgroundDrawList": "ig_draw_rect",
     "ImGui::TableHeader": "internal",  # the file browser's own table
 }
+PATHS = ROOT / "src" / "paths" / "imgui"  # the current path's seams, outside src/lib (szaghi/figure#15 §2)
+
+
+def library_files() -> list[Path]:
+    """The library's sources on the current path: src/lib and the seams over Dear ImGui."""
+    return sorted([*LIB.glob("*.F90"), *PATHS.rglob("*.F90")])
+
+
+def module_file(module: str) -> Path:
+    """The source of a library module on the current path (``figure`` or ``figure.F90``)."""
+    stem = module.removesuffix(".F90").lower()
+    return next((p for p in library_files() if p.stem.lower() == stem), LIB / f"{stem}.F90")
+
 
 
 def pinned_problems() -> list[str]:
@@ -180,8 +193,8 @@ def bound_names() -> set[str]:
     """C names bound by the raw modules (figure_cimgui, figure_cimplot, figure_cimplot3d)."""
     names: set[str] = set()
     for f in ("figure_cimgui.F90", "figure_cimplot.F90", "figure_cimplot3d.F90"):
-        names.update(re.findall(r"bind\(C,\s*name='(\w+)'\)", (LIB / f).read_text()))
-        names.update(re.findall(r"^\s*(?:function|subroutine)\s+(\w+)", (LIB / f).read_text(), re.M))
+        names.update(re.findall(r"bind\(C,\s*name='(\w+)'\)", (module_file(f)).read_text()))
+        names.update(re.findall(r"^\s*(?:function|subroutine)\s+(\w+)", (module_file(f)).read_text(), re.M))
     return names
 
 
@@ -266,7 +279,7 @@ def native_calls() -> dict[str, set[str]]:
             for h in hs:
                 users[h] = users.get(h, 0) + 1
     cname: dict[str, str] = {}  # the native layer's interfaces: figure_c_native's, and those of the modules that
-    for path in sorted(LIB.glob("*.F90")):  # bind their own (figure_view3d, figure_editor, figure_markdown, ...)
+    for path in sorted(library_files()):  # bind their own (figure_view3d, figure_editor, figure_markdown, ...)
         if path.stem not in GENERATED:
             cname.update(re.findall(r"(?:function|subroutine)\s+(\w+)\s*\([^)]*\)[^\n]*?bind\(C,\s*name='(\w+)'\)",
                                     re.sub(r"&\s*\n\s*", " ", path.read_text())))
@@ -290,7 +303,7 @@ def library_calls() -> tuple[dict[tuple[str, str], set[str]], dict]:
     """For each procedure of src/lib, (module, name): the identifiers its body calls (lower case); and the sources."""
     calls: dict[tuple[str, str], set[str]] = {}
     sources = {}
-    for path in sorted(LIB.glob("*.F90")):
+    for path in sorted(library_files()):
         if path.stem in GENERATED:
             continue
         mod = path.stem.lower()

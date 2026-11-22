@@ -32,7 +32,7 @@ use figure_c_native, only : FIG_OK, FIG_ERR_ARGUMENT, fig_input_key, fig_input_m
                             fig_item_find, fig_item_value, fig_items_list, fig_item_click, fig_item_type, &
                             fig_menu_click, fig_test_run, fig_test_capture, fig_image_write, fig_set_last_error
 use figure_imgui, only : ig_item_rect
-use figure_implot, only : plot_copies, plot_stride
+use figure_plot_series, only : plot_copies, plot_stride
 use figure_texture, only : fig_read_image
 
 implicit none

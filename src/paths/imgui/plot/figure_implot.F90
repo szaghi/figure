@@ -41,6 +41,8 @@ use fundal, only : dev_memcpy_from_device
 use figure_decimate, only : decimate_axis, decimate_cache, decimate, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
                             DECIMATE_THRESHOLD
 use figure_cimgui, only : im_vec2, im_vec4, igGetFrameCount, igGetTime, igIsMousePosValid
+use figure_plot_series, only : kept, kept_frame, kept_r32, kept_r64, plot_copies, plot_stride, scratch_age, series_gap, &
+                              series_lead, series_put, series_r32, series_r64
 use figure_texture, only : texture_object, texture_ref
 use figure_imgui, only : take_payload
 use figure_cimplot, only : ImPlot_BeginAlignedPlots, ImPlot_EndAlignedPlots, ImPlot_IsLegendEntryHovered,           &
@@ -114,9 +116,6 @@ public :: ip_begin_plot, ip_end_plot, ip_setup_axes, ip_begin_subplots, ip_end_s
 
 character(len=128), allocatable :: subplots_seen(:)  !< Titles of the subplot figures drawn so far.
 integer(int32)                  :: fits_pending = 0  !< Plots of a new subplot figure still to fit to their data.
-integer(int64), public          :: plot_copies = 0   !< Arrays the items copied because ImPlot could not read them in
-                                                     !< place (strides, integer abscissae): `test_plot_copies`.
-integer(int64), public          :: plot_stride = 0   !< Byte stride given to ImPlot for the last item: `test_plot_stride`.
 public :: ip_bars, ip_line, ip_scatter, ip_shaded, ip_bubbles, ip_pie_chart
 public :: ip_colormap_scale, ip_heatmap, ip_image, ip_plot_limits, ip_plot_size, ip_setup_axes_limits
 public :: ip_colormap, ip_colormap_names, ip_load_colormap, ip_colormap_stops, ig_gradient_edit
@@ -126,8 +125,6 @@ public :: ip_colormap_legend, ip_colormap_legend_edit, ip_field_image
 public :: ip_spec, plot_spec_object
 public :: ip_setup_axis, ip_set_axes, ip_setup_axis_limits, ip_setup_axis_ticks, ip_setup_axis_constraints
 public :: ip_setup_legend
-! The items' stride helpers, for the 3-D items of figure_implot3d (not re-exported by figure)
-public :: series_r32, series_r64, series_lead, series_put, series_scratch, series_gap
 public :: ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection, ip_cancel_selection
 public :: ip_drop_target
 public :: ip_link_axis, ip_begin_aligned, ip_end_aligned, ip_legend_hovered, ip_begin_legend_popup
@@ -277,47 +274,13 @@ interface in_line
    module procedure in_line_r32, in_line_r64
 endinterface in_line
 
-type :: buffer_r32
-   !< A scratch array of the items (single precision): the temporary of an array ImPlot cannot read in place.
-   real(real32), allocatable :: v(:) !< Values, at the item's stride.
-endtype buffer_r32
-
-type :: buffer_r64
-   !< A scratch array of the items (double precision): the temporary of an array ImPlot cannot read in place.
-   real(real64), allocatable :: v(:) !< Values, at the item's stride.
-endtype buffer_r64
-
-type :: series_r32
-   !< Where ImPlot reads the arrays of one item (single precision): one address per array and the byte stride they
-   !< share (ImPlot applies one stride to all the arrays of an item); an array copied is read from its slot's scratch.
-   type(c_ptr)    :: p(4) = c_null_ptr !< Addresses: 1 x, 2 y (sets the stride), 3-4 the other ordinates.
-   integer(int64) :: stride = 4_int64  !< Stride of every array [bytes].
-   integer(int64) :: n = 0_int64       !< Points (those kept, once decimated: `series_decimate`).
-endtype series_r32
-
-type :: series_r64
-   !< Where ImPlot reads the arrays of one item (double precision): one address per array and the byte stride they
-   !< share (ImPlot applies one stride to all the arrays of an item); an array copied is read from its slot's scratch.
-   type(c_ptr)    :: p(4) = c_null_ptr !< Addresses: 1 x, 2 y (sets the stride), 3-4 the other ordinates.
-   integer(int64) :: stride = 8_int64  !< Stride of every array [bytes].
-   integer(int64) :: n = 0_int64       !< Points (those kept, once decimated: `series_decimate`).
-endtype series_r64
-
-! The items' scratch, one array per slot and precision, kept from item to item (an item's arrays are read by ImPlot
-! during the call, and items are drawn by the main thread only): `scratch_reserve_*`, `scratch_age`.
-type(buffer_r32), target :: scratch_r32(4)          !< Single precision.
-type(buffer_r64), target :: scratch_r64(4)          !< Double precision.
-integer(int32)           :: scratch_frame = -1_int32 !< Dear ImGui frame of the last copy into the scratch; -1: none kept.
 
 ! The decimation of long line-like series (figure_decimate, szaghi/figure#15 P4): the points kept, gathered from the
-! item's arrays into these buffers (x, y, the second ordinates), kept from item to item and freed with the scratch.
+! item's arrays into figure_plot_series' buffers (x, y, the second ordinates), kept from item to item and freed with
+! the scratch.
 integer(int32), parameter :: ITEM_LINE = 1_int32      !< A line (`ip_line`): its flags Segments and Loop not decimated.
 integer(int32), parameter :: ITEM_STAIRS = 2_int32    !< A staircase (`ip_stairs`).
 integer(int32), parameter :: ITEM_SHADED = 3_int32    !< A shaded area (`ip_shaded`): a fill.
-type(buffer_r32), target    :: kept_r32(3)            !< The points kept, single precision.
-type(buffer_r64), target    :: kept_r64(3)            !< The points kept, double precision.
-integer(int64), allocatable :: kept(:)                !< Their indices.
-integer(int32)              :: kept_frame = -1_int32  !< Dear ImGui frame of the last decimation; -1: none kept.
 integer(int64), public      :: plot_decimated = 0     !< Items decimated so far (tests: `use figure_implot`).
 integer(int64), public      :: plot_kept = 0          !< Points the last decimated item kept.
 logical                     :: decimation_on = .true. !< Long series decimated (`ip_set_decimation`).
@@ -350,16 +313,6 @@ logical                         :: next_changed = .false.  !< ... and its data c
 integer(int64), public          :: plot_cache_builds = 0   !< Caches built (data new or changed: tests).
 integer(int64), public          :: plot_cache_hits = 0     !< Caches reused (tests).
 
-interface series_lead
-   !< Place the array that sets an item's stride.
-   module procedure lead_r32, lead_r64
-endinterface series_lead
-
-interface series_put
-   !< Place another array of an item, at its stride.
-   module procedure put_r32, put_r64, put_i32_r32, put_i64_r32, put_i32_r64, put_i64_r64
-endinterface series_put
-
 interface series_spec
    !< The C spec of an item with its stride.
    module procedure spec_stride_r32, spec_stride_r64
@@ -369,21 +322,6 @@ interface series_decimate
    !< Decimate an item's arrays (figure_decimate): the points kept in its slots, `d%n` their number.
    module procedure decimate_series_r32, decimate_series_r64
 endinterface series_decimate
-
-interface series_gap
-   !< Bytes from one address to the next one: the stride of an array, from the addresses of two consecutive elements.
-   module procedure gap
-endinterface series_gap
-
-interface series_scratch
-   !< The scratch of a slot, at least `n` elements long, for an array an item lays out itself (a grid, a field).
-   module procedure scratch_slot_r32, scratch_slot_r64
-endinterface series_scratch
-
-interface scratch_copy
-   !< Copy an item's array into its slot's scratch at the item's stride (integer abscissae converted).
-   module procedure copy_r32, copy_r64, copy_i32_r32, copy_i64_r32, copy_i32_r64, copy_i64_r64
-endinterface scratch_copy
 
 contains
    ! plots
@@ -5194,7 +5132,7 @@ contains
    logical                          :: contiguous_ !< Adjacent.
 
    contiguous_ = .true.
-   if (size(a) > 1) contiguous_ = gap(c_loc(a(1)), c_loc(a(2))) == storage_size(a, kind=int64) / 8_int64
+   if (size(a) > 1) contiguous_ = series_gap(c_loc(a(1)), c_loc(a(2))) == storage_size(a, kind=int64) / 8_int64
    endfunction in_line_r32
 
    function in_line_r64(a) result(contiguous_)
@@ -5203,7 +5141,7 @@ contains
    logical                          :: contiguous_ !< Adjacent.
 
    contiguous_ = .true.
-   if (size(a) > 1) contiguous_ = gap(c_loc(a(1)), c_loc(a(2))) == storage_size(a, kind=int64) / 8_int64
+   if (size(a) > 1) contiguous_ = series_gap(c_loc(a(1)), c_loc(a(2))) == storage_size(a, kind=int64) / 8_int64
    endfunction in_line_r64
 
    pure subroutine set_flag(flags, flag, on)
@@ -5302,90 +5240,6 @@ contains
    if (present(value)) v = real(value, c_double)
    endfunction uniform
 
-   subroutine lead_r32(d, k, a)
-   !< Place the array that sets an item's stride (its ordinates) in slot `k`: read in place with its own stride when
-   !< that is a positive multiple of the element size within a C int; otherwise (a reversed section, a stride beyond a
-   !< C int) copied, contiguous, into the slot's scratch.
-   type(series_r32), intent(inout)                    :: d    !< The item's arrays.
-   integer(int32),   intent(in)                       :: k    !< Slot.
-   real(real32),     intent(in), target, asynchronous :: a(:) !< Array.
-   integer(int64)                                     :: es   !< Element size [bytes].
-   integer(int64)                                     :: s    !< Its stride [bytes].
-
-   call scratch_age()
-   es = storage_size(a, kind=int64) / 8_int64
-   d%stride = es
-   d%n = size(a, kind=int64)
-   if (size(a) == 0) return
-   s = es
-   if (size(a) > 1) s = gap(c_loc(a(1)), c_loc(a(2)))
-   if (s > 0_int64 .and. mod(s, es) == 0_int64 .and. s <= int(huge(0_c_int), int64)) then
-      d%stride = s
-      d%p(k) = c_loc(a(1))
-   else
-      call scratch_reserve_r32(k, size(a, kind=int64))
-      call scratch_copy(a, scratch_r32(k)%v, 1_int64)
-      d%p(k) = c_loc(scratch_r32(k)%v)
-      plot_copies = plot_copies + 1_int64
-   endif
-   endsubroutine lead_r32
-
-   subroutine put_r32(d, k, a)
-   !< Place an array of an item in slot `k`: read in place when its stride is the item's (set by `series_lead`, which
-   !< comes first); otherwise copied at the item's stride into the slot's scratch.
-   type(series_r32), intent(inout)                    :: d    !< The item's arrays.
-   integer(int32),   intent(in)                       :: k    !< Slot.
-   real(real32),     intent(in), target, asynchronous :: a(:) !< Array.
-   integer(int64)                                     :: m    !< The item's stride [elements].
-
-   if (size(a) == 0) return
-   if (size(a) == 1) then
-      d%p(k) = c_loc(a(1))
-      return
-   endif
-   if (gap(c_loc(a(1)), c_loc(a(2))) == d%stride) then
-      d%p(k) = c_loc(a(1))
-      return
-   endif
-   m = d%stride / (storage_size(a, kind=int64) / 8_int64)
-   call scratch_reserve_r32(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
-   call scratch_copy(a, scratch_r32(k)%v, m)
-   d%p(k) = c_loc(scratch_r32(k)%v)
-   plot_copies = plot_copies + 1_int64
-   endsubroutine put_r32
-
-   subroutine put_i32_r32(d, k, a)
-   !< Place integer abscissae of an item in slot `k`: converted to `real(real32)` (ImPlot reads x and y of one type),
-   !< into the slot's scratch laid out at the item's stride, so that the ordinates stay in place.
-   type(series_r32), intent(inout)            :: d    !< The item's arrays.
-   integer(int32),   intent(in)               :: k    !< Slot.
-   integer(int32),   intent(in), asynchronous :: a(:) !< Abscissae.
-   integer(int64)                             :: m    !< The item's stride [elements].
-
-   if (size(a) == 0) return
-   m = d%stride / 4_int64
-   call scratch_reserve_r32(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
-   call scratch_copy(a, scratch_r32(k)%v, m)
-   d%p(k) = c_loc(scratch_r32(k)%v)
-   plot_copies = plot_copies + 1_int64
-   endsubroutine put_i32_r32
-
-   subroutine put_i64_r32(d, k, a)
-   !< Place integer abscissae of an item in slot `k`: converted to `real(real32)` (ImPlot reads x and y of one type),
-   !< into the slot's scratch laid out at the item's stride, so that the ordinates stay in place.
-   type(series_r32), intent(inout)            :: d    !< The item's arrays.
-   integer(int32),   intent(in)               :: k    !< Slot.
-   integer(int64),   intent(in), asynchronous :: a(:) !< Abscissae.
-   integer(int64)                             :: m    !< The item's stride [elements].
-
-   if (size(a) == 0) return
-   m = d%stride / 4_int64
-   call scratch_reserve_r32(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
-   call scratch_copy(a, scratch_r32(k)%v, m)
-   d%p(k) = c_loc(scratch_r32(k)%v)
-   plot_copies = plot_copies + 1_int64
-   endsubroutine put_i64_r32
-
    function spec_stride_r32(d, spec) result(c)
    !< The C spec to pass: the given one, or ImPlot's defaults, with the item's stride.
    type(series_r32),       intent(in)           :: d    !< The item's arrays.
@@ -5396,90 +5250,6 @@ contains
    c%Stride = int(d%stride, c_int)
    plot_stride = d%stride
    endfunction spec_stride_r32
-
-   subroutine lead_r64(d, k, a)
-   !< Place the array that sets an item's stride (its ordinates) in slot `k`: read in place with its own stride when
-   !< that is a positive multiple of the element size within a C int; otherwise (a reversed section, a stride beyond a
-   !< C int) copied, contiguous, into the slot's scratch.
-   type(series_r64), intent(inout)                    :: d    !< The item's arrays.
-   integer(int32),   intent(in)                       :: k    !< Slot.
-   real(real64),     intent(in), target, asynchronous :: a(:) !< Array.
-   integer(int64)                                     :: es   !< Element size [bytes].
-   integer(int64)                                     :: s    !< Its stride [bytes].
-
-   call scratch_age()
-   es = storage_size(a, kind=int64) / 8_int64
-   d%stride = es
-   d%n = size(a, kind=int64)
-   if (size(a) == 0) return
-   s = es
-   if (size(a) > 1) s = gap(c_loc(a(1)), c_loc(a(2)))
-   if (s > 0_int64 .and. mod(s, es) == 0_int64 .and. s <= int(huge(0_c_int), int64)) then
-      d%stride = s
-      d%p(k) = c_loc(a(1))
-   else
-      call scratch_reserve_r64(k, size(a, kind=int64))
-      call scratch_copy(a, scratch_r64(k)%v, 1_int64)
-      d%p(k) = c_loc(scratch_r64(k)%v)
-      plot_copies = plot_copies + 1_int64
-   endif
-   endsubroutine lead_r64
-
-   subroutine put_r64(d, k, a)
-   !< Place an array of an item in slot `k`: read in place when its stride is the item's (set by `series_lead`, which
-   !< comes first); otherwise copied at the item's stride into the slot's scratch.
-   type(series_r64), intent(inout)                    :: d    !< The item's arrays.
-   integer(int32),   intent(in)                       :: k    !< Slot.
-   real(real64),     intent(in), target, asynchronous :: a(:) !< Array.
-   integer(int64)                                     :: m    !< The item's stride [elements].
-
-   if (size(a) == 0) return
-   if (size(a) == 1) then
-      d%p(k) = c_loc(a(1))
-      return
-   endif
-   if (gap(c_loc(a(1)), c_loc(a(2))) == d%stride) then
-      d%p(k) = c_loc(a(1))
-      return
-   endif
-   m = d%stride / (storage_size(a, kind=int64) / 8_int64)
-   call scratch_reserve_r64(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
-   call scratch_copy(a, scratch_r64(k)%v, m)
-   d%p(k) = c_loc(scratch_r64(k)%v)
-   plot_copies = plot_copies + 1_int64
-   endsubroutine put_r64
-
-   subroutine put_i32_r64(d, k, a)
-   !< Place integer abscissae of an item in slot `k`: converted to `real(real64)` (ImPlot reads x and y of one type),
-   !< into the slot's scratch laid out at the item's stride, so that the ordinates stay in place.
-   type(series_r64), intent(inout)            :: d    !< The item's arrays.
-   integer(int32),   intent(in)               :: k    !< Slot.
-   integer(int32),   intent(in), asynchronous :: a(:) !< Abscissae.
-   integer(int64)                             :: m    !< The item's stride [elements].
-
-   if (size(a) == 0) return
-   m = d%stride / 8_int64
-   call scratch_reserve_r64(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
-   call scratch_copy(a, scratch_r64(k)%v, m)
-   d%p(k) = c_loc(scratch_r64(k)%v)
-   plot_copies = plot_copies + 1_int64
-   endsubroutine put_i32_r64
-
-   subroutine put_i64_r64(d, k, a)
-   !< Place integer abscissae of an item in slot `k`: converted to `real(real64)` (ImPlot reads x and y of one type),
-   !< into the slot's scratch laid out at the item's stride, so that the ordinates stay in place.
-   type(series_r64), intent(inout)            :: d    !< The item's arrays.
-   integer(int32),   intent(in)               :: k    !< Slot.
-   integer(int64),   intent(in), asynchronous :: a(:) !< Abscissae.
-   integer(int64)                             :: m    !< The item's stride [elements].
-
-   if (size(a) == 0) return
-   m = d%stride / 8_int64
-   call scratch_reserve_r64(k, (size(a, kind=int64) - 1_int64) * m + 1_int64)
-   call scratch_copy(a, scratch_r64(k)%v, m)
-   d%p(k) = c_loc(scratch_r64(k)%v)
-   plot_copies = plot_copies + 1_int64
-   endsubroutine put_i64_r64
 
    function spec_stride_r64(d, spec) result(c)
    !< The C spec to pass: the given one, or ImPlot's defaults, with the item's stride.
@@ -5895,204 +5665,6 @@ contains
    ax%reach = 0.5_real64 * max(1.0_real64, real(c%LineWeight, real64)) + 1.5_real64
    wanted = .true.
    endfunction decimation_wanted
-
-   subroutine scratch_age()
-   !< Free the items' scratch (both precisions) when no item has copied into it in this frame or the one before: a
-   !< program that stops plotting reversed or converted data gives the memory back at its next item. A new Dear ImGui
-   !< context (its frame count restarted) frees it too. The decimation's buffers likewise.
-   integer(int32) :: k   !< Slot.
-   integer(int32) :: age !< Frames since the last copy.
-
-   if (kept_frame >= 0_int32) then
-      age = int(igGetFrameCount(), int32) - kept_frame
-      if (age /= 0_int32 .and. age /= 1_int32) then
-         do k = 1_int32, 3_int32
-            if (allocated(kept_r32(k)%v)) deallocate(kept_r32(k)%v)
-            if (allocated(kept_r64(k)%v)) deallocate(kept_r64(k)%v)
-         enddo
-         if (allocated(kept)) deallocate(kept)
-         kept_frame = -1_int32
-      endif
-   endif
-   if (scratch_frame < 0_int32) return
-   age = int(igGetFrameCount(), int32) - scratch_frame
-   if (age == 0_int32 .or. age == 1_int32) return
-   do k = 1_int32, 4_int32
-      if (allocated(scratch_r32(k)%v)) deallocate(scratch_r32(k)%v)
-      if (allocated(scratch_r64(k)%v)) deallocate(scratch_r64(k)%v)
-   enddo
-   scratch_frame = -1_int32
-   endsubroutine scratch_age
-
-   subroutine scratch_slot_r32(k, n, v)
-   !< The scratch of slot `k` (single precision), at least `n` elements long, for an array an item lays out itself
-   !< (figure_implot3d: a surface's grid), counted as a copy (`test_plot_copies`). Valid until the next item.
-   integer(int32),                      intent(in)  :: k    !< Slot.
-   integer(int64),                      intent(in)  :: n    !< Elements needed.
-   real(real32), pointer, contiguous,   intent(out) :: v(:) !< The slot's first n elements.
-
-   call scratch_age()
-   call scratch_reserve_r32(k, n)
-   v => scratch_r32(k)%v(1_int64:n)
-   plot_copies = plot_copies + 1_int64
-   endsubroutine scratch_slot_r32
-
-   subroutine scratch_slot_r64(k, n, v)
-   !< The scratch of slot `k` (double precision), at least `n` elements long, for an array an item lays out itself
-   !< (figure_implot3d: a surface's grid), counted as a copy (`test_plot_copies`). Valid until the next item.
-   integer(int32),                      intent(in)  :: k    !< Slot.
-   integer(int64),                      intent(in)  :: n    !< Elements needed.
-   real(real64), pointer, contiguous,   intent(out) :: v(:) !< The slot's first n elements.
-
-   call scratch_age()
-   call scratch_reserve_r64(k, n)
-   v => scratch_r64(k)%v(1_int64:n)
-   plot_copies = plot_copies + 1_int64
-   endsubroutine scratch_slot_r64
-
-   subroutine scratch_reserve_r32(k, n)
-   !< Make the scratch of slot `k` (single precision) at least `n` elements long: kept from item to item and from frame
-   !< to frame, grown by half again when too short (a series that grows by a point per frame is not reallocated every
-   !< frame), freed by `scratch_age`. A temporary allocated and freed by every item can cost the memory's first touch
-   !< every frame (nvfortran 26.9 with glibc: 2.4 ms against 1.0 ms to copy 10**6 doubles; plots.md, "Data in place").
-   integer(int32), intent(in) :: k !< Slot.
-   integer(int64), intent(in) :: n !< Elements needed.
-   integer(int64)             :: c !< Capacity [elements].
-
-   c = 0_int64
-   if (allocated(scratch_r32(k)%v)) c = size(scratch_r32(k)%v, kind=int64)
-   if (c < n) then
-      if (allocated(scratch_r32(k)%v)) deallocate(scratch_r32(k)%v)
-      allocate(scratch_r32(k)%v(max(n, c + c / 2_int64)))
-   endif
-   scratch_frame = int(igGetFrameCount(), int32)
-   endsubroutine scratch_reserve_r32
-
-   subroutine copy_r32(a, v, m)
-   !< Copy `a` into `v` at a stride of `m` elements, v(1), v(1 + m), ... (the elements between left as they are), single
-   !< precision. A reversed section of adjacent elements (`a(n:1:-1)`) is read through a contiguous view of its memory:
-   !< with the descending unit stride known to the compiler, the copy runs as fast as a contiguous one (nvfortran 26.9
-   !< takes twice as long through the section's descriptor).
-   real(real32),   intent(in), target, asynchronous :: a(:) !< Array, any stride.
-   real(real32),   intent(inout)                    :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
-   integer(int64), intent(in)                       :: m    !< Stride in v [elements].
-   real(real32),   pointer, contiguous              :: r(:) !< A reversed section's elements, in memory order.
-   integer(int64)                                   :: n    !< Elements.
-
-   n = size(a, kind=int64)
-   if (n == 0_int64) return
-   if (n > 1_int64) then
-      if (gap(c_loc(a(2)), c_loc(a(1))) == storage_size(a, kind=int64) / 8_int64) then
-         call c_f_pointer(c_loc(a(n)), r, [n])
-         if (m == 1_int64) then
-            v(1_int64:n) = r(n:1_int64:-1_int64)
-         else
-            v(1_int64:(n - 1_int64) * m + 1_int64:m) = r(n:1_int64:-1_int64)
-         endif
-         return
-      endif
-   endif
-   v(1_int64:(n - 1_int64) * m + 1_int64:m) = a
-   endsubroutine copy_r32
-
-   subroutine copy_i32_r32(a, v, m)
-   !< Convert `int32` values to `real(real32)` into `v` at a stride of `m` elements.
-   integer(int32), intent(in), asynchronous :: a(:) !< Values, any stride.
-   real(real32),   intent(inout)            :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
-   integer(int64), intent(in)               :: m    !< Stride in v [elements].
-   integer(int64)                           :: n    !< Elements.
-
-   n = size(a, kind=int64)
-   if (n > 0_int64) v(1_int64:(n - 1_int64) * m + 1_int64:m) = real(a, real32)
-   endsubroutine copy_i32_r32
-
-   subroutine copy_i64_r32(a, v, m)
-   !< Convert `int64` values to `real(real32)` into `v` at a stride of `m` elements.
-   integer(int64), intent(in), asynchronous :: a(:) !< Values, any stride.
-   real(real32),   intent(inout)            :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
-   integer(int64), intent(in)               :: m    !< Stride in v [elements].
-   integer(int64)                           :: n    !< Elements.
-
-   n = size(a, kind=int64)
-   if (n > 0_int64) v(1_int64:(n - 1_int64) * m + 1_int64:m) = real(a, real32)
-   endsubroutine copy_i64_r32
-
-   subroutine scratch_reserve_r64(k, n)
-   !< Make the scratch of slot `k` (double precision) at least `n` elements long: kept from item to item and from frame
-   !< to frame, grown by half again when too short (a series that grows by a point per frame is not reallocated every
-   !< frame), freed by `scratch_age`. A temporary allocated and freed by every item can cost the memory's first touch
-   !< every frame (nvfortran 26.9 with glibc: 2.4 ms against 1.0 ms to copy 10**6 doubles; plots.md, "Data in place").
-   integer(int32), intent(in) :: k !< Slot.
-   integer(int64), intent(in) :: n !< Elements needed.
-   integer(int64)             :: c !< Capacity [elements].
-
-   c = 0_int64
-   if (allocated(scratch_r64(k)%v)) c = size(scratch_r64(k)%v, kind=int64)
-   if (c < n) then
-      if (allocated(scratch_r64(k)%v)) deallocate(scratch_r64(k)%v)
-      allocate(scratch_r64(k)%v(max(n, c + c / 2_int64)))
-   endif
-   scratch_frame = int(igGetFrameCount(), int32)
-   endsubroutine scratch_reserve_r64
-
-   subroutine copy_r64(a, v, m)
-   !< Copy `a` into `v` at a stride of `m` elements, v(1), v(1 + m), ... (the elements between left as they are), double
-   !< precision. A reversed section of adjacent elements (`a(n:1:-1)`) is read through a contiguous view of its memory:
-   !< with the descending unit stride known to the compiler, the copy runs as fast as a contiguous one (nvfortran 26.9
-   !< takes twice as long through the section's descriptor).
-   real(real64),   intent(in), target, asynchronous :: a(:) !< Array, any stride.
-   real(real64),   intent(inout)                    :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
-   integer(int64), intent(in)                       :: m    !< Stride in v [elements].
-   real(real64),   pointer, contiguous              :: r(:) !< A reversed section's elements, in memory order.
-   integer(int64)                                   :: n    !< Elements.
-
-   n = size(a, kind=int64)
-   if (n == 0_int64) return
-   if (n > 1_int64) then
-      if (gap(c_loc(a(2)), c_loc(a(1))) == storage_size(a, kind=int64) / 8_int64) then
-         call c_f_pointer(c_loc(a(n)), r, [n])
-         if (m == 1_int64) then
-            v(1_int64:n) = r(n:1_int64:-1_int64)
-         else
-            v(1_int64:(n - 1_int64) * m + 1_int64:m) = r(n:1_int64:-1_int64)
-         endif
-         return
-      endif
-   endif
-   v(1_int64:(n - 1_int64) * m + 1_int64:m) = a
-   endsubroutine copy_r64
-
-   subroutine copy_i32_r64(a, v, m)
-   !< Convert `int32` values to `real(real64)` into `v` at a stride of `m` elements.
-   integer(int32), intent(in), asynchronous :: a(:) !< Values, any stride.
-   real(real64),   intent(inout)            :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
-   integer(int64), intent(in)               :: m    !< Stride in v [elements].
-   integer(int64)                           :: n    !< Elements.
-
-   n = size(a, kind=int64)
-   if (n > 0_int64) v(1_int64:(n - 1_int64) * m + 1_int64:m) = real(a, real64)
-   endsubroutine copy_i32_r64
-
-   subroutine copy_i64_r64(a, v, m)
-   !< Convert `int64` values to `real(real64)` into `v` at a stride of `m` elements.
-   integer(int64), intent(in), asynchronous :: a(:) !< Values, any stride.
-   real(real64),   intent(inout)            :: v(:) !< Scratch, at least (size(a) - 1) m + 1 elements long.
-   integer(int64), intent(in)               :: m    !< Stride in v [elements].
-   integer(int64)                           :: n    !< Elements.
-
-   n = size(a, kind=int64)
-   if (n > 0_int64) v(1_int64:(n - 1_int64) * m + 1_int64:m) = real(a, real64)
-   endsubroutine copy_i64_r64
-
-   function gap(first, second) result(bytes)
-   !< Bytes from one address to the next one: the stride of an array, from the addresses of two consecutive elements.
-   !< The integer TRANSFER gives for a C address is processor-dependent; gfortran, nvfortran and ifx give the address.
-   type(c_ptr), intent(in) :: first  !< Address of a(i).
-   type(c_ptr), intent(in) :: second !< Address of a(i + 1).
-   integer(int64)          :: bytes  !< Distance [bytes]; negative for a reversed section.
-
-   bytes = int(transfer(second, 0_c_intptr_t) - transfer(first, 0_c_intptr_t), int64)
-   endfunction gap
 
    function spec_c(spec) result(c)
    !< The C spec to pass: the given one, or ImPlot's defaults.

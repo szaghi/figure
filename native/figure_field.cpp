@@ -1,9 +1,9 @@
-// A field through a colormap (ip_field_image, src/lib/figure_implot.F90): a real32 or real64 matrix coloured into an
-// RGBA texture and drawn as one ImPlot image. The texture is cached by the item's ImGui id and coloured again only
-// when the program says the values changed, or the array (address, shape, kind), the range, the colormap (or its
-// colours, edited by ig_gradient_edit), the scale or the NaN colour differ from the last colouring; an entry not
-// drawn for IDLE_SECONDS is released at the end of a frame. Every argument is checked on the Fortran side; main
-// thread only, inside a plot.
+// A field through a colormap (ip_field_image, src/paths/imgui/plot/figure_implot.F90): a real32 or real64 matrix
+// coloured into an RGBA texture and drawn as one ImPlot image. The texture is cached by the item's ImGui id and
+// coloured again only when the program says the values changed, or the array (address, shape, kind), the range, the
+// colormap (or its colours, edited by ig_gradient_edit), the scale or the NaN colour differ from the last colouring;
+// an entry not drawn for IDLE_SECONDS is released at the end of a frame. Every argument is checked on the Fortran
+// side; main thread only, inside a plot.
 //
 // Colouring. A value v maps to t = (s(v) - s(lo)) / (s(hi) - s(lo)), s the scale (identity, log10, or ImPlot's symlog
 // 2 asinh(v/2)), v clamped to [lo, hi] first, then to the colormap's colour at t as ImPlot samples it

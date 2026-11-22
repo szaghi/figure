@@ -97,6 +97,19 @@ def strip_comment(line: str) -> str:
         elif ch == "!":
             return line[:i]
     return line
+PATHS = ROOT / "src" / "paths" / "imgui"  # the current path's seams, outside src/lib (szaghi/figure#15 §2)
+
+
+def library_files() -> list[Path]:
+    """The library's sources on the current path: src/lib and the seams over Dear ImGui."""
+    return sorted([*LIB.glob("*.F90"), *PATHS.rglob("*.F90")])
+
+
+def module_file(module: str) -> Path:
+    """The source of a library module on the current path (``figure`` or ``figure.F90``)."""
+    stem = module.removesuffix(".F90").lower()
+    return next((p for p in library_files() if p.stem.lower() == stem), LIB / f"{stem}.F90")
+
 
 
 def statement_end(lines: list[str], i: int) -> int:
@@ -286,7 +299,7 @@ def type_bound(module: Path, type_name: str) -> list[str]:
 
 def check_comments() -> list[str]:
     """Public entities and dummy arguments without a ``!<`` doc comment."""
-    sources = {p.stem.lower(): parse(p) for p in LIB.glob("*.F90")}
+    sources = {p.stem.lower(): parse(p) for p in library_files()}
     missing: list[str] = []
     seen: set[tuple[str, str]] = set()
 
@@ -312,7 +325,7 @@ def check_comments() -> list[str]:
     def check_type(mod: str, name: str) -> None:
         src = sources[mod]
         line, documented, bindings = src.types[name]
-        path = LIB / f"{mod}.F90"
+        path = module_file(mod)
         if not documented:
             missing.append(f"{rel(path, line)}: type {name} has no !< doc comment")
         for comp in src.components.get(name, []):
@@ -322,8 +335,8 @@ def check_comments() -> list[str]:
                 check_proc(mod, impl, f"{name}%{binding.split(':')[0]} ({impl})")
 
     for module in ("figure", "figure_testing"):
-        origin = used_from(LIB / f"{module}.F90")
-        for pub in public_names(LIB / f"{module}.F90"):
+        origin = used_from(module_file(module))
+        for pub in public_names(module_file(module)):
             if CONSTANT.match(pub):
                 continue
             name = pub.lower()
@@ -337,7 +350,7 @@ def check_comments() -> list[str]:
             elif name in src.generics:
                 line, documented, specifics = src.generics[name]
                 if not documented:
-                    missing.append(f"{rel(LIB / f'{mod}.F90', line)}: generic {name} has no !< doc comment")
+                    missing.append(f"{rel(module_file(mod), line)}: generic {name} has no !< doc comment")
                 for s in specifics:
                     check_proc(mod, s, f"{name} (specific {s})")
             else:
@@ -414,11 +427,11 @@ def check_feature_map() -> list[str]:
     words = {w for c in code for w in re.findall(r"[\w%]+", c)}
     missing: list[str] = []
     for module in ("figure.F90", "figure_testing.F90"):
-        for name in public_names(LIB / module):
+        for name in public_names(module_file(module)):
             if not CONSTANT.match(name) and name not in words:
                 missing.append(f"not in docs/guide/features.md: {name} ({module})")
     for type_name, var in TYPES.items():
-        for f in LIB.glob("*.F90"):
+        for f in library_files():
             for proc in type_bound(f, type_name):
                 if f"{var}%{proc}" not in words:
                     missing.append(f"not in docs/guide/features.md: {var}%{proc} ({f.name})")
@@ -676,9 +689,9 @@ def api_names() -> list[str]:
     (constants left out) and the type-bound procedures as ``var%proc`` (``app%init``)."""
     names: list[str] = []
     for module in ("figure.F90", "figure_testing.F90"):
-        names += [n for n in public_names(LIB / module) if not CONSTANT.match(n) and n not in TYPES]
+        names += [n for n in public_names(module_file(module)) if not CONSTANT.match(n) and n not in TYPES]
     for type_name, var in TYPES.items():
-        for f in LIB.glob("*.F90"):
+        for f in library_files():
             names += [f"{var}%{proc}" for proc in type_bound(f, type_name)]
     return sorted(set(names))
 

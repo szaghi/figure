@@ -11,7 +11,7 @@ module figure_implot3d
 !< `ip3_begin_plot` returns true when the plot is visible: then declare its axes (`ip3_setup_axes`) and items, and close
 !< it with `ip3_end_plot` (only in that case). Items (`ip3_line`, `ip3_scatter`, `ip3_surface`, `ip3_mesh`) take
 !< `real(real32)` or `real(real64)` arrays of any stride, read in place during the call as the 2-D items are
-!< (figure_implot: ImPlot3D has one byte stride for all the arrays of an item, an array of another stride is copied at
+!< (figure_plot_series: ImPlot3D has one byte stride for all the arrays of an item, an array of another stride is copied at
 !< it; the dummies are ASYNCHRONOUS). Every item takes an optional `spec`, built by `ip3_spec` from ImPlot3D's
 !< defaults. A surface is coloured by FIGURE's colormaps (`ip_colormap`), copied into ImPlot3D's registry at their
 !< first use and followed when `ig_gradient_edit` changes them.
@@ -61,8 +61,8 @@ use figure_cimplot3d_enums, only : ImPlot3DFlags_None, ImPlot3DFlags_Equal, ImPl
                                    ImPlot3DSurfaceFlags_NoLines, ImPlot3DSurfaceFlags_NoFill,                    &
                                    ImPlot3DSurfaceFlags_NoMarkers, ImPlot3DMeshFlags_NoLines,                    &
                                    ImPlot3DMeshFlags_NoFill, ImPlot3DMeshFlags_NoMarkers
-use figure_implot, only : plot_copies, plot_stride, series_gap, series_lead, series_put, series_r32, series_r64, &
-                          series_scratch
+use figure_plot_series, only : plot_copies, plot_stride, series_gap, series_lead, series_put, series_r32, series_r64, &
+                              series_scratch
 
 implicit none
 private
