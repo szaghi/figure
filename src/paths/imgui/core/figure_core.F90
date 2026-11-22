@@ -20,7 +20,9 @@ module figure_core
 !< - input: `core_mouse_pos`, `core_mouse_down`, `core_mouse_clicked`, `core_mouse_released`,
 !<   `core_mouse_hovering_rect`, `core_key_down`, `core_key_pressed`;
 !< - the draw list: `core_draw_begin` (the current window's), then lines, rectangles, triangles, convex polygons,
-!<   polylines, circles, text, images, clip rectangles and callbacks, and `core_draw_end`.
+!<   polylines, circles, text, images, clip rectangles and callbacks, and `core_draw_end`; for the plot frame
+!<   (src/paths/fortran/plot/), Dear ImGui 1.93's axis-aligned lines (`core_draw_line_h`, `core_draw_line_v`), a
+!<   line's texture (`core_line_texture`) and a textured quad (`core_draw_quad_uv`), thin wrappers of the list's calls.
 !<
 !< The draw list is built in Fortran (figure_drawlist, the first piece of block E) and appended to the window's Dear
 !< ImGui list by `core_draw_end`: the primitives figure_drawlist tessellates (filled rectangles without rounding,
@@ -45,7 +47,7 @@ use figure_cimgui_core, only : figure_ImDrawList_append, figure_ImDrawList_share
                                igGetHoveredID, igItemAdd, igItemSize_Vec2, igKeepAliveID, ImDrawList_AddCallback,          &
                                ImDrawList_AddCircle, ImDrawList_AddCircleFilled, ImDrawList_AddImage, ImDrawList_AddPolyline, &
                                ImDrawList_AddRect, ImDrawList_AddRectFilled, ImDrawList_AddText_Vec2, ImDrawList_PopClipRect, &
-                               ImDrawList_PushClipRect
+                               ImDrawList_PrimReserve, ImDrawList_PushClipRect
 use figure_style, only : ig_get_style_var
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
                             dl_triangle_filled, DL_LINE_TEXTURES
@@ -63,6 +65,7 @@ public :: core_key_down, core_key_pressed
 public :: core_draw_begin, core_draw_end, core_draw_line, core_draw_rect_filled, core_draw_rect, core_draw_triangle_filled
 public :: core_draw_convex_poly_filled, core_draw_polyline, core_draw_circle, core_draw_text, core_draw_image
 public :: core_push_clip_rect, core_pop_clip_rect, core_draw_callback
+public :: core_draw_line_h, core_draw_line_v, core_line_texture, core_draw_quad_uv
 public :: core_draw_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
@@ -70,6 +73,56 @@ integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module
 character(kind=c_char, len=BUF_LEN + 1), target :: buf  !< NUL-terminated copy of a text or an ID.
 type(draw_list), target                         :: list !< The Fortran draw list (`core_draw_begin` .. `core_draw_end`).
 type(c_ptr)                                     :: target_list = c_null_ptr !< The Dear ImGui list it goes to.
+
+interface
+   ! cimgui's functions of the plot frame's calls (imgui.h, Dear ImGui 1.93), not in the generated layer
+   subroutine ImDrawList_AddLineH(self, min_x, max_x, y, col, thickness, flags) bind(C, name='ImDrawList_AddLineH')
+   !< ImDrawList::AddLineH(float,float,float,ImU32,float,ImDrawFlags), imgui.h.
+   import :: c_float, c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: self         !< C `ImDrawList*`.
+   real(c_float),  value :: min_x, max_x !< C `float`.
+   real(c_float),  value :: y            !< C `float`.
+   integer(c_int), value :: col          !< C `ImU32`.
+   real(c_float),  value :: thickness    !< C `float`.
+   integer(c_int), value :: flags        !< C `ImDrawFlags`.
+   endsubroutine ImDrawList_AddLineH
+
+   subroutine ImDrawList_AddLineV(self, x, min_y, max_y, col, thickness, flags) bind(C, name='ImDrawList_AddLineV')
+   !< ImDrawList::AddLineV(float,float,float,ImU32,float,ImDrawFlags), imgui.h.
+   import :: c_float, c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: self         !< C `ImDrawList*`.
+   real(c_float),  value :: x            !< C `float`.
+   real(c_float),  value :: min_y, max_y !< C `float`.
+   integer(c_int), value :: col          !< C `ImU32`.
+   real(c_float),  value :: thickness    !< C `float`.
+   integer(c_int), value :: flags        !< C `ImDrawFlags`.
+   endsubroutine ImDrawList_AddLineV
+
+   subroutine ImDrawList_PrimQuadUV(self, a, b, c, d, uv_a, uv_b, uv_c, uv_d, col) bind(C, name='ImDrawList_PrimQuadUV')
+   !< ImDrawList::PrimQuadUV(ImVec2 x4, ImVec2 x4, ImU32), imgui.h.
+   import :: c_int, c_ptr, im_vec2
+   implicit none
+   type(c_ptr),    value :: self                   !< C `ImDrawList*`.
+   type(im_vec2),  value :: a, b, c, d             !< C `const ImVec2_c`.
+   type(im_vec2),  value :: uv_a, uv_b, uv_c, uv_d !< C `const ImVec2_c`.
+   integer(c_int), value :: col                    !< C `ImU32`.
+   endsubroutine ImDrawList_PrimQuadUV
+
+   subroutine ImDrawList__SelectLineTexture(self, screen_thickness, out_uv0, out_uv1, out_fringe, flags) &
+      bind(C, name='ImDrawList__SelectLineTexture')
+   !< ImDrawList::_SelectLineTexture(float,ImVec2*,ImVec2*,float*,ImDrawFlags), imgui.h.
+   import :: c_float, c_int, c_ptr, im_vec2
+   implicit none
+   type(c_ptr),    value         :: self             !< C `ImDrawList*`.
+   real(c_float),  value         :: screen_thickness !< C `float`.
+   type(im_vec2),  intent(out)   :: out_uv0          !< C `ImVec2_c*`.
+   type(im_vec2),  intent(out)   :: out_uv1          !< C `ImVec2_c*`.
+   real(c_float),  intent(out)   :: out_fringe       !< C `float*`.
+   integer(c_int), value         :: flags            !< C `ImDrawFlags`.
+   endsubroutine ImDrawList__SelectLineTexture
+endinterface
 
 contains
    ! IDs
@@ -605,6 +658,60 @@ contains
    call core_draw_end_pending()
    call ImDrawList_AddCallback(target_list, callback, data, 0_c_size_t)
    endsubroutine core_draw_callback
+
+   subroutine core_draw_line_h(x0, x1, y, col, thickness)
+   !< A horizontal line from x0 to x1 (Dear ImGui 1.93's `AddLineH`, flags 0): the stroke below `y` (inside), drawn as
+   !< a rectangle when pixel-aligned, `thickness` pixels wide (default 1).
+   real(real64),   intent(in)           :: x0, x1, y !< Ends and ordinate [pixels].
+   integer(int32), intent(in)           :: col       !< Packed colour.
+   real(real64),   intent(in), optional :: thickness !< Thickness [pixels].
+
+   call core_draw_end_pending()
+   call ImDrawList_AddLineH(target_list, real(x0, c_float), real(x1, c_float), real(y, c_float), int(col, c_int), &
+                            opt(thickness, 1.0_real64), 0_c_int)
+   endsubroutine core_draw_line_h
+
+   subroutine core_draw_line_v(x, y0, y1, col, thickness)
+   !< A vertical line from y0 to y1 (Dear ImGui 1.93's `AddLineV`, flags 0): the stroke right of `x` (inside), drawn as
+   !< a rectangle when pixel-aligned, `thickness` pixels wide (default 1).
+   real(real64),   intent(in)           :: x, y0, y1 !< Abscissa and ends [pixels].
+   integer(int32), intent(in)           :: col       !< Packed colour.
+   real(real64),   intent(in), optional :: thickness !< Thickness [pixels].
+
+   call core_draw_end_pending()
+   call ImDrawList_AddLineV(target_list, real(x, c_float), real(y0, c_float), real(y1, c_float), int(col, c_int), &
+                            opt(thickness, 1.0_real64), 0_c_int)
+   endsubroutine core_draw_line_v
+
+   subroutine core_line_texture(thickness, uv0, uv1, fringe)
+   !< The texture coordinates of the two sides of an anti-aliased line `thickness` screen pixels wide (at least 1), and
+   !< its fringe [pixels] (`_SelectLineTexture` with the list's flags; without anti-aliased lines: the white pixel, 0).
+   real(real64), intent(in)  :: thickness !< Thickness [screen pixels].
+   real(real64), intent(out) :: uv0(2)    !< One side's (u, v).
+   real(real64), intent(out) :: uv1(2)    !< The other's.
+   real(real64), intent(out) :: fringe    !< Fringe [pixels].
+   type(im_vec2)             :: a, b      !< C values.
+   real(c_float)             :: f         !< C value.
+
+   call core_draw_end_pending()
+   call ImDrawList__SelectLineTexture(target_list, real(thickness, c_float), a, b, f, list%flags)
+   uv0 = [real(a%x, real64), real(a%y, real64)]
+   uv1 = [real(b%x, real64), real(b%y, real64)]
+   fringe = real(f, real64)
+   endsubroutine core_line_texture
+
+   subroutine core_draw_quad_uv(x, y, u, v, col)
+   !< A quad of four textured vertices, triangles (1, 2, 3) and (1, 3, 4) (`PrimReserve(6, 4)` and `PrimQuadUV`): the
+   !< texture is the list's current one (the font atlas: its white pixel, a line's texture).
+   real(real64),   intent(in) :: x(4), y(4) !< Vertices [pixels].
+   real(real64),   intent(in) :: u(4), v(4) !< Their texture coordinates.
+   integer(int32), intent(in) :: col        !< Packed colour.
+
+   call core_draw_end_pending()
+   call ImDrawList_PrimReserve(target_list, 6_c_int, 4_c_int)
+   call ImDrawList_PrimQuadUV(target_list, v2(x(1), y(1)), v2(x(2), y(2)), v2(x(3), y(3)), v2(x(4), y(4)), &
+                              v2(u(1), v(1)), v2(u(2), v(2)), v2(u(3), v(3)), v2(u(4), v(4)), int(col, c_int))
+   endsubroutine core_draw_quad_uv
 
    ! private
 

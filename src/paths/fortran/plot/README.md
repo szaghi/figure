@@ -13,7 +13,19 @@ program, and compare the two pictures (`test_compare_image`, threshold 2).
 **Ticks (the owner's choice (a), 2026-11-22):** the frame places ticks as ImPlot's `Locator_Default` does (the major
 count from the axis length, `NiceNum`, ten labelled minors per major, the labels thinned when they overflow), so the
 goldens stay. foresight's locator (gnuplot's: the step from the range alone) gives other ticks on every axis probed;
-adopting it later is its own change, with regenerated goldens. Labels: foresight's printf formatter, checked equal to C's `%g` on the labels the goldens show.
+adopting it later is its own change, with regenerated goldens. Labels: foresight's printf formatter, checked equal to
+C's `%g` on the labels the goldens show.
+
+## Status
+
+- 2026-11-22, the skeleton (`figure_plot_frame`): a plot's begin and end with ImPlot's layout (padding, tick label
+  sizes, the plot rectangle), two linear axes with given limits, ImPlot's ticks and `%g` labels (foresight's
+  `c_real`), grid, tick marks, frame and plot backgrounds, border, ImPlot's automatic colours, and a line (ImPlot's
+  segment quads, clipped). `figure_test_plot_frame` compares it with ImPlot on four plots (gfortran, nvfortran, ifx):
+  equal at threshold 2, no pixel failing; the anti-aliased line pixels differ by 1 at most (ImPlot normalises a
+  segment with the SSE `rsqrtss` estimate, the frame with `1/sqrt`). Not yet: auto-fit, pan and zoom, hover, legend,
+  title and axis labels, more axes, scales, the style's line colours (ImPlot's colormaps), several plots open, the
+  style variables of a theme, labels without an allocation per label.
 
 ## What the current seam calls, to replace
 
