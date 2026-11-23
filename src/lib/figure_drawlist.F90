@@ -35,7 +35,7 @@ implicit none
 private
 public :: draw_vert, draw_list
 public :: dl_reset, dl_set_state, dl_rect_filled, dl_rect_filled_multicolor, dl_convex_poly_filled, dl_triangle_filled
-public :: dl_line, dl_prim_rect, dl_batch
+public :: dl_line, dl_prim_rect, dl_batch, dl_prims
 public :: DL_LINE_TEXTURES, DL_BATCH_VERTICES
 
 integer(int32), parameter :: DL_LINE_TEXTURES = 64_int32  !< Room for the anti-aliased lines' textures (Dear ImGui 1.93
@@ -317,6 +317,29 @@ contains
       call put_tri(dl, b, b + i - 2_int32, b + i - 1_int32)
    enddo
    endsubroutine dl_convex_poly_filled
+
+   subroutine dl_prims(dl, px, py, pu, pv, col, idx)
+   !< Vertices and triangles as given (the 3-D plots' depth-sorted triangles, ImPlot3D's `SortedMoveToImGuiDrawList`):
+   !< every vertex in one batch (a new batch when they would pass 65535, as Dear ImGui's `PrimReserve` with
+   !< `AllowVtxOffset`), a triangle with an index past what the batch can still address dropped, as ImPlot3D drops it.
+   type(draw_list),    intent(inout) :: dl                     !< List.
+   real(c_float),      intent(in)    :: px(:), py(:), pu(:), pv(:) !< Vertices: position, texture coordinates.
+   integer(c_int32_t), intent(in)    :: col(:)                 !< ... colour.
+   integer(c_int),     intent(in)    :: idx(:)                 !< Triangles' vertices, 0-based, three each.
+   integer(int32)                    :: n, b, t, mx, i          !< Vertices, first vertex, triangle, max index, counter.
+
+   n = size(px, kind=int32)
+   if (n == 0_int32 .or. size(idx) < 3) return
+   call reserve(dl, n, size(idx, kind=int32), b)
+   mx = DL_BATCH_VERTICES - b
+   do i = 1_int32, n
+      call put_vtx(dl, px(i), py(i), pu(i), pv(i), col(i))
+   enddo
+   do t = 1_int32, size(idx, kind=int32) / 3_int32
+      if (idx(3 * t - 2) > mx .or. idx(3 * t - 1) > mx .or. idx(3 * t) > mx) cycle
+      call put_tri(dl, idx(3 * t - 2) + b, idx(3 * t - 1) + b, idx(3 * t) + b)
+   enddo
+   endsubroutine dl_prims
 
    subroutine dl_line(dl, x1, y1, x2, y2, col, thickness, flags)
    !< `AddLine`: a segment from (x1, y1) to (x2, y2), `thickness` pixels wide (Dear ImGui's default 1, flags 0).

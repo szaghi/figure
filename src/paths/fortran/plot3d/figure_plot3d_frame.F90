@@ -26,8 +26,13 @@ module figure_plot3d_frame
 !< labelled, the default ones off), a printf format of the tick labels (`SetupAxisFormat` with FIGURE's formatter:
 !< figure_plot_format's glibc printf), lock, no grid, auto-fit.
 !<
-!< Not yet (P13's next steps): items, the 3-D list and its depth sort, the legend, input beyond the plot's button and
-!< auto-fit (rotation, pan, zoom, the hover of planes and axes, the animation), context menus.
+!< Items (step 4): `pf3_item_begin` (`BeginItem`, `RegisterOrGetItem`: the items kept per plot by their label's ID,
+!< the colormap's next colour for a new one, the style staged), the fit (`ExtendFit`, `ApplyFit`; `Equal`'s
+!< reference axis), the 3-D list moved, depth-sorted, at the plot's end (figure_plot3d_drawlist), the legend
+!< (`RenderLegend`, `ShowLegendEntries`: its box, button, scrolling, entries that hide or highlight their items).
+!<
+!< Not yet (P13's next steps): input beyond the plot's button and auto-fit (rotation, pan, zoom, the hover of planes and
+!< axes, the animation), context menus.
 !<
 !< No allocation per frame once the tables are grown (ADR 0001): fixed slots for titles and labels, the ticks' arrays
 !< kept, fixed arrays for quads.
@@ -35,12 +40,14 @@ use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan, ieee_negative_inf, ieee_positive_inf, &
                                           ieee_value
 use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_ButtonActive, ImGuiCol_ButtonHovered, ImGuiCol_FrameBg, &
-                                ImGuiCol_Text, ImGuiCol_WindowBg
+                                ImGuiCol_PopupBg, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiCol_WindowBg,      &
+                                ImGuiKey_MouseWheelY
 use figure_core, only : core_button_behavior, core_content_region_avail, core_cursor_screen_pos, core_draw_begin, &
                         core_draw_convex_poly_filled, core_draw_end, core_draw_line, core_draw_quad_uv,          &
                         core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, core_frame_count, &
                         core_get_id, core_item_add, core_item_size, core_mouse_pos, core_mouse_pos_valid,        &
-                        core_pop_clip_rect, core_push_clip_rect, core_style_color, core_text_size
+                        core_pop_clip_rect, core_push_clip_rect, core_style_color, core_text_size, core_color,  &
+                        core_draw_rect, core_keep_alive, core_io_input, core_set_key_owner
 use figure_plot_format, only : plot_format, fmt_parse, fmt_real, fmt_text
 use figure_plot_locators, only : transform_log10, transform_symlog
 use figure_plot3d_camera, only : plot3d_quat, view3d, quat_from_el_az, quat_rotate, view_scale, rect_center, &
@@ -48,6 +55,8 @@ use figure_plot3d_camera, only : plot3d_quat, view3d, quat_from_el_az, quat_rota
                                  pixels_to_plot_plane, axes_parameters, mouse_over_plane, edge_outward_dir,          &
                                  in_edge_region, c_atan2f, c_cosf, c_sinf, IM_PI_F, FACES, EDGES, FACE_EDGES,        &
                                  SCALE3_LINEAR, SCALE3_LOG10, SCALE3_SYMLOG
+use figure_plot_colormaps, only : cm_key, cm_size, mix_u32, CM_DEEP
+use figure_plot3d_drawlist, only : d3_flush, d3_reset
 use figure_plot3d_locators, only : ticks3d, ticks3_add, ticks3_reset, locate3_default, locate3_log10, locate3_symlog
 use vecfor_R8P, only : vector_R8P
 
@@ -56,11 +65,14 @@ private
 public :: pf3_begin_plot, pf3_end_plot, pf3_setup_axes, pf3_setup_axis, pf3_setup_axis_ticks, pf3_setup_box
 public :: pf3_setup_legend
 public :: pf3_plot_to_pixels, pf3_mouse_ray, pf3_plot_limits, pf3_plot_rotation
+public :: plot3d_spec, item3d_style, pf3_item_begin, pf3_item_fit, pf3_item_fitting, pf3_item_view, pf3_item_end
+public :: F3_NO_CLIP
 
 ! ImPlot3DFlags
 integer(int32), parameter :: F3_NO_TITLE = 1_int32       !< NoTitle.
 integer(int32), parameter :: F3_NO_LEGEND = 2_int32      !< NoLegend.
 integer(int32), parameter :: F3_NO_MOUSE_TEXT = 4_int32  !< NoMouseText.
+integer(int32), parameter :: F3_NO_CLIP = 8_int32        !< NoClip.
 integer(int32), parameter :: F3_EQUAL = 32_int32         !< Equal.
 integer(int32), parameter :: F3_NO_INPUTS = 512_int32    !< NoInputs.
 ! ImPlot3DAxisFlags
@@ -80,6 +92,18 @@ integer(int32), parameter :: COND_ONCE = 2_int32   !< Once.
 integer(int32), parameter :: LOC_NORTH = 1_int32, LOC_SOUTH = 2_int32, LOC_WEST = 4_int32, LOC_EAST = 8_int32 !< Bits.
 ! the plot's button (ImGuiButtonFlags): AllowOverlap, PressedOnClick, PressedOnDoubleClick, the three mouse buttons
 integer(int32), parameter :: PLOT_BUTTON_FLAGS = 4096_int32 + 16_int32 + 256_int32 + 1_int32 + 2_int32 + 4_int32 !< Flags.
+integer(int32), parameter :: LEGEND_BUTTON_FLAGS = PLOT_BUTTON_FLAGS + 2048_int32 !< ... and FlattenChildren.
+! ImPlot3DLegendFlags
+integer(int32), parameter :: L3_NO_BUTTONS = 1_int32    !< NoButtons.
+integer(int32), parameter :: L3_NO_HIGHLIGHT = 2_int32  !< NoHighlightItem.
+integer(int32), parameter :: L3_HORIZONTAL = 4_int32    !< Horizontal.
+! ImPlot3DItemFlags, markers
+integer(int32), parameter :: I3_NO_LEGEND = 1_int32     !< NoLegend.
+integer(int32), parameter :: I3_NO_FIT = 2_int32        !< NoFit.
+integer(int32), parameter :: M3_NONE = -2_int32         !< ImPlot3DMarker_None.
+real(real32),   parameter :: LEGEND_PADDING(2) = [10.0_real32, 10.0_real32]      !< LegendPadding.
+real(real32),   parameter :: LEGEND_INNER_PADDING(2) = [5.0_real32, 5.0_real32] !< LegendInnerPadding.
+real(real32),   parameter :: LEGEND_SPACING(2) = [5.0_real32, 0.0_real32]       !< LegendSpacing.
 ! the style (ImPlot3DStyle's defaults)
 real(real32),   parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 400.0_real32] !< PlotDefaultSize.
 real(real32),   parameter :: PLOT_MIN_SIZE(2) = [200.0_real32, 200.0_real32]     !< PlotMinSize.
@@ -117,6 +141,50 @@ type :: axis3d
    integer(int32)          :: col_act = 0_int32      !< ColorAct.
 endtype axis3d
 
+type :: plot3d_spec
+   !< An item's style as given (`ImPlot3DSpec` without its per-point arrays): a colour's alpha -1 is automatic, a
+   !< negative weight, size or alpha the style's, the marker `ImPlot3DMarker_Auto` (-1) the style's.
+   real(real32)   :: line_color(4) = [0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32]        !< LineColor.
+   real(real32)   :: line_weight = 1.0_real32                                                 !< LineWeight.
+   real(real32)   :: fill_color(4) = [0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32]        !< FillColor.
+   real(real32)   :: fill_alpha = -1.0_real32                                                 !< FillAlpha.
+   integer(int32) :: marker = -1_int32                                                        !< Marker.
+   real(real32)   :: marker_size = -1.0_real32                                                !< MarkerSize.
+   real(real32)   :: marker_line_color(4) = [0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32] !< MarkerLineColor.
+   real(real32)   :: marker_fill_color(4) = [0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32] !< MarkerFillColor.
+   integer(int32) :: flags = 0_int32                                                          !< Flags.
+endtype plot3d_spec
+
+type :: item3d_style
+   !< An item's style as `BeginItem` stages it (`ImPlot3DNextItemData`).
+   real(real32)   :: line_color(4) = 0.0_real32  !< LineColor.
+   real(real32)   :: fill_color(4) = 0.0_real32  !< FillColor (times FillAlpha).
+   real(real32)   :: mline_color(4) = 0.0_real32 !< MarkerLineColor.
+   real(real32)   :: mfill_color(4) = 0.0_real32 !< MarkerFillColor (times FillAlpha).
+   real(real32)   :: line_weight = 1.0_real32    !< LineWeight.
+   real(real32)   :: marker_size = 4.0_real32    !< MarkerSize.
+   real(real32)   :: fill_alpha = 1.0_real32     !< FillAlpha.
+   integer(int32) :: marker = M3_NONE            !< Marker.
+   logical        :: auto_line = .false.         !< IsAutoLine.
+   logical        :: auto_fill = .false.         !< IsAutoFill.
+   logical        :: render_line = .false.       !< RenderLine.
+   logical        :: render_fill = .false.       !< RenderFill.
+   logical        :: render_mline = .false.      !< RenderMarkerLine.
+   logical        :: render_mfill = .false.      !< RenderMarkerFill.
+   integer(int32) :: color = 0_int32             !< The item's colour (packed).
+endtype item3d_style
+
+type :: item3d
+   !< An item kept between frames (`ImPlot3DItem`).
+   integer(int32)          :: id = 0_int32          !< ID.
+   integer(int32)          :: color = 0_int32       !< Colour (packed).
+   logical                 :: show = .true.         !< Shown.
+   logical                 :: legend_hovered = .false. !< Its legend entry hovered.
+   logical                 :: seen = .false.        !< SeenThisFrame.
+   character(len=TEXT_LEN) :: name = ''             !< Legend label (its first name_len characters).
+   integer(int32)          :: name_len = 0_int32    !< Its length.
+endtype item3d
+
 type :: plot3d_record
    !< A 3-D plot kept between frames (`ImPlot3DPlot`).
    logical                 :: used = .false.          !< Slot in use.
@@ -146,12 +214,23 @@ type :: plot3d_record
    integer(int32)          :: legend_prev_loc = LOC_NORTH + LOC_WEST !< Legend.PreviousLocation.
    integer(int32)          :: legend_flags = 0_int32  !< Legend.Flags.
    integer(int32)          :: legend_prev_flags = 0_int32 !< Legend.PreviousFlags.
+   type(item3d), allocatable :: it(:)                 !< Items (ImPlot3DItemGroup::ItemPool).
+   integer(int32)          :: n_items = 0_int32       !< Items in the pool.
+   integer(int32), allocatable :: leg(:)              !< Legend entries of this frame (items' indices).
+   integer(int32)          :: n_leg = 0_int32         !< Entries.
+   integer(int32)          :: colormap_idx = 0_int32  !< ColormapIdx.
+   real(real32)            :: leg_rect(4) = 0.0_real32 !< Legend.Rect.
+   real(real32)            :: leg_clamped(4) = 0.0_real32 !< Legend.RectClamped.
+   real(real32)            :: leg_scroll(2) = 0.0_real32 !< Legend.Scroll.
+   logical                 :: leg_hovered = .false.   !< Legend.Hovered.
+   logical                 :: leg_held = .false.      !< Legend.Held.
 endtype plot3d_record
 
 type(plot3d_record), allocatable, target :: plots(:) !< The plots (ImPlot3DContext::Plots).
 integer(int32)                           :: n_plots = 0_int32 !< Slots in use or freed.
 integer(int32)                           :: cur = 0_int32     !< The plot begun, 0 none (handle, never a pointer).
 character(len=128)                       :: mouse_text = ''   !< The mouse position's text.
+integer(int32)                           :: cur_item = 0_int32 !< The item begun (handle in the plot's pool), 0 none.
 
 contains
    ! begin and end
@@ -226,9 +305,11 @@ contains
       call core_item_size(real(p%frame(3) - p%frame(1), real64), real(p%frame(4) - p%frame(2), real64))
       if (.not. core_item_add(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
                               real(p%frame(4), real64), id)) return
+      p%n_leg = 0_int32 ! Legend.Reset
       do i = 1_int32, 3_int32 ! ImPlot3DAxis::Reset
          call axis_reset(p, i)
       enddo
+      call d3_reset()
       call core_push_clip_rect(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
                                real(p%frame(4), real64), intersect=.true.)
    endassociate
@@ -244,6 +325,9 @@ contains
 
    if (cur == 0_int32) error stop 'figure_plot3d_frame: pf3_end_plot without a 3-D plot'
    associate(p => plots(cur))
+      call core_draw_begin() ! SortedMoveToImGuiDrawList
+      call d3_flush()
+      call core_draw_end()
       if (p%fit) then
          p%fit = .false.
          if (.not. has_flag(p%flags, F3_EQUAL)) then
@@ -272,10 +356,16 @@ contains
       endif
       call setup_lock(p)
       call core_pop_clip_rect() ! the plot rectangle
+      p%leg_hovered = .false.
+      call render_legend(p)
       call mouse_position(p)
       call core_pop_clip_rect() ! the frame
+      do i = 1_int32, p%n_items
+         p%it(i)%seen = .false.
+      enddo
    endassociate
    cur = 0_int32
+   cur_item = 0_int32
    endsubroutine pf3_end_plot
 
    ! setup
@@ -529,6 +619,118 @@ contains
    q(3) = plots(cur)%v%rot%z
    q(4) = plots(cur)%v%rot%w
    endsubroutine pf3_plot_rotation
+
+   ! items
+
+   function pf3_item_begin(label, spec, item_col, item_mkr, st) result(shown)
+   !< `BeginItem`: the setup locked, the item registered (its legend entry this frame when its label shows), its colour
+   !< (the given one, else the colormap's next when created), the style staged into `st` (automatic colours from the
+   !< item's, the style's weight 1, marker none, size 4, alpha 1; `FillAlpha` on the fills; what is drawn; a hovered
+   !< legend entry doubles the weight and makes the markers 1.25 times larger). False for a hidden item.
+   character(len=*),   intent(in)  :: label       !< Label (its ID in the window's ID stack).
+   type(plot3d_spec),  intent(in)  :: spec        !< Style given.
+   real(real32),       intent(in)  :: item_col(4) !< The colour that names the item (alpha -1: automatic).
+   integer(int32),     intent(in)  :: item_mkr    !< The marker that names it (unused: ImPlot3D keeps it, draws the spec's).
+   type(item3d_style), intent(out) :: st          !< Staged style.
+   logical                         :: shown       !< Drawn.
+   integer(int32)                  :: h           !< The item.
+   logical                         :: created     !< New.
+   real(real32)                    :: ic(4)       !< The item's colour, unpacked.
+
+   if (cur == 0_int32) error stop 'figure_plot3d_frame: a 3-D item outside a 3-D plot'
+   shown = .false.
+   associate(p => plots(cur))
+      call setup_lock(p)
+      h = register_item(p, label, spec%flags, created)
+      cur_item = h
+      if (item_col(4) /= -1.0_real32) then
+         p%it(h)%color = core_color(real(item_col(1), real64), real(item_col(2), real64), real(item_col(3), real64), &
+                                    real(item_col(4), real64))
+      elseif (created) then
+         p%it(h)%color = cm_key(CM_DEEP, mod(p%colormap_idx, cm_size(CM_DEEP)))
+         p%colormap_idx = p%colormap_idx + 1_int32
+      endif
+      if (item_mkr < -2_int32) error stop 'figure_plot3d_frame: an invalid marker'
+      call unpack_u32(p%it(h)%color, ic)
+      st%color = p%it(h)%color
+      st%auto_line = spec%line_color(4) == -1.0_real32
+      st%auto_fill = spec%fill_color(4) == -1.0_real32
+      st%line_color = spec%line_color
+      if (st%auto_line) st%line_color = ic
+      st%fill_color = spec%fill_color
+      if (st%auto_fill) st%fill_color = ic
+      st%mline_color = spec%marker_line_color
+      if (spec%marker_line_color(4) == -1.0_real32) st%mline_color = st%line_color
+      st%mfill_color = spec%marker_fill_color
+      if (spec%marker_fill_color(4) == -1.0_real32) st%mfill_color = st%line_color
+      st%line_weight = spec%line_weight
+      if (st%line_weight < 0.0_real32) st%line_weight = 1.0_real32
+      st%marker = spec%marker
+      if (st%marker < 0_int32) st%marker = M3_NONE
+      st%marker_size = spec%marker_size
+      if (st%marker_size < 0.0_real32) st%marker_size = 4.0_real32
+      st%fill_alpha = spec%fill_alpha
+      if (st%fill_alpha < 0.0_real32) st%fill_alpha = 1.0_real32
+      st%fill_color(4) = st%fill_color(4) * st%fill_alpha
+      st%mfill_color(4) = st%mfill_color(4) * st%fill_alpha
+      st%render_line = st%line_color(4) > 0.0_real32 .and. st%line_weight > 0.0_real32
+      st%render_fill = st%fill_color(4) > 0.0_real32
+      st%render_mline = st%line_color(4) > 0.0_real32 .and. st%line_weight > 0.0_real32
+      st%render_mfill = st%fill_color(4) > 0.0_real32
+      if (.not. p%it(h)%show) then
+         cur_item = 0_int32
+         return
+      endif
+      if (p%it(h)%legend_hovered .and. .not. has_flag(p%legend_flags, L3_NO_HIGHLIGHT)) then
+         st%line_weight = st%line_weight * 2.0_real32
+         st%marker_size = st%marker_size * 1.25_real32
+      endif
+   endassociate
+   shown = .true.
+   endfunction pf3_item_begin
+
+   function pf3_item_fitting(flags) result(yes)
+   !< Whether the item's points extend the fit this frame (`FitThisFrame`, not `NoFit`).
+   integer(int32), intent(in) :: flags !< The item's flags.
+   logical                    :: yes   !< Fitting.
+
+   yes = plots(cur)%fit .and. .not. has_flag(flags, I3_NO_FIT)
+   endfunction pf3_item_fitting
+
+   subroutine pf3_item_fit(x, y, z)
+   !< `ImPlot3DPlot::ExtendFit`: each finite coordinate of an axis to fit, within its constraints.
+   real(real64), intent(in) :: x, y, z !< Point.
+
+   associate(p => plots(cur))
+      call extend_fit(p, 1_int32, x)
+      call extend_fit(p, 2_int32, y)
+      call extend_fit(p, 3_int32, z)
+   endassociate
+   endsubroutine pf3_item_fit
+
+   subroutine pf3_item_view(v, cmin, cmax, flags)
+   !< What an item's renderers read: the plot's view, the cull box (its ranges, unbounded with `NoClip`), its flags.
+   type(view3d),   intent(out) :: v       !< View.
+   real(real64),   intent(out) :: cmin(3) !< Cull box's minima.
+   real(real64),   intent(out) :: cmax(3) !< ... maxima.
+   integer(int32), intent(out) :: flags   !< ImPlot3DFlags.
+
+   v = plots(cur)%v
+   flags = plots(cur)%flags
+   if (has_flag(flags, F3_NO_CLIP)) then
+      cmin = ieee_value(1.0_real64, ieee_negative_inf)
+      cmax = ieee_value(1.0_real64, ieee_positive_inf)
+   else
+      cmin = v%rmin
+      cmax = v%rmax
+   endif
+   endsubroutine pf3_item_view
+
+   subroutine pf3_item_end()
+   !< `EndItem`.
+
+   cur_item = 0_int32
+   endsubroutine pf3_item_end
 
    ! private: setup
 
@@ -1428,6 +1630,294 @@ contains
    enddo
    endsubroutine range_center
 
+   ! private: items and legend
+
+   function register_item(p, label, flags, created) result(h)
+   !< `RegisterOrGetItem`: the item of the label's ID (added when new); the first time this frame, a legend entry
+   !< when the label shows something and the item has one.
+   type(plot3d_record), intent(inout) :: p       !< Plot.
+   character(len=*),    intent(in)    :: label   !< Label.
+   integer(int32),      intent(in)    :: flags   !< Item flags.
+   logical,             intent(out)   :: created !< New.
+   integer(int32)                     :: h       !< The item.
+   integer(int32)                     :: id, k   !< ID, counter.
+
+   id = core_get_id(label)
+   h = 0_int32
+   do k = 1_int32, p%n_items
+      if (p%it(k)%id == id) then
+         h = k
+         exit
+      endif
+   enddo
+   created = h == 0_int32
+   if (created) then
+      if (.not. allocated(p%it)) allocate(p%it(8))
+      if (p%n_items == size(p%it, kind=int32)) call grow_items(p)
+      p%n_items = p%n_items + 1_int32
+      h = p%n_items
+      p%it(h)%id = id
+      p%it(h)%color = 0_int32
+      p%it(h)%show = .true.
+      p%it(h)%legend_hovered = .false.
+      p%it(h)%seen = .false.
+      p%it(h)%name_len = 0_int32
+   endif
+   if (p%it(h)%seen) return
+   p%it(h)%seen = .true.
+   if (.not. has_flag(flags, I3_NO_LEGEND) .and. rendered_len(label) > 0_int32) then
+      if (.not. allocated(p%leg)) allocate(p%leg(8))
+      if (p%n_leg == size(p%leg, kind=int32)) call grow_leg(p)
+      p%n_leg = p%n_leg + 1_int32
+      p%leg(p%n_leg) = h
+      p%it(h)%name_len = min(len(label, kind=int32), TEXT_LEN)
+      p%it(h)%name(1:p%it(h)%name_len) = label(1:p%it(h)%name_len)
+   endif
+   endfunction register_item
+
+   subroutine grow_items(p)
+   !< Room for twice the items, those held kept (element by element).
+   type(plot3d_record), intent(inout) :: p       !< Plot.
+   type(item3d), allocatable          :: more(:) !< New pool.
+   integer(int32)                     :: k       !< Counter.
+
+   allocate(more(2_int32 * size(p%it, kind=int32)))
+   do k = 1_int32, p%n_items
+      more(k) = p%it(k)
+   enddo
+   call move_alloc(more, p%it)
+   endsubroutine grow_items
+
+   subroutine grow_leg(p)
+   !< Room for twice the legend entries.
+   type(plot3d_record), intent(inout) :: p       !< Plot.
+   integer(int32), allocatable        :: more(:) !< New list.
+
+   allocate(more(2_int32 * size(p%leg, kind=int32)))
+   more(1:p%n_leg) = p%leg(1:p%n_leg)
+   call move_alloc(more, p%leg)
+   endsubroutine grow_leg
+
+   subroutine extend_fit(p, i, v)
+   !< `ImPlot3DAxis::ExtendFit` for an axis to fit: a finite value within the constraints widens the fit extents.
+   type(plot3d_record), intent(inout) :: p !< Plot.
+   integer(int32),      intent(in)    :: i !< Axis.
+   real(real64),        intent(in)    :: v !< Value.
+
+   if (.not. p%ax(i)%fit) return
+   if (.not. ieee_is_finite(v)) return
+   if (v >= p%ax(i)%con_min .and. v <= p%ax(i)%con_max) then
+      p%ax(i)%fit_min = min(p%ax(i)%fit_min, v)
+      p%ax(i)%fit_max = max(p%ax(i)%fit_max, v)
+   endif
+   endsubroutine extend_fit
+
+   pure subroutine unpack_u32(col, c)
+   !< `ColorConvertU32ToFloat4`: each byte times 1/255 (floats).
+   integer(int32), intent(in)  :: col  !< Packed colour.
+   real(real32),   intent(out) :: c(4) !< RGBA.
+   integer(int64)              :: u    !< Unsigned.
+   integer(int32)              :: k    !< Channel.
+
+   u = iand(int(col, int64), 4294967295_int64)
+   do k = 1_int32, 4_int32
+      c(k) = real(iand(ishft(u, -8 * (k - 1_int32)), 255_int64), real32) * (1.0_real32 / 255.0_real32)
+   enddo
+   endsubroutine unpack_u32
+
+   pure function alpha_u32(col, alpha) result(c)
+   !< `ImAlphaU32`: the alpha bits of `(1 - alpha) * 255` cleared.
+   integer(int32), intent(in) :: col   !< Packed colour.
+   real(real32),   intent(in) :: alpha !< Alpha in [0, 1].
+   integer(int32)             :: c     !< Colour.
+   integer(int64)             :: u     !< Unsigned value.
+
+   u = iand(iand(int(col, int64), 4294967295_int64), &
+            not(ishft(int(int((1.0_real32 - alpha) * 255.0_real32, int32), int64), 24)))
+   if (u >= 2147483648_int64) u = u - 4294967296_int64
+   c = int(u, int32)
+   endfunction alpha_u32
+
+   subroutine render_legend(p)
+   !< `RenderLegend`: the entries' box at its location in the plot rectangle (clamped, scrolled by the wheel when it
+   !< overflows), its button, background, entries and border.
+   type(plot3d_record), intent(inout) :: p     !< Plot.
+   real(real32)                       :: sz(2), pos(2), step, mins(2), off(2), mx, my !< Work.
+   real(real64)                       :: dx, dy, wheel, wheel_h, drag(5) !< io.
+   integer(int32)                     :: mods  !< io.KeyMods.
+   logical                            :: horz, scrollable, dd, clicked !< Work.
+
+   if (has_flag(p%flags, F3_NO_LEGEND) .or. p%n_leg == 0_int32) return
+   horz = has_flag(p%legend_flags, L3_HORIZONTAL)
+   call legend_size(p, .not. horz, sz)
+   call location_pos(p%v%rect, sz(1), sz(2), p%legend_loc, LEGEND_PADDING(1), LEGEND_PADDING(2), pos)
+   p%leg_rect(1:2) = pos
+   p%leg_rect(3:4) = pos + sz
+   p%leg_clamped = p%leg_rect
+   scrollable = .false.
+   if (p%leg_clamped(1) < p%v%rect(1) + LEGEND_PADDING(1)) then
+      p%leg_clamped(1) = p%v%rect(1) + LEGEND_PADDING(1)
+      scrollable = .true.
+   endif
+   if (p%leg_clamped(2) < p%v%rect(2) + LEGEND_PADDING(2)) then
+      p%leg_clamped(2) = p%v%rect(2) + LEGEND_PADDING(2)
+      scrollable = .true.
+   endif
+   if (p%leg_clamped(3) > p%v%rect(3) - LEGEND_PADDING(1)) then
+      p%leg_clamped(3) = p%v%rect(3) - LEGEND_PADDING(1)
+      scrollable = .true.
+   endif
+   if (p%leg_clamped(4) > p%v%rect(4) - LEGEND_PADDING(2)) then
+      p%leg_clamped(4) = p%v%rect(4) - LEGEND_PADDING(2)
+      scrollable = .true.
+   endif
+   call core_keep_alive(p%id - 1_int32)
+   clicked = core_button_behavior(real(p%leg_clamped(1), real64), real(p%leg_clamped(2), real64),         &
+                                  real(p%leg_clamped(3), real64), real(p%leg_clamped(4), real64), p%id - 1_int32, &
+                                  p%leg_hovered, p%leg_held, flags=LEGEND_BUTTON_FLAGS)
+   if (pointer(mx, my)) p%leg_hovered = p%leg_hovered .or. (mx >= p%leg_clamped(1) .and. my >= p%leg_clamped(2) .and. &
+                                                            mx < p%leg_clamped(3) .and. my < p%leg_clamped(4))
+   if (scrollable) then
+      if (p%leg_hovered) then
+         call core_set_key_owner(ImGuiKey_MouseWheelY, p%id - 1_int32)
+         call core_io_input(dx, dy, wheel, wheel_h, drag, mods, dd)
+         if (wheel /= 0.0_real64) then
+            step = im_floor(min(2.0_real32 * real(core_font_size(), real32), (p%leg_rect(3) - p%leg_rect(1)) * 0.67_real32))
+            p%leg_scroll(1) = p%leg_scroll(1) + step * real(wheel, real32)
+            p%leg_scroll(2) = p%leg_scroll(2) + step * real(wheel, real32)
+         endif
+      endif
+      mins(1) = (p%leg_clamped(3) - p%leg_clamped(1)) - (p%leg_rect(3) - p%leg_rect(1))
+      mins(2) = (p%leg_clamped(4) - p%leg_clamped(2)) - (p%leg_rect(4) - p%leg_rect(2))
+      p%leg_scroll(1) = min(max(p%leg_scroll(1), mins(1)), 0.0_real32)
+      p%leg_scroll(2) = min(max(p%leg_scroll(2), mins(2)), 0.0_real32)
+      off = p%leg_clamped(1:2) - p%leg_rect(1:2)
+      if (horz) then
+         off(1) = off(1) + p%leg_scroll(1)
+      else
+         off(2) = off(2) + p%leg_scroll(2)
+      endif
+      p%leg_rect(1:2) = p%leg_rect(1:2) + off
+      p%leg_rect(3:4) = p%leg_rect(3:4) + off
+   else
+      p%leg_scroll = 0.0_real32
+   endif
+   call core_push_clip_rect(real(p%leg_clamped(1), real64), real(p%leg_clamped(2), real64), &
+                            real(p%leg_clamped(3), real64), real(p%leg_clamped(4), real64), intersect=.true.)
+   call core_draw_begin()
+   call core_draw_rect_filled(real(p%leg_clamped(1), real64), real(p%leg_clamped(2), real64), &
+                              real(p%leg_clamped(3), real64), real(p%leg_clamped(4), real64), &
+                              core_style_color(ImGuiCol_PopupBg))
+   call legend_entries(p, .not. horz)
+   call core_draw_rect(real(p%leg_clamped(1), real64), real(p%leg_clamped(2), real64), &
+                       real(p%leg_clamped(3), real64), real(p%leg_clamped(4), real64), core_style_color(ImGuiCol_Border))
+   call core_draw_end()
+   call core_pop_clip_rect()
+   endsubroutine render_legend
+
+   subroutine legend_size(p, vertical, sz)
+   !< `CalcLegendSize`: the padding, an icon a line high per entry, the widest label (or the labels' sum in a row).
+   type(plot3d_record), intent(in)  :: p        !< Plot.
+   logical,             intent(in)  :: vertical !< A column.
+   real(real32),        intent(out) :: sz(2)    !< Size.
+   real(real32)                     :: ht, mx_w, sum_w, lw !< Line height, widths.
+   real(real64)                     :: w, h     !< A label's size.
+   integer(int32)                   :: i, n     !< Entry, entries.
+
+   ht = real(core_font_size(), real32)
+   n = p%n_leg
+   mx_w = 0.0_real32
+   sum_w = 0.0_real32
+   do i = 1_int32, n
+      call core_text_size(p%it(p%leg(i))%name(1:p%it(p%leg(i))%name_len), w, h, hide_after_hash=.true.)
+      lw = real(w, real32)
+      if (lw > mx_w) mx_w = lw
+      sum_w = sum_w + lw
+   enddo
+   if (vertical) then
+      sz(1) = LEGEND_INNER_PADDING(1) * 2.0_real32 + ht + mx_w
+      sz(2) = LEGEND_INNER_PADDING(2) * 2.0_real32 + real(n, real32) * ht + real(n - 1_int32, real32) * LEGEND_SPACING(2)
+   else
+      sz(1) = LEGEND_INNER_PADDING(1) * 2.0_real32 + ht * real(n, real32) + sum_w + &
+              real(n - 1_int32, real32) * LEGEND_SPACING(1)
+      sz(2) = LEGEND_INNER_PADDING(2) * 2.0_real32 + ht
+   endif
+   endsubroutine legend_size
+
+   subroutine legend_entries(p, vertical)
+   !< `ShowLegendEntries`: per entry, its button (a click hides or shows the item), its icon (the item's colour; lighter
+   !< hovered or held, the disabled text's when hidden) and its label (mixed with the item's colour when hovered).
+   type(plot3d_record), intent(inout) :: p        !< Plot.
+   logical,             intent(in)    :: vertical !< A column.
+   real(real32)                       :: ht, sum_w, lw, tl(2), ib(4), lb(4) !< Work.
+   real(real64)                       :: w, h     !< A label's size.
+   integer(int32)                     :: i, k, col_txt, col_dis, col_hl, col_item, col_icon !< Entry, item, colours.
+   logical                            :: hov, hld, clk !< Its button.
+
+   ht = real(core_font_size(), real32)
+   col_txt = core_style_color(ImGuiCol_Text)
+   col_dis = alpha_u32(col_txt, 0.25_real32)
+   sum_w = 0.0_real32
+   do i = 1_int32, p%n_leg
+      k = p%leg(i)
+      call core_text_size(p%it(k)%name(1:p%it(k)%name_len), w, h, hide_after_hash=.true.)
+      lw = real(w, real32)
+      if (vertical) then
+         tl(1) = p%leg_rect(1) + LEGEND_INNER_PADDING(1) + 0.0_real32
+         tl(2) = p%leg_rect(2) + LEGEND_INNER_PADDING(2) + real(i - 1_int32, real32) * (ht + LEGEND_SPACING(2))
+      else
+         tl(1) = p%leg_rect(1) + LEGEND_INNER_PADDING(1) + &
+                 (real(i - 1_int32, real32) * (ht + LEGEND_SPACING(1)) + sum_w)
+         tl(2) = p%leg_rect(2) + LEGEND_INNER_PADDING(2) + 0.0_real32
+      endif
+      sum_w = sum_w + lw
+      ib(1) = tl(1) + 2.0_real32
+      ib(2) = tl(2) + 2.0_real32
+      ib(3) = tl(1) + (ht - 2.0_real32)
+      ib(4) = tl(2) + (ht - 2.0_real32)
+      lb(1:2) = tl
+      lb(3) = tl(1) + (lw + ht)
+      lb(4) = tl(2) + ht
+      col_item = alpha_u32(p%it(k)%color, 1.0_real32)
+      call core_keep_alive(p%it(k)%id)
+      hov = .false.
+      hld = .false.
+      clk = .false.
+      if (.not. has_flag(p%legend_flags, L3_NO_BUTTONS)) &
+         clk = core_button_behavior(real(ib(1), real64), real(ib(2), real64), real(lb(3), real64), real(lb(4), real64), &
+                                    p%it(k)%id, hov, hld)
+      if (clk) p%it(k)%show = .not. p%it(k)%show
+      if (hov .and. .not. has_flag(p%legend_flags, L3_NO_HIGHLIGHT)) then
+         p%it(k)%legend_hovered = .true.
+         col_hl = mix_u32(col_txt, col_item, 64_int32)
+      else
+         p%it(k)%legend_hovered = .false.
+         col_hl = col_txt
+      endif
+      if (hld) then
+         if (p%it(k)%show) then
+            col_icon = alpha_u32(col_item, 0.5_real32)
+         else
+            col_icon = core_style_color(ImGuiCol_TextDisabled, 0.5_real64)
+         endif
+      elseif (hov) then
+         if (p%it(k)%show) then
+            col_icon = alpha_u32(col_item, 0.75_real32)
+         else
+            col_icon = core_style_color(ImGuiCol_TextDisabled, 0.75_real64)
+         endif
+      else
+         col_icon = col_item
+         if (.not. p%it(k)%show) col_icon = col_dis
+      endif
+      call core_draw_rect_filled(real(ib(1), real64), real(ib(2), real64), real(ib(3), real64), real(ib(4), real64), &
+                                 col_icon)
+      if (rendered_len(p%it(k)%name(1:p%it(k)%name_len)) > 0_int32) &
+         call core_draw_text(real(tl(1) + ht, real64), real(tl(2) + 0.0_real32, real64), merge(col_hl, col_dis, p%it(k)%show), &
+                             p%it(k)%name(1:rendered_len(p%it(k)%name(1:p%it(k)%name_len))))
+   enddo
+   endsubroutine legend_entries
+
    ! private: tables
 
    function plot_handle(id, frame, created) result(h)
@@ -1502,6 +1992,14 @@ contains
    p%legend_prev_loc = LOC_NORTH + LOC_WEST
    p%legend_flags = 0_int32
    p%legend_prev_flags = 0_int32
+   p%n_items = 0_int32
+   p%n_leg = 0_int32
+   p%colormap_idx = 0_int32
+   p%leg_rect = 0.0_real32
+   p%leg_clamped = 0.0_real32
+   p%leg_scroll = 0.0_real32
+   p%leg_hovered = .false.
+   p%leg_held = .false.
    do i = 1_int32, 3_int32
       call axis_defaults(p, i)
    enddo

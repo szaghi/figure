@@ -36,7 +36,8 @@ module figure_core
 !<   items' primitives and decimation; `core_texture_sampling`, the texture filter callback around a user image;
 !<   a glyph of the current font at its size (`core_font_glyph`: `GetFontBaked`, `FindGlyph`), for text drawn glyph by
 !<   glyph (ImPlot's vertical text); a rectangle of four corner colours (`core_draw_rect_filled_multicolor`:
-!<   `AddRectFilledMultiColor`, ImPlot's colour bars).
+!<   `AddRectFilledMultiColor`, ImPlot's colour bars); P13: triangles appended as given (`core_draw_prims`, the 3-D
+!<   plots' depth-sorted list).
 !<
 !< The draw list is built in Fortran (figure_drawlist, the first piece of block E) and appended to the window's Dear
 !< ImGui list by `core_draw_end`: the primitives figure_drawlist tessellates (filled rectangles without rounding,
@@ -49,7 +50,7 @@ module figure_core
 !< concatenation; a text longer than the buffer gets an allocated copy).
 use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_double, c_f_pointer, c_float, c_funptr, c_int, &
                                          c_int16_t, c_int32_t, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t
-use, intrinsic :: iso_fortran_env, only : int32, int64, real64
+use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextSize, igGetColorU32_Col,             &
                           igGetContentRegionAvail, igGetCursorScreenPos, igGetFont, igGetFontSize, igGetFrameCount,     &
                           igGetFrameHeight, igGetID_Str, igGetMousePos, igGetTime, igGetWindowDrawList, igGetWindowPos, &
@@ -69,6 +70,7 @@ use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,
                                ImDrawList_PrimReserve, ImDrawList_PushClipRect, igBeginPopupEx, igOpenPopupEx
 use figure_c_native, only : fig_texture_sampling
 use figure_style, only : ig_get_style_var
+use figure_drawlist, only : dl_prims
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
                             dl_triangle_filled, DL_LINE_TEXTURES
 
@@ -93,6 +95,7 @@ public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_pu
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
 public :: core_open_popup, core_begin_popup, core_end_popup, core_open_popup_id, core_begin_popup_id
 public :: core_white_pixel, core_framebuffer_scale, core_texture_sampling
+public :: core_draw_prims
 public :: core_draw_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
@@ -1103,6 +1106,18 @@ contains
    uv1 = [real(b%x, real64), real(b%y, real64)]
    fringe = real(f, real64)
    endsubroutine core_line_texture
+
+   subroutine core_draw_prims(x, y, u, v, col, idx)
+   !< Vertices and triangles as given, appended in order (the 3-D plots' depth-sorted triangles: ImPlot3D's
+   !< `SortedMoveToImGuiDrawList`, `PrimReserve` and its 16-bit indices included): positions [pixels] and texture
+   !< coordinates in single precision, packed colours, three 0-based vertex indices per triangle.
+   real(real32),   intent(in) :: x(:), y(:) !< Positions.
+   real(real32),   intent(in) :: u(:), v(:) !< Texture coordinates.
+   integer(int32), intent(in) :: col(:)     !< Colours.
+   integer(int32), intent(in) :: idx(:)     !< Triangles.
+
+   call dl_prims(list, x, y, u, v, col, idx)
+   endsubroutine core_draw_prims
 
    subroutine core_draw_quad_uv(x, y, u, v, col)
    !< A quad of four textured vertices, triangles (1, 2, 3) and (1, 3, 4) (`PrimReserve(6, 4)` and `PrimQuadUV`): the
