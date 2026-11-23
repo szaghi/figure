@@ -126,7 +126,7 @@ private
 public :: pf_begin_plot, pf_end_plot, pf_plot_limits
 public :: plot_item_ctx, pf_item_begin, pf_item_fit, pf_item_end, pf_item_hidden, pf_item_fit_axis
 public :: pf_plot_ctx, pf_item_count, pf_item_shown_at, pf_item_state, pf_item_fit_with, pf_digital_offset
-public :: pf_text_vertical, pf_item_recolor, pf_item_id
+public :: pf_text_vertical, pf_item_recolor, pf_item_id, pf_last_item_color
 public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
 public :: pf_hide_next_item, pf_legend_hovered
@@ -344,6 +344,7 @@ logical                                :: open_context = .false. !< A context me
 character(len=MOUSE_TEXT_LEN)          :: mouse_text     !< The mouse text (MousePosStringBuilder).
 integer(int32)                         :: digital_offset = 0_int32 !< The digital items' bands (DigitalPlotOffset).
 integer(int32)                         :: last_item = 0_int32 !< The item `pf_item_begin` registered last.
+integer(int32)                         :: prev_item = 0_int32 !< The item drawn or hidden last (PreviousItem; 0: none).
 
 contains
    function pf_begin_plot(title, width, height, equal) result(visible)
@@ -1768,6 +1769,7 @@ contains
    next_hidden_set = .false.
    open_context = .false.
    digital_offset = 0_int32
+   prev_item = 0_int32
    endsubroutine reset_next
 
    ! private: the items
@@ -1868,7 +1870,10 @@ contains
          endif
       endif
       last_item = it
-      if (.not. shown) return
+      if (.not. shown) then
+         prev_item = it ! (BeginItem of a hidden item: PreviousItem = item)
+         return
+      endif
       ctx%color = p%item_color(it)
       ctx%marker = p%item_marker(it)
       ctx%hovered = .false.
@@ -2040,6 +2045,20 @@ contains
    plots(cur)%item_color(last_item) = col
    endsubroutine pf_item_recolor
 
+   function pf_last_item_color() result(c)
+   !< `GetLastItemColor`: the colour of the item drawn (or hidden) last in the open plot, RGBA as floats
+   !< (`ColorConvertU32ToFloat4`); zeros when none (also after `pf_end_plot`).
+   real(real64) :: c(4) !< Colour.
+   integer(int32) :: k  !< Channel.
+
+   c = 0.0_real64
+   if (cur == 0_int32 .or. prev_item == 0_int32) return
+   do k = 1_int32, 4_int32
+      c(k) = real(real(channel(plots(cur)%item_color(prev_item), k - 1_int32), real32) * (1.0_real32 / 255.0_real32), &
+                  real64)
+   enddo
+   endfunction pf_last_item_color
+
    function pf_item_id(label) result(id)
    !< The ID an item of `label` has in the open plot (figure_plot_field's cache key).
    character(len=*), intent(in) :: label !< Label.
@@ -2049,9 +2068,10 @@ contains
    endfunction pf_item_id
 
    subroutine pf_item_end()
-   !< `EndItem` (figure_plot_items): the next item's data reset.
+   !< `EndItem` (figure_plot_items): the next item's data reset, the item the previous one.
 
    next_hidden_set = .false.
+   prev_item = last_item
    endsubroutine pf_item_end
 
    subroutine legend_append(p, it, label)

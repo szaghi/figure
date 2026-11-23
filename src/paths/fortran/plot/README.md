@@ -187,6 +187,18 @@ without allocation (glibc's output; at first foresight's `c_real`, which it repr
   linear images, fields linear/log/symlog with NaNs, a 400 x 400 log field through the table, the fit, the cache's
   one upload) and the idle release: ranges, applied ranges equal to the bit, pictures at threshold 2 with no pixel
   failing (three compilers).
+- 2026-11-22, the rest of P11: `pf_cache_next_item` (`ip_cache_next_item`: figure_implot's series caches, a fixed
+  table of 32 keyed by the data's identity, `decimate`'s cache reused while the program says the values did not
+  change, released after 10 s; `pf_cache_counts` = `plot_cache_builds`/`hits`), `pf_line_device` (`ip_line_device`:
+  figure_decimate_device's decimation where the arrays live, only the kept points copied to the host through
+  FUNDAL, a series not decimated copied whole, then drawn as they are), `pf_last_item_color` (`GetLastItemColor`:
+  the item drawn or hidden last, zeros after the plot). `figure_test_plot_frame_rest` compares 3 cases with ImPlot
+  (cached line and area with equal build/hit counts, device lines of 400 000 points in both precisions and an
+  unsorted one, the last item's colour): ranges, pictures at threshold 2 with no pixel failing (three compilers, in
+  FUNDAL's CPU mode). The device path on a GPU (tests-nvf-acc) is not built for the Fortran path: that mode's `src` is
+  `$PATH_IMGUI` and its template excludes src/tests/fortran; it would need a `tests-nvf-acc-fortran` mode (template
+  tests-nvf-acc, `src = src/lib/ $PATH_FORTRAN src/tests/`, `exclude_dirs` empty), not added (fobos is not this
+  step's).
 
 ## What the current seam calls, to replace
 

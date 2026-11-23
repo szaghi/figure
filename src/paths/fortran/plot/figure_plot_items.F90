@@ -58,15 +58,17 @@ module figure_plot_items
 !< ImPlot normalises a line segment with the SSE estimate `_mm_rsqrt_ss` (12 bits), the frame with `1/sqrt`: an
 !< anti-aliased edge pixel may land on the other side of a texel (figure_test_plot_frame_labels' header).
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
-use, intrinsic :: iso_c_binding, only : c_double, c_float
+use, intrinsic :: iso_c_binding, only : c_double, c_float, c_intptr_t, c_loc
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui_enums, only : ImGuiCol_Text
 use figure_core, only : core_draw_image, core_draw_line, core_draw_line_h, core_draw_line_v, core_draw_quad_uv,     &
-                        core_draw_rect_filled, core_draw_text, core_frame_count, core_framebuffer_scale,           &
+                        core_draw_rect_filled, core_draw_text, core_frame_count, core_framebuffer_scale, core_time, &
                         core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,             &
                         core_style_var, core_text_size, core_texture_sampling, core_white_pixel
-use figure_decimate, only : decimate, decimate_axis, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
+use figure_decimate, only : decimate, decimate_axis, decimate_cache, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
                             DECIMATE_THRESHOLD
+use figure_decimate_device, only : decimate_device_r32, decimate_device_r64
+use fundal, only : dev_memcpy_from_device
 use figure_plot_colormaps, only : cm_current, cm_key, cm_pop, cm_push, cm_sample, CM_VIRIDIS
 use figure_plot_field, only : field_colour, field_count, field_sweep, field_uploads, FIELD_LINEAR, FIELD_LOG, &
                               FIELD_SYMLOG
@@ -82,6 +84,7 @@ implicit none
 private
 public :: plot_item_spec, pf_spec
 public :: pf_line, pf_scatter, pf_stairs, pf_stems, pf_shaded, pf_set_decimation
+public :: pf_cache_next_item, pf_cache_counts, pf_line_device
 public :: pf_bars, pf_bar_groups, pf_error_bars, pf_inf_lines
 public :: PF_BARS_HORIZONTAL, PF_ERROR_BARS_HORIZONTAL, PF_INF_LINES_HORIZONTAL
 public :: pf_pie_chart, pf_bubbles, pf_digital, pf_text
@@ -264,6 +267,31 @@ type :: item_series
 endtype item_series
 
 logical                     :: decimation_on = .true. !< Long series decimated (`pf_set_decimation`).
+logical                     :: skip_decimation = .false. !< The item's points already kept (`pf_line_device`).
+real(real64),   allocatable, target :: dev64x(:), dev64y(:) !< A device line's points on the host (kept, grown).
+real(real32),   allocatable, target :: dev32x(:), dev32y(:) !< ... single precision.
+! the caches of decimated series (figure_implot's, szaghi/figure#15 P5): a fixed table, entries reset field by field
+type :: series_cache
+   !< A series' cache: its data's identity and what `decimate` keeps.
+   logical              :: used = .false.          !< Holds a series.
+   integer(c_intptr_t)  :: p(3) = 0_c_intptr_t     !< Addresses of x, y, y2.
+   integer(int64)       :: n = 0_int64             !< Points.
+   integer(int64)       :: stride = 0_int64        !< y's stride [bytes].
+   integer(int32)       :: kind = 0_int32          !< Bytes of a value.
+   integer(int32)       :: item = 0_int32          !< KIND_*.
+   logical              :: uniform = .false.       !< Abscissae x0 + (i - 1) dx.
+   real(real64)         :: x0 = 0.0_real64         !< ... x0.
+   real(real64)         :: dx = 0.0_real64         !< ... dx.
+   real(real64)         :: last_time = 0.0_real64  !< Time of its last use [s].
+   type(decimate_cache) :: dc                      !< What `decimate` keeps.
+endtype series_cache
+real(real64),   parameter   :: CACHE_IDLE = 10.0_real64 !< A cache not used for this long is released [s].
+integer(int32), parameter   :: CACHE_SLOTS = 32_int32   !< Caches at most.
+type(series_cache)          :: caches(CACHE_SLOTS)      !< The caches.
+logical                     :: next_cached = .false.    !< The next line-like item uses its cache.
+logical                     :: next_changed = .false.   !< ... its data changed.
+integer(int64)              :: cache_builds = 0_int64   !< Caches built (tests).
+integer(int64)              :: cache_hits = 0_int64     !< Caches reused (tests).
 integer(int64), allocatable :: keep(:)                !< The decimation's kept indices.
 real(real32),   allocatable :: conv32(:)              !< Integer abscissae converted (decimated items).
 real(real64),   allocatable :: conv64(:)              !< ...
@@ -384,6 +412,11 @@ interface pf_field_image
    !< A field through a colormap, kept as a texture: `ip_field_image`.
    module procedure field_image_r32, field_image_r64
 endinterface pf_field_image
+
+interface pf_line_device
+   !< A line of two contiguous arrays on a device, decimated there: `ip_line_device`.
+   module procedure pf_line_device_r32, pf_line_device_r64
+endinterface pf_line_device
 
 interface pf_digital
    !< A digital signal in a band at the bottom of the plot: `ip_digital`.
@@ -3524,90 +3557,370 @@ contains
    subroutine decimate_series(g, item, spec, ctx, fill)
    !< Decimate a line-like getter (figure_decimate, M4 per pixel column) when it has more than DECIMATE_THRESHOLD points
    !< a column: its kept points read through `keep`. Not decimated: decimation off, few points, markers, `Segments`,
-   !< `Loop`, unsorted abscissae.
+   !< `Loop`, unsorted abscissae. With `pf_cache_next_item`, through the series' cache.
    type(item_series),    intent(inout) :: g     !< Getter.
-   integer(int32),       intent(in)    :: item  !< KIND_LINE, KIND_STAIRS.
+   integer(int32),       intent(in)    :: item  !< KIND_LINE, KIND_STAIRS, KIND_SHADED.
    type(plot_item_spec), intent(in)    :: spec  !< Style.
    type(plot_item_ctx),  intent(in)    :: ctx   !< The plot.
    logical,              intent(in)    :: fill  !< The item fills an area.
+   type(item_series)                   :: none  !< No second ordinates.
+
+   call decimate_getters(g, none, .false., item, spec, ctx, fill)
+   endsubroutine decimate_series
+
+   subroutine decimate_pair(g1, g2, spec, ctx)
+   !< Decimate a shaded item's two getters together (the second's y as the second ordinates; a reference line: y alone).
+   type(item_series),    intent(inout) :: g1, g2 !< Getters.
+   type(plot_item_spec), intent(in)    :: spec   !< Style.
+   type(plot_item_ctx),  intent(in)    :: ctx    !< The plot.
+
+   call decimate_getters(g1, g2, g2%src(2) /= SRC_CONST, KIND_SHADED, spec, ctx, .true.)
+   if (g1%kept) then
+      g2%kept = .true.
+      g2%n = g1%n
+   endif
+   endsubroutine decimate_pair
+
+   subroutine decimate_getters(g, g2, two, item, spec, ctx, fill)
+   !< `series_decimate`: the cache asked for (`pf_cache_next_item`) found or made for the series' identity, then the
+   !< decimation of g (and g2's y as the second ordinates when `two`), its kept points read through `keep`.
+   type(item_series),    intent(inout) :: g, g2 !< Getters.
+   logical,              intent(in)    :: two   !< g2's y as second ordinates.
+   integer(int32),       intent(in)    :: item  !< KIND_*.
+   type(plot_item_spec), intent(in)    :: spec  !< Style.
+   type(plot_item_ctx),  intent(in)    :: ctx   !< The plot.
+   logical,              intent(in)    :: fill  !< Fill.
    type(decimate_axis)                 :: ax    !< The x axis.
    integer(int64)                      :: nk    !< Points kept.
-   logical                             :: dec   !< Decimated.
+   integer(int32)                      :: c     !< Cache (0: none).
+   logical                             :: dec, fresh !< Decimated, the data changed.
 
-   if (.not. wanted(g, item, spec, ctx, ax)) return
+   c = 0_int32
+   if (next_cached) then
+      fresh = next_changed
+      next_cached = .false.
+      if (wanted(g, item, spec, ctx, ax)) c = cache_slot(g, g2, two, item, fresh)
+   endif
+   if (c == 0_int32) then
+      if (.not. wanted(g, item, spec, ctx, ax)) return
+      call decimate_any(ax, g, g2, two, fill, nk, dec)
+   else
+      call decimate_any(ax, g, g2, two, fill, nk, dec, caches(c)%dc)
+   endif
+   if (.not. dec) return
+   g%kept = .true.
+   g%n = int(nk, int32)
+   endsubroutine decimate_getters
+
+   subroutine decimate_any(ax, g, g2, two, fill, nk, dec, dc)
+   !< `decimate` over a getter's sources (r32/r64 ordinates; r32/r64/integer/uniform abscissae, integer ones converted
+   !< into the kept buffer), g2's y as the second ordinates when `two`, through a cache when given.
+   type(decimate_axis),  intent(in)              :: ax    !< The x axis.
+   type(item_series),    intent(in)              :: g, g2 !< Getters.
+   logical,              intent(in)              :: two   !< Second ordinates.
+   logical,              intent(in)              :: fill  !< Fill.
+   integer(int64),       intent(out)             :: nk    !< Points kept.
+   logical,              intent(out)             :: dec   !< Decimated.
+   type(decimate_cache), intent(inout), optional :: dc    !< The series' cache.
+
+   dec = .false.
+   nk = 0_int64
    select case (g%src(2))
    case (SRC_R64)
       select case (g%src(1))
       case (SRC_R64)
-         dec = decimate(ax, g%a64(1:g%n), g%b64(1:g%n), keep, nk, fill=fill)
+         if (two) then
+            dec = decimate(ax, g%a64(1:g%n), g%b64(1:g%n), keep, nk, y2=g2%b64(1:g%n), fill=fill, cache=dc)
+         else
+            dec = decimate(ax, g%a64(1:g%n), g%b64(1:g%n), keep, nk, fill=fill, cache=dc)
+         endif
       case (SRC_LIN)
-         dec = decimate(ax, g%lin(1, 1), g%lin(2, 1), g%b64(1:g%n), keep, nk, fill=fill)
+         if (two) then
+            dec = decimate(ax, g%lin(1, 1), g%lin(2, 1), g%b64(1:g%n), keep, nk, y2=g2%b64(1:g%n), fill=fill, &
+                           cache=dc)
+         else
+            dec = decimate(ax, g%lin(1, 1), g%lin(2, 1), g%b64(1:g%n), keep, nk, fill=fill, cache=dc)
+         endif
       case default
          call convert64(g)
-         dec = decimate(ax, conv64(1:g%n), g%b64(1:g%n), keep, nk, fill=fill)
+         if (two) then
+            dec = decimate(ax, conv64(1:g%n), g%b64(1:g%n), keep, nk, y2=g2%b64(1:g%n), fill=fill, cache=dc)
+         else
+            dec = decimate(ax, conv64(1:g%n), g%b64(1:g%n), keep, nk, fill=fill, cache=dc)
+         endif
       endselect
    case (SRC_R32)
       select case (g%src(1))
       case (SRC_R32)
-         dec = decimate(ax, g%a32(1:g%n), g%b32(1:g%n), keep, nk, fill=fill)
+         if (two) then
+            dec = decimate(ax, g%a32(1:g%n), g%b32(1:g%n), keep, nk, y2=g2%b32(1:g%n), fill=fill, cache=dc)
+         else
+            dec = decimate(ax, g%a32(1:g%n), g%b32(1:g%n), keep, nk, fill=fill, cache=dc)
+         endif
       case (SRC_LIN)
-         dec = decimate(ax, g%lin(1, 1), g%lin(2, 1), g%b32(1:g%n), keep, nk, fill=fill)
+         if (two) then
+            dec = decimate(ax, g%lin(1, 1), g%lin(2, 1), g%b32(1:g%n), keep, nk, y2=g2%b32(1:g%n), fill=fill, &
+                           cache=dc)
+         else
+            dec = decimate(ax, g%lin(1, 1), g%lin(2, 1), g%b32(1:g%n), keep, nk, fill=fill, cache=dc)
+         endif
       case default
          call convert32(g)
-         dec = decimate(ax, conv32(1:g%n), g%b32(1:g%n), keep, nk, fill=fill)
+         if (two) then
+            dec = decimate(ax, conv32(1:g%n), g%b32(1:g%n), keep, nk, y2=g2%b32(1:g%n), fill=fill, cache=dc)
+         else
+            dec = decimate(ax, conv32(1:g%n), g%b32(1:g%n), keep, nk, fill=fill, cache=dc)
+         endif
       endselect
    case default
-      dec = .false.
    endselect
-   if (.not. dec) return
-   g%kept = .true.
-   g%n = int(nk, int32)
-   endsubroutine decimate_series
+   endsubroutine decimate_any
 
-   subroutine decimate_pair(g1, g2, spec, ctx)
-   !< Decimate a shaded item's two getters together (the second's y as the second ordinates), as `decimate_series`.
-   type(item_series),    intent(inout) :: g1, g2 !< Getters.
-   type(plot_item_spec), intent(in)    :: spec   !< Style.
-   type(plot_item_ctx),  intent(in)    :: ctx    !< The plot.
-   type(decimate_axis)                 :: ax     !< The x axis.
-   integer(int64)                      :: nk     !< Points kept.
-   logical                             :: dec    !< Decimated.
+   subroutine pf_cache_next_item(changed)
+   !< The next `pf_line`, `pf_stairs` or `pf_shaded` keeps what its decimation computes of its data between frames
+   !< (`ip_cache_next_item`); `changed`: the program changed the values since that item's last frame.
+   logical, intent(in) :: changed !< The values changed.
 
-   if (.not. wanted(g1, KIND_SHADED, spec, ctx, ax)) return
-   dec = .false.
-   if (g2%src(2) == SRC_CONST) then ! a reference line: y alone
-      call decimate_series(g1, KIND_SHADED, spec, ctx, .true.)
-      if (g1%kept) then
-         g2%kept = .true.
-         g2%n = g1%n
+   next_cached = .true.
+   next_changed = changed
+   endsubroutine pf_cache_next_item
+
+   function cache_slot(g, g2, two, item, changed) result(c)
+   !< figure_implot's `cache_slot`: the cache of a series by its data's identity (the arrays' addresses, points,
+   !< stride, kind, item, uniform abscissae), else a free slot or the least recently used; invalidated when changed;
+   !< the caches idle CACHE_IDLE seconds released.
+   type(item_series), intent(in) :: g, g2   !< Getters.
+   logical,           intent(in) :: two     !< g2's y used.
+   integer(int32),    intent(in) :: item    !< KIND_*.
+   logical,           intent(in) :: changed !< Values changed.
+   integer(int32)                :: c       !< Cache.
+   integer(c_intptr_t)           :: p(3)    !< Addresses of x, y, y2 (0: none).
+   integer(int64)                :: stride  !< y's stride [bytes].
+   integer(int32)                :: kind, k !< Bytes of a value, counter.
+   real(real64)                  :: now, ux0, udx !< Time, uniform abscissae.
+   logical                       :: uniform, same !< Uniform abscissae, the same data.
+
+   now = core_time()
+   call identity(g, g2, two, p, stride, kind)
+   uniform = g%src(1) == SRC_LIN
+   ux0 = 0.0_real64
+   udx = 0.0_real64
+   if (uniform) then
+      ux0 = g%lin(1, 1)
+      udx = g%lin(2, 1)
+   endif
+   c = 0_int32
+   do k = 1_int32, CACHE_SLOTS
+      if (.not. caches(k)%used) cycle
+      if (now - caches(k)%last_time > CACHE_IDLE .or. now < caches(k)%last_time) then
+         call cache_release(k)
+         cycle
       endif
+      if (c == 0_int32) then
+         same = all(caches(k)%p == p) .and. caches(k)%n == int(g%n, int64) .and. caches(k)%stride == stride .and. &
+                caches(k)%kind == kind .and. caches(k)%item == item .and. (caches(k)%uniform .eqv. uniform) .and. &
+                caches(k)%x0 == ux0 .and. caches(k)%dx == udx
+         if (same) c = k
+      endif
+   enddo
+   if (c > 0_int32) then
+      if (changed) then
+         caches(c)%dc%valid = .false.
+         cache_builds = cache_builds + 1_int64
+      else
+         cache_hits = cache_hits + 1_int64
+      endif
+      caches(c)%last_time = now
       return
    endif
-   select case (g1%src(2))
+   c = 1_int32
+   do k = 1_int32, CACHE_SLOTS
+      if (.not. caches(k)%used) then
+         c = k
+         exit
+      endif
+      if (caches(k)%last_time < caches(c)%last_time) c = k
+   enddo
+   if (caches(c)%used) call cache_release(c)
+   caches(c)%used = .true.
+   caches(c)%p = p
+   caches(c)%n = int(g%n, int64)
+   caches(c)%stride = stride
+   caches(c)%kind = kind
+   caches(c)%item = item
+   caches(c)%uniform = uniform
+   caches(c)%x0 = ux0
+   caches(c)%dx = udx
+   caches(c)%last_time = now
+   caches(c)%dc%valid = .false.
+   cache_builds = cache_builds + 1_int64
+   endfunction cache_slot
+
+   subroutine identity(g, g2, two, p, stride, kind)
+   !< A series' identity: the addresses of its x, y and second y arrays (0 for none: uniform, constant), y's stride and
+   !< kind.
+   type(item_series),   intent(in)  :: g, g2 !< Getters.
+   logical,             intent(in)  :: two   !< Second ordinates.
+   integer(c_intptr_t), intent(out) :: p(3)  !< Addresses.
+   integer(int64),      intent(out) :: stride !< y's stride [bytes].
+   integer(int32),      intent(out) :: kind  !< Bytes of a value.
+
+   p = 0_c_intptr_t
+   stride = 0_int64
+   kind = 8_int32
+   if (g%n < 1_int32) return
+   select case (g%src(1))
    case (SRC_R64)
-      select case (g1%src(1))
-      case (SRC_R64)
-         dec = decimate(ax, g1%a64(1:g1%n), g1%b64(1:g1%n), keep, nk, y2=g2%b64(1:g1%n), fill=.true.)
-      case default
-         call convert64(g1)
-         dec = decimate(ax, conv64(1:g1%n), g1%b64(1:g1%n), keep, nk, y2=g2%b64(1:g1%n), fill=.true.)
-      endselect
+      p(1) = transfer(c_loc(g%a64(1)), p(1))
    case (SRC_R32)
-      select case (g1%src(1))
-      case (SRC_R32)
-         dec = decimate(ax, g1%a32(1:g1%n), g1%b32(1:g1%n), keep, nk, y2=g2%b32(1:g1%n), fill=.true.)
-      case default
-         call convert32(g1)
-         dec = decimate(ax, conv32(1:g1%n), g1%b32(1:g1%n), keep, nk, y2=g2%b32(1:g1%n), fill=.true.)
-      endselect
+      p(1) = transfer(c_loc(g%a32(1)), p(1))
+   case (SRC_I32)
+      p(1) = transfer(c_loc(g%ai32(1)), p(1))
+   case (SRC_I64)
+      p(1) = transfer(c_loc(g%ai64(1)), p(1))
    case default
    endselect
-   if (.not. dec) return
-   g1%kept = .true.
-   g1%n = int(nk, int32)
-   g2%kept = .true.
-   g2%n = g1%n
-   endsubroutine decimate_pair
+   select case (g%src(2))
+   case (SRC_R64)
+      p(2) = transfer(c_loc(g%b64(1)), p(2))
+      if (g%n > 1_int32) stride = int(transfer(c_loc(g%b64(2)), p(2)) - p(2), int64)
+   case (SRC_R32)
+      p(2) = transfer(c_loc(g%b32(1)), p(2))
+      if (g%n > 1_int32) stride = int(transfer(c_loc(g%b32(2)), p(2)) - p(2), int64)
+      kind = 4_int32
+   case default
+   endselect
+   if (two) then
+      select case (g2%src(2))
+      case (SRC_R64)
+         p(3) = transfer(c_loc(g2%b64(1)), p(3))
+      case (SRC_R32)
+         p(3) = transfer(c_loc(g2%b32(1)), p(3))
+      case default
+      endselect
+   endif
+   endsubroutine identity
+
+   subroutine cache_release(k)
+   !< A cache's memory and slot freed.
+   integer(int32), intent(in) :: k !< Slot.
+   integer(int32)             :: o !< Ordinate.
+
+   do o = 1_int32, 2_int32
+      if (allocated(caches(k)%dc%py(o)%first)) deallocate(caches(k)%dc%py(o)%first)
+      if (allocated(caches(k)%dc%py(o)%imin)) deallocate(caches(k)%dc%py(o)%imin)
+      if (allocated(caches(k)%dc%py(o)%imax)) deallocate(caches(k)%dc%py(o)%imax)
+      if (allocated(caches(k)%dc%py(o)%gap)) deallocate(caches(k)%dc%py(o)%gap)
+      caches(k)%dc%py(o)%n = 0_int64
+   enddo
+   caches(k)%dc%valid = .false.
+   caches(k)%dc%sorted = .false.
+   caches(k)%used = .false.
+   caches(k)%p = 0_c_intptr_t
+   caches(k)%n = 0_int64
+   endsubroutine cache_release
+
+   subroutine pf_cache_counts(builds, hits)
+   !< The caches built (data new or changed) and reused since the start (tests: figure_implot's plot_cache_builds,
+   !< plot_cache_hits).
+   integer(int64), intent(out) :: builds, hits !< Counts.
+
+   builds = cache_builds
+   hits = cache_hits
+   endsubroutine pf_cache_counts
+
+   subroutine pf_line_device_r64(label, x, y, spec)
+   !< A line through (x(i), y(i)) of two contiguous real64 arrays on a device (`ip_line_device`): decimated there
+   !< (figure_decimate_device, FUNDAL), only the kept points copied to the host; a series not decimated copied whole.
+   character(len=*),     intent(in)           :: label !< Legend label.
+   real(real64),         intent(in), target   :: x(:)  !< Abscissae, on the device.
+   real(real64),         intent(in), target   :: y(:)  !< Ordinates, on the device.
+   type(plot_item_spec), intent(in), optional :: spec  !< Style.
+   type(plot_item_spec)                       :: sp    !< Style.
+   type(plot_item_ctx)                        :: ctx   !< The plot (for the decimation's axis).
+   type(decimate_axis)                        :: ax    !< The x axis.
+   type(item_series)                          :: g     !< A getter of n points (the decimation's test).
+   integer(int64)                             :: nk    !< Points drawn.
+   integer(int32)                             :: ierr  !< FUNDAL's status.
+   logical                                    :: done  !< Decimated.
+
+   sp = spec_or_default(spec)
+   call pf_plot_ctx(ctx)
+   g%n = int(min(size(x), size(y)), int32)
+   done = .false.
+   ierr = 0_int32
+   if (wanted(g, KIND_LINE, sp, ctx, ax)) done = decimate_device_r64(ax, x, y, dev64x, dev64y, nk, ierr)
+   if (.not. done .and. ierr == 0_int32) then ! every point, copied
+      nk = int(g%n, int64)
+      call dev_room64(nk)
+      if (nk > 0_int64) call dev_memcpy_from_device(dst=dev64x(1:nk), src=x, ierr=ierr)
+      if (nk > 0_int64 .and. ierr == 0_int32) call dev_memcpy_from_device(dst=dev64y(1:nk), src=y, ierr=ierr)
+   endif
+   if (ierr /= 0_int32) error stop 'figure_plot_items: pf_line_device: a copy from the device failed'
+   g = item_series()
+   call view_r64(g, 1_int32, dev64x(1:nk))
+   call view_r64(g, 2_int32, dev64y(1:nk))
+   g%n = int(nk, int32)
+   skip_decimation = .true. ! (the points are the kept ones: ImPlot draws them as they are)
+   call line_item(label, g, sp)
+   skip_decimation = .false.
+   endsubroutine pf_line_device_r64
+
+   subroutine pf_line_device_r32(label, x, y, spec)
+   !< A line of two contiguous real32 device arrays (`ip_line_device`), as `pf_line_device_r64`.
+   character(len=*),     intent(in)           :: label !< Legend label.
+   real(real32),         intent(in), target   :: x(:)  !< Abscissae, on the device.
+   real(real32),         intent(in), target   :: y(:)  !< Ordinates, on the device.
+   type(plot_item_spec), intent(in), optional :: spec  !< Style.
+   type(plot_item_spec)                       :: sp    !< Style.
+   type(plot_item_ctx)                        :: ctx   !< The plot.
+   type(decimate_axis)                        :: ax    !< The x axis.
+   type(item_series)                          :: g     !< A getter of n points.
+   integer(int64)                             :: nk    !< Points drawn.
+   integer(int32)                             :: ierr  !< FUNDAL's status.
+   logical                                    :: done  !< Decimated.
+
+   sp = spec_or_default(spec)
+   call pf_plot_ctx(ctx)
+   g%n = int(min(size(x), size(y)), int32)
+   done = .false.
+   ierr = 0_int32
+   if (wanted(g, KIND_LINE, sp, ctx, ax)) done = decimate_device_r32(ax, x, y, dev32x, dev32y, nk, ierr)
+   if (.not. done .and. ierr == 0_int32) then
+      nk = int(g%n, int64)
+      call dev_room32(nk)
+      if (nk > 0_int64) call dev_memcpy_from_device(dst=dev32x(1:nk), src=x, ierr=ierr)
+      if (nk > 0_int64 .and. ierr == 0_int32) call dev_memcpy_from_device(dst=dev32y(1:nk), src=y, ierr=ierr)
+   endif
+   if (ierr /= 0_int32) error stop 'figure_plot_items: pf_line_device: a copy from the device failed'
+   g = item_series()
+   call view_r32(g, 1_int32, dev32x(1:nk))
+   call view_r32(g, 2_int32, dev32y(1:nk))
+   g%n = int(nk, int32)
+   skip_decimation = .true.
+   call line_item(label, g, sp)
+   skip_decimation = .false.
+   endsubroutine pf_line_device_r32
+
+   subroutine dev_room64(n)
+   !< Room for n points in the device line's host buffers (kept, grown).
+   integer(int64), intent(in) :: n !< Points.
+
+   if (allocated(dev64x)) then
+      if (size(dev64x, kind=int64) < n) deallocate(dev64x, dev64y)
+   endif
+   if (.not. allocated(dev64x)) allocate(dev64x(max(n, 1024_int64)), dev64y(max(n, 1024_int64)))
+   endsubroutine dev_room64
+
+   subroutine dev_room32(n)
+   !< Room for n points in the device line's host buffers, single precision.
+   integer(int64), intent(in) :: n !< Points.
+
+   if (allocated(dev32x)) then
+      if (size(dev32x, kind=int64) < n) deallocate(dev32x, dev32y)
+   endif
+   if (.not. allocated(dev32x)) allocate(dev32x(max(n, 1024_int64)), dev32y(max(n, 1024_int64)))
+   endsubroutine dev_room32
 
    function wanted(g, item, spec, ctx, ax) result(yes)
    !< Whether a getter may be decimated (figure_implot's `decimation_wanted`), and the x axis as its points map to
@@ -3621,6 +3934,7 @@ contains
    real(real64)                      :: sx, sy !< Framebuffer scale.
 
    yes = .false.
+   if (skip_decimation) return
    if (.not. decimation_on .or. int(g%n, int64) <= int(DECIMATE_THRESHOLD, int64)) return
    if (spec%marker /= PF_MARKER_NONE) return
    if (item == KIND_LINE .and. iand(spec%flags, ior(PF_LINE_SEGMENTS, PF_LINE_LOOP)) /= 0_int32) return
