@@ -22,7 +22,9 @@ module figure_core
 !< - the draw list: `core_draw_begin` (the current window's), then lines, rectangles, triangles, convex polygons,
 !<   polylines, circles, text, images, clip rectangles and callbacks, and `core_draw_end`; for the plot frame
 !<   (src/paths/fortran/plot/), Dear ImGui 1.93's axis-aligned lines (`core_draw_line_h`, `core_draw_line_v`), a
-!<   line's texture (`core_line_texture`) and a textured quad (`core_draw_quad_uv`), thin wrappers of the list's calls.
+!<   line's texture (`core_line_texture`) and a textured quad (`core_draw_quad_uv`), thin wrappers of the list's calls;
+!<   a glyph of the current font at its size (`core_font_glyph`: `GetFontBaked`, `FindGlyph`), for text drawn glyph by
+!<   glyph (ImPlot's vertical text).
 !<
 !< The draw list is built in Fortran (figure_drawlist, the first piece of block E) and appended to the window's Dear
 !< ImGui list by `core_draw_end`: the primitives figure_drawlist tessellates (filled rectangles without rounding,
@@ -33,15 +35,15 @@ module figure_core
 !<
 !< No allocation per item: text and IDs go through a buffer of the module (NUL-terminated copies; a longer text gets
 !< an allocated copy).
-use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_float, c_funptr, c_int, c_int32_t, c_loc, &
-                                         c_null_char, c_null_ptr, c_ptr, c_size_t
+use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_f_pointer, c_float, c_funptr, c_int, c_int16_t, &
+                                         c_int32_t, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64
 use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextSize, igGetColorU32_Col,             &
-                          igGetContentRegionAvail, igGetCursorScreenPos, igGetFontSize, igGetFrameCount, igGetFrameHeight, &
-                          igGetID_Str, igGetMousePos, igGetTime, igGetWindowDrawList, igGetWindowPos, igGetWindowSize,     &
-                          igIsItemActive, igIsItemHovered, igIsKeyDown_Nil, igIsKeyPressed_Bool, igIsMouseClicked_Bool,    &
-                          igIsMouseDown_Nil, igIsMouseHoveringRect, igIsMouseReleased_Nil, igPopID, igPushID_Str,          &
-                          igSetCursorScreenPos
+                          igGetContentRegionAvail, igGetCursorScreenPos, igGetFont, igGetFontSize, igGetFrameCount,     &
+                          igGetFrameHeight, igGetID_Str, igGetMousePos, igGetTime, igGetWindowDrawList, igGetWindowPos, &
+                          igGetWindowSize, igIsItemActive, igIsItemHovered, igIsKeyDown_Nil, igIsKeyPressed_Bool,       &
+                          igIsMouseClicked_Bool, igIsMouseDown_Nil, igIsMouseHoveringRect, igIsMouseReleased_Nil,       &
+                          igPopID, igPushID_Str, igSetCursorScreenPos
 use figure_cimgui_enums, only : ImDrawFlags_Closed
 use figure_cimgui_core, only : figure_ImDrawList_append, figure_ImDrawList_shared, igButtonBehavior, igGetActiveID,         &
                                igGetHoveredID, igItemAdd, igItemSize_Vec2, igKeepAliveID, ImDrawList_AddCallback,          &
@@ -66,6 +68,7 @@ public :: core_draw_begin, core_draw_end, core_draw_line, core_draw_rect_filled,
 public :: core_draw_convex_poly_filled, core_draw_polyline, core_draw_circle, core_draw_text, core_draw_image
 public :: core_push_clip_rect, core_pop_clip_rect, core_draw_callback
 public :: core_draw_line_h, core_draw_line_v, core_line_texture, core_draw_quad_uv
+public :: core_font_glyph
 public :: core_draw_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
@@ -122,7 +125,46 @@ interface
    real(c_float),  intent(out)   :: out_fringe       !< C `float*`.
    integer(c_int), value         :: flags            !< C `ImDrawFlags`.
    endsubroutine ImDrawList__SelectLineTexture
+
+   function ImFont_GetFontBaked(self, font_size, density) result(res) bind(C, name='ImFont_GetFontBaked')
+   !< ImFont::GetFontBaked(float,float), imgui.h.
+   import :: c_float, c_ptr
+   implicit none
+   type(c_ptr),   value :: self      !< C `ImFont*`.
+   real(c_float), value :: font_size !< C `float`.
+   real(c_float), value :: density   !< C `float` (negative: the current rasterizer density).
+   type(c_ptr)          :: res       !< C `ImFontBaked*`.
+   endfunction ImFont_GetFontBaked
+
+   function ImFontBaked_FindGlyph(self, c) result(res) bind(C, name='ImFontBaked_FindGlyph')
+   !< ImFontBaked::FindGlyph(ImWchar), imgui.h (the fallback glyph when the font has none).
+   import :: c_int16_t, c_ptr
+   implicit none
+   type(c_ptr),        value :: self !< C `ImFontBaked*`.
+   integer(c_int16_t), value :: c    !< C `ImWchar` (16 bits).
+   type(c_ptr)               :: res  !< C `ImFontGlyph*`.
+   endfunction ImFontBaked_FindGlyph
 endinterface
+
+type, bind(C) :: im_font_glyph
+   !< ImFontGlyph (imgui.h, 1.93): what `core_font_glyph` reads of it.
+   integer(c_int32_t) :: bits      !< Colored, Visible, SourceIdx, Codepoint (bit fields).
+   real(c_float)      :: advance_x !< AdvanceX.
+   real(c_float)      :: x0, y0    !< Glyph corners, from the pen at the line's top.
+   real(c_float)      :: x1, y1    !< ...
+   real(c_float)      :: u0, v0    !< Texture coordinates.
+   real(c_float)      :: u1, v1    !< ...
+   integer(c_int32_t) :: pack_id   !< PackId.
+endtype im_font_glyph
+
+type, bind(C) :: im_font_baked_head
+   !< The first members of ImFontBaked (imgui.h, 1.93), up to Size.
+   integer(c_int)  :: index_advance_size     !< IndexAdvanceX.Size.
+   integer(c_int)  :: index_advance_capacity !< IndexAdvanceX.Capacity.
+   type(c_ptr)     :: index_advance_data     !< IndexAdvanceX.Data.
+   real(c_float)   :: fallback_advance_x     !< FallbackAdvanceX.
+   real(c_float)   :: size                   !< Size: the size it was baked at [pixels].
+endtype im_font_baked_head
 
 contains
    ! IDs
@@ -712,6 +754,54 @@ contains
    call ImDrawList_PrimQuadUV(target_list, v2(x(1), y(1)), v2(x(2), y(2)), v2(x(3), y(3)), v2(x(4), y(4)), &
                               v2(u(1), v(1)), v2(u(2), v(2)), v2(u(3), v(3)), v2(u(4), v(4)), int(col, c_int))
    endsubroutine core_draw_quad_uv
+
+   subroutine core_font_glyph(c, found, scale, advance, x0, y0, x1, y1, u0, v0, u1, v1)
+   !< A glyph of the current font at the current size (`g.Font->GetFontBaked(g.FontSize)`, `FindGlyph((ImWchar)c)`:
+   !< the fallback glyph when the font has none), in the baked font's units: its corners from the pen (x0, y0)-(x1, y1),
+   !< its texture coordinates in the font atlas, its advance, and `scale`, the current size over the baked one (what
+   !< ImPlot's `AddTextVertical` multiplies them by). `found` false: no glyph (the values 0).
+   integer(int32), intent(in)           :: c              !< Code point (taken modulo 2**16, as `ImWchar`).
+   logical,        intent(out)          :: found          !< A glyph.
+   real(real64),   intent(out)          :: scale          !< Font size over the baked size.
+   real(real64),   intent(out)          :: advance        !< AdvanceX.
+   real(real64),   intent(out)          :: x0, y0, x1, y1 !< Corners.
+   real(real64),   intent(out)          :: u0, v0, u1, v1 !< Texture coordinates.
+   type(c_ptr)                          :: baked, glyph   !< C objects.
+   type(im_font_baked_head), pointer    :: b              !< Baked font.
+   type(im_font_glyph),      pointer    :: g              !< Glyph.
+   integer(int32)                       :: w              !< 16-bit value.
+
+   found = .false.
+   scale = 0.0_real64
+   advance = 0.0_real64
+   x0 = 0.0_real64
+   y0 = 0.0_real64
+   x1 = 0.0_real64
+   y1 = 0.0_real64
+   u0 = 0.0_real64
+   v0 = 0.0_real64
+   u1 = 0.0_real64
+   v1 = 0.0_real64
+   baked = ImFont_GetFontBaked(igGetFont(), igGetFontSize(), -1.0_c_float)
+   if (.not. c_associated(baked)) return
+   call c_f_pointer(baked, b)
+   w = iand(c, 65535_int32)
+   if (w > 32767_int32) w = w - 65536_int32
+   glyph = ImFontBaked_FindGlyph(baked, int(w, c_int16_t))
+   if (.not. c_associated(glyph)) return
+   call c_f_pointer(glyph, g)
+   found = .true.
+   scale = real(igGetFontSize() / b%size, real64)
+   advance = real(g%advance_x, real64)
+   x0 = real(g%x0, real64)
+   y0 = real(g%y0, real64)
+   x1 = real(g%x1, real64)
+   y1 = real(g%y1, real64)
+   u0 = real(g%u0, real64)
+   v0 = real(g%v0, real64)
+   u1 = real(g%u1, real64)
+   v1 = real(g%v1, real64)
+   endsubroutine core_font_glyph
 
    ! private
 

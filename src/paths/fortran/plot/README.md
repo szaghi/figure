@@ -43,6 +43,23 @@ C's `%g` on the labels the goldens show.
   holds them), `SetAxes`, limits' constraints, `FitPadding` and the other ImPlot style variables of a theme, the
   automatic colours of FIGURE's own styles (their colormaps are registered by the native layer: the colormap
   registry, step 7), the item ID pushed on Dear ImGui's ID stack (figure_core has no `PushOverrideID`).
+- 2026-11-22, title, axis labels, the six axes and the legend (P10 steps 3 and 4): the title above the plot (`##`
+  hides the rest, `AddTextCentered`), axis labels (x: `AddText` beyond the tick labels; y: `AddTextVertical`, glyph
+  by glyph from the font's baked glyphs through figure_core's new `core_font_glyph`, UTF-8 decoded), each in the layout
+  of `SetupFinish` (`PadAndDatumAxesX`/`Y`); the axes X1-X3 and Y1-Y3 with `ip_setup_axis`'s flags (secondary axes
+  opposite and without grid lines by default, `opposite`, `no_grid`, `invert`, `lock`, `auto_fit`), `pf_set_axes`,
+  the minor tick marks and axis lines of a side's second and third axes, `equal` per pair; the legend
+  (`pf_setup_legend`: compass point, outside, horizontal), its entries in first-drawn order, `##` labels without one,
+  `LegendBg`/`LegendBorder` and ImPlot's paddings, an outside legend's room from the frame after; each entry a button
+  on the item's ID after the legend's own, as ImPlot: a click hides or shows the item (`pf_hide_next_item`, once or
+  always, as `ip_hide_next_item`), a hover tints the entry, doubles the item's line weight on the next frame and
+  highlights its axis where its direction has more than one; `pf_legend_hovered`. `figure_test_plot_frame_labels`
+  compares 12 cases with ImPlot (title, `##` title, labels with a non-ASCII character, a long y label, a second y
+  axis, an inverted top x axis and a left third y axis, the legend at four places inside and outside, clicks, hover),
+  ranges and `legend_hovered` of every frame equal, pictures at threshold 2 with no pixel failing (gfortran,
+  nvfortran, ifx). A line twice as thick (a hovered item) is sensitive to ImPlot's `rsqrtss` normal: one edge pixel
+  differed by 48 on one curve (see the test's header). Not yet: the mouse text and the axes' hover (the pointer on the
+  plot area), the legend's scrolling, sorting and context menu, tick formats, `TickLabelsInside`, `Foreground`.
 
 ## What the current seam calls, to replace
 
@@ -54,14 +71,14 @@ The ImPlot functions `figure_implot` calls (76, through `figure_cimplot`) and th
 - [x] Plot begin and end, kept between frames: `ImPlot_BeginPlot`; `fig_plot_end` (`figure_native.cpp`: `EndPlot`,
       `SetupLock`, the fit of axes without data dropped)
 - [ ] `fig_plot_state` (`GetCurrentPlot`: the axes enabled, their scales); the scope record's ends (`figure_scope.cpp`)
-- [ ] Axes: `ImPlot_SetupAxes`, `ImPlot_SetupAxis`, `ImPlot_SetAxes`
+- [x] Axes: `ImPlot_SetupAxes`, `ImPlot_SetupAxis`, `ImPlot_SetAxes`
 - [x] Limits and the fit: `ImPlot_SetupAxisLimits`, `ImPlot_SetupAxesLimits`, `ImPlot_SetNextAxisToFit`,
       `ImPlot_GetPlotLimits` (X1, Y1)
 - [ ] Constraints: `fig_plot_axis_constraints` (`SetupAxisLimitsConstraints`, `SetupAxisZoomConstraints`)
 - [ ] Scales: `ImPlot_SetupAxisScale_PlotScale` (linear, log, symlog, time); `fig_plot_x_transform`
 - [ ] Ticks and labels: `ImPlot_SetupAxisTicks_doublePtr`, `ImPlot_SetupAxisFormat_Str`
-- [ ] Legend: `ImPlot_SetupLegend`, `ImPlot_IsLegendEntryHovered`, `ImPlot_BeginLegendPopup`,
-      `ImPlot_EndLegendPopup`, `ImPlot_HideNextItem`
+- [x] Legend: `ImPlot_SetupLegend`, `ImPlot_IsLegendEntryHovered`, `ImPlot_HideNextItem`
+- [ ] Legend popups: `ImPlot_BeginLegendPopup`, `ImPlot_EndLegendPopup`
 - [ ] Queries: `ImPlot_GetPlotSize`, `ImPlot_IsPlotHovered`, `ImPlot_GetPlotMousePos`, `ImPlot_PlotToPixels_double`,
       `ImPlot_PixelsToPlot_Float`
 - [ ] Pan, zoom, box select: `ImPlot_GetPlotSelection`, `ImPlot_IsPlotSelected`, `ImPlot_CancelPlotSelection`; the

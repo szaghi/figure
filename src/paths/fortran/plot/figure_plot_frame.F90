@@ -1,75 +1,100 @@
-!< figure_plot_frame, the Fortran path's plot frame: a plot's layout, axes, ticks, grid and lines, as ImPlot draws them.
+!< figure_plot_frame, the Fortran path's plot frame: a plot's layout, axes, ticks, grid, legend and lines, as ImPlot
+!< draws them.
 module figure_plot_frame
-!< figure_plot_frame, the Fortran path's plot frame: a plot's layout, axes, ticks, grid and lines, as ImPlot draws them.
+!< figure_plot_frame, the Fortran path's plot frame: a plot's layout, axes, ticks, grid, legend and lines, as ImPlot
+!< draws them.
 !<
 !< szaghi/figure#15 P10. A plot drawn through figure_core only (no ImPlot, no figure_cimplot), to the pixels ImPlot 1.2
 !< WIP (FIGURE's copy) draws for the same plot: `pf_begin_plot`, `pf_setup_axes`, `pf_setup_axis`,
-!< `pf_setup_axes_limits`, `pf_setup_axis_limits`, `pf_set_next_axes_to_fit`, `pf_set_next_axis_to_fit`, `pf_line`,
-!< `pf_plot_limits`, `pf_end_plot` draw what `ip_begin_plot`, `ip_setup_axes`, `ip_setup_axis`,
-!< `ip_setup_axes_limits`, `ip_setup_axis_limits`, ImPlot's `SetNextAxesToFit`/`SetNextAxisToFit`, `ip_line`,
-!< `ip_plot_limits`, `ip_end_plot` draw for a plot of two linear axes (X1, Y1), no title, no axis labels, no legend,
-!< lines of the default weight, the pointer away from the plot. Reproduced from implot.cpp, implot_items.cpp and
-!< implot_internal.h, their arithmetic kept (single precision where ImPlot's is `float`, double where it is `double`):
+!< `pf_setup_axes_limits`, `pf_setup_axis_limits`, `pf_setup_legend`, `pf_set_next_axes_to_fit`,
+!< `pf_set_next_axis_to_fit`, `pf_set_axes`, `pf_hide_next_item`, `pf_line`, `pf_legend_hovered`, `pf_plot_limits`,
+!< `pf_end_plot` draw what `ip_begin_plot`, `ip_setup_axes`, `ip_setup_axis`, `ip_setup_axes_limits`,
+!< `ip_setup_axis_limits`, `ip_setup_legend`, ImPlot's `SetNextAxesToFit`/`SetNextAxisToFit`, `ip_set_axes`,
+!< `ip_hide_next_item`, `ip_line`, `ip_legend_hovered`, `ip_plot_limits`, `ip_end_plot` draw for a plot of linear
+!< axes, lines of the default weight, the pointer away from the plot area (no mouse text, no pan or zoom). Reproduced
+!< from implot.cpp, implot_items.cpp and implot_internal.h, their arithmetic kept (single precision where ImPlot's is
+!< `float`, double where it is `double`):
 !<
 !< - the plots kept between frames (`ImPlotContext::Plots`, `ImPlotPlot`): a table of plots keyed by the ID of their
 !<   title in the window's ID stack (`core_get_id`, ImPlot's `Window->GetID(title_id)`), each with its axes (range,
-!<   flags, the limits' condition, the range fit), its items and the frame it was last drawn on; integer handles into a
-!<   table that grows (8 plots, doubled up to 256; past that the least recently drawn plot not drawn on this frame makes
-!<   room: ImPlot keeps every plot for the context's life); one plot open at a time (ImPlot forbids nesting), several
-!<   one after another in a frame;
+!<   flags, the limits' condition, the range fit), its items, its legend and the frame it was last drawn on; integer
+!<   handles into a table that grows (8 plots, doubled up to 256; past that the least recently drawn plot not drawn on
+!<   this frame makes room: ImPlot keeps every plot for the context's life); one plot open at a time (ImPlot forbids
+!<   nesting), several one after another in a frame;
 !< - a plot's items (`ImPlotItemGroup`): keyed by the ID ImPlot gives them, the label hashed with the seed
 !<   `plot.ID - 1` (figure_plot_hash), each with its colour, given (`color=`) or assigned once, when the item is
-!<   created, from the colormap's next colour (`NextColormapColorU32`: the plot's own counter, `ColormapIdx`), and
-!<   kept after; a table per plot, as the plots' (256 items, then the least recently drawn one makes room);
+!<   created, from the colormap's next colour (`NextColormapColorU32`: the plot's own counter, `ColormapIdx`), whether
+!<   it is shown (`HideNextItem`, a click on its legend entry) and whether its legend entry is hovered; a table per
+!<   plot, as the plots' (256 items, then the least recently drawn one makes room);
 !< - the limits (`SetupAxisLimits`): applied every frame (`ImPlotCond_Always`, which also locks the axis against any
 !<   fit), or until the plot has been drawn once (`ImPlotCond_Once`, the default as FIGURE's `ip_setup_*_limits`);
 !< - the fit to the data (`SetupFinish`, `BeginItemEx`, `EndPlot`, `ImPlotAxis::ExtendFitWith`, `ApplyFit`): an axis
 !<   fits on the plot's first frame if it has no limits (`CanInitFit`), on every frame with `auto_fit`
-!<   (`ImPlotAxisFlags_AutoFit`), on the frame after `pf_set_next_axis_to_fit`; the items extend the fit range while
-!<   the plot is drawn with its current ranges, and the fit is applied at `pf_end_plot`: the picture shows it on the
-!<   next frame (ImPlot's one-frame lag). The fit pads the range by `FitPadding` (0, ImPlot's default), a degenerate
-!<   range (`ImAlmostEqual` of its ends, 2 ulp) becomes [v - 0.5, v + 0.5]; ends locked (`lock`, limits `always`) are
-!<   kept. An axis with no data does not fit (FIGURE's `fig_plot_end`). x and y follow the same rules; with
-!<   `equal=.true.` (`ImPlotFlags_Equal`) both get the same units per pixel, as `SetupFinish` and `EndPlot` constrain
-!<   them;
-!< - the layout of `BeginPlot` and `SetupFinish`: the frame, `PlotPadding`, the X axis's tick labels below the plot
-!<   (their height, `LabelPadding`), the Y axis's left of it (their widest label): the plot rectangle;
+!<   (`ImPlotAxisFlags_AutoFit`), on the frame after `pf_set_next_axis_to_fit`; the items shown extend the fit range of
+!<   the axes they use (`pf_set_axes`) while the plot is drawn with its current ranges, and the fit is applied at
+!<   `pf_end_plot`: the picture shows it on the next frame (ImPlot's one-frame lag). The fit pads the range by
+!<   `FitPadding` (0, ImPlot's default), a degenerate range (`ImAlmostEqual` of its ends, 2 ulp) becomes
+!<   [v - 0.5, v + 0.5]; ends locked (`lock`, limits `always`) are kept. An axis with no data does not fit (FIGURE's
+!<   `fig_plot_end`). x and y follow the same rules; with `equal=.true.` (`ImPlotFlags_Equal`) each pair X1-Y1, X2-Y2,
+!<   X3-Y3 gets the same units per pixel, as `SetupFinish` and `EndPlot` constrain them;
+!< - the axes X1, X2, X3, Y1, Y2, Y3 (`SetupAxis`): X1 and Y1 always, the others on the frames they are set up, their
+!<   flags as FIGURE's `ip_setup_axis` makes them (the secondary axes on the opposite side, without grid lines, unless
+!<   asked), inverted axes;
+!< - the layout of `BeginPlot` and `SetupFinish`: the frame, `PlotPadding`, an outside legend's room (from the legend
+!<   of the frame before, as ImPlot), the title above the plot (`LabelPadding`), the x axes below or above it and the y
+!<   axes left or right of it, outwards in order (`PadAndDatumAxesX`, `PadAndDatumAxesY`: their labels, their tick
+!<   labels, `MinorTickLen` and `LabelPadding` between two axes on a side), the plot rectangle;
 !< - the ticks of `Locator_Default`: the major count from the axis length (a major per 400 pixels on x, 300 on y, at
 !<   least 2), `NiceNum`, majors accumulated by `major += interval` with the zero snapped, ten labelled minors per
 !<   major, the labels thinned (every other one from the first major) when they fill more than 0.8 (x) or 1.0 (y) of
 !<   the axis; labels as `Formatter_Default` writes them, C's `%g` (foresight's printf formatter: glibc's output from
 !<   the exact binary value);
 !< - the drawing of `SetupFinish` and `EndPlot`, in their order: the frame (`RenderFrame`, `FrameBg`), the plot's
-!<   background (`WindowBg`), the grid (majors, minors faded by `MinorAlpha` and by the ticks' density), the tick labels
-!<   (`Text`), the items clipped to the plot, the tick marks (clipped to the frame), the border (`Border`); ImPlot's
-!<   automatic colours (`StyleColorsAuto`, from Dear ImGui's style colours) and its default style variables;
+!<   background (`WindowBg`), the grid (majors, minors faded by `MinorAlpha` and by the ticks' density), each axis's
+!<   highlight (an item's colour while its legend entry is hovered, with more than one axis on its direction), label
+!<   (x: centred, `AddText`; y: rotated, `AddTextVertical` glyph by glyph from the font's baked glyphs, figure_core's
+!<   `core_font_glyph`) and tick labels (`Text`), the items clipped to the plot, the title (`AddTextCentered`), the
+!<   tick marks (clipped to the frame; minor length on a side's second and third axes), the legend, the border
+!<   (`Border`); ImPlot's automatic colours (`StyleColorsAuto`, from Dear ImGui's style colours) and its default style
+!<   variables;
+!< - the legend (`ShowLegendEntries`, `CalcLegendSize`, `GetLocationPos`, `ClampLegendRect`): the labelled items in
+!<   the order they were first drawn on the frame, an entry an icon (a square of the item's colour, the text height
+!<   less 2 pixels each side) and the label, in a column or a row, inside the plot (`LegendPadding`) or outside it
+!<   (`PlotPadding`), at a compass point, on `LegendBg` (`PopupBg`) with a `LegendBorder` (`Border`), inner padding and
+!<   spacing ImPlot's; an entry is a button (`ButtonBehavior` on the item's ID, after the legend's own, as ImPlot):
+!<   clicked, it hides or shows its item; hovered, its text takes a quarter of the item's colour, its icon 3/4 alpha,
+!<   and on the next frame the item's line is twice as thick (and its axis highlighted); a hidden item's entry is
+!<   greyed (`Text` at 1/4 alpha);
 !< - a line (`PlotLine`'s `RendererLineStrip`): each segment a quad of the anti-aliased line's texture, half its
 !<   weight (at least 1 pixel) plus half the texture's fringe on each side, the segments outside the plot culled.
 !<
-!< Not yet (P10's rest, P11, P12): other scales, pan, zoom and selection, hovering, legends, titles, axis labels, more
-!< axes, colormaps other than Deep (the line colours of FIGURE's own styles: seal, paper, ...: their automatic colours
-!< are ImPlot's colormaps, registered by the native layer), ImPlot style variables set by a theme (`FitPadding`
-!< included), limits' constraints, `ImPlotAxisFlags_NoInitialFit` and `RangeFit` from the API (kept in the state).
-!< Items are hashed under the plot's seed but the ID stack is not pushed (figure_core has no `PushOverrideID`): a Dear
-!< ImGui widget drawn between `pf_begin_plot` and `pf_end_plot` gets another ID than in ImPlot. The segment's normal is
-!< `1/sqrt` where ImPlot takes the SSE estimate `_mm_rsqrt_ss` (12 bits): the line's vertices may differ from ImPlot's
-!< below a thousandth of a pixel.
+!< Not yet (P10's rest, P11, P12): other scales, tick formats, pan, zoom and selection, the mouse text and the axes'
+!< hover (the pointer over the plot area), the legend's scrolling and context menus, colormaps other than Deep (the
+!< line colours of FIGURE's own styles: seal, paper, ...: their automatic colours are ImPlot's colormaps, registered by
+!< the native layer), ImPlot style variables set by a theme (`FitPadding` included), limits' constraints, the axis
+!< flags FIGURE's API does not set (`NoInitialFit`, `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or
+!< not drawn), legend sorting. Items are hashed under the plot's seed but the ID stack is not pushed (figure_core has
+!< no `PushOverrideID`): a Dear ImGui widget drawn between `pf_begin_plot` and `pf_end_plot` gets another ID than in
+!< ImPlot. The segment's normal is `1/sqrt` where ImPlot takes the SSE estimate `_mm_rsqrt_ss` (12 bits): the line's
+!< vertices may differ from ImPlot's below a thousandth of a pixel.
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_BorderShadow, ImGuiCol_FrameBg, ImGuiCol_Text, &
-                                ImGuiCol_WindowBg
-use figure_core, only : core_color, core_content_region_avail, core_cursor_screen_pos, core_draw_begin, core_draw_end, &
-                        core_draw_line_h, core_draw_line_v, core_draw_quad_uv, core_draw_rect, core_draw_rect_filled,  &
-                        core_draw_text, core_font_size, core_frame_count, core_get_id, core_item_add, core_item_size,  &
-                        core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color, core_style_var,  &
-                        core_text_size
+use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_BorderShadow, ImGuiCol_FrameBg, ImGuiCol_PopupBg, &
+                                ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiCol_WindowBg
+use figure_core, only : core_button_behavior, core_color, core_content_region_avail, core_cursor_screen_pos, &
+                        core_draw_begin, core_draw_end, core_draw_line_h, core_draw_line_v, core_draw_quad_uv, &
+                        core_draw_rect, core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, &
+                        core_frame_count, core_get_id, core_item_add, core_item_size, core_keep_alive,         &
+                        core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,           &
+                        core_style_var, core_text_size
 use figure_plot_hash, only : plot_hash, plot_id_offset
 use foresight_format, only : c_real
 
 implicit none
 private
 public :: pf_begin_plot, pf_end_plot, pf_line, pf_plot_limits
-public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits
-public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit
+public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
+public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
+public :: pf_hide_next_item, pf_legend_hovered
 public :: pf_plot_count
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
@@ -85,8 +110,12 @@ real(real32), parameter :: MAJOR_GRID_SIZE(2) = [1.0_real32, 1.0_real32]       !
 real(real32), parameter :: MINOR_GRID_SIZE(2) = [1.0_real32, 1.0_real32]       !< MinorGridSize [pixels].
 real(real32), parameter :: PLOT_PADDING(2) = [10.0_real32, 10.0_real32]        !< PlotPadding [pixels].
 real(real32), parameter :: LABEL_PADDING(2) = [5.0_real32, 5.0_real32]         !< LabelPadding [pixels].
+real(real32), parameter :: LEGEND_PADDING(2) = [10.0_real32, 10.0_real32]      !< LegendPadding [pixels].
+real(real32), parameter :: LEGEND_INNER_PADDING(2) = [5.0_real32, 5.0_real32]  !< LegendInnerPadding [pixels].
+real(real32), parameter :: LEGEND_SPACING(2) = [5.0_real32, 0.0_real32]        !< LegendSpacing [pixels].
 real(real32), parameter :: FIT_PADDING(2) = [0.0_real32, 0.0_real32]           !< FitPadding (fraction of the range).
 real(real32), parameter :: LINE_WEIGHT = 1.0_real32                            !< ImPlotSpec's LineWeight [pixels].
+real(real32), parameter :: HIGHLIGHT_LINE_SCALE = 2.0_real32                   !< ITEM_HIGHLIGHT_LINE_SCALE.
 ! Locator_Default
 real(real32),   parameter :: TICK_FILL_X = 0.8_real32 !< Labels may fill this much of an x axis.
 real(real32),   parameter :: TICK_FILL_Y = 1.0_real32 !< ... of a y axis.
@@ -98,15 +127,37 @@ integer(int32), parameter :: AX_X3 = 3_int32 !< X3.
 integer(int32), parameter :: AX_Y1 = 4_int32 !< Y1.
 integer(int32), parameter :: AX_Y3 = 6_int32 !< Y3.
 integer(int32), parameter :: AXES = 6_int32  !< ImAxis_COUNT.
-! ImPlotAxisFlags, ImPlotFlags, ImPlotCond (implot.h)
+! ImPlotAxisFlags, ImPlotFlags, ImPlotCond, ImPlotLegendFlags, ImPlotLocation (implot.h)
+integer(int32), parameter :: AXF_NO_LABEL = 1_int32        !< ImPlotAxisFlags_NoLabel.
+integer(int32), parameter :: AXF_NO_GRID_LINES = 2_int32   !< ImPlotAxisFlags_NoGridLines.
+integer(int32), parameter :: AXF_NO_TICK_MARKS = 4_int32   !< ImPlotAxisFlags_NoTickMarks.
+integer(int32), parameter :: AXF_NO_TICK_LABELS = 8_int32  !< ImPlotAxisFlags_NoTickLabels.
 integer(int32), parameter :: AXF_NO_INITIAL_FIT = 16_int32 !< ImPlotAxisFlags_NoInitialFit.
+integer(int32), parameter :: AXF_OPPOSITE = 256_int32      !< ImPlotAxisFlags_Opposite.
+integer(int32), parameter :: AXF_FOREGROUND = 512_int32    !< ImPlotAxisFlags_Foreground.
+integer(int32), parameter :: AXF_INVERT = 1024_int32       !< ImPlotAxisFlags_Invert.
 integer(int32), parameter :: AXF_AUTO_FIT = 2048_int32     !< ImPlotAxisFlags_AutoFit.
 integer(int32), parameter :: AXF_RANGE_FIT = 4096_int32    !< ImPlotAxisFlags_RangeFit.
 integer(int32), parameter :: AXF_LOCK_MIN = 16384_int32    !< ImPlotAxisFlags_LockMin.
 integer(int32), parameter :: AXF_LOCK_MAX = 32768_int32    !< ImPlotAxisFlags_LockMax.
+integer(int32), parameter :: PF_NO_TITLE = 1_int32         !< ImPlotFlags_NoTitle.
+integer(int32), parameter :: PF_NO_LEGEND = 2_int32        !< ImPlotFlags_NoLegend.
 integer(int32), parameter :: PF_EQUAL = 128_int32          !< ImPlotFlags_Equal.
 integer(int32), parameter :: COND_ALWAYS = 1_int32         !< ImPlotCond_Always.
 integer(int32), parameter :: COND_ONCE = 2_int32           !< ImPlotCond_Once.
+integer(int32), parameter :: LGF_NO_BUTTONS = 1_int32      !< ImPlotLegendFlags_NoButtons.
+integer(int32), parameter :: LGF_NO_HIGHLIGHT_ITEM = 2_int32 !< ImPlotLegendFlags_NoHighlightItem.
+integer(int32), parameter :: LGF_NO_HIGHLIGHT_AXIS = 4_int32 !< ImPlotLegendFlags_NoHighlightAxis.
+integer(int32), parameter :: LGF_OUTSIDE = 16_int32        !< ImPlotLegendFlags_Outside.
+integer(int32), parameter :: LGF_HORIZONTAL = 32_int32     !< ImPlotLegendFlags_Horizontal.
+integer(int32), parameter :: LOC_NORTH = 1_int32           !< ImPlotLocation_North.
+integer(int32), parameter :: LOC_SOUTH = 2_int32           !< ImPlotLocation_South.
+integer(int32), parameter :: LOC_WEST = 4_int32            !< ImPlotLocation_West.
+integer(int32), parameter :: LOC_EAST = 8_int32            !< ImPlotLocation_East.
+! ImGuiButtonFlags of the legend's rectangle (imgui.h, imgui_internal.h): AllowOverlap, PressedOnClick,
+! PressedOnDoubleClick, the three mouse buttons, FlattenChildren
+integer(int32), parameter :: LEGEND_BUTTON_FLAGS = 4096_int32 + 16_int32 + 256_int32 + 1_int32 + 2_int32 + 4_int32 + &
+                                                   2048_int32 !< ImPlot's `legend_button_flags`.
 ! the tables
 integer(int32), parameter :: PLOT_CAP = 256_int32 !< Plots kept before the least recently drawn one makes room.
 integer(int32), parameter :: ITEM_CAP = 256_int32 !< A plot's items kept before the least recently drawn makes room.
@@ -131,7 +182,7 @@ type :: tick_list
 endtype tick_list
 
 type :: plot_axis
-   !< An axis (ImPlotAxis): its state kept between frames, and where its range is on screen this frame.
+   !< An axis (ImPlotAxis): its state kept between frames, and where it is on screen this frame.
    integer(int32) :: flags = 0_int32                  !< ImPlotAxisFlags in effect.
    integer(int32) :: prev_flags = 0_int32             !< ... those last set up.
    logical        :: enabled = .false.                !< In use on this frame.
@@ -146,49 +197,77 @@ type :: plot_axis
    real(real32)   :: pixel_max = 0.0_real32           !< ... its maximum.
    real(real64)   :: scale_to_pixel = 0.0_real64      !< Pixels per unit.
    real(real32)   :: datum1 = 0.0_real32              !< Where the axis's ticks start [pixels].
+   real(real32)   :: datum2 = 0.0_real32              !< Where its room ends, away from the plot [pixels].
+   integer(int32) :: hili = 0_int32                   !< Highlight's colour (ColorHiLi; 0: none).
+   integer(int32) :: ortho = 0_int32                  !< The axis of the other direction it pairs with (0: none).
+   integer(int32) :: label_off = 0_int32              !< Its label in the text of the frame (0: no label).
+   integer(int32) :: label_len = 0_int32              !< ... its length.
 endtype plot_axis
 
 type :: plot_record
    !< A plot (ImPlotPlot): what is kept between frames, and its layout on the frame it is drawn.
-   integer(int32)              :: id = 0_int32          !< ID (its title's in the window's ID stack).
-   logical                     :: used = .false.        !< The slot holds a plot.
-   integer(int32)              :: last_frame = -1_int32 !< The frame it was last begun on.
-   logical                     :: just_created = .false. !< Created on this frame.
-   logical                     :: initialized = .false. !< Drawn to its end once.
-   logical                     :: locked = .false.      !< Setup finished on this frame (layout done, frame drawn).
-   logical                     :: fit = .false.         !< An axis fits at the end of this frame (FitThisFrame).
-   integer(int32)              :: flags = 0_int32       !< ImPlotFlags in effect.
-   integer(int32)              :: prev_flags = 0_int32  !< ... those last asked.
-   real(real32)                :: frame(4) = 0.0_real32 !< Frame rectangle: x min, y min, x max, y max [pixels].
-   real(real32)                :: canvas(4) = 0.0_real32 !< Canvas: the frame less the padding.
-   real(real32)                :: rect(4) = 0.0_real32  !< Plot rectangle.
-   integer(int32)              :: col_maj = 0_int32     !< Major grid lines' colour.
-   integer(int32)              :: col_min = 0_int32     !< Minor grid lines' colour.
-   integer(int32)              :: col_tick = 0_int32    !< Tick marks' colour.
-   integer(int32)              :: col_txt = 0_int32     !< Tick labels' colour.
-   integer(int32)              :: col_border = 0_int32  !< Border's colour.
-   type(plot_axis)             :: ax(AXES)              !< Axes: X1, X2, X3, Y1, Y2, Y3.
-   integer(int32)              :: colormap_idx = 0_int32 !< Automatic colours given (ColormapIdx).
-   integer(int32)              :: n_items = 0_int32     !< Items held.
-   integer(int32)              :: item_next = 1_int32   !< Where the search for the next item starts.
-   integer(int32), allocatable :: item_id(:)            !< Item's ID.
-   integer(int32), allocatable :: item_color(:)         !< ... colour (packed).
-   integer(int32), allocatable :: item_frame(:)         !< ... the frame it was last drawn on.
+   integer(int32)                :: id = 0_int32          !< ID (its title's in the window's ID stack).
+   logical                       :: used = .false.        !< The slot holds a plot.
+   integer(int32)                :: last_frame = -1_int32 !< The frame it was last begun on.
+   logical                       :: just_created = .false. !< Created on this frame.
+   logical                       :: initialized = .false. !< Drawn to its end once.
+   logical                       :: locked = .false.      !< Setup finished on this frame (layout done, frame drawn).
+   logical                       :: fit = .false.         !< An axis fits at the end of this frame (FitThisFrame).
+   integer(int32)                :: flags = 0_int32       !< ImPlotFlags in effect.
+   integer(int32)                :: prev_flags = 0_int32  !< ... those last asked.
+   integer(int32)                :: title_off = 0_int32   !< Its title in the text of the frame (0: none).
+   integer(int32)                :: title_len = 0_int32   !< ... its length.
+   real(real32)                  :: frame(4) = 0.0_real32 !< Frame rectangle: x min, y min, x max, y max [pixels].
+   real(real32)                  :: canvas(4) = 0.0_real32 !< Canvas: the frame less the padding (and the legend).
+   real(real32)                  :: axes_rect(4) = 0.0_real32 !< Axes' room (AxesRect).
+   real(real32)                  :: rect(4) = 0.0_real32  !< Plot rectangle.
+   integer(int32)                :: col_maj = 0_int32     !< Major grid lines' colour.
+   integer(int32)                :: col_min = 0_int32     !< Minor grid lines' colour.
+   integer(int32)                :: col_tick = 0_int32    !< Tick marks' colour.
+   integer(int32)                :: col_txt = 0_int32     !< Tick labels' and axis labels' colour.
+   integer(int32)                :: col_border = 0_int32  !< Border's colour.
+   type(plot_axis)               :: ax(AXES)              !< Axes: X1, X2, X3, Y1, Y2, Y3.
+   integer(int32)                :: cur_x = AX_X1         !< The x axis the items use (CurrentX).
+   integer(int32)                :: cur_y = AX_Y1         !< ... the y axis.
+   integer(int32)                :: colormap_idx = 0_int32 !< Automatic colours given (ColormapIdx).
+   integer(int32)                :: n_items = 0_int32     !< Items held.
+   integer(int32)                :: item_next = 1_int32   !< Where the search for the next item starts.
+   integer(int32), allocatable   :: item_id(:)            !< Item's ID.
+   integer(int32), allocatable   :: item_color(:)         !< ... colour (packed).
+   integer(int32), allocatable   :: item_frame(:)         !< ... the frame it was last drawn on.
+   logical,        allocatable   :: item_show(:)          !< ... shown (Show).
+   logical,        allocatable   :: item_hovered(:)       !< ... its legend entry hovered (LegendHovered).
+   integer(int32)                :: leg_flags = 0_int32   !< Legend's ImPlotLegendFlags in effect.
+   integer(int32)                :: leg_prev_flags = 0_int32 !< ... those last asked.
+   integer(int32)                :: leg_loc = LOC_NORTH + LOC_WEST !< Legend's ImPlotLocation in effect.
+   integer(int32)                :: leg_prev_loc = LOC_NORTH + LOC_WEST !< ... that last asked.
+   logical                       :: leg_hovered = .false. !< Legend hovered.
+   integer(int32)                :: n_leg = 0_int32       !< Legend's entries.
+   integer(int32), allocatable   :: leg_item(:)           !< Entry's item.
+   integer(int32), allocatable   :: leg_off(:)            !< ... label's start in `leg_text`.
+   integer(int32), allocatable   :: leg_len(:)            !< ... label's length.
+   integer(int32)                :: leg_n = 0_int32       !< Characters of `leg_text` in use.
+   character(len=:), allocatable :: leg_text              !< Legend's labels.
 endtype plot_record
 
 type(plot_record), allocatable, target :: plots(:)       !< The plots (ImPlotContext::Plots).
 integer(int32)                         :: n_plots = 0_int32 !< Slots of `plots` in use.
 integer(int32)                         :: cur = 0_int32  !< The plot open (0: none).
 logical                                :: next_fit(AXES) = .false. !< Axes to fit on the next plot (NextPlotData.Fit).
-type(tick_list), target                :: ticks(2)       !< The open plot's ticks: x (X1), y (Y1).
+logical                                :: next_hidden_set = .false. !< The next item's visibility set (HasHidden).
+logical                                :: next_hidden = .false. !< ... hidden.
+integer(int32)                         :: next_hidden_cond = 0_int32 !< ... its condition.
+type(tick_list), target                :: ticks(AXES)    !< The open plot's ticks, per axis.
+character(len=:), allocatable          :: text           !< The open plot's title and axis labels (TextBuffer).
+integer(int32)                         :: n_text = 0_int32 !< Characters of `text` in use.
 
 contains
    function pf_begin_plot(title, width, height, equal) result(visible)
    !< Begin a plot (`BeginPlot`): its frame placed at the cursor, `width` x `height` pixels (default: the full width,
    !< ImPlot's default height; a negative size is the room left less it); `equal`: the same units per pixel on x and
    !< y (`ImPlotFlags_Equal`). When true, declare its content and call `pf_end_plot`. A plot is kept between frames by
-   !< its ID (its title's).
-   character(len=*), intent(in)           :: title   !< Title (also the plot's ID; '##id' hides it).
+   !< its ID (its title's: `##` hides what follows, `###` makes the ID of what follows only).
+   character(len=*), intent(in)           :: title   !< Title (also the plot's ID).
    real(real64),     intent(in), optional :: width   !< Width [pixels].
    real(real64),     intent(in), optional :: height  !< Height [pixels].
    logical,          intent(in), optional :: equal   !< Same units per pixel on both axes.
@@ -227,11 +306,20 @@ contains
          p%ax(i)%fit = .false.
          p%ax(i)%fit_min = huge(1.0_real64)
          p%ax(i)%fit_max = -huge(1.0_real64)
+         p%ax(i)%ortho = 0_int32
+         p%ax(i)%label_off = 0_int32
+         p%ax(i)%label_len = 0_int32
       enddo
       p%ax(AX_X1)%enabled = .true.
       p%ax(AX_Y1)%enabled = .true.
+      p%cur_x = AX_X1
+      p%cur_y = AX_Y1
       p%ax(AX_X1)%has_range = .false. ! ApplyNextPlotData: no SetNextAxisLimits
       p%ax(AX_Y1)%has_range = .false.
+      n_text = 0_int32 ! ClearTextBuffer, SetTitle
+      p%title_off = 0_int32
+      p%title_len = 0_int32
+      if (label_shown(title)) call append_text(title, p%title_off, p%title_len)
       req = [-1.0_real32, 0.0_real32]
       if (present(width)) req(1) = real(width, real32)
       if (present(height)) req(2) = real(height, real32)
@@ -257,7 +345,7 @@ contains
       call core_item_size(real(p%frame(3) - p%frame(1), real64), real(p%frame(4) - p%frame(2), real64))
       if (.not. core_item_add(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
                               real(p%frame(4), real64), id)) then
-         next_fit = .false. ! ResetCtxForNextPlot
+         call reset_next() ! ResetCtxForNextPlot
          return
       endif
    endassociate
@@ -266,40 +354,53 @@ contains
    endfunction pf_begin_plot
 
    subroutine pf_setup_axes(xlabel, ylabel, auto_fit)
-   !< The axes X1 and Y1 (`SetupAxes`; `ip_setup_axes`): call after `pf_begin_plot`, before any item. `auto_fit`: both
-   !< fit the data every frame (`ImPlotAxisFlags_AutoFit`). The flags persist: a plot keeps them on the frames this is
-   !< not called. Labels: none yet ('' or '##...').
+   !< The axes X1 and Y1 (`SetupAxes`; `ip_setup_axes`): their labels ('' or '##...': none) and, with `auto_fit`, both
+   !< fit the data every frame (`ImPlotAxisFlags_AutoFit`). Call after `pf_begin_plot`, before any item. The flags
+   !< persist: a plot keeps them on the frames this is not called.
    character(len=*), intent(in)           :: xlabel   !< X label.
    character(len=*), intent(in)           :: ylabel   !< Y label.
    logical,          intent(in), optional :: auto_fit !< Fit the data every frame.
-
-   call pf_setup_axis('x1', xlabel, auto_fit=auto_fit)
-   call pf_setup_axis('y1', ylabel, auto_fit=auto_fit)
-   endsubroutine pf_setup_axes
-
-   subroutine pf_setup_axis(axis, label, auto_fit, lock)
-   !< One axis (`SetupAxis`; `ip_setup_axis`): `'x1'` or `'y1'` (the others not yet); call after `pf_begin_plot`,
-   !< before any item. `auto_fit`: it fits the data every frame; `lock`: its ends stay (`ImPlotAxisFlags_Lock`: no fit
-   !< moves them). The flags persist: a plot keeps them on the frames this is not called. Labels: none yet.
-   character(len=*), intent(in)           :: axis     !< 'x1', 'y1'.
-   character(len=*), intent(in), optional :: label    !< Label ('' or '##...').
-   logical,          intent(in), optional :: auto_fit !< Fit the data every frame.
-   logical,          intent(in), optional :: lock     !< Ends locked.
    integer(int32)                         :: flags    !< ImPlotAxisFlags.
 
-   if (cur == 0_int32) error stop 'figure_plot_frame: pf_setup_axis outside a plot'
-   if (plots(cur)%locked) error stop 'figure_plot_frame: pf_setup_axis after the setup (an item, pf_plot_limits)'
-   if (present(label)) then
-      if (label_shown(label)) error stop 'figure_plot_frame: pf_setup_axis: axis labels are not drawn yet'
-   endif
+   call setup_refused('pf_setup_axes')
    flags = 0_int32
    if (present(auto_fit)) then
-      if (auto_fit) flags = ior(flags, AXF_AUTO_FIT)
+      if (auto_fit) flags = AXF_AUTO_FIT
    endif
-   if (present(lock)) then
-      if (lock) flags = ior(flags, ior(AXF_LOCK_MIN, AXF_LOCK_MAX))
+   call setup_axis(plots(cur), AX_X1, flags, xlabel)
+   call setup_axis(plots(cur), AX_Y1, flags, ylabel)
+   endsubroutine pf_setup_axes
+
+   subroutine pf_setup_axis(axis, label, auto_fit, opposite, invert, lock, no_grid)
+   !< One axis (`SetupAxis`; `ip_setup_axis`): `'x1'`, `'x2'`, `'x3'`, `'y1'`, `'y2'`, `'y3'`; call after
+   !< `pf_begin_plot`, before any item, every frame for the axes 2 and 3 (they exist on the frames they are set up).
+   !< The secondary axes go on the opposite side (top, right) without grid lines unless `opposite`/`no_grid` say
+   !< otherwise; `auto_fit`: the axis fits the data every frame; `invert`: values grow leftwards or downwards; `lock`:
+   !< its ends stay (no fit moves them). The flags persist: a plot keeps them on the frames this is not called.
+   character(len=*), intent(in)           :: axis     !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   character(len=*), intent(in), optional :: label    !< Label (default, '' or '##...': none).
+   logical,          intent(in), optional :: auto_fit !< Fit the data every frame.
+   logical,          intent(in), optional :: opposite !< On the opposite side (default: the axes 2 and 3).
+   logical,          intent(in), optional :: invert   !< Inverted.
+   logical,          intent(in), optional :: lock     !< Ends locked.
+   logical,          intent(in), optional :: no_grid  !< No grid lines (default: the axes 2 and 3).
+   integer(int32)                         :: i        !< Axis.
+   integer(int32)                         :: flags    !< ImPlotAxisFlags.
+
+   call setup_refused('pf_setup_axis')
+   i = axis_code(axis)
+   flags = 0_int32
+   if (i /= AX_X1 .and. i /= AX_Y1) flags = ior(AXF_OPPOSITE, AXF_NO_GRID_LINES) ! ImPlotAxisFlags_AuxDefault
+   call set_flag(flags, AXF_OPPOSITE, opposite)
+   call set_flag(flags, AXF_NO_GRID_LINES, no_grid)
+   call set_flag(flags, AXF_AUTO_FIT, auto_fit)
+   call set_flag(flags, AXF_INVERT, invert)
+   call set_flag(flags, ior(AXF_LOCK_MIN, AXF_LOCK_MAX), lock)
+   if (present(label)) then
+      call setup_axis(plots(cur), i, flags, label)
+   else
+      call setup_axis(plots(cur), i, flags)
    endif
-   call setup_axis(plots(cur), axis_code(axis), flags)
    endsubroutine pf_setup_axis
 
    subroutine pf_setup_axes_limits(xmin, xmax, ymin, ymax, always)
@@ -315,17 +416,16 @@ contains
    endsubroutine pf_setup_axes_limits
 
    subroutine pf_setup_axis_limits(axis, vmin, vmax, always)
-   !< The range of one axis (`SetupAxisLimits`; `ip_setup_axis_limits`), `'x1'` or `'y1'`: applied until the plot
+   !< The range of one axis (`SetupAxisLimits`; `ip_setup_axis_limits`), set up on this frame: applied until the plot
    !< has been drawn once, or every frame with `always=.true.`. Call after `pf_begin_plot`, before any item.
-   character(len=*), intent(in)           :: axis   !< 'x1', 'y1'.
+   character(len=*), intent(in)           :: axis   !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
    real(real64),     intent(in)           :: vmin   !< Lower end.
    real(real64),     intent(in)           :: vmax   !< Upper end.
    logical,          intent(in), optional :: always !< Every frame.
    integer(int32)                         :: i      !< Axis.
    integer(int32)                         :: cond   !< ImPlotCond.
 
-   if (cur == 0_int32) error stop 'figure_plot_frame: pf_setup_axis_limits outside a plot'
-   if (plots(cur)%locked) error stop 'figure_plot_frame: pf_setup_axis_limits after the setup'
+   call setup_refused('pf_setup_axis_limits')
    i = axis_code(axis)
    cond = COND_ONCE
    if (present(always)) then
@@ -339,10 +439,35 @@ contains
    endassociate
    endsubroutine pf_setup_axis_limits
 
+   subroutine pf_setup_legend(location, outside, horizontal)
+   !< Where the plot's legend goes (`SetupLegend`; `ip_setup_legend`): `location` a compass point, `'n'`, `'ne'`,
+   !< `'e'`, `'se'`, `'s'`, `'sw'`, `'w'`, `'nw'` (default) or `'c'`; `outside`: outside the plot area, which shrinks
+   !< to make room (from the frame after the legend has entries, as ImPlot); `horizontal`: the entries in a row. Call
+   !< after `pf_begin_plot`, before any item; the choice persists.
+   character(len=*), intent(in), optional :: location   !< Compass point.
+   logical,          intent(in), optional :: outside    !< Outside the plot area.
+   logical,          intent(in), optional :: horizontal !< Entries in a row.
+   integer(int32)                         :: loc        !< ImPlotLocation.
+   integer(int32)                         :: flags      !< ImPlotLegendFlags.
+
+   call setup_refused('pf_setup_legend')
+   loc = LOC_NORTH + LOC_WEST
+   if (present(location)) loc = location_code(trim(location))
+   flags = 0_int32
+   call set_flag(flags, LGF_OUTSIDE, outside)
+   call set_flag(flags, LGF_HORIZONTAL, horizontal)
+   associate(p => plots(cur))
+      if (loc /= p%leg_prev_loc) p%leg_loc = loc
+      p%leg_prev_loc = loc
+      if (flags /= p%leg_prev_flags) p%leg_flags = flags
+      p%leg_prev_flags = flags
+   endassociate
+   endsubroutine pf_setup_legend
+
    subroutine pf_set_next_axis_to_fit(axis)
-   !< Fit one axis (`'x1'` or `'y1'`) of the next plot begun to its data (`SetNextAxisToFit`): call before
-   !< `pf_begin_plot`; the fit is applied at its `pf_end_plot` and shown from the frame after.
-   character(len=*), intent(in) :: axis !< 'x1', 'y1'.
+   !< Fit one axis of the next plot begun to its data (`SetNextAxisToFit`): call before `pf_begin_plot`; the fit is
+   !< applied at its `pf_end_plot` and shown from the frame after.
+   character(len=*), intent(in) :: axis !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
 
    if (cur /= 0_int32) error stop 'figure_plot_frame: pf_set_next_axis_to_fit inside a plot'
    next_fit(axis_code(axis)) = .true.
@@ -355,118 +480,161 @@ contains
    next_fit = .true.
    endsubroutine pf_set_next_axes_to_fit
 
-   subroutine pf_plot_limits(xmin, xmax, ymin, ymax)
-   !< The ranges of X1 and Y1 the open plot is drawn with on this frame (`GetPlotLimits`; `ip_plot_limits`): ends its
-   !< setup.
-   real(real64), intent(out) :: xmin, xmax !< X axis's range.
-   real(real64), intent(out) :: ymin, ymax !< Y axis's range.
+   subroutine pf_set_axes(x, y)
+   !< The axes the next items use (`SetAxes`; `ip_set_axes`), until the next call or the plot's end (each plot starts
+   !< on X1 and Y1), each set up on this frame. It ends the setup.
+   character(len=*), intent(in) :: x  !< 'x1', 'x2' or 'x3'.
+   character(len=*), intent(in) :: y  !< 'y1', 'y2' or 'y3'.
+   integer(int32)               :: ix, iy !< Axes.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_set_axes outside a plot'
+   ix = axis_code(x)
+   iy = axis_code(y)
+   if (ix > AX_X3 .or. iy < AX_Y1) error stop 'figure_plot_frame: pf_set_axes: an x axis and a y axis'
+   associate(p => plots(cur))
+      if (.not. (p%ax(ix)%enabled .and. p%ax(iy)%enabled)) error stop 'figure_plot_frame: pf_set_axes: axis not set up'
+      if (.not. p%locked) call setup_finish(p)
+      p%cur_x = ix
+      p%cur_y = iy
+   endassociate
+   endsubroutine pf_set_axes
+
+   subroutine pf_hide_next_item(hidden, always)
+   !< Hide (default) or show the next item (`HideNextItem`; `ip_hide_next_item`): the first time it is drawn only,
+   !< unless `always=.true.` (on this frame, whatever its legend entry's clicks did). Its legend entry stays, greyed
+   !< while hidden.
+   logical, intent(in), optional :: hidden !< Hidden (default) or shown.
+   logical, intent(in), optional :: always !< On this frame.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_hide_next_item outside a plot'
+   next_hidden_set = .true.
+   next_hidden = .true.
+   if (present(hidden)) next_hidden = hidden
+   next_hidden_cond = COND_ONCE
+   if (present(always)) then
+      if (always) next_hidden_cond = COND_ALWAYS
+   endif
+   endsubroutine pf_hide_next_item
+
+   function pf_legend_hovered(label) result(hovered)
+   !< The legend entry of the item `label` is hovered (`IsLegendEntryHovered`; `ip_legend_hovered`): as the last
+   !< legend drawn found it. It ends the setup.
+   character(len=*), intent(in) :: label   !< The item's label.
+   logical                      :: hovered !< Hovered.
+   integer(int32)               :: id, k   !< The item's ID, counter.
+
+   hovered = .false.
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_legend_hovered outside a plot'
+   associate(p => plots(cur))
+      if (.not. p%locked) call setup_finish(p)
+      id = plot_hash(label, plot_id_offset(p%id, -1_int32))
+      do k = 1_int32, p%n_items
+         if (p%item_id(k) == id) then
+            hovered = p%item_hovered(k)
+            exit
+         endif
+      enddo
+   endassociate
+   endfunction pf_legend_hovered
+
+   subroutine pf_plot_limits(xmin, xmax, ymin, ymax, xaxis, yaxis)
+   !< The ranges the open plot is drawn with on this frame (`GetPlotLimits`; `ip_plot_limits`): of the axes the items
+   !< use now (X1 and Y1, or those of the last `pf_set_axes`), or of `xaxis` and `yaxis`. It ends the setup.
+   real(real64),     intent(out)          :: xmin, xmax !< X axis's range.
+   real(real64),     intent(out)          :: ymin, ymax !< Y axis's range.
+   character(len=*), intent(in), optional :: xaxis      !< 'x1', 'x2', 'x3' (default: the current one).
+   character(len=*), intent(in), optional :: yaxis      !< 'y1', 'y2', 'y3' (default: the current one).
+   integer(int32)                         :: ix, iy     !< Axes.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: pf_plot_limits outside a plot'
-   if (.not. plots(cur)%locked) call setup_finish(plots(cur))
-   xmin = plots(cur)%ax(AX_X1)%range_min
-   xmax = plots(cur)%ax(AX_X1)%range_max
-   ymin = plots(cur)%ax(AX_Y1)%range_min
-   ymax = plots(cur)%ax(AX_Y1)%range_max
+   associate(p => plots(cur))
+      if (.not. p%locked) call setup_finish(p)
+      ix = p%cur_x
+      iy = p%cur_y
+      if (present(xaxis)) ix = axis_code(xaxis)
+      if (present(yaxis)) iy = axis_code(yaxis)
+      xmin = p%ax(ix)%range_min
+      xmax = p%ax(ix)%range_max
+      ymin = p%ax(iy)%range_min
+      ymax = p%ax(iy)%range_max
+   endassociate
    endsubroutine pf_plot_limits
 
    subroutine pf_line(label, x, y, color)
-   !< A line through the points (x(i), y(i)) (`PlotLine` of weight 1), clipped to the plot, of the colour `color`
-   !< (`ip_spec(line_color=...)`), else of the colour its item was given when created: the plot's next automatic
-   !< colour (ImPlot's colormap Deep: the styles `'dark'`, `'light'`, `'classic'`). The item is keyed by its label's
-   !< ID; the label is not shown yet (no legend). Its points extend the fit of the axes that fit on this frame.
+   !< A line through the points (x(i), y(i)) (`PlotLine` of weight 1), clipped to the plot, on the current axes, of
+   !< the colour `color` (`ip_spec(line_color=...)`), else of the colour its item was given when created: the plot's
+   !< next automatic colour (ImPlot's colormap Deep: the styles `'dark'`, `'light'`, `'classic'`). The item is keyed
+   !< by its label's ID; a label with text before any `##` gets a legend entry. A hidden item is neither drawn nor fit;
+   !< a shown one extends the fit of its axes that fit on this frame.
    character(len=*), intent(in)           :: label    !< Legend label (the item's ID).
    real(real64),     intent(in)           :: x(:)     !< Abscissae.
    real(real64),     intent(in)           :: y(:)     !< Ordinates.
    real(real64),     intent(in), optional :: color(4) !< Colour, RGBA in [0, 1].
    integer(int32)               :: col     !< Colour.
+   real(real32)                 :: weight  !< Line weight [pixels].
    real(real32)                 :: hw      !< Half the weight [pixels].
    real(real64)                 :: uv0(2), uv1(2), fringe !< The line's texture.
    real(real32)                 :: p1(2), p2(2) !< A segment's ends [pixels].
    real(real32)                 :: dx, dy, d2, inv !< Its direction.
    integer(int32)               :: k, n    !< Counter, points.
    integer(int32)               :: it      !< The item's handle.
-   logical                      :: created !< The item is new.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: pf_line outside a plot'
    associate(p => plots(cur))
-      if (.not. p%locked) call setup_finish(p)
-      it = item_handle(p, plot_hash(label, plot_id_offset(p%id, -1_int32)), core_frame_count(), created)
-      if (present(color)) then ! BeginItem: the colour given, else the next automatic one if the item is new
-         p%item_color(it) = core_color(color(1), color(2), color(3), color(4))
-      elseif (created) then
-         p%item_color(it) = rgb_u32(DEEP(:, modulo(p%colormap_idx, 10_int32) + 1_int32)) ! NextColormapColorU32
-         p%colormap_idx = p%colormap_idx + 1_int32
-      endif
+      if (.not. begin_item(p, label, color, it)) return
       col = p%item_color(it)
+      weight = LINE_WEIGHT
+      if (p%item_hovered(it)) call highlight(p, it, weight)
       n = int(min(size(x), size(y)), int32)
-      if (p%fit) call fit_points(p%ax(AX_X1), p%ax(AX_Y1), x, y, n) ! BeginItemEx's Fitter1
-      if (n < 2_int32) return
-      call core_push_clip_rect(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
-                               real(p%rect(4), real64))
-      hw = max(1.0_real32, LINE_WEIGHT) * 0.5_real32 ! RendererLineStrip, GetLineRenderProps
-      call core_line_texture(real(hw * 2.0_real32, real64), uv0, uv1, fringe)
-      hw = hw + real(fringe, real32) * 0.5_real32
-      p1 = [to_pixels(p%ax(AX_X1), x(1)), to_pixels(p%ax(AX_Y1), y(1))]
-      do k = 2_int32, n
-         p2 = [to_pixels(p%ax(AX_X1), x(k)), to_pixels(p%ax(AX_Y1), y(k))]
-         if (min(p1(2), p2(2)) < p%rect(4) .and. max(p1(2), p2(2)) > p%rect(2) .and. &
-             min(p1(1), p2(1)) < p%rect(3) .and. max(p1(1), p2(1)) > p%rect(1)) then ! PrimLine
-            dx = p2(1) - p1(1)
-            dy = p2(2) - p1(2)
-            d2 = dx * dx + dy * dy
-            if (d2 > 0.0_real32) then
-               inv = 1.0_real32 / sqrt(d2)
-               dx = dx * inv
-               dy = dy * inv
+      associate(ax => p%ax(p%cur_x), ay => p%ax(p%cur_y))
+         if (p%fit) call fit_points(ax, ay, x, y, n) ! BeginItemEx's Fitter1
+         if (n < 2_int32) return
+         call core_push_clip_rect(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
+                                  real(p%rect(4), real64))
+         hw = max(1.0_real32, weight) * 0.5_real32 ! RendererLineStrip, GetLineRenderProps
+         call core_line_texture(real(hw * 2.0_real32, real64), uv0, uv1, fringe)
+         hw = hw + real(fringe, real32) * 0.5_real32
+         p1 = [to_pixels(ax, x(1)), to_pixels(ay, y(1))]
+         do k = 2_int32, n
+            p2 = [to_pixels(ax, x(k)), to_pixels(ay, y(k))]
+            if (min(p1(2), p2(2)) < p%rect(4) .and. max(p1(2), p2(2)) > p%rect(2) .and. &
+                min(p1(1), p2(1)) < p%rect(3) .and. max(p1(1), p2(1)) > p%rect(1)) then ! PrimLine
+               dx = p2(1) - p1(1)
+               dy = p2(2) - p1(2)
+               d2 = dx * dx + dy * dy
+               if (d2 > 0.0_real32) then
+                  inv = 1.0_real32 / sqrt(d2)
+                  dx = dx * inv
+                  dy = dy * inv
+               endif
+               dx = dx * hw
+               dy = dy * hw
+               call core_draw_quad_uv(real([p1(1) + dy, p2(1) + dy, p2(1) - dy, p1(1) - dy], real64),   &
+                                      real([p1(2) - dx, p2(2) - dx, p2(2) + dx, p1(2) + dx], real64),   &
+                                      [uv0(1), uv0(1), uv1(1), uv1(1)], [uv0(2), uv0(2), uv1(2), uv1(2)], col)
             endif
-            dx = dx * hw
-            dy = dy * hw
-            call core_draw_quad_uv(real([p1(1) + dy, p2(1) + dy, p2(1) - dy, p1(1) - dy], real64),   &
-                                   real([p1(2) - dx, p2(2) - dx, p2(2) + dx, p1(2) + dx], real64),   &
-                                   [uv0(1), uv0(1), uv1(1), uv1(1)], [uv0(2), uv0(2), uv1(2), uv1(2)], col)
-         endif
-         p1 = p2
-      enddo
-      call core_pop_clip_rect()
+            p1 = p2
+         enddo
+         call core_pop_clip_rect()
+      endassociate
    endassociate
    endsubroutine pf_line
 
    subroutine pf_end_plot()
-   !< End the plot (`EndPlot`): the tick marks and the border; then the fit of the axes that fit on this frame, shown
-   !< from the next one.
-   real(real32)   :: len_, thk !< A tick's length and thickness.
-   integer(int32) :: k         !< Counter.
+   !< End the plot (`EndPlot`): the title, the tick marks, the legend and the border; then the fit of the axes that
+   !< fit on this frame, shown from the next one.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: pf_end_plot without a plot'
    associate(p => plots(cur))
       if (.not. p%locked) call setup_finish(p)
       call core_push_clip_rect(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
                                real(p%frame(4), real64))
-      associate(t => ticks(1), r => p%rect, ax => p%ax(AX_X1)) ! x ticks, upwards from the axis
-         do k = 1_int32, t%n
-            if (t%pix(k) < r(1) .or. t%pix(k) > r(3)) cycle
-            len_ = merge(MAJOR_TICK_LEN(1), MINOR_TICK_LEN(1), t%major(k))
-            thk = merge(MAJOR_TICK_SIZE(1), MINOR_TICK_SIZE(1), t%major(k))
-            call core_draw_line_v(real(t%pix(k), real64), real(ax%datum1, real64), &
-                                  real(ax%datum1 + (-1.0_real32) * len_, real64), p%col_tick, real(thk, real64))
-         enddo
-         if (.not. border_shown(p)) call core_draw_line_h(real(r(1), real64), real(r(3), real64), &
-                                                          real(ax%datum1, real64), p%col_tick,     &
-                                                          real(MINOR_TICK_SIZE(1), real64))
-      endassociate
-      associate(t => ticks(2), r => p%rect, ax => p%ax(AX_Y1)) ! y ticks, rightwards from the axis
-         do k = 1_int32, t%n
-            if (t%pix(k) < r(2) .or. t%pix(k) > r(4)) cycle
-            len_ = merge(MAJOR_TICK_LEN(2), MINOR_TICK_LEN(2), t%major(k))
-            thk = merge(MAJOR_TICK_SIZE(2), MINOR_TICK_SIZE(2), t%major(k))
-            call core_draw_line_h(real(ax%datum1, real64), real(ax%datum1 + 1.0_real32 * len_, real64), &
-                                  real(t%pix(k), real64), p%col_tick, real(thk, real64))
-         enddo
-         if (.not. border_shown(p)) call core_draw_line_v(real(ax%datum1, real64), real(r(2), real64), &
-                                                          real(r(4), real64), p%col_tick,              &
-                                                          real(MINOR_TICK_SIZE(2), real64))
-      endassociate
+      if (p%title_len > 0_int32 .and. iand(p%flags, PF_NO_TITLE) == 0_int32) &
+         call text_centered(0.5_real32 * (p%rect(1) + p%rect(3)), p%canvas(2), core_style_color(ImGuiCol_Text), &
+                            text(p%title_off:p%title_off + p%title_len - 1_int32))
+      call tick_marks(p)
       call core_pop_clip_rect()
+      call legend(p)
       if (border_shown(p)) call core_draw_rect(real(p%rect(1), real64), real(p%rect(2), real64),        &
                                                real(p%rect(3), real64), real(p%rect(4), real64), p%col_border, &
                                                rounding=0.0_real64, thickness=real(PLOT_BORDER_SIZE, real64))
@@ -474,7 +642,7 @@ contains
       call fit_axes(p)
       p%initialized = .true.
    endassociate
-   next_fit = .false. ! ResetCtxForNextPlot
+   call reset_next() ! ResetCtxForNextPlot
    cur = 0_int32
    endsubroutine pf_end_plot
 
@@ -488,6 +656,229 @@ contains
       if (plots(k)%used) n = n + 1_int32
    enddo
    endfunction pf_plot_count
+
+   ! private: the API's helpers
+
+   subroutine setup_refused(name)
+   !< Stop unless a plot is open and its setup not over.
+   character(len=*), intent(in) :: name !< The procedure called.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: a setup call outside a plot'
+   if (plots(cur)%locked) then
+      write(*, '(A)') 'figure_plot_frame: '//name//' after the setup (an item, pf_set_axes, pf_plot_limits)'
+      error stop 1
+   endif
+   endsubroutine setup_refused
+
+   subroutine set_flag(flags, flag, value)
+   !< A flag set or cleared, if `value` is given.
+   integer(int32), intent(inout)        :: flags !< Flags.
+   integer(int32), intent(in)           :: flag  !< The flag's bits.
+   logical,        intent(in), optional :: value !< Set (true) or cleared.
+
+   if (.not. present(value)) return
+   if (value) then
+      flags = ior(flags, flag)
+   else
+      flags = iand(flags, not(flag))
+   endif
+   endsubroutine set_flag
+
+   function axis_code(axis) result(i)
+   !< The axis of a name ('x1' .. 'x3' X1 .. X3, 'y1' .. 'y3' Y1 .. Y3).
+   character(len=*), intent(in) :: axis !< Name.
+   integer(int32)               :: i    !< Axis.
+
+   select case (axis)
+   case ('x1')
+      i = AX_X1
+   case ('x2')
+      i = AX_X1 + 1_int32
+   case ('x3')
+      i = AX_X3
+   case ('y1')
+      i = AX_Y1
+   case ('y2')
+      i = AX_Y1 + 1_int32
+   case ('y3')
+      i = AX_Y3
+   case default
+      i = 0_int32
+      write(*, '(A)') "figure_plot_frame: unknown axis '"//axis//"' ('x1', 'x2', 'x3', 'y1', 'y2' or 'y3')"
+      error stop 1
+   endselect
+   endfunction axis_code
+
+   function location_code(location) result(loc)
+   !< The ImPlotLocation of a compass point.
+   character(len=*), intent(in) :: location !< 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'c'.
+   integer(int32)               :: loc      !< ImPlotLocation.
+
+   select case (location)
+   case ('n')
+      loc = LOC_NORTH
+   case ('ne')
+      loc = LOC_NORTH + LOC_EAST
+   case ('e')
+      loc = LOC_EAST
+   case ('se')
+      loc = LOC_SOUTH + LOC_EAST
+   case ('s')
+      loc = LOC_SOUTH
+   case ('sw')
+      loc = LOC_SOUTH + LOC_WEST
+   case ('w')
+      loc = LOC_WEST
+   case ('nw')
+      loc = LOC_NORTH + LOC_WEST
+   case ('c')
+      loc = 0_int32
+   case default
+      loc = 0_int32
+      error stop "figure_plot_frame: a legend location is 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw' or 'c'"
+   endselect
+   endfunction location_code
+
+   pure function label_shown(label) result(yes)
+   !< A label has text to show (`FindRenderedTextEnd(label) != label`: not empty, not starting with '##').
+   character(len=*), intent(in) :: label !< Label.
+   logical                      :: yes   !< Shown.
+
+   yes = rendered_len(label) > 0
+   endfunction label_shown
+
+   pure function rendered_len(label) result(n)
+   !< The length of a label's shown part (`FindRenderedTextEnd`: up to its first `##`).
+   character(len=*), intent(in) :: label !< Label.
+   integer(int32)               :: n     !< Characters shown.
+
+   n = int(index(label, '##'), int32) - 1_int32
+   if (n < 0_int32) n = len(label, kind=int32)
+   endfunction rendered_len
+
+   subroutine append_text(s, off, n)
+   !< A text appended to the open plot's text (`TextBuffer`): where it starts and its length.
+   character(len=*), intent(in)  :: s   !< Text.
+   integer(int32),   intent(out) :: off !< Its start.
+   integer(int32),   intent(out) :: n   !< Its length.
+   character(len=:), allocatable :: more !< Grown text.
+
+   n = len(s, kind=int32)
+   if (.not. allocated(text)) allocate(character(len=max(256_int32, n)) :: text)
+   if (n_text + n > len(text, kind=int32)) then
+      allocate(character(len=max(2_int32 * len(text, kind=int32), n_text + n)) :: more)
+      more(1:n_text) = text(1:n_text)
+      call move_alloc(more, text)
+   endif
+   off = n_text + 1_int32
+   text(off:off + n - 1_int32) = s
+   n_text = n_text + n
+   endsubroutine append_text
+
+   subroutine reset_next()
+   !< `ResetCtxForNextPlot`: the next plot's and the next item's data cleared.
+
+   next_fit = .false.
+   next_hidden_set = .false.
+   endsubroutine reset_next
+
+   ! private: the items
+
+   function begin_item(p, label, color, it) result(shown)
+   !< `BeginItem`: the setup finished, the item registered (`RegisterOrGetItem`: its legend entry the first time it is
+   !< drawn on this frame, if its label has text), its colour (given, or the next automatic one when it is created),
+   !< its visibility (`pf_hide_next_item`); shown, or not (then nothing else is done).
+   type(plot_record), intent(inout)        :: p        !< Plot.
+   character(len=*),  intent(in)           :: label    !< Label.
+   real(real64),      intent(in), optional :: color(4) !< Colour given.
+   integer(int32),    intent(out)          :: it       !< The item's handle.
+   logical                                 :: shown    !< Shown.
+   logical                                 :: created  !< The item is new.
+   logical                                 :: seen     !< Drawn already on this frame.
+
+   if (.not. p%locked) call setup_finish(p)
+   it = item_handle(p, plot_hash(label, plot_id_offset(p%id, -1_int32)), core_frame_count(), created, seen)
+   if (.not. seen) then
+      if (label_shown(label)) then
+         call legend_append(p, it, label)
+      else
+         p%item_show(it) = .true.
+      endif
+   endif
+   if (present(color)) then
+      p%item_color(it) = core_color(color(1), color(2), color(3), color(4))
+   elseif (created) then
+      p%item_color(it) = rgb_u32(DEEP(:, modulo(p%colormap_idx, 10_int32) + 1_int32)) ! NextColormapColorU32
+      p%colormap_idx = p%colormap_idx + 1_int32
+   endif
+   if (next_hidden_set) then
+      if (created .or. next_hidden_cond == COND_ALWAYS) p%item_show(it) = .not. next_hidden
+   endif
+   next_hidden_set = .false. ! NextItemData.Reset (in BeginItem when hidden, in EndItem when drawn)
+   shown = p%item_show(it)
+   endfunction begin_item
+
+   subroutine highlight(p, it, weight)
+   !< `BeginItem`'s highlight of an item whose legend entry is hovered: its line twice as thick, its axes highlighted
+   !< in its colour where more than one axis of their direction is in use.
+   type(plot_record), intent(inout) :: p      !< Plot.
+   integer(int32),    intent(in)    :: it     !< Item.
+   real(real32),      intent(inout) :: weight !< Line weight [pixels].
+   integer(int32)                   :: i, nx, ny !< Counter, axes in use.
+
+   if (iand(p%leg_flags, LGF_NO_HIGHLIGHT_ITEM) == 0_int32) weight = weight * HIGHLIGHT_LINE_SCALE
+   if (iand(p%leg_flags, LGF_NO_HIGHLIGHT_AXIS) == 0_int32) then
+      nx = 0_int32
+      ny = 0_int32
+      do i = 1_int32, AXES
+         if (.not. p%ax(i)%enabled) cycle
+         if (i <= AX_X3) then
+            nx = nx + 1_int32
+         else
+            ny = ny + 1_int32
+         endif
+      enddo
+      if (nx > 1_int32) p%ax(p%cur_x)%hili = p%item_color(it)
+      if (ny > 1_int32) p%ax(p%cur_y)%hili = p%item_color(it)
+   endif
+   endsubroutine highlight
+
+   subroutine legend_append(p, it, label)
+   !< An entry appended to the plot's legend (`Legend.Indices`, `Legend.Labels`).
+   type(plot_record), intent(inout) :: p     !< Plot.
+   integer(int32),    intent(in)    :: it    !< Item.
+   character(len=*),  intent(in)    :: label !< Its label.
+   integer(int32),    allocatable   :: item(:), off(:), ln(:) !< Grown columns.
+   character(len=:),  allocatable   :: more  !< Grown text.
+   integer(int32)                   :: n, m  !< Entries, characters.
+
+   n = p%n_leg
+   if (.not. allocated(p%leg_item)) then
+      allocate(p%leg_item(8), p%leg_off(8), p%leg_len(8))
+   elseif (n == size(p%leg_item, kind=int32)) then
+      allocate(item(2_int32 * n), off(2_int32 * n), ln(2_int32 * n))
+      item(1:n) = p%leg_item(1:n)
+      off(1:n) = p%leg_off(1:n)
+      ln(1:n) = p%leg_len(1:n)
+      call move_alloc(item, p%leg_item)
+      call move_alloc(off, p%leg_off)
+      call move_alloc(ln, p%leg_len)
+   endif
+   m = len(label, kind=int32)
+   if (.not. allocated(p%leg_text)) allocate(character(len=max(256_int32, m)) :: p%leg_text)
+   if (p%leg_n + m > len(p%leg_text, kind=int32)) then
+      allocate(character(len=max(2_int32 * len(p%leg_text, kind=int32), p%leg_n + m)) :: more)
+      more(1:p%leg_n) = p%leg_text(1:p%leg_n)
+      call move_alloc(more, p%leg_text)
+   endif
+   n = n + 1_int32
+   p%n_leg = n
+   p%leg_item(n) = it
+   p%leg_off(n) = p%leg_n + 1_int32
+   p%leg_len(n) = m
+   p%leg_text(p%leg_n + 1_int32:p%leg_n + m) = label
+   p%leg_n = p%leg_n + m
+   endsubroutine legend_append
 
    ! private: the tables
 
@@ -550,7 +941,7 @@ contains
    endsubroutine grow_plots
 
    subroutine reset_plot(p, id)
-   !< A slot made a new plot of the ID (field by field: the item tables kept allocated).
+   !< A slot made a new plot of the ID (field by field: the item and legend tables kept allocated).
    type(plot_record), intent(inout) :: p  !< Plot.
    integer(int32),    intent(in)    :: id !< ID.
    integer(int32)                   :: i  !< Axis.
@@ -567,6 +958,13 @@ contains
    p%colormap_idx = 0_int32
    p%n_items = 0_int32
    p%item_next = 1_int32
+   p%leg_flags = 0_int32
+   p%leg_prev_flags = 0_int32
+   p%leg_loc = LOC_NORTH + LOC_WEST
+   p%leg_prev_loc = LOC_NORTH + LOC_WEST
+   p%leg_hovered = .false.
+   p%n_leg = 0_int32
+   p%leg_n = 0_int32
    do i = 1_int32, AXES
       p%ax(i)%flags = 0_int32
       p%ax(i)%prev_flags = 0_int32
@@ -582,27 +980,35 @@ contains
       p%ax(i)%pixel_max = 0.0_real32
       p%ax(i)%scale_to_pixel = 0.0_real64
       p%ax(i)%datum1 = 0.0_real32
+      p%ax(i)%datum2 = 0.0_real32
+      p%ax(i)%hili = 0_int32
+      p%ax(i)%ortho = 0_int32
+      p%ax(i)%label_off = 0_int32
+      p%ax(i)%label_len = 0_int32
    enddo
    endsubroutine reset_plot
 
-   function item_handle(p, id, frame, created) result(h)
+   function item_handle(p, id, frame, created, seen) result(h)
    !< The item of an ID in a plot, added if new (`RegisterOrGetItem`): searched from where the last one was found
    !< (items come in the same order every frame), added in a new slot (the table grown, doubled up to ITEM_CAP) or in
-   !< the slot of the least recently drawn item not drawn on this frame.
+   !< the slot of the least recently drawn item not drawn on this frame. `seen`: drawn already on this frame.
    type(plot_record), intent(inout) :: p       !< Plot.
    integer(int32),    intent(in)    :: id      !< ID.
    integer(int32),    intent(in)    :: frame   !< This frame.
    logical,           intent(out)   :: created !< The item is new.
+   logical,           intent(out)   :: seen    !< Drawn already on this frame (SeenThisFrame).
    integer(int32)                   :: h       !< Handle.
    integer(int32)                   :: j, k, n !< Counters, items.
 
    created = .false.
+   seen = .false.
    n = p%n_items
    k = p%item_next
    do j = 1_int32, n
       if (k > n) k = 1_int32
       if (p%item_id(k) == id) then
          h = k
+         seen = p%item_frame(h) == frame
          p%item_frame(h) = frame
          p%item_next = h + 1_int32
          return
@@ -630,6 +1036,8 @@ contains
    p%item_id(h) = id
    p%item_color(h) = -1_int32 ! IM_COL32_WHITE
    p%item_frame(h) = frame
+   p%item_show(h) = .true.
+   p%item_hovered(h) = .false.
    p%item_next = h + 1_int32
    endfunction item_handle
 
@@ -638,31 +1046,43 @@ contains
    type(plot_record), intent(inout) :: p                       !< Plot.
    integer(int32),    intent(in)    :: m                       !< Items room.
    integer(int32),    allocatable   :: id(:), color(:), frame(:) !< New columns.
+   logical,           allocatable   :: show(:), hovered(:)     !< ...
    integer(int32)                   :: n                       !< Items held.
 
    n = p%n_items
-   allocate(id(m), color(m), frame(m))
+   allocate(id(m), color(m), frame(m), show(m), hovered(m))
    if (n > 0_int32) then
       id(1:n) = p%item_id(1:n)
       color(1:n) = p%item_color(1:n)
       frame(1:n) = p%item_frame(1:n)
+      show(1:n) = p%item_show(1:n)
+      hovered(1:n) = p%item_hovered(1:n)
    endif
    call move_alloc(id, p%item_id)
    call move_alloc(color, p%item_color)
    call move_alloc(frame, p%item_frame)
+   call move_alloc(show, p%item_show)
+   call move_alloc(hovered, p%item_hovered)
    endsubroutine grow_items
 
    ! private: the axes
 
-   subroutine setup_axis(p, i, flags)
-   !< `SetupAxis`: the axis enabled on this frame, its flags taken if the plot is new or they changed.
-   type(plot_record), intent(inout) :: p     !< Plot.
-   integer(int32),    intent(in)    :: i     !< Axis.
-   integer(int32),    intent(in)    :: flags !< ImPlotAxisFlags.
+   subroutine setup_axis(p, i, flags, label)
+   !< `SetupAxis`: the axis enabled on this frame, its flags taken if the plot is new or they changed, its label (none:
+   !< absent, empty or starting with '##').
+   type(plot_record), intent(inout)        :: p     !< Plot.
+   integer(int32),    intent(in)           :: i     !< Axis.
+   integer(int32),    intent(in)           :: flags !< ImPlotAxisFlags.
+   character(len=*),  intent(in), optional :: label !< Label.
 
    if (p%just_created .or. flags /= p%ax(i)%prev_flags) p%ax(i)%flags = flags
    p%ax(i)%prev_flags = flags
    p%ax(i)%enabled = .true.
+   p%ax(i)%label_off = 0_int32
+   p%ax(i)%label_len = 0_int32
+   if (present(label)) then
+      if (label_shown(label)) call append_text(label, p%ax(i)%label_off, p%ax(i)%label_len)
+   endif
    endsubroutine setup_axis
 
    subroutine set_range(ax, v1, v2)
@@ -749,50 +1169,6 @@ contains
    call update_scale(ax)
    endsubroutine apply_fit
 
-   subroutine fit_axes(p)
-   !< `EndPlot`'s fit: the axes that fit on this frame and saw data (FIGURE's `fig_plot_end` drops the others), x axes
-   !< then y axes; with `ImPlotFlags_Equal` the pair X1-Y1 then shares the larger units per pixel.
-   type(plot_record), intent(inout) :: p      !< Plot.
-   real(real64)                     :: aspect !< Units per pixel.
-   integer(int32)                   :: i      !< Axis.
-   logical                          :: equal  !< ImPlotFlags_Equal.
-
-   if (.not. p%fit) return
-   do i = 1_int32, AXES
-      if (p%ax(i)%fit .and. p%ax(i)%fit_min > p%ax(i)%fit_max) p%ax(i)%fit = .false.
-   enddo
-   equal = iand(p%flags, PF_EQUAL) == PF_EQUAL
-   do i = AX_X1, AX_X3
-      if (.not. p%ax(i)%fit) cycle
-      call apply_fit(p%ax(i), FIT_PADDING(1))
-      if (equal .and. i == AX_X1) then ! OrthoAxis: Y1
-         aspect = get_aspect(p%ax(AX_X1))
-         if (p%ax(AX_Y1)%fit) then
-            call apply_fit(p%ax(AX_Y1), FIT_PADDING(2))
-            p%ax(AX_Y1)%fit = .false.
-            aspect = merge(aspect, get_aspect(p%ax(AX_Y1)), aspect >= get_aspect(p%ax(AX_Y1)))
-         endif
-         call set_aspect(p%ax(AX_X1), aspect)
-         call set_aspect(p%ax(AX_Y1), aspect)
-      endif
-   enddo
-   do i = AX_Y1, AX_Y3
-      if (.not. p%ax(i)%fit) cycle
-      call apply_fit(p%ax(i), FIT_PADDING(2))
-      if (equal .and. i == AX_Y1) then ! OrthoAxis: X1
-         aspect = get_aspect(p%ax(AX_Y1))
-         if (p%ax(AX_X1)%fit) then
-            call apply_fit(p%ax(AX_X1), FIT_PADDING(1))
-            p%ax(AX_X1)%fit = .false.
-            aspect = merge(get_aspect(p%ax(AX_X1)), aspect, get_aspect(p%ax(AX_X1)) >= aspect)
-         endif
-         call set_aspect(p%ax(AX_X1), aspect)
-         call set_aspect(p%ax(AX_Y1), aspect)
-      endif
-   enddo
-   p%fit = .false.
-   endsubroutine fit_axes
-
    function get_aspect(ax) result(a)
    !< `ImPlotAxis::GetAspect`: units per pixel.
    type(plot_axis), intent(in) :: ax !< Axis.
@@ -877,55 +1253,113 @@ contains
    endif
    endfunction constrain_inf
 
-   function axis_code(axis) result(i)
-   !< The axis of a name ('x1' X1, 'y1' Y1; the others are not drawn yet).
-   character(len=*), intent(in) :: axis !< Name.
-   integer(int32)               :: i    !< Axis.
+   subroutine fit_axes(p)
+   !< `EndPlot`'s fit: the axes that fit on this frame and saw data (FIGURE's `fig_plot_end` drops the others), x axes
+   !< then y axes; with `ImPlotFlags_Equal` an axis and its pair then share the larger units per pixel.
+   type(plot_record), intent(inout) :: p      !< Plot.
+   real(real64)                     :: aspect !< Units per pixel.
+   integer(int32)                   :: i, o   !< Axis, its pair.
+   logical                          :: equal  !< ImPlotFlags_Equal.
 
-   select case (axis)
-   case ('x1')
-      i = AX_X1
-   case ('y1')
-      i = AX_Y1
-   case default
-      i = 0_int32
-      error stop "figure_plot_frame: an axis other than 'x1' and 'y1' (not drawn yet)"
-   endselect
-   endfunction axis_code
+   if (.not. p%fit) return
+   do i = 1_int32, AXES
+      if (p%ax(i)%fit .and. p%ax(i)%fit_min > p%ax(i)%fit_max) p%ax(i)%fit = .false.
+   enddo
+   equal = iand(p%flags, PF_EQUAL) == PF_EQUAL
+   do i = AX_X1, AX_X3
+      if (.not. p%ax(i)%fit) cycle
+      call apply_fit(p%ax(i), FIT_PADDING(1))
+      o = p%ax(i)%ortho
+      if (equal .and. o /= 0_int32) then
+         aspect = get_aspect(p%ax(i))
+         if (p%ax(o)%fit) then
+            call apply_fit(p%ax(o), FIT_PADDING(2))
+            p%ax(o)%fit = .false.
+            aspect = merge(aspect, get_aspect(p%ax(o)), aspect >= get_aspect(p%ax(o)))
+         endif
+         call set_aspect(p%ax(i), aspect)
+         call set_aspect(p%ax(o), aspect)
+      endif
+   enddo
+   do i = AX_Y1, AX_Y3
+      if (.not. p%ax(i)%fit) cycle
+      call apply_fit(p%ax(i), FIT_PADDING(2))
+      o = p%ax(i)%ortho
+      if (equal .and. o /= 0_int32) then
+         aspect = get_aspect(p%ax(i))
+         if (p%ax(o)%fit) then
+            call apply_fit(p%ax(o), FIT_PADDING(1))
+            p%ax(o)%fit = .false.
+            aspect = merge(get_aspect(p%ax(o)), aspect, get_aspect(p%ax(o)) >= aspect)
+         endif
+         call set_aspect(p%ax(o), aspect)
+         call set_aspect(p%ax(i), aspect)
+      endif
+   enddo
+   p%fit = .false.
+   endsubroutine fit_axes
 
-   pure function label_shown(label) result(yes)
-   !< A label has text to show (`FindRenderedTextEnd(label) != label`: not empty, not starting with '##').
-   character(len=*), intent(in) :: label !< Label.
-   logical                      :: yes   !< Shown.
+   pure function has_flag(flags, flag) result(yes)
+   !< `ImHasFlag`: all the flag's bits set.
+   integer(int32), intent(in) :: flags !< Flags.
+   integer(int32), intent(in) :: flag  !< The flag's bits.
+   logical                    :: yes   !< Set.
 
-   yes = len(label) > 0
-   if (len(label) >= 2) yes = label(1:2) /= '##'
-   endfunction label_shown
+   yes = iand(flags, flag) == flag
+   endfunction has_flag
+
+   pure function will_render(ax) result(yes)
+   !< `ImPlotAxis::WillRender`: enabled, with grid lines, tick labels or tick marks.
+   type(plot_axis), intent(in) :: ax  !< Axis.
+   logical                     :: yes !< Drawn.
+
+   yes = ax%enabled .and. (.not. has_flag(ax%flags, AXF_NO_GRID_LINES) .or.  &
+                           .not. has_flag(ax%flags, AXF_NO_TICK_LABELS) .or. &
+                           .not. has_flag(ax%flags, AXF_NO_TICK_MARKS))
+   endfunction will_render
 
    ! private: the drawing
 
    subroutine setup_finish(p)
-   !< `SetupFinish`: the axes' initial fit decided, the layout (ticks, paddings, the plot rectangle), the axes on
-   !< screen (and made equal), the fits asked for, then the frame, the plot's background, the grid and the tick labels.
+   !< `SetupFinish`: the axes' initial fit decided, their pairs, the layout (an outside legend, the title, the axes'
+   !< ticks and paddings, the plot rectangle), the axes on screen (and made equal), the fits asked for, then the frame,
+   !< the plot's background, the grid, the axes' highlights, labels and tick labels; the legend emptied for the items.
    type(plot_record), intent(inout) :: p          !< Plot.
-   real(real32)   :: t                    !< Text line height [pixels].
    real(real32)   :: pad_top, pad_bot     !< Paddings above and below the plot [pixels].
    real(real32)   :: pad_left, pad_right  !< ... left and right of it.
    real(real32)   :: plot_height, plot_width !< The plot's size.
+   real(real32)   :: title_w, title_h     !< The title's size.
+   real(real32)   :: title_pad            !< Its room.
+   real(real32)   :: lsize(2)             !< An outside legend's size.
    real(real32)   :: rounding, border     !< FrameRounding, FrameBorderSize.
    real(real64)   :: v(2)                 !< A style variable.
+   real(real64)   :: w, h                 !< A text's size.
    real(real64)   :: xar, yar             !< Units per pixel on x, y.
    integer(int32) :: nv                   !< Its values.
-   integer(int32) :: i                    !< Axis.
+   integer(int32) :: i, j                 !< Axes.
+   logical        :: equal, horz          !< ImPlotFlags_Equal, a horizontal legend.
+   logical        :: west, east, north, south !< The legend's side.
 
    p%locked = .true.
    do i = 1_int32, AXES ! finalize the axes: an axis with no limits fits on the plot's first frame (CanInitFit)
       if (.not. p%ax(i)%enabled) cycle
       call constrain(p%ax(i))
-      if (.not. p%initialized .and. iand(p%ax(i)%flags, AXF_NO_INITIAL_FIT) == 0_int32 .and. &
+      if (.not. p%initialized .and. .not. has_flag(p%ax(i)%flags, AXF_NO_INITIAL_FIT) .and. &
           .not. p%ax(i)%has_range) then
          p%fit = .true.
          p%ax(i)%fit = .true.
+      endif
+   enddo
+   equal = has_flag(p%flags, PF_EQUAL)
+   do i = AX_X1, AX_X3 ! the pairs (OrthoAxis): an x and a y axis of the same rank, or the first of the other
+      j = i + AX_Y1 - AX_X1
+      if (p%ax(i)%enabled .and. p%ax(j)%enabled) then
+         p%ax(i)%ortho = j
+         p%ax(j)%ortho = i
+      elseif (p%ax(i)%enabled .and. .not. equal) then
+         p%ax(i)%ortho = AX_Y1
+      elseif (p%ax(j)%enabled .and. .not. equal) then
+         p%ax(j)%ortho = AX_X1
       endif
    enddo
    p%col_maj = core_style_color(ImGuiCol_Text, 0.25_real64)                 ! AxisGrid: Text * (1, 1, 1, 0.25)
@@ -933,46 +1367,98 @@ contains
    p%col_tick = p%col_maj                                                   ! AxisTick: AxisGrid
    p%col_txt = core_style_color(ImGuiCol_Text)                              ! AxisText: Text
    p%col_border = core_style_color(ImGuiCol_Border)                         ! PlotBorder: Border
-   t = real(core_font_size(), real32)
-   ticks(1)%n = 0_int32
-   ticks(1)%max_size = 0.0_real32
-   ticks(2)%n = 0_int32
-   ticks(2)%max_size = 0.0_real32
+   do i = 1_int32, AXES
+      ticks(i)%n = 0_int32
+      ticks(i)%max_size = 0.0_real32
+   enddo
    p%canvas(1:2) = p%frame(1:2) + PLOT_PADDING
    p%canvas(3:4) = p%frame(3:4) - PLOT_PADDING
-   ! (1) the x axis below the plot, its labels' height not known yet; (2) the y ticks; (3) the y axis left of the plot
-   pad_top = 0.0_real32
-   pad_bot = 0.0_real32 + ((max(t, ticks(1)%max_size(2)) + LABEL_PADDING(2)) + 0.0_real32)
-   p%ax(AX_X1)%datum1 = p%canvas(4) - pad_bot
-   plot_height = ((p%canvas(4) - p%canvas(2)) - pad_top) - pad_bot
-   if (plot_height > 0.0_real32) call locate(ticks(2), p%ax(AX_Y1)%range_min, p%ax(AX_Y1)%range_max, plot_height, &
-                                             .true.)
-   pad_left = 0.0_real32 + (ticks(2)%max_size(1) + LABEL_PADDING(1))
-   pad_right = 0.0_real32
-   p%ax(AX_Y1)%datum1 = p%canvas(1) + pad_left
-   plot_width = ((p%canvas(3) - p%canvas(1)) - pad_left) - pad_right
-   ! (4) the x ticks; (4.5) the x axis again, its labels' height known; (5) the plot rectangle
-   if (plot_width > 0.0_real32) call locate(ticks(1), p%ax(AX_X1)%range_min, p%ax(AX_X1)%range_max, plot_width, &
-                                            .false.)
-   pad_top = 0.0_real32
-   pad_bot = 0.0_real32 + ((max(t, ticks(1)%max_size(2)) + LABEL_PADDING(2)) + 0.0_real32)
-   p%ax(AX_X1)%datum1 = p%canvas(4) - pad_bot
-   p%rect = [p%canvas(1) + pad_left, p%canvas(2) + pad_top, p%canvas(3) - pad_right, p%canvas(4) - pad_bot]
-   p%ax(AX_X1)%pixel_min = p%rect(1)
-   p%ax(AX_X1)%pixel_max = p%rect(3)
-   call update_scale(p%ax(AX_X1))
-   p%ax(AX_Y1)%pixel_min = p%rect(4)
-   p%ax(AX_Y1)%pixel_max = p%rect(2)
-   call update_scale(p%ax(AX_Y1))
-   if (iand(p%flags, PF_EQUAL) == PF_EQUAL) then ! x constrained to y, unless x's limits were set on this frame
-      xar = get_aspect(p%ax(AX_X1))
-      yar = get_aspect(p%ax(AX_Y1))
-      if (p%ax(AX_X1)%has_range) then
-         call set_aspect(p%ax(AX_Y1), xar)
-      elseif (.not. almost_equal(xar, yar) .and. .not. ((locked_min(p%ax(AX_Y1)) .and. locked_max(p%ax(AX_Y1))) &
-                                                        .or. auto_fitting(p%ax(AX_Y1)))) then
-         call set_aspect(p%ax(AX_X1), yar)
+   p%axes_rect = p%frame
+   ! an outside legend's room, from the legend of the frame before
+   if (.not. has_flag(p%flags, PF_NO_LEGEND) .and. p%n_leg > 0_int32 .and. has_flag(p%leg_flags, LGF_OUTSIDE)) then
+      horz = has_flag(p%leg_flags, LGF_HORIZONTAL)
+      lsize = legend_size(p, .not. horz)
+      west = has_flag(p%leg_loc, LOC_WEST) .and. .not. has_flag(p%leg_loc, LOC_EAST)
+      east = has_flag(p%leg_loc, LOC_EAST) .and. .not. has_flag(p%leg_loc, LOC_WEST)
+      north = has_flag(p%leg_loc, LOC_NORTH) .and. .not. has_flag(p%leg_loc, LOC_SOUTH)
+      south = has_flag(p%leg_loc, LOC_SOUTH) .and. .not. has_flag(p%leg_loc, LOC_NORTH)
+      if ((west .and. .not. horz) .or. (west .and. horz .and. .not. north .and. .not. south)) then
+         p%canvas(1) = p%canvas(1) + (lsize(1) + LEGEND_PADDING(1))
+         p%axes_rect(1) = p%axes_rect(1) + (lsize(1) + PLOT_PADDING(1))
       endif
+      if ((east .and. .not. horz) .or. (east .and. horz .and. .not. north .and. .not. south)) then
+         p%canvas(3) = p%canvas(3) - (lsize(1) + LEGEND_PADDING(1))
+         p%axes_rect(3) = p%axes_rect(3) - (lsize(1) + PLOT_PADDING(1))
+      endif
+      if ((north .and. horz) .or. (north .and. .not. horz .and. .not. west .and. .not. east)) then
+         p%canvas(2) = p%canvas(2) + (lsize(2) + LEGEND_PADDING(2))
+         p%axes_rect(2) = p%axes_rect(2) + (lsize(2) + PLOT_PADDING(2))
+      endif
+      if ((south .and. horz) .or. (south .and. .not. horz .and. .not. west .and. .not. east)) then
+         p%canvas(4) = p%canvas(4) - (lsize(2) + LEGEND_PADDING(2))
+         p%axes_rect(4) = p%axes_rect(4) - (lsize(2) + PLOT_PADDING(2))
+      endif
+   endif
+   ! (0) the title's room
+   pad_top = 0.0_real32
+   pad_bot = 0.0_real32
+   pad_left = 0.0_real32
+   pad_right = 0.0_real32
+   title_w = 0.0_real32
+   title_h = 0.0_real32
+   if (p%title_len > 0_int32 .and. .not. has_flag(p%flags, PF_NO_TITLE)) then
+      call core_text_size(text(p%title_off:p%title_off + p%title_len - 1_int32), w, h, hide_after_hash=.true.)
+      title_w = real(w, real32)
+      title_h = real(h, real32)
+   endif
+   if (title_w > 0.0_real32) then
+      pad_top = pad_top + (title_h + LABEL_PADDING(2))
+      p%axes_rect(2) = p%axes_rect(2) + (PLOT_PADDING(2) + pad_top)
+   endif
+   ! (1) the x axes, their tick labels' height not known yet; (2) the y ticks; (3) the y axes
+   call pad_and_datum_x(p, pad_top, pad_bot)
+   plot_height = ((p%canvas(4) - p%canvas(2)) - pad_top) - pad_bot
+   do i = AX_Y1, AX_Y3
+      if (will_render(p%ax(i)) .and. plot_height > 0.0_real32) &
+         call locate(ticks(i), p%ax(i)%range_min, p%ax(i)%range_max, plot_height, .true.)
+   enddo
+   call pad_and_datum_y(p, pad_left, pad_right)
+   plot_width = ((p%canvas(3) - p%canvas(1)) - pad_left) - pad_right
+   ! (4) the x ticks; (4.5) the x axes again, their labels' height known; (5) the plot rectangle
+   do i = AX_X1, AX_X3
+      if (will_render(p%ax(i)) .and. plot_width > 0.0_real32) &
+         call locate(ticks(i), p%ax(i)%range_min, p%ax(i)%range_max, plot_width, .false.)
+   enddo
+   title_pad = 0.0_real32
+   if (title_w > 0.0_real32) title_pad = title_h + LABEL_PADDING(2)
+   pad_top = title_pad
+   pad_bot = 0.0_real32
+   call pad_and_datum_x(p, pad_top, pad_bot)
+   if (title_w > 0.0_real32) p%axes_rect(2) = (p%frame(2) + PLOT_PADDING(2)) + title_pad
+   p%rect = [p%canvas(1) + pad_left, p%canvas(2) + pad_top, p%canvas(3) - pad_right, p%canvas(4) - pad_bot]
+   do i = AX_X1, AX_X3 ! the axes on screen
+      p%ax(i)%pixel_min = merge(p%rect(3), p%rect(1), has_flag(p%ax(i)%flags, AXF_INVERT))
+      p%ax(i)%pixel_max = merge(p%rect(1), p%rect(3), has_flag(p%ax(i)%flags, AXF_INVERT))
+      call update_scale(p%ax(i))
+   enddo
+   do i = AX_Y1, AX_Y3
+      p%ax(i)%pixel_min = merge(p%rect(2), p%rect(4), has_flag(p%ax(i)%flags, AXF_INVERT))
+      p%ax(i)%pixel_max = merge(p%rect(4), p%rect(2), has_flag(p%ax(i)%flags, AXF_INVERT))
+      call update_scale(p%ax(i))
+   enddo
+   if (equal) then ! x constrained to y, unless x's limits were set on this frame
+      do i = AX_X1, AX_X3
+         j = p%ax(i)%ortho
+         if (j == 0_int32) cycle
+         xar = get_aspect(p%ax(i))
+         yar = get_aspect(p%ax(j))
+         if (p%ax(i)%has_range) then
+            call set_aspect(p%ax(j), xar)
+         elseif (.not. almost_equal(xar, yar) .and. .not. ((locked_min(p%ax(j)) .and. locked_max(p%ax(j))) &
+                                                           .or. auto_fitting(p%ax(j)))) then
+            call set_aspect(p%ax(i), yar)
+         endif
+      enddo
    endif
    do i = 1_int32, AXES ! the fits asked for: SetNextAxisToFit, ImPlotAxisFlags_AutoFit
       if (next_fit(i) .or. auto_fitting(p%ax(i))) then
@@ -998,12 +1484,119 @@ contains
    endif
    call core_draw_rect_filled(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
                               real(p%rect(4), real64), core_style_color(ImGuiCol_WindowBg))
-   call place_ticks(ticks(1), p%ax(AX_X1))
-   call place_ticks(ticks(2), p%ax(AX_Y1))
-   call grid(p, ticks(1), .false.)
-   call grid(p, ticks(2), .true.)
-   call tick_labels(p)
+   do i = 1_int32, AXES
+      if (will_render(p%ax(i))) call place_ticks(ticks(i), p%ax(i))
+   enddo
+   do i = 1_int32, AXES
+      if (p%ax(i)%enabled .and. .not. has_flag(p%ax(i)%flags, AXF_NO_GRID_LINES) .and. &
+          .not. has_flag(p%ax(i)%flags, AXF_FOREGROUND)) call grid(p, ticks(i), i >= AX_Y1)
+   enddo
+   do i = AX_X1, AX_X3
+      if (p%ax(i)%enabled) call axis_texts(p, i)
+   enddo
+   do i = AX_Y1, AX_Y3
+      if (p%ax(i)%enabled) call axis_texts(p, i)
+   enddo
+   p%n_leg = 0_int32 ! Legend.Reset: the entries of this frame's items follow
+   p%leg_n = 0_int32
    endsubroutine setup_finish
+
+   subroutine pad_and_datum_x(p, pad_t, pad_b)
+   !< `PadAndDatumAxesX`: the x axes placed outwards from the plot, X3 to X1 (each its label's height, its tick labels'
+   !< and `LabelPadding`, `MinorTickLen` between two on a side), their paddings added.
+   type(plot_record), intent(inout) :: p            !< Plot.
+   real(real32),      intent(inout) :: pad_t, pad_b !< Paddings above and below [pixels].
+   real(real32)                     :: t, pp, k     !< Text height, LabelPadding, MinorTickLen.
+   real(real32)                     :: last_t, last_b !< The previous axes' datums.
+   real(real64)                     :: w, h         !< A label's size.
+   integer(int32)                   :: count_t, count_b, i !< Axes on a side, axis.
+
+   t = real(core_font_size(), real32)
+   pp = LABEL_PADDING(2)
+   k = MINOR_TICK_LEN(1)
+   count_t = 0_int32
+   count_b = 0_int32
+   last_t = p%axes_rect(2)
+   last_b = p%axes_rect(4)
+   do i = AX_X3, AX_X1, -1_int32
+      if (.not. p%ax(i)%enabled) cycle
+      associate(ax => p%ax(i))
+         if (has_flag(ax%flags, AXF_OPPOSITE)) then
+            if (count_t > 0_int32) pad_t = pad_t + (k + pp)
+            count_t = count_t + 1_int32
+            if (has_label(ax)) then
+               call core_text_size(text(ax%label_off:ax%label_off + ax%label_len - 1_int32), w, h)
+               pad_t = pad_t + (real(h, real32) + pp)
+            endif
+            if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) &
+               pad_t = pad_t + ((max(t, ticks(i)%max_size(2)) + pp) + 0.0_real32)
+            ax%datum1 = p%canvas(2) + pad_t
+            ax%datum2 = last_t
+            last_t = ax%datum1
+         else
+            if (count_b > 0_int32) pad_b = pad_b + (k + pp)
+            count_b = count_b + 1_int32
+            if (has_label(ax)) then
+               call core_text_size(text(ax%label_off:ax%label_off + ax%label_len - 1_int32), w, h)
+               pad_b = pad_b + (real(h, real32) + pp)
+            endif
+            if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) &
+               pad_b = pad_b + ((max(t, ticks(i)%max_size(2)) + pp) + 0.0_real32)
+            ax%datum1 = p%canvas(4) - pad_b
+            ax%datum2 = last_b
+            last_b = ax%datum1
+         endif
+      endassociate
+   enddo
+   endsubroutine pad_and_datum_x
+
+   subroutine pad_and_datum_y(p, pad_l, pad_r)
+   !< `PadAndDatumAxesY`: the y axes placed outwards from the plot, Y3 to Y1 (each the text height for its label, its
+   !< widest tick label and `LabelPadding`, `MinorTickLen` between two on a side), their paddings added.
+   type(plot_record), intent(inout) :: p            !< Plot.
+   real(real32),      intent(inout) :: pad_l, pad_r !< Paddings left and right [pixels].
+   real(real32)                     :: t, pp, k     !< Text height, LabelPadding, MinorTickLen.
+   real(real32)                     :: last_l, last_r !< The previous axes' datums.
+   integer(int32)                   :: count_l, count_r, i !< Axes on a side, axis.
+
+   t = real(core_font_size(), real32)
+   pp = LABEL_PADDING(1)
+   k = MINOR_TICK_LEN(2)
+   count_l = 0_int32
+   count_r = 0_int32
+   last_l = p%axes_rect(1)
+   last_r = p%axes_rect(3)
+   do i = AX_Y3, AX_Y1, -1_int32
+      if (.not. p%ax(i)%enabled) cycle
+      associate(ax => p%ax(i))
+         if (has_flag(ax%flags, AXF_OPPOSITE)) then
+            if (count_r > 0_int32) pad_r = pad_r + (k + pp)
+            count_r = count_r + 1_int32
+            if (has_label(ax)) pad_r = pad_r + (t + pp)
+            if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) pad_r = pad_r + (ticks(i)%max_size(1) + pp)
+            ax%datum1 = p%canvas(3) - pad_r
+            ax%datum2 = last_r
+            last_r = ax%datum1
+         else
+            if (count_l > 0_int32) pad_l = pad_l + (k + pp)
+            count_l = count_l + 1_int32
+            if (has_label(ax)) pad_l = pad_l + (t + pp)
+            if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) pad_l = pad_l + (ticks(i)%max_size(1) + pp)
+            ax%datum1 = p%canvas(1) + pad_l
+            ax%datum2 = last_l
+            last_l = ax%datum1
+         endif
+      endassociate
+   enddo
+   endsubroutine pad_and_datum_y
+
+   pure function has_label(ax) result(yes)
+   !< `ImPlotAxis::HasLabel`.
+   type(plot_axis), intent(in) :: ax  !< Axis.
+   logical                     :: yes !< A label shown.
+
+   yes = ax%label_len > 0_int32 .and. .not. has_flag(ax%flags, AXF_NO_LABEL)
+   endfunction has_label
 
    subroutine place_ticks(t, ax)
    !< The ticks' pixels, rounded (`IM_ROUND(PlotToPixels)`).
@@ -1060,32 +1653,467 @@ contains
       endsubroutine line
    endsubroutine grid
 
-   subroutine tick_labels(p)
-   !< The tick labels: the x axis's centred below its ticks, the y axis's right-aligned left of the plot.
-   type(plot_record), intent(in) :: p      !< Plot.
-   real(real32)                  :: px, py !< A label's top-left corner [pixels].
-   real(real32)                  :: pad    !< Its distance from the axis.
-   integer(int32)                :: k      !< Counter.
+   subroutine axis_texts(p, i)
+   !< An axis's highlight (`ColorHiLi`, once), label and tick labels (`SetupFinish`): an x axis's label centred
+   !< beyond its tick labels, its tick labels centred on their ticks; a y axis's label rotated, its tick labels aligned
+   !< on the plot's side.
+   type(plot_record), intent(inout) :: p       !< Plot.
+   integer(int32),    intent(in)    :: i       !< Axis.
+   real(real32)                     :: px, py  !< A label's corner [pixels].
+   real(real32)                     :: pad, datum, off !< Distances from the axis.
+   real(real32)                     :: lw, lh  !< The label's size.
+   real(real64)                     :: w, h    !< A text's size.
+   integer(int32)                   :: k       !< Counter.
+   logical                          :: opp     !< On the opposite side.
 
-   associate(t => ticks(1), r => p%rect)
-      do k = 1_int32, t%n
-         if (.not. t%show(k) .or. t%pix(k) < r(1) - 1.0_real32 .or. t%pix(k) > r(3) + 1.0_real32) cycle
-         pad = LABEL_PADDING(2) ! level 0, below the axis
-         px = t%pix(k) - 0.5_real32 * t%label_size(1, k)
-         py = p%ax(AX_X1)%datum1 + pad * 1.0_real32
-         call core_draw_text(real(px, real64), real(py, real64), p%col_txt, trim(t%label(k)))
-      enddo
+   associate(ax => p%ax(i), t => ticks(i), r => p%rect)
+      opp = has_flag(ax%flags, AXF_OPPOSITE)
+      if (ax%hili /= 0_int32) then ! (no hover: the axis's background, AxisBg, is transparent)
+         if (i <= AX_X3) then
+            call core_draw_rect_filled(real(r(1), real64), real(min(ax%datum1, ax%datum2), real64), &
+                                       real(r(3), real64), real(max(ax%datum1, ax%datum2), real64), ax%hili)
+         else
+            call core_draw_rect_filled(real(min(ax%datum1, ax%datum2), real64), real(r(2), real64), &
+                                       real(max(ax%datum1, ax%datum2), real64), real(r(4), real64), ax%hili)
+         endif
+         ax%hili = 0_int32
+      endif
+      if (i <= AX_X3) then
+         if (has_label(ax)) then
+            call core_text_size(text(ax%label_off:ax%label_off + ax%label_len - 1_int32), w, h)
+            lw = real(w, real32)
+            lh = real(h, real32)
+            off = 0.0_real32
+            if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) off = (t%max_size(2) + LABEL_PADDING(2)) + &
+                                                                    0.0_real32 * (real(core_font_size(), real32) + &
+                                                                                  LABEL_PADDING(2))
+            off = off + LABEL_PADDING(2)
+            px = (r(1) + r(3)) * 0.5_real32 - lw * 0.5_real32
+            py = merge((ax%datum1 - off) - lh, ax%datum1 + off, opp)
+            call core_draw_text(real(px, real64), real(py, real64), p%col_txt, &
+                                text(ax%label_off:ax%label_off + ax%label_len - 1_int32))
+         endif
+         if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) then
+            do k = 1_int32, t%n
+               pad = (LABEL_PADDING(2) + merge(t%label_size(2, k), 0.0_real32, opp)) + 0.0_real32
+               datum = ax%datum1 + pad * merge(-1.0_real32, 1.0_real32, opp)
+               if (.not. t%show(k) .or. t%pix(k) < r(1) - 1.0_real32 .or. t%pix(k) > r(3) + 1.0_real32) cycle
+               px = t%pix(k) - 0.5_real32 * t%label_size(1, k)
+               call core_draw_text(real(px, real64), real(datum, real64), p%col_txt, trim(t%label(k)))
+            enddo
+         endif
+      else
+         if (has_label(ax)) then
+            call core_text_size(text(ax%label_off:ax%label_off + ax%label_len - 1_int32), w, h)
+            lw = real(h, real32) ! CalcTextSizeVertical
+            lh = real(w, real32)
+            off = 0.0_real32
+            if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) off = t%max_size(1) + LABEL_PADDING(1)
+            off = off + LABEL_PADDING(1)
+            px = merge(ax%datum1 + off, (ax%datum1 - off) - lw, opp)
+            py = (r(2) + r(4)) * 0.5_real32 + lh * 0.5_real32
+            call text_vertical(px, py, p%col_txt, text(ax%label_off:ax%label_off + ax%label_len - 1_int32))
+         endif
+         if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) then
+            do k = 1_int32, t%n
+               pad = LABEL_PADDING(1) + merge(0.0_real32, t%label_size(1, k), opp)
+               datum = ax%datum1 + pad * merge(1.0_real32, -1.0_real32, opp)
+               if (.not. t%show(k) .or. t%pix(k) < r(2) - 1.0_real32 .or. t%pix(k) > r(4) + 1.0_real32) cycle
+               py = t%pix(k) - 0.5_real32 * t%label_size(2, k)
+               call core_draw_text(real(datum, real64), real(py, real64), p%col_txt, trim(t%label(k)))
+            enddo
+         endif
+      endif
    endassociate
-   associate(t => ticks(2), r => p%rect)
-      do k = 1_int32, t%n
-         if (.not. t%show(k) .or. t%pix(k) < r(2) - 1.0_real32 .or. t%pix(k) > r(4) + 1.0_real32) cycle
-         pad = LABEL_PADDING(1) + t%label_size(1, k)
-         px = p%ax(AX_Y1)%datum1 + pad * (-1.0_real32)
-         py = t%pix(k) - 0.5_real32 * t%label_size(2, k)
-         call core_draw_text(real(px, real64), real(py, real64), p%col_txt, trim(t%label(k)))
-      enddo
-   endassociate
-   endsubroutine tick_labels
+   endsubroutine axis_texts
+
+   subroutine tick_marks(p)
+   !< `EndPlot`'s tick marks: each axis's, outwards from it (minor length and size on a side's second and third axes),
+   !< and its line where the border does not draw it (a side's second and third axes, or no border).
+   type(plot_record), intent(in) :: p          !< Plot.
+   real(real32)                  :: len_, thk  !< A tick's length and thickness.
+   real(real32)                  :: dir        !< Its direction.
+   integer(int32)                :: i, k       !< Axis, counter.
+   integer(int32)                :: count_a, count_b !< Axes drawn on the near side, on the opposite side.
+   logical                       :: opp, aux   !< On the opposite side, not the first on its side.
+
+   count_a = 0_int32
+   count_b = 0_int32
+   do i = AX_X1, AX_X3
+      if (.not. p%ax(i)%enabled) cycle
+      associate(ax => p%ax(i), t => ticks(i), r => p%rect)
+         opp = has_flag(ax%flags, AXF_OPPOSITE)
+         aux = (opp .and. count_b > 0_int32) .or. (.not. opp .and. count_a > 0_int32)
+         if (.not. has_flag(ax%flags, AXF_NO_TICK_MARKS)) then
+            dir = merge(1.0_real32, -1.0_real32, opp)
+            do k = 1_int32, t%n
+               if (t%pix(k) < r(1) .or. t%pix(k) > r(3)) cycle
+               len_ = merge(MAJOR_TICK_LEN(1), MINOR_TICK_LEN(1), .not. aux .and. t%major(k))
+               thk = merge(MAJOR_TICK_SIZE(1), MINOR_TICK_SIZE(1), .not. aux .and. t%major(k))
+               call core_draw_line_v(real(t%pix(k), real64), real(ax%datum1, real64), &
+                                     real(ax%datum1 + dir * len_, real64), p%col_tick, real(thk, real64))
+            enddo
+            if (aux .or. .not. border_shown(p)) call core_draw_line_h(real(r(1), real64), real(r(3), real64), &
+                                                                     real(ax%datum1, real64), p%col_tick,     &
+                                                                     real(MINOR_TICK_SIZE(1), real64))
+         endif
+         if (opp) then
+            count_b = count_b + 1_int32
+         else
+            count_a = count_a + 1_int32
+         endif
+      endassociate
+   enddo
+   count_a = 0_int32
+   count_b = 0_int32
+   do i = AX_Y1, AX_Y3
+      if (.not. p%ax(i)%enabled) cycle
+      associate(ax => p%ax(i), t => ticks(i), r => p%rect)
+         opp = has_flag(ax%flags, AXF_OPPOSITE)
+         aux = (opp .and. count_b > 0_int32) .or. (.not. opp .and. count_a > 0_int32)
+         if (.not. has_flag(ax%flags, AXF_NO_TICK_MARKS)) then
+            dir = merge(-1.0_real32, 1.0_real32, opp)
+            do k = 1_int32, t%n
+               if (t%pix(k) < r(2) .or. t%pix(k) > r(4)) cycle
+               len_ = merge(MAJOR_TICK_LEN(2), MINOR_TICK_LEN(2), .not. aux .and. t%major(k))
+               thk = merge(MAJOR_TICK_SIZE(2), MINOR_TICK_SIZE(2), .not. aux .and. t%major(k))
+               call core_draw_line_h(real(ax%datum1, real64), real(ax%datum1 + dir * len_, real64), &
+                                     real(t%pix(k), real64), p%col_tick, real(thk, real64))
+            enddo
+            if (aux .or. .not. border_shown(p)) call core_draw_line_v(real(ax%datum1, real64), real(r(2), real64), &
+                                                                     real(r(4), real64), p%col_tick,              &
+                                                                     real(MINOR_TICK_SIZE(2), real64))
+         endif
+         if (opp) then
+            count_b = count_b + 1_int32
+         else
+            count_a = count_a + 1_int32
+         endif
+      endassociate
+   enddo
+   endsubroutine tick_marks
+
+   ! private: the legend
+
+   function legend_size(p, vertical) result(sz)
+   !< `CalcLegendSize`: the legend's size, its entries in a column or a row.
+   type(plot_record), intent(in) :: p        !< Plot.
+   logical,           intent(in) :: vertical !< In a column.
+   real(real32)                  :: sz(2)    !< Size [pixels].
+   real(real32)                  :: txt_ht, icon, max_w, sum_w, lw !< Text height, icon, widths.
+   real(real64)                  :: w, h     !< A label's size.
+   integer(int32)                :: k, n     !< Counter, entries.
+
+   n = p%n_leg
+   txt_ht = real(core_font_size(), real32)
+   icon = txt_ht
+   max_w = 0.0_real32
+   sum_w = 0.0_real32
+   do k = 1_int32, n
+      call core_text_size(p%leg_text(p%leg_off(k):p%leg_off(k) + p%leg_len(k) - 1_int32), w, h, hide_after_hash=.true.)
+      lw = real(w, real32)
+      if (lw > max_w) max_w = lw
+      sum_w = sum_w + lw
+   enddo
+   if (vertical) then
+      sz(1) = (LEGEND_INNER_PADDING(1) * 2.0_real32 + icon) + max_w
+      sz(2) = (LEGEND_INNER_PADDING(2) * 2.0_real32 + real(n, real32) * txt_ht) + &
+              real(n - 1_int32, real32) * LEGEND_SPACING(2)
+   else
+      sz(1) = ((LEGEND_INNER_PADDING(1) * 2.0_real32 + icon * real(n, real32)) + sum_w) + &
+              real(n - 1_int32, real32) * LEGEND_SPACING(1)
+      sz(2) = LEGEND_INNER_PADDING(2) * 2.0_real32 + txt_ht
+   endif
+   endfunction legend_size
+
+   function location_pos(outer, sz, loc, pad) result(pos)
+   !< `GetLocationPos`: where a box of size `sz` goes in `outer` at a compass point, `pad` from its sides, rounded.
+   real(real32),   intent(in) :: outer(4) !< Outer rectangle.
+   real(real32),   intent(in) :: sz(2)    !< Box's size.
+   integer(int32), intent(in) :: loc      !< ImPlotLocation.
+   real(real32),   intent(in) :: pad(2)   !< Padding.
+   real(real32)               :: pos(2)   !< Top-left corner.
+
+   if (has_flag(loc, LOC_WEST) .and. .not. has_flag(loc, LOC_EAST)) then
+      pos(1) = outer(1) + pad(1)
+   elseif (.not. has_flag(loc, LOC_WEST) .and. has_flag(loc, LOC_EAST)) then
+      pos(1) = (outer(3) - pad(1)) - sz(1)
+   else
+      pos(1) = (outer(1) + outer(3)) * 0.5_real32 - sz(1) * 0.5_real32
+   endif
+   if (has_flag(loc, LOC_NORTH) .and. .not. has_flag(loc, LOC_SOUTH)) then
+      pos(2) = outer(2) + pad(2)
+   elseif (.not. has_flag(loc, LOC_NORTH) .and. has_flag(loc, LOC_SOUTH)) then
+      pos(2) = (outer(4) - pad(2)) - sz(2)
+   else
+      pos(2) = (outer(2) + outer(4)) * 0.5_real32 - sz(2) * 0.5_real32
+   endif
+   pos = real(int(pos + 0.5_real32, int32), real32) ! IM_ROUND
+   endfunction location_pos
+
+   subroutine legend(p)
+   !< `EndPlot`'s legend: the items' hover reset, then the legend placed (`GetLocationPos`, `ClampLegendRect`), its
+   !< button (the legend's ID, `plot.ID - 1`), its background, entries (`ShowLegendEntries`) and border.
+   type(plot_record), intent(inout) :: p          !< Plot.
+   real(real32)                     :: sz(2)      !< Its size.
+   real(real32)                     :: outer(4)   !< Where it goes.
+   real(real32)                     :: pad(2)     !< Its padding there.
+   real(real32)                     :: lr(4)      !< Its rectangle.
+   real(real32)                     :: cl(4)      !< ... clamped.
+   logical                          :: out, horz, held !< Outside, horizontal; the button held.
+   integer(int32)                   :: items_id   !< The legend's ID.
+   logical                          :: dummy      !< Pressed.
+
+   p%leg_hovered = .false.
+   if (p%n_items > 0_int32) p%item_hovered(1:p%n_items) = .false.
+   if (has_flag(p%flags, PF_NO_LEGEND) .or. p%n_leg < 1_int32) return
+   out = has_flag(p%leg_flags, LGF_OUTSIDE)
+   horz = has_flag(p%leg_flags, LGF_HORIZONTAL)
+   sz = legend_size(p, .not. horz)
+   if (out) then
+      outer = p%frame
+      pad = PLOT_PADDING
+   else
+      outer = p%rect
+      pad = LEGEND_PADDING
+   endif
+   lr(1:2) = location_pos(outer, sz, p%leg_loc, pad)
+   lr(3:4) = lr(1:2) + sz
+   cl = lr ! ClampLegendRect
+   cl(1) = max(cl(1), outer(1) + pad(1))
+   cl(2) = max(cl(2), outer(2) + pad(2))
+   cl(3) = min(cl(3), outer(3) - pad(1))
+   cl(4) = min(cl(4), outer(4) - pad(2))
+   if (any(cl /= lr)) then ! clamped: the entries from the clamped corner (no scrolling yet)
+      lr(3:4) = lr(3:4) + (cl(1:2) - lr(1:2))
+      lr(1:2) = cl(1:2)
+   endif
+   items_id = plot_id_offset(p%id, -1_int32)
+   call core_keep_alive(items_id)
+   dummy = core_button_behavior(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
+                                items_id, p%leg_hovered, held, flags=LEGEND_BUTTON_FLAGS)
+   call core_push_clip_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64))
+   call core_draw_rect_filled(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
+                              core_style_color(ImGuiCol_PopupBg))
+   call legend_entries(p, lr, .not. horz)
+   call core_draw_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
+                       core_style_color(ImGuiCol_Border))
+   call core_pop_clip_rect()
+   endsubroutine legend
+
+   subroutine legend_entries(p, lr, vertical)
+   !< `ShowLegendEntries`: each entry its button (a click shows or hides the item), its icon and its label.
+   type(plot_record), intent(inout) :: p        !< Plot.
+   real(real32),      intent(in)    :: lr(4)    !< Legend's rectangle.
+   logical,           intent(in)    :: vertical !< In a column.
+   real(real32)                     :: txt_ht, icon, lw, sum_w !< Text height, icon, label widths.
+   real(real32)                     :: tl(2)    !< An entry's top-left corner.
+   real(real32)                     :: ib(4)    !< Its icon.
+   real(real64)                     :: w, h     !< A label's size.
+   integer(int32)                   :: col_txt, col_dis, col_hl, col_item, col_icon !< Colours.
+   integer(int32)                   :: k, it, a, n !< Entry, item, label's start and shown length.
+   logical                          :: hov, held, clicked !< The entry's button.
+   real(real32), parameter          :: SHRINK = 2.0_real32 !< icon_shrink.
+
+   txt_ht = real(core_font_size(), real32)
+   icon = txt_ht
+   col_txt = core_style_color(ImGuiCol_Text) ! LegendText: InlayText: Text
+   col_dis = alpha_u32(col_txt, 0.25_real32)
+   sum_w = 0.0_real32
+   do k = 1_int32, p%n_leg
+      it = p%leg_item(k)
+      a = p%leg_off(k)
+      n = rendered_len(p%leg_text(a:a + p%leg_len(k) - 1_int32))
+      call core_text_size(p%leg_text(a:a + p%leg_len(k) - 1_int32), w, h, hide_after_hash=.true.)
+      lw = real(w, real32)
+      if (vertical) then
+         tl(1) = (lr(1) + LEGEND_INNER_PADDING(1)) + 0.0_real32
+         tl(2) = (lr(2) + LEGEND_INNER_PADDING(2)) + real(k - 1_int32, real32) * (txt_ht + LEGEND_SPACING(2))
+      else
+         tl(1) = (lr(1) + LEGEND_INNER_PADDING(1)) + (real(k - 1_int32, real32) * (icon + LEGEND_SPACING(1)) + sum_w)
+         tl(2) = (lr(2) + LEGEND_INNER_PADDING(2)) + 0.0_real32
+      endif
+      sum_w = sum_w + lw
+      ib = [tl(1) + SHRINK, tl(2) + SHRINK, tl(1) + (icon - SHRINK), tl(2) + (icon - SHRINK)]
+      col_item = p%item_color(it)
+      call core_keep_alive(p%item_id(it))
+      hov = .false.
+      held = .false.
+      clicked = .false.
+      if (.not. has_flag(p%leg_flags, LGF_NO_BUTTONS)) &
+         clicked = core_button_behavior(real(ib(1), real64), real(ib(2), real64), real(tl(1) + (lw + icon), real64), &
+                                        real(tl(2) + icon, real64), p%item_id(it), hov, held)
+      if (clicked) p%item_show(it) = .not. p%item_show(it)
+      if (hov .and. (.not. has_flag(p%leg_flags, LGF_NO_HIGHLIGHT_ITEM) .or. &
+                     .not. has_flag(p%leg_flags, LGF_NO_HIGHLIGHT_AXIS))) then
+         p%item_hovered(it) = .true.
+         col_hl = mix_u32(col_txt, col_item, 64_int32)
+      else
+         col_hl = col_txt
+      endif
+      if (held) then
+         if (p%item_show(it)) then
+            col_icon = alpha_u32(col_item, 0.5_real32)
+         else
+            col_icon = core_style_color(ImGuiCol_TextDisabled, 0.5_real64)
+         endif
+      elseif (hov) then
+         if (p%item_show(it)) then
+            col_icon = alpha_u32(col_item, 0.75_real32)
+         else
+            col_icon = core_style_color(ImGuiCol_TextDisabled, 0.75_real64)
+         endif
+      else
+         col_icon = merge(col_item, col_dis, p%item_show(it))
+      endif
+      call core_draw_rect_filled(real(ib(1), real64), real(ib(2), real64), real(ib(3), real64), real(ib(4), real64), &
+                                 col_icon)
+      if (n > 0_int32) call core_draw_text(real(tl(1) + icon, real64), real(tl(2) + 0.0_real32, real64), &
+                                           merge(col_hl, col_dis, p%item_show(it)), p%leg_text(a:a + n - 1_int32))
+   enddo
+   endsubroutine legend_entries
+
+   ! private: text
+
+   subroutine text_centered(cx, top, col, s)
+   !< `AddTextCentered`: a text's shown part (up to `##`), each line centred on `cx`, from `top` down.
+   real(real32),     intent(in) :: cx  !< Centre's abscissa [pixels].
+   real(real32),     intent(in) :: top !< Top [pixels].
+   integer(int32),   intent(in) :: col !< Colour.
+   character(len=*), intent(in) :: s   !< Text.
+   real(real32)                 :: y, txt_ht !< Line's offset, text height.
+   real(real64)                 :: w, h      !< A line's size.
+   integer(int32)               :: a, e, nl  !< A line's start, the shown end, a newline.
+
+   txt_ht = real(core_font_size(), real32)
+   e = rendered_len(s)
+   a = 1_int32
+   y = 0.0_real32
+   do
+      nl = int(index(s(a:e), achar(10)), int32)
+      if (nl == 0_int32) exit
+      call core_text_size(s(a:a + nl - 2_int32), w, h, hide_after_hash=.true.)
+      call core_draw_text(real(cx - real(w, real32) * 0.5_real32, real64), real(top + y, real64), col, &
+                          s(a:a + nl - 2_int32))
+      a = a + nl
+      y = y + txt_ht
+   enddo
+   call core_text_size(s(a:e), w, h, hide_after_hash=.true.)
+   call core_draw_text(real(cx - real(w, real32) * 0.5_real32, real64), real(top + y, real64), col, s(a:e))
+   endsubroutine text_centered
+
+   subroutine text_vertical(x, y, col, s)
+   !< `AddTextVertical`: a text rotated a quarter turn anticlockwise, (x, y) its bottom-left corner (floored), glyph by
+   !< glyph from the current font's baked glyphs (`core_font_glyph`), each a textured quad, the pen moving up by its
+   !< advance; characters decoded from UTF-8, those without a glyph skipped.
+   real(real32),     intent(in) :: x, y !< Bottom-left corner [pixels].
+   integer(int32),   intent(in) :: col  !< Colour.
+   character(len=*), intent(in) :: s    !< Text (UTF-8).
+   real(real32)                 :: px, py, sc !< Pen, scale.
+   real(real64)                 :: scale, adv, x0, y0, x1, y1, u0, v0, u1, v1 !< A glyph.
+   integer(int32)               :: k, c, nb !< Byte, code point, its bytes.
+   logical                      :: found !< A glyph.
+
+   px = im_floor(x)
+   py = im_floor(y)
+   k = 1_int32
+   do while (k <= len(s, kind=int32))
+      call utf8_char(s, k, c, nb)
+      k = k + nb
+      call core_font_glyph(c, found, scale, adv, x0, y0, x1, y1, u0, v0, u1, v1)
+      if (.not. found) cycle
+      sc = real(scale, real32)
+      call core_draw_quad_uv(real([px + real(y0, real32) * sc, px + real(y0, real32) * sc,                    &
+                                   px + real(y1, real32) * sc, px + real(y1, real32) * sc], real64),          &
+                             real([py + (-real(x0, real32)) * sc, py + (-real(x1, real32)) * sc,             &
+                                   py + (-real(x1, real32)) * sc, py + (-real(x0, real32)) * sc], real64),    &
+                             [u0, u1, u1, u0], [v0, v0, v1, v1], col)
+      py = py - real(adv, real32) * sc
+   enddo
+   endsubroutine text_vertical
+
+   pure subroutine utf8_char(s, k, c, nb)
+   !< The character at byte k of a UTF-8 text (`ImTextCharFromUtf8`): its code point and bytes (a malformed sequence:
+   !< U+FFFD, one byte).
+   character(len=*), intent(in)  :: s  !< Text.
+   integer(int32),   intent(in)  :: k  !< Byte.
+   integer(int32),   intent(out) :: c  !< Code point.
+   integer(int32),   intent(out) :: nb !< Bytes.
+   integer(int32)                :: b(4), j, n !< Bytes, counter, bytes left.
+
+   n = len(s, kind=int32) - k + 1_int32
+   b = 0_int32
+   do j = 1_int32, min(4_int32, n)
+      b(j) = iand(ichar(s(k + j - 1_int32:k + j - 1_int32), kind=int32), 255_int32)
+   enddo
+   c = 65533_int32
+   nb = 1_int32
+   if (b(1) < 128_int32) then
+      c = b(1)
+   elseif (iand(b(1), 224_int32) == 192_int32 .and. n >= 2_int32) then
+      if (iand(b(2), 192_int32) == 128_int32) then
+         c = ior(ishft(iand(b(1), 31_int32), 6), iand(b(2), 63_int32))
+         nb = 2_int32
+      endif
+   elseif (iand(b(1), 240_int32) == 224_int32 .and. n >= 3_int32) then
+      if (iand(b(2), 192_int32) == 128_int32 .and. iand(b(3), 192_int32) == 128_int32) then
+         c = ior(ior(ishft(iand(b(1), 15_int32), 12), ishft(iand(b(2), 63_int32), 6)), iand(b(3), 63_int32))
+         nb = 3_int32
+      endif
+   elseif (iand(b(1), 248_int32) == 240_int32 .and. n >= 4_int32) then
+      if (iand(b(2), 192_int32) == 128_int32 .and. iand(b(3), 192_int32) == 128_int32 .and. &
+          iand(b(4), 192_int32) == 128_int32) then
+         c = ior(ior(ior(ishft(iand(b(1), 7_int32), 18), ishft(iand(b(2), 63_int32), 12)), &
+                     ishft(iand(b(3), 63_int32), 6)), iand(b(4), 63_int32))
+         nb = 4_int32
+      endif
+   endif
+   endsubroutine utf8_char
+
+   pure function im_floor(f) result(r)
+   !< `ImFloor` of a float.
+   real(real32), intent(in) :: f !< Value.
+   real(real32)             :: r !< Floor.
+
+   r = real(int(f, int32), real32)
+   if (f < 0.0_real32 .and. r /= f) r = r - 1.0_real32
+   endfunction im_floor
+
+   ! private: colours
+
+   pure function alpha_u32(col, alpha) result(c)
+   !< `ImAlphaU32`: the alpha bits of `(1 - alpha) * 255` cleared.
+   integer(int32), intent(in) :: col   !< Packed colour.
+   real(real32),   intent(in) :: alpha !< Alpha in [0, 1].
+   integer(int32)             :: c     !< Colour.
+   integer(int64)             :: u     !< Unsigned value.
+
+   u = iand(iand(int(col, int64), 4294967295_int64), &
+            not(ishft(int(int((1.0_real32 - alpha) * 255.0_real32, int32), int64), 24)))
+   if (u >= 2147483648_int64) u = u - 4294967296_int64
+   c = int(u, int32)
+   endfunction alpha_u32
+
+   pure function mix_u32(a, b, s) result(c)
+   !< `ImMixU32` (32-bit form): a + (b - a) * s / 256 on each channel.
+   integer(int32), intent(in) :: a, b !< Packed colours.
+   integer(int32), intent(in) :: s    !< Weight of b, 0-256.
+   integer(int32)             :: c    !< Mix.
+   integer(int64)             :: ua, ub, al, ah, bl, bh, ml, mh, u !< Unsigned values.
+   integer(int64), parameter  :: M32 = 4294967295_int64 !< 32 bits.
+
+   ua = iand(int(a, int64), M32)
+   ub = iand(int(b, int64), M32)
+   al = iand(ua, 16711935_int64)                 ! 0x00ff00ff
+   ah = ishft(iand(ua, 4278255360_int64), -8)    ! 0xff00ff00
+   bl = iand(ub, 16711935_int64)
+   bh = ishft(iand(ub, 4278255360_int64), -8)
+   ml = iand(al * int(256_int32 - s, int64) + bl * int(s, int64), M32)
+   mh = iand(ah * int(256_int32 - s, int64) + bh * int(s, int64), M32)
+   u = ior(iand(mh, 4278255360_int64), ishft(iand(ml, 4278255360_int64), -8))
+   if (u >= 2147483648_int64) u = u - 4294967296_int64
+   c = int(u, int32)
+   endfunction mix_u32
 
    subroutine locate(t, rmin, rmax, pixels, vertical)
    !< `Locator_Default`: the ticks of a linear range on an axis `pixels` long.
