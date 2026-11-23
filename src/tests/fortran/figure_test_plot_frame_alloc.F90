@@ -7,7 +7,8 @@ program figure_test_plot_frame_alloc
 !< levels), a symlog y axis and a linear Y2, four labelled lines in the legend (one with square markers), a scatter
 !< (P11), the pointer resting on the plot (the mouse text: values of four axes, a time among them), and beside it a
 !< colour bar with a label format and a label; below them (P12) a 1 x 2 subplot, titled, its x axes linked, and two
-!< plots side by side in an aligned group, their x axes linked in a group (`pf_link_axis`).
+!< plots side by side in an aligned group, their x axes linked in a group (`pf_link_axis`), the second with the four
+!< drag tools (figure_plot_tools).
 !< Drawn first by ImPlot through FIGURE's API (`ip_*`), then by the Fortran frame (`pf_*`), NF frames each: on the
 !< Fortran side the last NCOUNT frames are counted, from `pf_begin_plot` to `pf_end_plot` and around
 !< `pf_colormap_scale`, by figure_test_plot_alloc_counter (the C library's allocator entry points defined in the
@@ -23,6 +24,7 @@ program figure_test_plot_frame_alloc
 !< The pictures are `figure_test_plot_frame_alloc.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : ip_begin_aligned, ip_begin_subplots, ip_end_aligned, ip_end_subplots, ip_link_axis
+use figure, only : ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_drag_rect
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
                    ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes,             &
                    ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
@@ -30,6 +32,7 @@ use figure_plot_frame, only : pf_begin_aligned, pf_begin_subplots, pf_end_aligne
 use figure_plot_frame, only : pf_begin_plot, pf_colormap_scale, pf_end_plot, pf_plot_limits, pf_set_axes, &
                               pf_setup_axes, pf_setup_axis, pf_setup_axis_limits
 use figure_plot_items, only : pf_line, pf_scatter, pf_spec
+use figure_plot_tools, only : pf_drag_line_x, pf_drag_line_y, pf_drag_point, pf_drag_rect
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 use figure_test_plot_alloc_counter, only : alloc_arm, alloc_count, alloc_disarm
 
@@ -168,6 +171,10 @@ contains
    subroutine cells()
    !< A 1 x 2 subplot with linked x axes and two aligned plots side by side (P12), by the side drawing.
    integer(int32) :: k !< Cell.
+   real(real64)   :: tv(8) = [20.0_real64, 1.2_real64, 50.0_real64, 0.8_real64, 100.0_real64, 400.0_real64, &
+                              0.9_real64, 1.3_real64] !< The drag tools' values (kept: the pointer never moves them).
+   logical        :: moved !< A tool moved.
+
 
    if (side_fortran) then
       if (pf_begin_subplots('Cells', 1_int32, 2_int32, height=150.0_real64, link_x=.true.)) then
@@ -190,6 +197,10 @@ contains
          if (pf_begin_plot('##a2', width=300.0_real64, height=150.0_real64)) then
             call pf_link_axis('x1', 'pair x')
             call pf_line('##w', xs, ys(:, 4), spec=pf_spec(line_color=C(:, 4)))
+            moved = pf_drag_line_x(1_int32, tv(1))
+            moved = pf_drag_line_y(2_int32, tv(2), color=C(:, 1), thickness=2.0_real64)
+            moved = pf_drag_point(3_int32, tv(3), tv(4), radius=5.0_real64)
+            moved = pf_drag_rect(4_int32, tv(5), tv(6), tv(7), tv(8), color=C(:, 2))
             call pf_end_plot()
          endif
          call pf_end_aligned()
@@ -215,6 +226,10 @@ contains
          if (ip_begin_plot('##a2', width=300.0_real64, height=150.0_real64)) then
             call ip_link_axis('x1', 'pair x')
             call ip_line('##w', xs, ys(:, 4), spec=ip_spec(line_color=C(:, 4)))
+            moved = ip_drag_line_x(1_int32, tv(1))
+            moved = ip_drag_line_y(2_int32, tv(2), color=C(:, 1), thickness=2.0_real64)
+            moved = ip_drag_point(3_int32, tv(3), tv(4), radius=5.0_real64)
+            moved = ip_drag_rect(4_int32, tv(5), tv(6), tv(7), tv(8), color=C(:, 2))
             call ip_end_plot()
          endif
          call ip_end_aligned()

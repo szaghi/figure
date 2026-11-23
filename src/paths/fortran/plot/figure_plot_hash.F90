@@ -14,7 +14,7 @@ use, intrinsic :: iso_fortran_env, only : int32, int64
 
 implicit none
 private
-public :: plot_hash, plot_id_offset
+public :: plot_hash, plot_hash_int, plot_id_offset
 
 integer(int64), parameter :: POLY = int(z'82F63B78', int64) !< CRC32c's reflected polynomial.
 integer(int64), parameter :: MASK = int(z'FFFFFFFF', int64) !< The low 32 bits.
@@ -57,6 +57,31 @@ contains
    enddo
    id = to_int32(iand(not(crc), MASK))
    endfunction plot_hash
+
+   pure function plot_hash_int(n, seed) result(id)
+   !< `ImHashData(&n, sizeof(int), seed)`: the ID of an integer in an ID stack whose top is `seed` (`GetID(int)`, the
+   !< drag tools' IDs): its four bytes, little-endian, through the same CRC32c (no `###` rule).
+   integer(int32), intent(in) :: n    !< Integer.
+   integer(int32), intent(in) :: seed !< Seed (an `ImGuiID`'s bits).
+   integer(int32)             :: id   !< ID (an `ImGuiID`'s bits).
+   integer(int64)             :: crc  !< Running CRC.
+   integer(int64)             :: u    !< The integer's bits, unsigned.
+   integer(int32)             :: k, b !< Byte, bit.
+
+   crc = iand(not(iand(int(seed, int64), MASK)), MASK)
+   u = iand(int(n, int64), MASK)
+   do k = 0_int32, 3_int32
+      crc = ieor(crc, iand(ishft(u, -8_int32 * k), 255_int64))
+      do b = 1_int32, 8_int32
+         if (iand(crc, 1_int64) /= 0_int64) then
+            crc = ieor(ishft(crc, -1), POLY)
+         else
+            crc = ishft(crc, -1)
+         endif
+      enddo
+   enddo
+   id = to_int32(iand(not(crc), MASK))
+   endfunction plot_hash_int
 
    pure function plot_id_offset(id, offset) result(o)
    !< An ID plus an offset modulo 2**32 (ImPlot's `plot.ID - 1`, `plot.ID + idx + 1`).

@@ -145,7 +145,7 @@ public :: pf_hide_next_item, pf_legend_hovered
 public :: pf_plot_count, pf_colormap, pf_colormap_scale
 public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
 public :: pf_cancel_selection
-public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis
+public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_plot_id
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
 real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
@@ -2423,6 +2423,16 @@ contains
       call fill_ctx(p, ctx)
    endassociate
    endsubroutine pf_plot_ctx
+
+   function pf_plot_id() result(id)
+   !< The open plot's ID (figure_plot_tools: the drag tools hash theirs under `plot.ID - 1`, the items' ID). It ends the
+   !< setup.
+   integer(int32) :: id !< ID.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: a drag tool outside a plot'
+   if (.not. plots(cur)%locked) call setup_finish(plots(cur))
+   id = plots(cur)%id
+   endfunction pf_plot_id
 
    subroutine fill_ctx(p, ctx)
    !< The plot's part of an item's context: fit, rectangle, the current axes' maps, ranges, pixels, inversions.
