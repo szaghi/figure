@@ -59,7 +59,8 @@ the repository. The same rule run locally writes them into `docs/guide`.
   directory. `scripts/check_sync.py` fails when a mode would compile a module twice. The plot seam is `figure_implot`
   as a whole (`src/paths/imgui/plot/`; its path-independent part, where an item's arrays are read, is
   `src/lib/figure_plot_series.F90`): the Fortran plot frame grows in `src/paths/fortran/plot/` under its own module
-  names until it replaces it.
+  names until it replaces it. The 3-D seam likewise: `figure_implot3d` (`src/paths/imgui/plot3d/`; its
+  path-independent checks `src/lib/figure_plot3d_series.F90`), the Fortran 3-D frame in `src/paths/fortran/plot3d/`.
 - **Pinned versions.** cimgui, cimplot and SDL3 are a matched set: do not bump one alone.
 - **Tests grow with bindings.** Every new widget or plot item gets a headless check driven by synthetic input, as in
   `src/tests/figure_test_headless.F90`.

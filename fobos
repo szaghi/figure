@@ -61,13 +61,14 @@ $EXCLUDE     = src/third_party/FUNDAL/src/lib/fundal_mpih_object.F90
 # module names, one directory per seam (src/paths/imgui/core/ and, in block E, src/paths/fortran/core/; ...); a mode
 # picks one implementation of each seam through its `src`, with no preprocessor macro. $PATH_IMGUI is the current path
 # (every seam over Dear ImGui); $PATH_FORTRAN the newest: the seams already ported (src/paths/fortran/: the renderers of
-# P9), the others still from the current path (src/paths/imgui/core/, src/paths/imgui/plot/: the Fortran plot frame
-# grows in src/paths/fortran/plot/ under its own module names until it replaces figure_implot, P10-P12). The fpm builds
+# P9), the others still from the current path (src/paths/imgui/core/, src/paths/imgui/plot/, src/paths/imgui/plot3d/:
+# the Fortran plot frames grow in src/paths/fortran/plot/ and plot3d/ under their own module names until they replace
+# figure_implot, P10-P12, and figure_implot3d, P13). The fpm builds
 # use the same sets, assembled into one tree (scripts/fpm.sh, scripts/fpm_package.py); scripts/check_sync.py checks
 # each mode's set: one implementation of each module. $FORTRAN_ONLY: the Fortran path's tests, left out by the default
 # modes (the templates' exclude_dirs)
 $PATH_IMGUI   = src/paths/imgui/
-$PATH_FORTRAN = src/paths/imgui/core/ src/paths/imgui/plot/ src/paths/fortran/
+$PATH_FORTRAN = src/paths/imgui/core/ src/paths/imgui/plot/ src/paths/imgui/plot3d/ src/paths/fortran/
 $FORTRAN_ONLY = src/tests/fortran
 
 # main modes: the tests build into exe/ (scripts/run_tests.sh runs every program there), the examples into exe/examples/
