@@ -9,7 +9,8 @@ module figure_plot_tools
 !<
 !< - the setup ended (`SetupLock`); on a frame the plot fits, the tool's values extend the current axes' fit
 !<   (`FitPointX`, `FitPointY`, `FitPoint`; the rectangle's two corners);
-!< - its ID, Dear ImGui's under the items' override ID (`plot.ID - 1`): `GetID(n_id)` for a vertical line, under
+!< - its ID, Dear ImGui's under the current items' override ID (`CurrentItems->ID`: `plot.ID - 1`, or the subplot's
+!<   when it shares its items): `GetID(n_id)` for a vertical line, under
 !<   `PushID("#IMPLOT_DRAG_LINE_Y")`, `"#IMPLOT_DRAG_POINT"`, `"#IMPLOT_DRAG_RECT"` for the others (hashed here,
 !<   figure_plot_hash, not pushed: nothing between uses the stack), a rectangle's corners and edges the next eight IDs;
 !< - its buttons (`KeepAliveID`, `ButtonBehavior` with flags 0) on its grab rectangles clipped to the plot area
@@ -39,7 +40,7 @@ use figure_core, only : core_button_behavior, core_color, core_draw_circle, core
                         core_mouse_double_clicked, core_mouse_down, core_mouse_pos, core_pop_clip_rect,        &
                         core_push_clip_rect, core_set_mouse_cursor, core_style_color_rgba
 use figure_plot_frame, only : plot_item_ctx, pf_item_fit, pf_item_fit_axis, pf_pixels_to_plot, pf_plot_ctx, &
-                              pf_plot_id, pf_plot_limits, pf_plot_to_pixels
+                              pf_items_id, pf_plot_limits, pf_plot_to_pixels
 use figure_plot_hash, only : plot_hash, plot_hash_int, plot_id_offset
 
 implicit none
@@ -74,7 +75,7 @@ contains
    yb = ctx%rect(4)
    call pf_plot_to_pixels(x, ctx%y_range(1), px, py) ! (ImPlot maps (x, 0): only x is used)
    xp = im_round(real(px, real32))
-   tid = plot_hash_int(id, plot_id_offset(pf_plot_id(), -1_int32))
+   tid = plot_hash_int(id, pf_items_id())
    call core_keep_alive(tid)
    clicked = button(ctx%rect, xp - half, yt, xp + half, yb, tid, hov, held)
    if (hov .or. held) call core_set_mouse_cursor(ImGuiMouseCursor_ResizeEW)
@@ -122,7 +123,7 @@ contains
    xr = ctx%rect(3)
    call pf_plot_to_pixels(ctx%x_range(1), y, px, py) ! (ImPlot maps (0, y): only y is used)
    yp = im_round(real(py, real32))
-   tid = plot_hash_int(id, plot_hash('#IMPLOT_DRAG_LINE_Y', plot_id_offset(pf_plot_id(), -1_int32)))
+   tid = plot_hash_int(id, plot_hash('#IMPLOT_DRAG_LINE_Y', pf_items_id()))
    call core_keep_alive(tid)
    clicked = button(ctx%rect, xl, yp - half, xr, yp + half, tid, hov, held)
    if (hov .or. held) call core_set_mouse_cursor(ImGuiMouseCursor_ResizeNS)
@@ -170,7 +171,7 @@ contains
    col = tool_color(color, 1.0_real32)
    call pf_plot_to_pixels(x, y, px, py)
    call pix2(px, py, pos)
-   tid = plot_hash_int(id, plot_hash('#IMPLOT_DRAG_POINT', plot_id_offset(pf_plot_id(), -1_int32)))
+   tid = plot_hash_int(id, plot_hash('#IMPLOT_DRAG_POINT', pf_items_id()))
    call core_keep_alive(tid)
    clicked = button(ctx%rect, pos(1) - half, pos(2) - half, pos(1) + half, pos(2) + half, tid, hov, held)
    if (held .and. dragging()) then
@@ -247,7 +248,7 @@ contains
    enddo
    col = tool_color(color, 1.0_real32)
    col_a = tool_color(color, 0.25_real32)
-   rid = plot_hash_int(id, plot_hash('#IMPLOT_DRAG_RECT', plot_id_offset(pf_plot_id(), -1_int32)))
+   rid = plot_hash_int(id, plot_hash('#IMPLOT_DRAG_RECT', pf_items_id()))
    call core_io_input(dx, dy, wh, wh_h, dmax, mods, dnd)
    drag = core_mouse_down(0_int32) .and. dmax(1) >= DRAG_THRESHOLD_SQ
    out_held = .false.

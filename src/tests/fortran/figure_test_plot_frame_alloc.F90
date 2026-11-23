@@ -6,7 +6,8 @@ program figure_test_plot_frame_alloc
 !< with every per-frame string of the frame on: a title, axis labels, a log x axis, a time x axis (X2: dates on two
 !< levels), a symlog y axis and a linear Y2, four labelled lines in the legend (one with square markers), a scatter
 !< (P11), the pointer resting on the plot (the mouse text: values of four axes, a time among them), and beside it a
-!< colour bar with a label format and a label; below them (P12) a 1 x 2 subplot, titled, its x axes linked, and two
+!< colour bar with a label format and a label; below them (P12) a 1 x 2 subplot, titled, its x axes linked, its items
+!< shared (`share_items`; on ImPlot's side cimplot's `BeginSubplots` with `ShareItems`: their legend north), and two
 !< plots side by side in an aligned group, their x axes linked in a group (`pf_link_axis`), the second with the four
 !< drag tools (figure_plot_tools); tags on three of the plot's axes (`pf_tag`: a value labelled, a date, a text);
 !< tick formats on the symlog Y1 and on Y2 (`%a` among them: the mouse text and the tag in them), and Y2's ticks given
@@ -31,7 +32,7 @@ program figure_test_plot_frame_alloc
 !<
 !< The pictures are `figure_test_plot_frame_alloc.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : ip_begin_aligned, ip_begin_subplots, ip_end_aligned, ip_end_subplots, ip_link_axis
+use figure, only : ip_begin_aligned, ip_end_aligned, ip_link_axis
 use figure, only : ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_drag_rect, ip_tag
 use figure_testing, only : test_mouse_button, test_record_items
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
@@ -39,8 +40,11 @@ use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line
                    ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
 use figure, only : ip_setup_axis_ticks, ip_setup_axis_constraints, ip_begin_legend_popup, ip_end_legend_popup, &
                    ip_annotation, ip_plot_size, ip_colormap, ip_colormap_legend, ip_drop_target
-use figure_cimplot, only : ImPlot_SetupLegend
-use figure_cimplot_enums, only : ImPlotLegendFlags_Sort, ImPlotLocation_NorthWest
+use, intrinsic :: iso_c_binding, only : c_float, c_int, c_null_char, c_null_ptr
+use figure_cimgui, only : im_vec2
+use figure_cimplot, only : ImPlot_BeginSubplots, ImPlot_EndSubplots, ImPlot_SetNextAxisToFit, ImPlot_SetupLegend
+use figure_cimplot_enums, only : ImPlotLegendFlags_Sort, ImPlotLocation_NorthWest, ImPlotSubplotFlags_LinkAllX, &
+                                 ImPlotSubplotFlags_ShareItems
 use figure_plot_frame, only : pf_begin_aligned, pf_begin_subplots, pf_end_aligned, pf_end_subplots, pf_link_axis
 use figure_plot_frame, only : pf_tag, pf_setup_axis_ticks, pf_setup_axis_constraints, pf_setup_legend, &
                               pf_begin_legend_popup, pf_end_legend_popup, pf_annotation, pf_plot_size, &
@@ -248,13 +252,15 @@ contains
    real(real64)   :: tv(8) = [20.0_real64, 1.2_real64, 50.0_real64, 0.8_real64, 100.0_real64, 400.0_real64, &
                               0.9_real64, 1.3_real64] !< The drag tools' values (kept: the pointer never moves them).
    logical        :: moved !< A tool moved.
+   integer(c_int) :: ia    !< Axis.
 
 
    if (side_fortran) then
-      if (pf_begin_subplots('Cells', 1_int32, 2_int32, height=150.0_real64, link_x=.true.)) then
+      if (pf_begin_subplots('Cells', 1_int32, 2_int32, height=150.0_real64, link_x=.true., share_items=.true.)) then
          do k = 1_int32, 2_int32
             if (pf_begin_plot(merge('##c1', '##c2', k == 1_int32))) then
-               call pf_line('##w', xs(1:60 * k), ys(1:60 * k, k), spec=pf_spec(line_color=C(:, k)))
+               call pf_line(merge('w1', 'w2', k == 1_int32), xs(1:60 * k), ys(1:60 * k, k), &
+                            spec=pf_spec(line_color=C(:, k)))
                call pf_end_plot()
             endif
          enddo
@@ -280,14 +286,22 @@ contains
          call pf_end_aligned()
       endif
    else
-      if (ip_begin_subplots('Cells', 1_int32, 2_int32, height=150.0_real64, link_x=.true.)) then
+      if (ImPlot_BeginSubplots('Cells'//c_null_char, 1_c_int, 2_c_int, im_vec2(-1.0_c_float, 150.0_c_float),   &
+                               ior(ImPlotSubplotFlags_LinkAllX, ImPlotSubplotFlags_ShareItems), c_null_ptr, &
+                               c_null_ptr)) then
          do k = 1_int32, 2_int32
+            if (f == 1_int32) then ! ip_begin_subplots' first-draw fit (ip_begin_plot: SetNextAxisToFit)
+               do ia = 0_c_int, 5_c_int
+                  call ImPlot_SetNextAxisToFit(ia)
+               enddo
+            endif
             if (ip_begin_plot(merge('##c1', '##c2', k == 1_int32))) then
-               call ip_line('##w', xs(1:60 * k), ys(1:60 * k, k), spec=ip_spec(line_color=C(:, k)))
+               call ip_line(merge('w1', 'w2', k == 1_int32), xs(1:60 * k), ys(1:60 * k, k), &
+                            spec=ip_spec(line_color=C(:, k)))
                call ip_end_plot()
             endif
          enddo
-         call ip_end_subplots()
+         call ImPlot_EndSubplots()
       endif
       if (ip_begin_aligned('pair', horizontal=.true.)) then
          if (ip_begin_plot('##a1', width=300.0_real64, height=150.0_real64)) then

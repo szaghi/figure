@@ -22,11 +22,12 @@ module figure_plot_frame
 !<   handles into a table that grows (8 plots, doubled up to 256; past that the least recently drawn plot not drawn on
 !<   this frame makes room: ImPlot keeps every plot for the context's life); one plot open at a time (ImPlot forbids
 !<   nesting), several one after another in a frame;
-!< - a plot's items (`ImPlotItemGroup`): keyed by the ID ImPlot gives them, the label hashed with the seed
-!<   `plot.ID - 1` (figure_plot_hash), each with its colour, given (`color=`) or assigned once, when the item is
-!<   created, from the colormap's next colour (`NextColormapColorU32`: the plot's own counter, `ColormapIdx`), whether
+!< - a plot's items (`ImPlotItemGroup`, `item_group`): keyed by the ID ImPlot gives them, the label hashed with the
+!<   seed `plot.ID - 1` (figure_plot_hash), each with its colour, given (`color=`) or assigned once, when the item is
+!<   created, from the colormap's next colour (`NextColormapColorU32`: the group's own counter, `ColormapIdx`), whether
 !<   it is shown (`HideNextItem`, a click on its legend entry) and whether its legend entry is hovered; a table per
-!<   plot, as the plots' (256 items, then the least recently drawn one makes room);
+!<   group, as the plots' (256 items, then the least recently drawn one makes room); the items go to the current
+!<   group (`gp.CurrentItems`): the plot's own, or the subplot's (seed `subplot.ID - 1`) when it shares them;
 !< - the limits (`SetupAxisLimits`): applied every frame (`ImPlotCond_Always`, which also locks the axis against any
 !<   fit), or until the plot has been drawn once (`ImPlotCond_Once`, the default as FIGURE's `ip_setup_*_limits`);
 !< - the fit to the data (`SetupFinish`, `BeginItemEx`, `EndPlot`, `ImPlotAxis::ExtendFitWith`, `ApplyFit`): an axis
@@ -90,7 +91,10 @@ module figure_plot_frame
 !<   X1 and Y1 linked to its column's and row's range (`LinkAllX`, `LinkAllY`, the menu's `LinkRows`, `LinkCols`), the
 !<   paddings of a row (top, bottom) and a column (left, right) raised to the widest of the frame before
 !<   (`ImPlotAlignmentData`, also for a group of `pf_begin_aligned`), the plot's context menu's "Subplots" (Linking,
-!<   Settings);
+!<   Settings); the cells' items shared (`ImPlotSubplotFlags_ShareItems`: `pf_begin_subplots(share_items=)` or the
+!<   menu's Settings > Share Items): one group for the cells, its legend drawn by `EndSubplots` in the subplot's frame
+!<   (north, in a row, outside, never inside: its menu has no Outside), the grid shrunk for it from the frame after,
+!<   its context menu opened by a right click on it, the cells' Legend menu acting on it;
 !< - P12, axes linked across plots (`pf_link_axis`, as `ip_link_axis` and FIGURE's `fig_plot_link` over ImPlot's
 !<   `SetupAxisLinks`): named groups (never removed) holding the range their axes share, pulled at the call (a cell's
 !<   at its plot's begin), pushed by every axis at `pf_end_plot`; a linked axis has no initial fit (`CanInitFit`);
@@ -114,7 +118,7 @@ module figure_plot_frame
 !<   `pf_plot_state`: `fig_plot_state`; `pf_plot_x_transform`: `fig_plot_x_transform`) and the error recovery's ends
 !<   (`pf_open_state`, `pf_recover_to`: the scope record's `recover_to`, `fig_plot_end` and `EndSubplots`; their wiring
 !<   into native/figure_scope.cpp waits for the seam's switch);
-!< - the drag tools are figure_plot_tools' (P12), over this module's hooks (`pf_plot_id`, ...).
+!< - the drag tools are figure_plot_tools' (P12), over this module's hooks (`pf_items_id`, ...).
 !<
 !< Kept from the current path (FIGURE's behaviour over ImPlot, mirrored bit for bit; the owner's decisions on #15):
 !< `ip_begin_subplots`' first-draw fit (every axis of the next rows x cols plots begun fits, from a global count: a
@@ -128,8 +132,7 @@ module figure_plot_frame
 !< Not yet: local time and ImPlot's time style options (12-hour clock, US dates: ImPlot's defaults), colormaps other
 !< than Deep (the line colours of FIGURE's own styles: seal, paper, ...: their automatic colours are ImPlot's
 !< colormaps, registered by the native layer), the axis flags FIGURE's API does not set (`NoInitialFit`, `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or
-!< not drawn); of P12, a subplot's shared items and legend (`ShareItems`: only the cells' menu can ask for it, the flag
-!< is stored); a window hidden for its first frames (an auto-resizing one measuring itself: `SkipItems` there,
+!< not drawn); a window hidden for its first frames (an auto-resizing one measuring itself: `SkipItems` there,
 !< which figure_core does not give; a collapsed window's, `IsWindowCollapsed`, is: plots, subplots, aligned groups and
 !< colour bars return false or draw nothing in it, as ImPlot's).
 !< The segment's normal is `1/sqrt`, as FIGURE's ImPlot (native/patches/implot-0002).
@@ -200,7 +203,7 @@ public :: pf_hide_next_item, pf_legend_hovered, pf_begin_legend_popup, pf_end_le
 public :: pf_plot_count, pf_colormap, pf_colormap_scale
 public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
 public :: pf_cancel_selection
-public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_plot_id, pf_tag
+public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_items_id, pf_tag
 public :: pf_drop_target
 public :: pf_annotation, pf_plot_size, pf_plot_state, pf_plot_x_transform, pf_open_state, pf_recover_to
 public :: pf_plot_rect
@@ -283,15 +286,18 @@ integer(int32),   parameter :: AXIS_NAMES_LEN(6) = [6_int32, 8_int32, 8_int32, 6
 integer(int32),   parameter :: MOUSE_TEXT_LEN = 256_int32 !< The mouse text's room (six values of 31 characters).
 ! ImPlotSubplotFlags (implot.h)
 integer(int32), parameter :: SPF_NO_TITLE = 1_int32      !< ImPlotSubplotFlags_NoTitle.
+integer(int32), parameter :: SPF_NO_LEGEND = 2_int32     !< ImPlotSubplotFlags_NoLegend.
 integer(int32), parameter :: SPF_NO_MENUS = 4_int32      !< ImPlotSubplotFlags_NoMenus.
 integer(int32), parameter :: SPF_NO_RESIZE = 8_int32     !< ImPlotSubplotFlags_NoResize.
 integer(int32), parameter :: SPF_NO_ALIGN = 16_int32     !< ImPlotSubplotFlags_NoAlign.
-integer(int32), parameter :: SPF_SHARE_ITEMS = 32_int32  !< ImPlotSubplotFlags_ShareItems (stored, not honoured).
+integer(int32), parameter :: SPF_SHARE_ITEMS = 32_int32  !< ImPlotSubplotFlags_ShareItems.
 integer(int32), parameter :: SPF_LINK_ROWS = 64_int32    !< ImPlotSubplotFlags_LinkRows.
 integer(int32), parameter :: SPF_LINK_COLS = 128_int32   !< ImPlotSubplotFlags_LinkCols.
 integer(int32), parameter :: SPF_LINK_ALL_X = 256_int32  !< ImPlotSubplotFlags_LinkAllX.
 integer(int32), parameter :: SPF_LINK_ALL_Y = 512_int32  !< ImPlotSubplotFlags_LinkAllY.
 integer(int32), parameter :: SPF_COL_MAJOR = 1024_int32  !< ImPlotSubplotFlags_ColMajor.
+integer(int32), parameter :: HOVERED_CHILD_ACTIVE = 129_int32 !< ImGuiHoveredFlags ChildWindows,
+                                                         !< AllowWhenBlockedByActiveItem (a subplot's FrameHovered).
 integer(int32), parameter :: SEP_BUTTON_FLAGS = 2048_int32 + 16_int32 + 256_int32 !< A splitter's ImGuiButtonFlags:
                                                          !< FlattenChildren, PressedOnClick, PressedOnDoubleClick.
 real(real32),   parameter :: SPLITTER_HALF = 4.0_real32  !< SUBPLOT_SPLITTER_HALF_THICKNESS [pixels].
@@ -343,6 +349,35 @@ type :: plot_axis
    logical        :: show_default = .true.            !< Its locator's ticks drawn (`ShowDefaultTicks`: no ticks given).
 endtype plot_axis
 
+type :: item_group
+   !< Items and their legend (`ImPlotItemGroup`): a plot's own, or those a subplot's cells share (ShareItems).
+   integer(int32)                :: id = 0_int32          !< ID (Items.ID: the plot's or the subplot's ID - 1).
+   logical                       :: can_go_inside = .true. !< The legend may go inside (a subplot's may not).
+   integer(int32)                :: colormap_idx = 0_int32 !< Automatic colours given (ColormapIdx).
+   integer(int32)                :: marker_idx = 0_int32  !< Automatic markers given (MarkerIdx).
+   integer(int32)                :: n_items = 0_int32     !< Items held.
+   integer(int32)                :: item_next = 1_int32   !< Where the search for the next item starts.
+   integer(int32), allocatable   :: item_id(:)            !< Item's ID.
+   integer(int32), allocatable   :: item_color(:)         !< ... colour (packed).
+   integer(int32), allocatable   :: item_frame(:)         !< ... the frame it was last drawn on.
+   logical,        allocatable   :: item_show(:)          !< ... shown (Show).
+   logical,        allocatable   :: item_hovered(:)       !< ... its legend entry hovered (LegendHovered).
+   integer(int32), allocatable   :: item_marker(:)        !< ... its marker (ImPlotMarker; -2 none).
+   integer(int32)                :: leg_flags = 0_int32   !< Legend's ImPlotLegendFlags in effect.
+   integer(int32)                :: leg_prev_flags = 0_int32 !< ... those last asked.
+   integer(int32)                :: leg_loc = LOC_NORTH + LOC_WEST !< Legend's ImPlotLocation in effect.
+   integer(int32)                :: leg_prev_loc = LOC_NORTH + LOC_WEST !< ... that last asked.
+   logical                       :: leg_hovered = .false. !< Legend hovered.
+   real(real32)                  :: leg_scroll(2) = 0.0_real32 !< Legend's scroll (Legend.Scroll) [pixels].
+   real(real32)                  :: leg_rc(4) = 0.0_real32 !< Legend's clamped rectangle as last drawn (RectClamped).
+   integer(int32)                :: n_leg = 0_int32       !< Legend's entries.
+   integer(int32), allocatable   :: leg_item(:)           !< Entry's item.
+   integer(int32), allocatable   :: leg_off(:)            !< ... label's start in `leg_text`.
+   integer(int32), allocatable   :: leg_len(:)            !< ... label's length.
+   integer(int32)                :: leg_n = 0_int32       !< Characters of `leg_text` in use.
+   character(len=:), allocatable :: leg_text              !< Legend's labels.
+endtype item_group
+
 type :: plot_record
    !< A plot (ImPlotPlot): what is kept between frames, and its layout on the frame it is drawn.
    integer(int32)                :: id = 0_int32          !< ID (its title's in the window's ID stack).
@@ -375,29 +410,7 @@ type :: plot_record
    type(plot_axis)               :: ax(AXES)              !< Axes: X1, X2, X3, Y1, Y2, Y3.
    integer(int32)                :: cur_x = AX_X1         !< The x axis the items use (CurrentX).
    integer(int32)                :: cur_y = AX_Y1         !< ... the y axis.
-   integer(int32)                :: colormap_idx = 0_int32 !< Automatic colours given (ColormapIdx).
-   integer(int32)                :: marker_idx = 0_int32  !< Automatic markers given (MarkerIdx).
-   integer(int32)                :: n_items = 0_int32     !< Items held.
-   integer(int32)                :: item_next = 1_int32   !< Where the search for the next item starts.
-   integer(int32), allocatable   :: item_id(:)            !< Item's ID.
-   integer(int32), allocatable   :: item_color(:)         !< ... colour (packed).
-   integer(int32), allocatable   :: item_frame(:)         !< ... the frame it was last drawn on.
-   logical,        allocatable   :: item_show(:)          !< ... shown (Show).
-   logical,        allocatable   :: item_hovered(:)       !< ... its legend entry hovered (LegendHovered).
-   integer(int32), allocatable   :: item_marker(:)        !< ... its marker (ImPlotMarker; -2 none).
-   integer(int32)                :: leg_flags = 0_int32   !< Legend's ImPlotLegendFlags in effect.
-   integer(int32)                :: leg_prev_flags = 0_int32 !< ... those last asked.
-   integer(int32)                :: leg_loc = LOC_NORTH + LOC_WEST !< Legend's ImPlotLocation in effect.
-   integer(int32)                :: leg_prev_loc = LOC_NORTH + LOC_WEST !< ... that last asked.
-   logical                       :: leg_hovered = .false. !< Legend hovered.
-   real(real32)                  :: leg_scroll(2) = 0.0_real32 !< Legend's scroll (Legend.Scroll) [pixels].
-   real(real32)                  :: leg_rc(4) = 0.0_real32 !< Legend's clamped rectangle as last drawn (RectClamped).
-   integer(int32)                :: n_leg = 0_int32       !< Legend's entries.
-   integer(int32), allocatable   :: leg_item(:)           !< Entry's item.
-   integer(int32), allocatable   :: leg_off(:)            !< ... label's start in `leg_text`.
-   integer(int32), allocatable   :: leg_len(:)            !< ... label's length.
-   integer(int32)                :: leg_n = 0_int32       !< Characters of `leg_text` in use.
-   character(len=:), allocatable :: leg_text              !< Legend's labels.
+   type(item_group)              :: items                 !< Its items and legend (Items).
 endtype plot_record
 
 type :: plot_item_ctx
@@ -452,6 +465,8 @@ type :: subplot_record
    integer(int32)                :: hov_sep = 0_int32    !< The splitter hovered on `hov_frame` (0: none).
    integer(int32)                :: hov_frame = -1_int32 !< ... that frame.
    real(real64)                  :: hov_t0 = 0.0_real64  !< Dear ImGui's time when its hover began [s].
+   logical                       :: frame_hovered = .false. !< Its frame hovered (FrameHovered).
+   type(item_group)              :: items                !< The items its cells share (Items: ShareItems).
 endtype subplot_record
 
 type :: plot_link
@@ -483,9 +498,11 @@ character(len=MOUSE_TEXT_LEN)          :: mouse_text     !< The mouse text (Mous
 integer(int32)                         :: digital_offset = 0_int32 !< The digital items' bands (DigitalPlotOffset).
 integer(int32)                         :: last_item = 0_int32 !< The item `pf_item_begin` registered last.
 integer(int32)                         :: prev_item = 0_int32 !< The item drawn or hidden last (PreviousItem; 0: none).
-type(subplot_record), allocatable      :: subs(:)        !< The subplots (ImPlotContext::Subplots).
+type(subplot_record), allocatable, target :: subs(:)   !< The subplots (ImPlotContext::Subplots).
 integer(int32)                         :: n_subs = 0_int32 !< Slots of `subs` in use.
 integer(int32)                         :: cur_sub = 0_int32 !< The subplot open (0: none).
+logical                                :: items_shared = .false. !< The items are the open subplot's
+                                                         !< (CurrentItems: ShareItems when it began), not the plot's.
 type(plot_align),     allocatable      :: aligns(:)      !< The aligned groups (ImPlotContext::AlignmentData).
 integer(int32),       allocatable      :: align_id(:)    !< ... their IDs.
 integer(int32)                         :: n_aligns = 0_int32 !< Groups held.
@@ -866,6 +883,7 @@ contains
    logical,          intent(in), optional :: reverse    !< Entries in the reverse order.
    integer(int32)                         :: loc        !< ImPlotLocation.
    integer(int32)                         :: flags      !< ImPlotLegendFlags.
+   type(item_group),              pointer :: g          !< The items' legend.
 
    call setup_refused('pf_setup_legend')
    loc = LOC_NORTH + LOC_WEST
@@ -875,12 +893,11 @@ contains
    call set_flag(flags, LGF_HORIZONTAL, horizontal)
    call set_flag(flags, LGF_SORT, sort)
    call set_flag(flags, LGF_REVERSE, reverse)
-   associate(p => plots(cur))
-      if (loc /= p%leg_prev_loc) p%leg_loc = loc
-      p%leg_prev_loc = loc
-      if (flags /= p%leg_prev_flags) p%leg_flags = flags
-      p%leg_prev_flags = flags
-   endassociate
+   g => items_now() ! CurrentItems->Legend: a subplot's that shares its items
+   if (loc /= g%leg_prev_loc) g%leg_loc = loc
+   g%leg_prev_loc = loc
+   if (flags /= g%leg_prev_flags) g%leg_flags = flags
+   g%leg_prev_flags = flags
    endsubroutine pf_setup_legend
 
    subroutine pf_set_next_axis_to_fit(axis)
@@ -941,19 +958,19 @@ contains
    character(len=*), intent(in) :: label   !< The item's label.
    logical                      :: hovered !< Hovered.
    integer(int32)               :: id, k   !< The item's ID, counter.
+   type(item_group), pointer    :: g       !< The items.
 
    hovered = .false.
    if (cur == 0_int32) error stop 'figure_plot_frame: pf_legend_hovered outside a plot'
-   associate(p => plots(cur))
-      if (.not. p%locked) call setup_finish(p)
-      id = plot_hash(label, plot_id_offset(p%id, -1_int32))
-      do k = 1_int32, p%n_items
-         if (p%item_id(k) == id) then
-            hovered = p%item_hovered(k)
-            exit
-         endif
-      enddo
-   endassociate
+   if (.not. plots(cur)%locked) call setup_finish(plots(cur))
+   g => items_now()
+   id = plot_hash(label, g%id)
+   do k = 1_int32, g%n_items
+      if (g%item_id(k) == id) then
+         hovered = g%item_hovered(k)
+         exit
+      endif
+   enddo
    endfunction pf_legend_hovered
 
    function pf_begin_legend_popup(label, button) result(open)
@@ -966,6 +983,7 @@ contains
    logical                                :: open   !< The popup is open: draw it, then end it.
    integer(int32)                         :: b      !< ImGuiMouseButton.
    integer(int32)                         :: id, k  !< The item's ID, counter.
+   type(item_group),              pointer :: g      !< The items.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: pf_begin_legend_popup outside a plot'
    b = 1_int32
@@ -981,18 +999,17 @@ contains
          error stop "figure_plot_frame: pf_begin_legend_popup: button must be 'left', 'right' or 'middle'"
       endselect
    endif
-   associate(p => plots(cur))
-      if (.not. p%locked) call setup_finish(p) ! SetupLock
-      id = plot_hash(label, plot_id_offset(p%id, -1_int32)) ! GetIDWithSeed(label, Items.ID)
-      if (core_mouse_released(b)) then
-         do k = 1_int32, p%n_items
-            if (p%item_id(k) == id) then
-               if (p%item_hovered(k)) call core_open_popup_id(id)
-               exit
-            endif
-         enddo
-      endif
-   endassociate
+   if (.not. plots(cur)%locked) call setup_finish(plots(cur)) ! SetupLock
+   g => items_now()
+   id = plot_hash(label, g%id) ! GetIDWithSeed(label, Items.ID)
+   if (core_mouse_released(b)) then
+      do k = 1_int32, g%n_items
+         if (g%item_id(k) == id) then
+            if (g%item_hovered(k)) call core_open_popup_id(id)
+            exit
+         endif
+      enddo
+   endif
    open = core_begin_popup_id(id, LEGEND_POPUP_FLAGS)
    endfunction pf_begin_legend_popup
 
@@ -1062,14 +1079,17 @@ contains
    endif
    endsubroutine pf_end_plot
 
-   function pf_begin_subplots(title, rows, cols, width, height, link_x, link_y) result(visible)
+   function pf_begin_subplots(title, rows, cols, width, height, link_x, link_y, share_items) result(visible)
    !< Begin a grid of `rows` x `cols` plots (`BeginSubplots`; `ip_begin_subplots`): when true, begin and end its plots
    !< (`pf_begin_plot`/`pf_end_plot`, one per cell, row by row), then `pf_end_subplots`. `link_x`/`link_y`: the cells
    !< share the x (y) range (`ImPlotSubplotFlags_LinkAllX`, `LinkAllY`). Size as `ip_begin_subplots` (default: the full
    !< width, 300 pixels a row). The frame, the title, the splitters (dragged, they share the room between two rows or
    !< columns) are drawn here; the cells get half the plot padding, no frame of their own, their paddings aligned by
    !< row and column. The first time a subplot is drawn its plots fit every axis (FIGURE's `ip_begin_subplots`: ImPlot
-   !< gives linked axes no initial fit), linked axes then sharing the last plot's range.
+   !< gives linked axes no initial fit), linked axes then sharing the last plot's range. The Fortran path's own
+   !< (FIGURE's `ip_begin_subplots` cannot ask for it; its cells' context menu can, Subplots > Settings > Share Items):
+   !< `share_items`, the cells' items one group (`ImPlotSubplotFlags_ShareItems`: an item of the same label in two cells
+   !< is one item, its colour and visibility shared) with one legend in the subplot's frame, north, in a row.
    character(len=*), intent(in)           :: title   !< Title (also the ID; '##id' hides it).
    integer(int32),   intent(in)           :: rows    !< Rows of plots.
    integer(int32),   intent(in)           :: cols    !< Columns of plots.
@@ -1077,6 +1097,7 @@ contains
    real(real64),     intent(in), optional :: height  !< Height [pixels] (default: 300 per row).
    logical,          intent(in), optional :: link_x  !< Share the x range.
    logical,          intent(in), optional :: link_y  !< Share the y range.
+   logical,          intent(in), optional :: share_items !< The cells share their items and one legend.
    logical                                :: visible !< The subplot is drawn.
    integer(int32)                         :: id, h, flags, k, sep !< ID, handle, flags, counter, splitter.
    logical                                :: created !< The subplot is new.
@@ -1093,6 +1114,7 @@ contains
    flags = 0_int32
    call set_flag(flags, SPF_LINK_ALL_X, link_x)
    call set_flag(flags, SPF_LINK_ALL_Y, link_y)
+   call set_flag(flags, SPF_SHARE_ITEMS, share_items)
    if (core_window_collapsed()) return ! SkipItems: false, nothing kept
    id = core_get_id(title)
    h = subplot_handle(id, core_frame_count(), created)
@@ -1144,6 +1166,13 @@ contains
       s%grid(2) = (s%frame(2) + half(2)) + pad_top
       s%grid(3) = s%frame(3) - half(1)
       s%grid(4) = s%frame(4) - half(2)
+      call core_mouse_pos(dx, dy)
+      s%frame_hovered = real(dx, real32) >= s%frame(1) .and. real(dy, real32) >= s%frame(2) .and. &
+                        real(dx, real32) < s%frame(3) .and. real(dy, real32) < s%frame(4) .and.   &
+                        core_window_hovered(HOVERED_CHILD_ACTIVE)
+      items_shared = has_flag(s%flags, SPF_SHARE_ITEMS) ! CurrentItems: the subplot's, for its cells
+      if (items_shared .and. .not. has_flag(s%flags, SPF_NO_LEGEND) .and. s%items%n_leg > 0_int32) &
+         call legend_room(s%items, s%grid) ! the shared legend's room, from the frame before
       call core_draw_begin()
       call render_frame(s%frame)
       if (title_w > 0.0_real32 .and. .not. has_flag(s%flags, SPF_NO_TITLE)) &
@@ -1232,6 +1261,8 @@ contains
          s%col_align(k)%pad_a_max = 0.0_real32
          s%col_align(k)%pad_b_max = 0.0_real32
       enddo
+      s%items%n_leg = 0_int32 ! Items.Legend.Reset: the entries the cells' items give on this frame follow
+      s%items%leg_n = 0_int32
       call set_cell(s, 0_int32, 0_int32)
    endassociate
    visible = .true.
@@ -1239,9 +1270,11 @@ contains
 
    subroutine pf_end_subplots()
    !< End the grid of plots (`EndSubplots`; `ip_end_subplots`): the rows' and columns' alignments kept for the next
-   !< frame, the cells' style undone, the layout cursor below the subplot's frame.
-   integer(int32) :: k !< Counter.
-   logical        :: added !< ItemAdd.
+   !< frame, the cells' style undone, the legend of the items the cells share (ShareItems: in the subplot's frame, its
+   !< context menu opened by a right click on it), the layout cursor below the subplot's frame.
+   integer(int32) :: k           !< Counter.
+   logical        :: added       !< ItemAdd.
+   logical        :: contextable !< The shared legend's menu may open.
 
    if (cur_sub == 0_int32) error stop 'figure_plot_frame: pf_end_subplots without a subplot'
    if (cur /= 0_int32) error stop 'figure_plot_frame: pf_end_subplots while a plot is open'
@@ -1258,6 +1291,22 @@ contains
       plot_min = STYLE_PLOT_MIN_SIZE
       frame_bg_clear = .false.
       call core_pop_style_var()
+      call items_hover_reset(s%items) ! the shared legend: in the subplot's frame, the style's PlotPadding from it
+      if (has_flag(s%flags, SPF_SHARE_ITEMS) .and. .not. has_flag(s%flags, SPF_NO_LEGEND) .and. &
+          s%items%n_leg > 0_int32) then
+         call core_draw_begin()
+         call legend_box(s%items, s%frame, STYLE_PLOT_PADDING, s%frame_hovered, contextable)
+         call core_draw_end()
+         if (contextable .and. .not. has_flag(s%flags, SPF_NO_MENUS) .and. core_mouse_released(1_int32)) &
+            call core_open_popup('##LegendContext') ! (MouseReleased[InputMap.Menu], not OpenContextThisFrame)
+         if (core_begin_popup('##LegendContext')) then
+            call core_text_unformatted('Legend')
+            call ig_separator()
+            if (legend_context_menu(s%items, .not. has_flag(s%flags, SPF_NO_LEGEND))) call flip(s%flags, SPF_NO_LEGEND)
+            call core_end_popup()
+         endif
+      endif
+      items_shared = .false. ! CurrentItems cleared
       call core_pop_id()
       call core_set_cursor_screen_pos(real(s%frame(1), real64), real(s%frame(2), real64)) ! Dummy(FrameRect's size)
       call core_item_size(real(s%frame(3) - s%frame(1), real64), real(s%frame(4) - s%frame(2), real64))
@@ -2143,7 +2192,7 @@ contains
    endif
    any_held = p%held .or. any(p%ax(:)%enabled .and. p%ax(:)%held)
    if (has_flag(p%flags, PF_CROSSHAIRS) .and. p%hovered .and. .not. any_held .and. .not. p%selecting .and. &
-       .not. p%leg_hovered) then
+       .not. p%items%leg_hovered) then
       call core_set_mouse_cursor(ImGuiMouseCursor_None)
       col = ps_u32(PC_CROSSHAIRS) ! GetStyleColorU32(ImPlotCol_Crosshairs)
       call core_draw_line_h(real(p%rect(1), real64), real(m(1) - 5.0_real32, real64), real(m(2), real64), col)
@@ -2260,7 +2309,7 @@ contains
    integer(int32)                   :: i, k    !< Axis, index on its direction.
 
    call core_push_override_id(p%id)
-   can_ctx = open_context .and. .not. has_flag(p%flags, PF_NO_MENUS) .and. .not. p%leg_hovered
+   can_ctx = open_context .and. .not. has_flag(p%flags, PF_NO_MENUS) .and. .not. p%items%leg_hovered
    if (can_ctx .and. p%hovered) call core_open_popup('##PlotContext')
    if (core_begin_popup('##PlotContext')) then
       call plot_context_menu(p)
@@ -2292,6 +2341,7 @@ contains
    type(plot_record), intent(inout) :: p     !< Plot.
    integer(int32)                   :: i     !< Axis.
    logical                          :: v     !< A setting.
+   logical                          :: lm    !< The current items' legend has menus.
 
    do i = 1_int32, AXES
       if (.not. p%ax(i)%enabled .or. has_flag(p%ax(i)%flags, AXF_NO_MENUS)) cycle
@@ -2308,9 +2358,18 @@ contains
       call core_pop_id()
    enddo
    call ig_separator()
-   if (.not. has_flag(p%leg_flags, LGF_NO_MENUS)) then
+   if (items_shared) then
+      lm = .not. has_flag(subs(cur_sub)%items%leg_flags, LGF_NO_MENUS)
+   else
+      lm = .not. has_flag(p%items%leg_flags, LGF_NO_MENUS)
+   endif
+   if (lm) then
       if (ig_begin_menu('Legend')) then
-         if (legend_context_menu(p, .not. has_flag(p%flags, PF_NO_LEGEND))) call flip(p%flags, PF_NO_LEGEND)
+         if (.not. items_shared) then ! owns_legend: the plot's legend; else the subplot's
+            if (legend_context_menu(p%items, .not. has_flag(p%flags, PF_NO_LEGEND))) call flip(p%flags, PF_NO_LEGEND)
+         elseif (legend_context_menu(subs(cur_sub)%items, .not. has_flag(subs(cur_sub)%flags, SPF_NO_LEGEND))) then
+            call flip(subs(cur_sub)%flags, SPF_NO_LEGEND)
+         endif
          call ig_end_menu()
       endif
    endif
@@ -2442,9 +2501,10 @@ contains
    endassociate
    endsubroutine axis_context_menu
 
-   function legend_context_menu(p, visible) result(changed)
-   !< `ShowLegendContextMenu`: Show, Outside, horizontal or vertical, the location's nine buttons.
-   type(plot_record), intent(inout) :: p       !< Plot.
+   function legend_context_menu(g, visible) result(changed)
+   !< `ShowLegendContextMenu`: Show, Outside (a legend that may go inside), horizontal or vertical, the location's nine
+   !< buttons.
+   type(item_group),  intent(inout) :: g       !< Items.
    logical,           intent(in)    :: visible !< The legend shown.
    logical                          :: changed !< Show toggled.
    logical                          :: v       !< A box.
@@ -2455,27 +2515,27 @@ contains
    bw = real(1.5_real32 * real(s, real32), real64)
    v = visible
    changed = ig_checkbox('Show', v)
-   call flag_box('Outside', p%leg_flags, LGF_OUTSIDE)
-   if (core_radio_button('H', has_flag(p%leg_flags, LGF_HORIZONTAL))) p%leg_flags = ior(p%leg_flags, LGF_HORIZONTAL)
+   if (g%can_go_inside) call flag_box('Outside', g%leg_flags, LGF_OUTSIDE)
+   if (core_radio_button('H', has_flag(g%leg_flags, LGF_HORIZONTAL))) g%leg_flags = ior(g%leg_flags, LGF_HORIZONTAL)
    call ig_same_line()
-   if (core_radio_button('V', .not. has_flag(p%leg_flags, LGF_HORIZONTAL))) &
-      p%leg_flags = iand(p%leg_flags, not(LGF_HORIZONTAL))
+   if (core_radio_button('V', .not. has_flag(g%leg_flags, LGF_HORIZONTAL))) &
+      g%leg_flags = iand(g%leg_flags, not(LGF_HORIZONTAL))
    call core_push_style_var(ImGuiStyleVar_ItemSpacing, 2.0_real64, 2.0_real64)
-   if (ig_button('NW', bw, s)) p%leg_loc = LOC_NORTH + LOC_WEST
+   if (ig_button('NW', bw, s)) g%leg_loc = LOC_NORTH + LOC_WEST
    call ig_same_line()
-   if (ig_button('N', bw, s)) p%leg_loc = LOC_NORTH
+   if (ig_button('N', bw, s)) g%leg_loc = LOC_NORTH
    call ig_same_line()
-   if (ig_button('NE', bw, s)) p%leg_loc = LOC_NORTH + LOC_EAST
-   if (ig_button('W', bw, s)) p%leg_loc = LOC_WEST
+   if (ig_button('NE', bw, s)) g%leg_loc = LOC_NORTH + LOC_EAST
+   if (ig_button('W', bw, s)) g%leg_loc = LOC_WEST
    call ig_same_line()
    if (core_invisible_button('C', bw, s)) continue
    call ig_same_line()
-   if (ig_button('E', bw, s)) p%leg_loc = LOC_EAST
-   if (ig_button('SW', bw, s)) p%leg_loc = LOC_SOUTH + LOC_WEST
+   if (ig_button('E', bw, s)) g%leg_loc = LOC_EAST
+   if (ig_button('SW', bw, s)) g%leg_loc = LOC_SOUTH + LOC_WEST
    call ig_same_line()
-   if (ig_button('S', bw, s)) p%leg_loc = LOC_SOUTH
+   if (ig_button('S', bw, s)) g%leg_loc = LOC_SOUTH
    call ig_same_line()
-   if (ig_button('SE', bw, s)) p%leg_loc = LOC_SOUTH + LOC_EAST
+   if (ig_button('SE', bw, s)) g%leg_loc = LOC_SOUTH + LOC_EAST
    call core_pop_style_var()
    endfunction legend_context_menu
 
@@ -2665,11 +2725,47 @@ contains
 
    ! private: the items
 
+   function items_now() result(g)
+   !< The items an item of the open plot goes to (`gp.CurrentItems`): the open subplot's when it shares them (it began
+   !< with ShareItems), else the plot's own.
+   type(item_group), pointer :: g !< Items.
+
+   if (items_shared) then
+      g => subs(cur_sub)%items
+   else
+      g => plots(cur)%items
+   endif
+   endfunction items_now
+
+   subroutine reset_items(g, id, subplot)
+   !< A group made new (field by field: its tables kept allocated): a plot's legend north-west, a subplot's north, in a
+   !< row, outside, never inside (ImPlotSubplot's constructor).
+   type(item_group), intent(inout) :: g       !< Items.
+   integer(int32),   intent(in)    :: id      !< Their ID (the owner's ID - 1).
+   logical,          intent(in)    :: subplot !< A subplot's.
+
+   g%id = id
+   g%can_go_inside = .not. subplot
+   g%colormap_idx = 0_int32
+   g%marker_idx = 0_int32
+   g%n_items = 0_int32
+   g%item_next = 1_int32
+   g%leg_flags = merge(LGF_HORIZONTAL + LGF_OUTSIDE, 0_int32, subplot)
+   g%leg_prev_flags = 0_int32
+   g%leg_loc = merge(LOC_NORTH, LOC_NORTH + LOC_WEST, subplot)
+   g%leg_prev_loc = LOC_NORTH + LOC_WEST
+   g%leg_hovered = .false.
+   g%leg_scroll = 0.0_real32
+   g%leg_rc = 0.0_real32
+   g%n_leg = 0_int32
+   g%leg_n = 0_int32
+   endsubroutine reset_items
+
    function begin_item(p, label, color, it, created, no_legend) result(shown)
-   !< `BeginItem`: the setup finished, the item registered (`RegisterOrGetItem`: its legend entry the first time it is
-   !< drawn on this frame, if its label has text), its colour (given, or the next automatic one when it is created),
-   !< its visibility (`pf_hide_next_item`); shown, or not (then nothing else is done).
-   type(plot_record), intent(inout)        :: p        !< Plot.
+   !< `BeginItem`: the setup finished, the item registered in the current items (`RegisterOrGetItem`: its legend entry
+   !< the first time it is drawn on this frame, if its label has text), its colour (given, or the next automatic one
+   !< when it is created), its visibility (`pf_hide_next_item`); shown, or not (then nothing else is done).
+   type(plot_record), intent(inout), target :: p       !< Plot (a target: its items are reached through `items_now`).
    character(len=*),  intent(in)           :: label    !< Label.
    real(real64),      intent(in), optional :: color(4) !< Colour given.
    integer(int32),    intent(out)          :: it       !< The item's handle.
@@ -2677,39 +2773,42 @@ contains
    logical,           intent(in)           :: no_legend !< ImPlotItemFlags_NoLegend.
    logical                                 :: shown    !< Shown.
    logical                                 :: seen     !< Drawn already on this frame.
+   type(item_group),               pointer :: g        !< The items.
 
    if (.not. p%locked) call setup_finish(p)
-   it = item_handle(p, plot_hash(label, plot_id_offset(p%id, -1_int32)), core_frame_count(), created, seen)
+   g => items_now()
+   it = item_handle(g, plot_hash(label, g%id), core_frame_count(), created, seen)
    if (.not. seen) then
       if (.not. no_legend .and. label_shown(label)) then
-         call legend_append(p, it, label)
+         call legend_append(g, it, label)
       else
-         p%item_show(it) = .true.
+         g%item_show(it) = .true.
       endif
    endif
    if (present(color)) then
-      p%item_color(it) = core_color(color(1), color(2), color(3), color(4))
+      g%item_color(it) = core_color(color(1), color(2), color(3), color(4))
    elseif (created) then
-      p%item_color(it) = cm_key(cm_current(), p%colormap_idx) ! NextColormapColorU32: the style's map
-      p%colormap_idx = p%colormap_idx + 1_int32
+      g%item_color(it) = cm_key(cm_current(), g%colormap_idx) ! NextColormapColorU32: the style's map
+      g%colormap_idx = g%colormap_idx + 1_int32
    endif
    if (next_hidden_set) then
-      if (created .or. next_hidden_cond == COND_ALWAYS) p%item_show(it) = .not. next_hidden
+      if (created .or. next_hidden_cond == COND_ALWAYS) g%item_show(it) = .not. next_hidden
    endif
    next_hidden_set = .false. ! NextItemData.Reset (in BeginItem when hidden, in EndItem when drawn)
-   shown = p%item_show(it)
+   shown = g%item_show(it)
    endfunction begin_item
 
-   subroutine highlight(p, it, weight)
+   subroutine highlight(p, g, it, weight)
    !< `BeginItem`'s highlight of an item whose legend entry is hovered: its line twice as thick, its axes highlighted
-   !< in its colour where more than one axis of their direction is in use.
+   !< in its colour where more than one axis of their direction is in use (unless the legend of its items says not).
    type(plot_record), intent(inout) :: p      !< Plot.
+   type(item_group),  intent(in)    :: g      !< Its current items.
    integer(int32),    intent(in)    :: it     !< Item.
    real(real32),      intent(inout) :: weight !< Line weight [pixels].
    integer(int32)                   :: i, nx, ny !< Counter, axes in use.
 
-   if (iand(p%leg_flags, LGF_NO_HIGHLIGHT_ITEM) == 0_int32) weight = weight * HIGHLIGHT_LINE_SCALE
-   if (iand(p%leg_flags, LGF_NO_HIGHLIGHT_AXIS) == 0_int32) then
+   if (iand(g%leg_flags, LGF_NO_HIGHLIGHT_ITEM) == 0_int32) weight = weight * HIGHLIGHT_LINE_SCALE
+   if (iand(g%leg_flags, LGF_NO_HIGHLIGHT_AXIS) == 0_int32) then
       nx = 0_int32
       ny = 0_int32
       do i = 1_int32, AXES
@@ -2720,8 +2819,8 @@ contains
             ny = ny + 1_int32
          endif
       enddo
-      if (nx > 1_int32) p%ax(p%cur_x)%hili = p%item_color(it)
-      if (ny > 1_int32) p%ax(p%cur_y)%hili = p%item_color(it)
+      if (nx > 1_int32) p%ax(p%cur_x)%hili = g%item_color(it)
+      if (ny > 1_int32) p%ax(p%cur_y)%hili = g%item_color(it)
    endif
    endsubroutine highlight
 
@@ -2740,6 +2839,7 @@ contains
    logical                          :: created   !< New.
    real(real32)                     :: w         !< A weight (unused: the items scale their own).
    real(real64)                     :: c64(4)    !< The colour given.
+   type(item_group),        pointer :: g         !< The items.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: an item outside a plot'
    associate(p => plots(cur))
@@ -2752,12 +2852,13 @@ contains
          c64(4) = real(color(4), real64)
          shown = begin_item(p, label, c64, it, created, no_legend)
       endif
+      g => items_now()
       if (marker /= -3_int32) then
          if (marker /= -1_int32) then
-            p%item_marker(it) = marker
-         elseif (created .or. p%item_marker(it) == -2_int32) then ! NextMarker: ImPlotMarker_COUNT 12
-            p%item_marker(it) = mod(p%marker_idx, 12_int32)
-            p%marker_idx = p%marker_idx + 1_int32
+            g%item_marker(it) = marker
+         elseif (created .or. g%item_marker(it) == -2_int32) then ! NextMarker: ImPlotMarker_COUNT 12
+            g%item_marker(it) = mod(g%marker_idx, 12_int32)
+            g%marker_idx = g%marker_idx + 1_int32
          endif
       endif
       last_item = it
@@ -2765,13 +2866,13 @@ contains
          prev_item = it ! (BeginItem of a hidden item: PreviousItem = item)
          return
       endif
-      ctx%color = p%item_color(it)
-      ctx%marker = p%item_marker(it)
+      ctx%color = g%item_color(it)
+      ctx%marker = g%item_marker(it)
       ctx%hovered = .false.
-      if (p%item_hovered(it)) then
+      if (g%item_hovered(it)) then
          w = 1.0_real32
-         call highlight(p, it, w) ! the axes' highlight
-         ctx%hovered = iand(p%leg_flags, LGF_NO_HIGHLIGHT_ITEM) == 0_int32
+         call highlight(p, g, it, w) ! the axes' highlight
+         ctx%hovered = iand(g%leg_flags, LGF_NO_HIGHLIGHT_ITEM) == 0_int32
       endif
       call fill_ctx(p, ctx)
    endassociate
@@ -2791,18 +2892,18 @@ contains
    character(len=*), intent(in) :: label  !< Label.
    logical                      :: hidden !< Hidden.
    integer(int32)               :: id, k  !< The item's ID, counter.
+   type(item_group), pointer    :: g      !< The items.
 
    hidden = .false.
    if (cur == 0_int32) error stop 'figure_plot_frame: an item outside a plot'
-   associate(p => plots(cur))
-      id = plot_hash(label, plot_id_offset(p%id, -1_int32))
-      do k = 1_int32, p%n_items
-         if (p%item_id(k) == id) then
-            hidden = .not. p%item_show(k)
-            return
-         endif
-      enddo
-   endassociate
+   g => items_now()
+   id = plot_hash(label, g%id)
+   do k = 1_int32, g%n_items
+      if (g%item_id(k) == id) then
+         hidden = .not. g%item_show(k)
+         return
+      endif
+   enddo
    endfunction pf_item_hidden
 
    subroutine pf_item_fit_axis(v, y_axis)
@@ -2868,7 +2969,7 @@ contains
          r(3:4) = p%ax(i)%hover_rect(3:4) - 3.5_real32
          where = 2_int32
       elseif (leg) then
-         r = p%leg_rc
+         r = items_now_rc() ! the current items' legend (a subplot's when it shares them)
          where = 3_int32
       else
          r = p%rect
@@ -2987,15 +3088,38 @@ contains
    if (cur_sub /= 0_int32 .and. .not. subplot) call pf_end_subplots()
    endsubroutine pf_recover_to
 
-   function pf_plot_id() result(id)
-   !< The open plot's ID (figure_plot_tools: the drag tools hash theirs under `plot.ID - 1`, the items' ID). It ends the
-   !< setup.
+   function pf_items_id() result(id)
+   !< The ID of the open plot's current items (figure_plot_tools: the drag tools hash theirs under it, the top of the
+   !< ID stack after `SetupLock`'s `PushOverrideID(CurrentItems->ID)`: the plot's ID - 1, or the subplot's when it
+   !< shares its items). It ends the setup.
    integer(int32) :: id !< ID.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: a drag tool outside a plot'
    if (.not. plots(cur)%locked) call setup_finish(plots(cur))
-   id = plots(cur)%id
-   endfunction pf_plot_id
+   id = items_now_id()
+   endfunction pf_items_id
+
+   function items_now_id() result(id)
+   !< `gp.CurrentItems->ID`.
+   integer(int32) :: id !< ID.
+
+   if (items_shared) then
+      id = subs(cur_sub)%items%id
+   else
+      id = plots(cur)%items%id
+   endif
+   endfunction items_now_id
+
+   function items_now_rc() result(r)
+   !< `gp.CurrentItems->Legend.RectClamped`.
+   real(real32) :: r(4) !< Rectangle [pixels].
+
+   if (items_shared) then
+      r = subs(cur_sub)%items%leg_rc
+   else
+      r = plots(cur)%items%leg_rc
+   endif
+   endfunction items_now_rc
 
    subroutine fill_ctx(p, ctx)
    !< The plot's part of an item's context: fit, rectangle, the current axes' maps, ranges, pixels, inversions.
@@ -3016,17 +3140,21 @@ contains
 
    function pf_item_count() result(n)
    !< `ItemGroup::GetItemCount` of the open plot.
-   integer(int32) :: n !< Items.
+   integer(int32)            :: n !< Items.
+   type(item_group), pointer :: g !< The items.
 
-   n = plots(cur)%n_items
+   g => items_now()
+   n = g%n_items
    endfunction pf_item_count
 
    function pf_item_shown_at(i) result(shown)
    !< `GetItemByIndex(i)->Show`, i from 0 (the items in the order they were created).
    integer(int32), intent(in) :: i     !< Index.
    logical                    :: shown !< Shown.
+   type(item_group), pointer  :: g     !< The items.
 
-   shown = plots(cur)%item_show(i + 1_int32)
+   g => items_now()
+   shown = g%item_show(i + 1_int32)
    endfunction pf_item_shown_at
 
    subroutine pf_item_state(label, found, shown, color)
@@ -3036,21 +3164,21 @@ contains
    logical,          intent(out) :: shown !< Shown.
    integer(int32),   intent(out) :: color !< Colour (packed; 0 when not found).
    integer(int32)                :: id, k !< ID, counter.
+   type(item_group), pointer     :: g     !< The items.
 
    found = .false.
    shown = .false.
    color = 0_int32
-   associate(p => plots(cur))
-      id = plot_hash(label, plot_id_offset(p%id, -1_int32))
-      do k = 1_int32, p%n_items
-         if (p%item_id(k) == id) then
-            found = .true.
-            shown = p%item_show(k)
-            color = p%item_color(k)
-            return
-         endif
-      enddo
-   endassociate
+   g => items_now()
+   id = plot_hash(label, g%id)
+   do k = 1_int32, g%n_items
+      if (g%item_id(k) == id) then
+         found = .true.
+         shown = g%item_show(k)
+         color = g%item_color(k)
+         return
+      endif
+   enddo
    endsubroutine pf_item_state
 
    subroutine pf_item_fit_with(v, alt, y_axis)
@@ -3096,21 +3224,24 @@ contains
    subroutine pf_item_recolor(col)
    !< The colour of the item `pf_item_begin` registered last (PlotImage: `GetCurrentItem()->Color = tint`).
    integer(int32), intent(in) :: col !< Colour (packed).
+   type(item_group), pointer  :: g   !< The items.
 
-   plots(cur)%item_color(last_item) = col
+   g => items_now()
+   g%item_color(last_item) = col
    endsubroutine pf_item_recolor
 
    function pf_last_item_color() result(c)
    !< `GetLastItemColor`: the colour of the item drawn (or hidden) last in the open plot, RGBA as floats
    !< (`ColorConvertU32ToFloat4`); zeros when none (also after `pf_end_plot`).
-   real(real64) :: c(4) !< Colour.
-   integer(int32) :: k  !< Channel.
+   real(real64)              :: c(4) !< Colour.
+   integer(int32)            :: k    !< Channel.
+   type(item_group), pointer :: g    !< The items.
 
    c = 0.0_real64
    if (cur == 0_int32 .or. prev_item == 0_int32) return
+   g => items_now()
    do k = 1_int32, 4_int32
-      c(k) = real(real(channel(plots(cur)%item_color(prev_item), k - 1_int32), real32) * (1.0_real32 / 255.0_real32), &
-                  real64)
+      c(k) = real(real(channel(g%item_color(prev_item), k - 1_int32), real32) * (1.0_real32 / 255.0_real32), real64)
    enddo
    endfunction pf_last_item_color
 
@@ -3119,7 +3250,7 @@ contains
    character(len=*), intent(in) :: label !< Label.
    integer(int32)               :: id    !< ID.
 
-   id = plot_hash(label, plot_id_offset(plots(cur)%id, -1_int32))
+   id = plot_hash(label, items_now_id())
    endfunction pf_item_id
 
    subroutine pf_item_end()
@@ -3129,41 +3260,41 @@ contains
    prev_item = last_item
    endsubroutine pf_item_end
 
-   subroutine legend_append(p, it, label)
+   subroutine legend_append(g, it, label)
    !< An entry appended to the plot's legend (`Legend.Indices`, `Legend.Labels`).
-   type(plot_record), intent(inout) :: p     !< Plot.
+   type(item_group),  intent(inout) :: g     !< Items.
    integer(int32),    intent(in)    :: it    !< Item.
    character(len=*),  intent(in)    :: label !< Its label.
    integer(int32),    allocatable   :: item(:), off(:), ln(:) !< Grown columns.
    character(len=:),  allocatable   :: more  !< Grown text.
    integer(int32)                   :: n, m  !< Entries, characters.
 
-   n = p%n_leg
-   if (.not. allocated(p%leg_item)) then
-      allocate(p%leg_item(8), p%leg_off(8), p%leg_len(8))
-   elseif (n == size(p%leg_item, kind=int32)) then
+   n = g%n_leg
+   if (.not. allocated(g%leg_item)) then
+      allocate(g%leg_item(8), g%leg_off(8), g%leg_len(8))
+   elseif (n == size(g%leg_item, kind=int32)) then
       allocate(item(2_int32 * n), off(2_int32 * n), ln(2_int32 * n))
-      item(1:n) = p%leg_item(1:n)
-      off(1:n) = p%leg_off(1:n)
-      ln(1:n) = p%leg_len(1:n)
-      call move_alloc(item, p%leg_item)
-      call move_alloc(off, p%leg_off)
-      call move_alloc(ln, p%leg_len)
+      item(1:n) = g%leg_item(1:n)
+      off(1:n) = g%leg_off(1:n)
+      ln(1:n) = g%leg_len(1:n)
+      call move_alloc(item, g%leg_item)
+      call move_alloc(off, g%leg_off)
+      call move_alloc(ln, g%leg_len)
    endif
    m = len(label, kind=int32)
-   if (.not. allocated(p%leg_text)) allocate(character(len=max(256_int32, m)) :: p%leg_text)
-   if (p%leg_n + m > len(p%leg_text, kind=int32)) then
-      allocate(character(len=max(2_int32 * len(p%leg_text, kind=int32), p%leg_n + m)) :: more)
-      more(1:p%leg_n) = p%leg_text(1:p%leg_n)
-      call move_alloc(more, p%leg_text)
+   if (.not. allocated(g%leg_text)) allocate(character(len=max(256_int32, m)) :: g%leg_text)
+   if (g%leg_n + m > len(g%leg_text, kind=int32)) then
+      allocate(character(len=max(2_int32 * len(g%leg_text, kind=int32), g%leg_n + m)) :: more)
+      more(1:g%leg_n) = g%leg_text(1:g%leg_n)
+      call move_alloc(more, g%leg_text)
    endif
    n = n + 1_int32
-   p%n_leg = n
-   p%leg_item(n) = it
-   p%leg_off(n) = p%leg_n + 1_int32
-   p%leg_len(n) = m
-   p%leg_text(p%leg_n + 1_int32:p%leg_n + m) = label
-   p%leg_n = p%leg_n + m
+   g%n_leg = n
+   g%leg_item(n) = it
+   g%leg_off(n) = g%leg_n + 1_int32
+   g%leg_len(n) = m
+   g%leg_text(g%leg_n + 1_int32:g%leg_n + m) = label
+   g%leg_n = g%leg_n + m
    endsubroutine legend_append
 
    ! private: the tables
@@ -3241,17 +3372,7 @@ contains
    p%fit = .false.
    p%flags = 0_int32
    p%prev_flags = 0_int32
-   p%colormap_idx = 0_int32
-   p%marker_idx = 0_int32
-   p%n_items = 0_int32
-   p%item_next = 1_int32
-   p%leg_flags = 0_int32
-   p%leg_prev_flags = 0_int32
-   p%leg_loc = LOC_NORTH + LOC_WEST
-   p%leg_prev_loc = LOC_NORTH + LOC_WEST
-   p%leg_hovered = .false.
-   p%n_leg = 0_int32
-   p%leg_n = 0_int32
+   call reset_items(p%items, plot_id_offset(id, -1_int32), .false.)
    p%hovered = .false.
    p%held = .false.
    p%selecting = .false.
@@ -3293,11 +3414,11 @@ contains
    enddo
    endsubroutine reset_plot
 
-   function item_handle(p, id, frame, created, seen) result(h)
+   function item_handle(g, id, frame, created, seen) result(h)
    !< The item of an ID in a plot, added if new (`RegisterOrGetItem`): searched from where the last one was found
    !< (items come in the same order every frame), added in a new slot (the table grown, doubled up to ITEM_CAP) or in
    !< the slot of the least recently drawn item not drawn on this frame. `seen`: drawn already on this frame.
-   type(plot_record), intent(inout) :: p       !< Plot.
+   type(item_group),  intent(inout) :: g       !< Items.
    integer(int32),    intent(in)    :: id      !< ID.
    integer(int32),    intent(in)    :: frame   !< This frame.
    logical,           intent(out)   :: created !< The item is new.
@@ -3307,71 +3428,71 @@ contains
 
    created = .false.
    seen = .false.
-   n = p%n_items
-   k = p%item_next
+   n = g%n_items
+   k = g%item_next
    do j = 1_int32, n
       if (k > n) k = 1_int32
-      if (p%item_id(k) == id) then
+      if (g%item_id(k) == id) then
          h = k
-         seen = p%item_frame(h) == frame
-         p%item_frame(h) = frame
-         p%item_next = h + 1_int32
+         seen = g%item_frame(h) == frame
+         g%item_frame(h) = frame
+         g%item_next = h + 1_int32
          return
       endif
       k = k + 1_int32
    enddo
    created = .true.
    h = 0_int32
-   if (.not. allocated(p%item_id)) call grow_items(p, 8_int32)
-   if (n == size(p%item_id, kind=int32) .and. n >= ITEM_CAP) then ! the least recently drawn makes room
+   if (.not. allocated(g%item_id)) call grow_items(g, 8_int32)
+   if (n == size(g%item_id, kind=int32) .and. n >= ITEM_CAP) then ! the least recently drawn makes room
       do k = 1_int32, n
-         if (p%item_frame(k) >= frame) cycle
+         if (g%item_frame(k) >= frame) cycle
          if (h == 0_int32) then
             h = k
-         elseif (p%item_frame(k) < p%item_frame(h)) then
+         elseif (g%item_frame(k) < g%item_frame(h)) then
             h = k
          endif
       enddo
    endif
    if (h == 0_int32) then
-      if (n == size(p%item_id, kind=int32)) call grow_items(p, 2_int32 * n)
-      p%n_items = n + 1_int32
-      h = p%n_items
+      if (n == size(g%item_id, kind=int32)) call grow_items(g, 2_int32 * n)
+      g%n_items = n + 1_int32
+      h = g%n_items
    endif
-   p%item_id(h) = id
-   p%item_color(h) = -1_int32 ! IM_COL32_WHITE
-   p%item_frame(h) = frame
-   p%item_show(h) = .true.
-   p%item_hovered(h) = .false.
-   p%item_marker(h) = -2_int32 ! ImPlotMarker_None
-   p%item_next = h + 1_int32
+   g%item_id(h) = id
+   g%item_color(h) = -1_int32 ! IM_COL32_WHITE
+   g%item_frame(h) = frame
+   g%item_show(h) = .true.
+   g%item_hovered(h) = .false.
+   g%item_marker(h) = -2_int32 ! ImPlotMarker_None
+   g%item_next = h + 1_int32
    endfunction item_handle
 
-   subroutine grow_items(p, m)
+   subroutine grow_items(g, m)
    !< Room for m items in a plot's table, those held kept.
-   type(plot_record), intent(inout) :: p                       !< Plot.
+   type(item_group),  intent(inout) :: g                       !< Items.
    integer(int32),    intent(in)    :: m                       !< Items room.
    integer(int32),    allocatable   :: id(:), color(:), frame(:) !< New columns.
    logical,           allocatable   :: show(:), hovered(:)     !< ...
    integer(int32),    allocatable   :: marker(:)               !< ...
    integer(int32)                   :: n                       !< Items held.
 
-   n = p%n_items
+   n = g%n_items
    allocate(id(m), color(m), frame(m), show(m), hovered(m), marker(m))
    if (n > 0_int32) then
-      id(1:n) = p%item_id(1:n)
-      color(1:n) = p%item_color(1:n)
-      frame(1:n) = p%item_frame(1:n)
-      show(1:n) = p%item_show(1:n)
-      hovered(1:n) = p%item_hovered(1:n)
-      marker(1:n) = p%item_marker(1:n)
+      id(1:n) = g%item_id(1:n)
+      color(1:n) = g%item_color(1:n)
+      frame(1:n) = g%item_frame(1:n)
+      show(1:n) = g%item_show(1:n)
+      hovered(1:n) = g%item_hovered(1:n)
+      marker(1:n) = g%item_marker(1:n)
    endif
-   call move_alloc(id, p%item_id)
-   call move_alloc(color, p%item_color)
-   call move_alloc(frame, p%item_frame)
-   call move_alloc(show, p%item_show)
-   call move_alloc(hovered, p%item_hovered)
-   call move_alloc(marker, p%item_marker)
+   call move_alloc(id, g%item_id)
+   call move_alloc(color, g%item_color)
+   call move_alloc(frame, g%item_frame)
+   call move_alloc(show, g%item_show)
+   call move_alloc(hovered, g%item_hovered)
+   call move_alloc(marker, g%item_marker)
    endsubroutine grow_items
 
    ! private: tags
@@ -3629,6 +3750,8 @@ contains
    subs(h)%hov_sep = 0_int32
    subs(h)%hov_frame = -1_int32
    subs(h)%hov_t0 = 0.0_real64
+   subs(h)%frame_hovered = .false.
+   call reset_items(subs(h)%items, plot_id_offset(id, -1_int32), .true.)
    endfunction subplot_handle
 
    subroutine grow_subs(m)
@@ -4360,13 +4483,14 @@ contains
    p%canvas(3:4) = p%frame(3:4) - plot_pad
    p%axes_rect = p%frame
    ! an outside legend's room, from the legend of the frame before
-   if (.not. has_flag(p%flags, PF_NO_LEGEND) .and. p%n_leg > 0_int32 .and. has_flag(p%leg_flags, LGF_OUTSIDE)) then
-      horz = has_flag(p%leg_flags, LGF_HORIZONTAL)
-      lsize = legend_size(p, .not. horz)
-      west = has_flag(p%leg_loc, LOC_WEST) .and. .not. has_flag(p%leg_loc, LOC_EAST)
-      east = has_flag(p%leg_loc, LOC_EAST) .and. .not. has_flag(p%leg_loc, LOC_WEST)
-      north = has_flag(p%leg_loc, LOC_NORTH) .and. .not. has_flag(p%leg_loc, LOC_SOUTH)
-      south = has_flag(p%leg_loc, LOC_SOUTH) .and. .not. has_flag(p%leg_loc, LOC_NORTH)
+   if (.not. has_flag(p%flags, PF_NO_LEGEND) .and. p%items%n_leg > 0_int32 .and. &
+       has_flag(p%items%leg_flags, LGF_OUTSIDE)) then
+      horz = has_flag(p%items%leg_flags, LGF_HORIZONTAL)
+      lsize = legend_size(p%items, .not. horz)
+      west = has_flag(p%items%leg_loc, LOC_WEST) .and. .not. has_flag(p%items%leg_loc, LOC_EAST)
+      east = has_flag(p%items%leg_loc, LOC_EAST) .and. .not. has_flag(p%items%leg_loc, LOC_WEST)
+      north = has_flag(p%items%leg_loc, LOC_NORTH) .and. .not. has_flag(p%items%leg_loc, LOC_SOUTH)
+      south = has_flag(p%items%leg_loc, LOC_SOUTH) .and. .not. has_flag(p%items%leg_loc, LOC_NORTH)
       if ((west .and. .not. horz) .or. (west .and. horz .and. .not. north .and. .not. south)) then
          p%canvas(1) = p%canvas(1) + (lsize(1) + LEGEND_PADDING(1))
          p%axes_rect(1) = p%axes_rect(1) + (lsize(1) + plot_pad(1))
@@ -4476,9 +4600,9 @@ contains
    do i = AX_Y1, AX_Y3
       if (p%ax(i)%enabled) call axis_texts(p, i)
    enddo
-   p%n_leg = 0_int32 ! Legend.Reset: the entries of this frame's items follow
-   p%leg_n = 0_int32
-   call core_push_override_id(plot_id_offset(p%id, -1_int32)) ! the items' IDs: PushOverrideID(Items.ID)
+   p%items%n_leg = 0_int32 ! plot.Items.Legend.Reset: the entries of this frame's items follow (the plot's own)
+   p%items%leg_n = 0_int32
+   call core_push_override_id(items_now_id()) ! the items' IDs: PushOverrideID(CurrentItems->ID)
    endsubroutine setup_finish
 
    subroutine pad_and_datum_x(p, pad_t, pad_b)
@@ -4901,22 +5025,22 @@ contains
 
    ! private: the legend
 
-   function legend_size(p, vertical) result(sz)
+   function legend_size(g, vertical) result(sz)
    !< `CalcLegendSize`: the legend's size, its entries in a column or a row.
-   type(plot_record), intent(in) :: p        !< Plot.
+   type(item_group),  intent(in) :: g        !< Items.
    logical,           intent(in) :: vertical !< In a column.
    real(real32)                  :: sz(2)    !< Size [pixels].
    real(real32)                  :: txt_ht, icon, max_w, sum_w, lw !< Text height, icon, widths.
    real(real64)                  :: w, h     !< A label's size.
    integer(int32)                :: k, n     !< Counter, entries.
 
-   n = p%n_leg
+   n = g%n_leg
    txt_ht = real(core_font_size(), real32)
    icon = txt_ht
    max_w = 0.0_real32
    sum_w = 0.0_real32
    do k = 1_int32, n
-      call core_text_size(p%leg_text(p%leg_off(k):p%leg_off(k) + p%leg_len(k) - 1_int32), w, h, hide_after_hash=.true.)
+      call core_text_size(g%leg_text(g%leg_off(k):g%leg_off(k) + g%leg_len(k) - 1_int32), w, h, hide_after_hash=.true.)
       lw = real(w, real32)
       if (lw > max_w) max_w = lw
       sum_w = sum_w + lw
@@ -4931,6 +5055,29 @@ contains
       sz(2) = LEGEND_INNER_PADDING(2) * 2.0_real32 + txt_ht
    endif
    endfunction legend_size
+
+   subroutine legend_room(g, r)
+   !< `BeginSubplots`' outside legend adjustment: the grid shrunk on the legend's side by its size and LegendPadding.
+   type(item_group), intent(in)    :: g     !< Items.
+   real(real32),     intent(inout) :: r(4)  !< Rectangle.
+   real(real32)                    :: lsize(2) !< The legend's size.
+   logical                         :: horz, west, east, north, south !< A row; its side.
+
+   horz = has_flag(g%leg_flags, LGF_HORIZONTAL)
+   lsize = legend_size(g, .not. horz)
+   west = has_flag(g%leg_loc, LOC_WEST) .and. .not. has_flag(g%leg_loc, LOC_EAST)
+   east = has_flag(g%leg_loc, LOC_EAST) .and. .not. has_flag(g%leg_loc, LOC_WEST)
+   north = has_flag(g%leg_loc, LOC_NORTH) .and. .not. has_flag(g%leg_loc, LOC_SOUTH)
+   south = has_flag(g%leg_loc, LOC_SOUTH) .and. .not. has_flag(g%leg_loc, LOC_NORTH)
+   if ((west .and. .not. horz) .or. (west .and. horz .and. .not. north .and. .not. south)) &
+      r(1) = r(1) + (lsize(1) + LEGEND_PADDING(1))
+   if ((east .and. .not. horz) .or. (east .and. horz .and. .not. north .and. .not. south)) &
+      r(3) = r(3) - (lsize(1) + LEGEND_PADDING(1))
+   if ((north .and. horz) .or. (north .and. .not. horz .and. .not. west .and. .not. east)) &
+      r(2) = r(2) + (lsize(2) + LEGEND_PADDING(2))
+   if ((south .and. horz) .or. (south .and. .not. horz .and. .not. west .and. .not. east)) &
+      r(4) = r(4) - (lsize(2) + LEGEND_PADDING(2))
+   endsubroutine legend_room
 
    function location_pos(outer, sz, loc, pad) result(pos)
    !< `GetLocationPos`: where a box of size `sz` goes in `outer` at a compass point, `pad` from its sides, rounded.
@@ -4958,101 +5105,115 @@ contains
    endfunction location_pos
 
    subroutine legend(p)
-   !< `EndPlot`'s legend: the items' hover reset, then the legend placed (`GetLocationPos`, `ClampLegendRect`), its
-   !< button (the legend's ID, `plot.ID - 1`), its background, entries (`ShowLegendEntries`) and border.
-   type(plot_record), intent(inout) :: p          !< Plot.
+   !< `EndPlot`'s legend: the hover of the plot's own items reset, then, shown with entries, its box in the frame
+   !< (outside) or in the plot area, and its context menu (the plot's right click: `OpenContextThisFrame`).
+   type(plot_record), intent(inout) :: p           !< Plot.
+   logical                          :: contextable !< The legend's menu may open.
+
+   call items_hover_reset(p%items)
+   if (has_flag(p%flags, PF_NO_LEGEND) .or. p%items%n_leg < 1_int32) return
+   if (has_flag(p%items%leg_flags, LGF_OUTSIDE)) then
+      call legend_box(p%items, p%frame, plot_pad, core_window_hovered(), contextable)
+   else
+      call legend_box(p%items, p%rect, LEGEND_PADDING, core_window_hovered(), contextable)
+   endif
+   if (open_context .and. contextable .and. .not. has_flag(p%flags, PF_NO_MENUS)) &
+      call core_open_popup('##LegendContext')
+   if (core_begin_popup('##LegendContext')) then
+      call core_text_unformatted('Legend')
+      call ig_separator()
+      if (legend_context_menu(p%items, .not. has_flag(p%flags, PF_NO_LEGEND))) call flip(p%flags, PF_NO_LEGEND)
+      call core_end_popup()
+   endif
+   endsubroutine legend
+
+   subroutine items_hover_reset(g)
+   !< The legend's and its entries' hover reset (`Legend.Hovered`, `LegendHovered`), before a legend is drawn.
+   type(item_group), intent(inout) :: g !< Items.
+
+   g%leg_hovered = .false.
+   if (g%n_items > 0_int32) g%item_hovered(1:g%n_items) = .false.
+   endsubroutine items_hover_reset
+
+   subroutine legend_box(g, outer, pad, win_hov, contextable)
+   !< A legend (`EndPlot`'s, `EndSubplots`'): placed in `outer` (`GetLocationPos`, `ClampLegendRect`), its button (the
+   !< items' ID), its scroll, background, entries (`ShowLegendEntries`) and border.
+   type(item_group),  intent(inout) :: g          !< Items.
+   real(real32),      intent(in)    :: outer(4)   !< Where it goes.
+   real(real32),      intent(in)    :: pad(2)     !< Its padding there.
+   logical,           intent(in)    :: win_hov    !< The window (the subplot's frame) hovered: the legend hovered when
+                                                  !< the pointer is inside it, its button aside.
+   logical,           intent(out)   :: contextable !< Its menu may open (hovered off its entries, menus allowed).
    real(real32)                     :: sz(2)      !< Its size.
-   real(real32)                     :: outer(4)   !< Where it goes.
-   real(real32)                     :: pad(2)     !< Its padding there.
    real(real32)                     :: lr(4)      !< Its rectangle.
    real(real32)                     :: cl(4)      !< ... clamped.
-   logical                          :: out, horz, held !< Outside, horizontal; the button held.
+   logical                          :: horz, held !< Horizontal; the button held.
    integer(int32)                   :: items_id   !< The legend's ID.
    logical                          :: dummy      !< Pressed.
    logical                          :: any_item   !< An entry hovered.
-   logical                          :: contextable !< The legend's menu may open.
    real(real64)                     :: mx, my     !< The pointer.
    real(real64)                     :: dx, dy, wheel, wheel_h, dmax(5) !< Input.
    integer(int32)                   :: mods, k    !< Key mods, counter.
    logical                          :: dnd        !< A drag and drop.
    real(real32)                     :: step, smin, off(2) !< The scroll's step, its least, the entries' offset.
 
-   p%leg_hovered = .false.
-   if (p%n_items > 0_int32) p%item_hovered(1:p%n_items) = .false.
-   if (has_flag(p%flags, PF_NO_LEGEND) .or. p%n_leg < 1_int32) return
-   out = has_flag(p%leg_flags, LGF_OUTSIDE)
-   horz = has_flag(p%leg_flags, LGF_HORIZONTAL)
-   sz = legend_size(p, .not. horz)
-   if (out) then
-      outer = p%frame
-      pad = plot_pad
-   else
-      outer = p%rect
-      pad = LEGEND_PADDING
-   endif
-   lr(1:2) = location_pos(outer, sz, p%leg_loc, pad)
+   horz = has_flag(g%leg_flags, LGF_HORIZONTAL)
+   sz = legend_size(g, .not. horz)
+   lr(1:2) = location_pos(outer, sz, g%leg_loc, pad)
    lr(3:4) = lr(1:2) + sz
    cl = lr ! ClampLegendRect
    cl(1) = max(cl(1), outer(1) + pad(1))
    cl(2) = max(cl(2), outer(2) + pad(2))
    cl(3) = min(cl(3), outer(3) - pad(1))
    cl(4) = min(cl(4), outer(4) - pad(2))
-   p%leg_rc = cl
-   items_id = plot_id_offset(p%id, -1_int32)
+   g%leg_rc = cl
+   items_id = g%id
    call core_keep_alive(items_id)
    dummy = core_button_behavior(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
-                                items_id, p%leg_hovered, held, flags=LEGEND_BUTTON_FLAGS)
+                                items_id, g%leg_hovered, held, flags=LEGEND_BUTTON_FLAGS)
    call core_mouse_pos(mx, my)
-   p%leg_hovered = p%leg_hovered .or. (core_window_hovered() .and. real(mx, real32) >= cl(1) .and. &
+   g%leg_hovered = g%leg_hovered .or. (win_hov .and. real(mx, real32) >= cl(1) .and. &
                                        real(my, real32) >= cl(2) .and. real(mx, real32) < cl(3) .and. &
                                        real(my, real32) < cl(4))
    if (any(cl /= lr)) then ! clamped: scrollable, the wheel over it scrolls it (a step of two font sizes at most)
-      if (p%leg_hovered) then
+      if (g%leg_hovered) then
          call core_set_key_owner(ImGuiKey_MouseWheelY, items_id)
          call core_io_input(dx, dy, wheel, wheel_h, dmax, mods, dnd)
          if (wheel /= 0.0_real64) then
             step = (lr(3) - lr(1)) * 0.67_real32
             step = im_floor(min(2.0_real32 * real(core_font_size(), real32), step))
-            p%leg_scroll(1) = p%leg_scroll(1) + step * real(wheel, real32)
-            p%leg_scroll(2) = p%leg_scroll(2) + step * real(wheel, real32)
+            g%leg_scroll(1) = g%leg_scroll(1) + step * real(wheel, real32)
+            g%leg_scroll(2) = g%leg_scroll(2) + step * real(wheel, real32)
          endif
       endif
       do k = 1_int32, 2_int32 ! ImClamp(Scroll, RectClamped's size - Rect's, 0)
          smin = (cl(k + 2_int32) - cl(k)) - (lr(k + 2_int32) - lr(k))
-         if (p%leg_scroll(k) < smin) then
-            p%leg_scroll(k) = smin
-         elseif (p%leg_scroll(k) > 0.0_real32) then
-            p%leg_scroll(k) = 0.0_real32
+         if (g%leg_scroll(k) < smin) then
+            g%leg_scroll(k) = smin
+         elseif (g%leg_scroll(k) > 0.0_real32) then
+            g%leg_scroll(k) = 0.0_real32
          endif
       enddo
-      off(1) = (cl(1) - lr(1)) + merge(p%leg_scroll(1), 0.0_real32, horz)
-      off(2) = (cl(2) - lr(2)) + merge(0.0_real32, p%leg_scroll(2), horz)
+      off(1) = (cl(1) - lr(1)) + merge(g%leg_scroll(1), 0.0_real32, horz)
+      off(2) = (cl(2) - lr(2)) + merge(0.0_real32, g%leg_scroll(2), horz)
       lr(1:2) = lr(1:2) + off
       lr(3:4) = lr(3:4) + off
    else
-      p%leg_scroll = 0.0_real32
+      g%leg_scroll = 0.0_real32
    endif
    call core_push_clip_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64))
    call core_draw_rect_filled(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
                               ps_u32(PC_LEGEND_BG))
-   call legend_entries(p, lr, .not. horz, any_item)
-   contextable = p%leg_hovered .and. .not. any_item .and. .not. has_flag(p%leg_flags, LGF_NO_MENUS)
+   call legend_entries(g, lr, .not. horz, any_item)
+   contextable = g%leg_hovered .and. .not. any_item .and. .not. has_flag(g%leg_flags, LGF_NO_MENUS)
    call core_draw_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
                        ps_u32(PC_LEGEND_BORDER))
    call core_pop_clip_rect()
-   if (open_context .and. contextable .and. .not. has_flag(p%flags, PF_NO_MENUS)) &
-      call core_open_popup('##LegendContext')
-   if (core_begin_popup('##LegendContext')) then
-      call core_text_unformatted('Legend')
-      call ig_separator()
-      if (legend_context_menu(p, .not. has_flag(p%flags, PF_NO_LEGEND))) call flip(p%flags, PF_NO_LEGEND)
-      call core_end_popup()
-   endif
-   endsubroutine legend
+   endsubroutine legend_box
 
-   subroutine legend_entries(p, lr, vertical, any_item)
+   subroutine legend_entries(g, lr, vertical, any_item)
    !< `ShowLegendEntries`: each entry its button (a click shows or hides the item), its icon and its label.
-   type(plot_record), intent(inout) :: p        !< Plot.
+   type(item_group),  intent(inout) :: g        !< Items.
    real(real32),      intent(in)    :: lr(4)    !< Legend's rectangle.
    logical,           intent(in)    :: vertical !< In a column.
    logical,           intent(out)   :: any_item !< An entry hovered.
@@ -5072,21 +5233,21 @@ contains
    col_dis = alpha_u32(col_txt, 0.25_real32)
    sum_w = 0.0_real32
    any_item = .false.
-   if (.not. allocated(leg_order)) allocate(leg_order(max(64_int32, p%n_leg)))
-   if (p%n_leg > size(leg_order, kind=int32)) then ! grown (rarely): the entries' order
-      allocate(more(max(2_int32 * size(leg_order, kind=int32), p%n_leg)))
+   if (.not. allocated(leg_order)) allocate(leg_order(max(64_int32, g%n_leg)))
+   if (g%n_leg > size(leg_order, kind=int32)) then ! grown (rarely): the entries' order
+      allocate(more(max(2_int32 * size(leg_order, kind=int32), g%n_leg)))
       call move_alloc(more, leg_order)
    endif
-   do k = 1_int32, p%n_leg
+   do k = 1_int32, g%n_leg
       leg_order(k) = k
    enddo
-   if (has_flag(p%leg_flags, LGF_SORT) .and. p%n_leg > 1_int32) call sort_entries(p)
-   do i = 1_int32, p%n_leg
-      k = leg_order(merge(p%n_leg + 1_int32 - i, i, has_flag(p%leg_flags, LGF_REVERSE)))
-      it = p%leg_item(k)
-      a = p%leg_off(k)
-      n = rendered_len(p%leg_text(a:a + p%leg_len(k) - 1_int32))
-      call core_text_size(p%leg_text(a:a + p%leg_len(k) - 1_int32), w, h, hide_after_hash=.true.)
+   if (has_flag(g%leg_flags, LGF_SORT) .and. g%n_leg > 1_int32) call sort_entries(g)
+   do i = 1_int32, g%n_leg
+      k = leg_order(merge(g%n_leg + 1_int32 - i, i, has_flag(g%leg_flags, LGF_REVERSE)))
+      it = g%leg_item(k)
+      a = g%leg_off(k)
+      n = rendered_len(g%leg_text(a:a + g%leg_len(k) - 1_int32))
+      call core_text_size(g%leg_text(a:a + g%leg_len(k) - 1_int32), w, h, hide_after_hash=.true.)
       lw = real(w, real32)
       if (vertical) then
          tl(1) = (lr(1) + LEGEND_INNER_PADDING(1)) + 0.0_real32
@@ -5097,57 +5258,57 @@ contains
       endif
       sum_w = sum_w + lw
       ib = [tl(1) + SHRINK, tl(2) + SHRINK, tl(1) + (icon - SHRINK), tl(2) + (icon - SHRINK)]
-      col_item = p%item_color(it)
-      call core_keep_alive(p%item_id(it))
+      col_item = g%item_color(it)
+      call core_keep_alive(g%item_id(it))
       hov = .false.
       held = .false.
       clicked = .false.
-      if (.not. has_flag(p%leg_flags, LGF_NO_BUTTONS)) &
+      if (.not. has_flag(g%leg_flags, LGF_NO_BUTTONS)) &
          clicked = core_button_behavior(real(ib(1), real64), real(ib(2), real64), real(tl(1) + (lw + icon), real64), &
-                                        real(tl(2) + icon, real64), p%item_id(it), hov, held)
-      if (clicked) p%item_show(it) = .not. p%item_show(it)
-      if (hov .and. (.not. has_flag(p%leg_flags, LGF_NO_HIGHLIGHT_ITEM) .or. &
-                     .not. has_flag(p%leg_flags, LGF_NO_HIGHLIGHT_AXIS))) then
-         p%item_hovered(it) = .true.
+                                        real(tl(2) + icon, real64), g%item_id(it), hov, held)
+      if (clicked) g%item_show(it) = .not. g%item_show(it)
+      if (hov .and. (.not. has_flag(g%leg_flags, LGF_NO_HIGHLIGHT_ITEM) .or. &
+                     .not. has_flag(g%leg_flags, LGF_NO_HIGHLIGHT_AXIS))) then
+         g%item_hovered(it) = .true.
          any_item = .true.
          col_hl = mix_u32(col_txt, col_item, 64_int32)
       else
          col_hl = style_alpha_u32(col_txt) ! ImGui::GetColorU32(ImU32): its alpha times the style's
       endif
       if (held) then
-         if (p%item_show(it)) then
+         if (g%item_show(it)) then
             col_icon = alpha_u32(col_item, 0.5_real32)
          else
             col_icon = core_style_color(ImGuiCol_TextDisabled, 0.5_real64)
          endif
       elseif (hov) then
-         if (p%item_show(it)) then
+         if (g%item_show(it)) then
             col_icon = alpha_u32(col_item, 0.75_real32)
          else
             col_icon = core_style_color(ImGuiCol_TextDisabled, 0.75_real64)
          endif
       else
-         col_icon = merge(col_item, col_dis, p%item_show(it))
+         col_icon = merge(col_item, col_dis, g%item_show(it))
       endif
       call core_draw_rect_filled(real(ib(1), real64), real(ib(2), real64), real(ib(3), real64), real(ib(4), real64), &
                                  col_icon)
       if (n > 0_int32) call core_draw_text(real(tl(1) + icon, real64), real(tl(2) + 0.0_real32, real64), &
-                                           merge(col_hl, col_dis, p%item_show(it)), p%leg_text(a:a + n - 1_int32))
+                                           merge(col_hl, col_dis, g%item_show(it)), g%leg_text(a:a + n - 1_int32))
    enddo
    endsubroutine legend_entries
 
-   subroutine sort_entries(p)
+   subroutine sort_entries(g)
    !< The legend's entries ordered by their labels (`ShowLegendEntries`' `qsort` with `LegendSortingComp`: C's `strcmp`
    !< of the whole labels): an insertion sort of `leg_order` (two entries never share a label: it is their item's ID).
-   type(plot_record), intent(in) :: p    !< Plot.
+   type(item_group),  intent(in) :: g    !< Items.
    integer(int32)                :: i, j, k !< Counters, the entry moved.
 
-   do i = 2_int32, p%n_leg
+   do i = 2_int32, g%n_leg
       k = leg_order(i)
       j = i - 1_int32
       do while (j >= 1_int32)
-         if (c_strcmp(p%leg_text(p%leg_off(leg_order(j)):p%leg_off(leg_order(j)) + p%leg_len(leg_order(j)) - 1_int32), &
-                      p%leg_text(p%leg_off(k):p%leg_off(k) + p%leg_len(k) - 1_int32)) <= 0_int32) exit
+         if (c_strcmp(g%leg_text(g%leg_off(leg_order(j)):g%leg_off(leg_order(j)) + g%leg_len(leg_order(j)) - 1_int32), &
+                      g%leg_text(g%leg_off(k):g%leg_off(k) + g%leg_len(k) - 1_int32)) <= 0_int32) exit
          leg_order(j + 1_int32) = leg_order(j)
          j = j - 1_int32
       enddo
