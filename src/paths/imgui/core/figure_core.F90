@@ -908,10 +908,21 @@ contains
    endsubroutine core_draw_triangle_filled
 
    subroutine core_draw_convex_poly_filled(x, y, col)
-   !< A filled convex polygon, its points clockwise (`AddConvexPolyFilled`).
+   !< A filled convex polygon, its points clockwise (`AddConvexPolyFilled`); up to 16 points without a heap allocation
+   !< (the 3-D frame's quads, every frame).
    real(real64),   intent(in) :: x(:), y(:) !< Points [pixels].
    integer(int32), intent(in) :: col        !< Packed colour.
+   integer(int32), parameter  :: NFIX = 16_int32 !< Points converted in fixed arrays.
+   real(c_float)              :: fx(NFIX), fy(NFIX) !< Points, C kind.
+   integer(int32)             :: n          !< Points.
 
+   n = size(x, kind=int32)
+   if (n <= NFIX) then
+      fx(1:n) = real(x, c_float)
+      fy(1:n) = real(y, c_float)
+      call dl_convex_poly_filled(list, fx(1:n), fy(1:n), int(col, c_int32_t), 0_c_int)
+      return
+   endif
    call dl_convex_poly_filled(list, real(x, c_float), real(y, c_float), int(col, c_int32_t), 0_c_int)
    endsubroutine core_draw_convex_poly_filled
 
