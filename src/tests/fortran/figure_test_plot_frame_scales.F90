@@ -21,8 +21,9 @@ use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip_begin_plot, ip_end_plot, &
                    ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes, ip_setup_axes_limits, ip_setup_axis,        &
                    ip_setup_axis_limits, ip_spec, ImGuiWindowFlags_NoDecoration
-use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_line, pf_plot_limits, pf_set_axes, pf_setup_axes, &
+use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_plot_limits, pf_set_axes, pf_setup_axes, &
                               pf_setup_axes_limits, pf_setup_axis, pf_setup_axis_limits
+use figure_plot_items, only : pf_line, pf_spec
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 
 implicit none
@@ -209,7 +210,7 @@ contains
    real(real64),     intent(in) :: col(4) !< Colour.
 
    if (side_fortran) then
-      call pf_line(label, xs(:, j), ys(:, j), color=col)
+      call pf_line(label, xs(:, j), ys(:, j), spec=pf_spec(line_color=col))
    else
       call ip_line(label, xs(:, j), ys(:, j), spec=ip_spec(line_color=col))
    endif

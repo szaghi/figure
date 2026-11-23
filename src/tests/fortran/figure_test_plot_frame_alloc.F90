@@ -4,8 +4,9 @@ program figure_test_plot_frame_alloc
 !<
 !< szaghi/figure#15 P10, step 9 (ADR 0001: no allocation per item per frame in the core and the plot frame). A plot
 !< with every per-frame string of the frame on: a title, axis labels, a log x axis, a time x axis (X2: dates on two
-!< levels), a symlog y axis and a linear Y2, four labelled lines in the legend, the pointer resting on the plot (the
-!< mouse text: values of four axes, a time among them), and beside it a colour bar with a label format and a label.
+!< levels), a symlog y axis and a linear Y2, four labelled lines in the legend (one with square markers), a scatter
+!< (P11), the pointer resting on the plot (the mouse text: values of four axes, a time among them), and beside it a
+!< colour bar with a label format and a label.
 !< Drawn first by ImPlot through FIGURE's API (`ip_*`), then by the Fortran frame (`pf_*`), NF frames each: on the
 !< Fortran side the last NCOUNT frames are counted, from `pf_begin_plot` to `pf_end_plot` and around
 !< `pf_colormap_scale`, by figure_test_plot_alloc_counter (the C library's allocator entry points defined in the
@@ -22,9 +23,10 @@ program figure_test_plot_frame_alloc
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
                    ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes,             &
-                   ip_setup_axis, ip_setup_axis_limits, ip_spec, ImGuiWindowFlags_NoDecoration
-use figure_plot_frame, only : pf_begin_plot, pf_colormap_scale, pf_end_plot, pf_line, pf_plot_limits, pf_set_axes, &
+                   ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
+use figure_plot_frame, only : pf_begin_plot, pf_colormap_scale, pf_end_plot, pf_plot_limits, pf_set_axes, &
                               pf_setup_axes, pf_setup_axis, pf_setup_axis_limits
+use figure_plot_items, only : pf_line, pf_scatter, pf_spec
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 use figure_test_plot_alloc_counter, only : alloc_arm, alloc_count, alloc_disarm
 
@@ -41,6 +43,7 @@ real(real64),   parameter :: C(4, 4) = reshape([0.91_real64, 0.40_real64, 0.30_r
                                                 0.80_real64, 0.60_real64, 0.20_real64, 1.0_real64], [4, 4]) !< Colours.
 type(app_object)          :: app                !< Application.
 real(real64)              :: xs(NP), ts(NP), ys(NP, 4) !< The lines.
+real(real64)              :: xd(21), yd(21)     !< The scatter (named arrays: nvfortran, see the report of P11 (a)).
 real(real64)              :: lim(8, 2)          !< The last frame's ranges (X1, Y1, X2, Y2) per side.
 integer(int64)            :: counted            !< Allocations on the counted frames.
 integer(int64)            :: control            !< Allocations of the control.
@@ -59,6 +62,8 @@ do i = 1_int32, NP
    ys(i, 3) = 2.0_real64 + sin(real(i, real64) * 0.03_real64)
    ys(i, 4) = 1.0_real64 + 0.5_real64 * cos(real(i, real64) * 0.07_real64)
 enddo
+xd = xs(::10)
+yd = ys(::10, 1) * 0.5_real64
 counted = 0_int64
 lim = 0.0_real64
 do sd = 1_int32, 2_int32 ! 1 ImPlot, 2 the Fortran frame
@@ -113,11 +118,12 @@ contains
          call pf_setup_axis_limits('y1', -40.0_real64, 40.0_real64)
          call pf_setup_axis_limits('x2', T0, ts(NP))
          call pf_setup_axis_limits('y2', 0.0_real64, 3.5_real64)
-         call pf_line('wave', xs, ys(:, 1), color=C(:, 1))
-         call pf_line('small', xs, ys(:, 2), color=C(:, 2))
+         call pf_line('wave', xs, ys(:, 1), spec=pf_spec(line_color=C(:, 1)))
+         call pf_line('small', xs, ys(:, 2), spec=pf_spec(line_color=C(:, 2), marker=1_int32))
+         call pf_scatter('dots', xd, yd, spec=pf_spec(marker=0_int32))
          call pf_set_axes('x2', 'y2')
-         call pf_line('daily', ts, ys(:, 3), color=C(:, 3))
-         call pf_line('hourly', ts, ys(:, 4), color=C(:, 4))
+         call pf_line('daily', ts, ys(:, 3), spec=pf_spec(line_color=C(:, 3)))
+         call pf_line('hourly', ts, ys(:, 4), spec=pf_spec(line_color=C(:, 4)))
          call pf_plot_limits(lim(1, 2), lim(2, 2), lim(3, 2), lim(4, 2), 'x1', 'y1')
          call pf_plot_limits(lim(5, 2), lim(6, 2), lim(7, 2), lim(8, 2), 'x2', 'y2')
          call pf_end_plot()
@@ -132,7 +138,8 @@ contains
          call ip_setup_axis_limits('x2', T0, ts(NP))
          call ip_setup_axis_limits('y2', 0.0_real64, 3.5_real64)
          call ip_line('wave', xs, ys(:, 1), spec=ip_spec(line_color=C(:, 1)))
-         call ip_line('small', xs, ys(:, 2), spec=ip_spec(line_color=C(:, 2)))
+         call ip_line('small', xs, ys(:, 2), spec=ip_spec(line_color=C(:, 2), marker=1_int32))
+         call ip_scatter('dots', xd, yd, spec=ip_spec(marker=0_int32))
          call ip_set_axes('x2', 'y2')
          call ip_line('daily', ts, ys(:, 3), spec=ip_spec(line_color=C(:, 3)))
          call ip_line('hourly', ts, ys(:, 4), spec=ip_spec(line_color=C(:, 4)))

@@ -119,6 +119,26 @@ without allocation (glibc's output; at first foresight's `c_real`, which it repr
   allocation of the thread, the Fortran run-time's, Dear ImGui's, C++'s, with a control proving it sees them): 0 on
   ten frames after twenty (gfortran had 1146 a frame before), the pictures equal to ImPlot's (three compilers). Not
   yet: an open context menu's widgets (src/lib) allocate while it is open.
+- 2026-11-22, the line-like items (P11 group (a)): `figure_plot_items`, `pf_line` (points, uniform abscissae, a
+  matrix's row), `pf_scatter`, `pf_stairs`, `pf_stems`, `pf_shaded` (two curves, or a curve and a reference, -inf/+inf
+  the plot's edges), generic over `real32`/`real64` data and `int32`/`int64` abscissae as FIGURE's `ip_*`, arrays of
+  any stride read in place (getters over pointers to the dummies, no copy), styles by `pf_spec` (`ip_spec`'s fields:
+  colours, weights, markers and sizes, fill alpha, item flags NoLegend/NoFit, the items' flags Segments, Loop,
+  SkipNaN, NoClip, Shaded, PreStep, Horizontal); `BeginItem`'s staging of the style (automatic colours, markers by
+  `NextMarker`, the legend's highlight), the fitters, ImPlot's renderers vertex for vertex (strip, segments, loop,
+  shaded, stairs and shaded stairs, stems, the twelve markers' fills and outlines, culled as `RenderPrimitivesEx`,
+  clips expanded for markers) through figure_core's textured quads, and the decimation of long line-like series
+  (figure_decimate, as `series_decimate`; `pf_set_decimation`). `pf_line` moved from the frame (its `color=` is now
+  `spec=pf_spec(line_color=...)`); the frame gives the items `pf_item_begin`/`pf_item_fit`/`pf_item_end`, and its
+  `PlotToPixels` and the items' `Transformer1` are one function (`figure_plot_transform`). figure_core: the white
+  pixel (`core_white_pixel`) and the framebuffer scale (`core_framebuffer_scale`). `figure_test_plot_frame_items`
+  compares 12 cases with ImPlot (markers, line flags, the twelve shapes, automatic markers and colours, stairs,
+  stems, shaded with references and infinities, every kind and stride, the fit with NoFit/NoLegend, 400 000 points
+  decimated on linear and log axes, a log y, a hovered legend entry): ranges of every frame equal to the bit,
+  pictures at threshold 2 with no pixel failing (three compilers; one curve shifted by 0.01 for an `rsqrtss` pixel,
+  see the test's header); `figure_test_plot_frame_alloc` counts a scatter and a marked line: 0 allocations a frame.
+  Not yet: the decimation's cache (`ip_cache_next`) and the device lines (`ip_line_device`), per-point colours and
+  sizes (FIGURE's API sets none), `GetLastItemColor`.
 
 ## What the current seam calls, to replace
 
@@ -157,7 +177,7 @@ The ImPlot functions `figure_implot` calls (76, through `figure_cimplot`) and th
 
 ### P11, the items
 
-- [ ] Lines, scatter, stairs, stems, shaded: `ImPlot_PlotLine_*`, `ImPlot_PlotScatter_*`, `ImPlot_PlotStairs_*`,
+- [x] Lines, scatter, stairs, stems, shaded: `ImPlot_PlotLine_*`, `ImPlot_PlotScatter_*`, `ImPlot_PlotStairs_*`,
       `ImPlot_PlotStems_*`, `ImPlot_PlotShaded_*`
 - [ ] Bars and groups, error bars, infinite lines: `ImPlot_PlotBars_*`, `ImPlot_PlotBarGroups_*`,
       `ImPlot_PlotErrorBars_*`, `ImPlot_PlotInfLines_*`

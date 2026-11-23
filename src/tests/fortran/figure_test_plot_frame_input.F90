@@ -29,9 +29,10 @@ use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_
                    ip_cancel_selection, ip_line, ip_plot_hovered, ip_plot_limits, ip_plot_mouse, ip_plot_selection, &
                    ip_plot_to_pixels, ip_set_axes, ip_setup_axes, ip_setup_axes_limits, ip_setup_axis, ip_spec,       &
                    ImGuiWindowFlags_NoDecoration
-use figure_plot_frame, only : pf_begin_plot, pf_cancel_selection, pf_end_plot, pf_line, pf_plot_hovered,     &
+use figure_plot_frame, only : pf_begin_plot, pf_cancel_selection, pf_end_plot, pf_plot_hovered,     &
                               pf_plot_limits, pf_plot_mouse, pf_plot_selection, pf_set_axes, pf_setup_axes, &
                               pf_setup_axes_limits, pf_setup_axis
+use figure_plot_items, only : pf_line, pf_spec
 use figure_testing, only : test_capture, test_compare_image, test_drag, test_item_click, test_mouse_button, &
                            test_mouse_move, test_next_frame, test_wheel
 
@@ -316,7 +317,7 @@ contains
    real(real64),     intent(in) :: col(4) !< Colour.
 
    if (side_fortran) then
-      call pf_line(label, xs, ys(:, j), color=col)
+      call pf_line(label, xs, ys(:, j), spec=pf_spec(line_color=col))
    else
       call ip_line(label, xs, ys(:, j), spec=ip_spec(line_color=col))
    endif

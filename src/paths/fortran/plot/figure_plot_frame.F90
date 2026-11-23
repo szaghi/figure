@@ -7,7 +7,8 @@ module figure_plot_frame
 !< szaghi/figure#15 P10. A plot drawn through figure_core only (no ImPlot, no figure_cimplot), to the pixels ImPlot 1.2
 !< WIP (FIGURE's copy) draws for the same plot: `pf_begin_plot`, `pf_setup_axes`, `pf_setup_axis`,
 !< `pf_setup_axes_limits`, `pf_setup_axis_limits`, `pf_setup_legend`, `pf_set_next_axes_to_fit`,
-!< `pf_set_next_axis_to_fit`, `pf_set_axes`, `pf_hide_next_item`, `pf_line`, `pf_legend_hovered`, `pf_plot_limits`,
+!< `pf_set_next_axis_to_fit`, `pf_set_axes`, `pf_hide_next_item`, `pf_line` (figure_plot_items), `pf_legend_hovered`,
+!< `pf_plot_limits`,
 !< `pf_end_plot` draw what `ip_begin_plot`, `ip_setup_axes`, `ip_setup_axis`, `ip_setup_axes_limits`,
 !< `ip_setup_axis_limits`, `ip_setup_legend`, ImPlot's `SetNextAxesToFit`/`SetNextAxisToFit`, `ip_set_axes`,
 !< `ip_hide_next_item`, `ip_line`, `ip_legend_hovered`, `ip_plot_limits`, `ip_end_plot` draw for a plot of linear
@@ -113,6 +114,7 @@ use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, c
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
 use figure_plot_format, only : plot_format, fmt_parse, fmt_text
+use figure_plot_transform, only : plot_axis_map, map_pixel
 use figure_plot_locators, only : plot_ticks, ticks_reset, locate_default, locate_log10, locate_symlog, locate_time, &
                                 transform_log10, transform_symlog, inverse_log10, inverse_symlog, axis_value_text, &
                                 time_cursor_label, TIME_MAX, TIME_MIN
@@ -121,7 +123,8 @@ use figure_menu, only : ig_begin_menu, ig_end_menu, ig_menu_item
 
 implicit none
 private
-public :: pf_begin_plot, pf_end_plot, pf_line, pf_plot_limits
+public :: pf_begin_plot, pf_end_plot, pf_plot_limits
+public :: plot_item_ctx, pf_item_begin, pf_item_fit, pf_item_end
 public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
 public :: pf_hide_next_item, pf_legend_hovered
@@ -146,7 +149,6 @@ real(real32), parameter :: LEGEND_PADDING(2) = [10.0_real32, 10.0_real32]      !
 real(real32), parameter :: LEGEND_INNER_PADDING(2) = [5.0_real32, 5.0_real32]  !< LegendInnerPadding [pixels].
 real(real32), parameter :: LEGEND_SPACING(2) = [5.0_real32, 0.0_real32]        !< LegendSpacing [pixels].
 real(real32), parameter :: FIT_PADDING(2) = [0.0_real32, 0.0_real32]           !< FitPadding (fraction of the range).
-real(real32), parameter :: LINE_WEIGHT = 1.0_real32                            !< ImPlotSpec's LineWeight [pixels].
 real(real32), parameter :: HIGHLIGHT_LINE_SCALE = 2.0_real32                   !< ITEM_HIGHLIGHT_LINE_SCALE.
 ! ImPlotScale (implot.h)
 integer(int32), parameter :: SCALE_LINEAR = 0_int32 !< ImPlotScale_Linear.
@@ -284,6 +286,7 @@ type :: plot_record
    integer(int32)                :: cur_x = AX_X1         !< The x axis the items use (CurrentX).
    integer(int32)                :: cur_y = AX_Y1         !< ... the y axis.
    integer(int32)                :: colormap_idx = 0_int32 !< Automatic colours given (ColormapIdx).
+   integer(int32)                :: marker_idx = 0_int32  !< Automatic markers given (MarkerIdx).
    integer(int32)                :: n_items = 0_int32     !< Items held.
    integer(int32)                :: item_next = 1_int32   !< Where the search for the next item starts.
    integer(int32), allocatable   :: item_id(:)            !< Item's ID.
@@ -291,6 +294,7 @@ type :: plot_record
    integer(int32), allocatable   :: item_frame(:)         !< ... the frame it was last drawn on.
    logical,        allocatable   :: item_show(:)          !< ... shown (Show).
    logical,        allocatable   :: item_hovered(:)       !< ... its legend entry hovered (LegendHovered).
+   integer(int32), allocatable   :: item_marker(:)        !< ... its marker (ImPlotMarker; -2 none).
    integer(int32)                :: leg_flags = 0_int32   !< Legend's ImPlotLegendFlags in effect.
    integer(int32)                :: leg_prev_flags = 0_int32 !< ... those last asked.
    integer(int32)                :: leg_loc = LOC_NORTH + LOC_WEST !< Legend's ImPlotLocation in effect.
@@ -303,6 +307,21 @@ type :: plot_record
    integer(int32)                :: leg_n = 0_int32       !< Characters of `leg_text` in use.
    character(len=:), allocatable :: leg_text              !< Legend's labels.
 endtype plot_record
+
+type :: plot_item_ctx
+   !< The open plot as an item sees it after `pf_item_begin` (figure_plot_items): the item's colour and marker, its
+   !< legend entry hovered (the items' highlight), whether the plot fits on this frame, the plot rectangle, the current
+   !< axes' maps and ranges.
+   integer(int32)      :: color = 0_int32         !< The item's colour (packed).
+   integer(int32)      :: marker = -2_int32       !< Its marker (ImPlotMarker).
+   logical             :: hovered = .false.       !< Its legend entry hovered, items highlighted (not NoHighlightItem).
+   logical             :: fit = .false.           !< The plot fits on this frame (FitThisFrame).
+   real(real32)        :: rect(4) = 0.0_real32    !< Plot rectangle [pixels].
+   type(plot_axis_map) :: tx                      !< The current x axis's map.
+   type(plot_axis_map) :: ty                      !< The current y axis's map.
+   real(real64)        :: x_range(2) = 0.0_real64 !< The current x axis's range.
+   real(real64)        :: y_range(2) = 0.0_real64 !< The current y axis's range.
+endtype plot_item_ctx
 
 type(plot_record), allocatable, target :: plots(:)       !< The plots (ImPlotContext::Plots).
 integer(int32)                         :: n_plots = 0_int32 !< Slots of `plots` in use.
@@ -628,75 +647,6 @@ contains
       ymax = p%ax(iy)%range_max
    endassociate
    endsubroutine pf_plot_limits
-
-   subroutine pf_line(label, x, y, color)
-   !< A line through the points (x(i), y(i)) (`PlotLine` of weight 1), clipped to the plot, on the current axes, of
-   !< the colour `color` (`ip_spec(line_color=...)`), else of the colour its item was given when created: the plot's
-   !< next automatic colour (ImPlot's colormap Deep: the styles `'dark'`, `'light'`, `'classic'`). The item is keyed
-   !< by its label's ID; a label with text before any `##` gets a legend entry. A hidden item is neither drawn nor fit;
-   !< a shown one extends the fit of its axes that fit on this frame.
-   character(len=*), intent(in)           :: label    !< Legend label (the item's ID).
-   real(real64),     intent(in)           :: x(:)     !< Abscissae.
-   real(real64),     intent(in)           :: y(:)     !< Ordinates.
-   real(real64),     intent(in), optional :: color(4) !< Colour, RGBA in [0, 1].
-   integer(int32)               :: col     !< Colour.
-   real(real32)                 :: weight  !< Line weight [pixels].
-   real(real32)                 :: hw      !< Half the weight [pixels].
-   real(real64)                 :: uv0(2), uv1(2), fringe !< The line's texture.
-   real(real32)                 :: p1(2), p2(2) !< A segment's ends [pixels].
-   real(real64)                 :: qx(4), qy(4), qu(4), qv(4) !< Its quad: vertices, texture coordinates.
-   real(real32)                 :: dx, dy, d2, inv !< Its direction.
-   integer(int32)               :: k, n    !< Counter, points.
-   integer(int32)               :: it      !< The item's handle.
-
-   if (cur == 0_int32) error stop 'figure_plot_frame: pf_line outside a plot'
-   associate(p => plots(cur))
-      if (.not. begin_item(p, label, color, it)) return
-      col = p%item_color(it)
-      weight = LINE_WEIGHT
-      if (p%item_hovered(it)) call highlight(p, it, weight)
-      n = int(min(size(x), size(y)), int32)
-      associate(ax => p%ax(p%cur_x), ay => p%ax(p%cur_y))
-         if (p%fit) call fit_points(ax, ay, x, y, n) ! BeginItemEx's Fitter1
-         if (n < 2_int32) return
-         call core_push_clip_rect(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
-                                  real(p%rect(4), real64))
-         hw = max(1.0_real32, weight) * 0.5_real32 ! RendererLineStrip, GetLineRenderProps
-         call core_line_texture(real(hw * 2.0_real32, real64), uv0, uv1, fringe)
-         hw = hw + real(fringe, real32) * 0.5_real32
-         qu = [uv0(1), uv0(1), uv1(1), uv1(1)]
-         qv = [uv0(2), uv0(2), uv1(2), uv1(2)]
-         p1 = [to_pixels(ax, x(1)), to_pixels(ay, y(1))]
-         do k = 2_int32, n
-            p2 = [to_pixels(ax, x(k)), to_pixels(ay, y(k))]
-            if (min(p1(2), p2(2)) < p%rect(4) .and. max(p1(2), p2(2)) > p%rect(2) .and. &
-                min(p1(1), p2(1)) < p%rect(3) .and. max(p1(1), p2(1)) > p%rect(1)) then ! PrimLine
-               dx = p2(1) - p1(1)
-               dy = p2(2) - p1(2)
-               d2 = dx * dx + dy * dy
-               if (d2 > 0.0_real32) then
-                  inv = 1.0_real32 / sqrt(d2)
-                  dx = dx * inv
-                  dy = dy * inv
-               endif
-               dx = dx * hw
-               dy = dy * hw
-               qx(1) = real(p1(1) + dy, real64) ! (fixed arrays, not constructors: nvfortran allocates those)
-               qx(2) = real(p2(1) + dy, real64)
-               qx(3) = real(p2(1) - dy, real64)
-               qx(4) = real(p1(1) - dy, real64)
-               qy(1) = real(p1(2) - dx, real64)
-               qy(2) = real(p2(2) - dx, real64)
-               qy(3) = real(p2(2) + dx, real64)
-               qy(4) = real(p1(2) + dx, real64)
-               call core_draw_quad_uv(qx, qy, qu, qv, col)
-            endif
-            p1 = p2
-         enddo
-         call core_pop_clip_rect()
-      endassociate
-   endassociate
-   endsubroutine pf_line
 
    subroutine pf_end_plot()
    !< End the plot (`EndPlot`): the title, the tick marks, the selection, the crosshairs, the mouse text, the legend and
@@ -1813,7 +1763,7 @@ contains
 
    ! private: the items
 
-   function begin_item(p, label, color, it) result(shown)
+   function begin_item(p, label, color, it, created, no_legend) result(shown)
    !< `BeginItem`: the setup finished, the item registered (`RegisterOrGetItem`: its legend entry the first time it is
    !< drawn on this frame, if its label has text), its colour (given, or the next automatic one when it is created),
    !< its visibility (`pf_hide_next_item`); shown, or not (then nothing else is done).
@@ -1821,14 +1771,15 @@ contains
    character(len=*),  intent(in)           :: label    !< Label.
    real(real64),      intent(in), optional :: color(4) !< Colour given.
    integer(int32),    intent(out)          :: it       !< The item's handle.
+   logical,           intent(out)          :: created  !< The item is new.
+   logical,           intent(in)           :: no_legend !< ImPlotItemFlags_NoLegend.
    logical                                 :: shown    !< Shown.
-   logical                                 :: created  !< The item is new.
    logical                                 :: seen     !< Drawn already on this frame.
 
    if (.not. p%locked) call setup_finish(p)
    it = item_handle(p, plot_hash(label, plot_id_offset(p%id, -1_int32)), core_frame_count(), created, seen)
    if (.not. seen) then
-      if (label_shown(label)) then
+      if (.not. no_legend .and. label_shown(label)) then
          call legend_append(p, it, label)
       else
          p%item_show(it) = .true.
@@ -1871,6 +1822,74 @@ contains
       if (ny > 1_int32) p%ax(p%cur_y)%hili = p%item_color(it)
    endif
    endsubroutine highlight
+
+   function pf_item_begin(label, color, marker, no_legend, ctx) result(shown)
+   !< `BeginItem` for figure_plot_items: the item registered (its legend entry, unless `no_legend`), its colour (given:
+   !< `color`'s alpha /= -1; else the colormap's next when created), its marker (`marker` -3, ImPlotMarker_Invalid:
+   !< left; -1, Auto: the plot's next when created or when it has none; else that one), its visibility, the highlight
+   !< of a hovered entry's axes; and the plot as the item sees it. False: hidden (nothing else to do).
+   character(len=*),    intent(in)  :: label     !< Label.
+   real(real32),        intent(in)  :: color(4)  !< The colour that sets the item's (alpha -1: automatic).
+   integer(int32),      intent(in)  :: marker    !< Marker asked.
+   logical,             intent(in)  :: no_legend !< ImPlotItemFlags_NoLegend.
+   type(plot_item_ctx), intent(out) :: ctx       !< The plot.
+   logical                          :: shown     !< Shown.
+   integer(int32)                   :: it        !< The item.
+   logical                          :: created   !< New.
+   real(real32)                     :: w         !< A weight (unused: the items scale their own).
+   real(real64)                     :: c64(4)    !< The colour given.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: an item outside a plot'
+   associate(p => plots(cur))
+      if (color(4) == -1.0_real32) then
+         shown = begin_item(p, label, it=it, created=created, no_legend=no_legend)
+      else
+         c64(1) = real(color(1), real64) ! (a fixed array, not an expression: nvfortran allocates its temporary)
+         c64(2) = real(color(2), real64)
+         c64(3) = real(color(3), real64)
+         c64(4) = real(color(4), real64)
+         shown = begin_item(p, label, c64, it, created, no_legend)
+      endif
+      if (marker /= -3_int32) then
+         if (marker /= -1_int32) then
+            p%item_marker(it) = marker
+         elseif (created .or. p%item_marker(it) == -2_int32) then ! NextMarker: ImPlotMarker_COUNT 12
+            p%item_marker(it) = mod(p%marker_idx, 12_int32)
+            p%marker_idx = p%marker_idx + 1_int32
+         endif
+      endif
+      if (.not. shown) return
+      ctx%color = p%item_color(it)
+      ctx%marker = p%item_marker(it)
+      ctx%hovered = .false.
+      if (p%item_hovered(it)) then
+         w = 1.0_real32
+         call highlight(p, it, w) ! the axes' highlight
+         ctx%hovered = iand(p%leg_flags, LGF_NO_HIGHLIGHT_ITEM) == 0_int32
+      endif
+      ctx%fit = p%fit
+      ctx%rect = p%rect
+      ctx%tx = axis_map(p%ax(p%cur_x))
+      ctx%ty = axis_map(p%ax(p%cur_y))
+      ctx%x_range = [p%ax(p%cur_x)%range_min, p%ax(p%cur_x)%range_max]
+      ctx%y_range = [p%ax(p%cur_y)%range_min, p%ax(p%cur_y)%range_max]
+   endassociate
+   endfunction pf_item_begin
+
+   subroutine pf_item_fit(x, y)
+   !< `ExtendFitWith` of a point on the current axes (figure_plot_items' fitters, on the frames the plot fits).
+   real(real64), intent(in) :: x, y !< Point.
+
+   associate(p => plots(cur))
+      call fit_point(p%ax(p%cur_x), p%ax(p%cur_y), x, y)
+   endassociate
+   endsubroutine pf_item_fit
+
+   subroutine pf_item_end()
+   !< `EndItem` (figure_plot_items): the next item's data reset.
+
+   next_hidden_set = .false.
+   endsubroutine pf_item_end
 
    subroutine legend_append(p, it, label)
    !< An entry appended to the plot's legend (`Legend.Indices`, `Legend.Labels`).
@@ -1985,6 +2004,7 @@ contains
    p%flags = 0_int32
    p%prev_flags = 0_int32
    p%colormap_idx = 0_int32
+   p%marker_idx = 0_int32
    p%n_items = 0_int32
    p%item_next = 1_int32
    p%leg_flags = 0_int32
@@ -2082,6 +2102,7 @@ contains
    p%item_frame(h) = frame
    p%item_show(h) = .true.
    p%item_hovered(h) = .false.
+   p%item_marker(h) = -2_int32 ! ImPlotMarker_None
    p%item_next = h + 1_int32
    endfunction item_handle
 
@@ -2091,22 +2112,25 @@ contains
    integer(int32),    intent(in)    :: m                       !< Items room.
    integer(int32),    allocatable   :: id(:), color(:), frame(:) !< New columns.
    logical,           allocatable   :: show(:), hovered(:)     !< ...
+   integer(int32),    allocatable   :: marker(:)               !< ...
    integer(int32)                   :: n                       !< Items held.
 
    n = p%n_items
-   allocate(id(m), color(m), frame(m), show(m), hovered(m))
+   allocate(id(m), color(m), frame(m), show(m), hovered(m), marker(m))
    if (n > 0_int32) then
       id(1:n) = p%item_id(1:n)
       color(1:n) = p%item_color(1:n)
       frame(1:n) = p%item_frame(1:n)
       show(1:n) = p%item_show(1:n)
       hovered(1:n) = p%item_hovered(1:n)
+      marker(1:n) = p%item_marker(1:n)
    endif
    call move_alloc(id, p%item_id)
    call move_alloc(color, p%item_color)
    call move_alloc(frame, p%item_frame)
    call move_alloc(show, p%item_show)
    call move_alloc(hovered, p%item_hovered)
+   call move_alloc(marker, p%item_marker)
    endsubroutine grow_items
 
    ! private: the axes
@@ -2225,35 +2249,30 @@ contains
    ax%scale_max = forward(ax, ax%range_max)
    endsubroutine update_scale
 
-   subroutine fit_points(xa, ya, x, y, n)
-   !< `Fitter1` with `ExtendFitWith`: the points' finite coordinates within the axes' constraints (a log axis's
-   !< positive ones) extend the axes' fit ranges (with `ImPlotAxisFlags_RangeFit`, only those whose other coordinate is
-   !< in the other axis's range).
+   subroutine fit_point(xa, ya, x, y)
+   !< `ExtendFitWith` on both axes: a point's finite coordinates within the axes' constraints (a log axis's positive
+   !< ones) extend the axes' fit ranges (with `ImPlotAxisFlags_RangeFit`, only those whose other coordinate is in the
+   !< other axis's range).
    type(plot_axis), intent(inout) :: xa   !< X axis.
    type(plot_axis), intent(inout) :: ya   !< Y axis.
-   real(real64),    intent(in)    :: x(:) !< Abscissae.
-   real(real64),    intent(in)    :: y(:) !< Ordinates.
-   integer(int32),  intent(in)    :: n    !< Points.
+   real(real64),    intent(in)    :: x, y !< Point.
    logical                        :: rx, ry !< RangeFit on x, on y.
-   integer(int32)                 :: k    !< Counter.
 
    rx = iand(xa%flags, AXF_RANGE_FIT) == AXF_RANGE_FIT
    ry = iand(ya%flags, AXF_RANGE_FIT) == AXF_RANGE_FIT
-   do k = 1_int32, n
-      if (abs(x(k)) <= huge(1.0_real64) .and. x(k) >= xa%con_min .and. x(k) <= xa%con_max) then
-         if (.not. rx .or. (y(k) >= ya%range_min .and. y(k) <= ya%range_max)) then
-            if (x(k) < xa%fit_min) xa%fit_min = x(k)
-            if (x(k) > xa%fit_max) xa%fit_max = x(k)
-         endif
+   if (abs(x) <= huge(1.0_real64) .and. x >= xa%con_min .and. x <= xa%con_max) then
+      if (.not. rx .or. (y >= ya%range_min .and. y <= ya%range_max)) then
+         if (x < xa%fit_min) xa%fit_min = x
+         if (x > xa%fit_max) xa%fit_max = x
       endif
-      if (abs(y(k)) <= huge(1.0_real64) .and. y(k) >= ya%con_min .and. y(k) <= ya%con_max) then
-         if (.not. ry .or. (x(k) >= xa%range_min .and. x(k) <= xa%range_max)) then
-            if (y(k) < ya%fit_min) ya%fit_min = y(k)
-            if (y(k) > ya%fit_max) ya%fit_max = y(k)
-         endif
+   endif
+   if (abs(y) <= huge(1.0_real64) .and. y >= ya%con_min .and. y <= ya%con_max) then
+      if (.not. ry .or. (x >= xa%range_min .and. x <= xa%range_max)) then
+         if (y < ya%fit_min) ya%fit_min = y
+         if (y > ya%fit_max) ya%fit_max = y
       endif
-   enddo
-   endsubroutine fit_points
+   endif
+   endsubroutine fit_point
 
    subroutine apply_fit(ax, padding)
    !< `ImPlotAxis::ApplyFit`: the range made the data's, padded, its unlocked ends only; a degenerate range widened
@@ -3325,23 +3344,27 @@ contains
    endsubroutine locate
 
    pure function to_pixels(ax, v) result(px)
-   !< `PlotToPixels` (and the items' `Transformer1`): the pixel of a value, in single precision; on a log10 or symlog
-   !< axis the value's place in the transformed range mapped back onto the range first. The products added to
-   !< another term in statements of their own (no FMA, as ImPlot's build).
+   !< `PlotToPixels` (and the items' `Transformer1`): the pixel of a value, in single precision (figure_plot_transform).
    type(plot_axis), intent(in) :: ax !< Axis.
    real(real64),    intent(in) :: v  !< Value.
    real(real32)                :: px !< Pixel.
-   real(real64)                :: w, tt !< Value on the range, its fraction.
 
-   w = v
-   if (ax%scale == SCALE_LOG10 .or. ax%scale == SCALE_SYMLOG) then
-      tt = (forward(ax, v) - ax%scale_min) / (ax%scale_max - ax%scale_min)
-      w = (ax%range_max - ax%range_min) * tt
-      w = ax%range_min + w
-   endif
-   w = ax%scale_to_pixel * (w - ax%range_min)
-   px = real(real(ax%pixel_min, real64) + w, real32)
+   px = map_pixel(axis_map(ax), v)
    endfunction to_pixels
+
+   pure function axis_map(ax) result(m)
+   !< An axis as the items map values onto it (`Transformer1`'s fields).
+   type(plot_axis), intent(in) :: ax !< Axis.
+   type(plot_axis_map)         :: m  !< Map.
+
+   m%pix_min = real(ax%pixel_min, real64)
+   m%plt_min = ax%range_min
+   m%plt_max = ax%range_max
+   m%m = ax%scale_to_pixel
+   m%sca_min = ax%scale_min
+   m%sca_max = ax%scale_max
+   m%scale = ax%scale
+   endfunction axis_map
 
    pure function border_shown(p) result(shown)
    !< The plot's border is drawn (`PlotBorderSize` > 0, the colour not transparent).

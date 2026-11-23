@@ -30,7 +30,9 @@ module figure_core
 !<   `core_push_id_int`; ImPlot's menu widgets as it calls them (`core_push_item_width` without a FIGURE scope,
 !<   `core_push_item_flag`, `core_push_style_var`, `core_drag_double`, `core_radio_button`, `core_invisible_button`,
 !<   `core_text_unformatted`; P10 step 9: `core_open_popup`, `core_begin_popup`, `core_end_popup`, the popups ImPlot
-!<   declares every frame, without the allocations of src/lib's `ig_*_popup` and their scope record);
+!<   declares every frame, without the allocations of src/lib's `ig_*_popup` and their scope record); P11: the white
+!<   pixel's texture coordinates (`core_white_pixel`) and the framebuffer scale (`core_framebuffer_scale`) for the
+!<   items' primitives and decimation;
 !<   a glyph of the current font at its size (`core_font_glyph`: `GetFontBaked`, `FindGlyph`), for text drawn glyph by
 !<   glyph (ImPlot's vertical text); a rectangle of four corner colours (`core_draw_rect_filled_multicolor`:
 !<   `AddRectFilledMultiColor`, ImPlot's colour bars).
@@ -56,7 +58,7 @@ use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextS
                           igInvisibleButton, igIsMouseDoubleClicked_Nil, igIsMousePosValid, igIsWindowHovered,         &
                           igPopItemFlag, igPopStyleVar, igPushID_Int, igPushItemFlag, igPushItemWidth,                 &
                           igPushStyleVar_Float, igPushStyleVar_Vec2, igRadioButton_Bool, igSetMouseCursor,             &
-                          igTextUnformatted, igBeginPopup, igEndPopup, igOpenPopup_Str
+                          igTextUnformatted, igBeginPopup, igEndPopup, igOpenPopup_Str, igGetIO_Nil
 use figure_cimgui_enums, only : ImDrawFlags_Closed, ImGuiDataType_Double_ => ImGuiDataType_Double
 use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,                                         &
                                figure_ImDrawList_append, figure_ImDrawList_shared, igButtonBehavior, igGetActiveID,         &
@@ -88,6 +90,7 @@ public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core
 public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
 public :: core_open_popup, core_begin_popup, core_end_popup
+public :: core_white_pixel, core_framebuffer_scale
 public :: core_draw_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
@@ -195,6 +198,14 @@ type, bind(C) :: im_font_baked_head
    real(c_float)   :: fallback_advance_x     !< FallbackAdvanceX.
    real(c_float)   :: size                   !< Size: the size it was baked at [pixels].
 endtype im_font_baked_head
+
+type, bind(C) :: im_io_head
+   !< The first members of ImGuiIO (imgui.h, 1.93), up to DisplayFramebufferScale.
+   integer(c_int) :: config_flags  !< ConfigFlags.
+   integer(c_int) :: backend_flags !< BackendFlags.
+   real(c_float)  :: display_size(2)              !< DisplaySize.
+   real(c_float)  :: display_framebuffer_scale(2) !< DisplayFramebufferScale.
+endtype im_io_head
 
 contains
    ! IDs
@@ -1016,6 +1027,25 @@ contains
    call ImDrawList_AddLineV(target_list, real(x, c_float), real(y0, c_float), real(y1, c_float), int(col, c_int), &
                             opt(thickness, 1.0_real64), 0_c_int)
    endsubroutine core_draw_line_v
+
+   subroutine core_white_pixel(u, v)
+   !< The texture coordinates of the font atlas's white pixel (`_Data->TexUvWhitePixel`, read at `core_draw_begin`):
+   !< what filled primitives written vertex by vertex take (the plot frame's items, `core_draw_quad_uv`).
+   real(real64), intent(out) :: u, v !< Texture coordinates.
+
+   u = real(list%uv_white(1), real64)
+   v = real(list%uv_white(2), real64)
+   endsubroutine core_white_pixel
+
+   subroutine core_framebuffer_scale(sx, sy)
+   !< io.DisplayFramebufferScale: display pixels per pixel (the plot frame's decimation, as figure_implot's).
+   real(real64), intent(out) :: sx, sy !< Scale.
+   type(im_io_head), pointer :: io     !< Dear ImGui's io.
+
+   call c_f_pointer(igGetIO_Nil(), io)
+   sx = real(io%display_framebuffer_scale(1), real64)
+   sy = real(io%display_framebuffer_scale(2), real64)
+   endsubroutine core_framebuffer_scale
 
    subroutine core_line_texture(thickness, uv0, uv1, fringe)
    !< The texture coordinates of the two sides of an anti-aliased line `thickness` screen pixels wide (at least 1), and

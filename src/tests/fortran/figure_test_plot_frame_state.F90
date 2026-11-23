@@ -35,9 +35,10 @@ use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_
 use figure_cimplot, only : ImPlot_SetNextAxesToFit, ImPlot_SetNextAxisToFit
 use figure_cimplot_enums, only : ImAxis_Y1
 use figure_core, only : core_get_id
-use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_line, pf_plot_count, pf_plot_limits, pf_setup_axes, &
+use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_plot_count, pf_plot_limits, pf_setup_axes, &
                               pf_setup_axes_limits, pf_setup_axis_limits, pf_set_next_axes_to_fit,             &
                               pf_set_next_axis_to_fit
+use figure_plot_items, only : pf_line, pf_spec
 use figure_plot_hash, only : plot_hash
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 
@@ -317,7 +318,7 @@ contains
    real(real64),     intent(in), optional :: col(4) !< Colour.
 
    if (side_fortran) then
-      call pf_line(label, xs(1:ns(j), j), ys(1:ns(j), j), color=col)
+      call pf_line(label, xs(1:ns(j), j), ys(1:ns(j), j), spec=pf_spec(line_color=col))
    elseif (present(col)) then
       call ip_line(label, xs(1:ns(j), j), ys(1:ns(j), j), spec=ip_spec(line_color=col))
    else

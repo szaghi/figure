@@ -36,9 +36,10 @@ use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_
                    ip_setup_axes_limits, ip_setup_axis, ip_setup_axis_limits, ip_setup_legend, ip_spec,               &
                    ImGuiWindowFlags_NoDecoration
 use figure_core, only : core_cursor_screen_pos, core_font_size, core_text_size
-use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_hide_next_item, pf_legend_hovered, pf_line,       &
+use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_hide_next_item, pf_legend_hovered,       &
                               pf_plot_limits, pf_set_axes, pf_setup_axes, pf_setup_axes_limits, pf_setup_axis, &
                               pf_setup_axis_limits, pf_setup_legend
+use figure_plot_items, only : pf_line, pf_spec
 use figure_testing, only : test_capture, test_click, test_compare_image, test_mouse_move
 
 implicit none
@@ -374,7 +375,7 @@ contains
    real(real64),     intent(in) :: col(4) !< Colour.
 
    if (side_fortran) then
-      call pf_line(label, xs, ys(:, j), color=col)
+      call pf_line(label, xs, ys(:, j), spec=pf_spec(line_color=col))
    else
       call ip_line(label, xs, ys(:, j), spec=ip_spec(line_color=col))
    endif
