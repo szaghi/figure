@@ -26,7 +26,7 @@ each release, summarised from its issue; the [changelog](changelog) lists the co
 
 | Item | Status | Why, or until when |
 |---|---|---|
-| The Fortran stack: no C++ in FIGURE's build | planned | [#15](https://github.com/szaghi/figure/issues/15), [ADR 0001](../adr/0001-fortran-stack) |
+| The Fortran stack: no C++ in FIGURE's build | on [#15](https://github.com/szaghi/figure/issues/15) | Its plan and progress are tracked there only; the decisions in [ADR 0001](../adr/0001-fortran-stack) |
 | The items of [Next](#next) | planned | v0.8.0: [#13](https://github.com/szaghi/figure/issues/13), [#14](https://github.com/szaghi/figure/issues/14) |
 | The functions listed "raw only" in [Dear ImGui names](imgui-names) wrapped | deferred | Until an application asks |
 | The whole application compiled to WebAssembly | deferred | An experiment: a patched flang and Emscripten SDL3, no OpenMP and no MPI there |
