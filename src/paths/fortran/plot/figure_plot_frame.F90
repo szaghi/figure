@@ -101,6 +101,10 @@ module figure_plot_frame
 !<   with `clamp`): a text at a point of the current axes, alone or in a box (black or white text by its luminance),
 !<   centred on the point or offset with a leader line to the box's nearest corner, kept inside the plot area, drawn
 !<   under the plot's clip before the selection and the mouse text;
+!< - the queries FIGURE's current path reads through its native layer (`pf_plot_size`: `GetPlotSize`;
+!<   `pf_plot_state`: `fig_plot_state`; `pf_plot_x_transform`: `fig_plot_x_transform`) and the error recovery's ends
+!<   (`pf_open_state`, `pf_recover_to`: the scope record's `recover_to`, `fig_plot_end` and `EndSubplots`; their wiring
+!<   into native/figure_scope.cpp waits for the seam's switch);
 !< - the drag tools are figure_plot_tools' (P12), over this module's hooks (`pf_plot_id`, ...).
 !<
 !< Kept from the current path (FIGURE's behaviour over ImPlot, mirrored bit for bit; the owner's decisions on #15):
@@ -151,7 +155,7 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_text_unformatted, core_window_hovered, core_frame_height, core_open_popup,         &
                         core_open_popup_id, core_begin_popup_id,                                                &
                         core_begin_popup, core_end_popup, core_set_cursor_screen_pos, core_time, &
-                        core_draw_triangle_filled, core_draw_line
+                        core_draw_triangle_filled, core_draw_line, core_framebuffer_scale
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
@@ -178,7 +182,7 @@ public :: pf_plot_count, pf_colormap, pf_colormap_scale
 public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
 public :: pf_cancel_selection
 public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_plot_id, pf_tag
-public :: pf_annotation
+public :: pf_annotation, pf_plot_size, pf_plot_state, pf_plot_x_transform, pf_open_state, pf_recover_to
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
 real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
@@ -2792,6 +2796,92 @@ contains
       call fill_ctx(p, ctx)
    endassociate
    endsubroutine pf_plot_ctx
+
+   subroutine pf_plot_size(width, height)
+   !< The open plot's area [pixels] (`GetPlotSize`; `ip_plot_size`): it ends the setup.
+   real(real64), intent(out) :: width  !< Width [pixels].
+   real(real64), intent(out) :: height !< Height [pixels].
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_plot_size outside a plot'
+   if (.not. plots(cur)%locked) call setup_finish(plots(cur)) ! SetupLock
+   width = real(plots(cur)%rect(3) - plots(cur)%rect(1), real64)
+   height = real(plots(cur)%rect(4) - plots(cur)%rect(2), real64)
+   endsubroutine pf_plot_size
+
+   function pf_plot_state(enabled, scale) result(state)
+   !< The open plot's state, as FIGURE's `fig_plot_state` gives ImPlot's (the current path's refusals read it): 0 no
+   !< plot, 1 its setup open, 2 its setup over; each axis set up on this frame (X1, X2, X3, Y1, Y2, Y3) and its scale
+   !< (ImPlotScale: 0 linear, 1 time, 2 log10, 3 symlog).
+   integer(int32), intent(out) :: enabled(AXES) !< Axes set up (1) or not (0).
+   integer(int32), intent(out) :: scale(AXES)   !< Their scales.
+   integer(int32)              :: state         !< 0, 1, 2.
+   integer(int32)              :: i             !< Axis.
+
+   enabled = 0_int32
+   scale = SCALE_LINEAR
+   state = 0_int32
+   if (cur == 0_int32) return
+   do i = 1_int32, AXES
+      enabled(i) = merge(1_int32, 0_int32, plots(cur)%ax(i)%enabled)
+      scale(i) = plots(cur)%ax(i)%scale
+   enddo
+   state = merge(2_int32, 1_int32, plots(cur)%locked)
+   endfunction pf_plot_state
+
+   function pf_plot_x_transform(v, scale) result(state)
+   !< The current x axis's transform as the items compute a pixel (`Transformer1`), as FIGURE's `fig_plot_x_transform`
+   !< gives ImPlot's (the decimation of the current path): v = PixelMin, the range's ends, ScaleToPixel, ScaleMin,
+   !< ScaleMax, the plot area's left and right, io.DisplayFramebufferScale's x; `scale` the ImPlotScale. It ends the
+   !< setup; 0 (and zeros) outside a plot.
+   real(real64),   intent(out) :: v(9)  !< The transform.
+   integer(int32), intent(out) :: scale !< ImPlotScale.
+   integer(int32)              :: state !< 1, or 0 outside a plot.
+   real(real64)                :: sx, sy !< The framebuffer scale.
+
+   v = 0.0_real64
+   scale = SCALE_LINEAR
+   state = 0_int32
+   if (cur == 0_int32) return
+   associate(p => plots(cur))
+      if (.not. p%locked) call setup_finish(p) ! SetupLock
+      associate(a => p%ax(p%cur_x))
+         v(1) = real(a%pixel_min, real64)
+         v(2) = a%range_min
+         v(3) = a%range_max
+         v(4) = a%scale_to_pixel
+         v(5) = a%scale_min
+         v(6) = a%scale_max
+         scale = a%scale
+      endassociate
+      v(7) = real(p%rect(1), real64)
+      v(8) = real(p%rect(3), real64)
+   endassociate
+   call core_framebuffer_scale(sx, sy)
+   v(9) = sx
+   state = 1_int32
+   endfunction pf_plot_x_transform
+
+   subroutine pf_open_state(plot, subplot)
+   !< What the frame has open (the scope record's snapshot of ImPlot's stacks, `sizes_t`: `CurrentPlot`,
+   !< `CurrentSubplot`), for `pf_recover_to`.
+   logical, intent(out) :: plot    !< A plot open.
+   logical, intent(out) :: subplot !< A subplot open.
+
+   plot = cur /= 0_int32
+   subplot = cur_sub /= 0_int32
+   endsubroutine pf_open_state
+
+   subroutine pf_recover_to(plot, subplot)
+   !< Back to a snapshot of `pf_open_state` (the scope record's `recover_to`, FIGURE's error recovery): a plot open
+   !< now and not then ended (`fig_plot_end`: `pf_end_plot`), then a subplot open now and not then
+   !< (`EndSubplots`: `pf_end_subplots`). The wiring into the scope record (native/figure_scope.cpp) waits for the
+   !< seam's switch.
+   logical, intent(in) :: plot    !< A plot was open.
+   logical, intent(in) :: subplot !< A subplot was open.
+
+   if (cur /= 0_int32 .and. .not. plot) call pf_end_plot()
+   if (cur_sub /= 0_int32 .and. .not. subplot) call pf_end_subplots()
+   endsubroutine pf_recover_to
 
    function pf_plot_id() result(id)
    !< The open plot's ID (figure_plot_tools: the drag tools hash theirs under `plot.ID - 1`, the items' ID). It ends the
