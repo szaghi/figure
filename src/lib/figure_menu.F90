@@ -20,10 +20,10 @@ module figure_menu
 !< the user clicks outside it (a plain popup) or when the program calls `ig_close_current_popup` inside it. Open and
 !< begin must use the same id in the same id scope (the same window). A context menu (`ig_begin_popup_context`) opens
 !< itself, on a click of the right button over an item, a window's empty space or the display's background.
-use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_int, c_loc, c_null_char, c_null_ptr
+use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_int, c_loc, c_null_char, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32
-use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_scope_open, figure_scope_refused, &
-                        SCOPE_MAIN_MENU_BAR, SCOPE_MENU, SCOPE_MENU_BAR, SCOPE_POPUP
+use figure_base, only : cstr, cstr_fix, CSTR_ROOM, figure_check, figure_draw_refused, figure_fail, figure_scope_open, &
+                        figure_scope_refused, SCOPE_MAIN_MENU_BAR, SCOPE_MENU, SCOPE_MENU_BAR, SCOPE_POPUP
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_set_next_item_shortcut, fig_shortcut
 use figure_cimgui, only : igBeginMainMenuBar, igBeginMenu, igBeginMenuBar, igEndMainMenuBar, igEndMenu, igEndMenuBar, &
                           igMenuItem_BoolPtr, igBeginPopup, igBeginPopupModal,         &
@@ -79,12 +79,18 @@ contains
    logical,          intent(in), optional :: enabled !< The menu can be opened (default true).
    logical                                :: open    !< The menu is open.
    logical(c_bool)                        :: e       !< C copy of `enabled`.
+   character(kind=c_char, len=CSTR_ROOM)   :: cl      !< `label` NUL-terminated (no allocation: menus are drawn open).
 
    open = .false.
    if (figure_draw_refused('ig_begin_menu')) return ! a task does not draw
    e = .true._c_bool
    if (present(enabled)) e = logical(enabled, c_bool)
-   open = logical(igBeginMenu(cstr(label), e))
+   if (len(label) < CSTR_ROOM) then
+      call cstr_fix(label, cl)
+      open = logical(igBeginMenu(cl, e))
+   else
+      open = logical(igBeginMenu(cstr(label), e))
+   endif
    call figure_scope_open(SCOPE_MENU, 'ig_begin_menu', label, open)
    endfunction ig_begin_menu
 
@@ -105,21 +111,39 @@ contains
    logical                                   :: picked   !< Picked this frame.
    logical(c_bool)                           :: e        !< C copy of `enabled`.
    logical(c_bool), target                   :: s        !< C copy of `selected`.
-   character(len=:), allocatable             :: keys     !< Shortcut text, NUL-terminated (empty when absent).
+   character(kind=c_char, len=CSTR_ROOM)      :: cl       !< `label` NUL-terminated (no allocation: menus are drawn open).
+   character(kind=c_char, len=CSTR_ROOM)      :: ck       !< Shortcut text, NUL-terminated (empty when absent).
+   character(len=:), allocatable             :: keys     !< ... when either is too long for the fixed buffers.
+   type(c_ptr)                               :: ps       !< `selected`'s C copy, or none.
 
    picked = .false.
    if (figure_draw_refused('ig_menu_item')) return ! a task does not draw
    e = .true._c_bool
    if (present(enabled)) e = logical(enabled, c_bool)
-   keys = cstr('')
-   if (present(shortcut)) keys = cstr(shortcut)
+   ps = c_null_ptr
    if (present(selected)) then
       s = logical(selected, c_bool)
-      picked = logical(igMenuItem_BoolPtr(cstr(label), keys, c_loc(s), e))
-      selected = logical(s)
-   else
-      picked = logical(igMenuItem_BoolPtr(cstr(label), keys, c_null_ptr, e))
+      ps = c_loc(s)
    endif
+   if (len(label, kind=int32) < CSTR_ROOM .and. shortcut_len() < CSTR_ROOM) then
+      call cstr_fix(label, cl)
+      call cstr_fix('', ck)
+      if (present(shortcut)) call cstr_fix(shortcut, ck)
+      picked = logical(igMenuItem_BoolPtr(cl, ck, ps, e))
+   else
+      keys = cstr('')
+      if (present(shortcut)) keys = cstr(shortcut)
+      picked = logical(igMenuItem_BoolPtr(cstr(label), keys, ps, e))
+   endif
+   if (present(selected)) selected = logical(s)
+   contains
+      pure function shortcut_len() result(n)
+      !< The shortcut's length (0 when absent).
+      integer(int32) :: n !< Length.
+
+      n = 0_int32
+      if (present(shortcut)) n = len(shortcut, kind=int32)
+      endfunction shortcut_len
    endfunction ig_menu_item
 
    recursive function ig_shortcut(keys, scope, repeat, stat) result(pressed)

@@ -18,7 +18,10 @@ program figure_test_plot_frame_alloc
 !< Fortran side the last NCOUNT frames are counted, from `pf_begin_plot` to `pf_end_plot` and around
 !< `pf_colormap_scale`, by figure_test_plot_alloc_counter (the C library's allocator entry points defined in the
 !< program: every allocation of the thread, the Fortran run-time's, Dear ImGui's, the C++ library's), and must make
-!< none. Checks:
+!< none. On the last seven the plot's context menu opens (a right click), then its x axis's submenu under the pointer:
+!< the menus' widgets, figure_menu's and figure_imgui's, label their items from fixed buffers. The item recorder
+!< (figure_items, native) is off on those frames: it copies a popup window's name into a std::string every frame
+!< (szaghi/figure#15, reported). Checks:
 !<
 !< 1. no allocation on the counted frames (the stacks of the first ones are printed on standard error);
 !< 2. the counter sees allocations: an ALLOCATE and a character concatenation of run-time length, counted (a counter
@@ -30,6 +33,7 @@ program figure_test_plot_frame_alloc
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : ip_begin_aligned, ip_begin_subplots, ip_end_aligned, ip_end_subplots, ip_link_axis
 use figure, only : ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_drag_rect, ip_tag
+use figure_testing, only : test_mouse_button, test_record_items
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
                    ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes,             &
                    ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
@@ -99,9 +103,17 @@ do sd = 1_int32, 2_int32 ! 1 ImPlot, 2 the Fortran frame
       call ig_end()
       if (f == NF) call test_capture(picture(side_fortran), s)
       if (f == 1_int32) call test_mouse_move(250.0_real64, 170.0_real64) ! resting on the plot from frame 2
+      if (f == NF - 7_int32) call test_record_items(.false.) ! from the next frame (see the header)
+      if (f == NF - 7_int32) call test_mouse_button(.true., 'right') ! the plot's context menu, open on the last frames
+      if (f == NF - 6_int32) call test_mouse_button(.false., 'right')
+      if (f == NF - 4_int32) call test_mouse_move(290.0_real64, 186.0_real64) ! on its first entry: the x axis's submenu
    enddo
-   call test_mouse_move(-100.0_real64, -100.0_real64)
+   call test_mouse_move(630.0_real64, 795.0_real64) ! the menu closed by a click outside it
    do i = 1_int32, 40_int32 ! as the other frame tests: the sides apart
+      if (i == 2_int32) call test_mouse_button(.true.)
+      if (i == 3_int32) call test_mouse_button(.false.)
+      if (i == 4_int32) call test_mouse_move(-100.0_real64, -100.0_real64)
+      if (i == 4_int32) call test_record_items(.true.)
       if (.not. app%next_frame()) error stop 'figure_test_plot_frame_alloc: next_frame returned false headless'
    enddo
 enddo

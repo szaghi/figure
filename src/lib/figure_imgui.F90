@@ -15,8 +15,9 @@ use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_double, c_f_pointer, c
                                         c_null_char, c_null_ptr, c_ptr
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused, figure_scope_open, &
-                        figure_scope_refused, figure_usage_error, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP, SCOPE_WINDOW
+use figure_base, only : cstr, cstr_fix, CSTR_ROOM, figure_check, figure_draw_refused, figure_fail, figure_refused, &
+                        figure_scope_open, figure_scope_refused, figure_usage_error, SCOPE_ITEM_WIDTH, SCOPE_TOOLTIP, &
+                        SCOPE_WINDOW
 use figure_c_native, only : fig_begin_side_bar, fig_texture_sampling, fig_tool_button, fig_widget_input_text, &
                             fig_text_get, fig_text_length, fig_text_release, fig_text_set, fig_widget_input_text_multiline, &
                             fig_get_clipboard, fig_set_clipboard, fig_item_status, fig_last_item, fig_mark_last_item_edited, &
@@ -208,13 +209,19 @@ contains
    real(real64),     intent(in), optional :: height  !< Height [pixels] (default: fit the label).
    logical                                :: pressed !< Clicked this frame.
    type(im_vec2)                          :: extent   !< Size (not `size`: see docs/guide/known-issues.md).
+   character(kind=c_char, len=CSTR_ROOM)   :: cl       !< `label` NUL-terminated (no allocation).
 
    pressed = .false.
    if (figure_draw_refused('ig_button')) return ! a task does not draw
    extent = im_vec2(0.0_c_float, 0.0_c_float)
    if (present(width)) extent%x = real(width, c_float)
    if (present(height)) extent%y = real(height, c_float)
-   pressed = logical(igButton(cstr(label), extent))
+   if (len(label) < CSTR_ROOM) then
+      call cstr_fix(label, cl)
+      pressed = logical(igButton(cl, extent))
+   else
+      pressed = logical(igButton(cstr(label), extent))
+   endif
    endfunction ig_button
 
    recursive function ig_tool_button(label, icon, width, height, selected, accent) result(clicked)
@@ -273,11 +280,17 @@ contains
    logical,          intent(inout) :: value   !< Value.
    logical                         :: changed !< Toggled this frame.
    logical(c_bool), target         :: v       !< C copy of `value`.
+   character(kind=c_char, len=CSTR_ROOM) :: cl !< `label` NUL-terminated (no allocation).
 
    changed = .false.
    if (figure_draw_refused('ig_checkbox')) return ! a task does not draw
    v = logical(value, c_bool)
-   changed = logical(igCheckbox(cstr(label), c_loc(v)))
+   if (len(label) < CSTR_ROOM) then
+      call cstr_fix(label, cl)
+      changed = logical(igCheckbox(cl, c_loc(v)))
+   else
+      changed = logical(igCheckbox(cstr(label), c_loc(v)))
+   endif
    value = logical(v)
    endfunction ig_checkbox
 
