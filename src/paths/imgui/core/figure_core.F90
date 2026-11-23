@@ -68,7 +68,8 @@ use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,
                                igGetHoveredID, igItemAdd, igItemSize_Vec2, igKeepAliveID, ImDrawList_AddCallback,          &
                                ImDrawList_AddCircle, ImDrawList_AddCircleFilled, ImDrawList_AddImage, ImDrawList_AddPolyline, &
                                ImDrawList_AddRect, ImDrawList_AddRectFilled, ImDrawList_AddText_Vec2, ImDrawList_PopClipRect, &
-                               ImDrawList_PrimReserve, ImDrawList_PushClipRect, igBeginPopupEx, igOpenPopupEx
+                               ImDrawList_PrimReserve, ImDrawList_PushClipRect, igBeginPopupEx, igOpenPopupEx,              &
+                               ImDrawList_PushTexture, ImDrawList_PopTexture
 use figure_c_native, only : fig_texture_sampling
 use figure_style, only : ig_get_style_var
 use figure_drawlist, only : dl_prims
