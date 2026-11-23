@@ -44,11 +44,13 @@ module figure_plot_frame
 !<   of the frame before, as ImPlot), the title above the plot (`LabelPadding`), the x axes below or above it and the y
 !<   axes left or right of it, outwards in order (`PadAndDatumAxesX`, `PadAndDatumAxesY`: their labels, their tick
 !<   labels, `MinorTickLen` and `LabelPadding` between two axes on a side), the plot rectangle;
-!< - the ticks of `Locator_Default`: the major count from the axis length (a major per 400 pixels on x, 300 on y, at
-!<   least 2), `NiceNum`, majors accumulated by `major += interval` with the zero snapped, ten labelled minors per
-!<   major, the labels thinned (every other one from the first major) when they fill more than 0.8 (x) or 1.0 (y) of
-!<   the axis; labels as `Formatter_Default` writes them, C's `%g` (foresight's printf formatter: glibc's output from
-!<   the exact binary value);
+!< - the scales (`SetupAxisScale`; `pf_setup_axis(scale=)`, `pf_setup_axes(xscale=, yscale=)`): linear, log10,
+!<   symlog, time (x only), set up every frame; a log10 or symlog axis maps a value through its transform onto the
+!<   range (`PlotToPixels`, the items' `Transformer1`), its range constrained (log10 from DBL_MIN, time from 0 to
+!<   IMPLOT_MAX_TIME: the fit takes only the values within, on the raw values, as ImPlot's `ExtendFit`);
+!< - the ticks (figure_plot_locators): `Locator_Default`, `Locator_Log10`, `Locator_SymLog`, `Locator_Time` with their
+!<   labels (`%g`; dates and times on two levels: the second level's room below the first, its labels lower, its ticks
+!<   without grid lines or tick marks);
 !< - the drawing of `SetupFinish` and `EndPlot`, in their order: the frame (`RenderFrame`, `FrameBg`), the plot's
 !<   background (`WindowBg`), the grid (majors, minors faded by `MinorAlpha` and by the ticks' density), each axis's
 !<   highlight (an item's colour while its legend entry is hovered, with more than one axis on its direction), label
@@ -68,7 +70,8 @@ module figure_plot_frame
 !< - a line (`PlotLine`'s `RendererLineStrip`): each segment a quad of the anti-aliased line's texture, half its
 !<   weight (at least 1 pixel) plus half the texture's fringe on each side, the segments outside the plot culled.
 !<
-!< Not yet (P10's rest, P11, P12): other scales, tick formats, pan, zoom and selection, the mouse text and the axes'
+!< Not yet (P10's rest, P11, P12): tick formats, local time and ImPlot's time style options (12-hour clock, US dates:
+!< ImPlot's defaults), pan, zoom and selection, the mouse text and the axes'
 !< hover (the pointer over the plot area), the legend's scrolling and context menus, colormaps other than Deep (the
 !< line colours of FIGURE's own styles: seal, paper, ...: their automatic colours are ImPlot's colormaps, registered by
 !< the native layer), ImPlot style variables set by a theme (`FitPadding` included), limits' constraints, the axis
@@ -87,7 +90,8 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,           &
                         core_style_var, core_text_size
 use figure_plot_hash, only : plot_hash, plot_id_offset
-use foresight_format, only : c_real
+use figure_plot_locators, only : plot_ticks, ticks_reset, locate_default, locate_log10, locate_symlog, locate_time, &
+                                transform_log10, transform_symlog, TIME_MAX, TIME_MIN
 
 implicit none
 private
@@ -116,11 +120,11 @@ real(real32), parameter :: LEGEND_SPACING(2) = [5.0_real32, 0.0_real32]        !
 real(real32), parameter :: FIT_PADDING(2) = [0.0_real32, 0.0_real32]           !< FitPadding (fraction of the range).
 real(real32), parameter :: LINE_WEIGHT = 1.0_real32                            !< ImPlotSpec's LineWeight [pixels].
 real(real32), parameter :: HIGHLIGHT_LINE_SCALE = 2.0_real32                   !< ITEM_HIGHLIGHT_LINE_SCALE.
-! Locator_Default
-real(real32),   parameter :: TICK_FILL_X = 0.8_real32 !< Labels may fill this much of an x axis.
-real(real32),   parameter :: TICK_FILL_Y = 1.0_real32 !< ... of a y axis.
-integer(int32), parameter :: N_MINOR = 10_int32       !< Minor intervals per major.
-integer(int32), parameter :: LABEL_LEN = 32_int32     !< IMPLOT_LABEL_MAX_SIZE.
+! ImPlotScale (implot.h)
+integer(int32), parameter :: SCALE_LINEAR = 0_int32 !< ImPlotScale_Linear.
+integer(int32), parameter :: SCALE_TIME = 1_int32   !< ImPlotScale_Time.
+integer(int32), parameter :: SCALE_LOG10 = 2_int32  !< ImPlotScale_Log10.
+integer(int32), parameter :: SCALE_SYMLOG = 3_int32 !< ImPlotScale_SymLog.
 ! the axes (ImAxis, one-based)
 integer(int32), parameter :: AX_X1 = 1_int32 !< X1.
 integer(int32), parameter :: AX_X3 = 3_int32 !< X3.
@@ -169,18 +173,6 @@ integer(int32), parameter :: DEEP(3, 10) = reshape([76_int32, 114_int32, 176_int
                                                     204_int32, 185_int32, 116_int32, 100_int32, 181_int32, 205_int32], &
                                                    [3, 10]) !< Its colours, RGB 0-255.
 
-type :: tick_list
-   !< An axis's ticks (ImPlotTicker): kept from frame to frame, grown when needed (no allocation per frame).
-   integer(int32)                        :: n = 0_int32            !< Ticks.
-   real(real64),             allocatable :: pos(:)                 !< Value.
-   real(real32),             allocatable :: pix(:)                 !< Pixel (rounded).
-   real(real32),             allocatable :: label_size(:,:)        !< Label's size (2, n) [pixels].
-   logical,                  allocatable :: major(:)               !< A major tick.
-   logical,                  allocatable :: show(:)                !< Its label shown.
-   character(len=LABEL_LEN), allocatable :: label(:)               !< Label.
-   real(real32)                          :: max_size(2) = 0.0_real32 !< The largest label (shown when added).
-endtype tick_list
-
 type :: plot_axis
    !< An axis (ImPlotAxis): its state kept between frames, and where it is on screen this frame.
    integer(int32) :: flags = 0_int32                  !< ImPlotAxisFlags in effect.
@@ -196,6 +188,11 @@ type :: plot_axis
    real(real32)   :: pixel_min = 0.0_real32           !< The range's minimum on screen [pixels].
    real(real32)   :: pixel_max = 0.0_real32           !< ... its maximum.
    real(real64)   :: scale_to_pixel = 0.0_real64      !< Pixels per unit.
+   integer(int32) :: scale = 0_int32                  !< ImPlotScale (this frame's: set up every frame).
+   real(real64)   :: scale_min = 0.0_real64           !< The range's minimum transformed (ScaleMin).
+   real(real64)   :: scale_max = 1.0_real64           !< ... its maximum (ScaleMax).
+   real(real64)   :: con_min = -huge(1.0_real64)      !< The range's constraint (ConstraintRange): minimum.
+   real(real64)   :: con_max = huge(1.0_real64)       !< ... maximum.
    real(real32)   :: datum1 = 0.0_real32              !< Where the axis's ticks start [pixels].
    real(real32)   :: datum2 = 0.0_real32              !< Where its room ends, away from the plot [pixels].
    integer(int32) :: hili = 0_int32                   !< Highlight's colour (ColorHiLi; 0: none).
@@ -257,7 +254,7 @@ logical                                :: next_fit(AXES) = .false. !< Axes to fi
 logical                                :: next_hidden_set = .false. !< The next item's visibility set (HasHidden).
 logical                                :: next_hidden = .false. !< ... hidden.
 integer(int32)                         :: next_hidden_cond = 0_int32 !< ... its condition.
-type(tick_list), target                :: ticks(AXES)    !< The open plot's ticks, per axis.
+type(plot_ticks), target               :: ticks(AXES)    !< The open plot's ticks, per axis.
 character(len=:), allocatable          :: text           !< The open plot's title and axis labels (TextBuffer).
 integer(int32)                         :: n_text = 0_int32 !< Characters of `text` in use.
 
@@ -309,6 +306,9 @@ contains
          p%ax(i)%ortho = 0_int32
          p%ax(i)%label_off = 0_int32
          p%ax(i)%label_len = 0_int32
+         p%ax(i)%scale = SCALE_LINEAR
+         p%ax(i)%con_min = -huge(1.0_real64)
+         p%ax(i)%con_max = huge(1.0_real64)
       enddo
       p%ax(AX_X1)%enabled = .true.
       p%ax(AX_Y1)%enabled = .true.
@@ -353,13 +353,16 @@ contains
    visible = .true.
    endfunction pf_begin_plot
 
-   subroutine pf_setup_axes(xlabel, ylabel, auto_fit)
+   subroutine pf_setup_axes(xlabel, ylabel, auto_fit, xscale, yscale)
    !< The axes X1 and Y1 (`SetupAxes`; `ip_setup_axes`): their labels ('' or '##...': none) and, with `auto_fit`, both
-   !< fit the data every frame (`ImPlotAxisFlags_AutoFit`). Call after `pf_begin_plot`, before any item. The flags
-   !< persist: a plot keeps them on the frames this is not called.
+   !< fit the data every frame (`ImPlotAxisFlags_AutoFit`); `xscale`/`yscale`: 'linear' (default), 'log', 'symlog',
+   !< 'time' (x only), as `ip_setup_axes`. Call after `pf_begin_plot`, before any item, every frame (the scales are
+   !< this frame's). The flags persist: a plot keeps them on the frames this is not called.
    character(len=*), intent(in)           :: xlabel   !< X label.
    character(len=*), intent(in)           :: ylabel   !< Y label.
    logical,          intent(in), optional :: auto_fit !< Fit the data every frame.
+   character(len=*), intent(in), optional :: xscale   !< Scale of x.
+   character(len=*), intent(in), optional :: yscale   !< Scale of y.
    integer(int32)                         :: flags    !< ImPlotAxisFlags.
 
    call setup_refused('pf_setup_axes')
@@ -369,16 +372,20 @@ contains
    endif
    call setup_axis(plots(cur), AX_X1, flags, xlabel)
    call setup_axis(plots(cur), AX_Y1, flags, ylabel)
+   if (present(xscale)) call setup_scale(plots(cur)%ax(AX_X1), xscale, .false.)
+   if (present(yscale)) call setup_scale(plots(cur)%ax(AX_Y1), yscale, .true.)
    endsubroutine pf_setup_axes
 
-   subroutine pf_setup_axis(axis, label, auto_fit, opposite, invert, lock, no_grid)
+   subroutine pf_setup_axis(axis, label, scale, auto_fit, opposite, invert, lock, no_grid)
    !< One axis (`SetupAxis`; `ip_setup_axis`): `'x1'`, `'x2'`, `'x3'`, `'y1'`, `'y2'`, `'y3'`; call after
    !< `pf_begin_plot`, before any item, every frame for the axes 2 and 3 (they exist on the frames they are set up).
    !< The secondary axes go on the opposite side (top, right) without grid lines unless `opposite`/`no_grid` say
    !< otherwise; `auto_fit`: the axis fits the data every frame; `invert`: values grow leftwards or downwards; `lock`:
-   !< its ends stay (no fit moves them). The flags persist: a plot keeps them on the frames this is not called.
+   !< its ends stay (no fit moves them); `scale`: 'linear' (default), 'log', 'symlog', 'time' (x axes only), this
+   !< frame's (`SetupAxisScale`). The flags persist: a plot keeps them on the frames this is not called.
    character(len=*), intent(in)           :: axis     !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
    character(len=*), intent(in), optional :: label    !< Label (default, '' or '##...': none).
+   character(len=*), intent(in), optional :: scale    !< 'linear', 'log', 'symlog', 'time'.
    logical,          intent(in), optional :: auto_fit !< Fit the data every frame.
    logical,          intent(in), optional :: opposite !< On the opposite side (default: the axes 2 and 3).
    logical,          intent(in), optional :: invert   !< Inverted.
@@ -401,6 +408,7 @@ contains
    else
       call setup_axis(plots(cur), i, flags)
    endif
+   if (present(scale)) call setup_scale(plots(cur)%ax(i), scale, i >= AX_Y1)
    endsubroutine pf_setup_axis
 
    subroutine pf_setup_axes_limits(xmin, xmax, ymin, ymax, always)
@@ -985,6 +993,11 @@ contains
       p%ax(i)%ortho = 0_int32
       p%ax(i)%label_off = 0_int32
       p%ax(i)%label_len = 0_int32
+      p%ax(i)%scale = SCALE_LINEAR
+      p%ax(i)%scale_min = 0.0_real64
+      p%ax(i)%scale_max = 1.0_real64
+      p%ax(i)%con_min = -huge(1.0_real64)
+      p%ax(i)%con_max = huge(1.0_real64)
    enddo
    endsubroutine reset_plot
 
@@ -1067,6 +1080,63 @@ contains
 
    ! private: the axes
 
+   subroutine setup_scale(ax, scale, vertical)
+   !< `SetupAxisScale`: the scale of an axis on this frame and its constraint (log10: from DBL_MIN; time: 0 to
+   !< IMPLOT_MAX_TIME, two label levels).
+   type(plot_axis),  intent(inout) :: ax       !< Axis.
+   character(len=*), intent(in)    :: scale    !< 'linear', 'log', 'symlog', 'time'.
+   logical,          intent(in)    :: vertical !< A y axis.
+
+   select case (trim(scale))
+   case ('linear')
+      ax%scale = SCALE_LINEAR
+      ax%con_min = -huge(1.0_real64)
+      ax%con_max = huge(1.0_real64)
+   case ('log')
+      ax%scale = SCALE_LOG10
+      ax%con_min = tiny(1.0_real64)
+      ax%con_max = huge(1.0_real64)
+   case ('symlog')
+      ax%scale = SCALE_SYMLOG
+      ax%con_min = -huge(1.0_real64)
+      ax%con_max = huge(1.0_real64)
+   case ('time')
+      if (vertical) error stop "figure_plot_frame: scale 'time' on a y axis (ImPlot labels time on x axes only)"
+      ax%scale = SCALE_TIME
+      ax%con_min = TIME_MIN
+      ax%con_max = TIME_MAX
+   case default
+      error stop "figure_plot_frame: a scale is 'linear', 'log', 'symlog' or 'time'"
+   endselect
+   endsubroutine setup_scale
+
+   subroutine measure_text(s, w, h)
+   !< A text's size in the current font (`CalcTextSize`), for the locators.
+   character(len=*), intent(in)  :: s    !< Text.
+   real(real32),     intent(out) :: w, h !< Size [pixels].
+   real(real64)                  :: cw, ch !< C values.
+
+   call core_text_size(s, cw, ch)
+   w = real(cw, real32)
+   h = real(ch, real32)
+   endsubroutine measure_text
+
+   pure function forward(ax, v) result(s)
+   !< The axis's forward transform (`TransformForward`): log10 or symlog; the value itself otherwise.
+   type(plot_axis), intent(in) :: ax !< Axis.
+   real(real64),    intent(in) :: v  !< Value.
+   real(real64)                :: s  !< Transformed.
+
+   select case (ax%scale)
+   case (SCALE_LOG10)
+      s = transform_log10(v)
+   case (SCALE_SYMLOG)
+      s = transform_symlog(v)
+   case default
+      s = v
+   endselect
+   endfunction forward
+
    subroutine setup_axis(p, i, flags, label)
    !< `SetupAxis`: the axis enabled on this frame, its flags taken if the plot is new or they changed, its label (none:
    !< absent, empty or starting with '##').
@@ -1097,13 +1167,15 @@ contains
    endsubroutine set_range
 
    subroutine constrain(ax)
-   !< `ImPlotAxis::Constrain` with the default constraints (any range, a size of at least DBL_MIN): NaN ends made 0,
-   !< infinite ones the largest finite value, an empty range given DBL_EPSILON.
+   !< `ImPlotAxis::Constrain`: NaN ends made 0, infinite ones the largest finite value, the ends within the scale's
+   !< constraint (`ConstraintRange`), a size of at least DBL_MIN (`ConstraintZoom`), an empty range given DBL_EPSILON.
    type(plot_axis), intent(inout) :: ax       !< Axis.
    real(real64)                   :: z, delta !< Size, half the growth.
 
    ax%range_min = constrain_nan(constrain_inf(ax%range_min))
    ax%range_max = constrain_nan(constrain_inf(ax%range_max))
+   if (ax%range_min < ax%con_min) ax%range_min = ax%con_min
+   if (ax%range_max > ax%con_max) ax%range_max = ax%con_max
    z = ax%range_max - ax%range_min
    if (z < tiny(1.0_real64)) then
       delta = (tiny(1.0_real64) - z) * 0.5_real64
@@ -1114,15 +1186,18 @@ contains
    endsubroutine constrain
 
    subroutine update_scale(ax)
-   !< `ImPlotAxis::UpdateTransformCache` of a linear axis: pixels per unit.
+   !< `ImPlotAxis::UpdateTransformCache`: pixels per unit, the range's ends transformed.
    type(plot_axis), intent(inout) :: ax !< Axis.
 
    ax%scale_to_pixel = real(ax%pixel_max - ax%pixel_min, real64) / (ax%range_max - ax%range_min)
+   ax%scale_min = forward(ax, ax%range_min)
+   ax%scale_max = forward(ax, ax%range_max)
    endsubroutine update_scale
 
    subroutine fit_points(xa, ya, x, y, n)
-   !< `Fitter1` with `ExtendFitWith`: the points' finite coordinates extend the axes' fit ranges (with
-   !< `ImPlotAxisFlags_RangeFit`, only those whose other coordinate is in the other axis's range).
+   !< `Fitter1` with `ExtendFitWith`: the points' finite coordinates within the axes' constraints (a log axis's
+   !< positive ones) extend the axes' fit ranges (with `ImPlotAxisFlags_RangeFit`, only those whose other coordinate is
+   !< in the other axis's range).
    type(plot_axis), intent(inout) :: xa   !< X axis.
    type(plot_axis), intent(inout) :: ya   !< Y axis.
    real(real64),    intent(in)    :: x(:) !< Abscissae.
@@ -1134,13 +1209,13 @@ contains
    rx = iand(xa%flags, AXF_RANGE_FIT) == AXF_RANGE_FIT
    ry = iand(ya%flags, AXF_RANGE_FIT) == AXF_RANGE_FIT
    do k = 1_int32, n
-      if (abs(x(k)) <= huge(1.0_real64)) then
+      if (abs(x(k)) <= huge(1.0_real64) .and. x(k) >= xa%con_min .and. x(k) <= xa%con_max) then
          if (.not. rx .or. (y(k) >= ya%range_min .and. y(k) <= ya%range_max)) then
             if (x(k) < xa%fit_min) xa%fit_min = x(k)
             if (x(k) > xa%fit_max) xa%fit_max = x(k)
          endif
       endif
-      if (abs(y(k)) <= huge(1.0_real64)) then
+      if (abs(y(k)) <= huge(1.0_real64) .and. y(k) >= ya%con_min .and. y(k) <= ya%con_max) then
          if (.not. ry .or. (x(k) >= xa%range_min .and. x(k) <= xa%range_max)) then
             if (y(k) < ya%fit_min) ya%fit_min = y(k)
             if (y(k) > ya%fit_max) ya%fit_max = y(k)
@@ -1368,8 +1443,8 @@ contains
    p%col_txt = core_style_color(ImGuiCol_Text)                              ! AxisText: Text
    p%col_border = core_style_color(ImGuiCol_Border)                         ! PlotBorder: Border
    do i = 1_int32, AXES
-      ticks(i)%n = 0_int32
-      ticks(i)%max_size = 0.0_real32
+      call ticks_reset(ticks(i))
+      if (p%ax(i)%scale == SCALE_TIME) ticks(i)%levels = 2_int32 ! SetupAxisScale: Ticker.Levels = 2
    enddo
    p%canvas(1:2) = p%frame(1:2) + PLOT_PADDING
    p%canvas(3:4) = p%frame(3:4) - PLOT_PADDING
@@ -1420,14 +1495,14 @@ contains
    plot_height = ((p%canvas(4) - p%canvas(2)) - pad_top) - pad_bot
    do i = AX_Y1, AX_Y3
       if (will_render(p%ax(i)) .and. plot_height > 0.0_real32) &
-         call locate(ticks(i), p%ax(i)%range_min, p%ax(i)%range_max, plot_height, .true.)
+         call locate(p%ax(i), ticks(i), plot_height, .true.)
    enddo
    call pad_and_datum_y(p, pad_left, pad_right)
    plot_width = ((p%canvas(3) - p%canvas(1)) - pad_left) - pad_right
    ! (4) the x ticks; (4.5) the x axes again, their labels' height known; (5) the plot rectangle
    do i = AX_X1, AX_X3
       if (will_render(p%ax(i)) .and. plot_width > 0.0_real32) &
-         call locate(ticks(i), p%ax(i)%range_min, p%ax(i)%range_max, plot_width, .false.)
+         call locate(p%ax(i), ticks(i), plot_width, .false.)
    enddo
    title_pad = 0.0_real32
    if (title_w > 0.0_real32) title_pad = title_h + LABEL_PADDING(2)
@@ -1529,7 +1604,8 @@ contains
                pad_t = pad_t + (real(h, real32) + pp)
             endif
             if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) &
-               pad_t = pad_t + ((max(t, ticks(i)%max_size(2)) + pp) + 0.0_real32)
+               pad_t = pad_t + ((max(t, ticks(i)%max_size(2)) + pp) + merge(t + pp, 0.0_real32, &
+                                                                            ax%scale == SCALE_TIME))
             ax%datum1 = p%canvas(2) + pad_t
             ax%datum2 = last_t
             last_t = ax%datum1
@@ -1541,7 +1617,8 @@ contains
                pad_b = pad_b + (real(h, real32) + pp)
             endif
             if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) &
-               pad_b = pad_b + ((max(t, ticks(i)%max_size(2)) + pp) + 0.0_real32)
+               pad_b = pad_b + ((max(t, ticks(i)%max_size(2)) + pp) + merge(t + pp, 0.0_real32, &
+                                                                            ax%scale == SCALE_TIME))
             ax%datum1 = p%canvas(4) - pad_b
             ax%datum2 = last_b
             last_b = ax%datum1
@@ -1600,8 +1677,8 @@ contains
 
    subroutine place_ticks(t, ax)
    !< The ticks' pixels, rounded (`IM_ROUND(PlotToPixels)`).
-   type(tick_list), intent(inout) :: t  !< Ticks.
-   type(plot_axis), intent(in)    :: ax !< Their axis.
+   type(plot_ticks), intent(inout) :: t  !< Ticks.
+   type(plot_axis),  intent(in)    :: ax !< Their axis.
    integer(int32)                 :: k  !< Counter.
 
    do k = 1_int32, t%n
@@ -1613,7 +1690,7 @@ contains
    !< The grid lines of an axis's ticks (`RenderGridLinesX`, `RenderGridLinesY`): the majors', and the minors' while
    !< the ticks are fewer than one per 5 pixels, faded out from one per 10.
    type(plot_record), intent(in) :: p        !< Plot.
-   type(tick_list),   intent(in) :: t        !< Ticks.
+   type(plot_ticks),  intent(in) :: t        !< Ticks.
    logical,           intent(in) :: vertical !< A y axis (horizontal lines).
    real(real32)                  :: density  !< Ticks per pixel.
    real(real32)                  :: a        !< The minors' alpha.
@@ -1630,6 +1707,7 @@ contains
    col_min = with_alpha(p%col_min, int(min(max(a, 0.0_real32), 1.0_real32) * 255.0_real32 + 0.5_real32, int32))
    do k = 1_int32, t%n
       if (t%pix(k) < p%rect(i) .or. t%pix(k) > p%rect(i + 2)) cycle
+      if (.not. vertical .and. t%level(k) /= 0_int32) cycle ! RenderGridLinesX: level 0 only
       if (t%major(k)) then
          call line(t%pix(k), p%col_maj, merge(MAJOR_GRID_SIZE(2), MAJOR_GRID_SIZE(1), vertical))
       elseif (density < 0.2_real32) then
@@ -1685,8 +1763,9 @@ contains
             lh = real(h, real32)
             off = 0.0_real32
             if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) off = (t%max_size(2) + LABEL_PADDING(2)) + &
-                                                                    0.0_real32 * (real(core_font_size(), real32) + &
-                                                                                  LABEL_PADDING(2))
+                                                                    real(t%levels - 1_int32, real32) *      &
+                                                                    (real(core_font_size(), real32) +       &
+                                                                     LABEL_PADDING(2))
             off = off + LABEL_PADDING(2)
             px = (r(1) + r(3)) * 0.5_real32 - lw * 0.5_real32
             py = merge((ax%datum1 - off) - lh, ax%datum1 + off, opp)
@@ -1695,7 +1774,8 @@ contains
          endif
          if (.not. has_flag(ax%flags, AXF_NO_TICK_LABELS)) then
             do k = 1_int32, t%n
-               pad = (LABEL_PADDING(2) + merge(t%label_size(2, k), 0.0_real32, opp)) + 0.0_real32
+               pad = (LABEL_PADDING(2) + merge(t%label_size(2, k), 0.0_real32, opp)) + &
+                     real(t%level(k), real32) * (real(core_font_size(), real32) + LABEL_PADDING(2))
                datum = ax%datum1 + pad * merge(-1.0_real32, 1.0_real32, opp)
                if (.not. t%show(k) .or. t%pix(k) < r(1) - 1.0_real32 .or. t%pix(k) > r(3) + 1.0_real32) cycle
                px = t%pix(k) - 0.5_real32 * t%label_size(1, k)
@@ -1747,7 +1827,7 @@ contains
          if (.not. has_flag(ax%flags, AXF_NO_TICK_MARKS)) then
             dir = merge(1.0_real32, -1.0_real32, opp)
             do k = 1_int32, t%n
-               if (t%pix(k) < r(1) .or. t%pix(k) > r(3)) cycle
+               if (t%level(k) /= 0_int32 .or. t%pix(k) < r(1) .or. t%pix(k) > r(3)) cycle
                len_ = merge(MAJOR_TICK_LEN(1), MINOR_TICK_LEN(1), .not. aux .and. t%major(k))
                thk = merge(MAJOR_TICK_SIZE(1), MINOR_TICK_SIZE(1), .not. aux .and. t%major(k))
                call core_draw_line_v(real(t%pix(k), real64), real(ax%datum1, real64), &
@@ -1774,7 +1854,7 @@ contains
          if (.not. has_flag(ax%flags, AXF_NO_TICK_MARKS)) then
             dir = merge(-1.0_real32, 1.0_real32, opp)
             do k = 1_int32, t%n
-               if (t%pix(k) < r(2) .or. t%pix(k) > r(4)) cycle
+               if (t%level(k) /= 0_int32 .or. t%pix(k) < r(2) .or. t%pix(k) > r(4)) cycle
                len_ = merge(MAJOR_TICK_LEN(2), MINOR_TICK_LEN(2), .not. aux .and. t%major(k))
                thk = merge(MAJOR_TICK_SIZE(2), MINOR_TICK_SIZE(2), .not. aux .and. t%major(k))
                call core_draw_line_h(real(ax%datum1, real64), real(ax%datum1 + dir * len_, real64), &
@@ -2115,186 +2195,43 @@ contains
    c = int(u, int32)
    endfunction mix_u32
 
-   subroutine locate(t, rmin, rmax, pixels, vertical)
-   !< `Locator_Default`: the ticks of a linear range on an axis `pixels` long.
-   type(tick_list), intent(inout) :: t          !< Ticks (appended).
-   real(real64),    intent(in)    :: rmin, rmax !< Range.
-   real(real32),    intent(in)    :: pixels     !< Axis's length [pixels].
-   logical,         intent(in)    :: vertical   !< A y axis.
-   integer(int32)                 :: n_major    !< Majors wanted.
-   real(real64)                   :: nice_range, interval, magnitude, min_interval !< The step.
-   real(real64)                   :: graphmin, graphmax !< The majors' span.
-   real(real64)                   :: major, minor !< Tick values.
-   real(real32)                   :: total(2)   !< Labels' total size [pixels].
-   integer(int32)                 :: first      !< The first major's tick (0: none).
-   integer(int32)                 :: idx0       !< Ticks before.
-   integer(int32)                 :: i          !< Counter.
+   subroutine locate(ax, t, pixels, vertical)
+   !< The axis's locator (`axis.Locator`): `Locator_Default`, `Locator_Log10`, `Locator_SymLog` or `Locator_Time` of
+   !< figure_plot_locators, on its range, the axis `pixels` long.
+   type(plot_axis),  intent(in)    :: ax       !< Axis.
+   type(plot_ticks), intent(inout) :: t        !< Ticks (appended).
+   real(real32),     intent(in)    :: pixels   !< Axis's length [pixels].
+   logical,          intent(in)    :: vertical !< A y axis.
 
-   if (rmin == rmax) return
-   n_major = max(2_int32, int(real(int(pixels / merge(300.0_real32, 400.0_real32, vertical) + 0.5_real32, int32), &
-                                  real32), int32))
-   nice_range = nice_num((rmax - rmin) * 0.99_real64, .false.)
-   interval = nice_num(nice_range / real(n_major - 1_int32, real64), .true.)
-   magnitude = max(abs(rmin), abs(rmax))
-   min_interval = nearest(magnitude, 1.0_real64) - magnitude
-   if (interval < min_interval) interval = min_interval
-   graphmin = c_floor(rmin / interval) * interval
-   graphmax = c_ceil(rmax / interval) * interval
-   first = 0_int32
-   idx0 = t%n
-   total = 0.0_real32
-   major = graphmin
-   do while (major < graphmax + 0.5_real64 * interval)
-      if (major - interval < 0.0_real64 .and. major + interval > 0.0_real64) major = 0.0_real64
-      if (major >= rmin .and. major <= rmax) then
-         if (first == 0_int32) first = t%n + 1_int32
-         call add_tick(t, major, .true., total)
-      endif
-      do i = 1_int32, N_MINOR - 1_int32
-         minor = major + real(i, real64) * interval / real(N_MINOR, real64)
-         if (minor >= rmin .and. minor <= rmax) call add_tick(t, minor, .false., total)
-      enddo
-      major = major + interval
-   enddo
-   if ((.not. vertical .and. total(1) > pixels * TICK_FILL_X) .or. &
-       (vertical .and. total(2) > pixels * TICK_FILL_Y)) then
-      if (first == 0_int32) first = 1_int32 ! ImPlot's first_major_idx left 0: the first tick
-      do i = first - 1_int32, idx0 + 1_int32, -2_int32
-         t%show(i) = .false.
-      enddo
-      do i = first + 1_int32, t%n, 2_int32
-         t%show(i) = .false.
-      enddo
-   endif
+   select case (ax%scale)
+   case (SCALE_LOG10)
+      call locate_log10(t, ax%range_min, ax%range_max, pixels, vertical, measure_text)
+   case (SCALE_SYMLOG)
+      call locate_symlog(t, ax%range_min, ax%range_max, pixels, vertical, measure_text)
+   case (SCALE_TIME)
+      call locate_time(t, ax%range_min, ax%range_max, pixels, measure_text)
+   case default
+      call locate_default(t, ax%range_min, ax%range_max, pixels, vertical, measure_text)
+   endselect
    endsubroutine locate
 
-   subroutine add_tick(t, v, major, total)
-   !< `ImPlotTicker::AddTick` with `Formatter_Default` (`%g`): a labelled tick, its label's size added to `total`.
-   type(tick_list), intent(inout) :: t        !< Ticks.
-   real(real64),    intent(in)    :: v        !< Value.
-   logical,         intent(in)    :: major    !< A major tick.
-   real(real32),    intent(inout) :: total(2) !< Labels' total size [pixels].
-   real(real64)                   :: w, h     !< Label's size.
-   integer(int32)                 :: k        !< The tick.
-
-   if (.not. allocated(t%pos)) call grow(t, 64_int32)
-   if (t%n == size(t%pos, kind=int32)) call grow(t, 2_int32 * t%n)
-   k = t%n + 1_int32
-   t%n = k
-   t%pos(k) = v
-   t%pix(k) = 0.0_real32
-   t%major(k) = major
-   t%show(k) = .true.
-   t%label(k) = c_real('', 0_int32, -1_int32, 'g', v)
-   call core_text_size(trim(t%label(k)), w, h)
-   t%label_size(:, k) = [real(w, real32), real(h, real32)]
-   t%max_size(1) = merge(t%label_size(1, k), t%max_size(1), t%label_size(1, k) > t%max_size(1))
-   t%max_size(2) = merge(t%label_size(2, k), t%max_size(2), t%label_size(2, k) > t%max_size(2))
-   total = total + t%label_size(:, k)
-   endsubroutine add_tick
-
-   subroutine grow(t, m)
-   !< Room for m ticks, those held kept.
-   type(tick_list), intent(inout)        :: t   !< Ticks.
-   integer(int32),  intent(in)           :: m   !< Ticks room.
-   real(real64),             allocatable :: pos(:)          !< New storage.
-   real(real32),             allocatable :: pix(:), ls(:,:) !< ...
-   logical,                  allocatable :: major(:), show(:) !< ...
-   character(len=LABEL_LEN), allocatable :: label(:)        !< ...
-   integer(int32)                        :: n   !< Ticks held.
-
-   n = t%n
-   allocate(pos(m), pix(m), ls(2, m), major(m), show(m), label(m))
-   if (n > 0_int32) then
-      pos(1:n) = t%pos(1:n)
-      pix(1:n) = t%pix(1:n)
-      ls(:, 1:n) = t%label_size(:, 1:n)
-      major(1:n) = t%major(1:n)
-      show(1:n) = t%show(1:n)
-      label(1:n) = t%label(1:n)
-   endif
-   call move_alloc(pos, t%pos)
-   call move_alloc(pix, t%pix)
-   call move_alloc(ls, t%label_size)
-   call move_alloc(major, t%major)
-   call move_alloc(show, t%show)
-   call move_alloc(label, t%label)
-   endsubroutine grow
-
-   pure function nice_num(x, round) result(nice)
-   !< `NiceNum`: a nice number (1, 2, 5 or 10 times a power of ten) near x, rounded or not below it.
-   real(real64), intent(in) :: x     !< Value (> 0).
-   logical,      intent(in) :: round !< Round (else the nice number at least x).
-   real(real64)             :: nice  !< Nice number.
-   real(real64)             :: f, nf !< Fraction, nice fraction.
-   integer(int32)           :: e     !< Exponent.
-
-   e = int(c_floor(log10(x)), int32)
-   f = x / pow10(e)
-   if (round) then
-      if (f < 1.5_real64) then
-         nf = 1.0_real64
-      elseif (f < 3.0_real64) then
-         nf = 2.0_real64
-      elseif (f < 7.0_real64) then
-         nf = 5.0_real64
-      else
-         nf = 10.0_real64
-      endif
-   elseif (f <= 1.0_real64) then
-      nf = 1.0_real64
-   elseif (f <= 2.0_real64) then
-      nf = 2.0_real64
-   elseif (f <= 5.0_real64) then
-      nf = 5.0_real64
-   else
-      nf = 10.0_real64
-   endif
-   nice = nf * pow10(e)
-   endfunction nice_num
-
-   pure function pow10(e) result(p)
-   !< 10**e as C's correctly rounded `pow(10.0, e)`: exact up to 10**22, its reciprocal one rounding below 1.
-   integer(int32), intent(in) :: e !< Exponent.
-   real(real64)               :: p !< Power.
-   integer(int32)             :: k !< Counter.
-
-   if (abs(e) > 22_int32) then
-      p = 10.0_real64**real(e, real64)
-      return
-   endif
-   p = 1.0_real64
-   do k = 1_int32, abs(e)
-      p = p * 10.0_real64
-   enddo
-   if (e < 0_int32) p = 1.0_real64 / p
-   endfunction pow10
-
-   pure function c_floor(x) result(f)
-   !< C's `floor` of a real, as a real (no integer overflow).
-   real(real64), intent(in) :: x !< Value.
-   real(real64)             :: f !< Floor.
-
-   f = aint(x)
-   if (f > x) f = f - 1.0_real64
-   endfunction c_floor
-
-   pure function c_ceil(x) result(f)
-   !< C's `ceil` of a real, as a real.
-   real(real64), intent(in) :: x !< Value.
-   real(real64)             :: f !< Ceiling.
-
-   f = aint(x)
-   if (f < x) f = f + 1.0_real64
-   endfunction c_ceil
-
    pure function to_pixels(ax, v) result(px)
-   !< `PlotToPixels` of a linear axis: the pixel of a value, in single precision.
+   !< `PlotToPixels` (and the items' `Transformer1`): the pixel of a value, in single precision; on a log10 or symlog
+   !< axis the value's place in the transformed range mapped back onto the range first. The products added to
+   !< another term in statements of their own (no FMA, as ImPlot's build).
    type(plot_axis), intent(in) :: ax !< Axis.
    real(real64),    intent(in) :: v  !< Value.
    real(real32)                :: px !< Pixel.
+   real(real64)                :: w, tt !< Value on the range, its fraction.
 
-   px = real(real(ax%pixel_min, real64) + ax%scale_to_pixel * (v - ax%range_min), real32)
+   w = v
+   if (ax%scale == SCALE_LOG10 .or. ax%scale == SCALE_SYMLOG) then
+      tt = (forward(ax, v) - ax%scale_min) / (ax%scale_max - ax%scale_min)
+      w = (ax%range_max - ax%range_min) * tt
+      w = ax%range_min + w
+   endif
+   w = ax%scale_to_pixel * (w - ax%range_min)
+   px = real(real(ax%pixel_min, real64) + w, real32)
    endfunction to_pixels
 
    pure function border_shown(p) result(shown)

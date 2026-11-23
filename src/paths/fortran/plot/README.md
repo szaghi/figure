@@ -60,6 +60,20 @@ C's `%g` on the labels the goldens show.
   nvfortran, ifx). A line twice as thick (a hovered item) is sensitive to ImPlot's `rsqrtss` normal: one edge pixel
   differed by 48 on one curve (see the test's header). Not yet: the mouse text and the axes' hover (the pointer on the
   plot area), the legend's scrolling, sorting and context menu, tick formats, `TickLabelsInside`, `Foreground`.
+- 2026-11-22, scales (P10 step 5): `figure_plot_locators`, ImPlot's `Locator_Default`, `Locator_Log10`
+  (`CalcLogarithmicExponents`, `AddTicksLogarithmic`), `Locator_SymLog` (`CalcSymLogPixel`), `Locator_Time` (units,
+  steps, the formats of `TimeFormatLevel0/1/1First`, `FormatDateTime`, UTC through a Fortran `gmtime`/`timegm`,
+  ImPlot's `AddTime`, `FloorTime`, `TimeLabelSame`, years by `NiceNum`) and the transforms (log10 of max(v, DBL_MIN),
+  2 asinh(v/2)); checked first standalone against ImPlot's own C++ on 25 ranges (a scratch harness: every tick's
+  value to 17 digits, major, level, label and label size equal, gfortran, nvfortran, ifx), then in the frame:
+  `pf_setup_axis(scale=)`, `pf_setup_axes(xscale=, yscale=)`, points through the transform, the scales' constraints
+  in the fit, two label levels on time axes. `pow`, `log10`, `asinh`, `sinh` are bound from the C library (glibc's
+  `pow(10, e)` is not correctly rounded at e = 23, 210; nvfortran's own differ) and the sums of products are split
+  (nvfortran -O2 makes FMAs). `figure_test_plot_frame_scales` compares 9 cases with ImPlot (log y over decades, log x,
+  symlog across zero and within [-1, 1], log y with values <= 0, a log y2, time axes over hours, months, 30 years):
+  ranges of every frame equal, pictures at threshold 2 with no pixel failing (three compilers). Not yet: tick formats
+  (`SetupAxisFormat`), custom ticks, local time and ImPlot's time style options (`UseLocalTime`, `UseISO8601`,
+  `Use24HourClock`: the locator takes the last two, the frame passes ImPlot's defaults).
 
 ## What the current seam calls, to replace
 
@@ -75,7 +89,8 @@ The ImPlot functions `figure_implot` calls (76, through `figure_cimplot`) and th
 - [x] Limits and the fit: `ImPlot_SetupAxisLimits`, `ImPlot_SetupAxesLimits`, `ImPlot_SetNextAxisToFit`,
       `ImPlot_GetPlotLimits` (X1, Y1)
 - [ ] Constraints: `fig_plot_axis_constraints` (`SetupAxisLimitsConstraints`, `SetupAxisZoomConstraints`)
-- [ ] Scales: `ImPlot_SetupAxisScale_PlotScale` (linear, log, symlog, time); `fig_plot_x_transform`
+- [x] Scales: `ImPlot_SetupAxisScale_PlotScale` (linear, log, symlog, time)
+- [ ] `fig_plot_x_transform` (the decimation's view of an axis's transform)
 - [ ] Ticks and labels: `ImPlot_SetupAxisTicks_doublePtr`, `ImPlot_SetupAxisFormat_Str`
 - [x] Legend: `ImPlot_SetupLegend`, `ImPlot_IsLegendEntryHovered`, `ImPlot_HideNextItem`
 - [ ] Legend popups: `ImPlot_BeginLegendPopup`, `ImPlot_EndLegendPopup`
