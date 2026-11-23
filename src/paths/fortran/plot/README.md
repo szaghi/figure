@@ -164,6 +164,18 @@ without allocation (glibc's output; at first foresight's `c_real`, which it repr
   of both precisions and their fit, two digital bands with a NaN, texts horizontal and vertical with offsets and their
   fit, a single precision pie): ranges of every frame equal to the bit, pictures at threshold 2 with no pixel failing
   (three compilers).
+- 2026-11-22, heatmaps and histograms (P11 group (d), first part), in `figure_plot_items`: `pf_heatmap`
+  (`PlotHeatmap` as `ip_heatmap` calls it: rows along y from ymin, the scale from the data unless given, a constant
+  scale one rectangle of the map's first colour, cells `RendererRectC` vertex for vertex and culled, `ColMajor`, the
+  values printed through a printf format black or white on their cell; the colormap pushed, Viridis by default),
+  `pf_histogram` (`ip_histogram` then `PlotHistogram`: the finite values, the range given or theirs widened,
+  FIGURE's bin rules (`rule_bins`, `std_dev` as figure_implot's), the counts cumulative, density, without outliers,
+  horizontal, the bars' path, `max_count`), `pf_histogram2d` (`PlotHistogram2D`: the counts a heatmap, density, a
+  colormap). `figure_test_plot_frame_fields` compares 10 cases with ImPlot (data and given scales, Jet, a constant
+  field, column major, Sturges, 20 bins cumulative density horizontal, NaNs with Scott's rule and NoOutliers, 2-D
+  default and given bins in Hot, the fit, single precision): ranges of every frame and `max_count` equal to the
+  bit, pictures at threshold 2 with no pixel failing (three compilers). Not yet: `ip_image` and `ip_field_image`
+  (they need a figure_core wrapper of the textures' sampling callback: proposed, waiting for the coordinator).
 
 ## What the current seam calls, to replace
 

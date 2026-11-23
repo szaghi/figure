@@ -44,6 +44,12 @@ module figure_plot_items
 !< segments, `cosf`/`sinf`), `pf_digital` (`PlotDigital`, FIGURE's patched copy: the bands stacked, no fit),
 !< `pf_text` (`PlotText`: centred, vertical, offset, fitted; not an item).
 !<
+!< Group (d): `pf_heatmap` (`PlotHeatmap` as `ip_heatmap` calls it: rows along y from ymin, the scale from the data
+!< when not given, a constant scale one rectangle, `RendererRectC` cells, labels through a printf format),
+!< `pf_histogram` and `pf_histogram2d` (`ip_histogram`/`ip_histogram2d`: the finite values, FIGURE's range and bin
+!< rules, then `PlotHistogram` (cumulative, density, outliers; the bars' path) and `PlotHistogram2D` (a heatmap of the
+!< counts)).
+!<
 !< No allocation per item per frame (ADR 0001): views of the arrays, fixed quads; the decimation's index buffer and
 !< the integer abscissae's conversion (decimated items only) are grown once and kept.
 !<
@@ -58,7 +64,7 @@ use figure_core, only : core_draw_line, core_draw_line_h, core_draw_line_v, core
                         core_push_clip_rect, core_style_color, core_style_var, core_text_size, core_white_pixel
 use figure_decimate, only : decimate, decimate_axis, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
                             DECIMATE_THRESHOLD
-use figure_plot_colormaps, only : cm_pop, cm_push
+use figure_plot_colormaps, only : cm_current, cm_key, cm_pop, cm_push, cm_sample, CM_VIRIDIS
 use figure_plot_format, only : plot_format, fmt_parse, fmt_real
 use figure_plot_frame, only : plot_item_ctx, pf_digital_offset, pf_item_begin, pf_item_count, pf_item_end,      &
                               pf_item_fit, pf_item_fit_axis, pf_item_fit_with, pf_item_hidden, pf_item_shown_at, &
@@ -73,6 +79,10 @@ public :: pf_bars, pf_bar_groups, pf_error_bars, pf_inf_lines
 public :: PF_BARS_HORIZONTAL, PF_ERROR_BARS_HORIZONTAL, PF_INF_LINES_HORIZONTAL
 public :: pf_pie_chart, pf_bubbles, pf_digital, pf_text
 public :: PF_PIE_NORMALIZE, PF_PIE_IGNORE_HIDDEN, PF_PIE_EXPLODING, PF_PIE_NO_SLICE_BORDER, PF_TEXT_VERT
+public :: pf_heatmap, pf_histogram, pf_histogram2d
+public :: PF_HEATMAP_COL_MAJOR, PF_HIST_HORIZONTAL, PF_HIST_CUMULATIVE, PF_HIST_DENSITY, PF_HIST_NO_OUTLIERS
+public :: PF_HIST_COL_MAJOR
+public :: PF_BIN_SQRT, PF_BIN_STURGES, PF_BIN_RICE, PF_BIN_SCOTT
 ! ImPlotMarker (implot.h): the same values as FIGURE's ImPlotMarker_*
 public :: PF_MARKER_NONE, PF_MARKER_AUTO, PF_MARKER_CIRCLE, PF_MARKER_SQUARE, PF_MARKER_DIAMOND, PF_MARKER_UP
 public :: PF_MARKER_DOWN, PF_MARKER_LEFT, PF_MARKER_RIGHT, PF_MARKER_CROSS, PF_MARKER_PLUS, PF_MARKER_ASTERISK
@@ -118,6 +128,16 @@ integer(int32), parameter :: PF_TEXT_VERT = 1024_int32           !< ImPlotTextFl
 real(real32),   parameter :: IM_PI = 3.14159265358979323846_real32 !< IM_PI (a float).
 real(real32),   parameter :: DIGITAL_PADDING = 20.0_real32       !< ImPlotStyle::DigitalPadding.
 real(real32),   parameter :: DIGITAL_SPACING = 4.0_real32        !< ImPlotStyle::DigitalSpacing.
+integer(int32), parameter :: PF_HEATMAP_COL_MAJOR = 1024_int32 !< ImPlotHeatmapFlags_ColMajor.
+integer(int32), parameter :: PF_HIST_HORIZONTAL = 1024_int32  !< ImPlotHistogramFlags_Horizontal.
+integer(int32), parameter :: PF_HIST_CUMULATIVE = 2048_int32  !< ImPlotHistogramFlags_Cumulative.
+integer(int32), parameter :: PF_HIST_DENSITY = 4096_int32     !< ImPlotHistogramFlags_Density.
+integer(int32), parameter :: PF_HIST_NO_OUTLIERS = 8192_int32 !< ImPlotHistogramFlags_NoOutliers.
+integer(int32), parameter :: PF_HIST_COL_MAJOR = 16384_int32  !< ImPlotHistogramFlags_ColMajor (heatmaps' ColMajor).
+integer(int32), parameter :: PF_BIN_SQRT = -1_int32           !< ImPlotBin_Sqrt.
+integer(int32), parameter :: PF_BIN_STURGES = -2_int32        !< ImPlotBin_Sturges.
+integer(int32), parameter :: PF_BIN_RICE = -3_int32           !< ImPlotBin_Rice.
+integer(int32), parameter :: PF_BIN_SCOTT = -4_int32          !< ImPlotBin_Scott.
 real(real32),   parameter :: AUTO_ALPHA = -1.0_real32       !< IMPLOT_AUTO_COL's alpha: an automatic colour.
 real(real32),   parameter :: HIGHLIGHT_LINE_SCALE = 2.0_real32 !< ITEM_HIGHLIGHT_LINE_SCALE.
 real(real32),   parameter :: HIGHLIGHT_MARK_SCALE = 1.25_real32 !< ITEM_HIGHLIGHT_MARK_SCALE.
@@ -242,6 +262,8 @@ real(real32),   allocatable :: conv32(:)              !< Integer abscissae conve
 real(real64),   allocatable :: conv64(:)              !< ...
 real(real64)                :: uv_white(2) = 0.0_real64 !< The white pixel's texture coordinates (this item's).
 real(real64), allocatable, target :: stack_tmp(:)     !< Stacked bar groups' neg, pos, curr_min, curr_max (TempDouble1).
+real(real64), allocatable, target :: hist_a(:), hist_b(:) !< Histograms' centres and counts (TempDouble1/2), 2-D counts.
+real(real64), allocatable         :: finite_x(:), finite_y(:) !< The finite values of a histogram (kept, grown).
 
 interface pf_line
    !< Line through the points (x(i), y(i)), through y(i) at uniformly spaced x (a vector or a matrix's row): `ip_line`.
@@ -335,6 +357,21 @@ interface pf_bubbles
    !< Circles at (x(i), y(i)) of radius radii(i) in plot units: `ip_bubbles`.
    module procedure bubbles_r32, bubbles_r64
 endinterface pf_bubbles
+
+interface pf_heatmap
+   !< The field f(i, j) as coloured cells over [xmin, xmax] x [ymin, ymax]: `ip_heatmap`.
+   module procedure heatmap_r32, heatmap_r64
+endinterface pf_heatmap
+
+interface pf_histogram
+   !< A histogram of values: `ip_histogram`.
+   module procedure histogram_r32, histogram_r64
+endinterface pf_histogram
+
+interface pf_histogram2d
+   !< A 2-D histogram of points: `ip_histogram2d`.
+   module procedure histogram2d_r32, histogram2d_r64
+endinterface pf_histogram2d
 
 interface pf_digital
    !< A digital signal in a band at the bottom of the plot: `ip_digital`.
@@ -2358,6 +2395,553 @@ contains
       col = -1_int32        ! 0xFFFFFFFF
    endif
    endfunction text_on
+
+   ! heatmaps, histograms (PlotHeatmap, PlotHistogram, PlotHistogram2D)
+
+   subroutine heatmap_r64(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec)
+   !< The field f(i, j) as coloured cells (`PlotHeatmap`, as `ip_heatmap` calls it: rows size(f, 2) along y, columns
+   !< size(f, 1) along x, row 1 at ymin), double precision, read in place.
+   character(len=*),     intent(in)                     :: label        !< Legend label.
+   real(real64),         intent(in), target, contiguous :: f(:,:)       !< Field.
+   real(real64),         intent(in)                     :: xmin, xmax   !< Columns' edges.
+   real(real64),         intent(in)                     :: ymin, ymax   !< Rows' edges.
+   real(real64),         intent(in), optional           :: scale_min    !< Value at the map's bottom.
+   real(real64),         intent(in), optional           :: scale_max    !< ... at its top (both or none: data).
+   character(len=*),     intent(in), optional           :: label_format !< printf format of each cell's value.
+   integer(int32),       intent(in), optional           :: colormap     !< Colormap (default Viridis).
+   type(plot_item_spec), intent(in), optional           :: spec         !< Style (its flags).
+   type(item_series)                                    :: g            !< The values in memory order (coordinate 2).
+   real(real64), pointer                                :: v(:)         !< ... as a vector.
+
+   v(1:size(f)) => f
+   call view_r64(g, 2_int32, v)
+   g%n = int(size(f), int32)
+   call heatmap_item(label, g, int(size(f, 2), int32), int(size(f, 1), int32), xmin, xmax, ymin, ymax, scale_min, &
+                     scale_max, label_format, colormap, spec_or_default(spec))
+   endsubroutine heatmap_r64
+
+   subroutine heatmap_r32(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, colormap, spec)
+   !< The field f(i, j) as coloured cells (`PlotHeatmap`), single precision, read in place.
+   character(len=*),     intent(in)                     :: label        !< Legend label.
+   real(real32),         intent(in), target, contiguous :: f(:,:)       !< Field.
+   real(real64),         intent(in)                     :: xmin, xmax   !< Columns' edges.
+   real(real64),         intent(in)                     :: ymin, ymax   !< Rows' edges.
+   real(real64),         intent(in), optional           :: scale_min    !< Value at the map's bottom.
+   real(real64),         intent(in), optional           :: scale_max    !< ... at its top (both or none: data).
+   character(len=*),     intent(in), optional           :: label_format !< printf format of each cell's value.
+   integer(int32),       intent(in), optional           :: colormap     !< Colormap (default Viridis).
+   type(plot_item_spec), intent(in), optional           :: spec         !< Style (its flags).
+   type(item_series)                                    :: g            !< The values in memory order.
+   real(real32), pointer                                :: v(:)         !< ... as a vector.
+
+   v(1:size(f)) => f
+   call view_r32(g, 2_int32, v)
+   g%n = int(size(f), int32)
+   call heatmap_item(label, g, int(size(f, 2), int32), int(size(f, 1), int32), xmin, xmax, ymin, ymax, scale_min, &
+                     scale_max, label_format, colormap, spec_or_default(spec))
+   endsubroutine heatmap_r32
+
+   subroutine heatmap_item(label, g, rows, cols, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, &
+                           colormap, spec)
+   !< `PlotHeatmap(values, rows, cols, smin, smax, fmt, (xmin, ymax), (xmax, ymin))` as `ip_heatmap` calls it, the
+   !< colormap pushed: `FitterRect`, `RenderHeatmap` (reverse_y: row 0 at ymin).
+   character(len=*),     intent(in)           :: label        !< Label.
+   type(item_series),    intent(in)           :: g            !< Values.
+   integer(int32),       intent(in)           :: rows, cols   !< Shape.
+   real(real64),         intent(in)           :: xmin, xmax, ymin, ymax !< Bounds.
+   real(real64),         intent(in), optional :: scale_min, scale_max   !< Scale.
+   character(len=*),     intent(in), optional :: label_format !< Labels.
+   integer(int32),       intent(in), optional :: colormap     !< Colormap.
+   type(plot_item_spec), intent(in)           :: spec         !< Style.
+   type(plot_item_ctx)                        :: ctx          !< The plot.
+   type(item_style)                           :: s            !< Staged style.
+   type(plot_format)                          :: fm           !< Labels' format.
+   real(real64)                               :: smin, smax   !< Scale.
+   integer(int32)                             :: cm           !< Colormap.
+
+   cm = CM_VIRIDIS
+   if (present(colormap)) cm = colormap
+   call cm_push(cm)
+   smin = 0.0_real64
+   smax = 0.0_real64
+   if (present(scale_min)) smin = scale_min
+   if (present(scale_max)) smax = scale_max
+   if (begin(label, spec, [0.0_real32, 0.0_real32, 0.0_real32, AUTO_ALPHA], PF_MARKER_INVALID, ctx, s)) then
+      if (fits(ctx, spec)) then ! FitterRect((xmin, ymax), (xmax, ymin))
+         call pf_item_fit(xmin, ymax)
+         call pf_item_fit(xmax, ymin)
+      endif
+      if (rows > 0_int32 .and. cols > 0_int32) then
+         if (present(label_format)) then
+            call fmt_parse(label_format, fm)
+            call render_heatmap(ctx, g, rows, cols, smin, smax, fm, .true., xmin, ymax, xmax, ymin, .true., &
+                                iand(spec%flags, PF_HEATMAP_COL_MAJOR) /= 0_int32)
+         else
+            call render_heatmap(ctx, g, rows, cols, smin, smax, fm, .false., xmin, ymax, xmax, ymin, .true., &
+                                iand(spec%flags, PF_HEATMAP_COL_MAJOR) /= 0_int32)
+         endif
+      endif
+      call finish()
+   endif
+   call cm_pop()
+   endsubroutine heatmap_item
+
+   subroutine render_heatmap(ctx, g, rows, cols, smin_, smax_, fm, labelled, bx0, by0, bx1, by1, reverse_y, col_maj)
+   !< `RenderHeatmap`: scale from the data when (0, 0); a constant scale one rectangle of the map's first colour; else
+   !< a cell per value (`GetterHeatmapRowMaj`/`ColMaj`, `RendererRectC`: culled, transparent skipped), then the labels.
+   type(plot_item_ctx), intent(in) :: ctx            !< The plot.
+   type(item_series),   intent(in) :: g              !< Values.
+   integer(int32),      intent(in) :: rows, cols     !< Shape.
+   real(real64),        intent(in) :: smin_, smax_   !< Scale.
+   type(plot_format),   intent(in) :: fm             !< Labels' format.
+   logical,             intent(in) :: labelled       !< Labels.
+   real(real64),        intent(in) :: bx0, by0, bx1, by1 !< bounds_min, bounds_max.
+   logical,             intent(in) :: reverse_y      !< Row 0 at bounds_max.y.
+   logical,             intent(in) :: col_maj        !< Column major.
+   real(real64)                    :: smin, smax, w, h, hx, hy, yref, ydir, px, py, v, t, a !< Cells.
+   real(real32)                    :: p1(2), p2(2), tsz(2) !< Pixels, a label's size.
+   real(real64)                    :: tw, th          !< Text size.
+   integer(int32)                  :: idx, r, c, col, nl !< Value, row, column, colour, label length.
+   character(len=31)               :: lab             !< A label.
+
+   smin = smin_
+   smax = smax_
+   if (smin == 0.0_real64 .and. smax == 0.0_real64) call min_max(g, rows * cols, smin, smax)
+   if (smin == smax) then
+      p1 = [map_pixel(ctx%tx, bx0), map_pixel(ctx%ty, by0)]
+      p2 = [map_pixel(ctx%tx, bx1), map_pixel(ctx%ty, by1)]
+      call core_draw_rect_filled(real(p1(1), real64), real(p1(2), real64), real(p2(1), real64), real(p2(2), real64), &
+                                 cm_key(cm_current(), 0_int32))
+      return
+   endif
+   yref = merge(by1, by0, reverse_y)
+   ydir = merge(-1.0_real64, 1.0_real64, reverse_y)
+   w = (bx1 - bx0) / real(cols, real64)
+   h = (by1 - by0) / real(rows, real64)
+   hx = w * 0.5_real64
+   hy = h * 0.5_real64
+   do idx = 0_int32, rows * cols - 1_int32
+      if (col_maj) then
+         r = mod(idx, rows)
+         c = idx / rows
+      else
+         r = idx / cols
+         c = mod(idx, cols)
+      endif
+      v = coordinate(g, 2_int32, int(idx + 1_int32, int64))
+      t = real(c, real64) * w ! XRef + HalfSize.x + c Width
+      px = (bx0 + hx) + t
+      t = real(r, real64) * h ! YRef + YDir (HalfSize.y + r Height)
+      a = hy + t
+      t = ydir * a
+      py = yref + t
+      col = cm_sample(cm_current(), min(max(real((v - smin) / (smax - smin), real32), 0.0_real32), 1.0_real32))
+      p1 = [map_pixel(ctx%tx, px - hx), map_pixel(ctx%ty, py - hy)]
+      p2 = [map_pixel(ctx%tx, px + hx), map_pixel(ctx%ty, py + hy)]
+      if (iand(ishft(int(col, int64), -24), 255_int64) == 0_int64) cycle
+      if (.not. overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
+                         im_max(p1(2), p2(2)))) cycle
+      call prim_rect_fill(p1(1), p1(2), p2(1), p2(2), col)
+   enddo
+   if (.not. labelled) return
+   idx = 0_int32
+   do r = 0_int32, merge(cols, rows, col_maj) - 1_int32 ! (outer loop: columns when column major)
+      do c = 0_int32, merge(rows, cols, col_maj) - 1_int32
+         if (col_maj) then
+            call label_cell(c, r)
+         else
+            call label_cell(r, c)
+         endif
+         idx = idx + 1_int32
+      enddo
+   enddo
+   contains
+      subroutine label_cell(rr, cc)
+      !< A cell's label: its value through the format, centred, black or white on its colour.
+      integer(int32), intent(in) :: rr, cc !< Row, column.
+      real(real64)               :: qx, qy, q, b !< Centre, terms.
+
+      q = 0.5_real64 * w
+      qx = bx0 + q
+      q = real(cc, real64) * w
+      qx = qx + q
+      q = 0.5_real64 * h
+      b = real(rr, real64) * h
+      q = q + b
+      q = ydir * q
+      qy = yref + q
+      v = coordinate(g, 2_int32, int(idx + 1_int32, int64))
+      nl = 0_int32
+      call fmt_real(lab, nl, fm, v)
+      call core_text_size(lab(1:nl), tw, th)
+      tsz = [real(tw, real32), real(th, real32)] * 0.5_real32
+      q = min(max((v - smin) / (smax - smin), 0.0_real64), 1.0_real64)
+      col = text_on(unpack_u32(cm_sample(cm_current(), real(q, real32)))) ! CalcTextColor(SampleColormap((float)t))
+      call core_draw_text(real(map_pixel(ctx%tx, qx) - tsz(1), real64), real(map_pixel(ctx%ty, qy) - tsz(2), real64), &
+                          col, lab(1:nl))
+      endsubroutine label_cell
+   endsubroutine render_heatmap
+
+   subroutine min_max(g, n, lo, hi)
+   !< `ImMinMaxIndexer`: the first value, then `<` and `>` (NaN ignored after the first).
+   type(item_series), intent(in)  :: g      !< Values.
+   integer(int32),    intent(in)  :: n      !< Count.
+   real(real64),      intent(out) :: lo, hi !< Range.
+   integer(int32)                 :: i      !< Counter.
+   real(real64)                   :: v      !< A value.
+
+   lo = coordinate(g, 2_int32, 1_int64)
+   hi = lo
+   do i = 2_int32, n
+      v = coordinate(g, 2_int32, int(i, int64))
+      if (v < lo) lo = v
+      if (v > hi) hi = v
+   enddo
+   endsubroutine min_max
+
+   subroutine histogram_r64(label, values, bins, vmin, vmax, bar_scale, max_count, spec)
+   !< A histogram (`ip_histogram`), double precision.
+   character(len=*),     intent(in)            :: label     !< Legend label.
+   real(real64),         intent(in)            :: values(:) !< Values.
+   integer(int32),       intent(in),  optional :: bins      !< A count > 0 or a `PF_BIN_*` rule (default Sturges).
+   real(real64),         intent(in),  optional :: vmin      !< First bin's left end (with vmax).
+   real(real64),         intent(in),  optional :: vmax      !< Last bin's right end.
+   real(real64),         intent(in),  optional :: bar_scale !< Bar width over bin width (default 1).
+   real(real64),         intent(out), optional :: max_count !< The tallest bar.
+   type(plot_item_spec), intent(in),  optional :: spec      !< Style (histogram flags).
+   integer(int64)                              :: n, i      !< Finite values, counter.
+
+   call finite_room(size(values, kind=int64))
+   n = 0_int64
+   do i = 1_int64, size(values, kind=int64)
+      if (abs(values(i)) <= huge(1.0_real64)) then
+         n = n + 1_int64
+         finite_x(n) = values(i)
+      endif
+   enddo
+   call histogram_item(label, n, bins, vmin, vmax, bar_scale, max_count, spec_or_default(spec))
+   endsubroutine histogram_r64
+
+   subroutine histogram_r32(label, values, bins, vmin, vmax, bar_scale, max_count, spec)
+   !< A histogram (`ip_histogram`), single precision (the values taken as double, as ImPlot's indexer).
+   character(len=*),     intent(in)            :: label     !< Legend label.
+   real(real32),         intent(in)            :: values(:) !< Values.
+   integer(int32),       intent(in),  optional :: bins      !< A count > 0 or a `PF_BIN_*` rule (default Sturges).
+   real(real64),         intent(in),  optional :: vmin      !< First bin's left end (with vmax).
+   real(real64),         intent(in),  optional :: vmax      !< Last bin's right end.
+   real(real64),         intent(in),  optional :: bar_scale !< Bar width over bin width (default 1).
+   real(real64),         intent(out), optional :: max_count !< The tallest bar.
+   type(plot_item_spec), intent(in),  optional :: spec      !< Style (histogram flags).
+   integer(int64)                              :: n, i      !< Finite values, counter.
+
+   call finite_room(size(values, kind=int64))
+   n = 0_int64
+   do i = 1_int64, size(values, kind=int64)
+      if (abs(values(i)) <= huge(1.0_real32)) then
+         n = n + 1_int64
+         finite_x(n) = real(values(i), real64)
+      endif
+   enddo
+   call histogram_item(label, n, bins, vmin, vmax, bar_scale, max_count, spec_or_default(spec))
+   endsubroutine histogram_r32
+
+   subroutine histogram_item(label, n, bins, vmin, vmax, bar_scale, max_count, spec)
+   !< `ip_histogram` then `PlotHistogram` on the n finite values (finite_x): the range given or theirs widened, the
+   !< bins counted or by FIGURE's rule (`rule_bins`), the counts (cumulative, density, outliers), bars through
+   !< `PlotBars(centres, counts)` (horizontal: `PlotBars(counts, centres)`), bar_scale times the bin width.
+   character(len=*),     intent(in)            :: label     !< Label.
+   integer(int64),       intent(in)            :: n         !< Finite values.
+   integer(int32),       intent(in),  optional :: bins      !< Bins.
+   real(real64),         intent(in),  optional :: vmin, vmax !< Range.
+   real(real64),         intent(in),  optional :: bar_scale !< Bar scale.
+   real(real64),         intent(out), optional :: max_count !< Tallest bar.
+   type(plot_item_spec), intent(in)            :: spec      !< Style.
+   type(plot_item_spec)                        :: sb        !< The bars' spec.
+   type(item_series)                           :: g         !< The bars' getter.
+   real(real64)                                :: rmin, rmax, width, val, top, scale, t, sd !< Range, bins, counts.
+   integer(int32)                              :: nb, b, ib, below, counted !< Bins, a bin, counts.
+   logical                                     :: cumulative, density, outliers, horz !< Flags.
+
+   if (present(max_count)) max_count = 0.0_real64
+   if (n == 0_int64) return ! nothing to count: no item
+   nb = PF_BIN_STURGES
+   if (present(bins)) nb = bins
+   if (present(vmin) .and. present(vmax)) then
+      rmin = vmin
+      rmax = vmax
+   else
+      rmin = minval(finite_x(1:n))
+      rmax = maxval(finite_x(1:n))
+      if (.not. (rmax > rmin)) then ! widen
+         rmin = rmin - 0.5_real64
+         rmax = rmax + 0.5_real64
+      endif
+   endif
+   sd = 0.0_real64
+   if (nb == PF_BIN_SCOTT) sd = std_dev(finite_x(1:n))
+   nb = rule_bins(nb, n, rmin, rmax, sd)
+   cumulative = iand(spec%flags, PF_HIST_CUMULATIVE) /= 0_int32
+   density = iand(spec%flags, PF_HIST_DENSITY) /= 0_int32
+   outliers = iand(spec%flags, PF_HIST_NO_OUTLIERS) == 0_int32
+   horz = iand(spec%flags, PF_HIST_HORIZONTAL) /= 0_int32
+   width = (rmax - rmin) / real(nb, real64)
+   call hist_room(int(nb, int64))
+   do b = 0_int32, nb - 1_int32 ! range.Min + b width + width 0.5
+      t = real(b, real64) * width
+      hist_a(b + 1_int32) = rmin + t
+      t = width * 0.5_real64
+      hist_a(b + 1_int32) = hist_a(b + 1_int32) + t
+      hist_b(b + 1_int32) = 0.0_real64
+   enddo
+   below = 0_int32
+   counted = 0_int32
+   top = 0.0_real64
+   do b = 1_int32, int(n, int32)
+      val = finite_x(b)
+      if (val >= rmin .and. val <= rmax) then
+         ib = min(max(int((val - rmin) / width, int32), 0_int32), nb - 1_int32) + 1_int32
+         hist_b(ib) = hist_b(ib) + 1.0_real64
+         if (hist_b(ib) > top) top = hist_b(ib)
+         counted = counted + 1_int32
+      elseif (val < rmin) then
+         below = below + 1_int32
+      endif
+   enddo
+   if (cumulative .and. density) then
+      if (outliers) hist_b(1) = hist_b(1) + real(below, real64)
+      do b = 2_int32, nb
+         hist_b(b) = hist_b(b) + hist_b(b - 1_int32)
+      enddo
+      scale = 1.0_real64 / real(merge(int(n, int32), counted, outliers), real64)
+      hist_b(1:nb) = hist_b(1:nb) * scale
+      top = hist_b(nb)
+   elseif (cumulative) then
+      if (outliers) hist_b(1) = hist_b(1) + real(below, real64)
+      do b = 2_int32, nb
+         hist_b(b) = hist_b(b) + hist_b(b - 1_int32)
+      enddo
+      top = hist_b(nb)
+   elseif (density) then
+      scale = 1.0_real64 / (real(merge(int(n, int32), counted, outliers), real64) * width)
+      hist_b(1:nb) = hist_b(1:nb) * scale
+      top = top * scale
+   endif
+   sb = spec
+   if (horz) then ! PlotBars(counts, centres, Horizontal)
+      sb%flags = PF_BARS_HORIZONTAL
+      call view_r64(g, 1_int32, hist_b(1:nb))
+      call view_r64(g, 2_int32, hist_a(1:nb))
+   else
+      sb%flags = 0_int32
+      call view_r64(g, 1_int32, hist_a(1:nb))
+      call view_r64(g, 2_int32, hist_b(1:nb))
+   endif
+   g%n = nb
+   t = 1.0_real64
+   if (present(bar_scale)) t = bar_scale
+   t = t * width
+   call bars_item(label, g, t, sb)
+   if (present(max_count)) max_count = top
+   endsubroutine histogram_item
+
+   subroutine histogram2d_r64(label, x, y, xbins, ybins, xmin, xmax, ymin, ymax, colormap, max_count, spec)
+   !< A 2-D histogram (`ip_histogram2d`), double precision.
+   character(len=*),     intent(in)            :: label      !< Legend label.
+   real(real64),         intent(in)            :: x(:), y(:) !< Points.
+   integer(int32),       intent(in),  optional :: xbins, ybins !< Bins (counts or rules; default Sturges).
+   real(real64),         intent(in),  optional :: xmin, xmax, ymin, ymax !< Range (default: the finite points').
+   integer(int32),       intent(in),  optional :: colormap   !< Colormap (default Viridis).
+   real(real64),         intent(out), optional :: max_count  !< The fullest cell.
+   type(plot_item_spec), intent(in),  optional :: spec       !< Style (Density, NoOutliers, ColMajor).
+   integer(int64)                              :: n, i       !< Finite points, counter.
+
+   call finite_room(int(min(size(x), size(y)), int64))
+   n = 0_int64
+   do i = 1_int64, int(min(size(x), size(y)), int64)
+      if (abs(x(i)) <= huge(1.0_real64) .and. abs(y(i)) <= huge(1.0_real64)) then
+         n = n + 1_int64
+         finite_x(n) = x(i)
+         finite_y(n) = y(i)
+      endif
+   enddo
+   call histogram2d_item(label, n, xbins, ybins, xmin, xmax, ymin, ymax, colormap, max_count, spec_or_default(spec))
+   endsubroutine histogram2d_r64
+
+   subroutine histogram2d_r32(label, x, y, xbins, ybins, xmin, xmax, ymin, ymax, colormap, max_count, spec)
+   !< A 2-D histogram (`ip_histogram2d`), single precision.
+   character(len=*),     intent(in)            :: label      !< Legend label.
+   real(real32),         intent(in)            :: x(:), y(:) !< Points.
+   integer(int32),       intent(in),  optional :: xbins, ybins !< Bins (counts or rules; default Sturges).
+   real(real64),         intent(in),  optional :: xmin, xmax, ymin, ymax !< Range (default: the finite points').
+   integer(int32),       intent(in),  optional :: colormap   !< Colormap (default Viridis).
+   real(real64),         intent(out), optional :: max_count  !< The fullest cell.
+   type(plot_item_spec), intent(in),  optional :: spec       !< Style (Density, NoOutliers, ColMajor).
+   integer(int64)                              :: n, i       !< Finite points, counter.
+
+   call finite_room(int(min(size(x), size(y)), int64))
+   n = 0_int64
+   do i = 1_int64, int(min(size(x), size(y)), int64)
+      if (abs(x(i)) <= huge(1.0_real32) .and. abs(y(i)) <= huge(1.0_real32)) then
+         n = n + 1_int64
+         finite_x(n) = real(x(i), real64)
+         finite_y(n) = real(y(i), real64)
+      endif
+   enddo
+   call histogram2d_item(label, n, xbins, ybins, xmin, xmax, ymin, ymax, colormap, max_count, spec_or_default(spec))
+   endsubroutine histogram2d_r32
+
+   subroutine histogram2d_item(label, n, xbins, ybins, xmin, xmax, ymin, ymax, colormap, max_count, spec)
+   !< `ip_histogram2d` then `PlotHistogram2D` on the n finite points (finite_x, finite_y): ranges given or the points'
+   !< widened, bins by count or FIGURE's rule, the counts (row y, column x), density; `FitterRect(range)` and
+   !< `RenderHeatmap(counts, ybins, xbins, 0, max, no labels, range, reverse_y false)`, the colormap pushed.
+   character(len=*),     intent(in)            :: label        !< Label.
+   integer(int64),       intent(in)            :: n            !< Finite points.
+   integer(int32),       intent(in),  optional :: xbins, ybins !< Bins.
+   real(real64),         intent(in),  optional :: xmin, xmax, ymin, ymax !< Range.
+   integer(int32),       intent(in),  optional :: colormap     !< Colormap.
+   real(real64),         intent(out), optional :: max_count    !< Fullest cell.
+   type(plot_item_spec), intent(in)            :: spec         !< Style.
+   type(plot_item_ctx)                         :: ctx          !< The plot.
+   type(item_style)                            :: s            !< Staged style.
+   type(item_series)                           :: g            !< The counts.
+   type(plot_format)                           :: fm           !< (no labels)
+   real(real64)                                :: x0, x1, y0, y1, w, h, sx, sy, top, scale !< Range, bins.
+   integer(int32)                              :: nbx, nby, i, xb, yb, counted, cm !< Bins, counters.
+   logical                                     :: density, outliers !< Flags.
+
+   if (present(max_count)) max_count = 0.0_real64
+   if (n == 0_int64) return ! nothing to count: no item
+   nbx = PF_BIN_STURGES
+   if (present(xbins)) nbx = xbins
+   nby = PF_BIN_STURGES
+   if (present(ybins)) nby = ybins
+   if (present(xmin) .and. present(xmax)) then
+      x0 = xmin
+      x1 = xmax
+   else
+      x0 = minval(finite_x(1:n))
+      x1 = maxval(finite_x(1:n))
+      if (.not. (x1 > x0)) then
+         x0 = x0 - 0.5_real64
+         x1 = x1 + 0.5_real64
+      endif
+   endif
+   if (present(ymin) .and. present(ymax)) then
+      y0 = ymin
+      y1 = ymax
+   else
+      y0 = minval(finite_y(1:n))
+      y1 = maxval(finite_y(1:n))
+      if (.not. (y1 > y0)) then
+         y0 = y0 - 0.5_real64
+         y1 = y1 + 0.5_real64
+      endif
+   endif
+   sx = 0.0_real64
+   sy = 0.0_real64
+   if (nbx == PF_BIN_SCOTT) sx = std_dev(finite_x(1:n))
+   if (nby == PF_BIN_SCOTT) sy = std_dev(finite_y(1:n))
+   nbx = rule_bins(nbx, n, x0, x1, sx)
+   nby = rule_bins(nby, n, y0, y1, sy)
+   density = iand(spec%flags, PF_HIST_DENSITY) /= 0_int32
+   outliers = iand(spec%flags, PF_HIST_NO_OUTLIERS) == 0_int32
+   w = (x1 - x0) / real(nbx, real64)
+   h = (y1 - y0) / real(nby, real64)
+   call hist_room(int(nbx, int64) * int(nby, int64))
+   hist_b(1:nbx * nby) = 0.0_real64
+   counted = 0_int32
+   top = 0.0_real64
+   do i = 1_int32, int(n, int32)
+      if (finite_x(i) >= x0 .and. finite_x(i) <= x1 .and. finite_y(i) >= y0 .and. finite_y(i) <= y1) then
+         xb = min(max(int((finite_x(i) - x0) / w, int32), 0_int32), nbx - 1_int32)
+         yb = min(max(int((finite_y(i) - y0) / h, int32), 0_int32), nby - 1_int32)
+         hist_b(yb * nbx + xb + 1_int32) = hist_b(yb * nbx + xb + 1_int32) + 1.0_real64
+         if (hist_b(yb * nbx + xb + 1_int32) > top) top = hist_b(yb * nbx + xb + 1_int32)
+         counted = counted + 1_int32
+      endif
+   enddo
+   if (density) then
+      scale = 1.0_real64 / ((real(merge(int(n, int32), counted, outliers), real64) * w) * h)
+      hist_b(1:nbx * nby) = hist_b(1:nbx * nby) * scale
+      top = top * scale
+   endif
+   cm = CM_VIRIDIS
+   if (present(colormap)) cm = colormap
+   call cm_push(cm)
+   if (begin(label, spec, [0.0_real32, 0.0_real32, 0.0_real32, AUTO_ALPHA], PF_MARKER_INVALID, ctx, s)) then
+      if (fits(ctx, spec)) then ! FitterRect(range)
+         call pf_item_fit(x0, y0)
+         call pf_item_fit(x1, y1)
+      endif
+      call view_r64(g, 2_int32, hist_b(1:nbx * nby))
+      g%n = nbx * nby
+      call render_heatmap(ctx, g, nby, nbx, 0.0_real64, top, fm, .false., x0, y0, x1, y1, .false., &
+                          iand(spec%flags, PF_HIST_COL_MAJOR) /= 0_int32)
+      call finish()
+   endif
+   call cm_pop()
+   if (present(max_count)) max_count = top
+   endsubroutine histogram2d_item
+
+   pure function rule_bins(nb, n, rmin, rmax, sd) result(bins)
+   !< FIGURE's `rule_bins` (figure_implot), verbatim: a count, or the rule's over n values in [rmin, rmax].
+   integer(int32), intent(in) :: nb         !< A count (> 0) or a `PF_BIN_*` rule.
+   integer(int64), intent(in) :: n          !< Values.
+   real(real64),   intent(in) :: rmin, rmax !< Range.
+   real(real64),   intent(in) :: sd         !< Standard deviation (Scott's rule).
+   integer(int32)             :: bins       !< Bins, at least 1.
+   real(real64)               :: w, k       !< Width, bins as a real.
+
+   if (nb > 0_int32) then
+      bins = nb
+      return
+   endif
+   select case (nb)
+   case (PF_BIN_SQRT)
+      k = ceiling(sqrt(real(n, real64)))
+   case (PF_BIN_RICE)
+      k = ceiling(2.0_real64 * real(n, real64)**(1.0_real64 / 3.0_real64))
+   case (PF_BIN_SCOTT)
+      w = 3.49_real64 * sd / real(n, real64)**(1.0_real64 / 3.0_real64)
+      k = 1.0_real64
+      if (w > 0.0_real64) k = anint(min(real(rmax - rmin, real64) / w, 1.0e6_real64))
+   case default ! Sturges
+      k = ceiling(1.0_real64 + log(real(n, real64)) / log(2.0_real64))
+   endselect
+   bins = int(max(1.0_real64, min(k, 1.0e6_real64)), int32)
+   endfunction rule_bins
+
+   pure function std_dev(v) result(s)
+   !< FIGURE's `std_dev`, verbatim: population standard deviation (0 for none).
+   real(real64), intent(in) :: v(:) !< Values.
+   real(real64)             :: s    !< Standard deviation.
+   real(real64)             :: m    !< Mean.
+
+   s = 0.0_real64
+   if (size(v) == 0) return
+   m = sum(v) / real(size(v), real64)
+   s = sqrt(sum((v - m)**2) / real(size(v), real64))
+   endfunction std_dev
+
+   subroutine finite_room(n)
+   !< Room for n finite values (kept, grown).
+   integer(int64), intent(in) :: n !< Values.
+
+   if (allocated(finite_x)) then
+      if (size(finite_x, kind=int64) < n) deallocate(finite_x, finite_y)
+   endif
+   if (.not. allocated(finite_x)) allocate(finite_x(max(n, 1024_int64)), finite_y(max(n, 1024_int64)))
+   endsubroutine finite_room
+
+   subroutine hist_room(n)
+   !< Room for n bins (kept, grown).
+   integer(int64), intent(in) :: n !< Bins.
+
+   if (allocated(hist_a)) then
+      if (size(hist_a, kind=int64) < n) deallocate(hist_a, hist_b)
+   endif
+   if (.not. allocated(hist_a)) allocate(hist_a(max(n, 256_int64)), hist_b(max(n, 256_int64)))
+   endsubroutine hist_room
 
    ! private: the items (PlotLineEx, PlotScatterEx, PlotStairsEx, PlotStemsEx, PlotShadedEx)
 
