@@ -29,7 +29,7 @@ without notice.
 | cimgui | 427 | 368 | 8 | 51 |
 | cimplot | 401 | 96 | 272 | 33 |
 | cimplot3d | 131 | 53 | 73 | 5 |
-| cimgui_core | 41 | 34 | 7 | 0 |
+| cimgui_core | 43 | 36 | 7 | 0 |
 
 ## cimgui: through the generated glue (8)
 

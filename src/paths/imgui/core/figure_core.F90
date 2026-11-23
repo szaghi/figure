@@ -30,7 +30,8 @@ module figure_core
 !<   `core_push_id_int`; ImPlot's menu widgets as it calls them (`core_push_item_width` without a FIGURE scope,
 !<   `core_push_item_flag`, `core_push_style_var`, `core_drag_double`, `core_radio_button`, `core_invisible_button`,
 !<   `core_text_unformatted`; P10 step 9: `core_open_popup`, `core_begin_popup`, `core_end_popup`, the popups ImPlot
-!<   declares every frame, without the allocations of src/lib's `ig_*_popup` and their scope record); P11: the white
+!<   declares every frame, without the allocations of src/lib's `ig_*_popup` and their scope record; a popup by its ID,
+!<   `core_open_popup_id`, `core_begin_popup_id`: ImPlot's legend entries' popups, `OpenPopupEx`, `BeginPopupEx`); P11: the white
 !<   pixel's texture coordinates (`core_white_pixel`) and the framebuffer scale (`core_framebuffer_scale`) for the
 !<   items' primitives and decimation; `core_texture_sampling`, the texture filter callback around a user image;
 !<   a glyph of the current font at its size (`core_font_glyph`: `GetFontBaked`, `FindGlyph`), for text drawn glyph by
@@ -65,7 +66,7 @@ use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,
                                igGetHoveredID, igItemAdd, igItemSize_Vec2, igKeepAliveID, ImDrawList_AddCallback,          &
                                ImDrawList_AddCircle, ImDrawList_AddCircleFilled, ImDrawList_AddImage, ImDrawList_AddPolyline, &
                                ImDrawList_AddRect, ImDrawList_AddRectFilled, ImDrawList_AddText_Vec2, ImDrawList_PopClipRect, &
-                               ImDrawList_PrimReserve, ImDrawList_PushClipRect
+                               ImDrawList_PrimReserve, ImDrawList_PushClipRect, igBeginPopupEx, igOpenPopupEx
 use figure_c_native, only : fig_texture_sampling
 use figure_style, only : ig_get_style_var
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
@@ -90,7 +91,7 @@ public :: core_io_input, core_mouse_drag_delta, core_mouse_double_clicked, core_
 public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core_push_id_int
 public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
-public :: core_open_popup, core_begin_popup, core_end_popup
+public :: core_open_popup, core_begin_popup, core_end_popup, core_open_popup_id, core_begin_popup_id
 public :: core_white_pixel, core_framebuffer_scale, core_texture_sampling
 public :: core_draw_list
 
@@ -766,6 +767,23 @@ contains
       open = logical(igBeginPopup(id//c_null_char, 0_c_int))
    endif
    endfunction core_begin_popup
+
+   subroutine core_open_popup_id(id)
+   !< `OpenPopupEx(id, ImGuiPopupFlags_None)`: the popup of an ID (ImPlot's `BeginLegendPopup`).
+   integer(int32), intent(in) :: id !< Popup's ID.
+
+   if (igOpenPopupEx(int(id, c_int), 0_c_int)) continue
+   endsubroutine core_open_popup_id
+
+   function core_begin_popup_id(id, flags) result(open)
+   !< `BeginPopupEx(id, flags)`, every frame (ImPlot's `BeginLegendPopup`; end it with `core_end_popup`, only when
+   !< true).
+   integer(int32), intent(in) :: id    !< Popup's ID.
+   integer(int32), intent(in) :: flags !< ImGuiWindowFlags added.
+   logical                    :: open  !< Open.
+
+   open = logical(igBeginPopupEx(int(id, c_int), int(flags, c_int)))
+   endfunction core_begin_popup_id
 
    subroutine core_end_popup()
    !< `EndPopup` (after `core_begin_popup` returned true).

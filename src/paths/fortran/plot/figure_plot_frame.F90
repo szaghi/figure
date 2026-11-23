@@ -75,7 +75,10 @@ module figure_plot_frame
 !<   spacing ImPlot's; an entry is a button (`ButtonBehavior` on the item's ID, after the legend's own, as ImPlot):
 !<   clicked, it hides or shows its item; hovered, its text takes a quarter of the item's colour, its icon 3/4 alpha,
 !<   and on the next frame the item's line is twice as thick (and its axis highlighted); a hidden item's entry is
-!<   greyed (`Text` at 1/4 alpha);
+!<   greyed (`Text` at 1/4 alpha); a legend larger than its room clamped and scrolled by the wheel over it
+!<   (`Legend.Scroll`, a step of two font sizes at most); its entries sorted by label and reversed (`pf_setup_legend`'s
+!<   `sort`, `reverse`: the Fortran path's own, ImPlot's `Sort`, `Reverse` flags); an entry's popup
+!<   (`pf_begin_legend_popup`, `pf_end_legend_popup`, as `ip_begin_legend_popup`: `BeginLegendPopup`);
 !< - a line (`PlotLine`'s `RendererLineStrip`): each segment a quad of the anti-aliased line's texture, half its
 !<   weight (at least 1 pixel) plus half the texture's fringe on each side, the segments outside the plot culled.
 !< - P12, subplots and aligned plots (`pf_begin_subplots`, `pf_end_subplots`, `pf_begin_aligned`, `pf_end_aligned`, as
@@ -105,13 +108,13 @@ module figure_plot_frame
 !< a scale set up as 'linear' leaving the axis's scale as it is (`ip_setup_axis` calls `SetupAxisScale` for the
 !< others only).
 !<
-!< Not yet: local time and ImPlot's time style options (12-hour clock, US dates: ImPlot's defaults), the
-!< legend's scrolling, colormaps other than Deep (the line colours of FIGURE's own styles: seal, paper, ...: their
-!< automatic colours are ImPlot's colormaps, registered by the native layer), ImPlot style variables set by a theme
-!< (`FitPadding` included), the axis flags FIGURE's API does not set (`NoInitialFit`,
-!< `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or not drawn), legend sorting; of P12, a subplot's
-!< shared items and legend (`ShareItems`: only the cells' menu can ask for it, the flag is stored), a subplot or an
-!< aligned group in a collapsed window (`SkipItems`, which figure_core does not give: they begin as if shown).
+!< Not yet: local time and ImPlot's time style options (12-hour clock, US dates: ImPlot's defaults), colormaps other
+!< than Deep (the line colours of FIGURE's own styles: seal, paper, ...: their automatic colours are ImPlot's
+!< colormaps, registered by the native layer), ImPlot style variables set by a theme (`FitPadding` included), the axis
+!< flags FIGURE's API does not set (`NoInitialFit`, `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or
+!< not drawn); of P12, a subplot's shared items and legend (`ShareItems`: only the cells' menu can ask for it, the flag
+!< is stored), a subplot or an aligned group in a collapsed window (`SkipItems`, which figure_core does not give: they
+!< begin as if shown).
 !< The segment's normal is `1/sqrt`, as FIGURE's ImPlot (native/patches/implot-0002).
 !<
 !< No allocation per frame once the tables are grown (ADR 0001; P10 step 9, figure_test_plot_frame_alloc counts them):
@@ -142,6 +145,7 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_push_id_int, core_push_item_flag, core_push_item_width, core_push_override_id,     &
                         core_push_style_var, core_radio_button, core_set_key_owner, core_set_mouse_cursor,      &
                         core_text_unformatted, core_window_hovered, core_frame_height, core_open_popup,         &
+                        core_open_popup_id, core_begin_popup_id,                                                &
                         core_begin_popup, core_end_popup, core_set_cursor_screen_pos, core_time, &
                         core_draw_triangle_filled
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
@@ -165,7 +169,7 @@ public :: pf_text_vertical, pf_item_recolor, pf_item_id, pf_last_item_color
 public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
 public :: pf_setup_axis_ticks, pf_setup_axis_constraints
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
-public :: pf_hide_next_item, pf_legend_hovered
+public :: pf_hide_next_item, pf_legend_hovered, pf_begin_legend_popup, pf_end_legend_popup
 public :: pf_plot_count, pf_colormap, pf_colormap_scale
 public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
 public :: pf_cancel_selection
@@ -244,6 +248,10 @@ integer(int32), parameter :: LGF_NO_HIGHLIGHT_ITEM = 2_int32 !< ImPlotLegendFlag
 integer(int32), parameter :: LGF_NO_HIGHLIGHT_AXIS = 4_int32 !< ImPlotLegendFlags_NoHighlightAxis.
 integer(int32), parameter :: LGF_OUTSIDE = 16_int32        !< ImPlotLegendFlags_Outside.
 integer(int32), parameter :: LGF_HORIZONTAL = 32_int32     !< ImPlotLegendFlags_Horizontal.
+integer(int32), parameter :: LGF_SORT = 64_int32           !< ImPlotLegendFlags_Sort.
+integer(int32), parameter :: LGF_REVERSE = 128_int32       !< ImPlotLegendFlags_Reverse.
+integer(int32), parameter :: LEGEND_POPUP_FLAGS = 321_int32 !< `BeginLegendPopup`'s window flags: AlwaysAutoResize,
+                                                           !< NoTitleBar, NoSavedSettings.
 integer(int32), parameter :: LOC_NORTH = 1_int32           !< ImPlotLocation_North.
 integer(int32), parameter :: LOC_SOUTH = 2_int32           !< ImPlotLocation_South.
 integer(int32), parameter :: LOC_WEST = 4_int32            !< ImPlotLocation_West.
@@ -370,6 +378,7 @@ type :: plot_record
    integer(int32)                :: leg_loc = LOC_NORTH + LOC_WEST !< Legend's ImPlotLocation in effect.
    integer(int32)                :: leg_prev_loc = LOC_NORTH + LOC_WEST !< ... that last asked.
    logical                       :: leg_hovered = .false. !< Legend hovered.
+   real(real32)                  :: leg_scroll(2) = 0.0_real32 !< Legend's scroll (Legend.Scroll) [pixels].
    integer(int32)                :: n_leg = 0_int32       !< Legend's entries.
    integer(int32), allocatable   :: leg_item(:)           !< Entry's item.
    integer(int32), allocatable   :: leg_off(:)            !< ... label's start in `leg_text`.
@@ -493,6 +502,7 @@ integer(int32),       allocatable      :: tag_fg(:)      !< ... text colour.
 integer(int32),       allocatable      :: tag_off(:)     !< ... text's start in `tag_text`.
 integer(int32),       allocatable      :: tag_len(:)     !< ... its length.
 character(len=:),     allocatable      :: tag_text       !< The tags' texts.
+integer(int32),       allocatable      :: leg_order(:)   !< The legend's entries in their drawing order (TempInt1).
 integer(int32)                         :: n_tag_text = 0_int32 !< Characters of `tag_text` in use.
 
 contains
@@ -808,14 +818,19 @@ contains
    endassociate
    endsubroutine pf_setup_axis_limits
 
-   subroutine pf_setup_legend(location, outside, horizontal)
+   subroutine pf_setup_legend(location, outside, horizontal, sort, reverse)
    !< Where the plot's legend goes (`SetupLegend`; `ip_setup_legend`): `location` a compass point, `'n'`, `'ne'`,
    !< `'e'`, `'se'`, `'s'`, `'sw'`, `'w'`, `'nw'` (default) or `'c'`; `outside`: outside the plot area, which shrinks
-   !< to make room (from the frame after the legend has entries, as ImPlot); `horizontal`: the entries in a row. Call
-   !< after `pf_begin_plot`, before any item; the choice persists.
+   !< to make room (from the frame after the legend has entries, as ImPlot); `horizontal`: the entries in a row.
+   !< The Fortran path's own (FIGURE's `ip_setup_legend` cannot ask for them): `sort`, the entries in the order of their
+   !< labels (`ImPlotLegendFlags_Sort`: C's `strcmp` of the whole label, its hidden `##` part included), `reverse`,
+   !< in the reverse order (`ImPlotLegendFlags_Reverse`). Call after `pf_begin_plot`, before any item; the choice
+   !< persists.
    character(len=*), intent(in), optional :: location   !< Compass point.
    logical,          intent(in), optional :: outside    !< Outside the plot area.
    logical,          intent(in), optional :: horizontal !< Entries in a row.
+   logical,          intent(in), optional :: sort       !< Entries sorted by label.
+   logical,          intent(in), optional :: reverse    !< Entries in the reverse order.
    integer(int32)                         :: loc        !< ImPlotLocation.
    integer(int32)                         :: flags      !< ImPlotLegendFlags.
 
@@ -825,6 +840,8 @@ contains
    flags = 0_int32
    call set_flag(flags, LGF_OUTSIDE, outside)
    call set_flag(flags, LGF_HORIZONTAL, horizontal)
+   call set_flag(flags, LGF_SORT, sort)
+   call set_flag(flags, LGF_REVERSE, reverse)
    associate(p => plots(cur))
       if (loc /= p%leg_prev_loc) p%leg_loc = loc
       p%leg_prev_loc = loc
@@ -905,6 +922,53 @@ contains
       enddo
    endassociate
    endfunction pf_legend_hovered
+
+   function pf_begin_legend_popup(label, button) result(open)
+   !< A popup of the legend entry of the item `label` (`BeginLegendPopup`; `ip_begin_legend_popup`), opened when
+   !< `button` ('right', default, 'left' or 'middle') is released with the entry hovered (as the last legend drawn
+   !< found it): when true, draw its contents, then `pf_end_legend_popup`. After the item, before `pf_end_plot`; it
+   !< ends the setup.
+   character(len=*), intent(in)           :: label  !< The item's label.
+   character(len=*), intent(in), optional :: button !< 'right' (default), 'left' or 'middle'.
+   logical                                :: open   !< The popup is open: draw it, then end it.
+   integer(int32)                         :: b      !< ImGuiMouseButton.
+   integer(int32)                         :: id, k  !< The item's ID, counter.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_begin_legend_popup outside a plot'
+   b = 1_int32
+   if (present(button)) then
+      select case (button)
+      case ('left')
+         b = 0_int32
+      case ('right')
+         b = 1_int32
+      case ('middle')
+         b = 2_int32
+      case default
+         error stop "figure_plot_frame: pf_begin_legend_popup: button must be 'left', 'right' or 'middle'"
+      endselect
+   endif
+   associate(p => plots(cur))
+      if (.not. p%locked) call setup_finish(p) ! SetupLock
+      id = plot_hash(label, plot_id_offset(p%id, -1_int32)) ! GetIDWithSeed(label, Items.ID)
+      if (core_mouse_released(b)) then
+         do k = 1_int32, p%n_items
+            if (p%item_id(k) == id) then
+               if (p%item_hovered(k)) call core_open_popup_id(id)
+               exit
+            endif
+         enddo
+      endif
+   endassociate
+   open = core_begin_popup_id(id, LEGEND_POPUP_FLAGS)
+   endfunction pf_begin_legend_popup
+
+   subroutine pf_end_legend_popup()
+   !< End a legend entry's popup (`EndLegendPopup`; only after `pf_begin_legend_popup` returned true).
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_end_legend_popup outside a plot'
+   call core_end_popup()
+   endsubroutine pf_end_legend_popup
 
    subroutine pf_plot_limits(xmin, xmax, ymin, ymax, xaxis, yaxis)
    !< The ranges the open plot is drawn with on this frame (`GetPlotLimits`; `ip_plot_limits`): of the axes the items
@@ -4529,6 +4593,10 @@ contains
    logical                          :: any_item   !< An entry hovered.
    logical                          :: contextable !< The legend's menu may open.
    real(real64)                     :: mx, my     !< The pointer.
+   real(real64)                     :: dx, dy, wheel, wheel_h, dmax(5) !< Input.
+   integer(int32)                   :: mods, k    !< Key mods, counter.
+   logical                          :: dnd        !< A drag and drop.
+   real(real32)                     :: step, smin, off(2) !< The scroll's step, its least, the entries' offset.
 
    p%leg_hovered = .false.
    if (p%n_items > 0_int32) p%item_hovered(1:p%n_items) = .false.
@@ -4550,10 +4618,6 @@ contains
    cl(2) = max(cl(2), outer(2) + pad(2))
    cl(3) = min(cl(3), outer(3) - pad(1))
    cl(4) = min(cl(4), outer(4) - pad(2))
-   if (any(cl /= lr)) then ! clamped: the entries from the clamped corner (no scrolling yet)
-      lr(3:4) = lr(3:4) + (cl(1:2) - lr(1:2))
-      lr(1:2) = cl(1:2)
-   endif
    items_id = plot_id_offset(p%id, -1_int32)
    call core_keep_alive(items_id)
    dummy = core_button_behavior(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
@@ -4562,6 +4626,32 @@ contains
    p%leg_hovered = p%leg_hovered .or. (core_window_hovered() .and. real(mx, real32) >= cl(1) .and. &
                                        real(my, real32) >= cl(2) .and. real(mx, real32) < cl(3) .and. &
                                        real(my, real32) < cl(4))
+   if (any(cl /= lr)) then ! clamped: scrollable, the wheel over it scrolls it (a step of two font sizes at most)
+      if (p%leg_hovered) then
+         call core_set_key_owner(ImGuiKey_MouseWheelY, items_id)
+         call core_io_input(dx, dy, wheel, wheel_h, dmax, mods, dnd)
+         if (wheel /= 0.0_real64) then
+            step = (lr(3) - lr(1)) * 0.67_real32
+            step = im_floor(min(2.0_real32 * real(core_font_size(), real32), step))
+            p%leg_scroll(1) = p%leg_scroll(1) + step * real(wheel, real32)
+            p%leg_scroll(2) = p%leg_scroll(2) + step * real(wheel, real32)
+         endif
+      endif
+      do k = 1_int32, 2_int32 ! ImClamp(Scroll, RectClamped's size - Rect's, 0)
+         smin = (cl(k + 2_int32) - cl(k)) - (lr(k + 2_int32) - lr(k))
+         if (p%leg_scroll(k) < smin) then
+            p%leg_scroll(k) = smin
+         elseif (p%leg_scroll(k) > 0.0_real32) then
+            p%leg_scroll(k) = 0.0_real32
+         endif
+      enddo
+      off(1) = (cl(1) - lr(1)) + merge(p%leg_scroll(1), 0.0_real32, horz)
+      off(2) = (cl(2) - lr(2)) + merge(0.0_real32, p%leg_scroll(2), horz)
+      lr(1:2) = lr(1:2) + off
+      lr(3:4) = lr(3:4) + off
+   else
+      p%leg_scroll = 0.0_real32
+   endif
    call core_push_clip_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64))
    call core_draw_rect_filled(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
                               core_style_color(ImGuiCol_PopupBg))
@@ -4591,9 +4681,10 @@ contains
    real(real32)                     :: ib(4)    !< Its icon.
    real(real64)                     :: w, h     !< A label's size.
    integer(int32)                   :: col_txt, col_dis, col_hl, col_item, col_icon !< Colours.
-   integer(int32)                   :: k, it, a, n !< Entry, item, label's start and shown length.
+   integer(int32)                   :: i, k, it, a, n !< Place, entry, item, label's start and shown length.
    logical                          :: hov, held, clicked !< The entry's button.
    real(real32), parameter          :: SHRINK = 2.0_real32 !< icon_shrink.
+   integer(int32), allocatable      :: more(:) !< A larger order.
 
    txt_ht = real(core_font_size(), real32)
    icon = txt_ht
@@ -4601,7 +4692,17 @@ contains
    col_dis = alpha_u32(col_txt, 0.25_real32)
    sum_w = 0.0_real32
    any_item = .false.
+   if (.not. allocated(leg_order)) allocate(leg_order(max(64_int32, p%n_leg)))
+   if (p%n_leg > size(leg_order, kind=int32)) then ! grown (rarely): the entries' order
+      allocate(more(max(2_int32 * size(leg_order, kind=int32), p%n_leg)))
+      call move_alloc(more, leg_order)
+   endif
    do k = 1_int32, p%n_leg
+      leg_order(k) = k
+   enddo
+   if (has_flag(p%leg_flags, LGF_SORT) .and. p%n_leg > 1_int32) call sort_entries(p)
+   do i = 1_int32, p%n_leg
+      k = leg_order(merge(p%n_leg + 1_int32 - i, i, has_flag(p%leg_flags, LGF_REVERSE)))
       it = p%leg_item(k)
       a = p%leg_off(k)
       n = rendered_len(p%leg_text(a:a + p%leg_len(k) - 1_int32))
@@ -4609,9 +4710,9 @@ contains
       lw = real(w, real32)
       if (vertical) then
          tl(1) = (lr(1) + LEGEND_INNER_PADDING(1)) + 0.0_real32
-         tl(2) = (lr(2) + LEGEND_INNER_PADDING(2)) + real(k - 1_int32, real32) * (txt_ht + LEGEND_SPACING(2))
+         tl(2) = (lr(2) + LEGEND_INNER_PADDING(2)) + real(i - 1_int32, real32) * (txt_ht + LEGEND_SPACING(2))
       else
-         tl(1) = (lr(1) + LEGEND_INNER_PADDING(1)) + (real(k - 1_int32, real32) * (icon + LEGEND_SPACING(1)) + sum_w)
+         tl(1) = (lr(1) + LEGEND_INNER_PADDING(1)) + (real(i - 1_int32, real32) * (icon + LEGEND_SPACING(1)) + sum_w)
          tl(2) = (lr(2) + LEGEND_INNER_PADDING(2)) + 0.0_real32
       endif
       sum_w = sum_w + lw
@@ -4654,6 +4755,44 @@ contains
                                            merge(col_hl, col_dis, p%item_show(it)), p%leg_text(a:a + n - 1_int32))
    enddo
    endsubroutine legend_entries
+
+   subroutine sort_entries(p)
+   !< The legend's entries ordered by their labels (`ShowLegendEntries`' `qsort` with `LegendSortingComp`: C's `strcmp`
+   !< of the whole labels): an insertion sort of `leg_order` (two entries never share a label: it is their item's ID).
+   type(plot_record), intent(in) :: p    !< Plot.
+   integer(int32)                :: i, j, k !< Counters, the entry moved.
+
+   do i = 2_int32, p%n_leg
+      k = leg_order(i)
+      j = i - 1_int32
+      do while (j >= 1_int32)
+         if (c_strcmp(p%leg_text(p%leg_off(leg_order(j)):p%leg_off(leg_order(j)) + p%leg_len(leg_order(j)) - 1_int32), &
+                      p%leg_text(p%leg_off(k):p%leg_off(k) + p%leg_len(k) - 1_int32)) <= 0_int32) exit
+         leg_order(j + 1_int32) = leg_order(j)
+         j = j - 1_int32
+      enddo
+      leg_order(j + 1_int32) = k
+   enddo
+   endsubroutine sort_entries
+
+   pure function c_strcmp(a, b) result(c)
+   !< C's `strcmp` of two texts (their bytes unsigned; a text that is the other's start first): -1, 0, 1.
+   character(len=*), intent(in) :: a, b !< Texts.
+   integer(int32)               :: c    !< Order.
+   integer(int32)               :: k, ca, cb !< Counter, bytes.
+
+   c = 0_int32
+   do k = 1_int32, min(len(a, kind=int32), len(b, kind=int32))
+      ca = iand(ichar(a(k:k), kind=int32), 255_int32)
+      cb = iand(ichar(b(k:k), kind=int32), 255_int32)
+      if (ca /= cb) then
+         c = merge(-1_int32, 1_int32, ca < cb)
+         return
+      endif
+   enddo
+   if (len(a) < len(b)) c = -1_int32
+   if (len(a) > len(b)) c = 1_int32
+   endfunction c_strcmp
 
    ! private: text
 

@@ -116,10 +116,11 @@ CORE_FUNCTIONS = (
     "ImDrawList_AddTriangleFilled",
     "ImDrawList_GetClipRectMax", "ImDrawList_GetClipRectMin", "ImDrawList_PopClipRect", "ImDrawList_PopTexture",
     "ImDrawList_PrimReserve", "ImDrawList_PrimUnreserve", "ImDrawList_PushClipRect", "ImDrawList_PushTexture",
-    "igButtonBehavior", "igCalcItemSize", "igClearActiveID", "igGetActiveID", "igGetCurrentWindow", "igGetHoveredID",
+    "igBeginPopupEx", "igButtonBehavior", "igCalcItemSize", "igClearActiveID", "igGetActiveID", "igGetCurrentWindow",
+    "igGetHoveredID",
     "igGetIDWithSeed_Int", "igGetIDWithSeed_Str", "igIsClippedEx", "igItemAdd", "igItemHoverable", "igItemSize_Rect",
-    "igItemSize_Vec2", "igKeepAliveID", "igPushOverrideID", "igRenderFrame", "igRenderTextClipped", "igSetActiveID",
-    "igSetHoveredID", "igSetKeyOwner",
+    "igItemSize_Vec2", "igKeepAliveID", "igOpenPopupEx", "igPushOverrideID", "igRenderFrame", "igRenderTextClipped",
+    "igSetActiveID", "igSetHoveredID", "igSetKeyOwner",
 )
 CORE_ENUMS = ("ImGuiButtonFlagsPrivate_", "ImGuiItemFlagsPrivate_")
 # callback types bound as procedure pointers (`type(c_funptr), value`) in the selected modules
