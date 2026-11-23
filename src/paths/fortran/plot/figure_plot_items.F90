@@ -38,22 +38,31 @@ module figure_plot_items
 !< `AddLineH`/`V` whiskers, the style's text colour unless a line colour is given, not culled), `pf_inf_lines`
 !< (`PlotInfLines`: segments across the current range, `FitterX`/`FitterY`).
 !<
+!< Group (c): `pf_pie_chart` (`PlotPieChart`: the slices' fans and borders, two halves for half a turn or more, the
+!< labels through a printf format, `Normalize`, `IgnoreHidden`, `Exploding`, `NoSliceBorder`, a colormap pushed;
+!< libm's `cos`/`sin` bound from C, IM_PI a float as ImPlot's), `pf_bubbles` (`PlotBubbles`: circles of 10 to 64
+!< segments, `cosf`/`sinf`), `pf_digital` (`PlotDigital`, FIGURE's patched copy: the bands stacked, no fit),
+!< `pf_text` (`PlotText`: centred, vertical, offset, fitted; not an item).
+!<
 !< No allocation per item per frame (ADR 0001): views of the arrays, fixed quads; the decimation's index buffer and
 !< the integer abscissae's conversion (decimated items only) are grown once and kept.
 !<
 !< ImPlot normalises a line segment with the SSE estimate `_mm_rsqrt_ss` (12 bits), the frame with `1/sqrt`: an
 !< anti-aliased edge pixel may land on the other side of a texel (figure_test_plot_frame_labels' header).
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
+use, intrinsic :: iso_c_binding, only : c_double, c_float
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui_enums, only : ImGuiCol_Text
-use figure_core, only : core_draw_line, core_draw_line_h, core_draw_line_v, core_draw_quad_uv, &
-                        core_framebuffer_scale, core_line_texture, core_pop_clip_rect, core_push_clip_rect, &
-                        core_style_color, core_style_var, core_white_pixel
+use figure_core, only : core_draw_line, core_draw_line_h, core_draw_line_v, core_draw_quad_uv, core_draw_rect_filled, &
+                        core_draw_text, core_framebuffer_scale, core_line_texture, core_pop_clip_rect,             &
+                        core_push_clip_rect, core_style_color, core_style_var, core_text_size, core_white_pixel
 use figure_decimate, only : decimate, decimate_axis, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
                             DECIMATE_THRESHOLD
 use figure_plot_colormaps, only : cm_pop, cm_push
-use figure_plot_frame, only : plot_item_ctx, pf_item_begin, pf_item_end, pf_item_fit, pf_item_fit_axis, &
-                              pf_item_hidden
+use figure_plot_format, only : plot_format, fmt_parse, fmt_real
+use figure_plot_frame, only : plot_item_ctx, pf_digital_offset, pf_item_begin, pf_item_count, pf_item_end,      &
+                              pf_item_fit, pf_item_fit_axis, pf_item_fit_with, pf_item_hidden, pf_item_shown_at, &
+                              pf_item_state, pf_legend_hovered, pf_pixels_to_plot, pf_plot_ctx, pf_text_vertical
 use figure_plot_transform, only : map_pixel, MAP_LINEAR, MAP_LOG10, MAP_SYMLOG, MAP_TIME
 
 implicit none
@@ -62,6 +71,8 @@ public :: plot_item_spec, pf_spec
 public :: pf_line, pf_scatter, pf_stairs, pf_stems, pf_shaded, pf_set_decimation
 public :: pf_bars, pf_bar_groups, pf_error_bars, pf_inf_lines
 public :: PF_BARS_HORIZONTAL, PF_ERROR_BARS_HORIZONTAL, PF_INF_LINES_HORIZONTAL
+public :: pf_pie_chart, pf_bubbles, pf_digital, pf_text
+public :: PF_PIE_NORMALIZE, PF_PIE_IGNORE_HIDDEN, PF_PIE_EXPLODING, PF_PIE_NO_SLICE_BORDER, PF_TEXT_VERT
 ! ImPlotMarker (implot.h): the same values as FIGURE's ImPlotMarker_*
 public :: PF_MARKER_NONE, PF_MARKER_AUTO, PF_MARKER_CIRCLE, PF_MARKER_SQUARE, PF_MARKER_DIAMOND, PF_MARKER_UP
 public :: PF_MARKER_DOWN, PF_MARKER_LEFT, PF_MARKER_RIGHT, PF_MARKER_CROSS, PF_MARKER_PLUS, PF_MARKER_ASTERISK
@@ -99,6 +110,14 @@ integer(int32), parameter :: PF_STEMS_HORIZONTAL = 1024_int32 !< ImPlotStemsFlag
 integer(int32), parameter :: PF_BARS_HORIZONTAL = 1024_int32       !< ImPlotBarsFlags_Horizontal.
 integer(int32), parameter :: PF_ERROR_BARS_HORIZONTAL = 1024_int32 !< ImPlotErrorBarsFlags_Horizontal.
 integer(int32), parameter :: PF_INF_LINES_HORIZONTAL = 1024_int32  !< ImPlotInfLinesFlags_Horizontal.
+integer(int32), parameter :: PF_PIE_NORMALIZE = 1024_int32       !< ImPlotPieChartFlags_Normalize.
+integer(int32), parameter :: PF_PIE_IGNORE_HIDDEN = 2048_int32   !< ImPlotPieChartFlags_IgnoreHidden.
+integer(int32), parameter :: PF_PIE_EXPLODING = 4096_int32       !< ImPlotPieChartFlags_Exploding.
+integer(int32), parameter :: PF_PIE_NO_SLICE_BORDER = 8192_int32 !< ImPlotPieChartFlags_NoSliceBorder.
+integer(int32), parameter :: PF_TEXT_VERT = 1024_int32           !< ImPlotTextFlags_Vertical (`pf_text(vertical=)`).
+real(real32),   parameter :: IM_PI = 3.14159265358979323846_real32 !< IM_PI (a float).
+real(real32),   parameter :: DIGITAL_PADDING = 20.0_real32       !< ImPlotStyle::DigitalPadding.
+real(real32),   parameter :: DIGITAL_SPACING = 4.0_real32        !< ImPlotStyle::DigitalSpacing.
 real(real32),   parameter :: AUTO_ALPHA = -1.0_real32       !< IMPLOT_AUTO_COL's alpha: an automatic colour.
 real(real32),   parameter :: HIGHLIGHT_LINE_SCALE = 2.0_real32 !< ITEM_HIGHLIGHT_LINE_SCALE.
 real(real32),   parameter :: HIGHLIGHT_MARK_SCALE = 1.25_real32 !< ITEM_HIGHLIGHT_MARK_SCALE.
@@ -272,6 +291,55 @@ interface pf_inf_lines
    !< Lines across the whole plot at x = values(i) (y with `horizontal`): `ip_inf_lines`.
    module procedure inf_lines_r32, inf_lines_r64, inf_lines_i32, inf_lines_i64
 endinterface pf_inf_lines
+
+interface
+   pure function c_cos(x) result(r) bind(C, name='cos')
+   !< C's `cos`.
+   import :: c_double
+   implicit none
+   real(c_double), value :: x !< Angle.
+   real(c_double)        :: r !< Cosine.
+   endfunction c_cos
+
+   pure function c_sin(x) result(r) bind(C, name='sin')
+   !< C's `sin`.
+   import :: c_double
+   implicit none
+   real(c_double), value :: x !< Angle.
+   real(c_double)        :: r !< Sine.
+   endfunction c_sin
+
+   pure function c_cosf(x) result(r) bind(C, name='cosf')
+   !< C's `cosf`.
+   import :: c_float
+   implicit none
+   real(c_float), value :: x !< Angle.
+   real(c_float)        :: r !< Cosine.
+   endfunction c_cosf
+
+   pure function c_sinf(x) result(r) bind(C, name='sinf')
+   !< C's `sinf`.
+   import :: c_float
+   implicit none
+   real(c_float), value :: x !< Angle.
+   real(c_float)        :: r !< Sine.
+   endfunction c_sinf
+endinterface
+
+interface pf_pie_chart
+   !< A pie chart, one slice per value, its label in the legend: `ip_pie_chart`.
+   module procedure pie_chart_r32, pie_chart_r64
+endinterface pf_pie_chart
+
+interface pf_bubbles
+   !< Circles at (x(i), y(i)) of radius radii(i) in plot units: `ip_bubbles`.
+   module procedure bubbles_r32, bubbles_r64
+endinterface pf_bubbles
+
+interface pf_digital
+   !< A digital signal in a band at the bottom of the plot: `ip_digital`.
+   module procedure digital_r32, digital_r64
+endinterface pf_digital
 
 contains
    ! the style
@@ -1734,6 +1802,562 @@ contains
    if (g%n > 0_int32 .and. s%line) call render_segments2(ctx, g, g2, s%col_line, s%weight)
    call finish()
    endsubroutine inf_lines_item
+
+   ! pie charts, bubbles, digital signals, text (PlotPieChart, PlotBubbles, PlotDigital, PlotText)
+
+   subroutine pie_chart_r64(labels, values, x, y, radius, label_format, angle0, normalize, colormap, spec)
+   !< A pie chart (`PlotPieChart`), double precision: `ip_pie_chart`.
+   character(len=*),     intent(in)           :: labels(:)    !< One label per slice (trailing blanks dropped).
+   real(real64),         intent(in), target   :: values(:)    !< Slice values.
+   real(real64),         intent(in)           :: x, y         !< Centre [plot units].
+   real(real64),         intent(in)           :: radius       !< Radius [plot units].
+   character(len=*),     intent(in), optional :: label_format !< printf format of a value (default '%.1f'; '': none).
+   real(real64),         intent(in), optional :: angle0       !< The first slice's start [degrees] (default 90).
+   logical,              intent(in), optional :: normalize    !< Always a full circle.
+   integer(int32),       intent(in), optional :: colormap     !< The slices' colours.
+   type(plot_item_spec), intent(in), optional :: spec         !< Style (its flags).
+   type(item_series)                          :: g            !< The values (coordinate 2).
+
+   call view_r64(g, 2_int32, values)
+   g%n = int(size(values), int32)
+   call pie_item(labels, g, x, y, radius, label_format, angle0, normalize, colormap, spec_or_default(spec))
+   endsubroutine pie_chart_r64
+
+   subroutine pie_chart_r32(labels, values, x, y, radius, label_format, angle0, normalize, colormap, spec)
+   !< A pie chart (`PlotPieChart`), single precision values: `ip_pie_chart`.
+   character(len=*),     intent(in)           :: labels(:)    !< One label per slice (trailing blanks dropped).
+   real(real32),         intent(in), target   :: values(:)    !< Slice values.
+   real(real64),         intent(in)           :: x, y         !< Centre [plot units].
+   real(real64),         intent(in)           :: radius       !< Radius [plot units].
+   character(len=*),     intent(in), optional :: label_format !< printf format of a value (default '%.1f'; '': none).
+   real(real64),         intent(in), optional :: angle0       !< The first slice's start [degrees] (default 90).
+   logical,              intent(in), optional :: normalize    !< Always a full circle.
+   integer(int32),       intent(in), optional :: colormap     !< The slices' colours.
+   type(plot_item_spec), intent(in), optional :: spec         !< Style (its flags).
+   type(item_series)                          :: g            !< The values (coordinate 2).
+
+   call view_r32(g, 2_int32, values)
+   g%n = int(size(values), int32)
+   call pie_item(labels, g, x, y, radius, label_format, angle0, normalize, colormap, spec_or_default(spec))
+   endsubroutine pie_chart_r32
+
+   subroutine bubbles_r64(label, x, y, radii, spec)
+   !< Circles at (x(i), y(i)) of radius radii(i) [plot units] (`PlotBubbles`), double precision, read in place.
+   character(len=*),     intent(in)           :: label    !< Legend label.
+   real(real64),         intent(in), target   :: x(:)     !< Abscissae.
+   real(real64),         intent(in), target   :: y(:)     !< Ordinates.
+   real(real64),         intent(in), target   :: radii(:) !< Radii.
+   type(plot_item_spec), intent(in), optional :: spec     !< Style.
+   type(item_series)                          :: g, r     !< Getters: the centres, the radii (coordinate 2).
+
+   call view_r64(g, 1_int32, x)
+   call view_r64(g, 2_int32, y)
+   call view_r64(r, 2_int32, radii)
+   g%n = int(min(size(x), size(y), size(radii)), int32)
+   r%n = g%n
+   call bubbles_item(label, g, r, spec_or_default(spec))
+   endsubroutine bubbles_r64
+
+   subroutine bubbles_r32(label, x, y, radii, spec)
+   !< Circles at (x(i), y(i)) of radius radii(i) [plot units] (`PlotBubbles`), single precision, read in place.
+   character(len=*),     intent(in)           :: label    !< Legend label.
+   real(real32),         intent(in), target   :: x(:)     !< Abscissae.
+   real(real32),         intent(in), target   :: y(:)     !< Ordinates.
+   real(real32),         intent(in), target   :: radii(:) !< Radii.
+   type(plot_item_spec), intent(in), optional :: spec     !< Style.
+   type(item_series)                          :: g, r     !< Getters: the centres, the radii (coordinate 2).
+
+   call view_r32(g, 1_int32, x)
+   call view_r32(g, 2_int32, y)
+   call view_r32(r, 2_int32, radii)
+   g%n = int(min(size(x), size(y), size(radii)), int32)
+   r%n = g%n
+   call bubbles_item(label, g, r, spec_or_default(spec))
+   endsubroutine bubbles_r32
+
+   subroutine digital_r64(label, x, y, spec)
+   !< A digital signal (`PlotDigital`), double precision, read in place: `ip_digital`.
+   character(len=*),     intent(in)           :: label !< Legend label.
+   real(real64),         intent(in), target   :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target   :: y(:)  !< Values.
+   type(plot_item_spec), intent(in), optional :: spec  !< Style (`size`: the band's height [pixels]).
+   type(item_series)                          :: g     !< Getter.
+
+   call view_r64(g, 1_int32, x)
+   call view_r64(g, 2_int32, y)
+   g%n = int(min(size(x), size(y)), int32)
+   call digital_item(label, g, spec_or_default(spec))
+   endsubroutine digital_r64
+
+   subroutine digital_r32(label, x, y, spec)
+   !< A digital signal (`PlotDigital`), single precision, read in place: `ip_digital`.
+   character(len=*),     intent(in)           :: label !< Legend label.
+   real(real32),         intent(in), target   :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target   :: y(:)  !< Values.
+   type(plot_item_spec), intent(in), optional :: spec  !< Style (`size`: the band's height [pixels]).
+   type(item_series)                          :: g     !< Getter.
+
+   call view_r32(g, 1_int32, x)
+   call view_r32(g, 2_int32, y)
+   g%n = int(min(size(x), size(y)), int32)
+   call digital_item(label, g, spec_or_default(spec))
+   endsubroutine digital_r32
+
+   subroutine pf_text(text, x, y, offset, vertical)
+   !< A text centred on the plot point (x, y) (`PlotText`; `ip_text`): the inlay text colour, clipped to the plot,
+   !< `offset` [pixels] (x right, y down), `vertical` written bottom to top; not an item: no legend entry, it fits.
+   character(len=*), intent(in)           :: text      !< Text (UTF-8).
+   real(real64),     intent(in)           :: x, y      !< Point [plot units].
+   real(real64),     intent(in), optional :: offset(2) !< Offset [pixels].
+   logical,          intent(in), optional :: vertical  !< Bottom to top.
+   type(plot_item_ctx)                    :: ctx       !< The plot.
+   real(real32)                           :: off(2), siz(2), ctr(2), pos(2) !< Offset, size, half size, corner.
+   real(real64)                           :: w, h, px, py !< Text size, a plot point.
+   integer(int32)                         :: col       !< Colour.
+   logical                                :: vert      !< Vertical.
+
+   vert = .false.
+   if (present(vertical)) vert = vertical
+   off = 0.0_real32
+   if (present(offset)) off = real(offset, real32)
+   call pf_plot_ctx(ctx) ! SetupLock
+   call core_push_clip_rect(real(ctx%rect(1), real64), real(ctx%rect(2), real64), real(ctx%rect(3), real64), &
+                            real(ctx%rect(4), real64))
+   col = core_style_color(ImGuiCol_Text) ! ImPlotCol_InlayText (automatic: Text)
+   call core_text_size(text, w, h)
+   if (vert) then ! CalcTextSizeVertical(text) * 0.5, the centre half that
+      siz = [real(h, real32) * 0.5_real32, real(w, real32) * 0.5_real32]
+      ctr = siz * 0.5_real32
+      pos(1) = map_pixel(ctx%tx, x) + (-ctr(1))
+      pos(2) = map_pixel(ctx%ty, y) + ctr(2)
+      pos = pos + off
+      if (ctx%fit) then
+         call pf_pixels_to_plot(real(pos(1), real64), real(pos(2), real64), px, py)
+         call pf_item_fit(px, py)
+         call pf_pixels_to_plot(real(pos(1) + siz(1), real64), real(pos(2) - siz(2), real64), px, py)
+         call pf_item_fit(px, py)
+      endif
+      call pf_text_vertical(pos(1), pos(2), col, text)
+   else
+      siz = [real(w, real32), real(h, real32)]
+      ctr = siz * 0.5_real32
+      pos(1) = map_pixel(ctx%tx, x) - ctr(1)
+      pos(2) = map_pixel(ctx%ty, y) - ctr(2)
+      pos = pos + off
+      if (ctx%fit) then
+         call pf_pixels_to_plot(real(pos(1), real64), real(pos(2), real64), px, py)
+         call pf_item_fit(px, py)
+         call pf_pixels_to_plot(real(pos(1) + siz(1), real64), real(pos(2) + siz(2), real64), px, py)
+         call pf_item_fit(px, py)
+      endif
+      call core_draw_text(real(pos(1), real64), real(pos(2), real64), col, text)
+   endif
+   call core_pop_clip_rect()
+   endsubroutine pf_text
+
+   subroutine pie_item(labels, g, x, y, radius, label_format, angle0, normalize, colormap, spec)
+   !< `PlotPieChart`: the sum (of the shown items with `IgnoreHidden`), the slices (`PlotPieChartEx`: an item each,
+   !< `FitterRect` of the pie's square, a fan and its anti-aliased border; two halves for a slice of half or more;
+   !< `Exploding`: a hovered entry's slice detached), then the labels (the value through the format, centred at half
+   !< the radius, black or white on the slice's colour).
+   character(len=*),     intent(in)           :: labels(:)    !< Labels.
+   type(item_series),    intent(in)           :: g            !< The values (coordinate 2).
+   real(real64),         intent(in)           :: x, y         !< Centre.
+   real(real64),         intent(in)           :: radius       !< Radius.
+   character(len=*),     intent(in), optional :: label_format !< Format.
+   real(real64),         intent(in), optional :: angle0       !< Start [degrees].
+   logical,              intent(in), optional :: normalize    !< Full circle.
+   integer(int32),       intent(in), optional :: colormap     !< Colours.
+   type(plot_item_spec), intent(in)           :: spec         !< Style.
+   type(plot_item_spec)                       :: sp           !< The slices' spec (Normalize set).
+   type(plot_item_ctx)                        :: ctx          !< The plot.
+   type(item_style)                           :: s            !< Staged style.
+   type(plot_format)                          :: fm           !< The labels' format.
+   character(len=31)                          :: lab          !< A label (ImPlot's 32-byte buffer).
+   real(real64)                               :: sum_, percent, a0, a1, ang, off, w, h, v, t, u !< Angles, sizes.
+   real(real32)                               :: pos(2), tsz(2), c4(4) !< A label's place, size; a colour.
+   integer(int32)                             :: i, jl, nl, col !< Slice, lengths, colour.
+   logical                                    :: ignore, norm, skip, hov, found, shown, labelled !< Flags.
+
+   sp = spec
+   if (present(normalize)) then
+      if (normalize) sp%flags = ior(sp%flags, PF_PIE_NORMALIZE)
+   endif
+   if (present(colormap)) call cm_push(colormap)
+   call pf_plot_ctx(ctx)
+   call core_push_clip_rect(real(ctx%rect(1), real64), real(ctx%rect(2), real64), real(ctx%rect(3), real64), &
+                            real(ctx%rect(4), real64))
+   ignore = iand(sp%flags, PF_PIE_IGNORE_HIDDEN) /= 0_int32
+   sum_ = pie_sum(g, ignore)
+   norm = iand(sp%flags, PF_PIE_NORMALIZE) /= 0_int32 .or. sum_ > 1.0_real64
+   ! PlotPieChartEx
+   a0 = start_angle(angle0)
+   a1 = a0
+   do i = 1_int32, g%n
+      jl = len_trim(labels(i), kind=int32)
+      call pf_item_state(labels(i)(1:jl), found, shown, col)
+      v = coordinate(g, 2_int32, int(i, int64))
+      percent = v
+      if (norm) percent = v / sum_
+      skip = sum_ <= 0.0_real64 .or. (ignore .and. found .and. .not. shown)
+      if (.not. skip) then
+         t = real(2.0_real32 * IM_PI, real64) * percent ! (2 * IM_PI a float, then times the double)
+         a1 = a0 + t
+      endif
+      if (begin(labels(i)(1:jl), sp, [0.0_real32, 0.0_real32, 0.0_real32, AUTO_ALPHA], PF_MARKER_INVALID, ctx, s)) then
+         if (fits(ctx, sp)) then ! FitterRect
+            call pf_item_fit(x - radius, y - radius)
+            call pf_item_fit(x + radius, y + radius)
+         endif
+         hov = pf_legend_hovered(labels(i)(1:jl)) .and. iand(sp%flags, PF_PIE_EXPLODING) /= 0_int32
+         if (sum_ > 0.0_real64) then
+            if (percent < 0.5_real64) then
+               call pie_slice(ctx, x, y, radius, a0, a1, ctx%color, sp%flags, hov)
+            else
+               t = (a1 - a0) * 0.5_real64
+               u = a0 + t
+               call pie_slice(ctx, x, y, radius, a0, u, ctx%color, sp%flags, hov)
+               call pie_slice(ctx, x, y, radius, u, a1, ctx%color, sp%flags, hov)
+            endif
+         endif
+         call finish()
+      endif
+      if (.not. skip) a0 = a1
+   enddo
+   ! the labels
+   labelled = .true.
+   if (present(label_format)) labelled = len(label_format) > 0
+   if (labelled) then
+      if (present(label_format)) then
+         call fmt_parse(label_format, fm)
+      else
+         call fmt_parse('%.1f', fm)
+      endif
+      a0 = start_angle(angle0)
+      a1 = a0
+      do i = 1_int32, g%n
+         jl = len_trim(labels(i), kind=int32)
+         call pf_item_state(labels(i)(1:jl), found, shown, col)
+         v = coordinate(g, 2_int32, int(i, int64))
+         percent = v
+         if (norm) percent = v / sum_
+         skip = ignore .and. found .and. .not. shown
+         if (skip) cycle
+         t = real(2.0_real32 * IM_PI, real64) * percent
+         a1 = a0 + t
+         if (shown) then
+            nl = 0_int32
+            call fmt_real(lab, nl, fm, v)
+            call core_text_size(lab(1:nl), w, h)
+            tsz = [real(w, real32), real(h, real32)]
+            t = (a1 - a0) * 0.5_real64
+            ang = a0 + t
+            hov = pf_legend_hovered(labels(i)(1:jl)) .and. iand(sp%flags, PF_PIE_EXPLODING) /= 0_int32
+            off = merge(0.6_real64, 0.5_real64, hov) * radius
+            t = off * c_cos(ang)
+            u = off * c_sin(ang)
+            pos(1) = map_pixel(ctx%tx, x + t)
+            pos(2) = map_pixel(ctx%ty, y + u)
+            c4 = unpack_u32(col) ! the item's colour
+            col = text_on(c4)
+            tsz = tsz * 0.5_real32
+            call core_draw_text(real(pos(1) - tsz(1), real64), real(pos(2) - tsz(2), real64), col, lab(1:nl))
+         endif
+         a0 = a1
+      enddo
+   endif
+   call core_pop_clip_rect()
+   if (present(colormap)) call cm_pop()
+   endsubroutine pie_item
+
+   pure function start_angle(angle0) result(a)
+   !< `angle0 * 2 * IM_PI / 360.0` (IM_PI the float; default 90 degrees).
+   real(real64), intent(in), optional :: angle0 !< Degrees.
+   real(real64)                       :: a      !< Radians.
+
+   a = 90.0_real64
+   if (present(angle0)) a = angle0
+   a = a * 2.0_real64
+   a = a * real(IM_PI, real64)
+   a = a / 360.0_real64
+   endfunction start_angle
+
+   function pie_sum(g, ignore_hidden) result(total)
+   !< `PieChartSum`: the values' sum; with `IgnoreHidden`, of those whose item (by index in the plot's items, as
+   !< ImPlot's `GetItemByIndex`) is shown.
+   type(item_series), intent(in) :: g             !< Values.
+   logical,           intent(in) :: ignore_hidden !< IgnoreHidden.
+   real(real64)                  :: total         !< Sum.
+   integer(int32)                :: i             !< Value.
+
+   total = 0.0_real64
+   do i = 1_int32, g%n
+      if (ignore_hidden) then
+         if (i > pf_item_count()) exit
+         if (.not. pf_item_shown_at(i - 1_int32)) cycle
+      endif
+      total = total + coordinate(g, 2_int32, int(i, int64))
+   enddo
+   endfunction pie_sum
+
+   subroutine pie_slice(ctx, cx, cy, radius, a0, a1, col, flags, detached)
+   !< `RenderPieSlice`: the centre and n points of the arc (n from the arc's length, 50 a turn, 3 at least), closed on
+   !< the centre; the fan (`PrimPieSliceFill`) and, unless `NoSliceBorder`, its border (`PrimPieSliceLine`, 2 pixels,
+   !< anti-aliased); detached: 0.08 away along the middle angle, 0.95 of the width, the radius + 0.04.
+   type(plot_item_ctx), intent(in) :: ctx      !< The plot.
+   real(real64),        intent(in) :: cx, cy   !< Centre.
+   real(real64),        intent(in) :: radius   !< Radius.
+   real(real64),        intent(in) :: a0, a1   !< Angles.
+   integer(int32),      intent(in) :: col      !< Colour.
+   integer(int32),      intent(in) :: flags    !< Flags.
+   logical,             intent(in) :: detached !< Exploded.
+   real(real32), parameter         :: RESOLUTION = 50.0_real32 / (2.0_real32 * IM_PI) !< Points a radian (a float).
+   real(real32)                    :: b(2, 52), hw !< The points [pixels], half weight.
+   real(real64)                    :: da, a, ox, oy, r, mid, na0, na1, t, u !< Angles, centre, radius.
+   real(real64)                    :: uv0(2), uv1(2) !< Texture.
+   integer(int32)                  :: n, i, k   !< Points, counters.
+
+   t = (a1 - a0) * real(RESOLUTION, real64)
+   n = max(3_int32, int(t, int32))
+   ox = cx
+   oy = cy
+   r = radius
+   if (detached) then
+      mid = (a0 + a1) / 2.0_real64
+      t = (a1 - a0) * 0.95_real64
+      t = t / 2.0_real64
+      na0 = mid - t
+      na1 = mid + t
+      t = 0.08_real64 * c_cos(mid)
+      ox = cx + t
+      t = 0.08_real64 * c_sin(mid)
+      oy = cy + t
+      r = radius + 0.08_real64 / 2.0_real64
+   else
+      na0 = a0
+      na1 = a1
+   endif
+   da = (na1 - na0) / real(n - 1_int32, real64)
+   b(1, 1) = map_pixel(ctx%tx, ox)
+   b(2, 1) = map_pixel(ctx%ty, oy)
+   do i = 0_int32, n - 1_int32
+      t = real(i, real64) * da
+      a = na0 + t
+      t = r * c_cos(a)
+      u = r * c_sin(a)
+      b(1, i + 2_int32) = map_pixel(ctx%tx, ox + t)
+      b(2, i + 2_int32) = map_pixel(ctx%ty, oy + u)
+   enddo
+   b(:, n + 2_int32) = b(:, 1)
+   call fan(b, n + 2_int32, col)
+   if (iand(flags, PF_PIE_NO_SLICE_BORDER) == 0_int32) then
+      hw = 1.0_real32 ! GetLineRenderProps of half weight 1
+      call core_line_texture(2.0_real64, uv0, uv1, t)
+      hw = hw + real(t, real32) * 0.5_real32
+      do k = 1_int32, n + 1_int32
+         call prim_line(b(:, k), b(:, k + 1_int32), hw, col, uv0, uv1)
+      enddo
+   endif
+   endsubroutine pie_slice
+
+   subroutine fan(v, nv, col)
+   !< A triangle fan from v(:, 1): (1, k, k + 1), k = 2 .. nv - 1, as quads (1, k, k + 1, k + 2) of two triangles (a
+   !< lone last one with a repeated vertex).
+   real(real32),   intent(in) :: v(:, :) !< Vertices [pixels].
+   integer(int32), intent(in) :: nv      !< Their count.
+   integer(int32), intent(in) :: col     !< Colour.
+   integer(int32)             :: k       !< Vertex.
+
+   k = 2_int32
+   do while (k < nv)
+      if (k + 2_int32 <= nv) then
+         call prim_quad(v(:, 1), v(:, k), v(:, k + 1), v(:, k + 2), col)
+      else
+         call prim_quad(v(:, 1), v(:, k), v(:, k + 1), v(:, 1), col)
+      endif
+      k = k + 2_int32
+   enddo
+   endsubroutine fan
+
+   subroutine bubbles_item(label, g, r, spec)
+   !< `PlotBubblesEx`: `FitterBubbles1` (each centre +- its radius on both axes), the filled circles
+   !< (`RendererCircleFill`), their outlines (`RendererCircleLine`); 10 to 64 segments from the radius in x pixels, the
+   !< angles and their sines and cosines in float (`ImCos`, `ImSin`), each circle culled by its box.
+   character(len=*),     intent(in) :: label !< Label.
+   type(item_series),    intent(in) :: g, r  !< Getters: centres, radii.
+   type(plot_item_spec), intent(in) :: spec  !< Style.
+   type(plot_item_ctx)              :: ctx   !< The plot.
+   type(item_style)                 :: s     !< Staged style.
+   real(real64)                     :: x, y, rad, dummy !< A bubble.
+   integer(int32)                   :: i     !< Bubble.
+
+   if (.not. begin(label, spec, spec%fill_color, spec%marker, ctx, s)) return
+   if (fits(ctx, spec)) then
+      do i = 1_int32, g%n
+         call point(g, i, x, y)
+         call point(r, i, dummy, rad)
+         call pf_item_fit_with(x - rad, y, .false.)
+         call pf_item_fit_with(x + rad, y, .false.)
+         call pf_item_fit_with(y - rad, x, .true.)
+         call pf_item_fit_with(y + rad, x, .true.)
+      enddo
+   endif
+   if (g%n > 0_int32) then
+      if (s%fill) call render_circles(ctx, g, r, s%col_fill, -1.0_real32)
+      if (s%line) call render_circles(ctx, g, r, s%col_line, s%weight)
+   endif
+   call finish()
+   endsubroutine bubbles_item
+
+   subroutine render_circles(ctx, g, r, col, weight)
+   !< `RendererCircleFill` (`weight` < 0: a fan of the circle's points) or `RendererCircleLine` (its segments).
+   type(plot_item_ctx), intent(in) :: ctx    !< The plot.
+   type(item_series),   intent(in) :: g, r   !< Getters.
+   integer(int32),      intent(in) :: col    !< Colour.
+   real(real32),        intent(in) :: weight !< Line weight (< 0: fill).
+   real(real32)                    :: v(2, 64), p1(2), p2(2), pmin(2), pmax(2), rad, ar, a_step, ang, cs, sn, hw !<
+                                       !< Points, box, radius, angles.
+   real(real64)                    :: x, y, dummy, uv0(2), uv1(2), t !< A bubble, texture.
+   integer(int32)                  :: i, k, ns  !< Bubble, point, segments.
+
+   if (weight >= 0.0_real32) call line_props(weight, hw, uv0, uv1)
+   do i = 1_int32, g%n
+      call point(g, i, x, y)
+      call point(r, i, dummy, t)
+      rad = real(t, real32)
+      ar = real(abs(real(rad, real64) * ctx%tx%m), real32)
+      ns = min(max(int(ar, int32), 10_int32), 64_int32)
+      p1(1) = map_pixel(ctx%tx, x - real(rad, real64))
+      p1(2) = map_pixel(ctx%ty, y - real(rad, real64))
+      p2(1) = map_pixel(ctx%tx, x + real(rad, real64))
+      p2(2) = map_pixel(ctx%ty, y + real(rad, real64))
+      pmin(1) = im_min(p1(1), p2(1))
+      pmin(2) = im_min(p1(2), p2(2))
+      pmax(1) = im_max(p1(1), p2(1))
+      pmax(2) = im_max(p1(2), p2(2))
+      if (.not. overlaps(ctx%rect, pmin(1), pmin(2), pmax(1), pmax(2))) cycle
+      a_step = (IM_PI * 2.0_real32) / real(ns, real32)
+      do k = 0_int32, ns - 1_int32
+         ang = a_step * real(k, real32)
+         cs = c_cosf(ang) * rad ! (float products, then the double sums: as ImPlot's)
+         sn = c_sinf(ang) * rad
+         v(1, k + 1_int32) = map_pixel(ctx%tx, x + real(cs, real64))
+         v(2, k + 1_int32) = map_pixel(ctx%ty, y + real(sn, real64))
+      enddo
+      if (weight < 0.0_real32) then
+         call fan(v, ns, col)
+      else
+         do k = 1_int32, ns
+            call prim_line(v(:, k), v(:, mod(k, ns) + 1_int32), hw, col, uv0, uv1)
+         enddo
+      endif
+   enddo
+   endsubroutine render_circles
+
+   subroutine digital_item(label, g, spec)
+   !< `PlotDigitalEx` (FIGURE's patched copy): in a band at the bottom of the plot (above the bands of the digital items
+   !< before it on this plot), a rectangle per run of equal values, its height `Size` times the value (at least
+   !< `Size`), clamped to the x axis's pixels; no fit (`BeginItem`, no fitter).
+   character(len=*),     intent(in) :: label !< Label.
+   type(item_series),    intent(in) :: g     !< Getter.
+   type(plot_item_spec), intent(in) :: spec  !< Style.
+   type(plot_item_ctx)              :: ctx   !< The plot.
+   type(item_style)                 :: s     !< Staged style.
+   real(real64)                     :: x1, y1, x2, y2, xn, yn !< Points.
+   real(real32)                     :: pmin(2), pmax(2), pix1, y_ref, lo, hi, base !< Pixels.
+   integer(int32)                   :: i, pix0, choff, pixmax, poff !< Point, pixel sizes.
+
+   if (.not. begin(label, spec, spec%fill_color, PF_MARKER_INVALID, ctx, s)) return
+   if (g%n > 1_int32 .and. s%fill) then
+      pixmax = 0_int32
+      call point(g, 1_int32, x1, y1)
+      base = real(pf_digital_offset(0_int32), real32)
+      i = 1_int32
+      do while (i <= g%n)
+         call point(g, i, x2, y2)
+         if (.not. (abs(y1) <= huge(1.0_real64))) then ! ImNanOrInf
+            x1 = x2
+            y1 = y2
+            i = i + 1_int32
+            cycle
+         endif
+         if (.not. (abs(y2) <= huge(1.0_real64))) y2 = constrain_nan_inf(y2)
+         pix0 = int(s%weight, int32)
+         y1 = max(0.0_real64, y1) ! ImMax(0.0, y1)
+         pix1 = s%size * real(y1, real32)
+         choff = int(max(s%size, pix1) + DIGITAL_SPACING, int32)
+         pixmax = max(pixmax, choff)
+         pmin(1) = map_pixel(ctx%tx, x1)
+         pmax(1) = map_pixel(ctx%tx, x2)
+         poff = int(DIGITAL_PADDING, int32)
+         y_ref = merge(ctx%y_pix(2), ctx%y_pix(1), ctx%y_inv)
+         pmin(2) = y_ref - (base + real(poff, real32))
+         pmax(2) = y_ref - (base + real(pix0 + int(pix1, int32) + poff, real32))
+         do while (i + 2_int32 <= g%n .and. y1 == y2) ! one rectangle a run of equal values
+            call point(g, i + 1_int32, xn, yn)
+            x2 = xn
+            y2 = yn
+            if (.not. (abs(yn) <= huge(1.0_real64))) exit
+            pmax(1) = map_pixel(ctx%tx, xn)
+            i = i + 1_int32
+         enddo
+         lo = merge(ctx%x_pix(2), ctx%x_pix(1), ctx%x_inv)
+         hi = merge(ctx%x_pix(1) - 1.0_real32, ctx%x_pix(2) - 1.0_real32, ctx%x_inv)
+         pmin(1) = min(max(pmin(1), lo), hi) ! ImClamp
+         pmax(1) = min(max(pmax(1), lo), hi)
+         if (rect_contains(ctx%rect, pmin) .or. rect_contains(ctx%rect, pmax)) & ! (FIGURE's patch: corners ordered)
+            call core_draw_rect_filled(real(im_min(pmin(1), pmax(1)), real64), real(im_min(pmin(2), pmax(2)), real64), &
+                                       real(im_max(pmin(1), pmax(1)), real64), real(im_max(pmin(2), pmax(2)), real64), &
+                                       s%col_fill)
+         x1 = x2
+         y1 = y2
+         i = i + 1_int32
+      enddo
+      base = real(pf_digital_offset(pixmax), real32)
+   endif
+   call finish()
+   endsubroutine digital_item
+
+   pure function rect_contains(r, p) result(yes)
+   !< `ImRect::Contains(ImVec2)`: min <= p < max.
+   real(real32), intent(in) :: r(4) !< Rectangle.
+   real(real32), intent(in) :: p(2) !< Point.
+   logical                  :: yes  !< Inside.
+
+   yes = p(1) >= r(1) .and. p(2) >= r(2) .and. p(1) < r(3) .and. p(2) < r(4)
+   endfunction rect_contains
+
+   pure function constrain_nan_inf(v) result(c)
+   !< `ImConstrainNan(ImConstrainInf(v))`: +-inf to +-DBL_MAX, NaN to 0.
+   real(real64), intent(in) :: v !< Value.
+   real(real64)             :: c !< Constrained.
+
+   if (v /= v) then
+      c = 0.0_real64
+   elseif (v > huge(1.0_real64)) then
+      c = huge(1.0_real64)
+   elseif (v < -huge(1.0_real64)) then
+      c = -huge(1.0_real64)
+   else
+      c = v
+   endif
+   endfunction constrain_nan_inf
+
+   pure function text_on(c) result(col)
+   !< `CalcTextColor`: black on a light colour (luminance 0.299 r + 0.587 g + 0.114 b > 0.5, float), else white.
+   real(real32), intent(in) :: c(4) !< Background.
+   integer(int32)           :: col  !< IM_COL32_BLACK or IM_COL32_WHITE.
+   real(real32)             :: a, b, d !< Terms.
+
+   a = c(1) * 0.299_real32
+   b = c(2) * 0.587_real32
+   d = c(3) * 0.114_real32
+   if ((a + b) + d > 0.5_real32) then
+      col = -16777216_int32 ! 0xFF000000
+   else
+      col = -1_int32        ! 0xFFFFFFFF
+   endif
+   endfunction text_on
 
    ! private: the items (PlotLineEx, PlotScatterEx, PlotStairsEx, PlotStemsEx, PlotShadedEx)
 

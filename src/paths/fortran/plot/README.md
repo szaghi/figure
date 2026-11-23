@@ -149,6 +149,21 @@ without allocation (glibc's output; at first foresight's `c_real`, which it repr
   (outlines, horizontal, sub-pixel bars, groups and Viridis, stacked with negatives and horizontal, a hidden stacked
   item, error bars of both kinds, infinite lines, the fit, every kind): ranges of every frame equal to the bit,
   pictures at threshold 2 with no pixel failing (three compilers). Not yet: per-bar colours (FIGURE's API sets none).
+- 2026-11-22, pie charts, bubbles, digital signals, texts (P11 group (c)), in `figure_plot_items`: `pf_pie_chart`
+  (`PlotPieChart`: each slice an item with `FitterRect`, its fan and 2-pixel border vertex for vertex, two halves for
+  half a turn or more, the labels through a printf format (figure_plot_format) black or white on the slice, sums
+  above 1 or `normalize` full circles, `IgnoreHidden`, `Exploding` with a hovered entry, `NoSliceBorder`, a colormap
+  pushed; C's `cos`/`sin` bound, IM_PI the float ImPlot uses), `pf_bubbles` (`PlotBubbles`: `FitterBubbles1`, 10 to 64
+  segments from the radius in pixels, `cosf`/`sinf` in float, fills and outlines), `pf_digital` (`PlotDigital`, with
+  FIGURE's patch that orders the rectangles' corners: the bands of a plot's digital items stacked from the bottom,
+  runs of equal values one rectangle, no fit), `pf_text` (`PlotText`: centred or vertical, offset, the inlay text
+  colour, fitted). The frame gives the items the plot's context without an item (`pf_plot_ctx`), the items' state
+  (`pf_item_state`, `pf_item_count`, `pf_item_shown_at`), one axis's `ExtendFitWith` (`pf_item_fit_with`), the
+  digital offset and the vertical text. `figure_test_plot_frame_misc` compares 10 cases with ImPlot (normalised,
+  partial and normalized pies, Viridis without borders and labels, a hidden slice ignored, an exploded slice, bubbles
+  of both precisions and their fit, two digital bands with a NaN, texts horizontal and vertical with offsets and their
+  fit, a single precision pie): ranges of every frame equal to the bit, pictures at threshold 2 with no pixel failing
+  (three compilers).
 
 ## What the current seam calls, to replace
 
@@ -191,7 +206,7 @@ The ImPlot functions `figure_implot` calls (76, through `figure_cimplot`) and th
       `ImPlot_PlotStems_*`, `ImPlot_PlotShaded_*`
 - [x] Bars and groups, error bars, infinite lines: `ImPlot_PlotBars_*`, `ImPlot_PlotBarGroups_*`,
       `ImPlot_PlotErrorBars_*`, `ImPlot_PlotInfLines_*`
-- [ ] Pies, bubbles, digital, text: `ImPlot_PlotPieChart_*`, `ImPlot_PlotBubbles_*`, `ImPlot_PlotDigital_*`,
+- [x] Pies, bubbles, digital, text: `ImPlot_PlotPieChart_*`, `ImPlot_PlotBubbles_*`, `ImPlot_PlotDigital_*`,
       `ImPlot_PlotText`
 - [ ] Heatmaps, histograms, images, fields: `ImPlot_PlotHeatmap_*`, `ImPlot_PlotHistogram_*`,
       `ImPlot_PlotHistogram2D_*`, `ImPlot_PlotImage`, `fig_field_image` (`figure_field.cpp`), `fig_texture_sampling`

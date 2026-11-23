@@ -125,6 +125,8 @@ implicit none
 private
 public :: pf_begin_plot, pf_end_plot, pf_plot_limits
 public :: plot_item_ctx, pf_item_begin, pf_item_fit, pf_item_end, pf_item_hidden, pf_item_fit_axis
+public :: pf_plot_ctx, pf_item_count, pf_item_shown_at, pf_item_state, pf_item_fit_with, pf_digital_offset
+public :: pf_text_vertical
 public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
 public :: pf_hide_next_item, pf_legend_hovered
@@ -321,6 +323,10 @@ type :: plot_item_ctx
    type(plot_axis_map) :: ty                      !< The current y axis's map.
    real(real64)        :: x_range(2) = 0.0_real64 !< The current x axis's range.
    real(real64)        :: y_range(2) = 0.0_real64 !< The current y axis's range.
+   real(real32)        :: x_pix(2) = 0.0_real32   !< The current x axis's PixelMin, PixelMax.
+   real(real32)        :: y_pix(2) = 0.0_real32   !< The current y axis's PixelMin, PixelMax.
+   logical             :: x_inv = .false.         !< The current x axis inverted.
+   logical             :: y_inv = .false.         !< The current y axis inverted.
 endtype plot_item_ctx
 
 type(plot_record), allocatable, target :: plots(:)       !< The plots (ImPlotContext::Plots).
@@ -336,6 +342,7 @@ character(len=:), allocatable          :: text           !< The open plot's titl
 integer(int32)                         :: n_text = 0_int32 !< Characters of `text` in use.
 logical                                :: open_context = .false. !< A context menu opens (OpenContextThisFrame).
 character(len=MOUSE_TEXT_LEN)          :: mouse_text     !< The mouse text (MousePosStringBuilder).
+integer(int32)                         :: digital_offset = 0_int32 !< The digital items' bands (DigitalPlotOffset).
 
 contains
    function pf_begin_plot(title, width, height, equal) result(visible)
@@ -1759,6 +1766,7 @@ contains
    next_fit = .false.
    next_hidden_set = .false.
    open_context = .false.
+   digital_offset = 0_int32
    endsubroutine reset_next
 
    ! private: the items
@@ -1867,12 +1875,7 @@ contains
          call highlight(p, it, w) ! the axes' highlight
          ctx%hovered = iand(p%leg_flags, LGF_NO_HIGHLIGHT_ITEM) == 0_int32
       endif
-      ctx%fit = p%fit
-      ctx%rect = p%rect
-      ctx%tx = axis_map(p%ax(p%cur_x))
-      ctx%ty = axis_map(p%ax(p%cur_y))
-      ctx%x_range = [p%ax(p%cur_x)%range_min, p%ax(p%cur_x)%range_max]
-      ctx%y_range = [p%ax(p%cur_y)%range_min, p%ax(p%cur_y)%range_max]
+      call fill_ctx(p, ctx)
    endassociate
    endfunction pf_item_begin
 
@@ -1920,6 +1923,113 @@ contains
       endif
    endassociate
    endsubroutine pf_item_fit_axis
+
+   subroutine pf_plot_ctx(ctx)
+   !< The open plot as a non-item sees it (`PlotText`, `PlotPieChart`'s labels: `SetupLock`): rectangle, current axes.
+   type(plot_item_ctx), intent(out) :: ctx !< The plot.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: an item outside a plot'
+   associate(p => plots(cur))
+      if (.not. p%locked) call setup_finish(p)
+      call fill_ctx(p, ctx)
+   endassociate
+   endsubroutine pf_plot_ctx
+
+   subroutine fill_ctx(p, ctx)
+   !< The plot's part of an item's context: fit, rectangle, the current axes' maps, ranges, pixels, inversions.
+   type(plot_record),   intent(in)    :: p   !< Plot.
+   type(plot_item_ctx), intent(inout) :: ctx !< Context.
+
+   ctx%fit = p%fit
+   ctx%rect = p%rect
+   ctx%tx = axis_map(p%ax(p%cur_x))
+   ctx%ty = axis_map(p%ax(p%cur_y))
+   ctx%x_range = [p%ax(p%cur_x)%range_min, p%ax(p%cur_x)%range_max]
+   ctx%y_range = [p%ax(p%cur_y)%range_min, p%ax(p%cur_y)%range_max]
+   ctx%x_pix = [p%ax(p%cur_x)%pixel_min, p%ax(p%cur_x)%pixel_max]
+   ctx%y_pix = [p%ax(p%cur_y)%pixel_min, p%ax(p%cur_y)%pixel_max]
+   ctx%x_inv = has_flag(p%ax(p%cur_x)%flags, AXF_INVERT)
+   ctx%y_inv = has_flag(p%ax(p%cur_y)%flags, AXF_INVERT)
+   endsubroutine fill_ctx
+
+   function pf_item_count() result(n)
+   !< `ItemGroup::GetItemCount` of the open plot.
+   integer(int32) :: n !< Items.
+
+   n = plots(cur)%n_items
+   endfunction pf_item_count
+
+   function pf_item_shown_at(i) result(shown)
+   !< `GetItemByIndex(i)->Show`, i from 0 (the items in the order they were created).
+   integer(int32), intent(in) :: i     !< Index.
+   logical                    :: shown !< Shown.
+
+   shown = plots(cur)%item_show(i + 1_int32)
+   endfunction pf_item_shown_at
+
+   subroutine pf_item_state(label, found, shown, color)
+   !< `GetItem(label)`: whether the item exists in the open plot, shown, its colour.
+   character(len=*), intent(in)  :: label !< Label.
+   logical,          intent(out) :: found !< Exists.
+   logical,          intent(out) :: shown !< Shown.
+   integer(int32),   intent(out) :: color !< Colour (packed; 0 when not found).
+   integer(int32)                :: id, k !< ID, counter.
+
+   found = .false.
+   shown = .false.
+   color = 0_int32
+   associate(p => plots(cur))
+      id = plot_hash(label, plot_id_offset(p%id, -1_int32))
+      do k = 1_int32, p%n_items
+         if (p%item_id(k) == id) then
+            found = .true.
+            shown = p%item_show(k)
+            color = p%item_color(k)
+            return
+         endif
+      enddo
+   endassociate
+   endsubroutine pf_item_state
+
+   subroutine pf_item_fit_with(v, alt, y_axis)
+   !< `ExtendFitWith` of one current axis (x, or y): v within its constraint, alt (the other axis's value) within the
+   !< other's range when RangeFit.
+   real(real64), intent(in) :: v, alt !< Value, the other coordinate.
+   logical,      intent(in) :: y_axis !< The y axis.
+   integer(int32)           :: i, j   !< The axis, the other.
+
+   associate(p => plots(cur))
+      i = merge(p%cur_y, p%cur_x, y_axis)
+      j = merge(p%cur_x, p%cur_y, y_axis)
+      associate(a => p%ax(i), o => p%ax(j))
+         if (has_flag(a%flags, AXF_RANGE_FIT)) then
+            if (.not. (alt >= o%range_min .and. alt <= o%range_max)) return
+         endif
+         if (abs(v) <= huge(1.0_real64) .and. v >= a%con_min .and. v <= a%con_max) then
+            if (v < a%fit_min) a%fit_min = v
+            if (v > a%fit_max) a%fit_max = v
+         endif
+      endassociate
+   endassociate
+   endsubroutine pf_item_fit_with
+
+   function pf_digital_offset(add) result(old)
+   !< `gp.DigitalPlotOffset` of the open plot (0 at each plot's begin): its value, then `add` added.
+   integer(int32), intent(in) :: add !< Pixels to add.
+   integer(int32)             :: old !< The offset before.
+
+   old = digital_offset
+   digital_offset = digital_offset + add
+   endfunction pf_digital_offset
+
+   subroutine pf_text_vertical(x, y, col, text)
+   !< `AddTextVertical` (figure_plot_items' vertical `pf_text`): the frame's `text_vertical`.
+   real(real32),     intent(in) :: x, y !< Bottom-left corner [pixels].
+   integer(int32),   intent(in) :: col  !< Colour.
+   character(len=*), intent(in) :: text !< Text.
+
+   call text_vertical(x, y, col, text)
+   endsubroutine pf_text_vertical
 
    subroutine pf_item_end()
    !< `EndItem` (figure_plot_items): the next item's data reset.
