@@ -48,6 +48,8 @@ public :: locate_default, locate_log10, locate_symlog, locate_time
 public :: transform_log10, inverse_log10, transform_symlog, inverse_symlog
 public :: nice_num, pow10, c_floor, c_ceil, round_axis_value, time_cursor_label, axis_value_text
 public :: TICK_LABEL_LEN, TIME_MIN, TIME_MAX
+public :: plot_time, time_from_double, time_to_double, time_lt, gm_time, mk_time, make_time, time_year, &
+          days_in_month, leap_year, add_time, floor_time, TU_S, TU_DAY, TU_MO, TU_YR ! (figure_plot_time_picker)
 
 integer(int32), parameter :: TICK_LABEL_LEN = 31_int32     !< IMPLOT_LABEL_MAX_SIZE less its NUL.
 real(real64),   parameter :: TIME_MIN = 0.0_real64         !< IMPLOT_MIN_TIME.

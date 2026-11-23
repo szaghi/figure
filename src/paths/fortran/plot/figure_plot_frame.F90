@@ -185,6 +185,7 @@ use figure_plot_locators, only : plot_ticks, ticks_reset, locate_default, locate
 use figure_base, only : format_ok, FORMAT_REAL
 use figure_imgui, only : ig_button, ig_checkbox, ig_same_line, ig_separator
 use figure_menu, only : ig_begin_menu, ig_end_menu, ig_menu_item
+use figure_plot_time_picker, only : pf_time_picker_menu
 
 implicit none
 private
@@ -2373,13 +2374,13 @@ contains
 
    subroutine axis_context_menu(p, i, eq)
    !< `ShowAxisContextMenu` of a linear, log or symlog axis: its ends (locks and drags), Auto-Fit, Invert, Opposite,
-   !< Label, Grid Lines, Tick Marks, Tick Labels, Tick Labels Inside. (A time axis's date and time pickers: not yet;
-   !< its menu shows the drags of a linear axis.)
+   !< Label, Grid Lines, Tick Marks, Tick Labels, Tick Labels Inside. A time axis's ends are the menus Min Time and Max
+   !< Time (figure_plot_time_picker), in place of the drags.
    type(plot_record), intent(inout) :: p      !< Plot.
    integer(int32),    intent(in)    :: i      !< Axis.
    integer(int32),    intent(in)    :: eq     !< The axis made equal with it (0: none).
    logical                          :: always_locked, label, grid, marks, labels, inside, v, done !< State.
-   real(real64)                     :: speed, tmp !< The drags' speed, a value.
+   real(real64)                     :: speed, tmp, tmp2 !< The drags' speed, values.
 
    call core_push_item_width(75.0_real64)
    associate(ax => p%ax(i))
@@ -2402,7 +2403,9 @@ contains
       v = locked_min(ax) .or. always_locked
       call begin_disabled(v)
       tmp = ax%range_min
-      if (core_drag_double('Min', tmp, speed, ieee_value(tmp, ieee_negative_inf), ax%range_max - epsilon(1.0_real64), &
+      if (ax%scale == SCALE_TIME) then ! the date and time pickers
+         if (pf_time_picker_menu(p%id, i, .false., ax%range_min, ax%range_max, tmp, tmp2)) call set_range(ax, tmp, tmp2)
+      elseif (core_drag_double('Min', tmp, speed, ieee_value(tmp, ieee_negative_inf), ax%range_max - epsilon(1.0_real64), &
                            '%.3g', 1_int32)) then
          done = set_min(ax, tmp, .true.)
          if (eq /= 0_int32) call set_aspect(p%ax(eq), get_aspect(ax))
@@ -2415,7 +2418,9 @@ contains
       v = locked_max(ax) .or. always_locked
       call begin_disabled(v)
       tmp = ax%range_max
-      if (core_drag_double('Max', tmp, speed, ax%range_min + epsilon(1.0_real64), ieee_value(tmp, ieee_positive_inf), &
+      if (ax%scale == SCALE_TIME) then ! the date and time pickers
+         if (pf_time_picker_menu(p%id, i, .true., ax%range_min, ax%range_max, tmp, tmp2)) call set_range(ax, tmp, tmp2)
+      elseif (core_drag_double('Max', tmp, speed, ax%range_min + epsilon(1.0_real64), ieee_value(tmp, ieee_positive_inf), &
                            '%.3g', 1_int32)) then
          done = set_max(ax, tmp, .true.)
          if (eq /= 0_int32) call set_aspect(p%ax(eq), get_aspect(ax))

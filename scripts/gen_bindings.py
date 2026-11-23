@@ -117,6 +117,7 @@ CORE_FUNCTIONS = (
     "ImDrawList_AddTriangleFilled",
     "ImDrawList_GetClipRectMax", "ImDrawList_GetClipRectMin", "ImDrawList_PopClipRect", "ImDrawList_PopTexture",
     "ImDrawList_PrimReserve", "ImDrawList_PrimUnreserve", "ImDrawList_PushClipRect", "ImDrawList_PushTexture",
+    "igArrowButtonEx",
     "igBeginPopupEx", "igButtonBehavior", "igCalcItemSize", "igClearActiveID", "igGetActiveID", "igGetCurrentWindow",
     "igGetHoveredID", "igGetStyleVarInfo",
     "igGetIDWithSeed_Int", "igGetIDWithSeed_Str", "igIsClippedEx", "igItemAdd", "igItemHoverable", "igItemSize_Rect",

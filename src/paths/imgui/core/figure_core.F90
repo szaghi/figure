@@ -75,7 +75,8 @@ use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,
                                ImDrawList_PushTexture, ImDrawList_PopTexture
 use figure_c_native, only : fig_texture_sampling
 use figure_style, only : ig_get_style_var
-use figure_cimgui_core, only : ImDrawList_AddConcavePolyFilled
+use figure_cimgui_core, only : ImDrawList_AddConcavePolyFilled, igArrowButtonEx
+use figure_cimgui, only : igBeginCombo, igEndCombo
 use figure_drawlist, only : dl_prims
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
                             dl_triangle_filled, DL_LINE_TEXTURES
@@ -105,6 +106,7 @@ public :: core_white_pixel, core_framebuffer_scale, core_texture_sampling
 public :: core_draw_prims, core_delta_time, core_style_color_rgba
 public :: core_draw_list
 public :: core_draw_concave_poly_filled
+public :: core_arrow_button, core_begin_combo, core_end_combo
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
 
@@ -792,6 +794,38 @@ contains
    endif
    v = cv
    endfunction core_drag_double
+
+   function core_arrow_button(id, dir, w, h) result(pressed)
+   !< `ArrowButtonEx(id, dir, ImVec2(w, h), 0)`: a button with an arrow, of a given size (ImPlot's date picker).
+   character(len=*), intent(in) :: id      !< ID (`##...`).
+   integer(int32),   intent(in) :: dir     !< `ImGuiDir`.
+   real(real64),     intent(in) :: w, h    !< Size [pixels].
+   logical                      :: pressed !< Clicked this frame.
+
+   call to_buf(id(1:min(len(id), BUF_LEN)))
+   pressed = logical(igArrowButtonEx(buf, int(dir, c_int), v2(w, h), 0_c_int))
+   endfunction core_arrow_button
+
+   function core_begin_combo(label, preview, flags) result(open)
+   !< `BeginCombo(label, preview, flags)`; when true, its lines (`ig_selectable`), then `core_end_combo`.
+   character(len=*), intent(in) :: label   !< Label.
+   character(len=*), intent(in) :: preview !< The text shown closed.
+   integer(int32),   intent(in) :: flags   !< `ImGuiComboFlags`.
+   logical                      :: open    !< Open.
+   integer(int32)               :: a       !< Where the preview starts in the buffer.
+
+   a = len(label, kind=int32) + 2_int32
+   if (a + len(preview, kind=int32) > BUF_LEN) error stop 'figure_core: core_begin_combo: texts too long'
+   call to_buf(label)
+   call to_buf(preview, a)
+   open = logical(igBeginCombo(buf, buf(a:), int(flags, c_int)))
+   endfunction core_begin_combo
+
+   subroutine core_end_combo()
+   !< `EndCombo` (after `core_begin_combo` returned true).
+
+   call igEndCombo()
+   endsubroutine core_end_combo
 
    function core_radio_button(label, active) result(pressed)
    !< `RadioButton(label, active)`.

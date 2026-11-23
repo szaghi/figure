@@ -38,6 +38,8 @@ Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figur
 - `figure_plot_field`: `ip_field_image`'s colouring and its texture cache, as `native/figure_field.cpp`.
 - `figure_plot_tools`: the drag tools (lines, point, rectangle), as ImPlot's `DragLineX`, ... in `implot.cpp`.
 - `figure_plot_hash`: Dear ImGui's string and integer hashes with a seed (ImPlot's item and drag tool IDs).
+- `figure_plot_time_picker`: a time axis's menus Min Time and Max Time in the axis menu, ImPlot's `ShowTimePicker`
+  and `ShowDatePicker` (`implot.cpp`), UTC on a 12-hour clock, as the frame's time axes.
 - `figure_plot_draw`: drawing in a plot (`pf_draw_line`, `pf_draw_rect`, `pf_draw_circle`, `pf_draw_polyline`,
   `pf_draw_polygon`, `pf_draw_text`, `pf_draw_image`), as `figure_canvas.cpp`'s `fig_draw` on the `'plot'` layer
   (`ig_draw_*(..., layer='plot')`), through the frame's public hooks (`pf_plot_to_pixels`, `pf_plot_rect`,
