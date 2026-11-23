@@ -139,6 +139,16 @@ without allocation (glibc's output; at first foresight's `c_real`, which it repr
   see the test's header); `figure_test_plot_frame_alloc` counts a scatter and a marked line: 0 allocations a frame.
   Not yet: the decimation's cache (`ip_cache_next`) and the device lines (`ip_line_device`), per-point colours and
   sizes (FIGURE's API sets none), `GetLastItemColor`.
+- 2026-11-22, bars, bar groups, error bars, infinite lines (P11 group (b)), in `figure_plot_items`: `pf_bars`
+  (`PlotBarsVEx`/`HEx`: their fitter, fills and outlines, a bar at least a pixel wide, no outline of the fill's
+  colour, `PrimRectLine`; horizontal by the spec's flag, as `ip_bars`), `pf_bar_groups` (`PlotBarGroups`: side by side
+  or stacked, negative values below, a hidden item's values skipped (`pf_item_hidden`), a colormap pushed for the
+  call), `pf_error_bars` (symmetric or not, along x or y, Dear ImGui's lines and whiskers, the text colour by
+  default, `Size`), `pf_inf_lines` (across the current range, x or y fitted alone: `pf_item_fit_axis`); the API's
+  kinds (`real32`/`real64`, `int32`/`int64` positions). `figure_test_plot_frame_bars` compares 10 cases with ImPlot
+  (outlines, horizontal, sub-pixel bars, groups and Viridis, stacked with negatives and horizontal, a hidden stacked
+  item, error bars of both kinds, infinite lines, the fit, every kind): ranges of every frame equal to the bit,
+  pictures at threshold 2 with no pixel failing (three compilers). Not yet: per-bar colours (FIGURE's API sets none).
 
 ## What the current seam calls, to replace
 
@@ -179,7 +189,7 @@ The ImPlot functions `figure_implot` calls (76, through `figure_cimplot`) and th
 
 - [x] Lines, scatter, stairs, stems, shaded: `ImPlot_PlotLine_*`, `ImPlot_PlotScatter_*`, `ImPlot_PlotStairs_*`,
       `ImPlot_PlotStems_*`, `ImPlot_PlotShaded_*`
-- [ ] Bars and groups, error bars, infinite lines: `ImPlot_PlotBars_*`, `ImPlot_PlotBarGroups_*`,
+- [x] Bars and groups, error bars, infinite lines: `ImPlot_PlotBars_*`, `ImPlot_PlotBarGroups_*`,
       `ImPlot_PlotErrorBars_*`, `ImPlot_PlotInfLines_*`
 - [ ] Pies, bubbles, digital, text: `ImPlot_PlotPieChart_*`, `ImPlot_PlotBubbles_*`, `ImPlot_PlotDigital_*`,
       `ImPlot_PlotText`

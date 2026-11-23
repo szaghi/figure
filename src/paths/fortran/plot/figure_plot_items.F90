@@ -1,6 +1,6 @@
-!< figure_plot_items, the plot frame's items: lines, markers, scatter, stairs, stems, shaded areas, as ImPlot draws.
+!< figure_plot_items, the plot frame's items: lines, markers, stairs, stems, shaded areas, bars, as ImPlot draws.
 module figure_plot_items
-!< figure_plot_items, the plot frame's items: lines, markers, scatter, stairs, stems, shaded areas, as ImPlot draws.
+!< figure_plot_items, the plot frame's items: lines, markers, stairs, stems, shaded areas, bars, as ImPlot draws.
 !<
 !< szaghi/figure#15 P11, group (a). The items of FIGURE's plot API drawn into the Fortran plot frame
 !< (figure_plot_frame): `pf_line`, `pf_scatter`, `pf_stairs`, `pf_stems`, `pf_shaded`, with an item's style
@@ -31,6 +31,13 @@ module figure_plot_items
 !<   column above DECIMATE_THRESHOLD points a column; not with markers, `Segments`, `Loop`): the kept points read
 !<   through their indices, in place (`pf_set_decimation` turns it off, as `ip_set_decimation`).
 !<
+!< Group (b): `pf_bars` (`PlotBarsVEx`/`HEx`: `FitterBarV`/`H`, `RendererBarsFill`/`Line`, a bar at least a pixel
+!< wide, no outline when it has the fill's colour; `PrimRectLine`'s eight triangles as four quads), `pf_bar_groups`
+!< (`PlotBarGroups`: side by side, or stacked with the negative values below, a hidden item's values skipped; the
+!< colormap pushed for the call), `pf_error_bars` (`PlotErrorBarsVEx`/`HEx`: Dear ImGui's `AddLine` and
+!< `AddLineH`/`V` whiskers, the style's text colour unless a line colour is given, not culled), `pf_inf_lines`
+!< (`PlotInfLines`: segments across the current range, `FitterX`/`FitterY`).
+!<
 !< No allocation per item per frame (ADR 0001): views of the arrays, fixed quads; the decimation's index buffer and
 !< the integer abscissae's conversion (decimated items only) are grown once and kept.
 !<
@@ -38,17 +45,23 @@ module figure_plot_items
 !< anti-aliased edge pixel may land on the other side of a texel (figure_test_plot_frame_labels' header).
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_core, only : core_draw_quad_uv, core_framebuffer_scale, core_line_texture, core_pop_clip_rect, &
-                        core_push_clip_rect, core_style_var, core_white_pixel
+use figure_cimgui_enums, only : ImGuiCol_Text
+use figure_core, only : core_draw_line, core_draw_line_h, core_draw_line_v, core_draw_quad_uv, &
+                        core_framebuffer_scale, core_line_texture, core_pop_clip_rect, core_push_clip_rect, &
+                        core_style_color, core_style_var, core_white_pixel
 use figure_decimate, only : decimate, decimate_axis, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
                             DECIMATE_THRESHOLD
-use figure_plot_frame, only : plot_item_ctx, pf_item_begin, pf_item_end, pf_item_fit
+use figure_plot_colormaps, only : cm_pop, cm_push
+use figure_plot_frame, only : plot_item_ctx, pf_item_begin, pf_item_end, pf_item_fit, pf_item_fit_axis, &
+                              pf_item_hidden
 use figure_plot_transform, only : map_pixel, MAP_LINEAR, MAP_LOG10, MAP_SYMLOG, MAP_TIME
 
 implicit none
 private
 public :: plot_item_spec, pf_spec
 public :: pf_line, pf_scatter, pf_stairs, pf_stems, pf_shaded, pf_set_decimation
+public :: pf_bars, pf_bar_groups, pf_error_bars, pf_inf_lines
+public :: PF_BARS_HORIZONTAL, PF_ERROR_BARS_HORIZONTAL, PF_INF_LINES_HORIZONTAL
 ! ImPlotMarker (implot.h): the same values as FIGURE's ImPlotMarker_*
 public :: PF_MARKER_NONE, PF_MARKER_AUTO, PF_MARKER_CIRCLE, PF_MARKER_SQUARE, PF_MARKER_DIAMOND, PF_MARKER_UP
 public :: PF_MARKER_DOWN, PF_MARKER_LEFT, PF_MARKER_RIGHT, PF_MARKER_CROSS, PF_MARKER_PLUS, PF_MARKER_ASTERISK
@@ -83,6 +96,9 @@ integer(int32), parameter :: PF_SCATTER_NO_CLIP = 1024_int32 !< ImPlotScatterFla
 integer(int32), parameter :: PF_STAIRS_PRE_STEP = 1024_int32 !< ImPlotStairsFlags_PreStep.
 integer(int32), parameter :: PF_STAIRS_SHADED = 2048_int32  !< ImPlotStairsFlags_Shaded.
 integer(int32), parameter :: PF_STEMS_HORIZONTAL = 1024_int32 !< ImPlotStemsFlags_Horizontal.
+integer(int32), parameter :: PF_BARS_HORIZONTAL = 1024_int32       !< ImPlotBarsFlags_Horizontal.
+integer(int32), parameter :: PF_ERROR_BARS_HORIZONTAL = 1024_int32 !< ImPlotErrorBarsFlags_Horizontal.
+integer(int32), parameter :: PF_INF_LINES_HORIZONTAL = 1024_int32  !< ImPlotInfLinesFlags_Horizontal.
 real(real32),   parameter :: AUTO_ALPHA = -1.0_real32       !< IMPLOT_AUTO_COL's alpha: an automatic colour.
 real(real32),   parameter :: HIGHLIGHT_LINE_SCALE = 2.0_real32 !< ITEM_HIGHLIGHT_LINE_SCALE.
 real(real32),   parameter :: HIGHLIGHT_MARK_SCALE = 1.25_real32 !< ITEM_HIGHLIGHT_MARK_SCALE.
@@ -174,6 +190,7 @@ type :: item_style
    integer(int32) :: col_mfill = 0_int32      !< Markers' fill colour.
    real(real32)   :: weight = 1.0_real32      !< Line weight [pixels].
    real(real32)   :: marker_size = 4.0_real32 !< Marker size [pixels].
+   real(real32)   :: size = 4.0_real32        !< Size: error bars' whiskers [pixels].
    integer(int32) :: marker = PF_MARKER_NONE  !< Marker.
    integer(int32) :: flags = 0_int32          !< Flags.
    logical        :: line = .false.           !< RenderLine.
@@ -205,6 +222,7 @@ integer(int64), allocatable :: keep(:)                !< The decimation's kept i
 real(real32),   allocatable :: conv32(:)              !< Integer abscissae converted (decimated items).
 real(real64),   allocatable :: conv64(:)              !< ...
 real(real64)                :: uv_white(2) = 0.0_real64 !< The white pixel's texture coordinates (this item's).
+real(real64), allocatable, target :: stack_tmp(:)     !< Stacked bar groups' neg, pos, curr_min, curr_max (TempDouble1).
 
 interface pf_line
    !< Line through the points (x(i), y(i)), through y(i) at uniformly spaced x (a vector or a matrix's row): `ip_line`.
@@ -233,6 +251,27 @@ interface pf_shaded
    module procedure shaded_i32_r32, shaded_i64_r32, shaded_i32_r64, shaded_i64_r64
    module procedure shaded_ref_i32_r32, shaded_ref_i64_r32, shaded_ref_i32_r64, shaded_ref_i64_r64
 endinterface pf_shaded
+
+interface pf_bars
+   !< Bars of height y(i) centred at x(i), `bar_size` wide: `ip_bars` (`PF_BARS_HORIZONTAL` in the spec: along y).
+   module procedure bars_r32, bars_r64, bars_i32_r32, bars_i64_r32, bars_i32_r64, bars_i64_r64
+endinterface pf_bars
+
+interface pf_bar_groups
+   !< Items in groups of bars, `values(g, i)` item i in group g: `ip_bar_groups`.
+   module procedure bar_groups_r32, bar_groups_r64
+endinterface pf_bar_groups
+
+interface pf_error_bars
+   !< Error bars at (x(i), y(i)): `ip_error_bars`.
+   module procedure error_bars_r32, error_bars_r64, error_bars_i32_r32, error_bars_i64_r32, error_bars_i32_r64, &
+                    error_bars_i64_r64
+endinterface pf_error_bars
+
+interface pf_inf_lines
+   !< Lines across the whole plot at x = values(i) (y with `horizontal`): `ip_inf_lines`.
+   module procedure inf_lines_r32, inf_lines_r64, inf_lines_i32, inf_lines_i64
+endinterface pf_inf_lines
 
 contains
    ! the style
@@ -904,6 +943,798 @@ contains
    call shaded_item(label, g1, g2, spec_or_default(spec), yref)
    endsubroutine shaded_ref_i64_r32
 
+   ! bars, bar groups, error bars, infinite lines (PlotBars, PlotBarGroups, PlotErrorBars, PlotInfLines)
+
+   subroutine bars_r32(label, x, y, bar_size, spec)
+   !< Bars of height y(i) centred at x(i), `bar_size` wide, single precision, read in place.
+   character(len=*),     intent(in)           :: label    !< Legend label.
+   real(real32)        , intent(in), target   :: x(:)     !< Bar positions.
+   real(real32)        , intent(in), target   :: y(:)     !< Bar heights.
+   real(real64),         intent(in)           :: bar_size !< Bar width [x units].
+   type(plot_item_spec), intent(in), optional :: spec     !< Style.
+   type(item_series)                          :: g        !< Getter.
+
+   call view_r32(g, 1_int32, x)
+   call view_r32(g, 2_int32, y)
+   g%n = int(min(size(x), size(y)), int32)
+   call bars_item(label, g, bar_size, spec_or_default(spec))
+   endsubroutine bars_r32
+
+   subroutine bars_r64(label, x, y, bar_size, spec)
+   !< Bars of height y(i) centred at x(i), `bar_size` wide, double precision, read in place.
+   character(len=*),     intent(in)           :: label    !< Legend label.
+   real(real64)        , intent(in), target   :: x(:)     !< Bar positions.
+   real(real64)        , intent(in), target   :: y(:)     !< Bar heights.
+   real(real64),         intent(in)           :: bar_size !< Bar width [x units].
+   type(plot_item_spec), intent(in), optional :: spec     !< Style.
+   type(item_series)                          :: g        !< Getter.
+
+   call view_r64(g, 1_int32, x)
+   call view_r64(g, 2_int32, y)
+   g%n = int(min(size(x), size(y)), int32)
+   call bars_item(label, g, bar_size, spec_or_default(spec))
+   endsubroutine bars_r64
+
+   subroutine bars_i32_r32(label, x, y, bar_size, spec)
+   !< Bars of height y(i) centred at x(i), `bar_size` wide, single precision, abscissae `int32`, read in place.
+   character(len=*),     intent(in)           :: label    !< Legend label.
+   integer(int32)      , intent(in), target   :: x(:)     !< Bar positions.
+   real(real32)        , intent(in), target   :: y(:)     !< Bar heights.
+   real(real64),         intent(in)           :: bar_size !< Bar width [x units].
+   type(plot_item_spec), intent(in), optional :: spec     !< Style.
+   type(item_series)                          :: g        !< Getter.
+
+   call view_i32(g, x, .true.)
+   call view_r32(g, 2_int32, y)
+   g%n = int(min(size(x), size(y)), int32)
+   call bars_item(label, g, bar_size, spec_or_default(spec))
+   endsubroutine bars_i32_r32
+
+   subroutine bars_i64_r32(label, x, y, bar_size, spec)
+   !< Bars of height y(i) centred at x(i), `bar_size` wide, single precision, abscissae `int64`, read in place.
+   character(len=*),     intent(in)           :: label    !< Legend label.
+   integer(int64)      , intent(in), target   :: x(:)     !< Bar positions.
+   real(real32)        , intent(in), target   :: y(:)     !< Bar heights.
+   real(real64),         intent(in)           :: bar_size !< Bar width [x units].
+   type(plot_item_spec), intent(in), optional :: spec     !< Style.
+   type(item_series)                          :: g        !< Getter.
+
+   call view_i64(g, x, .true.)
+   call view_r32(g, 2_int32, y)
+   g%n = int(min(size(x), size(y)), int32)
+   call bars_item(label, g, bar_size, spec_or_default(spec))
+   endsubroutine bars_i64_r32
+
+   subroutine bars_i32_r64(label, x, y, bar_size, spec)
+   !< Bars of height y(i) centred at x(i), `bar_size` wide, double precision, abscissae `int32`, read in place.
+   character(len=*),     intent(in)           :: label    !< Legend label.
+   integer(int32)      , intent(in), target   :: x(:)     !< Bar positions.
+   real(real64)        , intent(in), target   :: y(:)     !< Bar heights.
+   real(real64),         intent(in)           :: bar_size !< Bar width [x units].
+   type(plot_item_spec), intent(in), optional :: spec     !< Style.
+   type(item_series)                          :: g        !< Getter.
+
+   call view_i32(g, x, .false.)
+   call view_r64(g, 2_int32, y)
+   g%n = int(min(size(x), size(y)), int32)
+   call bars_item(label, g, bar_size, spec_or_default(spec))
+   endsubroutine bars_i32_r64
+
+   subroutine bars_i64_r64(label, x, y, bar_size, spec)
+   !< Bars of height y(i) centred at x(i), `bar_size` wide, double precision, abscissae `int64`, read in place.
+   character(len=*),     intent(in)           :: label    !< Legend label.
+   integer(int64)      , intent(in), target   :: x(:)     !< Bar positions.
+   real(real64)        , intent(in), target   :: y(:)     !< Bar heights.
+   real(real64),         intent(in)           :: bar_size !< Bar width [x units].
+   type(plot_item_spec), intent(in), optional :: spec     !< Style.
+   type(item_series)                          :: g        !< Getter.
+
+   call view_i64(g, x, .false.)
+   call view_r64(g, 2_int32, y)
+   g%n = int(min(size(x), size(y)), int32)
+   call bars_item(label, g, bar_size, spec_or_default(spec))
+   endsubroutine bars_i64_r64
+
+   subroutine error_bars_r32(label, x, y, err, err_high, spec, horizontal)
+   !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
+   !< single precision, read in place.
+   character(len=*),     intent(in)                   :: label       !< Legend label.
+   real(real32)        , intent(in), target           :: x(:)        !< Abscissae.
+   real(real32)        , intent(in), target           :: y(:)        !< Ordinates.
+   real(real32)        , intent(in), target           :: err(:)      !< Error below (and above).
+   real(real32)        , intent(in), target, optional :: err_high(:) !< Error above.
+   type(plot_item_spec), intent(in), optional         :: spec        !< Style.
+   logical,              intent(in), optional         :: horizontal  !< Bars along x.
+   type(item_series)                                  :: g, e        !< Getters: the points, the errors.
+
+   call view_r32(g, 1_int32, x)
+   call view_r32(g, 2_int32, y)
+   call view_r32(e, 1_int32, err)
+   if (present(err_high)) then
+      call view_r32(e, 2_int32, err_high)
+   else
+      call view_r32(e, 2_int32, err)
+   endif
+   g%n = int(min(size(x), size(y), size(err)), int32)
+   if (present(err_high)) g%n = min(g%n, int(size(err_high), int32))
+   e%n = g%n
+   call error_bars_item(label, g, e, spec_or_default(spec), horizontal)
+   endsubroutine error_bars_r32
+
+   subroutine error_bars_r64(label, x, y, err, err_high, spec, horizontal)
+   !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
+   !< double precision, read in place.
+   character(len=*),     intent(in)                   :: label       !< Legend label.
+   real(real64)        , intent(in), target           :: x(:)        !< Abscissae.
+   real(real64)        , intent(in), target           :: y(:)        !< Ordinates.
+   real(real64)        , intent(in), target           :: err(:)      !< Error below (and above).
+   real(real64)        , intent(in), target, optional :: err_high(:) !< Error above.
+   type(plot_item_spec), intent(in), optional         :: spec        !< Style.
+   logical,              intent(in), optional         :: horizontal  !< Bars along x.
+   type(item_series)                                  :: g, e        !< Getters: the points, the errors.
+
+   call view_r64(g, 1_int32, x)
+   call view_r64(g, 2_int32, y)
+   call view_r64(e, 1_int32, err)
+   if (present(err_high)) then
+      call view_r64(e, 2_int32, err_high)
+   else
+      call view_r64(e, 2_int32, err)
+   endif
+   g%n = int(min(size(x), size(y), size(err)), int32)
+   if (present(err_high)) g%n = min(g%n, int(size(err_high), int32))
+   e%n = g%n
+   call error_bars_item(label, g, e, spec_or_default(spec), horizontal)
+   endsubroutine error_bars_r64
+
+   subroutine error_bars_i32_r32(label, x, y, err, err_high, spec, horizontal)
+   !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
+   !< single precision, abscissae `int32`, read in place.
+   character(len=*),     intent(in)                   :: label       !< Legend label.
+   integer(int32)      , intent(in), target           :: x(:)        !< Abscissae.
+   real(real32)        , intent(in), target           :: y(:)        !< Ordinates.
+   real(real32)        , intent(in), target           :: err(:)      !< Error below (and above).
+   real(real32)        , intent(in), target, optional :: err_high(:) !< Error above.
+   type(plot_item_spec), intent(in), optional         :: spec        !< Style.
+   logical,              intent(in), optional         :: horizontal  !< Bars along x.
+   type(item_series)                                  :: g, e        !< Getters: the points, the errors.
+
+   call view_i32(g, x, .true.)
+   call view_r32(g, 2_int32, y)
+   call view_r32(e, 1_int32, err)
+   if (present(err_high)) then
+      call view_r32(e, 2_int32, err_high)
+   else
+      call view_r32(e, 2_int32, err)
+   endif
+   g%n = int(min(size(x), size(y), size(err)), int32)
+   if (present(err_high)) g%n = min(g%n, int(size(err_high), int32))
+   e%n = g%n
+   call error_bars_item(label, g, e, spec_or_default(spec), horizontal)
+   endsubroutine error_bars_i32_r32
+
+   subroutine error_bars_i64_r32(label, x, y, err, err_high, spec, horizontal)
+   !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
+   !< single precision, abscissae `int64`, read in place.
+   character(len=*),     intent(in)                   :: label       !< Legend label.
+   integer(int64)      , intent(in), target           :: x(:)        !< Abscissae.
+   real(real32)        , intent(in), target           :: y(:)        !< Ordinates.
+   real(real32)        , intent(in), target           :: err(:)      !< Error below (and above).
+   real(real32)        , intent(in), target, optional :: err_high(:) !< Error above.
+   type(plot_item_spec), intent(in), optional         :: spec        !< Style.
+   logical,              intent(in), optional         :: horizontal  !< Bars along x.
+   type(item_series)                                  :: g, e        !< Getters: the points, the errors.
+
+   call view_i64(g, x, .true.)
+   call view_r32(g, 2_int32, y)
+   call view_r32(e, 1_int32, err)
+   if (present(err_high)) then
+      call view_r32(e, 2_int32, err_high)
+   else
+      call view_r32(e, 2_int32, err)
+   endif
+   g%n = int(min(size(x), size(y), size(err)), int32)
+   if (present(err_high)) g%n = min(g%n, int(size(err_high), int32))
+   e%n = g%n
+   call error_bars_item(label, g, e, spec_or_default(spec), horizontal)
+   endsubroutine error_bars_i64_r32
+
+   subroutine error_bars_i32_r64(label, x, y, err, err_high, spec, horizontal)
+   !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
+   !< double precision, abscissae `int32`, read in place.
+   character(len=*),     intent(in)                   :: label       !< Legend label.
+   integer(int32)      , intent(in), target           :: x(:)        !< Abscissae.
+   real(real64)        , intent(in), target           :: y(:)        !< Ordinates.
+   real(real64)        , intent(in), target           :: err(:)      !< Error below (and above).
+   real(real64)        , intent(in), target, optional :: err_high(:) !< Error above.
+   type(plot_item_spec), intent(in), optional         :: spec        !< Style.
+   logical,              intent(in), optional         :: horizontal  !< Bars along x.
+   type(item_series)                                  :: g, e        !< Getters: the points, the errors.
+
+   call view_i32(g, x, .false.)
+   call view_r64(g, 2_int32, y)
+   call view_r64(e, 1_int32, err)
+   if (present(err_high)) then
+      call view_r64(e, 2_int32, err_high)
+   else
+      call view_r64(e, 2_int32, err)
+   endif
+   g%n = int(min(size(x), size(y), size(err)), int32)
+   if (present(err_high)) g%n = min(g%n, int(size(err_high), int32))
+   e%n = g%n
+   call error_bars_item(label, g, e, spec_or_default(spec), horizontal)
+   endsubroutine error_bars_i32_r64
+
+   subroutine error_bars_i64_r64(label, x, y, err, err_high, spec, horizontal)
+   !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
+   !< double precision, abscissae `int64`, read in place.
+   character(len=*),     intent(in)                   :: label       !< Legend label.
+   integer(int64)      , intent(in), target           :: x(:)        !< Abscissae.
+   real(real64)        , intent(in), target           :: y(:)        !< Ordinates.
+   real(real64)        , intent(in), target           :: err(:)      !< Error below (and above).
+   real(real64)        , intent(in), target, optional :: err_high(:) !< Error above.
+   type(plot_item_spec), intent(in), optional         :: spec        !< Style.
+   logical,              intent(in), optional         :: horizontal  !< Bars along x.
+   type(item_series)                                  :: g, e        !< Getters: the points, the errors.
+
+   call view_i64(g, x, .false.)
+   call view_r64(g, 2_int32, y)
+   call view_r64(e, 1_int32, err)
+   if (present(err_high)) then
+      call view_r64(e, 2_int32, err_high)
+   else
+      call view_r64(e, 2_int32, err)
+   endif
+   g%n = int(min(size(x), size(y), size(err)), int32)
+   if (present(err_high)) g%n = min(g%n, int(size(err_high), int32))
+   e%n = g%n
+   call error_bars_item(label, g, e, spec_or_default(spec), horizontal)
+   endsubroutine error_bars_i64_r64
+
+   subroutine inf_lines_r32(label, values, horizontal, spec)
+   !< Lines across the whole plot at x = values(i) (y with `horizontal`), `r32` positions, read in place.
+   character(len=*),     intent(in)           :: label      !< Legend label.
+   real(real32)        , intent(in), target   :: values(:)  !< Positions.
+   logical,              intent(in), optional :: horizontal !< Horizontal lines.
+   type(plot_item_spec), intent(in), optional :: spec       !< Style.
+   type(item_series)                          :: g          !< Getter (the positions, the other coordinate unset).
+   integer(int32)                             :: k          !< The positions' coordinate.
+
+   k = 1_int32
+   if (present(horizontal)) then
+      if (horizontal) k = 2_int32
+   endif
+   call view_r32(g, k, values)
+   g%n = int(size(values), int32)
+   call inf_lines_item(label, g, k, spec_or_default(spec))
+   endsubroutine inf_lines_r32
+
+   subroutine inf_lines_r64(label, values, horizontal, spec)
+   !< Lines across the whole plot at x = values(i) (y with `horizontal`), `r64` positions, read in place.
+   character(len=*),     intent(in)           :: label      !< Legend label.
+   real(real64)        , intent(in), target   :: values(:)  !< Positions.
+   logical,              intent(in), optional :: horizontal !< Horizontal lines.
+   type(plot_item_spec), intent(in), optional :: spec       !< Style.
+   type(item_series)                          :: g          !< Getter (the positions, the other coordinate unset).
+   integer(int32)                             :: k          !< The positions' coordinate.
+
+   k = 1_int32
+   if (present(horizontal)) then
+      if (horizontal) k = 2_int32
+   endif
+   call view_r64(g, k, values)
+   g%n = int(size(values), int32)
+   call inf_lines_item(label, g, k, spec_or_default(spec))
+   endsubroutine inf_lines_r64
+
+   subroutine inf_lines_i32(label, values, horizontal, spec)
+   !< Lines across the whole plot at x = values(i) (y with `horizontal`), `i32` positions, read in place.
+   character(len=*),     intent(in)           :: label      !< Legend label.
+   integer(int32)      , intent(in), target   :: values(:)  !< Positions.
+   logical,              intent(in), optional :: horizontal !< Horizontal lines.
+   type(plot_item_spec), intent(in), optional :: spec       !< Style.
+   type(item_series)                          :: g          !< Getter (the positions, the other coordinate unset).
+   integer(int32)                             :: k          !< The positions' coordinate.
+
+   k = 1_int32
+   if (present(horizontal)) then
+      if (horizontal) k = 2_int32
+   endif
+   call view_i32(g, values, .false., k)
+   g%n = int(size(values), int32)
+   call inf_lines_item(label, g, k, spec_or_default(spec))
+   endsubroutine inf_lines_i32
+
+   subroutine inf_lines_i64(label, values, horizontal, spec)
+   !< Lines across the whole plot at x = values(i) (y with `horizontal`), `i64` positions, read in place.
+   character(len=*),     intent(in)           :: label      !< Legend label.
+   integer(int64)      , intent(in), target   :: values(:)  !< Positions.
+   logical,              intent(in), optional :: horizontal !< Horizontal lines.
+   type(plot_item_spec), intent(in), optional :: spec       !< Style.
+   type(item_series)                          :: g          !< Getter (the positions, the other coordinate unset).
+   integer(int32)                             :: k          !< The positions' coordinate.
+
+   k = 1_int32
+   if (present(horizontal)) then
+      if (horizontal) k = 2_int32
+   endif
+   call view_i64(g, values, .false., k)
+   g%n = int(size(values), int32)
+   call inf_lines_item(label, g, k, spec_or_default(spec))
+   endsubroutine inf_lines_i64
+
+   subroutine bar_groups_r32(labels, values, group_size, shift, horizontal, stacked, colormap, spec)
+   !< Items in groups of bars (`PlotBarGroups`), `values(g, i)` item i in group g, group g at g - 1 (+ `shift`), the
+   !< items side by side in `group_size` (default 0.67) or stacked; along y with `horizontal`; the items' colours from
+   !< `colormap` (pushed for the call), `r32`.
+   character(len=*),     intent(in)                   :: labels(:)    !< One per item (trailing blanks dropped).
+   real(real32)        , intent(in), target, contiguous :: values(:, :) !< values(group, item).
+   real(real64),         intent(in), optional         :: group_size   !< A group's width (default 0.67).
+   real(real64),         intent(in), optional         :: shift        !< Shift of every group (default 0).
+   logical,              intent(in), optional         :: horizontal   !< Along y.
+   logical,              intent(in), optional         :: stacked      !< Stacked.
+   integer(int32),       intent(in), optional         :: colormap     !< The items' colours.
+   type(plot_item_spec), intent(in), optional         :: spec         !< Style.
+   type(item_series)                                  :: g1, g2       !< Getters.
+   type(plot_item_spec)                               :: sb           !< The bars' spec (flags cleared).
+   real(real64)                                       :: gs, sh, sub, w, ss !< Group size, shift, a bar's.
+   integer(int32)                                     :: i, j, ni, ng, ib, jl !< Item, group, counts, base, length.
+   logical                                            :: horz, stack  !< Flags.
+   real(real64)                                       :: v            !< A value.
+
+   gs = 0.67_real64
+   if (present(group_size)) gs = group_size
+   sh = 0.0_real64
+   if (present(shift)) sh = shift
+   horz = .false.
+   if (present(horizontal)) horz = horizontal
+   stack = .false.
+   if (present(stacked)) stack = stacked
+   ni = int(size(values, 2), int32)
+   ng = int(size(values, 1), int32)
+   sb = spec_or_default(spec)
+   sb%flags = 0_int32
+   if (present(colormap)) call cm_push(colormap)
+   if (stack) then
+      call stack_room(ng)
+      stack_tmp(1:2_int32 * ng) = 0.0_real64 ! neg, pos
+      do i = 1_int32, ni
+         jl = len_trim(labels(i), kind=int32)
+         if (.not. pf_item_hidden(labels(i)(1:jl))) then
+            do j = 1_int32, ng
+               v = real(values(j, i), real64)
+               if (v > 0.0_real64) then ! curr_min = pos, curr_max = curr_min + v, pos += v
+                  stack_tmp(2_int32 * ng + j) = stack_tmp(ng + j)
+                  stack_tmp(3_int32 * ng + j) = stack_tmp(2_int32 * ng + j) + v
+                  stack_tmp(ng + j) = stack_tmp(ng + j) + v
+               else ! curr_max = neg, curr_min = curr_max + v, neg += v
+                  stack_tmp(3_int32 * ng + j) = stack_tmp(j)
+                  stack_tmp(2_int32 * ng + j) = stack_tmp(3_int32 * ng + j) + v
+                  stack_tmp(j) = stack_tmp(j) + v
+               endif
+            enddo
+         endif
+         ib = 2_int32 * ng
+         call stacked_views(g1, g2, ng, ib, sh, horz)
+         if (horz) then
+            call bars_ex(labels(i)(1:jl), g1, g2, gs, sb, .true.)
+         else
+            call bars_ex(labels(i)(1:jl), g1, g2, gs, sb, .false.)
+         endif
+      enddo
+   else
+      sub = gs / real(ni, real64)
+      do i = 1_int32, ni
+         jl = len_trim(labels(i), kind=int32)
+         w = (real(i - 1_int32, real64) + 0.5_real64) * sub ! subshift = (i + 0.5) subsize - group_size / 2
+         ss = gs / 2.0_real64
+         w = w - ss
+         w = w + sh
+         g1 = item_series()
+         g2 = item_series()
+         if (horz) then ! (values, lin), (0, lin)
+            call view_r32(g1, 1_int32, values(:, i))
+            call view_lin(g1, 2_int32, w, 1.0_real64)
+            call view_const(g2, 1_int32, 0.0_real64)
+            call view_lin(g2, 2_int32, w, 1.0_real64)
+         else ! (lin, values), (lin, 0)
+            call view_lin(g1, 1_int32, w, 1.0_real64)
+            call view_r32(g1, 2_int32, values(:, i))
+            call view_lin(g2, 1_int32, w, 1.0_real64)
+            call view_const(g2, 2_int32, 0.0_real64)
+         endif
+         g1%n = ng
+         g2%n = ng
+         call bars_ex(labels(i)(1:jl), g1, g2, sub, sb, horz)
+      enddo
+   endif
+   if (present(colormap)) call cm_pop()
+   endsubroutine bar_groups_r32
+
+   subroutine bar_groups_r64(labels, values, group_size, shift, horizontal, stacked, colormap, spec)
+   !< Items in groups of bars (`PlotBarGroups`), `values(g, i)` item i in group g, group g at g - 1 (+ `shift`), the
+   !< items side by side in `group_size` (default 0.67) or stacked; along y with `horizontal`; the items' colours from
+   !< `colormap` (pushed for the call), `r64`.
+   character(len=*),     intent(in)                   :: labels(:)    !< One per item (trailing blanks dropped).
+   real(real64)        , intent(in), target, contiguous :: values(:, :) !< values(group, item).
+   real(real64),         intent(in), optional         :: group_size   !< A group's width (default 0.67).
+   real(real64),         intent(in), optional         :: shift        !< Shift of every group (default 0).
+   logical,              intent(in), optional         :: horizontal   !< Along y.
+   logical,              intent(in), optional         :: stacked      !< Stacked.
+   integer(int32),       intent(in), optional         :: colormap     !< The items' colours.
+   type(plot_item_spec), intent(in), optional         :: spec         !< Style.
+   type(item_series)                                  :: g1, g2       !< Getters.
+   type(plot_item_spec)                               :: sb           !< The bars' spec (flags cleared).
+   real(real64)                                       :: gs, sh, sub, w, ss !< Group size, shift, a bar's.
+   integer(int32)                                     :: i, j, ni, ng, ib, jl !< Item, group, counts, base, length.
+   logical                                            :: horz, stack  !< Flags.
+   real(real64)                                       :: v            !< A value.
+
+   gs = 0.67_real64
+   if (present(group_size)) gs = group_size
+   sh = 0.0_real64
+   if (present(shift)) sh = shift
+   horz = .false.
+   if (present(horizontal)) horz = horizontal
+   stack = .false.
+   if (present(stacked)) stack = stacked
+   ni = int(size(values, 2), int32)
+   ng = int(size(values, 1), int32)
+   sb = spec_or_default(spec)
+   sb%flags = 0_int32
+   if (present(colormap)) call cm_push(colormap)
+   if (stack) then
+      call stack_room(ng)
+      stack_tmp(1:2_int32 * ng) = 0.0_real64 ! neg, pos
+      do i = 1_int32, ni
+         jl = len_trim(labels(i), kind=int32)
+         if (.not. pf_item_hidden(labels(i)(1:jl))) then
+            do j = 1_int32, ng
+               v = real(values(j, i), real64)
+               if (v > 0.0_real64) then ! curr_min = pos, curr_max = curr_min + v, pos += v
+                  stack_tmp(2_int32 * ng + j) = stack_tmp(ng + j)
+                  stack_tmp(3_int32 * ng + j) = stack_tmp(2_int32 * ng + j) + v
+                  stack_tmp(ng + j) = stack_tmp(ng + j) + v
+               else ! curr_max = neg, curr_min = curr_max + v, neg += v
+                  stack_tmp(3_int32 * ng + j) = stack_tmp(j)
+                  stack_tmp(2_int32 * ng + j) = stack_tmp(3_int32 * ng + j) + v
+                  stack_tmp(j) = stack_tmp(j) + v
+               endif
+            enddo
+         endif
+         ib = 2_int32 * ng
+         call stacked_views(g1, g2, ng, ib, sh, horz)
+         if (horz) then
+            call bars_ex(labels(i)(1:jl), g1, g2, gs, sb, .true.)
+         else
+            call bars_ex(labels(i)(1:jl), g1, g2, gs, sb, .false.)
+         endif
+      enddo
+   else
+      sub = gs / real(ni, real64)
+      do i = 1_int32, ni
+         jl = len_trim(labels(i), kind=int32)
+         w = (real(i - 1_int32, real64) + 0.5_real64) * sub ! subshift = (i + 0.5) subsize - group_size / 2
+         ss = gs / 2.0_real64
+         w = w - ss
+         w = w + sh
+         g1 = item_series()
+         g2 = item_series()
+         if (horz) then ! (values, lin), (0, lin)
+            call view_r64(g1, 1_int32, values(:, i))
+            call view_lin(g1, 2_int32, w, 1.0_real64)
+            call view_const(g2, 1_int32, 0.0_real64)
+            call view_lin(g2, 2_int32, w, 1.0_real64)
+         else ! (lin, values), (lin, 0)
+            call view_lin(g1, 1_int32, w, 1.0_real64)
+            call view_r64(g1, 2_int32, values(:, i))
+            call view_lin(g2, 1_int32, w, 1.0_real64)
+            call view_const(g2, 2_int32, 0.0_real64)
+         endif
+         g1%n = ng
+         g2%n = ng
+         call bars_ex(labels(i)(1:jl), g1, g2, sub, sb, horz)
+      enddo
+   endif
+   if (present(colormap)) call cm_pop()
+   endsubroutine bar_groups_r64
+
+   ! private: bars (PlotBarsVEx, PlotBarsHEx), bar groups' stacks, error bars, infinite lines
+
+   subroutine bars_item(label, g, bar_size, spec)
+   !< `PlotBars(xs, ys)`: getter1 (x, y), getter2 (x, 0) (horizontal: (0, y)).
+   character(len=*),     intent(in) :: label    !< Label.
+   type(item_series),    intent(in) :: g        !< Getter.
+   real(real64),         intent(in) :: bar_size !< Bar size.
+   type(plot_item_spec), intent(in) :: spec     !< Style.
+   type(item_series)                :: g2       !< The bars' bases.
+   logical                          :: horz     !< Horizontal.
+
+   horz = iand(spec%flags, PF_BARS_HORIZONTAL) /= 0_int32
+   g2 = g
+   if (horz) then
+      g2%src(1) = SRC_CONST
+      g2%con(1) = 0.0_real64
+   else
+      g2%src(2) = SRC_CONST
+      g2%con(2) = 0.0_real64
+   endif
+   call bars_ex(label, g, g2, bar_size, spec, horz)
+   endsubroutine bars_item
+
+   subroutine bars_ex(label, g1, g2, bar_size, spec, horz)
+   !< `PlotBarsVEx`/`PlotBarsHEx`: `FitterBarV`/`H`, the fills (`RendererBarsFillV`/`H`), the outlines unless the fill
+   !< has their colour (`RendererBarsLineV`/`H`).
+   character(len=*),     intent(in) :: label    !< Label.
+   type(item_series),    intent(in) :: g1, g2   !< Getters: the bars' ends.
+   real(real64),         intent(in) :: bar_size !< Width (height).
+   type(plot_item_spec), intent(in) :: spec     !< Style.
+   logical,              intent(in) :: horz     !< Horizontal.
+   type(plot_item_ctx)              :: ctx      !< The plot.
+   type(item_style)                 :: s        !< Staged style.
+   real(real64)                     :: half     !< Half the bar size.
+   real(real64)                     :: x1, y1, x2, y2 !< Ends.
+   integer(int32)                   :: i        !< Bar.
+   logical                          :: line     !< Outlines.
+
+   if (.not. begin(label, spec, spec%fill_color, PF_MARKER_INVALID, ctx, s)) return
+   half = bar_size * 0.5_real64
+   if (fits(ctx, spec)) then
+      do i = 1_int32, min(g1%n, g2%n)
+         call point(g1, i, x1, y1)
+         call point(g2, i, x2, y2)
+         if (horz) then
+            y1 = y1 - half
+            y2 = y2 + half
+         else
+            x1 = x1 - half
+            x2 = x2 + half
+         endif
+         call pf_item_fit(x1, y1)
+         call pf_item_fit(x2, y2)
+      enddo
+   endif
+   if (g1%n > 0_int32 .and. g2%n > 0_int32) then
+      line = s%line
+      if (s%fill) then
+         call render_bars(ctx, g1, g2, bar_size, horz, s%col_fill, -1.0_real32)
+         if (line .and. s%col_fill == s%col_line) line = .false.
+      endif
+      if (line) call render_bars(ctx, g1, g2, bar_size, horz, s%col_line, s%weight)
+   endif
+   call finish()
+   endsubroutine bars_ex
+
+   subroutine render_bars(ctx, g1, g2, bar_size, horz, col, weight)
+   !< `RendererBarsFillV`/`H` (`weight` < 0) or `RendererBarsLineV`/`H`: each bar at least a pixel wide, culled.
+   type(plot_item_ctx), intent(in) :: ctx      !< The plot.
+   type(item_series),   intent(in) :: g1, g2   !< Getters.
+   real(real64),        intent(in) :: bar_size !< Width (height).
+   logical,             intent(in) :: horz     !< Horizontal.
+   integer(int32),      intent(in) :: col      !< Colour.
+   real(real32),        intent(in) :: weight   !< Outline weight (< 0: fill).
+   real(real64)                    :: half, x1, y1, x2, y2 !< Half size, ends.
+   real(real32)                    :: p1(2), p2(2), pmin(2), pmax(2), wpx !< Pixels, the bar's size.
+   integer(int32)                  :: i, a     !< Bar, the sized coordinate.
+
+   half = bar_size / 2.0_real64
+   a = merge(2_int32, 1_int32, horz)
+   do i = 1_int32, min(g1%n, g2%n)
+      call point(g1, i, x1, y1)
+      call point(g2, i, x2, y2)
+      if (horz) then
+         y1 = y1 + half
+         y2 = y2 - half
+      else
+         x1 = x1 + half
+         x2 = x2 - half
+      endif
+      p1(1) = map_pixel(ctx%tx, x1)
+      p1(2) = map_pixel(ctx%ty, y1)
+      p2(1) = map_pixel(ctx%tx, x2)
+      p2(2) = map_pixel(ctx%ty, y2)
+      wpx = abs(p1(a) - p2(a))
+      if (wpx < 1.0_real32) then ! (P2's test sees P1 moved, as ImPlot's)
+         if (p1(a) > p2(a)) then
+            p1(a) = p1(a) + (1.0_real32 - wpx) / 2.0_real32
+         else
+            p1(a) = p1(a) + (wpx - 1.0_real32) / 2.0_real32
+         endif
+         if (p2(a) > p1(a)) then
+            p2(a) = p2(a) + (1.0_real32 - wpx) / 2.0_real32
+         else
+            p2(a) = p2(a) + (wpx - 1.0_real32) / 2.0_real32
+         endif
+      endif
+      pmin(1) = im_min(p1(1), p2(1))
+      pmin(2) = im_min(p1(2), p2(2))
+      pmax(1) = im_max(p1(1), p2(1))
+      pmax(2) = im_max(p1(2), p2(2))
+      if (.not. overlaps(ctx%rect, pmin(1), pmin(2), pmax(1), pmax(2))) cycle
+      if (weight < 0.0_real32) then
+         call prim_rect_fill(pmin(1), pmin(2), pmax(1), pmax(2), col)
+      else
+         call prim_rect_line(pmin, pmax, weight, col)
+      endif
+   enddo
+   endsubroutine render_bars
+
+   subroutine prim_rect_line(pmin, pmax, w, col)
+   !< `PrimRectLine`: a rectangle's outline `w` pixels inside it, eight triangles over its eight vertices (outer 0-3:
+   !< (min.x, min.y), (min.x, max.y), (max.x, max.y), (max.x, min.y); inner 4-7 the same `w` inside): (0, 1, 5),
+   !< (0, 5, 4), (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7), as four quads.
+   real(real32),   intent(in) :: pmin(2), pmax(2) !< Corners [pixels].
+   real(real32),   intent(in) :: w                !< Weight [pixels].
+   integer(int32), intent(in) :: col              !< Colour.
+   real(real32)               :: v(2, 0:7)        !< Vertices.
+
+   v(:, 0) = [pmin(1), pmin(2)]
+   v(:, 1) = [pmin(1), pmax(2)]
+   v(:, 2) = [pmax(1), pmax(2)]
+   v(:, 3) = [pmax(1), pmin(2)]
+   v(:, 4) = [pmin(1) + w, pmin(2) + w]
+   v(:, 5) = [pmin(1) + w, pmax(2) - w]
+   v(:, 6) = [pmax(1) - w, pmax(2) - w]
+   v(:, 7) = [pmax(1) - w, pmin(2) + w]
+   call prim_quad(v(:, 0), v(:, 1), v(:, 5), v(:, 4), col)
+   call prim_quad(v(:, 1), v(:, 2), v(:, 6), v(:, 5), col)
+   call prim_quad(v(:, 2), v(:, 3), v(:, 7), v(:, 6), col)
+   call prim_quad(v(:, 3), v(:, 0), v(:, 4), v(:, 7), col)
+   endsubroutine prim_rect_line
+
+   subroutine stack_room(ng)
+   !< Room for a stacked bar group's four columns of `ng` (TempDouble1), kept between frames.
+   integer(int32), intent(in) :: ng !< Groups.
+
+   if (allocated(stack_tmp)) then
+      if (size(stack_tmp) < 4_int32 * ng) deallocate(stack_tmp)
+   endif
+   if (.not. allocated(stack_tmp)) allocate(stack_tmp(max(4_int32 * ng, 64_int32)))
+   endsubroutine stack_room
+
+   subroutine stacked_views(g1, g2, ng, ib, sh, horz)
+   !< A stacked item's getters: (lin, curr_min), (lin, curr_max) (horizontal: (curr_min, lin), (curr_max, lin)).
+   type(item_series), intent(out) :: g1, g2 !< Getters.
+   integer(int32),    intent(in)  :: ng     !< Groups.
+   integer(int32),    intent(in)  :: ib     !< curr_min's start - 1 in `stack_tmp` (curr_max follows).
+   real(real64),      intent(in)  :: sh     !< Shift.
+   logical,           intent(in)  :: horz   !< Horizontal.
+   integer(int32)                 :: kv, kl !< The values' coordinate, the positions'.
+
+   kv = merge(1_int32, 2_int32, horz)
+   kl = 3_int32 - kv
+   call view_r64(g1, kv, stack_tmp(ib + 1_int32:ib + ng))
+   call view_r64(g2, kv, stack_tmp(ib + ng + 1_int32:ib + 2_int32 * ng))
+   call view_lin(g1, kl, sh, 1.0_real64)
+   call view_lin(g2, kl, sh, 1.0_real64)
+   g1%n = ng
+   g2%n = ng
+   endsubroutine stacked_views
+
+   subroutine error_bars_item(label, g, e, spec, horizontal)
+   !< `PlotErrorBarsVEx`/`HEx`: `Fitter2` of the bars' ends, each bar `AddLine` from (y - neg) to (y + pos) and its
+   !< whiskers (`AddLineH`/`V`, `Size` wide) in the style's text colour unless a line colour is given; not culled.
+   character(len=*),     intent(in)           :: label      !< Label.
+   type(item_series),    intent(in)           :: g, e       !< Getters: the points, the errors (neg, pos).
+   type(plot_item_spec), intent(in)           :: spec       !< Style.
+   logical,              intent(in), optional :: horizontal !< Along x.
+   type(plot_item_ctx)                        :: ctx        !< The plot.
+   type(item_style)                           :: s          !< Staged style.
+   real(real64)                               :: ax, ay, bx, by !< The bar's ends.
+   real(real32)                               :: p1(2), p2(2), hw !< Pixels, half whisker.
+   integer(int32)                             :: i, col, pass !< Bar, colour, fit pass.
+   logical                                    :: horz   !< Along x.
+   real(real32)                               :: auto_col(4) !< IMPLOT_AUTO_COL.
+
+   horz = iand(spec%flags, PF_ERROR_BARS_HORIZONTAL) /= 0_int32
+   if (present(horizontal)) horz = horz .or. horizontal
+   auto_col = [0.0_real32, 0.0_real32, 0.0_real32, AUTO_ALPHA]
+   if (.not. begin(label, spec, auto_col, PF_MARKER_INVALID, ctx, s)) return
+   if (fits(ctx, spec)) then ! Fitter2: the positive ends, then the negative ones
+      do pass = 1_int32, 2_int32
+         do i = 1_int32, g%n
+            call error_ends(g, e, i, horz, ax, ay, bx, by)
+            if (pass == 1_int32) then
+               call pf_item_fit(bx, by)
+            else
+               call pf_item_fit(ax, ay)
+            endif
+         enddo
+      enddo
+   endif
+   if (g%n > 0_int32) then
+      if (is_auto(spec%line_color)) then
+         col = core_style_color(ImGuiCol_Text)
+      else
+         col = s%col_line
+      endif
+      hw = s%size * 0.5_real32
+      do i = 1_int32, g%n
+         call error_ends(g, e, i, horz, ax, ay, bx, by)
+         p1 = [map_pixel(ctx%tx, ax), map_pixel(ctx%ty, ay)]
+         p2 = [map_pixel(ctx%tx, bx), map_pixel(ctx%ty, by)]
+         call core_draw_line(real(p1(1), real64), real(p1(2), real64), real(p2(1), real64), real(p2(2), real64), &
+                             col, real(s%weight, real64))
+         if (s%size > 0.0_real32) then
+            if (horz) then
+               call core_draw_line_v(real(p1(1), real64), real(p1(2) - hw, real64), real(p1(2) + hw, real64), col, &
+                                     real(s%weight, real64))
+               call core_draw_line_v(real(p2(1), real64), real(p2(2) - hw, real64), real(p2(2) + hw, real64), col, &
+                                     real(s%weight, real64))
+            else
+               call core_draw_line_h(real(p1(1) - hw, real64), real(p1(1) + hw, real64), real(p1(2), real64), col, &
+                                     real(s%weight, real64))
+               call core_draw_line_h(real(p2(1) - hw, real64), real(p2(1) + hw, real64), real(p2(2), real64), col, &
+                                     real(s%weight, real64))
+            endif
+         endif
+      enddo
+   endif
+   call finish()
+   endsubroutine error_bars_item
+
+   subroutine error_ends(g, e, i, horz, ax, ay, bx, by)
+   !< An error bar's ends: (x, y - neg) and (x, y + pos) (`IndexerAdd`: 1 y + (-1) neg, 1 y + 1 pos); along x the same
+   !< on x.
+   type(item_series), intent(in)  :: g, e   !< Getters.
+   integer(int32),    intent(in)  :: i      !< Bar.
+   logical,           intent(in)  :: horz   !< Along x.
+   real(real64),      intent(out) :: ax, ay !< The negative end.
+   real(real64),      intent(out) :: bx, by !< The positive end.
+   real(real64)                   :: x, y, en, ep !< The point, its errors.
+
+   call point(g, i, x, y)
+   call point(e, i, en, ep)
+   if (horz) then
+      ax = x - en
+      bx = x + ep
+      ay = y
+      by = y
+   else
+      ax = x
+      bx = x
+      ay = y - en
+      by = y + ep
+   endif
+   endsubroutine error_ends
+
+   subroutine inf_lines_item(label, g, k, spec)
+   !< `PlotInfLines`: `FitterX` (`FitterY`) of the positions, a segment across the current range at each
+   !< (`RendererLineSegments2`).
+   character(len=*),     intent(in)    :: label !< Label.
+   type(item_series),    intent(inout) :: g     !< Getter: the positions in coordinate k.
+   integer(int32),       intent(in)    :: k     !< 1 vertical lines (x), 2 horizontal (y).
+   type(plot_item_spec), intent(in)    :: spec  !< Style.
+   type(plot_item_ctx)                 :: ctx   !< The plot.
+   type(item_style)                    :: s     !< Staged style.
+   type(item_series)                   :: g2    !< The lines' other ends.
+   real(real64)                        :: x, y  !< A point.
+   integer(int32)                      :: i     !< Line.
+
+   if (.not. begin(label, spec, spec%line_color, PF_MARKER_INVALID, ctx, s)) return
+   g%src(3_int32 - k) = SRC_CONST ! GetPlotLimits: the current axes' ranges
+   g2 = g
+   if (k == 1_int32) then
+      g%con(2) = ctx%y_range(1)
+      g2%con(2) = ctx%y_range(2)
+   else
+      g%con(1) = ctx%x_range(1)
+      g2%con(1) = ctx%x_range(2)
+   endif
+   if (fits(ctx, spec)) then
+      do i = 1_int32, g%n
+         call point(g, i, x, y)
+         if (k == 1_int32) then
+            call pf_item_fit_axis(x, .false.)
+         else
+            call pf_item_fit_axis(y, .true.)
+         endif
+      enddo
+   endif
+   if (g%n > 0_int32 .and. s%line) call render_segments2(ctx, g, g2, s%col_line, s%weight)
+   call finish()
+   endsubroutine inf_lines_item
+
    ! private: the items (PlotLineEx, PlotScatterEx, PlotStairsEx, PlotStemsEx, PlotShadedEx)
 
    subroutine line_item(label, g, spec)
@@ -1080,11 +1911,13 @@ contains
    mfc(4) = mfc(4) * spec%fill_alpha
    s%weight = spec%line_weight
    s%marker_size = spec%marker_size
+   s%size = spec%size
    s%marker = ctx%marker
    s%flags = spec%flags
    if (ctx%hovered) then
       s%weight = s%weight * HIGHLIGHT_LINE_SCALE
       s%marker_size = s%marker_size * HIGHLIGHT_MARK_SCALE
+      s%size = s%size * HIGHLIGHT_MARK_SCALE
    endif
    s%line = lc(4) > 0.0_real32 .and. s%weight > 0.0_real32
    s%fill = fc(4) > 0.0_real32
@@ -1179,25 +2012,35 @@ contains
    endif
    endsubroutine view_r32
 
-   subroutine view_i32(g, a, via32)
+   subroutine view_i32(g, a, via32, k)
    !< The abscissae of a getter from an int32 array: each converted as FIGURE's API converts them (to the ordinates'
    !< kind), then to double.
    type(item_series),      intent(inout) :: g     !< Getter.
    integer(int32), target, intent(in)    :: a(:)  !< Array.
    logical,                intent(in)    :: via32 !< Single precision ordinates.
+   integer(int32),         intent(in), optional :: k !< Coordinate (default 1: the abscissae).
 
    g%src(1) = SRC_I32
+   if (present(k)) then
+      g%src(1) = SRC_NONE
+      g%src(k) = SRC_I32
+   endif
    g%ai32 => a
    g%via32 = via32
    endsubroutine view_i32
 
-   subroutine view_i64(g, a, via32)
+   subroutine view_i64(g, a, via32, k)
    !< The abscissae of a getter from an int64 array (as `view_i32`).
    type(item_series),      intent(inout) :: g     !< Getter.
    integer(int64), target, intent(in)    :: a(:)  !< Array.
    logical,                intent(in)    :: via32 !< Single precision ordinates.
+   integer(int32),         intent(in), optional :: k !< Coordinate (default 1: the abscissae).
 
    g%src(1) = SRC_I64
+   if (present(k)) then
+      g%src(1) = SRC_NONE
+      g%src(k) = SRC_I64
+   endif
    g%ai64 => a
    g%via32 = via32
    endsubroutine view_i64

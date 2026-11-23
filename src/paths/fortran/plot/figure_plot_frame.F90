@@ -124,7 +124,7 @@ use figure_menu, only : ig_begin_menu, ig_end_menu, ig_menu_item
 implicit none
 private
 public :: pf_begin_plot, pf_end_plot, pf_plot_limits
-public :: plot_item_ctx, pf_item_begin, pf_item_fit, pf_item_end
+public :: plot_item_ctx, pf_item_begin, pf_item_fit, pf_item_end, pf_item_hidden, pf_item_fit_axis
 public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
 public :: pf_hide_next_item, pf_legend_hovered
@@ -1884,6 +1884,42 @@ contains
       call fit_point(p%ax(p%cur_x), p%ax(p%cur_y), x, y)
    endassociate
    endsubroutine pf_item_fit
+
+   function pf_item_hidden(label) result(hidden)
+   !< `IsItemHidden` (figure_plot_items' stacked bar groups): the item of `label` exists in the open plot and is hidden.
+   character(len=*), intent(in) :: label  !< Label.
+   logical                      :: hidden !< Hidden.
+   integer(int32)               :: id, k  !< The item's ID, counter.
+
+   hidden = .false.
+   if (cur == 0_int32) error stop 'figure_plot_frame: an item outside a plot'
+   associate(p => plots(cur))
+      id = plot_hash(label, plot_id_offset(p%id, -1_int32))
+      do k = 1_int32, p%n_items
+         if (p%item_id(k) == id) then
+            hidden = .not. p%item_show(k)
+            return
+         endif
+      enddo
+   endassociate
+   endfunction pf_item_hidden
+
+   subroutine pf_item_fit_axis(v, y_axis)
+   !< `ImPlotAxis::ExtendFit` of the current x axis (or y axis) alone (figure_plot_items' `FitterX`, `FitterY`): a
+   !< finite value within the axis's constraint.
+   real(real64), intent(in) :: v      !< Value.
+   logical,      intent(in) :: y_axis !< The y axis.
+   integer(int32)           :: i      !< Axis.
+
+   i = plots(cur)%cur_x
+   if (y_axis) i = plots(cur)%cur_y
+   associate(ax => plots(cur)%ax(i))
+      if (abs(v) <= huge(1.0_real64) .and. v >= ax%con_min .and. v <= ax%con_max) then
+         if (v < ax%fit_min) ax%fit_min = v
+         if (v > ax%fit_max) ax%fit_max = v
+      endif
+   endassociate
+   endsubroutine pf_item_fit_axis
 
    subroutine pf_item_end()
    !< `EndItem` (figure_plot_items): the next item's data reset.
