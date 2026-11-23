@@ -14,7 +14,11 @@ module figure_plot_colormaps
 !< ImPlot's maps, a bundled one (figure_plot_colormaps_bundled, generated from `third_party/colormaps/<name>.csv`), or the
 !< reverse of either (`<name>_r`), cut into `levels` bands (`<name>|<levels>`, qualitative, each band the map's
 !< colour at its centre); registered at its first use under that name, its keys packed as Dear ImGui packs a float
-!< colour (`ColorConvertFloat4ToU32`). User maps (`ip_load_colormap`) and edited ones (`ig_gradient_edit`) are not
+!< colour (`ColorConvertFloat4ToU32`). User maps (`cm_load`, as `fig_load_colormap`: a CSV table or a ParaView preset,
+!< figure_plot_colormap_files) are kept for the program's life, in load order, and resolve as the others; `cm_list_count`
+!< and `cm_list_name` list the names as `fig_colormap_count` and `fig_colormap_name` (the bundled maps, ImPlot's, the
+!< user's); `cm_stops` gives a map's stops as `fig_colormap_stops` (`stops_of`: every key of a table of up to 16, else
+!< the keys taken greedily while the map is linear within 2/255 between them). Edited maps (`ig_gradient_edit`) are not
 !< here yet.
 !<
 !< The style's map (`ImPlotStyle::Colormap`, the automatic colours of the plot items): `cm_style_refresh` reads the
@@ -24,13 +28,15 @@ module figure_plot_colormaps
 !< products in statements of their own (nvfortran -O2 fuses `a*b + c`, ImPlot's build does not).
 use, intrinsic :: iso_c_binding, only : c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_c_native, only : fig_style_lines
+use figure_c_native, only : fig_style_lines, FIG_OK, FIG_ERR_ARGUMENT, FIG_ERR_FAILED
+use figure_plot_colormap_files, only : cmf_csv, cmf_paraview
 use figure_plot_colormaps_bundled, only : BUNDLED_COUNT, BUNDLED_NAMES, BUNDLED_SAMPLES, bundled_map
 
 implicit none
 private
 public :: cm_colormap, cm_count, cm_current, cm_index, cm_is_qual, cm_key, cm_pop, cm_push, cm_register, cm_sample
 public :: cm_size, cm_style_refresh, mix_u32, pack_float4
+public :: cm_load, cm_list_count, cm_list_name, cm_stops
 public :: CM_DEEP, CM_VIRIDIS
 
 integer(int32), parameter :: CM_DEEP = 0_int32    !< ImPlotColormap_Deep.
@@ -158,6 +164,16 @@ integer(int32),   allocatable :: stack(:)           !< Maps pushed over.
 integer(int32)                :: n_stack = 0_int32  !< ... their number.
 logical                       :: style_read = .false. !< The style's lines read once.
 integer(c_int)                :: style_gen = 0_c_int  !< Their generation then.
+! the user's maps (`user_maps` of native/figure_colormap.cpp), in load order
+integer(int32)                :: n_user = 0_int32     !< Maps loaded.
+integer(int32),   allocatable :: user_off(:)          !< A map's first row in `user_rows`.
+integer(int32),   allocatable :: user_cnt(:)          !< ... its rows.
+integer(int32),   allocatable :: user_noff(:)         !< ... its name's start in `user_names`.
+integer(int32),   allocatable :: user_nlen(:)         !< ... its length.
+real(real64),     allocatable :: user_rows(:,:)       !< Their tables (3, rows), components in [0, 1].
+integer(int32)                :: n_user_rows = 0_int32 !< ... rows in use.
+character(len=:), allocatable :: user_names           !< Their names.
+integer(int32)                :: n_user_names = 0_int32 !< ... characters in use.
 
 contains
    ! the registry
@@ -354,7 +370,7 @@ contains
    ! FIGURE's names (ip_colormap)
 
    function cm_colormap(name, levels) result(id)
-   !< The id of a map by FIGURE's name (`fig_colormap`): ImPlot's, a bundled one, `<name>_r` reversed, cut into
+   !< The id of a map by FIGURE's name (`fig_colormap`): ImPlot's, a bundled one, a user's, `<name>_r` reversed, cut into
    !< `levels` bands (2-256; 0 or absent: continuous), registered at its first use; -1 for an unknown name or levels.
    character(len=*), intent(in)           :: name   !< Name.
    integer(int32),   intent(in), optional :: levels !< Bands (0: none).
@@ -404,13 +420,8 @@ contains
          enddo
       enddo
    else
-      qual = .false.
-      do k = 1_int32, BUNDLED_COUNT
-         if (trim(BUNDLED_NAMES(k)) == base) exit
-      enddo
-      allocate(rgb(3, BUNDLED_SAMPLES))
-      rgb = bundled_map(k)
-      n = BUNDLED_SAMPLES
+      call base_table(base, rgb, qual)
+      n = size(rgb, 2, kind=int32)
    endif
    if (reversed) rgb = rgb(:, n:1:-1)
    if (lv > 0_int32) then ! a band each, the map's colour at its centre
@@ -430,7 +441,7 @@ contains
    endfunction cm_colormap
 
    function known(name) result(yes)
-   !< A name of ImPlot's maps or of the bundled ones.
+   !< A name of ImPlot's maps, of the bundled ones or of the user's (`known`).
    character(len=*), intent(in) :: name !< Name.
    logical                      :: yes  !< Known.
    integer(int32)               :: k    !< Counter.
@@ -443,7 +454,20 @@ contains
          return
       endif
    enddo
+   yes = user_index(name) > 0_int32
    endfunction known
+
+   function user_index(name) result(u)
+   !< A user map's slot by name (`user_map`); 0 if none.
+   character(len=*), intent(in) :: name !< Name.
+   integer(int32)               :: u    !< Slot.
+
+   do u = 1_int32, n_user
+      if (user_nlen(u) /= len(name, kind=int32)) cycle
+      if (user_names(user_noff(u):user_noff(u) + user_nlen(u) - 1_int32) == name) return
+   enddo
+   u = 0_int32
+   endfunction user_index
 
    pure function builtin(name) result(id)
    !< The id of one of ImPlot's maps by name; -1 if none.
@@ -483,6 +507,276 @@ contains
       c(j) = a + b
    enddo
    endfunction band
+
+   subroutine base_table(base, rgb, qual)
+   !< `base_keys` of a map not ImPlot's: a bundled map's samples or a user map's table (continuous).
+   character(len=*),          intent(in)  :: base     !< Name (bundled or user).
+   real(real64), allocatable, intent(out) :: rgb(:,:) !< Table (3, n).
+   logical,                   intent(out) :: qual     !< Qualitative (never).
+   integer(int32)                         :: k, u     !< Bundled map, user map.
+
+   qual = .false.
+   do k = 1_int32, BUNDLED_COUNT
+      if (trim(BUNDLED_NAMES(k)) == base) then
+         allocate(rgb(3, BUNDLED_SAMPLES))
+         rgb = bundled_map(k)
+         return
+      endif
+   enddo
+   u = user_index(base)
+   allocate(rgb(3, user_cnt(u)))
+   rgb = user_rows(:, user_off(u):user_off(u) + user_cnt(u) - 1_int32)
+   endsubroutine base_table
+
+   subroutine keys_of(base, rgb, qual)
+   !< `base_keys`: a map's keys as doubles (ImPlot's: its packed keys as floats, `GetColormapColor`), qualitative or
+   !< not.
+   character(len=*),          intent(in)  :: base     !< Name (known).
+   real(real64), allocatable, intent(out) :: rgb(:,:) !< Keys (3, n).
+   logical,                   intent(out) :: qual     !< Qualitative.
+   integer(int32)                         :: b, n, k, j !< ImPlot's map, keys, counters.
+
+   b = builtin(base)
+   if (b < 0_int32) then
+      call base_table(base, rgb, qual)
+      return
+   endif
+   qual = quals(b + 1_int32)
+   n = key_cnt(b + 1_int32)
+   allocate(rgb(3, n))
+   do k = 1_int32, n
+      do j = 0_int32, 2_int32
+         rgb(j + 1_int32, k) = real(real(channel(cm_key(b, k - 1_int32), j), real32) * (1.0_real32 / 255.0_real32), &
+                                    real64)
+      enddo
+   enddo
+   endsubroutine keys_of
+
+   ! the user's maps and the lists
+
+   subroutine cm_load(name, file, status, err)
+   !< A user map read from `file` and kept under `name` (`fig_load_colormap`; `ip_load_colormap`): a ParaView preset
+   !< if the text starts with '[' or '{' (blanks skipped), else a CSV table (figure_plot_colormap_files). `status`:
+   !< FIG_OK; FIG_ERR_ARGUMENT for a name not allowed (empty, with '|', starting with 'FIGURE '), taken (a map or the
+   !< reverse of one) or a malformed file; FIG_ERR_FAILED for a file that cannot be read; `err` the message.
+   character(len=*),              intent(in)  :: name   !< Name (its trailing blanks dropped, as `ip_load_colormap`).
+   character(len=*),              intent(in)  :: file   !< CSV table or ParaView JSON preset (trailing blanks dropped).
+   integer(int32),                intent(out) :: status !< Status.
+   character(len=:), allocatable, intent(out) :: err    !< Message ('' on success).
+   character(len=:), allocatable :: n, f, text, where  !< Name, file, its text, the messages' start.
+   real(real64),     allocatable :: rows(:,:), more(:,:) !< The table, a grown store.
+   integer(int32),   allocatable :: a(:), b(:), c(:), d(:) !< Grown columns.
+   character(len=:), allocatable :: grown              !< Grown names.
+   integer(int32)                :: unit, ios, sz, k, m, first !< Unit, status, size, counters.
+   logical                       :: json, reversed     !< A preset, the reverse of a map.
+
+   call init()
+   status = FIG_OK
+   err = ''
+   n = name(1:len_trim(name))
+   f = file(1:len_trim(file))
+   where = 'ip_load_colormap: '//f
+   if (len(n) == 0 .or. index(n, '|') > 0 .or. starts(n, 'FIGURE ')) then
+      status = FIG_ERR_ARGUMENT
+      err = "ip_load_colormap: the name '"//n//"' is not allowed (empty, with '|', or starting with 'FIGURE ')"
+      return
+   endif
+   reversed = .false.
+   if (.not. known(n) .and. len(n) > 2) then
+      if (n(len(n) - 1:) == '_r') reversed = known(n(1:len(n) - 2))
+   endif
+   if (known(n) .or. reversed) then
+      status = FIG_ERR_ARGUMENT
+      if (reversed) then
+         err = "ip_load_colormap: the name '"//n//"' is taken (the reverse of '"//n(1:len(n) - 2)// &
+               "'): ImPlot cannot replace a colormap"
+      else
+         err = "ip_load_colormap: the name '"//n//"' is taken (a colormap): ImPlot cannot replace a colormap"
+      endif
+      return
+   endif
+   open(newunit=unit, file=f, access='stream', form='unformatted', status='old', action='read', iostat=ios)
+   if (ios == 0) inquire(unit=unit, size=sz, iostat=ios)
+   if (ios /= 0) then
+      status = FIG_ERR_FAILED
+      err = where//': cannot be read'
+      return
+   endif
+   allocate(character(len=max(sz, 0)) :: text)
+   if (sz > 0) read(unit, iostat=ios) text
+   close(unit)
+   if (ios /= 0) then
+      status = FIG_ERR_FAILED
+      err = where//': cannot be read'
+      return
+   endif
+   first = verify(text, ' '//achar(9)//achar(13)//achar(10))
+   json = .false.
+   if (first > 0) json = text(first:first) == '[' .or. text(first:first) == '{'
+   if (json) then
+      call cmf_paraview(text, where, n, rows, err)
+   else
+      call cmf_csv(text, where, rows, err)
+   endif
+   if (len(err) > 0) then
+      status = FIG_ERR_ARGUMENT
+      return
+   endif
+   m = size(rows, 2, kind=int32)
+   if (.not. allocated(user_off)) then
+      allocate(user_off(8), user_cnt(8), user_noff(8), user_nlen(8), user_rows(3, max(1024_int32, m)))
+      allocate(character(len=256) :: user_names)
+   endif
+   if (n_user == size(user_off, kind=int32)) then
+      allocate(a(2_int32 * n_user), b(2_int32 * n_user), c(2_int32 * n_user), d(2_int32 * n_user))
+      a(1:n_user) = user_off(1:n_user)
+      b(1:n_user) = user_cnt(1:n_user)
+      c(1:n_user) = user_noff(1:n_user)
+      d(1:n_user) = user_nlen(1:n_user)
+      call move_alloc(a, user_off)
+      call move_alloc(b, user_cnt)
+      call move_alloc(c, user_noff)
+      call move_alloc(d, user_nlen)
+   endif
+   if (n_user_rows + m > size(user_rows, 2, kind=int32)) then
+      allocate(more(3, max(2_int32 * size(user_rows, 2, kind=int32), n_user_rows + m)))
+      more(:, 1:n_user_rows) = user_rows(:, 1:n_user_rows)
+      call move_alloc(more, user_rows)
+   endif
+   if (n_user_names + len(n) > len(user_names)) then
+      allocate(character(len=max(2 * len(user_names), n_user_names + len(n))) :: grown)
+      grown(1:n_user_names) = user_names(1:n_user_names)
+      call move_alloc(grown, user_names)
+   endif
+   n_user = n_user + 1_int32
+   k = n_user
+   user_off(k) = n_user_rows + 1_int32
+   user_cnt(k) = m
+   user_rows(:, n_user_rows + 1_int32:n_user_rows + m) = rows
+   n_user_rows = n_user_rows + m
+   user_noff(k) = n_user_names + 1_int32
+   user_nlen(k) = len(n, kind=int32)
+   user_names(n_user_names + 1_int32:n_user_names + len(n)) = n
+   n_user_names = n_user_names + len(n, kind=int32)
+   endsubroutine cm_load
+
+   pure function starts(s, head) result(yes)
+   !< `s` starts with `head`.
+   character(len=*), intent(in) :: s, head !< Texts.
+   logical                      :: yes     !< Starts so.
+
+   yes = len(s) >= len(head)
+   if (yes) yes = s(1:len(head)) == head
+   endfunction starts
+
+   function cm_list_count() result(n)
+   !< The names `cm_colormap` knows (`fig_colormap_count`): the bundled maps, ImPlot's, the user's.
+   integer(int32) :: n !< Names.
+
+   n = BUNDLED_COUNT + 16_int32 + n_user
+   endfunction cm_list_count
+
+   function cm_list_name(i) result(name)
+   !< The i-th name of the list (`fig_colormap_name`): the bundled maps (alphabetical), ImPlot's (in ImPlot's order),
+   !< the user's (in load order); '' out of range.
+   integer(int32), intent(in)    :: i    !< Index (1-based).
+   character(len=:), allocatable :: name !< Name.
+
+   name = ''
+   if (i >= 1_int32 .and. i <= BUNDLED_COUNT) then
+      name = trim(BUNDLED_NAMES(i))
+   elseif (i > BUNDLED_COUNT .and. i <= BUNDLED_COUNT + 16_int32) then
+      name = trim(IMPLOT_NAMES(i - BUNDLED_COUNT))
+   elseif (i > BUNDLED_COUNT + 16_int32 .and. i <= cm_list_count()) then
+      associate(u => i - BUNDLED_COUNT - 16_int32)
+         name = user_names(user_noff(u):user_noff(u) + user_nlen(u) - 1_int32)
+      endassociate
+   endif
+   endfunction cm_list_name
+
+   subroutine cm_stops(name, pos, rgb, status, err)
+   !< A map's stops (`fig_colormap_stops`; `ip_colormap_stops`), sorted by position: `stops_of` its keys (as floats,
+   !< `ImVec4`). `status`: FIG_OK; FIG_ERR_ARGUMENT for an unknown name, a reversed map, a table not readable, a
+   !< qualitative map (`editable`); `err` the message. Arrays of size 0 on a failure.
+   character(len=*),              intent(in)  :: name     !< Name (trailing blanks dropped).
+   real(real64),     allocatable, intent(out) :: pos(:)   !< Positions in [0, 1].
+   real(real64),     allocatable, intent(out) :: rgb(:,:) !< Colours (3, n).
+   integer(int32),                intent(out) :: status   !< Status.
+   character(len=:), allocatable, intent(out) :: err      !< Message.
+   character(len=:), allocatable :: n                     !< Name.
+   real(real64),     allocatable :: keys(:,:)             !< The map's keys.
+   integer(int32),   allocatable :: idx(:)                !< The keys kept.
+   integer(int32)                :: nk, ns, a, b, c, k, j !< Keys, stops, the segment, counters.
+   real(real64)                  :: w, e                  !< A weight, a deviation.
+   logical                       :: qual, ok              !< Qualitative, within the tolerance.
+   real(real64),     parameter   :: TOL = 2.0_real64 / 255.0_real64 !< STOP_TOLERANCE.
+
+   call init()
+   allocate(pos(0), rgb(3, 0))
+   status = FIG_ERR_ARGUMENT
+   n = name(1:len_trim(name))
+   if (.not. known(n)) then
+      err = "ip_colormap_stops: unknown colormap '"//n//"' (ip_colormap_names lists them)"
+      if (len(n) > 2) then
+         if (n(len(n) - 1:) == '_r' .and. known(n(1:max(len(n) - 2, 0)))) &
+            err = "ip_colormap_stops: '"//n//"' is a reversed map: edit '"//n(1:len(n) - 2)//"'"
+      endif
+      return
+   endif
+   call keys_of(n, keys, qual)
+   nk = size(keys, 2, kind=int32)
+   if (nk < 2_int32) then
+      err = "ip_colormap_stops: the table of '"//n//"' cannot be read"
+      return
+   endif
+   if (qual) then
+      err = "ip_colormap_stops: '"//n//"' is qualitative (a list of colours, not a scale): it has no gradient"
+      return
+   endif
+   allocate(idx(nk))
+   if (nk <= 16_int32) then
+      ns = nk
+      do k = 1_int32, nk
+         idx(k) = k - 1_int32
+      enddo
+   else
+      ns = 1_int32
+      idx(1) = 0_int32
+      a = 0_int32
+      do while (a + 1_int32 < nk)
+         b = a + 1_int32
+         do while (b + 1_int32 < nk) ! the segment extended to b + 1 while every key between stays within the tolerance
+            ok = .true.
+            c = b + 1_int32
+            do k = a + 1_int32, c - 1_int32
+               if (.not. ok) exit
+               w = real(k - a, real64) / real(c - a, real64)
+               do j = 1_int32, 3_int32
+                  e = w * (keys(j, c + 1_int32) - keys(j, a + 1_int32))
+                  e = keys(j, a + 1_int32) + e
+                  e = e - keys(j, k + 1_int32)
+                  if (abs(e) > TOL) ok = .false.
+               enddo
+            enddo
+            if (.not. ok) exit
+            b = c
+         enddo
+         ns = ns + 1_int32
+         idx(ns) = b
+         a = b
+      enddo
+   endif
+   deallocate(pos, rgb)
+   allocate(pos(ns), rgb(3, ns))
+   do k = 1_int32, ns ! as ImVec4 (floats)
+      pos(k) = real(real(real(idx(k), real64) / real(nk - 1_int32, real64), real32), real64)
+      do j = 1_int32, 3_int32
+         rgb(j, k) = real(real(keys(j, idx(k) + 1_int32), real32), real64)
+      enddo
+   enddo
+   status = FIG_OK
+   err = ''
+   endsubroutine cm_stops
 
    ! the style's map
 
