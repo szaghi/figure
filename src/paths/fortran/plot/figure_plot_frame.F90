@@ -106,6 +106,10 @@ module figure_plot_frame
 !<   backgrounds, the borders, the texts of the axes, title, legend and mouse text, the axes' hover, the drag tools,
 !<   the subplots' splitters: Dear ImGui's style Alpha not applied) or `ImGui::GetColorU32` (the grid, the legend's
 !<   text, the selection, the tags' and annotations' boxes, the items: its alpha times the style's);
+!< - drop targets (`pf_drop_target`, as `ip_drop_target`, FIGURE's `fig_dnd_plot_target` over ImPlot's
+!<   `BeginDragDropTargetPlot`, `...Axis`, `...Legend`): the plot area, an axis's hover rectangle less 3.5 pixels, the
+!<   legend as last drawn; Dear ImGui's target through figure_core's `core_drop_target` (an item without an ID on the
+!<   rectangle and `BeginDragDropTarget`, where ImPlot calls `BeginDragDropTargetCustom` with the plot's or axis's ID);
 !< - the queries FIGURE's current path reads through its native layer (`pf_plot_size`: `GetPlotSize`;
 !<   `pf_plot_state`: `fig_plot_state`; `pf_plot_x_transform`: `fig_plot_x_transform`) and the error recovery's ends
 !<   (`pf_open_state`, `pf_recover_to`: the scope record's `recover_to`, `fig_plot_end` and `EndSubplots`; their wiring
@@ -159,7 +163,8 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_text_unformatted, core_window_hovered, core_frame_height, core_open_popup,         &
                         core_open_popup_id, core_begin_popup_id,                                                &
                         core_begin_popup, core_end_popup, core_set_cursor_screen_pos, core_time, &
-                        core_draw_triangle_filled, core_draw_line, core_framebuffer_scale, core_style_color_rgba
+                        core_draw_triangle_filled, core_draw_line, core_framebuffer_scale, core_style_color_rgba, &
+                        core_drop_target, core_end_drop_target
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
@@ -194,6 +199,7 @@ public :: pf_plot_count, pf_colormap, pf_colormap_scale
 public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
 public :: pf_cancel_selection
 public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_plot_id, pf_tag
+public :: pf_drop_target
 public :: pf_annotation, pf_plot_size, pf_plot_state, pf_plot_x_transform, pf_open_state, pf_recover_to
 public :: pf_plot_rect
 
@@ -383,6 +389,7 @@ type :: plot_record
    integer(int32)                :: leg_prev_loc = LOC_NORTH + LOC_WEST !< ... that last asked.
    logical                       :: leg_hovered = .false. !< Legend hovered.
    real(real32)                  :: leg_scroll(2) = 0.0_real32 !< Legend's scroll (Legend.Scroll) [pixels].
+   real(real32)                  :: leg_rc(4) = 0.0_real32 !< Legend's clamped rectangle as last drawn (RectClamped).
    integer(int32)                :: n_leg = 0_int32       !< Legend's entries.
    integer(int32), allocatable   :: leg_item(:)           !< Entry's item.
    integer(int32), allocatable   :: leg_off(:)            !< ... label's start in `leg_text`.
@@ -2813,6 +2820,61 @@ contains
    endassociate
    endsubroutine pf_plot_ctx
 
+   function pf_drop_target(type, payload, axis, legend, x, y) result(dropped)
+   !< The open plot a target of drag and drop for payloads of `type` (`ip_drop_target`, FIGURE's `fig_dnd_plot_target`
+   !< over ImPlot's `BeginDragDropTargetPlot`, `...Axis`, `...Legend`): the plot area, or with `axis` that axis's
+   !< hover rectangle less 3.5 pixels each side, or with `legend` the legend as last drawn; true on the frame a payload
+   !< is dropped, `payload` then holding it and (x, y) the pointer on the current axes (not for the legend). After the
+   !< items, before `pf_end_plot`, every frame; it ends the setup. Usage errors (a type not of 1-32 characters or
+   !< starting with '_', both `axis` and `legend`, an axis not set up) error-stop.
+   character(len=*),              intent(in)              :: type    !< Type accepted.
+   character(len=:), allocatable, intent(inout)           :: payload !< The payload dropped (unchanged otherwise).
+   character(len=*),              intent(in),    optional :: axis    !< Only this axis receives.
+   logical,                       intent(in),    optional :: legend  !< Only the legend receives.
+   real(real64),                  intent(inout), optional :: x       !< Abscissa of the drop [plot units].
+   real(real64),                  intent(inout), optional :: y       !< Ordinate of the drop [plot units].
+   logical                                                :: dropped !< A payload was dropped this frame.
+   real(real32)                                           :: r(4)    !< The target's rectangle.
+   real(real64)                                           :: mx, my  !< The pointer on the plot.
+   integer(int32)                                         :: i, n, where !< Axis, length, where (1 plot, 2, 3).
+   logical                                                :: leg, open !< The legend, the target open.
+
+   dropped = .false.
+   if (len(type) < 1 .or. len(type) > 32) error stop 'figure_plot_frame: pf_drop_target: a type has 1 to 32 characters'
+   if (type(1:1) == '_') error stop "figure_plot_frame: pf_drop_target: a type starting with '_' is Dear ImGui's"
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_drop_target outside a plot'
+   leg = .false.
+   if (present(legend)) leg = legend
+   associate(p => plots(cur))
+      if (.not. p%locked) call setup_finish(p) ! SetupLock
+      if (present(axis)) then
+         if (leg) error stop 'figure_plot_frame: pf_drop_target: give axis or legend, not both'
+         i = axis_code(axis)
+         if (.not. p%ax(i)%enabled) error stop 'figure_plot_frame: pf_drop_target: the axis is not set up'
+         r(1:2) = p%ax(i)%hover_rect(1:2) + 3.5_real32 ! ImRect::Expand(-3.5)
+         r(3:4) = p%ax(i)%hover_rect(3:4) - 3.5_real32
+         where = 2_int32
+      elseif (leg) then
+         r = p%leg_rc
+         where = 3_int32
+      else
+         r = p%rect
+         where = 1_int32
+      endif
+   endassociate
+   open = core_drop_target(real(r(1), real64), real(r(2), real64), real(r(3), real64), real(r(4), real64), type, &
+                           payload, n)
+   if (.not. open) return
+   call core_end_drop_target()
+   if (n < 0_int32) return
+   if (where /= 3_int32) then
+      call pf_plot_mouse(mx, my)
+      if (present(x)) x = mx
+      if (present(y)) y = my
+   endif
+   dropped = .true.
+   endfunction pf_drop_target
+
    subroutine pf_plot_size(width, height)
    !< The open plot's area [pixels] (`GetPlotSize`; `ip_plot_size`): it ends the setup.
    real(real64), intent(out) :: width  !< Width [pixels].
@@ -4922,6 +4984,7 @@ contains
    cl(2) = max(cl(2), outer(2) + pad(2))
    cl(3) = min(cl(3), outer(3) - pad(1))
    cl(4) = min(cl(4), outer(4) - pad(2))
+   p%leg_rc = cl
    items_id = plot_id_offset(p%id, -1_int32)
    call core_keep_alive(items_id)
    dummy = core_button_behavior(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &

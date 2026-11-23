@@ -59,6 +59,7 @@ use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextS
                           igGetWindowSize, igIsItemActive, igIsItemHovered, igIsKeyDown_Nil, igIsKeyPressed_Bool,       &
                           igIsMouseClicked_Bool, igIsMouseDown_Nil, igIsMouseHoveringRect, igIsMouseReleased_Nil,       &
                           igPopID, igPushID_Str, igSetCursorScreenPos, igDragScalar, igGetMouseDragDelta,              &
+                          igBeginDragDropTarget, igAcceptDragDropPayload, igEndDragDropTarget,                       &
                           igInvisibleButton, igIsMouseDoubleClicked_Nil, igIsMousePosValid, igIsWindowHovered,         &
                           igPopItemFlag, igPopStyleVar, igPushID_Int, igPushItemFlag, igPushItemWidth,                 &
                           igPushStyleVar_Float, igPushStyleVar_Vec2, igRadioButton_Bool, igSetMouseCursor,             &
@@ -99,7 +100,7 @@ public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core
 public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
 public :: core_open_popup, core_begin_popup, core_end_popup, core_open_popup_id, core_begin_popup_id
-public :: core_style_vec2
+public :: core_style_vec2, core_drop_target, core_end_drop_target
 public :: core_white_pixel, core_framebuffer_scale, core_texture_sampling
 public :: core_draw_prims, core_delta_time, core_style_color_rgba
 public :: core_draw_list
@@ -210,6 +211,12 @@ type, bind(C) :: im_font_baked_head
    real(c_float)   :: fallback_advance_x     !< FallbackAdvanceX.
    real(c_float)   :: size                   !< Size: the size it was baked at [pixels].
 endtype im_font_baked_head
+
+type, bind(C) :: payload_head
+   !< `ImGuiPayload`'s first members: its data and their size.
+   type(c_ptr)    :: data      !< Data.
+   integer(c_int) :: data_size !< Size [bytes].
+endtype payload_head
 
 type, bind(C) :: style_floats
    !< `ImGuiStyle` read as floats (its first 4 KiB at most: only the variable asked for is read).
@@ -466,6 +473,48 @@ contains
    if (present(alpha_mul)) a = real(alpha_mul, c_float)
    col = int(igGetColorU32_Col(int(idx, c_int), a), int32)
    endfunction core_style_color
+
+   function core_drop_target(x0, y0, x1, y1, type, payload, n) result(open)
+   !< A drop target on a rectangle (ImPlot's `BeginDragDropTargetPlot`, `...Axis`, `...Legend`: Dear ImGui's
+   !< `BeginDragDropTargetCustom`, here an item without an ID on it, `ItemAdd`, then `BeginDragDropTarget`, which the
+   !< public API gives), and when open the payload of `type` accepted (`AcceptDragDropPayload`, drawing the target's
+   !< highlight): `n` its length on the frame it is delivered (`payload` then allocated and holding it: a frame of a
+   !< drop only), else -1 and `payload` untouched. End it with `core_end_drop_target` when true.
+   real(real64),     intent(in)    :: x0, y0, x1, y1 !< Rectangle [pixels].
+   character(len=*), intent(in)    :: type           !< Payload type (at most 32 characters).
+   character(len=:), allocatable, intent(inout) :: payload !< The payload delivered.
+   integer(int32),   intent(out)   :: n              !< Its length, or -1.
+   logical                         :: open           !< The target opened: end it.
+   type(payload_head), pointer     :: p              !< The payload.
+   character(kind=c_char), pointer :: d(:)           !< Its bytes.
+   type(c_ptr)                     :: cp             !< Its address.
+   integer(int32)                  :: k              !< Counter.
+
+   n = -1_int32
+   open = .false.
+   if (.not. logical(igItemAdd(rect(x0, y0, x1, y1), 0_c_int, c_null_ptr, 0_c_int))) return
+   open = logical(igBeginDragDropTarget())
+   if (.not. open) return
+   call to_buf(type)
+   cp = igAcceptDragDropPayload(buf, 0_c_int)
+   if (.not. c_associated(cp)) return
+   call c_f_pointer(cp, p)
+   n = int(p%data_size, int32)
+   if (allocated(payload)) deallocate(payload)
+   allocate(character(len=max(n, 0_int32)) :: payload)
+   if (n > 0_int32) then
+      call c_f_pointer(p%data, d, [n])
+      do k = 1_int32, n
+         payload(k:k) = d(k)
+      enddo
+   endif
+   endfunction core_drop_target
+
+   subroutine core_end_drop_target()
+   !< `EndDragDropTarget` (after `core_drop_target` returned true).
+
+   call igEndDragDropTarget()
+   endsubroutine core_end_drop_target
 
    subroutine core_style_vec2(idx, x, y)
    !< A pair of the style by its `ImGuiStyleVar` (`GetStyleVarInfo(idx)->GetVarPtr(&GetStyle())`), without the
