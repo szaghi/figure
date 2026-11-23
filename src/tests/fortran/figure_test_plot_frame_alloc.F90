@@ -11,7 +11,8 @@ program figure_test_plot_frame_alloc
 !< drag tools (figure_plot_tools); tags on three of the plot's axes (`pf_tag`: a value labelled, a date, a text);
 !< tick formats on the symlog Y1 and on Y2 (`%a` among them: the mouse text and the tag in them), and Y2's ticks given
 !< with labels (`pf_setup_axis_ticks`); Y2's limit and zoom constraints (`pf_setup_axis_constraints`); the legend
-!< sorted (`pf_setup_legend(sort=.true.)`), a legend entry's popup asked for (closed).
+!< sorted (`pf_setup_legend(sort=.true.)`), a legend entry's popup asked for (closed); two annotations
+!< (`pf_annotation`: a text alone, a box with an offset).
 !< Drawn first by ImPlot through FIGURE's API (`ip_*`), then by the Fortran frame (`pf_*`), NF frames each: on the
 !< Fortran side the last NCOUNT frames are counted, from `pf_begin_plot` to `pf_end_plot` and around
 !< `pf_colormap_scale`, by figure_test_plot_alloc_counter (the C library's allocator entry points defined in the
@@ -31,12 +32,13 @@ use figure, only : ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_drag_rect, 
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
                    ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes,             &
                    ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
-use figure, only : ip_setup_axis_ticks, ip_setup_axis_constraints, ip_begin_legend_popup, ip_end_legend_popup
+use figure, only : ip_setup_axis_ticks, ip_setup_axis_constraints, ip_begin_legend_popup, ip_end_legend_popup, &
+                   ip_annotation
 use figure_cimplot, only : ImPlot_SetupLegend
 use figure_cimplot_enums, only : ImPlotLegendFlags_Sort, ImPlotLocation_NorthWest
 use figure_plot_frame, only : pf_begin_aligned, pf_begin_subplots, pf_end_aligned, pf_end_subplots, pf_link_axis
 use figure_plot_frame, only : pf_tag, pf_setup_axis_ticks, pf_setup_axis_constraints, pf_setup_legend, &
-                              pf_begin_legend_popup, pf_end_legend_popup
+                              pf_begin_legend_popup, pf_end_legend_popup, pf_annotation
 use figure_plot_frame, only : pf_begin_plot, pf_colormap_scale, pf_end_plot, pf_plot_limits, pf_set_axes, &
                               pf_setup_axes, pf_setup_axis, pf_setup_axis_limits
 use figure_plot_items, only : pf_line, pf_scatter, pf_spec
@@ -53,6 +55,7 @@ integer(int32), parameter :: NP = 201_int32     !< Points of a line.
 real(real64),   parameter :: T0 = 1.6e9_real64  !< The time axis's start [s since the epoch].
 real(real64),   parameter :: Y2T(3) = [0.5_real64, 1.75_real64, 3.0_real64] !< Y2's ticks.
 character(len=4), parameter :: Y2L(3) = ['low ', 'mid ', 'high'] !< Their labels.
+real(real64),   parameter :: AOFF(2) = [12.0_real64, -14.0_real64] !< An annotation's offset.
 real(real64),   parameter :: C(4, 4) = reshape([0.91_real64, 0.40_real64, 0.30_real64, 1.0_real64,  &
                                                 0.30_real64, 0.62_real64, 0.85_real64, 1.0_real64,  &
                                                 0.35_real64, 0.75_real64, 0.40_real64, 1.0_real64,  &
@@ -148,6 +151,8 @@ contains
          call pf_tag('y2', 2.0_real64, text='level')
          call pf_tag('y2', 1.25_real64)
          if (pf_begin_legend_popup('wave')) call pf_end_legend_popup()
+         call pf_annotation(100.0_real64, 10.0_real64, 'peak')
+         call pf_annotation(1000.0_real64, -20.0_real64, 'trough', color=C(:, 1), offset=AOFF)
          call pf_plot_limits(lim(1, 2), lim(2, 2), lim(3, 2), lim(4, 2), 'x1', 'y1')
          call pf_plot_limits(lim(5, 2), lim(6, 2), lim(7, 2), lim(8, 2), 'x2', 'y2')
          call pf_end_plot()
@@ -175,6 +180,8 @@ contains
          call ip_tag('y2', 2.0_real64, text='level')
          call ip_tag('y2', 1.25_real64)
          if (ip_begin_legend_popup('wave')) call ip_end_legend_popup()
+         call ip_annotation(100.0_real64, 10.0_real64, 'peak')
+         call ip_annotation(1000.0_real64, -20.0_real64, 'trough', color=C(:, 1), offset=AOFF)
          call ip_plot_limits(lim(1, 1), lim(2, 1), lim(3, 1), lim(4, 1), 'x1', 'y1')
          call ip_plot_limits(lim(5, 1), lim(6, 1), lim(7, 1), lim(8, 1), 'x2', 'y2')
          call ip_end_plot()

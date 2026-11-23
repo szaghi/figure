@@ -97,6 +97,10 @@ module figure_plot_frame
 !< - P12, axis tags (`pf_tag`, as `ip_tag`, `fig_plot_tag` and ImPlot's `TagX`, `TagY`): text or the value
 !<   (unrounded, in the axis's format; a time axis's date and time), the last item's colour by default, drawn after the
 !<   border with the axis's room for them from the next frame (`OverrideSizeLate`);
+!< - annotations (`pf_annotation`, as `ip_annotation`, FIGURE's `fig_plot_annotation` over ImPlot's `Annotation`
+!<   with `clamp`): a text at a point of the current axes, alone or in a box (black or white text by its luminance),
+!<   centred on the point or offset with a leader line to the box's nearest corner, kept inside the plot area, drawn
+!<   under the plot's clip before the selection and the mouse text;
 !< - the drag tools are figure_plot_tools' (P12), over this module's hooks (`pf_plot_id`, ...).
 !<
 !< Kept from the current path (FIGURE's behaviour over ImPlot, mirrored bit for bit; the owner's decisions on #15):
@@ -147,7 +151,7 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_text_unformatted, core_window_hovered, core_frame_height, core_open_popup,         &
                         core_open_popup_id, core_begin_popup_id,                                                &
                         core_begin_popup, core_end_popup, core_set_cursor_screen_pos, core_time, &
-                        core_draw_triangle_filled
+                        core_draw_triangle_filled, core_draw_line
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
@@ -174,6 +178,7 @@ public :: pf_plot_count, pf_colormap, pf_colormap_scale
 public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
 public :: pf_cancel_selection
 public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_plot_id, pf_tag
+public :: pf_annotation
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
 real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
@@ -503,6 +508,16 @@ integer(int32),       allocatable      :: tag_off(:)     !< ... text's start in 
 integer(int32),       allocatable      :: tag_len(:)     !< ... its length.
 character(len=:),     allocatable      :: tag_text       !< The tags' texts.
 integer(int32),       allocatable      :: leg_order(:)   !< The legend's entries in their drawing order (TempInt1).
+integer(int32)                         :: n_anns = 0_int32 !< The open plot's annotations (ImPlotContext::Annotations).
+real(real32),         allocatable      :: ann_pos(:,:)   !< An annotation's point on screen (Pos) [pixels].
+real(real32),         allocatable      :: ann_off(:,:)   !< ... its offset (Offset) [pixels].
+integer(int32),       allocatable      :: ann_bg(:)      !< ... box colour.
+integer(int32),       allocatable      :: ann_fg(:)      !< ... text colour.
+integer(int32),       allocatable      :: ann_toff(:)    !< ... text's start in `ann_text`.
+integer(int32),       allocatable      :: ann_tlen(:)    !< ... its length.
+logical,              allocatable      :: ann_clamp(:)   !< ... kept inside the plot area (Clamp).
+character(len=:),     allocatable      :: ann_text       !< The annotations' texts.
+integer(int32)                         :: n_ann_text = 0_int32 !< Characters of `ann_text` in use.
 integer(int32)                         :: n_tag_text = 0_int32 !< Characters of `tag_text` in use.
 
 contains
@@ -1409,6 +1424,68 @@ contains
    endassociate
    endsubroutine pf_tag
 
+   subroutine pf_annotation(x, y, text, color, offset)
+   !< A text at the point (x, y) of the open plot's current axes (`Annotation(x, y, col, offset, clamp=true, "%s",
+   !< text)` through FIGURE's `fig_plot_annotation`; `ip_annotation`), drawn when the plot ends, over its items, kept
+   !< inside the plot area. Without `color` (or with alpha 0): the text alone, in the plot's text colour; with it: in a
+   !< box of that colour, the text black or white by the box's luminance (`CalcTextColor`). `offset` moves the box
+   !< [pixels] from the point (x right, y down), with a leader line from the point to its nearest corner; a zero
+   !< component centres it on the point along that axis (the default). It ends the setup.
+   real(real64),     intent(in)           :: x         !< Abscissa [plot units].
+   real(real64),     intent(in)           :: y         !< Ordinate [plot units].
+   character(len=*), intent(in)           :: text      !< Text (UTF-8).
+   real(real64),     intent(in), optional :: color(:)  !< Box colour, RGBA in [0, 1] (default: no box).
+   real(real64),     intent(in), optional :: offset(:) !< Offset [pixels], (x right, y down) (default: centred).
+   real(real32)                           :: c(4)      !< Colour.
+   real(real32)                           :: lum, t    !< Luminance (CalcTextColor), a product.
+   integer(int32)                         :: k, nt, j  !< The annotation, its text's length, a component.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_annotation outside a plot'
+   if (present(color)) then
+      if (size(color) /= 4) error stop 'figure_plot_frame: pf_annotation: a colour needs 4 components (RGBA)'
+   endif
+   if (present(offset)) then
+      if (size(offset) /= 2) error stop 'figure_plot_frame: pf_annotation: the offset needs 2 components (x, y)'
+   endif
+   associate(p => plots(cur))
+      if (.not. p%locked) call setup_finish(p) ! SetupLock
+      nt = len(text, kind=int32)
+      call grow_anns(n_anns + 1_int32, n_ann_text + nt)
+      n_anns = n_anns + 1_int32
+      k = n_anns
+      c = 0.0_real32
+      if (present(color)) then
+         do j = 1_int32, 4_int32
+            c(j) = real(color(j), real32)
+         enddo
+      endif
+      ann_off(:, k) = 0.0_real32
+      if (present(offset)) then
+         ann_off(1, k) = real(offset(1), real32)
+         ann_off(2, k) = real(offset(2), real32)
+      endif
+      ann_pos(1, k) = to_pixels(p%ax(p%cur_x), x) ! PlotToPixels(x, y, IMPLOT_AUTO, IMPLOT_AUTO)
+      ann_pos(2, k) = to_pixels(p%ax(p%cur_y), y)
+      ann_bg(k) = core_color(real(c(1), real64), real(c(2), real64), real(c(3), real64), real(c(4), real64))
+      if (c(4) == 0.0_real32) then
+         ann_fg(k) = core_style_color(ImGuiCol_Text) ! InlayText
+      else ! CalcTextColor
+         lum = c(1) * 0.299_real32
+         t = c(2) * 0.587_real32
+         lum = lum + t
+         t = c(3) * 0.114_real32
+         lum = lum + t
+         ann_fg(k) = merge(core_color(0.0_real64, 0.0_real64, 0.0_real64, 1.0_real64), &
+                           core_color(1.0_real64, 1.0_real64, 1.0_real64, 1.0_real64), lum > 0.5_real32)
+      endif
+      ann_clamp(k) = .true. ! fig_plot_annotation's clamp
+      ann_toff(k) = n_ann_text + 1_int32
+      ann_tlen(k) = nt
+      ann_text(n_ann_text + 1_int32:n_ann_text + ann_tlen(k)) = text
+      n_ann_text = n_ann_text + ann_tlen(k)
+   endassociate
+   endsubroutine pf_annotation
+
    function pf_plot_count() result(n)
    !< Plots held (tests).
    integer(int32) :: n !< Plots.
@@ -2006,7 +2083,8 @@ contains
    ! private: the overlays of EndPlot
 
    subroutine overlays(p)
-   !< `EndPlot` under the plot's clip: the selection (`RenderSelectionRect`), the crosshairs, the mouse text.
+   !< `EndPlot` under the plot's clip: the annotations, the selection (`RenderSelectionRect`), the crosshairs, the mouse
+   !< text.
    type(plot_record), intent(inout) :: p           !< Plot.
    real(real64)                     :: mx, my, w, h !< The pointer, a text's size.
    real(real32)                     :: m(2), pos(2), sz(2), sr(4) !< ..., the box on screen.
@@ -2016,6 +2094,7 @@ contains
 
    call core_push_clip_rect(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
                             real(p%rect(4), real64))
+   call draw_annotations(p)
    call core_mouse_pos(mx, my)
    m = [real(mx, real32), real(my, real32)]
    if (p%selected) then ! Selection: (1, 1, 0), its fill at 1/4 alpha
@@ -2537,6 +2616,8 @@ contains
    next_link_idx = 0_int32
    n_tags = 0_int32 ! Tags.Reset
    n_tag_text = 0_int32
+   n_anns = 0_int32 ! Annotations.Reset
+   n_ann_text = 0_int32
    open_context = .false.
    digital_offset = 0_int32
    prev_item = 0_int32
@@ -3135,6 +3216,107 @@ contains
       call move_alloc(t_, tag_text)
    endif
    endsubroutine grow_tags
+
+   subroutine grow_anns(m, chars)
+   !< Room for m annotations and `chars` characters of their texts, those held kept (grown when short only).
+   integer(int32),   intent(in)  :: m, chars !< Annotations, characters.
+   real(real32),     allocatable :: pos_(:,:), off_(:,:) !< New columns.
+   integer(int32),   allocatable :: bg_(:), fg_(:), toff_(:), tlen_(:) !< ...
+   logical,          allocatable :: cl_(:)   !< ...
+   character(len=:), allocatable :: t_       !< New texts.
+   integer(int32)                :: n        !< Their room.
+
+   if (.not. allocated(ann_bg)) then
+      allocate(ann_pos(2, 8), ann_off(2, 8), ann_bg(8), ann_fg(8), ann_toff(8), ann_tlen(8), ann_clamp(8))
+   elseif (m > size(ann_bg, kind=int32)) then
+      n = 2_int32 * size(ann_bg, kind=int32)
+      allocate(pos_(2, n), off_(2, n), bg_(n), fg_(n), toff_(n), tlen_(n), cl_(n))
+      pos_(:, 1:n_anns) = ann_pos(:, 1:n_anns)
+      off_(:, 1:n_anns) = ann_off(:, 1:n_anns)
+      bg_(1:n_anns) = ann_bg(1:n_anns)
+      fg_(1:n_anns) = ann_fg(1:n_anns)
+      toff_(1:n_anns) = ann_toff(1:n_anns)
+      tlen_(1:n_anns) = ann_tlen(1:n_anns)
+      cl_(1:n_anns) = ann_clamp(1:n_anns)
+      call move_alloc(pos_, ann_pos)
+      call move_alloc(off_, ann_off)
+      call move_alloc(bg_, ann_bg)
+      call move_alloc(fg_, ann_fg)
+      call move_alloc(toff_, ann_toff)
+      call move_alloc(tlen_, ann_tlen)
+      call move_alloc(cl_, ann_clamp)
+   endif
+   if (.not. allocated(ann_text)) then
+      allocate(character(len=max(256_int32, chars)) :: ann_text)
+   elseif (chars > len(ann_text, kind=int32)) then
+      allocate(character(len=max(2_int32 * len(ann_text, kind=int32), chars)) :: t_)
+      t_(1:n_ann_text) = ann_text(1:n_ann_text)
+      call move_alloc(t_, ann_text)
+   endif
+   endsubroutine grow_anns
+
+   subroutine draw_annotations(p)
+   !< `EndPlot`'s annotations, under the plot's clip (pushed by the caller): each box placed by its offset (centred on
+   !< a zero component), kept inside the plot area (`ClampLabelPos`), a leader line from the point to the box's nearest
+   !< corner when offset, the box, the text (`AnnotationPadding` round it).
+   type(plot_record), intent(in) :: p    !< Plot.
+   real(real64)                  :: w, h !< The text's size.
+   real(real32)                  :: sz(2), pos(2), cx(4), cy(4), dx, dy, l, lmin !< Box, corners, distances.
+   integer(int32)                :: k, a, e, j, jmin !< Annotation, its text's ends, corners.
+
+   do k = 1_int32, n_anns
+      a = ann_toff(k)
+      e = ann_toff(k) + ann_tlen(k) - 1_int32
+      call core_text_size(ann_text(a:e), w, h)
+      sz(1) = real(w, real32) + ANNOTATION_PADDING(1) * 2.0_real32
+      sz(2) = real(h, real32) + ANNOTATION_PADDING(2) * 2.0_real32
+      pos = ann_pos(:, k)
+      do j = 1_int32, 2_int32
+         if (ann_off(j, k) == 0.0_real32) then
+            pos(j) = pos(j) - sz(j) / 2.0_real32
+         elseif (ann_off(j, k) > 0.0_real32) then
+            pos(j) = pos(j) + ann_off(j, k)
+         else
+            pos(j) = pos(j) - (sz(j) - ann_off(j, k))
+         endif
+      enddo
+      if (ann_clamp(k)) then ! ClampLabelPos
+         if (pos(1) < p%rect(1)) pos(1) = p%rect(1)
+         if (pos(2) < p%rect(2)) pos(2) = p%rect(2)
+         if (pos(1) + sz(1) > p%rect(3)) pos(1) = p%rect(3) - sz(1)
+         if (pos(2) + sz(2) > p%rect(4)) pos(2) = p%rect(4) - sz(2)
+      endif
+      if (ann_off(1, k) /= 0.0_real32 .or. ann_off(2, k) /= 0.0_real32) then ! the leader to the nearest corner
+         cx(1) = pos(1) ! TL, TR, BR, BL (no array constructor: nvfortran allocates them)
+         cx(2) = pos(1) + sz(1)
+         cx(3) = cx(2)
+         cx(4) = pos(1)
+         cy(1) = pos(2)
+         cy(2) = pos(2)
+         cy(3) = pos(2) + sz(2)
+         cy(4) = cy(3)
+         jmin = 1_int32
+         lmin = huge(1.0_real32)
+         do j = 1_int32, 4_int32
+            dx = ann_pos(1, k) - cx(j)
+            dy = ann_pos(2, k) - cy(j)
+            l = dx * dx
+            dx = dy * dy
+            l = l + dx ! ImLengthSqr (no FMA)
+            if (l < lmin) then
+               jmin = j
+               lmin = l
+            endif
+         enddo
+         call core_draw_line(real(ann_pos(1, k), real64), real(ann_pos(2, k), real64), real(cx(jmin), real64), &
+                             real(cy(jmin), real64), ann_bg(k))
+      endif
+      call core_draw_rect_filled(real(pos(1), real64), real(pos(2), real64), real(pos(1) + sz(1), real64), &
+                                 real(pos(2) + sz(2), real64), ann_bg(k))
+      call core_draw_text(real(pos(1) + ANNOTATION_PADDING(1), real64), real(pos(2) + ANNOTATION_PADDING(2), real64), &
+                          ann_fg(k), ann_text(a:e))
+   enddo
+   endsubroutine draw_annotations
 
    subroutine draw_tags(p)
    !< `EndPlot`'s tags, after the border, without the plot's clip: on an enabled axis, the value within its range, a

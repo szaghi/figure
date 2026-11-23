@@ -52,8 +52,8 @@ module figure_plot_items
 !< figure_core's `core_texture_sampling` callbacks) and `pf_field_image` (`ip_field_image`: figure_plot_field colours
 !< the field into a cached texture, bit for bit with native/figure_field.cpp; then the image).
 !<
-!< Not items: P12's drag tools (figure_plot_tools) and tags (figure_plot_frame's `pf_tag`). Not yet: the annotations
-!< (`ip_annotation`, FIGURE's `fig_plot_annotation` over ImPlot's `Annotation`).
+!< Not items: P12's drag tools (figure_plot_tools), tags and annotations (figure_plot_frame's `pf_tag`,
+!< `pf_annotation`: `ip_annotation`, FIGURE's `fig_plot_annotation` over ImPlot's `Annotation`).
 !<
 !< No allocation per item per frame (ADR 0001): views of the arrays, fixed quads; the decimation's index buffer and
 !< the integer abscissae's conversion (decimated items only) are grown once and kept.
