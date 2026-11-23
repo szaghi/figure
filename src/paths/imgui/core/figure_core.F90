@@ -49,10 +49,11 @@ module figure_core
 !< No allocation per item: text and IDs go through a buffer of the module (NUL-terminated copies, `to_buf`, no
 !< concatenation; a text longer than the buffer gets an allocated copy).
 use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_double, c_f_pointer, c_float, c_funptr, c_int, &
-                                         c_int16_t, c_int32_t, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t
+                                         c_int16_t, c_int32_t, c_loc, c_null_char, c_null_ptr, c_ptr, &
+                                         c_size_t
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextSize, igGetColorU32_Col,             &
-                          igGetStyleColorVec4,                                                                  &
+                          igGetStyleColorVec4, igGetStyle,                                                      &
                           igGetContentRegionAvail, igGetCursorScreenPos, igGetFont, igGetFontSize, igGetFrameCount,     &
                           igGetFrameHeight, igGetID_Str, igGetMousePos, igGetTime, igGetWindowDrawList, igGetWindowPos, &
                           igGetWindowSize, igIsItemActive, igIsItemHovered, igIsKeyDown_Nil, igIsKeyPressed_Bool,       &
@@ -68,7 +69,8 @@ use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,
                                igGetHoveredID, igItemAdd, igItemSize_Vec2, igKeepAliveID, ImDrawList_AddCallback,          &
                                ImDrawList_AddCircle, ImDrawList_AddCircleFilled, ImDrawList_AddImage, ImDrawList_AddPolyline, &
                                ImDrawList_AddRect, ImDrawList_AddRectFilled, ImDrawList_AddText_Vec2, ImDrawList_PopClipRect, &
-                               ImDrawList_PrimReserve, ImDrawList_PushClipRect, igBeginPopupEx, igOpenPopupEx,              &
+                               ImDrawList_PrimReserve, ImDrawList_PushClipRect, igBeginPopupEx, igOpenPopupEx, &
+                               igGetStyleVarInfo,              &
                                ImDrawList_PushTexture, ImDrawList_PopTexture
 use figure_c_native, only : fig_texture_sampling
 use figure_style, only : ig_get_style_var
@@ -96,6 +98,7 @@ public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core
 public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
 public :: core_open_popup, core_begin_popup, core_end_popup, core_open_popup_id, core_begin_popup_id
+public :: core_style_vec2
 public :: core_white_pixel, core_framebuffer_scale, core_texture_sampling
 public :: core_draw_prims, core_delta_time, core_style_color_rgba
 public :: core_draw_list
@@ -205,6 +208,11 @@ type, bind(C) :: im_font_baked_head
    real(c_float)   :: fallback_advance_x     !< FallbackAdvanceX.
    real(c_float)   :: size                   !< Size: the size it was baked at [pixels].
 endtype im_font_baked_head
+
+type, bind(C) :: style_floats
+   !< `ImGuiStyle` read as floats (its first 4 KiB at most: only the variable asked for is read).
+   real(c_float) :: f(1024) !< Floats.
+endtype style_floats
 
 type, bind(C) :: im_io_head
    !< The first members of ImGuiIO (imgui.h, 1.93), up to DeltaTime.
@@ -456,6 +464,24 @@ contains
    if (present(alpha_mul)) a = real(alpha_mul, c_float)
    col = int(igGetColorU32_Col(int(idx, c_int), a), int32)
    endfunction core_style_color
+
+   subroutine core_style_vec2(idx, x, y)
+   !< A pair of the style by its `ImGuiStyleVar` (`GetStyleVarInfo(idx)->GetVarPtr(&GetStyle())`), without the
+   !< allocation of a lookup by name (`core_style_var`: a name past 15 characters is a heap `std::string`). The style
+   !< is read as floats (`style_floats`, a scalar pointer: nvfortran 26.9 allocates in `transfer` of a `c_ptr` and in
+   !< an array `c_f_pointer`), the pair at the info's Offset (the bitfield's high 16 bits, as GCC lays it out).
+   integer(int32), intent(in)  :: idx  !< `ImGuiStyleVar` of an `ImVec2` (`ImGuiStyleVar_ItemInnerSpacing`, ...).
+   real(real64),   intent(out) :: x, y !< Its components.
+   integer(c_int32_t),  pointer :: info !< `ImGuiStyleVarInfo`: Count (8 bits), DataType (8), Offset (16).
+   type(style_floats),  pointer :: st   !< The style.
+   integer(int32)               :: k    !< The pair's first float.
+
+   call c_f_pointer(igGetStyleVarInfo(int(idx, c_int)), info)
+   call c_f_pointer(igGetStyle(), st)
+   k = int(ishft(info, -16), int32) / 4_int32 + 1_int32
+   x = real(st%f(k), real64)
+   y = real(st%f(k + 1_int32), real64)
+   endsubroutine core_style_vec2
 
    subroutine core_style_var(name, values, n)
    !< A style variable by its `ImGuiStyle` name (`'FramePadding'`, `'FrameRounding'`, ...): its value(s) and how many

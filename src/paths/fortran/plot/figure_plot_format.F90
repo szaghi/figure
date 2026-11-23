@@ -10,7 +10,8 @@ module figure_plot_format
 !< - `fmt_parse`: a printf format of one real (`Formatter_Default`'s `fmt`; `SetupAxisFormat`, `ColormapScale`'s
 !<   label format), parsed once into a `plot_format`: the text before and after the one conversion (`%%` resolved, 32
 !<   characters each at most), its flags (`-+ 0#`), width and precision (any digits, read up to 10^8) and type
-!<   (`f F e E g G a A`). A format it cannot read is `ok = .false.` and labels as "%g". A precision past 1080 is
+!<   (`f F e E g G a A`). A format without conversion is text (`text`: printed as it is, as printf ignores the value);
+!<   a format it cannot read is `ok = .false.` and labels as "%g". A precision past 1080 is
 !<   computed as 1080 (a double's exact expansion ends before: only zeros follow, kept out of the buffers but counted
 !<   in the width).
 !< - `fmt_real`: the real through a `plot_format`, glibc's output: the conversion from the exact binary value (a double
@@ -60,6 +61,7 @@ type :: plot_format
    integer(int32)               :: prec = -1_int32    !< Precision (-1: absent, 6).
    character(len=1)             :: ctype = 'g'        !< Conversion: f F e E g G.
    logical                      :: ok = .true.        !< Read (else "%g").
+   logical                      :: text = .false.     !< No conversion: the text alone (`prefix`, `%%` resolved).
 endtype plot_format
 
 contains
@@ -139,7 +141,7 @@ contains
       f%ctype = text(i:i)
       i = i + 1_int32
    enddo
-   if (.not. found) call fail(f)
+   if (.not. found) f%text = .true. ! printf prints the text and ignores the value
    endsubroutine fmt_parse
 
    pure subroutine affix_to(f, after, c)
@@ -251,6 +253,7 @@ contains
    integer(int64)                   :: bits !< The value's bits.
 
    call fmt_text(buf, n, f%prefix(1:f%prefix_len))
+   if (f%text) return
    upper = scan(f%ctype, 'FEGA') > 0
    nl = 0_int32
    lead = ' '

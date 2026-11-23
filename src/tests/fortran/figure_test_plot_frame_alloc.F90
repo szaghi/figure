@@ -13,7 +13,7 @@ program figure_test_plot_frame_alloc
 !< with labels (`pf_setup_axis_ticks`); Y2's limit and zoom constraints (`pf_setup_axis_constraints`); the legend
 !< sorted (`pf_setup_legend(sort=.true.)`), a legend entry's popup asked for (closed); two annotations
 !< (`pf_annotation`: a text alone, a box with an offset); the queries (`pf_plot_size`, `pf_plot_state`,
-!< `pf_plot_x_transform`, `pf_open_state`).
+!< `pf_plot_x_transform`, `pf_open_state`); below them a colour-scale legend of 6 levels (`pf_colormap_legend`).
 !< Drawn first by ImPlot through FIGURE's API (`ip_*`), then by the Fortran frame (`pf_*`), NF frames each: on the
 !< Fortran side the last NCOUNT frames are counted, from `pf_begin_plot` to `pf_end_plot` and around
 !< `pf_colormap_scale`, by figure_test_plot_alloc_counter (the C library's allocator entry points defined in the
@@ -34,7 +34,7 @@ use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line
                    ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes,             &
                    ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
 use figure, only : ip_setup_axis_ticks, ip_setup_axis_constraints, ip_begin_legend_popup, ip_end_legend_popup, &
-                   ip_annotation, ip_plot_size
+                   ip_annotation, ip_plot_size, ip_colormap, ip_colormap_legend
 use figure_cimplot, only : ImPlot_SetupLegend
 use figure_cimplot_enums, only : ImPlotLegendFlags_Sort, ImPlotLocation_NorthWest
 use figure_plot_frame, only : pf_begin_aligned, pf_begin_subplots, pf_end_aligned, pf_end_subplots, pf_link_axis
@@ -45,6 +45,8 @@ use figure_plot_frame, only : pf_begin_plot, pf_colormap_scale, pf_end_plot, pf_
                               pf_setup_axes, pf_setup_axis, pf_setup_axis_limits
 use figure_plot_items, only : pf_line, pf_scatter, pf_spec
 use figure_plot_tools, only : pf_drag_line_x, pf_drag_line_y, pf_drag_point, pf_drag_rect
+use figure_plot_colorbar, only : pf_colormap_legend
+use figure_plot_colormaps, only : cm_colormap
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 use figure_test_plot_alloc_counter, only : alloc_arm, alloc_count, alloc_disarm
 
@@ -131,6 +133,7 @@ contains
    real(real64)        :: qv(9) !< The queries' values.
    integer(int32)      :: qs, qon(6), qsc(6) !< ...
    logical             :: qp, qsp !< ...
+   integer(int32), save :: cm_id = -1_int32, ip_id = -1_int32 !< The legend's colormap on each side.
 
    if (count) call alloc_arm()
    if (side_fortran) then
@@ -208,6 +211,19 @@ contains
    if (count) call pause()
    if (count) call alloc_arm()
    call cells()
+   if (count) call pause()
+   if (cm_id < 0_int32) then ! the legend's colormap, resolved once (not counted)
+      cm_id = cm_colormap('turbo', 6_int32)
+      ip_id = ip_colormap('turbo', 6_int32)
+   endif
+   if (count) call alloc_arm()
+   if (side_fortran) then
+      call pf_colormap_legend('##legend', cm_id, -2.0_real64, 4.0_real64, levels=6_int32, horizontal=.true., &
+                              width=600.0_real64, label_format='%.1f')
+   else
+      call ip_colormap_legend('##legend', ip_id, -2.0_real64, 4.0_real64, levels=6_int32, horizontal=.true., &
+                              width=600.0_real64, label_format='%.1f')
+   endif
    if (count) call pause()
    endsubroutine draw
 

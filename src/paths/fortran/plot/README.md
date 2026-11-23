@@ -33,6 +33,8 @@ Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figur
   maps, the bundled ones, the style's line colours.
 - `figure_plot_colormap_files`: the user's colormaps read from files (`ip_load_colormap`'s CSV tables and ParaView
   JSON presets, their colour spaces), as `native/figure_colormap.cpp`.
+- `figure_plot_colorbar`: the colour-scale legend (`ip_colormap_legend`, `ip_colormap_legend_edit`), as
+  `native/figure_colormap.cpp`'s `fig_colormap_legend`.
 - `figure_plot_field`: `ip_field_image`'s colouring and its texture cache, as `native/figure_field.cpp`.
 - `figure_plot_tools`: the drag tools (lines, point, rectangle), as ImPlot's `DragLineX`, ... in `implot.cpp`.
 - `figure_plot_hash`: Dear ImGui's string and integer hashes with a seed (ImPlot's item and drag tool IDs).
