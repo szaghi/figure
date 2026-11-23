@@ -74,6 +74,7 @@ use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,
                                ImDrawList_PushTexture, ImDrawList_PopTexture
 use figure_c_native, only : fig_texture_sampling
 use figure_style, only : ig_get_style_var
+use figure_cimgui_core, only : ImDrawList_AddConcavePolyFilled
 use figure_drawlist, only : dl_prims
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
                             dl_triangle_filled, DL_LINE_TEXTURES
@@ -102,6 +103,7 @@ public :: core_style_vec2
 public :: core_white_pixel, core_framebuffer_scale, core_texture_sampling
 public :: core_draw_prims, core_delta_time, core_style_color_rgba
 public :: core_draw_list
+public :: core_draw_concave_poly_filled
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
 
@@ -979,6 +981,32 @@ contains
    endif
    call ImDrawList_AddPolyline(target_list, c_loc(p), int(size(p), c_int), int(col, c_int), opt(thickness, 1.0_real64), f)
    endsubroutine core_draw_polyline
+
+   subroutine core_draw_concave_poly_filled(x, y, col)
+   !< A filled polygon, convex or not, not self-intersecting (`AddConcavePolyFilled`); up to 64 points without a heap
+   !< allocation.
+   real(real64),   intent(in)         :: x(:), y(:) !< Points [pixels].
+   integer(int32), intent(in)         :: col        !< Packed colour.
+   integer(int32), parameter          :: NFIX = 64_int32 !< Points converted in a fixed array.
+   type(im_vec2), target              :: f(NFIX)    !< Points, C layout.
+   type(im_vec2), allocatable, target :: p(:)       !< ... beyond NFIX.
+   integer(int32)                     :: k, n       !< Counter, points.
+
+   call core_draw_end_pending()
+   n = size(x, kind=int32)
+   if (n <= NFIX) then
+      do k = 1_int32, n
+         f(k) = im_vec2(real(x(k), c_float), real(y(k), c_float))
+      enddo
+      call ImDrawList_AddConcavePolyFilled(target_list, c_loc(f), int(n, c_int), int(col, c_int))
+      return
+   endif
+   allocate(p(n))
+   do k = 1_int32, n
+      p(k) = im_vec2(real(x(k), c_float), real(y(k), c_float))
+   enddo
+   call ImDrawList_AddConcavePolyFilled(target_list, c_loc(p), int(n, c_int), int(col, c_int))
+   endsubroutine core_draw_concave_poly_filled
 
    subroutine core_draw_circle(x, y, radius, col, filled, thickness, segments)
    !< A circle (`AddCircle`, `AddCircleFilled`), `segments` 0 for Dear ImGui's automatic count (default).

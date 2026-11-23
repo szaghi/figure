@@ -128,6 +128,8 @@ contains
       endif
    case (2_int32)
       call limits(0.0_real64, 42.0_real64, -2.0_real64, 2.0_real64)
+#if !defined DEV_OAC
+      ! host arrays as device arrays: FUNDAL's CPU mode only (under OpenACC, figure_test_plot_frame_device's GPU lines)
       if (side_fortran) then
          call pf_line_device('device', xb, yb, spec=pf_spec(line_color=C1))
          call pf_line_device('device r32', xb32, yb32, spec=pf_spec(line_color=C2))
@@ -137,6 +139,7 @@ contains
          call ip_line_device('device r32', xb32, yb32, spec=ip_spec(line_color=C2))
          call ip_line_device('unsorted', xu, yu)
       endif
+#endif
    case default
       call limits(0.0_real64, 42.0_real64, -2.0_real64, 2.0_real64)
       if (side_fortran) then

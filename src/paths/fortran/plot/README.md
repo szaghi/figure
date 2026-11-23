@@ -38,6 +38,10 @@ Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figur
 - `figure_plot_field`: `ip_field_image`'s colouring and its texture cache, as `native/figure_field.cpp`.
 - `figure_plot_tools`: the drag tools (lines, point, rectangle), as ImPlot's `DragLineX`, ... in `implot.cpp`.
 - `figure_plot_hash`: Dear ImGui's string and integer hashes with a seed (ImPlot's item and drag tool IDs).
+- `figure_plot_draw`: drawing in a plot (`pf_draw_line`, `pf_draw_rect`, `pf_draw_circle`, `pf_draw_polyline`,
+  `pf_draw_polygon`, `pf_draw_text`, `pf_draw_image`), as `figure_canvas.cpp`'s `fig_draw` on the `'plot'` layer
+  (`ig_draw_*(..., layer='plot')`), through the frame's public hooks (`pf_plot_to_pixels`, `pf_plot_rect`,
+  `pf_plot_state`).
 
 They draw through `figure_core` only (no ImPlot, no `figure_cimplot`). The C library's `pow`, `log10`, `asinh`,
 `sinh`, `cos`, `sin` are called where ImPlot calls them, and products ImPlot does not fuse are kept in statements of
@@ -70,7 +74,7 @@ it, by step:
   `ImPlot_PopColormap`, `ImPlot_SampleColormap`, `ImPlot_GetColormapCount`, `ImPlot_ColormapScale`,
   `fig_colormap_legend`, `fig_gradient_edit`); the style (`ImPlotStyle`: `figure_style_generated.cpp`,
   `figure_theme.cpp`, `figure_native.cpp`); `fig_dnd_plot_target` (`figure_dnd.cpp`); drawing in a plot
-  (`figure_canvas.cpp`).
+  (`fig_draw` on the plot layer, `figure_canvas.cpp`: figure_plot_draw's `pf_draw_*`).
 - P11, the items: `ImPlot_PlotLine_*`, `ImPlot_PlotScatter_*`, `ImPlot_PlotStairs_*`, `ImPlot_PlotStems_*`,
   `ImPlot_PlotShaded_*`, `ImPlot_PlotBars_*`, `ImPlot_PlotBarGroups_*`, `ImPlot_PlotErrorBars_*`,
   `ImPlot_PlotInfLines_*`, `ImPlot_PlotPieChart_*`, `ImPlot_PlotBubbles_*`, `ImPlot_PlotDigital_*`, `ImPlot_PlotText`,

@@ -183,6 +183,7 @@ public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, 
 public :: pf_cancel_selection
 public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_plot_id, pf_tag
 public :: pf_annotation, pf_plot_size, pf_plot_state, pf_plot_x_transform, pf_open_state, pf_recover_to
+public :: pf_plot_rect
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
 real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
@@ -2807,6 +2808,19 @@ contains
    width = real(plots(cur)%rect(3) - plots(cur)%rect(1), real64)
    height = real(plots(cur)%rect(4) - plots(cur)%rect(2), real64)
    endsubroutine pf_plot_size
+
+   subroutine pf_plot_rect(x0, y0, x1, y1)
+   !< The open plot's area [pixels], its corners (`GetPlotPos`, and plus `GetPlotSize`: what `PushPlotClipRect`
+   !< clips to; figure_plot_draw's primitives): it ends the setup.
+   real(real64), intent(out) :: x0, y0, x1, y1 !< Corners [pixels]: top-left, bottom-right.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_plot_rect outside a plot'
+   if (.not. plots(cur)%locked) call setup_finish(plots(cur)) ! SetupLock
+   x0 = real(plots(cur)%rect(1), real64)
+   y0 = real(plots(cur)%rect(2), real64)
+   x1 = real(plots(cur)%rect(3), real64)
+   y1 = real(plots(cur)%rect(4), real64)
+   endsubroutine pf_plot_rect
 
    function pf_plot_state(enabled, scale) result(state)
    !< The open plot's state, as FIGURE's `fig_plot_state` gives ImPlot's (the current path's refusals read it): 0 no

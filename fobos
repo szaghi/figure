@@ -207,9 +207,9 @@ exclude_dirs =
 
 # tests-nvf-acc-fortran: the Fortran path with OpenACC on the GPU, as tests-nvf-acc for the current path (its flags, with
 # -Mnofma as tests-nvf-fortran): figure_test_plot_frame_device draws 10**8 device points by `ip_line_device` and by the
-# frame's `pf_line_device`. Two tests fail in it by construction: figure_test_sibling_libs, as in tests-nvf-acc, and
-# figure_test_plot_frame_rest (its "device" arrays are host arrays, as FUNDAL's CPU mode allows); figure_test_tasks
-# can (nvfortran's I/O is thread-safe with -mp only)
+# frame's `pf_line_device` (figure_test_plot_frame_rest's host arrays given as device ones are left out by DEV_OAC).
+# One test fails in it by construction, figure_test_sibling_libs, as in tests-nvf-acc; figure_test_tasks can
+# (nvfortran's I/O is thread-safe with -mp only)
 [tests-nvf-acc-fortran]
 template     = tests-nvf-acc
 src          = src/lib/ $PATH_FORTRAN src/tests/

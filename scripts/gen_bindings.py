@@ -110,7 +110,8 @@ class Library:
 # the imgui_internal functions it calls, bound by the same rules as the public ones. Implementation A of the seam only:
 # it goes with Dear ImGui in P27.
 CORE_FUNCTIONS = (
-    "ImDrawList_AddCallback", "ImDrawList_AddCircle", "ImDrawList_AddCircleFilled", "ImDrawList_AddConvexPolyFilled",
+    "ImDrawList_AddCallback", "ImDrawList_AddCircle", "ImDrawList_AddCircleFilled", "ImDrawList_AddConcavePolyFilled",
+    "ImDrawList_AddConvexPolyFilled",
     "ImDrawList_AddDrawCmd", "ImDrawList_AddImage", "ImDrawList_AddLine", "ImDrawList_AddPolyline", "ImDrawList_AddRect",
     "ImDrawList_AddRectFilled", "ImDrawList_AddRectFilledMultiColor", "ImDrawList_AddText_Vec2",
     "ImDrawList_AddTriangleFilled",
