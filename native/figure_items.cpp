@@ -127,18 +127,26 @@ std::string id_part(const std::string &l) {
    return p == std::string::npos ? std::string() : l.substr(p);
 }
 
-// The name a window is shown by: a menu's label, a child window's own name, the visible part of the others.
-std::string window_shown_name(const ImGuiWindow *w) {
-   std::string n = w->Name;
+// The name a window is shown by, appended to the pool (its offset and length): a menu's label, a child window's own
+// name, the visible part of the others. Pointers into the window's name, no std::string: a popup's name
+// ("##Popup_%08x", 16 characters) is past std::string's in-place 15, a heap allocation every frame a popup is open.
+unsigned append_shown_name(std::string &pool, const ImGuiWindow *w, unsigned &n) {
+   const char *b = w->Name;
+   const char *e = b + std::strlen(b);
    if ((w->Flags & ImGuiWindowFlags_ChildWindow) && !(w->Flags & ImGuiWindowFlags_Popup)) {
       // BeginChild names its window "<parent>/<name>_<8 hex digits>"
-      const size_t slash = n.rfind('/');
-      if (slash != std::string::npos) n = n.substr(slash + 1);
-      if (n.size() > 9 && n[n.size() - 9] == '_') n = n.substr(0, n.size() - 9);
-      return n;
+      for (const char *c = e; c > b; --c)
+         if (c[-1] == '/') {
+            b = c;
+            break;
+         }
+      if (e - b > 9 && e[-9] == '_') e -= 9;
+   } else {
+      const char *h = std::strstr(b, "##"); // the visible part, unless empty
+      if (h != nullptr && h != b) e = h;
    }
-   const std::string v = visible_part(n);
-   return v.empty() ? n : v;
+   n = static_cast<unsigned>(e - b);
+   return append(pool, b, n);
 }
 
 int find_building(ImGuiID id) {
@@ -556,9 +564,7 @@ void ImGuiTestEngineHook_ItemAdd(ImGuiContext *c, ImGuiID id, const ImRect &bb, 
       r.visible = !w->Hidden && w->HiddenFramesCannotSkipItems <= 0;
       r.label_at = append(building.chars, w->Name, std::strlen(w->Name));
       r.label_n = static_cast<unsigned>(std::strlen(w->Name));
-      const std::string shown = window_shown_name(w);
-      r.name_at = append(building.chars, shown.c_str(), shown.size());
-      r.name_n = static_cast<unsigned>(shown.size());
+      r.name_at = append_shown_name(building.chars, w, r.name_n);
       if (w->Flags & ImGuiWindowFlags_Popup) {
          ImGuiID open_parent = 0;
          for (int i = g.BeginPopupStack.Size - 1; i >= 0; --i)

@@ -59,7 +59,7 @@ use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextS
                           igGetWindowSize, igIsItemActive, igIsItemHovered, igIsKeyDown_Nil, igIsKeyPressed_Bool,       &
                           igIsMouseClicked_Bool, igIsMouseDown_Nil, igIsMouseHoveringRect, igIsMouseReleased_Nil,       &
                           igPopID, igPushID_Str, igSetCursorScreenPos, igDragScalar, igGetMouseDragDelta,              &
-                          igBeginDragDropTarget, igAcceptDragDropPayload, igEndDragDropTarget, igIsWindowCollapsed,  &
+                          igBeginDragDropTarget, igAcceptDragDropPayload, igEndDragDropTarget,                       &
                           igInvisibleButton, igIsMouseDoubleClicked_Nil, igIsMousePosValid, igIsWindowHovered,         &
                           igPopItemFlag, igPopStyleVar, igPushID_Int, igPushItemFlag, igPushItemWidth,                 &
                           igPushStyleVar_Float, igPushStyleVar_Vec2, igRadioButton_Bool, igSetMouseCursor,             &
@@ -77,6 +77,7 @@ use figure_c_native, only : fig_texture_sampling
 use figure_style, only : ig_get_style_var
 use figure_cimgui_core, only : ImDrawList_AddConcavePolyFilled, igArrowButtonEx
 use figure_cimgui, only : igBeginCombo, igEndCombo
+use figure_c_native, only : fig_window_skip_items
 use figure_drawlist, only : dl_prims
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
                             dl_triangle_filled, DL_LINE_TEXTURES
@@ -107,6 +108,7 @@ public :: core_draw_prims, core_delta_time, core_style_color_rgba
 public :: core_draw_list
 public :: core_draw_concave_poly_filled
 public :: core_arrow_button, core_begin_combo, core_end_combo
+public :: core_window_skip_items
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
 
@@ -513,11 +515,11 @@ contains
    endfunction core_drop_target
 
    function core_window_collapsed() result(yes)
-   !< The current window is collapsed (`IsWindowCollapsed`): its items are skipped (`SkipItems`, the case of it the
-   !< public API gives; a window hidden for its first frames, an auto-resizing one measuring itself, is not seen).
-   logical :: yes !< Collapsed.
+   !< The current window skips its items (`ImGuiWindow::SkipItems`, through `core_window_skip_items`): collapsed, or
+   !< hidden for its first frames while an auto-resizing window measures itself, as ImPlot's BeginPlot tests.
+   logical :: yes !< Items skipped.
 
-   yes = logical(igIsWindowCollapsed())
+   yes = core_window_skip_items() ! SkipItems: collapsed, or hidden while an auto-resizing window measures itself
    endfunction core_window_collapsed
 
    subroutine core_end_drop_target()
@@ -826,6 +828,15 @@ contains
 
    call igEndCombo()
    endsubroutine core_end_combo
+
+   function core_window_skip_items() result(yes)
+   !< The current window skips its items (`ImGuiWindow::SkipItems`): collapsed, or hidden for its first frames while an
+   !< auto-resizing window measures itself (what `IsWindowCollapsed` does not tell). ImPlot's `BeginPlot` and
+   !< `BeginSubplots` return false then.
+   logical :: yes !< Skipped.
+
+   yes = fig_window_skip_items() /= 0_c_int
+   endfunction core_window_skip_items
 
    function core_radio_button(label, active) result(pressed)
    !< `RadioButton(label, active)`.

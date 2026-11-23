@@ -9,7 +9,8 @@ program figure_test_plot_frame_time_picker
 !< opened (March: the range's max was moved past its new min), its month's button, its year browsed back with the
 !< arrow, the year's button (twenty years). Checked: the axes' ranges of every frame equal to the bit (the picks set
 !< the range: 05:00, then March 20th, 05:00), and the pictures of six moments at FIGURE's oracle rule (|d| <= 2, no
-!< pixel failing). The input is spaced five frames apart: a click takes two frames, a popup one more to show.
+!< pixel failing). The input is spaced seven frames apart: a click takes its frames (move, press, release), a popup
+!< one more to show, and the item recorder answers from the frames before (five frames apart was too close).
 !<
 !< The pictures are `figure_test_plot_frame_time_picker.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
@@ -23,9 +24,9 @@ use figure_testing, only : test_capture, test_click, test_compare_image, test_it
 implicit none
 integer(int32), parameter :: W = 900_int32      !< Display width [pixels].
 integer(int32), parameter :: H = 640_int32      !< Display height [pixels].
-integer(int32), parameter :: NF = 60_int32      !< Frames per side.
+integer(int32), parameter :: NF = 80_int32      !< Frames per side.
 integer(int32), parameter :: NPIC = 6_int32     !< Pictures per side.
-integer(int32), parameter :: SHOTS(NPIC) = [12_int32, 18_int32, 28_int32, 33_int32, 53_int32, 58_int32] !< When.
+integer(int32), parameter :: SHOTS(NPIC) = [15_int32, 22_int32, 36_int32, 43_int32, 71_int32, 79_int32] !< When.
 real(real64),   parameter :: T0 = 1577836800.0_real64 !< 2020-01-01 00:00 UTC.
 type(app_object)          :: app               !< Application.
 real(real64)              :: tx(11), ty(11)    !< A line.
@@ -96,33 +97,33 @@ contains
       call test_mouse_button(.true., 'right')
    case (4_int32)
       call test_mouse_button(.false., 'right')
-   case (8_int32)
+   case (9_int32)
       call click('Min Time')
-   case (13_int32) ! the hour combo: the menu's first item
+   case (16_int32) ! the hour combo, the menu's first item (a combo is recorded without its label)
       call click_at(18.0_real64, 17.0_real64)
-   case (19_int32)
+   case (23_int32)
       call click('05')
-   case (24_int32)
+   case (30_int32)
       call click('January 2020')
-   case (29_int32)
-      call click_at(122.0_real64, 84.0_real64) ! Mar, third of the first row of months
-   case (34_int32)
-      call click_at(152.0_real64, 132.0_real64) ! the 20th, Friday of March's third week
-   case (39_int32)
-      call click('Max Time')
+   case (37_int32)
+      call click('Mar')
    case (44_int32)
-      call click_at(40.0_real64, 48.0_real64) ! the month's button
-   case (49_int32)
+      call click('20')
+   case (51_int32)
+      call click('Max Time')
+   case (58_int32)
+      call click('March 2020')
+   case (65_int32)
       call click('##Up')
-   case (54_int32)
-      call click_at(20.0_real64, 48.0_real64) ! the year's button
+   case (72_int32)
+      call click('2019')
    case default
    endselect
    endsubroutine pointer
 
    subroutine click_at(dx, dy)
-   !< A click at a point of the innermost popup open in the last frame, from its top-left corner (the date picker's
-   !< buttons: their labels repeat, and the item recorder does not find all of them).
+   !< A click at a point of the innermost popup open in the last frame, from its top-left corner (a combo, which the
+   !< item recorder keeps without its label).
    real(real64), intent(in) :: dx, dy         !< Offset [pixels].
    real(real64)             :: x0, y0, x1, y1 !< The popup.
    logical                  :: found          !< A popup open.

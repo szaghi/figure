@@ -15,6 +15,7 @@ public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutd
 public :: fig_set_remote_fps, fig_set_remote_compress, fig_set_remote_token, fig_remote_token
 public :: fig_set_remote_lossy
 public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, fig_texture_destroy, fig_texture_sampling
+public :: fig_window_skip_items
 public :: fig_texture_update, fig_image_read, fig_image_free, fig_image_write
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
@@ -1295,6 +1296,14 @@ interface
    integer(c_int), value :: plot         !< 1: the current plot's draw list; 0: the current window's.
    integer(c_int), value :: from_texture !< 1: before the image; 0: after it.
    endsubroutine fig_texture_sampling
+
+   function fig_window_skip_items() result(skip) bind(C, name='fig_window_skip_items')
+   !< The current window skips its items (`ImGuiWindow::SkipItems`: collapsed, or hidden for its first frames while
+   !< an auto-resizing window measures itself): 1, else 0.
+   import :: c_int
+   implicit none
+   integer(c_int) :: skip !< 1: skipped.
+   endfunction fig_window_skip_items
 
    function fig_load_style(path, path_len) result(status) bind(C, name='fig_load_style')
    !< Apply a theme file.

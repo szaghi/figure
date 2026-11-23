@@ -1,4 +1,5 @@
-// FIGURE's glue of ImPlot3D (the ip3_* procedures of src/lib/figure_implot3d.F90): see figure_native.h, "ImPlot3D".
+// FIGURE's glue of ImPlot3D (the ip3_* procedures of src/paths/imgui/plot3d/figure_implot3d.F90): see figure_native.h,
+// "ImPlot3D".
 //
 // ImPlot3D (brenocq/implot3d, MIT; through cimgui/cimplot3d, MIT) draws its 3-D plots through Dear ImGui's draw lists
 // only, so the remote and headless modes show them as every other widget. Its context lives beside ImPlot's (created

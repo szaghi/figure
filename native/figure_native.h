@@ -121,6 +121,10 @@ int    fig_image_write(const char *path, int path_len, const unsigned char *pixe
 /* Around a user image: from_texture = 1 makes the backend sample with the texture's own filter, 0 restores its
  * render state; plot = 1 for the current ImPlot plot's draw list, 0 for the current window's. */
 void   fig_texture_sampling(int plot, int from_texture);
+/* The current window skips its items (ImGuiWindow::SkipItems: collapsed, or hidden for its first frames while an
+ * auto-resizing window measures itself): 1, else 0 (no window: 0). ImPlot's BeginPlot and BeginSubplots return false
+ * then; the Fortran plot frame asks the same. */
+int    fig_window_skip_items(void);
 
 /* Docking (Dear ImGui's docking branch). Dock ids are ImGuiIDs: fig_dock_id hashes a name. A layout is built once,
  * while fig_dock_layout_begin reports it is needed (no node yet: first run without an ini file): split, dock

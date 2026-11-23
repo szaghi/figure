@@ -3208,6 +3208,12 @@ int fig_texture_update(unsigned long long id, int width, int height, const unsig
    FIG_CATCH
 }
 
+int fig_window_skip_items() {
+   const ImGuiContext *g = ImGui::GetCurrentContext();
+   if (g == nullptr || g->CurrentWindow == nullptr) return 0;
+   return g->CurrentWindow->SkipItems ? 1 : 0;
+}
+
 void fig_texture_sampling(int plot, int from_texture) {
    // The OpenGL3 backend samples every texture through its own (linear) sampler object, which overrides the
    // glTexParameteri filter of user textures: around a user image, ask it to use the texture's own filter, then
