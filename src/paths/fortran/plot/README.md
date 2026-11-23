@@ -80,5 +80,5 @@ it, by step:
   group's first frame, `ip_drag_rect`'s ordering once released), and where ImPlot keeps state FIGURE did not ask for
   (an X2..Y3 axis stays linked after `pf_link_axis` stops); the frame's header names them.
 
-The 3-D plots (`figure_implot3d`, ImPlot3D) are P13; they share only `figure_plot_series` and the colormaps with the
-2-D seam.
+The 3-D plots (`figure_implot3d`, ImPlot3D) are P13's seam, `src/paths/fortran/plot3d/` (its README); they use this
+seam's `figure_plot_format`, `figure_plot_colormaps` and `figure_plot_locators`' transforms, read-only.
