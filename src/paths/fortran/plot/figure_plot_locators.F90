@@ -33,7 +33,7 @@ module figure_plot_locators
 !< term are computed in a statement of their own (nvfortran -O2 fuses `a*b + c` into an FMA, ImPlot's build does not).
 use, intrinsic :: iso_c_binding, only : c_double
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use foresight_format, only : c_real
+use foresight_format, only : c_real, split_format
 
 implicit none
 private
@@ -232,13 +232,18 @@ contains
 
    ! the linear locator
 
-   subroutine locate_default(t, rmin, rmax, pixels, vertical, measure)
-   !< `Locator_Default`: the ticks of a linear range on an axis `pixels` long.
-   type(plot_ticks),       intent(inout) :: t          !< Ticks (appended).
-   real(real64),           intent(in)    :: rmin, rmax !< Range.
-   real(real32),           intent(in)    :: pixels     !< Axis's length [pixels].
-   logical,                intent(in)    :: vertical   !< A y axis.
-   procedure(text_measure)               :: measure    !< Text sizes.
+   subroutine locate_default(t, rmin, rmax, pixels, vertical, measure, fmt)
+   !< `Locator_Default`: the ticks of a linear range on an axis `pixels` long, labelled by `fmt` (a C printf format of
+   !< one real: `Formatter_Default`; default "%g").
+   type(plot_ticks),       intent(inout)        :: t          !< Ticks (appended).
+   real(real64),           intent(in)           :: rmin, rmax !< Range.
+   real(real32),           intent(in)           :: pixels     !< Axis's length [pixels].
+   logical,                intent(in)           :: vertical   !< A y axis.
+   procedure(text_measure)                      :: measure    !< Text sizes.
+   character(len=*),       intent(in), optional :: fmt        !< Label format.
+   character(len=:), allocatable         :: prefix, flags, suffix, message !< The format's parts.
+   character(len=1)                      :: ctype      !< Its conversion.
+   integer(int32)                        :: width, prec !< Its width and precision.
    integer(int32)                        :: n_major    !< Majors wanted.
    real(real64)                          :: nice_range, interval, magnitude, min_interval !< The step.
    real(real64)                          :: graphmin, graphmax !< The majors' span.
@@ -249,6 +254,16 @@ contains
    integer(int32)                        :: i          !< Counter.
 
    if (rmin == rmax) return
+   if (present(fmt)) then
+      call split_format(fmt, prefix, flags, width, prec, ctype, suffix, message)
+   else
+      prefix = ''
+      flags = ''
+      suffix = ''
+      width = 0_int32
+      prec = -1_int32
+      ctype = 'g'
+   endif
    n_major = max(2_int32, int(real(int(pixels / merge(300.0_real32, 400.0_real32, vertical) + 0.5_real32, int32), &
                                   real32), int32))
    nice_range = nice_num((rmax - rmin) * 0.99_real64, .false.)
@@ -266,12 +281,14 @@ contains
       if (major - interval < 0.0_real64 .and. major + interval > 0.0_real64) major = 0.0_real64
       if (major >= rmin .and. major <= rmax) then
          if (first == 0_int32) first = t%n + 1_int32
-         call add_tick(t, major, .true., 0_int32, .true., label_g(major), measure, total)
+         call add_tick(t, major, .true., 0_int32, .true., prefix//c_real(flags, width, prec, ctype, major)//suffix, &
+                       measure, total)
       endif
       do i = 1_int32, N_MINOR - 1_int32
          minor = major + real(i, real64) * interval / real(N_MINOR, real64)
-         if (minor >= rmin .and. minor <= rmax) call add_tick(t, minor, .false., 0_int32, .true., label_g(minor), &
-                                                              measure, total)
+         if (minor >= rmin .and. minor <= rmax) &
+            call add_tick(t, minor, .false., 0_int32, .true., &
+                          prefix//c_real(flags, width, prec, ctype, minor)//suffix, measure, total)
       enddo
       major = major + interval
    enddo

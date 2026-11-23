@@ -178,6 +178,9 @@ struct state_t {
    std::string   palette_resolved;                 // the bundled palette "auto" chose
    std::string   auto_dark = "seal", auto_light = "seal-light"; // the palettes of "auto"
    std::string   lines_name;                       // the line palette of the last set_style (kept by "auto")
+   std::vector<ImU32> lines;                       // the style's line colours, packed as ImPlot's colormap keys
+                                                   // (empty: ImPlot's Deep); fig_style_lines
+   unsigned int  lines_generation = 0;             // incremented when they change (fig_style_lines)
    bool          has_roles = false;                // roles: those of the palette in effect
    figure_theme::color_t roles[figure_theme::ROLE_COUNT];
    struct frame_t {                                // decorations='figure': the window's frame drawn by FIGURE
@@ -1330,6 +1333,12 @@ void commit_style(style_build_t &b, const figure_theme::theme_t *t = nullptr) {
          }
       }
       b.ps.Colormap = cmap;
+      std::vector<ImU32> keys; // the style's line colours as FIGURE's own state (fig_style_lines), not read back
+      for (const auto &c : b.lines) keys.push_back(ImGui::ColorConvertFloat4ToU32(vec4(c)));
+      if (keys != st.lines) {
+         st.lines = std::move(keys);
+         ++st.lines_generation;
+      }
    }
    ImGui::GetStyle() = b.s;
    ImPlot::GetStyle() = b.ps;
@@ -2397,6 +2406,18 @@ int fig_palette_color(const char *role, int role_len, float *rgba) {
    rgba[1] = roles[k].g;
    rgba[2] = roles[k].b;
    rgba[3] = roles[k].a;
+   return FIG_OK;
+   FIG_CATCH
+}
+
+int fig_style_lines(unsigned int *colors, int cap, int *n, unsigned int *generation) {
+   FIG_TRY
+   *n = 0;
+   *generation = st.lines_generation;
+   if (cap < 0) return fail(FIG_ERR_ARGUMENT, "fig_style_lines: cap must not be negative");
+   const int count = static_cast<int>(st.lines.size());
+   *n = count;
+   for (int i = 0; i < count && i < cap; ++i) colors[i] = st.lines[static_cast<size_t>(i)];
    return FIG_OK;
    FIG_CATCH
 }

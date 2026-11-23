@@ -34,6 +34,7 @@ public :: fig_cpu_texture
 public :: fig_tool_button, fig_clipper_new, fig_clipper_begin, fig_clipper_step, fig_clipper_delete
 public :: fig_table_sort, fig_table_row_color, fig_table_column_enabled, fig_table_hovered_column
 public :: fig_set_title, fig_title, fig_set_style_parts, fig_palette_color, fig_input_system_theme
+public :: fig_style_lines
 public :: fig_frame_options, fig_set_icon_rgba, fig_set_icon_glyph, fig_frame_hit, fig_frame_rect, fig_frame_state
 public :: fig_process_start, fig_process_pending, fig_process_take, fig_process_info, fig_process_kill
 public :: fig_process_release
@@ -215,6 +216,18 @@ interface
    real(c_float),          intent(out) :: rgba(4)  !< Colour, components in [0, 1].
    integer(c_int)                      :: status   !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_palette_color
+
+   function fig_style_lines(colors, cap, n, generation) result(status) bind(C, name='fig_style_lines')
+   !< The line colours of the style in effect, from FIGURE's style state: packed as ImPlot's colormap keys, the first
+   !< `cap` into `colors`, `n` their number (0: none, ImPlot's Deep); `generation` changes whenever they do.
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: colors(*)  !< Packed colours (C `unsigned int`).
+   integer(c_int), value       :: cap        !< Room in `colors`.
+   integer(c_int), intent(out) :: n          !< Colours.
+   integer(c_int), intent(out) :: generation !< Change counter (C `unsigned int`).
+   integer(c_int)              :: status     !< Status: FIG_OK or FIG_ERR_*.
+   endfunction fig_style_lines
 
    function fig_input_system_theme(theme) result(status) bind(C, name='fig_input_system_theme')
    !< The system's light (1) or dark (2) setting, handled at the next frame as SDL's event; 0: the system's again.

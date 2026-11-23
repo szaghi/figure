@@ -24,7 +24,8 @@ module figure_core
 !<   (src/paths/fortran/plot/), Dear ImGui 1.93's axis-aligned lines (`core_draw_line_h`, `core_draw_line_v`), a
 !<   line's texture (`core_line_texture`) and a textured quad (`core_draw_quad_uv`), thin wrappers of the list's calls;
 !<   a glyph of the current font at its size (`core_font_glyph`: `GetFontBaked`, `FindGlyph`), for text drawn glyph by
-!<   glyph (ImPlot's vertical text).
+!<   glyph (ImPlot's vertical text); a rectangle of four corner colours (`core_draw_rect_filled_multicolor`:
+!<   `AddRectFilledMultiColor`, ImPlot's colour bars).
 !<
 !< The draw list is built in Fortran (figure_drawlist, the first piece of block E) and appended to the window's Dear
 !< ImGui list by `core_draw_end`: the primitives figure_drawlist tessellates (filled rectangles without rounding,
@@ -68,7 +69,7 @@ public :: core_draw_begin, core_draw_end, core_draw_line, core_draw_rect_filled,
 public :: core_draw_convex_poly_filled, core_draw_polyline, core_draw_circle, core_draw_text, core_draw_image
 public :: core_push_clip_rect, core_pop_clip_rect, core_draw_callback
 public :: core_draw_line_h, core_draw_line_v, core_line_texture, core_draw_quad_uv
-public :: core_font_glyph
+public :: core_font_glyph, core_draw_rect_filled_multicolor
 public :: core_draw_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
@@ -125,6 +126,17 @@ interface
    real(c_float),  intent(out)   :: out_fringe       !< C `float*`.
    integer(c_int), value         :: flags            !< C `ImDrawFlags`.
    endsubroutine ImDrawList__SelectLineTexture
+
+   subroutine ImDrawList_AddRectFilledMultiColor(self, p_min, p_max, col_upr_left, col_upr_right, col_bot_right, &
+                                                 col_bot_left) bind(C, name='ImDrawList_AddRectFilledMultiColor')
+   !< ImDrawList::AddRectFilledMultiColor(ImVec2,ImVec2,ImU32 x4), imgui.h.
+   import :: c_int, c_ptr, im_vec2
+   implicit none
+   type(c_ptr),    value :: self                         !< C `ImDrawList*`.
+   type(im_vec2),  value :: p_min, p_max                 !< C `const ImVec2_c`.
+   integer(c_int), value :: col_upr_left, col_upr_right  !< C `ImU32`.
+   integer(c_int), value :: col_bot_right, col_bot_left  !< C `ImU32`.
+   endsubroutine ImDrawList_AddRectFilledMultiColor
 
    function ImFont_GetFontBaked(self, font_size, density) result(res) bind(C, name='ImFont_GetFontBaked')
    !< ImFont::GetFontBaked(float,float), imgui.h.
@@ -563,6 +575,17 @@ contains
    endif
    call dl_rect_filled(list, real(x0, c_float), real(y0, c_float), real(x1, c_float), real(y1, c_float), int(col, c_int32_t))
    endsubroutine core_draw_rect_filled
+
+   subroutine core_draw_rect_filled_multicolor(x0, y0, x1, y1, col_ul, col_ur, col_br, col_bl)
+   !< A filled rectangle of four corner colours blended across it (`AddRectFilledMultiColor`).
+   real(real64),   intent(in) :: x0, y0, x1, y1 !< Corners [pixels].
+   integer(int32), intent(in) :: col_ul, col_ur !< Packed colours: upper left, upper right.
+   integer(int32), intent(in) :: col_br, col_bl !< ... bottom right, bottom left.
+
+   call core_draw_end_pending()
+   call ImDrawList_AddRectFilledMultiColor(target_list, v2(x0, y0), v2(x1, y1), int(col_ul, c_int), int(col_ur, c_int), &
+                                           int(col_br, c_int), int(col_bl, c_int))
+   endsubroutine core_draw_rect_filled_multicolor
 
    subroutine core_draw_rect(x0, y0, x1, y1, col, rounding, thickness)
    !< A rectangle's outline (`AddRect`).

@@ -70,6 +70,10 @@ int    fig_set_style_parts(const char *name, int name_len, const char *look, int
                            int auto_light_len, const char *lines, int lines_len);
 /* The colour of a palette role in effect (rgba[4] in [0, 1]); without a palette, read from Dear ImGui's colours. */
 int    fig_palette_color(const char *role, int role_len, float *rgba);
+/* The line colours of the style in effect (the automatic colours of plot items), from FIGURE's own style state:
+ * packed as ImPlot's colormap keys (red in the low byte), the first cap of them into colors, *n their number (0: the
+ * style has none, ImPlot's Deep); *generation changes whenever they do. */
+int    fig_style_lines(unsigned int *colors, int cap, int *n, unsigned int *generation);
 /* Theme files (figure_theme.h format): load one, or write the style in effect as one (what differs from its base). */
 int    fig_load_style(const char *path, int path_len);
 int    fig_save_style(const char *path, int path_len);

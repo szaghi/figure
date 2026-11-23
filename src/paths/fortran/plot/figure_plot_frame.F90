@@ -88,7 +88,9 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_draw_rect, core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, &
                         core_frame_count, core_get_id, core_item_add, core_item_size, core_keep_alive,         &
                         core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,           &
-                        core_style_var, core_text_size
+                        core_style_var, core_text_size, core_draw_rect_filled_multicolor
+use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
+                                 mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
 use figure_plot_locators, only : plot_ticks, ticks_reset, locate_default, locate_log10, locate_symlog, locate_time, &
                                 transform_log10, transform_symlog, TIME_MAX, TIME_MIN
@@ -99,7 +101,7 @@ public :: pf_begin_plot, pf_end_plot, pf_line, pf_plot_limits
 public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
 public :: pf_hide_next_item, pf_legend_hovered
-public :: pf_plot_count
+public :: pf_plot_count, pf_colormap, pf_colormap_scale
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
 real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
@@ -165,13 +167,6 @@ integer(int32), parameter :: LEGEND_BUTTON_FLAGS = 4096_int32 + 16_int32 + 256_i
 ! the tables
 integer(int32), parameter :: PLOT_CAP = 256_int32 !< Plots kept before the least recently drawn one makes room.
 integer(int32), parameter :: ITEM_CAP = 256_int32 !< A plot's items kept before the least recently drawn makes room.
-! the colormap Deep (implot.cpp), IM_RGB(r, g, b): red in the low byte, opaque
-integer(int32), parameter :: DEEP(3, 10) = reshape([76_int32, 114_int32, 176_int32, 221_int32, 132_int32, 82_int32,  &
-                                                    85_int32, 168_int32, 104_int32, 196_int32, 78_int32, 82_int32,  &
-                                                    129_int32, 114_int32, 179_int32, 147_int32, 120_int32, 96_int32, &
-                                                    218_int32, 139_int32, 195_int32, 140_int32, 140_int32, 140_int32, &
-                                                    204_int32, 185_int32, 116_int32, 100_int32, 181_int32, 205_int32], &
-                                                   [3, 10]) !< Its colours, RGB 0-255.
 
 type :: plot_axis
    !< An axis (ImPlotAxis): its state kept between frames, and where it is on screen this frame.
@@ -255,6 +250,7 @@ logical                                :: next_hidden_set = .false. !< The next 
 logical                                :: next_hidden = .false. !< ... hidden.
 integer(int32)                         :: next_hidden_cond = 0_int32 !< ... its condition.
 type(plot_ticks), target               :: ticks(AXES)    !< The open plot's ticks, per axis.
+type(plot_ticks)                       :: cticks         !< A colour bar's ticks (CTicker).
 character(len=:), allocatable          :: text           !< The open plot's title and axis labels (TextBuffer).
 integer(int32)                         :: n_text = 0_int32 !< Characters of `text` in use.
 
@@ -281,6 +277,7 @@ contains
 
    visible = .false.
    if (cur /= 0_int32) error stop 'figure_plot_frame: pf_begin_plot while a plot is open'
+   call cm_style_refresh() ! the style's line colours, if they changed (set_style)
    flags = 0_int32
    if (present(equal)) then
       if (equal) flags = PF_EQUAL
@@ -665,6 +662,116 @@ contains
    enddo
    endfunction pf_plot_count
 
+   function pf_colormap(name, levels) result(id)
+   !< A colormap's id by name (`ip_colormap`): ImPlot's maps, FIGURE's bundled ones, `<name>_r` reversed, cut into
+   !< `levels` bands (2-256); -1 for an unknown name (figure_plot_colormaps).
+   character(len=*), intent(in)           :: name   !< Name.
+   integer(int32),   intent(in), optional :: levels !< Bands (0: continuous).
+   integer(int32)                         :: id     !< Id.
+
+   id = cm_colormap(trim(name), levels)
+   endfunction pf_colormap
+
+   subroutine pf_colormap_scale(label, scale_min, scale_max, width, height, label_format, colormap)
+   !< A colour bar for [scale_min, scale_max] (`ColormapScale`; `ip_colormap_scale`), outside a plot: `width` x
+   !< `height` pixels (0 or absent: ImPlot's, the bar 20 pixels wide and the default plot height; negative: the room
+   !< left less it), the colormap `colormap` (default Viridis), its ticks by the linear locator labelled by
+   !< `label_format` (default "%g") right of the bar, `label` rotated beyond them ('##...': none). The bar's top is
+   !< `scale_max` (`scale_min` > `scale_max` turns it over).
+   character(len=*), intent(in)           :: label        !< Label (also the item's ID).
+   real(real64),     intent(in)           :: scale_min    !< Value at the bottom.
+   real(real64),     intent(in)           :: scale_max    !< Value at the top.
+   real(real64),     intent(in), optional :: width        !< Width [pixels].
+   real(real64),     intent(in), optional :: height       !< Height [pixels].
+   character(len=*), intent(in), optional :: label_format !< printf format of the tick labels.
+   integer(int32),   intent(in), optional :: colormap     !< Colormap (`pf_colormap`).
+   integer(int32)                         :: cm           !< The map.
+   integer(int32)                         :: id, k        !< The item's ID, counter.
+   real(real32)                           :: req(2), fs(2) !< Size asked, the frame's size.
+   real(real32)                           :: lw, lh       !< The label's size.
+   real(real32)                           :: pad, bar_w, txt_off !< Paddings, the bar's width.
+   real(real32)                           :: fr(4), gr(4) !< The frame, the bar.
+   real(real32)                           :: y_min, y_max, y_pos, tick_w, tick_k, txt_x, txt_y !< Ticks.
+   real(real32)                           :: tick_t       !< A tick's place in the map.
+   real(real64)                           :: cx, cy, aw, ah, w, h, rmin, rmax !< Cursor, room, sizes, range.
+   logical                                :: rend_label, reversed !< A label shown, the range turned over.
+   integer(int32)                         :: col_text     !< Text colour.
+
+   cm = CM_VIRIDIS
+   if (present(colormap)) cm = colormap
+   id = core_get_id(label)
+   call core_text_size(label, w, h, hide_after_hash=.true.)
+   lw = real(w, real32)
+   lh = real(h, real32)
+   req = 0.0_real32
+   if (present(width)) req(1) = real(width, real32)
+   if (present(height)) req(2) = real(height, real32)
+   fs = req ! CalcItemSize(size, 0, PlotDefaultSize.y)
+   aw = 0.0_real64
+   ah = 0.0_real64
+   if (req(1) < 0.0_real32 .or. req(2) < 0.0_real32) call core_content_region_avail(aw, ah)
+   if (req(1) < 0.0_real32) fs(1) = max(4.0_real32, real(aw, real32) + req(1))
+   if (req(2) == 0.0_real32) then
+      fs(2) = PLOT_DEFAULT_SIZE(2)
+   elseif (req(2) < 0.0_real32) then
+      fs(2) = max(4.0_real32, real(ah, real32) + req(2))
+   endif
+   if (fs(2) < PLOT_MIN_SIZE(2) .and. req(2) < 0.0_real32) fs(2) = PLOT_MIN_SIZE(2)
+   rmin = merge(scale_min, scale_max, scale_min < scale_max)
+   rmax = merge(scale_min, scale_max, scale_min >= scale_max)
+   call ticks_reset(cticks)
+   if (present(label_format)) then
+      call locate_default(cticks, rmin, rmax, fs(2), .true., measure_text, label_format)
+   else
+      call locate_default(cticks, rmin, rmax, fs(2), .true., measure_text)
+   endif
+   rend_label = lw > 0.0_real32
+   txt_off = LABEL_PADDING(1)
+   pad = (txt_off + cticks%max_size(1)) + merge(txt_off + lh, 0.0_real32, rend_label)
+   bar_w = 20.0_real32
+   if (fs(1) == 0.0_real32) then
+      fs(1) = (bar_w + pad) + 2.0_real32 * PLOT_PADDING(1)
+   else
+      bar_w = fs(1) - (pad + 2.0_real32 * PLOT_PADDING(1))
+      if (bar_w < MAJOR_TICK_LEN(2)) bar_w = MAJOR_TICK_LEN(2)
+   endif
+   call core_cursor_screen_pos(cx, cy)
+   fr = [real(cx, real32), real(cy, real32), real(cx, real32) + fs(1), real(cy, real32) + fs(2)]
+   call core_item_size(real(fs(1), real64), real(fs(2), real64))
+   if (.not. core_item_add(real(fr(1), real64), real(fr(2), real64), real(fr(3), real64), real(fr(4), real64), id)) &
+      return
+   call core_draw_begin()
+   call render_frame(fr)
+   reversed = scale_min > scale_max
+   gr = [(fr(1) + PLOT_PADDING(1)) + 0.0_real32, (fr(2) + PLOT_PADDING(2)) + 0.0_real32, &
+         fr(1) + ((bar_w + PLOT_PADDING(1)) + 0.0_real32), fr(2) + (fs(2) - PLOT_PADDING(2))]
+   call core_push_clip_rect(real(fr(1), real64), real(fr(2), real64), real(fr(3), real64), real(fr(4), real64))
+   col_text = core_style_color(ImGuiCol_Text)
+   y_min = merge(gr(4), gr(2), reversed)
+   y_max = merge(gr(2), gr(4), reversed)
+   call color_bar(cm, gr)
+   do k = 1_int32, cticks%n
+      y_pos = y_min + ((real(cticks%pos(k), real32) - real(rmax, real32)) * (y_max - y_min)) / &
+                      (real(rmin, real32) - real(rmax, real32)) ! ImRemap
+      tick_w = merge(MAJOR_TICK_LEN(2), MINOR_TICK_LEN(2), cticks%major(k))
+      tick_k = merge(MAJOR_TICK_SIZE(2), MINOR_TICK_SIZE(2), cticks%major(k))
+      tick_t = real((cticks%pos(k) - scale_min) / (scale_max - scale_min), real32)
+      if (y_pos < gr(4) - 2.0_real32 .and. y_pos > gr(2) + 2.0_real32) &
+         call core_draw_line_h(real(gr(3) - 1.0_real32, real64), real(gr(3) - tick_w, real64), real(y_pos, real64), &
+                               text_color(cm_sample(cm, tick_t)), real(tick_k, real64))
+      txt_x = gr(3) + txt_off
+      txt_y = y_pos - cticks%label_size(2, k) * 0.5_real32
+      call core_draw_text(real(txt_x, real64), real(txt_y, real64), col_text, trim(cticks%label(k)))
+   enddo
+   if (rend_label) call text_vertical((gr(3) + 2.0_real32 * txt_off) + cticks%max_size(1), &
+                                      (gr(2) + gr(4)) * 0.5_real32 + lw * 0.5_real32, col_text, &
+                                      label(1:rendered_len(label)))
+   call core_draw_rect(real(gr(1), real64), real(gr(2), real64), real(gr(3), real64), real(gr(4), real64), &
+                       core_style_color(ImGuiCol_Border))
+   call core_pop_clip_rect()
+   call core_draw_end()
+   endsubroutine pf_colormap_scale
+
    ! private: the API's helpers
 
    subroutine setup_refused(name)
@@ -816,7 +923,7 @@ contains
    if (present(color)) then
       p%item_color(it) = core_color(color(1), color(2), color(3), color(4))
    elseif (created) then
-      p%item_color(it) = rgb_u32(DEEP(:, modulo(p%colormap_idx, 10_int32) + 1_int32)) ! NextColormapColorU32
+      p%item_color(it) = cm_key(cm_current(), p%colormap_idx) ! NextColormapColorU32: the style's map
       p%colormap_idx = p%colormap_idx + 1_int32
    endif
    if (next_hidden_set) then
@@ -1406,11 +1513,8 @@ contains
    real(real32)   :: title_w, title_h     !< The title's size.
    real(real32)   :: title_pad            !< Its room.
    real(real32)   :: lsize(2)             !< An outside legend's size.
-   real(real32)   :: rounding, border     !< FrameRounding, FrameBorderSize.
-   real(real64)   :: v(2)                 !< A style variable.
    real(real64)   :: w, h                 !< A text's size.
    real(real64)   :: xar, yar             !< Units per pixel on x, y.
-   integer(int32) :: nv                   !< Its values.
    integer(int32) :: i, j                 !< Axes.
    logical        :: equal, horz          !< ImPlotFlags_Equal, a horizontal legend.
    logical        :: west, east, north, south !< The legend's side.
@@ -1542,21 +1646,8 @@ contains
       endif
    enddo
    ! render: the frame, the plot's background
-   call core_style_var('FrameRounding', v, nv)
-   rounding = real(v(1), real32)
-   call core_style_var('FrameBorderSize', v, nv)
-   border = real(v(1), real32)
    call core_draw_begin()
-   call core_draw_rect_filled(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
-                              real(p%frame(4), real64), core_style_color(ImGuiCol_FrameBg), real(rounding, real64))
-   if (border > 0.0_real32) then ! RenderFrame's border
-      call core_draw_rect(real(p%frame(1) + 1.0_real32, real64), real(p%frame(2) + 1.0_real32, real64),    &
-                          real(p%frame(3) + 1.0_real32, real64), real(p%frame(4) + 1.0_real32, real64),    &
-                          core_style_color(ImGuiCol_BorderShadow), real(rounding, real64), real(border, real64))
-      call core_draw_rect(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
-                          real(p%frame(4), real64), core_style_color(ImGuiCol_Border), real(rounding, real64), &
-                          real(border, real64))
-   endif
+   call render_frame(p%frame)
    call core_draw_rect_filled(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
                               real(p%rect(4), real64), core_style_color(ImGuiCol_WindowBg))
    do i = 1_int32, AXES
@@ -1873,6 +1964,70 @@ contains
    enddo
    endsubroutine tick_marks
 
+   subroutine render_frame(fr)
+   !< `RenderFrame` with ImPlot's `FrameBg` (Dear ImGui's): the filled frame and, with `FrameBorderSize`, its shadow
+   !< and border.
+   real(real32), intent(in) :: fr(4)   !< Rectangle [pixels].
+   real(real32)             :: rounding, border !< FrameRounding, FrameBorderSize.
+   real(real64)             :: v(2)    !< A style variable.
+   integer(int32)           :: nv      !< Its values.
+
+   call core_style_var('FrameRounding', v, nv)
+   rounding = real(v(1), real32)
+   call core_style_var('FrameBorderSize', v, nv)
+   border = real(v(1), real32)
+   call core_draw_rect_filled(real(fr(1), real64), real(fr(2), real64), real(fr(3), real64), real(fr(4), real64), &
+                              core_style_color(ImGuiCol_FrameBg), real(rounding, real64))
+   if (border > 0.0_real32) then
+      call core_draw_rect(real(fr(1) + 1.0_real32, real64), real(fr(2) + 1.0_real32, real64),    &
+                          real(fr(3) + 1.0_real32, real64), real(fr(4) + 1.0_real32, real64),    &
+                          core_style_color(ImGuiCol_BorderShadow), real(rounding, real64), real(border, real64))
+      call core_draw_rect(real(fr(1), real64), real(fr(2), real64), real(fr(3), real64), real(fr(4), real64), &
+                          core_style_color(ImGuiCol_Border), real(rounding, real64), real(border, real64))
+   endif
+   endsubroutine render_frame
+
+   subroutine color_bar(cm, b)
+   !< `RenderColorBar` of a map's keys, vertical, from its last key at the top (`reversed`): a strip per key (between
+   !< two keys, blended, for a continuous map), `AddRectFilledMultiColor`.
+   integer(int32), intent(in) :: cm   !< Map.
+   real(real32),   intent(in) :: b(4) !< Bounds [pixels].
+   real(real32)               :: step, y0, y1 !< A strip's height and edges.
+   integer(int32)             :: n, nk, i, c1, c2 !< Strips, keys, counter, colours.
+   logical                    :: continuous !< Not qualitative.
+
+   nk = cm_size(cm)
+   continuous = .not. cm_is_qual(cm)
+   n = merge(nk - 1_int32, nk, continuous)
+   step = (b(4) - b(2)) / real(n, real32)
+   y0 = b(2)
+   y1 = b(2) + step
+   do i = 0_int32, n - 1_int32
+      c1 = cm_key(cm, nk - i - 1_int32)
+      c2 = c1
+      if (continuous) c2 = cm_key(cm, nk - i - 2_int32)
+      call core_draw_rect_filled_multicolor(real(b(1), real64), real(y0, real64), real(b(3), real64), &
+                                            real(y1, real64), c1, c1, c2, c2)
+      y0 = y0 + step
+      y1 = y1 + step
+   enddo
+   endsubroutine color_bar
+
+   pure function text_color(bg) result(col)
+   !< `CalcTextColor`: black on a light colour (luminance 0.299 r + 0.587 g + 0.114 b above 0.5), else white.
+   integer(int32), intent(in) :: bg  !< Background (packed).
+   integer(int32)             :: col !< IM_COL32_BLACK or IM_COL32_WHITE.
+   real(real32), parameter    :: S = 1.0_real32 / 255.0_real32 !< ColorConvertU32ToFloat4's scale.
+   real(real32)               :: lum, t !< Luminance, a term.
+
+   lum = (real(channel(bg, 0_int32), real32) * S) * 0.299_real32
+   t = (real(channel(bg, 1_int32), real32) * S) * 0.587_real32
+   lum = lum + t
+   t = (real(channel(bg, 2_int32), real32) * S) * 0.114_real32
+   lum = lum + t
+   col = merge(-16777216_int32, -1_int32, lum > 0.5_real32) ! 0xFF000000, 0xFFFFFFFF
+   endfunction text_color
+
    ! private: the legend
 
    function legend_size(p, vertical) result(sz)
@@ -2174,27 +2329,6 @@ contains
    c = int(u, int32)
    endfunction alpha_u32
 
-   pure function mix_u32(a, b, s) result(c)
-   !< `ImMixU32` (32-bit form): a + (b - a) * s / 256 on each channel.
-   integer(int32), intent(in) :: a, b !< Packed colours.
-   integer(int32), intent(in) :: s    !< Weight of b, 0-256.
-   integer(int32)             :: c    !< Mix.
-   integer(int64)             :: ua, ub, al, ah, bl, bh, ml, mh, u !< Unsigned values.
-   integer(int64), parameter  :: M32 = 4294967295_int64 !< 32 bits.
-
-   ua = iand(int(a, int64), M32)
-   ub = iand(int(b, int64), M32)
-   al = iand(ua, 16711935_int64)                 ! 0x00ff00ff
-   ah = ishft(iand(ua, 4278255360_int64), -8)    ! 0xff00ff00
-   bl = iand(ub, 16711935_int64)
-   bh = ishft(iand(ub, 4278255360_int64), -8)
-   ml = iand(al * int(256_int32 - s, int64) + bl * int(s, int64), M32)
-   mh = iand(ah * int(256_int32 - s, int64) + bh * int(s, int64), M32)
-   u = ior(iand(mh, 4278255360_int64), ishft(iand(ml, 4278255360_int64), -8))
-   if (u >= 2147483648_int64) u = u - 4294967296_int64
-   c = int(u, int32)
-   endfunction mix_u32
-
    subroutine locate(ax, t, pixels, vertical)
    !< The axis's locator (`axis.Locator`): `Locator_Default`, `Locator_Log10`, `Locator_SymLog` or `Locator_Time` of
    !< figure_plot_locators, on its range, the axis `pixels` long.
@@ -2241,14 +2375,6 @@ contains
 
    shown = PLOT_BORDER_SIZE > 0.0_real32 .and. channel(p%col_border, 3_int32) > 0_int32
    endfunction border_shown
-
-   pure function rgb_u32(rgb) result(col)
-   !< An opaque colour packed as `IM_RGB` packs it (red in the low byte).
-   integer(int32), intent(in) :: rgb(3) !< Channels 0-255.
-   integer(int32)             :: col    !< Packed colour.
-
-   col = with_alpha(ior(ior(rgb(1), ishft(rgb(2), 8)), ishft(rgb(3), 16)), 255_int32)
-   endfunction rgb_u32
 
    pure function channel(col, c) result(v)
    !< A channel of a packed colour (0 red, 1 green, 2 blue, 3 alpha), 0-255.
