@@ -31,8 +31,12 @@ module figure_plot3d_frame
 !< reference axis), the 3-D list moved, depth-sorted, at the plot's end (figure_plot3d_drawlist), the legend
 !< (`RenderLegend`, `ShowLegendEntries`: its box, button, scrolling, entries that hide or highlight their items).
 !<
-!< Not yet (P13's next steps): input beyond the plot's button and auto-fit (rotation, pan, zoom, the hover of planes and
-!< axes, the animation), context menus.
+!< Input (step 6): `HandleInput` whole (the hover of planes, axes and edges; pan, rotation, zoom, double-click fit, the
+!< animated rotation to the initial one or to a face, `SetupBoxRotation`'s animation; the context click opening its
+!< popup); io.MouseClickedTime[1] is the time of the frame a 3-D plot saw the right click (`core_time()`, g.Time as
+!< ImGui sets it; a click on a frame without a 3-D plot is missed), MouseDoubleClickTime 0.30 (FIGURE never changes it).
+!<
+!< Not yet (P13's next steps): the context menus' contents.
 !<
 !< No allocation per frame once the tables are grown (ADR 0001): fixed slots for titles and labels, the ticks' arrays
 !< kept, fixed arrays for quads.
@@ -47,10 +51,14 @@ use figure_core, only : core_button_behavior, core_content_region_avail, core_cu
                         core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, core_frame_count, &
                         core_get_id, core_item_add, core_item_size, core_mouse_pos, core_mouse_pos_valid,        &
                         core_pop_clip_rect, core_push_clip_rect, core_style_color, core_text_size, core_color,  &
-                        core_draw_rect, core_keep_alive, core_io_input, core_set_key_owner
+                        core_draw_rect, core_keep_alive, core_io_input, core_set_key_owner, core_delta_time,  &
+                        core_style_color_rgba, core_mouse_down, core_mouse_clicked, core_mouse_double_clicked, &
+                        core_mouse_drag_delta, core_time, core_open_popup
 use figure_plot_format, only : plot_format, fmt_parse, fmt_real, fmt_text
 use figure_plot_locators, only : transform_log10, transform_symlog
 use figure_plot3d_camera, only : plot3d_quat, view3d, quat_from_el_az, quat_rotate, view_scale, rect_center, &
+                                 quat_axis_angle, quat_mul, quat_inverse, quat_normalize, quat_dot, quat_slerp,   &
+                                 quat_from_two_vectors, quat_rotate_v, ndc_to_plot, c_acosf,                     &
                                  plot_to_ndc, ndc_to_pixels, plot_to_pixels, pixels_to_ndc_ray, ndc_ray_to_plot_ray, &
                                  pixels_to_plot_plane, axes_parameters, mouse_over_plane, edge_outward_dir,          &
                                  in_edge_region, c_atan2f, c_cosf, c_sinf, IM_PI_F, FACES, EDGES, FACE_EDGES,        &
@@ -75,7 +83,21 @@ integer(int32), parameter :: F3_NO_LEGEND = 2_int32      !< NoLegend.
 integer(int32), parameter :: F3_NO_MOUSE_TEXT = 4_int32  !< NoMouseText.
 integer(int32), parameter :: F3_NO_CLIP = 8_int32        !< NoClip.
 integer(int32), parameter :: F3_EQUAL = 32_int32         !< Equal.
+integer(int32), parameter :: F3_NO_MENUS = 16_int32      !< NoMenus.
+integer(int32), parameter :: F3_NO_ROTATE = 64_int32     !< NoRotate.
+integer(int32), parameter :: F3_NO_PAN = 128_int32       !< NoPan.
+integer(int32), parameter :: F3_NO_ZOOM = 256_int32      !< NoZoom.
 integer(int32), parameter :: F3_NO_INPUTS = 512_int32    !< NoInputs.
+integer(int32), parameter :: A3_PAN_STRETCH = 256_int32  !< ImPlot3DAxisFlags_PanStretch.
+real(real32),   parameter :: ANIMATION_ANGULAR_VELOCITY = 2.0_real32 * 3.1415_real32 !< ImPlot3D's (a float).
+character(len=*), parameter :: AXIS_CONTEXTS(0:2) = ['##XAxisContext', '##YAxisContext', '##ZAxisContext'] !< Popups.
+character(len=*), parameter :: PLANE_CONTEXTS(0:2) = ['##YZPlaneContext', '##XZPlaneContext', '##XYPlaneContext'] !<
+                                                       !< Popups.
+! edge_to_faces of HandleInput: per edge, two (face, plane) pairs
+integer(int32), parameter :: EDGE_TO_FACES(0:1, 0:1, 0:11) = reshape([1, 1, 2, 2, 2, 2, 3, 0, 2, 2, 4, 1, 0, 0, 2, 2, &
+                                                                       1, 1, 5, 2, 3, 0, 5, 2, 4, 1, 5, 2, 0, 0, 5, 2, &
+                                                                       0, 0, 1, 1, 1, 1, 3, 0, 3, 0, 4, 1, 0, 0, 4, 1], &
+                                                                      [2, 2, 12]) !< (face/plane, pair, edge).
 ! ImPlot3DAxisFlags
 integer(int32), parameter :: A3_NO_LABEL = 1_int32       !< NoLabel.
 integer(int32), parameter :: A3_NO_GRID = 2_int32        !< NoGridLines.
@@ -210,6 +232,9 @@ type :: plot3d_record
    type(plot3d_quat)       :: initial_rotation        !< InitialRotation (INITIAL_ROTATION, set by plot_handle).
    type(plot3d_quat)       :: anim_end                !< RotationAnimationEnd.
    real(real32)            :: anim_time = 0.0_real32  !< AnimationTime.
+   real(real64)            :: drag_axis(3) = 0.0_real64 !< DragRotationAxis.
+   logical                 :: context_click = .false. !< ContextClick.
+   logical                 :: open_context = .false.  !< OpenContextThisFrame.
    type(axis3d)            :: ax(3)                   !< Axes.
    integer(int32)          :: legend_loc = LOC_NORTH + LOC_WEST !< Legend.Location.
    integer(int32)          :: legend_prev_loc = LOC_NORTH + LOC_WEST !< Legend.PreviousLocation.
@@ -231,6 +256,8 @@ type(plot3d_record), allocatable, target :: plots(:) !< The plots (ImPlot3DConte
 integer(int32)                           :: n_plots = 0_int32 !< Slots in use or freed.
 integer(int32)                           :: cur = 0_int32     !< The plot begun, 0 none (handle, never a pointer).
 character(len=128)                       :: mouse_text = ''   !< The mouse position's text.
+real(real64)                             :: right_click_time = -huge(1.0_real64) !< io.MouseClickedTime[1], as seen by
+                                                              !< the 3-D plots (the time of the frame of a right click).
 integer(int32)                           :: cur_item = 0_int32 !< The item begun (handle in the plot's pool), 0 none.
 integer(int32)                           :: cmap3 = CM_DEEP   !< ImPlot3DStyle::Colormap in effect (FIGURE's ids).
 integer(int32)                           :: cmap3_saved = CM_DEEP !< The one before a push.
@@ -273,6 +300,7 @@ contains
       if (p%prev_flags /= flags) p%flags = flags
       p%prev_flags = flags
       p%setup_locked = .false.
+      p%open_context = .false.
       p%rotation_cond = COND_NONE
       n = rendered_len(title) ! SetTitle: kept when something shows before '##'
       p%title_len = 0_int32
@@ -477,11 +505,12 @@ contains
    endassociate
    endsubroutine pf3_setup_axis_ticks
 
-   subroutine pf3_setup_box(scale, elevation, azimuth)
-   !< As `ip3_setup_box` without animation: `SetupBoxScale` and `SetupBoxRotation` always (degrees).
+   subroutine pf3_setup_box(scale, elevation, azimuth, animate)
+   !< As `ip3_setup_box`: `SetupBoxScale` and `SetupBoxRotation` always (degrees), at once or animated.
    real(real64), intent(in), optional :: scale(:)  !< Relative sides [x, y, z].
    real(real64), intent(in), optional :: elevation !< Elevation [degrees].
    real(real64), intent(in), optional :: azimuth   !< Azimuth [degrees].
+   logical,      intent(in), optional :: animate   !< Turn there smoothly.
 
    call setup_refused('pf3_setup_box')
    if (present(elevation) .neqv. present(azimuth)) error stop 'figure_plot3d_frame: pf3_setup_box: both angles or neither'
@@ -493,7 +522,7 @@ contains
          p%v%ndc(2) = scale(2)
          p%v%ndc(3) = scale(3)
       endif
-      if (present(elevation)) call setup_box_rotation(p, quat_el_az_degrees(elevation, azimuth), .false., COND_ALWAYS)
+      if (present(elevation)) call setup_box_rotation(p, quat_el_az_degrees(elevation, azimuth), opt(animate), COND_ALWAYS)
    endassociate
    endsubroutine pf3_setup_box
 
@@ -848,10 +877,14 @@ contains
    logical,             intent(in)    :: animate !< Turn there smoothly.
    integer(int32),      intent(in)    :: cond    !< ImPlot3DCond.
 
-   if (animate) error stop 'figure_plot3d_frame: the animated rotation is not there yet'
    if (.not. p%initialized .or. cond == COND_ALWAYS) then
-      p%v%rot = q
-      p%anim_time = 0.0_real32
+      if (.not. animate) then
+         p%v%rot = q
+         p%anim_time = 0.0_real32
+      else
+         p%anim_end = q
+         p%anim_time = animation_time(p%v%rot, p%anim_end)
+      endif
       p%rotation_cond = cond
    endif
    endsubroutine setup_box_rotation
@@ -870,6 +903,7 @@ contains
    type(plot3d_record), intent(inout) :: p   !< Plot.
    real(real64)                       :: xar, yar, zar, asp, w, h !< Aspects, text size.
    real(real32)                       :: pixels, cx !< An axis's length, the frame's centre.
+   real(real32)                       :: dtf, tf    !< Animation's step, fraction.
    integer(int32)                     :: i   !< Axis.
 
    if (p%setup_locked) return
@@ -914,6 +948,14 @@ contains
                           core_style_color(ImGuiCol_Text), p%title(1:rendered_len(p%title(1:p%title_len))))
       p%v%rect(2) = p%v%rect(2) + (real(core_font_size(), real32) + LABEL_PADDING(2))
    endif
+   if (p%anim_time > 0.0_real32) then ! the animation
+      dtf = real(core_delta_time(), real32)
+      tf = dtf / p%anim_time
+      tf = min(max(tf, 0.0_real32), 1.0_real32)
+      p%anim_time = p%anim_time - dtf
+      if (p%anim_time < 0.0_real32) p%anim_time = 0.0_real32
+      p%v%rot = quat_slerp(p%v%rot, p%anim_end, real(tf, real64))
+   endif
    p%initialized = .true.
    call handle_input(p)
    call core_draw_end()
@@ -925,17 +967,118 @@ contains
    endsubroutine setup_lock
 
    subroutine handle_input(p)
-   !< `HandleInput`, so far: the plot's button (its hover and hold) and the auto-fitting axes.
+   !< `HandleInput`: the plot's button; the plane, axis and edge under the pointer and the axes hovered or held; the
+   !< plane the pointer's position is read on; a double click fits the hovered axes; pan (the whole box through the
+   !< inverse rotation, or the hovered axes through the plane), a right double click animates to the initial rotation
+   !< or to the hovered face, a right drag turns the box (about z or -z, then x), the wheel or a middle drag zooms
+   !< (about the pointer on a plane or an axis, else about the centre); `Equal` kept; the context click and the popup
+   !< it opens.
    type(plot3d_record), intent(inout) :: p !< Plot.
-   integer(int32)                     :: i !< Axis.
-   logical                            :: clicked !< Pressed.
+   integer(int32)                     :: i, hp, hpi, ha, he, plane_2d, mplane, cur_edge, f0, f1, ref, best !< Work.
+   integer(int32)                     :: ac(0:1, 0:2) !< Axis corners.
+   logical                            :: af(3), clicked, rotating, axis_equal, allow_rotate, allow_pan, allow_zoom !< Work.
+   logical                            :: any_held, all_hov, increasing, f0_active, f1_active, found, zoom_mouse, valid !<
+                                                                                                                    !< ...
+   real(real32)                       :: cp(2, 0:7), mx, my, rdx, rdy, zoom, ax_, ay_, delta, dmin, dmax !< Work.
+   real(real32)                       :: pmin(2), pmax(2), mpix(2), cand(4) !< Pixels, candidates' dots.
+   real(real64)                       :: c(3, 0:7), dx, dy, wheel, wheel_h, drag(5), mpos(3), q(3), q2(3), nmin(3), &
+                                         nmax(3), half, v1, v2, nlo, nhi, ang_x, ang_y, ndc_limit, zf !< Work.
+   integer(int32)                     :: mods !< io.KeyMods.
+   logical                            :: dd   !< io.
+   type(vector_R8P)                   :: dpix, dndc, an, up, xa, ya, nxa, nya, ez, bestv !< Vectors.
+   type(plot3d_quat)                  :: qa, qb !< Rotations.
 
    if (has_flag(p%flags, F3_NO_INPUTS)) return
    clicked = core_button_behavior(real(p%v%rect(1), real64), real(p%v%rect(2), real64), real(p%v%rect(3), real64), &
                                   real(p%v%rect(4), real64), p%id, p%hovered, p%held, flags=PLOT_BUTTON_FLAGS)
+   if (core_mouse_clicked(1_int32)) right_click_time = core_time()
+   call core_mouse_drag_delta(1_int32, dx, dy)
+   rdx = real(dx, real32)
+   rdy = real(dy, real32)
+   rotating = rdx * rdx + rdy * rdy > 5.0_real32
+   axis_equal = has_flag(p%flags, F3_EQUAL)
+   allow_rotate = .not. has_flag(p%flags, F3_NO_ROTATE)
+   allow_pan = .not. has_flag(p%flags, F3_NO_PAN)
+   allow_zoom = .not. has_flag(p%flags, F3_NO_ZOOM)
+   call axes_parameters(p%v, af, cp, c, plane_2d, ac)
+   valid = pointer(mx, my)
+   hp = -1_int32
+   he = -1_int32
+   ha = -1_int32
+   if (valid) then
+      hp = mouse_over_plane(af, cp, mx, my)
+      ha = over_axis(p, cp, plane_2d, ac, mx, my, he)
+   endif
+   hpi = hp
+   if (ha /= -1_int32) then
+      hpi = -1_int32
+      hp = -1_int32
+   endif
+   if (.not. core_mouse_down(0_int32) .and. .not. core_mouse_down(2_int32)) then
+      do i = 1_int32, 3_int32
+         p%ax(i)%held = .false.
+      enddo
+   endif
    if (.not. p%held) then
       p%held_edge = -1_int32
       p%held_plane = -1_int32
+   endif
+   any_held = p%ax(1)%held .or. p%ax(2)%held .or. p%ax(3)%held
+   if (.not. any_held) then
+      do i = 1_int32, 3_int32
+         p%ax(i)%hovered = .false.
+      enddo
+      if (ha /= -1_int32) then
+         p%ax(ha + 1_int32)%hovered = .true.
+      elseif (hp /= -1_int32) then
+         p%ax(mod(hp + 1_int32, 3_int32) + 1_int32)%hovered = .true.
+         p%ax(mod(hp + 2_int32, 3_int32) + 1_int32)%hovered = .true.
+      else
+         do i = 1_int32, 3_int32
+            p%ax(i)%hovered = .true.
+         enddo
+      endif
+   endif
+   mplane = 2_int32
+   if (plane_2d /= -1_int32) then
+      mplane = plane_2d
+   elseif (p%ax(2)%hovered .and. p%ax(3)%hovered) then
+      mplane = 0_int32
+   elseif (p%ax(1)%hovered .and. p%ax(3)%hovered) then
+      mplane = 1_int32
+   elseif (p%ax(1)%hovered .and. p%ax(2)%hovered) then
+      mplane = 2_int32
+   elseif (p%held_edge /= -1_int32 .or. he /= -1_int32) then
+      cur_edge = he
+      if (p%held_edge /= -1_int32) cur_edge = p%held_edge
+      f0 = EDGE_TO_FACES(0, 0, cur_edge)
+      f1 = EDGE_TO_FACES(0, 1, cur_edge)
+      if (f0 < 3_int32) then
+         f0_active = .not. af(f0 + 1_int32)
+      else
+         f0_active = af(f0 - 2_int32)
+      endif
+      if (f1 < 3_int32) then
+         f1_active = .not. af(f1 + 1_int32)
+      else
+         f1_active = af(f1 - 2_int32)
+      endif
+      if (f0_active) then
+         mplane = EDGE_TO_FACES(1, 0, cur_edge)
+      elseif (f1_active) then
+         mplane = EDGE_TO_FACES(1, 1, cur_edge)
+      else
+         mplane = EDGE_TO_FACES(1, 0, cur_edge)
+      endif
+   endif
+   mpos = 0.0_real64
+   if (valid) call pixels_to_plot_plane(p%v, mx, my, mplane, .false., mpos, found)
+   if (clicked .and. (core_mouse_double_clicked(0_int32) .or. core_mouse_double_clicked(2_int32)) .and. &
+       (allow_pan .and. allow_zoom)) then
+      p%fit = .true.
+      do i = 1_int32, 3_int32
+         p%ax(i)%fit = p%ax(i)%hovered
+      enddo
    endif
    do i = 1_int32, 3_int32
       if (has_flag(p%ax(i)%flags, A3_AUTO_FIT)) then
@@ -943,7 +1086,264 @@ contains
          p%ax(i)%fit = .true.
       endif
    enddo
+   call core_io_input(dx, dy, wheel, wheel_h, drag, mods, dd)
+   if (p%held .and. core_mouse_down(0_int32) .and. allow_pan) then
+      all_hov = p%ax(1)%hovered .and. p%ax(2)%hovered .and. p%ax(3)%hovered
+      if (all_hov) then
+         zoom = view_scale(p%v)
+         dpix%x = real(real(dx, real32), real64) / real(zoom, real64)
+         dpix%y = real(-real(dy, real32), real64) / real(zoom, real64)
+         dpix%z = 0.0_real64 / real(zoom, real64)
+         dndc = quat_rotate_v(quat_inverse(p%v%rot), dpix)
+         nmin(1) = -(0.5_real64 * p%v%ndc(1)) - dndc%x
+         nmax(1) = 0.5_real64 * p%v%ndc(1) - dndc%x
+         nmin(2) = -(0.5_real64 * p%v%ndc(2)) - dndc%y
+         nmax(2) = 0.5_real64 * p%v%ndc(2) - dndc%y
+         nmin(3) = -(0.5_real64 * p%v%ndc(3)) - dndc%z
+         nmax(3) = 0.5_real64 * p%v%ndc(3) - dndc%z
+         call ndc_to_plot(p%v, nmin, q)
+         call ndc_to_plot(p%v, nmax, q2)
+         do i = 1_int32, 3_int32
+            if (p%ax(i)%hovered) then
+               v1 = q(i)
+               v2 = q2(i)
+               nlo = min(v1, v2)
+               nhi = max(v1, v2)
+               increasing = nlo > p%v%rmin(i)
+               if ((nlo /= p%v%rmin(i) .or. nhi /= p%v%rmax(i)) .and. .not. pan_locked(p, i, increasing)) then
+                  call set_range(p, i, nlo, nhi)
+                  if (axis_equal) call apply_equal_aspect(p, i)
+               endif
+               p%ax(i)%held = .true.
+            endif
+            if (.not. any_held) then
+               p%held_edge = he
+               p%held_plane = hpi
+            endif
+         enddo
+      elseif (p%ax(1)%hovered .or. p%ax(2)%hovered .or. p%ax(3)%hovered) then
+         do i = 1_int32, 3_int32
+            if (p%ax(i)%hovered) then
+               q = mpos
+               q2 = mpos
+               q(i) = p%v%rmin(i)
+               q2(i) = p%v%rmax(i)
+               call plot_to_pixels(p%v, q, pmin(1), pmin(2))
+               call plot_to_pixels(p%v, q2, pmax(1), pmax(2))
+               pmin(1) = pmin(1) - real(dx, real32)
+               pmin(2) = pmin(2) - real(dy, real32)
+               pmax(1) = pmax(1) - real(dx, real32)
+               pmax(2) = pmax(2) - real(dy, real32)
+               call pixels_to_plot_plane(p%v, pmin(1), pmin(2), mplane, .false., nmin, found)
+               call pixels_to_plot_plane(p%v, pmax(1), pmax(2), mplane, .false., nmax, found)
+               nlo = nmin(i)
+               nhi = nmax(i)
+               increasing = nlo < p%v%rmin(i)
+               if ((nlo /= p%v%rmin(i) .or. nhi /= p%v%rmax(i)) .and. .not. pan_locked(p, i, increasing)) then
+                  call set_range(p, i, nlo, nhi)
+                  if (axis_equal) call apply_equal_aspect(p, i)
+               endif
+               p%ax(i)%held = .true.
+            endif
+            if (.not. any_held) then
+               p%held_edge = he
+               p%held_plane = hpi
+            endif
+         enddo
+      endif
+   endif
+   if (p%held .and. core_mouse_double_clicked(1_int32) .and. p%rotation_cond /= COND_ALWAYS .and. allow_rotate) then
+      p%anim_end = p%v%rot
+      if (hp == -1_int32) then
+         p%anim_end = p%initial_rotation
+      else
+         an%x = 0.0_real64
+         an%y = 0.0_real64
+         an%z = 0.0_real64
+         v1 = 1.0_real64
+         if (af(hp + 1_int32)) v1 = -1.0_real64
+         if (has_flag(p%ax(hp + 1_int32)%flags, A3_INVERT)) v1 = v1 * (-1.0_real64)
+         select case (hp)
+         case (0_int32)
+            an%x = v1
+         case (1_int32)
+            an%y = v1
+         case default
+            an%z = v1
+         endselect
+         ez%x = 0.0_real64
+         ez%y = 0.0_real64
+         ez%z = 1.0_real64
+         qa = quat_from_two_vectors(quat_rotate_v(p%anim_end, an), ez)
+         p%anim_end = quat_mul(qa, p%anim_end)
+         up%x = 0.0_real64
+         up%y = 1.0_real64
+         up%z = 0.0_real64
+         if (hp /= 2_int32) then
+            qb = quat_from_two_vectors(quat_rotate_v(p%anim_end, ez), up)
+            p%anim_end = quat_mul(qb, p%anim_end)
+         else
+            an%x = 1.0_real64
+            an%y = 0.0_real64
+            an%z = 0.0_real64
+            xa = quat_rotate_v(p%anim_end, an)
+            an%x = 0.0_real64
+            an%y = 1.0_real64
+            ya = quat_rotate_v(p%anim_end, an)
+            an%x = -1.0_real64
+            an%y = 0.0_real64
+            nxa = quat_rotate_v(p%anim_end, an)
+            an%x = 0.0_real64
+            an%y = -1.0_real64
+            nya = quat_rotate_v(p%anim_end, an)
+            cand(1) = real(xa .dot. up, real32)
+            cand(2) = real(ya .dot. up, real32)
+            cand(3) = real(nxa .dot. up, real32)
+            cand(4) = real(nya .dot. up, real32)
+            best = 1_int32
+            do i = 2_int32, 4_int32
+               if (cand(i) > cand(best)) best = i
+            enddo
+            select case (best)
+            case (1_int32)
+               bestv = xa
+            case (2_int32)
+               bestv = ya
+            case (3_int32)
+               bestv = nxa
+            case default
+               bestv = nya
+            endselect
+            qb = quat_from_two_vectors(bestv, up)
+            p%anim_end = quat_mul(qb, p%anim_end)
+         endif
+      endif
+      p%anim_time = animation_time(p%v%rot, p%anim_end)
+   endif
+   if (p%held .and. core_mouse_down(1_int32) .and. p%rotation_cond /= COND_ALWAYS .and. allow_rotate) then
+      ang_x = real(real(dx, real32) * (3.1415_real32 / 180.0_real32), real64)
+      ang_y = real(real(dy, real32) * (3.1415_real32 / 180.0_real32), real64)
+      if (p%drag_axis(1) == 0.0_real64 .and. p%drag_axis(2) == 0.0_real64 .and. p%drag_axis(3) == 0.0_real64) then
+         call quat_rotate(p%v%rot, 0.0_real64, 0.0_real64, 1.0_real64, q(1), q(2), q(3))
+         p%drag_axis = 0.0_real64
+         p%drag_axis(3) = 1.0_real64
+         if (q(3) < 0.0_real64) p%drag_axis(3) = -1.0_real64
+      endif
+      q(1) = 1.0_real64
+      q(2) = 0.0_real64
+      q(3) = 0.0_real64
+      qa = quat_axis_angle(ang_y, q)
+      qb = quat_axis_angle(ang_x, p%drag_axis)
+      p%v%rot = quat_normalize(quat_mul(quat_mul(qa, p%v%rot), qb))
+   else
+      p%drag_axis = 0.0_real64
+   endif
+   if (p%hovered .and. allow_zoom) then
+      call core_set_key_owner(ImGuiKey_MouseWheelY, p%id)
+      if (core_mouse_down(2_int32) .or. wheel /= 0.0_real64) then
+         if (core_mouse_down(2_int32)) then
+            delta = -0.01_real32 * real(dy, real32)
+         else
+            delta = -0.1_real32 * real(wheel, real32)
+         endif
+         zoom_mouse = ha /= -1_int32 .or. hp /= -1_int32
+         ref = 1_int32
+         do i = 1_int32, 3_int32
+            if (.not. p%ax(i)%hovered .or. input_locked(p, i)) cycle
+            q = mpos
+            q2 = mpos
+            q(i) = p%v%rmin(i)
+            q2(i) = p%v%rmax(i)
+            call plot_to_pixels(p%v, q, pmin(1), pmin(2))
+            call plot_to_pixels(p%v, q2, pmax(1), pmax(2))
+            call plot_to_pixels(p%v, mpos, mpix(1), mpix(2))
+            dmin = sqrt((pmin(1) - mpix(1)) * (pmin(1) - mpix(1)) + (pmin(2) - mpix(2)) * (pmin(2) - mpix(2)))
+            dmax = sqrt((pmax(1) - mpix(1)) * (pmax(1) - mpix(1)) + (pmax(2) - mpix(2)) * (pmax(2) - mpix(2)))
+            if (zoom_mouse .and. (dmin > 0.0_real32 .or. dmax > 0.0_real32)) then
+               ax_ = pmin(1) - mpix(1)
+               ay_ = pmin(2) - mpix(2)
+               pmin(1) = mpix(1) + ax_ * (1.0_real32 + delta)
+               pmin(2) = mpix(2) + ay_ * (1.0_real32 + delta)
+               ax_ = pmax(1) - mpix(1)
+               ay_ = pmax(2) - mpix(2)
+               pmax(1) = mpix(1) + ax_ * (1.0_real32 + delta)
+               pmax(2) = mpix(2) + ay_ * (1.0_real32 + delta)
+               call pixels_to_plot_plane(p%v, pmin(1), pmin(2), mplane, .false., nmin, found)
+               call pixels_to_plot_plane(p%v, pmax(1), pmax(2), mplane, .false., nmax, found)
+               call set_range(p, i, nmin(i), nmax(i))
+            else
+               ndc_limit = 0.5_real64 * p%v%ndc(i)
+               zf = real(1.0_real32 + delta, real64)
+               nmin = 0.0_real64
+               nmax = 0.0_real64
+               nmin(i) = -ndc_limit * zf
+               nmax(i) = ndc_limit * zf
+               call ndc_to_plot(p%v, nmin, q)
+               call ndc_to_plot(p%v, nmax, q2)
+               call set_range(p, i, q(i), q2(i))
+            endif
+            p%ax(i)%held = .true.
+            ref = i
+         enddo
+         if (axis_equal) call apply_equal_aspect(p, ref)
+         if (.not. any_held) then
+            p%held_edge = he
+            p%held_plane = hpi
+         endif
+      endif
+   endif
+   if (p%held .and. core_mouse_clicked(1_int32) .and. .not. has_flag(p%flags, F3_NO_MENUS)) p%context_click = .true.
+   if (rotating .or. (core_mouse_double_clicked(1_int32) .and. allow_rotate)) p%context_click = .false.
+   valid = .true.
+   if (allow_rotate) valid = real(core_time() - right_click_time, real32) > 0.30_real32
+   if (p%hovered .and. p%context_click .and. valid .and. .not. core_mouse_down(1_int32)) then
+      p%context_click = .false.
+      p%open_context = .true.
+   endif
+   if (p%open_context) then
+      if (p%leg_hovered) then
+         call core_open_popup('##LegendContext')
+      elseif (ha /= -1_int32) then
+         call core_open_popup(AXIS_CONTEXTS(ha))
+      elseif (hp /= -1_int32) then
+         call core_open_popup(PLANE_CONTEXTS(hp))
+      elseif (p%hovered) then
+         call core_open_popup('##PlotContext')
+      endif
+   endif
    endsubroutine handle_input
+
+   function animation_time(q0, q1) result(t)
+   !< `CalcAnimationTime`: the angle between two rotations (2 acosf of the dot's magnitude) over 2 * 3.1415.
+   type(plot3d_quat), intent(in) :: q0, q1 !< Rotations.
+   real(real32)                  :: t      !< Time [s].
+   real(real64)                  :: d      !< Dot.
+   real(real32)                  :: ang    !< Angle.
+
+   d = min(max(quat_dot(q0, q1), -1.0_real64), 1.0_real64)
+   ang = 2.0_real32 * c_acosf(abs(real(d, real32)))
+   t = ang / ANIMATION_ANGULAR_VELOCITY
+   endfunction animation_time
+
+   pure function pan_locked(p, i, increasing) result(yes)
+   !< `IsPanLocked`: with PanStretch, input-locked; else not when locked or auto-fitting, and at the constraint's end.
+   type(plot3d_record), intent(in) :: p          !< Plot.
+   integer(int32),      intent(in) :: i          !< Axis.
+   logical,             intent(in) :: increasing !< Panning up.
+   logical                         :: yes        !< Locked.
+
+   if (has_flag(p%ax(i)%flags, A3_PAN_STRETCH)) then
+      yes = input_locked(p, i)
+      return
+   endif
+   yes = .false.
+   if (locked_min(p, i) .or. locked_max(p, i) .or. has_flag(p%ax(i)%flags, A3_AUTO_FIT)) return
+   if (increasing) then
+      yes = p%v%rmax(i) == p%ax(i)%con_max
+   else
+      yes = p%v%rmin(i) == p%ax(i)%con_min
+   endif
+   endfunction pan_locked
 
    ! private: the box
 
@@ -977,6 +1377,7 @@ contains
    integer(int32)                  :: hovered, a, f, k, col, col_bg, col_hov !< Plane, axis, face, corner, colours.
    real(real64)                    :: qx(4), qy(4)  !< A quad.
    real(real32)                    :: mx, my        !< Pointer.
+   real(real64)                    :: bg(4)         !< PlotBg (WindowBg), floats.
 
    hovered = -1_int32
    if (.not. p%held) then
@@ -987,8 +1388,13 @@ contains
    else
       hovered = p%held_plane
    endif
-   col_bg = core_style_color(ImGuiCol_WindowBg)
-   col_hov = lighter(col_bg)
+   call core_style_color_rgba(ImGuiCol_WindowBg, bg)
+   col_bg = core_color(real(real(bg(1), real32), real64), real(real(bg(2), real32), real64), &
+                       real(real(bg(3), real32), real64), real(real(bg(4), real32), real64))
+   bg(1) = real(real(bg(1), real32) + 0.03_real32, real64) ! col_bg + ImVec4(0.03, 0.03, 0.03, 0), in float
+   bg(2) = real(real(bg(2), real32) + 0.03_real32, real64)
+   bg(3) = real(real(bg(3), real32) + 0.03_real32, real64)
+   col_hov = core_color(bg(1), bg(2), bg(3), bg(4))
    do a = 0_int32, 2_int32
       f = a + 3_int32 * merge(1_int32, 0_int32, af(a + 1_int32))
       do k = 0_int32, 3_int32
@@ -1634,19 +2040,21 @@ contains
    w = max(w, AXIS_RECT_MIN_WIDTH)
    endfunction hover_width
 
-   function over_axis(p, cp, plane_2d, ac, mx, my) result(axis)
+   function over_axis(p, cp, plane_2d, ac, mx, my, edge_out) result(axis)
    !< `GetMouseOverAxis`: the axis whose hover rectangle holds the pointer, or -1.
    type(plot3d_record), intent(in) :: p            !< Plot.
    real(real32),        intent(in) :: cp(2, 0:7)   !< Corners' pixels.
    integer(int32),      intent(in) :: plane_2d     !< 2-D plane.
    integer(int32),      intent(in) :: ac(0:1, 0:2) !< Axis corners.
    real(real32),        intent(in) :: mx, my       !< Pointer.
+   integer(int32),      intent(out), optional :: edge_out !< The axis's edge (0-11), or -1.
    integer(int32)                  :: axis         !< Axis (0-2), or -1.
    real(real32)                    :: bc(2), o(2), pt(2) !< Box centre, outward direction, pointer.
    integer(int32)                  :: a, e         !< Axis, edge.
    logical                         :: found        !< The edge found.
 
    axis = -1_int32
+   if (present(edge_out)) edge_out = -1_int32
    call box_center(cp, bc)
    pt(1) = mx
    pt(2) = my
@@ -1665,6 +2073,7 @@ contains
       call edge_outward_dir(cp(:, ac(0, a)), cp(:, ac(1, a)), bc, o)
       if (in_edge_region(pt, cp(:, ac(0, a)), cp(:, ac(1, a)), o, hover_width(p%ax(a + 1_int32)))) then
          axis = a
+         if (present(edge_out)) edge_out = e
          return
       endif
    enddo
@@ -2052,6 +2461,9 @@ contains
    p%initial_rotation = INITIAL_ROTATION
    p%anim_end = p%v%rot
    p%anim_time = 0.0_real32
+   p%drag_axis = 0.0_real64
+   p%context_click = .false.
+   p%open_context = .false.
    p%legend_loc = LOC_NORTH + LOC_WEST
    p%legend_prev_loc = LOC_NORTH + LOC_WEST
    p%legend_flags = 0_int32

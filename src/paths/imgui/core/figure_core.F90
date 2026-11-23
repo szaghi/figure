@@ -52,6 +52,7 @@ use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_double, 
                                          c_int16_t, c_int32_t, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextSize, igGetColorU32_Col,             &
+                          igGetStyleColorVec4,                                                                  &
                           igGetContentRegionAvail, igGetCursorScreenPos, igGetFont, igGetFontSize, igGetFrameCount,     &
                           igGetFrameHeight, igGetID_Str, igGetMousePos, igGetTime, igGetWindowDrawList, igGetWindowPos, &
                           igGetWindowSize, igIsItemActive, igIsItemHovered, igIsKeyDown_Nil, igIsKeyPressed_Bool,       &
@@ -95,7 +96,7 @@ public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_pu
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
 public :: core_open_popup, core_begin_popup, core_end_popup, core_open_popup_id, core_begin_popup_id
 public :: core_white_pixel, core_framebuffer_scale, core_texture_sampling
-public :: core_draw_prims
+public :: core_draw_prims, core_delta_time, core_style_color_rgba
 public :: core_draw_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
@@ -205,11 +206,12 @@ type, bind(C) :: im_font_baked_head
 endtype im_font_baked_head
 
 type, bind(C) :: im_io_head
-   !< The first members of ImGuiIO (imgui.h, 1.93), up to DisplayFramebufferScale.
+   !< The first members of ImGuiIO (imgui.h, 1.93), up to DeltaTime.
    integer(c_int) :: config_flags  !< ConfigFlags.
    integer(c_int) :: backend_flags !< BackendFlags.
    real(c_float)  :: display_size(2)              !< DisplaySize.
    real(c_float)  :: display_framebuffer_scale(2) !< DisplayFramebufferScale.
+   real(c_float)  :: delta_time                   !< DeltaTime.
 endtype im_io_head
 
 contains
@@ -1079,6 +1081,28 @@ contains
    call core_draw_end_pending()
    call fig_texture_sampling(0_c_int, merge(1_c_int, 0_c_int, from_texture))
    endsubroutine core_texture_sampling
+
+   function core_delta_time() result(dt)
+   !< io.DeltaTime: the time since the last frame [s] (the 3-D plots' rotation animation).
+   real(real64)              :: dt !< Time [s].
+   type(im_io_head), pointer :: io !< Dear ImGui's io.
+
+   call c_f_pointer(igGetIO_Nil(), io)
+   dt = real(io%delta_time, real64)
+   endfunction core_delta_time
+
+   subroutine core_style_color_rgba(idx, rgba)
+   !< A style colour (`ImGuiCol_*`) as its four float channels (`GetStyleColorVec4`, no alpha factor).
+   integer(int32), intent(in)  :: idx     !< Colour.
+   real(real64),   intent(out) :: rgba(4) !< Channels.
+   type(im_vec4), pointer      :: c       !< Dear ImGui's.
+
+   call c_f_pointer(igGetStyleColorVec4(int(idx, c_int)), c)
+   rgba(1) = real(c%x, real64)
+   rgba(2) = real(c%y, real64)
+   rgba(3) = real(c%z, real64)
+   rgba(4) = real(c%w, real64)
+   endsubroutine core_style_color_rgba
 
    subroutine core_framebuffer_scale(sx, sy)
    !< io.DisplayFramebufferScale: display pixels per pixel (the plot frame's decimation, as figure_implot's).
