@@ -7,7 +7,7 @@ program figure_test_plot_frame_alloc
 !< levels), a symlog y axis and a linear Y2, four labelled lines in the legend (one with square markers), a scatter
 !< (P11), the pointer resting on the plot (the mouse text: values of four axes, a time among them), and beside it a
 !< colour bar with a label format and a label; below them (P12) a 1 x 2 subplot, titled, its x axes linked, and two
-!< plots side by side in an aligned group.
+!< plots side by side in an aligned group, their x axes linked in a group (`pf_link_axis`).
 !< Drawn first by ImPlot through FIGURE's API (`ip_*`), then by the Fortran frame (`pf_*`), NF frames each: on the
 !< Fortran side the last NCOUNT frames are counted, from `pf_begin_plot` to `pf_end_plot` and around
 !< `pf_colormap_scale`, by figure_test_plot_alloc_counter (the C library's allocator entry points defined in the
@@ -22,11 +22,11 @@ program figure_test_plot_frame_alloc
 !<
 !< The pictures are `figure_test_plot_frame_alloc.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : ip_begin_aligned, ip_begin_subplots, ip_end_aligned, ip_end_subplots
+use figure, only : ip_begin_aligned, ip_begin_subplots, ip_end_aligned, ip_end_subplots, ip_link_axis
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
                    ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes,             &
                    ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
-use figure_plot_frame, only : pf_begin_aligned, pf_begin_subplots, pf_end_aligned, pf_end_subplots
+use figure_plot_frame, only : pf_begin_aligned, pf_begin_subplots, pf_end_aligned, pf_end_subplots, pf_link_axis
 use figure_plot_frame, only : pf_begin_plot, pf_colormap_scale, pf_end_plot, pf_plot_limits, pf_set_axes, &
                               pf_setup_axes, pf_setup_axis, pf_setup_axis_limits
 use figure_plot_items, only : pf_line, pf_scatter, pf_spec
@@ -182,11 +182,13 @@ contains
       if (pf_begin_aligned('pair', horizontal=.true.)) then
          if (pf_begin_plot('##a1', width=300.0_real64, height=150.0_real64)) then
             call pf_setup_axes('x', '')
+            call pf_link_axis('x1', 'pair x')
             call pf_line('##w', xs, ys(:, 3), spec=pf_spec(line_color=C(:, 3)))
             call pf_end_plot()
          endif
          call ig_same_line()
          if (pf_begin_plot('##a2', width=300.0_real64, height=150.0_real64)) then
+            call pf_link_axis('x1', 'pair x')
             call pf_line('##w', xs, ys(:, 4), spec=pf_spec(line_color=C(:, 4)))
             call pf_end_plot()
          endif
@@ -205,11 +207,13 @@ contains
       if (ip_begin_aligned('pair', horizontal=.true.)) then
          if (ip_begin_plot('##a1', width=300.0_real64, height=150.0_real64)) then
             call ip_setup_axes('x', '')
+            call ip_link_axis('x1', 'pair x')
             call ip_line('##w', xs, ys(:, 3), spec=ip_spec(line_color=C(:, 3)))
             call ip_end_plot()
          endif
          call ig_same_line()
          if (ip_begin_plot('##a2', width=300.0_real64, height=150.0_real64)) then
+            call ip_link_axis('x1', 'pair x')
             call ip_line('##w', xs, ys(:, 4), spec=ip_spec(line_color=C(:, 4)))
             call ip_end_plot()
          endif

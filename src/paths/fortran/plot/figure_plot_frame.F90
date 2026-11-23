@@ -145,7 +145,7 @@ public :: pf_hide_next_item, pf_legend_hovered
 public :: pf_plot_count, pf_colormap, pf_colormap_scale
 public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
 public :: pf_cancel_selection
-public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned
+public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
 real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
@@ -401,6 +401,19 @@ type :: subplot_record
    real(real64)                  :: hov_t0 = 0.0_real64  !< Dear ImGui's time when its hover began [s].
 endtype subplot_record
 
+type :: plot_link
+   !< A group of linked axes (`fig_plot_link`'s `link_t`, native/figure_plot_links.cpp): its range, kept here as the
+   !< two doubles ImPlot links an axis to, and its first plot.
+   real(real64)   :: lmin = 0.0_real64     !< Range's minimum.
+   real(real64)   :: lmax = 1.0_real64     !< ... maximum.
+   integer(int32) :: state = 0_int32       !< 0 new, 1 waiting for its first plot's fit, 2 linked.
+   integer(int32) :: plot = 0_int32        !< Its first plot's ID (state 1).
+   integer(int32) :: axis = 0_int32        !< ... and axis.
+   integer(int32) :: frame = -1_int32      !< The frame it was first used on.
+   integer(int32) :: name_off = 0_int32    !< Its name in `link_names`.
+   integer(int32) :: name_len = 0_int32    !< ... its length.
+endtype plot_link
+
 type(plot_record), allocatable, target :: plots(:)       !< The plots (ImPlotContext::Plots).
 integer(int32)                         :: n_plots = 0_int32 !< Slots of `plots` in use.
 integer(int32)                         :: cur = 0_int32  !< The plot open (0: none).
@@ -437,6 +450,10 @@ real(real32)                           :: plot_pad(2) = STYLE_PLOT_PADDING !< Pl
                                                          !< cells: half of it).
 real(real32)                           :: plot_min(2) = STYLE_PLOT_MIN_SIZE !< PlotMinSize in effect (cells: 0).
 logical                                :: frame_bg_clear = .false. !< FrameBg transparent (a subplot's cells).
+type(plot_link),      allocatable      :: links(:)       !< The link groups (`fig_plot_link`'s map; never removed).
+integer(int32)                         :: n_links = 0_int32 !< Groups held.
+character(len=:),     allocatable      :: link_names     !< Their names.
+integer(int32)                         :: n_link_names = 0_int32 !< Characters of `link_names` in use.
 
 contains
    function pf_begin_plot(title, width, height, equal) result(visible)
@@ -1059,6 +1076,55 @@ contains
    cur_align_h = 0_int32 ! ResetCtxForNextAlignedPlots
    cur_align_v = 0_int32
    endsubroutine pf_end_aligned
+
+   subroutine pf_link_axis(axis, group)
+   !< Link `axis` (`'x1'`..`'y3'`) of the plot being set up to the group `group` (`ip_link_axis`, FIGURE's
+   !< `fig_plot_link` over ImPlot's `SetupAxisLinks`): every plot linked to a group shows its range, and a pan or a
+   !< zoom in any of them moves all. A new group is not linked on its first frame: its plots fit their data alone; from
+   !< the next frame the group takes its first plot's range on that plot's axis (the calling plot's own if that plot is
+   !< gone) and every plot of the group shares it. Call it in the setup, after `pf_setup_axes`/`pf_setup_axis`, every
+   !< frame (an X1 or Y1 link lasts one frame; an X2..Y3 link stays, as ImPlot's: see the README's P12 notes).
+   character(len=*), intent(in) :: axis  !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   character(len=*), intent(in) :: group !< The group's name (any text, not empty; trailing blanks count).
+   integer(int32)               :: i, g, k, f, h !< Axis, group, counter, frame, the first plot's handle.
+
+   call setup_refused('pf_link_axis')
+   i = axis_code(axis)
+   if (.not. plots(cur)%ax(i)%enabled) error stop 'figure_plot_frame: pf_link_axis: the axis is not set up'
+   if (len_trim(group) == 0) error stop 'figure_plot_frame: pf_link_axis: the group has no name'
+   g = link_handle(group)
+   f = core_frame_count()
+   associate(p => plots(cur), lk => links(g))
+      if (lk%state == 0_int32) then ! new: its first plot fits alone
+         lk%state = 1_int32
+         lk%plot = p%id
+         lk%axis = i
+         lk%frame = f
+         return
+      endif
+      if (lk%state == 1_int32) then
+         if (f == lk%frame) return ! another plot of the group on its first frame: it fits alone too
+         h = 0_int32
+         do k = 1_int32, n_plots
+            if (plots(k)%used .and. plots(k)%id == lk%plot) then
+               h = k
+               exit
+            endif
+         enddo
+         if (h /= 0_int32) then
+            lk%lmin = plots(h)%ax(lk%axis)%range_min
+            lk%lmax = plots(h)%ax(lk%axis)%range_max
+         else
+            lk%lmin = p%ax(i)%range_min
+            lk%lmax = p%ax(i)%range_max
+         endif
+         lk%state = 2_int32
+      endif
+      p%ax(i)%link_kind = LINK_GROUP ! SetupAxisLinks
+      p%ax(i)%link_idx = g
+      call pull_links(p%ax(i))
+   endassociate
+   endsubroutine pf_link_axis
 
    function pf_plot_count() result(n)
    !< Plots held (tests).
@@ -2964,6 +3030,48 @@ contains
    aligns(k)%vertical = .true.
    endfunction align_handle
 
+   function link_handle(name) result(g)
+   !< The link group of a name, added if new (the name kept once; trailing blanks count, as `fig_plot_link`'s).
+   character(len=*), intent(in)  :: name    !< Name.
+   integer(int32)                :: g       !< Group.
+   type(plot_link),  allocatable :: more(:) !< New table.
+   character(len=:), allocatable :: text_   !< New names.
+   integer(int32)                :: j, n    !< Counter, the name's length.
+
+   n = len(name, kind=int32)
+   do g = 1_int32, n_links
+      if (links(g)%name_len /= n) cycle
+      if (link_names(links(g)%name_off:links(g)%name_off + n - 1_int32) == name) return
+   enddo
+   if (.not. allocated(links)) then
+      allocate(links(4))
+   elseif (n_links == size(links, kind=int32)) then
+      allocate(more(2_int32 * n_links))
+      do j = 1_int32, n_links
+         more(j) = links(j)
+      enddo
+      call move_alloc(more, links)
+   endif
+   if (.not. allocated(link_names)) allocate(character(len=max(256_int32, n)) :: link_names)
+   if (n_link_names + n > len(link_names, kind=int32)) then
+      allocate(character(len=max(2_int32 * len(link_names, kind=int32), n_link_names + n)) :: text_)
+      text_(1:n_link_names) = link_names(1:n_link_names)
+      call move_alloc(text_, link_names)
+   endif
+   n_links = n_links + 1_int32
+   g = n_links
+   links(g)%lmin = 0.0_real64
+   links(g)%lmax = 1.0_real64
+   links(g)%state = 0_int32
+   links(g)%plot = 0_int32
+   links(g)%axis = 0_int32
+   links(g)%frame = -1_int32
+   links(g)%name_off = n_link_names + 1_int32
+   links(g)%name_len = n
+   link_names(n_link_names + 1_int32:n_link_names + n) = name
+   n_link_names = n_link_names + n
+   endfunction link_handle
+
    pure subroutine align_reset(a)
    !< `ImPlotAlignmentData::Reset`.
    type(plot_align), intent(inout) :: a !< Alignment.
@@ -3041,6 +3149,9 @@ contains
    do i = 1_int32, AXES
       associate(ax => p%ax(i))
          select case (ax%link_kind)
+         case (LINK_GROUP)
+            links(ax%link_idx)%lmin = ax%range_min
+            links(ax%link_idx)%lmax = ax%range_max
          case (LINK_COL)
             if (cur_sub == 0_int32) cycle
             subs(cur_sub)%col_link(1, ax%link_idx) = ax%range_min
@@ -3064,6 +3175,10 @@ contains
    hi = 1.0_real64
    found = .false.
    select case (kind)
+   case (LINK_GROUP)
+      lo = links(idx)%lmin
+      hi = links(idx)%lmax
+      found = .true.
    case (LINK_COL)
       if (cur_sub == 0_int32) return
       lo = subs(cur_sub)%col_link(1, idx)
