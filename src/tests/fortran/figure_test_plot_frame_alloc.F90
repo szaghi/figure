@@ -8,7 +8,7 @@ program figure_test_plot_frame_alloc
 !< (P11), the pointer resting on the plot (the mouse text: values of four axes, a time among them), and beside it a
 !< colour bar with a label format and a label; below them (P12) a 1 x 2 subplot, titled, its x axes linked, and two
 !< plots side by side in an aligned group, their x axes linked in a group (`pf_link_axis`), the second with the four
-!< drag tools (figure_plot_tools).
+!< drag tools (figure_plot_tools); tags on three of the plot's axes (`pf_tag`: a value labelled, a date, a text).
 !< Drawn first by ImPlot through FIGURE's API (`ip_*`), then by the Fortran frame (`pf_*`), NF frames each: on the
 !< Fortran side the last NCOUNT frames are counted, from `pf_begin_plot` to `pf_end_plot` and around
 !< `pf_colormap_scale`, by figure_test_plot_alloc_counter (the C library's allocator entry points defined in the
@@ -24,11 +24,12 @@ program figure_test_plot_frame_alloc
 !< The pictures are `figure_test_plot_frame_alloc.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : ip_begin_aligned, ip_begin_subplots, ip_end_aligned, ip_end_subplots, ip_link_axis
-use figure, only : ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_drag_rect
+use figure, only : ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_drag_rect, ip_tag
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
                    ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes,             &
                    ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
 use figure_plot_frame, only : pf_begin_aligned, pf_begin_subplots, pf_end_aligned, pf_end_subplots, pf_link_axis
+use figure_plot_frame, only : pf_tag
 use figure_plot_frame, only : pf_begin_plot, pf_colormap_scale, pf_end_plot, pf_plot_limits, pf_set_axes, &
                               pf_setup_axes, pf_setup_axis, pf_setup_axis_limits
 use figure_plot_items, only : pf_line, pf_scatter, pf_spec
@@ -130,6 +131,9 @@ contains
          call pf_set_axes('x2', 'y2')
          call pf_line('daily', ts, ys(:, 3), spec=pf_spec(line_color=C(:, 3)))
          call pf_line('hourly', ts, ys(:, 4), spec=pf_spec(line_color=C(:, 4)))
+         call pf_tag('y1', 10.0_real64)
+         call pf_tag('x2', ts(100), color=C(:, 2))
+         call pf_tag('y2', 2.0_real64, text='level')
          call pf_plot_limits(lim(1, 2), lim(2, 2), lim(3, 2), lim(4, 2), 'x1', 'y1')
          call pf_plot_limits(lim(5, 2), lim(6, 2), lim(7, 2), lim(8, 2), 'x2', 'y2')
          call pf_end_plot()
@@ -149,6 +153,9 @@ contains
          call ip_set_axes('x2', 'y2')
          call ip_line('daily', ts, ys(:, 3), spec=ip_spec(line_color=C(:, 3)))
          call ip_line('hourly', ts, ys(:, 4), spec=ip_spec(line_color=C(:, 4)))
+         call ip_tag('y1', 10.0_real64)
+         call ip_tag('x2', ts(100), color=C(:, 2))
+         call ip_tag('y2', 2.0_real64, text='level')
          call ip_plot_limits(lim(1, 1), lim(2, 1), lim(3, 1), lim(4, 1), 'x1', 'y1')
          call ip_plot_limits(lim(5, 1), lim(6, 1), lim(7, 1), lim(8, 1), 'x2', 'y2')
          call ip_end_plot()

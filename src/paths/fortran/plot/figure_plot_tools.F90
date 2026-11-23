@@ -22,8 +22,10 @@ module figure_plot_tools
 !<   two end marks `MajorTickLen` long and three times as thick; a point a filled circle; a rectangle filled at a
 !<   quarter of its colour's alpha, outlined, and with its five grab circles while the pointer is in it or it moved.
 !<
-!< The colour: given (RGBA in [0, 1]), or Dear ImGui's text colour (ImPlot's automatic colour, alpha -1). As
-!< `ip_drag_rect`, a rectangle's values are put in order once it is no longer held. Usage errors (outside a plot, a
+!< The colour: given (RGBA in [0, 1]), or Dear ImGui's text colour (ImPlot's automatic colour, alpha -1; packed with
+!< the style's alpha, which FIGURE's themes keep at 1). Kept from the current path (the owner's decision on #15): as
+!< `ip_drag_rect`, a rectangle's values are put in order once it is no longer held, and it is held while the pointer
+!< is in it with the left button down even off its handles (ImPlot's `out_held`). Usage errors (outside a plot, a
 !< colour of size /= 4, a NaN edge) stop the program, as the frame's.
 !<
 !< No allocation per frame: the values are scalars, the grab rectangles fixed arrays.

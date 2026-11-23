@@ -76,22 +76,33 @@ module figure_plot_frame
 !<   alignments; LRU past 64), the frame, title and splitters (hovered after Dear ImGui's hover time, figure_core giving
 !<   no `HoveredIdTimer`: the time since the hover began; dragged; a double click evens two), the cells' style
 !<   (`PlotPadding` halved, no `PlotMinSize`, no frame of their own), each cell's plot under `PushID(cell)` with its
-!<   X1 and Y1 linked to its column's and row's range (`LinkAllX`, `LinkAllY`, the menu's `LinkRows`, `LinkCols`;
-!<   pulled at the plot's begin, pushed at its end; no initial fit), the paddings of a row (top, bottom) and a column
-!<   (left, right) raised to the widest of the frame before (`ImPlotAlignmentData`, also for a group of
-!<   `pf_begin_aligned`), the plot's context menu's "Subplots" (Linking, Settings; Share Items stored, not honoured);
-!<   FIGURE's first-draw fit of `ip_begin_subplots` (every axis of the next rows x cols plots fits the first time a
-!<   subplot is drawn: keyed by its ID, where `ip_begin_subplots` keys it by its title).
+!<   X1 and Y1 linked to its column's and row's range (`LinkAllX`, `LinkAllY`, the menu's `LinkRows`, `LinkCols`), the
+!<   paddings of a row (top, bottom) and a column (left, right) raised to the widest of the frame before
+!<   (`ImPlotAlignmentData`, also for a group of `pf_begin_aligned`), the plot's context menu's "Subplots" (Linking,
+!<   Settings);
+!< - P12, axes linked across plots (`pf_link_axis`, as `ip_link_axis` and FIGURE's `fig_plot_link` over ImPlot's
+!<   `SetupAxisLinks`): named groups (never removed) holding the range their axes share, pulled at the call (a cell's
+!<   at its plot's begin), pushed by every axis at `pf_end_plot`; a linked axis has no initial fit (`CanInitFit`);
+!< - P12, axis tags (`pf_tag`, as `ip_tag`, `fig_plot_tag` and ImPlot's `TagX`, `TagY`): text or the value
+!<   (unrounded "%g", a time axis's date and time), the last item's colour by default, drawn after the border with the
+!<   axis's room for them from the next frame (`OverrideSizeLate`);
+!< - the drag tools are figure_plot_tools' (P12), over this module's hooks (`pf_plot_id`, ...).
 !<
-!< Not yet (P10's rest, P11, P12): tick formats, local time and ImPlot's time style options (12-hour clock, US dates:
-!< ImPlot's defaults), pan, zoom and selection, the mouse text and the axes'
-!< hover (the pointer over the plot area), the legend's scrolling and context menus, colormaps other than Deep (the
-!< line colours of FIGURE's own styles: seal, paper, ...: their automatic colours are ImPlot's colormaps, registered by
-!< the native layer), ImPlot style variables set by a theme (`FitPadding` included), limits' constraints, the axis
-!< flags FIGURE's API does not set (`NoInitialFit`, `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or
-!< not drawn), legend sorting. Items are hashed under the plot's seed but the ID stack is not pushed (figure_core has
-!< no `PushOverrideID`): a Dear ImGui widget drawn between `pf_begin_plot` and `pf_end_plot` gets another ID than in
-!< ImPlot. The segment's normal is `1/sqrt`, as FIGURE's ImPlot (native/patches/implot-0002).
+!< Kept from the current path (FIGURE's behaviour over ImPlot, mirrored bit for bit; the owner's decisions on #15):
+!< `ip_begin_subplots`' first-draw fit (every axis of the next rows x cols plots begun fits, from a global count: a
+!< subplot that begins fewer cells leaves fits for the plots after it; "first time" keyed here by the subplot's ID,
+!< there by its title); a link group's first frame (its plots fit alone, then the group takes its first plot's
+!< range); an X2..Y3 link lasting after the program stops calling `pf_link_axis` (ImPlot resets only X1's and Y1's),
+!< still pushing its axis's range into the group; `pf_begin_aligned` refused inside a subplot (`fig_aligned_open`).
+!<
+!< Not yet: tick formats, local time and ImPlot's time style options (12-hour clock, US dates: ImPlot's defaults), the
+!< legend's scrolling, colormaps other than Deep (the line colours of FIGURE's own styles: seal, paper, ...: their
+!< automatic colours are ImPlot's colormaps, registered by the native layer), ImPlot style variables set by a theme
+!< (`FitPadding` included), limits' constraints, the axis flags FIGURE's API does not set (`NoInitialFit`,
+!< `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or not drawn), legend sorting; of P12, a subplot's
+!< shared items and legend (`ShareItems`: only the cells' menu can ask for it, the flag is stored), a subplot or an
+!< aligned group in a collapsed window (`SkipItems`, which figure_core does not give: they begin as if shown).
+!< The segment's normal is `1/sqrt`, as FIGURE's ImPlot (native/patches/implot-0002).
 !<
 !< No allocation per frame once the tables are grown (ADR 0001; P10 step 9, figure_test_plot_frame_alloc counts them):
 !< every label is written by figure_plot_format into a fixed slot (the ticks' 31 characters, `mouse_text`) and passed
@@ -121,11 +132,12 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_push_id_int, core_push_item_flag, core_push_item_width, core_push_override_id,     &
                         core_push_style_var, core_radio_button, core_set_key_owner, core_set_mouse_cursor,      &
                         core_text_unformatted, core_window_hovered, core_frame_height, core_open_popup,         &
-                        core_begin_popup, core_end_popup, core_set_cursor_screen_pos, core_time
+                        core_begin_popup, core_end_popup, core_set_cursor_screen_pos, core_time, &
+                        core_draw_triangle_filled
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
-use figure_plot_format, only : plot_format, fmt_parse, fmt_text
+use figure_plot_format, only : plot_format, fmt_g, fmt_parse, fmt_text
 use figure_plot_transform, only : plot_axis_map, map_pixel
 use figure_plot_locators, only : plot_ticks, ticks_reset, locate_default, locate_log10, locate_symlog, locate_time, &
                                 transform_log10, transform_symlog, inverse_log10, inverse_symlog, axis_value_text, &
@@ -145,7 +157,7 @@ public :: pf_hide_next_item, pf_legend_hovered
 public :: pf_plot_count, pf_colormap, pf_colormap_scale
 public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
 public :: pf_cancel_selection
-public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_plot_id
+public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_plot_id, pf_tag
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
 real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
@@ -252,6 +264,7 @@ integer(int32), parameter :: SEP_BUTTON_FLAGS = 2048_int32 + 16_int32 + 256_int3
 real(real32),   parameter :: SPLITTER_HALF = 4.0_real32  !< SUBPLOT_SPLITTER_HALF_THICKNESS [pixels].
 real(real32),   parameter :: SPLITTER_FEEDBACK = 0.06_real32 !< SUBPLOT_SPLITTER_FEEDBACK_TIMER [s].
 real(real32),   parameter :: SUBPLOT_BORDER = 1.0_real32 !< SUBPLOT_BORDER_SIZE [pixels].
+real(real32),   parameter :: ANNOTATION_PADDING(2) = [2.0_real32, 2.0_real32] !< ImPlotStyle::AnnotationPadding.
 integer(int32), parameter :: SUB_CAP = 64_int32          !< Subplots kept before the least recently drawn makes room.
 ! what an axis is linked to (ImPlotAxis::LinkedMin, LinkedMax: handles, not pointers)
 integer(int32), parameter :: LINK_NONE = 0_int32  !< Not linked.
@@ -290,6 +303,8 @@ type :: plot_axis
    real(real32)   :: hover_rect(4) = 0.0_real32       !< Its button's rectangle (HoverRect).
    integer(int32) :: link_kind = LINK_NONE            !< What it is linked to (LinkedMin, LinkedMax).
    integer(int32) :: link_idx = 0_int32               !< ... which group, column or row.
+   real(real32)   :: late(2) = 0.0_real32             !< A tag's size, the tick labels' room from the next frame
+                                                      !< (`Ticker.LateSize`, `OverrideSizeLate`).
 endtype plot_axis
 
 type :: plot_record
@@ -454,6 +469,15 @@ type(plot_link),      allocatable      :: links(:)       !< The link groups (`fi
 integer(int32)                         :: n_links = 0_int32 !< Groups held.
 character(len=:),     allocatable      :: link_names     !< Their names.
 integer(int32)                         :: n_link_names = 0_int32 !< Characters of `link_names` in use.
+integer(int32)                         :: n_tags = 0_int32 !< The open plot's tags (ImPlotContext::Tags).
+integer(int32),       allocatable      :: tag_axis(:)    !< A tag's axis.
+real(real64),         allocatable      :: tag_value(:)   !< ... value.
+integer(int32),       allocatable      :: tag_bg(:)      !< ... box colour.
+integer(int32),       allocatable      :: tag_fg(:)      !< ... text colour.
+integer(int32),       allocatable      :: tag_off(:)     !< ... text's start in `tag_text`.
+integer(int32),       allocatable      :: tag_len(:)     !< ... its length.
+character(len=:),     allocatable      :: tag_text       !< The tags' texts.
+integer(int32)                         :: n_tag_text = 0_int32 !< Characters of `tag_text` in use.
 
 contains
    function pf_begin_plot(title, width, height, equal) result(visible)
@@ -804,6 +828,7 @@ contains
       if (border_shown(p)) call core_draw_rect(real(p%rect(1), real64), real(p%rect(2), real64),        &
                                                real(p%rect(3), real64), real(p%rect(4), real64), p%col_border, &
                                                rounding=0.0_real64, thickness=real(PLOT_BORDER_SIZE, real64))
+      call draw_tags(p)
       call core_draw_end()
       call fit_axes(p)
       call context_menus(p)
@@ -1125,6 +1150,75 @@ contains
       call pull_links(p%ax(i))
    endassociate
    endsubroutine pf_link_axis
+
+   subroutine pf_tag(axis, value, color, text)
+   !< A tag on an axis of the open plot (`TagX`, `TagY` through FIGURE's `fig_plot_tag`; `ip_tag`): a box at `value`
+   !< over the axis, holding `text` or, without it, the value labelled as the axis labels a value (`LabelAxisValue`,
+   !< unrounded: "%g", a time axis's date and time). Drawn when the plot ends, over the axis's tick labels, if the
+   !< value is within the axis's range; the axis makes room for it from the next frame. Default colour: the last item's
+   !< (a tag after a line marks the line's last value); alpha 0: no box, the axis's text colour. `axis` is
+   !< `'x1'`..`'x3'`, `'y1'`..`'y3'`, set up on this frame. It ends the setup.
+   character(len=*), intent(in)           :: axis     !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   real(real64),     intent(in)           :: value    !< Position [axis units].
+   real(real64),     intent(in), optional :: color(:) !< Box colour, RGBA in [0, 1] (default: the last item's).
+   character(len=*), intent(in), optional :: text     !< Text (UTF-8; default: the value, as the axis labels it).
+   integer(int32)                         :: i, k, nt !< Axis, the tag, the text's room.
+   real(real32)                           :: c(4)     !< Colour.
+   real(real32)                           :: lum, t   !< Luminance (CalcTextColor), a product.
+   real(real64)                           :: lc(4)    !< The last item's colour.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_tag outside a plot'
+   if (value /= value) error stop 'figure_plot_frame: pf_tag: the value is NaN'
+   if (present(color)) then
+      if (size(color) /= 4) error stop 'figure_plot_frame: pf_tag: a colour needs 4 components (RGBA)'
+   endif
+   i = axis_code(axis)
+   associate(p => plots(cur))
+      if (.not. p%ax(i)%enabled) error stop 'figure_plot_frame: pf_tag: the axis is not set up'
+      if (.not. p%locked) call setup_finish(p) ! SetupLock
+      c(4) = -1.0_real32
+      if (present(color)) then
+         do k = 1_int32, 4_int32
+            c(k) = real(color(k), real32)
+         enddo
+      endif
+      if (c(4) < 0.0_real32) then ! GetLastItemColor
+         lc = pf_last_item_color()
+         do k = 1_int32, 4_int32
+            c(k) = real(lc(k), real32)
+         enddo
+      endif
+      nt = 32_int32 ! ImPlot's label buffer
+      if (present(text)) nt = len(text, kind=int32)
+      call grow_tags(n_tags + 1_int32, n_tag_text + nt)
+      n_tags = n_tags + 1_int32
+      k = n_tags
+      tag_axis(k) = i
+      tag_value(k) = value
+      tag_bg(k) = core_color(real(c(1), real64), real(c(2), real64), real(c(3), real64), real(c(4), real64))
+      if (c(4) == 0.0_real32) then
+         tag_fg(k) = core_style_color(ImGuiCol_Text) ! AxisText
+      else ! CalcTextColor
+         lum = c(1) * 0.299_real32
+         t = c(2) * 0.587_real32
+         lum = lum + t
+         t = c(3) * 0.114_real32
+         lum = lum + t
+         tag_fg(k) = merge(core_color(0.0_real64, 0.0_real64, 0.0_real64, 1.0_real64), &
+                           core_color(1.0_real64, 1.0_real64, 1.0_real64, 1.0_real64), lum > 0.5_real32)
+      endif
+      tag_off(k) = n_tag_text + 1_int32
+      if (present(text)) then
+         call fmt_text(tag_text, n_tag_text, text)
+      elseif (p%ax(i)%scale == SCALE_TIME) then
+         call time_cursor_label(value, p%ax(i)%range_max - p%ax(i)%range_min, p%rect(3) - p%rect(1), tag_text, &
+                                n_tag_text)
+      else
+         call fmt_g(tag_text, n_tag_text, value) ! Formatter_Default, "%g"
+      endif
+      tag_len(k) = n_tag_text - tag_off(k) + 1_int32
+   endassociate
+   endsubroutine pf_tag
 
    function pf_plot_count() result(n)
    !< Plots held (tests).
@@ -2249,6 +2343,8 @@ contains
    next_hidden_set = .false.
    next_link_kind = LINK_NONE
    next_link_idx = 0_int32
+   n_tags = 0_int32 ! Tags.Reset
+   n_tag_text = 0_int32
    open_context = .false.
    digital_offset = 0_int32
    prev_item = 0_int32
@@ -2726,6 +2822,7 @@ contains
       p%ax(i)%con_max = huge(1.0_real64)
       p%ax(i)%link_kind = LINK_NONE
       p%ax(i)%link_idx = 0_int32
+      p%ax(i)%late = 0.0_real32
    enddo
    endsubroutine reset_plot
 
@@ -2809,6 +2906,103 @@ contains
    call move_alloc(hovered, p%item_hovered)
    call move_alloc(marker, p%item_marker)
    endsubroutine grow_items
+
+   ! private: tags
+
+   subroutine grow_tags(m, chars)
+   !< Room for m tags and `chars` characters of their texts, those held kept (grown when short only).
+   integer(int32),   intent(in)  :: m, chars !< Tags, characters.
+   integer(int32),   allocatable :: ax_(:), bg_(:), fg_(:), off_(:), len_(:) !< New columns.
+   real(real64),     allocatable :: v_(:)    !< ...
+   character(len=:), allocatable :: t_       !< New texts.
+   integer(int32)                :: n        !< Their room.
+
+   if (.not. allocated(tag_axis)) then
+      allocate(tag_axis(8), tag_value(8), tag_bg(8), tag_fg(8), tag_off(8), tag_len(8))
+   elseif (m > size(tag_axis, kind=int32)) then
+      n = 2_int32 * size(tag_axis, kind=int32)
+      allocate(ax_(n), v_(n), bg_(n), fg_(n), off_(n), len_(n))
+      ax_(1:n_tags) = tag_axis(1:n_tags)
+      v_(1:n_tags) = tag_value(1:n_tags)
+      bg_(1:n_tags) = tag_bg(1:n_tags)
+      fg_(1:n_tags) = tag_fg(1:n_tags)
+      off_(1:n_tags) = tag_off(1:n_tags)
+      len_(1:n_tags) = tag_len(1:n_tags)
+      call move_alloc(ax_, tag_axis)
+      call move_alloc(v_, tag_value)
+      call move_alloc(bg_, tag_bg)
+      call move_alloc(fg_, tag_fg)
+      call move_alloc(off_, tag_off)
+      call move_alloc(len_, tag_len)
+   endif
+   if (.not. allocated(tag_text)) then
+      allocate(character(len=max(256_int32, chars)) :: tag_text)
+   elseif (chars > len(tag_text, kind=int32)) then
+      allocate(character(len=max(2_int32 * len(tag_text, kind=int32), chars)) :: t_)
+      t_(1:n_tag_text) = tag_text(1:n_tag_text)
+      call move_alloc(t_, tag_text)
+   endif
+   endsubroutine grow_tags
+
+   subroutine draw_tags(p)
+   !< `EndPlot`'s tags, after the border, without the plot's clip: on an enabled axis, the value within its range, a
+   !< box (`AnnotationPadding` round the text) beside the axis's datum with a triangle pointing at the value's pixel,
+   !< and the text; the axis's room for the next frame (`OverrideSizeLate`).
+   type(plot_record), intent(inout) :: p    !< Plot.
+   real(real64)                     :: w, h !< The text's size.
+   real(real32)                     :: sz(2), pos(2), pix, d, half !< The box's size and corner, the value's pixel.
+   integer(int32)                   :: k, i, a, e !< Tag, axis, its text's ends.
+
+   do k = 1_int32, n_tags
+      i = tag_axis(k)
+      a = tag_off(k)
+      e = tag_off(k) + tag_len(k) - 1_int32
+      associate(ax => p%ax(i))
+         if (.not. ax%enabled) cycle
+         if (.not. (tag_value(k) >= ax%range_min .and. tag_value(k) <= ax%range_max)) cycle ! Range.Contains
+         call core_text_size(tag_text(a:e), w, h)
+         sz(1) = real(w, real32) + 2.0_real32 * ANNOTATION_PADDING(1)
+         sz(2) = real(h, real32) + 2.0_real32 * ANNOTATION_PADDING(2)
+         ax%late(1) = max(ax%late(1), sz(1)) ! OverrideSizeLate
+         ax%late(2) = max(ax%late(2), sz(2))
+         pix = im_round(to_pixels(ax, tag_value(k)))
+         d = ax%datum1
+         if (i >= AX_Y1) then
+            half = sz(2) * 0.5_real32
+            pos(2) = pix - half
+            if (has_flag(ax%flags, AXF_OPPOSITE)) then
+               pos(1) = d + LABEL_PADDING(1)
+               call core_draw_triangle_filled(real(d, real64), real(pix, real64), real(pos(1), real64),      &
+                                              real(pos(2), real64), real(pos(1), real64),                    &
+                                              real(pos(2) + sz(2), real64), tag_bg(k))
+            else
+               pos(1) = (d - sz(1)) - LABEL_PADDING(1)
+               call core_draw_triangle_filled(real(pos(1) + sz(1), real64), real(pos(2), real64), real(d, real64), &
+                                              real(pix, real64), real(pos(1) + sz(1), real64),                    &
+                                              real(pos(2) + sz(2), real64), tag_bg(k))
+            endif
+         else
+            half = sz(1) * 0.5_real32
+            pos(1) = pix - half
+            if (has_flag(ax%flags, AXF_OPPOSITE)) then
+               pos(2) = (d - sz(2)) - LABEL_PADDING(2)
+               call core_draw_triangle_filled(real(pos(1), real64), real(pos(2) + sz(2), real64),          &
+                                              real(pos(1) + sz(1), real64), real(pos(2) + sz(2), real64), &
+                                              real(pix, real64), real(d, real64), tag_bg(k))
+            else
+               pos(2) = d + LABEL_PADDING(2)
+               call core_draw_triangle_filled(real(pos(1), real64), real(pos(2), real64), real(pix, real64),     &
+                                              real(d, real64), real(pos(1) + sz(1), real64), real(pos(2), real64), &
+                                              tag_bg(k))
+            endif
+         endif
+         call core_draw_rect_filled(real(pos(1), real64), real(pos(2), real64), real(pos(1) + sz(1), real64), &
+                                    real(pos(2) + sz(2), real64), tag_bg(k))
+         call core_draw_text(real(pos(1) + ANNOTATION_PADDING(1), real64), &
+                             real(pos(2) + ANNOTATION_PADDING(2), real64), tag_fg(k), tag_text(a:e))
+      endassociate
+   enddo
+   endsubroutine draw_tags
 
    ! private: subplots, alignments, links
 
@@ -3568,6 +3762,8 @@ contains
    p%col_border = core_style_color(ImGuiCol_Border)                         ! PlotBorder: Border
    do i = 1_int32, AXES
       call ticks_reset(ticks(i))
+      ticks(i)%max_size = p%ax(i)%late ! Ticker::Reset: MaxSize = LateSize (a tag's room), LateSize = 0
+      p%ax(i)%late = 0.0_real32
       if (p%ax(i)%scale == SCALE_TIME) ticks(i)%levels = 2_int32 ! SetupAxisScale: Ticker.Levels = 2
    enddo
    p%canvas(1:2) = p%frame(1:2) + plot_pad
