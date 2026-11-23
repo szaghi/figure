@@ -31,6 +31,7 @@ use figure_plot_colormaps, only : cm_sample
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : im_texture_ref
 use figure_plot3d_camera, only : view3d, plot_to_pixels, point_depth
+use figure_plot3d_style, only : style3_color_u32
 use figure_plot3d_drawlist, only : d3_reserve, d3_room, d3_set_texture, d3_tri, d3_vtx, d3_vtx_count
 use figure_plot3d_frame, only : plot3d_spec, item3d_style, pf3_item_begin, pf3_item_end, pf3_item_fit, &
                                 pf3_item_fitting, pf3_item_view, pf3_push_colormap, pf3_pop_colormap,  &
@@ -378,7 +379,7 @@ contains
    if (present(spec)) sp = spec
    if (.not. begin_item_ex(label, sp, sp%fill_color, sp%marker, st)) return
    if (count >= nside .and. st%render_fill .and. iand(sp%flags, F_NO_FILL) == 0_int32) &
-      call render_fill(nside, u32(st%fill_color))
+      call render_fill(nside, style3_color_u32(st%fill_color))
    if (count >= 2_int32 .and. st%render_line .and. iand(sp%flags, F_NO_LINES) == 0_int32) &
       call render_segments(st, merge(L_TRI, L_QUAD, nside == 3_int32))
    if (st%marker /= MK_NONE .and. iand(sp%flags, F_NO_MARKERS) == 0_int32) call render_markers(st, .false.)
@@ -540,7 +541,7 @@ contains
    count = size(triangles, kind=int32)
    if (.not. begin_item_ex(label, sp, sp%fill_color, sp%marker, st)) return
    if (base_count >= 3_int32 .and. st%render_fill .and. iand(sp%flags, F_NO_FILL) == 0_int32) &
-      call render_fill(3_int32, u32(st%fill_color))
+      call render_fill(3_int32, style3_color_u32(st%fill_color))
    if (base_count >= 2_int32 .and. st%render_line .and. .not. st%auto_line .and. iand(sp%flags, F_NO_LINES) == 0_int32) &
       call render_segments(st, L_TRI)
    if (st%marker /= MK_NONE .and. iand(sp%flags, F_NO_MARKERS) == 0_int32) then
@@ -634,7 +635,7 @@ contains
 
    np = d3_room((nx - 1_int32) * (ny - 1_int32), 4_int32)
    call d3_reserve(4_int32 * np, 2_int32 * np)
-   cfill = u32(st%fill_color)
+   cfill = style3_color_u32(st%fill_color)
    cm = pf3_colormap()
    zmin = 0.0_real64
    zmax = 0.0_real64
@@ -833,7 +834,7 @@ contains
    hw = max(1.0_real32, st%line_weight) * 0.5_real32
    call line_props(hw, uv0, uv1)
    col = 0_int32
-   if (.not. associated(pcol)) col = u32(st%line_color)
+   if (.not. associated(pcol)) col = style3_color_u32(st%line_color)
    call point(modulo_pt(0_int32, loop), p1)
    jvalid = .false.
    jpos = 0.0_real32
@@ -878,7 +879,7 @@ contains
    hw = max(1.0_real32, st%line_weight) * 0.5_real32
    call line_props(hw, uv0, uv1)
    col = 0_int32
-   if (.not. associated(pcol)) col = u32(st%line_color)
+   if (.not. associated(pcol)) col = style3_color_u32(st%line_color)
    do k = 0_int32, np - 1_int32
       call line_point(g, 2_int32 * k, p1)
       call line_point(g, 2_int32 * k + 1_int32, p2)
@@ -955,7 +956,7 @@ contains
    m = size(shape, 2, kind=int32)
    np = d3_room(count, m)
    call d3_reserve(m * np, (m - 2_int32) * np)
-   ccol = u32(st%mfill_color)
+   ccol = style3_color_u32(st%mfill_color)
    do k = 0_int32, np - 1_int32
       call point(k, q)
       if (.not. contains(q)) cycle
@@ -988,7 +989,7 @@ contains
    call d3_reserve(m / 2_int32 * 4_int32 * np, m / 2_int32 * 2_int32 * np)
    hw = max(1.0_real32, st%line_weight) * 0.5_real32
    call line_props(hw, uv0, uv1)
-   ccol = u32(st%mline_color)
+   ccol = style3_color_u32(st%mline_color)
    do k = 0_int32, np - 1_int32
       call point(k, q)
       if (.not. contains(q)) cycle
@@ -1376,7 +1377,8 @@ contains
    endfunction clip_update
 
    function u32(c) result(col)
-   !< `GetColorU32(ImVec4)`: a colour packed (the style's alpha 1).
+   !< `ColorConvertFloat4ToU32`: a colour packed (the style's alpha not applied; figure_plot3d_style's
+   !< `style3_color_u32` where ImPlot3D calls `GetColorU32`).
    real(real32), intent(in) :: c(4) !< RGBA.
    integer(int32)           :: col  !< Packed.
 

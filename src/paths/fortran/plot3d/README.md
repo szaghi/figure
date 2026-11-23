@@ -24,6 +24,11 @@ Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figur
   and the move sorted as glibc's `qsort` sorts (its top-down merge sort, step for step).
 - `figure_plot3d_frame`: the plots kept between frames, begin and end, setup, `SetupLock`, the box, rotated text,
   input (`HandleInput`), the legend, the context menus, the mouse text, the queries, the items' hooks, `pf3_text`.
+- `figure_plot3d_style`: `ImPlot3DStyle`: its 14 colours (automatic until pushed, `GetAutoColor`: from Dear ImGui's
+  colours of now, so FIGURE's themes, which set no ImPlot3D colour, reach the 3-D plots as on the current path) and
+  the 11 variables `ip3_push_style_var` names; `pf3_push_style_color`, `pf3_pop_style_color`, `pf3_push_style_var`,
+  `pf3_pop_style_var` (stacks of their own: on the current path figure_style's one stack is shared with ImGui's and
+  ImPlot's pushes).
 - `figure_plot3d_items`: the items (`pf3_line`, `pf3_scatter`, `pf3_triangles`, `pf3_quads`, `pf3_surface`,
   `pf3_mesh`, `pf3_image`), `pf3_spec`; the user's arrays read in place, any stride, `real32` or `real64`.
 
@@ -38,7 +43,8 @@ ImPlot3D is built (`-ffp-contract=off`).
 unfused, libm's `sincos`), `_box` (the box, axes, camera at several rotations and box scales), `_axes` (log10, symlog,
 custom ticks, formats, flags), `_lines` (lines, markers, legend, the depth sort), `_surfaces` (triangles, quads,
 surfaces, meshes, images, texts), `_input` (rotation, pan, zoom, fit, animation), `_menus` (the context menus),
-`_alloc` (no heap allocation per frame), `_big` (a 256 x 256 surface: ImPlot3D's 65535-vertex cap mirrored, the
+`_style` (colours and variables pushed, the themes, Dear ImGui's style alpha), `_alloc` (no heap allocation per
+frame), `_big` (a 256 x 256 surface: ImPlot3D's 65535-vertex cap mirrored, the
 frame times reported).
 
 ## The ImPlot3D calls the seam replaces
@@ -51,5 +57,5 @@ What `figure_implot3d` calls (through `figure_cimplot3d`) and the native C++ tha
 `ImPlot3D_PlotLine_*`, `ImPlot3D_PlotScatter_*`, `ImPlot3D_PlotTriangle_*`, `ImPlot3D_PlotQuad_*`,
 `ImPlot3D_PlotSurface_*`, `ImPlot3D_PlotMesh_*`, `ImPlot3D_PlotImage_Plot3DPoint`, `ImPlot3D_PlotText`,
 `ImPlot3D_PushColormap_Plot3DColormap`, `ImPlot3D_PopColormap`, `fig_plot3d_colormap`;
-`ImPlot3D_PlotToPixels_double`, `fig_plot3d_mouse_ray` (`figure_plot3d_pick.cpp`). Not yet: the ImPlot3D style
-(`ip3_push_style_*`, themes' ImPlot3D colours: the frame takes ImPlot3D's automatic colours).
+`ImPlot3D_PlotToPixels_double`, `fig_plot3d_mouse_ray` (`figure_plot3d_pick.cpp`); `fig_push_style_color`,
+`fig_push_style_var`, `fig_pop_style` for ImPlot3D (`ip3_push_style_*`, `ip3_pop_style_*`, figure_style).

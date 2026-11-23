@@ -17,8 +17,9 @@ module figure_plot3d_frame
 !< `pf3_plot_rotation`. The camera and the box's geometry are figure_plot3d_camera's, the ticks
 !< figure_plot3d_locators'.
 !<
-!< Colours are ImPlot3D's automatic ones (`GetAutoColor`: from Dear ImGui's style), packed by figure_core with the
-!< style's alpha (ImPlot3D packs without it: equal while `style.Alpha` is 1, as FIGURE's themes have it).
+!< Colours and style variables are figure_plot3d_style's (`ImPlot3DStyle`: the colours pushed, else automatic,
+!< `GetAutoColor` from Dear ImGui's style of now; packed without the style's alpha as `GetStyleColorU32`, or with it where
+!< ImPlot3D calls `GetColorU32`).
 !<
 !< Axes (step 3): log10 and symlog scales (`SetupAxisScale`: ImPlot3D's transforms, constraints and locators; the scaled
 !< range cached when the range is set, as `UpdateTransformCache`: a scale set after the limits on a plot's first frame
@@ -75,6 +76,15 @@ use figure_plot3d_drawlist, only : d3_flush, d3_reset
 use figure_imgui, only : ig_button, ig_checkbox, ig_same_line, ig_separator, ig_push_item_width, ig_pop_item_width
 use figure_menu, only : ig_begin_menu, ig_end_menu, ig_menu_item
 use figure_group, only : ig_begin_disabled, ig_end_disabled
+use figure_plot3d_style, only : style3_vec4, style3_u32, style3_color_u32, style3_alpha_u32,                  &
+                                S3_TITLE_TEXT, S3_INLAY_TEXT, S3_FRAME_BG, S3_PLOT_BG,                         &
+                                S3_PLOT_BORDER, S3_LEGEND_BG, S3_LEGEND_BORDER, S3_LEGEND_TEXT, S3_AXIS_TEXT,  &
+                                S3_AXIS_GRID, S3_AXIS_TICK, S3_AXIS_BG, S3_AXIS_BG_HOVERED, S3_AXIS_BG_ACTIVE, &
+                                s3_line_weight, s3_marker_size, s3_fill_alpha, s3_view_factor,                 &
+                                PLOT_DEFAULT_SIZE => s3_default_size, PLOT_MIN_SIZE => s3_min_size,            &
+                                PLOT_PADDING => s3_plot_padding, LABEL_PADDING => s3_label_padding,            &
+                                LEGEND_PADDING => s3_legend_padding, LEGEND_INNER_PADDING => s3_legend_inner,  &
+                                LEGEND_SPACING => s3_legend_spacing
 use figure_plot3d_locators, only : ticks3d, ticks3_add, ticks3_reset, locate3_default, locate3_log10, locate3_symlog
 use vecfor_R8P, only : vector_R8P
 
@@ -136,14 +146,7 @@ integer(int32), parameter :: L3_HORIZONTAL = 4_int32    !< Horizontal.
 integer(int32), parameter :: I3_NO_LEGEND = 1_int32     !< NoLegend.
 integer(int32), parameter :: I3_NO_FIT = 2_int32        !< NoFit.
 integer(int32), parameter :: M3_NONE = -2_int32         !< ImPlot3DMarker_None.
-real(real32),   parameter :: LEGEND_PADDING(2) = [10.0_real32, 10.0_real32]      !< LegendPadding.
-real(real32),   parameter :: LEGEND_INNER_PADDING(2) = [5.0_real32, 5.0_real32] !< LegendInnerPadding.
-real(real32),   parameter :: LEGEND_SPACING(2) = [5.0_real32, 0.0_real32]       !< LegendSpacing.
 ! the style (ImPlot3DStyle's defaults)
-real(real32),   parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 400.0_real32] !< PlotDefaultSize.
-real(real32),   parameter :: PLOT_MIN_SIZE(2) = [200.0_real32, 200.0_real32]     !< PlotMinSize.
-real(real32),   parameter :: PLOT_PADDING(2) = [10.0_real32, 10.0_real32]        !< PlotPadding.
-real(real32),   parameter :: LABEL_PADDING(2) = [5.0_real32, 5.0_real32]         !< LabelPadding.
 real(real32),   parameter :: AXIS_TICK_INNER_PAD = 5.0_real32  !< Between an axis's edge and its tick labels.
 real(real32),   parameter :: AXIS_LABEL_PAD = 10.0_real32      !< Between the tick labels and the axis label.
 real(real32),   parameter :: AXIS_RECT_MIN_WIDTH = 40.0_real32 !< An axis's hover rectangle at least.
@@ -709,13 +712,13 @@ contains
       st%mfill_color = spec%marker_fill_color
       if (spec%marker_fill_color(4) == -1.0_real32) st%mfill_color = st%line_color
       st%line_weight = spec%line_weight
-      if (st%line_weight < 0.0_real32) st%line_weight = 1.0_real32
+      if (st%line_weight < 0.0_real32) st%line_weight = s3_line_weight
       st%marker = spec%marker
       if (st%marker < 0_int32) st%marker = M3_NONE
       st%marker_size = spec%marker_size
-      if (st%marker_size < 0.0_real32) st%marker_size = 4.0_real32
+      if (st%marker_size < 0.0_real32) st%marker_size = s3_marker_size
       st%fill_alpha = spec%fill_alpha
-      if (st%fill_alpha < 0.0_real32) st%fill_alpha = 1.0_real32
+      if (st%fill_alpha < 0.0_real32) st%fill_alpha = s3_fill_alpha
       st%fill_color(4) = st%fill_color(4) * st%fill_alpha
       st%mfill_color(4) = st%mfill_color(4) * st%fill_alpha
       st%render_line = st%line_color(4) > 0.0_real32 .and. st%line_weight > 0.0_real32
@@ -790,7 +793,7 @@ contains
       a = 0.0_real32
       if (present(angle)) a = real(angle, real32)
       call core_draw_begin()
-      call text_rotated(px, py, a, core_style_color(ImGuiCol_Text), text)
+      call text_rotated(px, py, a, style3_u32(S3_INLAY_TEXT), text)
       call core_draw_end()
    endassociate
    endsubroutine pf3_text
@@ -923,7 +926,8 @@ contains
    p%setup_locked = .true.
    call core_draw_begin()
    call core_draw_rect_filled(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
-                              real(p%frame(4), real64), core_style_color(ImGuiCol_FrameBg))
+                              real(p%frame(4), real64), style3_u32(S3_FRAME_BG))
+   p%v%factor = s3_view_factor ! GetViewScale reads the style's factor
    p%canvas(1:2) = p%frame(1:2) + PLOT_PADDING
    p%canvas(3:4) = p%frame(3:4) - PLOT_PADDING
    p%v%rect = p%canvas
@@ -951,15 +955,15 @@ contains
             call locate3_default(p%ax(i)%ticks, p%v%rmin(i), p%v%rmax(i), pixels, p%ax(i)%fmt)
          endselect
       endif
-      p%ax(i)%col_bg = 0_int32 ! AxisBg: transparent
-      p%ax(i)%col_hov = core_style_color(ImGuiCol_ButtonHovered)
-      p%ax(i)%col_act = core_style_color(ImGuiCol_ButtonActive)
+      p%ax(i)%col_bg = style3_u32(S3_AXIS_BG)
+      p%ax(i)%col_hov = style3_u32(S3_AXIS_BG_HOVERED)
+      p%ax(i)%col_act = style3_u32(S3_AXIS_BG_ACTIVE)
    enddo
    if (p%title_len > 0_int32 .and. .not. has_flag(p%flags, F3_NO_TITLE)) then ! AddTextCentered
       cx = (p%frame(1) + p%frame(3)) * 0.5_real32
       call core_text_size(p%title(1:p%title_len), w, h, hide_after_hash=.true.)
       call core_draw_text(real(cx - real(w, real32) * 0.5_real32, real64), real(p%canvas(2), real64), &
-                          core_style_color(ImGuiCol_Text), p%title(1:rendered_len(p%title(1:p%title_len))))
+                          style3_u32(S3_TITLE_TEXT), p%title(1:rendered_len(p%title(1:p%title_len))))
       p%v%rect(2) = p%v%rect(2) + (real(core_font_size(), real32) + LABEL_PADDING(2))
    endif
    if (p%anim_time > 0.0_real32) then ! the animation
@@ -1391,7 +1395,7 @@ contains
    integer(int32)                  :: hovered, a, f, k, col, col_bg, col_hov !< Plane, axis, face, corner, colours.
    real(real64)                    :: qx(4), qy(4)  !< A quad.
    real(real32)                    :: mx, my        !< Pointer.
-   real(real64)                    :: bg(4)         !< PlotBg (WindowBg), floats.
+   real(real32)                    :: bgf(4)        !< PlotBg, floats.
 
    hovered = -1_int32
    if (.not. p%held) then
@@ -1402,13 +1406,10 @@ contains
    else
       hovered = p%held_plane
    endif
-   call core_style_color_rgba(ImGuiCol_WindowBg, bg)
-   col_bg = core_color(real(real(bg(1), real32), real64), real(real(bg(2), real32), real64), &
-                       real(real(bg(3), real32), real64), real(real(bg(4), real32), real64))
-   bg(1) = real(real(bg(1), real32) + 0.03_real32, real64) ! col_bg + ImVec4(0.03, 0.03, 0.03, 0), in float
-   bg(2) = real(real(bg(2), real32) + 0.03_real32, real64)
-   bg(3) = real(real(bg(3), real32) + 0.03_real32, real64)
-   col_hov = core_color(bg(1), bg(2), bg(3), bg(4))
+   call style3_vec4(S3_PLOT_BG, bgf)
+   col_bg = core_color(real(bgf(1), real64), real(bgf(2), real64), real(bgf(3), real64), real(bgf(4), real64))
+   bgf(1:3) = bgf(1:3) + 0.03_real32 ! col_bg + ImVec4(0.03, 0.03, 0.03, 0), in float
+   col_hov = core_color(real(bgf(1), real64), real(bgf(2), real64), real(bgf(3), real64), real(bgf(4), real64))
    do a = 0_int32, 2_int32
       f = a + 3_int32 * merge(1_int32, 0_int32, af(a + 1_int32))
       do k = 0_int32, 3_int32
@@ -1476,7 +1477,7 @@ contains
          draw(FACE_EDGES(k, f)) = .true.
       enddo
    enddo
-   col = core_style_color(ImGuiCol_Border)
+   col = style3_u32(S3_PLOT_BORDER)
    do k = 0_int32, 11_int32
       if (.not. draw(k)) cycle
       call core_draw_line(real(cp(1, EDGES(0, k)), real64), real(cp(2, EDGES(0, k)), real64), &
@@ -1494,9 +1495,14 @@ contains
    integer(int32)                  :: face, f, au, av, t, col_minor, col_major !< Face, axes, tick, colours.
    real(real64)                    :: p0(3), p1(3), p3(3), u(3), w(3), tt, a(3), b(3) !< Corners, edges, points.
    real(real32)                    :: ax_, ay_, bx_, by_ !< Pixels.
+   real(real32)                    :: cg(4), ch(4) !< AxisGrid, its minor and major.
 
-   col_minor = core_style_color(ImGuiCol_Text, real(0.25_real32 * 0.3_real32, real64))
-   col_major = core_style_color(ImGuiCol_Text, real(0.25_real32 * 0.6_real32, real64))
+   call style3_vec4(S3_AXIS_GRID, cg) ! GetColorU32(col_grid * ImVec4(1, 1, 1, 0.3)): times the style's alpha
+   ch = cg
+   ch(4) = cg(4) * 0.3_real32
+   col_minor = style3_color_u32(ch)
+   ch(4) = cg(4) * 0.6_real32
+   col_major = style3_color_u32(ch)
    do face = 0_int32, 2_int32
       if (plane_2d /= -1_int32 .and. face /= plane_2d) cycle
       f = face + 3_int32 * merge(1_int32, 0_int32, af(face + 1_int32))
@@ -1547,7 +1553,7 @@ contains
    real(real64)                    :: alen, plen, vv, tp(3), n(3), half(3), sz, t1(3), t2(3) !< Work.
    real(real32)                    :: x1, y1, x2, y2 !< Pixels.
 
-   col = core_style_color(ImGuiCol_Text, 0.25_real64)
+   col = style3_u32(S3_AXIS_TICK)
    do a = 0_int32, 2_int32
       if (has_flag(p%ax(a + 1_int32)%flags, A3_NO_TICK_MARKS)) cycle
       i0 = ac(0, a)
@@ -1642,7 +1648,7 @@ contains
    real(real32)                    :: d(2), l, o(2), off(2), ang, rc(2), x, y, ext !< Work.
    real(real64)                    :: s(3), dir(3), tt, tp(3), ctr(3) !< Axis start, direction, a tick's point.
 
-   col = core_style_color(ImGuiCol_Text)
+   col = style3_u32(S3_AXIS_TEXT)
    do a = 0_int32, 2_int32
       if (has_flag(p%ax(a + 1_int32)%flags, A3_NO_TICK_LABELS)) cycle
       i0 = ac(0, a)
@@ -1691,7 +1697,7 @@ contains
    real(real32)                    :: d(2), l, o(2), ang, rc(2), ext, tot, mid(2) !< Work.
    real(real64)                    :: ctr(3) !< The ranges' centre.
 
-   col = core_style_color(ImGuiCol_Text)
+   col = style3_u32(S3_AXIS_TEXT)
    do a = 0_int32, 2_int32
       if (.not. has_label(p%ax(a + 1_int32))) cycle
       i0 = ac(0, a)
@@ -1827,7 +1833,7 @@ contains
    call core_text_size(mouse_text(1:n), w, h)
    call location_pos(p%v%rect, real(w, real32), real(h, real32), LOC_SOUTH + LOC_EAST, 10.0_real32, 10.0_real32, pos)
    call core_draw_begin()
-   call core_draw_text(real(pos(1), real64), real(pos(2), real64), core_style_color(ImGuiCol_Text), mouse_text(1:n))
+   call core_draw_text(real(pos(1), real64), real(pos(2), real64), style3_u32(S3_INLAY_TEXT), mouse_text(1:n))
    call core_draw_end()
    endsubroutine mouse_position
 
@@ -2576,10 +2582,10 @@ contains
    call core_draw_begin()
    call core_draw_rect_filled(real(p%leg_clamped(1), real64), real(p%leg_clamped(2), real64), &
                               real(p%leg_clamped(3), real64), real(p%leg_clamped(4), real64), &
-                              core_style_color(ImGuiCol_PopupBg))
+                              style3_u32(S3_LEGEND_BG))
    call legend_entries(p, .not. horz)
    call core_draw_rect(real(p%leg_clamped(1), real64), real(p%leg_clamped(2), real64), &
-                       real(p%leg_clamped(3), real64), real(p%leg_clamped(4), real64), core_style_color(ImGuiCol_Border))
+                       real(p%leg_clamped(3), real64), real(p%leg_clamped(4), real64), style3_u32(S3_LEGEND_BORDER))
    call core_draw_end()
    call core_pop_clip_rect()
    endsubroutine render_legend
@@ -2624,7 +2630,7 @@ contains
    logical                            :: hov, hld, clk !< Its button.
 
    ht = real(core_font_size(), real32)
-   col_txt = core_style_color(ImGuiCol_Text)
+   col_txt = style3_u32(S3_LEGEND_TEXT)
    col_dis = alpha_u32(col_txt, 0.25_real32)
    sum_w = 0.0_real32
    do i = 1_int32, p%n_leg
@@ -2661,7 +2667,7 @@ contains
          col_hl = mix_u32(col_txt, col_item, 64_int32)
       else
          p%it(k)%legend_hovered = .false.
-         col_hl = col_txt
+         col_hl = style3_alpha_u32(col_txt) ! ImGui::GetColorU32(col_txt)
       endif
       if (hld) then
          if (p%it(k)%show) then
