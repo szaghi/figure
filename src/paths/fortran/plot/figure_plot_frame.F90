@@ -70,6 +70,18 @@ module figure_plot_frame
 !<   greyed (`Text` at 1/4 alpha);
 !< - a line (`PlotLine`'s `RendererLineStrip`): each segment a quad of the anti-aliased line's texture, half its
 !<   weight (at least 1 pixel) plus half the texture's fringe on each side, the segments outside the plot culled.
+!< - P12, subplots and aligned plots (`pf_begin_subplots`, `pf_end_subplots`, `pf_begin_aligned`, `pf_end_aligned`, as
+!<   `ip_begin_subplots`, ... and ImPlot's `BeginSubplots`, `SubplotSetCell`, `EndSubplots`, `BeginAlignedPlots`,
+!<   `EndAlignedPlots`): a table of subplots keyed by their title's ID (rows' and columns' ratios, linked ranges and
+!<   alignments; LRU past 64), the frame, title and splitters (hovered after Dear ImGui's hover time, figure_core giving
+!<   no `HoveredIdTimer`: the time since the hover began; dragged; a double click evens two), the cells' style
+!<   (`PlotPadding` halved, no `PlotMinSize`, no frame of their own), each cell's plot under `PushID(cell)` with its
+!<   X1 and Y1 linked to its column's and row's range (`LinkAllX`, `LinkAllY`, the menu's `LinkRows`, `LinkCols`;
+!<   pulled at the plot's begin, pushed at its end; no initial fit), the paddings of a row (top, bottom) and a column
+!<   (left, right) raised to the widest of the frame before (`ImPlotAlignmentData`, also for a group of
+!<   `pf_begin_aligned`), the plot's context menu's "Subplots" (Linking, Settings; Share Items stored, not honoured);
+!<   FIGURE's first-draw fit of `ip_begin_subplots` (every axis of the next rows x cols plots fits the first time a
+!<   subplot is drawn: keyed by its ID, where `ip_begin_subplots` keys it by its title).
 !<
 !< Not yet (P10's rest, P11, P12): tick formats, local time and ImPlot's time style options (12-hour clock, US dates:
 !< ImPlot's defaults), pan, zoom and selection, the mouse text and the axes'
@@ -95,7 +107,8 @@ use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_BorderShadow, ImGuiCol
                                 ImGuiKey_MouseWheelY, ImGuiMod_Alt, ImGuiMod_Ctrl, ImGuiMod_Shift, &
                                 ImGuiMouseCursor_None, ImGuiMouseCursor_NotAllowed, ImGuiMouseCursor_ResizeAll, &
                                 ImGuiMouseCursor_ResizeEW, ImGuiMouseCursor_ResizeNS, ImGuiStyleVar_Alpha, &
-                                ImGuiStyleVar_ItemSpacing
+                                ImGuiStyleVar_ItemSpacing, ImGuiCol_SeparatorActive, ImGuiCol_SeparatorHovered, &
+                                ImGuiStyleVar_FrameBorderSize
 use figure_core, only : core_button_behavior, core_color, core_content_region_avail, core_cursor_screen_pos, &
                         core_draw_begin, core_draw_end, core_draw_line_h, core_draw_line_v, core_draw_quad_uv, &
                         core_draw_rect, core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, &
@@ -108,7 +121,7 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_push_id_int, core_push_item_flag, core_push_item_width, core_push_override_id,     &
                         core_push_style_var, core_radio_button, core_set_key_owner, core_set_mouse_cursor,      &
                         core_text_unformatted, core_window_hovered, core_frame_height, core_open_popup,         &
-                        core_begin_popup, core_end_popup
+                        core_begin_popup, core_end_popup, core_set_cursor_screen_pos, core_time
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
@@ -132,10 +145,11 @@ public :: pf_hide_next_item, pf_legend_hovered
 public :: pf_plot_count, pf_colormap, pf_colormap_scale
 public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
 public :: pf_cancel_selection
+public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
 real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
-real(real32), parameter :: PLOT_MIN_SIZE(2) = [200.0_real32, 150.0_real32]     !< PlotMinSize [pixels].
+real(real32), parameter :: STYLE_PLOT_MIN_SIZE(2) = [200.0_real32, 150.0_real32] !< PlotMinSize [pixels].
 real(real32), parameter :: PLOT_BORDER_SIZE = 1.0_real32                       !< PlotBorderSize [pixels].
 real(real32), parameter :: MINOR_ALPHA = 0.25_real32                           !< MinorAlpha.
 real(real32), parameter :: MAJOR_TICK_LEN(2) = [10.0_real32, 10.0_real32]      !< MajorTickLen [pixels].
@@ -144,7 +158,7 @@ real(real32), parameter :: MAJOR_TICK_SIZE(2) = [1.0_real32, 1.0_real32]       !
 real(real32), parameter :: MINOR_TICK_SIZE(2) = [1.0_real32, 1.0_real32]       !< MinorTickSize [pixels].
 real(real32), parameter :: MAJOR_GRID_SIZE(2) = [1.0_real32, 1.0_real32]       !< MajorGridSize [pixels].
 real(real32), parameter :: MINOR_GRID_SIZE(2) = [1.0_real32, 1.0_real32]       !< MinorGridSize [pixels].
-real(real32), parameter :: PLOT_PADDING(2) = [10.0_real32, 10.0_real32]        !< PlotPadding [pixels].
+real(real32), parameter :: STYLE_PLOT_PADDING(2) = [10.0_real32, 10.0_real32]  !< PlotPadding [pixels].
 real(real32), parameter :: LABEL_PADDING(2) = [5.0_real32, 5.0_real32]         !< LabelPadding [pixels].
 real(real32), parameter :: LEGEND_PADDING(2) = [10.0_real32, 10.0_real32]      !< LegendPadding [pixels].
 real(real32), parameter :: LEGEND_INNER_PADDING(2) = [5.0_real32, 5.0_real32]  !< LegendInnerPadding [pixels].
@@ -222,6 +236,28 @@ character(len=8), parameter :: AXIS_NAMES(6) = ['X-Axis  ', 'X-Axis 2', 'X-Axis 
                                                 'Y-Axis 3'] !< Names.
 integer(int32),   parameter :: AXIS_NAMES_LEN(6) = [6_int32, 8_int32, 8_int32, 6_int32, 8_int32, 8_int32] !< Lengths.
 integer(int32),   parameter :: MOUSE_TEXT_LEN = 256_int32 !< The mouse text's room (six values of 31 characters).
+! ImPlotSubplotFlags (implot.h)
+integer(int32), parameter :: SPF_NO_TITLE = 1_int32      !< ImPlotSubplotFlags_NoTitle.
+integer(int32), parameter :: SPF_NO_MENUS = 4_int32      !< ImPlotSubplotFlags_NoMenus.
+integer(int32), parameter :: SPF_NO_RESIZE = 8_int32     !< ImPlotSubplotFlags_NoResize.
+integer(int32), parameter :: SPF_NO_ALIGN = 16_int32     !< ImPlotSubplotFlags_NoAlign.
+integer(int32), parameter :: SPF_SHARE_ITEMS = 32_int32  !< ImPlotSubplotFlags_ShareItems (stored, not honoured).
+integer(int32), parameter :: SPF_LINK_ROWS = 64_int32    !< ImPlotSubplotFlags_LinkRows.
+integer(int32), parameter :: SPF_LINK_COLS = 128_int32   !< ImPlotSubplotFlags_LinkCols.
+integer(int32), parameter :: SPF_LINK_ALL_X = 256_int32  !< ImPlotSubplotFlags_LinkAllX.
+integer(int32), parameter :: SPF_LINK_ALL_Y = 512_int32  !< ImPlotSubplotFlags_LinkAllY.
+integer(int32), parameter :: SPF_COL_MAJOR = 1024_int32  !< ImPlotSubplotFlags_ColMajor.
+integer(int32), parameter :: SEP_BUTTON_FLAGS = 2048_int32 + 16_int32 + 256_int32 !< A splitter's ImGuiButtonFlags:
+                                                         !< FlattenChildren, PressedOnClick, PressedOnDoubleClick.
+real(real32),   parameter :: SPLITTER_HALF = 4.0_real32  !< SUBPLOT_SPLITTER_HALF_THICKNESS [pixels].
+real(real32),   parameter :: SPLITTER_FEEDBACK = 0.06_real32 !< SUBPLOT_SPLITTER_FEEDBACK_TIMER [s].
+real(real32),   parameter :: SUBPLOT_BORDER = 1.0_real32 !< SUBPLOT_BORDER_SIZE [pixels].
+integer(int32), parameter :: SUB_CAP = 64_int32          !< Subplots kept before the least recently drawn makes room.
+! what an axis is linked to (ImPlotAxis::LinkedMin, LinkedMax: handles, not pointers)
+integer(int32), parameter :: LINK_NONE = 0_int32  !< Not linked.
+integer(int32), parameter :: LINK_GROUP = 1_int32 !< A group of `pf_link_axis`.
+integer(int32), parameter :: LINK_COL = 2_int32   !< A column's (or all X's) range of the subplot open.
+integer(int32), parameter :: LINK_ROW = 3_int32   !< A row's (or all Y's) range of the subplot open.
 
 type :: plot_axis
    !< An axis (ImPlotAxis): its state kept between frames, and where it is on screen this frame.
@@ -252,6 +288,8 @@ type :: plot_axis
    logical        :: hovered = .false.                !< Its button hovered (the pointer over its labels).
    logical        :: held = .false.                   !< ... held (dragged).
    real(real32)   :: hover_rect(4) = 0.0_real32       !< Its button's rectangle (HoverRect).
+   integer(int32) :: link_kind = LINK_NONE            !< What it is linked to (LinkedMin, LinkedMax).
+   integer(int32) :: link_idx = 0_int32               !< ... which group, column or row.
 endtype plot_axis
 
 type :: plot_record
@@ -328,6 +366,41 @@ type :: plot_item_ctx
    logical             :: y_inv = .false.         !< The current y axis inverted.
 endtype plot_item_ctx
 
+type :: plot_align
+   !< An alignment of plots' paddings (`ImPlotAlignmentData`): a group's, or a subplot's row or column.
+   logical      :: vertical = .true.        !< Left and right paddings (true) or top and bottom.
+   real(real32) :: pad_a = 0.0_real32       !< The padding before (top, left), from the frame before [pixels].
+   real(real32) :: pad_b = 0.0_real32       !< ... after (bottom, right).
+   real(real32) :: pad_a_max = 0.0_real32   !< The largest of this frame's plots, before.
+   real(real32) :: pad_b_max = 0.0_real32   !< ... after.
+endtype plot_align
+
+type :: subplot_record
+   !< A grid of plots (`ImPlotSubplot`): what is kept between frames, and its layout on the frame it is drawn.
+   integer(int32)                :: id = 0_int32         !< ID (its title's in the window's ID stack).
+   logical                       :: used = .false.       !< The slot holds a subplot.
+   integer(int32)                :: last_frame = -1_int32 !< The frame it was last begun on.
+   integer(int32)                :: flags = 0_int32      !< ImPlotSubplotFlags in effect (the menu flips them).
+   integer(int32)                :: prev_flags = 0_int32 !< ... those last asked.
+   integer(int32)                :: rows = 0_int32       !< Rows.
+   integer(int32)                :: cols = 0_int32       !< Columns.
+   logical                       :: has_title = .false.  !< Its title has text.
+   real(real32),     allocatable :: row_ratio(:)         !< A row's share of the grid's height (RowRatios).
+   real(real32),     allocatable :: col_ratio(:)         !< A column's share of its width (ColRatios).
+   real(real64),     allocatable :: row_link(:,:)        !< A row's linked y range, (min, max) (RowLinkData).
+   real(real64),     allocatable :: col_link(:,:)        !< A column's linked x range (ColLinkData).
+   type(plot_align), allocatable :: row_align(:)         !< A row's alignment (RowAlignmentData).
+   type(plot_align), allocatable :: col_align(:)         !< A column's (ColAlignmentData).
+   real(real32)                  :: frame(4) = 0.0_real32 !< Frame rectangle (FrameRect) [pixels].
+   real(real32)                  :: grid(4) = 0.0_real32 !< The cells' rectangle (GridRect).
+   real(real32)                  :: cell(2) = 0.0_real32 !< The current cell's size (CellSize).
+   real(real32)                  :: temp(2) = 0.0_real32 !< Two ratios when a splitter was clicked (TempSizes).
+   integer(int32)                :: cur_idx = 0_int32    !< The current cell (CurrentIdx, from 0).
+   integer(int32)                :: hov_sep = 0_int32    !< The splitter hovered on `hov_frame` (0: none).
+   integer(int32)                :: hov_frame = -1_int32 !< ... that frame.
+   real(real64)                  :: hov_t0 = 0.0_real64  !< Dear ImGui's time when its hover began [s].
+endtype subplot_record
+
 type(plot_record), allocatable, target :: plots(:)       !< The plots (ImPlotContext::Plots).
 integer(int32)                         :: n_plots = 0_int32 !< Slots of `plots` in use.
 integer(int32)                         :: cur = 0_int32  !< The plot open (0: none).
@@ -344,6 +417,26 @@ character(len=MOUSE_TEXT_LEN)          :: mouse_text     !< The mouse text (Mous
 integer(int32)                         :: digital_offset = 0_int32 !< The digital items' bands (DigitalPlotOffset).
 integer(int32)                         :: last_item = 0_int32 !< The item `pf_item_begin` registered last.
 integer(int32)                         :: prev_item = 0_int32 !< The item drawn or hidden last (PreviousItem; 0: none).
+type(subplot_record), allocatable      :: subs(:)        !< The subplots (ImPlotContext::Subplots).
+integer(int32)                         :: n_subs = 0_int32 !< Slots of `subs` in use.
+integer(int32)                         :: cur_sub = 0_int32 !< The subplot open (0: none).
+type(plot_align),     allocatable      :: aligns(:)      !< The aligned groups (ImPlotContext::AlignmentData).
+integer(int32),       allocatable      :: align_id(:)    !< ... their IDs.
+integer(int32)                         :: n_aligns = 0_int32 !< Groups held.
+integer(int32)                         :: cur_align_h = 0_int32 !< The top and bottom paddings' alignment
+                                                         !< (CurrentAlignmentH): 0 none, > 0 a group, < 0 -(row) of
+                                                         !< the subplot open.
+integer(int32)                         :: cur_align_v = 0_int32 !< The left and right paddings' (CurrentAlignmentV):
+                                                         !< ... < 0 -(column) of the subplot open.
+integer(int32)                         :: next_link_kind(2) = LINK_NONE !< X1's and Y1's links of the next plot
+                                                         !< (NextPlotData.LinkedMin, LinkedMax: a subplot's cell).
+integer(int32)                         :: next_link_idx(2) = 0_int32 !< ... which column or row.
+integer(int32)                         :: fits_pending = 0_int32 !< Plots begun next that fit every axis: a subplot
+                                                         !< drawn for the first time (FIGURE's `ip_begin_subplots`).
+real(real32)                           :: plot_pad(2) = STYLE_PLOT_PADDING !< PlotPadding in effect (a subplot's
+                                                         !< cells: half of it).
+real(real32)                           :: plot_min(2) = STYLE_PLOT_MIN_SIZE !< PlotMinSize in effect (cells: 0).
+logical                                :: frame_bg_clear = .false. !< FrameBg transparent (a subplot's cells).
 
 contains
    function pf_begin_plot(title, width, height, equal) result(visible)
@@ -365,14 +458,20 @@ contains
    integer(int32)                         :: flags   !< ImPlotFlags.
    integer(int32)                         :: i       !< Axis.
    logical                                :: created !< The plot is new.
+   logical                                :: added   !< Not clipped (ItemAdd).
 
    visible = .false.
    if (cur /= 0_int32) error stop 'figure_plot_frame: pf_begin_plot while a plot is open'
+   if (fits_pending > 0_int32) then ! a cell of a subplot drawn for the first time: every axis fits (ip_begin_plot)
+      next_fit = .true.
+      fits_pending = fits_pending - 1_int32
+   endif
    call cm_style_refresh() ! the style's line colours, if they changed (set_style)
    flags = 0_int32
    if (present(equal)) then
       if (equal) flags = PF_EQUAL
    endif
+   if (cur_sub /= 0_int32) call core_push_id_int(subs(cur_sub)%cur_idx) ! a cell: PushID(CurrentIdx)
    id = core_get_id(title)
    h = plot_handle(id, core_frame_count(), created)
    associate(p => plots(h))
@@ -402,37 +501,49 @@ contains
       p%ax(AX_Y1)%enabled = .true.
       p%cur_x = AX_X1
       p%cur_y = AX_Y1
-      p%ax(AX_X1)%has_range = .false. ! ApplyNextPlotData: no SetNextAxisLimits
-      p%ax(AX_Y1)%has_range = .false.
+      p%ax(AX_X1)%has_range = .false. ! ApplyNextPlotData: no SetNextAxisLimits; the links of a subplot's cell (the
+      p%ax(AX_Y1)%has_range = .false. ! other axes keep theirs: they are not enabled yet)
+      p%ax(AX_X1)%link_kind = next_link_kind(1)
+      p%ax(AX_X1)%link_idx = next_link_idx(1)
+      p%ax(AX_Y1)%link_kind = next_link_kind(2)
+      p%ax(AX_Y1)%link_idx = next_link_idx(2)
+      call pull_links(p%ax(AX_X1))
+      call pull_links(p%ax(AX_Y1))
       n_text = 0_int32 ! ClearTextBuffer, SetTitle
       p%title_off = 0_int32
       p%title_len = 0_int32
       if (label_shown(title)) call append_text(title, p%title_off, p%title_len)
-      req = [-1.0_real32, 0.0_real32]
+      req(1) = -1.0_real32
+      req(2) = 0.0_real32
       if (present(width)) req(1) = real(width, real32)
       if (present(height)) req(2) = real(height, real32)
-      ext = req ! CalcItemSize(size, PlotDefaultSize)
-      aw = 0.0_real64
-      ah = 0.0_real64
-      if (req(1) < 0.0_real32 .or. req(2) < 0.0_real32) call core_content_region_avail(aw, ah)
-      if (req(1) == 0.0_real32) then
-         ext(1) = PLOT_DEFAULT_SIZE(1)
-      elseif (req(1) < 0.0_real32) then
-         ext(1) = max(4.0_real32, real(aw, real32) + req(1))
+      if (cur_sub /= 0_int32) then ! a cell: its size
+         ext = subs(cur_sub)%cell
+      else
+         ext = req ! CalcItemSize(size, PlotDefaultSize)
+         aw = 0.0_real64
+         ah = 0.0_real64
+         if (req(1) < 0.0_real32 .or. req(2) < 0.0_real32) call core_content_region_avail(aw, ah)
+         if (req(1) == 0.0_real32) then
+            ext(1) = PLOT_DEFAULT_SIZE(1)
+         elseif (req(1) < 0.0_real32) then
+            ext(1) = max(4.0_real32, real(aw, real32) + req(1))
+         endif
+         if (req(2) == 0.0_real32) then
+            ext(2) = PLOT_DEFAULT_SIZE(2)
+         elseif (req(2) < 0.0_real32) then
+            ext(2) = max(4.0_real32, real(ah, real32) + req(2))
+         endif
       endif
-      if (req(2) == 0.0_real32) then
-         ext(2) = PLOT_DEFAULT_SIZE(2)
-      elseif (req(2) < 0.0_real32) then
-         ext(2) = max(4.0_real32, real(ah, real32) + req(2))
-      endif
-      if (ext(1) < PLOT_MIN_SIZE(1) .and. req(1) < 0.0_real32) ext(1) = PLOT_MIN_SIZE(1)
-      if (ext(2) < PLOT_MIN_SIZE(2) .and. req(2) < 0.0_real32) ext(2) = PLOT_MIN_SIZE(2)
+      if (ext(1) < plot_min(1) .and. (req(1) < 0.0_real32 .or. cur_sub /= 0_int32)) ext(1) = plot_min(1)
+      if (ext(2) < plot_min(2) .and. (req(2) < 0.0_real32 .or. cur_sub /= 0_int32)) ext(2) = plot_min(2)
       call core_cursor_screen_pos(cx, cy)
       p%frame(1:2) = [real(cx, real32), real(cy, real32)]
       p%frame(3:4) = p%frame(1:2) + ext
       call core_item_size(real(p%frame(3) - p%frame(1), real64), real(p%frame(4) - p%frame(2), real64))
-      if (.not. core_item_add(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
-                              real(p%frame(4), real64), id)) then
+      added = core_item_add(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
+                            real(p%frame(4), real64), id)
+      if (.not. added .and. cur_sub == 0_int32) then ! a subplot's cell is drawn even clipped
          call reset_next() ! ResetCtxForNextPlot
          return
       endif
@@ -679,12 +790,275 @@ contains
       call core_draw_end()
       call fit_axes(p)
       call context_menus(p)
+      call push_links(p)
       p%initialized = .true.
       call core_pop_id() ! the items' IDs (PushOverrideID of SetupFinish)
    endassociate
    call reset_next() ! ResetCtxForNextPlot
    cur = 0_int32
+   if (cur_sub /= 0_int32) then ! a subplot's cell: its PushID popped, the next cell set
+      call core_pop_id()
+      call next_cell(subs(cur_sub))
+   endif
    endsubroutine pf_end_plot
+
+   function pf_begin_subplots(title, rows, cols, width, height, link_x, link_y) result(visible)
+   !< Begin a grid of `rows` x `cols` plots (`BeginSubplots`; `ip_begin_subplots`): when true, begin and end its plots
+   !< (`pf_begin_plot`/`pf_end_plot`, one per cell, row by row), then `pf_end_subplots`. `link_x`/`link_y`: the cells
+   !< share the x (y) range (`ImPlotSubplotFlags_LinkAllX`, `LinkAllY`). Size as `ip_begin_subplots` (default: the full
+   !< width, 300 pixels a row). The frame, the title, the splitters (dragged, they share the room between two rows or
+   !< columns) are drawn here; the cells get half the plot padding, no frame of their own, their paddings aligned by
+   !< row and column. The first time a subplot is drawn its plots fit every axis (FIGURE's `ip_begin_subplots`: ImPlot
+   !< gives linked axes no initial fit), linked axes then sharing the last plot's range.
+   character(len=*), intent(in)           :: title   !< Title (also the ID; '##id' hides it).
+   integer(int32),   intent(in)           :: rows    !< Rows of plots.
+   integer(int32),   intent(in)           :: cols    !< Columns of plots.
+   real(real64),     intent(in), optional :: width   !< Width [pixels] (default: full width).
+   real(real64),     intent(in), optional :: height  !< Height [pixels] (default: 300 per row).
+   logical,          intent(in), optional :: link_x  !< Share the x range.
+   logical,          intent(in), optional :: link_y  !< Share the y range.
+   logical                                :: visible !< The subplot is drawn.
+   integer(int32)                         :: id, h, flags, k, sep !< ID, handle, flags, counter, splitter.
+   logical                                :: created !< The subplot is new.
+   logical                                :: hov, held, clicked !< A splitter's button.
+   real(real32)                           :: req(2), ext(2), half(2) !< Size asked, the frame's, half the padding.
+   real(real32)                           :: title_w, title_h, pad_top !< The title's size, its room.
+   real(real32)                           :: pos, size_, dp, t, r2 !< A splitter's place, the grid's size, a drag.
+   real(real64)                           :: aw, ah, cx, cy, w, hh, dx, dy !< Room, cursor, a size, a drag.
+
+   visible = .false.
+   if (cur /= 0_int32) error stop 'figure_plot_frame: pf_begin_subplots inside a plot'
+   if (cur_sub /= 0_int32) error stop 'figure_plot_frame: pf_begin_subplots inside a subplot (ImPlot nests none)'
+   if (rows < 1_int32 .or. cols < 1_int32) error stop 'figure_plot_frame: pf_begin_subplots: rows and cols below 1'
+   flags = 0_int32
+   call set_flag(flags, SPF_LINK_ALL_X, link_x)
+   call set_flag(flags, SPF_LINK_ALL_Y, link_y)
+   id = core_get_id(title)
+   h = subplot_handle(id, core_frame_count(), created)
+   if (created) fits_pending = rows * cols ! the first time this subplot is drawn (U1: keyed by its ID, not its title)
+   cur_sub = h
+   call core_push_id_int(id) ! PushID(ID)
+   associate(s => subs(h))
+      s%last_frame = core_frame_count()
+      s%has_title = label_shown(title)
+      if (created .or. flags /= s%prev_flags) s%flags = flags
+      s%prev_flags = flags
+      if (s%rows /= rows .or. s%cols /= cols) call resize_subplot(s, rows, cols)
+      s%rows = rows
+      s%cols = cols
+      title_w = 0.0_real32
+      title_h = 0.0_real32
+      if (.not. has_flag(s%flags, SPF_NO_TITLE)) then
+         call core_text_size(title, w, hh, hide_after_hash=.true.)
+         title_w = real(w, real32)
+         title_h = real(hh, real32)
+      endif
+      pad_top = 0.0_real32
+      if (title_w > 0.0_real32) pad_top = title_h + LABEL_PADDING(2)
+      half = plot_pad / 2.0_real32
+      req(1) = -1.0_real32 ! CalcItemSize(size, PlotDefaultSize)
+      req(2) = 300.0_real32 * real(rows, real32)
+      if (present(width)) req(1) = real(width, real32)
+      if (present(height)) req(2) = real(height, real32)
+      ext = req
+      aw = 0.0_real64
+      ah = 0.0_real64
+      if (req(1) < 0.0_real32 .or. req(2) < 0.0_real32) call core_content_region_avail(aw, ah)
+      if (req(1) == 0.0_real32) then
+         ext(1) = PLOT_DEFAULT_SIZE(1)
+      elseif (req(1) < 0.0_real32) then
+         ext(1) = max(4.0_real32, real(aw, real32) + req(1))
+      endif
+      if (req(2) == 0.0_real32) then
+         ext(2) = PLOT_DEFAULT_SIZE(2)
+      elseif (req(2) < 0.0_real32) then
+         ext(2) = max(4.0_real32, real(ah, real32) + req(2))
+      endif
+      call core_cursor_screen_pos(cx, cy)
+      s%frame(1) = real(cx, real32)
+      s%frame(2) = real(cy, real32)
+      s%frame(3) = s%frame(1) + ext(1)
+      s%frame(4) = s%frame(2) + ext(2)
+      s%grid(1) = (s%frame(1) + half(1)) + 0.0_real32
+      s%grid(2) = (s%frame(2) + half(2)) + pad_top
+      s%grid(3) = s%frame(3) - half(1)
+      s%grid(4) = s%frame(4) - half(2)
+      call core_draw_begin()
+      call render_frame(s%frame)
+      if (title_w > 0.0_real32 .and. .not. has_flag(s%flags, SPF_NO_TITLE)) &
+         call text_centered((s%grid(1) + s%grid(3)) * 0.5_real32, (s%grid(2) - pad_top) + half(2), &
+                            core_style_color(ImGuiCol_Text), title)
+      if (.not. has_flag(s%flags, SPF_NO_RESIZE)) then ! the splitters: rows, then columns
+         sep = 1_int32
+         size_ = s%grid(4) - s%grid(2)
+         pos = s%grid(2)
+         do k = 1_int32, s%rows - 1_int32
+            t = s%row_ratio(k) * size_
+            pos = pos + t
+            call core_keep_alive(plot_id_offset(s%id, sep))
+            clicked = core_button_behavior(real(s%grid(1), real64), real(pos - SPLITTER_HALF, real64),            &
+                                           real(s%grid(3), real64), real(pos + SPLITTER_HALF, real64),            &
+                                           plot_id_offset(s%id, sep), hov, held, flags=SEP_BUTTON_FLAGS)
+            if ((hov .and. splitter_timer(s, sep, hov) > SPLITTER_FEEDBACK) .or. held) then
+               if (clicked .and. core_mouse_double_clicked(0_int32)) then
+                  r2 = (s%row_ratio(k) + s%row_ratio(k + 1_int32)) / 2.0_real32
+                  s%row_ratio(k) = r2
+                  s%row_ratio(k + 1_int32) = r2
+               endif
+               if (clicked) s%temp = s%row_ratio(k:k + 1_int32)
+               if (held) then
+                  call core_mouse_drag_delta(0_int32, dx, dy)
+                  dp = real(dy, real32) / size_
+                  if (s%temp(1) + dp > 0.1_real32 .and. s%temp(2) - dp > 0.1_real32) then
+                     s%row_ratio(k) = s%temp(1) + dp
+                     s%row_ratio(k + 1_int32) = s%temp(2) - dp
+                  endif
+               endif
+               call core_draw_line_h(real(im_round(s%grid(1)), real64), real(im_round(s%grid(3)), real64), &
+                                     real(im_round(pos), real64),                                         &
+                                     core_style_color(merge(ImGuiCol_SeparatorActive, ImGuiCol_SeparatorHovered, &
+                                                            held)), &
+                                     real(SUBPLOT_BORDER, real64))
+               call core_set_mouse_cursor(ImGuiMouseCursor_ResizeNS)
+            endif
+            sep = sep + 1_int32
+         enddo
+         size_ = s%grid(3) - s%grid(1)
+         pos = s%grid(1)
+         do k = 1_int32, s%cols - 1_int32
+            t = s%col_ratio(k) * size_
+            pos = pos + t
+            call core_keep_alive(plot_id_offset(s%id, sep))
+            clicked = core_button_behavior(real(pos - SPLITTER_HALF, real64), real(s%grid(2), real64),            &
+                                           real(pos + SPLITTER_HALF, real64), real(s%grid(4), real64),            &
+                                           plot_id_offset(s%id, sep), hov, held, flags=SEP_BUTTON_FLAGS)
+            if ((hov .and. splitter_timer(s, sep, hov) > SPLITTER_FEEDBACK) .or. held) then
+               if (clicked .and. core_mouse_double_clicked(0_int32)) then
+                  r2 = (s%col_ratio(k) + s%col_ratio(k + 1_int32)) / 2.0_real32
+                  s%col_ratio(k) = r2
+                  s%col_ratio(k + 1_int32) = r2
+               endif
+               if (clicked) s%temp = s%col_ratio(k:k + 1_int32)
+               if (held) then
+                  call core_mouse_drag_delta(0_int32, dx, dy)
+                  dp = real(dx, real32) / size_
+                  if (s%temp(1) + dp > 0.1_real32 .and. s%temp(2) - dp > 0.1_real32) then
+                     s%col_ratio(k) = s%temp(1) + dp
+                     s%col_ratio(k + 1_int32) = s%temp(2) - dp
+                  endif
+               endif
+               call core_draw_line_v(real(im_round(pos), real64), real(im_round(s%grid(2)), real64), &
+                                     real(im_round(s%grid(4)), real64),                             &
+                                     core_style_color(merge(ImGuiCol_SeparatorActive, ImGuiCol_SeparatorHovered, &
+                                                            held)), &
+                                     real(SUBPLOT_BORDER, real64))
+               call core_set_mouse_cursor(ImGuiMouseCursor_ResizeEW)
+            endif
+            sep = sep + 1_int32
+         enddo
+      endif
+      call core_draw_end()
+      plot_pad = half ! the cells' style: PlotPadding halved, PlotMinSize 0, FrameBg transparent, no frame border
+      plot_min = 0.0_real32
+      frame_bg_clear = .true.
+      call core_push_style_var(ImGuiStyleVar_FrameBorderSize, 0.0_real64)
+      call core_set_cursor_screen_pos(real(s%grid(1), real64), real(s%grid(2), real64))
+      do k = 1_int32, s%rows
+         s%row_align(k)%pad_a_max = 0.0_real32 ! ImPlotAlignmentData::Begin
+         s%row_align(k)%pad_b_max = 0.0_real32
+      enddo
+      do k = 1_int32, s%cols
+         s%col_align(k)%pad_a_max = 0.0_real32
+         s%col_align(k)%pad_b_max = 0.0_real32
+      enddo
+      call set_cell(s, 0_int32, 0_int32)
+   endassociate
+   visible = .true.
+   endfunction pf_begin_subplots
+
+   subroutine pf_end_subplots()
+   !< End the grid of plots (`EndSubplots`; `ip_end_subplots`): the rows' and columns' alignments kept for the next
+   !< frame, the cells' style undone, the layout cursor below the subplot's frame.
+   integer(int32) :: k !< Counter.
+   logical        :: added !< ItemAdd.
+
+   if (cur_sub == 0_int32) error stop 'figure_plot_frame: pf_end_subplots without a subplot'
+   if (cur /= 0_int32) error stop 'figure_plot_frame: pf_end_subplots while a plot is open'
+   associate(s => subs(cur_sub))
+      do k = 1_int32, s%rows
+         s%row_align(k)%pad_a = s%row_align(k)%pad_a_max ! ImPlotAlignmentData::End
+         s%row_align(k)%pad_b = s%row_align(k)%pad_b_max
+      enddo
+      do k = 1_int32, s%cols
+         s%col_align(k)%pad_a = s%col_align(k)%pad_a_max
+         s%col_align(k)%pad_b = s%col_align(k)%pad_b_max
+      enddo
+      plot_pad = STYLE_PLOT_PADDING
+      plot_min = STYLE_PLOT_MIN_SIZE
+      frame_bg_clear = .false.
+      call core_pop_style_var()
+      call core_pop_id()
+      call core_set_cursor_screen_pos(real(s%frame(1), real64), real(s%frame(2), real64)) ! Dummy(FrameRect's size)
+      call core_item_size(real(s%frame(3) - s%frame(1), real64), real(s%frame(4) - s%frame(2), real64))
+      added = core_item_add(real(s%frame(1), real64), real(s%frame(2), real64), real(s%frame(3), real64), &
+                            real(s%frame(4), real64), 0_int32)
+   endassociate
+   cur_sub = 0_int32 ! ResetCtxForNextSubplot
+   cur_align_h = 0_int32
+   cur_align_v = 0_int32
+   endsubroutine pf_end_subplots
+
+   function pf_begin_aligned(group, horizontal) result(open)
+   !< Begin a group of aligned plots (`BeginAlignedPlots`; `ip_begin_aligned`): the plots begun until `pf_end_aligned`
+   !< have their plot areas start and end at the same pixels (stacked: the same left and right paddings;
+   !< `horizontal=.true.`, side by side: the same top and bottom), from the frame after the group's widest. One group
+   !< at a time, none inside a subplot (its cells are aligned already: `fig_aligned_open`).
+   character(len=*), intent(in)           :: group      !< The group's ID.
+   logical,          intent(in), optional :: horizontal !< Plots side by side (default: stacked).
+   logical                                :: open       !< The group is open: begin its plots, then end it.
+   logical                                :: vertical   !< Left and right paddings aligned.
+   integer(int32)                         :: k          !< The group's slot.
+
+   open = .false.
+   if (cur_align_h /= 0_int32 .or. cur_align_v /= 0_int32) &
+      error stop 'figure_plot_frame: pf_begin_aligned: a group of aligned plots is open (ImPlot aligns one at a time)'
+   vertical = .true.
+   if (present(horizontal)) vertical = .not. horizontal
+   k = align_handle(core_get_id(group))
+   if (vertical) then
+      cur_align_v = k
+   else
+      cur_align_h = k
+   endif
+   if (aligns(k)%vertical .neqv. vertical) call align_reset(aligns(k))
+   aligns(k)%vertical = vertical
+   aligns(k)%pad_a_max = 0.0_real32 ! Begin
+   aligns(k)%pad_b_max = 0.0_real32
+   open = .true.
+   endfunction pf_begin_aligned
+
+   subroutine pf_end_aligned()
+   !< End a group of aligned plots (`EndAlignedPlots`; `ip_end_aligned`): its paddings kept for the next frame.
+   integer(int32) :: k !< The alignment (ImPlot's: the top and bottom one if set, else the left and right one).
+
+   if (cur_align_h == 0_int32 .and. cur_align_v == 0_int32) &
+      error stop 'figure_plot_frame: pf_end_aligned without a group'
+   k = merge(cur_align_h, cur_align_v, cur_align_h /= 0_int32)
+   if (k > 0_int32) then
+      aligns(k)%pad_a = aligns(k)%pad_a_max
+      aligns(k)%pad_b = aligns(k)%pad_b_max
+   elseif (cur_sub /= 0_int32) then ! (inside a subplot: refused by pf_begin_aligned, kept as ImPlot's End)
+      if (cur_align_h /= 0_int32) then
+         subs(cur_sub)%row_align(-k)%pad_a = subs(cur_sub)%row_align(-k)%pad_a_max
+         subs(cur_sub)%row_align(-k)%pad_b = subs(cur_sub)%row_align(-k)%pad_b_max
+      else
+         subs(cur_sub)%col_align(-k)%pad_a = subs(cur_sub)%col_align(-k)%pad_a_max
+         subs(cur_sub)%col_align(-k)%pad_b = subs(cur_sub)%col_align(-k)%pad_b_max
+      endif
+   endif
+   cur_align_h = 0_int32 ! ResetCtxForNextAlignedPlots
+   cur_align_v = 0_int32
+   endsubroutine pf_end_aligned
 
    function pf_plot_count() result(n)
    !< Plots held (tests).
@@ -752,7 +1126,7 @@ contains
    elseif (req(2) < 0.0_real32) then
       fs(2) = max(4.0_real32, real(ah, real32) + req(2))
    endif
-   if (fs(2) < PLOT_MIN_SIZE(2) .and. req(2) < 0.0_real32) fs(2) = PLOT_MIN_SIZE(2)
+   if (fs(2) < plot_min(2) .and. req(2) < 0.0_real32) fs(2) = plot_min(2)
    rmin = merge(scale_min, scale_max, scale_min < scale_max)
    rmax = merge(scale_min, scale_max, scale_min >= scale_max)
    call ticks_reset(cticks)
@@ -763,9 +1137,9 @@ contains
    pad = (txt_off + cticks%max_size(1)) + merge(txt_off + lh, 0.0_real32, rend_label)
    bar_w = 20.0_real32
    if (fs(1) == 0.0_real32) then
-      fs(1) = (bar_w + pad) + 2.0_real32 * PLOT_PADDING(1)
+      fs(1) = (bar_w + pad) + 2.0_real32 * plot_pad(1)
    else
-      bar_w = fs(1) - (pad + 2.0_real32 * PLOT_PADDING(1))
+      bar_w = fs(1) - (pad + 2.0_real32 * plot_pad(1))
       if (bar_w < MAJOR_TICK_LEN(2)) bar_w = MAJOR_TICK_LEN(2)
    endif
    call core_cursor_screen_pos(cx, cy)
@@ -776,8 +1150,8 @@ contains
    call core_draw_begin()
    call render_frame(fr)
    reversed = scale_min > scale_max
-   gr = [(fr(1) + PLOT_PADDING(1)) + 0.0_real32, (fr(2) + PLOT_PADDING(2)) + 0.0_real32, &
-         fr(1) + ((bar_w + PLOT_PADDING(1)) + 0.0_real32), fr(2) + (fs(2) - PLOT_PADDING(2))]
+   gr = [(fr(1) + plot_pad(1)) + 0.0_real32, (fr(2) + plot_pad(2)) + 0.0_real32, &
+         fr(1) + ((bar_w + plot_pad(1)) + 0.0_real32), fr(2) + (fs(2) - plot_pad(2))]
    call core_push_clip_rect(real(fr(1), real64), real(fr(2), real64), real(fr(3), real64), real(fr(4), real64))
    col_text = core_style_color(ImGuiCol_Text)
    y_min = merge(gr(4), gr(2), reversed)
@@ -1488,7 +1862,48 @@ contains
       if (ig_menu_item('Crosshairs', selected=v)) call flip(p%flags, PF_CROSSHAIRS)
       call ig_end_menu()
    endif
+   if (cur_sub /= 0_int32) then ! a subplot's cell
+      if (.not. has_flag(subs(cur_sub)%flags, SPF_NO_MENUS)) then
+         call ig_separator()
+         if (ig_begin_menu('Subplots')) then
+            call subplots_context_menu(subs(cur_sub))
+            call ig_end_menu()
+         endif
+      endif
+   endif
    endsubroutine plot_context_menu
+
+   subroutine subplots_context_menu(s)
+   !< `ShowSubplotsContextMenu`: Linking (rows, columns, all x, all y) and Settings (Title, Resizable, Align, Share
+   !< Items: stored, not honoured).
+   type(subplot_record), intent(inout) :: s !< Subplot.
+   logical                             :: v !< A setting.
+
+   if (ig_begin_menu('Linking')) then
+      v = has_flag(s%flags, SPF_LINK_ROWS)
+      if (ig_menu_item('Link Rows', selected=v)) call flip(s%flags, SPF_LINK_ROWS)
+      v = has_flag(s%flags, SPF_LINK_COLS)
+      if (ig_menu_item('Link Cols', selected=v)) call flip(s%flags, SPF_LINK_COLS)
+      v = has_flag(s%flags, SPF_LINK_ALL_X)
+      if (ig_menu_item('Link All X', selected=v)) call flip(s%flags, SPF_LINK_ALL_X)
+      v = has_flag(s%flags, SPF_LINK_ALL_Y)
+      if (ig_menu_item('Link All Y', selected=v)) call flip(s%flags, SPF_LINK_ALL_Y)
+      call ig_end_menu()
+   endif
+   if (ig_begin_menu('Settings')) then
+      call begin_disabled(.not. s%has_title)
+      v = s%has_title .and. .not. has_flag(s%flags, SPF_NO_TITLE)
+      if (ig_menu_item('Title', selected=v)) call flip(s%flags, SPF_NO_TITLE)
+      call end_disabled(.not. s%has_title)
+      v = .not. has_flag(s%flags, SPF_NO_RESIZE)
+      if (ig_menu_item('Resizable', selected=v)) call flip(s%flags, SPF_NO_RESIZE)
+      v = .not. has_flag(s%flags, SPF_NO_ALIGN)
+      if (ig_menu_item('Align', selected=v)) call flip(s%flags, SPF_NO_ALIGN)
+      v = has_flag(s%flags, SPF_SHARE_ITEMS)
+      if (ig_menu_item('Share Items', selected=v)) call flip(s%flags, SPF_SHARE_ITEMS)
+      call ig_end_menu()
+   endif
+   endsubroutine subplots_context_menu
 
    subroutine axis_context_menu(p, i, eq)
    !< `ShowAxisContextMenu` of a linear, log or symlog axis: its ends (locks and drags), Auto-Fit, Invert, Opposite,
@@ -1766,6 +2181,8 @@ contains
 
    next_fit = .false.
    next_hidden_set = .false.
+   next_link_kind = LINK_NONE
+   next_link_idx = 0_int32
    open_context = .false.
    digital_offset = 0_int32
    prev_item = 0_int32
@@ -2231,6 +2648,8 @@ contains
       p%ax(i)%scale_max = 1.0_real64
       p%ax(i)%con_min = -huge(1.0_real64)
       p%ax(i)%con_max = huge(1.0_real64)
+      p%ax(i)%link_kind = LINK_NONE
+      p%ax(i)%link_idx = 0_int32
    enddo
    endsubroutine reset_plot
 
@@ -2314,6 +2733,357 @@ contains
    call move_alloc(hovered, p%item_hovered)
    call move_alloc(marker, p%item_marker)
    endsubroutine grow_items
+
+   ! private: subplots, alignments, links
+
+   function subplot_handle(id, frame, created) result(h)
+   !< The subplot of an ID, added if new (`Subplots.GetOrAddByKey`): in a free slot, the table grown (doubled up to
+   !< SUB_CAP), or in the slot of the least recently begun subplot not begun on this frame.
+   integer(int32), intent(in)  :: id      !< ID.
+   integer(int32), intent(in)  :: frame   !< This frame.
+   logical,        intent(out) :: created !< The subplot is new.
+   integer(int32)              :: h       !< Handle.
+   integer(int32)              :: k       !< Counter.
+
+   created = .false.
+   do k = 1_int32, n_subs
+      if (subs(k)%used .and. subs(k)%id == id) then
+         h = k
+         return
+      endif
+   enddo
+   created = .true.
+   h = 0_int32
+   do k = 1_int32, n_subs
+      if (.not. subs(k)%used) then
+         h = k
+         exit
+      endif
+   enddo
+   if (h == 0_int32) then
+      if (.not. allocated(subs)) allocate(subs(4))
+      if (n_subs == size(subs, kind=int32) .and. n_subs >= SUB_CAP) then ! the least recently begun makes room
+         do k = 1_int32, n_subs
+            if (subs(k)%last_frame >= frame) cycle
+            if (h == 0_int32) then
+               h = k
+            elseif (subs(k)%last_frame < subs(h)%last_frame) then
+               h = k
+            endif
+         enddo
+      endif
+      if (h == 0_int32) then
+         if (n_subs == size(subs, kind=int32)) call grow_subs(max(2_int32 * n_subs, 4_int32))
+         n_subs = n_subs + 1_int32
+         h = n_subs
+      endif
+   endif
+   subs(h)%id = id ! a new subplot (field by field: its arrays kept allocated)
+   subs(h)%used = .true.
+   subs(h)%last_frame = -1_int32
+   subs(h)%flags = 0_int32
+   subs(h)%prev_flags = 0_int32
+   subs(h)%rows = 0_int32
+   subs(h)%cols = 0_int32
+   subs(h)%has_title = .false.
+   subs(h)%temp = 0.0_real32
+   subs(h)%cur_idx = 0_int32
+   subs(h)%hov_sep = 0_int32
+   subs(h)%hov_frame = -1_int32
+   subs(h)%hov_t0 = 0.0_real64
+   endfunction subplot_handle
+
+   subroutine grow_subs(m)
+   !< Room for m subplots in the table, those held kept (element by element: ADR 0001).
+   integer(int32), intent(in)        :: m       !< Subplots room.
+   type(subplot_record), allocatable :: more(:) !< New table.
+   integer(int32)                    :: k       !< Counter.
+
+   allocate(more(m))
+   do k = 1_int32, n_subs
+      more(k) = subs(k)
+   enddo
+   call move_alloc(more, subs)
+   endsubroutine grow_subs
+
+   subroutine resize_subplot(s, rows, cols)
+   !< A subplot's rows or columns changed: the ratios even, the links (0, 1), the alignments reset (the arrays grown
+   !< when they are short only).
+   type(subplot_record), intent(inout) :: s          !< Subplot.
+   integer(int32),       intent(in)    :: rows, cols !< Rows, columns.
+   integer(int32)                      :: k          !< Counter.
+
+   if (.not. allocated(s%row_ratio)) then
+      allocate(s%row_ratio(rows), s%row_link(2, rows), s%row_align(rows))
+   elseif (size(s%row_ratio, kind=int32) < rows) then
+      deallocate(s%row_ratio, s%row_link, s%row_align)
+      allocate(s%row_ratio(rows), s%row_link(2, rows), s%row_align(rows))
+   endif
+   if (.not. allocated(s%col_ratio)) then
+      allocate(s%col_ratio(cols), s%col_link(2, cols), s%col_align(cols))
+   elseif (size(s%col_ratio, kind=int32) < cols) then
+      deallocate(s%col_ratio, s%col_link, s%col_align)
+      allocate(s%col_ratio(cols), s%col_link(2, cols), s%col_align(cols))
+   endif
+   do k = 1_int32, rows
+      call align_reset(s%row_align(k))
+      s%row_link(1, k) = 0.0_real64
+      s%row_link(2, k) = 1.0_real64
+      s%row_ratio(k) = 1.0_real32 / real(rows, real32)
+   enddo
+   do k = 1_int32, cols
+      call align_reset(s%col_align(k))
+      s%col_link(1, k) = 0.0_real64
+      s%col_link(2, k) = 1.0_real64
+      s%col_ratio(k) = 1.0_real32 / real(cols, real32)
+   enddo
+   endsubroutine resize_subplot
+
+   subroutine set_cell(s, row, col)
+   !< `SubplotSetCell`: the layout cursor at a cell (from 0, row by row), its size, the next plot's links (X1 to its
+   !< column's or all X's range, Y1 to its row's or all Y's), its row's and column's alignments, the current index.
+   type(subplot_record), intent(inout) :: s        !< Subplot.
+   integer(int32),       intent(in)    :: row, col !< Cell.
+   real(real32)                        :: xoff, yoff, gw, gh, cx, cy, t !< Offsets, the grid's size, the cell.
+   integer(int32)                      :: k        !< Counter.
+   logical                             :: lx, ly, lr, lc !< The links.
+
+   if (row >= s%rows .or. col >= s%cols) return
+   xoff = 0.0_real32
+   yoff = 0.0_real32
+   do k = 1_int32, col
+      xoff = xoff + s%col_ratio(k)
+   enddo
+   do k = 1_int32, row
+      yoff = yoff + s%row_ratio(k)
+   enddo
+   gw = s%grid(3) - s%grid(1)
+   gh = s%grid(4) - s%grid(2)
+   t = xoff * gw
+   cx = s%grid(1) + t
+   t = yoff * gh
+   cy = s%grid(2) + t
+   call core_set_cursor_screen_pos(real(im_round(cx), real64), real(im_round(cy), real64))
+   t = gw * s%col_ratio(col + 1_int32)
+   s%cell(1) = im_round(t)
+   t = gh * s%row_ratio(row + 1_int32)
+   s%cell(2) = im_round(t)
+   lx = has_flag(s%flags, SPF_LINK_ALL_X)
+   ly = has_flag(s%flags, SPF_LINK_ALL_Y)
+   lr = has_flag(s%flags, SPF_LINK_ROWS)
+   lc = has_flag(s%flags, SPF_LINK_COLS)
+   next_link_kind = LINK_NONE
+   next_link_idx = 0_int32
+   if (lx) then
+      next_link_kind(1) = LINK_COL
+      next_link_idx(1) = 1_int32
+   elseif (lc) then
+      next_link_kind(1) = LINK_COL
+      next_link_idx(1) = col + 1_int32
+   endif
+   if (ly) then
+      next_link_kind(2) = LINK_ROW
+      next_link_idx(2) = 1_int32
+   elseif (lr) then
+      next_link_kind(2) = LINK_ROW
+      next_link_idx(2) = row + 1_int32
+   endif
+   if (.not. has_flag(s%flags, SPF_NO_ALIGN)) then
+      cur_align_h = -(row + 1_int32)
+      cur_align_v = -(col + 1_int32)
+   endif
+   if (has_flag(s%flags, SPF_COL_MAJOR)) then
+      s%cur_idx = col * s%rows + row
+   else
+      s%cur_idx = row * s%cols + col
+   endif
+   endsubroutine set_cell
+
+   subroutine next_cell(s)
+   !< `SubplotNextCell`: the next cell (past the last one, nothing changes but the index).
+   type(subplot_record), intent(inout) :: s   !< Subplot.
+   integer(int32)                      :: idx !< The next cell's index.
+
+   s%cur_idx = s%cur_idx + 1_int32
+   idx = s%cur_idx
+   if (idx >= s%rows * s%cols) return
+   if (has_flag(s%flags, SPF_COL_MAJOR)) then
+      call set_cell(s, mod(idx, s%rows), idx / s%rows)
+   else
+      call set_cell(s, idx / s%cols, mod(idx, s%cols))
+   endif
+   endsubroutine next_cell
+
+   function splitter_timer(s, sep, hov) result(t)
+   !< How long a hovered splitter has been hovered (Dear ImGui's `HoveredIdTimer`, which figure_core does not give):
+   !< 0 on the first frame, then the time since that frame, `g.Time`'s growth (both add io.DeltaTime per frame).
+   type(subplot_record), intent(inout) :: s   !< Subplot.
+   integer(int32),       intent(in)    :: sep !< Splitter.
+   logical,              intent(in)    :: hov !< Hovered on this frame.
+   real(real32)                        :: t   !< Time [s].
+   integer(int32)                      :: f   !< This frame.
+
+   t = 0.0_real32
+   if (.not. hov) return
+   f = core_frame_count()
+   if (s%hov_sep == sep .and. (s%hov_frame == f - 1_int32 .or. s%hov_frame == f)) then
+      t = real(core_time() - s%hov_t0, real32)
+   else
+      s%hov_t0 = core_time()
+   endif
+   s%hov_sep = sep
+   s%hov_frame = f
+   endfunction splitter_timer
+
+   function align_handle(id) result(k)
+   !< The aligned group of an ID, added if new (`AlignmentData.GetOrAddByKey`; never removed, as ImPlot's).
+   integer(int32), intent(in)    :: id      !< ID.
+   integer(int32)                :: k       !< Slot.
+   type(plot_align), allocatable :: more(:) !< New table.
+   integer(int32),   allocatable :: more_id(:) !< ... IDs.
+   integer(int32)                :: j       !< Counter.
+
+   do k = 1_int32, n_aligns
+      if (align_id(k) == id) return
+   enddo
+   if (.not. allocated(aligns)) then
+      allocate(aligns(4), align_id(4))
+   elseif (n_aligns == size(aligns, kind=int32)) then
+      allocate(more(2_int32 * n_aligns), more_id(2_int32 * n_aligns))
+      do j = 1_int32, n_aligns
+         more(j) = aligns(j)
+         more_id(j) = align_id(j)
+      enddo
+      call move_alloc(more, aligns)
+      call move_alloc(more_id, align_id)
+   endif
+   n_aligns = n_aligns + 1_int32
+   k = n_aligns
+   align_id(k) = id
+   call align_reset(aligns(k))
+   aligns(k)%vertical = .true.
+   endfunction align_handle
+
+   pure subroutine align_reset(a)
+   !< `ImPlotAlignmentData::Reset`.
+   type(plot_align), intent(inout) :: a !< Alignment.
+
+   a%pad_a = 0.0_real32
+   a%pad_b = 0.0_real32
+   a%pad_a_max = 0.0_real32
+   a%pad_b_max = 0.0_real32
+   endsubroutine align_reset
+
+   subroutine align_update(vertical, pad_a, pad_b, delta_a, delta_b, aligned)
+   !< `ImPlotAlignmentData::Update` of the current alignment of a direction (left and right: `vertical`), if any: its
+   !< largest paddings of this frame kept, the plot's raised to those of the frame before, the growth returned.
+   logical,      intent(in)    :: vertical       !< Left and right (CurrentAlignmentV), or top and bottom (H).
+   real(real32), intent(inout) :: pad_a, pad_b   !< The plot's paddings [pixels].
+   real(real32), intent(out)   :: delta_a, delta_b !< Their growth.
+   logical,      intent(out)   :: aligned        !< An alignment is current.
+   integer(int32)              :: c              !< Its code.
+
+   delta_a = 0.0_real32
+   delta_b = 0.0_real32
+   c = merge(cur_align_v, cur_align_h, vertical)
+   aligned = c /= 0_int32
+   if (c > 0_int32) then
+      call align_pads(aligns(c), pad_a, pad_b, delta_a, delta_b)
+   elseif (c < 0_int32 .and. cur_sub /= 0_int32) then
+      if (vertical) then
+         call align_pads(subs(cur_sub)%col_align(-c), pad_a, pad_b, delta_a, delta_b)
+      else
+         call align_pads(subs(cur_sub)%row_align(-c), pad_a, pad_b, delta_a, delta_b)
+      endif
+   endif
+   endsubroutine align_update
+
+   pure subroutine align_pads(a, pad_a, pad_b, delta_a, delta_b)
+   !< `ImPlotAlignmentData::Update` on one alignment.
+   type(plot_align), intent(inout) :: a                !< Alignment.
+   real(real32),     intent(inout) :: pad_a, pad_b     !< The plot's paddings.
+   real(real32),     intent(out)   :: delta_a, delta_b !< Their growth.
+   real(real32)                    :: bak_a, bak_b     !< Them as given.
+
+   bak_a = pad_a
+   bak_b = pad_b
+   if (a%pad_a_max < pad_a) a%pad_a_max = pad_a
+   if (a%pad_b_max < pad_b) a%pad_b_max = pad_b
+   if (pad_a < a%pad_a) then
+      pad_a = a%pad_a
+      delta_a = pad_a - bak_a
+   else
+      delta_a = 0.0_real32
+   endif
+   if (pad_b < a%pad_b) then
+      pad_b = a%pad_b
+      delta_b = pad_b - bak_b
+   else
+      delta_b = 0.0_real32
+   endif
+   endsubroutine align_pads
+
+   subroutine pull_links(ax)
+   !< `ImPlotAxis::PullLinks`: a linked axis takes its link's range (`SetRange`).
+   type(plot_axis), intent(inout) :: ax     !< Axis.
+   real(real64)                   :: lo, hi !< The link's range.
+   logical                        :: found  !< A link.
+
+   call link_range(ax%link_kind, ax%link_idx, lo, hi, found)
+   if (found) call set_range(ax, lo, hi)
+   endsubroutine pull_links
+
+   subroutine push_links(p)
+   !< `EndPlot`'s `PushLinks` of every axis (enabled or not, as ImPlot): its range written to its link.
+   type(plot_record), intent(in) :: p !< Plot.
+   integer(int32)                :: i !< Axis.
+
+   do i = 1_int32, AXES
+      associate(ax => p%ax(i))
+         select case (ax%link_kind)
+         case (LINK_COL)
+            if (cur_sub == 0_int32) cycle
+            subs(cur_sub)%col_link(1, ax%link_idx) = ax%range_min
+            subs(cur_sub)%col_link(2, ax%link_idx) = ax%range_max
+         case (LINK_ROW)
+            if (cur_sub == 0_int32) cycle
+            subs(cur_sub)%row_link(1, ax%link_idx) = ax%range_min
+            subs(cur_sub)%row_link(2, ax%link_idx) = ax%range_max
+         endselect
+      endassociate
+   enddo
+   endsubroutine push_links
+
+   subroutine link_range(kind, idx, lo, hi, found)
+   !< A link's range (`*LinkedMin`, `*LinkedMax`).
+   integer(int32), intent(in)  :: kind, idx !< The link.
+   real(real64),   intent(out) :: lo, hi    !< Its range.
+   logical,        intent(out) :: found     !< A link.
+
+   lo = 0.0_real64
+   hi = 1.0_real64
+   found = .false.
+   select case (kind)
+   case (LINK_COL)
+      if (cur_sub == 0_int32) return
+      lo = subs(cur_sub)%col_link(1, idx)
+      hi = subs(cur_sub)%col_link(2, idx)
+      found = .true.
+   case (LINK_ROW)
+      if (cur_sub == 0_int32) return
+      lo = subs(cur_sub)%row_link(1, idx)
+      hi = subs(cur_sub)%row_link(2, idx)
+      found = .true.
+   endselect
+   endsubroutine link_range
+
+   pure function im_round(f) result(r)
+   !< `IM_ROUND` of a (positive) float: `(float)(int)(f + 0.5f)`.
+   real(real32), intent(in) :: f !< Value.
+   real(real32)             :: r !< Rounded.
+
+   r = real(int(f + 0.5_real32, int32), real32)
+   endfunction im_round
 
    ! private: the axes
 
@@ -2649,7 +3419,7 @@ contains
       if (.not. p%ax(i)%enabled) cycle
       call constrain(p%ax(i))
       if (.not. p%initialized .and. .not. has_flag(p%ax(i)%flags, AXF_NO_INITIAL_FIT) .and. &
-          .not. p%ax(i)%has_range) then
+          .not. p%ax(i)%has_range .and. p%ax(i)%link_kind == LINK_NONE) then
          p%fit = .true.
          p%ax(i)%fit = .true.
       endif
@@ -2675,8 +3445,8 @@ contains
       call ticks_reset(ticks(i))
       if (p%ax(i)%scale == SCALE_TIME) ticks(i)%levels = 2_int32 ! SetupAxisScale: Ticker.Levels = 2
    enddo
-   p%canvas(1:2) = p%frame(1:2) + PLOT_PADDING
-   p%canvas(3:4) = p%frame(3:4) - PLOT_PADDING
+   p%canvas(1:2) = p%frame(1:2) + plot_pad
+   p%canvas(3:4) = p%frame(3:4) - plot_pad
    p%axes_rect = p%frame
    ! an outside legend's room, from the legend of the frame before
    if (.not. has_flag(p%flags, PF_NO_LEGEND) .and. p%n_leg > 0_int32 .and. has_flag(p%leg_flags, LGF_OUTSIDE)) then
@@ -2688,19 +3458,19 @@ contains
       south = has_flag(p%leg_loc, LOC_SOUTH) .and. .not. has_flag(p%leg_loc, LOC_NORTH)
       if ((west .and. .not. horz) .or. (west .and. horz .and. .not. north .and. .not. south)) then
          p%canvas(1) = p%canvas(1) + (lsize(1) + LEGEND_PADDING(1))
-         p%axes_rect(1) = p%axes_rect(1) + (lsize(1) + PLOT_PADDING(1))
+         p%axes_rect(1) = p%axes_rect(1) + (lsize(1) + plot_pad(1))
       endif
       if ((east .and. .not. horz) .or. (east .and. horz .and. .not. north .and. .not. south)) then
          p%canvas(3) = p%canvas(3) - (lsize(1) + LEGEND_PADDING(1))
-         p%axes_rect(3) = p%axes_rect(3) - (lsize(1) + PLOT_PADDING(1))
+         p%axes_rect(3) = p%axes_rect(3) - (lsize(1) + plot_pad(1))
       endif
       if ((north .and. horz) .or. (north .and. .not. horz .and. .not. west .and. .not. east)) then
          p%canvas(2) = p%canvas(2) + (lsize(2) + LEGEND_PADDING(2))
-         p%axes_rect(2) = p%axes_rect(2) + (lsize(2) + PLOT_PADDING(2))
+         p%axes_rect(2) = p%axes_rect(2) + (lsize(2) + plot_pad(2))
       endif
       if ((south .and. horz) .or. (south .and. .not. horz .and. .not. west .and. .not. east)) then
          p%canvas(4) = p%canvas(4) - (lsize(2) + LEGEND_PADDING(2))
-         p%axes_rect(4) = p%axes_rect(4) - (lsize(2) + PLOT_PADDING(2))
+         p%axes_rect(4) = p%axes_rect(4) - (lsize(2) + plot_pad(2))
       endif
    endif
    ! (0) the title's room
@@ -2717,7 +3487,7 @@ contains
    endif
    if (title_w > 0.0_real32) then
       pad_top = pad_top + (title_h + LABEL_PADDING(2))
-      p%axes_rect(2) = p%axes_rect(2) + (PLOT_PADDING(2) + pad_top)
+      p%axes_rect(2) = p%axes_rect(2) + (plot_pad(2) + pad_top)
    endif
    ! (1) the x axes, their tick labels' height not known yet; (2) the y ticks; (3) the y axes
    call pad_and_datum_x(p, pad_top, pad_bot)
@@ -2738,7 +3508,7 @@ contains
    pad_top = title_pad
    pad_bot = 0.0_real32
    call pad_and_datum_x(p, pad_top, pad_bot)
-   if (title_w > 0.0_real32) p%axes_rect(2) = (p%frame(2) + PLOT_PADDING(2)) + title_pad
+   if (title_w > 0.0_real32) p%axes_rect(2) = (p%frame(2) + plot_pad(2)) + title_pad
    p%rect = [p%canvas(1) + pad_left, p%canvas(2) + pad_top, p%canvas(3) - pad_right, p%canvas(4) - pad_bot]
    do i = AX_X1, AX_X3 ! the axes on screen, their buttons' rectangles (HoverRect)
       associate(ax => p%ax(i))
@@ -2802,11 +3572,14 @@ contains
 
    subroutine pad_and_datum_x(p, pad_t, pad_b)
    !< `PadAndDatumAxesX`: the x axes placed outwards from the plot, X3 to X1 (each its label's height, its tick labels'
-   !< and `LabelPadding`, `MinorTickLen` between two on a side), their paddings added.
+   !< and `LabelPadding`, `MinorTickLen` between two on a side), their paddings added; in an alignment
+   !< (`CurrentAlignmentH`) the paddings raised to the group's and the axes moved by as much.
    type(plot_record), intent(inout) :: p            !< Plot.
    real(real32),      intent(inout) :: pad_t, pad_b !< Paddings above and below [pixels].
    real(real32)                     :: t, pp, k     !< Text height, LabelPadding, MinorTickLen.
    real(real32)                     :: last_t, last_b !< The previous axes' datums.
+   real(real32)                     :: delta_t, delta_b !< The paddings' growth in the alignment.
+   logical                          :: aligned      !< An alignment is current.
    real(real64)                     :: w, h         !< A label's size.
    integer(int32)                   :: count_t, count_b, i !< Axes on a side, axis.
 
@@ -2849,15 +3622,36 @@ contains
          endif
       endassociate
    enddo
+   call align_update(.false., pad_t, pad_b, delta_t, delta_b, aligned)
+   if (.not. aligned) return
+   count_t = 0_int32
+   count_b = 0_int32
+   do i = AX_X3, AX_X1, -1_int32 ! (ImPlot's `count_T++ > 1`: only a third axis's outer datum moves)
+      if (.not. p%ax(i)%enabled) cycle
+      associate(ax => p%ax(i))
+         if (has_flag(ax%flags, AXF_OPPOSITE)) then
+            ax%datum1 = ax%datum1 + delta_t
+            if (count_t > 1_int32) ax%datum2 = ax%datum2 + delta_t
+            count_t = count_t + 1_int32
+         else
+            ax%datum1 = ax%datum1 - delta_b
+            if (count_b > 1_int32) ax%datum2 = ax%datum2 - delta_b
+            count_b = count_b + 1_int32
+         endif
+      endassociate
+   enddo
    endsubroutine pad_and_datum_x
 
    subroutine pad_and_datum_y(p, pad_l, pad_r)
    !< `PadAndDatumAxesY`: the y axes placed outwards from the plot, Y3 to Y1 (each the text height for its label, its
-   !< widest tick label and `LabelPadding`, `MinorTickLen` between two on a side), their paddings added.
+   !< widest tick label and `LabelPadding`, `MinorTickLen` between two on a side), their paddings added; in an
+   !< alignment (`CurrentAlignmentV`) the paddings raised to the group's and the axes moved by as much.
    type(plot_record), intent(inout) :: p            !< Plot.
    real(real32),      intent(inout) :: pad_l, pad_r !< Paddings left and right [pixels].
    real(real32)                     :: t, pp, k     !< Text height, LabelPadding, MinorTickLen.
    real(real32)                     :: last_l, last_r !< The previous axes' datums.
+   real(real32)                     :: delta_l, delta_r !< The paddings' growth in the alignment.
+   logical                          :: aligned      !< An alignment is current.
    integer(int32)                   :: count_l, count_r, i !< Axes on a side, axis.
 
    t = real(core_font_size(), real32)
@@ -2886,6 +3680,24 @@ contains
             ax%datum1 = p%canvas(1) + pad_l
             ax%datum2 = last_l
             last_l = ax%datum1
+         endif
+      endassociate
+   enddo
+   call align_update(.true., pad_l, pad_r, delta_l, delta_r, aligned)
+   if (.not. aligned) return
+   count_l = 0_int32
+   count_r = 0_int32
+   do i = AX_Y3, AX_Y1, -1_int32
+      if (.not. p%ax(i)%enabled) cycle
+      associate(ax => p%ax(i))
+         if (has_flag(ax%flags, AXF_OPPOSITE)) then
+            ax%datum1 = ax%datum1 - delta_r
+            if (count_r > 1_int32) ax%datum2 = ax%datum2 - delta_r
+            count_r = count_r + 1_int32
+         else
+            ax%datum1 = ax%datum1 + delta_l
+            if (count_l > 1_int32) ax%datum2 = ax%datum2 + delta_l
+            count_l = count_l + 1_int32
          endif
       endassociate
    enddo
@@ -3114,8 +3926,9 @@ contains
    rounding = real(v(1), real32)
    call core_style_var('FrameBorderSize', v, nv)
    border = real(v(1), real32)
-   call core_draw_rect_filled(real(fr(1), real64), real(fr(2), real64), real(fr(3), real64), real(fr(4), real64), &
-                              core_style_color(ImGuiCol_FrameBg), real(rounding, real64))
+   if (.not. frame_bg_clear) & ! a subplot's cell: IM_COL32_BLACK_TRANS, which AddRectFilled skips
+      call core_draw_rect_filled(real(fr(1), real64), real(fr(2), real64), real(fr(3), real64), real(fr(4), real64), &
+                                 core_style_color(ImGuiCol_FrameBg), real(rounding, real64))
    if (border > 0.0_real32) then
       call core_draw_rect(real(fr(1) + 1.0_real32, real64), real(fr(2) + 1.0_real32, real64),    &
                           real(fr(3) + 1.0_real32, real64), real(fr(4) + 1.0_real32, real64),    &
@@ -3248,7 +4061,7 @@ contains
    sz = legend_size(p, .not. horz)
    if (out) then
       outer = p%frame
-      pad = PLOT_PADDING
+      pad = plot_pad
    else
       outer = p%rect
       pad = LEGEND_PADDING
