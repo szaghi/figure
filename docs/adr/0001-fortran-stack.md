@@ -208,7 +208,9 @@ fpm package; FIGURE's library uses FUNDAL from #15 P6 (`ip_line_device`, `figure
 only in the tests. Arrays of `type(string)` do not hit #4's bug A
 (a section of a deferred-length character array taken at the array's first elements, gfortran) on any of the three
 compilers. foresight joined on 2026-11-20, once it compiled with nvfortran and ifx under FIGURE's flags (v0.6.2,
-szaghi/foresight#2); FiNeR, VecFor and MORTIF join with the steps that need them.
+szaghi/foresight#2); VecFor joined with #15 P13 (the 3-D plots' camera and rays; the nvfortran `-fortran` modes then
+build without FMA, `-Mnofma`, which VecFor's one-line products would otherwise get); FiNeR and MORTIF join with the
+steps that need them (MORTIF only if picking measures slow: P13 found no per-point picking in FIGURE).
 
 ## Consequences
 

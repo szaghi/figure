@@ -12,6 +12,7 @@ email      = stefano.zaghi@cnr.it
 # fpm.toml [dependencies] (scripts/check_sync.py checks both). PENF is built without PENF_R16P (no quadruple precision).
 # FUNDAL's fundal_mpih_object.F90 (the MPI handler, `use mpi`) is excluded by the templates: FIGURE has no MPI.
 # foresight (§6, K4: its printf-subset formatter and tick locators) joined after szaghi/foresight#2 (v0.6.2).
+# VecFor (§6: 3-D vector algebra, the 3-D plots' camera and picking rays) joined with #15 P13.
 [dependencies]
 deps_dir   = src/third_party
 PENF       = https://github.com/szaghi/PENF :: branch=master :: src=src/lib
@@ -20,6 +21,7 @@ BeFoR64    = https://github.com/szaghi/BeFoR64 :: branch=master :: src=src/lib
 StringiFor = https://github.com/szaghi/StringiFor :: branch=master :: src=src/lib
 FUNDAL     = https://github.com/szaghi/FUNDAL :: branch=main :: src=src/lib
 foresight  = https://github.com/szaghi/foresight :: branch=master :: src=src/lib
+VecFor     = https://github.com/szaghi/VecFor :: branch=master :: src=src/lib
 
 [modes]
 modes = tests-gnu tests-gnu-debug examples-gnu examples-gnu-traps
@@ -182,8 +184,10 @@ mklib     = static
 # key but `src`) and builds, besides, the Fortran path's tests the default modes leave out ($FORTRAN_ONLY, through the
 # templates' exclude_dirs; emptied here). With ifx the Fortran path is value-safe (-fp-model precise): the CPU
 # renderer's picture is figure_swrast's to the bit only without the default fast model's reassociation (as the native
-# layer is built with -ffp-contract=off); the default modes keep their flags. They build into the default's
-# directories: switching path, as switching compiler, needs `--force-compile` (or `rm -rf exe`)
+# layer is built with -ffp-contract=off); with nvfortran it is built without FMA (-Mnofma): nvfortran -O2 fuses `a*b + c`,
+# also inside VecFor's one-line dot and cross products, which ImPlot3D's build does not (#15 P13); the default modes keep
+# their flags. They build into the default's directories: switching path, as switching compiler, needs
+# `--force-compile` (or `rm -rf exe`)
 [tests-gnu-fortran]
 template     = tests-gnu
 src          = src/lib/ $PATH_FORTRAN src/tests/
@@ -197,11 +201,13 @@ exclude_dirs =
 [tests-nvf-fortran]
 template     = tests-nvf
 src          = src/lib/ $PATH_FORTRAN src/tests/
+cflags       = $CNVF -O2 -Mnofma
 exclude_dirs =
 
 [examples-nvf-fortran]
 template     = examples-nvf
 src          = src/lib/ $PATH_FORTRAN src/examples/
+cflags       = $CNVF -O2 -Mnofma
 exclude_dirs =
 
 [tests-ifx-fortran]
