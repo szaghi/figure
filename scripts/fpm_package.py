@@ -102,6 +102,9 @@ IMCONFIG_ADDITION = """
 #ifndef IMGUI_ENABLE_TEST_ENGINE
 #define IMGUI_ENABLE_TEST_ENGINE // Dear ImGui's item hooks, implemented by FIGURE (figure_items.cpp)
 #endif
+#ifndef IMGUI_DISABLE_SSE
+#define IMGUI_DISABLE_SSE // ImRsqrt is 1/sqrtf, not SSE's rsqrtss estimate (its bits differ by CPU vendor)
+#endif
 #undef NDEBUG // cimgui's cimconfig.h: Dear ImGui's assertions stay on
 // native/CMakeLists.txt's -ffp-contract=off, as pragmas (every file that draws includes imgui.h, so this file): no
 // fused multiply-add, so a picture rendered headless does not depend on the machine (#7 S1)

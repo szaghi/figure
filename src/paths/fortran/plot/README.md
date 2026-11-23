@@ -41,9 +41,9 @@ their own (nvfortran's FMA), so the three compilers draw the same pixels.
 `src/tests/fortran/figure_test_plot_frame*.F90`, built by the `-fortran` modes: each case draws one plot with FIGURE's
 current API (`ip_*`, ImPlot) and with the frame in one headless window, 40 frames apart (a click of one pass must not
 make a double click with the other's), and compares the axis ranges of every frame to the bit and the pictures with
-`test_compare_image(threshold=2, max_failed=0)`. ImPlot normalises a line segment with SSE's `rsqrtss` estimate,
-whose bits differ by CPU vendor; where an anti-aliased edge pixel of a test curve fell on a texel boundary the curve
-was shifted, as the test headers say. `figure_test_plot_frame_alloc` counts every heap allocation of a frame (the
+`test_compare_image(threshold=2, max_failed=0)`. ImPlot normalises a line segment with `1/sqrt`, as the frame does
+(native/patches/implot-0002: upstream takes SSE's `rsqrtss` estimate, whose bits differ by CPU vendor).
+`figure_test_plot_frame_alloc` counts every heap allocation of a frame (the
 program defines `malloc` and the like, glibc only) and expects none.
 
 ## The ImPlot calls the seam replaces

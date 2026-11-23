@@ -54,9 +54,6 @@ module figure_plot_items
 !<
 !< No allocation per item per frame (ADR 0001): views of the arrays, fixed quads; the decimation's index buffer and
 !< the integer abscissae's conversion (decimated items only) are grown once and kept.
-!<
-!< ImPlot normalises a line segment with the SSE estimate `_mm_rsqrt_ss` (12 bits), the frame with `1/sqrt`: an
-!< anti-aliased edge pixel may land on the other side of a texel (figure_test_plot_frame_labels' header).
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_intptr_t, c_loc
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64

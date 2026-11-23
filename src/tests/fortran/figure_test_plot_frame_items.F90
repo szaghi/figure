@@ -26,10 +26,6 @@ program figure_test_plot_frame_items
 !< nvfortran 26.9 gives `xs(1::4) * 0.25` the extent of `xs` (41 for 11, the rest garbage), as an actual argument and
 !< in an assignment to an allocatable (`af` builds them element by element).
 !<
-!< Case 1's first line is sin(x) + 0.01: with sin(x) one anti-aliased pixel of the 2-pixel line, (85, 115), differed
-!< by 30 (ImPlot's `rsqrtss` normal, as in figure_test_plot_frame_labels; all cases matched with the frame's normal
-!< scaled by 1 + 2e-4).
-!<
 !< The pictures are `figure_test_plot_frame_items.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: ieee_arithmetic, only : ieee_negative_inf, ieee_positive_inf, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
@@ -149,7 +145,7 @@ contains
    select case (k)
    case (1_int32)
       call limits(0.0_real64, 10.0_real64, -1.5_real64, 1.5_real64)
-      call line('circles', xs, af(ys(:, 1), 1.0_real64, 0.01_real64), lc=C(:, 1), lw=2.0_real64, mk=MK_CIRCLE, &
+      call line('circles', xs, ys(:, 1), lc=C(:, 1), lw=2.0_real64, mk=MK_CIRCLE, &
                 ms=5.0_real64, fa=0.5_real64)
       call line('squares', xs, ys(:, 2), lc=C(:, 2), mk=MK_SQUARE, mfc=C(:, 3))
    case (2_int32)

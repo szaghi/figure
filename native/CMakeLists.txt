@@ -116,34 +116,40 @@ set(FIGURE_MD4C_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/md4c)
 # fetched one (the fetched sources stay as fetched, a FETCHCONTENT_SOURCE_DIR_CIMGUI included); scripts/fpm_package.py
 # applies the same patches to the fpm package. A patch whose line is no longer in the file stops the configuration:
 # upstream changed it (fixed, perhaps), and the patch is checked against its upstream issue, then updated or removed.
-function(figure_patch_line source patch out)
-   file(READ ${patch} diff)
-   string(REPLACE "\r" "" diff "${diff}") # a checkout with CRLF line ends
-   string(REGEX MATCH "\n-([^-\n][^\n]*)" old "${diff}") # the removed line, not the --- header
-   set(old "${CMAKE_MATCH_1}")
-   string(REGEX MATCH "\n\\+([^+\n][^\n]*)" new "${diff}") # the added line, not the +++ header
-   set(new "${CMAKE_MATCH_1}")
+function(figure_patch_line source patch out) # further patches of the same file after `out`, applied in order
    file(READ ${source} text)
-   string(FIND "${text}" "${old}" at)
-   if(at EQUAL -1)
-      message(FATAL_ERROR "${patch} does not apply to ${source}: its line changed upstream. Check the patch against "
-                          "its upstream issue (THIRD_PARTY.md), then update or remove it.")
-   endif()
-   string(REPLACE "${old}" "${new}" text "${text}")
+   foreach(p IN ITEMS ${patch} ${ARGN})
+      file(READ ${p} diff)
+      string(REPLACE "\r" "" diff "${diff}") # a checkout with CRLF line ends
+      string(REGEX MATCH "\n-([^-\n][^\n]*)" old "${diff}") # the removed line, not the --- header
+      set(old "${CMAKE_MATCH_1}")
+      string(REGEX MATCH "\n\\+([^+\n][^\n]*)" new "${diff}") # the added line, not the +++ header
+      set(new "${CMAKE_MATCH_1}")
+      string(FIND "${text}" "${old}" at)
+      if(at EQUAL -1)
+         message(FATAL_ERROR "${p} does not apply to ${source}: its line changed upstream. Check the patch against "
+                             "its upstream issue (THIRD_PARTY.md), then update or remove it.")
+      endif()
+      string(REPLACE "${old}" "${new}" text "${text}")
+      set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${p})
+   endforeach()
    if(EXISTS ${out})
       file(READ ${out} current)
    endif()
    if(NOT "${current}" STREQUAL "${text}")
       file(WRITE ${out} "${text}")
    endif()
-   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${patch} ${source})
+   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${source})
 endfunction()
 # ocornut/imgui#8718: TableUpdateLayout divides 0 by 0 in a SizingStretchProp table's first frame
 figure_patch_line(${IMGUI_DIR}/imgui_tables.cpp ${CMAKE_CURRENT_SOURCE_DIR}/patches/imgui-0001-stretch-weight-zero-sum.patch
                   ${CMAKE_CURRENT_BINARY_DIR}/patched/imgui_tables.cpp)
-# PlotDigital gives AddRectFilled its corners top and bottom swapped, which Dear ImGui 1.93 draws as nothing (#12, S8)
+# PlotDigital gives AddRectFilled its corners top and bottom swapped, which Dear ImGui 1.93 draws as nothing (#12, S8);
+# a line segment normalised with 1/sqrt, not SSE's rsqrtss estimate, whose bits differ by CPU vendor (#15, 2026-11-23:
+# the pictures then do not depend on the machine, and the Fortran plot frame draws the same vertices)
 figure_patch_line(${IMPLOT_DIR}/implot_items.cpp ${CMAKE_CURRENT_SOURCE_DIR}/patches/implot-0001-digital-rect-order.patch
-                  ${CMAKE_CURRENT_BINARY_DIR}/patched/implot_items.cpp)
+                  ${CMAKE_CURRENT_BINARY_DIR}/patched/implot_items.cpp
+                  ${CMAKE_CURRENT_SOURCE_DIR}/patches/implot-0002-exact-inv-sqrt.patch)
 
 add_library(figure_native STATIC
    ${cimgui_SOURCE_DIR}/cimgui.cpp
@@ -300,6 +306,9 @@ if(WIN32)
    target_link_libraries(figure_native PUBLIC ws2_32)
 endif()
 # Same configuration cimgui/cimplot were generated with: their C structs must match the C++ ones bit for bit.
+# IMGUI_DISABLE_SSE: ImRsqrt and ImRsqrtPrecise are 1/sqrtf, not SSE's rsqrtss estimate, whose bits differ by CPU vendor
+# (#15, 2026-11-23: the pictures then do not depend on the machine); it also takes the CRC32C table for the IDs' hash
+# instead of SSE 4.2's instruction, which computes the same values, and ImIsTruncated4's plain form (the same result).
 # IMGUI_ENABLE_TEST_ENGINE compiles in Dear ImGui's item hooks, implemented by FIGURE (figure_items.cpp: no
 # imgui_test_engine code). It changes no structure (ImGuiContext has its TestEngineHookItems either way) and adds only
 # enum values; with the hooks off (g.TestEngineHookItems false: every program that does not record items) a registered
@@ -307,7 +316,8 @@ endif()
 target_compile_definitions(figure_native PUBLIC
    IMGUI_USER_CONFIG="${cimgui_SOURCE_DIR}/cimconfig.h"
    IMGUI_DISABLE_OBSOLETE_FUNCTIONS=1
-   IMGUI_ENABLE_TEST_ENGINE)
+   IMGUI_ENABLE_TEST_ENGINE
+   IMGUI_DISABLE_SSE)
 # No contraction of a * b + c into a fused multiply-add (GCC and Clang contract by default where the target has FMA:
 # aarch64, x86-64 with -march=haswell and later): Dear ImGui's and ImPlot's layout arithmetic and the CPU renderer's
 # then round the same way on every platform, so a picture rendered headless does not depend on the machine (#7 S1: an

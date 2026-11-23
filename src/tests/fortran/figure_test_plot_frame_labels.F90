@@ -22,12 +22,6 @@ program figure_test_plot_frame_labels
 !< the legend entry (outside, east) of a line on the second y axis: the entry highlighted, the line twice as thick, the
 !< axis highlighted in its colour, `legend_hovered` true.
 !<
-!< The line's normal: ImPlot takes the SSE estimate `rsqrtss` (12 bits, its exact values the CPU's), the frame
-!< `1/sqrt`. On a line twice as thick the anti-aliased edge can sample the line's texture on the other side of a texel
-!< boundary: with the curve 50 + 30 sin(x/2) in case 12 one pixel, (384, 267), differed by 48 on an Intel i9-13900KF
-!< (and matched with the frame's normal scaled by 1 - 2e-4, inside the estimate's error); the curve is shifted by 0.3
-!< rad, the difference reported (szaghi/figure#15 P10 step 4), not hidden by a mask or a threshold.
-!<
 !< The pictures are `figure_test_plot_frame_labels.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them; a
 !< mismatch's .new.png and .diff.png are left for inspection).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
@@ -68,7 +62,7 @@ do i = 1_int32, NP
    ys(i, 1) = sin(xs(i))
    ys(i, 2) = 0.8_real64 * cos(xs(i))
    ys(i, 3) = 0.5_real64 * sin(2.0_real64 * xs(i))
-   ys(i, 4) = 50.0_real64 + 30.0_real64 * sin(0.5_real64 * xs(i) + 0.3_real64)
+   ys(i, 4) = 50.0_real64 + 30.0_real64 * sin(0.5_real64 * xs(i))
 enddo
 do c = 1_int32, NCASE
    lims = 0.0_real64

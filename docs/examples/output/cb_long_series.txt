@@ -1,4 +1,4 @@
 $ ./cb_long_series --check
 a line of 1000000 points, 600 pixels wide
-pixels of the plot that differ by more than 2 of 255: 1083
+pixels of the plot that differ by more than 2 of 255: 1086
 pixels of the plot that differ by more than 96 of 255: 0

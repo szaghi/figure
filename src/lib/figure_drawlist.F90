@@ -18,8 +18,8 @@ module figure_drawlist
 !< (imgui_draw.cpp: `AddRectFilled` without rounding, `AddRectFilledMultiColor`, `AddConvexPolyFilled`,
 !< `AddTriangleFilled`, `AddLine`), in the same order, from the same state: the fringe scale, the white pixel's
 !< coordinates, the anti-aliased lines' texture coordinates and the list's flags (`dl_set_state`). Arithmetic in
-!< `real(c_float)`, as the C++'s; `ImRsqrtPrecise`'s SSE estimate refined by one Newton step is `1 / sqrt`, within a
-!< unit in the last place. Rounded rectangles, polylines, circles and text are not here yet: figure_core draws them
+!< `real(c_float)`, as the C++'s; `ImRsqrtPrecise` is `1 / sqrt` (Dear ImGui built with `IMGUI_DISABLE_SSE`, no
+!< rsqrtss estimate). Rounded rectangles, polylines, circles and text are not here yet: figure_core draws them
 !< through Dear ImGui.
 !<
 !< Colours are `ImU32` packed as Dear ImGui packs them (red in the low byte, alpha in the high one), held in a

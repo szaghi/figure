@@ -79,8 +79,7 @@ module figure_plot_frame
 !< flags FIGURE's API does not set (`NoInitialFit`, `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or
 !< not drawn), legend sorting. Items are hashed under the plot's seed but the ID stack is not pushed (figure_core has
 !< no `PushOverrideID`): a Dear ImGui widget drawn between `pf_begin_plot` and `pf_end_plot` gets another ID than in
-!< ImPlot. The segment's normal is `1/sqrt` where ImPlot takes the SSE estimate `_mm_rsqrt_ss` (12 bits): the line's
-!< vertices may differ from ImPlot's below a thousandth of a pixel.
+!< ImPlot. The segment's normal is `1/sqrt`, as FIGURE's ImPlot (native/patches/implot-0002).
 !<
 !< No allocation per frame once the tables are grown (ADR 0001; P10 step 9, figure_test_plot_frame_alloc counts them):
 !< every label is written by figure_plot_format into a fixed slot (the ticks' 31 characters, `mouse_text`) and passed

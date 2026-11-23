@@ -18,9 +18,7 @@ program figure_test_plot_frame_input
 !< (pictured open), its Settings > Crosshairs clicked, the crosshairs drawn.
 !<
 !< The two sides are 40 frames apart (past Dear ImGui's double-click time: a click of the frame's side at the place of
-!< one of ImPlot's side 0.2 s before made a double click, the fit). Case 6's second line has a phase of 0.2 rad: with
-!< 0.6 cos(1.3 x) one anti-aliased pixel, (135, 264), differed by 48 (ImPlot's `rsqrtss` normal, as in
-!< figure_test_plot_frame_labels; it matched with the frame's normal scaled by 1 - 2e-4).
+!< one of ImPlot's side 0.2 s before made a double click, the fit).
 !<
 !< The pictures are `figure_test_plot_frame_input.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them; a
 !< mismatch's .new.png and .diff.png are left for inspection).
@@ -61,7 +59,7 @@ do i = 1_int32, NP
    xs(i) = real(i - 1_int32, real64) * 0.05_real64
    ys(i, 1) = sin(xs(i))
    ys(i, 2) = 10.0_real64**(xs(i) / 3.0_real64)
-   ys(i, 3) = 0.6_real64 * cos(1.3_real64 * xs(i) + 0.2_real64)
+   ys(i, 3) = 0.6_real64 * cos(1.3_real64 * xs(i))
 enddo
 do c = 1_int32, NCASE
    state = 0.0_real64
