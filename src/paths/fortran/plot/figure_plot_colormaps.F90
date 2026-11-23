@@ -18,8 +18,10 @@ module figure_plot_colormaps
 !< figure_plot_colormap_files) are kept for the program's life, in load order, and resolve as the others; `cm_list_count`
 !< and `cm_list_name` list the names as `fig_colormap_count` and `fig_colormap_name` (the bundled maps, ImPlot's, the
 !< user's); `cm_stops` gives a map's stops as `fig_colormap_stops` (`stops_of`: every key of a table of up to 16, else
-!< the keys taken greedily while the map is linear within 2/255 between them). Edited maps (`ig_gradient_edit`) are not
-!< here yet.
+!< the keys taken greedily while the map is linear within 2/255 between them). An edited map (`cm_edit_stops`, what
+!< `ig_gradient_edit` does to a map: `resample_from_stops`) keeps its stops; its table (or ImPlot's keys) is resampled
+!< from them, linearly and constant beyond the ends, and every variant registered (`_r`, levels) rewritten;
+!< `cm_generation` counts the edits (a field coloured with a map is coloured again).
 !<
 !< The style's map (`ImPlotStyle::Colormap`, the automatic colours of the plot items): `cm_style_refresh` reads the
 !< line colours of FIGURE's style in effect (`fig_style_lines`, FIGURE's own state, not ImPlot's) when they changed,
@@ -36,7 +38,7 @@ implicit none
 private
 public :: cm_colormap, cm_count, cm_current, cm_index, cm_is_qual, cm_key, cm_pop, cm_push, cm_register, cm_sample
 public :: cm_size, cm_style_refresh, mix_u32, pack_float4
-public :: cm_load, cm_list_count, cm_list_name, cm_stops
+public :: cm_load, cm_list_count, cm_list_name, cm_stops, cm_edit_stops, cm_generation
 public :: CM_DEEP, CM_VIRIDIS
 
 integer(int32), parameter :: CM_DEEP = 0_int32    !< ImPlotColormap_Deep.
@@ -174,6 +176,16 @@ real(real64),     allocatable :: user_rows(:,:)       !< Their tables (3, rows),
 integer(int32)                :: n_user_rows = 0_int32 !< ... rows in use.
 character(len=:), allocatable :: user_names           !< Their names.
 integer(int32)                :: n_user_names = 0_int32 !< ... characters in use.
+
+type :: gradient
+   !< A map edited (`gradient_t`): its stops in the editor's order and, for a bundled map, its table as edited.
+   character(len=:), allocatable :: name      !< The map (its base name).
+   real(real32),     allocatable :: stops(:,:) !< (r, g, b, position) each, as `ImVec4`.
+   real(real64),     allocatable :: table(:,:) !< A bundled map's table as edited (3, 256).
+endtype gradient
+type(gradient),   allocatable :: grads(:)            !< The maps edited.
+integer(int32)                :: n_grads = 0_int32   !< ... their number.
+integer(int32)                :: generation = 0_int32 !< Edits made (`fig_colormap_generation`).
 
 contains
    ! the registry
@@ -519,6 +531,13 @@ contains
    do k = 1_int32, BUNDLED_COUNT
       if (trim(BUNDLED_NAMES(k)) == base) then
          allocate(rgb(3, BUNDLED_SAMPLES))
+         u = grad_index(base)
+         if (u > 0_int32) then
+            if (allocated(grads(u)%table)) then ! edited
+               rgb = grads(u)%table
+               return
+            endif
+         endif
          rgb = bundled_map(k)
          return
       endif
@@ -709,6 +728,7 @@ contains
    integer(int32)                :: nk, ns, a, b, c, k, j !< Keys, stops, the segment, counters.
    real(real64)                  :: w, e                  !< A weight, a deviation.
    logical                       :: qual, ok              !< Qualitative, within the tolerance.
+   real(real32),     allocatable :: sst(:,:)              !< An edited map's stops, sorted.
    real(real64),     parameter   :: TOL = 2.0_real64 / 255.0_real64 !< STOP_TOLERANCE.
 
    call init()
@@ -731,6 +751,19 @@ contains
    endif
    if (qual) then
       err = "ip_colormap_stops: '"//n//"' is qualitative (a list of colours, not a scale): it has no gradient"
+      return
+   endif
+   k = grad_index(n)
+   if (k > 0_int32) then ! edited: its stops, sorted by position (stable)
+      call sorted_stops(grads(k)%stops, sst)
+      deallocate(pos, rgb)
+      allocate(pos(size(sst, 2)), rgb(3, size(sst, 2)))
+      do j = 1_int32, size(sst, 2, kind=int32)
+         pos(j) = real(sst(4, j), real64)
+         rgb(:, j) = real(sst(1:3, j), real64)
+      enddo
+      status = FIG_OK
+      err = ''
       return
    endif
    allocate(idx(nk))
@@ -777,6 +810,265 @@ contains
    status = FIG_OK
    err = ''
    endsubroutine cm_stops
+
+   ! edited maps (ig_gradient_edit's)
+
+   function grad_index(name) result(g)
+   !< An edited map's slot by its base name; 0 if none.
+   character(len=*), intent(in) :: name !< Name.
+   integer(int32)               :: g    !< Slot.
+
+   do g = 1_int32, n_grads
+      if (len(grads(g)%name) /= len(name)) cycle
+      if (grads(g)%name == name) return
+   enddo
+   g = 0_int32
+   endfunction grad_index
+
+   function cm_generation() result(n)
+   !< The edits made to the maps (`fig_colormap_generation`): a field coloured with a map is coloured again.
+   integer(int32) :: n !< Generation.
+
+   n = generation
+   endfunction cm_generation
+
+   subroutine sorted_stops(s, out)
+   !< `sorted_stops`: the stops by position, a stable sort.
+   real(real32),              intent(in)  :: s(:,:)   !< Stops (4, n).
+   real(real32), allocatable, intent(out) :: out(:,:) !< Sorted.
+   real(real32)                           :: t(4)     !< A stop moved.
+   integer(int32)                         :: i, j     !< Counters.
+
+   allocate(out(4, size(s, 2)))
+   out = s
+   do i = 2_int32, size(s, 2, kind=int32)
+      t = out(:, i)
+      j = i - 1_int32
+      do while (j >= 1_int32)
+         if (.not. out(4, j) > t(4)) exit
+         out(:, j + 1_int32) = out(:, j)
+         j = j - 1_int32
+      enddo
+      out(:, j + 1_int32) = t
+   enddo
+   endsubroutine sorted_stops
+
+   pure function stops_at(s, t) result(c)
+   !< `stops_at`: the colour of sorted stops at t, linear between them, the ends' beyond them.
+   real(real32), intent(in) :: s(:,:) !< Sorted stops (4, n).
+   real(real64), intent(in) :: t      !< Position.
+   real(real64)             :: c(3)   !< Colour.
+   real(real64)             :: w, d   !< Weight, a term.
+   integer(int32)           :: i, j, n !< Counters, stops.
+
+   n = size(s, 2, kind=int32)
+   c = 0.0_real64
+   if (n == 0_int32) return
+   if (t <= real(s(4, 1), real64)) then
+      c = real(s(1:3, 1), real64)
+      return
+   endif
+   do i = 2_int32, n
+      if (t <= real(s(4, i), real64)) then
+         if (s(4, i) > s(4, i - 1_int32)) then
+            w = (t - real(s(4, i - 1_int32), real64)) / (real(s(4, i), real64) - real(s(4, i - 1_int32), real64))
+         else
+            w = 1.0_real64
+         endif
+         do j = 1_int32, 3_int32
+            d = w * (real(s(j, i), real64) - real(s(j, i - 1_int32), real64))
+            c(j) = real(s(j, i - 1_int32), real64) + d
+         enddo
+         return
+      endif
+   enddo
+   c = real(s(1:3, n), real64)
+   endfunction stops_at
+
+   subroutine cm_edit_stops(name, pos, rgb, status, err, changed)
+   !< A map's stops set (what `ig_gradient_edit` does on an edit: `gradient_of`, the stops changed, then
+   !< `resample_from_stops`): kept in the order given (the editor's); the map's table (256 colours for a bundled or a
+   !< user's map, ImPlot's keys for one of its own) resampled from them, sorted (linearly between, constant beyond the
+   !< ends), and every variant registered (`<name>_r`, levels) rewritten; `cm_generation` raised. Nothing done when
+   !< the stops are those it has (`same_stops`). `status`: FIG_OK; FIG_ERR_ARGUMENT for a name `editable` refuses
+   !< (unknown, reversed, qualitative) or stops not (positions, colours) of the same count; `err` the message.
+   character(len=*),              intent(in)            :: name     !< Map (its base name, trailing blanks dropped).
+   real(real64),                  intent(in)            :: pos(:)   !< Positions in [0, 1].
+   real(real64),                  intent(in)            :: rgb(:,:) !< Colours (3, n).
+   integer(int32),                intent(out)           :: status   !< Status.
+   character(len=:), allocatable, intent(out)           :: err      !< Message.
+   logical,                       intent(out), optional :: changed  !< The stops changed (the map resampled).
+   character(len=:), allocatable :: n                     !< Name.
+   real(real64),     allocatable :: p0(:), c0(:,:), keys(:,:) !< Its stops now, its keys.
+   real(real32),     allocatable :: st(:,:), sst(:,:)     !< The stops given, sorted.
+   type(gradient),   allocatable :: more(:)               !< Grown table.
+   integer(int32)                :: g, k, nk, b, u, ns    !< Slots, counters.
+   logical                       :: qual, same            !< Qualitative, the same stops.
+
+   call init()
+   if (present(changed)) changed = .false.
+   n = name(1:len_trim(name))
+   ns = size(pos, kind=int32)
+   if (size(rgb, 1) /= 3 .or. size(rgb, 2) /= ns) then
+      status = FIG_ERR_ARGUMENT
+      err = 'ig_gradient_edit: stops need a colour (3 components) per position'
+      return
+   endif
+   call cm_stops(n, p0, c0, status, err) ! `editable`, and the stops it has (`gradient_of`)
+   if (status /= FIG_OK) then
+      err = 'ig_gradient_edit'//err(len('ip_colormap_stops') + 1:)
+      return
+   endif
+   allocate(st(4, ns))
+   do k = 1_int32, ns
+      st(1:3, k) = real(rgb(:, k), real32)
+      st(4, k) = real(pos(k), real32)
+   enddo
+   g = grad_index(n)
+   if (g == 0_int32) then ! `gradient_of`: the stops it had, before this edit
+      if (.not. allocated(grads)) allocate(grads(4))
+      if (n_grads == size(grads, kind=int32)) then
+         allocate(more(2_int32 * n_grads))
+         do k = 1_int32, n_grads ! element by element (nvfortran: no section of a type with deferred-length parts)
+            call move_alloc(grads(k)%name, more(k)%name)
+            call move_alloc(grads(k)%stops, more(k)%stops)
+            if (allocated(grads(k)%table)) call move_alloc(grads(k)%table, more(k)%table)
+         enddo
+         call move_alloc(more, grads)
+      endif
+      n_grads = n_grads + 1_int32
+      g = n_grads
+      grads(g)%name = n
+      allocate(grads(g)%stops(4, size(p0)))
+      do k = 1_int32, size(p0, kind=int32)
+         grads(g)%stops(1:3, k) = real(c0(:, k), real32)
+         grads(g)%stops(4, k) = real(p0(k), real32)
+      enddo
+   endif
+   same = size(grads(g)%stops, 2) == ns
+   if (same) same = all(grads(g)%stops == st)
+   if (same) return
+   call move_alloc(st, grads(g)%stops)
+   ! resample_from_stops
+   call keys_of(n, keys, qual)
+   nk = size(keys, 2, kind=int32)
+   call sorted_stops(grads(g)%stops, sst)
+   do k = 1_int32, nk
+      if (nk > 1_int32) then
+         keys(:, k) = stops_at(sst, real(k - 1_int32, real64) / real(nk - 1_int32, real64))
+      else
+         keys(:, k) = stops_at(sst, 0.0_real64)
+      endif
+   enddo
+   b = builtin(n)
+   if (b >= 0_int32) then
+      call write_keys(b, keys)
+   elseif (user_index(n) > 0_int32) then
+      u = user_index(n)
+      user_rows(:, user_off(u):user_off(u) + user_cnt(u) - 1_int32) = keys
+   else
+      if (allocated(grads(g)%table)) deallocate(grads(g)%table)
+      allocate(grads(g)%table(3, nk))
+      grads(g)%table = keys
+   endif
+   call rewrite_variants(n, keys, qual, b >= 0_int32)
+   generation = generation + 1_int32
+   if (present(changed)) changed = .true.
+   status = FIG_OK
+   err = ''
+   endsubroutine cm_edit_stops
+
+   subroutine rewrite_variants(base, keys, qual, builtin_base)
+   !< Every registered variant of an edited map (`<base>`, `<base>_r`, with 0 or 2-256 levels) rewritten from its keys
+   !< (`variant_keys`), the base itself skipped when ImPlot's (written already).
+   character(len=*), intent(in) :: base         !< Base name.
+   real(real64),     intent(in) :: keys(:,:)    !< Its keys as edited (3, n).
+   logical,          intent(in) :: qual         !< Qualitative.
+   logical,          intent(in) :: builtin_base !< ImPlot's own map.
+   real(real64),     allocatable :: v(:,:)      !< A variant's keys.
+   character(len=:), allocatable :: nm, reg     !< A variant's name, registered name.
+   character(len=8)              :: tag         !< Levels, printed.
+   integer(int32)                :: r, lv, id, n, k !< Reversed, levels, its id, keys, counter.
+   logical                       :: q           !< Its kind.
+
+   n = size(keys, 2, kind=int32)
+   do r = 0_int32, 1_int32
+      nm = base
+      if (r == 1_int32) nm = base//'_r'
+      lv = 0_int32
+      do while (lv <= MAX_LEVELS)
+         if (.not. (lv == 0_int32 .and. r == 0_int32 .and. builtin_base)) then
+            if (lv > 0_int32) then
+               write(tag, '(I0)') lv
+               reg = nm//'|'//trim(tag)
+            else
+               reg = nm
+            endif
+            id = cm_index(reg)
+            if (id >= 0_int32) then
+               q = qual
+               if (r == 1_int32) then
+                  allocate(v(3, n))
+                  do k = 1_int32, n
+                     v(:, k) = keys(:, n + 1_int32 - k)
+                  enddo
+               else
+                  allocate(v(3, n))
+                  v = keys
+               endif
+               if (lv > 0_int32) then
+                  call write_band_keys(id, v, n, lv, q)
+               else
+                  call write_keys(id, v)
+               endif
+               deallocate(v)
+            endif
+         endif
+         lv = merge(2_int32, lv + 1_int32, lv == 0_int32)
+      enddo
+   enddo
+   endsubroutine rewrite_variants
+
+   subroutine write_band_keys(id, rgb, n, lv, qual)
+   !< A variant of `lv` bands rewritten: a band each, the map's colour at its centre (`variant_keys`).
+   integer(int32), intent(in) :: id       !< Map.
+   real(real64),   intent(in) :: rgb(:,:) !< Keys (3, n).
+   integer(int32), intent(in) :: n, lv    !< Keys, bands.
+   logical,        intent(in) :: qual     !< The map qualitative.
+   real(real64)               :: c(3, MAX_LEVELS) !< The bands' colours.
+   integer(int32)             :: k        !< Band.
+
+   do k = 0_int32, lv - 1_int32
+      c(:, k + 1_int32) = band(rgb, n, (real(k, real64) + 0.5_real64) / real(lv, real64), qual)
+   enddo
+   call write_keys(id, c(:, 1:lv))
+   endsubroutine write_band_keys
+
+   subroutine write_keys(id, rgb)
+   !< `write_keys` and `RebuildTables` of one map: its keys replaced (the same count, packed as
+   !< `ColorConvertFloat4ToU32`), its table rebuilt.
+   integer(int32), intent(in) :: id       !< Map.
+   real(real64),   intent(in) :: rgb(:,:) !< Keys (3, n).
+   integer(int32)             :: k, n, i, s !< Slot, keys, counters.
+
+   k = id + 1_int32
+   n = size(rgb, 2, kind=int32)
+   if (id < 0_int32 .or. id >= n_maps .or. key_cnt(k) /= n) return
+   do i = 1_int32, n
+      keys(key_off(k) + i) = pack_float4(rgb(:, i), 1.0_real64)
+   enddo
+   if (quals(k)) then
+      tables(tab_off(k) + 1_int32:tab_off(k) + n) = keys(key_off(k) + 1_int32:key_off(k) + n)
+   else
+      do i = 1_int32, n - 1_int32
+         do s = 0_int32, 254_int32
+            tables(tab_off(k) + (i - 1_int32) * 255_int32 + s + 1_int32) = &
+               mix_u32(keys(key_off(k) + i), keys(key_off(k) + i + 1_int32), s)
+         enddo
+      enddo
+      tables(tab_off(k) + tab_size(k)) = keys(key_off(k) + n)
+   endif
+   endsubroutine write_keys
 
    ! the style's map
 

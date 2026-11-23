@@ -20,7 +20,7 @@ use, intrinsic :: iso_c_binding, only : c_associated, c_double, c_int, c_long_lo
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_c_native, only : fig_texture_create, fig_texture_destroy, fig_texture_update
 use figure_core, only : core_time
-use figure_plot_colormaps, only : cm_sample
+use figure_plot_colormaps, only : cm_generation, cm_sample
 
 implicit none
 private
@@ -46,6 +46,7 @@ type :: field_entry
    real(real64)         :: vmin = 0.0_real64, vmax = 0.0_real64   !< ... its ends.
    real(real64)         :: lo = 0.0_real64, hi = 1.0_real64       !< The range applied.
    integer(int32)       :: cmap = -1_int32, scale = FIELD_LINEAR  !< Colormap, scale.
+   integer(int32)       :: colormaps = -1_int32 !< The colormaps' generation (`cm_generation`: an edited map).
    integer(int32)       :: nan = 0_int32         !< NaN colour (packed).
    real(real64)         :: last_time = 0.0_real64 !< Time of the last drawing.
 endtype field_entry
@@ -117,7 +118,8 @@ contains
    k = slot(id)
    associate(e => cache(k))
       again = e%tex == 0_c_long_long .or. changed .or. .not. same_ptr(e%data, p) .or. e%kind /= kind .or. &
-              e%nx /= nx .or. e%ny /= ny .or. e%cmap /= cmap .or. e%scale /= scale .or. e%nan /= nanc .or. &
+              e%nx /= nx .or. e%ny /= ny .or. e%cmap /= cmap .or. e%colormaps /= cm_generation() .or. &
+              e%scale /= scale .or. e%nan /= nanc .or. &
               (e%has_vmin .neqv. present(vmin)) .or. (e%has_vmax .neqv. present(vmax))
       if (.not. again .and. present(vmin)) again = e%vmin /= vmin
       if (.not. again .and. present(vmax)) again = e%vmax /= vmax
@@ -139,6 +141,7 @@ contains
          e%nx = nx
          e%ny = ny
          e%cmap = cmap
+         e%colormaps = cm_generation()
          e%scale = scale
          e%nan = nanc
          e%has_vmin = present(vmin)
