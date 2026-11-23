@@ -6,7 +6,7 @@ program figure_test_plot_frame_3d_alloc
 !< for the 2-D frame, its counter (figure_test_plot_alloc_counter) reused. A 3-D plot with every per-frame string of
 !< the frame so far: a title with a hidden part, three axis labels, the ticks' labels of three axes, an inverted axis,
 !< a scaled box, a rotation; (step 4) a line with per-point colours, a scatter with per-point colours and sizes, a line
-!< with markers, their legend. Drawn first by ImPlot3D through FIGURE's API (`ip3_*`), then by the Fortran frame
+!< with markers, their legend; (step 5) a surface, a mesh, triangles, quads, an image, a text. Drawn first by ImPlot3D through FIGURE's API (`ip3_*`), then by the Fortran frame
 !< (`pf3_*`), NF frames each: on the Fortran side the last NCOUNT frames are counted, from `pf3_begin_plot` to
 !< `pf3_end_plot`, and must make none. Checks:
 !<
@@ -15,12 +15,14 @@ program figure_test_plot_frame_3d_alloc
 !< 3. the pictures of the last frame of both sides equal at FIGURE's oracle rule (|d| <= 2, no pixel failing).
 !<
 !< The pictures are `figure_test_plot_frame_3d_alloc.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
-use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
+use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip3_begin_plot, ip3_end_plot, &
                    ip3_setup_axes, ip3_setup_axis, ip3_setup_box, ip3_line, ip3_scatter, ip3_spec,                &
+                   ip3_surface, ip3_mesh, ip3_triangles, ip3_quads, ip3_image, ip3_text, texture_object,            &
                    ImGuiWindowFlags_NoDecoration
 use figure_plot3d_frame, only : pf3_begin_plot, pf3_end_plot, pf3_setup_axes, pf3_setup_axis, pf3_setup_box
-use figure_plot3d_items, only : pf3_line, pf3_scatter, pf3_spec
+use figure_plot3d_items, only : pf3_line, pf3_scatter, pf3_spec, pf3_surface, pf3_mesh, pf3_triangles, pf3_quads, &
+                                pf3_image, pf3_text
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 use figure_test_plot_alloc_counter, only : alloc_arm, alloc_count, alloc_disarm
 
@@ -34,6 +36,11 @@ real(real64),   parameter :: LIM(6) = [-3.0_real64, 3.0_real64, 0.0_real64, 100.
 real(real64),   parameter :: BOX(3) = [1.0_real64, 1.5_real64, 0.75_real64] !< Box scale.
 integer(int32), parameter :: NP = 60_int32      !< Points.
 type(app_object)          :: app                !< Application.
+type(texture_object)      :: tex                !< An image.
+real(real64)              :: gx(12), gy(10), gz(12, 10) !< A surface.
+real(real64)              :: ox(6), oy(6), oz(6), corners(3, 4) !< A mesh, an image's corners.
+integer(int32)            :: otri(3, 8)         !< The mesh's faces.
+integer(int8)             :: rgba(4, 2, 2)      !< The image's pixels.
 real(real64)              :: x(NP), y(NP), z(NP), zh(NP), xh(NP), cols(4, NP), sizes(NP) !< The items (named
                                                 !< arrays: nvfortran allocates an expression's temporary).
 integer(int64)            :: counted            !< Allocations on the counted frames.
@@ -57,6 +64,25 @@ do i = 1_int32, NP
    cols(4, i) = 1.0_real64
    sizes(i) = 2.0_real64 + mod(real(i, real64), 4.0_real64)
 enddo
+do i = 1_int32, 12_int32
+   gx(i) = -2.5_real64 + real(i, real64) * 0.4_real64
+enddo
+do i = 1_int32, 10_int32
+   gy(i) = real(i, real64) * 9.0_real64
+enddo
+do i = 1_int32, 10_int32
+   gz(:, i) = 0.5_real64 * sin(gx) * cos(0.05_real64 * gy(i))
+enddo
+ox = [1.0_real64, -1.0_real64, 0.0_real64, 0.0_real64, 0.0_real64, 0.0_real64]
+oy = [50.0_real64, 50.0_real64, 80.0_real64, 20.0_real64, 50.0_real64, 50.0_real64]
+oz = [0.0_real64, 0.0_real64, 0.0_real64, 0.0_real64, 0.8_real64, -0.8_real64]
+otri = reshape([1, 3, 5, 3, 2, 5, 2, 4, 5, 4, 1, 5, 3, 1, 6, 2, 3, 6, 4, 2, 6, 1, 4, 6], [3, 8])
+corners = reshape([-2.0_real64, 10.0_real64, -0.9_real64, 2.0_real64, 10.0_real64, -0.9_real64, 2.0_real64, &
+                   90.0_real64, -0.9_real64, -2.0_real64, 90.0_real64, -0.9_real64], [3, 4])
+rgba = 100_int8
+rgba(4, :, :) = 127_int8
+call tex%init(2_int32, 2_int32)
+call tex%update(rgba)
 counted = 0_int64
 do sd = 1_int32, 2_int32 ! 1 ImPlot3D, 2 the Fortran frame
    side_fortran = sd == 2_int32
@@ -101,6 +127,12 @@ contains
          call pf3_line('wave', x, y, z, colors=cols)
          call pf3_scatter('dots', x(::3), y(::3), zh(::3), colors=cols(:, ::3), sizes=sizes(::3))
          call pf3_line('marked', xh(1:20), y(1:20), z(1:20), spec=pf3_spec(marker=2_int32))
+         call pf3_surface('surface', gx, gy, gz)
+         call pf3_mesh('mesh', ox, oy, oz, otri)
+         call pf3_triangles('triangles', ox(1:3), oy(1:3), oz(1:3))
+         call pf3_quads('quads', ox(1:4), oy(1:4), oz(1:4))
+         call pf3_image('image', tex, corners)
+         call pf3_text('text', 0.0_real64, 50.0_real64, 0.5_real64)
          call pf3_end_plot()
       endif
    else
@@ -111,6 +143,12 @@ contains
          call ip3_line('wave', x, y, z, colors=cols)
          call ip3_scatter('dots', x(::3), y(::3), zh(::3), colors=cols(:, ::3), sizes=sizes(::3))
          call ip3_line('marked', xh(1:20), y(1:20), z(1:20), spec=ip3_spec(marker=2_int32))
+         call ip3_surface('surface', gx, gy, gz)
+         call ip3_mesh('mesh', ox, oy, oz, otri)
+         call ip3_triangles('triangles', ox(1:3), oy(1:3), oz(1:3))
+         call ip3_quads('quads', ox(1:4), oy(1:4), oz(1:4))
+         call ip3_image('image', tex, corners)
+         call ip3_text('text', 0.0_real64, 50.0_real64, 0.5_real64)
          call ip3_end_plot()
       endif
    endif

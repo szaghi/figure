@@ -66,7 +66,8 @@ public :: pf3_begin_plot, pf3_end_plot, pf3_setup_axes, pf3_setup_axis, pf3_setu
 public :: pf3_setup_legend
 public :: pf3_plot_to_pixels, pf3_mouse_ray, pf3_plot_limits, pf3_plot_rotation
 public :: plot3d_spec, item3d_style, pf3_item_begin, pf3_item_fit, pf3_item_fitting, pf3_item_view, pf3_item_end
-public :: F3_NO_CLIP
+public :: pf3_colormap
+public :: F3_NO_CLIP, pf3_push_colormap, pf3_pop_colormap, pf3_item_recolor, pf3_text
 
 ! ImPlot3DFlags
 integer(int32), parameter :: F3_NO_TITLE = 1_int32       !< NoTitle.
@@ -231,6 +232,8 @@ integer(int32)                           :: n_plots = 0_int32 !< Slots in use or
 integer(int32)                           :: cur = 0_int32     !< The plot begun, 0 none (handle, never a pointer).
 character(len=128)                       :: mouse_text = ''   !< The mouse position's text.
 integer(int32)                           :: cur_item = 0_int32 !< The item begun (handle in the plot's pool), 0 none.
+integer(int32)                           :: cmap3 = CM_DEEP   !< ImPlot3DStyle::Colormap in effect (FIGURE's ids).
+integer(int32)                           :: cmap3_saved = CM_DEEP !< The one before a push.
 
 contains
    ! begin and end
@@ -647,7 +650,7 @@ contains
          p%it(h)%color = core_color(real(item_col(1), real64), real(item_col(2), real64), real(item_col(3), real64), &
                                     real(item_col(4), real64))
       elseif (created) then
-         p%it(h)%color = cm_key(CM_DEEP, mod(p%colormap_idx, cm_size(CM_DEEP)))
+         p%it(h)%color = cm_key(cmap3, mod(p%colormap_idx, cm_size(cmap3)))
          p%colormap_idx = p%colormap_idx + 1_int32
       endif
       if (item_mkr < -2_int32) error stop 'figure_plot3d_frame: an invalid marker'
@@ -688,6 +691,67 @@ contains
    endassociate
    shown = .true.
    endfunction pf3_item_begin
+
+   subroutine pf3_push_colormap(id)
+   !< `PushColormap` (one deep, as figure_implot3d's surfaces push one): the colormap of the next items' colours.
+   integer(int32), intent(in) :: id !< Colormap (FIGURE's id).
+
+   cmap3_saved = cmap3
+   cmap3 = id
+   endsubroutine pf3_push_colormap
+
+   subroutine pf3_pop_colormap()
+   !< `PopColormap`.
+
+   cmap3 = cmap3_saved
+   endsubroutine pf3_pop_colormap
+
+   function pf3_colormap() result(id)
+   !< The colormap in effect.
+   integer(int32) :: id !< Colormap.
+
+   id = cmap3
+   endfunction pf3_colormap
+
+   subroutine pf3_item_recolor(col)
+   !< `GetCurrentItem()->Color = col` (an image's tint).
+   integer(int32), intent(in) :: col !< Packed colour.
+
+   if (cur_item /= 0_int32) plots(cur)%it(cur_item)%color = col
+   endsubroutine pf3_item_recolor
+
+   subroutine pf3_text(text, x, y, z, angle, offset)
+   !< As `ip3_text` (`PlotText`): a text centred on a plot point (hidden outside the cull box), turned by `angle`
+   !< [radians], moved by `offset` [pixels], in InlayText; not an item.
+   character(len=*), intent(in)           :: text      !< Text.
+   real(real64),     intent(in)           :: x, y, z   !< Point.
+   real(real64),     intent(in), optional :: angle     !< Angle [radians].
+   real(real64),     intent(in), optional :: offset(2) !< Offset [pixels].
+   real(real64)                           :: q(3)      !< The point.
+   real(real32)                           :: px, py, a !< Its pixel, the angle.
+
+   if (cur == 0_int32) error stop 'figure_plot3d_frame: pf3_text outside a 3-D plot'
+   associate(p => plots(cur))
+      call setup_lock(p)
+      q(1) = x
+      q(2) = y
+      q(3) = z
+      if (.not. has_flag(p%flags, F3_NO_CLIP)) then
+         if (.not. ((x >= p%v%rmin(1) .and. x <= p%v%rmax(1)) .and. (y >= p%v%rmin(2) .and. y <= p%v%rmax(2)) .and. &
+                    (z >= p%v%rmin(3) .and. z <= p%v%rmax(3)))) return
+      endif
+      call plot_to_pixels(p%v, q, px, py)
+      if (present(offset)) then
+         px = px + real(offset(1), real32)
+         py = py + real(offset(2), real32)
+      endif
+      a = 0.0_real32
+      if (present(angle)) a = real(angle, real32)
+      call core_draw_begin()
+      call text_rotated(px, py, a, core_style_color(ImGuiCol_Text), text)
+      call core_draw_end()
+   endassociate
+   endsubroutine pf3_text
 
    function pf3_item_fitting(flags) result(yes)
    !< Whether the item's points extend the fit this frame (`FitThisFrame`, not `NoFit`).

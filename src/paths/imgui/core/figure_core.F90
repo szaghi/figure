@@ -1107,16 +1107,28 @@ contains
    fringe = real(f, real64)
    endsubroutine core_line_texture
 
-   subroutine core_draw_prims(x, y, u, v, col, idx)
+   subroutine core_draw_prims(x, y, u, v, col, idx, texture)
    !< Vertices and triangles as given, appended in order (the 3-D plots' depth-sorted triangles: ImPlot3D's
    !< `SortedMoveToImGuiDrawList`, `PrimReserve` and its 16-bit indices included): positions [pixels] and texture
-   !< coordinates in single precision, packed colours, three 0-based vertex indices per triangle.
-   real(real32),   intent(in) :: x(:), y(:) !< Positions.
-   real(real32),   intent(in) :: u(:), v(:) !< Texture coordinates.
-   integer(int32), intent(in) :: col(:)     !< Colours.
-   integer(int32), intent(in) :: idx(:)     !< Triangles.
+   !< coordinates in single precision, packed colours, three 0-based vertex indices per triangle; with `texture`
+   !< (an `ImTextureID`), drawn with it (`PushTexture`, `PopTexture` around them).
+   real(real32),   intent(in)           :: x(:), y(:) !< Positions.
+   real(real32),   intent(in)           :: u(:), v(:) !< Texture coordinates.
+   integer(int32), intent(in)           :: col(:)     !< Colours.
+   integer(int32), intent(in)           :: idx(:)     !< Triangles.
+   integer(int64), intent(in), optional :: texture    !< Texture.
+   type(im_texture_ref)                 :: t          !< Its reference.
 
+   if (.not. present(texture)) then
+      call dl_prims(list, x, y, u, v, col, idx)
+      return
+   endif
+   call core_draw_end_pending()
+   t%texid = texture
+   call ImDrawList_PushTexture(target_list, t)
    call dl_prims(list, x, y, u, v, col, idx)
+   call core_draw_end_pending()
+   call ImDrawList_PopTexture(target_list)
    endsubroutine core_draw_prims
 
    subroutine core_draw_quad_uv(x, y, u, v, col)

@@ -12,12 +12,13 @@ module figure_plot3d_drawlist
 !< figure_core (`core_draw_prims`), the list emptied.
 !<
 !< The buffers and the sort's scratch are module arrays grown once and kept (no allocation per frame).
-use, intrinsic :: iso_fortran_env, only : int32, real32, real64
+use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_core, only : core_draw_prims
 
 implicit none
 private
 public :: d3_reset, d3_reserve, d3_unreserve, d3_room, d3_vtx, d3_tri, d3_flush, d3_vtx_count, d3_tri_count
+public :: d3_set_texture
 public :: D3_MAX_IDX
 
 integer(int32), parameter :: D3_MAX_IDX = 65535_int32 !< ImDrawList3D::MaxIdx() (16-bit ImDrawIdx).
@@ -30,6 +31,9 @@ integer(int32), allocatable :: ord(:), tmp(:)             !< The sorted order, t
 integer(int32), allocatable :: sidx(:)                    !< The indices in the sorted order.
 integer(int32)              :: nv = 0_int32               !< Vertices (_VtxCurrentIdx).
 integer(int32)              :: nt = 0_int32               !< Triangles.
+integer(int64)              :: run_tex(64) = 0_int64      !< Texture runs (`_TextureBuffer`): texture (0: the default),
+integer(int32)              :: run_vtx(64) = 0_int32      !< ... from this vertex (0-based) on.
+integer(int32)              :: nrun = 0_int32             !< Runs.
 
 contains
    subroutine d3_reset()
@@ -37,7 +41,32 @@ contains
 
    nv = 0_int32
    nt = 0_int32
+   nrun = 0_int32
    endsubroutine d3_reset
+
+   subroutine d3_set_texture(tex)
+   !< `SetTexture` (`ResetTexture`: 0): the triangles from the next vertex on drawn with `tex`, runs coalesced as
+   !< ImPlot3D coalesces them.
+   integer(int64), intent(in) :: tex !< Texture (`ImTextureID`; 0 the default).
+
+   if (nrun == 0_int32) then
+      nrun = 1_int32
+      run_tex(1) = tex
+      run_vtx(1) = nv
+      return
+   endif
+   if (run_vtx(nrun) == nv) then
+      run_tex(nrun) = tex
+      if (nrun >= 2_int32) then
+         if (run_tex(nrun - 1_int32) == tex) nrun = nrun - 1_int32
+      endif
+   elseif (run_tex(nrun) /= tex) then
+      if (nrun == size(run_tex, kind=int32)) error stop 'figure_plot3d_drawlist: more than 64 texture runs in a plot'
+      nrun = nrun + 1_int32
+      run_tex(nrun) = tex
+      run_vtx(nrun) = nv
+   endif
+   endsubroutine d3_set_texture
 
    pure function d3_vtx_count() result(n)
    !< Vertices written (`_VtxCurrentIdx`).
@@ -125,11 +154,51 @@ contains
       sidx(3_int32 * k - 1_int32) = ix(3_int32 * t - 1_int32)
       sidx(3_int32 * k) = ix(3_int32 * t)
    enddo
-   call core_draw_prims(vx(1:nv), vy(1:nv), vu(1:nv), vv(1:nv), vc(1:nv), sidx(1:3_int32 * nt))
+   if (nrun <= 1_int32) then
+      call core_draw_prims(vx(1:nv), vy(1:nv), vu(1:nv), vv(1:nv), vc(1:nv), sidx(1:3_int32 * nt))
+   else
+      call flush_runs()
+   endif
    call d3_reset()
    endsubroutine d3_flush
 
    ! private
+
+   subroutine flush_runs()
+   !< The sorted triangles in runs of one texture (a triangle's texture: the last run starting at or before its first
+   !< vertex), each run drawn with its texture (the default one without): ImPlot3D's draw commands per texture.
+   integer(int32) :: a, b, k   !< A run of triangles, a triangle.
+   integer(int64) :: ta, tk    !< Their textures.
+
+   a = 1_int32
+   ta = tri_texture(sidx(1))
+   do k = 2_int32, nt + 1_int32
+      tk = -1_int64
+      if (k <= nt) tk = tri_texture(sidx(3_int32 * k - 2_int32))
+      if (k <= nt .and. tk == ta) cycle
+      b = k - 1_int32
+      if (ta == 0_int64) then
+         call core_draw_prims(vx(1:nv), vy(1:nv), vu(1:nv), vv(1:nv), vc(1:nv), sidx(3_int32 * a - 2_int32:3_int32 * b))
+      else
+         call core_draw_prims(vx(1:nv), vy(1:nv), vu(1:nv), vv(1:nv), vc(1:nv), sidx(3_int32 * a - 2_int32:3_int32 * b), &
+                              texture=ta)
+      endif
+      a = k
+      ta = tk
+   enddo
+   endsubroutine flush_runs
+
+   pure function tri_texture(i0) result(tex)
+   !< The texture of a triangle whose first vertex is i0 (0-based).
+   integer(int32), intent(in) :: i0  !< First vertex.
+   integer(int64)             :: tex !< Texture (0: the default).
+   integer(int32)             :: j   !< Run.
+
+   tex = 0_int64
+   do j = 1_int32, nrun
+      if (i0 >= run_vtx(j)) tex = run_tex(j)
+   enddo
+   endfunction tri_texture
 
    subroutine merge_sort()
    !< glibc's `qsort` (2.39: `msort_with_tmp`, a top-down merge sort) of `ord(1:nt)` by `zb` with ImPlot3D's comparator

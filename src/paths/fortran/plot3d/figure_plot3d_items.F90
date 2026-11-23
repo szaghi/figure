@@ -1,6 +1,6 @@
-!< figure_plot3d_items, the Fortran 3-D frame's items: lines and markers so far, as ImPlot3D draws them.
+!< figure_plot3d_items, the Fortran 3-D frame's items: lines, markers, triangles, quads, surfaces, meshes, images.
 module figure_plot3d_items
-!< figure_plot3d_items, the Fortran 3-D frame's items: lines and markers so far, as ImPlot3D draws them.
+!< figure_plot3d_items, the Fortran 3-D frame's items: lines, markers, triangles, quads, surfaces, meshes, images.
 !<
 !< szaghi/figure#15 P13, step 4. The items of FIGURE's 3-D API drawn into the Fortran 3-D frame (figure_plot3d_frame),
 !< reproduced from implot3d_items.cpp (ImPlot3D 0.6 WIP, FIGURE's copy): `pf3_spec` (the fields of `ip3_spec`),
@@ -13,20 +13,33 @@ module figure_plot3d_items
 !< (`GetPointDepth`) into the 3-D list (figure_plot3d_drawlist), at most 65535 vertices per plot
 !< (`RenderPrimitivesEx`). Lines take the anti-aliased line texture (`GetLineRenderProps`), fills the white pixel.
 !<
+!< Step 5: `pf3_triangles` and `pf3_quads` (`PlotTriangle`, `PlotQuad`: `RendererTriangleFill`, `RendererQuadFill`,
+!< their edges through `GetterTriangleLines`/`GetterQuadLines`), `pf3_surface` on a rectilinear grid or any grid
+!< (`PlotSurface`: `RendererSurfaceFill`, a cell's two triangles each with its depth, coloured by the colormap pushed
+!< for the item (`SampleColormap` of the heights between the scale's ends), the grid lines (`GetterSurfaceLines`)),
+!< `pf3_mesh` (`PlotMesh`: the user's 1-based triangles read in place (`GetterMeshTriangles`), edges only with a line
+!< colour), `pf3_image` (`PlotImage`: a textured quad, the texture's run in the 3-D list, the v coordinates flipped).
+!< `pf3_text` is the frame's.
+!<
 !< The arrays are read in place, any stride, `real32` or `real64` (module pointers to the dummies, which are TARGET:
 !< no copy); per-point colours are packed point by point as figure_implot3d packs them. No allocation per item per
 !< frame.
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use figure_core, only : core_color, core_line_texture, core_white_pixel
+use figure_plot_colormaps, only : cm_sample
+use figure_texture, only : texture_object, texture_ref
+use figure_cimgui, only : im_texture_ref
 use figure_plot3d_camera, only : view3d, plot_to_pixels, point_depth
-use figure_plot3d_drawlist, only : d3_reserve, d3_room, d3_tri, d3_vtx, d3_vtx_count
+use figure_plot3d_drawlist, only : d3_reserve, d3_room, d3_set_texture, d3_tri, d3_vtx, d3_vtx_count
 use figure_plot3d_frame, only : plot3d_spec, item3d_style, pf3_item_begin, pf3_item_end, pf3_item_fit, &
-                                pf3_item_fitting, pf3_item_view
+                                pf3_item_fitting, pf3_item_view, pf3_push_colormap, pf3_pop_colormap,  &
+                                pf3_item_recolor, pf3_colormap, pf3_text
 
 implicit none
 private
-public :: plot3d_spec, pf3_spec, pf3_line, pf3_scatter
+public :: plot3d_spec, pf3_spec, pf3_line, pf3_scatter, pf3_triangles, pf3_quads, pf3_surface, pf3_mesh, pf3_image
+public :: pf3_text
 
 interface pf3_line
    !< A line through the points (x(i), y(i), z(i)): `ip3_line`.
@@ -38,10 +51,40 @@ interface pf3_scatter
    module procedure scatter_r32, scatter_r64
 endinterface pf3_scatter
 
+interface pf3_triangles
+   !< Triangles, each three points in a row: `ip3_triangles`.
+   module procedure triangles_r32, triangles_r64
+endinterface pf3_triangles
+
+interface pf3_quads
+   !< Quadrilaterals, each four points in a row: `ip3_quads`.
+   module procedure quads_r32, quads_r64
+endinterface pf3_quads
+
+interface pf3_surface
+   !< A surface z(i, j) over a grid: `ip3_surface`.
+   module procedure surface_r32, surface_r64, surface_grid_r32, surface_grid_r64
+endinterface pf3_surface
+
+interface pf3_mesh
+   !< A mesh of triangles: `ip3_mesh`.
+   module procedure mesh_r32, mesh_r64
+endinterface pf3_mesh
+
 ! ImPlot3DLineFlags
 integer(int32), parameter :: LF_SEGMENTS = 1024_int32 !< Segments.
 integer(int32), parameter :: LF_LOOP = 2048_int32     !< Loop.
 integer(int32), parameter :: LF_SKIP_NAN = 4096_int32 !< SkipNaN.
+integer(int32), parameter :: F_NO_LINES = 1024_int32   !< ImPlot3DTriangleFlags/Quad/Surface/Mesh _NoLines.
+integer(int32), parameter :: F_NO_FILL = 2048_int32    !< ... _NoFill.
+integer(int32), parameter :: F_NO_MARKERS = 4096_int32 !< ... _NoMarkers.
+! getters
+integer(int32), parameter :: G_SERIES = 0_int32  !< The points x(i), y(i), z(i) (`GetterXYZ`).
+integer(int32), parameter :: G_RECT = 1_int32    !< A rectilinear grid's vertices x(i), y(j), z(i, j).
+integer(int32), parameter :: G_GRID = 2_int32    !< A grid's vertices x(i, j), y(i, j), z(i, j).
+integer(int32), parameter :: G_MESH = 3_int32    !< A mesh's triangles' corners (`GetterMeshTriangles`).
+integer(int32), parameter :: G_CORNERS = 4_int32 !< An image's four corners (`Getter3DPoints`).
+integer(int32), parameter :: L_NONE = 0_int32, L_TRI = 1_int32, L_QUAD = 2_int32, L_SURF = 3_int32 !< Line getters.
 ! markers
 integer(int32), parameter :: MK_NONE = -2_int32, MK_CIRCLE = 0_int32, MK_SQUARE = 1_int32, MK_DIAMOND = 2_int32, &
                              MK_UP = 3_int32, MK_DOWN = 4_int32, MK_LEFT = 5_int32, MK_RIGHT = 6_int32,          &
@@ -86,6 +129,14 @@ real(real32), pointer :: x32(:) => null(), y32(:) => null(), z32(:) => null() !<
 real(real64), pointer :: x64(:) => null(), y64(:) => null(), z64(:) => null() !< Double precision arrays.
 real(real64), pointer :: pcol(:,:) => null() !< Per-point colours (RGBA, 4 x n).
 real(real64), pointer :: psize(:) => null()  !< Per-point marker sizes.
+real(real32), pointer :: x2_32(:,:) => null(), y2_32(:,:) => null(), z2_32(:,:) => null() !< Grids, single.
+real(real64), pointer :: x2_64(:,:) => null(), y2_64(:,:) => null(), z2_64(:,:) => null() !< Grids, double.
+integer(int32), pointer :: tri(:,:) => null() !< A mesh's triangles (3, n), 1-based.
+real(real64)          :: corners4(3, 4) = 0.0_real64 !< An image's corners.
+integer(int32)        :: gmode = G_SERIES    !< The base getter.
+integer(int32)        :: nx = 0_int32        !< A grid's first extent (x_count).
+integer(int32)        :: ny = 0_int32        !< ... its second (y_count).
+integer(int32)        :: base_count = 0_int32 !< The base getter's points (the mesh's vertices for its fit).
 logical               :: k64 = .false.       !< The arrays are double precision.
 integer(int32)        :: count = 0_int32     !< Points.
 type(view3d)          :: v                   !< The plot's view.
@@ -232,10 +283,17 @@ contains
       return
    endif
    if (pf3_item_fitting(sp%flags)) then
-      do i = 0_int32, count - 1_int32
-         call point(i, p)
-         call pf3_item_fit(p(1), p(2), p(3))
-      enddo
+      if (gmode == G_MESH) then ! BeginItemEx's getter: the vertices
+         do i = 0_int32, base_count - 1_int32
+            call vertex(i, p)
+            call pf3_item_fit(p(1), p(2), p(3))
+         enddo
+      else
+         do i = 0_int32, count - 1_int32
+            call point(i, p)
+            call pf3_item_fit(p(1), p(2), p(3))
+         enddo
+      endif
    endif
    call pf3_item_view(v, cmin, cmax, flags)
    endfunction begin_item_ex
@@ -250,8 +308,509 @@ contains
    x64 => null()
    y64 => null()
    z64 => null()
+   x2_32 => null()
+   y2_32 => null()
+   z2_32 => null()
+   x2_64 => null()
+   y2_64 => null()
+   z2_64 => null()
+   tri => null()
+   gmode = G_SERIES
    count = 0_int32
    endsubroutine end_item
+
+
+   ! triangles, quads, surfaces, meshes, images
+
+   subroutine triangles_r32(label, x, y, z, spec)
+   !< `ip3_triangles`, single precision.
+   character(len=*),  intent(in)           :: label            !< Legend label.
+   real(real32),      intent(in), target   :: x(:), y(:), z(:) !< Vertices, three per triangle.
+   type(plot3d_spec), intent(in), optional :: spec             !< Style.
+
+   call set_arrays32(x, y, z)
+   call poly_item(label, 3_int32, spec)
+   endsubroutine triangles_r32
+
+   subroutine triangles_r64(label, x, y, z, spec)
+   !< `ip3_triangles`, double precision.
+   character(len=*),  intent(in)           :: label            !< Legend label.
+   real(real64),      intent(in), target   :: x(:), y(:), z(:) !< Vertices, three per triangle.
+   type(plot3d_spec), intent(in), optional :: spec             !< Style.
+
+   call set_arrays64(x, y, z)
+   call poly_item(label, 3_int32, spec)
+   endsubroutine triangles_r64
+
+   subroutine quads_r32(label, x, y, z, spec)
+   !< `ip3_quads`, single precision.
+   character(len=*),  intent(in)           :: label            !< Legend label.
+   real(real32),      intent(in), target   :: x(:), y(:), z(:) !< Vertices, four per quad.
+   type(plot3d_spec), intent(in), optional :: spec             !< Style.
+
+   call set_arrays32(x, y, z)
+   call poly_item(label, 4_int32, spec)
+   endsubroutine quads_r32
+
+   subroutine quads_r64(label, x, y, z, spec)
+   !< `ip3_quads`, double precision.
+   character(len=*),  intent(in)           :: label            !< Legend label.
+   real(real64),      intent(in), target   :: x(:), y(:), z(:) !< Vertices, four per quad.
+   type(plot3d_spec), intent(in), optional :: spec             !< Style.
+
+   call set_arrays64(x, y, z)
+   call poly_item(label, 4_int32, spec)
+   endsubroutine quads_r64
+
+   subroutine poly_item(label, nside, spec)
+   !< `PlotTriangleEx` / `PlotQuadEx`: at least 3 points; the fill (the fill colour), the edges (the line colour),
+   !< the markers, each unless its flag.
+   character(len=*),  intent(in)           :: label !< Legend label.
+   integer(int32),    intent(in)           :: nside !< 3 or 4.
+   type(plot3d_spec), intent(in), optional :: spec  !< Style.
+   type(plot3d_spec)                       :: sp    !< Style given.
+   type(item3d_style)                      :: st    !< Staged.
+
+   if (count < 3_int32) then
+      call end_item()
+      return
+   endif
+   if (present(spec)) sp = spec
+   if (.not. begin_item_ex(label, sp, sp%fill_color, sp%marker, st)) return
+   if (count >= nside .and. st%render_fill .and. iand(sp%flags, F_NO_FILL) == 0_int32) &
+      call render_fill(nside, u32(st%fill_color))
+   if (count >= 2_int32 .and. st%render_line .and. iand(sp%flags, F_NO_LINES) == 0_int32) &
+      call render_segments(st, merge(L_TRI, L_QUAD, nside == 3_int32))
+   if (st%marker /= MK_NONE .and. iand(sp%flags, F_NO_MARKERS) == 0_int32) call render_markers(st, .false.)
+   call end_item()
+   endsubroutine poly_item
+
+   subroutine surface_r32(label, x, y, z, colormap, scale_min, scale_max, spec)
+   !< `ip3_surface` over a rectilinear grid, single precision.
+   character(len=*),  intent(in)           :: label     !< Legend label.
+   real(real32),      intent(in), target   :: x(:), y(:) !< The grid's abscissae (size(z, 1)), ordinates (size(z, 2)).
+   real(real32),      intent(in), target   :: z(:,:)    !< Heights.
+   integer(int32),    intent(in), optional :: colormap  !< Colormap (default Viridis).
+   real(real64),      intent(in), optional :: scale_min !< Height at the first colour.
+   real(real64),      intent(in), optional :: scale_max !< Height at the last colour.
+   type(plot3d_spec), intent(in), optional :: spec      !< Style.
+
+   if (size(x) /= size(z, 1) .or. size(y) /= size(z, 2)) error stop 'figure_plot3d_items: pf3_surface: x, y and z'
+   x32 => x
+   y32 => y
+   z2_32 => z
+   k64 = .false.
+   call surface_item(label, G_RECT, size(z, 1, kind=int32), size(z, 2, kind=int32), surface_range32(z, scale_min, &
+                     scale_max), colormap, spec)
+   endsubroutine surface_r32
+
+   subroutine surface_r64(label, x, y, z, colormap, scale_min, scale_max, spec)
+   !< `ip3_surface` over a rectilinear grid, double precision.
+   character(len=*),  intent(in)           :: label     !< Legend label.
+   real(real64),      intent(in), target   :: x(:), y(:) !< The grid's abscissae (size(z, 1)), ordinates (size(z, 2)).
+   real(real64),      intent(in), target   :: z(:,:)    !< Heights.
+   integer(int32),    intent(in), optional :: colormap  !< Colormap (default Viridis).
+   real(real64),      intent(in), optional :: scale_min !< Height at the first colour.
+   real(real64),      intent(in), optional :: scale_max !< Height at the last colour.
+   type(plot3d_spec), intent(in), optional :: spec      !< Style.
+
+   if (size(x) /= size(z, 1) .or. size(y) /= size(z, 2)) error stop 'figure_plot3d_items: pf3_surface: x, y and z'
+   x64 => x
+   y64 => y
+   z2_64 => z
+   k64 = .true.
+   call surface_item(label, G_RECT, size(z, 1, kind=int32), size(z, 2, kind=int32), surface_range64(z, scale_min, &
+                     scale_max), colormap, spec)
+   endsubroutine surface_r64
+
+   subroutine surface_grid_r32(label, x, y, z, colormap, scale_min, scale_max, spec)
+   !< `ip3_surface` over any grid of quadrilaterals, single precision.
+   character(len=*),  intent(in)           :: label     !< Legend label.
+   real(real32),      intent(in), target   :: x(:,:), y(:,:), z(:,:) !< Vertices.
+   integer(int32),    intent(in), optional :: colormap  !< Colormap (default Viridis).
+   real(real64),      intent(in), optional :: scale_min !< Height at the first colour.
+   real(real64),      intent(in), optional :: scale_max !< Height at the last colour.
+   type(plot3d_spec), intent(in), optional :: spec      !< Style.
+
+   if (any(shape(x) /= shape(z)) .or. any(shape(y) /= shape(z))) error stop 'figure_plot3d_items: pf3_surface: shapes'
+   x2_32 => x
+   y2_32 => y
+   z2_32 => z
+   k64 = .false.
+   call surface_item(label, G_GRID, size(z, 1, kind=int32), size(z, 2, kind=int32), surface_range32(z, scale_min, &
+                     scale_max), colormap, spec)
+   endsubroutine surface_grid_r32
+
+   subroutine surface_grid_r64(label, x, y, z, colormap, scale_min, scale_max, spec)
+   !< `ip3_surface` over any grid of quadrilaterals, double precision.
+   character(len=*),  intent(in)           :: label     !< Legend label.
+   real(real64),      intent(in), target   :: x(:,:), y(:,:), z(:,:) !< Vertices.
+   integer(int32),    intent(in), optional :: colormap  !< Colormap (default Viridis).
+   real(real64),      intent(in), optional :: scale_min !< Height at the first colour.
+   real(real64),      intent(in), optional :: scale_max !< Height at the last colour.
+   type(plot3d_spec), intent(in), optional :: spec      !< Style.
+
+   if (any(shape(x) /= shape(z)) .or. any(shape(y) /= shape(z))) error stop 'figure_plot3d_items: pf3_surface: shapes'
+   x2_64 => x
+   y2_64 => y
+   z2_64 => z
+   k64 = .true.
+   call surface_item(label, G_GRID, size(z, 1, kind=int32), size(z, 2, kind=int32), surface_range64(z, scale_min, &
+                     scale_max), colormap, spec)
+   endsubroutine surface_grid_r64
+
+   subroutine surface_item(label, mode, mx, my, lohi, colormap, spec)
+   !< As figure_implot3d draws a surface: the colormap pushed (default Viridis), `PlotSurface` (at least 4 vertices;
+   !< the fill (`RendererSurfaceFill`), the grid lines, the markers, each unless its flag), the colormap popped.
+   character(len=*),  intent(in)           :: label    !< Legend label.
+   integer(int32),    intent(in)           :: mode     !< G_RECT or G_GRID.
+   integer(int32),    intent(in)           :: mx, my   !< x_count, y_count.
+   real(real64),      intent(in)           :: lohi(2)  !< Heights at the first and last colours.
+   integer(int32),    intent(in), optional :: colormap !< Colormap.
+   type(plot3d_spec), intent(in), optional :: spec     !< Style.
+   type(plot3d_spec)                       :: sp       !< Style given.
+   type(item3d_style)                      :: st       !< Staged.
+   integer(int32)                          :: cm       !< Colormap.
+
+   gmode = mode
+   nx = mx
+   ny = my
+   count = mx * my
+   call white_uv()
+   cm = 4_int32 ! ImPlotColormap_Viridis
+   if (present(colormap)) cm = colormap
+   call pf3_push_colormap(cm)
+   if (count >= 4_int32) then
+      if (present(spec)) sp = spec
+      if (begin_item_ex(label, sp, sp%fill_color, sp%marker, st)) then
+         if (count >= 4_int32 .and. st%render_fill .and. iand(sp%flags, F_NO_FILL) == 0_int32) &
+            call render_surface(st, lohi)
+         if (count >= 2_int32 .and. st%render_line .and. iand(sp%flags, F_NO_LINES) == 0_int32) &
+            call render_segments(st, L_SURF)
+         if (st%marker /= MK_NONE .and. iand(sp%flags, F_NO_MARKERS) == 0_int32) call render_markers(st, .false.)
+         call end_item()
+      endif
+   else
+      call end_item()
+   endif
+   call pf3_pop_colormap()
+   endsubroutine surface_item
+
+   subroutine mesh_r32(label, x, y, z, triangles, spec)
+   !< `ip3_mesh`, single precision.
+   character(len=*),  intent(in)           :: label            !< Legend label.
+   real(real32),      intent(in), target   :: x(:), y(:), z(:) !< Vertices.
+   integer(int32),    intent(in), target   :: triangles(:,:)   !< Each triangle's vertices (3, n), from 1.
+   type(plot3d_spec), intent(in), optional :: spec             !< Style.
+
+   call set_arrays32(x, y, z)
+   call mesh_item(label, triangles, spec)
+   endsubroutine mesh_r32
+
+   subroutine mesh_r64(label, x, y, z, triangles, spec)
+   !< `ip3_mesh`, double precision.
+   character(len=*),  intent(in)           :: label            !< Legend label.
+   real(real64),      intent(in), target   :: x(:), y(:), z(:) !< Vertices.
+   integer(int32),    intent(in), target   :: triangles(:,:)   !< Each triangle's vertices (3, n), from 1.
+   type(plot3d_spec), intent(in), optional :: spec             !< Style.
+
+   call set_arrays64(x, y, z)
+   call mesh_item(label, triangles, spec)
+   endsubroutine mesh_r64
+
+   subroutine mesh_item(label, triangles, spec)
+   !< `PlotMesh`/`PlotMeshEx`: at least 3 vertices and 3 corners; the triangles' fill, their edges (only with a line
+   !< colour given), the vertices' markers, each unless its flag.
+   character(len=*),  intent(in)           :: label          !< Legend label.
+   integer(int32),    intent(in), target   :: triangles(:,:) !< Triangles.
+   type(plot3d_spec), intent(in), optional :: spec           !< Style.
+   type(plot3d_spec)                       :: sp             !< Style given.
+   type(item3d_style)                      :: st             !< Staged.
+
+   if (size(triangles, 1) /= 3) error stop 'figure_plot3d_items: pf3_mesh: triangles needs 3 rows'
+   if (any(triangles < 1_int32) .or. any(triangles > count)) error stop 'figure_plot3d_items: pf3_mesh: a vertex out'
+   if (count < 3_int32 .or. size(triangles) < 3) then
+      call end_item()
+      return
+   endif
+   if (present(spec)) sp = spec
+   tri => triangles
+   base_count = count
+   gmode = G_MESH
+   count = size(triangles, kind=int32)
+   if (.not. begin_item_ex(label, sp, sp%fill_color, sp%marker, st)) return
+   if (base_count >= 3_int32 .and. st%render_fill .and. iand(sp%flags, F_NO_FILL) == 0_int32) &
+      call render_fill(3_int32, u32(st%fill_color))
+   if (base_count >= 2_int32 .and. st%render_line .and. .not. st%auto_line .and. iand(sp%flags, F_NO_LINES) == 0_int32) &
+      call render_segments(st, L_TRI)
+   if (st%marker /= MK_NONE .and. iand(sp%flags, F_NO_MARKERS) == 0_int32) then
+      gmode = G_SERIES ! RenderColoredMarkers(getter): the vertices
+      count = base_count
+      call render_markers(st, .false.)
+   endif
+   call end_item()
+   endsubroutine mesh_item
+
+   subroutine pf3_image(label, texture, corners, tint)
+   !< As `ip3_image` (`PlotImage` with corners (0, 0), (1, 0), (1, 1), (0, 1) in texture coordinates, flipped in v):
+   !< a textured quad sorted with the other items; the item's colour the tint.
+   character(len=*),     intent(in)           :: label         !< Legend label.
+   type(texture_object), intent(in)           :: texture       !< Image.
+   real(real64),         intent(in)           :: corners(:, :) !< x, y, z of the four corners (3 x 4).
+   real(real64),         intent(in), optional :: tint(:)       !< RGBA (default white).
+   type(plot3d_spec)                          :: sp            !< Style (the defaults).
+   type(item3d_style)                         :: st            !< Staged.
+   real(real32)                               :: c(4)          !< Tint.
+   integer(int32)                             :: col           !< Packed.
+   integer(int64)                             :: tex           !< Texture.
+   type(im_texture_ref)                       :: ref           !< Its reference.
+
+   if (size(corners, 1) /= 3 .or. size(corners, 2) /= 4) error stop 'figure_plot3d_items: pf3_image: corners 3 x 4'
+   c = 1.0_real32
+   if (present(tint)) c = real(tint, real32)
+   corners4 = corners
+   gmode = G_CORNERS
+   count = 4_int32
+   call white_uv()
+   if (.not. begin_item_ex(label, sp, c, sp%marker, st)) return
+   col = u32(c)
+   call pf3_item_recolor(col)
+   ref = texture_ref(texture)
+   tex = ref%TexID
+   if (iand(ishft(int(col, int64), -24), 255_int64) /= 0_int64) call render_image(tex, col)
+   call end_item()
+   endsubroutine pf3_image
+
+   ! renderers of fills
+
+   subroutine render_fill(nside, col)
+   !< `RendererTriangleFill` / `RendererQuadFill`: each primitive with a corner in the cull box, its vertices, its
+   !< triangles at the corners' mean depth.
+   integer(int32), intent(in) :: nside !< 3 or 4.
+   integer(int32), intent(in) :: col   !< Colour.
+   integer(int32)             :: np, k, j, base !< Drawn, primitive, corner, first vertex.
+   real(real64)               :: q(3, 4), m(3), z !< Corners, mean, depth.
+   real(real32)               :: px, py !< Pixel.
+   logical                    :: any_in !< A corner in the box.
+
+   np = d3_room(count / nside, nside)
+   call d3_reserve(nside * np, (nside - 2_int32) * np)
+   do k = 0_int32, np - 1_int32
+      any_in = .false.
+      do j = 1_int32, nside
+         call point(nside * k + j - 1_int32, q(:, j))
+         if (contains(q(:, j))) any_in = .true.
+      enddo
+      if (.not. any_in) cycle
+      base = d3_vtx_count()
+      do j = 1_int32, nside
+         call plot_to_pixels(v, q(:, j), px, py)
+         call d3_vtx(px, py, uvw(1), uvw(2), col)
+      enddo
+      if (nside == 3_int32) then
+         m = (q(:, 1) + q(:, 2)) + q(:, 3)
+         m = m / 3.0_real64
+         call d3_tri(base, base + 1_int32, base + 2_int32, point_depth(v, m))
+      else
+         m = ((q(:, 1) + q(:, 2)) + q(:, 3)) + q(:, 4)
+         m = m / 4.0_real64
+         z = point_depth(v, m)
+         call d3_tri(base, base + 1_int32, base + 2_int32, z)
+         call d3_tri(base, base + 2_int32, base + 3_int32, z)
+      endif
+   enddo
+   endsubroutine render_fill
+
+   subroutine render_surface(st, lohi)
+   !< `RendererSurfaceFill`: each cell with a corner in the cull box, its corners coloured by the colormap (the heights
+   !< between the scale's ends, or the data's when both are 0) times the fill alpha, or the fill colour; its two
+   !< triangles each at its corners' mean depth.
+   type(item3d_style), intent(in) :: st      !< Style.
+   real(real64),       intent(in) :: lohi(2) !< Scale's ends.
+   integer(int32)                 :: np, k, ix, iy, j, base, cols(4), cfill, cm !< Work.
+   real(real64)                   :: q(3, 4), m(3), zmin, zmax, lo, hi, t !< Corners, mean, ranges, fraction.
+   real(real32)                   :: px, py, f(4) !< Pixel, a colour.
+   logical                        :: any_in !< A corner in the box.
+
+   np = d3_room((nx - 1_int32) * (ny - 1_int32), 4_int32)
+   call d3_reserve(4_int32 * np, 2_int32 * np)
+   cfill = u32(st%fill_color)
+   cm = pf3_colormap()
+   zmin = 0.0_real64
+   zmax = 0.0_real64
+   if (st%auto_fill) then ! Init: the data's range
+      zmin = huge(1.0_real64)
+      zmax = -huge(1.0_real64)
+      do k = 0_int32, count - 1_int32
+         call point(k, q(:, 1))
+         if (.not. zmin < q(3, 1)) zmin = q(3, 1) ! ImMin, ImMax (a NaN taken as C takes it)
+         if (.not. zmax > q(3, 1)) zmax = q(3, 1)
+      enddo
+   endif
+   do k = 0_int32, np - 1_int32
+      ix = mod(k, nx - 1_int32)
+      iy = k / (nx - 1_int32)
+      call point(ix + iy * nx, q(:, 1))
+      call point(ix + 1_int32 + iy * nx, q(:, 2))
+      call point(ix + 1_int32 + (iy + 1_int32) * nx, q(:, 3))
+      call point(ix + (iy + 1_int32) * nx, q(:, 4))
+      any_in = .false.
+      do j = 1_int32, 4_int32
+         if (contains(q(:, j))) any_in = .true.
+      enddo
+      if (.not. any_in) cycle
+      cols = cfill
+      if (st%auto_fill) then
+         lo = zmin
+         hi = zmax
+         if (lohi(1) /= 0.0_real64 .or. lohi(2) /= 0.0_real64) then
+            lo = lohi(1)
+            hi = lohi(2)
+         endif
+         do j = 1_int32, 4_int32
+            t = (q(3, j) - lo) / (hi - lo)
+            if (t < 0.0_real64) then ! ImClamp
+               t = 0.0_real64
+            elseif (t > 1.0_real64) then
+               t = 1.0_real64
+            endif
+            call unpack4(cm_sample(cm, real(t, real32)), f)
+            f(4) = f(4) * st%fill_alpha
+            cols(j) = u32(f)
+         enddo
+      endif
+      base = d3_vtx_count()
+      do j = 1_int32, 4_int32
+         call plot_to_pixels(v, q(:, j), px, py)
+         call d3_vtx(px, py, uvw(1), uvw(2), cols(j))
+      enddo
+      m = (q(:, 1) + q(:, 2)) + q(:, 3)
+      m = m / 3.0_real64
+      call d3_tri(base, base + 1_int32, base + 2_int32, point_depth(v, m))
+      m = (q(:, 1) + q(:, 3)) + q(:, 4)
+      m = m / 3.0_real64
+      call d3_tri(base, base + 2_int32, base + 3_int32, point_depth(v, m))
+   enddo
+   endsubroutine render_surface
+
+   subroutine render_image(tex, col)
+   !< `RendererQuadImage`: the quad, culled as a quad, drawn with its texture (its run in the 3-D list).
+   integer(int64), intent(in) :: tex !< Texture.
+   integer(int32), intent(in) :: col !< Tint.
+   real(real32), parameter    :: U(4) = [0.0_real32, 1.0_real32, 1.0_real32, 0.0_real32] !< Texture u.
+   real(real32), parameter    :: W(4) = [1.0_real32, 1.0_real32, 0.0_real32, 0.0_real32] !< Texture v, flipped.
+   integer(int32)             :: np, j, base !< Drawn, corner, first vertex.
+   real(real64)               :: q(3, 4), m(3), z !< Corners, mean, depth.
+   real(real32)               :: px, py !< Pixel.
+   logical                    :: any_in !< A corner in the box.
+
+   np = d3_room(1_int32, 4_int32)
+   if (np < 1_int32) return
+   call d3_reserve(4_int32, 2_int32)
+   any_in = .false.
+   do j = 1_int32, 4_int32
+      call point(j - 1_int32, q(:, j))
+      if (contains(q(:, j))) any_in = .true.
+   enddo
+   if (.not. any_in) return
+   call d3_set_texture(tex)
+   base = d3_vtx_count()
+   do j = 1_int32, 4_int32
+      call plot_to_pixels(v, q(:, j), px, py)
+      call d3_vtx(px, py, U(j), W(j), col)
+   enddo
+   m = ((q(:, 1) + q(:, 2)) + q(:, 3)) + q(:, 4)
+   m = m / 4.0_real64
+   z = point_depth(v, m)
+   call d3_tri(base, base + 1_int32, base + 2_int32, z)
+   call d3_tri(base, base + 2_int32, base + 3_int32, z)
+   call d3_set_texture(0_int64)
+   endsubroutine render_image
+
+   pure subroutine unpack4(col, f)
+   !< `ColorConvertU32ToFloat4`.
+   integer(int32), intent(in)  :: col  !< Packed.
+   real(real32),   intent(out) :: f(4) !< RGBA.
+   integer(int64)              :: u    !< Unsigned.
+   integer(int32)              :: k    !< Channel.
+
+   u = iand(int(col, int64), 4294967295_int64)
+   do k = 1_int32, 4_int32
+      f(k) = real(iand(ishft(u, -8 * (k - 1_int32)), 255_int64), real32) * (1.0_real32 / 255.0_real32)
+   enddo
+   endsubroutine unpack4
+
+   function surface_range32(z, scale_min, scale_max) result(lohi)
+   !< figure_implot3d's scale of a surface: the given ends, else z's finite range (widened about a flat z).
+   real(real32), intent(in)           :: z(:,:)              !< Heights.
+   real(real64), intent(in), optional :: scale_min, scale_max !< Given ends.
+   real(real64)                       :: lohi(2)             !< Ends.
+
+   real(real32)                       :: lo, hi              !< z's finite range.
+   integer(int32)                     :: i, j                !< Counters.
+
+   if (present(scale_min) .neqv. present(scale_max)) error stop 'figure_plot3d_items: give both scale ends or neither'
+   if (present(scale_min)) then
+      lohi(1) = scale_min
+      lohi(2) = scale_max
+      return
+   endif
+   lo = huge(1.0_real32) ! as minval/maxval with a mask of the finite values (figure_plot3d_series), no temporary
+   hi = -huge(1.0_real32)
+   do j = 1_int32, size(z, 2, kind=int32)
+      do i = 1_int32, size(z, 1, kind=int32)
+         if (.not. ieee_is_finite(z(i, j))) cycle
+         lo = min(lo, z(i, j))
+         hi = max(hi, z(i, j))
+      enddo
+   enddo
+   call widen(real(lo, real64), real(hi, real64), lohi)
+   endfunction surface_range32
+
+   function surface_range64(z, scale_min, scale_max) result(lohi)
+   !< figure_implot3d's scale of a surface: the given ends, else z's finite range (widened about a flat z).
+   real(real64), intent(in)           :: z(:,:)              !< Heights.
+   real(real64), intent(in), optional :: scale_min, scale_max !< Given ends.
+   real(real64)                       :: lohi(2)             !< Ends.
+
+   real(real64)                       :: lo, hi              !< z's finite range.
+   integer(int32)                     :: i, j                !< Counters.
+
+   if (present(scale_min) .neqv. present(scale_max)) error stop 'figure_plot3d_items: give both scale ends or neither'
+   if (present(scale_min)) then
+      lohi(1) = scale_min
+      lohi(2) = scale_max
+      return
+   endif
+   lo = huge(1.0_real64)
+   hi = -huge(1.0_real64)
+   do j = 1_int32, size(z, 2, kind=int32)
+      do i = 1_int32, size(z, 1, kind=int32)
+         if (.not. ieee_is_finite(z(i, j))) cycle
+         lo = min(lo, z(i, j))
+         hi = max(hi, z(i, j))
+      enddo
+   enddo
+   call widen(lo, hi, lohi)
+   endfunction surface_range64
+
+   pure subroutine widen(lo, hi, lohi)
+   !< figure_plot3d_series' `field_range_*` rule: a range not increasing widened by one about its centre (to 0 when
+   !< not finite).
+   real(real64), intent(in)  :: lo, hi  !< Range.
+   real(real64), intent(out) :: lohi(2) !< Ends.
+
+   lohi(1) = lo
+   lohi(2) = hi
+   if (.not. lohi(1) < lohi(2)) then
+      if (.not. (ieee_is_finite(lohi(1)) .and. ieee_is_finite(lohi(2)))) then
+         lohi(1) = 0.0_real64
+         lohi(2) = 0.0_real64
+      endif
+      lohi(1) = lohi(1) - 0.5_real64
+      lohi(2) = lohi(2) + 0.5_real64
+   endif
+   endsubroutine widen
 
    ! the renderers
 
@@ -304,22 +863,25 @@ contains
    enddo
    endsubroutine render_strip
 
-   subroutine render_segments(st)
-   !< `RendererLineSegments`: a quad for each pair of points, clipped (NaN pairs skipped), no joints.
-   type(item3d_style), intent(in) :: st !< Style.
-   integer(int32)                 :: np, k, col !< Drawn, segment, colour.
+   subroutine render_segments(st, lg)
+   !< `RendererLineSegments`: a quad for each pair of points of a line getter, clipped (NaN pairs skipped), no joints.
+   type(item3d_style), intent(in)           :: st !< Style.
+   integer(int32),     intent(in), optional :: lg !< Line getter (default: the base points).
+   integer(int32)                 :: np, k, col, g !< Drawn, segment, colour, getter.
    real(real64)                   :: p1(3), p2(3), c1(3), c2(3) !< Points, clipped.
    real(real32)                   :: hw, uv0(2), uv1(2), a(2), b(2), nrm(2), off(2) !< Work.
 
-   np = d3_room(count / 2_int32, 4_int32)
+   g = L_NONE
+   if (present(lg)) g = lg
+   np = d3_room(line_count(g, count) / 2_int32, 4_int32)
    call d3_reserve(4_int32 * np, 2_int32 * np)
    hw = max(1.0_real32, st%line_weight) * 0.5_real32
    call line_props(hw, uv0, uv1)
    col = 0_int32
    if (.not. associated(pcol)) col = u32(st%line_color)
    do k = 0_int32, np - 1_int32
-      call point(2_int32 * k, p1)
-      call point(2_int32 * k + 1_int32, p2)
+      call line_point(g, 2_int32 * k, p1)
+      call line_point(g, 2_int32 * k + 1_int32, p2)
       if (any_nan(p1) .or. any_nan(p2)) cycle
       if (.not. clip_segment(p1, p2, c1, c2)) cycle
       call plot_to_pixels(v, c1, a(1), a(2))
@@ -608,7 +1170,51 @@ contains
    endsubroutine set_arrays64
 
    subroutine point(i, p)
-   !< Point i (0-based) as double (`GetterXYZ`).
+   !< Point i (0-based) of the base getter as double (`GetterXYZ`, a grid's vertex, a mesh's triangle corner, an
+   !< image's corner).
+   integer(int32), intent(in)  :: i    !< Index.
+   real(real64),   intent(out) :: p(3) !< Point.
+   integer(int32)              :: a, b !< Grid indices (1-based).
+
+   select case (gmode)
+   case (G_RECT)
+      a = mod(i, nx) + 1_int32
+      b = i / nx + 1_int32
+      if (k64) then
+         p(1) = x64(a)
+         p(2) = y64(b)
+         p(3) = z2_64(a, b)
+      else
+         p(1) = real(x32(a), real64)
+         p(2) = real(y32(b), real64)
+         p(3) = real(z2_32(a, b), real64)
+      endif
+      return
+   case (G_GRID)
+      a = mod(i, nx) + 1_int32
+      b = i / nx + 1_int32
+      if (k64) then
+         p(1) = x2_64(a, b)
+         p(2) = y2_64(a, b)
+         p(3) = z2_64(a, b)
+      else
+         p(1) = real(x2_32(a, b), real64)
+         p(2) = real(y2_32(a, b), real64)
+         p(3) = real(z2_32(a, b), real64)
+      endif
+      return
+   case (G_MESH)
+      call vertex(tri(mod(i, 3_int32) + 1_int32, i / 3_int32 + 1_int32) - 1_int32, p)
+      return
+   case (G_CORNERS)
+      p = corners4(:, i + 1_int32)
+      return
+   endselect
+   call vertex(i, p)
+   endsubroutine point
+
+   subroutine vertex(i, p)
+   !< Vertex i (0-based) of the series as double.
    integer(int32), intent(in)  :: i    !< Index.
    real(real64),   intent(out) :: p(3) !< Point.
 
@@ -621,7 +1227,58 @@ contains
       p(2) = real(y32(i + 1_int32), real64)
       p(3) = real(z32(i + 1_int32), real64)
    endif
-   endsubroutine point
+   endsubroutine vertex
+
+   subroutine line_point(lg, i, p)
+   !< Endpoint i (0-based) of a line getter over the base getter: `GetterTriangleLines`, `GetterQuadLines`,
+   !< `GetterSurfaceLines`, or the base itself.
+   integer(int32), intent(in)  :: lg   !< Line getter.
+   integer(int32), intent(in)  :: i    !< Index.
+   real(real64),   intent(out) :: p(3) !< Point.
+   integer(int32)              :: e, sg, hs, row, col, px, py !< Endpoint, segment, horizontal segments, grid.
+
+   select case (lg)
+   case (L_TRI)
+      call point(mod((mod(i, 6_int32) + 1_int32) / 2_int32, 3_int32) + i / 6_int32 * 3_int32, p)
+   case (L_QUAD)
+      call point(mod((mod(i, 8_int32) + 1_int32) / 2_int32, 4_int32) + i / 8_int32 * 4_int32, p)
+   case (L_SURF)
+      e = mod(i, 2_int32)
+      sg = i / 2_int32
+      hs = (nx - 1_int32) * ny
+      if (sg < hs) then
+         row = sg / (nx - 1_int32)
+         col = mod(sg, nx - 1_int32)
+         px = col
+         if (e /= 0_int32) px = col + 1_int32
+         py = row
+      else
+         col = (sg - hs) / (ny - 1_int32)
+         row = mod(sg - hs, ny - 1_int32)
+         px = col
+         py = row + e
+      endif
+      call point(py * nx + px, p)
+   case default
+      call point(i, p)
+   endselect
+   endsubroutine line_point
+
+   function line_count(lg, n) result(m)
+   !< A line getter's endpoints over a base of n points.
+   integer(int32), intent(in) :: lg !< Line getter.
+   integer(int32), intent(in) :: n  !< Base points.
+   integer(int32)             :: m  !< Endpoints.
+
+   select case (lg)
+   case (L_TRI, L_QUAD)
+      m = 2_int32 * n
+   case (L_SURF)
+      m = 2_int32 * ((nx - 1_int32) * ny + (ny - 1_int32) * nx)
+   case default
+      m = n
+   endselect
+   endfunction line_count
 
    pure function modulo_pt(i, loop) result(j)
    !< `GetterLoop`'s index: i modulo the points (a loop), else i.
