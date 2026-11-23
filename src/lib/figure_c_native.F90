@@ -176,7 +176,7 @@ interface
    endfunction fig_set_ini_file
 
    function fig_set_style(name, name_len, lines, lines_len) result(status) bind(C, name='fig_set_style')
-   !< Apply a built-in style (themes/<name>.toml), with its own line colours or a named palette.
+   !< Apply a built-in style (`themes/<name>.toml`), with its own line colours or a named palette.
    import :: c_char, c_int
    implicit none
    character(kind=c_char), intent(in) :: name(*)   !< Style name (not NUL-terminated).

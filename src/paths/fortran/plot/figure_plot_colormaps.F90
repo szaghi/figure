@@ -11,7 +11,7 @@ module figure_plot_colormaps
 !< `LerpTable`), `cm_size`, `cm_is_qual`.
 !<
 !< `cm_colormap(name, levels)` resolves a name as FIGURE's `ip_colormap` does (native/figure_colormap.cpp): one of
-!< ImPlot's maps, a bundled one (figure_plot_colormaps_bundled, generated from third_party/colormaps/<name>.csv), or the
+!< ImPlot's maps, a bundled one (figure_plot_colormaps_bundled, generated from `third_party/colormaps/<name>.csv`), or the
 !< reverse of either (`<name>_r`), cut into `levels` bands (`<name>|<levels>`, qualitative, each band the map's
 !< colour at its centre); registered at its first use under that name, its keys packed as Dear ImGui packs a float
 !< colour (`ColorConvertFloat4ToU32`). User maps (`ip_load_colormap`) and edited ones (`ig_gradient_edit`) are not
