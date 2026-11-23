@@ -36,7 +36,11 @@ module figure_plot3d_frame
 !< popup); io.MouseClickedTime[1] is the time of the frame a 3-D plot saw the right click (`core_time()`, g.Time as
 !< ImGui sets it; a click on a frame without a 3-D plot is missed), MouseDoubleClickTime 0.30 (FIGURE never changes it).
 !<
-!< Not yet (P13's next steps): the context menus' contents.
+!< Context menus (step 7): the legend's, each axis's, each plane's and the plot's, as ImPlot3D's (`ShowAxisContextMenu`,
+!< `ShowPlaneContextMenu`, `ShowPlotContextMenu`, `ShowLegendContextMenu`), through src/lib's widgets (`ig_checkbox`,
+!< `ig_begin_menu`, ...: they allocate their NUL-terminated copies while a menu is open, as the 2-D frame's) and
+!< figure_core's popups and drags; the Box menu's scales are double drags of the float values (ImPlot3D's DragFloat:
+!< the same text, the same values unless dragged).
 !<
 !< No allocation per frame once the tables are grown (ADR 0001): fixed slots for titles and labels, the ticks' arrays
 !< kept, fixed arrays for quads.
@@ -45,7 +49,7 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan, ieee_nega
                                           ieee_value
 use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_ButtonActive, ImGuiCol_ButtonHovered, ImGuiCol_FrameBg, &
                                 ImGuiCol_PopupBg, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiCol_WindowBg,      &
-                                ImGuiKey_MouseWheelY
+                                ImGuiKey_MouseWheelY, ImGuiStyleVar_ItemSpacing
 use figure_core, only : core_button_behavior, core_content_region_avail, core_cursor_screen_pos, core_draw_begin, &
                         core_draw_convex_poly_filled, core_draw_end, core_draw_line, core_draw_quad_uv,          &
                         core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, core_frame_count, &
@@ -53,7 +57,10 @@ use figure_core, only : core_button_behavior, core_content_region_avail, core_cu
                         core_pop_clip_rect, core_push_clip_rect, core_style_color, core_text_size, core_color,  &
                         core_draw_rect, core_keep_alive, core_io_input, core_set_key_owner, core_delta_time,  &
                         core_style_color_rgba, core_mouse_down, core_mouse_clicked, core_mouse_double_clicked, &
-                        core_mouse_drag_delta, core_time, core_open_popup
+                        core_mouse_drag_delta, core_time, core_open_popup, core_begin_popup, core_end_popup,  &
+                        core_text_unformatted, core_push_id_int, core_pop_id, core_push_item_width,           &
+                        core_radio_button, core_invisible_button, core_push_style_var, core_pop_style_var,    &
+                        core_drag_double, core_frame_height
 use figure_plot_format, only : plot_format, fmt_parse, fmt_real, fmt_text
 use figure_plot_locators, only : transform_log10, transform_symlog
 use figure_plot3d_camera, only : plot3d_quat, view3d, quat_from_el_az, quat_rotate, view_scale, rect_center, &
@@ -65,6 +72,9 @@ use figure_plot3d_camera, only : plot3d_quat, view3d, quat_from_el_az, quat_rota
                                  SCALE3_LINEAR, SCALE3_LOG10, SCALE3_SYMLOG
 use figure_plot_colormaps, only : cm_key, cm_size, mix_u32, CM_DEEP
 use figure_plot3d_drawlist, only : d3_flush, d3_reset
+use figure_imgui, only : ig_button, ig_checkbox, ig_same_line, ig_separator, ig_push_item_width, ig_pop_item_width
+use figure_menu, only : ig_begin_menu, ig_end_menu, ig_menu_item
+use figure_group, only : ig_begin_disabled, ig_end_disabled
 use figure_plot3d_locators, only : ticks3d, ticks3_add, ticks3_reset, locate3_default, locate3_log10, locate3_symlog
 use vecfor_R8P, only : vector_R8P
 
@@ -90,6 +100,8 @@ integer(int32), parameter :: F3_NO_ZOOM = 256_int32      !< NoZoom.
 integer(int32), parameter :: F3_NO_INPUTS = 512_int32    !< NoInputs.
 integer(int32), parameter :: A3_PAN_STRETCH = 256_int32  !< ImPlot3DAxisFlags_PanStretch.
 real(real32),   parameter :: ANIMATION_ANGULAR_VELOCITY = 2.0_real32 * 3.1415_real32 !< ImPlot3D's (a float).
+character(len=*), parameter :: AXIS_LABELS(0:2) = ['X-Axis', 'Y-Axis', 'Z-Axis'] !< Axes' default names.
+character(len=*), parameter :: PLANE_LABELS(0:2) = ['YZ-Plane', 'XZ-Plane', 'XY-Plane'] !< Planes' names.
 character(len=*), parameter :: AXIS_CONTEXTS(0:2) = ['##XAxisContext', '##YAxisContext', '##ZAxisContext'] !< Popups.
 character(len=*), parameter :: PLANE_CONTEXTS(0:2) = ['##YZPlaneContext', '##XZPlaneContext', '##XYPlaneContext'] !<
                                                        !< Popups.
@@ -390,6 +402,7 @@ contains
       p%leg_hovered = .false.
       call render_legend(p)
       call mouse_position(p)
+      call context_menus(p)
       call core_pop_clip_rect() ! the frame
       do i = 1_int32, p%n_items
          p%it(i)%seen = .false.
@@ -926,6 +939,7 @@ contains
       endif
    endif
    do i = 1_int32, 3_int32
+      p%v%invert(i) = has_flag(p%ax(i)%flags, A3_INVERT) ! (the axis menu flips the flag)
       if (p%ax(i)%show_default) then
          pixels = real(real(view_scale(p%v), real64) * p%v%ndc(i), real32)
          select case (p%v%scale(i))
@@ -2102,6 +2116,288 @@ contains
       ctr(i) = (p%v%rmin(i) + p%v%rmax(i)) * real(0.5_real32, real64)
    enddo
    endsubroutine range_center
+
+   ! private: context menus
+
+   subroutine context_menus(p)
+   !< `EndPlot`'s popups: the legend's, each axis's, each plane's and the plot's, their contents as ImPlot3D's.
+   type(plot3d_record), intent(inout) :: p !< Plot.
+   integer(int32)                     :: i !< Axis, plane.
+
+   if (core_begin_popup('##LegendContext')) then
+      call core_text_unformatted('Legend')
+      call ig_separator()
+      if (legend_menu(p, .not. has_flag(p%flags, F3_NO_LEGEND))) call flip(p%flags, F3_NO_LEGEND)
+      call core_end_popup()
+   endif
+   do i = 0_int32, 2_int32
+      if (core_begin_popup(AXIS_CONTEXTS(i))) then
+         if (has_label(p%ax(i + 1_int32))) then
+            call core_text_unformatted(p%ax(i + 1_int32)%label(1:p%ax(i + 1_int32)%label_len))
+         else
+            call core_text_unformatted(AXIS_LABELS(i))
+         endif
+         call ig_separator()
+         call axis_menu(p, i + 1_int32)
+         call core_end_popup()
+      endif
+   enddo
+   do i = 0_int32, 2_int32
+      if (core_begin_popup(PLANE_CONTEXTS(i))) then
+         call core_text_unformatted(PLANE_LABELS(i))
+         call ig_separator()
+         call plane_menu(p, i)
+         call core_end_popup()
+      endif
+   enddo
+   if (core_begin_popup('##PlotContext')) then
+      call plot_menu(p)
+      call core_end_popup()
+   endif
+   endsubroutine context_menus
+
+   subroutine axis_menu(p, i)
+   !< `ShowAxisContextMenu`: the ends (locks and drags), Auto-Fit, Invert, Label, Grid Lines, Tick Marks, Tick Labels
+   !< (the item width pushed and, as ImPlot3D, not popped).
+   type(plot3d_record), intent(inout) :: p !< Plot.
+   integer(int32),      intent(in)    :: i !< Axis (1-3).
+   logical                            :: always_locked, label, grid, ticks, labels, eq, inverted, dis !< State.
+   real(real64)                       :: speed, tmp, sz !< Drag speed, a value, the range's size.
+
+   call core_push_item_width(75.0_real64)
+   always_locked = p%ax(i)%range_cond == COND_ALWAYS .or. has_flag(p%ax(i)%flags, A3_AUTO_FIT)
+   label = has_label(p%ax(i))
+   grid = .not. has_flag(p%ax(i)%flags, A3_NO_GRID)
+   ticks = .not. has_flag(p%ax(i)%flags, A3_NO_TICK_MARKS)
+   labels = .not. has_flag(p%ax(i)%flags, A3_NO_TICK_LABELS)
+   sz = p%v%rmax(i) - p%v%rmin(i)
+   if (sz <= epsilon(1.0_real64)) then
+      speed = epsilon(1.0_real64) * 1.0e13_real64
+   else
+      speed = 0.01_real64 * sz
+   endif
+   speed = real(real(speed, real32), real64) ! (float)drag_speed
+   eq = has_flag(p%flags, F3_EQUAL)
+   call ig_begin_disabled(always_locked)
+   call flag_box('##LockMin', p%ax(i)%flags, A3_LOCK_MIN)
+   call ig_end_disabled()
+   call ig_same_line()
+   dis = locked_min(p, i) .or. always_locked
+   call ig_begin_disabled(dis)
+   tmp = p%v%rmin(i)
+   if (core_drag_double('Min', tmp, speed, p%ax(i)%con_min, p%v%rmax(i), '%f', 0_int32)) then ! (a null format: %f)
+      if (set_min(p, i, tmp)) continue
+      if (eq) call apply_equal_aspect(p, i)
+   endif
+   call ig_end_disabled()
+   call ig_begin_disabled(always_locked)
+   call flag_box('##LockMax', p%ax(i)%flags, A3_LOCK_MAX)
+   call ig_end_disabled()
+   call ig_same_line()
+   dis = locked_max(p, i) .or. always_locked
+   call ig_begin_disabled(dis)
+   tmp = p%v%rmax(i)
+   if (core_drag_double('Max', tmp, speed, p%v%rmin(i), p%ax(i)%con_max, '%f', 0_int32)) then
+      if (set_max(p, i, tmp)) continue
+      if (eq) call apply_equal_aspect(p, i)
+   endif
+   call ig_end_disabled()
+   call ig_separator()
+   call flag_box('Auto-Fit', p%ax(i)%flags, A3_AUTO_FIT)
+   call ig_separator()
+   inverted = has_flag(p%ax(i)%flags, A3_INVERT)
+   if (ig_checkbox('Invert', inverted)) call flip(p%ax(i)%flags, A3_INVERT)
+   call ig_separator()
+   call ig_begin_disabled(p%ax(i)%label_len == 0_int32)
+   if (ig_checkbox('Label', label)) call flip(p%ax(i)%flags, A3_NO_LABEL)
+   call ig_end_disabled()
+   if (ig_checkbox('Grid Lines', grid)) call flip(p%ax(i)%flags, A3_NO_GRID)
+   if (ig_checkbox('Tick Marks', ticks)) call flip(p%ax(i)%flags, A3_NO_TICK_MARKS)
+   if (ig_checkbox('Tick Labels', labels)) call flip(p%ax(i)%flags, A3_NO_TICK_LABELS)
+   endsubroutine axis_menu
+
+   subroutine plane_menu(p, plane)
+   !< `ShowPlaneContextMenu`: a submenu per axis of the plane.
+   type(plot3d_record), intent(inout) :: p     !< Plot.
+   integer(int32),      intent(in)    :: plane !< Plane (0-2).
+   integer(int32)                     :: i     !< Axis.
+
+   do i = 0_int32, 2_int32
+      if (i == plane) cycle
+      call core_push_id_int(i)
+      if (axis_submenu(p, i)) then
+         call axis_menu(p, i + 1_int32)
+         call ig_end_menu()
+      endif
+      call core_pop_id()
+   enddo
+   endsubroutine plane_menu
+
+   subroutine plot_menu(p)
+   !< `ShowPlotContextMenu`: the axes' submenus, Box (the scales), Legend, Settings (Equal, Title, Clip, Mouse
+   !< Position).
+   type(plot3d_record), intent(inout) :: p  !< Plot.
+   integer(int32)                     :: i  !< Axis.
+   real(real64)                       :: sc !< A scale.
+   logical                            :: v  !< A menu item's tick.
+   character(len=7), parameter        :: SCALE_LABELS(3) = ['Scale X', 'Scale Y', 'Scale Z'] !< Box's drags.
+
+   do i = 0_int32, 2_int32
+      call core_push_id_int(i)
+      if (axis_submenu(p, i)) then
+         call axis_menu(p, i + 1_int32)
+         call ig_end_menu()
+      endif
+      call core_pop_id()
+   enddo
+   call ig_separator()
+   if (ig_begin_menu('Box')) then
+      call ig_push_item_width(75.0_real64)
+      do i = 1_int32, 3_int32
+         sc = real(real(p%v%ndc(i), real32), real64)
+         if (core_drag_double(SCALE_LABELS(i), sc, real(0.01_real32, real64), real(0.1_real32, real64), 3.0_real64, &
+                              '%.3f', 0_int32)) p%v%ndc(i) = real(max(real(sc, real32), 0.01_real32), real64)
+      enddo
+      call ig_pop_item_width()
+      call ig_end_menu()
+   endif
+   call ig_separator()
+   if (ig_begin_menu('Legend')) then
+      if (legend_menu(p, .not. has_flag(p%flags, F3_NO_LEGEND))) call flip(p%flags, F3_NO_LEGEND)
+      call ig_end_menu()
+   endif
+   if (ig_begin_menu('Settings')) then
+      v = has_flag(p%flags, F3_EQUAL)
+      if (ig_menu_item('Equal', selected=v)) call flip(p%flags, F3_EQUAL)
+      call ig_begin_disabled(p%title_len == 0_int32)
+      v = p%title_len > 0_int32 .and. .not. has_flag(p%flags, F3_NO_TITLE)
+      if (ig_menu_item('Title', selected=v)) call flip(p%flags, F3_NO_TITLE)
+      call ig_end_disabled()
+      v = .not. has_flag(p%flags, F3_NO_CLIP)
+      if (ig_menu_item('Clip', selected=v)) call flip(p%flags, F3_NO_CLIP)
+      v = .not. has_flag(p%flags, F3_NO_MOUSE_TEXT)
+      if (ig_menu_item('Mouse Position', selected=v)) call flip(p%flags, F3_NO_MOUSE_TEXT)
+      call ig_end_menu()
+   endif
+   endsubroutine plot_menu
+
+   function axis_submenu(p, i) result(open)
+   !< `BeginMenu` of an axis: its label, or its default name.
+   type(plot3d_record), intent(in) :: p    !< Plot.
+   integer(int32),      intent(in) :: i    !< Axis (0-2).
+   logical                         :: open !< Open.
+
+   if (has_label(p%ax(i + 1_int32))) then
+      open = ig_begin_menu(p%ax(i + 1_int32)%label(1:p%ax(i + 1_int32)%label_len))
+   else
+      open = ig_begin_menu(AXIS_LABELS(i))
+   endif
+   endfunction axis_submenu
+
+   function legend_menu(p, visible) result(changed)
+   !< `ShowLegendContextMenu`: Show, horizontal or vertical, the location's buttons (the centre's invisible).
+   type(plot3d_record), intent(inout) :: p       !< Plot.
+   logical,             intent(in)    :: visible !< The legend shown.
+   logical                            :: changed !< Show toggled.
+   logical                            :: v       !< A box.
+   real(real64)                       :: s, bw   !< Frame height, a button's width.
+
+   s = real(real(core_frame_height(), real32), real64)
+   bw = real(1.5_real32 * real(s, real32), real64)
+   v = visible
+   changed = ig_checkbox('Show', v)
+   if (core_radio_button('H', has_flag(p%legend_flags, L3_HORIZONTAL))) &
+      p%legend_flags = ior(p%legend_flags, L3_HORIZONTAL)
+   call ig_same_line()
+   if (core_radio_button('V', .not. has_flag(p%legend_flags, L3_HORIZONTAL))) &
+      p%legend_flags = iand(p%legend_flags, not(L3_HORIZONTAL))
+   call core_push_style_var(ImGuiStyleVar_ItemSpacing, 2.0_real64, 2.0_real64)
+   if (ig_button('NW', bw, s)) p%legend_loc = LOC_NORTH + LOC_WEST
+   call ig_same_line()
+   if (ig_button('N', bw, s)) p%legend_loc = LOC_NORTH
+   call ig_same_line()
+   if (ig_button('NE', bw, s)) p%legend_loc = LOC_NORTH + LOC_EAST
+   if (ig_button('W', bw, s)) p%legend_loc = LOC_WEST
+   call ig_same_line()
+   if (core_invisible_button('C', bw, s)) continue
+   call ig_same_line()
+   if (ig_button('E', bw, s)) p%legend_loc = LOC_EAST
+   if (ig_button('SW', bw, s)) p%legend_loc = LOC_SOUTH + LOC_WEST
+   call ig_same_line()
+   if (ig_button('S', bw, s)) p%legend_loc = LOC_SOUTH
+   call ig_same_line()
+   if (ig_button('SE', bw, s)) p%legend_loc = LOC_SOUTH + LOC_EAST
+   call core_pop_style_var()
+   endfunction legend_menu
+
+   subroutine flag_box(label, flags, flag)
+   !< `CheckboxFlags` of one bit.
+   character(len=*), intent(in)    :: label !< Label.
+   integer(int32),   intent(inout) :: flags !< Flags.
+   integer(int32),   intent(in)    :: flag  !< The bit.
+   logical                         :: v     !< Its state.
+
+   v = has_flag(flags, flag)
+   if (ig_checkbox(label, v)) then
+      if (v) then
+         flags = ior(flags, flag)
+      else
+         flags = iand(flags, not(flag))
+      endif
+   endif
+   endsubroutine flag_box
+
+   pure subroutine flip(flags, flag)
+   !< `ImFlipFlag`.
+   integer(int32), intent(inout) :: flags !< Flags.
+   integer(int32), intent(in)    :: flag  !< The bit.
+
+   if (has_flag(flags, flag)) then
+      flags = iand(flags, not(flag))
+   else
+      flags = ior(flags, flag)
+   endif
+   endsubroutine flip
+
+   function set_min(p, i, v) result(done)
+   !< `SetMin(v, force=true)`: the minimum within the constraints and below the maximum.
+   type(plot3d_record), intent(inout) :: p    !< Plot.
+   integer(int32),      intent(in)    :: i    !< Axis.
+   real(real64),        intent(in)    :: v    !< Minimum.
+   logical                            :: done !< Set.
+   real(real64)                       :: m, zoom !< Value, size.
+
+   done = .false.
+   m = constrain_nan(constrain_inf(v))
+   if (m < p%ax(i)%con_min) m = p%ax(i)%con_min
+   zoom = p%v%rmax(i) - m
+   if (zoom < p%ax(i)%zoom_min) m = p%v%rmax(i) - p%ax(i)%zoom_min
+   if (zoom > p%ax(i)%zoom_max) m = p%v%rmax(i) - p%ax(i)%zoom_max
+   if (m >= p%v%rmax(i)) return
+   p%v%rmin(i) = m
+   call update_scaled(p, i)
+   done = .true.
+   endfunction set_min
+
+   function set_max(p, i, v) result(done)
+   !< `SetMax(v, force=true)`: the maximum within the constraints and above the minimum.
+   type(plot3d_record), intent(inout) :: p    !< Plot.
+   integer(int32),      intent(in)    :: i    !< Axis.
+   real(real64),        intent(in)    :: v    !< Maximum.
+   logical                            :: done !< Set.
+   real(real64)                       :: m, zoom !< Value, size.
+
+   done = .false.
+   m = constrain_nan(constrain_inf(v))
+   if (m > p%ax(i)%con_max) m = p%ax(i)%con_max
+   zoom = m - p%v%rmin(i)
+   if (zoom < p%ax(i)%zoom_min) m = p%v%rmin(i) + p%ax(i)%zoom_min
+   if (zoom > p%ax(i)%zoom_max) m = p%v%rmin(i) + p%ax(i)%zoom_max
+   if (m <= p%v%rmin(i)) return
+   p%v%rmax(i) = m
+   call update_scaled(p, i)
+   done = .true.
+   endfunction set_max
 
    ! private: items and legend
 
