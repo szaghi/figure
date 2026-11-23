@@ -74,6 +74,7 @@ use figure_plot_field, only : field_colour, field_count, field_sweep, field_uplo
                               FIELD_SYMLOG
 use figure_plot_format, only : plot_format, fmt_parse, fmt_real
 use figure_texture, only : texture_object, texture_ref
+use figure_plot_style, only : DIGITAL_PADDING, DIGITAL_SPACING, ps_u32, PC_INLAY_TEXT
 use figure_plot_frame, only : plot_item_ctx, pf_digital_offset, pf_item_begin, pf_item_count, pf_item_end,      &
                               pf_item_fit, pf_item_fit_axis, pf_item_fit_with, pf_item_hidden, pf_item_shown_at, &
                               pf_item_id, pf_item_recolor, pf_item_state, pf_legend_hovered, pf_pixels_to_plot,    &
@@ -136,8 +137,6 @@ integer(int32), parameter :: PF_PIE_EXPLODING = 4096_int32       !< ImPlotPieCha
 integer(int32), parameter :: PF_PIE_NO_SLICE_BORDER = 8192_int32 !< ImPlotPieChartFlags_NoSliceBorder.
 integer(int32), parameter :: PF_TEXT_VERT = 1024_int32           !< ImPlotTextFlags_Vertical (`pf_text(vertical=)`).
 real(real32),   parameter :: IM_PI = 3.14159265358979323846_real32 !< IM_PI (a float).
-real(real32),   parameter :: DIGITAL_PADDING = 20.0_real32       !< ImPlotStyle::DigitalPadding.
-real(real32),   parameter :: DIGITAL_SPACING = 4.0_real32        !< ImPlotStyle::DigitalSpacing.
 integer(int32), parameter :: PF_HEATMAP_COL_MAJOR = 1024_int32 !< ImPlotHeatmapFlags_ColMajor.
 integer(int32), parameter :: PF_HIST_HORIZONTAL = 1024_int32  !< ImPlotHistogramFlags_Horizontal.
 integer(int32), parameter :: PF_HIST_CUMULATIVE = 2048_int32  !< ImPlotHistogramFlags_Cumulative.
@@ -2005,7 +2004,7 @@ contains
    call pf_plot_ctx(ctx) ! SetupLock
    call core_push_clip_rect(real(ctx%rect(1), real64), real(ctx%rect(2), real64), real(ctx%rect(3), real64), &
                             real(ctx%rect(4), real64))
-   col = core_style_color(ImGuiCol_Text) ! ImPlotCol_InlayText (automatic: Text)
+   col = ps_u32(PC_INLAY_TEXT) ! GetStyleColorU32(ImPlotCol_InlayText): the style's Alpha not applied
    call core_text_size(text, w, h)
    if (vert) then ! CalcTextSizeVertical(text) * 0.5, the centre half that
       siz = [real(h, real32) * 0.5_real32, real(w, real32) * 0.5_real32]

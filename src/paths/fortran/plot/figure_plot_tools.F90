@@ -33,10 +33,11 @@ use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use figure_cimgui_enums, only : ImGuiCol_Text, ImGuiMouseCursor_Hand, ImGuiMouseCursor_ResizeAll, &
                                 ImGuiMouseCursor_ResizeEW, ImGuiMouseCursor_ResizeNESW, ImGuiMouseCursor_ResizeNS, &
                                 ImGuiMouseCursor_ResizeNWSE
+use figure_plot_style, only : MAJOR_TICK_LEN
 use figure_core, only : core_button_behavior, core_color, core_draw_circle, core_draw_line_h, core_draw_line_v, &
                         core_draw_rect, core_draw_rect_filled, core_io_input, core_keep_alive,                 &
                         core_mouse_double_clicked, core_mouse_down, core_mouse_pos, core_pop_clip_rect,        &
-                        core_push_clip_rect, core_set_mouse_cursor, core_style_color
+                        core_push_clip_rect, core_set_mouse_cursor, core_style_color_rgba
 use figure_plot_frame, only : plot_item_ctx, pf_item_fit, pf_item_fit_axis, pf_pixels_to_plot, pf_plot_ctx, &
                               pf_plot_id, pf_plot_limits, pf_plot_to_pixels
 use figure_plot_hash, only : plot_hash, plot_hash_int, plot_id_offset
@@ -46,7 +47,6 @@ private
 public :: pf_drag_line_x, pf_drag_line_y, pf_drag_point, pf_drag_rect
 
 real(real32), parameter :: GRAB_HALF = 4.0_real32                     !< DRAG_GRAB_HALF_SIZE [pixels].
-real(real32), parameter :: MAJOR_TICK_LEN(2) = [10.0_real32, 10.0_real32] !< ImPlotStyle::MajorTickLen [pixels].
 real(real64), parameter :: DRAG_THRESHOLD_SQ = 36.0_real64            !< io.MouseDragThreshold (6) squared.
 
 contains
@@ -470,6 +470,7 @@ contains
    real(real32), intent(in)           :: alpha_mul !< Alpha factor.
    integer(int32)                     :: col       !< Packed colour.
    real(real32)                       :: a         !< Alpha.
+   real(real64)                       :: t(4)      !< The text colour.
 
    if (present(color)) then
       if (size(color) /= 4) error stop "figure_plot_tools: a drag tool's colour needs 4 components (RGBA)"
@@ -479,7 +480,9 @@ contains
          return
       endif
    endif
-   col = core_style_color(ImGuiCol_Text, real(alpha_mul, real64))
+   call core_style_color_rgba(ImGuiCol_Text, t) ! GetStyleColorVec4(ImGuiCol_Text): Dear ImGui's style Alpha not applied
+   a = real(t(4), real32) * alpha_mul
+   col = core_color(t(1), t(2), t(3), real(a, real64))
    endfunction tool_color
 
    pure function im_round(f) result(r)

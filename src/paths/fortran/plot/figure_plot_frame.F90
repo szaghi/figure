@@ -101,6 +101,11 @@ module figure_plot_frame
 !<   with `clamp`): a text at a point of the current axes, alone or in a box (black or white text by its luminance),
 !<   centred on the point or offset with a leader line to the box's nearest corner, kept inside the plot area, drawn
 !<   under the plot's clip before the selection and the mouse text;
+!< - the style (figure_plot_style: ImPlotStyle's variables and colours, ImPlot's defaults, set by name, pushed, or taken
+!<   from FIGURE's theme with `ps_sync`): each colour packed as ImPlot packs it, `GetStyleColorU32` (the frame, the
+!<   backgrounds, the borders, the texts of the axes, title, legend and mouse text, the axes' hover, the drag tools,
+!<   the subplots' splitters: Dear ImGui's style Alpha not applied) or `ImGui::GetColorU32` (the grid, the legend's
+!<   text, the selection, the tags' and annotations' boxes, the items: its alpha times the style's);
 !< - the queries FIGURE's current path reads through its native layer (`pf_plot_size`: `GetPlotSize`;
 !<   `pf_plot_state`: `fig_plot_state`; `pf_plot_x_transform`: `fig_plot_x_transform`) and the error recovery's ends
 !<   (`pf_open_state`, `pf_recover_to`: the scope record's `recover_to`, `fig_plot_end` and `EndSubplots`; their wiring
@@ -118,8 +123,7 @@ module figure_plot_frame
 !<
 !< Not yet: local time and ImPlot's time style options (12-hour clock, US dates: ImPlot's defaults), colormaps other
 !< than Deep (the line colours of FIGURE's own styles: seal, paper, ...: their automatic colours are ImPlot's
-!< colormaps, registered by the native layer), ImPlot style variables set by a theme (`FitPadding` included), the axis
-!< flags FIGURE's API does not set (`NoInitialFit`, `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or
+!< colormaps, registered by the native layer), the axis flags FIGURE's API does not set (`NoInitialFit`, `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or
 !< not drawn); of P12, a subplot's shared items and legend (`ShareItems`: only the cells' menu can ask for it, the flag
 !< is stored), a subplot or an aligned group in a collapsed window (`SkipItems`, which figure_core does not give: they
 !< begin as if shown).
@@ -155,10 +159,18 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_text_unformatted, core_window_hovered, core_frame_height, core_open_popup,         &
                         core_open_popup_id, core_begin_popup_id,                                                &
                         core_begin_popup, core_end_popup, core_set_cursor_screen_pos, core_time, &
-                        core_draw_triangle_filled, core_draw_line, core_framebuffer_scale
+                        core_draw_triangle_filled, core_draw_line, core_framebuffer_scale, core_style_color_rgba
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
+use figure_plot_style, only : PLOT_DEFAULT_SIZE, STYLE_PLOT_MIN_SIZE, PLOT_BORDER_SIZE, MINOR_ALPHA, MAJOR_TICK_LEN, &
+                              MINOR_TICK_LEN, MAJOR_TICK_SIZE, MINOR_TICK_SIZE, MAJOR_GRID_SIZE, MINOR_GRID_SIZE,   &
+                              STYLE_PLOT_PADDING, LABEL_PADDING, LEGEND_PADDING, LEGEND_INNER_PADDING,              &
+                              LEGEND_SPACING, MOUSE_POS_PADDING, ANNOTATION_PADDING, FIT_PADDING, ps_u32,           &
+                              ps_vec4, ps_alpha_u32, ps_style_alpha, PC_FRAME_BG, PC_PLOT_BG, PC_PLOT_BORDER,      &
+                              PC_LEGEND_BG, PC_LEGEND_BORDER, PC_LEGEND_TEXT, PC_TITLE_TEXT, PC_INLAY_TEXT,        &
+                              PC_AXIS_TEXT, PC_AXIS_GRID, PC_AXIS_TICK, PC_AXIS_BG_HOVERED, PC_AXIS_BG_ACTIVE,     &
+                              PC_SELECTION, PC_CROSSHAIRS
 use figure_plot_format, only : plot_format, fmt_parse, fmt_real, fmt_text
 use figure_plot_transform, only : plot_axis_map, map_pixel
 use figure_plot_locators, only : plot_ticks, ticks_reset, locate_default, locate_log10, locate_symlog, locate_time, &
@@ -185,23 +197,7 @@ public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, 
 public :: pf_annotation, pf_plot_size, pf_plot_state, pf_plot_x_transform, pf_open_state, pf_recover_to
 public :: pf_plot_rect
 
-! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
-real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
-real(real32), parameter :: STYLE_PLOT_MIN_SIZE(2) = [200.0_real32, 150.0_real32] !< PlotMinSize [pixels].
-real(real32), parameter :: PLOT_BORDER_SIZE = 1.0_real32                       !< PlotBorderSize [pixels].
-real(real32), parameter :: MINOR_ALPHA = 0.25_real32                           !< MinorAlpha.
-real(real32), parameter :: MAJOR_TICK_LEN(2) = [10.0_real32, 10.0_real32]      !< MajorTickLen [pixels].
-real(real32), parameter :: MINOR_TICK_LEN(2) = [5.0_real32, 5.0_real32]        !< MinorTickLen [pixels].
-real(real32), parameter :: MAJOR_TICK_SIZE(2) = [1.0_real32, 1.0_real32]       !< MajorTickSize [pixels].
-real(real32), parameter :: MINOR_TICK_SIZE(2) = [1.0_real32, 1.0_real32]       !< MinorTickSize [pixels].
-real(real32), parameter :: MAJOR_GRID_SIZE(2) = [1.0_real32, 1.0_real32]       !< MajorGridSize [pixels].
-real(real32), parameter :: MINOR_GRID_SIZE(2) = [1.0_real32, 1.0_real32]       !< MinorGridSize [pixels].
-real(real32), parameter :: STYLE_PLOT_PADDING(2) = [10.0_real32, 10.0_real32]  !< PlotPadding [pixels].
-real(real32), parameter :: LABEL_PADDING(2) = [5.0_real32, 5.0_real32]         !< LabelPadding [pixels].
-real(real32), parameter :: LEGEND_PADDING(2) = [10.0_real32, 10.0_real32]      !< LegendPadding [pixels].
-real(real32), parameter :: LEGEND_INNER_PADDING(2) = [5.0_real32, 5.0_real32]  !< LegendInnerPadding [pixels].
-real(real32), parameter :: LEGEND_SPACING(2) = [5.0_real32, 0.0_real32]        !< LegendSpacing [pixels].
-real(real32), parameter :: FIT_PADDING(2) = [0.0_real32, 0.0_real32]           !< FitPadding (fraction of the range).
+! ImPlot's style: figure_plot_style's variables (PlotPadding, ... under the names these parameters had) and colours
 real(real32), parameter :: HIGHLIGHT_LINE_SCALE = 2.0_real32                   !< ITEM_HIGHLIGHT_LINE_SCALE.
 ! ImPlotScale (implot.h)
 integer(int32), parameter :: SCALE_LINEAR = 0_int32 !< ImPlotScale_Linear.
@@ -249,7 +245,6 @@ integer(int32), parameter :: AXIS_BUTTON_FLAGS = PLOT_BUTTON_FLAGS + 2048_int32 
 real(real32),   parameter :: DRAG_THRESHOLD = 5.0_real32       !< MOUSE_CURSOR_DRAG_THRESHOLD.
 real(real32),   parameter :: BOX_THRESHOLD = 4.0_real32        !< BOX_SELECT_DRAG_THRESHOLD.
 real(real32),   parameter :: ZOOM_RATE = 0.1_real32            !< ImPlotInputMap::ZoomRate.
-real(real32),   parameter :: MOUSE_POS_PADDING(2) = [10.0_real32, 10.0_real32] !< MousePosPadding [pixels].
 integer(int32), parameter :: PF_EQUAL = 128_int32          !< ImPlotFlags_Equal.
 integer(int32), parameter :: COND_ALWAYS = 1_int32         !< ImPlotCond_Always.
 integer(int32), parameter :: COND_ONCE = 2_int32           !< ImPlotCond_Once.
@@ -294,7 +289,6 @@ integer(int32), parameter :: SEP_BUTTON_FLAGS = 2048_int32 + 16_int32 + 256_int3
 real(real32),   parameter :: SPLITTER_HALF = 4.0_real32  !< SUBPLOT_SPLITTER_HALF_THICKNESS [pixels].
 real(real32),   parameter :: SPLITTER_FEEDBACK = 0.06_real32 !< SUBPLOT_SPLITTER_FEEDBACK_TIMER [s].
 real(real32),   parameter :: SUBPLOT_BORDER = 1.0_real32 !< SUBPLOT_BORDER_SIZE [pixels].
-real(real32),   parameter :: ANNOTATION_PADDING(2) = [2.0_real32, 2.0_real32] !< ImPlotStyle::AnnotationPadding.
 integer(int32), parameter :: SUB_CAP = 64_int32          !< Subplots kept before the least recently drawn makes room.
 ! what an axis is linked to (ImPlotAxis::LinkedMin, LinkedMax: handles, not pointers)
 integer(int32), parameter :: LINK_NONE = 0_int32  !< Not linked.
@@ -496,9 +490,10 @@ integer(int32)                         :: next_link_kind(2) = LINK_NONE !< X1's 
 integer(int32)                         :: next_link_idx(2) = 0_int32 !< ... which column or row.
 integer(int32)                         :: fits_pending = 0_int32 !< Plots begun next that fit every axis: a subplot
                                                          !< drawn for the first time (FIGURE's `ip_begin_subplots`).
-real(real32)                           :: plot_pad(2) = STYLE_PLOT_PADDING !< PlotPadding in effect (a subplot's
+real(real32)                           :: plot_pad(2) = 10.0_real32 !< PlotPadding in effect (the style's; a subplot's
                                                          !< cells: half of it).
-real(real32)                           :: plot_min(2) = STYLE_PLOT_MIN_SIZE !< PlotMinSize in effect (cells: 0).
+real(real32)                           :: plot_min(2) = [200.0_real32, 150.0_real32] !< PlotMinSize in effect (the
+                                                         !< style's; cells: 0).
 logical                                :: frame_bg_clear = .false. !< FrameBg transparent (a subplot's cells).
 type(plot_link),      allocatable      :: links(:)       !< The link groups (`fig_plot_link`'s map; never removed).
 integer(int32)                         :: n_links = 0_int32 !< Groups held.
@@ -558,7 +553,12 @@ contains
    if (present(equal)) then
       if (equal) flags = PF_EQUAL
    endif
-   if (cur_sub /= 0_int32) call core_push_id_int(subs(cur_sub)%cur_idx) ! a cell: PushID(CurrentIdx)
+   if (cur_sub /= 0_int32) then
+      call core_push_id_int(subs(cur_sub)%cur_idx) ! a cell: PushID(CurrentIdx)
+   else ! the style's PlotPadding, PlotMinSize (a subplot's cells: its own, pushed at its begin)
+      plot_pad = STYLE_PLOT_PADDING
+      plot_min = STYLE_PLOT_MIN_SIZE
+   endif
    id = core_get_id(title)
    h = plot_handle(id, core_frame_count(), created)
    associate(p => plots(h))
@@ -1023,7 +1023,7 @@ contains
       call core_push_clip_rect(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
                                real(p%frame(4), real64))
       if (p%title_len > 0_int32 .and. iand(p%flags, PF_NO_TITLE) == 0_int32) &
-         call text_centered(0.5_real32 * (p%rect(1) + p%rect(3)), p%canvas(2), core_style_color(ImGuiCol_Text), &
+         call text_centered(0.5_real32 * (p%rect(1) + p%rect(3)), p%canvas(2), ps_u32(PC_TITLE_TEXT), &
                             text(p%title_off:p%title_off + p%title_len - 1_int32))
       call tick_marks(p)
       call core_pop_clip_rect()
@@ -1102,7 +1102,7 @@ contains
       endif
       pad_top = 0.0_real32
       if (title_w > 0.0_real32) pad_top = title_h + LABEL_PADDING(2)
-      half = plot_pad / 2.0_real32
+      half = STYLE_PLOT_PADDING / 2.0_real32 ! the style's (BeginSubplots: gp.Style.PlotPadding / 2)
       req(1) = -1.0_real32 ! CalcItemSize(size, PlotDefaultSize)
       req(2) = 300.0_real32 * real(rows, real32)
       if (present(width)) req(1) = real(width, real32)
@@ -1134,7 +1134,7 @@ contains
       call render_frame(s%frame)
       if (title_w > 0.0_real32 .and. .not. has_flag(s%flags, SPF_NO_TITLE)) &
          call text_centered((s%grid(1) + s%grid(3)) * 0.5_real32, (s%grid(2) - pad_top) + half(2), &
-                            core_style_color(ImGuiCol_Text), title)
+                            ps_u32(PC_TITLE_TEXT), title)
       if (.not. has_flag(s%flags, SPF_NO_RESIZE)) then ! the splitters: rows, then columns
          sep = 1_int32
          size_ = s%grid(4) - s%grid(2)
@@ -1163,7 +1163,7 @@ contains
                endif
                call core_draw_line_h(real(im_round(s%grid(1)), real64), real(im_round(s%grid(3)), real64), &
                                      real(im_round(pos), real64),                                         &
-                                     core_style_color(merge(ImGuiCol_SeparatorActive, ImGuiCol_SeparatorHovered, &
+                                     style_u32(merge(ImGuiCol_SeparatorActive, ImGuiCol_SeparatorHovered, &
                                                             held)), &
                                      real(SUBPLOT_BORDER, real64))
                call core_set_mouse_cursor(ImGuiMouseCursor_ResizeNS)
@@ -1196,7 +1196,7 @@ contains
                endif
                call core_draw_line_v(real(im_round(pos), real64), real(im_round(s%grid(2)), real64), &
                                      real(im_round(s%grid(4)), real64),                             &
-                                     core_style_color(merge(ImGuiCol_SeparatorActive, ImGuiCol_SeparatorHovered, &
+                                     style_u32(merge(ImGuiCol_SeparatorActive, ImGuiCol_SeparatorHovered, &
                                                             held)), &
                                      real(SUBPLOT_BORDER, real64))
                call core_set_mouse_cursor(ImGuiMouseCursor_ResizeEW)
@@ -1373,6 +1373,8 @@ contains
    real(real64)                           :: lc(4)    !< The last item's colour.
    character(len=TICK_LABEL_LEN)          :: lab      !< The value's label.
    integer(int32)                         :: nl       !< Its length.
+   integer(int32)                         :: j        !< Channel.
+   real(real64)                           :: c64(4)   !< The box colour, double.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: pf_tag outside a plot'
    if (value /= value) error stop 'figure_plot_frame: pf_tag: the value is NaN'
@@ -1402,9 +1404,12 @@ contains
       k = n_tags
       tag_axis(k) = i
       tag_value(k) = value
-      tag_bg(k) = core_color(real(c(1), real64), real(c(2), real64), real(c(3), real64), real(c(4), real64))
+      do j = 1_int32, 4_int32 ! (element by element: nvfortran allocates a temporary for an array expression)
+         c64(j) = real(c(j), real64)
+      enddo
+      tag_bg(k) = ps_alpha_u32(c64) ! ImGui::GetColorU32(col): the style's Alpha applied
       if (c(4) == 0.0_real32) then
-         tag_fg(k) = core_style_color(ImGuiCol_Text) ! AxisText
+         tag_fg(k) = ps_u32(PC_AXIS_TEXT)
       else ! CalcTextColor
          lum = c(1) * 0.299_real32
          t = c(2) * 0.587_real32
@@ -1444,6 +1449,7 @@ contains
    real(real32)                           :: c(4)      !< Colour.
    real(real32)                           :: lum, t    !< Luminance (CalcTextColor), a product.
    integer(int32)                         :: k, nt, j  !< The annotation, its text's length, a component.
+   real(real64)                           :: c64(4)    !< The box colour, double.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: pf_annotation outside a plot'
    if (present(color)) then
@@ -1471,9 +1477,12 @@ contains
       endif
       ann_pos(1, k) = to_pixels(p%ax(p%cur_x), x) ! PlotToPixels(x, y, IMPLOT_AUTO, IMPLOT_AUTO)
       ann_pos(2, k) = to_pixels(p%ax(p%cur_y), y)
-      ann_bg(k) = core_color(real(c(1), real64), real(c(2), real64), real(c(3), real64), real(c(4), real64))
+      do j = 1_int32, 4_int32 ! (element by element: nvfortran allocates a temporary for an array expression)
+         c64(j) = real(c(j), real64)
+      enddo
+      ann_bg(k) = ps_alpha_u32(c64) ! ImGui::GetColorU32(col): the style's Alpha applied
       if (c(4) == 0.0_real32) then
-         ann_fg(k) = core_style_color(ImGuiCol_Text) ! InlayText
+         ann_fg(k) = ps_u32(PC_INLAY_TEXT)
       else ! CalcTextColor
          lum = c(1) * 0.299_real32
          t = c(2) * 0.587_real32
@@ -1540,6 +1549,7 @@ contains
 
    cm = CM_VIRIDIS
    if (present(colormap)) cm = colormap
+   if (cur_sub == 0_int32) plot_pad = STYLE_PLOT_PADDING ! gp.Style.PlotPadding (a subplot's: half of it)
    id = core_get_id(label)
    call core_text_size(label, w, h, hide_after_hash=.true.)
    lw = real(w, real32)
@@ -1606,7 +1616,7 @@ contains
                                       (gr(2) + gr(4)) * 0.5_real32 + lw * 0.5_real32, col_text, &
                                       label(1:rendered_len(label)))
    call core_draw_rect(real(gr(1), real64), real(gr(2), real64), real(gr(3), real64), real(gr(4), real64), &
-                       core_style_color(ImGuiCol_Border))
+                       ps_u32(PC_PLOT_BORDER))
    call core_pop_clip_rect()
    call core_draw_end()
    endsubroutine pf_colormap_scale
@@ -2094,6 +2104,8 @@ contains
    real(real64)                     :: mx, my, w, h !< The pointer, a text's size.
    real(real32)                     :: m(2), pos(2), sz(2), sr(4) !< ..., the box on screen.
    integer(int32)                   :: col, i      !< Colour, axis.
+   integer(int32)                   :: bd          !< The selection's border colour.
+   real(real64)                     :: sel(4)      !< Its colour.
    logical                          :: any_held    !< An axis or the plot held.
    integer(int32)                   :: n           !< The mouse text's length.
 
@@ -2105,16 +2117,19 @@ contains
    if (p%selected) then ! Selection: (1, 1, 0), its fill at 1/4 alpha
       sr = [p%select_rect(1) + p%rect(1), p%select_rect(2) + p%rect(2), p%select_rect(3) + p%rect(1), &
             p%select_rect(4) + p%rect(2)]
+      sel = ps_vec4(PC_SELECTION) ! RenderSelectionRect: GetColorU32(col * (1, 1, 1, 0.25)), GetColorU32(col)
+      bd = ps_alpha_u32(sel)
+      sel(4) = real(real(sel(4), real32) * 0.25_real32, real64)
       call core_draw_rect_filled(real(sr(1), real64), real(sr(2), real64), real(sr(3), real64), real(sr(4), real64), &
-                                 core_color(1.0_real64, 1.0_real64, 0.0_real64, 0.25_real64))
+                                 ps_alpha_u32(sel))
       call core_draw_rect(real(sr(1), real64), real(sr(2), real64), real(sr(3), real64), real(sr(4), real64), &
-                          core_color(1.0_real64, 1.0_real64, 0.0_real64, 1.0_real64))
+                          bd)
    endif
    any_held = p%held .or. any(p%ax(:)%enabled .and. p%ax(:)%held)
    if (has_flag(p%flags, PF_CROSSHAIRS) .and. p%hovered .and. .not. any_held .and. .not. p%selecting .and. &
        .not. p%leg_hovered) then
       call core_set_mouse_cursor(ImGuiMouseCursor_None)
-      col = p%col_border ! Crosshairs: PlotBorder
+      col = ps_u32(PC_CROSSHAIRS) ! GetStyleColorU32(ImPlotCol_Crosshairs)
       call core_draw_line_h(real(p%rect(1), real64), real(m(1) - 5.0_real32, real64), real(m(2), real64), col)
       call core_draw_line_h(real(m(1) + 5.0_real32, real64), real(p%rect(3), real64), real(m(2), real64), col)
       call core_draw_line_v(real(m(1), real64), real(p%rect(2), real64), real(m(2) - 5.0_real32, real64), col)
@@ -2138,7 +2153,7 @@ contains
       call core_text_size(mouse_text(1:n), w, h)
       sz = [real(w, real32), real(h, real32)]
       pos = location_pos(p%rect, sz, LOC_SOUTH + LOC_EAST, MOUSE_POS_PADDING)
-      call core_draw_text(real(pos(1), real64), real(pos(2), real64), core_style_color(ImGuiCol_Text), &
+      call core_draw_text(real(pos(1), real64), real(pos(2), real64), ps_u32(PC_INLAY_TEXT), &
                           mouse_text(1:n))
    endif
    call core_pop_clip_rect()
@@ -2215,7 +2230,7 @@ contains
       real(real32), intent(in) :: q(4) !< Rectangle.
 
       call core_draw_rect_filled(real(q(1), real64), real(q(2), real64), real(q(3), real64), real(q(4), real64), &
-                                 core_style_color(ImGuiCol_ButtonHovered))
+                                 ps_u32(PC_AXIS_BG_HOVERED))
       endsubroutine strip
    endsubroutine side_switch
 
@@ -4229,6 +4244,7 @@ contains
    real(real32)   :: lsize(2)             !< An outside legend's size.
    real(real64)   :: w, h                 !< A text's size.
    real(real64)   :: xar, yar             !< Units per pixel on x, y.
+   real(real64)   :: grid_col(4)          !< AxisGrid (its alpha times MinorAlpha for the minors).
    integer(int32) :: i, j                 !< Axes.
    logical        :: equal, horz          !< ImPlotFlags_Equal, a horizontal legend.
    logical        :: west, east, north, south !< The legend's side.
@@ -4255,11 +4271,13 @@ contains
          p%ax(j)%ortho = AX_X1
       endif
    enddo
-   p%col_maj = core_style_color(ImGuiCol_Text, 0.25_real64)                 ! AxisGrid: Text * (1, 1, 1, 0.25)
-   p%col_min = core_style_color(ImGuiCol_Text, real(0.25_real32 * MINOR_ALPHA, real64))
-   p%col_tick = p%col_maj                                                   ! AxisTick: AxisGrid
-   p%col_txt = core_style_color(ImGuiCol_Text)                              ! AxisText: Text
-   p%col_border = core_style_color(ImGuiCol_Border)                         ! PlotBorder: Border
+   grid_col = ps_vec4(PC_AXIS_GRID)                                         ! UpdateAxisColors
+   p%col_maj = ps_alpha_u32(grid_col)                                       ! ImGui::GetColorU32(col_grid)
+   grid_col(4) = real(real(grid_col(4), real32) * MINOR_ALPHA, real64)      ! col_grid * (1, 1, 1, MinorAlpha)
+   p%col_min = ps_alpha_u32(grid_col)
+   p%col_tick = ps_u32(PC_AXIS_TICK)                                        ! GetStyleColorU32: no style Alpha
+   p%col_txt = ps_u32(PC_AXIS_TEXT)                                         ! GetStyleColorU32: no style Alpha
+   p%col_border = ps_u32(PC_PLOT_BORDER)
    do i = 1_int32, AXES ! (the ticks reset at the plot's begin)
       if (p%ax(i)%scale == SCALE_TIME) ticks(i)%levels = 2_int32 ! SetupAxisScale: Ticker.Levels = 2
    enddo
@@ -4369,7 +4387,7 @@ contains
    call core_draw_begin()
    call render_frame(p%frame)
    call core_draw_rect_filled(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
-                              real(p%rect(4), real64), core_style_color(ImGuiCol_WindowBg))
+                              real(p%rect(4), real64), ps_u32(PC_PLOT_BG))
    do i = 1_int32, AXES
       if (will_render(p%ax(i))) call place_ticks(ticks(i), p%ax(i))
    enddo
@@ -4610,7 +4628,7 @@ contains
       if ((ax%hovered .or. ax%held) .and. .not. p%held .and. .not. has_flag(ax%flags, AXF_NO_HIGHLIGHT)) then
          call core_draw_rect_filled(real(ax%hover_rect(1), real64), real(ax%hover_rect(2), real64),       &
                                     real(ax%hover_rect(3), real64), real(ax%hover_rect(4), real64),       &
-                                    core_style_color(merge(ImGuiCol_ButtonActive, ImGuiCol_ButtonHovered, &
+                                    ps_u32(merge(PC_AXIS_BG_ACTIVE, PC_AXIS_BG_HOVERED, &
                                                            ax%held)))
       elseif (ax%hili /= 0_int32) then ! (the axis's background, AxisBg, is transparent)
          if (i <= AX_X3) then
@@ -4755,7 +4773,7 @@ contains
    border = real(v(1), real32)
    if (.not. frame_bg_clear) & ! a subplot's cell: IM_COL32_BLACK_TRANS, which AddRectFilled skips
       call core_draw_rect_filled(real(fr(1), real64), real(fr(2), real64), real(fr(3), real64), real(fr(4), real64), &
-                                 core_style_color(ImGuiCol_FrameBg), real(rounding, real64))
+                                 ps_u32(PC_FRAME_BG), real(rounding, real64))
    if (border > 0.0_real32) then
       call core_draw_rect(real(fr(1) + 1.0_real32, real64), real(fr(2) + 1.0_real32, real64),    &
                           real(fr(3) + 1.0_real32, real64), real(fr(4) + 1.0_real32, real64),    &
@@ -4940,11 +4958,11 @@ contains
    endif
    call core_push_clip_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64))
    call core_draw_rect_filled(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
-                              core_style_color(ImGuiCol_PopupBg))
+                              ps_u32(PC_LEGEND_BG))
    call legend_entries(p, lr, .not. horz, any_item)
    contextable = p%leg_hovered .and. .not. any_item .and. .not. has_flag(p%leg_flags, LGF_NO_MENUS)
    call core_draw_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
-                       core_style_color(ImGuiCol_Border))
+                       ps_u32(PC_LEGEND_BORDER))
    call core_pop_clip_rect()
    if (open_context .and. contextable .and. .not. has_flag(p%flags, PF_NO_MENUS)) &
       call core_open_popup('##LegendContext')
@@ -4974,7 +4992,7 @@ contains
 
    txt_ht = real(core_font_size(), real32)
    icon = txt_ht
-   col_txt = core_style_color(ImGuiCol_Text) ! LegendText: InlayText: Text
+   col_txt = ps_u32(PC_LEGEND_TEXT) ! GetStyleColorU32: the style's Alpha not applied
    col_dis = alpha_u32(col_txt, 0.25_real32)
    sum_w = 0.0_real32
    any_item = .false.
@@ -5018,7 +5036,7 @@ contains
          any_item = .true.
          col_hl = mix_u32(col_txt, col_item, 64_int32)
       else
-         col_hl = col_txt
+         col_hl = style_alpha_u32(col_txt) ! ImGui::GetColorU32(ImU32): its alpha times the style's
       endif
       if (held) then
          if (p%item_show(it)) then
@@ -5262,6 +5280,35 @@ contains
    m%sca_max = ax%scale_max
    m%scale = ax%scale
    endfunction axis_map
+
+   function style_u32(idx) result(col)
+   !< A Dear ImGui style colour packed as it is (`ColorConvertFloat4ToU32(Style.Colors[idx])`: no style Alpha).
+   integer(int32), intent(in) :: idx  !< `ImGuiCol_*`.
+   integer(int32)             :: col  !< Packed.
+   real(real64)               :: c(4) !< RGBA.
+
+   call core_style_color_rgba(idx, c)
+   col = core_color(c(1), c(2), c(3), c(4))
+   endfunction style_u32
+
+   function style_alpha_u32(col) result(c)
+   !< `ImGui::GetColorU32(ImU32 col)`: its alpha times Dear ImGui's style Alpha (`(ImU32)(a * Alpha)`), unless that
+   !< is 1.
+   integer(int32), intent(in) :: col !< Packed.
+   integer(int32)             :: c   !< Packed.
+   real(real32)               :: al  !< The style's Alpha.
+   integer(int64)             :: a, u !< Alpha byte, unsigned value.
+
+   al = ps_style_alpha()
+   c = col
+   if (al >= 1.0_real32) return
+   u = iand(int(col, int64), 4294967295_int64)
+   a = ishft(u, -24)
+   a = int(real(a, real32) * al, int64)
+   u = ior(iand(u, 16777215_int64), ishft(a, 24))
+   if (u >= 2147483648_int64) u = u - 4294967296_int64
+   c = int(u, int32)
+   endfunction style_alpha_u32
 
    pure function border_shown(p) result(shown)
    !< The plot's border is drawn (`PlotBorderSize` > 0, the colour not transparent).
