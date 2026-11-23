@@ -80,6 +80,13 @@ module figure_plot_frame
 !< no `PushOverrideID`): a Dear ImGui widget drawn between `pf_begin_plot` and `pf_end_plot` gets another ID than in
 !< ImPlot. The segment's normal is `1/sqrt` where ImPlot takes the SSE estimate `_mm_rsqrt_ss` (12 bits): the line's
 !< vertices may differ from ImPlot's below a thousandth of a pixel.
+!<
+!< No allocation per frame once the tables are grown (ADR 0001; P10 step 9, figure_test_plot_frame_alloc counts them):
+!< every label is written by figure_plot_format into a fixed slot (the ticks' 31 characters, `mouse_text`) and passed
+!< on as a substring, never `trim`med nor concatenated; a format is parsed once per call into a `plot_format`; the
+!< popups declared every frame go through figure_core's `core_*_popup`; quads are built in fixed arrays, not array
+!< constructors (nvfortran allocates those). An open context menu's widgets (src/lib's `ig_menu_item`, ...) still
+!< allocate their NUL-terminated copies while it is open.
 use, intrinsic :: ieee_arithmetic, only : ieee_negative_inf, ieee_positive_inf, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_BorderShadow, ImGuiCol_ButtonActive, &
@@ -100,16 +107,17 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_mouse_released, core_pop_id, core_pop_item_flag, core_pop_style_var,               &
                         core_push_id_int, core_push_item_flag, core_push_item_width, core_push_override_id,     &
                         core_push_style_var, core_radio_button, core_set_key_owner, core_set_mouse_cursor,      &
-                        core_text_unformatted, core_window_hovered, core_frame_height
+                        core_text_unformatted, core_window_hovered, core_frame_height, core_open_popup,         &
+                        core_begin_popup, core_end_popup
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
+use figure_plot_format, only : plot_format, fmt_parse, fmt_text
 use figure_plot_locators, only : plot_ticks, ticks_reset, locate_default, locate_log10, locate_symlog, locate_time, &
-                                transform_log10, transform_symlog, inverse_log10, inverse_symlog, round_axis_value, &
+                                transform_log10, transform_symlog, inverse_log10, inverse_symlog, axis_value_text, &
                                 time_cursor_label, TIME_MAX, TIME_MIN
 use figure_imgui, only : ig_button, ig_checkbox, ig_same_line, ig_separator
-use figure_menu, only : ig_begin_menu, ig_begin_popup, ig_end_menu, ig_end_popup, ig_menu_item, ig_open_popup
-use foresight_format, only : c_real
+use figure_menu, only : ig_begin_menu, ig_end_menu, ig_menu_item
 
 implicit none
 private
@@ -206,6 +214,11 @@ integer(int32), parameter :: LEGEND_BUTTON_FLAGS = 4096_int32 + 16_int32 + 256_i
 ! the tables
 integer(int32), parameter :: PLOT_CAP = 256_int32 !< Plots kept before the least recently drawn one makes room.
 integer(int32), parameter :: ITEM_CAP = 256_int32 !< A plot's items kept before the least recently drawn makes room.
+! the axes' menu names (ShowAxisContextMenu's "X-Axis", "X-Axis 2", ...), by axis
+character(len=8), parameter :: AXIS_NAMES(6) = ['X-Axis  ', 'X-Axis 2', 'X-Axis 3', 'Y-Axis  ', 'Y-Axis 2', &
+                                                'Y-Axis 3'] !< Names.
+integer(int32),   parameter :: AXIS_NAMES_LEN(6) = [6_int32, 8_int32, 8_int32, 6_int32, 8_int32, 8_int32] !< Lengths.
+integer(int32),   parameter :: MOUSE_TEXT_LEN = 256_int32 !< The mouse text's room (six values of 31 characters).
 
 type :: plot_axis
    !< An axis (ImPlotAxis): its state kept between frames, and where it is on screen this frame.
@@ -303,6 +316,7 @@ type(plot_ticks)                       :: cticks         !< A colour bar's ticks
 character(len=:), allocatable          :: text           !< The open plot's title and axis labels (TextBuffer).
 integer(int32)                         :: n_text = 0_int32 !< Characters of `text` in use.
 logical                                :: open_context = .false. !< A context menu opens (OpenContextThisFrame).
+character(len=MOUSE_TEXT_LEN)          :: mouse_text     !< The mouse text (MousePosStringBuilder).
 
 contains
    function pf_begin_plot(title, width, height, equal) result(visible)
@@ -507,7 +521,7 @@ contains
 
    call setup_refused('pf_setup_legend')
    loc = LOC_NORTH + LOC_WEST
-   if (present(location)) loc = location_code(trim(location))
+   if (present(location)) loc = location_code(location) ! (select case ignores trailing blanks)
    flags = 0_int32
    call set_flag(flags, LGF_OUTSIDE, outside)
    call set_flag(flags, LGF_HORIZONTAL, horizontal)
@@ -630,6 +644,7 @@ contains
    real(real32)                 :: hw      !< Half the weight [pixels].
    real(real64)                 :: uv0(2), uv1(2), fringe !< The line's texture.
    real(real32)                 :: p1(2), p2(2) !< A segment's ends [pixels].
+   real(real64)                 :: qx(4), qy(4), qu(4), qv(4) !< Its quad: vertices, texture coordinates.
    real(real32)                 :: dx, dy, d2, inv !< Its direction.
    integer(int32)               :: k, n    !< Counter, points.
    integer(int32)               :: it      !< The item's handle.
@@ -649,6 +664,8 @@ contains
          hw = max(1.0_real32, weight) * 0.5_real32 ! RendererLineStrip, GetLineRenderProps
          call core_line_texture(real(hw * 2.0_real32, real64), uv0, uv1, fringe)
          hw = hw + real(fringe, real32) * 0.5_real32
+         qu = [uv0(1), uv0(1), uv1(1), uv1(1)]
+         qv = [uv0(2), uv0(2), uv1(2), uv1(2)]
          p1 = [to_pixels(ax, x(1)), to_pixels(ay, y(1))]
          do k = 2_int32, n
             p2 = [to_pixels(ax, x(k)), to_pixels(ay, y(k))]
@@ -664,9 +681,15 @@ contains
                endif
                dx = dx * hw
                dy = dy * hw
-               call core_draw_quad_uv(real([p1(1) + dy, p2(1) + dy, p2(1) - dy, p1(1) - dy], real64),   &
-                                      real([p1(2) - dx, p2(2) - dx, p2(2) + dx, p1(2) + dx], real64),   &
-                                      [uv0(1), uv0(1), uv1(1), uv1(1)], [uv0(2), uv0(2), uv1(2), uv1(2)], col)
+               qx(1) = real(p1(1) + dy, real64) ! (fixed arrays, not constructors: nvfortran allocates those)
+               qx(2) = real(p2(1) + dy, real64)
+               qx(3) = real(p2(1) - dy, real64)
+               qx(4) = real(p1(1) - dy, real64)
+               qy(1) = real(p1(2) - dx, real64)
+               qy(2) = real(p2(2) - dx, real64)
+               qy(3) = real(p2(2) + dx, real64)
+               qy(4) = real(p1(2) + dx, real64)
+               call core_draw_quad_uv(qx, qy, qu, qv, col)
             endif
             p1 = p2
          enddo
@@ -750,6 +773,7 @@ contains
    real(real64)                           :: cx, cy, aw, ah, w, h, rmin, rmax !< Cursor, room, sizes, range.
    logical                                :: rend_label, reversed !< A label shown, the range turned over.
    integer(int32)                         :: col_text     !< Text colour.
+   type(plot_format)                      :: fmt          !< The labels' format, parsed ("%g" unless given).
 
    cm = CM_VIRIDIS
    if (present(colormap)) cm = colormap
@@ -774,11 +798,8 @@ contains
    rmin = merge(scale_min, scale_max, scale_min < scale_max)
    rmax = merge(scale_min, scale_max, scale_min >= scale_max)
    call ticks_reset(cticks)
-   if (present(label_format)) then
-      call locate_default(cticks, rmin, rmax, fs(2), .true., measure_text, label_format)
-   else
-      call locate_default(cticks, rmin, rmax, fs(2), .true., measure_text)
-   endif
+   if (present(label_format)) call fmt_parse(label_format, fmt)
+   call locate_default(cticks, rmin, rmax, fs(2), .true., measure_text, fmt)
    rend_label = lw > 0.0_real32
    txt_off = LABEL_PADDING(1)
    pad = (txt_off + cticks%max_size(1)) + merge(txt_off + lh, 0.0_real32, rend_label)
@@ -815,7 +836,7 @@ contains
                                text_color(cm_sample(cm, tick_t)), real(tick_k, real64))
       txt_x = gr(3) + txt_off
       txt_y = y_pos - cticks%label_size(2, k) * 0.5_real32
-      call core_draw_text(real(txt_x, real64), real(txt_y, real64), col_text, trim(cticks%label(k)))
+      call core_draw_text(real(txt_x, real64), real(txt_y, real64), col_text, cticks%label(k)(1:cticks%label_len(k)))
    enddo
    if (rend_label) call text_vertical((gr(3) + 2.0_real32 * txt_off) + cticks%max_size(1), &
                                       (gr(2) + gr(4)) * 0.5_real32 + lw * 0.5_real32, col_text, &
@@ -1307,7 +1328,7 @@ contains
    real(real32)                     :: m(2), pos(2), sz(2), sr(4) !< ..., the box on screen.
    integer(int32)                   :: col, i      !< Colour, axis.
    logical                          :: any_held    !< An axis or the plot held.
-   character(len=:), allocatable    :: s           !< The mouse text.
+   integer(int32)                   :: n           !< The mouse text's length.
 
    call core_push_clip_rect(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
                             real(p%rect(4), real64))
@@ -1332,39 +1353,41 @@ contains
       call core_draw_line_v(real(m(1), real64), real(m(2) + 5.0_real32, real64), real(p%rect(4), real64), col)
    endif
    if (.not. has_flag(p%flags, PF_NO_MOUSE_TEXT) .and. (p%hovered .or. p%held .or. p%selecting)) then
-      s = ''
+      n = 0_int32
       do i = AX_X1, AX_X3
          if (.not. p%ax(i)%enabled) cycle
-         if (i > AX_X1) s = s//', ('
-         s = s//trim(axis_value_label(p, i, pixels_to_plot(p%ax(i), m(1))))
-         if (i > AX_X1) s = s//')'
+         if (i > AX_X1) call fmt_text(mouse_text, n, ', (')
+         call axis_value_label(p, i, pixels_to_plot(p%ax(i), m(1)), mouse_text, n)
+         if (i > AX_X1) call fmt_text(mouse_text, n, ')')
       enddo
-      s = s//', '
+      call fmt_text(mouse_text, n, ', ')
       do i = AX_Y1, AX_Y3
          if (.not. p%ax(i)%enabled) cycle
-         if (i > AX_Y1) s = s//', ('
-         s = s//trim(axis_value_label(p, i, pixels_to_plot(p%ax(i), m(2))))
-         if (i > AX_Y1) s = s//')'
+         if (i > AX_Y1) call fmt_text(mouse_text, n, ', (')
+         call axis_value_label(p, i, pixels_to_plot(p%ax(i), m(2)), mouse_text, n)
+         if (i > AX_Y1) call fmt_text(mouse_text, n, ')')
       enddo
-      call core_text_size(s, w, h)
+      call core_text_size(mouse_text(1:n), w, h)
       sz = [real(w, real32), real(h, real32)]
       pos = location_pos(p%rect, sz, LOC_SOUTH + LOC_EAST, MOUSE_POS_PADDING)
-      call core_draw_text(real(pos(1), real64), real(pos(2), real64), core_style_color(ImGuiCol_Text), s)
+      call core_draw_text(real(pos(1), real64), real(pos(2), real64), core_style_color(ImGuiCol_Text), &
+                          mouse_text(1:n))
    endif
    call core_pop_clip_rect()
    endsubroutine overlays
 
-   function axis_value_label(p, i, v) result(s)
+   subroutine axis_value_label(p, i, v, s, n)
    !< `LabelAxisValue(axis, v, round=true)`: a time axis's `TimeFormatMouseCursor`; else v rounded to the ticks'
-   !< spacing's precision, "%g".
-   type(plot_record), intent(in) :: p !< Plot.
-   integer(int32),    intent(in) :: i !< Axis.
-   real(real64),      intent(in) :: v !< Value.
-   character(len=32)             :: s !< Label.
-   real(real64)                  :: spacing !< The first two ticks' distance, or the range.
+   !< spacing's precision, "%g"; appended to s(1:n).
+   type(plot_record), intent(in)    :: p !< Plot.
+   integer(int32),    intent(in)    :: i !< Axis.
+   real(real64),      intent(in)    :: v !< Value.
+   character(len=*),  intent(inout) :: s !< Text.
+   integer(int32),    intent(inout) :: n !< Its length.
+   real(real64)                     :: spacing !< The first two ticks' distance, or the range.
 
    if (p%ax(i)%scale == SCALE_TIME) then
-      s = time_cursor_label(v, p%ax(i)%range_max - p%ax(i)%range_min, p%rect(3) - p%rect(1))
+      call time_cursor_label(v, p%ax(i)%range_max - p%ax(i)%range_min, p%rect(3) - p%rect(1), s, n)
       return
    endif
    if (ticks(i)%n > 1_int32) then
@@ -1372,8 +1395,8 @@ contains
    else
       spacing = p%ax(i)%range_max - p%ax(i)%range_min
    endif
-   s = c_real('', 0_int32, -1_int32, 'g', round_axis_value(v, spacing))
-   endfunction axis_value_label
+   call axis_value_text(v, spacing, s, n)
+   endsubroutine axis_value_label
 
    subroutine side_switch(p)
    !< `EndPlot`'s axis side switch: an axis held over the plot, dragged onto its far edge, changes side.
@@ -1436,51 +1459,33 @@ contains
    type(plot_record), intent(inout) :: p       !< Plot.
    logical                          :: can_ctx !< A menu may open.
    integer(int32)                   :: i, k    !< Axis, index on its direction.
-   character(len=16)                :: name    !< "X-Axis 2", ...
 
    call core_push_override_id(p%id)
    can_ctx = open_context .and. .not. has_flag(p%flags, PF_NO_MENUS) .and. .not. p%leg_hovered
-   if (can_ctx .and. p%hovered) call ig_open_popup('##PlotContext')
-   if (ig_begin_popup('##PlotContext')) then
+   if (can_ctx .and. p%hovered) call core_open_popup('##PlotContext')
+   if (core_begin_popup('##PlotContext')) then
       call plot_context_menu(p)
-      call ig_end_popup()
+      call core_end_popup()
    endif
    do i = 1_int32, AXES
       k = merge(i - AX_X1, i - AX_Y1, i <= AX_X3)
       call core_push_id_int(k)
       if (can_ctx .and. p%ax(i)%hovered .and. .not. has_flag(p%ax(i)%flags, AXF_NO_MENUS)) &
-         call ig_open_popup(merge('##XContext', '##YContext', i <= AX_X3))
-      if (ig_begin_popup(merge('##XContext', '##YContext', i <= AX_X3))) then
+         call core_open_popup(merge('##XContext', '##YContext', i <= AX_X3))
+      if (core_begin_popup(merge('##XContext', '##YContext', i <= AX_X3))) then
          if (has_label(p%ax(i))) then
             call core_text_unformatted(text(p%ax(i)%label_off:p%ax(i)%label_off + p%ax(i)%label_len - 1_int32))
          else
-            name = axis_menu_name(i)
-            call core_text_unformatted(trim(name))
+            call core_text_unformatted(AXIS_NAMES(i)(1:AXIS_NAMES_LEN(i)))
          endif
          call ig_separator()
          call axis_context_menu(p, i, merge(p%ax(i)%ortho, 0_int32, has_flag(p%flags, PF_EQUAL)))
-         call ig_end_popup()
+         call core_end_popup()
       endif
       call core_pop_id()
    enddo
    call core_pop_id()
    endsubroutine context_menus
-
-   function axis_menu_name(i) result(name)
-   !< "X-Axis", "X-Axis 2", "X-Axis 3", "Y-Axis", ...
-   integer(int32), intent(in) :: i    !< Axis.
-   character(len=16)          :: name !< Name.
-
-   if (i == AX_X1) then
-      name = 'X-Axis'
-   elseif (i <= AX_X3) then
-      write(name, '(A,I0)') 'X-Axis ', i - AX_X1 + 1_int32
-   elseif (i == AX_Y1) then
-      name = 'Y-Axis'
-   else
-      write(name, '(A,I0)') 'Y-Axis ', i - AX_Y1 + 1_int32
-   endif
-   endfunction axis_menu_name
 
    subroutine plot_context_menu(p)
    !< `ShowPlotContextMenu`: a menu per enabled axis, the legend's, the settings (Equal, Box Select, Title, Mouse
@@ -1488,18 +1493,16 @@ contains
    type(plot_record), intent(inout) :: p     !< Plot.
    integer(int32)                   :: i     !< Axis.
    logical                          :: v     !< A setting.
-   character(len=16)                :: name  !< An axis's menu.
 
    do i = 1_int32, AXES
       if (.not. p%ax(i)%enabled .or. has_flag(p%ax(i)%flags, AXF_NO_MENUS)) cycle
       call core_push_id_int(merge(i - AX_X1, i - AX_Y1, i <= AX_X3))
-      name = axis_menu_name(i)
       if (has_label(p%ax(i))) then
          if (ig_begin_menu(text(p%ax(i)%label_off:p%ax(i)%label_off + p%ax(i)%label_len - 1_int32))) then
             call axis_context_menu(p, i, merge(p%ax(i)%ortho, 0_int32, has_flag(p%flags, PF_EQUAL)))
             call ig_end_menu()
          endif
-      elseif (ig_begin_menu(trim(name))) then
+      elseif (ig_begin_menu(AXIS_NAMES(i)(1:AXIS_NAMES_LEN(i)))) then
          call axis_context_menu(p, i, merge(p%ax(i)%ortho, 0_int32, has_flag(p%flags, PF_EQUAL)))
          call ig_end_menu()
       endif
@@ -2115,7 +2118,7 @@ contains
    character(len=*), intent(in)    :: scale    !< 'linear', 'log', 'symlog', 'time'.
    logical,          intent(in)    :: vertical !< A y axis.
 
-   select case (trim(scale))
+   select case (scale) ! (trailing blanks ignored)
    case ('linear')
       ax%scale = SCALE_LINEAR
       ax%con_min = -huge(1.0_real64)
@@ -2804,7 +2807,7 @@ contains
                datum = ax%datum1 + pad * merge(-1.0_real32, 1.0_real32, opp)
                if (.not. t%show(k) .or. t%pix(k) < r(1) - 1.0_real32 .or. t%pix(k) > r(3) + 1.0_real32) cycle
                px = t%pix(k) - 0.5_real32 * t%label_size(1, k)
-               call core_draw_text(real(px, real64), real(datum, real64), p%col_txt, trim(t%label(k)))
+               call core_draw_text(real(px, real64), real(datum, real64), p%col_txt, t%label(k)(1:t%label_len(k)))
             enddo
          endif
       else
@@ -2825,7 +2828,7 @@ contains
                datum = ax%datum1 + pad * merge(1.0_real32, -1.0_real32, opp)
                if (.not. t%show(k) .or. t%pix(k) < r(2) - 1.0_real32 .or. t%pix(k) > r(4) + 1.0_real32) cycle
                py = t%pix(k) - 0.5_real32 * t%label_size(2, k)
-               call core_draw_text(real(datum, real64), real(py, real64), p%col_txt, trim(t%label(k)))
+               call core_draw_text(real(datum, real64), real(py, real64), p%col_txt, t%label(k)(1:t%label_len(k)))
             enddo
          endif
       endif
@@ -3076,12 +3079,13 @@ contains
    call core_draw_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
                        core_style_color(ImGuiCol_Border))
    call core_pop_clip_rect()
-   if (open_context .and. contextable .and. .not. has_flag(p%flags, PF_NO_MENUS)) call ig_open_popup('##LegendContext')
-   if (ig_begin_popup('##LegendContext')) then
+   if (open_context .and. contextable .and. .not. has_flag(p%flags, PF_NO_MENUS)) &
+      call core_open_popup('##LegendContext')
+   if (core_begin_popup('##LegendContext')) then
       call core_text_unformatted('Legend')
       call ig_separator()
       if (legend_context_menu(p, .not. has_flag(p%flags, PF_NO_LEGEND))) call flip(p%flags, PF_NO_LEGEND)
-      call ig_end_popup()
+      call core_end_popup()
    endif
    endsubroutine legend
 
@@ -3197,7 +3201,9 @@ contains
    integer(int32),   intent(in) :: col  !< Colour.
    character(len=*), intent(in) :: s    !< Text (UTF-8).
    real(real32)                 :: px, py, sc !< Pen, scale.
+   real(real32)                 :: a0, a1, b0, b1 !< A glyph's corners from the pen [pixels].
    real(real64)                 :: scale, adv, x0, y0, x1, y1, u0, v0, u1, v1 !< A glyph.
+   real(real64)                 :: qx(4), qy(4), qu(4), qv(4) !< Its quad.
    integer(int32)               :: k, c, nb !< Byte, code point, its bytes.
    logical                      :: found !< A glyph.
 
@@ -3210,12 +3216,29 @@ contains
       call core_font_glyph(c, found, scale, adv, x0, y0, x1, y1, u0, v0, u1, v1)
       if (.not. found) cycle
       sc = real(scale, real32)
-      call core_draw_quad_uv(real([px + real(y0, real32) * sc, px + real(y0, real32) * sc,                    &
-                                   px + real(y1, real32) * sc, px + real(y1, real32) * sc], real64),          &
-                             real([py + (-real(x0, real32)) * sc, py + (-real(x1, real32)) * sc,             &
-                                   py + (-real(x1, real32)) * sc, py + (-real(x0, real32)) * sc], real64),    &
-                             [u0, u1, u1, u0], [v0, v0, v1, v1], col)
-      py = py - real(adv, real32) * sc
+      a0 = real(y0, real32) * sc ! the products apart (nvfortran's FMA), the quad in fixed arrays (no constructor)
+      a1 = real(y1, real32) * sc
+      b0 = (-real(x0, real32)) * sc
+      b1 = (-real(x1, real32)) * sc
+      qx(1) = real(px + a0, real64)
+      qx(2) = real(px + a0, real64)
+      qx(3) = real(px + a1, real64)
+      qx(4) = real(px + a1, real64)
+      qy(1) = real(py + b0, real64)
+      qy(2) = real(py + b1, real64)
+      qy(3) = real(py + b1, real64)
+      qy(4) = real(py + b0, real64)
+      qu(1) = u0
+      qu(2) = u1
+      qu(3) = u1
+      qu(4) = u0
+      qv(1) = v0
+      qv(2) = v0
+      qv(3) = v1
+      qv(4) = v1
+      call core_draw_quad_uv(qx, qy, qu, qv, col)
+      a0 = real(adv, real32) * sc
+      py = py - a0
    enddo
    endsubroutine text_vertical
 

@@ -22,28 +22,29 @@ module figure_plot_locators
 !< - the transforms of `SetupAxisScale` (`TransformForward_Log10`, `TransformInverse_Log10`, `TransformForward_SymLog`,
 !<   `TransformInverse_SymLog`): log10 of max(v, DBL_MIN), 2 asinh(v/2).
 !<
-!< Labels: `Formatter_Default` with "%g" (foresight's `c_real`, glibc's output) for linear, log and symlog axes, only on
+!< Labels: `Formatter_Default` with "%g" (figure_plot_format, glibc's output) for linear, log and symlog axes, only on
 !< the ticks shown (`AddTick(..., show_label, ...)`: a log axis's minors have none); the size of each label from the
 !< caller's `text_measure` (Dear ImGui's `CalcTextSize` in the frame), which the time locator also asks for the width
 !< of its formats (`GetDateTimeWidth`). The ticks are appended to a `plot_ticks` (ImPlotTicker): grown when needed, kept
-!< between frames (no allocation per frame).
+!< between frames; each label written into its fixed slot (31 characters at most, as ImPlot's `snprintf` into
+!< `IMPLOT_LABEL_MAX_SIZE` bytes) with its length, and passed on as a substring: no allocation per frame (ADR 0001).
 !<
 !< Bit for bit: `pow`, `log10`, `asinh` and `sinh` are the C library's (bound, as ImPlot calls them: glibc's
 !< `pow(10, e)` is not correctly rounded at e = 23 and 210, and nvfortran's own differ); the products added to another
 !< term are computed in a statement of their own (nvfortran -O2 fuses `a*b + c` into an FMA, ImPlot's build does not).
 use, intrinsic :: iso_c_binding, only : c_double
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use foresight_format, only : c_real, split_format
+use figure_plot_format, only : plot_format, fmt_g, fmt_int, fmt_real, fmt_text
 
 implicit none
 private
 public :: plot_ticks, text_measure, ticks_reset
 public :: locate_default, locate_log10, locate_symlog, locate_time
 public :: transform_log10, inverse_log10, transform_symlog, inverse_symlog
-public :: nice_num, pow10, c_floor, c_ceil, round_axis_value, time_cursor_label
+public :: nice_num, pow10, c_floor, c_ceil, round_axis_value, time_cursor_label, axis_value_text
 public :: TICK_LABEL_LEN, TIME_MIN, TIME_MAX
 
-integer(int32), parameter :: TICK_LABEL_LEN = 32_int32     !< IMPLOT_LABEL_MAX_SIZE.
+integer(int32), parameter :: TICK_LABEL_LEN = 31_int32     !< IMPLOT_LABEL_MAX_SIZE less its NUL.
 real(real64),   parameter :: TIME_MIN = 0.0_real64         !< IMPLOT_MIN_TIME.
 real(real64),   parameter :: TIME_MAX = 32503680000.0_real64 !< IMPLOT_MAX_TIME.
 real(real32),   parameter :: TICK_FILL_X = 0.8_real32      !< Labels may fill this much of an x axis.
@@ -95,7 +96,8 @@ type :: plot_ticks
    logical,                       allocatable :: major(:)                  !< A major tick.
    logical,                       allocatable :: show(:)                   !< Its label shown.
    integer(int32),                allocatable :: level(:)                  !< Its label's level (0, 1).
-   character(len=TICK_LABEL_LEN), allocatable :: label(:)                  !< Label.
+   character(len=TICK_LABEL_LEN), allocatable :: label(:)                  !< Label (its first `label_len`).
+   integer(int32),                allocatable :: label_len(:)              !< Its length.
    real(real32)                               :: max_size(2) = 0.0_real32  !< The largest label shown.
 endtype plot_ticks
 
@@ -184,10 +186,11 @@ contains
    t%level(k) = level
    t%show(k) = show
    t%label_size(:, k) = 0.0_real32
-   t%label(k) = ''
+   t%label_len(k) = 0_int32
    if (show) then
-      t%label(k) = label
-      call measure(trim(t%label(k)), t%label_size(1, k), t%label_size(2, k))
+      t%label_len(k) = min(len(label, kind=int32), TICK_LABEL_LEN)
+      t%label(k)(1:t%label_len(k)) = label(1:t%label_len(k))
+      call measure(t%label(k)(1:t%label_len(k)), t%label_size(1, k), t%label_size(2, k))
       t%max_size(1) = merge(t%label_size(1, k), t%max_size(1), t%label_size(1, k) > t%max_size(1))
       t%max_size(2) = merge(t%label_size(2, k), t%max_size(2), t%label_size(2, k) > t%max_size(2))
    endif
@@ -201,12 +204,12 @@ contains
    real(real64),                  allocatable :: pos(:)          !< New storage.
    real(real32),                  allocatable :: pix(:), ls(:,:) !< ...
    logical,                       allocatable :: major(:), show(:) !< ...
-   integer(int32),                allocatable :: level(:)        !< ...
+   integer(int32),                allocatable :: level(:), label_len(:) !< ...
    character(len=TICK_LABEL_LEN), allocatable :: label(:)        !< ...
    integer(int32)                             :: n     !< Ticks held.
 
    n = t%n
-   allocate(pos(m), pix(m), ls(2, m), major(m), show(m), level(m), label(m))
+   allocate(pos(m), pix(m), ls(2, m), major(m), show(m), level(m), label(m), label_len(m))
    if (n > 0_int32) then
       pos(1:n) = t%pos(1:n)
       pix(1:n) = t%pix(1:n)
@@ -215,6 +218,7 @@ contains
       show(1:n) = t%show(1:n)
       level(1:n) = t%level(1:n)
       label(1:n) = t%label(1:n)
+      label_len(1:n) = t%label_len(1:n)
    endif
    call move_alloc(pos, t%pos)
    call move_alloc(pix, t%pix)
@@ -223,30 +227,37 @@ contains
    call move_alloc(show, t%show)
    call move_alloc(level, t%level)
    call move_alloc(label, t%label)
+   call move_alloc(label_len, t%label_len)
    endsubroutine grow
 
-   function label_g(v) result(s)
-   !< `Formatter_Default` with "%g".
-   real(real64), intent(in)      :: v !< Value.
-   character(len=TICK_LABEL_LEN) :: s !< Label.
+   subroutine add_tick_g(t, v, major, measure)
+   !< `AddTick` of a labelled tick, `Formatter_Default` with "%g".
+   type(plot_ticks),       intent(inout) :: t       !< Ticks.
+   real(real64),           intent(in)    :: v       !< Value.
+   logical,                intent(in)    :: major   !< A major tick.
+   procedure(text_measure)               :: measure !< Text sizes.
+   character(len=TICK_LABEL_LEN)         :: s       !< Label.
+   integer(int32)                        :: n       !< Its length.
 
-   s = c_real('', 0_int32, -1_int32, 'g', v)
-   endfunction label_g
+   n = 0_int32
+   call fmt_g(s, n, v)
+   call add_tick(t, v, major, 0_int32, .true., s(1:n), measure)
+   endsubroutine add_tick_g
 
    ! the linear locator
 
    subroutine locate_default(t, rmin, rmax, pixels, vertical, measure, fmt)
    !< `Locator_Default`: the ticks of a linear range on an axis `pixels` long, labelled by `fmt` (a C printf format of
-   !< one real: `Formatter_Default`; default "%g").
+   !< one real, parsed: `Formatter_Default`; default "%g").
    type(plot_ticks),       intent(inout)        :: t          !< Ticks (appended).
    real(real64),           intent(in)           :: rmin, rmax !< Range.
    real(real32),           intent(in)           :: pixels     !< Axis's length [pixels].
    logical,                intent(in)           :: vertical   !< A y axis.
    procedure(text_measure)                      :: measure    !< Text sizes.
-   character(len=*),       intent(in), optional :: fmt        !< Label format.
-   character(len=:), allocatable         :: prefix, flags, suffix, message !< The format's parts.
-   character(len=1)                      :: ctype      !< Its conversion.
-   integer(int32)                        :: width, prec !< Its width and precision.
+   type(plot_format),      intent(in), optional :: fmt        !< Label format.
+   type(plot_format)                     :: f          !< The format ("%g" unless given).
+   character(len=TICK_LABEL_LEN)         :: s          !< A label.
+   integer(int32)                        :: ns         !< Its length.
    integer(int32)                        :: n_major    !< Majors wanted.
    real(real64)                          :: nice_range, interval, magnitude, min_interval !< The step.
    real(real64)                          :: graphmin, graphmax !< The majors' span.
@@ -257,16 +268,7 @@ contains
    integer(int32)                        :: i          !< Counter.
 
    if (rmin == rmax) return
-   if (present(fmt)) then
-      call split_format(fmt, prefix, flags, width, prec, ctype, suffix, message)
-   else
-      prefix = ''
-      flags = ''
-      suffix = ''
-      width = 0_int32
-      prec = -1_int32
-      ctype = 'g'
-   endif
+   if (present(fmt)) f = fmt
    n_major = max(2_int32, int(real(int(pixels / merge(300.0_real32, 400.0_real32, vertical) + 0.5_real32, int32), &
                                   real32), int32))
    nice_range = nice_num((rmax - rmin) * 0.99_real64, .false.)
@@ -284,14 +286,17 @@ contains
       if (major - interval < 0.0_real64 .and. major + interval > 0.0_real64) major = 0.0_real64
       if (major >= rmin .and. major <= rmax) then
          if (first == 0_int32) first = t%n + 1_int32
-         call add_tick(t, major, .true., 0_int32, .true., prefix//c_real(flags, width, prec, ctype, major)//suffix, &
-                       measure, total)
+         ns = 0_int32
+         call fmt_real(s, ns, f, major)
+         call add_tick(t, major, .true., 0_int32, .true., s(1:ns), measure, total)
       endif
       do i = 1_int32, N_MINOR - 1_int32
          minor = major + real(i, real64) * interval / real(N_MINOR, real64)
-         if (minor >= rmin .and. minor <= rmax) &
-            call add_tick(t, minor, .false., 0_int32, .true., &
-                          prefix//c_real(flags, width, prec, ctype, minor)//suffix, measure, total)
+         if (minor >= rmin .and. minor <= rmax) then
+            ns = 0_int32
+            call fmt_real(s, ns, f, minor)
+            call add_tick(t, minor, .false., 0_int32, .true., s(1:ns), measure, total)
+         endif
       enddo
       major = major + interval
    enddo
@@ -366,7 +371,7 @@ contains
       major2 = sgn * pow10(e + 1_int32)
       interval = (major2 - major1) / 9.0_real64
       if (major1 >= rmin - epsilon(1.0_real64) .and. major1 <= rmax + epsilon(1.0_real64)) &
-         call add_tick(t, major1, .true., 0_int32, .true., label_g(major1), measure)
+         call add_tick_g(t, major1, .true., measure)
       do j = 0_int32, exp_step - 1_int32
          major1 = sgn * pow10(e + j)
          major2 = sgn * pow10(e + j + 1_int32)
@@ -416,7 +421,7 @@ contains
       pix_n1 = symlog_pixel(-1.0_real64, rmin, rmax, pixels)
       call log_exponents(1.0_real64, rmax, abs(pixels - pix_p1), vertical, exp_min_p, exp_max_p, exp_step_p, ok)
       call log_exponents(rmin, -1.0_real64, abs(pix_n1 - 0.0_real32), vertical, exp_min_n, exp_max_n, exp_step_n, ok)
-      call add_tick(t, 0.0_real64, .true., 0_int32, .true., label_g(0.0_real64), measure)
+      call add_tick_g(t, 0.0_real64, .true., measure)
       call log_ticks(t, 1.0_real64, rmax, exp_min_p, exp_max_p, max(exp_step_n, exp_step_p), measure)
       call log_ticks(t, rmin, -1.0_real64, exp_min_n, exp_max_n, max(exp_step_n, exp_step_p), measure)
    else
@@ -501,6 +506,7 @@ contains
    integer(int32)                :: year_min, year_max, graphmin, graphmax, y !< Years.
    real(real64)                  :: nice_range, interval !< The years' step.
    character(len=TICK_LABEL_LEN) :: lab, last          !< Labels.
+   integer(int32)                :: nlab, nlast        !< Their lengths.
    logical                       :: h24, iso, has_last !< Options, a major labelled before.
 
    h24 = .false.
@@ -516,7 +522,7 @@ contains
    t_min = time_from_double(rmin)
    t_max = time_from_double(rmax)
    has_last = .false.
-   last = ''
+   nlast = 0_int32
    if (unit0 /= TU_YR) then
       pix_per_major_div = pixels / real((rmax - rmin) / TIME_UNIT_SPANS(unit1), real32)
       w0 = format_width(fmt0, h24, iso, measure)
@@ -528,17 +534,21 @@ contains
       do while (time_lt(t1, t_max))
          t2 = add_time(t1, unit1, 1_int32)
          if (time_le(t_min, t1) .and. time_le(t1, t_max)) then
-            call add_tick(t, time_to_double(t1), .true., 0_int32, .true., date_time_label(t1, fmt0, h24, iso), measure)
+            nlab = 0_int32
+            call date_time_text(t1, fmt0, h24, iso, lab, nlab)
+            call add_tick(t, time_to_double(t1), .true., 0_int32, .true., lab(1:nlab), measure)
+            nlab = 0_int32
             if (has_last) then
-               lab = date_time_label(t1, fmt1, h24, iso)
+               call date_time_text(t1, fmt1, h24, iso, lab, nlab)
             else
-               lab = date_time_label(t1, fmtf, h24, iso)
+               call date_time_text(t1, fmtf, h24, iso, lab, nlab)
             endif
-            call add_tick(t, time_to_double(t1), .true., 1_int32, .true., lab, measure)
+            call add_tick(t, time_to_double(t1), .true., 1_int32, .true., lab(1:nlab), measure)
             if (has_last) then
-               if (label_same(last, lab)) t%show(t%n) = .false.
+               if (label_same(last(1:nlast), lab(1:nlab))) t%show(t%n) = .false.
             endif
-            last = lab
+            last(1:nlab) = lab(1:nlab)
+            nlast = nlab
             has_last = .true.
          endif
          if (minor_per_major > 1_int32 .and. (time_le(t_min, t2) .and. time_le(t1, t_max))) then
@@ -546,12 +556,15 @@ contains
             do while (time_lt(t12, t2))
                px_to_t2 = real(time_to_double(time_sub(t2, t12)) / (rmax - rmin), real32) * pixels
                if (time_le(t_min, t12) .and. time_le(t12, t_max)) then
-                  call add_tick(t, time_to_double(t12), .false., 0_int32, px_to_t2 >= w0, &
-                                date_time_label(t12, fmt0, h24, iso), measure)
+                  nlab = 0_int32
+                  call date_time_text(t12, fmt0, h24, iso, lab, nlab)
+                  call add_tick(t, time_to_double(t12), .false., 0_int32, px_to_t2 >= w0, lab(1:nlab), measure)
                   if (.not. has_last .and. px_to_t2 >= w0 .and. px_to_t2 >= (w1 + wf) / 2.0_real32) then
-                     lab = date_time_label(t12, fmtf, h24, iso)
-                     call add_tick(t, time_to_double(t12), .true., 1_int32, .true., lab, measure)
-                     last = lab
+                     nlab = 0_int32
+                     call date_time_text(t12, fmtf, h24, iso, lab, nlab)
+                     call add_tick(t, time_to_double(t12), .true., 1_int32, .true., lab(1:nlab), measure)
+                     last(1:nlab) = lab(1:nlab)
+                     nlast = nlab
                      has_last = .true.
                   endif
                endif
@@ -573,10 +586,11 @@ contains
       y = graphmin
       do while (y < graphmax)
          t1 = make_time(y, 0_int32, 1_int32, 0_int32, 0_int32, 0_int32, 0_int32)
-         if (time_le(t_min, t1) .and. time_le(t1, t_max)) &
-            call add_tick(t, time_to_double(t1), .true., 0_int32, .true., &
-                          date_time_label(t1, FMT_LEVEL0(:, TU_YR), h24, iso), &
-                          measure)
+         if (time_le(t_min, t1) .and. time_le(t1, t_max)) then
+            nlab = 0_int32
+            call date_time_text(t1, FMT_LEVEL0(:, TU_YR), h24, iso, lab, nlab)
+            call add_tick(t, time_to_double(t1), .true., 0_int32, .true., lab(1:nlab), measure)
+         endif
          y = y + step
       enddo
    endif
@@ -589,9 +603,13 @@ contains
    procedure(text_measure)            :: measure  !< Text sizes.
    real(real32)                       :: w        !< Width [pixels].
    real(real32)                       :: h        !< Height [pixels].
+   character(len=TICK_LABEL_LEN)      :: s        !< The label.
+   integer(int32)                     :: n        !< Its length.
 
-   call measure(trim(date_time_label(make_time(2888_int32, 12_int32, 22_int32, 12_int32, 58_int32, 58_int32, &
-                                               888888_int32), fmt, h24, iso)), w, h)
+   n = 0_int32
+   call date_time_text(make_time(2888_int32, 12_int32, 22_int32, 12_int32, 58_int32, 58_int32, 888888_int32), fmt, &
+                       h24, iso, s, n)
+   call measure(s(1:n), w, h)
    endfunction format_width
 
    pure function unit_for_range(r) result(u)
@@ -657,8 +675,8 @@ contains
    logical                      :: same   !< Same ending.
    integer(int32)               :: n1, n2, n !< Lengths.
 
-   n1 = len_trim(l1, kind=int32)
-   n2 = len_trim(l2, kind=int32)
+   n1 = len(l1, kind=int32)
+   n2 = len(l2, kind=int32)
    n = min(n1, n2)
    same = l1(n1 - n + 1_int32:n1) == l2(n2 - n + 1_int32:n2)
    endfunction label_same
@@ -913,51 +931,69 @@ contains
    r = add_time(floor_time(t, unit), unit, 1_int32)
    endfunction ceil_time
 
-   function date_time_label(t, fmt, h24, iso) result(s)
-   !< `FormatDateTime`: the date, a blank and the time, as the formats ask (`FormatDate`, `FormatTime`).
-   type(plot_time), intent(in)   :: t      !< Time.
-   integer(int32),  intent(in)   :: fmt(2) !< (ImPlotDateFmt, ImPlotTimeFmt).
-   logical,         intent(in)   :: h24    !< 24-hour clock.
-   logical,         intent(in)   :: iso    !< ISO 8601 dates.
-   character(len=TICK_LABEL_LEN) :: s      !< Label.
-   character(len=TICK_LABEL_LEN) :: d, c   !< Date, clock.
-   integer(int32)                :: year, mon, mday, hour, minute, sec, ms, us, hr !< Calendar.
-   character(len=2)              :: ap     !< am/pm.
+   pure subroutine date_time_text(t, fmt, h24, iso, s, n)
+   !< `FormatDateTime`: the date, a blank and the time, as the formats ask (`FormatDate`, `FormatTime`), appended to
+   !< s(1:n) (figure_plot_format: no allocation).
+   type(plot_time),  intent(in)    :: t      !< Time.
+   integer(int32),   intent(in)    :: fmt(2) !< (ImPlotDateFmt, ImPlotTimeFmt).
+   logical,          intent(in)    :: h24    !< 24-hour clock.
+   logical,          intent(in)    :: iso    !< ISO 8601 dates.
+   character(len=*), intent(inout) :: s      !< Label.
+   integer(int32),   intent(inout) :: n      !< Its length.
+   integer(int32)                  :: year, mon, mday, hour, minute, sec, ms, us, hr !< Calendar.
+   character(len=2)                :: ap     !< am/pm.
 
    call gm_time(t%s, year, mon, mday, hour, minute, sec)
    us = mod(t%us, 1000_int32)
    ms = t%us / 1000_int32
-   d = ''
-   c = ''
    if (iso) then
       select case (fmt(1))
-      case (DF_DAY_MO)
-         write(d, '(A,I2.2,A,I2.2)') '--', mon + 1_int32, '-', mday
-      case (DF_DAY_MO_YR)
-         write(d, '(I0,A,I2.2,A,I2.2)') year, '-', mon + 1_int32, '-', mday
-      case (DF_MO_YR)
-         write(d, '(I0,A,I2.2)') year, '-', mon + 1_int32
-      case (DF_MO)
-         write(d, '(A,I2.2)') '--', mon + 1_int32
-      case (DF_YR)
-         write(d, '(I0)') year
+      case (DF_DAY_MO) ! --%02d-%02d
+         call fmt_text(s, n, '--')
+         call fmt_int(s, n, mon + 1_int32, 2_int32)
+         call fmt_text(s, n, '-')
+         call fmt_int(s, n, mday, 2_int32)
+      case (DF_DAY_MO_YR) ! %d-%02d-%02d
+         call fmt_int(s, n, year)
+         call fmt_text(s, n, '-')
+         call fmt_int(s, n, mon + 1_int32, 2_int32)
+         call fmt_text(s, n, '-')
+         call fmt_int(s, n, mday, 2_int32)
+      case (DF_MO_YR) ! %d-%02d
+         call fmt_int(s, n, year)
+         call fmt_text(s, n, '-')
+         call fmt_int(s, n, mon + 1_int32, 2_int32)
+      case (DF_MO) ! --%02d
+         call fmt_text(s, n, '--')
+         call fmt_int(s, n, mon + 1_int32, 2_int32)
+      case (DF_YR) ! %d
+         call fmt_int(s, n, year)
       case default
       endselect
    else
       select case (fmt(1))
-      case (DF_DAY_MO)
-         write(d, '(I0,A,I0)') mon + 1_int32, '/', mday
-      case (DF_DAY_MO_YR)
-         write(d, '(I0,A,I0,A,I2.2)') mon + 1_int32, '/', mday, '/', mod(year, 100_int32)
-      case (DF_MO_YR)
-         write(d, '(A,A,I0)') MONTH_ABRVS(mon), ' ', year
-      case (DF_MO)
-         d = MONTH_ABRVS(mon)
-      case (DF_YR)
-         write(d, '(I0)') year
+      case (DF_DAY_MO) ! %d/%d
+         call fmt_int(s, n, mon + 1_int32)
+         call fmt_text(s, n, '/')
+         call fmt_int(s, n, mday)
+      case (DF_DAY_MO_YR) ! %d/%d/%02d
+         call fmt_int(s, n, mon + 1_int32)
+         call fmt_text(s, n, '/')
+         call fmt_int(s, n, mday)
+         call fmt_text(s, n, '/')
+         call fmt_int(s, n, mod(year, 100_int32), 2_int32)
+      case (DF_MO_YR) ! %s %d
+         call fmt_text(s, n, MONTH_ABRVS(mon))
+         call fmt_text(s, n, ' ')
+         call fmt_int(s, n, year)
+      case (DF_MO) ! %s
+         call fmt_text(s, n, MONTH_ABRVS(mon))
+      case (DF_YR) ! %d
+         call fmt_int(s, n, year)
       case default
       endselect
    endif
+   if (fmt(1) /= DF_NONE .and. fmt(2) /= TF_NONE) call fmt_text(s, n, ' ')
    if (h24) then
       hr = hour
       ap = ''
@@ -966,50 +1002,64 @@ contains
       ap = merge('am', 'pm', hour < 12_int32)
    endif
    select case (fmt(2))
-   case (TF_US)
-      write(c, '(A,I3.3,A,I3.3)') '.', ms, ' ', us
-   case (TF_SUS)
-      write(c, '(A,I2.2,A,I3.3,A,I3.3)') ':', sec, '.', ms, ' ', us
-   case (TF_SMS)
-      write(c, '(A,I2.2,A,I3.3)') ':', sec, '.', ms
-   case (TF_S)
-      write(c, '(A,I2.2)') ':', sec
-   case (TF_MIN_SMS)
-      write(c, '(A,I2.2,A,I2.2,A,I3.3)') ':', minute, ':', sec, '.', ms
-   case (TF_HR_MIN_SMS)
+   case (TF_US) ! .%03d %03d
+      call fmt_text(s, n, '.')
+      call fmt_int(s, n, ms, 3_int32)
+      call fmt_text(s, n, ' ')
+      call fmt_int(s, n, us, 3_int32)
+   case (TF_SUS) ! :%02d.%03d %03d
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, sec, 2_int32)
+      call fmt_text(s, n, '.')
+      call fmt_int(s, n, ms, 3_int32)
+      call fmt_text(s, n, ' ')
+      call fmt_int(s, n, us, 3_int32)
+   case (TF_SMS) ! :%02d.%03d
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, sec, 2_int32)
+      call fmt_text(s, n, '.')
+      call fmt_int(s, n, ms, 3_int32)
+   case (TF_S) ! :%02d
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, sec, 2_int32)
+   case (TF_MIN_SMS) ! :%02d:%02d.%03d
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, minute, 2_int32)
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, sec, 2_int32)
+      call fmt_text(s, n, '.')
+      call fmt_int(s, n, ms, 3_int32)
+   case (TF_HR_MIN_SMS) ! %02d:%02d:%02d.%03d (24h), %d:%02d:%02d.%03d%s
+      call fmt_int(s, n, hr, merge(2_int32, 1_int32, h24))
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, minute, 2_int32)
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, sec, 2_int32)
+      call fmt_text(s, n, '.')
+      call fmt_int(s, n, ms, 3_int32)
+      if (.not. h24) call fmt_text(s, n, ap)
+   case (TF_HR_MIN_S) ! %02d:%02d:%02d (24h), %d:%02d:%02d%s
+      call fmt_int(s, n, hr, merge(2_int32, 1_int32, h24))
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, minute, 2_int32)
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, sec, 2_int32)
+      if (.not. h24) call fmt_text(s, n, ap)
+   case (TF_HR_MIN) ! %02d:%02d (24h), %d:%02d%s
+      call fmt_int(s, n, hr, merge(2_int32, 1_int32, h24))
+      call fmt_text(s, n, ':')
+      call fmt_int(s, n, minute, 2_int32)
+      if (.not. h24) call fmt_text(s, n, ap)
+   case (TF_HR) ! %02d:00 (24h), %d%s
+      call fmt_int(s, n, hr, merge(2_int32, 1_int32, h24))
       if (h24) then
-         write(c, '(I2.2,A,I2.2,A,I2.2,A,I3.3)') hr, ':', minute, ':', sec, '.', ms
+         call fmt_text(s, n, ':00')
       else
-         write(c, '(I0,A,I2.2,A,I2.2,A,I3.3,A)') hr, ':', minute, ':', sec, '.', ms, ap
-      endif
-   case (TF_HR_MIN_S)
-      if (h24) then
-         write(c, '(I2.2,A,I2.2,A,I2.2)') hr, ':', minute, ':', sec
-      else
-         write(c, '(I0,A,I2.2,A,I2.2,A)') hr, ':', minute, ':', sec, ap
-      endif
-   case (TF_HR_MIN)
-      if (h24) then
-         write(c, '(I2.2,A,I2.2)') hr, ':', minute
-      else
-         write(c, '(I0,A,I2.2,A)') hr, ':', minute, ap
-      endif
-   case (TF_HR)
-      if (h24) then
-         write(c, '(I2.2,A)') hr, ':00'
-      else
-         write(c, '(I0,A)') hr, ap
+         call fmt_text(s, n, ap)
       endif
    case default
    endselect
-   if (fmt(1) /= DF_NONE .and. fmt(2) /= TF_NONE) then
-      s = trim(d)//' '//trim(c)
-   elseif (fmt(1) /= DF_NONE) then
-      s = d
-   else
-      s = c
-   endif
-   endfunction date_time_label
+   endsubroutine date_time_text
 
    ! the mouse text (LabelAxisValue)
 
@@ -1031,17 +1081,37 @@ contains
    r = c_floor(x) / pw
    endfunction round_axis_value
 
-   function time_cursor_label(v, span, width) result(s)
+   subroutine time_cursor_label(v, span, width, s, n)
    !< `LabelAxisValue` of a time axis: `FormatDateTime` of v with `TimeFormatMouseCursor`, the unit of the range per
-   !< 100 pixels of the plot's width (ImPlot's defaults: 12-hour clock, not ISO 8601, UTC).
-   real(real64), intent(in)      :: v     !< Value [s].
-   real(real64), intent(in)      :: span  !< The axis's range [s].
-   real(real32), intent(in)      :: width !< The plot's width [pixels].
-   character(len=TICK_LABEL_LEN) :: s     !< Label.
+   !< 100 pixels of the plot's width (ImPlot's defaults: 12-hour clock, not ISO 8601, UTC), appended to s(1:n).
+   real(real64),     intent(in)    :: v     !< Value [s].
+   real(real64),     intent(in)    :: span  !< The axis's range [s].
+   real(real32),     intent(in)    :: width !< The plot's width [pixels].
+   character(len=*), intent(inout) :: s     !< Text.
+   integer(int32),   intent(inout) :: n     !< Its length.
+   character(len=TICK_LABEL_LEN)   :: lab   !< The label (ImPlot's 32-byte buffer).
+   integer(int32)                  :: nl    !< Its length.
 
-   s = date_time_label(time_from_double(v), FMT_CURSOR(:, unit_for_range(span / real(width / 100.0_real32, real64))), &
-                       .false., .false.)
-   endfunction time_cursor_label
+   nl = 0_int32
+   call date_time_text(time_from_double(v), FMT_CURSOR(:, unit_for_range(span / real(width / 100.0_real32, real64))), &
+                       .false., .false., lab, nl)
+   call fmt_text(s, n, lab(1:nl))
+   endsubroutine time_cursor_label
+
+   subroutine axis_value_text(v, spacing, s, n)
+   !< `LabelAxisValue(axis, v, round=true)` of an axis labelled "%g": v rounded to the precision of the ticks'
+   !< spacing, appended to s(1:n) (ImPlot's 32-byte buffer).
+   real(real64),     intent(in)    :: v       !< Value.
+   real(real64),     intent(in)    :: spacing !< The first two ticks' distance, or the range.
+   character(len=*), intent(inout) :: s       !< Text.
+   integer(int32),   intent(inout) :: n       !< Its length.
+   character(len=TICK_LABEL_LEN)   :: lab     !< The label.
+   integer(int32)                  :: nl      !< Its length.
+
+   nl = 0_int32
+   call fmt_g(lab, nl, round_axis_value(v, spacing))
+   call fmt_text(s, n, lab(1:nl))
+   endsubroutine axis_value_text
 
    ! numerics shared with the linear locator
 

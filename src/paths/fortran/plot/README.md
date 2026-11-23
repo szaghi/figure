@@ -13,8 +13,8 @@ program, and compare the two pictures (`test_compare_image`, threshold 2).
 **Ticks (the owner's choice (a), 2026-11-22):** the frame places ticks as ImPlot's `Locator_Default` does (the major
 count from the axis length, `NiceNum`, ten labelled minors per major, the labels thinned when they overflow), so the
 goldens stay. foresight's locator (gnuplot's: the step from the range alone) gives other ticks on every axis probed;
-adopting it later is its own change, with regenerated goldens. Labels: foresight's printf formatter, checked equal to
-C's `%g` on the labels the goldens show.
+adopting it later is its own change, with regenerated goldens. Labels: `figure_plot_format`, a printf of one real
+without allocation (glibc's output; at first foresight's `c_real`, which it reproduces with fixed buffers).
 
 ## Status
 
@@ -105,6 +105,20 @@ C's `%g` on the labels the goldens show.
   an axis hovered, the context menu and its Crosshairs): the state of every frame (ranges, hover, pointer,
   selection) equal to the bit, pictures at threshold 2 (three compilers). Not yet: the time axes' pickers in their
   menu, `GetPlotSize`, `ImPlotInputMap` other than the default.
+- 2026-11-22, labels without an allocation (P10 step 9, ADR 0001): `figure_plot_format` writes every label into a
+  caller's buffer (`fmt_parse` a printf format of one real into a `plot_format`, once per call; `fmt_real`, glibc's
+  conversion from the exact binary value in fixed work arrays, rounded half to even, equal to `snprintf` on 10^6
+  doubles and the specials in 22 formats on the three compilers; `fmt_int`, `fmt_text`); the ticks keep their labels
+  in 31-character slots with their lengths (ImPlot's `IMPLOT_LABEL_MAX_SIZE`), dates and times are written without
+  internal `write`, the mouse text goes into a fixed buffer, the popups declared every frame through figure_core's new
+  `core_open_popup`, `core_begin_popup`, `core_end_popup`, figure_core's texts copied into its buffer without a
+  concatenation, the quads built in fixed arrays (nvfortran allocated the array constructors: 1646 allocations a
+  frame). `figure_test_plot_frame_alloc` counts the allocations of a frame of a plot with every per-frame string on
+  (title, axis labels, log, time, symlog and linear axes, a legend of four, the mouse text, a colour bar with a format)
+  through the C library's allocator entry points defined in the test (figure_test_plot_alloc_counter: every
+  allocation of the thread, the Fortran run-time's, Dear ImGui's, C++'s, with a control proving it sees them): 0 on
+  ten frames after twenty (gfortran had 1146 a frame before), the pictures equal to ImPlot's (three compilers). Not
+  yet: an open context menu's widgets (src/lib) allocate while it is open.
 
 ## What the current seam calls, to replace
 

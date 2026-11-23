@@ -29,7 +29,8 @@ module figure_core
 !<   `core_window_hovered`, `core_set_key_owner`, `core_set_mouse_cursor`; IDs `core_push_override_id`,
 !<   `core_push_id_int`; ImPlot's menu widgets as it calls them (`core_push_item_width` without a FIGURE scope,
 !<   `core_push_item_flag`, `core_push_style_var`, `core_drag_double`, `core_radio_button`, `core_invisible_button`,
-!<   `core_text_unformatted`);
+!<   `core_text_unformatted`; P10 step 9: `core_open_popup`, `core_begin_popup`, `core_end_popup`, the popups ImPlot
+!<   declares every frame, without the allocations of src/lib's `ig_*_popup` and their scope record);
 !<   a glyph of the current font at its size (`core_font_glyph`: `GetFontBaked`, `FindGlyph`), for text drawn glyph by
 !<   glyph (ImPlot's vertical text); a rectangle of four corner colours (`core_draw_rect_filled_multicolor`:
 !<   `AddRectFilledMultiColor`, ImPlot's colour bars).
@@ -41,8 +42,8 @@ module figure_core
 !< so the order of the primitives is the order of the calls. Coordinates are screen pixels (`real(real64)`, as the
 !< public API's); colours are packed `ImU32` in an `integer(int32)`, red in the low byte (`core_color`).
 !<
-!< No allocation per item: text and IDs go through a buffer of the module (NUL-terminated copies; a longer text gets
-!< an allocated copy).
+!< No allocation per item: text and IDs go through a buffer of the module (NUL-terminated copies, `to_buf`, no
+!< concatenation; a text longer than the buffer gets an allocated copy).
 use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_double, c_f_pointer, c_float, c_funptr, c_int, &
                                          c_int16_t, c_int32_t, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64
@@ -55,7 +56,7 @@ use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextS
                           igInvisibleButton, igIsMouseDoubleClicked_Nil, igIsMousePosValid, igIsWindowHovered,         &
                           igPopItemFlag, igPopStyleVar, igPushID_Int, igPushItemFlag, igPushItemWidth,                 &
                           igPushStyleVar_Float, igPushStyleVar_Vec2, igRadioButton_Bool, igSetMouseCursor,             &
-                          igTextUnformatted
+                          igTextUnformatted, igBeginPopup, igEndPopup, igOpenPopup_Str
 use figure_cimgui_enums, only : ImDrawFlags_Closed, ImGuiDataType_Double_ => ImGuiDataType_Double
 use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,                                         &
                                figure_ImDrawList_append, figure_ImDrawList_shared, igButtonBehavior, igGetActiveID,         &
@@ -86,6 +87,7 @@ public :: core_io_input, core_mouse_drag_delta, core_mouse_double_clicked, core_
 public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core_push_id_int
 public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
+public :: core_open_popup, core_begin_popup, core_end_popup
 public :: core_draw_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
@@ -204,7 +206,7 @@ contains
    character(kind=c_char, len=:), allocatable :: long !< A label longer than the buffer.
 
    if (len(label) <= BUF_LEN) then
-      buf(1:len(label) + 1) = label//c_null_char
+      call to_buf(label)
       id = int(igGetID_Str(buf), int32)
    else
       long = label//c_null_char
@@ -218,7 +220,7 @@ contains
    character(kind=c_char, len=:), allocatable :: long !< A label longer than the buffer.
 
    if (len(label) <= BUF_LEN) then
-      buf(1:len(label) + 1) = label//c_null_char
+      call to_buf(label)
       call igPushID_Str(buf)
    else
       long = label//c_null_char
@@ -412,7 +414,7 @@ contains
    hide = .false.
    if (present(hide_after_hash)) hide = logical(hide_after_hash, c_bool)
    if (len(text) <= BUF_LEN) then
-      buf(1:len(text) + 1) = text//c_null_char
+      call to_buf(text)
       p = igCalcTextSize(buf, c_null_ptr, hide, -1.0_c_float)
    else
       long = text//c_null_char
@@ -665,16 +667,25 @@ contains
    integer(int32),   intent(in)    :: flags  !< `ImGuiSliderFlags`.
    logical                         :: changed !< Changed.
    real(c_double), target          :: cv, cmin, cmax !< C copies.
-   character(kind=c_char, len=:), allocatable, target :: cfmt !< Format, NUL-terminated.
-   character(kind=c_char, len=:), allocatable        :: clabel !< Label, NUL-terminated.
+   character(kind=c_char, len=:), allocatable, target :: cfmt !< Format, NUL-terminated (a long label and format).
+   character(kind=c_char, len=:), allocatable        :: clabel !< Label, NUL-terminated (...).
+   integer(int32)                  :: nl     !< The label's length.
 
    cv = v
    cmin = vmin
    cmax = vmax
-   cfmt = format//c_null_char
-   clabel = label//c_null_char
-   changed = logical(igDragScalar(clabel, ImGuiDataType_Double_, c_loc(cv), real(speed, c_float), c_loc(cmin), &
-                                  c_loc(cmax), c_loc(cfmt), int(flags, c_int)))
+   nl = len(label, kind=int32)
+   if (nl + len(format, kind=int32) + 1_int32 <= BUF_LEN) then ! both in the buffer, one after the other
+      call to_buf(label)
+      call to_buf(format, nl + 2_int32)
+      changed = logical(igDragScalar(buf, ImGuiDataType_Double_, c_loc(cv), real(speed, c_float), c_loc(cmin), &
+                                     c_loc(cmax), c_loc(buf(nl + 2_int32:nl + 2_int32)), int(flags, c_int)))
+   else
+      cfmt = format//c_null_char
+      clabel = label//c_null_char
+      changed = logical(igDragScalar(clabel, ImGuiDataType_Double_, c_loc(cv), real(speed, c_float), c_loc(cmin), &
+                                     c_loc(cmax), c_loc(cfmt), int(flags, c_int)))
+   endif
    v = cv
    endfunction core_drag_double
 
@@ -684,7 +695,12 @@ contains
    logical,          intent(in) :: active  !< Selected.
    logical                      :: pressed !< Pressed.
 
-   pressed = logical(igRadioButton_Bool(label//c_null_char, logical(active, c_bool)))
+   if (len(label) <= BUF_LEN) then
+      call to_buf(label)
+      pressed = logical(igRadioButton_Bool(buf, logical(active, c_bool)))
+   else
+      pressed = logical(igRadioButton_Bool(label//c_null_char, logical(active, c_bool)))
+   endif
    endfunction core_radio_button
 
    function core_invisible_button(id, w, h) result(pressed)
@@ -693,15 +709,71 @@ contains
    real(real64),     intent(in) :: w, h    !< Size [pixels].
    logical                      :: pressed !< Pressed.
 
-   pressed = logical(igInvisibleButton(id//c_null_char, v2(w, h), 0_c_int))
+   if (len(id) <= BUF_LEN) then
+      call to_buf(id)
+      pressed = logical(igInvisibleButton(buf, v2(w, h), 0_c_int))
+   else
+      pressed = logical(igInvisibleButton(id//c_null_char, v2(w, h), 0_c_int))
+   endif
    endfunction core_invisible_button
 
    subroutine core_text_unformatted(text)
    !< `TextUnformatted`.
    character(len=*), intent(in) :: text !< Text.
 
-   call igTextUnformatted(text//c_null_char, c_null_ptr)
+   if (len(text) <= BUF_LEN) then
+      call to_buf(text)
+      call igTextUnformatted(buf, c_null_ptr)
+   else
+      call igTextUnformatted(text//c_null_char, c_null_ptr)
+   endif
    endsubroutine core_text_unformatted
+
+   subroutine core_open_popup(id)
+   !< `OpenPopup(id)` (ImPlot's context menus: Dear ImGui's call, without FIGURE's scope record of `ig_open_popup`).
+   character(len=*), intent(in) :: id !< Popup id.
+
+   if (len(id) <= BUF_LEN) then
+      call to_buf(id)
+      if (igOpenPopup_Str(buf, 0_c_int)) continue
+   else
+      if (igOpenPopup_Str(id//c_null_char, 0_c_int)) continue
+   endif
+   endsubroutine core_open_popup
+
+   function core_begin_popup(id) result(open)
+   !< `BeginPopup(id, 0)`, every frame (ImPlot's context menus; `ig_begin_popup` without FIGURE's scope record: end it
+   !< with `core_end_popup`, only when true).
+   character(len=*), intent(in) :: id   !< Popup id.
+   logical                      :: open !< Open.
+
+   if (len(id) <= BUF_LEN) then
+      call to_buf(id)
+      open = logical(igBeginPopup(buf, 0_c_int))
+   else
+      open = logical(igBeginPopup(id//c_null_char, 0_c_int))
+   endif
+   endfunction core_begin_popup
+
+   subroutine core_end_popup()
+   !< `EndPopup` (after `core_begin_popup` returned true).
+
+   call igEndPopup()
+   endsubroutine core_end_popup
+
+   subroutine to_buf(s, at)
+   !< A text copied into the module's buffer, NUL-terminated, from `at` (default 1); the caller checked it fits. Two
+   !< assignments, no concatenation: a concatenation of run-time length is a heap temporary (gfortran).
+   character(len=*), intent(in)           :: s  !< Text.
+   integer(int32),   intent(in), optional :: at !< Where it starts.
+   integer(int32)                         :: a, n !< Start, length.
+
+   a = 1_int32
+   if (present(at)) a = at
+   n = len(s, kind=int32)
+   buf(a:a + n - 1_int32) = s
+   buf(a + n:a + n) = c_null_char
+   endsubroutine to_buf
 
    ! the draw list
 
@@ -867,7 +939,7 @@ contains
 
    call core_draw_end_pending()
    if (len(text) <= BUF_LEN) then
-      buf(1:len(text) + 1) = text//c_null_char
+      call to_buf(text)
       call ImDrawList_AddText_Vec2(target_list, v2(x, y), int(col, c_int), buf, c_null_ptr)
    else
       long = text//c_null_char
