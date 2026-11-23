@@ -10,7 +10,7 @@ program figure_test_plot_frame_alloc
 !< plots side by side in an aligned group, their x axes linked in a group (`pf_link_axis`), the second with the four
 !< drag tools (figure_plot_tools); tags on three of the plot's axes (`pf_tag`: a value labelled, a date, a text);
 !< tick formats on the symlog Y1 and on Y2 (`%a` among them: the mouse text and the tag in them), and Y2's ticks given
-!< with labels (`pf_setup_axis_ticks`).
+!< with labels (`pf_setup_axis_ticks`); Y2's limit and zoom constraints (`pf_setup_axis_constraints`).
 !< Drawn first by ImPlot through FIGURE's API (`ip_*`), then by the Fortran frame (`pf_*`), NF frames each: on the
 !< Fortran side the last NCOUNT frames are counted, from `pf_begin_plot` to `pf_end_plot` and around
 !< `pf_colormap_scale`, by figure_test_plot_alloc_counter (the C library's allocator entry points defined in the
@@ -30,9 +30,9 @@ use figure, only : ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_drag_rect, 
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
                    ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes,             &
                    ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
-use figure, only : ip_setup_axis_ticks
+use figure, only : ip_setup_axis_ticks, ip_setup_axis_constraints
 use figure_plot_frame, only : pf_begin_aligned, pf_begin_subplots, pf_end_aligned, pf_end_subplots, pf_link_axis
-use figure_plot_frame, only : pf_tag, pf_setup_axis_ticks
+use figure_plot_frame, only : pf_tag, pf_setup_axis_ticks, pf_setup_axis_constraints
 use figure_plot_frame, only : pf_begin_plot, pf_colormap_scale, pf_end_plot, pf_plot_limits, pf_set_axes, &
                               pf_setup_axes, pf_setup_axis, pf_setup_axis_limits
 use figure_plot_items, only : pf_line, pf_scatter, pf_spec
@@ -127,6 +127,7 @@ contains
          call pf_setup_axis('x2', label='time', scale='time')
          call pf_setup_axis('y2', label='y2', format='%.2a')
          call pf_setup_axis_ticks('y2', Y2T, Y2L)
+         call pf_setup_axis_constraints('y2', vmin=-1.0_real64, zoom_min=0.5_real64)
          call pf_setup_axis_limits('x1', 1.0_real64, 1.0e4_real64)
          call pf_setup_axis_limits('y1', -40.0_real64, 40.0_real64)
          call pf_setup_axis_limits('x2', T0, ts(NP))
@@ -151,6 +152,7 @@ contains
          call ip_setup_axis('x2', label='time', scale='time')
          call ip_setup_axis('y2', label='y2', format='%.2a')
          call ip_setup_axis_ticks('y2', Y2T, Y2L)
+         call ip_setup_axis_constraints('y2', vmin=-1.0_real64, zoom_min=0.5_real64)
          call ip_setup_axis_limits('x1', 1.0_real64, 1.0e4_real64)
          call ip_setup_axis_limits('y1', -40.0_real64, 40.0_real64)
          call ip_setup_axis_limits('x2', T0, ts(NP))

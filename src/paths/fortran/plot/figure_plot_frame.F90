@@ -57,6 +57,9 @@ module figure_plot_frame
 !<   and of the tags (`Formatter_Default`, figure_plot_format: glibc's printf, `%a` included); the ticks given
 !<   (`pf_setup_axis_ticks`: `SetupAxisTicks` with `show_default` false, as `ip_setup_axis_ticks`), minor ticks
 !<   labelled by their text (whole) or by the axis's format when they are given, the axis's locator off;
+!< - the limits' constraints (`pf_setup_axis_constraints`, as `ip_setup_axis_constraints` over ImPlot's
+!<   `ConstraintRange` and `ConstraintZoom`), this frame's: the range kept within them by `Constrain` (an excess of
+!<   size taken half from each end), `SetMin`, `SetMax` (a pan or zoom), the fit taking only the values within;
 !< - the drawing of `SetupFinish` and `EndPlot`, in their order: the frame (`RenderFrame`, `FrameBg`), the plot's
 !<   background (`WindowBg`), the grid (majors, minors faded by `MinorAlpha` and by the ticks' density), each axis's
 !<   highlight (an item's colour while its legend entry is hovered, with more than one axis on its direction), label
@@ -98,12 +101,14 @@ module figure_plot_frame
 !< subplot that begins fewer cells leaves fits for the plots after it; "first time" keyed here by the subplot's ID,
 !< there by its title); a link group's first frame (its plots fit alone, then the group takes its first plot's
 !< range); an X2..Y3 link lasting after the program stops calling `pf_link_axis` (ImPlot resets only X1's and Y1's),
-!< still pushing its axis's range into the group; `pf_begin_aligned` refused inside a subplot (`fig_aligned_open`).
+!< still pushing its axis's range into the group; `pf_begin_aligned` refused inside a subplot (`fig_aligned_open`);
+!< a scale set up as 'linear' leaving the axis's scale as it is (`ip_setup_axis` calls `SetupAxisScale` for the
+!< others only).
 !<
 !< Not yet: local time and ImPlot's time style options (12-hour clock, US dates: ImPlot's defaults), the
 !< legend's scrolling, colormaps other than Deep (the line colours of FIGURE's own styles: seal, paper, ...: their
 !< automatic colours are ImPlot's colormaps, registered by the native layer), ImPlot style variables set by a theme
-!< (`FitPadding` included), limits' constraints, the axis flags FIGURE's API does not set (`NoInitialFit`,
+!< (`FitPadding` included), the axis flags FIGURE's API does not set (`NoInitialFit`,
 !< `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or not drawn), legend sorting; of P12, a subplot's
 !< shared items and legend (`ShareItems`: only the cells' menu can ask for it, the flag is stored), a subplot or an
 !< aligned group in a collapsed window (`SkipItems`, which figure_core does not give: they begin as if shown).
@@ -158,7 +163,7 @@ public :: plot_item_ctx, pf_item_begin, pf_item_fit, pf_item_end, pf_item_hidden
 public :: pf_plot_ctx, pf_item_count, pf_item_shown_at, pf_item_state, pf_item_fit_with, pf_digital_offset
 public :: pf_text_vertical, pf_item_recolor, pf_item_id, pf_last_item_color
 public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
-public :: pf_setup_axis_ticks
+public :: pf_setup_axis_ticks, pf_setup_axis_constraints
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
 public :: pf_hide_next_item, pf_legend_hovered
 public :: pf_plot_count, pf_colormap, pf_colormap_scale
@@ -299,6 +304,8 @@ type :: plot_axis
    real(real64)   :: scale_max = 1.0_real64           !< ... its maximum (ScaleMax).
    real(real64)   :: con_min = -huge(1.0_real64)      !< The range's constraint (ConstraintRange): minimum.
    real(real64)   :: con_max = huge(1.0_real64)       !< ... maximum.
+   real(real64)   :: zoom_min = tiny(1.0_real64)      !< The range's size's constraint (ConstraintZoom): minimum.
+   real(real64)   :: zoom_max = huge(1.0_real64)      !< ... maximum (+inf from the plot's begin: none).
    real(real32)   :: datum1 = 0.0_real32              !< Where the axis's ticks start [pixels].
    real(real32)   :: datum2 = 0.0_real32              !< Where its room ends, away from the plot [pixels].
    integer(int32) :: hili = 0_int32                   !< Highlight's colour (ColorHiLi; 0: none).
@@ -546,6 +553,8 @@ contains
          p%ax(i)%scale = SCALE_LINEAR
          p%ax(i)%con_min = -huge(1.0_real64)
          p%ax(i)%con_max = huge(1.0_real64)
+         p%ax(i)%zoom_min = tiny(1.0_real64)                         ! ConstraintZoom (DBL_MIN, INFINITY)
+         p%ax(i)%zoom_max = ieee_value(1.0_real64, ieee_positive_inf)
          p%ax(i)%fmt = plot_format() ! HasFormatSpec false: "%g"
          p%ax(i)%show_default = .true.
          call ticks_reset(ticks(i)) ! Ticker::Reset (the ticks given at the setup follow): MaxSize = LateSize (a
@@ -677,6 +686,58 @@ contains
    if (present(scale)) call setup_scale(plots(cur)%ax(i), scale, i >= AX_Y1)
    if (present(format)) call setup_format(plots(cur)%ax(i), format)
    endsubroutine pf_setup_axis
+
+   subroutine pf_setup_axis_constraints(axis, vmin, vmax, zoom_min, zoom_max)
+   !< Bounds the user cannot pan or zoom one axis past (`SetupAxisLimitsConstraints`, `SetupAxisZoomConstraints`;
+   !< `ip_setup_axis_constraints`, FIGURE's `fig_plot_axis_constraints`): the range within [`vmin`, `vmax`], its size
+   !< within [`zoom_min`, `zoom_max`]; an end not given keeps its bound (none, or the scale's: a log axis above 0).
+   !< This frame's: after `pf_setup_axis` (and its `scale`) for that axis, before any item, every frame. Refused (an
+   !< error stop) as the current path refuses: a NaN, `vmin >= vmax`, a negative zoom size, `zoom_min > zoom_max`,
+   !< `vmin <= 0` on a log axis.
+   character(len=*), intent(in)           :: axis     !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   real(real64),     intent(in), optional :: vmin     !< Lowest value shown [axis units].
+   real(real64),     intent(in), optional :: vmax     !< Highest value shown [axis units].
+   real(real64),     intent(in), optional :: zoom_min !< Narrowest range [axis units].
+   real(real64),     intent(in), optional :: zoom_max !< Widest range [axis units].
+   integer(int32)                         :: i        !< Axis.
+
+   if (nan_given(vmin) .or. nan_given(vmax) .or. nan_given(zoom_min) .or. nan_given(zoom_max)) &
+      error stop 'figure_plot_frame: pf_setup_axis_constraints: a bound is NaN'
+   if (present(vmin) .and. present(vmax)) then
+      if (.not. vmin < vmax) error stop 'figure_plot_frame: pf_setup_axis_constraints: vmin must be below vmax'
+   endif
+   if (present(zoom_min)) then
+      if (zoom_min < 0.0_real64) error stop 'figure_plot_frame: pf_setup_axis_constraints: a zoom size is negative'
+   endif
+   if (present(zoom_max)) then
+      if (zoom_max < 0.0_real64) error stop 'figure_plot_frame: pf_setup_axis_constraints: a zoom size is negative'
+   endif
+   if (present(zoom_min) .and. present(zoom_max)) then
+      if (zoom_min > zoom_max) error stop 'figure_plot_frame: pf_setup_axis_constraints: zoom_min above zoom_max'
+   endif
+   call setup_refused('pf_setup_axis_constraints')
+   i = axis_code(axis)
+   associate(ax => plots(cur)%ax(i))
+      if (.not. ax%enabled) error stop 'figure_plot_frame: pf_setup_axis_constraints of an axis not set up'
+      if (present(vmin)) then
+         if (ax%scale == SCALE_LOG10 .and. vmin <= 0.0_real64) &
+            error stop 'figure_plot_frame: pf_setup_axis_constraints: vmin must be above 0 on a log axis'
+         ax%con_min = vmin
+      endif
+      if (present(vmax)) ax%con_max = vmax
+      if (present(zoom_min)) ax%zoom_min = zoom_min
+      if (present(zoom_max)) ax%zoom_max = zoom_max
+   endassociate
+   contains
+      pure function nan_given(b) result(yes)
+      !< A bound given and NaN.
+      real(real64), intent(in), optional :: b   !< Bound.
+      logical                            :: yes !< NaN.
+
+      yes = .false.
+      if (present(b)) yes = b /= b
+      endfunction nan_given
+   endsubroutine pf_setup_axis_constraints
 
    subroutine pf_setup_axis_ticks(axis, values, labels)
    !< Ticks of one axis at the values given instead of its locator's (`SetupAxisTicks`, `show_default` false;
@@ -1790,7 +1851,8 @@ contains
    m = constrain_nan(constrain_inf(v))
    if (m < ax%con_min) m = ax%con_min
    z = ax%range_max - m
-   if (z < tiny(1.0_real64)) m = ax%range_max - tiny(1.0_real64)
+   if (z < ax%zoom_min) m = ax%range_max - ax%zoom_min
+   if (z > ax%zoom_max) m = ax%range_max - ax%zoom_max
    if (m >= ax%range_max) return
    ax%range_min = m
    call update_scale(ax)
@@ -1810,7 +1872,8 @@ contains
    m = constrain_nan(constrain_inf(v))
    if (m > ax%con_max) m = ax%con_max
    z = m - ax%range_min
-   if (z < tiny(1.0_real64)) m = ax%range_min + tiny(1.0_real64)
+   if (z < ax%zoom_min) m = ax%range_min + ax%zoom_min
+   if (z > ax%zoom_max) m = ax%range_min + ax%zoom_max
    if (m <= ax%range_min) return
    ax%range_max = m
    call update_scale(ax)
@@ -3491,16 +3554,14 @@ contains
 
    subroutine setup_scale(ax, scale, vertical)
    !< `SetupAxisScale`: the scale of an axis on this frame and its constraint (log10: from DBL_MIN; time: 0 to
-   !< IMPLOT_MAX_TIME, two label levels).
+   !< IMPLOT_MAX_TIME, two label levels; symlog: none); 'linear' leaves the axis as it is, as FIGURE's API does.
    type(plot_axis),  intent(inout) :: ax       !< Axis.
    character(len=*), intent(in)    :: scale    !< 'linear', 'log', 'symlog', 'time'.
    logical,          intent(in)    :: vertical !< A y axis.
 
    select case (scale) ! (trailing blanks ignored)
-   case ('linear')
-      ax%scale = SCALE_LINEAR
-      ax%con_min = -huge(1.0_real64)
-      ax%con_max = huge(1.0_real64)
+   case ('linear') ! FIGURE's ip_setup_axis(es) call SetupAxisScale for the others only: the frame's as it is (linear,
+                   ! unless set otherwise earlier on this frame), its constraint kept
    case ('log')
       ax%scale = SCALE_LOG10
       ax%con_min = tiny(1.0_real64)
@@ -3577,7 +3638,8 @@ contains
 
    subroutine constrain(ax)
    !< `ImPlotAxis::Constrain`: NaN ends made 0, infinite ones the largest finite value, the ends within the scale's
-   !< constraint (`ConstraintRange`), a size of at least DBL_MIN (`ConstraintZoom`), an empty range given DBL_EPSILON.
+   !< constraint (`ConstraintRange`), its size within `ConstraintZoom` (at least DBL_MIN by default), each end moved by
+   !< half the excess, an empty range given DBL_EPSILON.
    type(plot_axis), intent(inout) :: ax       !< Axis.
    real(real64)                   :: z, delta !< Size, half the growth.
 
@@ -3586,10 +3648,15 @@ contains
    if (ax%range_min < ax%con_min) ax%range_min = ax%con_min
    if (ax%range_max > ax%con_max) ax%range_max = ax%con_max
    z = ax%range_max - ax%range_min
-   if (z < tiny(1.0_real64)) then
-      delta = (tiny(1.0_real64) - z) * 0.5_real64
+   if (z < ax%zoom_min) then
+      delta = (ax%zoom_min - z) * 0.5_real64
       ax%range_min = ax%range_min - delta
       ax%range_max = ax%range_max + delta
+   endif
+   if (z > ax%zoom_max) then
+      delta = (z - ax%zoom_max) * 0.5_real64
+      ax%range_min = ax%range_min + delta
+      ax%range_max = ax%range_max - delta
    endif
    if (ax%range_max <= ax%range_min) ax%range_max = ax%range_min + epsilon(1.0_real64)
    endsubroutine constrain

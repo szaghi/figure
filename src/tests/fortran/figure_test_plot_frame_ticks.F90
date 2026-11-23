@@ -11,7 +11,8 @@ program figure_test_plot_frame_ticks
 !<
 !< 1. formats on linear axes: X1 `%.2f s`, Y1 `%+.1e`, an X2 whose format is longer than ImPlot keeps (15 characters
 !<    of `%.1f metres per s`), a Y2 in `%.1a`; tags without text follow the formats;
-!< 2. formats on a symlog X1 (`%.1f`) and a log Y1 (`%.0e`), a tag;
+!< 2. formats on a symlog X1 (`%.1f`) and a log Y1 (`%.0e`), a tag; a Y2 in `%.105f` (a precision of three digits,
+!<    the labels cut at ImPlot's 31 characters);
 !< 3. ticks given: X1's labelled in two calls (they add up: a label longer than ImPlot's 32-byte buffer, taken whole,
 !<    one with trailing blanks, an empty one, a value out of the range, one at 1e30), Y1's labelled by its format,
 !<    Y2's labelled "%g" (given before its format) while its tag and mouse text take the format set after;
@@ -150,6 +151,7 @@ contains
       call ip_plot_limits(d1, d2, v(9), v(10), 'x2', 'y2')
    case (2_int32)
       call ip_setup_axes('', '', xscale='symlog', yscale='log', xformat='%.1f', yformat='%.0e')
+      call ip_setup_axis('y2', format='%.105f')
       call ip_setup_axes_limits(-100.0_real64, 100.0_real64, 1.0e-3_real64, 1.0e3_real64)
       call ip_line('##exp', ss, ls, spec=ip_spec(line_color=C1))
       call ip_tag('y1', 2.0_real64)
@@ -207,6 +209,7 @@ contains
       call pf_plot_limits(d1, d2, v(9), v(10), 'x2', 'y2')
    case (2_int32)
       call pf_setup_axes('', '', xscale='symlog', yscale='log', xformat='%.1f', yformat='%.0e')
+      call pf_setup_axis('y2', format='%.105f')
       call pf_setup_axes_limits(-100.0_real64, 100.0_real64, 1.0e-3_real64, 1.0e3_real64)
       call pf_line('##exp', ss, ls, spec=pf_spec(line_color=C1))
       call pf_tag('y1', 2.0_real64)

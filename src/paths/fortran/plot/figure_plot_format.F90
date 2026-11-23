@@ -9,8 +9,10 @@ module figure_plot_format
 !<
 !< - `fmt_parse`: a printf format of one real (`Formatter_Default`'s `fmt`; `SetupAxisFormat`, `ColormapScale`'s
 !<   label format), parsed once into a `plot_format`: the text before and after the one conversion (`%%` resolved, 32
-!<   characters each at most), its flags (`-+ 0#`), width (3 digits at most), precision (2 digits at most) and type
-!<   (`f F e E g G a A`). A format it cannot read is `ok = .false.` and labels as "%g".
+!<   characters each at most), its flags (`-+ 0#`), width and precision (any digits, read up to 10^8) and type
+!<   (`f F e E g G a A`). A format it cannot read is `ok = .false.` and labels as "%g". A precision past 1080 is
+!<   computed as 1080 (a double's exact expansion ends before: only zeros follow, kept out of the buffers but counted
+!<   in the width).
 !< - `fmt_real`: the real through a `plot_format`, glibc's output: the conversion from the exact binary value (a double
 !<   is m 2^k: its decimal expansion, at most 767 significant digits, in base 10^9 limbs of a fixed work array),
 !<   rounded half to even; "inf", "nan" (upper case for `F E G`), the sign of a zero or a NaN kept (as foresight's
@@ -37,7 +39,11 @@ integer(int32), parameter :: FMT_AFFIX_LEN = 32_int32   !< A format's text befor
 integer(int64), parameter :: LIMB = 1000000000_int64    !< Base of the exact decimal expansion.
 integer(int32), parameter :: LIMB_ROOM = 130_int32         !< Limbs of a double's expansion (767 digits: 86), and room.
 integer(int32), parameter :: DIGITS_LEN = 800_int32     !< Significant digits of a double, at most 767.
-integer(int32), parameter :: BODY_LEN = 512_int32       !< A number's text (%.99f of 1.8e308: 409 characters).
+integer(int32), parameter :: PREC_CAP = 1080_int32      !< Precision computed at most: past it (a double's fraction has
+                                                        !< 1074 digits at most, its expansion 767 significant ones)
+                                                        !< only zeros follow, counted, not written.
+integer(int32), parameter :: NUM_CAP = 100000000_int32  !< A width or precision read at most (C's int beyond).
+integer(int32), parameter :: BODY_LEN = 1536_int32      !< A number's text (%.1080f of 1.8e308: 1390 characters).
 
 type :: plot_format
    !< A printf format of one real, parsed (`%[flags][width][.prec]type` between two texts).
@@ -63,7 +69,7 @@ contains
    !< A printf format of one real parsed (`ok` false, and "%g", if it has no conversion, two, or one not of a real).
    character(len=*),  intent(in)  :: text !< Format.
    type(plot_format), intent(out) :: f    !< Parsed.
-   integer(int32)                 :: i, j, m !< Positions, length.
+   integer(int32)                 :: i, m    !< Position, length.
    logical                        :: found   !< The conversion read.
 
    found = .false.
@@ -105,31 +111,21 @@ contains
          endselect
          i = i + 1_int32
       enddo
-      j = i
       f%width = 0_int32
       do while (i <= m)
          if (scan(text(i:i), '0123456789') == 0) exit
-         f%width = 10_int32 * f%width + (iachar(text(i:i)) - iachar('0'))
+         f%width = min(10_int32 * f%width + (iachar(text(i:i)) - iachar('0')), NUM_CAP)
          i = i + 1_int32
       enddo
-      if (i - j > 3_int32) then
-         call fail(f)
-         return
-      endif
       if (i <= m) then
          if (text(i:i) == '.') then
             i = i + 1_int32
-            j = i
             f%prec = 0_int32
             do while (i <= m)
                if (scan(text(i:i), '0123456789') == 0) exit
-               f%prec = 10_int32 * f%prec + (iachar(text(i:i)) - iachar('0'))
+               f%prec = min(10_int32 * f%prec + (iachar(text(i:i)) - iachar('0')), NUM_CAP)
                i = i + 1_int32
             enddo
-            if (i - j > 2_int32) then
-               call fail(f)
-               return
-            endif
          endif
       endif
       if (i > m) then
@@ -201,7 +197,7 @@ contains
    integer(int32),   intent(in)    :: m   !< Copies.
    integer(int32)                  :: k   !< Counter.
 
-   do k = 1_int32, m
+   do k = 1_int32, min(m, len(buf, kind=int32) - n) ! (what does not fit dropped)
       call fmt_text(buf, n, c)
    enddo
    endsubroutine fmt_repeat
@@ -250,6 +246,7 @@ contains
    character(len=BODY_LEN)          :: body !< The number without its sign.
    character(len=3)                 :: lead !< Sign and, for `%a`, "0x" (`lead(1:nl)`).
    integer(int32)                   :: nd, e, nb, nl, p, x, gap !< Digits, exponent, lengths, precision, padding.
+   integer(int32)                   :: extra !< Zeros past PREC_CAP, counted in the width, not written.
    logical                          :: upper, finite !< Upper case, a finite value.
    integer(int64)                   :: bits !< The value's bits.
 
@@ -270,6 +267,8 @@ contains
    endif
    finite = ibits(bits, 52, 11) /= 2047_int64
    nb = 0_int32
+   extra = 0_int32
+   if (f%prec > PREC_CAP .and. finite .and. (scan(f%ctype, 'gG') == 0 .or. f%alt)) extra = f%prec - PREC_CAP
    if (.not. finite) then
       if (ibits(bits, 0, 52) /= 0_int64) then
          call put(body, nb, merge('NAN', 'nan', upper))
@@ -277,12 +276,12 @@ contains
          call put(body, nb, merge('INF', 'inf', upper))
       endif
    elseif (scan(f%ctype, 'aA') > 0) then
-      call hex_text(bits, f%prec, f%alt, upper, body, nb)
+      call hex_text(bits, min(f%prec, PREC_CAP), f%alt, upper, body, nb)
       lead(nl + 1_int32:nl + 2_int32) = merge('0X', '0x', upper)
       nl = nl + 2_int32
    else
       call exact_digits(v, dg, nd, e)
-      p = f%prec
+      p = min(f%prec, PREC_CAP)
       if (p < 0_int32) p = 6_int32
       select case (f%ctype)
       case ('f', 'F')
@@ -308,7 +307,7 @@ contains
          endif
       endselect
    endif
-   gap = f%width - nl - nb
+   gap = f%width - nl - nb - extra
    if (gap > 0_int32 .and. f%minus) then
       if (nl > 0_int32) call fmt_text(buf, n, lead(1:nl))
       call fmt_text(buf, n, body(1:nb))
