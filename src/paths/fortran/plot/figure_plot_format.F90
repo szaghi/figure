@@ -10,7 +10,7 @@ module figure_plot_format
 !< - `fmt_parse`: a printf format of one real (`Formatter_Default`'s `fmt`; `SetupAxisFormat`, `ColormapScale`'s
 !<   label format), parsed once into a `plot_format`: the text before and after the one conversion (`%%` resolved, 32
 !<   characters each at most), its flags (`-+ 0#`), width (3 digits at most), precision (2 digits at most) and type
-!<   (`f F e E g G`). A format it cannot read is `ok = .false.` and labels as "%g".
+!<   (`f F e E g G a A`). A format it cannot read is `ok = .false.` and labels as "%g".
 !< - `fmt_real`: the real through a `plot_format`, glibc's output: the conversion from the exact binary value (a double
 !<   is m 2^k: its decimal expansion, at most 767 significant digits, in base 10^9 limbs of a fixed work array),
 !<   rounded half to even; "inf", "nan" (upper case for `F E G`), the sign of a zero or a NaN kept (as foresight's
@@ -18,6 +18,10 @@ module figure_plot_format
 !<   from its bits (sign, exponent, mantissa): subnormals too where the compiler flushes them to zero (nvfortran without
 !<   -Kieee). `fmt_g` is "%g". Checked equal to glibc's `snprintf` (32 bytes) on 10^6 doubles (any bits, tick-like
 !<   values, decimal ties) and the specials (zeros, inf, NaN, subnormals) in 22 formats, on gfortran, nvfortran, ifx.
+!<   `%a` (`A`) as glibc's `printf_fphex`: "0x", the leading digit (1, 0 for zero and subnormals, whose exponent is
+!<   -1022), the 13 hexadecimal digits of the mantissa without their trailing zeros (or `prec` of them, rounded half
+!<   to even on the bits dropped, a carry raising the leading digit to 2), "p" and the binary exponent in decimal; the
+!<   zero padding after the "0x".
 !< - `fmt_int`: an integer, zero-padded to a number of digits (`%02d`, `%03d`, `%d`); `fmt_text`: a text.
 !<
 !< Rejected: Fortran's internal `write` (ties rounded as the processor chooses where glibc rounds half to even, and a
@@ -132,7 +136,7 @@ contains
          call fail(f)
          return
       endif
-      if (scan(text(i:i), 'fFeEgG') == 0) then
+      if (scan(text(i:i), 'fFeEgGaA') == 0) then
          call fail(f)
          return
       endif
@@ -244,24 +248,24 @@ contains
    real(real64),      intent(in)    :: v    !< Value.
    character(len=DIGITS_LEN)        :: dg   !< Exact significant digits of |v|.
    character(len=BODY_LEN)          :: body !< The number without its sign.
-   character(len=1)                 :: lead !< Sign ('' when none).
+   character(len=3)                 :: lead !< Sign and, for `%a`, "0x" (`lead(1:nl)`).
    integer(int32)                   :: nd, e, nb, nl, p, x, gap !< Digits, exponent, lengths, precision, padding.
    logical                          :: upper, finite !< Upper case, a finite value.
    integer(int64)                   :: bits !< The value's bits.
 
    call fmt_text(buf, n, f%prefix(1:f%prefix_len))
-   upper = scan(f%ctype, 'FEG') > 0
+   upper = scan(f%ctype, 'FEGA') > 0
    nl = 0_int32
    lead = ' '
    bits = transfer(v, 0_int64) ! the value read from its bits: the sign of a zero or a NaN, subnormals under DAZ
    if (btest(bits, 63)) then
-      lead = '-'
+      lead(1:1) = '-'
       nl = 1_int32
    elseif (f%plus) then
-      lead = '+'
+      lead(1:1) = '+'
       nl = 1_int32
    elseif (f%space) then
-      lead = ' '
+      lead(1:1) = ' '
       nl = 1_int32
    endif
    finite = ibits(bits, 52, 11) /= 2047_int64
@@ -272,6 +276,10 @@ contains
       else
          call put(body, nb, merge('INF', 'inf', upper))
       endif
+   elseif (scan(f%ctype, 'aA') > 0) then
+      call hex_text(bits, f%prec, f%alt, upper, body, nb)
+      lead(nl + 1_int32:nl + 2_int32) = merge('0X', '0x', upper)
+      nl = nl + 2_int32
    else
       call exact_digits(v, dg, nd, e)
       p = f%prec
@@ -302,22 +310,102 @@ contains
    endif
    gap = f%width - nl - nb
    if (gap > 0_int32 .and. f%minus) then
-      if (nl > 0_int32) call fmt_text(buf, n, lead)
+      if (nl > 0_int32) call fmt_text(buf, n, lead(1:nl))
       call fmt_text(buf, n, body(1:nb))
       call fmt_repeat(buf, n, ' ', gap)
    elseif (gap > 0_int32 .and. f%zero .and. finite) then
-      if (nl > 0_int32) call fmt_text(buf, n, lead)
+      if (nl > 0_int32) call fmt_text(buf, n, lead(1:nl))
       call fmt_repeat(buf, n, '0', gap)
       call fmt_text(buf, n, body(1:nb))
    else
       if (gap > 0_int32) call fmt_repeat(buf, n, ' ', gap)
-      if (nl > 0_int32) call fmt_text(buf, n, lead)
+      if (nl > 0_int32) call fmt_text(buf, n, lead(1:nl))
       call fmt_text(buf, n, body(1:nb))
    endif
    call fmt_text(buf, n, f%suffix(1:f%suffix_len))
    endsubroutine fmt_real
 
    ! the conversion
+
+   pure subroutine hex_text(bits, prec, alt, upper, body, nb)
+   !< `%a` of the finite double of these bits, without its sign and its "0x" (glibc's `__printf_fphex`): the leading
+   !< digit, the point (with digits, or `#`), the mantissa's hexadecimal digits (all but the trailing zeros, or `prec`
+   !< of them rounded half to even), "p", the exponent's sign and its decimal digits; upper case for `%A`.
+   integer(int64),   intent(in)    :: bits  !< The value's bits.
+   integer(int32),   intent(in)    :: prec  !< Precision (-1: absent).
+   logical,          intent(in)    :: alt   !< Flag `#`: the point always.
+   logical,          intent(in)    :: upper !< `%A`.
+   character(len=*), intent(inout) :: body  !< Text.
+   integer(int32),   intent(inout) :: nb    !< Its length.
+   character(len=16), parameter    :: HEX = '0123456789abcdef' !< The digits.
+   character(len=13)               :: hd    !< The mantissa's digits.
+   character(len=1)                :: lead  !< The leading digit.
+   integer(int64)                  :: m     !< The mantissa's bits.
+   integer(int32)                  :: be, x, nh, p, k, d, last, next, n0 !< Biased and binary exponents, counters.
+   logical                         :: up, more !< Round up, bits after the half.
+
+   m = ibits(bits, 0, 52)
+   be = int(ibits(bits, 52, 11), int32)
+   do k = 1_int32, 13_int32
+      d = int(ibits(m, 4 * (13 - k), 4), int32)
+      hd(k:k) = HEX(d + 1_int32:d + 1_int32)
+   enddo
+   if (be == 0_int32) then ! zero (exponent 0), or a subnormal (-1022)
+      lead = '0'
+      x = merge(0_int32, -1022_int32, m == 0_int64)
+   else
+      lead = '1'
+      x = be - 1023_int32
+   endif
+   nh = 13_int32 ! the trailing zeros dropped
+   do while (nh > 0_int32)
+      if (hd(nh:nh) /= '0') exit
+      nh = nh - 1_int32
+   enddo
+   p = prec
+   if (p < 0_int32) then
+      p = nh
+   elseif (p < nh) then ! round_away to nearest: a half and (an odd last digit or more bits)
+      if (p > 0_int32) then
+         last = index(HEX, hd(p:p)) - 1_int32
+      else
+         last = index(HEX, lead) - 1_int32
+      endif
+      next = index(HEX, hd(p + 1_int32:p + 1_int32)) - 1_int32
+      more = iand(next, 7_int32) /= 0_int32 .or. p + 1_int32 < nh
+      up = next >= 8_int32 .and. (iand(last, 1_int32) /= 0_int32 .or. more)
+      if (up) then
+         k = p
+         do while (k >= 1_int32)
+            d = index(HEX, hd(k:k)) - 1_int32
+            if (d < 15_int32) then
+               hd(k:k) = HEX(d + 2_int32:d + 2_int32)
+               exit
+            endif
+            hd(k:k) = '0'
+            k = k - 1_int32
+         enddo
+         if (k == 0_int32) lead = achar(iachar(lead) + 1) ! 0 -> 1, 1 -> 2 (a double's leading digit)
+      endif
+   endif
+   n0 = nb
+   call put(body, nb, lead)
+   if (p > 0_int32 .or. alt) call put(body, nb, '.')
+   if (p > 0_int32) then
+      call put(body, nb, hd(1:min(nh, p)))
+      do k = nh + 1_int32, p
+         call put(body, nb, '0')
+      enddo
+   endif
+   call put(body, nb, 'p')
+   call put(body, nb, merge('-', '+', x < 0_int32))
+   call fmt_int(body, nb, abs(x))
+   if (upper) then
+      do k = n0 + 1_int32, nb
+         if (body(k:k) >= 'a' .and. body(k:k) <= 'z') body(k:k) = achar(iachar(body(k:k)) - 32)
+      enddo
+   endif
+   endsubroutine hex_text
 
    pure subroutine exact_digits(v, dg, nd, e)
    !< The exact decimal value of the finite v: |v| = dg(1:nd) 10^e, `dg` without leading or trailing zeros ('0' for

@@ -22,23 +22,28 @@ module figure_plot_locators
 !< - the transforms of `SetupAxisScale` (`TransformForward_Log10`, `TransformInverse_Log10`, `TransformForward_SymLog`,
 !<   `TransformInverse_SymLog`): log10 of max(v, DBL_MIN), 2 asinh(v/2).
 !<
-!< Labels: `Formatter_Default` with "%g" (figure_plot_format, glibc's output) for linear, log and symlog axes, only on
-!< the ticks shown (`AddTick(..., show_label, ...)`: a log axis's minors have none); the size of each label from the
-!< caller's `text_measure` (Dear ImGui's `CalcTextSize` in the frame), which the time locator also asks for the width
-!< of its formats (`GetDateTimeWidth`). The ticks are appended to a `plot_ticks` (ImPlotTicker): grown when needed, kept
-!< between frames; each label written into its fixed slot (31 characters at most, as ImPlot's `snprintf` into
-!< `IMPLOT_LABEL_MAX_SIZE` bytes) with its length, and passed on as a substring: no allocation per frame (ADR 0001).
+!< - `add_tick_custom` (`AddTicksCustom`'s tick, `SetupAxisTicks`): a minor tick at a value given, labelled by the text
+!<   given or by the axis's format.
+!<
+!< Labels: `Formatter_Default` with the axis's format (`SetupAxisFormat`; "%g" by default: figure_plot_format, glibc's
+!< output) for linear, log and symlog axes, only on the ticks shown (`AddTick(..., show_label, ...)`: a log axis's
+!< minors have none); the size of each label from the caller's `text_measure` (Dear ImGui's `CalcTextSize` in the
+!< frame), which the time locator also asks for the width of its formats (`GetDateTimeWidth`). The ticks are appended to
+!< a `plot_ticks` (ImPlotTicker): grown when needed, kept between frames; each label appended to the ticks' text
+!< (`TextBuffer`, grown when needed) with its start and length, and passed on as a substring: no allocation per frame
+!< (ADR 0001). A formatted label is 31 characters at most (ImPlot's `snprintf` into `IMPLOT_LABEL_MAX_SIZE` bytes), a
+!< label given is taken whole.
 !<
 !< Bit for bit: `pow`, `log10`, `asinh` and `sinh` are the C library's (bound, as ImPlot calls them: glibc's
 !< `pow(10, e)` is not correctly rounded at e = 23 and 210, and nvfortran's own differ); the products added to another
 !< term are computed in a statement of their own (nvfortran -O2 fuses `a*b + c` into an FMA, ImPlot's build does not).
 use, intrinsic :: iso_c_binding, only : c_double
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_plot_format, only : plot_format, fmt_g, fmt_int, fmt_real, fmt_text
+use figure_plot_format, only : plot_format, fmt_int, fmt_real, fmt_text
 
 implicit none
 private
-public :: plot_ticks, text_measure, ticks_reset
+public :: plot_ticks, text_measure, ticks_reset, add_tick_custom
 public :: locate_default, locate_log10, locate_symlog, locate_time
 public :: transform_log10, inverse_log10, transform_symlog, inverse_symlog
 public :: nice_num, pow10, c_floor, c_ceil, round_axis_value, time_cursor_label, axis_value_text
@@ -96,8 +101,10 @@ type :: plot_ticks
    logical,                       allocatable :: major(:)                  !< A major tick.
    logical,                       allocatable :: show(:)                   !< Its label shown.
    integer(int32),                allocatable :: level(:)                  !< Its label's level (0, 1).
-   character(len=TICK_LABEL_LEN), allocatable :: label(:)                  !< Label (its first `label_len`).
-   integer(int32),                allocatable :: label_len(:)              !< Its length.
+   integer(int32),                allocatable :: label_off(:)              !< Its label's start in `text`.
+   integer(int32),                allocatable :: label_len(:)              !< ... its length.
+   character(len=:),              allocatable :: text                      !< The labels (TextBuffer).
+   integer(int32)                             :: n_text = 0_int32          !< Characters of `text` in use.
    real(real32)                               :: max_size(2) = 0.0_real32  !< The largest label shown.
 endtype plot_ticks
 
@@ -159,6 +166,7 @@ contains
    type(plot_ticks), intent(inout) :: t !< Ticks.
 
    t%n = 0_int32
+   t%n_text = 0_int32
    t%levels = 1_int32
    t%max_size = 0.0_real32
    endsubroutine ticks_reset
@@ -175,6 +183,8 @@ contains
    procedure(text_measure)                         :: measure  !< Text sizes.
    real(real32),           intent(inout), optional :: total(2) !< Labels' total size.
    integer(int32)                                  :: k        !< The tick.
+   integer(int32)                                  :: nl, o    !< The label's length, its start.
+   character(len=:),                   allocatable :: more     !< A larger text.
 
    if (.not. allocated(t%pos)) call grow(t, 64_int32)
    if (t%n == size(t%pos, kind=int32)) call grow(t, 2_int32 * t%n)
@@ -186,11 +196,22 @@ contains
    t%level(k) = level
    t%show(k) = show
    t%label_size(:, k) = 0.0_real32
+   t%label_off(k) = 1_int32
    t%label_len(k) = 0_int32
    if (show) then
-      t%label_len(k) = min(len(label, kind=int32), TICK_LABEL_LEN)
-      t%label(k)(1:t%label_len(k)) = label(1:t%label_len(k))
-      call measure(t%label(k)(1:t%label_len(k)), t%label_size(1, k), t%label_size(2, k))
+      nl = len(label, kind=int32)
+      if (.not. allocated(t%text)) allocate(character(len=max(2048_int32, nl)) :: t%text)
+      if (t%n_text + nl > len(t%text, kind=int32)) then ! grown, the labels held kept
+         allocate(character(len=max(2_int32 * len(t%text, kind=int32), t%n_text + nl)) :: more)
+         if (t%n_text > 0_int32) more(1:t%n_text) = t%text(1:t%n_text)
+         call move_alloc(more, t%text)
+      endif
+      o = t%n_text + 1_int32
+      t%text(o:o + nl - 1_int32) = label
+      t%n_text = t%n_text + nl
+      t%label_off(k) = o
+      t%label_len(k) = nl
+      call measure(t%text(o:o + nl - 1_int32), t%label_size(1, k), t%label_size(2, k))
       t%max_size(1) = merge(t%label_size(1, k), t%max_size(1), t%label_size(1, k) > t%max_size(1))
       t%max_size(2) = merge(t%label_size(2, k), t%max_size(2), t%label_size(2, k) > t%max_size(2))
    endif
@@ -204,12 +225,11 @@ contains
    real(real64),                  allocatable :: pos(:)          !< New storage.
    real(real32),                  allocatable :: pix(:), ls(:,:) !< ...
    logical,                       allocatable :: major(:), show(:) !< ...
-   integer(int32),                allocatable :: level(:), label_len(:) !< ...
-   character(len=TICK_LABEL_LEN), allocatable :: label(:)        !< ...
+   integer(int32),                allocatable :: level(:), label_off(:), label_len(:) !< ...
    integer(int32)                             :: n     !< Ticks held.
 
    n = t%n
-   allocate(pos(m), pix(m), ls(2, m), major(m), show(m), level(m), label(m), label_len(m))
+   allocate(pos(m), pix(m), ls(2, m), major(m), show(m), level(m), label_off(m), label_len(m))
    if (n > 0_int32) then
       pos(1:n) = t%pos(1:n)
       pix(1:n) = t%pix(1:n)
@@ -217,7 +237,7 @@ contains
       major(1:n) = t%major(1:n)
       show(1:n) = t%show(1:n)
       level(1:n) = t%level(1:n)
-      label(1:n) = t%label(1:n)
+      label_off(1:n) = t%label_off(1:n)
       label_len(1:n) = t%label_len(1:n)
    endif
    call move_alloc(pos, t%pos)
@@ -226,23 +246,40 @@ contains
    call move_alloc(major, t%major)
    call move_alloc(show, t%show)
    call move_alloc(level, t%level)
-   call move_alloc(label, t%label)
+   call move_alloc(label_off, t%label_off)
    call move_alloc(label_len, t%label_len)
    endsubroutine grow
 
-   subroutine add_tick_g(t, v, major, measure)
-   !< `AddTick` of a labelled tick, `Formatter_Default` with "%g".
+   subroutine add_tick_f(t, v, major, measure, fmt)
+   !< `AddTick` of a labelled tick, `Formatter_Default` with the axis's format.
    type(plot_ticks),       intent(inout) :: t       !< Ticks.
    real(real64),           intent(in)    :: v       !< Value.
    logical,                intent(in)    :: major   !< A major tick.
    procedure(text_measure)               :: measure !< Text sizes.
+   type(plot_format),      intent(in)    :: fmt     !< Label format.
    character(len=TICK_LABEL_LEN)         :: s       !< Label.
    integer(int32)                        :: n       !< Its length.
 
    n = 0_int32
-   call fmt_g(s, n, v)
+   call fmt_real(s, n, fmt, v)
    call add_tick(t, v, major, 0_int32, .true., s(1:n), measure)
-   endsubroutine add_tick_g
+   endsubroutine add_tick_f
+
+   subroutine add_tick_custom(t, v, measure, fmt, label)
+   !< `AddTicksCustom`'s tick (`SetupAxisTicks`): a minor tick of level 0 at `v`, labelled `label` (whole) or, without
+   !< it, by `fmt` (`Formatter_Default`, the axis's format when the ticks are set up).
+   type(plot_ticks),       intent(inout)        :: t       !< Ticks (appended).
+   real(real64),           intent(in)           :: v       !< Value.
+   procedure(text_measure)                      :: measure !< Text sizes.
+   type(plot_format),      intent(in)           :: fmt     !< Label format.
+   character(len=*),       intent(in), optional :: label   !< Label.
+
+   if (present(label)) then
+      call add_tick(t, v, .false., 0_int32, .true., label, measure)
+   else
+      call add_tick_f(t, v, .false., measure, fmt)
+   endif
+   endsubroutine add_tick_custom
 
    ! the linear locator
 
@@ -353,13 +390,14 @@ contains
    endif
    endsubroutine log_exponents
 
-   subroutine log_ticks(t, rmin, rmax, exp_min, exp_max, exp_step, measure)
+   subroutine log_ticks(t, rmin, rmax, exp_min, exp_max, exp_step, measure, fmt)
    !< `AddTicksLogarithmic`: the labelled majors at the decades of the step, the unlabelled minors 2 .. 9 times each
    !< decade (and the decade itself inside a step of several), within DBL_EPSILON of the range.
    type(plot_ticks),       intent(inout) :: t          !< Ticks (appended).
    real(real64),           intent(in)    :: rmin, rmax !< Range.
    integer(int32),         intent(in)    :: exp_min, exp_max, exp_step !< Exponents and step.
    procedure(text_measure)               :: measure    !< Text sizes.
+   type(plot_format),      intent(in)    :: fmt        !< Label format.
    real(real64)                          :: sgn        !< The range's sign.
    real(real64)                          :: major1, major2, interval, minor !< Values.
    integer(int32)                        :: e, i, j    !< Counters.
@@ -371,7 +409,7 @@ contains
       major2 = sgn * pow10(e + 1_int32)
       interval = (major2 - major1) / 9.0_real64
       if (major1 >= rmin - epsilon(1.0_real64) .and. major1 <= rmax + epsilon(1.0_real64)) &
-         call add_tick_g(t, major1, .true., measure)
+         call add_tick_f(t, major1, .true., measure, fmt)
       do j = 0_int32, exp_step - 1_int32
          major1 = sgn * pow10(e + j)
          major2 = sgn * pow10(e + j + 1_int32)
@@ -387,45 +425,52 @@ contains
    enddo
    endsubroutine log_ticks
 
-   subroutine locate_log10(t, rmin, rmax, pixels, vertical, measure)
-   !< `Locator_Log10`: the ticks of a log10 axis (none if the range crosses or touches zero).
-   type(plot_ticks),       intent(inout) :: t          !< Ticks (appended).
-   real(real64),           intent(in)    :: rmin, rmax !< Range.
-   real(real32),           intent(in)    :: pixels     !< Axis's length [pixels].
-   logical,                intent(in)    :: vertical   !< A y axis.
-   procedure(text_measure)               :: measure    !< Text sizes.
-   integer(int32)                        :: exp_min, exp_max, exp_step !< Exponents and step.
-   logical                               :: ok         !< One sign.
+   subroutine locate_log10(t, rmin, rmax, pixels, vertical, measure, fmt)
+   !< `Locator_Log10`: the ticks of a log10 axis (none if the range crosses or touches zero), labelled by `fmt` (default
+   !< "%g").
+   type(plot_ticks),       intent(inout)        :: t          !< Ticks (appended).
+   real(real64),           intent(in)           :: rmin, rmax !< Range.
+   real(real32),           intent(in)           :: pixels     !< Axis's length [pixels].
+   logical,                intent(in)           :: vertical   !< A y axis.
+   procedure(text_measure)                      :: measure    !< Text sizes.
+   type(plot_format),      intent(in), optional :: fmt        !< Label format.
+   type(plot_format)                            :: f          !< The format ("%g" unless given).
+   integer(int32)                               :: exp_min, exp_max, exp_step !< Exponents and step.
+   logical                                      :: ok         !< One sign.
 
+   if (present(fmt)) f = fmt
    call log_exponents(rmin, rmax, pixels, vertical, exp_min, exp_max, exp_step, ok)
-   if (ok) call log_ticks(t, rmin, rmax, exp_min, exp_max, exp_step, measure)
+   if (ok) call log_ticks(t, rmin, rmax, exp_min, exp_max, exp_step, measure, f)
    endsubroutine locate_log10
 
-   subroutine locate_symlog(t, rmin, rmax, pixels, vertical, measure)
+   subroutine locate_symlog(t, rmin, rmax, pixels, vertical, measure, fmt)
    !< `Locator_SymLog`: within [-1, 1] the linear ticks; crossing zero 0 and the logarithmic ticks of both sides (one
-   !< step, the larger of the two sides'); else the log10 ticks.
-   type(plot_ticks),       intent(inout) :: t          !< Ticks (appended).
-   real(real64),           intent(in)    :: rmin, rmax !< Range.
-   real(real32),           intent(in)    :: pixels     !< Axis's length [pixels].
-   logical,                intent(in)    :: vertical   !< A y axis.
-   procedure(text_measure)               :: measure    !< Text sizes.
+   !< step, the larger of the two sides'); else the log10 ticks; labelled by `fmt` (default "%g").
+   type(plot_ticks),       intent(inout)        :: t          !< Ticks (appended).
+   real(real64),           intent(in)           :: rmin, rmax !< Range.
+   real(real32),           intent(in)           :: pixels     !< Axis's length [pixels].
+   logical,                intent(in)           :: vertical   !< A y axis.
+   procedure(text_measure)                      :: measure    !< Text sizes.
+   type(plot_format),      intent(in), optional :: fmt        !< Label format.
+   type(plot_format)                            :: f          !< The format ("%g" unless given).
    real(real32)                          :: pix_p1, pix_n1 !< The pixels of 1 and -1.
    integer(int32)                        :: exp_min_p, exp_max_p, exp_step_p !< The positive side's exponents.
    integer(int32)                        :: exp_min_n, exp_max_n, exp_step_n !< The negative side's.
    logical                               :: ok         !< Exponents found.
 
+   if (present(fmt)) f = fmt
    if (rmin >= -1.0_real64 .and. rmax <= 1.0_real64) then
-      call locate_default(t, rmin, rmax, pixels, vertical, measure)
+      call locate_default(t, rmin, rmax, pixels, vertical, measure, f)
    elseif (rmin * rmax < 0.0_real64) then
       pix_p1 = symlog_pixel(1.0_real64, rmin, rmax, pixels)
       pix_n1 = symlog_pixel(-1.0_real64, rmin, rmax, pixels)
       call log_exponents(1.0_real64, rmax, abs(pixels - pix_p1), vertical, exp_min_p, exp_max_p, exp_step_p, ok)
       call log_exponents(rmin, -1.0_real64, abs(pix_n1 - 0.0_real32), vertical, exp_min_n, exp_max_n, exp_step_n, ok)
-      call add_tick_g(t, 0.0_real64, .true., measure)
-      call log_ticks(t, 1.0_real64, rmax, exp_min_p, exp_max_p, max(exp_step_n, exp_step_p), measure)
-      call log_ticks(t, rmin, -1.0_real64, exp_min_n, exp_max_n, max(exp_step_n, exp_step_p), measure)
+      call add_tick_f(t, 0.0_real64, .true., measure, f)
+      call log_ticks(t, 1.0_real64, rmax, exp_min_p, exp_max_p, max(exp_step_n, exp_step_p), measure, f)
+      call log_ticks(t, rmin, -1.0_real64, exp_min_n, exp_max_n, max(exp_step_n, exp_step_p), measure, f)
    else
-      call locate_log10(t, rmin, rmax, pixels, vertical, measure)
+      call locate_log10(t, rmin, rmax, pixels, vertical, measure, f)
    endif
    endsubroutine locate_symlog
 
@@ -1098,18 +1143,21 @@ contains
    call fmt_text(s, n, lab(1:nl))
    endsubroutine time_cursor_label
 
-   subroutine axis_value_text(v, spacing, s, n)
-   !< `LabelAxisValue(axis, v, round=true)` of an axis labelled "%g": v rounded to the precision of the ticks'
-   !< spacing, appended to s(1:n) (ImPlot's 32-byte buffer).
-   real(real64),     intent(in)    :: v       !< Value.
-   real(real64),     intent(in)    :: spacing !< The first two ticks' distance, or the range.
-   character(len=*), intent(inout) :: s       !< Text.
-   integer(int32),   intent(inout) :: n       !< Its length.
-   character(len=TICK_LABEL_LEN)   :: lab     !< The label.
-   integer(int32)                  :: nl      !< Its length.
+   subroutine axis_value_text(v, spacing, s, n, fmt)
+   !< `LabelAxisValue(axis, v, round=true)` of an axis labelled by `fmt` (default "%g"): v rounded to the precision of
+   !< the ticks' spacing, appended to s(1:n) (ImPlot's 32-byte buffer).
+   real(real64),      intent(in)           :: v       !< Value.
+   real(real64),      intent(in)           :: spacing !< The first two ticks' distance, or the range.
+   character(len=*),  intent(inout)        :: s       !< Text.
+   integer(int32),    intent(inout)        :: n       !< Its length.
+   type(plot_format), intent(in), optional :: fmt     !< The axis's format.
+   type(plot_format)                       :: f       !< The format ("%g" unless given).
+   character(len=TICK_LABEL_LEN)           :: lab     !< The label.
+   integer(int32)                          :: nl      !< Its length.
 
+   if (present(fmt)) f = fmt
    nl = 0_int32
-   call fmt_g(lab, nl, round_axis_value(v, spacing))
+   call fmt_real(lab, nl, f, round_axis_value(v, spacing))
    call fmt_text(s, n, lab(1:nl))
    endsubroutine axis_value_text
 

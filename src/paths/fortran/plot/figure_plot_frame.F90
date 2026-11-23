@@ -52,6 +52,11 @@ module figure_plot_frame
 !< - the ticks (figure_plot_locators): `Locator_Default`, `Locator_Log10`, `Locator_SymLog`, `Locator_Time` with their
 !<   labels (`%g`; dates and times on two levels: the second level's room below the first, its labels lower, its ticks
 !<   without grid lines or tick marks);
+!< - the tick formats (`pf_setup_axes`' `xformat`, `yformat`, `pf_setup_axis`' `format`: `SetupAxisFormat`, this
+!<   frame's, ImPlot's first 15 characters of it) of the tick labels of linear, log and symlog axes, of the mouse text
+!<   and of the tags (`Formatter_Default`, figure_plot_format: glibc's printf, `%a` included); the ticks given
+!<   (`pf_setup_axis_ticks`: `SetupAxisTicks` with `show_default` false, as `ip_setup_axis_ticks`), minor ticks
+!<   labelled by their text (whole) or by the axis's format when they are given, the axis's locator off;
 !< - the drawing of `SetupFinish` and `EndPlot`, in their order: the frame (`RenderFrame`, `FrameBg`), the plot's
 !<   background (`WindowBg`), the grid (majors, minors faded by `MinorAlpha` and by the ticks' density), each axis's
 !<   highlight (an item's colour while its legend entry is hovered, with more than one axis on its direction), label
@@ -84,8 +89,8 @@ module figure_plot_frame
 !<   `SetupAxisLinks`): named groups (never removed) holding the range their axes share, pulled at the call (a cell's
 !<   at its plot's begin), pushed by every axis at `pf_end_plot`; a linked axis has no initial fit (`CanInitFit`);
 !< - P12, axis tags (`pf_tag`, as `ip_tag`, `fig_plot_tag` and ImPlot's `TagX`, `TagY`): text or the value
-!<   (unrounded "%g", a time axis's date and time), the last item's colour by default, drawn after the border with the
-!<   axis's room for them from the next frame (`OverrideSizeLate`);
+!<   (unrounded, in the axis's format; a time axis's date and time), the last item's colour by default, drawn after the
+!<   border with the axis's room for them from the next frame (`OverrideSizeLate`);
 !< - the drag tools are figure_plot_tools' (P12), over this module's hooks (`pf_plot_id`, ...).
 !<
 !< Kept from the current path (FIGURE's behaviour over ImPlot, mirrored bit for bit; the owner's decisions on #15):
@@ -95,7 +100,7 @@ module figure_plot_frame
 !< range); an X2..Y3 link lasting after the program stops calling `pf_link_axis` (ImPlot resets only X1's and Y1's),
 !< still pushing its axis's range into the group; `pf_begin_aligned` refused inside a subplot (`fig_aligned_open`).
 !<
-!< Not yet: tick formats, local time and ImPlot's time style options (12-hour clock, US dates: ImPlot's defaults), the
+!< Not yet: local time and ImPlot's time style options (12-hour clock, US dates: ImPlot's defaults), the
 !< legend's scrolling, colormaps other than Deep (the line colours of FIGURE's own styles: seal, paper, ...: their
 !< automatic colours are ImPlot's colormaps, registered by the native layer), ImPlot style variables set by a theme
 !< (`FitPadding` included), limits' constraints, the axis flags FIGURE's API does not set (`NoInitialFit`,
@@ -137,11 +142,12 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
-use figure_plot_format, only : plot_format, fmt_g, fmt_parse, fmt_text
+use figure_plot_format, only : plot_format, fmt_parse, fmt_real, fmt_text
 use figure_plot_transform, only : plot_axis_map, map_pixel
 use figure_plot_locators, only : plot_ticks, ticks_reset, locate_default, locate_log10, locate_symlog, locate_time, &
                                 transform_log10, transform_symlog, inverse_log10, inverse_symlog, axis_value_text, &
-                                time_cursor_label, TIME_MAX, TIME_MIN
+                                time_cursor_label, add_tick_custom, TICK_LABEL_LEN, TIME_MAX, TIME_MIN
+use figure_base, only : format_ok, FORMAT_REAL
 use figure_imgui, only : ig_button, ig_checkbox, ig_same_line, ig_separator
 use figure_menu, only : ig_begin_menu, ig_end_menu, ig_menu_item
 
@@ -152,6 +158,7 @@ public :: plot_item_ctx, pf_item_begin, pf_item_fit, pf_item_end, pf_item_hidden
 public :: pf_plot_ctx, pf_item_count, pf_item_shown_at, pf_item_state, pf_item_fit_with, pf_digital_offset
 public :: pf_text_vertical, pf_item_recolor, pf_item_id, pf_last_item_color
 public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
+public :: pf_setup_axis_ticks
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
 public :: pf_hide_next_item, pf_legend_hovered
 public :: pf_plot_count, pf_colormap, pf_colormap_scale
@@ -305,6 +312,8 @@ type :: plot_axis
    integer(int32) :: link_idx = 0_int32               !< ... which group, column or row.
    real(real32)   :: late(2) = 0.0_real32             !< A tag's size, the tick labels' room from the next frame
                                                       !< (`Ticker.LateSize`, `OverrideSizeLate`).
+   type(plot_format) :: fmt                           !< Its labels' format, this frame's (`FormatSpec`; "%g").
+   logical        :: show_default = .true.            !< Its locator's ticks drawn (`ShowDefaultTicks`: no ticks given).
 endtype plot_axis
 
 type :: plot_record
@@ -537,6 +546,11 @@ contains
          p%ax(i)%scale = SCALE_LINEAR
          p%ax(i)%con_min = -huge(1.0_real64)
          p%ax(i)%con_max = huge(1.0_real64)
+         p%ax(i)%fmt = plot_format() ! HasFormatSpec false: "%g"
+         p%ax(i)%show_default = .true.
+         call ticks_reset(ticks(i)) ! Ticker::Reset (the ticks given at the setup follow): MaxSize = LateSize (a
+         ticks(i)%max_size = p%ax(i)%late ! tag's room), LateSize = 0
+         p%ax(i)%late = 0.0_real32
       enddo
       p%ax(AX_X1)%enabled = .true.
       p%ax(AX_Y1)%enabled = .true.
@@ -593,18 +607,24 @@ contains
    visible = .true.
    endfunction pf_begin_plot
 
-   subroutine pf_setup_axes(xlabel, ylabel, auto_fit, xscale, yscale)
+   subroutine pf_setup_axes(xlabel, ylabel, auto_fit, xscale, yscale, xformat, yformat)
    !< The axes X1 and Y1 (`SetupAxes`; `ip_setup_axes`): their labels ('' or '##...': none) and, with `auto_fit`, both
    !< fit the data every frame (`ImPlotAxisFlags_AutoFit`); `xscale`/`yscale`: 'linear' (default), 'log', 'symlog',
-   !< 'time' (x only), as `ip_setup_axes`. Call after `pf_begin_plot`, before any item, every frame (the scales are
-   !< this frame's). The flags persist: a plot keeps them on the frames this is not called.
+   !< 'time' (x only), as `ip_setup_axes`; `xformat`/`yformat`: a C printf format of one real for the tick labels
+   !< (`SetupAxisFormat`; checked as `ip_setup_axes` checks it). Call after `pf_begin_plot`, before any item, every
+   !< frame (the scales and formats are this frame's). The flags persist: a plot keeps them on the frames this is not
+   !< called.
    character(len=*), intent(in)           :: xlabel   !< X label.
    character(len=*), intent(in)           :: ylabel   !< Y label.
    logical,          intent(in), optional :: auto_fit !< Fit the data every frame.
    character(len=*), intent(in), optional :: xscale   !< Scale of x.
    character(len=*), intent(in), optional :: yscale   !< Scale of y.
+   character(len=*), intent(in), optional :: xformat  !< printf format of the x tick labels (one real).
+   character(len=*), intent(in), optional :: yformat  !< printf format of the y tick labels (one real).
    integer(int32)                         :: flags    !< ImPlotAxisFlags.
 
+   if (present(xformat)) call format_refused(xformat)
+   if (present(yformat)) call format_refused(yformat)
    call setup_refused('pf_setup_axes')
    flags = 0_int32
    if (present(auto_fit)) then
@@ -614,19 +634,24 @@ contains
    call setup_axis(plots(cur), AX_Y1, flags, ylabel)
    if (present(xscale)) call setup_scale(plots(cur)%ax(AX_X1), xscale, .false.)
    if (present(yscale)) call setup_scale(plots(cur)%ax(AX_Y1), yscale, .true.)
+   if (present(xformat)) call setup_format(plots(cur)%ax(AX_X1), xformat)
+   if (present(yformat)) call setup_format(plots(cur)%ax(AX_Y1), yformat)
    endsubroutine pf_setup_axes
 
-   subroutine pf_setup_axis(axis, label, scale, auto_fit, opposite, invert, lock, no_grid)
+   subroutine pf_setup_axis(axis, label, scale, auto_fit, format, opposite, invert, lock, no_grid)
    !< One axis (`SetupAxis`; `ip_setup_axis`): `'x1'`, `'x2'`, `'x3'`, `'y1'`, `'y2'`, `'y3'`; call after
    !< `pf_begin_plot`, before any item, every frame for the axes 2 and 3 (they exist on the frames they are set up).
    !< The secondary axes go on the opposite side (top, right) without grid lines unless `opposite`/`no_grid` say
    !< otherwise; `auto_fit`: the axis fits the data every frame; `invert`: values grow leftwards or downwards; `lock`:
    !< its ends stay (no fit moves them); `scale`: 'linear' (default), 'log', 'symlog', 'time' (x axes only), this
-   !< frame's (`SetupAxisScale`). The flags persist: a plot keeps them on the frames this is not called.
+   !< frame's (`SetupAxisScale`); `format`: a C printf format of one real for the tick labels, this frame's
+   !< (`SetupAxisFormat`; the date and time labels of a time axis keep theirs). The flags persist: a plot keeps them on
+   !< the frames this is not called.
    character(len=*), intent(in)           :: axis     !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
    character(len=*), intent(in), optional :: label    !< Label (default, '' or '##...': none).
    character(len=*), intent(in), optional :: scale    !< 'linear', 'log', 'symlog', 'time'.
    logical,          intent(in), optional :: auto_fit !< Fit the data every frame.
+   character(len=*), intent(in), optional :: format   !< printf format of the tick labels (one real).
    logical,          intent(in), optional :: opposite !< On the opposite side (default: the axes 2 and 3).
    logical,          intent(in), optional :: invert   !< Inverted.
    logical,          intent(in), optional :: lock     !< Ends locked.
@@ -634,6 +659,7 @@ contains
    integer(int32)                         :: i        !< Axis.
    integer(int32)                         :: flags    !< ImPlotAxisFlags.
 
+   if (present(format)) call format_refused(format)
    call setup_refused('pf_setup_axis')
    i = axis_code(axis)
    flags = 0_int32
@@ -649,7 +675,41 @@ contains
       call setup_axis(plots(cur), i, flags)
    endif
    if (present(scale)) call setup_scale(plots(cur)%ax(i), scale, i >= AX_Y1)
+   if (present(format)) call setup_format(plots(cur)%ax(i), format)
    endsubroutine pf_setup_axis
+
+   subroutine pf_setup_axis_ticks(axis, values, labels)
+   !< Ticks of one axis at the values given instead of its locator's (`SetupAxisTicks`, `show_default` false;
+   !< `ip_setup_axis_ticks`), labelled `labels` (trailing blanks dropped) or, without them, by the axis's format as it
+   !< is at this call (`pf_setup_axis`'s `format` first). Each a minor tick (`AddTicksCustom`); several calls add up.
+   !< After `pf_setup_axis` for that axis, before any item, every frame.
+   character(len=*), intent(in)           :: axis      !< 'x1', 'x2', 'x3', 'y1', 'y2', 'y3'.
+   real(real64),     intent(in)           :: values(:) !< Positions [axis units].
+   character(len=*), intent(in), optional :: labels(:) !< One label per value.
+   integer(int32)                         :: i         !< Axis.
+   integer(int32)                         :: k         !< Counter.
+
+   do k = 1_int32, size(values, kind=int32)
+      if (values(k) /= values(k) .or. abs(values(k)) > huge(1.0_real64)) &
+         error stop 'figure_plot_frame: pf_setup_axis_ticks: values must be finite'
+   enddo
+   if (present(labels)) then
+      if (size(labels) /= size(values)) error stop 'figure_plot_frame: pf_setup_axis_ticks: labels must be one per value'
+   endif
+   call setup_refused('pf_setup_axis_ticks')
+   i = axis_code(axis)
+   associate(ax => plots(cur)%ax(i))
+      if (.not. ax%enabled) error stop 'figure_plot_frame: pf_setup_axis_ticks of an axis not set up'
+      ax%show_default = .false.
+      do k = 1_int32, size(values, kind=int32)
+         if (present(labels)) then
+            call add_tick_custom(ticks(i), values(k), measure_text, ax%fmt, labels(k)(1:len_trim(labels(k))))
+         else
+            call add_tick_custom(ticks(i), values(k), measure_text, ax%fmt)
+         endif
+      enddo
+   endassociate
+   endsubroutine pf_setup_axis_ticks
 
    subroutine pf_setup_axes_limits(xmin, xmax, ymin, ymax, always)
    !< The ranges of X1 and Y1 (`SetupAxesLimits`; `ip_setup_axes_limits`): applied until the plot has been drawn
@@ -1154,7 +1214,7 @@ contains
    subroutine pf_tag(axis, value, color, text)
    !< A tag on an axis of the open plot (`TagX`, `TagY` through FIGURE's `fig_plot_tag`; `ip_tag`): a box at `value`
    !< over the axis, holding `text` or, without it, the value labelled as the axis labels a value (`LabelAxisValue`,
-   !< unrounded: "%g", a time axis's date and time). Drawn when the plot ends, over the axis's tick labels, if the
+   !< unrounded: the axis's format, "%g" by default; a time axis's date and time). Drawn when the plot ends, over the axis's tick labels, if the
    !< value is within the axis's range; the axis makes room for it from the next frame. Default colour: the last item's
    !< (a tag after a line marks the line's last value); alpha 0: no box, the axis's text colour. `axis` is
    !< `'x1'`..`'x3'`, `'y1'`..`'y3'`, set up on this frame. It ends the setup.
@@ -1166,6 +1226,8 @@ contains
    real(real32)                           :: c(4)     !< Colour.
    real(real32)                           :: lum, t   !< Luminance (CalcTextColor), a product.
    real(real64)                           :: lc(4)    !< The last item's colour.
+   character(len=TICK_LABEL_LEN)          :: lab      !< The value's label.
+   integer(int32)                         :: nl       !< Its length.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: pf_tag outside a plot'
    if (value /= value) error stop 'figure_plot_frame: pf_tag: the value is NaN'
@@ -1213,8 +1275,10 @@ contains
       elseif (p%ax(i)%scale == SCALE_TIME) then
          call time_cursor_label(value, p%ax(i)%range_max - p%ax(i)%range_min, p%rect(3) - p%rect(1), tag_text, &
                                 n_tag_text)
-      else
-         call fmt_g(tag_text, n_tag_text, value) ! Formatter_Default, "%g"
+      else ! the axis's formatter (Formatter_Default, its format) into ImPlot's 32 bytes
+         nl = 0_int32
+         call fmt_real(lab, nl, p%ax(i)%fmt, value)
+         call fmt_text(tag_text, n_tag_text, lab(1:nl))
       endif
       tag_len(k) = n_tag_text - tag_off(k) + 1_int32
    endassociate
@@ -1328,7 +1392,8 @@ contains
                                text_color(cm_sample(cm, tick_t)), real(tick_k, real64))
       txt_x = gr(3) + txt_off
       txt_y = y_pos - cticks%label_size(2, k) * 0.5_real32
-      call core_draw_text(real(txt_x, real64), real(txt_y, real64), col_text, cticks%label(k)(1:cticks%label_len(k)))
+      call core_draw_text(real(txt_x, real64), real(txt_y, real64), col_text, &
+                          cticks%text(cticks%label_off(k):cticks%label_off(k) + cticks%label_len(k) - 1_int32))
    enddo
    if (rend_label) call text_vertical((gr(3) + 2.0_real32 * txt_off) + cticks%max_size(1), &
                                       (gr(2) + gr(4)) * 0.5_real32 + lw * 0.5_real32, col_text, &
@@ -1870,7 +1935,7 @@ contains
 
    subroutine axis_value_label(p, i, v, s, n)
    !< `LabelAxisValue(axis, v, round=true)`: a time axis's `TimeFormatMouseCursor`; else v rounded to the ticks'
-   !< spacing's precision, "%g"; appended to s(1:n).
+   !< spacing's precision, in the axis's format; appended to s(1:n).
    type(plot_record), intent(in)    :: p !< Plot.
    integer(int32),    intent(in)    :: i !< Axis.
    real(real64),      intent(in)    :: v !< Value.
@@ -1887,7 +1952,7 @@ contains
    else
       spacing = p%ax(i)%range_max - p%ax(i)%range_min
    endif
-   call axis_value_text(v, spacing, s, n)
+   call axis_value_text(v, spacing, s, n, p%ax(i)%fmt)
    endsubroutine axis_value_label
 
    subroutine side_switch(p)
@@ -3406,6 +3471,24 @@ contains
 
    ! private: the axes
 
+   subroutine format_refused(fmt)
+   !< A format refused as `ip_setup_axes`/`ip_setup_axis` refuse it (`format_ok`: one conversion of a real), an error
+   !< stop here.
+   character(len=*), intent(in) :: fmt !< Format.
+
+   if (.not. format_ok(fmt, FORMAT_REAL)) error stop 'figure_plot_frame: a format of the tick labels needs one '// &
+                                                    'conversion of a real (%f, %e, %g, %a)'
+   endsubroutine format_refused
+
+   subroutine setup_format(ax, fmt)
+   !< `SetupAxisFormat`: the axis's labels' format on this frame, as ImPlot keeps it: its first 15 characters
+   !< (`ImStrncpy` into `FormatSpec[16]`), parsed.
+   type(plot_axis),  intent(inout) :: ax  !< Axis.
+   character(len=*), intent(in)    :: fmt !< Format.
+
+   call fmt_parse(fmt(1:min(len(fmt), 15)), ax%fmt)
+   endsubroutine setup_format
+
    subroutine setup_scale(ax, scale, vertical)
    !< `SetupAxisScale`: the scale of an axis on this frame and its constraint (log10: from DBL_MIN; time: 0 to
    !< IMPLOT_MAX_TIME, two label levels).
@@ -3760,10 +3843,7 @@ contains
    p%col_tick = p%col_maj                                                   ! AxisTick: AxisGrid
    p%col_txt = core_style_color(ImGuiCol_Text)                              ! AxisText: Text
    p%col_border = core_style_color(ImGuiCol_Border)                         ! PlotBorder: Border
-   do i = 1_int32, AXES
-      call ticks_reset(ticks(i))
-      ticks(i)%max_size = p%ax(i)%late ! Ticker::Reset: MaxSize = LateSize (a tag's room), LateSize = 0
-      p%ax(i)%late = 0.0_real32
+   do i = 1_int32, AXES ! (the ticks reset at the plot's begin)
       if (p%ax(i)%scale == SCALE_TIME) ticks(i)%levels = 2_int32 ! SetupAxisScale: Ticker.Levels = 2
    enddo
    p%canvas(1:2) = p%frame(1:2) + plot_pad
@@ -3814,14 +3894,14 @@ contains
    call pad_and_datum_x(p, pad_top, pad_bot)
    plot_height = ((p%canvas(4) - p%canvas(2)) - pad_top) - pad_bot
    do i = AX_Y1, AX_Y3
-      if (will_render(p%ax(i)) .and. plot_height > 0.0_real32) &
+      if (will_render(p%ax(i)) .and. p%ax(i)%show_default .and. plot_height > 0.0_real32) &
          call locate(p%ax(i), ticks(i), plot_height, .true.)
    enddo
    call pad_and_datum_y(p, pad_left, pad_right)
    plot_width = ((p%canvas(3) - p%canvas(1)) - pad_left) - pad_right
    ! (4) the x ticks; (4.5) the x axes again, their labels' height known; (5) the plot rectangle
    do i = AX_X1, AX_X3
-      if (will_render(p%ax(i)) .and. plot_width > 0.0_real32) &
+      if (will_render(p%ax(i)) .and. p%ax(i)%show_default .and. plot_width > 0.0_real32) &
          call locate(p%ax(i), ticks(i), plot_width, .false.)
    enddo
    title_pad = 0.0_real32
@@ -4033,13 +4113,20 @@ contains
    endfunction has_label
 
    subroutine place_ticks(t, ax)
-   !< The ticks' pixels, rounded (`IM_ROUND(PlotToPixels)`).
+   !< The ticks' pixels, rounded (`IM_ROUND(PlotToPixels)`); a tick given far outside the range (its pixel past a C
+   !< `int`) at x86's `(int)` of it, INT_MIN: outside the plot, as ImPlot's.
    type(plot_ticks), intent(inout) :: t  !< Ticks.
    type(plot_axis),  intent(in)    :: ax !< Their axis.
-   integer(int32)                 :: k  !< Counter.
+   real(real32)                    :: x  !< A pixel.
+   integer(int32)                  :: k  !< Counter.
 
    do k = 1_int32, t%n
-      t%pix(k) = real(int(to_pixels(ax, t%pos(k)) + 0.5_real32, int32), real32)
+      x = to_pixels(ax, t%pos(k)) + 0.5_real32
+      if (abs(x) < 2.0e9_real32) then
+         t%pix(k) = real(int(x, int32), real32)
+      else
+         t%pix(k) = -2147483648.0_real32
+      endif
    enddo
    endsubroutine place_ticks
 
@@ -4141,7 +4228,8 @@ contains
                datum = ax%datum1 + pad * merge(-1.0_real32, 1.0_real32, opp)
                if (.not. t%show(k) .or. t%pix(k) < r(1) - 1.0_real32 .or. t%pix(k) > r(3) + 1.0_real32) cycle
                px = t%pix(k) - 0.5_real32 * t%label_size(1, k)
-               call core_draw_text(real(px, real64), real(datum, real64), p%col_txt, t%label(k)(1:t%label_len(k)))
+               call core_draw_text(real(px, real64), real(datum, real64), p%col_txt, &
+                                   t%text(t%label_off(k):t%label_off(k) + t%label_len(k) - 1_int32))
             enddo
          endif
       else
@@ -4162,7 +4250,8 @@ contains
                datum = ax%datum1 + pad * merge(1.0_real32, -1.0_real32, opp)
                if (.not. t%show(k) .or. t%pix(k) < r(2) - 1.0_real32 .or. t%pix(k) > r(4) + 1.0_real32) cycle
                py = t%pix(k) - 0.5_real32 * t%label_size(2, k)
-               call core_draw_text(real(datum, real64), real(py, real64), p%col_txt, t%label(k)(1:t%label_len(k)))
+               call core_draw_text(real(datum, real64), real(py, real64), p%col_txt, &
+                                   t%text(t%label_off(k):t%label_off(k) + t%label_len(k) - 1_int32))
             enddo
          endif
       endif
@@ -4649,13 +4738,13 @@ contains
 
    select case (ax%scale)
    case (SCALE_LOG10)
-      call locate_log10(t, ax%range_min, ax%range_max, pixels, vertical, measure_text)
+      call locate_log10(t, ax%range_min, ax%range_max, pixels, vertical, measure_text, ax%fmt)
    case (SCALE_SYMLOG)
-      call locate_symlog(t, ax%range_min, ax%range_max, pixels, vertical, measure_text)
-   case (SCALE_TIME)
+      call locate_symlog(t, ax%range_min, ax%range_max, pixels, vertical, measure_text, ax%fmt)
+   case (SCALE_TIME) ! Formatter_Time: the axis's format unused
       call locate_time(t, ax%range_min, ax%range_max, pixels, measure_text)
    case default
-      call locate_default(t, ax%range_min, ax%range_max, pixels, vertical, measure_text)
+      call locate_default(t, ax%range_min, ax%range_max, pixels, vertical, measure_text, ax%fmt)
    endselect
    endsubroutine locate
 
