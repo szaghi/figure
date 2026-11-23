@@ -129,8 +129,9 @@ module figure_plot_frame
 !< than Deep (the line colours of FIGURE's own styles: seal, paper, ...: their automatic colours are ImPlot's
 !< colormaps, registered by the native layer), the axis flags FIGURE's API does not set (`NoInitialFit`, `RangeFit`, `Foreground`, `TickLabelsInside`: kept in the state or
 !< not drawn); of P12, a subplot's shared items and legend (`ShareItems`: only the cells' menu can ask for it, the flag
-!< is stored), a subplot or an aligned group in a collapsed window (`SkipItems`, which figure_core does not give: they
-!< begin as if shown).
+!< is stored); a window hidden for its first frames (an auto-resizing one measuring itself: `SkipItems` there,
+!< which figure_core does not give; a collapsed window's, `IsWindowCollapsed`, is: plots, subplots, aligned groups and
+!< colour bars return false or draw nothing in it, as ImPlot's).
 !< The segment's normal is `1/sqrt`, as FIGURE's ImPlot (native/patches/implot-0002).
 !<
 !< No allocation per frame once the tables are grown (ADR 0001; P10 step 9, figure_test_plot_frame_alloc counts them):
@@ -164,7 +165,7 @@ use figure_core, only : core_button_behavior, core_color, core_content_region_av
                         core_open_popup_id, core_begin_popup_id,                                                &
                         core_begin_popup, core_end_popup, core_set_cursor_screen_pos, core_time, &
                         core_draw_triangle_filled, core_draw_line, core_framebuffer_scale, core_style_color_rgba, &
-                        core_drop_target, core_end_drop_target
+                        core_drop_target, core_end_drop_target, core_window_collapsed
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
@@ -565,6 +566,10 @@ contains
    else ! the style's PlotPadding, PlotMinSize (a subplot's cells: its own, pushed at its begin)
       plot_pad = STYLE_PLOT_PADDING
       plot_min = STYLE_PLOT_MIN_SIZE
+      if (core_window_collapsed()) then ! SkipItems (outside a subplot): ResetCtxForNextPlot, false
+         call reset_next()
+         return
+      endif
    endif
    id = core_get_id(title)
    h = plot_handle(id, core_frame_count(), created)
@@ -1087,6 +1092,7 @@ contains
    flags = 0_int32
    call set_flag(flags, SPF_LINK_ALL_X, link_x)
    call set_flag(flags, SPF_LINK_ALL_Y, link_y)
+   if (core_window_collapsed()) return ! SkipItems: false, nothing kept
    id = core_get_id(title)
    h = subplot_handle(id, core_frame_count(), created)
    if (created) fits_pending = rows * cols ! the first time this subplot is drawn (U1: keyed by its ID, not its title)
@@ -1276,6 +1282,7 @@ contains
    open = .false.
    if (cur_align_h /= 0_int32 .or. cur_align_v /= 0_int32) &
       error stop 'figure_plot_frame: pf_begin_aligned: a group of aligned plots is open (ImPlot aligns one at a time)'
+   if (core_window_collapsed()) return ! SkipItems: false
    vertical = .true.
    if (present(horizontal)) vertical = .not. horizontal
    k = align_handle(core_get_id(group))
@@ -1557,6 +1564,7 @@ contains
    cm = CM_VIRIDIS
    if (present(colormap)) cm = colormap
    if (cur_sub == 0_int32) plot_pad = STYLE_PLOT_PADDING ! gp.Style.PlotPadding (a subplot's: half of it)
+   if (core_window_collapsed()) return ! SkipItems: nothing drawn
    id = core_get_id(label)
    call core_text_size(label, w, h, hide_after_hash=.true.)
    lw = real(w, real32)

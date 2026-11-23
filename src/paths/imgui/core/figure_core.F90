@@ -59,7 +59,7 @@ use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextS
                           igGetWindowSize, igIsItemActive, igIsItemHovered, igIsKeyDown_Nil, igIsKeyPressed_Bool,       &
                           igIsMouseClicked_Bool, igIsMouseDown_Nil, igIsMouseHoveringRect, igIsMouseReleased_Nil,       &
                           igPopID, igPushID_Str, igSetCursorScreenPos, igDragScalar, igGetMouseDragDelta,              &
-                          igBeginDragDropTarget, igAcceptDragDropPayload, igEndDragDropTarget,                       &
+                          igBeginDragDropTarget, igAcceptDragDropPayload, igEndDragDropTarget, igIsWindowCollapsed,  &
                           igInvisibleButton, igIsMouseDoubleClicked_Nil, igIsMousePosValid, igIsWindowHovered,         &
                           igPopItemFlag, igPopStyleVar, igPushID_Int, igPushItemFlag, igPushItemWidth,                 &
                           igPushStyleVar_Float, igPushStyleVar_Vec2, igRadioButton_Bool, igSetMouseCursor,             &
@@ -100,7 +100,7 @@ public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core
 public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
 public :: core_open_popup, core_begin_popup, core_end_popup, core_open_popup_id, core_begin_popup_id
-public :: core_style_vec2, core_drop_target, core_end_drop_target
+public :: core_style_vec2, core_drop_target, core_end_drop_target, core_window_collapsed
 public :: core_white_pixel, core_framebuffer_scale, core_texture_sampling
 public :: core_draw_prims, core_delta_time, core_style_color_rgba
 public :: core_draw_list
@@ -509,6 +509,14 @@ contains
       enddo
    endif
    endfunction core_drop_target
+
+   function core_window_collapsed() result(yes)
+   !< The current window is collapsed (`IsWindowCollapsed`): its items are skipped (`SkipItems`, the case of it the
+   !< public API gives; a window hidden for its first frames, an auto-resizing one measuring itself, is not seen).
+   logical :: yes !< Collapsed.
+
+   yes = logical(igIsWindowCollapsed())
+   endfunction core_window_collapsed
 
    subroutine core_end_drop_target()
    !< `EndDragDropTarget` (after `core_drop_target` returned true).

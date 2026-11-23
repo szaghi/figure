@@ -32,7 +32,7 @@ use figure_core, only : core_active_id, core_button_behavior, core_content_regio
                         core_draw_rect_filled_multicolor, core_draw_text, core_font_size, core_frame_height,     &
                         core_get_id, core_hovered_id, core_io_input, core_item_add, core_item_size,              &
                         core_mouse_pos, core_mouse_pos_valid, core_set_key_owner, core_style_color,              &
-                        core_style_vec2, core_text_size
+                        core_style_vec2, core_text_size, core_window_collapsed
 use figure_plot_colormaps, only : cm_count, cm_sample
 use figure_plot_format, only : plot_format, fmt_parse, fmt_real, fmt_text
 use figure_plot_locators, only : c_ceil, c_floor
@@ -210,6 +210,7 @@ contains
       error stop 'figure_plot_colorbar: a log scale needs vmin and vmax above 0'
    s0 = fwd(vmin)
    s1 = fwd(vmax)
+   if (core_window_collapsed()) return ! window->SkipItems
    call fmt_parse('%g', fmt)
    if (present(label_format)) then
       if (len(label_format) > 0) call fmt_parse(label_format, fmt)
