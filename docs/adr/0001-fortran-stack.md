@@ -126,8 +126,8 @@ From FIGURE's history with three compilers (#4):
 - **No allocation per item per frame** in the core and the plot frame: labels, IDs and `##` suffixes are character
   slices hashed in place, not `type(string)` values.
 
-nvfortran 26.9's defects, each with the form that avoids it (reproducers on #4; the last four have canaries in
-`figure_test_canaries`, which fail once a release fixes the defect):
+nvfortran 26.9's defects, each with the form that avoids it (reproducers on #4; the move_alloc, size, append and
+typed-constructor defects have canaries in `figure_test_canaries`, which fail once a release fixes the defect):
 
 - **A section of an array of a derived type with a deferred-length component**, an assumed-shape dummy assigned to an
   allocatable (`inner = items(2:3)`), crashes: copy element by element. (P3)
@@ -148,10 +148,17 @@ nvfortran 26.9's defects, each with the form that avoids it (reproducers on #4; 
   its dummy's length (`character(len=len(s))`) return nothing for a deferred-length actual: select on a variable, or
   pass `trim(v)`. The trigger is narrower than this (foresight's `select case (extension(...))` is right), but not
   known; the rule is the safe side of it. `[integer ::]` and `[real ::]` do not trigger it.
+- **An arithmetic expression of a strided section** (`xs(1::4) * 0.25`, `ys(1:n:2, k) + 1`), assigned to an
+  allocatable or passed as an actual argument, gets the parent array's extent, its tail garbage (its `size()` is right,
+  and so is a fixed-shape target): name the section first, or loop. A user's `ip_*` call with such an argument is
+  refused when its arrays' sizes then disagree, drawn wrong when they agree.
+- **An absent optional array forwarded to an optional dummy that is TARGET and ASYNCHRONOUS** stops the program
+  (`TMP_DESC: invalid original`); either attribute alone is right. The `ip_*` items' array dummies have both: a
+  program forwarding its own optional to one must test `present()` and call without it.
 
-The last four are checked in the sources by `scripts/check_nvf_patterns.py` (Checks), because a test catches them only
-on the paths it runs: the audit of 2026-11-21 found none in `src/lib` or `src/paths`, and the check keeps the layers to
-come so.
+The move_alloc, size, append and typed-constructor defects and the strided expression are checked in the sources by
+`scripts/check_nvf_patterns.py` (Checks), because a test catches them only on the paths it runs: the audits of
+2026-11-21 and 2026-11-22 found none in FIGURE's sources, and the check keeps the layers to come so.
 
 ## The sibling libraries
 

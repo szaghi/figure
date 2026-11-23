@@ -1,6 +1,7 @@
 """Check FIGURE's Fortran sources for the forms that nvfortran 26.9 compiles wrong (docs/adr/0001-fortran-stack.md).
 
-Four source patterns, each a defect with a reproducer on szaghi/figure#4 and a canary in figure_test_canaries:
+Five source patterns, each a defect with a reproducer on szaghi/figure#4 (the first four with a canary in
+figure_test_canaries):
 
   - ``move-alloc``: ``call move_alloc(from, to)``, ``to`` a local array of a procedure or main program that has
     internal procedures, or a host's local from inside one of them: the array's size is wrong afterwards (a module
@@ -16,6 +17,9 @@ Four source patterns, each a defect with a reproducer on szaghi/figure#4 and a c
     the file whose result has its dummy's length (``character(len=len(s))``) with a variable as the actual: no case
     matches, the result is empty.
 
+  - ``stride-expr``: an arithmetic operator applied to a strided section (``x(1::4) * 0.25``, ``y(1:n:2, k) + 1``): the
+    expression, assigned to an allocatable or passed as an actual argument, gets the parent array's extent (its
+    ``size()`` is right); name the section first, or loop.
 The check is syntactic and conservative: a line may carry ``! nvf-ok: <reason>`` to accept it. Exit status 0 when no
 pattern is found, 1 otherwise (each finding printed as ``file:line: pattern: text``). ``--self-test`` runs the check on
 built-in cases, each of which must be found or not as stated. Standard library only (Python >= 3.11).
@@ -62,6 +66,14 @@ TYPED_CHAR_CTOR = re.compile(r"\[\s*character\s*\([^)]*\)\s*::", re.I)
 SELECT_CALL = re.compile(
     r"^\s*(?:\w+\s*:\s*)?select\s+case\s*\(\s*([A-Za-z_]\w*)\s*\(", re.I
 )
+STRIDED = r"[A-Za-z_][\w%]*\s*\((?:[^()]*,)?[^(),]*:[^(),]*:[^(),]*(?:,[^()]*)?\)"
+STRIDE_EXPR = re.compile(rf"(?:{STRIDED})\s*(?:[-+/]|\*(?!\*))|(?<![*/])(?:[-+*/])\s*(?:{STRIDED})")
+# intrinsics whose result does not carry the expression's extent (sizes, reductions, elementals inside a reduction)
+ELEMENTAL_SAFE = {
+    "size", "sum", "product", "maxval", "minval", "any", "all", "count", "maxloc", "minloc", "norm2", "dot_product",
+    "shape", "ubound", "lbound", "abs", "sqrt", "exp", "log", "log10", "sin", "cos", "tan", "real", "int", "nint",
+    "dble", "min", "max", "merge", "ieee_is_nan", "ieee_is_finite",
+}
 APPEND = re.compile(r"^\s*([A-Za-z_][\w%]*)\s*=\s*\[(.*)\]\s*$", re.I)
 
 
@@ -308,6 +320,37 @@ def check_source(
             return False
         return "%" in name or base in unit.host.movable
 
+    def stride_expr_exposed(code: str, at: int, unit: Unit | None) -> bool:
+        """Whether the expression at `at` is an actual argument of a call or of a non-intrinsic function, or the
+        right side of an assignment to an allocatable or pointer variable."""
+        depth = 0
+        for k in range(at - 1, -1, -1):  # the innermost parenthesis enclosing the expression, and its name
+            if code[k] == ")":
+                depth += 1
+            elif code[k] == "(":
+                if depth == 0:
+                    name = re.search(r"([A-Za-z_]\w*)\s*$", code[:k])
+                    if re.match(r"^\s*call\b", code, re.I) and code.find("(") == k:
+                        return True
+                    if name and name.group(1).lower() not in ELEMENTAL_SAFE:
+                        return True
+                    if not name:  # a parenthesised operand: look further out
+                        continue
+                    return False
+                depth -= 1
+        lhs = re.match(r"^\s*([A-Za-z_][\w%]*)\s*=(?!=)", code)
+        if not lhs:
+            return False
+        base = lhs.group(1).lower().split("%")
+        if len(base) > 1:  # a component: its attributes are not resolved here
+            return True
+        scope = unit
+        while scope is not None:
+            if base[0] in scope.declared:
+                return base[0] in scope.movable
+            scope = scope.host
+        return False
+
     loop_depth, loop_lines, loop_start = 0, [], 0
     accepted_lines: set[int] = set()
     for number, statement, accepted in lines:
@@ -348,6 +391,12 @@ def check_source(
                     of_derived_type = of_derived_type or target in module_derived
             if target in items and of_derived_type:
                 findings.append((number, "append", statement))
+        # stride-expr: as an actual argument, or assigned to an allocatable (a fixed-shape target is right)
+        code = re.sub(r"'[^']*'|\"[^\"]*\"", "''", statement)
+        for m in STRIDE_EXPR.finditer(code):
+            if stride_expr_exposed(code, m.start(), unit):
+                findings.append((number, "stride-expr", statement))
+                break
         # select
         if has_typed_ctor:
             if (m := SELECT_CALL.match(statement)) and m.group(
@@ -391,6 +440,46 @@ def check_source(
 
 
 SELF_TESTS: list[tuple[str, str, set[str]]] = [
+    (
+        "an elemental expression of a strided section",
+        """subroutine s(xs, ys)
+real, intent(in) :: xs(:), ys(:, :)
+call plot(xs(1::4) * 0.25, 1.0 + ys(1:41:4, 2))
+endsubroutine
+""",
+        {"stride-expr"},
+    ),
+    (
+        "a strided expression assigned to an allocatable",
+        """subroutine s(xs)
+real, intent(in) :: xs(:)
+real, allocatable :: t(:)
+t = xs(1::4) * 0.25
+endsubroutine
+""",
+        {"stride-expr"},
+    ),
+    (
+        "a strided expression assigned to a fixed-shape array or section, or reduced (right)",
+        """subroutine s(xs)
+real, intent(in) :: xs(:)
+real :: t(11), r(4)
+t = xs(1::4) * 0.25
+r(1:3:2) = r(1:3:2) - 1.0
+print *, size(xs(1::4) * 0.25), sum(xs(1::2) * 2.0)
+endsubroutine
+""",
+        set(),
+    ),
+    (
+        "a strided section passed as it is, and a contiguous section in an expression (right)",
+        """subroutine s(xs)
+real, intent(in) :: xs(:)
+call plot(xs(1::4), xs(1:10) * 2.0)
+endsubroutine
+""",
+        set(),
+    ),
     (
         "move_alloc into a host local",
         """subroutine outer()
