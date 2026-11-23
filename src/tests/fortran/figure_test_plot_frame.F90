@@ -5,12 +5,12 @@ program figure_test_plot_frame
 !< szaghi/figure#15 P10's gate on the plot frame's skeleton (figure_plot_frame). Each case is one plot drawn twice in
 !< the same window at the same place, on different frames: by ImPlot through FIGURE's API (`ip_begin_plot`,
 !< `ip_setup_axes_limits(..., always=.true.)`, `ip_line`, `ip_end_plot`) and by the Fortran frame (`pf_begin_plot`,
-!< `pf_setup_axes_limits`, `pf_line`, `pf_end_plot`); the two pictures compared at FIGURE's oracle rule (|d| <= 2 on
-!< every channel, no pixel failing). The cases: a sine on [0, 10] x [-1.2, 1.2] (majors and labelled minors on both
-!< axes, the zero snapped); wide labels on [1e5, 2e5] x [-0.0013, 0.0021] (the x labels thinned, `%g` of small
-!< values); a line leaving the plot (culled and clipped segments) -- these three in FIGURE's default style (seal), the
-!< lines of explicit colours (the style's line colours are ImPlot's colormap, not the frame's yet); the sine again in
-!< the style `'dark'`, the line of the automatic colour (ImPlot's colormap Deep). One plot ID per case (an ImPlot
+!< `pf_setup_axes_limits(..., always=.true.)`, `pf_line`, `pf_end_plot`); the two pictures compared at FIGURE's oracle
+!< rule (|d| <= 2 on every channel, no pixel failing). The cases: a sine on [0, 10] x [-1.2, 1.2] (majors and labelled
+!< minors on both axes, the zero snapped); wide labels on [1e5, 2e5] x [-0.0013, 0.0021] (the x labels thinned, `%g` of
+!< small values); a line leaving the plot (culled and clipped segments) -- these three in FIGURE's default style (seal),
+!< the lines of explicit colours (the style's line colours are ImPlot's colormap, not the frame's yet); the sine again
+!< in the style `'dark'`, the line of the automatic colour (ImPlot's colormap Deep). One plot ID per case (an ImPlot
 !< item keeps the colour it was created with). The pictures are `figure_test_plot_frame.*.png.tmp`, removed at the end
 !< (FIGURE_TEST_KEEP=1 keeps them; a mismatch's .new.png and .diff.png are left for inspection).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
@@ -55,7 +55,7 @@ do c = 1_int32, NCASE
             endif
          else
             if (pf_begin_plot(plot_id(c), width=ext(1), height=ext(2))) then
-               call pf_setup_axes_limits(lim(1), lim(2), lim(3), lim(4))
+               call pf_setup_axes_limits(lim(1), lim(2), lim(3), lim(4), always=.true.)
                if (col(1) < 0.0_real64) then
                   call pf_line('##line', x, y)
                else

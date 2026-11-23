@@ -26,6 +26,23 @@ C's `%g` on the labels the goldens show.
   segment with the SSE `rsqrtss` estimate, the frame with `1/sqrt`). Not yet: auto-fit, pan and zoom, hover, legend,
   title and axis labels, more axes, scales, the style's line colours (ImPlot's colormaps), several plots open, the
   style variables of a theme, labels without an allocation per label.
+- 2026-11-22, per-plot state and the fit (P10 steps 1 and 2): the frame keeps a table of plots keyed by their title's
+  ID (`core_get_id`, ImPlot's `Window->GetID`), integer handles, each with its six axes (range, flags, limits and
+  their condition, the fit), its items (keyed by ImPlot's item ID: the label hashed with the seed `plot.ID - 1` by
+  `figure_plot_hash`, Dear ImGui's CRC32c checked equal to `core_get_id`; the colour given or assigned once from the
+  colormap, the plot's own colour counter) and the frame it was last begun on; several plots one after another in a
+  frame, none nested. A table grows to 256 plots (256 items a plot), then the least recently drawn one not drawn on
+  this frame makes room (ImPlot keeps everything: below the cap nothing differs). Limits `once` (the default, as
+  `ip_setup_*_limits`) and `always`; the fit of `SetupFinish`/`EndPlot`: an axis without limits fits on the plot's
+  first frame, `auto_fit` every frame, `pf_set_next_axis_to_fit`/`pf_set_next_axes_to_fit` on the next plot, the
+  items extending the range while the plot is drawn and the fit applied at `pf_end_plot` (shown from the next frame,
+  ImPlot's lag), `FitPadding` 0, a degenerate range widened to +-0.5, locked ends kept, an axis with no data not fit
+  (`fig_plot_end`); `equal` (`ImPlotFlags_Equal`: `SetupFinish`'s and `EndPlot`'s aspect rules); `pf_plot_limits`.
+  `figure_test_plot_frame_state` compares 9 cases with ImPlot, the ranges of every frame equal to the bit and the
+  pictures at threshold 2 (gfortran, nvfortran, ifx). Not yet: axis labels and the axes X2, X3, Y2, Y3 (the state
+  holds them), `SetAxes`, limits' constraints, `FitPadding` and the other ImPlot style variables of a theme, the
+  automatic colours of FIGURE's own styles (their colormaps are registered by the native layer: the colormap
+  registry, step 7), the item ID pushed on Dear ImGui's ID stack (figure_core has no `PushOverrideID`).
 
 ## What the current seam calls, to replace
 
@@ -34,11 +51,13 @@ The ImPlot functions `figure_implot` calls (76, through `figure_cimplot`) and th
 
 ### P10, the frame
 
-- [ ] Plot begin and end: `ImPlot_BeginPlot`; `fig_plot_end` and `fig_plot_state` (`figure_native.cpp`: `EndPlot`,
-      `SetupLock`, `GetCurrentPlot`); the scope record's ends (`figure_scope.cpp`)
+- [x] Plot begin and end, kept between frames: `ImPlot_BeginPlot`; `fig_plot_end` (`figure_native.cpp`: `EndPlot`,
+      `SetupLock`, the fit of axes without data dropped)
+- [ ] `fig_plot_state` (`GetCurrentPlot`: the axes enabled, their scales); the scope record's ends (`figure_scope.cpp`)
 - [ ] Axes: `ImPlot_SetupAxes`, `ImPlot_SetupAxis`, `ImPlot_SetAxes`
-- [ ] Limits: `ImPlot_SetupAxisLimits`, `ImPlot_SetupAxesLimits`, `ImPlot_SetNextAxisToFit`, `ImPlot_GetPlotLimits`;
-      constraints: `fig_plot_axis_constraints` (`SetupAxisLimitsConstraints`, `SetupAxisZoomConstraints`)
+- [x] Limits and the fit: `ImPlot_SetupAxisLimits`, `ImPlot_SetupAxesLimits`, `ImPlot_SetNextAxisToFit`,
+      `ImPlot_GetPlotLimits` (X1, Y1)
+- [ ] Constraints: `fig_plot_axis_constraints` (`SetupAxisLimitsConstraints`, `SetupAxisZoomConstraints`)
 - [ ] Scales: `ImPlot_SetupAxisScale_PlotScale` (linear, log, symlog, time); `fig_plot_x_transform`
 - [ ] Ticks and labels: `ImPlot_SetupAxisTicks_doublePtr`, `ImPlot_SetupAxisFormat_Str`
 - [ ] Legend: `ImPlot_SetupLegend`, `ImPlot_IsLegendEntryHovered`, `ImPlot_BeginLegendPopup`,
