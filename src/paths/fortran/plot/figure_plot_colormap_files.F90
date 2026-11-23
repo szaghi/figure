@@ -160,7 +160,7 @@ contains
    subroutine cmf_csv(text, where, rows, err)
    !< `parse_csv`: the table of a CSV text; `err` empty when read, else the message (`where` its start).
    character(len=*),              intent(in)  :: text      !< The file's text.
-   character(len=*),              intent(in)  :: where     !< "ip_load_colormap: <file>".
+   character(len=*),              intent(in)  :: where     !< `"ip_load_colormap: <file>"`.
    real(real64),     allocatable, intent(out) :: rows(:,:) !< The table (3, n), components in [0, 1].
    character(len=:), allocatable, intent(out) :: err       !< Message ('' when read).
    real(real64),     allocatable :: x(:), c(:,:), more(:,:), xm(:) !< Positions, colours, grown copies.
@@ -358,7 +358,7 @@ contains
    subroutine cmf_paraview(text, where, name, rows, err)
    !< `parse_paraview`: the table of a ParaView preset; `err` empty when read, else the message.
    character(len=*),              intent(in)  :: text      !< The file's text.
-   character(len=*),              intent(in)  :: where     !< "ip_load_colormap: <file>".
+   character(len=*),              intent(in)  :: where     !< `"ip_load_colormap: <file>"`.
    character(len=*),              intent(in)  :: name      !< The map's name (the preset's `Name`).
    real(real64),     allocatable, intent(out) :: rows(:,:) !< The table (3, 256).
    character(len=:), allocatable, intent(out) :: err       !< Message ('' when read).
@@ -721,7 +721,7 @@ contains
    endfunction json_value
 
    subroutine json_error(s, ns, p, what, err)
-   !< `error`: the message, unless one is kept, as "line <n>: <what>" (n: the lines up to p).
+   !< `error`: the message, unless one is kept, as `"line <n>: <what>"` (n: the lines up to p).
    character(kind=c_char),        intent(in)    :: s(:) !< Text.
    integer(int32),                intent(in)    :: ns   !< Its length.
    integer(int32),                intent(in)    :: p    !< Position.
