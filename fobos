@@ -28,7 +28,8 @@ modes = tests-gnu tests-gnu-debug examples-gnu examples-gnu-traps
         tests-nvf examples-nvf tests-nvf-acc
         tests-ifx examples-ifx
         figure-static-gnu figure-static-nvf figure-static-ifx
-        tests-gnu-fortran examples-gnu-fortran tests-nvf-fortran examples-nvf-fortran tests-ifx-fortran examples-ifx-fortran
+        tests-gnu-fortran examples-gnu-fortran tests-nvf-fortran examples-nvf-fortran tests-nvf-acc-fortran
+        tests-ifx-fortran examples-ifx-fortran
 
 # The native layer (libfigure_native.a + libSDL3.a in lib/) is built by `fobis rule --ex native` (CMake), run
 # automatically before every build (pre_build): a no-op once built. Linking it needs platform libraries: one varset per
@@ -202,6 +203,17 @@ exclude_dirs =
 template     = tests-nvf
 src          = src/lib/ $PATH_FORTRAN src/tests/
 cflags       = $CNVF -O2 -Mnofma
+exclude_dirs =
+
+# tests-nvf-acc-fortran: the Fortran path with OpenACC on the GPU, as tests-nvf-acc for the current path (its flags, with
+# -Mnofma as tests-nvf-fortran): figure_test_plot_frame_device draws 10**8 device points by `ip_line_device` and by the
+# frame's `pf_line_device`. Two tests fail in it by construction: figure_test_sibling_libs, as in tests-nvf-acc, and
+# figure_test_plot_frame_rest (its "device" arrays are host arrays, as FUNDAL's CPU mode allows); figure_test_tasks
+# can (nvfortran's I/O is thread-safe with -mp only)
+[tests-nvf-acc-fortran]
+template     = tests-nvf-acc
+src          = src/lib/ $PATH_FORTRAN src/tests/
+cflags       = $CNVF -O2 -Mnofma -acc -gpu=cc89 -DDEV_OAC -DCOMPILER_NVF
 exclude_dirs =
 
 [examples-nvf-fortran]

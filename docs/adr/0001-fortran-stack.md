@@ -74,9 +74,9 @@ switch; the Fortran path grows beside it on `main`. There is no long-lived branc
   2026-11-21).
 - The default modes (`tests-gnu`, `examples-gnu`, ..., the fpm package, the installer) build the current path,
   unchanged until the switch.
-- The `-fortran` modes (`tests-gnu-fortran`, `tests-nvf-fortran`, `tests-ifx-fortran`, `examples-*-fortran`) build the
-  newest path: the layers already ported, the others from the current path. Until the first layer lands each one takes
-  its default mode as template, so it builds the same thing.
+- The `-fortran` modes (`tests-gnu-fortran`, `tests-nvf-fortran`, `tests-nvf-acc-fortran`, `tests-ifx-fortran`,
+  `examples-*-fortran`) build the newest path: the layers already ported, the others from the current path. Until the
+  first layer lands each one takes its default mode as template, so it builds the same thing.
 - CI runs both. The Fortran path is a FoBiS build only; the fpm package ships the current path until the switch.
 - Nothing C++ is deleted before the last step: a step that ports a layer leaves the C++ library in place for the
   current path.
