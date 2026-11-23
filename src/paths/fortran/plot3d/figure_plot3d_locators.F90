@@ -4,7 +4,8 @@ module figure_plot3d_locators
 !<
 !< szaghi/figure#15 P13. ImPlot3D places ticks its own way, not ImPlot's: `Locator_Default` takes its major count from
 !< the axis's length (one per 80 pixels, at least 2) and up to 5 minor intervals (one per 30 pixels), labels minors
-!< too, and thins the labels every other one from the first major outwards past 7 ticks. Reproduced here with
+!< too, and thins the labels every other one from the first major outwards past 7 ticks; `Locator_Log10` and
+!< `Locator_SymLog` (decades, their minors unlabelled; a symlog range across zero split at -1 and 1). Reproduced here with
 !< figure_plot_locators' `nice_num` (ImPlot's and ImPlot3D's `NiceNum` are the same), `floor`/`ceil`, and the labels
 !< through figure_plot_format (glibc's printf of one real: "%g", ImPlot3D's `IMPLOT3D_LABEL_FORMAT`, or the axis's
 !< format), measured with figure_core's `core_text_size` (`CalcTextSize`).
@@ -14,11 +15,11 @@ use, intrinsic :: iso_fortran_env, only : int32, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_next_after, ieee_positive_inf, ieee_value
 use figure_core, only : core_text_size
 use figure_plot_format, only : plot_format, fmt_real
-use figure_plot_locators, only : nice_num, c_floor, c_ceil
+use figure_plot_locators, only : nice_num, c_floor, c_ceil, pow10, transform_symlog
 
 implicit none
 private
-public :: ticks3d, ticks3_reset, ticks3_add, locate3_default
+public :: ticks3d, ticks3_reset, ticks3_add, locate3_default, locate3_log10, locate3_symlog
 public :: TICK3_LABEL_LEN
 
 integer(int32), parameter :: TICK3_LABEL_LEN = 31_int32 !< IMPLOT3D_LABEL_MAX_SIZE less its NUL.
@@ -33,6 +34,16 @@ type :: ticks3d
    integer(int32),                 allocatable :: label_len(:)   !< Its length.
    real(real32),                   allocatable :: label_size(:,:) !< Its size (2, n) [pixels].
 endtype ticks3d
+
+interface
+   pure function c_log10(x) result(r) bind(C, name='log10')
+   !< C's `log10`.
+   import :: real64
+   implicit none
+   real(real64), value :: x !< Value.
+   real(real64)        :: r !< Logarithm.
+   endfunction c_log10
+endinterface
 
 contains
    subroutine ticks3_reset(t)
@@ -124,7 +135,131 @@ contains
    endif
    endsubroutine locate3_default
 
+   subroutine locate3_log10(t, rmin, rmax, pixels, f)
+   !< `Locator_Log10`: decades (a step of a multiple of three when there are many), their minors unlabelled; nothing
+   !< for a range that crosses or touches zero.
+   type(ticks3d),     intent(inout) :: t          !< Ticks.
+   real(real64),      intent(in)    :: rmin, rmax !< Range.
+   real(real32),      intent(in)    :: pixels     !< The axis's length [pixels].
+   type(plot_format), intent(in)    :: f          !< The axis's format.
+   integer(int32)                   :: emin, emax, estep !< Exponents.
+
+   if (log_exponents(rmin, rmax, pixels, emin, emax, estep)) call add_log_ticks(t, rmin, rmax, emin, emax, estep, f)
+   endsubroutine locate3_log10
+
+   subroutine locate3_symlog(t, rmin, rmax, pixels, f)
+   !< `Locator_SymLog`: within [-1, 1] the default ticks; across zero 0 and the decades on both sides (each side's
+   !< share of the pixels from `CalcSymLogPixel`, the larger step); else the log10 ticks.
+   type(ticks3d),     intent(inout) :: t          !< Ticks.
+   real(real64),      intent(in)    :: rmin, rmax !< Range.
+   real(real32),      intent(in)    :: pixels     !< The axis's length [pixels].
+   type(plot_format), intent(in)    :: f          !< The axis's format.
+   real(real32)                     :: pp1, pn1   !< Pixels of 1 and -1.
+   integer(int32)                   :: eminp, emaxp, estepp, eminn, emaxn, estepn, estep !< Exponents.
+   logical                          :: ok         !< Found.
+
+   if (rmin >= -1.0_real64 .and. rmax <= 1.0_real64) then
+      call locate3_default(t, rmin, rmax, pixels, f)
+   elseif (rmin * rmax < 0.0_real64) then
+      pp1 = symlog_pixel(1.0_real64, rmin, rmax, pixels)
+      pn1 = symlog_pixel(-1.0_real64, rmin, rmax, pixels)
+      eminp = 0_int32
+      emaxp = 0_int32
+      estepp = 0_int32
+      eminn = 0_int32
+      emaxn = 0_int32
+      estepn = 0_int32
+      ok = log_exponents(1.0_real64, rmax, abs(pixels - pp1), eminp, emaxp, estepp)
+      ok = log_exponents(rmin, -1.0_real64, abs(pn1 - 0.0_real32), eminn, emaxn, estepn)
+      estep = max(estepn, estepp)
+      call ticks3_add(t, 0.0_real64, .true., .true., f)
+      call add_log_ticks(t, 1.0_real64, rmax, eminp, emaxp, estep, f)
+      call add_log_ticks(t, rmin, -1.0_real64, eminn, emaxn, estep, f)
+   else
+      call locate3_log10(t, rmin, rmax, pixels, f)
+   endif
+   endsubroutine locate3_symlog
+
    ! private
+
+   function log_exponents(rmin, rmax, pix, emin, emax, estep) result(ok)
+   !< `CalcLogarithmicExponents`: the decades' exponents and step for a range of one sign (false otherwise, the
+   !< outputs untouched).
+   real(real64),   intent(in)    :: rmin, rmax        !< Range.
+   real(real32),   intent(in)    :: pix               !< Pixels.
+   integer(int32), intent(inout) :: emin, emax, estep !< Exponents.
+   logical                       :: ok                !< Found.
+   integer(int32)                :: n_major           !< Majors.
+   real(real64)                  :: lmin, lmax, la, lb !< Logarithms.
+
+   ok = rmin * rmax > 0.0_real64
+   if (.not. ok) return
+   n_major = max(2_int32, int(im_round(pix * 0.01_real32), int32))
+   lmin = c_log10(abs(rmin))
+   lmax = c_log10(abs(rmax))
+   la = min(lmin, lmax)
+   lb = max(lmin, lmax)
+   estep = max(1_int32, int(lb - la, int32) / n_major)
+   emin = int(la, int32)
+   emax = int(lb, int32)
+   if (estep /= 1_int32) then
+      do while (mod(estep, 3_int32) /= 0_int32)
+         estep = estep + 1_int32
+      enddo
+      do while (mod(emin, estep) /= 0_int32)
+         emin = emin - 1_int32
+      enddo
+   endif
+   endfunction log_exponents
+
+   subroutine add_log_ticks(t, rmin, rmax, emin, emax, estep, f)
+   !< `AddTicksLogarithmic`: each decade in range a labelled major, its nine (eight at a step's last decade but one)
+   !< minors unlabelled, the sign of the range's maximum.
+   type(ticks3d),     intent(inout) :: t                 !< Ticks.
+   real(real64),      intent(in)    :: rmin, rmax        !< Range.
+   integer(int32),    intent(in)    :: emin, emax, estep !< Exponents.
+   type(plot_format), intent(in)    :: f                 !< Format.
+   real(real64)                     :: sgn, m1, m2, iv, minor !< Sign, decades, interval, a minor.
+   integer(int32)                   :: e, j, i, ni       !< Exponent, decade, minor, minors.
+
+   sgn = 0.0_real64
+   if (rmax < 0.0_real64) sgn = -1.0_real64
+   if (rmax > 0.0_real64) sgn = 1.0_real64
+   e = emin - estep
+   do while (e < emax + estep)
+      m1 = sgn * pow10(e)
+      if (m1 >= rmin - epsilon(1.0_real64) .and. m1 <= rmax + epsilon(1.0_real64)) call ticks3_add(t, m1, .true., .true., f)
+      do j = 0_int32, estep - 1_int32
+         m1 = sgn * pow10(e + j)
+         m2 = sgn * pow10(e + j + 1_int32)
+         iv = (m2 - m1) / 9.0_real64
+         ni = 9_int32
+         if (j < estep - 1_int32) ni = 10_int32
+         do i = 1_int32, ni - 1_int32
+            minor = m1 + real(i, real64) * iv
+            if (minor >= rmin - epsilon(1.0_real64) .and. minor <= rmax + epsilon(1.0_real64)) &
+               call ticks3_add(t, minor, .false., .false., f)
+         enddo
+      enddo
+      e = e + estep
+   enddo
+   endsubroutine add_log_ticks
+
+   function symlog_pixel(v, rmin, rmax, pixels) result(px)
+   !< `CalcSymLogPixel`: the pixel of v along a symlog axis.
+   real(real64), intent(in) :: v, rmin, rmax !< Value, range.
+   real(real32), intent(in) :: pixels        !< The axis's length.
+   real(real32)             :: px            !< Pixel.
+   real(real64)             :: k, smin, smax, s, tt, q !< Scale, scaled ends, scaled value, fraction, the value back.
+
+   k = real(pixels, real64) / (rmax - rmin)
+   smin = transform_symlog(rmin)
+   smax = transform_symlog(rmax)
+   s = transform_symlog(v)
+   tt = (s - smin) / (smax - smin)
+   q = rmin + (rmax - rmin) * tt
+   px = real(0.0_real64 + k * (q - rmin), real32)
+   endfunction symlog_pixel
 
    pure function im_round(f) result(r)
    !< `IM_ROUND`: `(float)(int)(f + 0.5f)`.

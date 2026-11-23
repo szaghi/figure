@@ -20,9 +20,14 @@ module figure_plot3d_frame
 !< Colours are ImPlot3D's automatic ones (`GetAutoColor`: from Dear ImGui's style), packed by figure_core with the
 !< style's alpha (ImPlot3D packs without it: equal while `style.Alpha` is 1, as FIGURE's themes have it).
 !<
+!< Axes (step 3): log10 and symlog scales (`SetupAxisScale`: ImPlot3D's transforms, constraints and locators; the scaled
+!< range cached when the range is set, as `UpdateTransformCache`: a scale set after the limits on a plot's first frame
+!< maps against the linear range until the range changes, as ImPlot3D), custom ticks (`SetupAxisTicks`: minor ticks,
+!< labelled, the default ones off), a printf format of the tick labels (`SetupAxisFormat` with FIGURE's formatter:
+!< figure_plot_format's glibc printf), lock, no grid, auto-fit.
+!<
 !< Not yet (P13's next steps): items, the 3-D list and its depth sort, the legend, input beyond the plot's button and
-!< auto-fit (rotation, pan, zoom, the hover of planes and axes, the animation), context menus, log10 and symlog axes,
-!< custom ticks and formats.
+!< auto-fit (rotation, pan, zoom, the hover of planes and axes, the animation), context menus.
 !<
 !< No allocation per frame once the tables are grown (ADR 0001): fixed slots for titles and labels, the ticks' arrays
 !< kept, fixed arrays for quads.
@@ -36,18 +41,20 @@ use figure_core, only : core_button_behavior, core_content_region_avail, core_cu
                         core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, core_frame_count, &
                         core_get_id, core_item_add, core_item_size, core_mouse_pos, core_mouse_pos_valid,        &
                         core_pop_clip_rect, core_push_clip_rect, core_style_color, core_text_size
-use figure_plot_format, only : plot_format, fmt_real, fmt_text
+use figure_plot_format, only : plot_format, fmt_parse, fmt_real, fmt_text
+use figure_plot_locators, only : transform_log10, transform_symlog
 use figure_plot3d_camera, only : plot3d_quat, view3d, quat_from_el_az, quat_rotate, view_scale, rect_center, &
                                  plot_to_ndc, ndc_to_pixels, plot_to_pixels, pixels_to_ndc_ray, ndc_ray_to_plot_ray, &
                                  pixels_to_plot_plane, axes_parameters, mouse_over_plane, edge_outward_dir,          &
                                  in_edge_region, c_atan2f, c_cosf, c_sinf, IM_PI_F, FACES, EDGES, FACE_EDGES,        &
-                                 SCALE3_LINEAR
-use figure_plot3d_locators, only : ticks3d, ticks3_reset, locate3_default
+                                 SCALE3_LINEAR, SCALE3_LOG10, SCALE3_SYMLOG
+use figure_plot3d_locators, only : ticks3d, ticks3_add, ticks3_reset, locate3_default, locate3_log10, locate3_symlog
 use vecfor_R8P, only : vector_R8P
 
 implicit none
 private
-public :: pf3_begin_plot, pf3_end_plot, pf3_setup_axes, pf3_setup_axis, pf3_setup_box, pf3_setup_legend
+public :: pf3_begin_plot, pf3_end_plot, pf3_setup_axes, pf3_setup_axis, pf3_setup_axis_ticks, pf3_setup_box
+public :: pf3_setup_legend
 public :: pf3_plot_to_pixels, pf3_mouse_ray, pf3_plot_limits, pf3_plot_rotation
 
 ! ImPlot3DFlags
@@ -307,38 +314,75 @@ contains
    endassociate
    endsubroutine pf3_setup_axes
 
-   subroutine pf3_setup_axis(axis, label, auto_fit, invert, lock, no_grid)
-   !< As `ip3_setup_axis` (`SetupAxis`): one axis's label and flags ('x', 'y' or 'z').
+   subroutine pf3_setup_axis(axis, label, scale, auto_fit, invert, lock, no_grid, format)
+   !< As `ip3_setup_axis` (`SetupAxis`, `SetupAxisScale`, `SetupAxisFormat`): one axis's label, scale ('linear',
+   !< 'log', 'symlog'), flags and tick labels' printf format ('x', 'y' or 'z').
    character(len=*), intent(in)           :: axis     !< 'x', 'y' or 'z'.
    character(len=*), intent(in), optional :: label    !< Label (default: none).
+   character(len=*), intent(in), optional :: scale    !< 'linear' (default), 'log', 'symlog'.
    logical,          intent(in), optional :: auto_fit !< Fit the data every frame.
    logical,          intent(in), optional :: invert   !< Values grow the other way.
    logical,          intent(in), optional :: lock     !< No pan or zoom by the user.
    logical,          intent(in), optional :: no_grid  !< No grid lines.
+   character(len=*), intent(in), optional :: format   !< printf format of the tick labels (one real).
    integer(int32)                         :: i, flags !< Axis, ImPlot3DAxisFlags.
 
    call setup_refused('pf3_setup_axis')
-   select case (axis)
-   case ('x')
-      i = 1_int32
-   case ('y')
-      i = 2_int32
-   case ('z')
-      i = 3_int32
-   case default
-      error stop "figure_plot3d_frame: pf3_setup_axis: an axis is 'x', 'y' or 'z'"
-   endselect
+   i = axis_index(axis)
    flags = 0_int32
    if (opt(auto_fit)) flags = ior(flags, A3_AUTO_FIT)
    if (opt(invert)) flags = ior(flags, A3_INVERT)
    if (opt(lock)) flags = ior(flags, ior(A3_LOCK_MIN, A3_LOCK_MAX))
    if (opt(no_grid)) flags = ior(flags, A3_NO_GRID)
-   if (present(label)) then
-      call setup_axis(plots(cur), i, label, flags)
-   else
-      call setup_axis(plots(cur), i, '', flags)
-   endif
+   associate(p => plots(cur))
+      if (present(label)) then
+         call setup_axis(p, i, label, flags)
+      else
+         call setup_axis(p, i, '', flags)
+      endif
+      if (present(scale)) then
+         select case (scale)
+         case ('linear')
+         case ('log') ! SetupAxisScale(ImPlot3DScale_Log10)
+            p%v%scale(i) = SCALE3_LOG10
+            p%ax(i)%con_min = real(tiny(1.0_real32), real64)
+            p%ax(i)%con_max = ieee_value(1.0_real64, ieee_positive_inf)
+         case ('symlog')
+            p%v%scale(i) = SCALE3_SYMLOG
+            p%ax(i)%con_min = ieee_value(1.0_real64, ieee_negative_inf)
+            p%ax(i)%con_max = ieee_value(1.0_real64, ieee_positive_inf)
+         case default
+            error stop "figure_plot3d_frame: pf3_setup_axis: a scale is 'linear', 'log' or 'symlog'"
+         endselect
+      endif
+      if (present(format)) call fmt_parse(format, p%ax(i)%fmt)
+   endassociate
    endsubroutine pf3_setup_axis
+
+   subroutine pf3_setup_axis_ticks(axis, values, labels)
+   !< As `ip3_setup_axis_ticks` (`SetupAxisTicks`, the default ticks off): ticks at the given values (minor ticks,
+   !< labelled), labelled `labels` (trailing blanks not shown) or through the axis's format.
+   character(len=*), intent(in)           :: axis      !< 'x', 'y' or 'z'.
+   real(real64),     intent(in)           :: values(:) !< Tick positions.
+   character(len=*), intent(in), optional :: labels(:) !< One label per value.
+   integer(int32)                         :: i, k      !< Axis, tick.
+
+   call setup_refused('pf3_setup_axis_ticks')
+   i = axis_index(axis)
+   if (present(labels)) then
+      if (size(labels) /= size(values)) error stop 'figure_plot3d_frame: pf3_setup_axis_ticks: one label per value'
+   endif
+   associate(ax => plots(cur)%ax(i))
+      ax%show_default = .false.
+      do k = 1_int32, size(values, kind=int32)
+         if (present(labels)) then
+            call ticks3_add(ax%ticks, values(k), .false., .true., ax%fmt, label=labels(k)(1:len_trim(labels(k))))
+         else
+            call ticks3_add(ax%ticks, values(k), .false., .true., ax%fmt)
+         endif
+      enddo
+   endassociate
+   endsubroutine pf3_setup_axis_ticks
 
    subroutine pf3_setup_box(scale, elevation, azimuth)
    !< As `ip3_setup_box` without animation: `SetupBoxScale` and `SetupBoxRotation` always (degrees).
@@ -584,7 +628,14 @@ contains
    do i = 1_int32, 3_int32
       if (p%ax(i)%show_default) then
          pixels = real(real(view_scale(p%v), real64) * p%v%ndc(i), real32)
-         call locate3_default(p%ax(i)%ticks, p%v%rmin(i), p%v%rmax(i), pixels, p%ax(i)%fmt)
+         select case (p%v%scale(i))
+         case (SCALE3_LOG10)
+            call locate3_log10(p%ax(i)%ticks, p%v%rmin(i), p%v%rmax(i), pixels, p%ax(i)%fmt)
+         case (SCALE3_SYMLOG)
+            call locate3_symlog(p%ax(i)%ticks, p%v%rmin(i), p%v%rmax(i), pixels, p%ax(i)%fmt)
+         case default
+            call locate3_default(p%ax(i)%ticks, p%v%rmin(i), p%v%rmax(i), pixels, p%ax(i)%fmt)
+         endselect
       endif
       p%ax(i)%col_bg = 0_int32 ! AxisBg: transparent
       p%ax(i)%col_hov = core_style_color(ImGuiCol_ButtonHovered)
@@ -1110,8 +1161,8 @@ contains
    p%ax(i)%label_len = 0_int32
    p%v%rmin(i) = 0.0_real64
    p%v%rmax(i) = 1.0_real64
-   p%v%smin(i) = 0.0_real64
-   p%v%smax(i) = 1.0_real64
+   p%v%smin(i) = 0.0_real64 ! ScaledRange: ImPlot3DRange(), (0, 0)
+   p%v%smax(i) = 0.0_real64
    p%v%ndc(i) = 1.0_real64
    p%v%scale(i) = SCALE3_LINEAR
    p%v%invert(i) = .false.
@@ -1177,12 +1228,21 @@ contains
    endsubroutine constrain
 
    subroutine update_scaled(p, i)
-   !< `UpdateTransformCache`: the scaled range (linear axes: the range).
+   !< `UpdateTransformCache`: the scaled range through the axis's transform of now (linear axes: the range).
    type(plot3d_record), intent(inout) :: p !< Plot.
    integer(int32),      intent(in)    :: i !< Axis.
 
-   p%v%smin(i) = p%v%rmin(i)
-   p%v%smax(i) = p%v%rmax(i)
+   select case (p%v%scale(i))
+   case (SCALE3_LOG10)
+      p%v%smin(i) = transform_log10(p%v%rmin(i))
+      p%v%smax(i) = transform_log10(p%v%rmax(i))
+   case (SCALE3_SYMLOG)
+      p%v%smin(i) = transform_symlog(p%v%rmin(i))
+      p%v%smax(i) = transform_symlog(p%v%rmax(i))
+   case default
+      p%v%smin(i) = p%v%rmin(i)
+      p%v%smax(i) = p%v%rmax(i)
+   endselect
    endsubroutine update_scaled
 
    subroutine apply_fit(p, i)
@@ -1461,6 +1521,23 @@ contains
    endsubroutine grow_plots
 
    ! private: helpers
+
+   function axis_index(axis) result(i)
+   !< An axis's index from its name.
+   character(len=*), intent(in) :: axis !< 'x', 'y' or 'z'.
+   integer(int32)               :: i    !< 1-3.
+
+   select case (axis)
+   case ('x')
+      i = 1_int32
+   case ('y')
+      i = 2_int32
+   case ('z')
+      i = 3_int32
+   case default
+      error stop "figure_plot3d_frame: an axis is 'x', 'y' or 'z'"
+   endselect
+   endfunction axis_index
 
    function pointer(mx, my) result(valid)
    !< The pointer's position (floats), when valid (FIGURE's patch: no hover without one).
