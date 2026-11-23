@@ -119,7 +119,7 @@ CORE_FUNCTIONS = (
     "igButtonBehavior", "igCalcItemSize", "igClearActiveID", "igGetActiveID", "igGetCurrentWindow", "igGetHoveredID",
     "igGetIDWithSeed_Int", "igGetIDWithSeed_Str", "igIsClippedEx", "igItemAdd", "igItemHoverable", "igItemSize_Rect",
     "igItemSize_Vec2", "igKeepAliveID", "igPushOverrideID", "igRenderFrame", "igRenderTextClipped", "igSetActiveID",
-    "igSetHoveredID",
+    "igSetHoveredID", "igSetKeyOwner",
 )
 CORE_ENUMS = ("ImGuiButtonFlagsPrivate_", "ImGuiItemFlagsPrivate_")
 # callback types bound as procedure pointers (`type(c_funptr), value`) in the selected modules
@@ -154,6 +154,18 @@ int figure_ImDrawList_shared(const ImDrawList* dl, float* fringe_scale, ImVec2_c
       uv_lines[k] = ImVec4_c{u.x, u.y, u.z, u.w};
    }
    return n;
+}
+
+// The input state the plot frame reads (#15 P10 step 8: ImPlot's UpdateInput) that no C API function gives: the
+// frame's mouse delta (mouse[0:2]), the wheel (mouse[2], horizontal mouse[3]), the squared distance each button has
+// travelled since its click (mouse[4:9], MouseDragMaxDistanceSqr), the key mods (state[0], io.KeyMods) and whether a
+// drag and drop is active (state[1], g.DragDropActive).
+void figure_io_input(float* mouse, int* state) noexcept {
+   const ImGuiIO& io = ImGui::GetIO();
+   mouse[0] = io.MouseDelta.x, mouse[1] = io.MouseDelta.y, mouse[2] = io.MouseWheel, mouse[3] = io.MouseWheelH;
+   for (int k = 0; k < 5; k++) mouse[4 + k] = io.MouseDragMaxDistanceSqr[k];
+   state[0] = (int)io.KeyMods;
+   state[1] = GImGui->DragDropActive ? 1 : 0;
 }
 
 // The draw data as a renderer reads them (#15 P9: the Fortran path's renderers, through figure_render_imgui): the
@@ -286,6 +298,15 @@ CORE_INTERFACES = [
     "   integer(c_int), intent(out)   :: flags        !< `Flags`.",
     "   integer(c_int)                :: res          !< Line textures (0: none yet).",
     "   endfunction figure_ImDrawList_shared",
+    "",
+    "   subroutine figure_io_input(mouse, state) bind(C, name='figure_io_input')",
+    "   !< The input state ImPlot's UpdateInput reads: the mouse delta, the wheels, the buttons' squared drag distances,",
+    "   !< the key mods and whether a drag and drop is active (CORE_GLUE in scripts/gen_bindings.py).",
+    "   import :: c_float, c_int",
+    "   implicit none",
+    "   real(c_float),  intent(out) :: mouse(9) !< MouseDelta (x, y), MouseWheel, MouseWheelH, MouseDragMaxDistanceSqr(5).",
+    "   integer(c_int), intent(out) :: state(2) !< KeyMods, DragDropActive (0, 1).",
+    "   endsubroutine figure_io_input",
     "",
     "   function figure_ImDrawData_get(dd, view) result(res) bind(C, name='figure_ImDrawData_get')",
     "   !< The draw data's lists (-1: no valid data) and view: display position, size, framebuffer scale.",

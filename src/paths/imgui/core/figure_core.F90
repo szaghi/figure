@@ -23,6 +23,13 @@ module figure_core
 !<   polylines, circles, text, images, clip rectangles and callbacks, and `core_draw_end`; for the plot frame
 !<   (src/paths/fortran/plot/), Dear ImGui 1.93's axis-aligned lines (`core_draw_line_h`, `core_draw_line_v`), a
 !<   line's texture (`core_line_texture`) and a textured quad (`core_draw_quad_uv`), thin wrappers of the list's calls;
+!< - for the plot frame's input and menus (szaghi/figure#15 P10 step 8, ImPlot's `UpdateInput` and context menus):
+!<   the input state no C API gives (`core_io_input`: io.MouseDelta, MouseWheel, MouseWheelH, MouseDragMaxDistanceSqr,
+!<   KeyMods, g.DragDropActive), `core_mouse_drag_delta`, `core_mouse_double_clicked`, `core_mouse_pos_valid`,
+!<   `core_window_hovered`, `core_set_key_owner`, `core_set_mouse_cursor`; IDs `core_push_override_id`,
+!<   `core_push_id_int`; ImPlot's menu widgets as it calls them (`core_push_item_width` without a FIGURE scope,
+!<   `core_push_item_flag`, `core_push_style_var`, `core_drag_double`, `core_radio_button`, `core_invisible_button`,
+!<   `core_text_unformatted`);
 !<   a glyph of the current font at its size (`core_font_glyph`: `GetFontBaked`, `FindGlyph`), for text drawn glyph by
 !<   glyph (ImPlot's vertical text); a rectangle of four corner colours (`core_draw_rect_filled_multicolor`:
 !<   `AddRectFilledMultiColor`, ImPlot's colour bars).
@@ -36,17 +43,22 @@ module figure_core
 !<
 !< No allocation per item: text and IDs go through a buffer of the module (NUL-terminated copies; a longer text gets
 !< an allocated copy).
-use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_f_pointer, c_float, c_funptr, c_int, c_int16_t, &
-                                         c_int32_t, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t
+use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_double, c_f_pointer, c_float, c_funptr, c_int, &
+                                         c_int16_t, c_int32_t, c_loc, c_null_char, c_null_ptr, c_ptr, c_size_t
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64
 use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextSize, igGetColorU32_Col,             &
                           igGetContentRegionAvail, igGetCursorScreenPos, igGetFont, igGetFontSize, igGetFrameCount,     &
                           igGetFrameHeight, igGetID_Str, igGetMousePos, igGetTime, igGetWindowDrawList, igGetWindowPos, &
                           igGetWindowSize, igIsItemActive, igIsItemHovered, igIsKeyDown_Nil, igIsKeyPressed_Bool,       &
                           igIsMouseClicked_Bool, igIsMouseDown_Nil, igIsMouseHoveringRect, igIsMouseReleased_Nil,       &
-                          igPopID, igPushID_Str, igSetCursorScreenPos
-use figure_cimgui_enums, only : ImDrawFlags_Closed
-use figure_cimgui_core, only : figure_ImDrawList_append, figure_ImDrawList_shared, igButtonBehavior, igGetActiveID,         &
+                          igPopID, igPushID_Str, igSetCursorScreenPos, igDragScalar, igGetMouseDragDelta,              &
+                          igInvisibleButton, igIsMouseDoubleClicked_Nil, igIsMousePosValid, igIsWindowHovered,         &
+                          igPopItemFlag, igPopStyleVar, igPushID_Int, igPushItemFlag, igPushItemWidth,                 &
+                          igPushStyleVar_Float, igPushStyleVar_Vec2, igRadioButton_Bool, igSetMouseCursor,             &
+                          igTextUnformatted
+use figure_cimgui_enums, only : ImDrawFlags_Closed, ImGuiDataType_Double_ => ImGuiDataType_Double
+use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,                                         &
+                               figure_ImDrawList_append, figure_ImDrawList_shared, igButtonBehavior, igGetActiveID,         &
                                igGetHoveredID, igItemAdd, igItemSize_Vec2, igKeepAliveID, ImDrawList_AddCallback,          &
                                ImDrawList_AddCircle, ImDrawList_AddCircleFilled, ImDrawList_AddImage, ImDrawList_AddPolyline, &
                                ImDrawList_AddRect, ImDrawList_AddRectFilled, ImDrawList_AddText_Vec2, ImDrawList_PopClipRect, &
@@ -70,6 +82,10 @@ public :: core_draw_convex_poly_filled, core_draw_polyline, core_draw_circle, co
 public :: core_push_clip_rect, core_pop_clip_rect, core_draw_callback
 public :: core_draw_line_h, core_draw_line_v, core_line_texture, core_draw_quad_uv
 public :: core_font_glyph, core_draw_rect_filled_multicolor
+public :: core_io_input, core_mouse_drag_delta, core_mouse_double_clicked, core_mouse_pos_valid, core_window_hovered
+public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core_push_id_int
+public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
+public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
 public :: core_draw_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
@@ -215,6 +231,20 @@ contains
 
    call igPopID()
    endsubroutine core_pop_id
+
+   subroutine core_push_override_id(id)
+   !< Push an ID on the ID stack as it is, not hashed (`PushOverrideID`).
+   integer(int32), intent(in) :: id !< ID.
+
+   call igPushOverrideID(int(id, c_int))
+   endsubroutine core_push_override_id
+
+   subroutine core_push_id_int(i)
+   !< Push an integer on the ID stack (`PushID(int)`: its own hash, not a string's).
+   integer(int32), intent(in) :: i !< Integer.
+
+   call igPushID_Int(int(i, c_int))
+   endsubroutine core_push_id_int
 
    ! items
 
@@ -505,6 +535,173 @@ contains
    if (present(repeat)) r = logical(repeat, c_bool)
    yes = logical(igIsKeyPressed_Bool(int(key, c_int), r))
    endfunction core_key_pressed
+
+   subroutine core_io_input(dx, dy, wheel, wheel_h, drag_max_sqr, key_mods, drag_drop)
+   !< The input state of this frame no C API function gives (Dear ImGui's io and context): the mouse's delta, the
+   !< wheels, each button's squared travel since its click, the key mods (`ImGuiMod_*` bits), a drag and drop active.
+   real(real64),   intent(out) :: dx, dy          !< io.MouseDelta [pixels].
+   real(real64),   intent(out) :: wheel, wheel_h  !< io.MouseWheel, MouseWheelH.
+   real(real64),   intent(out) :: drag_max_sqr(5) !< io.MouseDragMaxDistanceSqr [pixels^2].
+   integer(int32), intent(out) :: key_mods        !< io.KeyMods.
+   logical,        intent(out) :: drag_drop       !< g.DragDropActive.
+   real(c_float)               :: m(9)            !< C values.
+   integer(c_int)              :: st(2)           !< C values.
+
+   call figure_io_input(m, st)
+   dx = real(m(1), real64)
+   dy = real(m(2), real64)
+   wheel = real(m(3), real64)
+   wheel_h = real(m(4), real64)
+   drag_max_sqr = real(m(5:9), real64)
+   key_mods = int(st(1), int32)
+   drag_drop = st(2) /= 0_c_int
+   endsubroutine core_io_input
+
+   subroutine core_mouse_drag_delta(button, dx, dy)
+   !< The mouse's travel since the button was clicked, while it is down (`GetMouseDragDelta(button, -1)`).
+   integer(int32), intent(in)  :: button !< Button (0 left, 1 right, 2 middle).
+   real(real64),   intent(out) :: dx, dy !< Travel [pixels].
+   type(im_vec2)               :: d      !< C value.
+
+   d = igGetMouseDragDelta(int(button, c_int), -1.0_c_float)
+   dx = real(d%x, real64)
+   dy = real(d%y, real64)
+   endsubroutine core_mouse_drag_delta
+
+   function core_mouse_double_clicked(button) result(yes)
+   !< A button double-clicked on this frame (`IsMouseDoubleClicked`).
+   integer(int32), intent(in) :: button !< Button.
+   logical                    :: yes    !< Double-clicked.
+
+   yes = logical(igIsMouseDoubleClicked_Nil(int(button, c_int)))
+   endfunction core_mouse_double_clicked
+
+   function core_mouse_pos_valid() result(yes)
+   !< The pointer's position is known (`IsMousePosValid`).
+   logical :: yes !< Valid.
+
+   yes = logical(igIsMousePosValid(c_null_ptr))
+   endfunction core_mouse_pos_valid
+
+   function core_window_hovered(flags) result(yes)
+   !< The current window is hovered (`IsWindowHovered`).
+   integer(int32), intent(in), optional :: flags !< `ImGuiHoveredFlags` (default 0).
+   logical                              :: yes   !< Hovered.
+   integer(c_int)                       :: f     !< C value.
+
+   f = 0_c_int
+   if (present(flags)) f = int(flags, c_int)
+   yes = logical(igIsWindowHovered(f))
+   endfunction core_window_hovered
+
+   subroutine core_set_key_owner(key, id)
+   !< Take a key for an ID on this frame (`SetKeyOwner(key, id, 0)`: the wheel kept from the window's scroll).
+   integer(int32), intent(in) :: key !< `ImGuiKey`.
+   integer(int32), intent(in) :: id  !< Owner ID.
+
+   call igSetKeyOwner(int(key, c_int), int(id, c_int), 0_c_int)
+   endsubroutine core_set_key_owner
+
+   subroutine core_set_mouse_cursor(cursor)
+   !< The mouse cursor's shape for this frame (`SetMouseCursor`).
+   integer(int32), intent(in) :: cursor !< `ImGuiMouseCursor`.
+
+   call igSetMouseCursor(int(cursor, c_int))
+   endsubroutine core_set_mouse_cursor
+
+   subroutine core_push_item_width(width)
+   !< `PushItemWidth`, as ImPlot calls it (no FIGURE scope: the window's end pops it).
+   real(real64), intent(in) :: width !< Width [pixels].
+
+   call igPushItemWidth(real(width, c_float))
+   endsubroutine core_push_item_width
+
+   subroutine core_push_item_flag(flag, on)
+   !< `PushItemFlag`.
+   integer(int32), intent(in) :: flag !< `ImGuiItemFlags`.
+   logical,        intent(in) :: on   !< Set.
+
+   call igPushItemFlag(int(flag, c_int), logical(on, c_bool))
+   endsubroutine core_push_item_flag
+
+   subroutine core_pop_item_flag()
+   !< `PopItemFlag`.
+
+   call igPopItemFlag()
+   endsubroutine core_pop_item_flag
+
+   subroutine core_push_style_var(idx, x, y)
+   !< `PushStyleVar` of a float (`x`) or a vector (`x`, `y`).
+   integer(int32), intent(in)           :: idx !< `ImGuiStyleVar`.
+   real(real64),   intent(in)           :: x   !< Value (first component).
+   real(real64),   intent(in), optional :: y   !< Second component.
+
+   if (present(y)) then
+      call igPushStyleVar_Vec2(int(idx, c_int), v2(x, y))
+   else
+      call igPushStyleVar_Float(int(idx, c_int), real(x, c_float))
+   endif
+   endsubroutine core_push_style_var
+
+   subroutine core_pop_style_var(count)
+   !< `PopStyleVar`.
+   integer(int32), intent(in), optional :: count !< Variables (default 1).
+
+   if (present(count)) then
+      call igPopStyleVar(int(count, c_int))
+   else
+      call igPopStyleVar(1_c_int)
+   endif
+   endsubroutine core_pop_style_var
+
+   function core_drag_double(label, v, speed, vmin, vmax, format, flags) result(changed)
+   !< `DragScalar` of a double (ImPlot's `DragFloat<double>`).
+   character(len=*), intent(in)    :: label  !< Label.
+   real(real64),     intent(inout) :: v      !< Value.
+   real(real64),     intent(in)    :: speed  !< Speed (as a float).
+   real(real64),     intent(in)    :: vmin   !< Minimum.
+   real(real64),     intent(in)    :: vmax   !< Maximum.
+   character(len=*), intent(in)    :: format !< printf format.
+   integer(int32),   intent(in)    :: flags  !< `ImGuiSliderFlags`.
+   logical                         :: changed !< Changed.
+   real(c_double), target          :: cv, cmin, cmax !< C copies.
+   character(kind=c_char, len=:), allocatable, target :: cfmt !< Format, NUL-terminated.
+   character(kind=c_char, len=:), allocatable        :: clabel !< Label, NUL-terminated.
+
+   cv = v
+   cmin = vmin
+   cmax = vmax
+   cfmt = format//c_null_char
+   clabel = label//c_null_char
+   changed = logical(igDragScalar(clabel, ImGuiDataType_Double_, c_loc(cv), real(speed, c_float), c_loc(cmin), &
+                                  c_loc(cmax), c_loc(cfmt), int(flags, c_int)))
+   v = cv
+   endfunction core_drag_double
+
+   function core_radio_button(label, active) result(pressed)
+   !< `RadioButton(label, active)`.
+   character(len=*), intent(in) :: label   !< Label.
+   logical,          intent(in) :: active  !< Selected.
+   logical                      :: pressed !< Pressed.
+
+   pressed = logical(igRadioButton_Bool(label//c_null_char, logical(active, c_bool)))
+   endfunction core_radio_button
+
+   function core_invisible_button(id, w, h) result(pressed)
+   !< `InvisibleButton(id, (w, h))`.
+   character(len=*), intent(in) :: id      !< ID.
+   real(real64),     intent(in) :: w, h    !< Size [pixels].
+   logical                      :: pressed !< Pressed.
+
+   pressed = logical(igInvisibleButton(id//c_null_char, v2(w, h), 0_c_int))
+   endfunction core_invisible_button
+
+   subroutine core_text_unformatted(text)
+   !< `TextUnformatted`.
+   character(len=*), intent(in) :: text !< Text.
+
+   call igTextUnformatted(text//c_null_char, c_null_ptr)
+   endsubroutine core_text_unformatted
 
    ! the draw list
 

@@ -80,20 +80,36 @@ module figure_plot_frame
 !< no `PushOverrideID`): a Dear ImGui widget drawn between `pf_begin_plot` and `pf_end_plot` gets another ID than in
 !< ImPlot. The segment's normal is `1/sqrt` where ImPlot takes the SSE estimate `_mm_rsqrt_ss` (12 bits): the line's
 !< vertices may differ from ImPlot's below a thousandth of a pixel.
+use, intrinsic :: ieee_arithmetic, only : ieee_negative_inf, ieee_positive_inf, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_BorderShadow, ImGuiCol_FrameBg, ImGuiCol_PopupBg, &
-                                ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiCol_WindowBg
+use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_BorderShadow, ImGuiCol_ButtonActive, &
+                                ImGuiCol_ButtonHovered, ImGuiCol_FrameBg, ImGuiCol_PopupBg, ImGuiCol_Text, &
+                                ImGuiCol_TextDisabled, ImGuiCol_WindowBg, ImGuiItemFlags_Disabled, &
+                                ImGuiKey_MouseWheelY, ImGuiMod_Alt, ImGuiMod_Ctrl, ImGuiMod_Shift, &
+                                ImGuiMouseCursor_None, ImGuiMouseCursor_NotAllowed, ImGuiMouseCursor_ResizeAll, &
+                                ImGuiMouseCursor_ResizeEW, ImGuiMouseCursor_ResizeNS, ImGuiStyleVar_Alpha, &
+                                ImGuiStyleVar_ItemSpacing
 use figure_core, only : core_button_behavior, core_color, core_content_region_avail, core_cursor_screen_pos, &
                         core_draw_begin, core_draw_end, core_draw_line_h, core_draw_line_v, core_draw_quad_uv, &
                         core_draw_rect, core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, &
                         core_frame_count, core_get_id, core_item_add, core_item_size, core_keep_alive,         &
                         core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,           &
-                        core_style_var, core_text_size, core_draw_rect_filled_multicolor
+                        core_style_var, core_text_size, core_draw_rect_filled_multicolor, core_drag_double,     &
+                        core_invisible_button, core_io_input, core_mouse_clicked, core_mouse_double_clicked,    &
+                        core_mouse_down, core_mouse_drag_delta, core_mouse_pos, core_mouse_pos_valid,           &
+                        core_mouse_released, core_pop_id, core_pop_item_flag, core_pop_style_var,               &
+                        core_push_id_int, core_push_item_flag, core_push_item_width, core_push_override_id,     &
+                        core_push_style_var, core_radio_button, core_set_key_owner, core_set_mouse_cursor,      &
+                        core_text_unformatted, core_window_hovered, core_frame_height
 use figure_plot_colormaps, only : cm_colormap, cm_current, cm_is_qual, cm_key, cm_sample, cm_size, cm_style_refresh, &
                                  mix_u32, CM_VIRIDIS
 use figure_plot_hash, only : plot_hash, plot_id_offset
 use figure_plot_locators, only : plot_ticks, ticks_reset, locate_default, locate_log10, locate_symlog, locate_time, &
-                                transform_log10, transform_symlog, TIME_MAX, TIME_MIN
+                                transform_log10, transform_symlog, inverse_log10, inverse_symlog, round_axis_value, &
+                                time_cursor_label, TIME_MAX, TIME_MIN
+use figure_imgui, only : ig_button, ig_checkbox, ig_same_line, ig_separator
+use figure_menu, only : ig_begin_menu, ig_begin_popup, ig_end_menu, ig_end_popup, ig_menu_item, ig_open_popup
+use foresight_format, only : c_real
 
 implicit none
 private
@@ -102,6 +118,8 @@ public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limi
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
 public :: pf_hide_next_item, pf_legend_hovered
 public :: pf_plot_count, pf_colormap, pf_colormap_scale
+public :: pf_plot_hovered, pf_plot_mouse, pf_plot_to_pixels, pf_pixels_to_plot, pf_plot_selection
+public :: pf_cancel_selection
 
 ! ImPlot's style defaults (ImPlotStyle::ImPlotStyle, StyleColorsAuto)
 real(real32), parameter :: PLOT_DEFAULT_SIZE(2) = [400.0_real32, 300.0_real32] !< PlotDefaultSize [pixels].
@@ -148,6 +166,27 @@ integer(int32), parameter :: AXF_LOCK_MIN = 16384_int32    !< ImPlotAxisFlags_Lo
 integer(int32), parameter :: AXF_LOCK_MAX = 32768_int32    !< ImPlotAxisFlags_LockMax.
 integer(int32), parameter :: PF_NO_TITLE = 1_int32         !< ImPlotFlags_NoTitle.
 integer(int32), parameter :: PF_NO_LEGEND = 2_int32        !< ImPlotFlags_NoLegend.
+integer(int32), parameter :: PF_NO_MOUSE_TEXT = 4_int32    !< ImPlotFlags_NoMouseText.
+integer(int32), parameter :: PF_NO_INPUTS = 8_int32        !< ImPlotFlags_NoInputs.
+integer(int32), parameter :: PF_NO_MENUS = 16_int32        !< ImPlotFlags_NoMenus.
+integer(int32), parameter :: PF_NO_BOX_SELECT = 32_int32   !< ImPlotFlags_NoBoxSelect.
+integer(int32), parameter :: PF_CROSSHAIRS = 256_int32     !< ImPlotFlags_Crosshairs.
+integer(int32), parameter :: AXF_NO_MENUS = 32_int32       !< ImPlotAxisFlags_NoMenus.
+integer(int32), parameter :: AXF_NO_SIDE_SWITCH = 64_int32 !< ImPlotAxisFlags_NoSideSwitch.
+integer(int32), parameter :: AXF_NO_HIGHLIGHT = 128_int32  !< ImPlotAxisFlags_NoHighlight.
+integer(int32), parameter :: AXF_PAN_STRETCH = 8192_int32  !< ImPlotAxisFlags_PanStretch.
+integer(int32), parameter :: AXF_TICK_LABELS_INSIDE = 65536_int32 !< ImPlotAxisFlags_TickLabelsInside.
+integer(int32), parameter :: LGF_NO_MENUS = 8_int32        !< ImPlotLegendFlags_NoMenus.
+! ImPlot's input (MapInputDefault, UpdateInput): buttons (0 left, 1 right), thresholds, the zoom rate
+integer(int32), parameter :: BTN_PAN = 0_int32, BTN_FIT = 0_int32, BTN_MENU = 1_int32, BTN_SELECT = 1_int32, &
+                             BTN_SELECT_CANCEL = 0_int32 !< Pan, Fit, Menu, Select, SelectCancel.
+integer(int32), parameter :: PLOT_BUTTON_FLAGS = 4096_int32 + 16_int32 + 256_int32 + 1_int32 + 2_int32 + 4_int32 !<
+                                                 !< AllowOverlap, PressedOnClick, PressedOnDoubleClick, the buttons.
+integer(int32), parameter :: AXIS_BUTTON_FLAGS = PLOT_BUTTON_FLAGS + 2048_int32 !< ... and FlattenChildren.
+real(real32),   parameter :: DRAG_THRESHOLD = 5.0_real32       !< MOUSE_CURSOR_DRAG_THRESHOLD.
+real(real32),   parameter :: BOX_THRESHOLD = 4.0_real32        !< BOX_SELECT_DRAG_THRESHOLD.
+real(real32),   parameter :: ZOOM_RATE = 0.1_real32            !< ImPlotInputMap::ZoomRate.
+real(real32),   parameter :: MOUSE_POS_PADDING(2) = [10.0_real32, 10.0_real32] !< MousePosPadding [pixels].
 integer(int32), parameter :: PF_EQUAL = 128_int32          !< ImPlotFlags_Equal.
 integer(int32), parameter :: COND_ALWAYS = 1_int32         !< ImPlotCond_Always.
 integer(int32), parameter :: COND_ONCE = 2_int32           !< ImPlotCond_Once.
@@ -194,6 +233,9 @@ type :: plot_axis
    integer(int32) :: ortho = 0_int32                  !< The axis of the other direction it pairs with (0: none).
    integer(int32) :: label_off = 0_int32              !< Its label in the text of the frame (0: no label).
    integer(int32) :: label_len = 0_int32              !< ... its length.
+   logical        :: hovered = .false.                !< Its button hovered (the pointer over its labels).
+   logical        :: held = .false.                   !< ... held (dragged).
+   real(real32)   :: hover_rect(4) = 0.0_real32       !< Its button's rectangle (HoverRect).
 endtype plot_axis
 
 type :: plot_record
@@ -218,6 +260,13 @@ type :: plot_record
    integer(int32)                :: col_tick = 0_int32    !< Tick marks' colour.
    integer(int32)                :: col_txt = 0_int32     !< Tick labels' and axis labels' colour.
    integer(int32)                :: col_border = 0_int32  !< Border's colour.
+   logical                       :: hovered = .false.     !< The plot area's button hovered.
+   logical                       :: held = .false.        !< ... held (panned).
+   logical                       :: selecting = .false.   !< A box being dragged (Selecting).
+   logical                       :: selected = .false.    !< ... and drawn (Selected).
+   logical                       :: context_locked = .false. !< A drag ended the right click (no menu).
+   real(real32)                  :: select_start(2) = 0.0_real32 !< Where the box started [pixels].
+   real(real32)                  :: select_rect(4) = 0.0_real32  !< The box, relative to the plot rectangle.
    type(plot_axis)               :: ax(AXES)              !< Axes: X1, X2, X3, Y1, Y2, Y3.
    integer(int32)                :: cur_x = AX_X1         !< The x axis the items use (CurrentX).
    integer(int32)                :: cur_y = AX_Y1         !< ... the y axis.
@@ -253,6 +302,7 @@ type(plot_ticks), target               :: ticks(AXES)    !< The open plot's tick
 type(plot_ticks)                       :: cticks         !< A colour bar's ticks (CTicker).
 character(len=:), allocatable          :: text           !< The open plot's title and axis labels (TextBuffer).
 integer(int32)                         :: n_text = 0_int32 !< Characters of `text` in use.
+logical                                :: open_context = .false. !< A context menu opens (OpenContextThisFrame).
 
 contains
    function pf_begin_plot(title, width, height, equal) result(visible)
@@ -626,8 +676,8 @@ contains
    endsubroutine pf_line
 
    subroutine pf_end_plot()
-   !< End the plot (`EndPlot`): the title, the tick marks, the legend and the border; then the fit of the axes that
-   !< fit on this frame, shown from the next one.
+   !< End the plot (`EndPlot`): the title, the tick marks, the selection, the crosshairs, the mouse text, the legend and
+   !< the border; then the fit of the axes that fit on this frame (shown from the next one) and the context menus.
 
    if (cur == 0_int32) error stop 'figure_plot_frame: pf_end_plot without a plot'
    associate(p => plots(cur))
@@ -639,13 +689,17 @@ contains
                             text(p%title_off:p%title_off + p%title_len - 1_int32))
       call tick_marks(p)
       call core_pop_clip_rect()
+      call overlays(p)
+      call side_switch(p)
       call legend(p)
       if (border_shown(p)) call core_draw_rect(real(p%rect(1), real64), real(p%rect(2), real64),        &
                                                real(p%rect(3), real64), real(p%rect(4), real64), p%col_border, &
                                                rounding=0.0_real64, thickness=real(PLOT_BORDER_SIZE, real64))
       call core_draw_end()
       call fit_axes(p)
+      call context_menus(p)
       p%initialized = .true.
+      call core_pop_id() ! the items' IDs (PushOverrideID of SetupFinish)
    endassociate
    call reset_next() ! ResetCtxForNextPlot
    cur = 0_int32
@@ -772,6 +826,862 @@ contains
    call core_draw_end()
    endsubroutine pf_colormap_scale
 
+   ! the queries (ip_plot_hovered, ip_plot_mouse, ip_plot_to_pixels, ip_pixels_to_plot, ip_plot_selection)
+
+   function pf_plot_hovered() result(hovered)
+   !< The pointer is over the plot area on this frame (`IsPlotHovered`; `ip_plot_hovered`). It ends the setup.
+   logical :: hovered !< Hovered.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_plot_hovered outside a plot'
+   if (.not. plots(cur)%locked) call setup_finish(plots(cur))
+   hovered = plots(cur)%hovered
+   endfunction pf_plot_hovered
+
+   subroutine pf_plot_mouse(x, y, xaxis, yaxis)
+   !< The pointer's position in plot units (`GetPlotMousePos`; `ip_plot_mouse`) on the current axes or on
+   !< `xaxis`/`yaxis`; -huge for both without a pointer. It ends the setup.
+   real(real64),     intent(out)          :: x, y         !< Position.
+   character(len=*), intent(in), optional :: xaxis, yaxis !< Axes.
+   integer(int32)                         :: ix, iy       !< Axes.
+   real(real64)                           :: mx, my       !< The pointer [pixels].
+
+   call query_axes('pf_plot_mouse', xaxis, yaxis, ix, iy)
+   if (.not. core_mouse_pos_valid()) then
+      x = -huge(1.0_real64)
+      y = -huge(1.0_real64)
+      return
+   endif
+   call core_mouse_pos(mx, my)
+   x = pixels_to_plot(plots(cur)%ax(ix), real(mx, real32))
+   y = pixels_to_plot(plots(cur)%ax(iy), real(my, real32))
+   endsubroutine pf_plot_mouse
+
+   subroutine pf_plot_to_pixels(x, y, px, py, xaxis, yaxis)
+   !< The display pixel of the plot point (x, y) (`PlotToPixels`; `ip_plot_to_pixels`). It ends the setup.
+   real(real64),     intent(in)           :: x, y         !< Point.
+   real(real64),     intent(out)          :: px, py       !< Pixel.
+   character(len=*), intent(in), optional :: xaxis, yaxis !< Axes.
+   integer(int32)                         :: ix, iy       !< Axes.
+
+   call query_axes('pf_plot_to_pixels', xaxis, yaxis, ix, iy)
+   px = real(to_pixels(plots(cur)%ax(ix), x), real64)
+   py = real(to_pixels(plots(cur)%ax(iy), y), real64)
+   endsubroutine pf_plot_to_pixels
+
+   subroutine pf_pixels_to_plot(px, py, x, y, xaxis, yaxis)
+   !< The plot point at the display pixel (px, py) (`PixelsToPlot`, float pixels; `ip_pixels_to_plot`). It ends the
+   !< setup.
+   real(real64),     intent(in)           :: px, py       !< Pixel.
+   real(real64),     intent(out)          :: x, y         !< Point.
+   character(len=*), intent(in), optional :: xaxis, yaxis !< Axes.
+   integer(int32)                         :: ix, iy       !< Axes.
+
+   call query_axes('pf_pixels_to_plot', xaxis, yaxis, ix, iy)
+   x = pixels_to_plot(plots(cur)%ax(ix), real(px, real32))
+   y = pixels_to_plot(plots(cur)%ax(iy), real(py, real32))
+   endsubroutine pf_pixels_to_plot
+
+   function pf_plot_selection(xmin, xmax, ymin, ymax, xaxis, yaxis) result(selected)
+   !< The box the user is dragging with the right button (`IsPlotSelected`, `GetPlotSelection`; `ip_plot_selection`):
+   !< true while it is drawn, its extent in plot units (0 otherwise). It ends the setup.
+   real(real64),     intent(out)          :: xmin, xmax, ymin, ymax !< Extent.
+   character(len=*), intent(in), optional :: xaxis, yaxis !< Axes.
+   logical                                :: selected     !< A box.
+   integer(int32)                         :: ix, iy       !< Axes.
+   real(real64)                           :: x1, x2, y1, y2 !< Its corners.
+
+   call query_axes('pf_plot_selection', xaxis, yaxis, ix, iy)
+   xmin = 0.0_real64
+   xmax = 0.0_real64
+   ymin = 0.0_real64
+   ymax = 0.0_real64
+   associate(p => plots(cur))
+      selected = p%selected
+      if (.not. selected) return
+      x1 = pixels_to_plot(p%ax(ix), p%select_rect(1) + p%rect(1))
+      y1 = pixels_to_plot(p%ax(iy), p%select_rect(2) + p%rect(2))
+      x2 = pixels_to_plot(p%ax(ix), p%select_rect(3) + p%rect(1))
+      y2 = pixels_to_plot(p%ax(iy), p%select_rect(4) + p%rect(2))
+      xmin = merge(x1, x2, x1 < x2)
+      xmax = merge(x1, x2, x1 >= x2)
+      ymin = merge(y1, y2, y1 < y2)
+      ymax = merge(y1, y2, y1 >= y2)
+   endassociate
+   endfunction pf_plot_selection
+
+   subroutine pf_cancel_selection()
+   !< End the box the user is dragging without the zoom of its release (`CancelPlotSelection`; `ip_cancel_selection`).
+   !< It ends the setup.
+
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_cancel_selection outside a plot'
+   associate(p => plots(cur))
+      if (.not. p%locked) call setup_finish(p)
+      if (p%selected) then
+         p%selected = .false.
+         p%selecting = .false.
+      endif
+   endassociate
+   endsubroutine pf_cancel_selection
+
+   subroutine query_axes(name, xaxis, yaxis, ix, iy)
+   !< A query's axes (the current ones or those named, enabled), the setup ended.
+   character(len=*), intent(in)           :: name         !< The procedure called.
+   character(len=*), intent(in), optional :: xaxis, yaxis !< Axes.
+   integer(int32),   intent(out)          :: ix, iy       !< Axes.
+
+   if (cur == 0_int32) then
+      write(*, '(A)') 'figure_plot_frame: '//name//' outside a plot'
+      error stop 1
+   endif
+   associate(p => plots(cur))
+      if (.not. p%locked) call setup_finish(p)
+      ix = p%cur_x
+      iy = p%cur_y
+      if (present(xaxis)) ix = axis_code(xaxis)
+      if (present(yaxis)) iy = axis_code(yaxis)
+   endassociate
+   endsubroutine query_axes
+
+   ! private: the input (UpdateInput)
+
+   subroutine update_input(p)
+   !< `UpdateInput`: the plot's and the axes' buttons; a box started by a right click, a fit by a double click; the
+   !< context menu's latch; the pan of the held axes by the mouse's delta; the wheel's zoom about the pointer on the
+   !< hovered axes; the box: confirmed (the zoom), cancelled, or drawn.
+   type(plot_record), intent(inout) :: p          !< Plot.
+   real(real64)   :: dx, dy, wheel, wheel_h, dmax(5), mx, my, sdx, sdy, pdx, pdy !< Input.
+   integer(int32) :: mods                         !< Key mods.
+   logical        :: dnd                          !< A drag and drop.
+   logical        :: clicked, can_pan, any_x_hov, any_y_hov, any_x_held, any_y_held, any_hov, any_held !< State.
+   logical        :: selecting, panning, equal, increasing, full_w, full_h, x_can, y_can !< ...
+   logical        :: x_hov(AXES), x_held(AXES)    !< Each axis hovered or held (with the plot's).
+   real(real32)   :: delta(2), mouse(2), rate, tx, ty, size_(2), w, sel_sq, pan_sq, d(2), a, b !< Pixels.
+   real(real64)   :: lo, hi                       !< Plot units.
+   integer(int32) :: i, o, dir, eq_ref            !< Axis, its pair, drag direction, equal's reference axis.
+
+   equal = has_flag(p%flags, PF_EQUAL)
+   call core_io_input(dx, dy, wheel, wheel_h, dmax, mods, dnd)
+   call core_mouse_pos(mx, my)
+   delta = [real(dx, real32), real(dy, real32)]
+   mouse = [real(mx, real32), real(my, real32)]
+   clicked = core_button_behavior(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
+                                  real(p%rect(4), real64), p%id, p%hovered, p%held, flags=PLOT_BUTTON_FLAGS)
+   if (clicked) then
+      if (.not. has_flag(p%flags, PF_NO_BOX_SELECT) .and. core_mouse_clicked(BTN_SELECT)) then
+         p%selecting = .true.
+         p%select_start = mouse
+         p%select_rect = 0.0_real32
+      endif
+      if (core_mouse_double_clicked(BTN_FIT)) then
+         p%fit = .true.
+         p%ax(:)%fit = .true.
+      endif
+   endif
+   can_pan = core_mouse_down(BTN_PAN)
+   p%held = p%held .and. can_pan
+   x_hov = .false.
+   x_held = .false.
+   do i = 1_int32, AXES
+      if (.not. p%ax(i)%enabled) cycle
+      associate(ax => p%ax(i))
+         call core_keep_alive(plot_id_offset(p%id, i))
+         clicked = core_button_behavior(real(ax%hover_rect(1), real64), real(ax%hover_rect(2), real64), &
+                                        real(ax%hover_rect(3), real64), real(ax%hover_rect(4), real64), &
+                                        plot_id_offset(p%id, i), ax%hovered, ax%held, flags=AXIS_BUTTON_FLAGS)
+         if (clicked .and. core_mouse_double_clicked(BTN_FIT)) then
+            p%fit = .true.
+            ax%fit = .true.
+         endif
+         ax%held = ax%held .and. can_pan
+         x_hov(i) = ax%hovered .or. p%hovered
+         x_held(i) = ax%held .or. p%held
+      endassociate
+   enddo
+   if (dnd .or. mods == ImGuiMod_Ctrl) return ! OverrideMod: no input
+   any_x_hov = p%hovered .or. any(p%ax(AX_X1:AX_X3)%enabled .and. p%ax(AX_X1:AX_X3)%hovered)
+   any_y_hov = p%hovered .or. any(p%ax(AX_Y1:AX_Y3)%enabled .and. p%ax(AX_Y1:AX_Y3)%hovered)
+   any_x_held = p%held .or. any(p%ax(AX_X1:AX_X3)%enabled .and. p%ax(AX_X1:AX_X3)%held)
+   any_y_held = p%held .or. any(p%ax(AX_Y1:AX_Y3)%enabled .and. p%ax(AX_Y1:AX_Y3)%held)
+   any_hov = any_x_hov .or. any_y_hov
+   any_held = any_x_held .or. any_y_held
+   call core_mouse_drag_delta(BTN_SELECT, sdx, sdy)
+   call core_mouse_drag_delta(BTN_PAN, pdx, pdy)
+   a = real(sdx, real32) * real(sdx, real32)
+   b = real(sdy, real32) * real(sdy, real32)
+   sel_sq = a + b
+   a = real(pdx, real32) * real(pdx, real32)
+   b = real(pdy, real32) * real(pdy, real32)
+   pan_sq = a + b
+   selecting = p%selecting .and. sel_sq > DRAG_THRESHOLD
+   panning = any_held .and. pan_sq > DRAG_THRESHOLD
+   ! the context menu
+   if (core_mouse_released(BTN_MENU) .and. .not. p%context_locked) open_context = .true.
+   if (selecting .or. panning) then
+      p%context_locked = .true.
+   elseif (.not. (core_mouse_down(BTN_MENU) .or. core_mouse_released(BTN_MENU))) then
+      p%context_locked = .false.
+   endif
+   ! the pan
+   if (any_held .and. .not. p%selecting) then
+      dir = 0_int32
+      do i = AX_X1, AX_X3
+         associate(ax => p%ax(i))
+            if (.not. (x_held(i) .and. .not. input_locked(ax))) cycle
+            dir = ior(dir, 2_int32)
+            increasing = merge(delta(1) > 0.0_real32, delta(1) < 0.0_real32, has_flag(ax%flags, AXF_INVERT))
+            if (delta(1) /= 0.0_real32 .and. .not. pan_locked(ax, increasing)) then
+               lo = pixels_to_plot(ax, p%rect(1) - delta(1))
+               hi = pixels_to_plot(ax, p%rect(3) - delta(1))
+               call pan_to(ax, lo, hi)
+               o = ax%ortho
+               if (equal .and. o /= 0_int32) call set_aspect(p%ax(o), get_aspect(ax))
+            endif
+         endassociate
+      enddo
+      do i = AX_Y1, AX_Y3
+         associate(ax => p%ax(i))
+            if (.not. (x_held(i) .and. .not. input_locked(ax))) cycle
+            dir = ior(dir, 4_int32)
+            increasing = merge(delta(2) < 0.0_real32, delta(2) > 0.0_real32, has_flag(ax%flags, AXF_INVERT))
+            if (delta(2) /= 0.0_real32 .and. .not. pan_locked(ax, increasing)) then
+               lo = pixels_to_plot(ax, p%rect(4) - delta(2)) ! bottom
+               hi = pixels_to_plot(ax, p%rect(2) - delta(2)) ! top
+               call pan_to(ax, lo, hi)
+               o = ax%ortho
+               if (equal .and. o /= 0_int32) call set_aspect(p%ax(o), get_aspect(ax))
+            endif
+         endassociate
+      enddo
+      if (dmax(BTN_PAN + 1_int32) > real(DRAG_THRESHOLD, real64)) then
+         select case (dir)
+         case (0_int32)
+            call core_set_mouse_cursor(ImGuiMouseCursor_NotAllowed)
+         case (2_int32)
+            call core_set_mouse_cursor(ImGuiMouseCursor_ResizeEW)
+         case (4_int32)
+            call core_set_mouse_cursor(ImGuiMouseCursor_ResizeNS)
+         case default
+            call core_set_mouse_cursor(ImGuiMouseCursor_ResizeAll)
+         endselect
+      endif
+   endif
+   ! the wheel's zoom (ZoomMod: none)
+   if (any_hov) then
+      rate = ZOOM_RATE
+      if (wheel == 0.0_real64) then
+         rate = 0.0_real32
+      elseif (wheel > 0.0_real64) then
+         rate = (-ZOOM_RATE) / (1.0_real32 + (2.0_real32 * ZOOM_RATE))
+      endif
+      size_ = [p%rect(3) - p%rect(1), p%rect(4) - p%rect(2)]
+      tx = ((mouse(1) - p%rect(1)) * (1.0_real32 - 0.0_real32)) / (p%rect(3) - p%rect(1)) + 0.0_real32 ! ImRemap
+      ty = ((mouse(2) - p%rect(2)) * (1.0_real32 - 0.0_real32)) / (p%rect(4) - p%rect(2)) + 0.0_real32
+      eq_ref = 0_int32
+      do i = AX_X1, AX_X3
+         associate(ax => p%ax(i))
+            o = ax%ortho
+            if (.not. x_hov(i) .or. input_locked(ax)) cycle
+            if (equal .and. o /= 0_int32) then
+               if (input_locked(p%ax(o))) cycle
+            endif
+            call core_set_key_owner(ImGuiKey_MouseWheelY, p%id)
+            if (rate /= 0.0_real32) then
+               w = size_(1) * tx
+               w = w * rate
+               lo = pixels_to_plot(ax, p%rect(1) - w)
+               w = size_(1) * (1.0_real32 - tx)
+               w = w * rate
+               hi = pixels_to_plot(ax, p%rect(3) + w)
+               call pan_to(ax, lo, hi)
+               if (equal .and. o /= 0_int32) eq_ref = i
+            endif
+         endassociate
+      enddo
+      do i = AX_Y1, AX_Y3
+         associate(ax => p%ax(i))
+            o = ax%ortho
+            if (.not. x_hov(i) .or. input_locked(ax)) cycle
+            if (equal .and. o /= 0_int32) then
+               if (input_locked(p%ax(o))) cycle
+            endif
+            call core_set_key_owner(ImGuiKey_MouseWheelY, p%id)
+            if (rate /= 0.0_real32) then
+               w = size_(2) * ty
+               w = w * rate
+               hi = pixels_to_plot(ax, p%rect(2) - w) ! top
+               w = size_(2) * (1.0_real32 - ty)
+               w = w * rate
+               lo = pixels_to_plot(ax, p%rect(4) + w) ! bottom
+               call pan_to(ax, lo, hi)
+               if (equal .and. o /= 0_int32) eq_ref = i
+            endif
+         endassociate
+      enddo
+      if (eq_ref /= 0_int32) then
+         o = p%ax(eq_ref)%ortho
+         if (o /= 0_int32) call set_aspect(p%ax(o), get_aspect(p%ax(eq_ref)))
+      endif
+   endif
+   ! the box
+   if (p%selecting) then
+      d = p%select_start - mouse
+      x_can = .not. has_flag(mods, ImGuiMod_Alt) .and. abs(d(1)) > 2.0_real32
+      y_can = .not. has_flag(mods, ImGuiMod_Shift) .and. abs(d(2)) > 2.0_real32
+      if (core_mouse_released(BTN_SELECT)) then ! confirmed: the zoom
+         do i = AX_X1, AX_X3
+            if (input_locked(p%ax(i)) .or. .not. x_can) cycle
+            lo = pixels_to_plot(p%ax(i), p%select_start(1))
+            hi = pixels_to_plot(p%ax(i), mouse(1))
+            call box_to(p%ax(i), lo, hi)
+         enddo
+         do i = AX_Y1, AX_Y3
+            if (input_locked(p%ax(i)) .or. .not. y_can) cycle
+            lo = pixels_to_plot(p%ax(i), p%select_start(2))
+            hi = pixels_to_plot(p%ax(i), mouse(2))
+            call box_to(p%ax(i), lo, hi)
+         enddo
+         if (x_can .or. y_can .or. (has_flag(mods, ImGuiMod_Alt) .and. has_flag(mods, ImGuiMod_Shift))) &
+            open_context = .false.
+         p%selected = .false.
+         p%selecting = .false.
+      elseif (core_mouse_released(BTN_SELECT_CANCEL)) then
+         p%selected = .false.
+         p%selecting = .false.
+         open_context = .false.
+      else
+         a = d(1) * d(1)
+         b = d(2) * d(2)
+         if (a + b > BOX_THRESHOLD) then
+            if (all_locked(p, AX_X1, AX_Y3)) then ! a bad selection
+               call core_set_mouse_cursor(ImGuiMouseCursor_NotAllowed)
+               open_context = .false.
+               p%selected = .false.
+            else
+               full_w = has_flag(mods, ImGuiMod_Alt) .or. all_locked(p, AX_X1, AX_X3)
+               full_h = has_flag(mods, ImGuiMod_Shift) .or. all_locked(p, AX_Y1, AX_Y3)
+               p%select_rect(1) = merge(p%rect(1), min(p%select_start(1), mouse(1)), full_w)
+               p%select_rect(3) = merge(p%rect(3), max(p%select_start(1), mouse(1)), full_w)
+               p%select_rect(2) = merge(p%rect(2), min(p%select_start(2), mouse(2)), full_h)
+               p%select_rect(4) = merge(p%rect(4), max(p%select_start(2), mouse(2)), full_h)
+               p%select_rect(1:3:2) = p%select_rect(1:3:2) - p%rect(1)
+               p%select_rect(2:4:2) = p%select_rect(2:4:2) - p%rect(2)
+               p%selected = .true.
+            endif
+         else
+            p%selected = .false.
+         endif
+      endif
+   endif
+   endsubroutine update_input
+
+   subroutine pan_to(ax, v_min, v_max)
+   !< A pan's or a zoom's new ends (`SetMin`, `SetMax`, an inverted axis's swapped).
+   type(plot_axis), intent(inout) :: ax           !< Axis.
+   real(real64),    intent(in)    :: v_min, v_max !< The ends at the pixel minimum and maximum.
+   logical                        :: done         !< Set.
+
+   if (has_flag(ax%flags, AXF_INVERT)) then
+      done = set_min(ax, v_max, .false.)
+      done = set_max(ax, v_min, .false.)
+   else
+      done = set_min(ax, v_min, .false.)
+      done = set_max(ax, v_max, .false.)
+   endif
+   endsubroutine pan_to
+
+   subroutine box_to(ax, p1, p2)
+   !< A box's zoom on an axis: `SetMin(ImMin(p1, p2))`, `SetMax(ImMax(p1, p2))`.
+   type(plot_axis), intent(inout) :: ax     !< Axis.
+   real(real64),    intent(in)    :: p1, p2 !< The box's ends.
+   logical                        :: done   !< Set.
+
+   done = set_min(ax, merge(p1, p2, p1 < p2), .false.)
+   done = set_max(ax, merge(p1, p2, p1 >= p2), .false.)
+   endsubroutine box_to
+
+   function set_min(ax, v, force) result(done)
+   !< `ImPlotAxis::SetMin`: the minimum, unless locked (not forced), constrained; refused if not below the maximum.
+   type(plot_axis), intent(inout) :: ax    !< Axis.
+   real(real64),    intent(in)    :: v     !< New minimum.
+   logical,         intent(in)    :: force !< Even locked.
+   logical                        :: done  !< Set.
+   real(real64)                   :: m, z  !< The minimum, the range.
+
+   done = .false.
+   if (.not. force .and. locked_min(ax)) return
+   m = constrain_nan(constrain_inf(v))
+   if (m < ax%con_min) m = ax%con_min
+   z = ax%range_max - m
+   if (z < tiny(1.0_real64)) m = ax%range_max - tiny(1.0_real64)
+   if (m >= ax%range_max) return
+   ax%range_min = m
+   call update_scale(ax)
+   done = .true.
+   endfunction set_min
+
+   function set_max(ax, v, force) result(done)
+   !< `ImPlotAxis::SetMax`: the maximum, unless locked (not forced), constrained; refused if not above the minimum.
+   type(plot_axis), intent(inout) :: ax    !< Axis.
+   real(real64),    intent(in)    :: v     !< New maximum.
+   logical,         intent(in)    :: force !< Even locked.
+   logical                        :: done  !< Set.
+   real(real64)                   :: m, z  !< The maximum, the range.
+
+   done = .false.
+   if (.not. force .and. locked_max(ax)) return
+   m = constrain_nan(constrain_inf(v))
+   if (m > ax%con_max) m = ax%con_max
+   z = m - ax%range_min
+   if (z < tiny(1.0_real64)) m = ax%range_min + tiny(1.0_real64)
+   if (m <= ax%range_min) return
+   ax%range_max = m
+   call update_scale(ax)
+   done = .true.
+   endfunction set_max
+
+   pure function input_locked(ax) result(yes)
+   !< `IsInputLocked`: both ends locked, or fit every frame.
+   type(plot_axis), intent(in) :: ax  !< Axis.
+   logical                     :: yes !< Locked.
+
+   yes = (locked_min(ax) .and. locked_max(ax)) .or. auto_fitting(ax)
+   endfunction input_locked
+
+   pure function pan_locked(ax, increasing) result(yes)
+   !< `IsPanLocked`: a pan towards the constraint's end, the axis at it.
+   type(plot_axis), intent(in) :: ax         !< Axis.
+   logical,         intent(in) :: increasing !< Towards larger values.
+   logical                     :: yes        !< Locked.
+
+   if (has_flag(ax%flags, AXF_PAN_STRETCH)) then
+      yes = input_locked(ax)
+   elseif (locked_min(ax) .or. locked_max(ax) .or. auto_fitting(ax)) then
+      yes = .false.
+   elseif (increasing) then
+      yes = ax%range_max == ax%con_max
+   else
+      yes = ax%range_min == ax%con_min
+   endif
+   endfunction pan_locked
+
+   pure function all_locked(p, i0, i1) result(yes)
+   !< The enabled axes i0 .. i1 all input-locked (`AllAxesInputLocked`; all six: `ImPlotPlot::IsInputLocked`, a
+   !< disabled axis counting as locked).
+   type(plot_record), intent(in) :: p      !< Plot.
+   integer(int32),    intent(in) :: i0, i1 !< Axes.
+   logical                       :: yes    !< Locked.
+   integer(int32)                :: i      !< Axis.
+
+   yes = .true.
+   do i = i0, i1
+      if (p%ax(i)%enabled .and. .not. input_locked(p%ax(i))) yes = .false.
+   enddo
+   endfunction all_locked
+
+   function pixels_to_plot(ax, pix) result(v)
+   !< `ImPlotAxis::PixelsToPlot`: the value at a pixel (float), through the inverse transform on a log10 or symlog axis.
+   type(plot_axis), intent(in) :: ax  !< Axis.
+   real(real32),    intent(in) :: pix !< Pixel.
+   real(real64)                :: v   !< Value.
+   real(real64)                :: t, s !< Fraction, transformed value.
+
+   v = real(pix - ax%pixel_min, real64) / ax%scale_to_pixel + ax%range_min
+   if (ax%scale == SCALE_LOG10 .or. ax%scale == SCALE_SYMLOG) then
+      t = (v - ax%range_min) / (ax%range_max - ax%range_min)
+      s = t * (ax%scale_max - ax%scale_min)
+      s = s + ax%scale_min
+      if (ax%scale == SCALE_LOG10) then
+         v = inverse_log10(s)
+      else
+         v = inverse_symlog(s)
+      endif
+   endif
+   endfunction pixels_to_plot
+
+   ! private: the overlays of EndPlot
+
+   subroutine overlays(p)
+   !< `EndPlot` under the plot's clip: the selection (`RenderSelectionRect`), the crosshairs, the mouse text.
+   type(plot_record), intent(inout) :: p           !< Plot.
+   real(real64)                     :: mx, my, w, h !< The pointer, a text's size.
+   real(real32)                     :: m(2), pos(2), sz(2), sr(4) !< ..., the box on screen.
+   integer(int32)                   :: col, i      !< Colour, axis.
+   logical                          :: any_held    !< An axis or the plot held.
+   character(len=:), allocatable    :: s           !< The mouse text.
+
+   call core_push_clip_rect(real(p%rect(1), real64), real(p%rect(2), real64), real(p%rect(3), real64), &
+                            real(p%rect(4), real64))
+   call core_mouse_pos(mx, my)
+   m = [real(mx, real32), real(my, real32)]
+   if (p%selected) then ! Selection: (1, 1, 0), its fill at 1/4 alpha
+      sr = [p%select_rect(1) + p%rect(1), p%select_rect(2) + p%rect(2), p%select_rect(3) + p%rect(1), &
+            p%select_rect(4) + p%rect(2)]
+      call core_draw_rect_filled(real(sr(1), real64), real(sr(2), real64), real(sr(3), real64), real(sr(4), real64), &
+                                 core_color(1.0_real64, 1.0_real64, 0.0_real64, 0.25_real64))
+      call core_draw_rect(real(sr(1), real64), real(sr(2), real64), real(sr(3), real64), real(sr(4), real64), &
+                          core_color(1.0_real64, 1.0_real64, 0.0_real64, 1.0_real64))
+   endif
+   any_held = p%held .or. any(p%ax(:)%enabled .and. p%ax(:)%held)
+   if (has_flag(p%flags, PF_CROSSHAIRS) .and. p%hovered .and. .not. any_held .and. .not. p%selecting .and. &
+       .not. p%leg_hovered) then
+      call core_set_mouse_cursor(ImGuiMouseCursor_None)
+      col = p%col_border ! Crosshairs: PlotBorder
+      call core_draw_line_h(real(p%rect(1), real64), real(m(1) - 5.0_real32, real64), real(m(2), real64), col)
+      call core_draw_line_h(real(m(1) + 5.0_real32, real64), real(p%rect(3), real64), real(m(2), real64), col)
+      call core_draw_line_v(real(m(1), real64), real(p%rect(2), real64), real(m(2) - 5.0_real32, real64), col)
+      call core_draw_line_v(real(m(1), real64), real(m(2) + 5.0_real32, real64), real(p%rect(4), real64), col)
+   endif
+   if (.not. has_flag(p%flags, PF_NO_MOUSE_TEXT) .and. (p%hovered .or. p%held .or. p%selecting)) then
+      s = ''
+      do i = AX_X1, AX_X3
+         if (.not. p%ax(i)%enabled) cycle
+         if (i > AX_X1) s = s//', ('
+         s = s//trim(axis_value_label(p, i, pixels_to_plot(p%ax(i), m(1))))
+         if (i > AX_X1) s = s//')'
+      enddo
+      s = s//', '
+      do i = AX_Y1, AX_Y3
+         if (.not. p%ax(i)%enabled) cycle
+         if (i > AX_Y1) s = s//', ('
+         s = s//trim(axis_value_label(p, i, pixels_to_plot(p%ax(i), m(2))))
+         if (i > AX_Y1) s = s//')'
+      enddo
+      call core_text_size(s, w, h)
+      sz = [real(w, real32), real(h, real32)]
+      pos = location_pos(p%rect, sz, LOC_SOUTH + LOC_EAST, MOUSE_POS_PADDING)
+      call core_draw_text(real(pos(1), real64), real(pos(2), real64), core_style_color(ImGuiCol_Text), s)
+   endif
+   call core_pop_clip_rect()
+   endsubroutine overlays
+
+   function axis_value_label(p, i, v) result(s)
+   !< `LabelAxisValue(axis, v, round=true)`: a time axis's `TimeFormatMouseCursor`; else v rounded to the ticks'
+   !< spacing's precision, "%g".
+   type(plot_record), intent(in) :: p !< Plot.
+   integer(int32),    intent(in) :: i !< Axis.
+   real(real64),      intent(in) :: v !< Value.
+   character(len=32)             :: s !< Label.
+   real(real64)                  :: spacing !< The first two ticks' distance, or the range.
+
+   if (p%ax(i)%scale == SCALE_TIME) then
+      s = time_cursor_label(v, p%ax(i)%range_max - p%ax(i)%range_min, p%rect(3) - p%rect(1))
+      return
+   endif
+   if (ticks(i)%n > 1_int32) then
+      spacing = ticks(i)%pos(2) - ticks(i)%pos(1)
+   else
+      spacing = p%ax(i)%range_max - p%ax(i)%range_min
+   endif
+   s = c_real('', 0_int32, -1_int32, 'g', round_axis_value(v, spacing))
+   endfunction axis_value_label
+
+   subroutine side_switch(p)
+   !< `EndPlot`'s axis side switch: an axis held over the plot, dragged onto its far edge, changes side.
+   type(plot_record), intent(inout) :: p      !< Plot.
+   real(real64)                     :: mx, my !< The pointer.
+   real(real32)                     :: m(2), r(4) !< ..., the switch's strip.
+   integer(int32)                   :: i      !< Axis.
+   logical                          :: opp, inside !< On the opposite side, the pointer over the plot.
+
+   if (p%held) return
+   call core_mouse_pos(mx, my)
+   m = [real(mx, real32), real(my, real32)]
+   inside = m(1) >= p%rect(1) .and. m(2) >= p%rect(2) .and. m(1) < p%rect(3) .and. m(2) < p%rect(4)
+   if (.not. inside) return
+   do i = 1_int32, AXES
+      associate(ax => p%ax(i))
+         if (has_flag(ax%flags, AXF_NO_SIDE_SWITCH) .or. .not. ax%held) cycle
+         opp = has_flag(ax%flags, AXF_OPPOSITE)
+         if (i <= AX_X3) then
+            if (.not. opp) then
+               r = [p%rect(1) - 5.0_real32, p%rect(2) - 5.0_real32, p%rect(3) + 5.0_real32, p%rect(2) + 5.0_real32]
+               if (m(2) < p%rect(4) - 10.0_real32) call strip(r)
+            else
+               r = [p%rect(1) - 5.0_real32, p%rect(4) - 5.0_real32, p%rect(3) + 5.0_real32, p%rect(4) + 5.0_real32]
+               if (m(2) > p%rect(2) + 10.0_real32) call strip(r)
+            endif
+         else
+            if (.not. opp) then
+               r = [p%rect(3) - 5.0_real32, p%rect(2) - 5.0_real32, p%rect(3) + 5.0_real32, p%rect(4) + 5.0_real32]
+               if (m(1) > p%rect(1) + 10.0_real32) call strip(r)
+            else
+               r = [p%rect(1) - 5.0_real32, p%rect(2) - 5.0_real32, p%rect(1) + 5.0_real32, p%rect(4) + 5.0_real32]
+               if (m(1) < p%rect(3) - 10.0_real32) call strip(r)
+            endif
+         endif
+         if (m(1) >= r(1) .and. m(2) >= r(2) .and. m(1) < r(3) .and. m(2) < r(4)) then
+            if (opp) then
+               ax%flags = iand(ax%flags, not(AXF_OPPOSITE))
+            else
+               ax%flags = ior(ax%flags, AXF_OPPOSITE)
+            endif
+         endif
+      endassociate
+   enddo
+   contains
+      subroutine strip(q)
+      !< The switch's strip (AxisBgHovered).
+      real(real32), intent(in) :: q(4) !< Rectangle.
+
+      call core_draw_rect_filled(real(q(1), real64), real(q(2), real64), real(q(3), real64), real(q(4), real64), &
+                                 core_style_color(ImGuiCol_ButtonHovered))
+      endsubroutine strip
+   endsubroutine side_switch
+
+   ! private: the context menus (EndPlot, ShowPlotContextMenu, ShowAxisContextMenu, ShowLegendContextMenu)
+
+   subroutine context_menus(p)
+   !< The plot's and the axes' context menus: opened by a right click (without a drag) over the plot or an axis, under
+   !< the plot's ID ("##PlotContext", and "##XContext"/"##YContext" under the axis's index).
+   type(plot_record), intent(inout) :: p       !< Plot.
+   logical                          :: can_ctx !< A menu may open.
+   integer(int32)                   :: i, k    !< Axis, index on its direction.
+   character(len=16)                :: name    !< "X-Axis 2", ...
+
+   call core_push_override_id(p%id)
+   can_ctx = open_context .and. .not. has_flag(p%flags, PF_NO_MENUS) .and. .not. p%leg_hovered
+   if (can_ctx .and. p%hovered) call ig_open_popup('##PlotContext')
+   if (ig_begin_popup('##PlotContext')) then
+      call plot_context_menu(p)
+      call ig_end_popup()
+   endif
+   do i = 1_int32, AXES
+      k = merge(i - AX_X1, i - AX_Y1, i <= AX_X3)
+      call core_push_id_int(k)
+      if (can_ctx .and. p%ax(i)%hovered .and. .not. has_flag(p%ax(i)%flags, AXF_NO_MENUS)) &
+         call ig_open_popup(merge('##XContext', '##YContext', i <= AX_X3))
+      if (ig_begin_popup(merge('##XContext', '##YContext', i <= AX_X3))) then
+         if (has_label(p%ax(i))) then
+            call core_text_unformatted(text(p%ax(i)%label_off:p%ax(i)%label_off + p%ax(i)%label_len - 1_int32))
+         else
+            name = axis_menu_name(i)
+            call core_text_unformatted(trim(name))
+         endif
+         call ig_separator()
+         call axis_context_menu(p, i, merge(p%ax(i)%ortho, 0_int32, has_flag(p%flags, PF_EQUAL)))
+         call ig_end_popup()
+      endif
+      call core_pop_id()
+   enddo
+   call core_pop_id()
+   endsubroutine context_menus
+
+   function axis_menu_name(i) result(name)
+   !< "X-Axis", "X-Axis 2", "X-Axis 3", "Y-Axis", ...
+   integer(int32), intent(in) :: i    !< Axis.
+   character(len=16)          :: name !< Name.
+
+   if (i == AX_X1) then
+      name = 'X-Axis'
+   elseif (i <= AX_X3) then
+      write(name, '(A,I0)') 'X-Axis ', i - AX_X1 + 1_int32
+   elseif (i == AX_Y1) then
+      name = 'Y-Axis'
+   else
+      write(name, '(A,I0)') 'Y-Axis ', i - AX_Y1 + 1_int32
+   endif
+   endfunction axis_menu_name
+
+   subroutine plot_context_menu(p)
+   !< `ShowPlotContextMenu`: a menu per enabled axis, the legend's, the settings (Equal, Box Select, Title, Mouse
+   !< Position, Crosshairs).
+   type(plot_record), intent(inout) :: p     !< Plot.
+   integer(int32)                   :: i     !< Axis.
+   logical                          :: v     !< A setting.
+   character(len=16)                :: name  !< An axis's menu.
+
+   do i = 1_int32, AXES
+      if (.not. p%ax(i)%enabled .or. has_flag(p%ax(i)%flags, AXF_NO_MENUS)) cycle
+      call core_push_id_int(merge(i - AX_X1, i - AX_Y1, i <= AX_X3))
+      name = axis_menu_name(i)
+      if (has_label(p%ax(i))) then
+         if (ig_begin_menu(text(p%ax(i)%label_off:p%ax(i)%label_off + p%ax(i)%label_len - 1_int32))) then
+            call axis_context_menu(p, i, merge(p%ax(i)%ortho, 0_int32, has_flag(p%flags, PF_EQUAL)))
+            call ig_end_menu()
+         endif
+      elseif (ig_begin_menu(trim(name))) then
+         call axis_context_menu(p, i, merge(p%ax(i)%ortho, 0_int32, has_flag(p%flags, PF_EQUAL)))
+         call ig_end_menu()
+      endif
+      call core_pop_id()
+   enddo
+   call ig_separator()
+   if (.not. has_flag(p%leg_flags, LGF_NO_MENUS)) then
+      if (ig_begin_menu('Legend')) then
+         if (legend_context_menu(p, .not. has_flag(p%flags, PF_NO_LEGEND))) call flip(p%flags, PF_NO_LEGEND)
+         call ig_end_menu()
+      endif
+   endif
+   if (ig_begin_menu('Settings')) then
+      v = has_flag(p%flags, PF_EQUAL)
+      if (ig_menu_item('Equal', selected=v)) call flip(p%flags, PF_EQUAL)
+      v = .not. has_flag(p%flags, PF_NO_BOX_SELECT)
+      if (ig_menu_item('Box Select', selected=v)) call flip(p%flags, PF_NO_BOX_SELECT)
+      call begin_disabled(p%title_len == 0_int32)
+      v = p%title_len > 0_int32 .and. .not. has_flag(p%flags, PF_NO_TITLE)
+      if (ig_menu_item('Title', selected=v)) call flip(p%flags, PF_NO_TITLE)
+      call end_disabled(p%title_len == 0_int32)
+      v = .not. has_flag(p%flags, PF_NO_MOUSE_TEXT)
+      if (ig_menu_item('Mouse Position', selected=v)) call flip(p%flags, PF_NO_MOUSE_TEXT)
+      v = has_flag(p%flags, PF_CROSSHAIRS)
+      if (ig_menu_item('Crosshairs', selected=v)) call flip(p%flags, PF_CROSSHAIRS)
+      call ig_end_menu()
+   endif
+   endsubroutine plot_context_menu
+
+   subroutine axis_context_menu(p, i, eq)
+   !< `ShowAxisContextMenu` of a linear, log or symlog axis: its ends (locks and drags), Auto-Fit, Invert, Opposite,
+   !< Label, Grid Lines, Tick Marks, Tick Labels, Tick Labels Inside. (A time axis's date and time pickers: not yet;
+   !< its menu shows the drags of a linear axis.)
+   type(plot_record), intent(inout) :: p      !< Plot.
+   integer(int32),    intent(in)    :: i      !< Axis.
+   integer(int32),    intent(in)    :: eq     !< The axis made equal with it (0: none).
+   logical                          :: always_locked, label, grid, marks, labels, inside, v, done !< State.
+   real(real64)                     :: speed, tmp !< The drags' speed, a value.
+
+   call core_push_item_width(75.0_real64)
+   associate(ax => p%ax(i))
+      always_locked = (ax%has_range .and. ax%range_cond == COND_ALWAYS) .or. auto_fitting(ax)
+      label = has_label(ax)
+      grid = .not. has_flag(ax%flags, AXF_NO_GRID_LINES)
+      marks = .not. has_flag(ax%flags, AXF_NO_TICK_MARKS)
+      labels = .not. has_flag(ax%flags, AXF_NO_TICK_LABELS)
+      inside = has_flag(ax%flags, AXF_TICK_LABELS_INSIDE)
+      if (ax%range_max - ax%range_min <= epsilon(1.0_real64)) then
+         speed = epsilon(1.0_real64) * 1.0e13_real64
+      else
+         speed = 0.01_real64 * (ax%range_max - ax%range_min)
+      endif
+      speed = real(real(speed, real32), real64) ! (float)drag_speed
+      call begin_disabled(always_locked)
+      call flag_box('##LockMin', ax%flags, AXF_LOCK_MIN)
+      call end_disabled(always_locked)
+      call ig_same_line()
+      v = locked_min(ax) .or. always_locked
+      call begin_disabled(v)
+      tmp = ax%range_min
+      if (core_drag_double('Min', tmp, speed, ieee_value(tmp, ieee_negative_inf), ax%range_max - epsilon(1.0_real64), &
+                           '%.3g', 1_int32)) then
+         done = set_min(ax, tmp, .true.)
+         if (eq /= 0_int32) call set_aspect(p%ax(eq), get_aspect(ax))
+      endif
+      call end_disabled(v)
+      call begin_disabled(always_locked)
+      call flag_box('##LockMax', ax%flags, AXF_LOCK_MAX)
+      call end_disabled(always_locked)
+      call ig_same_line()
+      v = locked_max(ax) .or. always_locked
+      call begin_disabled(v)
+      tmp = ax%range_max
+      if (core_drag_double('Max', tmp, speed, ax%range_min + epsilon(1.0_real64), ieee_value(tmp, ieee_positive_inf), &
+                           '%.3g', 1_int32)) then
+         done = set_max(ax, tmp, .true.)
+         if (eq /= 0_int32) call set_aspect(p%ax(eq), get_aspect(ax))
+      endif
+      call end_disabled(v)
+      call ig_separator()
+      call flag_box('Auto-Fit', ax%flags, AXF_AUTO_FIT)
+      call ig_separator()
+      call flag_box('Invert', ax%flags, AXF_INVERT)
+      call flag_box('Opposite', ax%flags, AXF_OPPOSITE)
+      call ig_separator()
+      call begin_disabled(ax%label_len == 0_int32)
+      if (ig_checkbox('Label', label)) call flip(ax%flags, AXF_NO_LABEL)
+      call end_disabled(ax%label_len == 0_int32)
+      if (ig_checkbox('Grid Lines', grid)) call flip(ax%flags, AXF_NO_GRID_LINES)
+      if (ig_checkbox('Tick Marks', marks)) call flip(ax%flags, AXF_NO_TICK_MARKS)
+      if (ig_checkbox('Tick Labels', labels)) call flip(ax%flags, AXF_NO_TICK_LABELS)
+      if (ig_checkbox('Tick Labels Inside', inside)) call flip(ax%flags, AXF_TICK_LABELS_INSIDE)
+   endassociate
+   endsubroutine axis_context_menu
+
+   function legend_context_menu(p, visible) result(changed)
+   !< `ShowLegendContextMenu`: Show, Outside, horizontal or vertical, the location's nine buttons.
+   type(plot_record), intent(inout) :: p       !< Plot.
+   logical,           intent(in)    :: visible !< The legend shown.
+   logical                          :: changed !< Show toggled.
+   logical                          :: v       !< A box.
+   real(real64)                     :: s       !< Frame height.
+   real(real64)                     :: bw      !< A button's width.
+
+   s = real(real(core_frame_height(), real32), real64)
+   bw = real(1.5_real32 * real(s, real32), real64)
+   v = visible
+   changed = ig_checkbox('Show', v)
+   call flag_box('Outside', p%leg_flags, LGF_OUTSIDE)
+   if (core_radio_button('H', has_flag(p%leg_flags, LGF_HORIZONTAL))) p%leg_flags = ior(p%leg_flags, LGF_HORIZONTAL)
+   call ig_same_line()
+   if (core_radio_button('V', .not. has_flag(p%leg_flags, LGF_HORIZONTAL))) &
+      p%leg_flags = iand(p%leg_flags, not(LGF_HORIZONTAL))
+   call core_push_style_var(ImGuiStyleVar_ItemSpacing, 2.0_real64, 2.0_real64)
+   if (ig_button('NW', bw, s)) p%leg_loc = LOC_NORTH + LOC_WEST
+   call ig_same_line()
+   if (ig_button('N', bw, s)) p%leg_loc = LOC_NORTH
+   call ig_same_line()
+   if (ig_button('NE', bw, s)) p%leg_loc = LOC_NORTH + LOC_EAST
+   if (ig_button('W', bw, s)) p%leg_loc = LOC_WEST
+   call ig_same_line()
+   if (core_invisible_button('C', bw, s)) continue
+   call ig_same_line()
+   if (ig_button('E', bw, s)) p%leg_loc = LOC_EAST
+   if (ig_button('SW', bw, s)) p%leg_loc = LOC_SOUTH + LOC_WEST
+   call ig_same_line()
+   if (ig_button('S', bw, s)) p%leg_loc = LOC_SOUTH
+   call ig_same_line()
+   if (ig_button('SE', bw, s)) p%leg_loc = LOC_SOUTH + LOC_EAST
+   call core_pop_style_var()
+   endfunction legend_context_menu
+
+   subroutine flag_box(label, flags, flag)
+   !< `CheckboxFlags` of one bit: a checkbox, the bit set or cleared when clicked.
+   character(len=*), intent(in)    :: label !< Label.
+   integer(int32),   intent(inout) :: flags !< Flags.
+   integer(int32),   intent(in)    :: flag  !< The bit.
+   logical                         :: v     !< Its state.
+
+   v = has_flag(flags, flag)
+   if (ig_checkbox(label, v)) then
+      if (v) then
+         flags = ior(flags, flag)
+      else
+         flags = iand(flags, not(flag))
+      endif
+   endif
+   endsubroutine flag_box
+
+   subroutine flip(flags, flag)
+   !< `ImFlipFlag`.
+   integer(int32), intent(inout) :: flags !< Flags.
+   integer(int32), intent(in)    :: flag  !< The bit.
+
+   if (has_flag(flags, flag)) then
+      flags = iand(flags, not(flag))
+   else
+      flags = ior(flags, flag)
+   endif
+   endsubroutine flip
+
+   subroutine begin_disabled(cond)
+   !< `BeginDisabledControls`: the items disabled and faded (Alpha x 0.25) while `cond`.
+   logical, intent(in) :: cond !< Disabled.
+   real(real64)        :: v(2) !< The style's Alpha.
+   integer(int32)      :: n    !< Its values.
+
+   if (.not. cond) return
+   call core_push_item_flag(ImGuiItemFlags_Disabled, .true.)
+   call core_style_var('Alpha', v, n)
+   call core_push_style_var(ImGuiStyleVar_Alpha, real(real(v(1), real32) * 0.25_real32, real64))
+   endsubroutine begin_disabled
+
+   subroutine end_disabled(cond)
+   !< `EndDisabledControls`.
+   logical, intent(in) :: cond !< Disabled.
+
+   if (.not. cond) return
+   call core_pop_item_flag()
+   call core_pop_style_var()
+   endsubroutine end_disabled
+
    ! private: the API's helpers
 
    subroutine setup_refused(name)
@@ -895,6 +1805,7 @@ contains
 
    next_fit = .false.
    next_hidden_set = .false.
+   open_context = .false.
    endsubroutine reset_next
 
    ! private: the items
@@ -1080,7 +1991,17 @@ contains
    p%leg_hovered = .false.
    p%n_leg = 0_int32
    p%leg_n = 0_int32
+   p%hovered = .false.
+   p%held = .false.
+   p%selecting = .false.
+   p%selected = .false.
+   p%context_locked = .false.
+   p%select_start = 0.0_real32
+   p%select_rect = 0.0_real32
    do i = 1_int32, AXES
+      p%ax(i)%hovered = .false.
+      p%ax(i)%held = .false.
+      p%ax(i)%hover_rect = 0.0_real32
       p%ax(i)%flags = 0_int32
       p%ax(i)%prev_flags = 0_int32
       p%ax(i)%enabled = .false.
@@ -1615,15 +2536,21 @@ contains
    call pad_and_datum_x(p, pad_top, pad_bot)
    if (title_w > 0.0_real32) p%axes_rect(2) = (p%frame(2) + PLOT_PADDING(2)) + title_pad
    p%rect = [p%canvas(1) + pad_left, p%canvas(2) + pad_top, p%canvas(3) - pad_right, p%canvas(4) - pad_bot]
-   do i = AX_X1, AX_X3 ! the axes on screen
-      p%ax(i)%pixel_min = merge(p%rect(3), p%rect(1), has_flag(p%ax(i)%flags, AXF_INVERT))
-      p%ax(i)%pixel_max = merge(p%rect(1), p%rect(3), has_flag(p%ax(i)%flags, AXF_INVERT))
-      call update_scale(p%ax(i))
+   do i = AX_X1, AX_X3 ! the axes on screen, their buttons' rectangles (HoverRect)
+      associate(ax => p%ax(i))
+         ax%hover_rect = [p%rect(1), min(ax%datum1, ax%datum2), p%rect(3), max(ax%datum1, ax%datum2)]
+         ax%pixel_min = merge(p%rect(3), p%rect(1), has_flag(ax%flags, AXF_INVERT))
+         ax%pixel_max = merge(p%rect(1), p%rect(3), has_flag(ax%flags, AXF_INVERT))
+         call update_scale(ax)
+      endassociate
    enddo
    do i = AX_Y1, AX_Y3
-      p%ax(i)%pixel_min = merge(p%rect(2), p%rect(4), has_flag(p%ax(i)%flags, AXF_INVERT))
-      p%ax(i)%pixel_max = merge(p%rect(4), p%rect(2), has_flag(p%ax(i)%flags, AXF_INVERT))
-      call update_scale(p%ax(i))
+      associate(ax => p%ax(i))
+         ax%hover_rect = [min(ax%datum1, ax%datum2), p%rect(2), max(ax%datum1, ax%datum2), p%rect(4)]
+         ax%pixel_min = merge(p%rect(2), p%rect(4), has_flag(ax%flags, AXF_INVERT))
+         ax%pixel_max = merge(p%rect(4), p%rect(2), has_flag(ax%flags, AXF_INVERT))
+         call update_scale(ax)
+      endassociate
    enddo
    if (equal) then ! x constrained to y, unless x's limits were set on this frame
       do i = AX_X1, AX_X3
@@ -1639,6 +2566,7 @@ contains
          endif
       enddo
    endif
+   if (.not. has_flag(p%flags, PF_NO_INPUTS)) call update_input(p)
    do i = 1_int32, AXES ! the fits asked for: SetNextAxisToFit, ImPlotAxisFlags_AutoFit
       if (next_fit(i) .or. auto_fitting(p%ax(i))) then
          p%fit = .true.
@@ -1665,6 +2593,7 @@ contains
    enddo
    p%n_leg = 0_int32 ! Legend.Reset: the entries of this frame's items follow
    p%leg_n = 0_int32
+   call core_push_override_id(plot_id_offset(p%id, -1_int32)) ! the items' IDs: PushOverrideID(Items.ID)
    endsubroutine setup_finish
 
    subroutine pad_and_datum_x(p, pad_t, pad_b)
@@ -1837,7 +2766,12 @@ contains
 
    associate(ax => p%ax(i), t => ticks(i), r => p%rect)
       opp = has_flag(ax%flags, AXF_OPPOSITE)
-      if (ax%hili /= 0_int32) then ! (no hover: the axis's background, AxisBg, is transparent)
+      if ((ax%hovered .or. ax%held) .and. .not. p%held .and. .not. has_flag(ax%flags, AXF_NO_HIGHLIGHT)) then
+         call core_draw_rect_filled(real(ax%hover_rect(1), real64), real(ax%hover_rect(2), real64),       &
+                                    real(ax%hover_rect(3), real64), real(ax%hover_rect(4), real64),       &
+                                    core_style_color(merge(ImGuiCol_ButtonActive, ImGuiCol_ButtonHovered, &
+                                                           ax%held)))
+      elseif (ax%hili /= 0_int32) then ! (the axis's background, AxisBg, is transparent)
          if (i <= AX_X3) then
             call core_draw_rect_filled(real(r(1), real64), real(min(ax%datum1, ax%datum2), real64), &
                                        real(r(3), real64), real(max(ax%datum1, ax%datum2), real64), ax%hili)
@@ -2098,6 +3032,9 @@ contains
    logical                          :: out, horz, held !< Outside, horizontal; the button held.
    integer(int32)                   :: items_id   !< The legend's ID.
    logical                          :: dummy      !< Pressed.
+   logical                          :: any_item   !< An entry hovered.
+   logical                          :: contextable !< The legend's menu may open.
+   real(real64)                     :: mx, my     !< The pointer.
 
    p%leg_hovered = .false.
    if (p%n_items > 0_int32) p%item_hovered(1:p%n_items) = .false.
@@ -2127,20 +3064,33 @@ contains
    call core_keep_alive(items_id)
    dummy = core_button_behavior(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
                                 items_id, p%leg_hovered, held, flags=LEGEND_BUTTON_FLAGS)
+   call core_mouse_pos(mx, my)
+   p%leg_hovered = p%leg_hovered .or. (core_window_hovered() .and. real(mx, real32) >= cl(1) .and. &
+                                       real(my, real32) >= cl(2) .and. real(mx, real32) < cl(3) .and. &
+                                       real(my, real32) < cl(4))
    call core_push_clip_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64))
    call core_draw_rect_filled(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
                               core_style_color(ImGuiCol_PopupBg))
-   call legend_entries(p, lr, .not. horz)
+   call legend_entries(p, lr, .not. horz, any_item)
+   contextable = p%leg_hovered .and. .not. any_item .and. .not. has_flag(p%leg_flags, LGF_NO_MENUS)
    call core_draw_rect(real(cl(1), real64), real(cl(2), real64), real(cl(3), real64), real(cl(4), real64), &
                        core_style_color(ImGuiCol_Border))
    call core_pop_clip_rect()
+   if (open_context .and. contextable .and. .not. has_flag(p%flags, PF_NO_MENUS)) call ig_open_popup('##LegendContext')
+   if (ig_begin_popup('##LegendContext')) then
+      call core_text_unformatted('Legend')
+      call ig_separator()
+      if (legend_context_menu(p, .not. has_flag(p%flags, PF_NO_LEGEND))) call flip(p%flags, PF_NO_LEGEND)
+      call ig_end_popup()
+   endif
    endsubroutine legend
 
-   subroutine legend_entries(p, lr, vertical)
+   subroutine legend_entries(p, lr, vertical, any_item)
    !< `ShowLegendEntries`: each entry its button (a click shows or hides the item), its icon and its label.
    type(plot_record), intent(inout) :: p        !< Plot.
    real(real32),      intent(in)    :: lr(4)    !< Legend's rectangle.
    logical,           intent(in)    :: vertical !< In a column.
+   logical,           intent(out)   :: any_item !< An entry hovered.
    real(real32)                     :: txt_ht, icon, lw, sum_w !< Text height, icon, label widths.
    real(real32)                     :: tl(2)    !< An entry's top-left corner.
    real(real32)                     :: ib(4)    !< Its icon.
@@ -2155,6 +3105,7 @@ contains
    col_txt = core_style_color(ImGuiCol_Text) ! LegendText: InlayText: Text
    col_dis = alpha_u32(col_txt, 0.25_real32)
    sum_w = 0.0_real32
+   any_item = .false.
    do k = 1_int32, p%n_leg
       it = p%leg_item(k)
       a = p%leg_off(k)
@@ -2182,6 +3133,7 @@ contains
       if (hov .and. (.not. has_flag(p%leg_flags, LGF_NO_HIGHLIGHT_ITEM) .or. &
                      .not. has_flag(p%leg_flags, LGF_NO_HIGHLIGHT_AXIS))) then
          p%item_hovered(it) = .true.
+         any_item = .true.
          col_hl = mix_u32(col_txt, col_item, 64_int32)
       else
          col_hl = col_txt

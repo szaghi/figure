@@ -468,6 +468,18 @@ int figure_ImDrawList_shared(const ImDrawList* dl, float* fringe_scale, ImVec2_c
    return n;
 }
 
+// The input state the plot frame reads (#15 P10 step 8: ImPlot's UpdateInput) that no C API function gives: the
+// frame's mouse delta (mouse[0:2]), the wheel (mouse[2], horizontal mouse[3]), the squared distance each button has
+// travelled since its click (mouse[4:9], MouseDragMaxDistanceSqr), the key mods (state[0], io.KeyMods) and whether a
+// drag and drop is active (state[1], g.DragDropActive).
+void figure_io_input(float* mouse, int* state) noexcept {
+   const ImGuiIO& io = ImGui::GetIO();
+   mouse[0] = io.MouseDelta.x, mouse[1] = io.MouseDelta.y, mouse[2] = io.MouseWheel, mouse[3] = io.MouseWheelH;
+   for (int k = 0; k < 5; k++) mouse[4 + k] = io.MouseDragMaxDistanceSqr[k];
+   state[0] = (int)io.KeyMods;
+   state[1] = GImGui->DragDropActive ? 1 : 0;
+}
+
 // The draw data as a renderer reads them (#15 P9: the Fortran path's renderers, through figure_render_imgui): the
 // lists (-1: no valid data) and the view (display position, size, framebuffer scale), each list's buffers, each
 // command (clip rectangle, texture, offsets and count; the result: 0 a draw, 1-4 the sampler callbacks reset, from the

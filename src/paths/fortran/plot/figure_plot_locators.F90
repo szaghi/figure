@@ -40,7 +40,7 @@ private
 public :: plot_ticks, text_measure, ticks_reset
 public :: locate_default, locate_log10, locate_symlog, locate_time
 public :: transform_log10, inverse_log10, transform_symlog, inverse_symlog
-public :: nice_num, pow10, c_floor, c_ceil
+public :: nice_num, pow10, c_floor, c_ceil, round_axis_value, time_cursor_label
 public :: TICK_LABEL_LEN, TIME_MIN, TIME_MAX
 
 integer(int32), parameter :: TICK_LABEL_LEN = 32_int32     !< IMPLOT_LABEL_MAX_SIZE.
@@ -77,6 +77,9 @@ integer(int32), parameter :: FMT_LEVEL1_FIRST(2, 0:7) = reshape([DF_DAY_MO_YR, T
                                                                  TF_HR_MIN, DF_DAY_MO_YR, TF_NONE, DF_DAY_MO_YR,    &
                                                                  TF_NONE, DF_YR, TF_NONE, DF_YR, TF_NONE], &
                                                                 [2, 8]) !< Level 1, the first major.
+integer(int32), parameter :: FMT_CURSOR(2, 0:7) = reshape([DF_NONE, TF_US, DF_NONE, TF_SUS, DF_NONE, TF_SMS,       &
+                                                           DF_NONE, TF_HR_MIN_S, DF_NONE, TF_HR_MIN, DF_DAY_MO, TF_HR, &
+                                                           DF_DAY_MO_YR, TF_NONE, DF_MO_YR, TF_NONE], [2, 8]) !< Cursor.
 character(len=3), parameter :: MONTH_ABRVS(0:11) = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', &
                                                     'Oct', 'Nov', 'Dec'] !< MONTH_ABRVS.
 integer(int32), parameter :: MONTH_DAYS(0:11) = [31_int32, 28_int32, 31_int32, 30_int32, 31_int32, 30_int32, &
@@ -1007,6 +1010,38 @@ contains
       s = c
    endif
    endfunction date_time_label
+
+   ! the mouse text (LabelAxisValue)
+
+   function round_axis_value(v, spacing) result(r)
+   !< `RoundAxisValue`: v rounded to the precision of the ticks' spacing (`Precision`: 1 - the order of magnitude,
+   !< at least 0; `RoundTo`: floor(v 10^p + 0.5) / 10^p).
+   real(real64), intent(in) :: v       !< Value.
+   real(real64), intent(in) :: spacing !< The first two ticks' distance, or the range's size.
+   real(real64)             :: r       !< Rounded.
+   integer(int32)           :: order, prec !< Order of magnitude, precision.
+   real(real64)             :: pw, x   !< 10^prec, v 10^prec.
+
+   order = 0_int32
+   if (spacing /= 0.0_real64) order = int(c_floor(c_log10(abs(spacing))), int32)
+   prec = merge(0_int32, 1_int32 - order, order > 0_int32)
+   pw = c_pow(10.0_real64, real(prec, real64))
+   x = v * pw
+   x = x + 0.5_real64
+   r = c_floor(x) / pw
+   endfunction round_axis_value
+
+   function time_cursor_label(v, span, width) result(s)
+   !< `LabelAxisValue` of a time axis: `FormatDateTime` of v with `TimeFormatMouseCursor`, the unit of the range per
+   !< 100 pixels of the plot's width (ImPlot's defaults: 12-hour clock, not ISO 8601, UTC).
+   real(real64), intent(in)      :: v     !< Value [s].
+   real(real64), intent(in)      :: span  !< The axis's range [s].
+   real(real32), intent(in)      :: width !< The plot's width [pixels].
+   character(len=TICK_LABEL_LEN) :: s     !< Label.
+
+   s = date_time_label(time_from_double(v), FMT_CURSOR(:, unit_for_range(span / real(width / 100.0_real32, real64))), &
+                       .false., .false.)
+   endfunction time_cursor_label
 
    ! numerics shared with the linear locator
 

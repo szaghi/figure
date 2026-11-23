@@ -89,6 +89,22 @@ C's `%g` on the labels the goldens show.
   Viridis in 6 bands, cool-warm_r): pictures at threshold 2, no pixel failing (the bars pixel-exact), three
   compilers. Not yet: user maps (`ip_load_colormap`), edited maps (`ig_gradient_edit`), `ip_colormap_legend`, the
   pushes FIGURE's items make (heatmaps, pies: P11).
+- 2026-11-22, input (P10 step 8): ImPlot's `UpdateInput` in the frame: the plot's and the axes' buttons (Dear ImGui's
+  `ButtonBehavior`, ImPlot's IDs and flags, in ImPlot's order), the pan by the mouse's delta (`SetMin`/`SetMax`, the
+  pan locks, `equal`), the wheel's zoom about the pointer (`ZoomRate` 0.1, the wheel taken from the window:
+  `SetKeyOwner`), the box (right drag; Alt, Shift; confirmed, cancelled by a left click or `pf_cancel_selection`),
+  the double click's fit, the menus' latch; drawn: an axis hovered or held, the box, the crosshairs, the mouse text
+  (south-east, values rounded to the ticks' precision, the extra axes in parentheses, time axes' cursor format), the
+  axis side switch; the context menus (plot, axes, legend: FIGURE's widgets of src/lib where they pass ImPlot's
+  arguments, figure_core wrappers elsewhere); the items' ID stack (`PushOverrideID` of the items' ID, as ImPlot);
+  the queries `pf_plot_hovered`, `pf_plot_mouse`, `pf_plot_to_pixels`, `pf_pixels_to_plot`, `pf_plot_selection`,
+  `pf_cancel_selection`. Shared code: figure_core's input, ID and widget wrappers; `figure_io_input` (io.MouseDelta,
+  MouseWheel, MouseDragMaxDistanceSqr, KeyMods, DragDropActive) and `igSetKeyOwner` added to the generated glue
+  (scripts/gen_bindings.py). `figure_test_plot_frame_input` compares 8 cases with ImPlot under the same synthetic
+  input (pan, wheel zoom, box and cancel, double-click fit, axis-only pan and zoom, mouse text on log and y2 axes,
+  an axis hovered, the context menu and its Crosshairs): the state of every frame (ranges, hover, pointer,
+  selection) equal to the bit, pictures at threshold 2 (three compilers). Not yet: the time axes' pickers in their
+  menu, `GetPlotSize`, `ImPlotInputMap` other than the default.
 
 ## What the current seam calls, to replace
 
@@ -109,10 +125,11 @@ The ImPlot functions `figure_implot` calls (76, through `figure_cimplot`) and th
 - [ ] Ticks and labels: `ImPlot_SetupAxisTicks_doublePtr`, `ImPlot_SetupAxisFormat_Str`
 - [x] Legend: `ImPlot_SetupLegend`, `ImPlot_IsLegendEntryHovered`, `ImPlot_HideNextItem`
 - [ ] Legend popups: `ImPlot_BeginLegendPopup`, `ImPlot_EndLegendPopup`
-- [ ] Queries: `ImPlot_GetPlotSize`, `ImPlot_IsPlotHovered`, `ImPlot_GetPlotMousePos`, `ImPlot_PlotToPixels_double`,
+- [x] Queries: `ImPlot_IsPlotHovered`, `ImPlot_GetPlotMousePos`, `ImPlot_PlotToPixels_double`,
       `ImPlot_PixelsToPlot_Float`
-- [ ] Pan, zoom, box select: `ImPlot_GetPlotSelection`, `ImPlot_IsPlotSelected`, `ImPlot_CancelPlotSelection`; the
-      context menus
+- [ ] Query not yet: `ImPlot_GetPlotSize`
+- [x] Pan, zoom, box select: `ImPlot_GetPlotSelection`, `ImPlot_IsPlotSelected`, `ImPlot_CancelPlotSelection`; the
+      context menus (the plot's, the axes', the legend's; a time axis's date and time pickers not yet)
 - [x] Colormaps: `fig_colormap` (ImPlot's and the bundled maps, `_r`, `|levels`: `AddColormap`, `GetColormap*`,
       `SampleColormap`); `ImPlot_PushColormap_PlotColormap`, `ImPlot_PopColormap`, `ImPlot_SampleColormap`,
       `ImPlot_GetColormapCount`; the colour scale `ImPlot_ColormapScale`; the style's line colours
