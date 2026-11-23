@@ -176,6 +176,17 @@ without allocation (glibc's output; at first foresight's `c_real`, which it repr
   default and given bins in Hot, the fit, single precision): ranges of every frame and `max_count` equal to the
   bit, pictures at threshold 2 with no pixel failing (three compilers). Not yet: `ip_image` and `ip_field_image`
   (they need a figure_core wrapper of the textures' sampling callback: proposed, waiting for the coordinator).
+- 2026-11-22, images and field images (P11 group (d), second part): `pf_image` (`PlotImage` as `ip_image` calls it:
+  `FitterRect`, the item's colour the white tint (`pf_item_recolor`), `AddImage` with uv (0, 1)-(1, 0) between
+  figure_core's new `core_texture_sampling` callbacks: the texture's own filter, nearest or linear), `pf_field_image`
+  (`ip_field_image`): `figure_plot_field` colours the field as native/figure_field.cpp does, bit for bit (the scale's
+  t with C's log10/asinh, the colours from the frame's registry, the NaN colour, the 65536-bin table of the float bits
+  for log/symlog fields of 131072 values or more, the range rules), into a texture of FIGURE's own texture API cached
+  by the item's ID (coloured again when the program says it changed or the array, range, colormap, scale or NaN
+  colour differ; released after 10 s idle). `figure_test_plot_frame_images` compares 8 cases with ImPlot (nearest and
+  linear images, fields linear/log/symlog with NaNs, a 400 x 400 log field through the table, the fit, the cache's
+  one upload) and the idle release: ranges, applied ranges equal to the bit, pictures at threshold 2 with no pixel
+  failing (three compilers).
 
 ## What the current seam calls, to replace
 
@@ -220,7 +231,7 @@ The ImPlot functions `figure_implot` calls (76, through `figure_cimplot`) and th
       `ImPlot_PlotErrorBars_*`, `ImPlot_PlotInfLines_*`
 - [x] Pies, bubbles, digital, text: `ImPlot_PlotPieChart_*`, `ImPlot_PlotBubbles_*`, `ImPlot_PlotDigital_*`,
       `ImPlot_PlotText`
-- [ ] Heatmaps, histograms, images, fields: `ImPlot_PlotHeatmap_*`, `ImPlot_PlotHistogram_*`,
+- [x] Heatmaps, histograms, images, fields: `ImPlot_PlotHeatmap_*`, `ImPlot_PlotHistogram_*`,
       `ImPlot_PlotHistogram2D_*`, `ImPlot_PlotImage`, `fig_field_image` (`figure_field.cpp`), `fig_texture_sampling`
 - [ ] Item colour and annotations: `ImPlot_GetLastItemColor`, `fig_plot_annotation` (`Annotation`)
 

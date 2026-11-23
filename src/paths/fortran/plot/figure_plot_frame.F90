@@ -126,7 +126,7 @@ private
 public :: pf_begin_plot, pf_end_plot, pf_plot_limits
 public :: plot_item_ctx, pf_item_begin, pf_item_fit, pf_item_end, pf_item_hidden, pf_item_fit_axis
 public :: pf_plot_ctx, pf_item_count, pf_item_shown_at, pf_item_state, pf_item_fit_with, pf_digital_offset
-public :: pf_text_vertical
+public :: pf_text_vertical, pf_item_recolor, pf_item_id
 public :: pf_setup_axes, pf_setup_axis, pf_setup_axes_limits, pf_setup_axis_limits, pf_setup_legend
 public :: pf_set_next_axes_to_fit, pf_set_next_axis_to_fit, pf_set_axes
 public :: pf_hide_next_item, pf_legend_hovered
@@ -343,6 +343,7 @@ integer(int32)                         :: n_text = 0_int32 !< Characters of `tex
 logical                                :: open_context = .false. !< A context menu opens (OpenContextThisFrame).
 character(len=MOUSE_TEXT_LEN)          :: mouse_text     !< The mouse text (MousePosStringBuilder).
 integer(int32)                         :: digital_offset = 0_int32 !< The digital items' bands (DigitalPlotOffset).
+integer(int32)                         :: last_item = 0_int32 !< The item `pf_item_begin` registered last.
 
 contains
    function pf_begin_plot(title, width, height, equal) result(visible)
@@ -1866,6 +1867,7 @@ contains
             p%marker_idx = p%marker_idx + 1_int32
          endif
       endif
+      last_item = it
       if (.not. shown) return
       ctx%color = p%item_color(it)
       ctx%marker = p%item_marker(it)
@@ -2030,6 +2032,21 @@ contains
 
    call text_vertical(x, y, col, text)
    endsubroutine pf_text_vertical
+
+   subroutine pf_item_recolor(col)
+   !< The colour of the item `pf_item_begin` registered last (PlotImage: `GetCurrentItem()->Color = tint`).
+   integer(int32), intent(in) :: col !< Colour (packed).
+
+   plots(cur)%item_color(last_item) = col
+   endsubroutine pf_item_recolor
+
+   function pf_item_id(label) result(id)
+   !< The ID an item of `label` has in the open plot (figure_plot_field's cache key).
+   character(len=*), intent(in) :: label !< Label.
+   integer(int32)               :: id    !< ID.
+
+   id = plot_hash(label, plot_id_offset(plots(cur)%id, -1_int32))
+   endfunction pf_item_id
 
    subroutine pf_item_end()
    !< `EndItem` (figure_plot_items): the next item's data reset.

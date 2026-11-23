@@ -48,7 +48,9 @@ module figure_plot_items
 !< when not given, a constant scale one rectangle, `RendererRectC` cells, labels through a printf format),
 !< `pf_histogram` and `pf_histogram2d` (`ip_histogram`/`ip_histogram2d`: the finite values, FIGURE's range and bin
 !< rules, then `PlotHistogram` (cumulative, density, outliers; the bars' path) and `PlotHistogram2D` (a heatmap of the
-!< counts)).
+!< counts)); `pf_image` (`PlotImage` as `ip_image` calls it: uv (0, 1)-(1, 0), white, the texture's own filter between
+!< figure_core's `core_texture_sampling` callbacks) and `pf_field_image` (`ip_field_image`: figure_plot_field colours
+!< the field into a cached texture, bit for bit with native/figure_field.cpp; then the image).
 !<
 !< No allocation per item per frame (ADR 0001): views of the arrays, fixed quads; the decimation's index buffer and
 !< the integer abscissae's conversion (decimated items only) are grown once and kept.
@@ -59,16 +61,21 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_c_binding, only : c_double, c_float
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui_enums, only : ImGuiCol_Text
-use figure_core, only : core_draw_line, core_draw_line_h, core_draw_line_v, core_draw_quad_uv, core_draw_rect_filled, &
-                        core_draw_text, core_framebuffer_scale, core_line_texture, core_pop_clip_rect,             &
-                        core_push_clip_rect, core_style_color, core_style_var, core_text_size, core_white_pixel
+use figure_core, only : core_draw_image, core_draw_line, core_draw_line_h, core_draw_line_v, core_draw_quad_uv,     &
+                        core_draw_rect_filled, core_draw_text, core_frame_count, core_framebuffer_scale,           &
+                        core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,             &
+                        core_style_var, core_text_size, core_texture_sampling, core_white_pixel
 use figure_decimate, only : decimate, decimate_axis, DECIMATE_LINEAR, DECIMATE_LOG10, DECIMATE_SYMLOG, &
                             DECIMATE_THRESHOLD
 use figure_plot_colormaps, only : cm_current, cm_key, cm_pop, cm_push, cm_sample, CM_VIRIDIS
+use figure_plot_field, only : field_colour, field_count, field_sweep, field_uploads, FIELD_LINEAR, FIELD_LOG, &
+                              FIELD_SYMLOG
 use figure_plot_format, only : plot_format, fmt_parse, fmt_real
+use figure_texture, only : texture_object, texture_ref
 use figure_plot_frame, only : plot_item_ctx, pf_digital_offset, pf_item_begin, pf_item_count, pf_item_end,      &
                               pf_item_fit, pf_item_fit_axis, pf_item_fit_with, pf_item_hidden, pf_item_shown_at, &
-                              pf_item_state, pf_legend_hovered, pf_pixels_to_plot, pf_plot_ctx, pf_text_vertical
+                              pf_item_id, pf_item_recolor, pf_item_state, pf_legend_hovered, pf_pixels_to_plot,    &
+                              pf_plot_ctx, pf_text_vertical
 use figure_plot_transform, only : map_pixel, MAP_LINEAR, MAP_LOG10, MAP_SYMLOG, MAP_TIME
 
 implicit none
@@ -79,7 +86,7 @@ public :: pf_bars, pf_bar_groups, pf_error_bars, pf_inf_lines
 public :: PF_BARS_HORIZONTAL, PF_ERROR_BARS_HORIZONTAL, PF_INF_LINES_HORIZONTAL
 public :: pf_pie_chart, pf_bubbles, pf_digital, pf_text
 public :: PF_PIE_NORMALIZE, PF_PIE_IGNORE_HIDDEN, PF_PIE_EXPLODING, PF_PIE_NO_SLICE_BORDER, PF_TEXT_VERT
-public :: pf_heatmap, pf_histogram, pf_histogram2d
+public :: pf_heatmap, pf_histogram, pf_histogram2d, pf_image, pf_field_image, pf_field_count, pf_field_uploads
 public :: PF_HEATMAP_COL_MAJOR, PF_HIST_HORIZONTAL, PF_HIST_CUMULATIVE, PF_HIST_DENSITY, PF_HIST_NO_OUTLIERS
 public :: PF_HIST_COL_MAJOR
 public :: PF_BIN_SQRT, PF_BIN_STURGES, PF_BIN_RICE, PF_BIN_SCOTT
@@ -372,6 +379,11 @@ interface pf_histogram2d
    !< A 2-D histogram of points: `ip_histogram2d`.
    module procedure histogram2d_r32, histogram2d_r64
 endinterface pf_histogram2d
+
+interface pf_field_image
+   !< A field through a colormap, kept as a texture: `ip_field_image`.
+   module procedure field_image_r32, field_image_r64
+endinterface pf_field_image
 
 interface pf_digital
    !< A digital signal in a band at the bottom of the plot: `ip_digital`.
@@ -2942,6 +2954,168 @@ contains
    endif
    if (.not. allocated(hist_a)) allocate(hist_a(max(n, 256_int64)), hist_b(max(n, 256_int64)))
    endsubroutine hist_room
+
+   ! images, field images (PlotImage; native/figure_field.cpp's colouring in figure_plot_field)
+
+   subroutine pf_image(label, tex, xmin, xmax, ymin, ymax, spec)
+   !< A texture over [xmin, xmax] x [ymin, ymax], pixel row 1 at ymin (`ip_image`: `PlotImage` with uv (0, 1)-(1, 0),
+   !< the texture's own filter): `FitterRect`, the item's colour the tint (white), `AddImage` in the plot's clip.
+   character(len=*),     intent(in)           :: label      !< Legend label.
+   type(texture_object), intent(in)           :: tex        !< Texture.
+   real(real64),         intent(in)           :: xmin, xmax !< Edges.
+   real(real64),         intent(in)           :: ymin, ymax !< ...
+   type(plot_item_spec), intent(in), optional :: spec       !< Style.
+
+   if (.not. tex%is_initialized()) error stop 'figure_plot_items: pf_image: the texture is not initialized'
+   associate(r => texture_ref(tex))
+      call image_item(label, int(r%TexID, int64), xmin, xmax, ymin, ymax, spec_or_default(spec))
+   endassociate
+   endsubroutine pf_image
+
+   subroutine image_item(label, tex, x0, x1, y0, y1, spec)
+   !< `PlotImage(tex, (x0, y0), (x1, y1), uv0 (0, 1), uv1 (1, 0), white)` between the texture-filter callbacks.
+   character(len=*),     intent(in) :: label  !< Label.
+   integer(int64),       intent(in) :: tex    !< Texture id.
+   real(real64),         intent(in) :: x0, x1, y0, y1 !< Edges.
+   type(plot_item_spec), intent(in) :: spec   !< Style.
+   type(plot_item_ctx)              :: ctx    !< The plot.
+   type(item_style)                 :: s      !< Staged style.
+   real(real32)                     :: p1(2), p2(2) !< Corners.
+
+   call core_texture_sampling(.true.) ! fig_texture_sampling(1, 1): the texture's own filter
+   if (begin(label, spec, [0.0_real32, 0.0_real32, 0.0_real32, AUTO_ALPHA], PF_MARKER_INVALID, ctx, s)) then
+      if (fits(ctx, spec)) then
+         call pf_item_fit(x0, y0)
+         call pf_item_fit(x1, y1)
+      endif
+      call pf_item_recolor(-1_int32) ! the tint, IM_COL32_WHITE
+      p1 = [map_pixel(ctx%tx, x0), map_pixel(ctx%ty, y1)]
+      p2 = [map_pixel(ctx%tx, x1), map_pixel(ctx%ty, y0)]
+      call core_draw_image(tex, real(p1(1), real64), real(p1(2), real64), real(p2(1), real64), real(p2(2), real64), &
+                           0.0_real64, 1.0_real64, 1.0_real64, 0.0_real64, -1_int32)
+      call finish()
+   endif
+   call core_texture_sampling(.false.)
+   endsubroutine image_item
+
+   subroutine field_image_r64(label, f, x0, x1, y0, y1, colormap, vmin, vmax, scale, nan_color, changed, range)
+   !< The field f(i, j) through a colormap, kept as a texture (`ip_field_image`), double precision.
+   character(len=*), intent(in)                     :: label        !< Legend label (the cache's id).
+   real(real64),     intent(in), target, contiguous :: f(:,:)       !< Field.
+   real(real64),     intent(in)                     :: x0, x1, y0, y1 !< Edges.
+   integer(int32),   intent(in), optional           :: colormap     !< Colormap (default Viridis).
+   real(real64),     intent(in), optional           :: vmin, vmax   !< Range (default: the data's).
+   character(len=*), intent(in), optional           :: scale        !< 'linear' (default), 'log', 'symlog'.
+   real(real64),     intent(in), optional           :: nan_color(4) !< NaN colour (default transparent).
+   logical,          intent(in), optional           :: changed      !< The values changed.
+   real(real64),     intent(out), optional          :: range(2)     !< The range applied.
+   integer(int64)                                   :: tex          !< Texture.
+   real(real64)                                     :: lo, hi       !< Range.
+   integer(int32)                                   :: st           !< Status.
+
+   if (size(f) == 0) return
+   call sweep_once()
+   call field_colour(pf_item_id(label), f64=f, nx=size(f, 1, kind=int64), ny=size(f, 2, kind=int64), &
+                     cmap=field_cmap(colormap), vmin=vmin, vmax=vmax, scale=field_scale(scale),   &
+                     nan_rgba=field_nan(nan_color), changed=field_changed(changed), tex=tex, lo=lo, hi=hi, stat=st)
+   if (st /= 0_int32) error stop 'figure_plot_items: pf_field_image: the texture failed'
+   if (present(range)) range = [lo, hi]
+   call image_item(label, tex, x0, x1, y0, y1, plot_item_spec())
+   endsubroutine field_image_r64
+
+   subroutine field_image_r32(label, f, x0, x1, y0, y1, colormap, vmin, vmax, scale, nan_color, changed, range)
+   !< The field f(i, j) through a colormap, kept as a texture (`ip_field_image`), single precision.
+   character(len=*), intent(in)                     :: label        !< Legend label (the cache's id).
+   real(real32),     intent(in), target, contiguous :: f(:,:)       !< Field.
+   real(real64),     intent(in)                     :: x0, x1, y0, y1 !< Edges.
+   integer(int32),   intent(in), optional           :: colormap     !< Colormap (default Viridis).
+   real(real64),     intent(in), optional           :: vmin, vmax   !< Range (default: the data's).
+   character(len=*), intent(in), optional           :: scale        !< 'linear' (default), 'log', 'symlog'.
+   real(real64),     intent(in), optional           :: nan_color(4) !< NaN colour (default transparent).
+   logical,          intent(in), optional           :: changed      !< The values changed.
+   real(real64),     intent(out), optional          :: range(2)     !< The range applied.
+   integer(int64)                                   :: tex          !< Texture.
+   real(real64)                                     :: lo, hi       !< Range.
+   integer(int32)                                   :: st           !< Status.
+
+   if (size(f) == 0) return
+   call sweep_once()
+   call field_colour(pf_item_id(label), f32=f, nx=size(f, 1, kind=int64), ny=size(f, 2, kind=int64), &
+                     cmap=field_cmap(colormap), vmin=vmin, vmax=vmax, scale=field_scale(scale),   &
+                     nan_rgba=field_nan(nan_color), changed=field_changed(changed), tex=tex, lo=lo, hi=hi, stat=st)
+   if (st /= 0_int32) error stop 'figure_plot_items: pf_field_image: the texture failed'
+   if (present(range)) range = [lo, hi]
+   call image_item(label, tex, x0, x1, y0, y1, plot_item_spec())
+   endsubroutine field_image_r32
+
+   subroutine sweep_once()
+   !< The idle field colourings released, once a frame (native: at the frame's end, `fig_field_sweep`).
+   integer(int32), save :: last = -1_int32 !< The frame swept last.
+
+   if (core_frame_count() == last) return
+   last = core_frame_count()
+   call field_sweep()
+   endsubroutine sweep_once
+
+   function field_cmap(colormap) result(cm)
+   !< The colormap (default Viridis).
+   integer(int32), intent(in), optional :: colormap !< Colormap.
+   integer(int32)                       :: cm       !< Map.
+
+   cm = CM_VIRIDIS
+   if (present(colormap)) cm = colormap
+   endfunction field_cmap
+
+   function field_scale(scale) result(code)
+   !< 'linear' (default) 0, 'log' 1, 'symlog' 2.
+   character(len=*), intent(in), optional :: scale !< Scale.
+   integer(int32)                         :: code  !< Code.
+
+   code = FIELD_LINEAR
+   if (.not. present(scale)) return
+   select case (scale)
+   case ('linear')
+      code = FIELD_LINEAR
+   case ('log')
+      code = FIELD_LOG
+   case ('symlog')
+      code = FIELD_SYMLOG
+   case default
+      error stop "figure_plot_items: pf_field_image: a scale is 'linear', 'log' or 'symlog'"
+   endselect
+   endfunction field_scale
+
+   function field_nan(nan_color) result(c)
+   !< The NaN colour as floats (default transparent).
+   real(real64), intent(in), optional :: nan_color(4) !< RGBA.
+   real(real32)                       :: c(4)         !< Colour.
+
+   c = 0.0_real32
+   if (present(nan_color)) c = real(nan_color, real32)
+   endfunction field_nan
+
+   function field_changed(changed) result(yes)
+   !< `changed` (default false).
+   logical, intent(in), optional :: changed !< Changed.
+   logical                       :: yes     !< Changed.
+
+   yes = .false.
+   if (present(changed)) yes = changed
+   endfunction field_changed
+
+   function pf_field_count() result(n)
+   !< The field colourings cached (tests).
+   integer(int32) :: n !< Entries.
+
+   n = field_count()
+   endfunction pf_field_count
+
+   function pf_field_uploads() result(n)
+   !< The field colourings uploaded since the start (tests).
+   integer(int64) :: n !< Uploads.
+
+   n = field_uploads()
+   endfunction pf_field_uploads
 
    ! private: the items (PlotLineEx, PlotScatterEx, PlotStairsEx, PlotStemsEx, PlotShadedEx)
 

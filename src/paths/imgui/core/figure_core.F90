@@ -32,7 +32,7 @@ module figure_core
 !<   `core_text_unformatted`; P10 step 9: `core_open_popup`, `core_begin_popup`, `core_end_popup`, the popups ImPlot
 !<   declares every frame, without the allocations of src/lib's `ig_*_popup` and their scope record); P11: the white
 !<   pixel's texture coordinates (`core_white_pixel`) and the framebuffer scale (`core_framebuffer_scale`) for the
-!<   items' primitives and decimation;
+!<   items' primitives and decimation; `core_texture_sampling`, the texture filter callback around a user image;
 !<   a glyph of the current font at its size (`core_font_glyph`: `GetFontBaked`, `FindGlyph`), for text drawn glyph by
 !<   glyph (ImPlot's vertical text); a rectangle of four corner colours (`core_draw_rect_filled_multicolor`:
 !<   `AddRectFilledMultiColor`, ImPlot's colour bars).
@@ -66,6 +66,7 @@ use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,
                                ImDrawList_AddCircle, ImDrawList_AddCircleFilled, ImDrawList_AddImage, ImDrawList_AddPolyline, &
                                ImDrawList_AddRect, ImDrawList_AddRectFilled, ImDrawList_AddText_Vec2, ImDrawList_PopClipRect, &
                                ImDrawList_PrimReserve, ImDrawList_PushClipRect
+use figure_c_native, only : fig_texture_sampling
 use figure_style, only : ig_get_style_var
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
                             dl_triangle_filled, DL_LINE_TEXTURES
@@ -90,7 +91,7 @@ public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core
 public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
 public :: core_open_popup, core_begin_popup, core_end_popup
-public :: core_white_pixel, core_framebuffer_scale
+public :: core_white_pixel, core_framebuffer_scale, core_texture_sampling
 public :: core_draw_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
@@ -1036,6 +1037,16 @@ contains
    u = real(list%uv_white(1), real64)
    v = real(list%uv_white(2), real64)
    endsubroutine core_white_pixel
+
+   subroutine core_texture_sampling(from_texture)
+   !< Around a user image (the plot frame's `pf_image`, `pf_field_image`): the renderer samples with the texture's own
+   !< filter (`from_texture` true) or its default again (false): FIGURE's native `fig_texture_sampling` on the window's
+   !< list, after what is pending (so the callback lands in order).
+   logical, intent(in) :: from_texture !< The texture's own filter.
+
+   call core_draw_end_pending()
+   call fig_texture_sampling(0_c_int, merge(1_c_int, 0_c_int, from_texture))
+   endsubroutine core_texture_sampling
 
    subroutine core_framebuffer_scale(sx, sy)
    !< io.DisplayFramebufferScale: display pixels per pixel (the plot frame's decimation, as figure_implot's).
