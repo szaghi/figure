@@ -298,6 +298,28 @@ def implot_ref() -> list[str]:
     ]
 
 
+def editor_generated() -> list[str]:
+    """Check the Fortran code editor's generated modules (gen_editor_tables.py, gen_editor_path.py; szaghi/figure#15 P16).
+
+    Returns
+    -------
+    list[str]
+        The discrepancies.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import gen_editor_path  # noqa: PLC0415 (a sibling script)
+    import gen_editor_tables  # noqa: PLC0415 (a sibling script)
+
+    errors = []
+    for script, target, generate in (
+        ("gen_editor_tables.py", gen_editor_tables.OUT, gen_editor_tables.generate),
+        ("gen_editor_path.py", gen_editor_path.TARGET, gen_editor_path.generate),
+    ):
+        if not target.is_file() or target.read_text(encoding="utf-8") != generate():
+            errors.append(f"{target.relative_to(ROOT).as_posix()} is not current: run python3 scripts/{script}")
+    return errors
+
+
 def library_root() -> list[str]:
     """Check that the static-library modes build from the library root and that it uses every public module.
 
@@ -629,6 +651,7 @@ def check() -> int:
     errors.extend(library_root())
     errors.extend(paths())
     errors.extend(implot_ref())
+    errors.extend(editor_generated())
     errors.extend(fortran_libraries())
 
     for e in errors:
