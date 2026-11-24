@@ -31,14 +31,16 @@ program figure_test_plot_frame_alloc
 !<
 !< The pictures are `figure_test_plot_frame_alloc.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : ip_begin_aligned, ip_end_aligned, ip_link_axis
-use figure, only : ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_drag_rect, ip_tag
+use figure_implot_ref, only : ip_begin_aligned, ip_end_aligned, ip_link_axis
+use figure_implot_ref, only : ip_drag_line_x, ip_drag_line_y, ip_drag_point, ip_drag_rect, ip_tag
 use figure_testing, only : test_mouse_button
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_plot, &
-                   ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, ip_setup_axes,             &
-                   ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter, ImGuiWindowFlags_NoDecoration
-use figure, only : ip_setup_axis_ticks, ip_setup_axis_constraints, ip_begin_legend_popup, ip_end_legend_popup, &
-                   ip_annotation, ip_plot_size, ip_colormap, ip_colormap_legend, ip_drop_target
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, &
+                   ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_begin_plot, ip_colormap_scale, ip_end_plot, ip_line, ip_plot_limits, ip_set_axes, &
+                              ip_setup_axes, ip_setup_axis, ip_setup_axis_limits, ip_spec, ip_scatter
+use figure_implot_ref, only : ip_setup_axis_ticks, ip_setup_axis_constraints, ip_begin_legend_popup, &
+                              ip_end_legend_popup, ip_annotation, ip_plot_size, ip_colormap, ip_colormap_legend, &
+                              ip_drop_target
 use, intrinsic :: iso_c_binding, only : c_float, c_int, c_null_char, c_null_ptr
 use figure_cimgui, only : im_vec2
 use figure_cimplot, only : ImPlot_BeginSubplots, ImPlot_EndSubplots, ImPlot_SetNextAxisToFit, ImPlot_SetupLegend

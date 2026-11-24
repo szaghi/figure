@@ -280,6 +280,23 @@ def package_sources() -> list[str]:
     ]
 
 
+def implot_ref() -> list[str]:
+    """Check the side-by-side tests' reference module: the current path's figure_implot renamed (gen_implot_ref.py).
+
+    Returns
+    -------
+    list[str]
+        The discrepancy, if any.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import gen_implot_ref  # noqa: PLC0415 (a sibling script)
+
+    target = gen_implot_ref.TARGET
+    if not target.is_file() or target.read_text(encoding="utf-8") != gen_implot_ref.generate():
+        return [f"{target.relative_to(ROOT).as_posix()} is not current: run python3 scripts/gen_implot_ref.py"]
+    return []
+
+
 def library_root() -> list[str]:
     """Check that the static-library modes build from the library root and that it uses every public module.
 
@@ -610,6 +627,7 @@ def check() -> int:
     errors.extend(package_sources())
     errors.extend(library_root())
     errors.extend(paths())
+    errors.extend(implot_ref())
     errors.extend(fortran_libraries())
 
     for e in errors:

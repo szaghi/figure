@@ -25,9 +25,10 @@ program figure_test_plot_frame_share
 !< mismatch's .new.png and .diff.png are left for inspection).
 use, intrinsic :: iso_c_binding, only : c_float, c_int, c_null_char, c_null_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ig_text_size,              &
-                   ip_begin_plot, ip_begin_subplots, ip_end_plot, ip_end_subplots, ip_legend_hovered, ip_line,     &
-                   ip_plot_limits, ip_plot_to_pixels, ip_setup_legend, ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ig_text_size, &
+                   ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_begin_plot, ip_begin_subplots, ip_end_plot, ip_end_subplots, ip_legend_hovered, &
+                              ip_line, ip_plot_limits, ip_plot_to_pixels, ip_setup_legend
 use figure_cimgui, only : im_vec2
 use figure_cimplot, only : ImPlot_BeginSubplots, ImPlot_EndSubplots, ImPlot_SetNextAxisToFit
 use figure_cimplot_enums, only : ImPlotSubplotFlags_ShareItems

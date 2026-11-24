@@ -116,8 +116,8 @@ module figure_plot_frame
 !<   rectangle and `BeginDragDropTarget`, where ImPlot calls `BeginDragDropTargetCustom` with the plot's or axis's ID);
 !< - the queries FIGURE's current path reads through its native layer (`pf_plot_size`: `GetPlotSize`;
 !<   `pf_plot_state`: `fig_plot_state`; `pf_plot_x_transform`: `fig_plot_x_transform`) and the error recovery's ends
-!<   (`pf_open_state`, `pf_recover_to`: the scope record's `recover_to`, `fig_plot_end` and `EndSubplots`; their wiring
-!<   into native/figure_scope.cpp waits for the seam's switch);
+!<   (`pf_open_state`, `pf_open_ids`, `pf_recover_to`: the scope record's `recover_to`, `fig_plot_end` and
+!<   `EndSubplots`, hooked into native/figure_scope.cpp by the Fortran path's `figure_implot`);
 !< - the drag tools are figure_plot_tools' (P12), over this module's hooks (`pf_items_id`, ...).
 !<
 !< Kept from the current path (FIGURE's behaviour over ImPlot, mirrored bit for bit; the owner's decisions on #15):
@@ -206,6 +206,7 @@ public :: pf_cancel_selection
 public :: pf_begin_subplots, pf_end_subplots, pf_begin_aligned, pf_end_aligned, pf_link_axis, pf_items_id, pf_tag
 public :: pf_drop_target
 public :: pf_annotation, pf_plot_size, pf_plot_state, pf_plot_x_transform, pf_open_state, pf_recover_to
+public :: pf_open_ids, pf_aligned_open, pf_tick_label
 public :: pf_plot_rect
 
 ! ImPlot's style: figure_plot_style's variables (PlotPadding, ... under the names these parameters had) and colours
@@ -1498,7 +1499,7 @@ contains
    endassociate
    endsubroutine pf_tag
 
-   subroutine pf_annotation(x, y, text, color, offset)
+   subroutine pf_annotation(x, y, text, color, offset, clamp)
    !< A text at the point (x, y) of the open plot's current axes (`Annotation(x, y, col, offset, clamp=true, "%s",
    !< text)` through FIGURE's `fig_plot_annotation`; `ip_annotation`), drawn when the plot ends, over its items, kept
    !< inside the plot area. Without `color` (or with alpha 0): the text alone, in the plot's text colour; with it: in a
@@ -1510,6 +1511,8 @@ contains
    character(len=*), intent(in)           :: text      !< Text (UTF-8).
    real(real64),     intent(in), optional :: color(:)  !< Box colour, RGBA in [0, 1] (default: no box).
    real(real64),     intent(in), optional :: offset(:) !< Offset [pixels], (x right, y down) (default: centred).
+   logical,          intent(in), optional :: clamp     !< Kept inside the plot area (default; `ip_contour`'s labels:
+                                                       !< not, `fig_plot_annotation`'s clamp 0).
    real(real32)                           :: c(4)      !< Colour.
    real(real32)                           :: lum, t    !< Luminance (CalcTextColor), a product.
    integer(int32)                         :: k, nt, j  !< The annotation, its text's length, a component.
@@ -1557,6 +1560,7 @@ contains
                            core_color(1.0_real64, 1.0_real64, 1.0_real64, 1.0_real64), lum > 0.5_real32)
       endif
       ann_clamp(k) = .true. ! fig_plot_annotation's clamp
+      if (present(clamp)) ann_clamp(k) = clamp
       ann_toff(k) = n_ann_text + 1_int32
       ann_tlen(k) = nt
       ann_text(n_ann_text + 1_int32:n_ann_text + ann_tlen(k)) = text
@@ -3076,11 +3080,53 @@ contains
    subplot = cur_sub /= 0_int32
    endsubroutine pf_open_state
 
+   subroutine pf_open_ids(plot, subplot)
+   !< What the frame has open, as the scope record snapshots it (szaghi/figure#15, the seam's switch: the Fortran
+   !< path's `figure_implot` hooks it into native/figure_scope.cpp): the open plot's and subplot's slots, 0 none.
+   integer(int32), intent(out) :: plot    !< The plot's slot (0: none).
+   integer(int32), intent(out) :: subplot !< The subplot's slot (0: none).
+
+   plot = cur
+   subplot = cur_sub
+   endsubroutine pf_open_ids
+
+   function pf_aligned_open() result(open)
+   !< A group of aligned plots open (`fig_aligned_open`: ImPlot's CurrentAlignmentH or V; a subplot's rows and columns
+   !< too).
+   logical :: open !< Open.
+
+   open = cur_align_h /= 0_int32 .or. cur_align_v /= 0_int32
+   endfunction pf_aligned_open
+
+   subroutine pf_tick_label(axis, index, label, count, label_len)
+   !< A tick label of the open plot (`test_plot_tick`, FIGURE's `fig_plot_tick_label`: `SetupLock`, then the axis's
+   !< ticker): the axis (1-6: X1, X2, X3, Y1, Y2, Y3), set up on this frame; the tick (from 1); the label into
+   !< `label` (its first `len(label)` characters), its length, the axis's ticks. It ends the setup.
+   integer(int32),   intent(in)  :: axis      !< Axis, 1-6.
+   integer(int32),   intent(in)  :: index     !< Tick, from 1.
+   character(len=*), intent(out) :: label     !< Label.
+   integer(int32),   intent(out) :: count     !< Ticks on the axis.
+   integer(int32),   intent(out) :: label_len !< The label's length.
+   integer(int32)                :: n         !< Characters copied.
+
+   label = ''
+   count = 0_int32
+   label_len = 0_int32
+   if (cur == 0_int32) error stop 'figure_plot_frame: pf_tick_label outside a plot'
+   if (.not. plots(cur)%ax(axis)%enabled) error stop 'figure_plot_frame: pf_tick_label of an axis not set up'
+   if (.not. plots(cur)%locked) call setup_finish(plots(cur)) ! SetupLock
+   count = ticks(axis)%n
+   if (index < 1_int32 .or. index > count) return
+   label_len = ticks(axis)%label_len(index)
+   n = min(label_len, len(label, kind=int32))
+   if (n > 0_int32) label(1:n) = ticks(axis)%text(ticks(axis)%label_off(index):ticks(axis)%label_off(index) + n - 1_int32)
+   endsubroutine pf_tick_label
+
    subroutine pf_recover_to(plot, subplot)
    !< Back to a snapshot of `pf_open_state` (the scope record's `recover_to`, FIGURE's error recovery): a plot open
    !< now and not then ended (`fig_plot_end`: `pf_end_plot`), then a subplot open now and not then
-   !< (`EndSubplots`: `pf_end_subplots`). The wiring into the scope record (native/figure_scope.cpp) waits for the
-   !< seam's switch.
+   !< (`EndSubplots`: `pf_end_subplots`). The Fortran path's `figure_implot` hooks it into the scope record
+   !< (native/figure_scope.cpp, `fig_scope_plot_hooks`).
    logical, intent(in) :: plot    !< A plot was open.
    logical, intent(in) :: subplot !< A subplot was open.
 

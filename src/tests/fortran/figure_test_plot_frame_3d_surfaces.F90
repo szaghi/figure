@@ -19,9 +19,10 @@ program figure_test_plot_frame_3d_surfaces
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip3_begin_plot, ip3_end_plot, &
-                   ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axes, ip3_triangles, ip3_quads, ip3_surface,         &
-                   ip3_mesh, ip3_image, ip3_text, ip3_spec, texture_object, ImGuiWindowFlags_NoDecoration,         &
-                   ImPlot3DMarker_Diamond, ImPlotColormap_Plasma
+                   ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axes, ip3_triangles, ip3_quads, ip3_surface, &
+                   ip3_mesh, ip3_image, ip3_text, ip3_spec, texture_object, ImGuiWindowFlags_NoDecoration, &
+                   ImPlot3DMarker_Diamond
+use figure_implot_ref, only : ImPlotColormap_Plasma
 use figure_plot3d_frame, only : pf3_begin_plot, pf3_end_plot, pf3_mouse_ray, pf3_plot_to_pixels, pf3_setup_axes
 use figure_plot3d_items, only : pf3_triangles, pf3_quads, pf3_surface, pf3_mesh, pf3_image, pf3_text, pf3_spec
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move

@@ -18,13 +18,14 @@ module figure_plot_field
 !<   range with an end <= 0 rebuilt a decade from the other end; a constant field the colormap's middle.
 use, intrinsic :: iso_c_binding, only : c_associated, c_double, c_int, c_long_long, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
+use figure_base, only : figure_time
 use figure_c_native, only : fig_texture_create, fig_texture_destroy, fig_texture_update
 use figure_core, only : core_time
 use figure_plot_colormaps, only : cm_generation, cm_sample
 
 implicit none
 private
-public :: field_colour, field_sweep, field_count, field_uploads
+public :: field_colour, field_sweep, field_count, field_uploads, field_time, field_pixel
 public :: FIELD_LINEAR, FIELD_LOG, FIELD_SYMLOG
 
 integer(int32), parameter :: FIELD_LINEAR = 0_int32 !< Scale: linear.
@@ -49,12 +50,15 @@ type :: field_entry
    integer(int32)       :: colormaps = -1_int32 !< The colormaps' generation (`cm_generation`: an edited map).
    integer(int32)       :: nan = 0_int32         !< NaN colour (packed).
    real(real64)         :: last_time = 0.0_real64 !< Time of the last drawing.
+   character(len=:), allocatable :: label        !< The item's label (`field_pixel`).
+   integer(int32),   allocatable :: px(:)        !< The colours of its last colouring (`field_pixel`).
 endtype field_entry
 
 type(field_entry), allocatable :: cache(:) !< The colourings.
 integer(int32),    allocatable, target :: rgba(:) !< The colours of the last colouring (kept, grown).
 integer(int32),    allocatable :: lut(:)   !< The bit table (kept, grown).
 integer(int64)                 :: uploads = 0_int64 !< Colourings uploaded since the start (tests).
+real(real64)                   :: last_ms = 0.0_real64 !< The last colouring's time, upload included [ms] (tests).
 ! the colouring in progress (`colour_setup`)
 real(real64)   :: lo_ = 0.0_real64, hi_ = 1.0_real64 !< Range, ordered.
 real(real64)   :: s0_ = 0.0_real64, inv_ = 1.0_real64 !< s(lo), 1 / (s(hi) - s(lo)).
@@ -82,9 +86,10 @@ interface
 endinterface
 
 contains
-   subroutine field_colour(id, f32, f64, nx, ny, cmap, vmin, vmax, scale, nan_rgba, changed, tex, lo, hi, stat)
+   subroutine field_colour(id, f32, f64, nx, ny, cmap, vmin, vmax, scale, nan_rgba, changed, tex, lo, hi, stat, label)
    !< The texture of a field (coloured again when needed): `f32` or `f64` (one present), nx x ny, f(i, j) the texture's
-   !< pixel (i, j); the range applied in lo, hi.
+   !< pixel (i, j); the range applied in lo, hi. With `label`, the colours are kept under it for `field_pixel` (as
+   !< figure_field.cpp keeps them: a test reads them), and the colouring's time for `field_time`.
    integer(int32),         intent(in)                   :: id          !< The item's ID.
    real(real32),           intent(in), target, optional :: f32(:,:)    !< Field, single precision.
    real(real64),           intent(in), target, optional :: f64(:,:)    !< Field, double precision.
@@ -97,7 +102,9 @@ contains
    integer(c_long_long),   intent(out)                  :: tex         !< Texture.
    real(real64),           intent(out)                  :: lo, hi      !< The range applied.
    integer(int32),         intent(out)                  :: stat        !< Status (0: ok).
+   character(len=*),       intent(in), optional         :: label       !< The item's label.
    type(c_ptr)                                          :: p           !< The array's address.
+   real(real64)                                         :: t0          !< The colouring's start [s].
    integer(int32)                                       :: k, kind, nanc, st !< Slot, kind, NaN colour, status.
    integer(int64)                                       :: n           !< Values.
    real(real64)                                         :: dlo, dhi    !< The data's range.
@@ -125,6 +132,7 @@ contains
       if (.not. again .and. present(vmax)) again = e%vmax /= vmax
       e%last_time = core_time()
       if (again) then
+         t0 = figure_time()
          n = nx * ny
          if (e%tex == 0_c_long_long .or. e%nx /= nx .or. e%ny /= ny) then
             if (e%tex /= 0_c_long_long) call fig_texture_destroy(e%tex)
@@ -187,6 +195,15 @@ contains
             return
          endif
          uploads = uploads + 1_int64
+         last_ms = (figure_time() - t0) * 1000.0_real64
+         if (present(label)) then ! kept for field_pixel (allocated when coloured, not per frame)
+            if (allocated(e%px)) then
+               if (size(e%px, kind=int64) /= n) deallocate(e%px)
+            endif
+            if (.not. allocated(e%px)) allocate(e%px(n))
+            e%px(1:n) = rgba(1:n)
+            e%label = label
+         endif
       endif
       tex = e%tex
       lo = e%lo
@@ -205,9 +222,70 @@ contains
       if (.not. cache(k)%used) cycle
       if (now - cache(k)%last_time <= IDLE_SECONDS) cycle
       if (cache(k)%tex /= 0_c_long_long) call fig_texture_destroy(cache(k)%tex)
-      cache(k) = field_entry()
+      call entry_reset(cache(k))
    enddo
    endsubroutine field_sweep
+
+   subroutine entry_reset(e)
+   !< An entry emptied, field by field (`a(i) = T()` for a type with allocatable components crashes nvfortran 26.9).
+   type(field_entry), intent(inout) :: e !< Entry.
+
+   e%id = 0_int32
+   e%used = .false.
+   e%tex = 0_c_long_long
+   e%nx = 0_int64
+   e%ny = 0_int64
+   e%kind = 0_int32
+   e%data = c_null_ptr
+   e%has_vmin = .false.
+   e%has_vmax = .false.
+   e%vmin = 0.0_real64
+   e%vmax = 0.0_real64
+   e%lo = 0.0_real64
+   e%hi = 1.0_real64
+   e%cmap = -1_int32
+   e%scale = FIELD_LINEAR
+   e%colormaps = -1_int32
+   e%nan = 0_int32
+   e%last_time = 0.0_real64
+   if (allocated(e%label)) deallocate(e%label)
+   if (allocated(e%px)) deallocate(e%px)
+   endsubroutine entry_reset
+
+   function field_time() result(ms)
+   !< The last colouring's time, upload included [ms] (tests: `test_field_time`).
+   real(real64) :: ms !< Time [ms].
+
+   ms = last_ms
+   endfunction field_time
+
+   function field_pixel(label, i, j, rgba_) result(status)
+   !< The colour of the value (i, j) of the field `label` in its last colouring (tests: `test_field_pixel`, as
+   !< figure_field.cpp's `fig_field_pixel`): 0, 1 for (i, j) outside the field, 2 for no field of that label cached.
+   character(len=*), intent(in)  :: label    !< The field's label.
+   integer(int32),   intent(in)  :: i, j     !< Indices, from 1.
+   real(real32),     intent(out) :: rgba_(4) !< Colour, RGBA in [0, 1] (steps of 1/255).
+   integer(int32)                :: status   !< Status.
+   integer(int32)                :: k, c, b  !< Slot, packed colour, channel.
+
+   rgba_ = 0.0_real32
+   status = 2_int32
+   if (.not. allocated(cache)) return
+   do k = 1_int32, size(cache, kind=int32)
+      if (.not. cache(k)%used) cycle
+      if (.not. allocated(cache(k)%label)) cycle
+      if (cache(k)%label /= label .or. len(cache(k)%label) /= len(label)) cycle
+      status = 1_int32
+      if (i < 1_int32 .or. int(i, int64) > cache(k)%nx .or. j < 1_int32 .or. int(j, int64) > cache(k)%ny) return
+      if (.not. allocated(cache(k)%px)) return
+      c = cache(k)%px(int(j - 1_int32, int64) * cache(k)%nx + int(i, int64))
+      do b = 1_int32, 4_int32
+         rgba_(b) = real(iand(ishft(c, -8_int32 * (b - 1_int32)), 255_int32), real32) / 255.0_real32
+      enddo
+      status = 0_int32
+      return
+   enddo
+   endfunction field_pixel
 
    function field_count() result(n)
    !< The colourings cached (tests: `test_field_textures`).
@@ -246,7 +324,7 @@ contains
       enddo
       call move_alloc(more, cache)
    endif
-   cache(k) = field_entry()
+   call entry_reset(cache(k))
    cache(k)%used = .true.
    cache(k)%id = id
    endfunction slot

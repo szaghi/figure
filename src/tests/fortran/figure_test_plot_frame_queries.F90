@@ -20,9 +20,10 @@ program figure_test_plot_frame_queries
 !< mismatch's .new.png and .diff.png are left for inspection).
 use, intrinsic :: iso_c_binding, only : c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip_begin_plot, ip_end_plot, &
-                   ip_line, ip_plot_limits, ip_plot_size, ip_set_axes, ip_setup_axes, ip_setup_axes_limits,         &
-                   ip_setup_axis, ip_spec, ip_begin_subplots, ip_end_subplots, ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_begin_plot, ip_end_plot, ip_line, ip_plot_limits, ip_plot_size, ip_set_axes, &
+                              ip_setup_axes, ip_setup_axes_limits, ip_setup_axis, ip_spec, ip_begin_subplots, &
+                              ip_end_subplots
 use figure_c_native, only : fig_plot_state, fig_plot_x_transform
 use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_plot_limits, pf_plot_size, pf_set_axes, pf_setup_axes, &
                               pf_setup_axes_limits, pf_setup_axis, pf_plot_state, pf_plot_x_transform,               &

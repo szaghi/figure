@@ -23,10 +23,10 @@ program figure_test_plot_frame_input
 !< The pictures are `figure_test_plot_frame_input.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them; a
 !< mismatch's .new.png and .diff.png are left for inspection).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip_begin_plot, ip_end_plot, &
-                   ip_cancel_selection, ip_line, ip_plot_hovered, ip_plot_limits, ip_plot_mouse, ip_plot_selection, &
-                   ip_plot_to_pixels, ip_set_axes, ip_setup_axes, ip_setup_axes_limits, ip_setup_axis, ip_spec,       &
-                   ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_begin_plot, ip_end_plot, ip_cancel_selection, ip_line, ip_plot_hovered, &
+                              ip_plot_limits, ip_plot_mouse, ip_plot_selection, ip_plot_to_pixels, ip_set_axes, &
+                              ip_setup_axes, ip_setup_axes_limits, ip_setup_axis, ip_spec
 use figure_plot_frame, only : pf_begin_plot, pf_cancel_selection, pf_end_plot, pf_plot_hovered,     &
                               pf_plot_limits, pf_plot_mouse, pf_plot_selection, pf_set_axes, pf_setup_axes, &
                               pf_setup_axes_limits, pf_setup_axis

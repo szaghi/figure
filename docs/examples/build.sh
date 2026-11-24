@@ -112,6 +112,8 @@ native_lflags="$native_lflags${extra_lflags:+ $extra_lflags}"
 lib_sources=$(python3 "$root/scripts/check_sync.py" --path-sources "$path")
 while IFS= read -r f; do cp "$root/${f%$'\r'}" "$build/src/"; done <<< "$lib_sources"
 cp "$ex"/src/*.F90 "$build/src/"
+# nvfortran 26.9 has no F2018 `stop, quiet=`: the copies stop without it (the run's floating-point note printed)
+[[ $compiler == nvf ]] && sed -i -E 's/^( *(error )?stop( [0-9]+)?), quiet=\.true\./\1/' "$build"/src/*.F90
 # FUNDAL (szaghi/figure#15 P6: figure_decimate_device, ip_line_device), fetched by `fobis fetch` into src/third_party:
 # its sources and the files they include, in its CPU mode; its MPI handler left out (fobos' $EXCLUDE)
 fundal=$root/src/third_party/FUNDAL/src/lib

@@ -20,14 +20,15 @@ program figure_test_plot_axes
 !< 8. an auto-fitting log axis on a plot that starts empty fits its line once the line arrives (#13 S1: reported as
 !<    drawing nothing, not reproduced), and a log axis whose line has no positive value keeps a finite positive range.
 ! oracle: wheel plot-zoom
+use, intrinsic :: iso_c_binding, only : c_float
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_end,      &
                    ig_set_next_window, ip_begin_plot, ip_begin_subplots, ip_end_plot, ip_end_subplots, ip_line,   &
-                   ip_plot_limits, ip_plot_size, ip_set_axes, ip_setup_axes, ip_setup_axes_limits, ip_setup_axis, &
+                   ip_plot_limits, ip_plot_size, ip_plot_to_pixels, ip_set_axes, ip_setup_axes, ip_setup_axes_limits, &
+                   ip_setup_axis, &
                    ip_setup_axis_constraints, ip_setup_axis_limits, ip_setup_axis_ticks, ip_setup_legend
 use figure_cimgui, only : im_vec2
-use figure_cimplot, only : ImPlot_GetPlotPos
 use figure_testing, only : test_mouse_move, test_plot_tick, test_wheel
 
 implicit none
@@ -353,7 +354,7 @@ contains
       call ip_setup_axis_constraints('x1', vmin=0.0_real64, vmax=10.0_real64, zoom_min=1.0_real64)
       call ip_line('residual', x / 10.0_real64, res)
       call ip_plot_size(w, h)
-      pos = ImPlot_GetPlotPos()
+      call top_left(pos) ! (ImPlot's GetPlotPos: the pixel of the current axes' minimum x and maximum y)
       centre = [real(pos%x, real64) + 0.5_real64 * w, real(pos%y, real64) + 0.5_real64 * h]
       if (frame == 48_int32) call ip_plot_limits(wide(1), wide(2), ylock(1), ylock(2))
       if (frame == 79_int32) call ip_plot_limits(narrow(1), narrow(2), ylock(1), ylock(2))
@@ -464,4 +465,15 @@ contains
       call ip_end_plot()
    endif
    endsubroutine log_late
+   subroutine top_left(pos)
+   !< The top-left corner of the plot area being declared, from the public API: the pixel of the current axes' left
+   !< end and top end (`GetPlotPos`, which the raw bindings give on the current path only).
+   type(im_vec2), intent(out) :: pos    !< Top-left corner [pixels].
+   real(real64)               :: l(4)   !< The axes' ranges.
+   real(real64)               :: px, py !< A pixel.
+
+   call ip_plot_limits(l(1), l(2), l(3), l(4))
+   call ip_plot_to_pixels(l(1), l(4), px, py)
+   pos = im_vec2(real(px, c_float), real(py, c_float))
+   endsubroutine top_left
 endprogram figure_test_plot_axes

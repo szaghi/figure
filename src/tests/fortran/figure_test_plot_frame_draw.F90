@@ -2,10 +2,13 @@
 program figure_test_plot_frame_draw
 !< figure_test_plot_frame_draw, drawing in a plot of the Fortran frame (`pf_draw_*`), as `ig_draw_*` on the plot layer.
 !<
-!< szaghi/figure#15, figure_plot_draw. Each case is a plot drawn on NF frames, first by ImPlot through FIGURE's API with
-!< the primitives of figure_canvas on the `'plot'` layer (`ig_draw_*(..., layer='plot')`: native/figure_canvas.cpp),
-!< then by the Fortran frame with `pf_draw_*`, in one headless window at the same place, 40 frames apart. Checked: the
-!< last pictures at FIGURE's oracle rule (|d| <= 2 on every channel, no pixel failing), the statuses equal:
+!< szaghi/figure#15, figure_plot_draw. Each case is a plot drawn on NF frames, first by ImPlot (`figure_implot_ref`)
+!< with the native layer's primitives on the `'plot'` layer (`fig_draw` on layer 4: native/figure_canvas.cpp, what
+!< figure_canvas calls on the current path), then by the Fortran frame with figure_canvas's `ig_draw_*(...,
+!< layer='plot')`, which on this path go to the frame (figure_plot_hooks, `pf_draw_prim`; since the seam's switch), in
+!< one headless window at the same place, 40 frames apart. Checked: the last pictures at FIGURE's oracle rule
+!< (|d| <= 2 on every channel, no pixel failing), and the refusals' statuses of `ig_draw_*(..., layer='plot')` and of
+!< `pf_draw_*`, both in a plot of the frame, equal:
 !<
 !< 1. every primitive (a segment, rectangles, circles, polylines, polygons convex and not, outlined and filled, a text,
 !<    an image tinted), over a line item and partly outside the plot's area (clipped), on linear axes;
@@ -20,16 +23,19 @@ program figure_test_plot_frame_draw
 !< The pictures are `figure_test_plot_frame_draw.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip_begin_plot, ip_end_plot, &
-                   ip_line, ip_setup_axes, ip_setup_axes_limits,                                                  &
-                   ig_draw_line, ig_draw_rect, ig_draw_circle, ig_draw_polyline, ig_draw_polygon, ig_draw_text,   &
-                   ig_draw_image, texture_object, ImGuiWindowFlags_NoDecoration, FIG_OK, FIG_ERR_STATE,           &
-                   FIG_ERR_ARGUMENT
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ig_draw_line, ig_draw_rect, &
+                   ig_draw_circle, ig_draw_polyline, ig_draw_polygon, ig_draw_text, ig_draw_image, texture_object, &
+                   ImGuiWindowFlags_NoDecoration, FIG_OK, FIG_ERR_STATE, FIG_ERR_ARGUMENT
+use figure_implot_ref, only : ip_begin_plot, ip_end_plot, ip_line, ip_setup_axes, ip_setup_axes_limits
 use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_setup_axes, pf_setup_axes_limits
 use figure_plot_items, only : pf_line
 use figure_plot_draw, only : pf_draw_line, pf_draw_rect, pf_draw_circle, pf_draw_polyline, pf_draw_polygon, &
                              pf_draw_text, pf_draw_image
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
+use figure_c_native, only : fig_draw
+use figure_texture, only : texture_ref
+use figure_cimgui, only : im_texture_ref
+use, intrinsic :: iso_c_binding, only : c_double, c_int, c_long_long
 
 implicit none
 integer(int32), parameter :: W = 640_int32     !< Display width [pixels].
@@ -52,10 +58,12 @@ real(real64)              :: bx(7), by(7)      !< The arrow moved.
 integer(int32)            :: st(NREF, 2)       !< The refusals' statuses per side.
 logical                   :: test_passed(NCASE + 1) !< Per-case outcome, the refusals.
 logical                   :: side_fortran      !< Drawing with the Fortran frame.
+logical                   :: refusing          !< The refusals: both sides in a plot of the frame.
 integer(int32)            :: c, f, s, sd, i, j !< Case, frame, status, side, counters.
 character(len=16)         :: keep              !< FIGURE_TEST_KEEP.
 
 call app%init_headless(W, H)
+refusing = .false.
 call test_mouse_move(-100.0_real64, -100.0_real64)
 do j = 1_int32, 3_int32
    do i = 1_int32, 4_int32
@@ -97,6 +105,7 @@ do c = 1_int32, NCASE
 enddo
 ! 5: the refusals
 st = -1_int32
+refusing = .true.
 do sd = 1_int32, 2_int32
    side_fortran = sd == 2_int32
    if (.not. app%next_frame()) error stop 'figure_test_plot_frame_draw: next_frame returned false headless'
@@ -108,8 +117,8 @@ if (.not. app%next_frame()) error stop 'figure_test_plot_frame_draw: next_frame 
 test_passed(NCASE + 1) = all(st(:, 1) == st(:, 2)) .and. st(1, 1) == FIG_ERR_STATE .and. &
                          all(st(2:NREF - 1, 1) == FIG_ERR_ARGUMENT) .and. st(NREF, 1) == FIG_OK
 if (.not. test_passed(NCASE + 1)) then
-   write(output_unit, '(A,*(1X,I0))') 'refusals, ImPlot:', st(:, 1)
-   write(output_unit, '(A,*(1X,I0))') 'refusals, frame: ', st(:, 2)
+   write(output_unit, '(A,*(1X,I0))') 'refusals, pf_draw_*:', st(:, 1)
+   write(output_unit, '(A,*(1X,I0))') 'refusals, ig_draw_*:', st(:, 2)
 endif
 call tex%destroy()
 call app%destroy()
@@ -165,7 +174,7 @@ contains
 
    logical function begin()
    !< The plot begun, by the side drawing.
-   if (side_fortran) then
+   if (side_fortran .or. refusing) then
       begin = pf_begin_plot('Draw', width=600.0_real64, height=440.0_real64)
    else
       begin = ip_begin_plot('Draw', width=600.0_real64, height=440.0_real64)
@@ -177,7 +186,7 @@ contains
    real(real64),     intent(in) :: x0, x1, y0, y1 !< Limits.
    character(len=*), intent(in) :: xs, ys         !< Scales.
 
-   if (side_fortran) then
+   if (side_fortran .or. refusing) then
       call pf_setup_axes('x', 'y', xscale=xs, yscale=ys)
       call pf_setup_axes_limits(x0, x1, y0, y1, always=.true.)
    else
@@ -188,7 +197,7 @@ contains
 
    subroutine finish()
    !< The plot ended, by the side drawing.
-   if (side_fortran) then
+   if (side_fortran .or. refusing) then
       call pf_end_plot()
    else
       call ip_end_plot()
@@ -201,9 +210,9 @@ contains
    real(real64), intent(in), optional :: t                      !< Thickness.
 
    if (side_fortran) then
-      call pf_draw_line(x1, y1, x2, y2, col, thickness=t)
-   else
       call ig_draw_line(x1, y1, x2, y2, col, thickness=t, layer='plot')
+   else
+      call native(1_c_int, [x1, x2], [y1, y2], col, thickness=t)
    endif
    endsubroutine segment
 
@@ -214,9 +223,9 @@ contains
    logical,      intent(in), optional :: filled                 !< Filled.
 
    if (side_fortran) then
-      call pf_draw_rect(x1, y1, x2, y2, col, thickness=thickness, filled=filled)
-   else
       call ig_draw_rect(x1, y1, x2, y2, col, thickness=thickness, filled=filled, layer='plot')
+   else
+      call native(2_c_int, [x1, x2], [y1, y2], col, thickness=thickness, filled=filled)
    endif
    endsubroutine rect
 
@@ -227,9 +236,9 @@ contains
    logical,      intent(in), optional :: filled          !< Filled.
 
    if (side_fortran) then
-      call pf_draw_circle(x, y, r, col, thickness=thickness, filled=filled)
-   else
       call ig_draw_circle(x, y, r, col, thickness=thickness, filled=filled, layer='plot')
+   else
+      call native(3_c_int, [x], [y], col, thickness=thickness, radius=r, filled=filled)
    endif
    endsubroutine circle
 
@@ -239,9 +248,9 @@ contains
    logical,      intent(in) :: closed                !< Closed.
 
    if (side_fortran) then
-      call pf_draw_polyline(x, y, col, thickness=t, closed=closed)
-   else
       call ig_draw_polyline(x, y, col, thickness=t, closed=closed, layer='plot')
+   else
+      call native(4_c_int, x, y, col, thickness=t, filled=closed)
    endif
    endsubroutine polyline
 
@@ -252,9 +261,9 @@ contains
    logical,      intent(in), optional :: filled             !< Filled.
 
    if (side_fortran) then
-      call pf_draw_polygon(x, y, col, thickness=thickness, filled=filled)
-   else
       call ig_draw_polygon(x, y, col, thickness=thickness, filled=filled, layer='plot')
+   else
+      call native(5_c_int, x, y, col, thickness=thickness, filled=filled)
    endif
    endsubroutine polygon
 
@@ -264,9 +273,9 @@ contains
    character(len=*), intent(in) :: t            !< Text.
 
    if (side_fortran) then
-      call pf_draw_text(x, y, t, col)
-   else
       call ig_draw_text(x, y, t, col, layer='plot')
+   else
+      call native(6_c_int, [x], [y], col, text=t)
    endif
    endsubroutine text
 
@@ -275,26 +284,60 @@ contains
    real(real64), intent(in) :: x1, y1, x2, y2 !< Corners.
 
    if (side_fortran) then
-      call pf_draw_image(tex, x1, y1, x2, y2, color=TINT)
-   else
       call ig_draw_image(tex, x1, y1, x2, y2, color=TINT, layer='plot')
+   else
+      call native(7_c_int, [x1, x2], [y1, y2], TINT, image=.true.)
    endif
    endsubroutine image
 
+   subroutine native(kind, x, y, col, thickness, radius, filled, text, image)
+   !< A primitive drawn by the native layer on the plot layer (`fig_draw` on layer 4, in ImPlot's plot), with
+   !< figure_canvas's defaults (thickness 1, radius 0, not filled, the colour's alpha 1 when not given).
+   integer(c_int),   intent(in)           :: kind      !< 1 line, 2 rect, 3 circle, 4 polyline, 5 polygon, 6 text, 7 image.
+   real(real64),     intent(in)           :: x(:), y(:) !< Points [plot units].
+   real(real64),     intent(in)           :: col(:)    !< Colour.
+   real(real64),     intent(in), optional :: thickness !< Thickness [pixels].
+   real(real64),     intent(in), optional :: radius    !< Radius [pixels].
+   logical,          intent(in), optional :: filled    !< Filled (a polyline: closed).
+   character(len=*), intent(in), optional :: text      !< Text.
+   logical,          intent(in), optional :: image     !< The image `tex`.
+   real(c_double)                         :: rgba(4), t, rr !< Colour, thickness, radius.
+   integer(c_int)                         :: f, st_   !< Filled, status.
+   type(im_texture_ref)                   :: ref      !< The image's reference.
+
+   rgba = 1.0_c_double
+   rgba(1:size(col)) = col
+   t = 1.0_c_double
+   if (present(thickness)) t = thickness
+   rr = 0.0_c_double
+   if (present(radius)) rr = radius
+   f = 0_c_int
+   if (present(filled)) f = merge(1_c_int, 0_c_int, filled)
+   if (present(text)) then
+      st_ = fig_draw(kind, 4_c_int, x, y, size(x, kind=c_int), rgba, t, rr, f, text, len(text, c_int), 0_c_long_long)
+   elseif (present(image)) then
+      ref = texture_ref(tex)
+      st_ = fig_draw(kind, 4_c_int, x, y, size(x, kind=c_int), rgba, t, rr, f, '', 0_c_int, ref%TexID)
+   else
+      st_ = fig_draw(kind, 4_c_int, x, y, size(x, kind=c_int), rgba, t, rr, f, '', 0_c_int, 0_c_long_long)
+   endif
+   endsubroutine native
+
    subroutine refusals(r)
-   !< The refusals' statuses, by the side drawing: outside a plot first, then inside one.
+   !< The refusals' statuses, by the side drawing: outside a plot first, then inside one (of the frame, both sides:
+   !< `pf_draw_*` on side 1, figure_canvas's `ig_draw_*` on side 2).
    integer(int32), intent(out) :: r(NREF) !< Statuses.
    real(real64)                :: nan     !< A NaN.
 
    nan = ieee_value(1.0_real64, ieee_quiet_nan)
-   if (side_fortran) then
+   if (.not. side_fortran) then
       call pf_draw_line(1.0_real64, 1.0_real64, 2.0_real64, 2.0_real64, RED, stat=r(1))
    else
       call ig_draw_line(1.0_real64, 1.0_real64, 2.0_real64, 2.0_real64, RED, layer='plot', stat=r(1))
    endif
    if (.not. begin()) return
    call axes(0.0_real64, 10.0_real64, 0.0_real64, 10.0_real64, 'linear', 'linear')
-   if (side_fortran) then
+   if (.not. side_fortran) then
       call pf_draw_line(1.0_real64, 1.0_real64, 2.0_real64, 2.0_real64, [1.0_real64, 2.0_real64, 0.0_real64], stat=r(2))
       call pf_draw_polygon([1.0_real64, 2.0_real64], [1.0_real64, 2.0_real64], RED, stat=r(3))
       call pf_draw_polyline([1.0_real64, nan], [1.0_real64, 2.0_real64], RED, stat=r(4))

@@ -20,10 +20,10 @@ program figure_test_plot_frame_style
 !<
 !< The pictures are `figure_test_plot_frame_style.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window,           &
-                   ig_set_style_var, ip_annotation, ip_begin_plot, ip_colormap_scale, ip_drag_line_x, ip_end_plot, &
-                   ip_line, ip_plot_limits, ip_plot_to_pixels, ip_set_style_color, ip_set_style_var, ip_setup_axes, &
-                   ip_setup_legend, ip_spec, ip_tag, ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, &
+                   ig_set_style_var, ip_set_style_color, ip_set_style_var, ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_annotation, ip_begin_plot, ip_colormap_scale, ip_drag_line_x, ip_end_plot, ip_line, &
+                              ip_plot_limits, ip_plot_to_pixels, ip_setup_axes, ip_setup_legend, ip_spec, ip_tag
 use figure_plot_frame, only : pf_annotation, pf_begin_plot, pf_colormap_scale, pf_end_plot, pf_plot_limits, &
                               pf_plot_to_pixels, pf_setup_axes, pf_setup_legend, pf_tag
 use figure_plot_items, only : pf_line, pf_spec

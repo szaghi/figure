@@ -23,9 +23,9 @@ program figure_test_plot_frame_device
 !< The pictures are `figure_test_plot_frame_device.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use fundal, only : dev_alloc, dev_free, dev_init
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip_begin_plot, ip_end_plot, &
-                   ip_line_device, ip_setup_axes_limits, ImGuiWindowFlags_NoDecoration
-use figure_implot, only : ip_kept => plot_kept
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_begin_plot, ip_end_plot, ip_line_device, ip_setup_axes_limits
+use figure_implot_ref, only : ip_kept => plot_kept
 use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_setup_axes_limits
 use figure_plot_items, only : pf_line_device
 use figure_testing, only : test_capture, test_compare_image

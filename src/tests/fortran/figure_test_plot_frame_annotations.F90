@@ -17,9 +17,9 @@ program figure_test_plot_frame_annotations
 !< The pictures are `figure_test_plot_frame_annotations.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them;
 !< a mismatch's .new.png and .diff.png are left for inspection).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip_begin_plot, ip_end_plot, &
-                   ip_line, ip_plot_limits, ip_plot_to_pixels, ip_set_axes, ip_setup_axes, ip_setup_axes_limits,    &
-                   ip_setup_axis, ip_spec, ip_annotation, ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_begin_plot, ip_end_plot, ip_line, ip_plot_limits, ip_plot_to_pixels, ip_set_axes, &
+                              ip_setup_axes, ip_setup_axes_limits, ip_setup_axis, ip_spec, ip_annotation
 use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_plot_limits, pf_plot_to_pixels, pf_set_axes, &
                               pf_setup_axes, pf_setup_axes_limits, pf_setup_axis, pf_annotation
 use figure_plot_items, only : pf_line, pf_spec

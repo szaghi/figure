@@ -17,8 +17,9 @@ program figure_test_plot_frame_colorbar
 !<
 !< The pictures are `figure_test_plot_frame_colorbar.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_colormap, &
-                   ip_colormap_legend, ip_colormap_legend_edit, ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, &
+                   ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_colormap, ip_colormap_legend, ip_colormap_legend_edit
 use figure_plot_colorbar, only : pf_colormap_legend, pf_colormap_legend_edit
 use figure_plot_colormaps, only : cm_colormap
 use figure_testing, only : test_capture, test_compare_image, test_drag, test_mouse_move, test_wheel

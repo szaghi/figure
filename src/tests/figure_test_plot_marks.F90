@@ -19,6 +19,7 @@ program figure_test_plot_marks
 !<    points, with and without a range; stairs and stems span their points;
 !< 6. wrong calls: inside a plot (unknown or not set up axes, bad arguments) and outside any plot (usage errors).
 ! oracle: drag plot-box-select plot-drag-tools
+use, intrinsic :: iso_c_binding, only : c_float
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_value, ieee_quiet_nan
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_last_error, ig_begin, ig_end,          &
@@ -29,7 +30,6 @@ use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, app_object, figure_l
                    ip_stems, ip_histogram, ip_histogram2d, ip_drag_line_x, ImPlotHistogramFlags_Cumulative,           &
                    ImPlotHistogramFlags_Density, ImPlotBin_Scott
 use figure_cimgui, only : im_vec2
-use figure_cimplot, only : ImPlot_GetPlotPos
 use figure_testing, only : test_drag, test_drawn_extent, test_mouse_button, test_mouse_move, test_next_frame, &
                            test_plot_copies
 
@@ -213,7 +213,7 @@ contains
    type(im_vec2) :: pos !< Top-left corner [pixels].
 
    call ip_plot_size(w, h)
-   pos = ImPlot_GetPlotPos()
+   call top_left(pos) ! (ImPlot's GetPlotPos: the pixel of the current axes' minimum x and maximum y)
    area = [real(pos%x, real64), real(pos%y, real64), real(pos%x, real64) + w, real(pos%y, real64) + h]
    centre = [area(1) + 0.5_real64 * w, area(2) + 0.5_real64 * h]
    endsubroutine measure_area
@@ -483,4 +483,15 @@ contains
    call ip_stems('s', xs(1:2), ys(1:2), stat=st(25))
    msg(25) = figure_last_error()
    endsubroutine outside_plot
+   subroutine top_left(pos)
+   !< The top-left corner of the plot area being declared, from the public API: the pixel of the current axes' left
+   !< end and top end (`GetPlotPos`, which the raw bindings give on the current path only).
+   type(im_vec2), intent(out) :: pos    !< Top-left corner [pixels].
+   real(real64)               :: l(4)   !< The axes' ranges.
+   real(real64)               :: px, py !< A pixel.
+
+   call ip_plot_limits(l(1), l(2), l(3), l(4))
+   call ip_plot_to_pixels(l(1), l(4), px, py)
+   pos = im_vec2(real(px, c_float), real(py, c_float))
+   endsubroutine top_left
 endprogram figure_test_plot_marks

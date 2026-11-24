@@ -351,11 +351,11 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `ip_pie_chart` | `cb_pie_bubbles.rec` | `figure_test_errors`, `figure_test_plot_more` |
 | `ip_pixels_to_plot` | `figure_test_plot_view`, `cb_plot_readout.rec` | `figure_test_plot_marks`, `figure_test_plot_view` |
 | `ip_plot_hovered` | `cb_plot_readout.rec`, `tut22_monitor.rec`, `tut23_player.rec` (+3) | `figure_test_errors`, `figure_test_plot_marks` |
-| `ip_plot_limits` | `figure_test_plot_view`, `cb_plot_readout.rec`, `cb_plot_window.rec` (+2) | `figure_test_plot_axes`, `figure_test_plot_links`, `figure_test_plot_marks` (+2) |
+| `ip_plot_limits` | `figure_test_plot_view`, `cb_plot_readout.rec`, `cb_plot_window.rec` (+2) | `figure_test_headless`, `figure_test_plot_axes`, `figure_test_plot_links` (+4) |
 | `ip_plot_mouse` | `cb_plot_readout.rec`, `tut22_monitor.rec`, `tut23_player.rec` (+3) | `figure_test_plot_marks` |
 | `ip_plot_selection` | `figure_test_plot_view`, `cb_plot_readout.rec` | `figure_test_plot_marks`, `figure_test_plot_view` |
 | `ip_plot_size` | `cb_plot_readout.rec`, `mandelbrot.rec` | `figure_test_plot_axes`, `figure_test_plot_marks` |
-| `ip_plot_to_pixels` | `figure_test_pixels`, `figure_test_plot_view`, `cb_plot_readout.rec` (+1) | `figure_test_dnd`, `figure_test_pixels`, `figure_test_plot_links` (+2) |
+| `ip_plot_to_pixels` | `figure_test_pixels`, `figure_test_plot_view`, `cb_plot_readout.rec` (+1) | `figure_test_dnd`, `figure_test_headless`, `figure_test_pixels` (+5) |
 | `ip_pop_style_color` | `figure_test_plot_view` | `figure_test_plot_marks`, `figure_test_plot_view` |
 | `ip_pop_style_var` | `figure_test_plot_view` | `figure_test_plot_view` |
 | `ip_push_style_color` | `figure_test_plot_view` | `figure_test_plot_marks`, `figure_test_plot_view` |
@@ -422,7 +422,7 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `test_click` | `figure_test_dock_view`, `figure_test_markdown`, `figure_test_menu_view` (+23) | `figure_test_canvas`, `figure_test_core`, `figure_test_dock_view` (+20) |
 | `test_compare_image` | `figure_test_dock_view`, `figure_test_editor`, `figure_test_gizmo` (+11) | `figure_test_core`, `figure_test_device`, `figure_test_dock_view` (+13) |
 | `test_drag` | `figure_test_layout_view`, `figure_test_plot_view`, `figure_test_table_layout` (+3) | `figure_test_app`, `figure_test_canvas`, `figure_test_fields` (+8) |
-| `test_drawn_extent` | `figure_test_markdown`, `figure_test_plot3d`, `figure_test_plot_view` (+1) | `figure_test_canvas`, `figure_test_markdown`, `figure_test_plot3d` (+10) |
+| `test_drawn_extent` | `figure_test_markdown`, `figure_test_plot3d`, `figure_test_plot_view` (+1) | `figure_test_canvas`, `figure_test_headless`, `figure_test_markdown` (+11) |
 | `test_drop` | `tut17_tested.rec`, `tut19_checks.rec`, `tut20_layout.rec` (+6) | `figure_test_tools` |
 | `test_field_pixel` | `figure_test_gizmo`, `figure_test_pixels`, `cb_field_scale.rec` | `figure_test_fields`, `figure_test_gizmo`, `figure_test_pixels` |
 | `test_field_textures` | `cb_field_scale.rec` | `figure_test_fields` |

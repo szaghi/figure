@@ -21,9 +21,9 @@ use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_
                    ImGuiWindowFlags_NoTitleBar, ig_slider, ig_input, ICON_FILE_PEN, ICON_PLAY
 use figure_cimgui, only : im_vec2, im_vec4, igCalcTextSize, igGetFontSize, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
-use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapIndex, ImPlot_GetLastItemColor, &
-                           ImPlot_GetPlotLimits, ImPlot_PlotToPixels_double
-use figure_testing, only : test_click, test_drag, test_key, test_type, test_window_rect
+use figure, only : ip_plot_limits, ip_plot_to_pixels
+use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapIndex
+use figure_testing, only : test_click, test_drag, test_drawn_extent, test_key, test_type, test_window_rect
 
 implicit none
 integer(int32), parameter :: N = 100_int32    !< Plot points.
@@ -124,6 +124,9 @@ integer(int32)            :: stat_spec        !< Status of a spec with a bad col
 type(plot_spec_object)    :: red              !< Red line, 2 pixels, circle markers.
 type(plot_spec_object)    :: bad              !< Spec with a 1-component colour.
 type(im_vec4)             :: red_seen         !< Colour ImPlot gave the last red line.
+real(real64)              :: red_ext(4)       !< ... the extent drawn in it.
+logical                   :: red_found        !< ... something drawn in it.
+real(real64)              :: px_(2)           !< A pixel (ip_plot_to_pixels).
 integer(int32)            :: stat             !< Status of a failing call.
 integer(int32)            :: stat_r32         !< Status of the single-precision line.
 integer(int32)            :: stat_empty       !< Status of the empty line.
@@ -219,7 +222,10 @@ do frame = 1_int32, 24_int32
          call ip_line('sin, uniform x', y, xscale=0.1_real64, xstart=0.1_real64, stat=stat_values)
          call ip_line('empty', x(1:0), y(1:0), stat=stat_empty)
          call ip_line('red', x, y, spec=red)
-         call ImPlot_GetLastItemColor(red_seen)
+         call test_drawn_extent([1.0_real64, 0.0_real64, 0.0_real64, 1.0_real64], red_ext(1), red_ext(2), red_ext(3), &
+                                red_ext(4), found=red_found) ! the line drawn in exactly the spec's red
+         red_seen = im_vec4(0.0_c_float, 0.0_c_float, 0.0_c_float, 0.0_c_float)
+         if (red_found) red_seen = im_vec4(1.0_c_float, 0.0_c_float, 0.0_c_float, 1.0_c_float)
          call ip_scatter('scatter', x, y, spec=red, stat=stat_items(1))
          call ip_bars('bars (real32)', real(x, real32), real(y, real32), 0.05_real64, stat=stat_items(2))
          call ip_shaded('band', x, y - 0.1_real64, y + 0.1_real64, stat=stat_items(3))
@@ -239,7 +245,7 @@ do frame = 1_int32, 24_int32
          call ip_heatmap('f labelled', real(fld, real32), 0.0_real64, 2.0_real64, 0.0_real64, 1.0_real64, &
                          scale_min=0.0_real64, scale_max=8.0_real64, label_format='%.0f', &
                          colormap=ImPlotColormap_Viridis, stat=stat_draw(3))
-         call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, field_limits)
+         call ip_plot_limits(field_limits%X%Min, field_limits%X%Max, field_limits%Y%Min, field_limits%Y%Max)
          call ip_end_plot()
       endif
    endif
@@ -249,7 +255,7 @@ do frame = 1_int32, 24_int32
    if (ig_begin('Rows')) then
       if (ip_begin_plot('row 2')) then
          call ip_line('row 2', m, 2_int32, xscale=0.1_real64, stat=stat_row)
-         call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, limits)
+         call ip_plot_limits(limits%X%Min, limits%X%Max, limits%Y%Min, limits%Y%Max)
          call ip_end_plot()
       endif
    endif
@@ -260,7 +266,7 @@ do frame = 1_int32, 24_int32
       if (ip_begin_plot('growing')) then
          call ip_setup_axes('x', 'y', auto_fit=.true.)
          call ip_line('grows', [0.0_real64, 10.0_real64 * frame], [0.0_real64, real(frame, real64)])
-         call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, grown)
+         call ip_plot_limits(grown%X%Min, grown%X%Max, grown%Y%Min, grown%Y%Max)
          call ip_end_plot()
       endif
    endif
@@ -272,9 +278,12 @@ do frame = 1_int32, 24_int32
          call ip_setup_axes('x', 'residual', ylog=.true.)
          call ip_setup_axes_limits(0.0_real64, 1.0_real64, 1.0e-6_real64, 1.0_real64, always=.true.)
          call ip_line('residual', [0.0_real64, 1.0_real64], [1.0_real64, 1.0e-6_real64])
-         log_px(1) = ImPlot_PlotToPixels_double(0.5_c_double, 1.0e-6_c_double, -1_c_int, -1_c_int)
-         log_px(2) = ImPlot_PlotToPixels_double(0.5_c_double, 1.0e-3_c_double, -1_c_int, -1_c_int)
-         log_px(3) = ImPlot_PlotToPixels_double(0.5_c_double, 1.0_c_double, -1_c_int, -1_c_int)
+         call ip_plot_to_pixels(0.5_real64, 1.0e-6_real64, px_(1), px_(2))
+         log_px(1) = im_vec2(real(px_(1), c_float), real(px_(2), c_float))
+         call ip_plot_to_pixels(0.5_real64, 1.0e-3_real64, px_(1), px_(2))
+         log_px(2) = im_vec2(real(px_(1), c_float), real(px_(2), c_float))
+         call ip_plot_to_pixels(0.5_real64, 1.0_real64, px_(1), px_(2))
+         log_px(3) = im_vec2(real(px_(1), c_float), real(px_(2), c_float))
          call ip_end_plot()
       endif
    endif

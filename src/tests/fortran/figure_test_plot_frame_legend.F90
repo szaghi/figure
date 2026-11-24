@@ -21,10 +21,11 @@ program figure_test_plot_frame_legend
 !< The pictures are `figure_test_plot_frame_legend.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them; a
 !< mismatch's .new.png and .diff.png are left for inspection).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ig_text, ip_begin_plot,    &
-                   ip_end_plot, ip_line, ip_plot_limits, ip_plot_to_pixels, ip_setup_axes_limits, ip_setup_legend, &
-                   ip_spec, ip_legend_hovered, ip_begin_legend_popup, ip_end_legend_popup,                      &
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ig_text, &
                    ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_begin_plot, ip_end_plot, ip_line, ip_plot_limits, ip_plot_to_pixels, &
+                              ip_setup_axes_limits, ip_setup_legend, ip_spec, ip_legend_hovered, &
+                              ip_begin_legend_popup, ip_end_legend_popup
 use figure_cimplot, only : ImPlot_SetupLegend
 use figure_cimplot_enums, only : ImPlotLegendFlags_Horizontal, ImPlotLegendFlags_Reverse, ImPlotLegendFlags_Sort, &
                                  ImPlotLocation_NorthWest

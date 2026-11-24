@@ -17,8 +17,8 @@ program figure_test_plot_frame_gradients
 !< The CSV is `figure_test_plot_frame_gradients.csv.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps it).
 use, intrinsic :: iso_c_binding, only : c_int
 use, intrinsic :: iso_fortran_env, only : int32, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_gradient_edit, ig_set_next_window, ip_colormap, &
-                   ip_colormap_stops, ip_load_colormap, ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ig_gradient_edit, ip_colormap, ip_colormap_stops, ip_load_colormap
 use figure_cimgui, only : im_vec4
 use figure_cimgui_enums, only : ImGuiStyleVar_ItemSpacing
 use figure_cimplot, only : ImPlot_GetColormapColor, ImPlot_GetColormapSize

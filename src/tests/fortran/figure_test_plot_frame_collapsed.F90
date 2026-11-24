@@ -13,9 +13,9 @@ program figure_test_plot_frame_collapsed
 !< The pictures are `figure_test_plot_frame_collapsed.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_c_binding, only : c_bool
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window, ip_begin_aligned, &
-                   ip_begin_plot, ip_begin_subplots, ip_colormap, ip_colormap_legend, ip_colormap_scale,               &
-                   ip_end_aligned, ip_end_plot, ip_end_subplots, ip_line, ip_spec
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_same_line, ig_set_next_window
+use figure_implot_ref, only : ip_begin_aligned, ip_begin_plot, ip_begin_subplots, ip_colormap, ip_colormap_legend, &
+                              ip_colormap_scale, ip_end_aligned, ip_end_plot, ip_end_subplots, ip_line, ip_spec
 use figure_cimgui, only : igSetNextWindowCollapsed
 use figure_cimgui_enums, only : ImGuiCond_Always
 use figure_plot_colorbar, only : pf_colormap_legend

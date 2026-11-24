@@ -57,6 +57,10 @@ module figure_plot_items
 !<
 !< No allocation per item per frame (ADR 0001): views of the arrays, fixed quads; the decimation's index buffer and
 !< the integer abscissae's conversion (decimated items only) are grown once and kept.
+!<
+!< The items' array dummies are ASYNCHRONOUS, as figure_implot's (the Fortran path's calls them with its own): nvfortran
+!< otherwise copies an asynchronous actual at the call, and the address a view (and a series' cache) keeps is that of a
+!< temporary.
 use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_intptr_t, c_loc
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
@@ -86,6 +90,7 @@ private
 public :: plot_item_spec, pf_spec
 public :: pf_line, pf_scatter, pf_stairs, pf_stems, pf_shaded, pf_set_decimation
 public :: pf_cache_next_item, pf_cache_counts, pf_line_device
+public :: plot_decimated, plot_kept, plot_cache_builds, plot_cache_hits, pf_last_decimated
 public :: pf_bars, pf_bar_groups, pf_error_bars, pf_inf_lines
 public :: PF_BARS_HORIZONTAL, PF_ERROR_BARS_HORIZONTAL, PF_INF_LINES_HORIZONTAL
 public :: pf_pie_chart, pf_bubbles, pf_digital, pf_text
@@ -289,8 +294,14 @@ integer(int32), parameter   :: CACHE_SLOTS = 32_int32   !< Caches at most.
 type(series_cache)          :: caches(CACHE_SLOTS)      !< The caches.
 logical                     :: next_cached = .false.    !< The next line-like item uses its cache.
 logical                     :: next_changed = .false.   !< ... its data changed.
-integer(int64)              :: cache_builds = 0_int64   !< Caches built (tests).
-integer(int64)              :: cache_hits = 0_int64     !< Caches reused (tests).
+integer(int64)              :: plot_cache_builds = 0_int64 !< Caches built (tests: figure_implot's, as the current path's).
+integer(int64)              :: plot_cache_hits = 0_int64   !< Caches reused (tests).
+integer(int64)              :: plot_decimated = 0_int64    !< Items decimated so far (tests: figure_implot's, as the
+                                                           !< current path's `plot_decimated`).
+integer(int64)              :: plot_kept = 0_int64         !< Points the last decimated item kept (tests).
+logical                     :: pf_last_decimated = .false. !< The last line-like item was decimated (set by its
+                                                           !< decimation; figure_implot clears it before an item: the
+                                                           !< stride `test_plot_stride` reports).
 integer(int64), allocatable :: keep(:)                !< The decimation's kept indices.
 real(real32),   allocatable :: conv32(:)              !< Integer abscissae converted (decimated items).
 real(real64),   allocatable :: conv64(:)              !< ...
@@ -465,8 +476,8 @@ contains
    subroutine line_r64(label, x, y, spec)
    !< Line through the points (x(i), y(i)), double precision, read in place.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real64),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   real(real64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -479,8 +490,8 @@ contains
    subroutine line_r32(label, x, y, spec)
    !< Line through the points (x(i), y(i)), single precision, read in place.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real32),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   real(real32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -493,8 +504,8 @@ contains
    subroutine line_i32_r64(label, x, y, spec)
    !< Line through the points (x(i), y(i)), double precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -507,8 +518,8 @@ contains
    subroutine line_i64_r64(label, x, y, spec)
    !< Line through the points (x(i), y(i)), double precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -521,8 +532,8 @@ contains
    subroutine line_i32_r32(label, x, y, spec)
    !< Line through the points (x(i), y(i)), single precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -535,8 +546,8 @@ contains
    subroutine line_i64_r32(label, x, y, spec)
    !< Line through the points (x(i), y(i)), single precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -549,7 +560,7 @@ contains
    subroutine line_values_r64(label, y, xscale, xstart, spec)
    !< Line through y(i) at x = xstart + (i - 1) xscale, double precision, read in place.
    character(len=*),     intent(in)           :: label  !< Legend label.
-   real(real64),         intent(in), target   :: y(:)   !< Ordinates.
+   real(real64),         intent(in), target, asynchronous :: y(:)   !< Ordinates.
    real(real64),         intent(in), optional :: xscale !< Spacing of the abscissae (default 1).
    real(real64),         intent(in), optional :: xstart !< First abscissa (default 0).
    type(plot_item_spec), intent(in), optional :: spec   !< Style.
@@ -564,7 +575,7 @@ contains
    subroutine line_values_r32(label, y, xscale, xstart, spec)
    !< Line through y(i) at x = xstart + (i - 1) xscale, single precision, read in place.
    character(len=*),     intent(in)           :: label  !< Legend label.
-   real(real32),         intent(in), target   :: y(:)   !< Ordinates.
+   real(real32),         intent(in), target, asynchronous :: y(:)   !< Ordinates.
    real(real64),         intent(in), optional :: xscale !< Spacing of the abscissae (default 1).
    real(real64),         intent(in), optional :: xstart !< First abscissa (default 0).
    type(plot_item_spec), intent(in), optional :: spec   !< Style.
@@ -615,8 +626,8 @@ contains
    subroutine scatter_r64(label, x, y, spec)
    !< Markers at the points (x(i), y(i)), double precision, read in place.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real64),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   real(real64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -629,8 +640,8 @@ contains
    subroutine scatter_r32(label, x, y, spec)
    !< Markers at the points (x(i), y(i)), single precision, read in place.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real32),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   real(real32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -643,8 +654,8 @@ contains
    subroutine scatter_i32_r64(label, x, y, spec)
    !< Markers at the points (x(i), y(i)), double precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -657,8 +668,8 @@ contains
    subroutine scatter_i64_r64(label, x, y, spec)
    !< Markers at the points (x(i), y(i)), double precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -671,8 +682,8 @@ contains
    subroutine scatter_i32_r32(label, x, y, spec)
    !< Markers at the points (x(i), y(i)), single precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -685,8 +696,8 @@ contains
    subroutine scatter_i64_r32(label, x, y, spec)
    !< Markers at the points (x(i), y(i)), single precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -701,8 +712,8 @@ contains
    subroutine stairs_r64(label, x, y, spec)
    !< A staircase through the points (x(i), y(i)), double precision, read in place.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real64),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   real(real64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -715,8 +726,8 @@ contains
    subroutine stairs_r32(label, x, y, spec)
    !< A staircase through the points (x(i), y(i)), single precision, read in place.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real32),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   real(real32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -729,8 +740,8 @@ contains
    subroutine stairs_i32_r64(label, x, y, spec)
    !< A staircase through the points (x(i), y(i)), double precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -743,8 +754,8 @@ contains
    subroutine stairs_i64_r64(label, x, y, spec)
    !< A staircase through the points (x(i), y(i)), double precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -757,8 +768,8 @@ contains
    subroutine stairs_i32_r32(label, x, y, spec)
    !< A staircase through the points (x(i), y(i)), single precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -771,8 +782,8 @@ contains
    subroutine stairs_i64_r32(label, x, y, spec)
    !< A staircase through the points (x(i), y(i)), single precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
 
@@ -787,8 +798,8 @@ contains
    subroutine stems_r64(label, x, y, ref, spec)
    !< Stems from y = ref (x = ref with `PF_STEMS_HORIZONTAL`) to the points (x(i), y(i)), double precision.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real64),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   real(real64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real64),         intent(in), optional :: ref   !< Base of the stems (default 0).
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
@@ -802,8 +813,8 @@ contains
    subroutine stems_r32(label, x, y, ref, spec)
    !< Stems from y = ref to the points (x(i), y(i)), single precision.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real32),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   real(real32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real64),         intent(in), optional :: ref   !< Base of the stems (default 0).
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
@@ -817,8 +828,8 @@ contains
    subroutine stems_i32_r64(label, x, y, ref, spec)
    !< Stems from y = ref to the points (x(i), y(i)), double precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real64),         intent(in), optional :: ref   !< Base of the stems (default 0).
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
@@ -832,8 +843,8 @@ contains
    subroutine stems_i64_r64(label, x, y, ref, spec)
    !< Stems from y = ref to the points (x(i), y(i)), double precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real64),         intent(in), optional :: ref   !< Base of the stems (default 0).
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
@@ -847,8 +858,8 @@ contains
    subroutine stems_i32_r32(label, x, y, ref, spec)
    !< Stems from y = ref to the points (x(i), y(i)), single precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real64),         intent(in), optional :: ref   !< Base of the stems (default 0).
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
@@ -862,8 +873,8 @@ contains
    subroutine stems_i64_r32(label, x, y, ref, spec)
    !< Stems from y = ref to the points (x(i), y(i)), single precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates.
    real(real64),         intent(in), optional :: ref   !< Base of the stems (default 0).
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g     !< Getter.
@@ -879,9 +890,9 @@ contains
    subroutine shaded_r64(label, x, y1, y2, spec)
    !< The area between y1(x) and y2(x), double precision, read in place.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real64),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y1(:) !< First curve.
-   real(real64),         intent(in), target   :: y2(:) !< Second curve.
+   real(real64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real64),         intent(in), target, asynchronous :: y2(:) !< Second curve.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
 
@@ -897,9 +908,9 @@ contains
    subroutine shaded_r32(label, x, y1, y2, spec)
    !< The area between y1(x) and y2(x), single precision, read in place.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real32),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y1(:) !< First curve.
-   real(real32),         intent(in), target   :: y2(:) !< Second curve.
+   real(real32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real32),         intent(in), target, asynchronous :: y2(:) !< Second curve.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
 
@@ -915,9 +926,9 @@ contains
    subroutine shaded_i32_r64(label, x, y1, y2, spec)
    !< The area between y1(x) and y2(x), double precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y1(:) !< First curve.
-   real(real64),         intent(in), target   :: y2(:) !< Second curve.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real64),         intent(in), target, asynchronous :: y2(:) !< Second curve.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
 
@@ -933,9 +944,9 @@ contains
    subroutine shaded_i64_r64(label, x, y1, y2, spec)
    !< The area between y1(x) and y2(x), double precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y1(:) !< First curve.
-   real(real64),         intent(in), target   :: y2(:) !< Second curve.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real64),         intent(in), target, asynchronous :: y2(:) !< Second curve.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
 
@@ -951,9 +962,9 @@ contains
    subroutine shaded_i32_r32(label, x, y1, y2, spec)
    !< The area between y1(x) and y2(x), single precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y1(:) !< First curve.
-   real(real32),         intent(in), target   :: y2(:) !< Second curve.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real32),         intent(in), target, asynchronous :: y2(:) !< Second curve.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
 
@@ -969,9 +980,9 @@ contains
    subroutine shaded_i64_r32(label, x, y1, y2, spec)
    !< The area between y1(x) and y2(x), single precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y1(:) !< First curve.
-   real(real32),         intent(in), target   :: y2(:) !< Second curve.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y1(:) !< First curve.
+   real(real32),         intent(in), target, asynchronous :: y2(:) !< Second curve.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
 
@@ -987,8 +998,8 @@ contains
    subroutine shaded_ref_r64(label, x, y, yref, spec)
    !< The area between y(x) and the line y = yref (-inf, +inf: the plot's bottom, top), double precision.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real64),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Curve.
+   real(real64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Curve.
    real(real64),         intent(in)           :: yref  !< Reference line.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
@@ -1005,8 +1016,8 @@ contains
    subroutine shaded_ref_r32(label, x, y, yref, spec)
    !< The area between y(x) and the line y = yref, single precision.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real32),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Curve.
+   real(real32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Curve.
    real(real64),         intent(in)           :: yref  !< Reference line.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
@@ -1023,8 +1034,8 @@ contains
    subroutine shaded_ref_i32_r64(label, x, y, yref, spec)
    !< The area between y(x) and the line y = yref, double precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Curve.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Curve.
    real(real64),         intent(in)           :: yref  !< Reference line.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
@@ -1041,8 +1052,8 @@ contains
    subroutine shaded_ref_i64_r64(label, x, y, yref, spec)
    !< The area between y(x) and the line y = yref, double precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Curve.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Curve.
    real(real64),         intent(in)           :: yref  !< Reference line.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
@@ -1059,8 +1070,8 @@ contains
    subroutine shaded_ref_i32_r32(label, x, y, yref, spec)
    !< The area between y(x) and the line y = yref, single precision, abscissae `int32`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int32),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Curve.
+   integer(int32),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Curve.
    real(real64),         intent(in)           :: yref  !< Reference line.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
@@ -1077,8 +1088,8 @@ contains
    subroutine shaded_ref_i64_r32(label, x, y, yref, spec)
    !< The area between y(x) and the line y = yref, single precision, abscissae `int64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   integer(int64),       intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Curve.
+   integer(int64),       intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Curve.
    real(real64),         intent(in)           :: yref  !< Reference line.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    type(item_series)                          :: g1, g2 !< Getters.
@@ -1097,8 +1108,8 @@ contains
    subroutine bars_r32(label, x, y, bar_size, spec)
    !< Bars of height y(i) centred at x(i), `bar_size` wide, single precision, read in place.
    character(len=*),     intent(in)           :: label    !< Legend label.
-   real(real32)        , intent(in), target   :: x(:)     !< Bar positions.
-   real(real32)        , intent(in), target   :: y(:)     !< Bar heights.
+   real(real32)        , intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real32)        , intent(in), target, asynchronous :: y(:)     !< Bar heights.
    real(real64),         intent(in)           :: bar_size !< Bar width [x units].
    type(plot_item_spec), intent(in), optional :: spec     !< Style.
    type(item_series)                          :: g        !< Getter.
@@ -1112,8 +1123,8 @@ contains
    subroutine bars_r64(label, x, y, bar_size, spec)
    !< Bars of height y(i) centred at x(i), `bar_size` wide, double precision, read in place.
    character(len=*),     intent(in)           :: label    !< Legend label.
-   real(real64)        , intent(in), target   :: x(:)     !< Bar positions.
-   real(real64)        , intent(in), target   :: y(:)     !< Bar heights.
+   real(real64)        , intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real64)        , intent(in), target, asynchronous :: y(:)     !< Bar heights.
    real(real64),         intent(in)           :: bar_size !< Bar width [x units].
    type(plot_item_spec), intent(in), optional :: spec     !< Style.
    type(item_series)                          :: g        !< Getter.
@@ -1127,8 +1138,8 @@ contains
    subroutine bars_i32_r32(label, x, y, bar_size, spec)
    !< Bars of height y(i) centred at x(i), `bar_size` wide, single precision, abscissae `int32`, read in place.
    character(len=*),     intent(in)           :: label    !< Legend label.
-   integer(int32)      , intent(in), target   :: x(:)     !< Bar positions.
-   real(real32)        , intent(in), target   :: y(:)     !< Bar heights.
+   integer(int32)      , intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real32)        , intent(in), target, asynchronous :: y(:)     !< Bar heights.
    real(real64),         intent(in)           :: bar_size !< Bar width [x units].
    type(plot_item_spec), intent(in), optional :: spec     !< Style.
    type(item_series)                          :: g        !< Getter.
@@ -1142,8 +1153,8 @@ contains
    subroutine bars_i64_r32(label, x, y, bar_size, spec)
    !< Bars of height y(i) centred at x(i), `bar_size` wide, single precision, abscissae `int64`, read in place.
    character(len=*),     intent(in)           :: label    !< Legend label.
-   integer(int64)      , intent(in), target   :: x(:)     !< Bar positions.
-   real(real32)        , intent(in), target   :: y(:)     !< Bar heights.
+   integer(int64)      , intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real32)        , intent(in), target, asynchronous :: y(:)     !< Bar heights.
    real(real64),         intent(in)           :: bar_size !< Bar width [x units].
    type(plot_item_spec), intent(in), optional :: spec     !< Style.
    type(item_series)                          :: g        !< Getter.
@@ -1157,8 +1168,8 @@ contains
    subroutine bars_i32_r64(label, x, y, bar_size, spec)
    !< Bars of height y(i) centred at x(i), `bar_size` wide, double precision, abscissae `int32`, read in place.
    character(len=*),     intent(in)           :: label    !< Legend label.
-   integer(int32)      , intent(in), target   :: x(:)     !< Bar positions.
-   real(real64)        , intent(in), target   :: y(:)     !< Bar heights.
+   integer(int32)      , intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real64)        , intent(in), target, asynchronous :: y(:)     !< Bar heights.
    real(real64),         intent(in)           :: bar_size !< Bar width [x units].
    type(plot_item_spec), intent(in), optional :: spec     !< Style.
    type(item_series)                          :: g        !< Getter.
@@ -1172,8 +1183,8 @@ contains
    subroutine bars_i64_r64(label, x, y, bar_size, spec)
    !< Bars of height y(i) centred at x(i), `bar_size` wide, double precision, abscissae `int64`, read in place.
    character(len=*),     intent(in)           :: label    !< Legend label.
-   integer(int64)      , intent(in), target   :: x(:)     !< Bar positions.
-   real(real64)        , intent(in), target   :: y(:)     !< Bar heights.
+   integer(int64)      , intent(in), target, asynchronous :: x(:)     !< Bar positions.
+   real(real64)        , intent(in), target, asynchronous :: y(:)     !< Bar heights.
    real(real64),         intent(in)           :: bar_size !< Bar width [x units].
    type(plot_item_spec), intent(in), optional :: spec     !< Style.
    type(item_series)                          :: g        !< Getter.
@@ -1188,10 +1199,10 @@ contains
    !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
    !< single precision, read in place.
    character(len=*),     intent(in)                   :: label       !< Legend label.
-   real(real32)        , intent(in), target           :: x(:)        !< Abscissae.
-   real(real32)        , intent(in), target           :: y(:)        !< Ordinates.
-   real(real32)        , intent(in), target           :: err(:)      !< Error below (and above).
-   real(real32)        , intent(in), target, optional :: err_high(:) !< Error above.
+   real(real32)        , intent(in), target, asynchronous :: x(:)        !< Abscissae.
+   real(real32)        , intent(in), target, asynchronous :: y(:)        !< Ordinates.
+   real(real32)        , intent(in), target, asynchronous :: err(:)      !< Error below (and above).
+   real(real32)        , intent(in), target, optional, asynchronous :: err_high(:) !< Error above.
    type(plot_item_spec), intent(in), optional         :: spec        !< Style.
    logical,              intent(in), optional         :: horizontal  !< Bars along x.
    type(item_series)                                  :: g, e        !< Getters: the points, the errors.
@@ -1214,10 +1225,10 @@ contains
    !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
    !< double precision, read in place.
    character(len=*),     intent(in)                   :: label       !< Legend label.
-   real(real64)        , intent(in), target           :: x(:)        !< Abscissae.
-   real(real64)        , intent(in), target           :: y(:)        !< Ordinates.
-   real(real64)        , intent(in), target           :: err(:)      !< Error below (and above).
-   real(real64)        , intent(in), target, optional :: err_high(:) !< Error above.
+   real(real64)        , intent(in), target, asynchronous :: x(:)        !< Abscissae.
+   real(real64)        , intent(in), target, asynchronous :: y(:)        !< Ordinates.
+   real(real64)        , intent(in), target, asynchronous :: err(:)      !< Error below (and above).
+   real(real64)        , intent(in), target, optional, asynchronous :: err_high(:) !< Error above.
    type(plot_item_spec), intent(in), optional         :: spec        !< Style.
    logical,              intent(in), optional         :: horizontal  !< Bars along x.
    type(item_series)                                  :: g, e        !< Getters: the points, the errors.
@@ -1240,10 +1251,10 @@ contains
    !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
    !< single precision, abscissae `int32`, read in place.
    character(len=*),     intent(in)                   :: label       !< Legend label.
-   integer(int32)      , intent(in), target           :: x(:)        !< Abscissae.
-   real(real32)        , intent(in), target           :: y(:)        !< Ordinates.
-   real(real32)        , intent(in), target           :: err(:)      !< Error below (and above).
-   real(real32)        , intent(in), target, optional :: err_high(:) !< Error above.
+   integer(int32)      , intent(in), target, asynchronous :: x(:)        !< Abscissae.
+   real(real32)        , intent(in), target, asynchronous :: y(:)        !< Ordinates.
+   real(real32)        , intent(in), target, asynchronous :: err(:)      !< Error below (and above).
+   real(real32)        , intent(in), target, optional, asynchronous :: err_high(:) !< Error above.
    type(plot_item_spec), intent(in), optional         :: spec        !< Style.
    logical,              intent(in), optional         :: horizontal  !< Bars along x.
    type(item_series)                                  :: g, e        !< Getters: the points, the errors.
@@ -1266,10 +1277,10 @@ contains
    !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
    !< single precision, abscissae `int64`, read in place.
    character(len=*),     intent(in)                   :: label       !< Legend label.
-   integer(int64)      , intent(in), target           :: x(:)        !< Abscissae.
-   real(real32)        , intent(in), target           :: y(:)        !< Ordinates.
-   real(real32)        , intent(in), target           :: err(:)      !< Error below (and above).
-   real(real32)        , intent(in), target, optional :: err_high(:) !< Error above.
+   integer(int64)      , intent(in), target, asynchronous :: x(:)        !< Abscissae.
+   real(real32)        , intent(in), target, asynchronous :: y(:)        !< Ordinates.
+   real(real32)        , intent(in), target, asynchronous :: err(:)      !< Error below (and above).
+   real(real32)        , intent(in), target, optional, asynchronous :: err_high(:) !< Error above.
    type(plot_item_spec), intent(in), optional         :: spec        !< Style.
    logical,              intent(in), optional         :: horizontal  !< Bars along x.
    type(item_series)                                  :: g, e        !< Getters: the points, the errors.
@@ -1292,10 +1303,10 @@ contains
    !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
    !< double precision, abscissae `int32`, read in place.
    character(len=*),     intent(in)                   :: label       !< Legend label.
-   integer(int32)      , intent(in), target           :: x(:)        !< Abscissae.
-   real(real64)        , intent(in), target           :: y(:)        !< Ordinates.
-   real(real64)        , intent(in), target           :: err(:)      !< Error below (and above).
-   real(real64)        , intent(in), target, optional :: err_high(:) !< Error above.
+   integer(int32)      , intent(in), target, asynchronous :: x(:)        !< Abscissae.
+   real(real64)        , intent(in), target, asynchronous :: y(:)        !< Ordinates.
+   real(real64)        , intent(in), target, asynchronous :: err(:)      !< Error below (and above).
+   real(real64)        , intent(in), target, optional, asynchronous :: err_high(:) !< Error above.
    type(plot_item_spec), intent(in), optional         :: spec        !< Style.
    logical,              intent(in), optional         :: horizontal  !< Bars along x.
    type(item_series)                                  :: g, e        !< Getters: the points, the errors.
@@ -1318,10 +1329,10 @@ contains
    !< Error bars at (x(i), y(i)) from y(i) - err(i) to y(i) + err(i) (+ err_high(i)), along x with `horizontal`,
    !< double precision, abscissae `int64`, read in place.
    character(len=*),     intent(in)                   :: label       !< Legend label.
-   integer(int64)      , intent(in), target           :: x(:)        !< Abscissae.
-   real(real64)        , intent(in), target           :: y(:)        !< Ordinates.
-   real(real64)        , intent(in), target           :: err(:)      !< Error below (and above).
-   real(real64)        , intent(in), target, optional :: err_high(:) !< Error above.
+   integer(int64)      , intent(in), target, asynchronous :: x(:)        !< Abscissae.
+   real(real64)        , intent(in), target, asynchronous :: y(:)        !< Ordinates.
+   real(real64)        , intent(in), target, asynchronous :: err(:)      !< Error below (and above).
+   real(real64)        , intent(in), target, optional, asynchronous :: err_high(:) !< Error above.
    type(plot_item_spec), intent(in), optional         :: spec        !< Style.
    logical,              intent(in), optional         :: horizontal  !< Bars along x.
    type(item_series)                                  :: g, e        !< Getters: the points, the errors.
@@ -1343,7 +1354,7 @@ contains
    subroutine inf_lines_r32(label, values, horizontal, spec)
    !< Lines across the whole plot at x = values(i) (y with `horizontal`), `r32` positions, read in place.
    character(len=*),     intent(in)           :: label      !< Legend label.
-   real(real32)        , intent(in), target   :: values(:)  !< Positions.
+   real(real32)        , intent(in), target, asynchronous :: values(:)  !< Positions.
    logical,              intent(in), optional :: horizontal !< Horizontal lines.
    type(plot_item_spec), intent(in), optional :: spec       !< Style.
    type(item_series)                          :: g          !< Getter (the positions, the other coordinate unset).
@@ -1361,7 +1372,7 @@ contains
    subroutine inf_lines_r64(label, values, horizontal, spec)
    !< Lines across the whole plot at x = values(i) (y with `horizontal`), `r64` positions, read in place.
    character(len=*),     intent(in)           :: label      !< Legend label.
-   real(real64)        , intent(in), target   :: values(:)  !< Positions.
+   real(real64)        , intent(in), target, asynchronous :: values(:)  !< Positions.
    logical,              intent(in), optional :: horizontal !< Horizontal lines.
    type(plot_item_spec), intent(in), optional :: spec       !< Style.
    type(item_series)                          :: g          !< Getter (the positions, the other coordinate unset).
@@ -1379,7 +1390,7 @@ contains
    subroutine inf_lines_i32(label, values, horizontal, spec)
    !< Lines across the whole plot at x = values(i) (y with `horizontal`), `i32` positions, read in place.
    character(len=*),     intent(in)           :: label      !< Legend label.
-   integer(int32)      , intent(in), target   :: values(:)  !< Positions.
+   integer(int32)      , intent(in), target, asynchronous :: values(:)  !< Positions.
    logical,              intent(in), optional :: horizontal !< Horizontal lines.
    type(plot_item_spec), intent(in), optional :: spec       !< Style.
    type(item_series)                          :: g          !< Getter (the positions, the other coordinate unset).
@@ -1397,7 +1408,7 @@ contains
    subroutine inf_lines_i64(label, values, horizontal, spec)
    !< Lines across the whole plot at x = values(i) (y with `horizontal`), `i64` positions, read in place.
    character(len=*),     intent(in)           :: label      !< Legend label.
-   integer(int64)      , intent(in), target   :: values(:)  !< Positions.
+   integer(int64)      , intent(in), target, asynchronous :: values(:)  !< Positions.
    logical,              intent(in), optional :: horizontal !< Horizontal lines.
    type(plot_item_spec), intent(in), optional :: spec       !< Style.
    type(item_series)                          :: g          !< Getter (the positions, the other coordinate unset).
@@ -1889,7 +1900,7 @@ contains
    subroutine pie_chart_r64(labels, values, x, y, radius, label_format, angle0, normalize, colormap, spec)
    !< A pie chart (`PlotPieChart`), double precision: `ip_pie_chart`.
    character(len=*),     intent(in)           :: labels(:)    !< One label per slice (trailing blanks dropped).
-   real(real64),         intent(in), target   :: values(:)    !< Slice values.
+   real(real64),         intent(in), target, asynchronous :: values(:)    !< Slice values.
    real(real64),         intent(in)           :: x, y         !< Centre [plot units].
    real(real64),         intent(in)           :: radius       !< Radius [plot units].
    character(len=*),     intent(in), optional :: label_format !< printf format of a value (default '%.1f'; '': none).
@@ -1907,7 +1918,7 @@ contains
    subroutine pie_chart_r32(labels, values, x, y, radius, label_format, angle0, normalize, colormap, spec)
    !< A pie chart (`PlotPieChart`), single precision values: `ip_pie_chart`.
    character(len=*),     intent(in)           :: labels(:)    !< One label per slice (trailing blanks dropped).
-   real(real32),         intent(in), target   :: values(:)    !< Slice values.
+   real(real32),         intent(in), target, asynchronous :: values(:)    !< Slice values.
    real(real64),         intent(in)           :: x, y         !< Centre [plot units].
    real(real64),         intent(in)           :: radius       !< Radius [plot units].
    character(len=*),     intent(in), optional :: label_format !< printf format of a value (default '%.1f'; '': none).
@@ -1925,9 +1936,9 @@ contains
    subroutine bubbles_r64(label, x, y, radii, spec)
    !< Circles at (x(i), y(i)) of radius radii(i) [plot units] (`PlotBubbles`), double precision, read in place.
    character(len=*),     intent(in)           :: label    !< Legend label.
-   real(real64),         intent(in), target   :: x(:)     !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)     !< Ordinates.
-   real(real64),         intent(in), target   :: radii(:) !< Radii.
+   real(real64),         intent(in), target, asynchronous :: x(:)     !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)     !< Ordinates.
+   real(real64),         intent(in), target, asynchronous :: radii(:) !< Radii.
    type(plot_item_spec), intent(in), optional :: spec     !< Style.
    type(item_series)                          :: g, r     !< Getters: the centres, the radii (coordinate 2).
 
@@ -1942,9 +1953,9 @@ contains
    subroutine bubbles_r32(label, x, y, radii, spec)
    !< Circles at (x(i), y(i)) of radius radii(i) [plot units] (`PlotBubbles`), single precision, read in place.
    character(len=*),     intent(in)           :: label    !< Legend label.
-   real(real32),         intent(in), target   :: x(:)     !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)     !< Ordinates.
-   real(real32),         intent(in), target   :: radii(:) !< Radii.
+   real(real32),         intent(in), target, asynchronous :: x(:)     !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)     !< Ordinates.
+   real(real32),         intent(in), target, asynchronous :: radii(:) !< Radii.
    type(plot_item_spec), intent(in), optional :: spec     !< Style.
    type(item_series)                          :: g, r     !< Getters: the centres, the radii (coordinate 2).
 
@@ -1959,8 +1970,8 @@ contains
    subroutine digital_r64(label, x, y, spec)
    !< A digital signal (`PlotDigital`), double precision, read in place: `ip_digital`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real64),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real64),         intent(in), target   :: y(:)  !< Values.
+   real(real64),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Values.
    type(plot_item_spec), intent(in), optional :: spec  !< Style (`size`: the band's height [pixels]).
    type(item_series)                          :: g     !< Getter.
 
@@ -1973,8 +1984,8 @@ contains
    subroutine digital_r32(label, x, y, spec)
    !< A digital signal (`PlotDigital`), single precision, read in place: `ip_digital`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real32),         intent(in), target   :: x(:)  !< Abscissae.
-   real(real32),         intent(in), target   :: y(:)  !< Values.
+   real(real32),         intent(in), target, asynchronous :: x(:)  !< Abscissae.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Values.
    type(plot_item_spec), intent(in), optional :: spec  !< Style (`size`: the band's height [pixels]).
    type(item_series)                          :: g     !< Getter.
 
@@ -3049,7 +3060,8 @@ contains
    call sweep_once()
    call field_colour(pf_item_id(label), f64=f, nx=size(f, 1, kind=int64), ny=size(f, 2, kind=int64), &
                      cmap=field_cmap(colormap), vmin=vmin, vmax=vmax, scale=field_scale(scale),   &
-                     nan_rgba=field_nan(nan_color), changed=field_changed(changed), tex=tex, lo=lo, hi=hi, stat=st)
+                     nan_rgba=field_nan(nan_color), changed=field_changed(changed), tex=tex, lo=lo, hi=hi, stat=st, &
+                     label=label)
    if (st /= 0_int32) error stop 'figure_plot_items: pf_field_image: the texture failed'
    if (present(range)) range = [lo, hi]
    call image_item(label, tex, x0, x1, y0, y1, plot_item_spec())
@@ -3074,7 +3086,8 @@ contains
    call sweep_once()
    call field_colour(pf_item_id(label), f32=f, nx=size(f, 1, kind=int64), ny=size(f, 2, kind=int64), &
                      cmap=field_cmap(colormap), vmin=vmin, vmax=vmax, scale=field_scale(scale),   &
-                     nan_rgba=field_nan(nan_color), changed=field_changed(changed), tex=tex, lo=lo, hi=hi, stat=st)
+                     nan_rgba=field_nan(nan_color), changed=field_changed(changed), tex=tex, lo=lo, hi=hi, stat=st, &
+                     label=label)
    if (st /= 0_int32) error stop 'figure_plot_items: pf_field_image: the texture failed'
    if (present(range)) range = [lo, hi]
    call image_item(label, tex, x0, x1, y0, y1, plot_item_spec())
@@ -3402,7 +3415,7 @@ contains
    !< Coordinate k (1 x, 2 y) of a getter from a real64 array, in place.
    type(item_series),    intent(inout) :: g    !< Getter.
    integer(int32),       intent(in)    :: k    !< Coordinate.
-   real(real64), target, intent(in)    :: a(:) !< Array.
+   real(real64), target, intent(in), asynchronous    :: a(:) !< Array.
 
    g%src(k) = SRC_R64
    if (k == 1_int32) then
@@ -3416,7 +3429,7 @@ contains
    !< Coordinate k of a getter from a real32 array, in place.
    type(item_series),    intent(inout) :: g    !< Getter.
    integer(int32),       intent(in)    :: k    !< Coordinate.
-   real(real32), target, intent(in)    :: a(:) !< Array.
+   real(real32), target, intent(in), asynchronous    :: a(:) !< Array.
 
    g%src(k) = SRC_R32
    if (k == 1_int32) then
@@ -3430,7 +3443,7 @@ contains
    !< The abscissae of a getter from an int32 array: each converted as FIGURE's API converts them (to the ordinates'
    !< kind), then to double.
    type(item_series),      intent(inout) :: g     !< Getter.
-   integer(int32), target, intent(in)    :: a(:)  !< Array.
+   integer(int32), target, intent(in), asynchronous    :: a(:)  !< Array.
    logical,                intent(in)    :: via32 !< Single precision ordinates.
    integer(int32),         intent(in), optional :: k !< Coordinate (default 1: the abscissae).
 
@@ -3446,7 +3459,7 @@ contains
    subroutine view_i64(g, a, via32, k)
    !< The abscissae of a getter from an int64 array (as `view_i32`).
    type(item_series),      intent(inout) :: g     !< Getter.
-   integer(int64), target, intent(in)    :: a(:)  !< Array.
+   integer(int64), target, intent(in), asynchronous    :: a(:)  !< Array.
    logical,                intent(in)    :: via32 !< Single precision ordinates.
    integer(int32),         intent(in), optional :: k !< Coordinate (default 1: the abscissae).
 
@@ -3609,6 +3622,9 @@ contains
    if (.not. dec) return
    g%kept = .true.
    g%n = int(nk, int32)
+   plot_decimated = plot_decimated + 1_int64
+   plot_kept = nk
+   pf_last_decimated = .true.
    endsubroutine decimate_getters
 
    subroutine decimate_any(ax, g, g2, two, fill, nk, dec, dc)
@@ -3725,9 +3741,9 @@ contains
    if (c > 0_int32) then
       if (changed) then
          caches(c)%dc%valid = .false.
-         cache_builds = cache_builds + 1_int64
+         plot_cache_builds = plot_cache_builds + 1_int64
       else
-         cache_hits = cache_hits + 1_int64
+         plot_cache_hits = plot_cache_hits + 1_int64
       endif
       caches(c)%last_time = now
       return
@@ -3752,7 +3768,7 @@ contains
    caches(c)%dx = udx
    caches(c)%last_time = now
    caches(c)%dc%valid = .false.
-   cache_builds = cache_builds + 1_int64
+   plot_cache_builds = plot_cache_builds + 1_int64
    endfunction cache_slot
 
    subroutine identity(g, g2, two, p, stride, kind)
@@ -3824,38 +3840,47 @@ contains
    !< plot_cache_hits).
    integer(int64), intent(out) :: builds, hits !< Counts.
 
-   builds = cache_builds
-   hits = cache_hits
+   builds = plot_cache_builds
+   hits = plot_cache_hits
    endsubroutine pf_cache_counts
 
-   subroutine pf_line_device_r64(label, x, y, spec)
+   subroutine pf_line_device_r64(label, x, y, spec, ierr)
    !< A line through (x(i), y(i)) of two contiguous real64 arrays on a device (`ip_line_device`): decimated there
    !< (figure_decimate_device, FUNDAL), only the kept points copied to the host; a series not decimated copied whole.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real64),         intent(in), target   :: x(:)  !< Abscissae, on the device.
-   real(real64),         intent(in), target   :: y(:)  !< Ordinates, on the device.
+   real(real64),         intent(in), target, asynchronous :: x(:)  !< Abscissae, on the device.
+   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates, on the device.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
+   integer(int32),       intent(out), optional :: ierr !< FUNDAL's status of a copy from the device (absent: a failure
+                                                       !< stops; present: nothing drawn on a failure).
    type(plot_item_spec)                       :: sp    !< Style.
    type(plot_item_ctx)                        :: ctx   !< The plot (for the decimation's axis).
    type(decimate_axis)                        :: ax    !< The x axis.
    type(item_series)                          :: g     !< A getter of n points (the decimation's test).
    integer(int64)                             :: nk    !< Points drawn.
-   integer(int32)                             :: ierr  !< FUNDAL's status.
+   integer(int32)                             :: ie    !< FUNDAL's status.
    logical                                    :: done  !< Decimated.
 
    sp = spec_or_default(spec)
    call pf_plot_ctx(ctx)
    g%n = int(min(size(x), size(y)), int32)
    done = .false.
-   ierr = 0_int32
-   if (wanted(g, KIND_LINE, sp, ctx, ax)) done = decimate_device_r64(ax, x, y, dev64x, dev64y, nk, ierr)
-   if (.not. done .and. ierr == 0_int32) then ! every point, copied
+   ie = 0_int32
+   if (wanted(g, KIND_LINE, sp, ctx, ax)) done = decimate_device_r64(ax, x, y, dev64x, dev64y, nk, ie)
+   if (.not. done .and. ie == 0_int32) then ! every point, copied
       nk = int(g%n, int64)
       call dev_room64(nk)
-      if (nk > 0_int64) call dev_memcpy_from_device(dst=dev64x(1:nk), src=x, ierr=ierr)
-      if (nk > 0_int64 .and. ierr == 0_int32) call dev_memcpy_from_device(dst=dev64y(1:nk), src=y, ierr=ierr)
+      if (nk > 0_int64) call dev_memcpy_from_device(dst=dev64x(1:nk), src=x, ierr=ie)
+      if (nk > 0_int64 .and. ie == 0_int32) call dev_memcpy_from_device(dst=dev64y(1:nk), src=y, ierr=ie)
+   elseif (done) then
+      plot_decimated = plot_decimated + 1_int64
+      plot_kept = nk
    endif
-   if (ierr /= 0_int32) error stop 'figure_plot_items: pf_line_device: a copy from the device failed'
+   if (present(ierr)) ierr = ie
+   if (ie /= 0_int32) then
+      if (present(ierr)) return
+      error stop 'figure_plot_items: pf_line_device: a copy from the device failed'
+   endif
    g = item_series()
    call view_r64(g, 1_int32, dev64x(1:nk))
    call view_r64(g, 2_int32, dev64y(1:nk))
@@ -3865,33 +3890,42 @@ contains
    skip_decimation = .false.
    endsubroutine pf_line_device_r64
 
-   subroutine pf_line_device_r32(label, x, y, spec)
+   subroutine pf_line_device_r32(label, x, y, spec, ierr)
    !< A line of two contiguous real32 device arrays (`ip_line_device`), as `pf_line_device_r64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real32),         intent(in), target   :: x(:)  !< Abscissae, on the device.
-   real(real32),         intent(in), target   :: y(:)  !< Ordinates, on the device.
+   real(real32),         intent(in), target, asynchronous :: x(:)  !< Abscissae, on the device.
+   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates, on the device.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
+   integer(int32),       intent(out), optional :: ierr !< FUNDAL's status of a copy from the device (absent: a failure
+                                                       !< stops; present: nothing drawn on a failure).
    type(plot_item_spec)                       :: sp    !< Style.
    type(plot_item_ctx)                        :: ctx   !< The plot.
    type(decimate_axis)                        :: ax    !< The x axis.
    type(item_series)                          :: g     !< A getter of n points.
    integer(int64)                             :: nk    !< Points drawn.
-   integer(int32)                             :: ierr  !< FUNDAL's status.
+   integer(int32)                             :: ie    !< FUNDAL's status.
    logical                                    :: done  !< Decimated.
 
    sp = spec_or_default(spec)
    call pf_plot_ctx(ctx)
    g%n = int(min(size(x), size(y)), int32)
    done = .false.
-   ierr = 0_int32
-   if (wanted(g, KIND_LINE, sp, ctx, ax)) done = decimate_device_r32(ax, x, y, dev32x, dev32y, nk, ierr)
-   if (.not. done .and. ierr == 0_int32) then
+   ie = 0_int32
+   if (wanted(g, KIND_LINE, sp, ctx, ax)) done = decimate_device_r32(ax, x, y, dev32x, dev32y, nk, ie)
+   if (.not. done .and. ie == 0_int32) then
       nk = int(g%n, int64)
       call dev_room32(nk)
-      if (nk > 0_int64) call dev_memcpy_from_device(dst=dev32x(1:nk), src=x, ierr=ierr)
-      if (nk > 0_int64 .and. ierr == 0_int32) call dev_memcpy_from_device(dst=dev32y(1:nk), src=y, ierr=ierr)
+      if (nk > 0_int64) call dev_memcpy_from_device(dst=dev32x(1:nk), src=x, ierr=ie)
+      if (nk > 0_int64 .and. ie == 0_int32) call dev_memcpy_from_device(dst=dev32y(1:nk), src=y, ierr=ie)
+   elseif (done) then
+      plot_decimated = plot_decimated + 1_int64
+      plot_kept = nk
    endif
-   if (ierr /= 0_int32) error stop 'figure_plot_items: pf_line_device: a copy from the device failed'
+   if (present(ierr)) ierr = ie
+   if (ie /= 0_int32) then
+      if (present(ierr)) return
+      error stop 'figure_plot_items: pf_line_device: a copy from the device failed'
+   endif
    g = item_series()
    call view_r32(g, 1_int32, dev32x(1:nk))
    call view_r32(g, 2_int32, dev32y(1:nk))

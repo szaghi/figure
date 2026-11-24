@@ -21,9 +21,9 @@ program figure_test_plot_frame_misc
 !< The pictures are `figure_test_plot_frame_misc.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip_begin_plot, ip_bubbles,  &
-                   ip_colormap, ip_digital, ip_end_plot, ip_hide_next_item, ip_line, ip_pie_chart, ip_plot_limits, &
-                   ip_setup_axes_limits, ip_spec, ip_text, ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_begin_plot, ip_bubbles, ip_colormap, ip_digital, ip_end_plot, ip_hide_next_item, &
+                              ip_line, ip_pie_chart, ip_plot_limits, ip_setup_axes_limits, ip_spec, ip_text
 use figure_plot_frame, only : pf_begin_plot, pf_colormap, pf_end_plot, pf_hide_next_item, pf_plot_limits, &
                               pf_setup_axes_limits
 use figure_plot_items, only : pf_bubbles, pf_digital, pf_line, pf_pie_chart, pf_spec, pf_text

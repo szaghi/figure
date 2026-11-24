@@ -32,11 +32,11 @@ use figure, only : app_object, ig_begin, ig_dock_id, ig_dock_layout_begin, ig_do
                    FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK
 use figure, only : ig_set_next_window, ip_annotation, ip_contour, ip_contour_levels, ip_contour_lines, ip_drag_line_x, &
                    ip_drag_line_y, ip_drag_point, ip_error_bars, ip_setup_axes_limits, ip_spec
-use figure, only : ig_item_rect, ig_same_line, ig_text_size, ip_colormap_legend
+use figure, only : ig_item_rect, ig_same_line, ig_text_size, ip_colormap_legend, ip_plot_limits, ip_plot_to_pixels
 use figure_cimgui, only : im_vec4
 use figure_cimgui, only : im_vec2
 use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapCount, ImPlot_GetColormapSize, &
-                           ImPlot_GetPlotLimits, ImPlot_SampleColormap, ImPlot_PlotToPixels_double
+                           ImPlot_SampleColormap
 use figure_testing, only : test_drag, test_drawn_extent, test_plot_tick
 
 implicit none
@@ -148,7 +148,7 @@ do frame = 1_int32, FRAMES
          do k = 1_int32, 2_int32
             if (ip_begin_plot('##linked'//achar(48 + k))) then
                call ip_line('d', [0.0_real64, 10.0_real64**(k - 1)], [0.0_real64, 1.0_real64])
-               call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, linked(k))
+               call ip_plot_limits(linked(k)%X%Min, linked(k)%X%Max, linked(k)%Y%Min, linked(k)%Y%Max)
                call ip_end_plot()
             endif
          enddo
@@ -159,7 +159,7 @@ do frame = 1_int32, FRAMES
          do k = 1_int32, 2_int32
             if (ip_begin_plot('##unlinked'//achar(48 + k))) then
                call ip_line('d', [0.0_real64, 10.0_real64**(k - 1)], [0.0_real64, 1.0_real64])
-               call ImPlot_GetPlotLimits(-1_c_int, -1_c_int, unlinked(k))
+               call ip_plot_limits(unlinked(k)%X%Min, unlinked(k)%X%Max, unlinked(k)%Y%Min, unlinked(k)%Y%Max)
                call ip_end_plot()
             endif
          enddo
@@ -381,10 +381,8 @@ contains
    real(real64), intent(in) :: x    !< Abscissa.
    real(real64), intent(in) :: y    !< Ordinate.
    real(real64)             :: p(2) !< Pixel.
-   type(im_vec2)            :: v    !< ImPlot's.
 
-   v = ImPlot_PlotToPixels_double(real(x, c_double), real(y, c_double), -1_c_int, -1_c_int)
-   p = real([v%x, v%y], real64)
+   call ip_plot_to_pixels(x, y, p(1), p(2))
    endfunction pixel
 
    subroutine draw_legends()

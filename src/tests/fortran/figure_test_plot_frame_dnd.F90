@@ -13,8 +13,9 @@ program figure_test_plot_frame_dnd
 !< The pictures are `figure_test_plot_frame_dnd.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_drag_source, ig_end, ig_item_rect, ig_same_line, &
-                   ig_set_next_window, ig_tree_node, ig_tree_pop, ip_begin_plot, ip_drop_target, ip_end_plot,   &
-                   ip_line, ip_plot_to_pixels, ip_setup_axes_limits, ImGuiWindowFlags_NoDecoration
+                   ig_set_next_window, ig_tree_node, ig_tree_pop, ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_begin_plot, ip_drop_target, ip_end_plot, ip_line, ip_plot_to_pixels, &
+                              ip_setup_axes_limits
 use figure_plot_frame, only : pf_begin_plot, pf_drop_target, pf_end_plot, pf_setup_axes_limits
 use figure_plot_items, only : pf_line
 use figure_testing, only : test_capture, test_compare_image, test_mouse_button, test_mouse_move, test_next_frame

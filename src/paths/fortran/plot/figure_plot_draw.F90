@@ -27,6 +27,7 @@ use figure_plot_frame, only : pf_plot_rect, pf_plot_state, pf_plot_to_pixels
 implicit none
 private
 public :: pf_draw_line, pf_draw_rect, pf_draw_circle, pf_draw_polyline, pf_draw_polygon, pf_draw_text, pf_draw_image
+public :: pf_draw_prim
 
 ! Primitives (native/figure_canvas.cpp's kind_t).
 integer(c_int), parameter :: DRAW_LINE = 1_c_int     !< A segment.
@@ -149,6 +150,34 @@ contains
                 texture=ref%TexID, stat=stat)
    endif
    endsubroutine pf_draw_image
+
+   function pf_draw_prim(kind, x, y, rgba, thickness, radius, filled, text, texture) result(status)
+   !< One primitive of figure_canvas's `'plot'` layer, its arguments checked there (`fig_draw` on layer 4, through
+   !< figure_plot_hooks: szaghi/figure#15, the seam's switch): 0, or -1 outside a plot (nothing drawn, nothing reported).
+   integer(c_int),   intent(in) :: kind      !< DRAW_*.
+   real(real64),     intent(in) :: x(:)      !< Abscissae [plot units].
+   real(real64),     intent(in) :: y(:)      !< Ordinates [plot units].
+   real(real64),     intent(in) :: rgba(4)   !< Colour, RGBA in [0, 1].
+   real(real64),     intent(in) :: thickness !< Line thickness [pixels].
+   real(real64),     intent(in) :: radius    !< A circle's radius [pixels].
+   logical,          intent(in) :: filled    !< Filled (a polyline: closed).
+   character(len=*), intent(in) :: text      !< Text (DRAW_TEXT).
+   integer(int64),   intent(in) :: texture   !< ImTextureID (DRAW_IMAGE).
+   integer(c_int)               :: status    !< Status.
+   integer(int32)               :: en(6), sc(6) !< The plot's axes (pf_plot_state).
+
+   status = -1_c_int
+   if (pf_plot_state(en, sc) == 0_int32) return
+   select case (kind)
+   case (DRAW_TEXT)
+      call draw('ig_draw_text', kind, x, y, rgba, thickness, radius, filled, text=text)
+   case (DRAW_IMAGE)
+      call draw('ig_draw_image', kind, x, y, rgba, thickness, radius, filled, texture=texture)
+   case default
+      call draw('ig_draw', kind, x, y, rgba, thickness, radius, filled)
+   endselect
+   status = 0_c_int
+   endfunction pf_draw_prim
 
    ! ---- private ------------------------------------------------------------------------------------------------------
    subroutine draw(who, kind, x, y, color, thickness, radius, filled, text, texture, stat)

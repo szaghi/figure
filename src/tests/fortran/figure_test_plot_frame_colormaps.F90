@@ -23,9 +23,8 @@ program figure_test_plot_frame_colormaps
 !< them).
 use, intrinsic :: iso_c_binding, only : c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip_colormap, &
-                   ip_colormap_names, ip_colormap_scale, ip_colormap_stops, ip_load_colormap,           &
-                   ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ip_colormap, ip_colormap_names, ip_colormap_scale, ip_colormap_stops, ip_load_colormap
 use figure_cimgui, only : im_vec4
 use figure_cimplot, only : ImPlot_GetColormapColor, ImPlot_GetColormapSize
 use figure_plot_colormaps, only : cm_colormap, cm_key, cm_list_count, cm_list_name, cm_load, cm_size, cm_stops
