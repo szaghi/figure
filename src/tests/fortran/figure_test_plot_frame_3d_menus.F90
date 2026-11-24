@@ -20,8 +20,9 @@ program figure_test_plot_frame_3d_menus
 !< The pictures are `figure_test_plot_frame_3d_menus.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip3_begin_plot, ip3_end_plot, &
-                   ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axes, ip3_line, ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_implot3d_ref, only : ip3_begin_plot, ip3_end_plot, ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axes, &
+                                ip3_line
 use figure_plot3d_frame, only : pf3_begin_plot, pf3_end_plot, pf3_mouse_ray, pf3_plot_to_pixels, pf3_setup_axes
 use figure_plot3d_items, only : pf3_line
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move, test_mouse_button, test_item_click, &

@@ -97,6 +97,7 @@ public :: pf3_plot_to_pixels, pf3_mouse_ray, pf3_plot_limits, pf3_plot_rotation
 public :: plot3d_spec, item3d_style, pf3_item_begin, pf3_item_fit, pf3_item_fitting, pf3_item_view, pf3_item_end
 public :: pf3_colormap
 public :: F3_NO_CLIP, pf3_push_colormap, pf3_pop_colormap, pf3_item_recolor, pf3_text
+public :: pf3_plot_state, pf3_open_id
 
 ! ImPlot3DFlags
 integer(int32), parameter :: F3_NO_TITLE = 1_int32       !< NoTitle.
@@ -357,8 +358,11 @@ contains
          call axis_reset(p, i)
       enddo
       call d3_reset()
+      call core_draw_begin() ! the window's draw list (`PushClipRect` on it): the list figure_core draws on now, not
+                             ! the last window's (a 3-D plot first in its window pushed there: its end popped this one)
       call core_push_clip_rect(real(p%frame(1), real64), real(p%frame(2), real64), real(p%frame(3), real64), &
                                real(p%frame(4), real64), intersect=.true.)
+      call core_draw_end()
    endassociate
    cur = h
    visible = .true.
@@ -649,6 +653,23 @@ contains
              fy < p%v%rect(2) + (p%v%rect(4) - p%v%rect(2))
    endassociate
    endfunction pf3_mouse_ray
+
+   function pf3_plot_state() result(state)
+   !< The open 3-D plot's state, as FIGURE's `fig_plot3d_state` gives ImPlot3D's (the Fortran path's refusals read it):
+   !< 0 no plot, 1 its setup open, 2 its setup over (`SetupLocked`).
+   integer(int32) :: state !< 0, 1, 2.
+
+   state = 0_int32
+   if (cur == 0_int32) return
+   state = merge(2_int32, 1_int32, plots(cur)%setup_locked)
+   endfunction pf3_plot_state
+
+   function pf3_open_id() result(id)
+   !< The open 3-D plot's slot, 0 none (the scope record's snapshot, as ImPlot3D's CurrentPlot).
+   integer(int32) :: id !< Slot.
+
+   id = cur
+   endfunction pf3_open_id
 
    subroutine pf3_plot_limits(lims)
    !< The three ranges of the open 3-D plot: [xmin, xmax, ymin, ymax, zmin, zmax].

@@ -31,9 +31,7 @@ use figure, only : app_object, ig_begin, ig_end, ig_gradient_edit, ig_set_next_w
                    ImPlot3DMeshFlags_NoLines, ImPlot3DMeshFlags_NoMarkers, ImPlot3DSurfaceFlags_NoLines, &
                    ImPlot3DSurfaceFlags_NoMarkers, ImPlot3DItemFlags_NoLegend, FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
 use figure_cimgui, only : im_vec2, im_vec4
-use figure_cimplot3d, only : ImPlot3D_GetPlotRectPos, ImPlot3D_GetPlotRectSize, ImPlot3D_PlotToPixels_double, &
-                             ImPlot3D_PopStyleColor, ImPlot3D_PushStyleColor_Vec4
-use figure_cimplot3d_enums, only : ImPlot3DCol_AxisText
+use figure, only : ig_cursor_screen_pos, ip3_plot_to_pixels, ip3_pop_style_color, ip3_push_style_color
 use figure_testing, only : test_capture, test_compare_image, test_drawn_extent, test_item_rect, test_mouse_button, &
                            test_mouse_move, test_next_frame, test_plot_copies, test_plot_stride
 
@@ -186,23 +184,20 @@ contains
    real(real64)         :: ends(4)   !< Pixels of the first and last points.
    logical              :: fl, fs    !< Found.
    integer(int32)       :: k         !< Frame.
-   type(im_vec2)        :: p, q      !< Plot rectangle; a projection.
+   real(real64)         :: cx, cy    !< The plot's frame's top-left.
 
    ok = .false.
    do k = 1_int32, 3_int32
       if (window()) then
+         call ig_cursor_screen_pos(cx, cy) ! the plot's frame: SIDE x SIDE there (it holds the plot rectangle)
          if (ip3_begin_plot('extent', width=SIDE, height=SIDE)) then
             call ip3_setup_axes('x', 'y', 'z', limits=LIMITS, elevation=25.0_real64, azimuth=-60.0_real64)
             call ip3_line('helix', hx, hy, hz, spec=ip3_spec(line_color=CL, line_weight=2.0_real64))
             call ip3_scatter('points', hx, hy, hz, spec=ip3_spec(marker=ImPlot3DMarker_Circle, marker_size=3.0_real64, &
                                                                  marker_line_color=CS, marker_fill_color=CS))
-            p = ImPlot3D_GetPlotRectPos()
-            q = ImPlot3D_GetPlotRectSize()
-            r = [real(p%x, real64), real(p%y, real64), real(p%x + q%x, real64), real(p%y + q%y, real64)]
-            q = ImPlot3D_PlotToPixels_double(hx(1), hy(1), hz(1))
-            ends(1:2) = [real(q%x, real64), real(q%y, real64)]
-            q = ImPlot3D_PlotToPixels_double(hx(N), hy(N), hz(N))
-            ends(3:4) = [real(q%x, real64), real(q%y, real64)]
+            r = [cx, cy, cx + SIDE, cy + SIDE]
+            call ip3_plot_to_pixels(hx(1), hy(1), hz(1), ends(1), ends(2))
+            call ip3_plot_to_pixels(hx(N), hy(N), hz(N), ends(3), ends(4))
             call ip3_end_plot()
          endif
          call test_drawn_extent(CL, el(1), el(2), el(3), el(4), fl)
@@ -239,7 +234,7 @@ contains
    do l = 1_int32, 2_int32
       do k = 1_int32, 3_int32
          if (window()) then
-            call ImPlot3D_PushStyleColor_Vec4(ImPlot3DCol_AxisText, vec4(CT))
+            call ip3_push_style_color('AxisText', CT)
             if (ip3_begin_plot('labels', width=SIDE, height=SIDE)) then
                if (l == 1_int32) then
                   call ip3_setup_axes('distance', 'span', 'height', limits=LIMITS, elevation=25.0_real64, &
@@ -250,7 +245,7 @@ contains
                call ip3_line('helix', hx, hy, hz)
                call ip3_end_plot()
             endif
-            call ImPlot3D_PopStyleColor(1_c_int)
+            call ip3_pop_style_color()
             call test_drawn_extent(CT, e(1), e(2), e(3), e(4), f(l), vertices=nv(l))
          endif
          call ig_end()
@@ -386,7 +381,7 @@ contains
    logical,                intent(in)  :: fixed    !< Rotation set every frame.
    real(real64), optional, intent(out) :: pixel(2) !< Pixel of (1, 0, 0).
    integer(int32)                      :: i        !< Frame.
-   type(im_vec2)                       :: q        !< Projection.
+   real(real64)                        :: q(2)     !< Projection.
    character(len=12)                   :: id       !< Plot id.
 
    id = merge('##held     ', '##turned   ', fixed)
@@ -400,8 +395,8 @@ contains
                call ip3_setup_axes('x', 'y', 'z', limits=LIMITS, elevation=25.0_real64, azimuth=-60.0_real64)
             endif
             call ip3_line('helix', hx, hy, hz)
-            q = ImPlot3D_PlotToPixels_double(1.0_real64, 0.0_real64, 0.0_real64)
-            if (present(pixel)) pixel = [real(q%x, real64), real(q%y, real64)]
+            call ip3_plot_to_pixels(1.0_real64, 0.0_real64, 0.0_real64, q(1), q(2))
+            if (present(pixel)) pixel = q
             call ip3_end_plot()
          endif
       endif
@@ -410,13 +405,11 @@ contains
    endsubroutine rotation_frames
 
    subroutine fixed_rotation()
-   !< The box's rotation set every frame (ImPlot3D's `SetupBoxRotation` with `ImPlot3DCond_Always`), through the raw
-   !< binding: what a program that holds its view does.
-   use figure_cimplot3d, only : ImPlot3D_SetupBoxRotation_double
-   use figure_cimplot3d_enums, only : ImPlot3DCond_Always
-   use, intrinsic :: iso_c_binding, only : c_bool
+   !< The box's rotation set every frame (ImPlot3D's `SetupBoxRotation` with `ImPlot3DCond_Always`: `ip3_setup_box`,
+   !< the public API's, since the 3-D seam's switch; before, the raw binding): what a program that holds its view does.
+   use figure, only : ip3_setup_box
 
-   call ImPlot3D_SetupBoxRotation_double(25.0_real64, -60.0_real64, .false._c_bool, ImPlot3DCond_Always)
+   call ip3_setup_box(elevation=25.0_real64, azimuth=-60.0_real64)
    endsubroutine fixed_rotation
 
    subroutine picture(ok)

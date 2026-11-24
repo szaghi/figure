@@ -166,7 +166,7 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `ig_color_edit` | `cb_legend.rec` | `figure_test_forms`, `figure_test_tasks` |
 | `ig_color_picker` | `cb_color_picker.rec` | `figure_test_picker` |
 | `ig_combo` | `canvas_primitives.rec`, `cb_form.rec`, `cb_scheme.rec` (+34) | `figure_test_forms`, `figure_test_paths` |
-| `ig_cursor_screen_pos` | `figure_test_markdown` | `figure_test_canvas`, `figure_test_markdown` |
+| `ig_cursor_screen_pos` | `figure_test_markdown`, `figure_test_plot3d` | `figure_test_canvas`, `figure_test_markdown`, `figure_test_plot3d` |
 | `ig_default_focus` | `cb_quit.rec` | `figure_test_forms` |
 | `ig_dock_id` | `figure_test_dock_view`, `canvas_primitives.rec`, `cb_dock.rec` (+37) | `figure_test_app`, `figure_test_dock_view`, `figure_test_headless` (+1) |
 | `ig_dock_layout_begin` | `figure_test_dock_view`, `canvas_primitives.rec`, `cb_dock.rec` (+37) | `figure_test_app`, `figure_test_dock_view`, `figure_test_errors` (+2) |
@@ -288,17 +288,17 @@ Gaps: 0 of the public names' 920 checks, 0 of the interaction classes' 64.
 | `ip3_line` | `figure_test_plot3d`, `canvas_primitives.rec`, `cb_trajectory.rec` (+19) | `figure_test_plot3d`, `figure_test_plot3d_more` |
 | `ip3_mesh` | `figure_test_plot3d`, `canvas_primitives.rec`, `colormaps-jet.rec` (+18) | `figure_test_plot3d` |
 | `ip3_mouse_ray` | `cb_plot3d_pick.rec` | `figure_test_plot3d_items` |
-| `ip3_plot_to_pixels` | `cb_plot3d_pick.rec` | `figure_test_plot3d_items` |
-| `ip3_pop_style_color` | `cb_plot3d_style.rec` | `figure_test_plot3d_more` |
+| `ip3_plot_to_pixels` | `figure_test_plot3d`, `cb_plot3d_pick.rec`, `cb_trajectory.rec` | `figure_test_plot3d`, `figure_test_plot3d_items` |
+| `ip3_pop_style_color` | `figure_test_plot3d`, `cb_plot3d_style.rec` | `figure_test_plot3d`, `figure_test_plot3d_more` |
 | `ip3_pop_style_var` | `cb_plot3d_style.rec` | `figure_test_plot3d_more` |
-| `ip3_push_style_color` | `cb_plot3d_style.rec` | `figure_test_plot3d_more` |
+| `ip3_push_style_color` | `figure_test_plot3d`, `cb_plot3d_style.rec` | `figure_test_plot3d`, `figure_test_plot3d_more` |
 | `ip3_push_style_var` | `cb_plot3d_style.rec` | `figure_test_plot3d_more` |
 | `ip3_quads` | `cb_plot3d_pick.rec` | `figure_test_plot3d_items` |
 | `ip3_scatter` | `figure_test_plot3d`, `canvas_primitives.rec`, `cb_plot3d_style.rec` (+20) | `figure_test_plot3d`, `figure_test_plot3d_more` |
 | `ip3_setup_axes` | `figure_test_plot3d`, `canvas_primitives.rec`, `cb_plot3d_pick.rec` (+21) | `figure_test_plot3d`, `figure_test_plot3d_items`, `figure_test_plot3d_more` |
 | `ip3_setup_axis` | `cb_plot3d_style.rec` | `figure_test_plot3d_items`, `figure_test_plot3d_more` |
 | `ip3_setup_axis_ticks` | `cb_plot3d_style.rec` | `figure_test_plot3d_more` |
-| `ip3_setup_box` | `cb_plot3d_pick.rec` | `figure_test_plot3d_items` |
+| `ip3_setup_box` | `figure_test_plot3d`, `cb_plot3d_pick.rec` | `figure_test_plot3d`, `figure_test_plot3d_items` |
 | `ip3_setup_legend` | `cb_plot3d_pick.rec` | `figure_test_plot3d_items` |
 | `ip3_spec` | `figure_test_plot3d`, `canvas_primitives.rec`, `cb_plot3d_style.rec` (+20) | `figure_test_plot3d`, `figure_test_plot3d_items`, `figure_test_plot3d_more` |
 | `ip3_surface` | `figure_test_plot3d`, `canvas_primitives.rec`, `colormaps-jet.rec` (+18) | `figure_test_plot3d` |

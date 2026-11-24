@@ -20,9 +20,9 @@ program figure_test_plot_frame_3d_axes
 !< The pictures are `figure_test_plot_frame_3d_axes.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip3_begin_plot, ip3_end_plot, &
-                   ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axes, ip3_setup_axis, ip3_setup_axis_ticks,         &
-                   ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_implot3d_ref, only : ip3_begin_plot, ip3_end_plot, ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axes, &
+                                ip3_setup_axis, ip3_setup_axis_ticks
 use figure_plot3d_frame, only : pf3_begin_plot, pf3_end_plot, pf3_mouse_ray, pf3_plot_to_pixels, pf3_setup_axes, &
                                 pf3_setup_axis, pf3_setup_axis_ticks
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move

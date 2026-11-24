@@ -16,10 +16,11 @@ program figure_test_plot_frame_3d_alloc
 !<
 !< The pictures are `figure_test_plot_frame_3d_alloc.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip3_begin_plot, ip3_end_plot, &
-                   ip3_setup_axes, ip3_setup_axis, ip3_setup_box, ip3_line, ip3_scatter, ip3_spec,                &
-                   ip3_surface, ip3_mesh, ip3_triangles, ip3_quads, ip3_image, ip3_text, texture_object,            &
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, texture_object, &
                    ImGuiWindowFlags_NoDecoration
+use figure_implot3d_ref, only : ip3_begin_plot, ip3_end_plot, ip3_setup_axes, ip3_setup_axis, ip3_setup_box, &
+                                ip3_line, ip3_scatter, ip3_spec, ip3_surface, ip3_mesh, ip3_triangles, ip3_quads, &
+                                ip3_image, ip3_text
 use figure_plot3d_frame, only : pf3_begin_plot, pf3_end_plot, pf3_setup_axes, pf3_setup_axis, pf3_setup_box
 use figure_plot3d_items, only : pf3_line, pf3_scatter, pf3_spec, pf3_surface, pf3_mesh, pf3_triangles, pf3_quads, &
                                 pf3_image, pf3_text

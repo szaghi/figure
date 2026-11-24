@@ -182,7 +182,8 @@ struct state_t {
                                                    // (empty: ImPlot's Deep); fig_style_lines
    unsigned int  lines_generation = 0;             // incremented when they change (fig_style_lines)
    unsigned int  contexts = 0;                     // contexts created so far (fig_generations)
-   unsigned int  implot_style_generation = 0;      // incremented when ImPlot's style may have changed (fig_generations)
+   unsigned int  implot_style_generation = 0;      // incremented when ImPlot's or ImPlot3D's style may have changed
+                                                   // (fig_generations)
    bool          has_roles = false;                // roles: those of the palette in effect
    figure_theme::color_t roles[figure_theme::ROLE_COUNT];
    struct frame_t {                                // decorations='figure': the window's frame drawn by FIGURE
@@ -2608,7 +2609,7 @@ int fig_push_style_color(int lib, const char *name, int name_len, const float *r
    ImVec4 &c = lib == 0 ? ImGui::GetStyle().Colors[i] : lib == 1 ? ImPlot::GetStyle().Colors[i] : ImPlot3D::GetStyle().Colors[i];
    remember(st.pushed_colors, reinterpret_cast<unsigned char *>(&c), sizeof(ImVec4));
    c = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
-   if (lib == 1) ++st.implot_style_generation;
+   if (lib >= 1) ++st.implot_style_generation;
    return FIG_OK;
    FIG_CATCH
 }
@@ -2630,7 +2631,7 @@ int fig_push_style_var(int lib, const char *name, int name_len, const double *va
    remember(st.pushed_vars, p, size);
    const std::vector<double> v(values, values + count);
    write_var(style_base(lib), *f, v);
-   if (lib == 1) ++st.implot_style_generation;
+   if (lib >= 1) ++st.implot_style_generation;
    return FIG_OK;
    FIG_CATCH
 }
@@ -2642,10 +2643,13 @@ int fig_pop_style(int vars, int n) {
       return fail(FIG_ERR_STATE, std::string(vars ? "pop style variable" : "pop style colour") + ": " +
                                      std::to_string(n) + " pop(s) for " + std::to_string(stack.size()) + " push(es)");
    const unsigned char *ps0 = reinterpret_cast<const unsigned char *>(&ImPlot::GetStyle());
+   const unsigned char *ps3 = reinterpret_cast<const unsigned char *>(&ImPlot3D::GetStyle());
    for (int k = 0; k < n; ++k) {
       const state_t::saved_t &s = stack.back();
       std::memcpy(s.where, s.was.data(), s.was.size());
-      if (s.where >= ps0 && s.where < ps0 + sizeof(ImPlotStyle)) ++st.implot_style_generation;
+      if ((s.where >= ps0 && s.where < ps0 + sizeof(ImPlotStyle)) ||
+          (s.where >= ps3 && s.where < ps3 + sizeof(ImPlot3DStyle)))
+         ++st.implot_style_generation;
       stack.pop_back();
    }
    return FIG_OK;
@@ -2731,14 +2735,15 @@ int fig_pop_font(void) {
 int fig_style_color(int lib, const char *name, int name_len, int set, float *rgba) {
    FIG_TRY
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
-   if (lib != 0 && lib != 1) return fail(FIG_ERR_ARGUMENT, "style colour: unknown library");
+   if ((lib != 0 && lib != 1) && !(lib == 2 && set == 2)) return fail(FIG_ERR_ARGUMENT, "style colour: unknown library");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
    const int i = style_color_index(lib, n);
    if (i < 0)
       return fail(FIG_ERR_ARGUMENT, std::string("style colour: unknown name \"") + n + "\" for " +
                                         (lib == 0 ? "Dear ImGui (ImGuiCol_*)" : "ImPlot (ImPlotCol_*)"));
-   if (set == 2) { // as stored: ImPlot's automatic colours (IMPLOT_AUTO_COL) left unresolved
-      const ImVec4 c = lib == 0 ? ImGui::GetStyle().Colors[i] : ImPlot::GetStyle().Colors[i];
+   if (set == 2) { // as stored: ImPlot's (ImPlot3D's) automatic colours left unresolved
+      const ImVec4 c = lib == 0 ? ImGui::GetStyle().Colors[i]
+                       : lib == 1 ? ImPlot::GetStyle().Colors[i] : ImPlot3D::GetStyle().Colors[i];
       rgba[0] = c.x;
       rgba[1] = c.y;
       rgba[2] = c.z;
@@ -2749,7 +2754,7 @@ int fig_style_color(int lib, const char *name, int name_len, int set, float *rgb
       const ImVec4 c(rgba[0], rgba[1], rgba[2], rgba[3]);
       if (lib == 0) ImGui::GetStyle().Colors[i] = c;
       else ImPlot::GetStyle().Colors[i] = c;
-      if (lib == 1) ++st.implot_style_generation;
+      if (lib >= 1) ++st.implot_style_generation;
    } else {
       // ImPlot's automatic colours (derived from Dear ImGui's) are resolved, as ImPlot would draw them
       const ImVec4 c = lib == 0 ? ImGui::GetStyle().Colors[i] : ImPlot::GetStyleColorVec4(i);
@@ -2765,7 +2770,7 @@ int fig_style_color(int lib, const char *name, int name_len, int set, float *rgb
 int fig_style_var(int lib, const char *name, int name_len, int set, double *values, int *count) {
    FIG_TRY
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
-   if (lib != 0 && lib != 1) return fail(FIG_ERR_ARGUMENT, "style variable: unknown library");
+   if ((lib != 0 && lib != 1) && !(lib == 2 && !set)) return fail(FIG_ERR_ARGUMENT, "style variable: unknown library");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
    const figure_style::field *f = style_field(lib, n);
    if (!f)
@@ -2784,7 +2789,7 @@ int fig_style_var(int lib, const char *name, int name_len, int set, double *valu
       case figure_style::FIG_STYLE_BOOL: *reinterpret_cast<bool *>(p) = values[0] != 0.0; break;
       default: *reinterpret_cast<int *>(p) = static_cast<int>(values[0]); break;
       }
-      if (lib == 1) ++st.implot_style_generation;
+      if (lib >= 1) ++st.implot_style_generation;
    } else {
       *count = ncomp;
       switch (f->kind) {

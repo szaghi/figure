@@ -19,11 +19,11 @@ program figure_test_plot_frame_3d_style
 !<
 !< The pictures are `figure_test_plot_frame_3d_style.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip3_begin_plot, ip3_end_plot, &
-                   ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axes, ip3_line, ip3_scatter, ip3_surface, ip3_spec,  &
-                   ip3_push_style_color, ip3_pop_style_color, ip3_push_style_var, ip3_pop_style_var,                &
-                   ig_push_style_var, ig_pop_style_var,                                                             &
-                   ImGuiWindowFlags_NoDecoration, ImPlot3DMarker_Square
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip3_push_style_color, &
+                   ip3_pop_style_color, ip3_push_style_var, ip3_pop_style_var, ig_push_style_var, ig_pop_style_var, &
+                   ImGuiWindowFlags_NoDecoration
+use figure_implot3d_ref, only : ip3_begin_plot, ip3_end_plot, ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axes, &
+                                ip3_line, ip3_scatter, ip3_surface, ip3_spec, ImPlot3DMarker_Square
 use figure_plot3d_frame, only : pf3_begin_plot, pf3_end_plot, pf3_mouse_ray, pf3_plot_to_pixels, pf3_setup_axes
 use figure_plot3d_items, only : pf3_line, pf3_scatter, pf3_surface, pf3_spec
 use figure_style, only : hex_color

@@ -74,9 +74,9 @@ int    fig_palette_color(const char *role, int role_len, float *rgba);
  * packed as ImPlot's colormap keys (red in the low byte), the first cap of them into colors, *n their number (0: the
  * style has none, ImPlot's Deep); *generation changes whenever they do. */
 int    fig_style_lines(unsigned int *colors, int cap, int *n, unsigned int *generation);
-/* Change counters: the contexts created so far (a new init), and ImPlot's style changes (a theme, a set, a push or a
- * pop of an ImPlot colour or variable, the style editor shown): the Fortran plot frame reads FIGURE's style again when
- * the second changes (szaghi/figure#15, the seam's switch). */
+/* Change counters: the contexts created so far (a new init), and the plots' style changes (a theme, a set, a push or a
+ * pop of an ImPlot or ImPlot3D colour or variable, the style editor shown): the Fortran plot frames read FIGURE's
+ * styles again when the second changes (szaghi/figure#15, the seam's switch). */
 void   fig_generations(unsigned int *contexts, unsigned int *implot_style);
 /* Theme files (figure_theme.h format): load one, or write the style in effect as one (what differs from its base). */
 int    fig_load_style(const char *path, int path_len);
@@ -95,7 +95,8 @@ int    fig_push_style_color(int lib, const char *name, int name_len, const float
 int    fig_push_style_var(int lib, const char *name, int name_len, const double *values, int count);
 int    fig_pop_style(int vars, int n);
 /* fig_style_color: set 0 reads the colour (ImPlot's automatic ones resolved, as ImPlot draws them), 1 writes it, 2 reads
- * it as stored (an automatic one IMPLOT_AUTO_COL, alpha -1). */
+ * it as stored (an automatic one IMPLOT_AUTO_COL, alpha -1); lib 2 (ImPlot3D): read as stored only. fig_style_var:
+ * lib 2 read only. */
 int    fig_style_color(int lib, const char *name, int name_len, int set, float *rgba);
 int    fig_style_var(int lib, const char *name, int name_len, int set, double *values, int *count);
 void   fig_request_frames(int n);

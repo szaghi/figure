@@ -53,12 +53,14 @@ use figure_base, only : figure_check, figure_draw_refused, figure_fail, figure_r
                         figure_scope_refused, figure_usage_error, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS, &
                         SCOPE_ALIGNED, SCOPE_LEGEND_POPUP
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_stops, &
-                            fig_generations, fig_gradient_edit, fig_load_colormap, fig_scope_plot_hooks
-use figure_cimplot, only : ImPlot_GetColormapCount, ImPlot_GetColormapName
+                            fig_gradient_edit, fig_load_colormap
+use figure_cimplot, only : ImPlot_GetColormapCount
 use figure_core, only : core_end_popup
 use figure_plot_series, only : plot_copies, plot_stride, series_gap
 use figure_texture, only : texture_object
 use figure_plot_colorbar, only : pf_colormap_legend, pf_colormap_legend_edit
+use figure_plot_cmap_ids, only : cm_frame_id, cm_frame_id_set
+use figure_plot_scope, only : plot_path_ready
 use figure_plot_colormaps, only : cm_colormap, cm_edit_stops, cm_list_count, cm_list_name, cm_load, cm_push, &
                                   cm_sample, cm_stops
 use figure_plot_frame, only : pf_aligned_open, pf_annotation, pf_begin_aligned, pf_begin_legend_popup, pf_begin_plot, &
@@ -261,9 +263,6 @@ endinterface in_line
 
 character(len=2), parameter :: AXIS_NAMES(0:5) = ['x1', 'x2', 'x3', 'y1', 'y2', 'y3'] !< ImAxis names, as the frame takes
                                                                                          !< them.
-logical :: hooks_set = .false. !< The scope record's hooks registered (`path_ready`).
-integer(int32), allocatable :: frame_ids(:) !< The frame's id of each colormap id (`frame_cmap`), -1 unknown yet.
-integer(c_int)              :: frame_ids_ctx = -1_c_int !< ... of this context (a new init registers the maps again).
 
 contains
    ! plots
@@ -2126,12 +2125,12 @@ contains
       endif
    endif
    if (outside_plot('ip_pie_chart', stat)) then
-      if (present(colormap)) call cm_push_left(frame_cmap(int(cmap, int32))) ! the current path's: pushed, then refused (notes)
+      if (present(colormap)) call cm_push_left(cm_frame_id(int(cmap, int32))) ! the current path's: pushed, then refused (notes)
       return
    endif
    if (n > 0_int64) then
       if (present(colormap)) then
-         call pf_pie_chart(labels, values, x, y, radius, label_format, angle0, normalize, frame_cmap(int(cmap, int32)), &
+         call pf_pie_chart(labels, values, x, y, radius, label_format, angle0, normalize, cm_frame_id(int(cmap, int32)), &
                            spec=item_spec(spec))
       else
          call pf_pie_chart(labels, values, x, y, radius, label_format, angle0, normalize, spec=item_spec(spec))
@@ -2191,12 +2190,12 @@ contains
       endif
    endif
    if (outside_plot('ip_pie_chart', stat)) then
-      if (present(colormap)) call cm_push_left(frame_cmap(int(cmap, int32))) ! the current path's: pushed, then refused (notes)
+      if (present(colormap)) call cm_push_left(cm_frame_id(int(cmap, int32))) ! the current path's: pushed, then refused (notes)
       return
    endif
    if (n > 0_int64) then
       if (present(colormap)) then
-         call pf_pie_chart(labels, values, x, y, radius, label_format, angle0, normalize, frame_cmap(int(cmap, int32)), &
+         call pf_pie_chart(labels, values, x, y, radius, label_format, angle0, normalize, cm_frame_id(int(cmap, int32)), &
                            spec=item_spec(spec))
       else
          call pf_pie_chart(labels, values, x, y, radius, label_format, angle0, normalize, spec=item_spec(spec))
@@ -2232,10 +2231,10 @@ contains
       if (format_refused('ip_heatmap', 'label_format', label_format, FORMAT_REAL, stat)) return
    endif
    if (outside_plot('ip_heatmap', stat)) then
-      call cm_push_left(frame_cmap(int(cmap, int32))) ! the current path's: pushed, then refused (notes)
+      call cm_push_left(cm_frame_id(int(cmap, int32))) ! the current path's: pushed, then refused (notes)
       return
    endif
-   call pf_heatmap(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, frame_cmap(int(cmap, int32)), &
+   call pf_heatmap(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, cm_frame_id(int(cmap, int32)), &
                    spec=item_spec(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_heatmap_r32
@@ -2267,10 +2266,10 @@ contains
       if (format_refused('ip_heatmap', 'label_format', label_format, FORMAT_REAL, stat)) return
    endif
    if (outside_plot('ip_heatmap', stat)) then
-      call cm_push_left(frame_cmap(int(cmap, int32))) ! the current path's: pushed, then refused (notes)
+      call cm_push_left(cm_frame_id(int(cmap, int32))) ! the current path's: pushed, then refused (notes)
       return
    endif
-   call pf_heatmap(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, frame_cmap(int(cmap, int32)), &
+   call pf_heatmap(label, f, xmin, xmax, ymin, ymax, scale_min, scale_max, label_format, cm_frame_id(int(cmap, int32)), &
                    spec=item_spec(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_heatmap_r64
@@ -2315,7 +2314,7 @@ contains
    if (present(label_format)) then
       if (format_refused('ip_colormap_scale', 'label_format', label_format, FORMAT_REAL, stat)) return
    endif
-   call pf_colormap_scale(label, scale_min, scale_max, width, height, label_format, frame_cmap(int(cmap, int32)))
+   call pf_colormap_scale(label, scale_min, scale_max, width, height, label_format, cm_frame_id(int(cmap, int32)))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_colormap_scale
 
@@ -2443,11 +2442,11 @@ contains
    if (interactive) then
       lo = vmin
       hi = vmax
-      changed = pf_colormap_legend_edit(id, frame_cmap(colormap), lo, hi, levels, horizontal, width, height, legend_format(), &
+      changed = pf_colormap_legend_edit(id, cm_frame_id(colormap), lo, hi, levels, horizontal, width, height, legend_format(), &
                                         scale)
       if (changed) range = [lo, hi]
    else
-      call pf_colormap_legend(id, frame_cmap(colormap), vmin, vmax, levels, horizontal, width, height, legend_format(), scale)
+      call pf_colormap_legend(id, cm_frame_id(colormap), vmin, vmax, levels, horizontal, width, height, legend_format(), scale)
    endif
    call figure_check(FIG_OK, stat)
    contains
@@ -2619,7 +2618,7 @@ contains
    integer(int32)                       :: cm       !< Map.
 
    cm = int(ImPlotColormap_Viridis, int32)
-   if (present(colormap)) cm = frame_cmap(colormap)
+   if (present(colormap)) cm = cm_frame_id(colormap)
    endfunction field_cmap
 
    function field_scale_ok(caller, scale, code, stat) result(ok)
@@ -2686,9 +2685,9 @@ contains
    endif
    id = int(c_id, int32) ! the native registry's id (ImPlot3D's, the 3-D views', as on the current path) ...
    if (n > 0_c_int) then ! ... the frame's map recorded for it
-      call frame_id_set(id, cm_colormap(name(1:len_trim(name)), int(n, int32)))
+      call cm_frame_id_set(id, cm_colormap(name(1:len_trim(name)), int(n, int32)))
    else
-      call frame_id_set(id, cm_colormap(name(1:len_trim(name))))
+      call cm_frame_id_set(id, cm_colormap(name(1:len_trim(name))))
    endif
    call figure_check(FIG_OK, stat)
    endfunction ip_colormap
@@ -3374,7 +3373,7 @@ contains
    if (plot_refused('ip_bar_groups', .false., stat)) return
    plot_stride = 4_int64 ! (the values copied contiguous, item by item)
    if (present(colormap)) then
-      call pf_bar_groups(labels, values, group_size, shift, horizontal, stacked, frame_cmap(int(cmap, int32)), &
+      call pf_bar_groups(labels, values, group_size, shift, horizontal, stacked, cm_frame_id(int(cmap, int32)), &
                          spec=item_spec(spec))
    else
       call pf_bar_groups(labels, values, group_size, shift, horizontal, stacked, spec=item_spec(spec))
@@ -3426,7 +3425,7 @@ contains
    if (plot_refused('ip_bar_groups', .false., stat)) return
    plot_stride = 8_int64 ! (the values copied contiguous, item by item)
    if (present(colormap)) then
-      call pf_bar_groups(labels, values, group_size, shift, horizontal, stacked, frame_cmap(int(cmap, int32)), &
+      call pf_bar_groups(labels, values, group_size, shift, horizontal, stacked, cm_frame_id(int(cmap, int32)), &
                          spec=item_spec(spec))
    else
       call pf_bar_groups(labels, values, group_size, shift, horizontal, stacked, spec=item_spec(spec))
@@ -3700,7 +3699,7 @@ contains
    endif
    plot_stride = s
    if (outside_plot('ip_histogram2d', stat)) return
-   call pf_histogram2d(label, x, y, xbins, ybins, xmin, xmax, ymin, ymax, frame_cmap(int(cmap, int32)), max_count, &
+   call pf_histogram2d(label, x, y, xbins, ybins, xmin, xmax, ymin, ymax, cm_frame_id(int(cmap, int32)), max_count, &
                        spec=item_spec(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_histogram2d_r32
@@ -3755,7 +3754,7 @@ contains
    endif
    plot_stride = s
    if (outside_plot('ip_histogram2d', stat)) return
-   call pf_histogram2d(label, x, y, xbins, ybins, xmin, xmax, ymin, ymax, frame_cmap(int(cmap, int32)), max_count, &
+   call pf_histogram2d(label, x, y, xbins, ybins, xmin, xmax, ymin, ymax, cm_frame_id(int(cmap, int32)), max_count, &
                        spec=item_spec(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip_histogram2d_r64
@@ -4197,7 +4196,7 @@ contains
       if (by_map) then
          t = 0.5_real64
          if (fmax > fmin) t = min(1.0_real64, max(0.0_real64, (lev(k) - fmin) / (fmax - fmin)))
-         col = cm_sample(frame_cmap(int(cmap, int32)), real(t, real32)) ! SampleColormap: ColorConvertU32ToFloat4 of the sample
+         col = cm_sample(cm_frame_id(int(cmap, int32)), real(t, real32)) ! SampleColormap: ColorConvertU32ToFloat4 of the sample
          do j = 1_int32, 4_int32
             v(j) = real(real(iand(ishft(col, -8_int32 * (j - 1_int32)), 255_int32), real32) * &
                         (1.0_real32 / 255.0_real32), real64)
@@ -4634,145 +4633,14 @@ contains
    ! the Fortran path's own: its entry, the scope record's hooks, the counters of the current path
 
    recursive function refused(caller, stat) result(r)
-   !< `figure_draw_refused` (a task, no frame open); when not refused, the path made ready (`path_ready`).
+   !< `figure_draw_refused` (a task, no frame open); when not refused, the path made ready (`plot_path_ready`).
    character(len=*), intent(in)            :: caller !< The entry point.
    integer(int32),   intent(out), optional :: stat   !< Status, on a refusal.
    logical                                 :: r      !< Refused: return.
 
    r = figure_draw_refused(caller, stat)
-   if (.not. r) call path_ready()
+   if (.not. r) call plot_path_ready()
    endfunction refused
-
-   subroutine path_ready()
-   !< The scope record's hooks registered (once: the frame's plots snapshot, recovered and closed by it), FIGURE's
-   !< ImPlot style brought into the frame's when it changed (`ps_refresh`).
-   if (.not. hooks_set) then
-      call fig_scope_plot_hooks(c_funloc(scope_state), c_funloc(scope_recover), c_funloc(scope_close))
-      hooks_set = .true.
-   endif
-   call ps_refresh()
-   endsubroutine path_ready
-
-   subroutine scope_state(open) bind(C)
-   !< The scope record's snapshot of the frame (native/figure_scope.cpp's `take_sizes`): the open plot's and
-   !< subplot's slots (as ImPlot's CurrentPlot, CurrentSubplot), no 3-D plot (ImPlot3D's, until the 3-D switch).
-   integer(c_int), intent(out) :: open(3) !< Plot, subplot, 3-D plot (0: none).
-   integer(int32)              :: p, s    !< Slots.
-
-   call pf_open_ids(p, s)
-   open(1) = int(p, c_int)
-   open(2) = int(s, c_int)
-   open(3) = 0_c_int
-   endsubroutine scope_state
-
-   subroutine scope_recover(then) bind(C)
-   !< The scope record's `recover_to`: the frame's plot and subplot open now and not in the snapshot ended.
-   integer(c_int), intent(in) :: then(3) !< The snapshot.
-
-   call pf_recover_to(then(1) /= 0_c_int, then(2) /= 0_c_int)
-   endsubroutine scope_recover
-
-   function scope_close(kind) result(done) bind(C)
-   !< The scope record's `close_entry` of a plot kind: the frame's end (only of what is open); 0 for the kinds the
-   !< frame does not own.
-   integer(c_int), value :: kind !< SCOPE_*.
-   integer(c_int)        :: done !< 1: closed here.
-   integer(int32)        :: p, s !< Slots.
-
-   done = 1_c_int
-   call pf_open_ids(p, s)
-   select case (kind)
-   case (SCOPE_PLOT)
-      if (p /= 0_int32) call pf_end_plot()
-   case (SCOPE_SUBPLOTS)
-      if (s /= 0_int32) call pf_end_subplots()
-   case (SCOPE_ALIGNED)
-      if (pf_aligned_open()) call pf_end_aligned()
-   case (SCOPE_LEGEND_POPUP)
-      if (p /= 0_int32) then
-         call pf_end_legend_popup()
-      else
-         call core_end_popup() ! (EndLegendPopup is EndPopup)
-      endif
-   case default
-      done = 0_c_int
-   endselect
-   endfunction scope_close
-
-   function frame_cmap(id) result(fid)
-   !< The frame's map of a colormap id: the ids of FIGURE's API are the native registry's (ImPlot's, which ImPlot3D and
-   !< the 3-D views read, until the 3-D switch: the ids of the current path); the frame keeps its own registry
-   !< (figure_plot_colormaps). ImPlot's 16 maps have the same ids in both; another is the one `ip_colormap` recorded,
-   !< or found by its native name (`<name>`, `<name>|<levels>`: one registered by the native layer itself, a 3-D view's).
-   integer(int32), intent(in)  :: id   !< Colormap id (registered: checked by the caller).
-   integer(int32)              :: fid  !< The frame's id.
-   type(c_ptr)                 :: p    !< The native name.
-   character(kind=c_char), pointer :: c(:) !< ... its characters.
-   character(len=:), allocatable :: nm !< ... as a string.
-   integer(int32)              :: k, bar, lv !< Length, the '|', levels.
-
-   fid = id
-   if (id < 16_int32) return
-   call frame_ids_current()
-   if (allocated(frame_ids)) then
-      if (id <= ubound(frame_ids, 1)) then
-         if (frame_ids(id) >= 0_int32) then
-            fid = frame_ids(id)
-            return
-         endif
-      endif
-   endif
-   p = ImPlot_GetColormapName(int(id, c_int))
-   if (.not. c_associated(p)) return
-   call c_f_pointer(p, c, [4096])
-   k = 0_int32
-   do while (c(k + 1_int32) /= achar(0))
-      k = k + 1_int32
-   enddo
-   allocate(character(len=k) :: nm)
-   do bar = 1_int32, k
-      nm(bar:bar) = c(bar)
-   enddo
-   bar = index(nm, '|')
-   if (bar > 0) then
-      read(nm(bar + 1:), *) lv
-      fid = cm_colormap(nm(1:bar - 1), lv)
-   else
-      fid = cm_colormap(nm)
-   endif
-   if (fid < 0_int32) fid = id
-   call frame_id_set(id, fid)
-   endfunction frame_cmap
-
-   subroutine frame_id_set(id, fid)
-   !< The frame's map of a colormap id recorded (`frame_cmap`).
-   integer(int32), intent(in)  :: id   !< Colormap id.
-   integer(int32), intent(in)  :: fid  !< The frame's.
-   integer(int32), allocatable :: more(:) !< Grown table.
-
-   if (id < 0_int32) return
-   call frame_ids_current()
-   if (.not. allocated(frame_ids)) then
-      allocate(frame_ids(0:max(63_int32, id)))
-      frame_ids = -1_int32
-   elseif (id > ubound(frame_ids, 1)) then
-      allocate(more(0:2_int32 * id))
-      more = -1_int32
-      more(0:ubound(frame_ids, 1)) = frame_ids
-      call move_alloc(more, frame_ids)
-   endif
-   frame_ids(id) = fid
-   endsubroutine frame_id_set
-
-   subroutine frame_ids_current()
-   !< The record of `frame_id_set` forgotten in a new context (its native ids are new).
-   integer(c_int) :: ctx, sty !< Generations.
-
-   call fig_generations(ctx, sty)
-   if (ctx == frame_ids_ctx) return
-   frame_ids_ctx = ctx
-   if (allocated(frame_ids)) frame_ids = -1_int32
-   endsubroutine frame_ids_current
 
    function item_spec(spec) result(s)
    !< The frame's style of an item: the given one, or ImPlot's defaults.

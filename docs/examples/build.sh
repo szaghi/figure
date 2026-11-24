@@ -120,6 +120,15 @@ fundal=$root/src/third_party/FUNDAL/src/lib
 [[ -f $fundal/fundal.F90 ]] || { echo "docs/examples/build.sh: $fundal missing: run fobis fetch first" >&2; exit 1; }
 cp "$fundal"/*.F90 "$fundal"/*.INC "$fundal"/*.H "$build/src/"
 rm -f "$build/src/fundal_mpih_object.F90"
+# the Fortran path's 3-D frame: VecFor (szaghi/figure#15 P13) and PENF, which it uses, as fobos' dependencies
+if [[ $path == fortran ]]; then
+   for dep in VecFor PENF; do
+      d=$root/src/third_party/$dep/src/lib
+      [[ -d $d ]] || { echo "docs/examples/build.sh: $d missing: run fobis fetch first" >&2; exit 1; }
+      cp "$d"/*.F90 "$build/src/"
+      if compgen -G "$d/*.INC" > /dev/null; then cp "$d"/*.INC "$build/src/"; fi
+   done
+fi
 (cd "$build" && fobis build --compiler "$fobis_compiler" --fc "$fc" --src src --build-dir bin --mod-dir mod --obj-dir obj \
                      --cflags "$cflags" \
                      --lib-dir "$root/lib" "${ext_libs[@]}" ${lflags[@]+"${lflags[@]}"} --jobs 1) \

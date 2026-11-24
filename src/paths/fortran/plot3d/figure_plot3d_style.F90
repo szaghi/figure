@@ -16,7 +16,15 @@ module figure_plot3d_style
 !< the style's alpha, as ImPlot3D packs it) and the variables as the module's protected values; where ImPlot3D packs
 !< with Dear ImGui's `GetColorU32` (the grid, the legend's text, the items' lines, fills and markers) the alpha is
 !< times the style's (`style3_color_u32`, `style3_alpha_u32`).
+!<
+!< `ps3_sync` takes the colours and variables as FIGURE's style holds them in ImPlot3D's context (`fig_style_color`,
+!< `fig_style_var` of the library 2: what `ip3_push_style_*` pushed, the colours as stored); `ps3_refresh`, which the
+!< Fortran path's `figure_implot3d` calls at its entry points (szaghi/figure#15, the 3-D seam's switch), syncs when
+!< the plots' styles changed (`fig_generations`): `ip3_push_style_*` and `ip3_pop_style_*` stay figure_style's, on
+!< its one stack, as on the current path.
+use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
+use figure_c_native, only : fig_generations, fig_style_color, fig_style_var
 use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_ButtonActive, ImGuiCol_ButtonHovered, ImGuiCol_FrameBg, &
                                 ImGuiCol_PopupBg, ImGuiCol_Text, ImGuiCol_WindowBg
 use figure_core, only : core_color, core_style_color_rgba, core_style_var
@@ -25,6 +33,7 @@ implicit none
 private
 public :: style3_vec4, style3_u32, style3_color_u32, style3_alpha_u32
 public :: pf3_push_style_color, pf3_pop_style_color, pf3_push_style_var, pf3_pop_style_var
+public :: ps3_sync, ps3_refresh
 public :: S3_TITLE_TEXT, S3_INLAY_TEXT, S3_FRAME_BG, S3_PLOT_BG, S3_PLOT_BORDER, S3_LEGEND_BG, S3_LEGEND_BORDER, &
           S3_LEGEND_TEXT, S3_AXIS_TEXT, S3_AXIS_GRID, S3_AXIS_TICK, S3_AXIS_BG, S3_AXIS_BG_HOVERED, S3_AXIS_BG_ACTIVE
 public :: s3_line_weight, s3_marker_size, s3_fill_alpha, s3_default_size, s3_min_size, s3_plot_padding, &
@@ -69,6 +78,8 @@ integer(int32) :: n_col = 0_int32                    !< Colour pushes held.
 real(real32)   :: var_stack(2, STACK) = 0.0_real32   !< Variables pushed: the old values.
 integer(int32) :: var_stack_idx(STACK) = 0_int32     !< ... which variable.
 integer(int32) :: n_var = 0_int32                    !< Variable pushes held.
+logical        :: synced = .false.                   !< `ps3_refresh` synced once.
+integer(c_int) :: synced_gen(2) = 0_c_int            !< ... at these generations (`fig_generations`).
 
 interface pf3_push_style_var
    !< As `ip3_push_style_var`: a variable of one number, or of a pair.
@@ -241,6 +252,50 @@ contains
       n_var = n_var - 1_int32
    enddo
    endsubroutine pf3_pop_style_var
+
+   ! FIGURE's style
+
+   subroutine ps3_sync()
+   !< The colours (as stored: an automatic one stays automatic) and the variables as FIGURE's style holds them in
+   !< ImPlot3D's context (`fig_style_color`, `fig_style_var` of the library 2). No allocation (names as substrings).
+   integer(int32) :: k        !< Index.
+   integer(c_int) :: n, st, l !< Count, status, a name's length.
+   real(c_double) :: v(2)     !< Value(s).
+   real(c_float)  :: c(4)     !< Colour.
+   real(real32)   :: w(2)     !< As floats.
+
+   do k = 1_int32, NCOL
+      c = 0.0_c_float
+      l = len_trim(COL_NAMES(k), c_int)
+      st = fig_style_color(2_c_int, COL_NAMES(k)(1:l), l, 2_c_int, c)
+      if (st /= 0_c_int) cycle
+      colors(1, k) = real(c(1), real32)
+      colors(2, k) = real(c(2), real32)
+      colors(3, k) = real(c(3), real32)
+      colors(4, k) = real(c(4), real32)
+   enddo
+   do k = 1_int32, NVAR
+      n = 0_c_int
+      v = 0.0_c_double
+      l = len_trim(VAR_NAMES(k), c_int)
+      st = fig_style_var(2_c_int, VAR_NAMES(k)(1:l), l, 0_c_int, v, n)
+      if (st /= 0_c_int) cycle
+      w(1) = real(v(1), real32)
+      w(2) = real(v(2), real32)
+      call set_var(k, w)
+   enddo
+   endsubroutine ps3_sync
+
+   subroutine ps3_refresh()
+   !< `ps3_sync` when the plots' styles changed since the last refresh (`fig_generations`).
+   integer(c_int) :: gen(2) !< Generations: contexts, the plots' styles.
+
+   call fig_generations(gen(1), gen(2))
+   if (synced .and. gen(1) == synced_gen(1) .and. gen(2) == synced_gen(2)) return
+   synced = .true.
+   synced_gen = gen
+   call ps3_sync()
+   endsubroutine ps3_refresh
 
    ! private
 

@@ -6,9 +6,7 @@ program cb_trajectory
 !< a right drag.
 use, intrinsic :: iso_fortran_env, only : int32, int64, output_unit, real64
 use figure, only : app_object, ig_begin, ig_end, ig_set_next_window, ig_text, ip3_begin_plot, ip3_end_plot, ip3_line, &
-                   ip3_scatter, ip3_setup_axes, ip3_spec, ImPlot3DMarker_Circle
-use figure_cimgui, only : im_vec2
-use figure_cimplot3d, only : ImPlot3D_PlotToPixels_double
+                   ip3_plot_to_pixels, ip3_scatter, ip3_setup_axes, ip3_spec, ImPlot3DMarker_Circle
 use figure_testing, only : test_drawn_extent, test_mouse_button, test_mouse_move, test_next_frame, test_plot_copies, &
                            test_plot_stride
 
@@ -68,7 +66,6 @@ contains
 
    subroutine draw()
    !< The window: the path as a line, its last point as a marker, the count below.
-   type(im_vec2) :: q    !< A projection.
    real(real64)  :: e(4) !< The path's extent [pixels] (the test).
 
    call ig_set_next_window(10.0_real64, 10.0_real64, 700.0_real64, 540.0_real64)
@@ -81,8 +78,7 @@ contains
          call ip3_line('path', path(1, 1:n), path(2, 1:n), path(3, 1:n), &      ! rows: read in place
                        spec=ip3_spec(line_color=RED, line_weight=1.5_real64))
          !endregion draw
-         q = ImPlot3D_PlotToPixels_double(0.0_real64, 0.0_real64, 25.0_real64)
-         pixel = [real(q%x, real64), real(q%y, real64)]
+         call ip3_plot_to_pixels(0.0_real64, 0.0_real64, 25.0_real64, pixel(1), pixel(2))
          !region draw
          call ip3_end_plot()
       endif

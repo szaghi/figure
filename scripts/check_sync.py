@@ -281,7 +281,7 @@ def package_sources() -> list[str]:
 
 
 def implot_ref() -> list[str]:
-    """Check the side-by-side tests' reference module: the current path's figure_implot renamed (gen_implot_ref.py).
+    """Check the side-by-side tests' reference modules: the current path's plot modules renamed (gen_implot_ref.py).
 
     Returns
     -------
@@ -291,10 +291,11 @@ def implot_ref() -> list[str]:
     sys.path.insert(0, str(ROOT / "scripts"))
     import gen_implot_ref  # noqa: PLC0415 (a sibling script)
 
-    target = gen_implot_ref.TARGET
-    if not target.is_file() or target.read_text(encoding="utf-8") != gen_implot_ref.generate():
-        return [f"{target.relative_to(ROOT).as_posix()} is not current: run python3 scripts/gen_implot_ref.py"]
-    return []
+    return [
+        f"{target.relative_to(ROOT).as_posix()} is not current: run python3 scripts/gen_implot_ref.py"
+        for module, target in gen_implot_ref.TARGETS.items()
+        if not target.is_file() or target.read_text(encoding="utf-8") != gen_implot_ref.generate(module)
+    ]
 
 
 def library_root() -> list[str]:
