@@ -3,7 +3,7 @@ program figure_test_code_editor_draw
 !< figure_test_code_editor_draw, the Fortran code editor drawn as the C++ one: pictures and layout to the bit.
 !<
 !< szaghi/figure#15 P16, step 11. Each case sets up two editors by the same calls of FIGURE's public API, the C++ one
-!< (`figure_editor`: ImGuiColorTextEdit and the native glue) and the Fortran one (`figure_editor_fortran`, the same
+!< (`figure_editor_ref`: ImGuiColorTextEdit and the native glue) and the Fortran one (`figure_editor`, the same
 !< module over the Fortran editor), then draws the C++ one for NF frames in a window, the Fortran one for NF frames in
 !< another window at the same place, 40 frames apart. Compared, on every frame: `draw`'s result, the cursor, the
 !< selection, every line's rectangle (`line_rect`, to the bit); on the last frame of each side, the picture
@@ -21,10 +21,10 @@ program figure_test_code_editor_draw
 !<
 !< The pictures are `figure_test_code_editor_draw.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
-use figure, only : app_object, code_editor_object, code_language, ig_begin, ig_end, ig_set_next_window, &
-                   ImGuiWindowFlags_NoDecoration, language_object
-use figure_editor_fortran, only : f_code_editor_object => code_editor_object, f_code_language => code_language, &
-                                  f_language_object => language_object
+use figure, only : app_object, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_editor_ref, only : code_editor_object, code_language, language_object
+use figure_editor, only : f_code_editor_object => code_editor_object, f_code_language => code_language, &
+                          f_language_object => language_object
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 
 implicit none

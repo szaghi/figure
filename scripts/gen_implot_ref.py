@@ -25,7 +25,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULES = {"figure_implot": ("plot", "ImPlot"), "figure_implot3d": ("plot3d", "ImPlot3D"),
-           "figure_view3d_gizmos": ("gizmo", "ImGuizmo"), "figure_markdown": ("markdown", "imgui_rich_md")}
+           "figure_view3d_gizmos": ("gizmo", "ImGuizmo"), "figure_markdown": ("markdown", "imgui_rich_md"),
+           "figure_editor": ("editor", "ImGuiColorTextEdit")}
 TARGETS = {m: ROOT / "src" / "tests" / "fortran" / f"{m}_ref.F90" for m in MODULES}
 TARGET = TARGETS["figure_implot"]  # (check_sync's first)
 

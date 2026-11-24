@@ -19,10 +19,10 @@ program figure_test_code_editor_popups
 !< The pictures are `figure_test_code_editor_popups.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_c_binding, only : c_bool
 use, intrinsic :: iso_fortran_env, only : int32, int64, output_unit, real64
-use figure, only : app_object, code_editor_object, code_language, ig_begin, ig_end, ig_set_next_window, &
-                   ImGuiWindowFlags_NoDecoration
+use figure, only : app_object, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_editor_ref, only : code_editor_object, code_language
 use figure_cimgui, only : igSetNavCursorVisible
-use figure_editor_fortran, only : f_code_editor_object => code_editor_object, f_code_language => code_language
+use figure_editor, only : f_code_editor_object => code_editor_object, f_code_language => code_language
 use figure_testing, only : test_capture, test_click, test_compare_image, test_key, test_mouse_move, test_type
 
 implicit none

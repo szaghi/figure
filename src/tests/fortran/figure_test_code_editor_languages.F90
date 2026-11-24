@@ -7,15 +7,15 @@ program figure_test_code_editor_languages
 !< each with a text that goes through its tokens (numbers of every form, strings, comments of every kind, Lua's long
 !< brackets over lines, Julia's nested comments, macros, symbols and characters, JSON's and Markdown's tokens, a
 !< preprocessor line, keywords, declarations, known identifiers, brackets), in four editors per picture: drawn by the
-!< C++ editor (`figure_editor`) in one window and by the Fortran one (`figure_editor_fortran`) in another at the same
+!< C++ editor (`figure_editor_ref`) in one window and by the Fortran one (`figure_editor`) in another at the same
 !< place, 40 frames apart, and the pictures compared (threshold 2, no pixel failing): a glyph of another colour fails.
 !<
 !< The pictures are `figure_test_code_editor_languages.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
-use figure, only : app_object, code_editor_object, code_language, ig_begin, ig_end, ig_same_line, ig_set_next_window, &
-                   ImGuiWindowFlags_NoDecoration, language_object
-use figure_editor_fortran, only : f_code_editor_object => code_editor_object, f_code_language => code_language, &
-                                  f_language_object => language_object
+use figure, only : app_object, ig_begin, ig_end, ig_same_line, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_editor_ref, only : code_editor_object, code_language, language_object
+use figure_editor, only : f_code_editor_object => code_editor_object, f_code_language => code_language, &
+                          f_language_object => language_object
 use figure_testing, only : test_capture, test_compare_image
 
 implicit none

@@ -3,7 +3,7 @@ program figure_test_code_editor_text
 !< figure_test_code_editor_text, the Fortran code editor's text, cursors, marks, find, replace and undo, as the C++'s.
 !<
 !< szaghi/figure#15 P16, step 10. Two editors driven by the same calls of FIGURE's public API: `code_editor_object` of
-!< `figure_editor` (ImGuiColorTextEdit and the native glue) and of `figure_editor_fortran` (the same module over the
+!< `figure_editor_ref` (ImGuiColorTextEdit and the native glue) and of `figure_editor` (the same module over the
 !< Fortran editor, written by scripts/gen_editor_path.py). After every call, compared: the status and, on a failure,
 !< the last error's message; the text; the line count; the cursor; the selection (its four positions, whether it is
 !< one, its text); the word at the cursor; every line's mark (severity, message); whether completion is open. Nothing
@@ -17,9 +17,10 @@ program figure_test_code_editor_text
 !<    among them), and bytes cut out of the text (a UTF-8 sequence cut short);
 !< 3. `code_diff_lines` of 400 random pairs of texts (a text and its edit), the lines added and removed equal.
 use, intrinsic :: iso_fortran_env, only : int32, int64, output_unit, real64
-use figure, only : app_object, code_diff_lines, code_editor_object, code_language, figure_last_error, language_object
-use figure_editor_fortran, only : f_code_diff_lines => code_diff_lines, f_code_editor_object => code_editor_object, &
-                                  f_code_language => code_language, f_language_object => language_object
+use figure, only : app_object, figure_last_error
+use figure_editor_ref, only : code_diff_lines, code_editor_object, code_language, language_object
+use figure_editor, only : f_code_diff_lines => code_diff_lines, f_code_editor_object => code_editor_object, &
+                          f_code_language => code_language, f_language_object => language_object
 
 implicit none
 character(len=*), parameter :: LF = achar(10)                             !< Line feed.

@@ -3,7 +3,7 @@ program figure_test_code_editor_input
 !< figure_test_code_editor_input, the Fortran code editor's keys and mouse, as the C++ one's: state and pictures.
 !<
 !< szaghi/figure#15 P16, step 12. Each case sets up two editors by the same calls of FIGURE's public API, the C++ one
-!< (`figure_editor`) and the Fortran one (`figure_editor_fortran`), then plays the same scripted input (figure_testing's
+!< (`figure_editor_ref`) and the Fortran one (`figure_editor`), then plays the same scripted input (figure_testing's
 !< keys, characters, clicks, drags, wheel) to the C++ one for NF frames in a window, then to the Fortran one in another
 !< window at the same place, 40 frames apart. Compared on every frame: `draw`'s result, the text (its length and a
 !< checksum), the cursor, the selection, four lines' rectangles; on the last frame, the picture (threshold 2, no pixel
@@ -22,9 +22,9 @@ program figure_test_code_editor_input
 !<
 !< The pictures are `figure_test_code_editor_input.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, output_unit, real64
-use figure, only : app_object, code_editor_object, code_language, ig_begin, ig_end, ig_set_next_window, &
-                   ImGuiWindowFlags_NoDecoration
-use figure_editor_fortran, only : f_code_editor_object => code_editor_object, f_code_language => code_language
+use figure, only : app_object, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
+use figure_editor_ref, only : code_editor_object, code_language
+use figure_editor, only : f_code_editor_object => code_editor_object, f_code_language => code_language
 use figure_testing, only : test_capture, test_click, test_compare_image, test_drag, test_key, test_mouse_button, &
                            test_mouse_move, test_type, test_wheel
 

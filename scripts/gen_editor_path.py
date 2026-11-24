@@ -1,16 +1,13 @@
 """Write the Fortran path's ``figure_editor`` from the current path's, over the Fortran code editor.
 
 The public API of the code editor and the diff (``code_editor_object``, ``language_object``, ``code_language``,
-``code_diff``, ``code_diff_lines``: ``src/lib/figure_editor.F90``) is a thin layer over the native glue's entry points
-(``fig_editor_*``, ``fig_code_diff*``, ``native/figure_editor.cpp``). The Fortran code editor
-(``src/paths/fortran/editor/``, szaghi/figure#15 P16) gives the same entry points as Fortran module procedures
-(``figure_code_editor``, ``figure_code_diff``), so the Fortran path's module is the current path's with its interface
-block replaced by ``use`` statements of those modules: this script writes it, so the two never differ in an argument
-check, a status, a message or a doc comment.
-
-Until the switch of the editor's seam the module is written as ``figure_editor_fortran``
-(``src/tests/fortran/figure_editor_fortran.F90``), which the side-by-side tests use beside ``figure_editor`` (the
-C++).
+``code_diff``, ``code_diff_lines``: the current path's ``src/paths/imgui/editor/figure_editor.F90``) is a thin layer over
+the native glue's entry points (``fig_editor_*``, ``fig_code_diff*``, ``native/figure_editor.cpp``). The Fortran code
+editor (``src/paths/fortran/editor/``, szaghi/figure#15 P16) gives the same entry points as Fortran module procedures
+(``figure_code_editor``, ``figure_code_view``, ``figure_code_diff``), so the Fortran path's module
+(``src/paths/fortran/editor/figure_editor.F90``) is the current path's with its interface block replaced by ``use``
+statements of those modules: this script writes it, so the two never differ in an argument check, a status, a message
+or a doc comment. The side-by-side tests draw the current path's through ``figure_editor_ref`` (gen_implot_ref.py).
 
 Usage::
 
@@ -28,9 +25,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "src" / "lib" / "figure_editor.F90"
-MODULE = "figure_editor_fortran"
-TARGET = ROOT / "src" / "tests" / "fortran" / f"{MODULE}.F90"
+SOURCE = ROOT / "src" / "paths" / "imgui" / "editor" / "figure_editor.F90"
+MODULE = "figure_editor"
+TARGET = ROOT / "src" / "paths" / "fortran" / "editor" / f"{MODULE}.F90"
 HEAD = (
     "!< The editor is ImGuiColorTextEdit (the goossens fork, MIT, vendored in third_party/ImGuiColorTextEdit) with FIGURE's\n"
     "!< own glue (native/figure_editor.cpp): it draws through Dear ImGui only, so window, headless and remote modes show the\n"
