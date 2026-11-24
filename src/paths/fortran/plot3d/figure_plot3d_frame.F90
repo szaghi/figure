@@ -58,6 +58,7 @@ use figure_core, only : core_button_behavior, core_content_region_avail, core_cu
                         core_pop_clip_rect, core_push_clip_rect, core_style_color, core_text_size, core_color,  &
                         core_draw_rect, core_keep_alive, core_io_input, core_set_key_owner, core_delta_time,  &
                         core_style_color_rgba, core_mouse_down, core_mouse_clicked, core_mouse_double_clicked, &
+                        core_mouse_released,                                                                   &
                         core_mouse_drag_delta, core_time, core_open_popup, core_begin_popup, core_end_popup,  &
                         core_text_unformatted, core_push_id_int, core_pop_id, core_push_item_width,           &
                         core_radio_button, core_invisible_button, core_push_style_var, core_pop_style_var,    &
@@ -1322,6 +1323,9 @@ contains
       p%context_click = .false.
       p%open_context = .true.
    endif
+   ! a right click released on the legend: its menu (FIGURE's ImPlot3D patch 0005, as ImPlot)
+   if (p%leg_hovered .and. core_mouse_released(1_int32) .and. .not. rotating .and. &
+       .not. has_flag(p%flags, F3_NO_MENUS)) p%open_context = .true.
    if (p%open_context) then
       if (p%leg_hovered) then
          call core_open_popup('##LegendContext')

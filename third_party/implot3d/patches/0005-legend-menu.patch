@@ -1,0 +1,25 @@
+FIGURE's patch 5 of 5 to ImPlot3D (commit c54525f8d46cece384cc2618761a2c55016b06db, the submodule of cimplot3d v0.5).
+
+A right click on a 3-D plot's legend opened no menu (#15, finding U7): HandleInput opens the menus from a right click
+the plot's button holds, and over the legend the legend's own button (ButtonBehavior in RenderLegend, after the
+plot's, with AllowOverlap) takes the pointer, so the plot is neither hovered nor held there; the "##LegendContext"
+branch of the menus could only open from the plot's menu. A right button released over the legend (hovered on the
+frame before, as the legend is drawn after the input), with no rotation drag and the plot's menus on, now opens the
+legend's menu, as ImPlot's legend does. Applied to third_party/implot3d/implot3d.cpp; without it
+src/tests/fortran/figure_test_plot_frame_3d_menus.F90's case 3 finds no "H" to click on the current path. To offer
+upstream.
+
+--- a/implot3d.cpp
++++ b/implot3d.cpp
+@@ -2853,6 +2853,11 @@
+         plot.ContextClick = false;
+         plot.OpenContextThisFrame = true;
+     }
++    // FIGURE: a right click released on the legend opens the legend's menu, as ImPlot's does: the legend's button takes
++    // the pointer from the plot's there (plot.Hovered and plot.Held stay false), so the click above never comes
++    if (plot.Items.Legend.Hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Right) && !rotating &&
++        !ImHasFlag(plot.Flags, ImPlot3DFlags_NoMenus))
++        plot.OpenContextThisFrame = true;
+ 
+     if (plot.OpenContextThisFrame) {
+         if (plot.Items.Legend.Hovered)

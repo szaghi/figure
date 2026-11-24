@@ -11,8 +11,9 @@ program figure_test_plot_frame_3d_menus
 !<
 !< 1. the plot's menu, Settings, Mouse Position unticked (the pointer then rests on the box: no mouse text);
 !< 2. a plane's menu, an axis's submenu, Invert ticked;
-!< 3. a click on the legend's entry (the item hidden, its icon greyed), a right click on the legend (no menu: the plot's
-!<    button keeps the hover, so ImPlot3D's legend menu opens only from the plot's menu);
+!< 3. a click on the legend's entry (the item hidden, its icon greyed), a right click on the legend: its menu (FIGURE's
+!<    ImPlot3D patch 0005, as ImPlot; upstream opened none), H clicked in it (an error stop if the menu is not open), the
+!<    legend made horizontal;
 !< 4. the plot's menu, its Legend submenu, the legend made horizontal;
 !< 5. the plot's menu, its Box submenu (the scales).
 !<
@@ -141,10 +142,11 @@ contains
       if (fr == 4_int32) call test_mouse_button(.false., 'right')
       if (fr == 37_int32) call test_item_click('x')
       if (fr == 41_int32) call test_item_click('Invert')
-   case (3_int32) ! the legend: a click hides the item; a right click opens nothing
+   case (3_int32) ! the legend: a click hides the item; a right click opens its menu, H in it
       if (fr == 2_int32) call test_click(LX, LY + 5.0_real64)
       if (fr == 8_int32) call test_mouse_button(.true., 'right')
       if (fr == 9_int32) call test_mouse_button(.false., 'right')
+      if (fr == 37_int32) call test_item_click('H')
       if (fr == 44_int32) call test_mouse_move(-100.0_real64, -100.0_real64)
    case (4_int32) ! the plot's menu, Legend, horizontal
       if (fr == 1_int32) call test_mouse_move(OX, OY)

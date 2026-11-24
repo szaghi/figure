@@ -1,4 +1,4 @@
-FIGURE's patch 3 of 4 to ImPlot3D (commit c54525f8d46cece384cc2618761a2c55016b06db, the submodule of cimplot3d v0.5).
+FIGURE's patch 3 of 5 to ImPlot3D (commit c54525f8d46cece384cc2618761a2c55016b06db, the submodule of cimplot3d v0.5).
 
 An axis caches its scaled range (UpdateTransformCache) when its range is set, through the transform it has then. A
 scale set after the limits (FIGURE's ip3_setup_axes(limits=...) then ip3_setup_axis(scale='log'), on a plot's first

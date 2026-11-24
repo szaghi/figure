@@ -2853,6 +2853,11 @@ void HandleInput(ImPlot3DPlot& plot) {
         plot.ContextClick = false;
         plot.OpenContextThisFrame = true;
     }
+    // FIGURE: a right click released on the legend opens the legend's menu, as ImPlot's does: the legend's button takes
+    // the pointer from the plot's there (plot.Hovered and plot.Held stay false), so the click above never comes
+    if (plot.Items.Legend.Hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Right) && !rotating &&
+        !ImHasFlag(plot.Flags, ImPlot3DFlags_NoMenus))
+        plot.OpenContextThisFrame = true;
 
     if (plot.OpenContextThisFrame) {
         if (plot.Items.Legend.Hovered)
