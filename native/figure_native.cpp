@@ -3244,6 +3244,16 @@ int fig_window_skip_items() {
    return g->CurrentWindow->SkipItems ? 1 : 0;
 }
 
+int fig_window_hover_state(float *inner) {
+   const ImGuiContext *g = ImGui::GetCurrentContext();
+   inner[0] = inner[1] = inner[2] = inner[3] = 0.0f;
+   if (g == nullptr || g->CurrentWindow == nullptr) return 0;
+   const ImGuiWindow *w = g->CurrentWindow;
+   inner[0] = w->InnerRect.Min.x, inner[1] = w->InnerRect.Min.y, inner[2] = w->InnerRect.Max.x, inner[3] = w->InnerRect.Max.y;
+   if (g->HoveredWindow == w) return 1;
+   return g->HoveredWindow == nullptr ? 2 : 0;
+}
+
 void fig_texture_sampling(int plot, int from_texture) {
    // The OpenGL3 backend samples every texture through its own (linear) sampler object, which overrides the
    // glTexParameteri filter of user textures: around a user image, ask it to use the texture's own filter, then

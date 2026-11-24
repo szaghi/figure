@@ -15,7 +15,7 @@ public :: fig_init, fig_init_headless, fig_begin_frame, fig_end_frame, fig_shutd
 public :: fig_set_remote_fps, fig_set_remote_compress, fig_set_remote_token, fig_remote_token
 public :: fig_set_remote_lossy
 public :: fig_init_remote, fig_set_ini_file, fig_set_style, fig_texture_create, fig_texture_destroy, fig_texture_sampling
-public :: fig_window_skip_items
+public :: fig_window_skip_items, fig_window_hover_state
 public :: fig_texture_update, fig_image_read, fig_image_free, fig_image_write
 public :: fig_content_scale, fig_last_error, fig_set_last_error, fig_input_mouse
 public :: fig_set_docking, fig_dock_id, fig_dock_space, fig_dock_layout_begin, fig_dock_split, fig_dock_window
@@ -1326,6 +1326,15 @@ interface
    implicit none
    integer(c_int) :: skip !< 1: skipped.
    endfunction fig_window_skip_items
+
+   function fig_window_hover_state(inner) result(state) bind(C, name='fig_window_hover_state')
+   !< The current window as ImGuizmo's `IsHoveringWindow` sees it: 1 the hovered window, 2 none hovered, 0 another;
+   !< `inner` its inner rectangle (min x, y, max x, y).
+   import :: c_float, c_int
+   implicit none
+   real(c_float)  :: inner(4) !< Inner rectangle [pixels].
+   integer(c_int) :: state    !< State.
+   endfunction fig_window_hover_state
 
    function fig_load_style(path, path_len) result(status) bind(C, name='fig_load_style')
    !< Apply a theme file.

@@ -31,6 +31,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
 implicit none
 private
 public :: view3d_object
+public :: view3d_handle
 
 type :: view3d_object
    !< A 3-D view: `v%init`, meshes added, then `v%draw` every frame. Not to be copied (the copy would share the view).
@@ -993,6 +994,15 @@ contains
    call figure_check(fig_view3d_matrices(self%handle, v, p), stat)
    m = reshape(real(p, real64), [4, 4])
    endsubroutine projection_matrix
+
+   function view3d_handle(self) result(handle)
+   !< The view's native handle (0: none): for the Fortran path's gizmos and their side-by-side tests (szaghi/figure#15
+   !< P14), not part of FIGURE's API (`figure` does not export it).
+   type(view3d_object), intent(in) :: self   !< View.
+   integer(c_int)                  :: handle !< Handle.
+
+   handle = self%handle
+   endfunction view3d_handle
 
    function alive(self, name, stat) result(ok)
    !< The view exists; else `FIG_ERR_STATE`.

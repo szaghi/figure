@@ -69,6 +69,12 @@ int  fig_view3d_matrices(int handle, double *view, double *projection);
  * corner 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left; changed 1 when it turned the camera. A gizmo moving
  * matrix (column-major 4x4, its last row 0 0 0 1): mode 0 translate, 1 rotate, 2 scale; space 0 world, 1 local; snap
  * (has_snap 1) in world units, degrees or a scale step; changed 1 when the user moved it (matrix updated). */
+/* The gizmos of the Fortran path (szaghi/figure#15 P14, src/paths/fortran/gizmo/figure_gizmo.F90): the view's widget as
+ * last drawn (drawn 1 in this frame and the current window; rect: its image's pixel x, y, width, height), and what the
+ * gizmos tell it (what's bits: 1 the cube's rectangle cube[4], min x, y, max x, y relative to the image, drawn on this
+ * frame; 2 a gizmo over the view or in use on this frame; 4 the cube turned the camera). */
+int  fig_view3d_widget(int handle, int *drawn, double *rect);
+int  fig_view3d_overlay(int handle, int what, const double *cube);
 int  fig_view3d_cube(int handle, double size, int corner, int *changed);
 int  fig_view3d_gizmo(int handle, const char *id, int id_len, double *matrix, int mode, int space, int has_snap,
                       double snap, int *changed);

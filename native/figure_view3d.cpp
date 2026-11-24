@@ -1497,6 +1497,33 @@ int fig_view3d_matrices(int handle, double *view, double *projection) {
       return fail(FIG_ERR_STATE, std::string("view3d_object%") + what +                                              \
                                      ": draw the view first, in this frame and in this window");
 
+int fig_view3d_widget(int handle, int *drawn, double *rect) {
+   V3_TRY
+   V3_VIEW
+   *drawn = 0;
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   *drawn = (v->image_frame == ImGui::GetFrameCount() && v->image_window == ImGui::GetCurrentWindow()->ID) ? 1 : 0;
+   rect[0] = v->image_pos.x, rect[1] = v->image_pos.y, rect[2] = v->vw, rect[3] = v->vh;
+   return FIG_OK;
+   V3_CATCH
+}
+
+int fig_view3d_overlay(int handle, int what, const double *cube) {
+   V3_TRY
+   V3_VIEW
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   const int frame = ImGui::GetFrameCount();
+   if (what & 1) {
+      v->cube_min = ImVec2(static_cast<float>(cube[0]), static_cast<float>(cube[1]));
+      v->cube_max = ImVec2(static_cast<float>(cube[2]), static_cast<float>(cube[3]));
+      v->cube_frame = frame;
+   }
+   if (what & 2) v->overlay_frame = frame;
+   if (what & 4) v->cube_moved = true;
+   return FIG_OK;
+   V3_CATCH
+}
+
 int fig_view3d_cube(int handle, double size, int corner, int *changed) {
    V3_TRY
    V3_VIEW

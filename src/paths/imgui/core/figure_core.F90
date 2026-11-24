@@ -39,7 +39,9 @@ module figure_core
 !<   `AddRectFilledMultiColor`, ImPlot's colour bars); P13: triangles appended as given (`core_draw_prims`, the 3-D
 !<   plots' depth-sorted list); P14, the gradient editor's widgets (`core_begin_child`, `core_end_child`,
 !<   `core_begin_group`, `core_end_group`, `core_dummy`, `core_same_line`, `core_begin_disabled`, `core_end_disabled`,
-!<   `core_button`, `core_color_edit3`) and the window's storage (`core_storage_int`, `core_set_storage_int`).
+!<   `core_button`, `core_color_edit3`) and the window's storage (`core_storage_int`, `core_set_storage_int`); the
+!<   gizmos' (`core_any_item_hovered`, `core_any_item_active`, `core_set_active_id`, `core_clear_active_id`,
+!<   `core_want_capture_mouse`, `core_window_hover_state`).
 !<
 !< The draw list is built in Fortran (figure_drawlist, the first piece of block E) and appended to the window's Dear
 !< ImGui list by `core_draw_end`: the primitives figure_drawlist tessellates (filled rectangles without rounding,
@@ -82,7 +84,10 @@ use figure_cimgui, only : igBeginCombo, igEndCombo
 use figure_c_native, only : fig_window_skip_items
 use figure_drawlist, only : dl_prims
 use figure_cimgui, only : igBeginChild_ID, igBeginDisabled, igBeginGroup, igButton, igColorEdit3, igDummy, igEndChild,  &
-                          igEndDisabled, igEndGroup, igGetStateStorage, igSameLine
+                          igEndDisabled, igEndGroup, igGetStateStorage, igSameLine, igIsAnyItemActive,                &
+                          igIsAnyItemHovered, igSetNextFrameWantCaptureMouse
+use figure_cimgui_core, only : igClearActiveID, igGetCurrentWindow, igSetActiveID
+use figure_c_native, only : fig_window_hover_state
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
                             dl_triangle_filled, DL_LINE_TEXTURES
 
@@ -104,6 +109,8 @@ public :: core_font_glyph, core_draw_rect_filled_multicolor
 public :: core_io_input, core_mouse_drag_delta, core_mouse_double_clicked, core_mouse_pos_valid, core_window_hovered
 public :: core_begin_child, core_end_child, core_begin_group, core_end_group, core_dummy, core_same_line   ! P14
 public :: core_begin_disabled, core_end_disabled, core_button, core_color_edit3, core_storage_int, core_set_storage_int
+public :: core_any_item_hovered, core_any_item_active, core_set_active_id, core_clear_active_id, core_want_capture_mouse
+public :: core_window_hover_state
 public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core_push_id_int
 public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
@@ -1048,6 +1055,52 @@ contains
    call ImGuiStorage_SetInt(igGetStateStorage(), int(id, c_int), int(v, c_int))
    endsubroutine core_set_storage_int
 
+   ! the gizmos' (szaghi/figure#15 P14: ImGuizmo and its FIGURE glue)
+
+   function core_any_item_hovered() result(yes)
+   !< `IsAnyItemHovered`.
+   logical :: yes !< An item is hovered.
+
+   yes = logical(igIsAnyItemHovered())
+   endfunction core_any_item_hovered
+
+   function core_any_item_active() result(yes)
+   !< `IsAnyItemActive`.
+   logical :: yes !< An item is active.
+
+   yes = logical(igIsAnyItemActive())
+   endfunction core_any_item_active
+
+   subroutine core_set_active_id(id)
+   !< `SetActiveID(id, the current window)`.
+   integer(int32), intent(in) :: id !< ID.
+
+   call igSetActiveID(int(id, c_int), igGetCurrentWindow())
+   endsubroutine core_set_active_id
+
+   subroutine core_clear_active_id()
+   !< `ClearActiveID`.
+
+   call igClearActiveID()
+   endsubroutine core_clear_active_id
+
+   subroutine core_want_capture_mouse()
+   !< `SetNextFrameWantCaptureMouse(true)`.
+
+   call igSetNextFrameWantCaptureMouse(.true._c_bool)
+   endsubroutine core_want_capture_mouse
+
+   subroutine core_window_hover_state(state, inner)
+   !< The current window as ImGuizmo's `IsHoveringWindow` sees it: `state` 1 Dear ImGui's hovered window, 2 no window
+   !< hovered, 0 another one; `inner` its inner rectangle (min x, y, max x, y) [pixels].
+   integer(int32), intent(out) :: state    !< State.
+   real(real64),   intent(out) :: inner(4) !< Inner rectangle.
+   real(c_float)               :: r(4)     !< C copy.
+
+   state = int(fig_window_hover_state(r), int32)
+   inner = real(r, real64)
+   endsubroutine core_window_hover_state
+
    subroutine to_buf(s, at)
    !< A text copied into the module's buffer, NUL-terminated, from `at` (default 1); the caller checked it fits. Two
    !< assignments, no concatenation: a concatenation of run-time length is a heap temporary (gfortran).
@@ -1184,24 +1237,34 @@ contains
    endsubroutine core_draw_convex_poly_filled
 
    subroutine core_draw_polyline(x, y, col, thickness, closed)
-   !< A polyline (`AddPolyline`), closed or not (default not).
+   !< A polyline (`AddPolyline`), closed or not (default not); up to 256 points without a heap allocation.
    real(real64),   intent(in)           :: x(:), y(:) !< Points [pixels].
    integer(int32), intent(in)           :: col        !< Packed colour.
    real(real64),   intent(in), optional :: thickness  !< Thickness [pixels] (default 1).
    logical,        intent(in), optional :: closed     !< Closed.
-   type(im_vec2), allocatable, target   :: p(:)       !< Points, C layout.
+   integer(int32), parameter            :: NFIX = 256_int32 !< Points converted in a fixed array (no heap allocation).
+   type(im_vec2), target                :: q(NFIX)    !< Points, C layout.
+   type(im_vec2), allocatable, target   :: p(:)       !< ... beyond NFIX.
    integer(c_int)                       :: f          !< Flags.
-   integer(int32)                       :: k          !< Counter.
+   integer(int32)                       :: k, n       !< Counter, points.
 
    call core_draw_end_pending()
-   allocate(p(size(x)))
-   do k = 1_int32, size(x, kind=int32)
-      p(k) = im_vec2(real(x(k), c_float), real(y(k), c_float))
-   enddo
    f = 0_c_int
    if (present(closed)) then
       if (closed) f = ImDrawFlags_Closed
    endif
+   n = size(x, kind=int32)
+   if (n <= NFIX) then
+      do k = 1_int32, n
+         q(k) = im_vec2(real(x(k), c_float), real(y(k), c_float))
+      enddo
+      call ImDrawList_AddPolyline(target_list, c_loc(q), int(n, c_int), int(col, c_int), opt(thickness, 1.0_real64), f)
+      return
+   endif
+   allocate(p(n))
+   do k = 1_int32, n
+      p(k) = im_vec2(real(x(k), c_float), real(y(k), c_float))
+   enddo
    call ImDrawList_AddPolyline(target_list, c_loc(p), int(size(p), c_int), int(col, c_int), opt(thickness, 1.0_real64), f)
    endsubroutine core_draw_polyline
 

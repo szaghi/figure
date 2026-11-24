@@ -132,6 +132,10 @@ void   fig_texture_sampling(int plot, int from_texture);
  * auto-resizing window measures itself): 1, else 0 (no window: 0). ImPlot's BeginPlot and BeginSubplots return false
  * then; the Fortran plot frame asks the same. */
 int    fig_window_skip_items(void);
+/* The current window as ImGuizmo's IsHoveringWindow sees it (szaghi/figure#15 P14, the Fortran gizmos): 1 it is
+ * Dear ImGui's hovered window, 2 no window is hovered, 0 another one is (or no window); inner[4] its InnerRect (min x,
+ * y, max x, y). */
+int    fig_window_hover_state(float *inner);
 
 /* Docking (Dear ImGui's docking branch). Dock ids are ImGuiIDs: fig_dock_id hashes a name. A layout is built once,
  * while fig_dock_layout_begin reports it is needed (no node yet: first run without an ini file): split, dock
