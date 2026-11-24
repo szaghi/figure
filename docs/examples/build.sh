@@ -52,9 +52,11 @@ build=$root/build/docs-examples # git-ignored
 case $compiler in
    gnu) fc=${FC:-gfortran}; fobis_compiler=gnu; cflags="-c -std=f2018 -ffree-line-length-132 -fimplicit-none -O2"
         extra_lflags="" ;;
-   nvf) fc=${FC:-nvfortran}; fobis_compiler=nvfortran; cflags="-c -Mstandard -Mfree -Munixlogical -O2"
+   # nvf: -mp as tests-nvf's openmp, for nvfortran's I/O runtime is thread-safe with -mp only (the examples whose
+   # tasks read and write files on worker threads failed at random without it: FIO-F-209, FIO-F-254)
+   nvf) fc=${FC:-nvfortran}; fobis_compiler=nvfortran; cflags="-c -Mstandard -Mfree -Munixlogical -O2 -mp"
         [[ $path == fortran ]] && cflags="$cflags -Mnofma"
-        extra_lflags="-Munixlogical" ;;
+        extra_lflags="-Munixlogical -mp" ;;
    ifx) fc=${FC:-ifx}; fobis_compiler=intel_nextgen; cflags="-c -stand f18 -free -fpscomp logicals -O2"
         [[ $path == fortran ]] && cflags="$cflags -fp-model precise"
         extra_lflags="" ;;
