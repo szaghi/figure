@@ -181,6 +181,8 @@ struct state_t {
    std::vector<ImU32> lines;                       // the style's line colours, packed as ImPlot's colormap keys
                                                    // (empty: ImPlot's Deep); fig_style_lines
    unsigned int  lines_generation = 0;             // incremented when they change (fig_style_lines)
+   unsigned int  contexts = 0;                     // contexts created so far (fig_generations)
+   unsigned int  implot_style_generation = 0;      // incremented when ImPlot's style may have changed (fig_generations)
    bool          has_roles = false;                // roles: those of the palette in effect
    figure_theme::color_t roles[figure_theme::ROLE_COUNT];
    struct frame_t {                                // decorations='figure': the window's frame drawn by FIGURE
@@ -840,6 +842,8 @@ void create_contexts() {
    ImGui::CreateContext();
    ImPlot::CreateContext();
    ImPlot3D::CreateContext(); // the small 3-D figures (figure_plot3d.cpp)
+   ++st.contexts;
+   ++st.implot_style_generation;
    ImGuiIO &io = ImGui::GetIO();
    // Docking on by default: a window dragged by its title bar docks into another window or into a dock space
    // (fig_set_docking turns it off). Multi-viewports stay off: remote and headless modes cannot have them.
@@ -1342,6 +1346,7 @@ void commit_style(style_build_t &b, const figure_theme::theme_t *t = nullptr) {
    }
    ImGui::GetStyle() = b.s;
    ImPlot::GetStyle() = b.ps;
+   ++st.implot_style_generation;
    for (int i = 0; i < 3; ++i) st.clear[i] = b.clear[i];
    st.style_base = b.base;
    st.look = b.look;
@@ -2410,6 +2415,11 @@ int fig_palette_color(const char *role, int role_len, float *rgba) {
    FIG_CATCH
 }
 
+void fig_generations(unsigned int *contexts, unsigned int *implot_style) {
+   *contexts = st.contexts;
+   *implot_style = st.implot_style_generation;
+}
+
 int fig_style_lines(unsigned int *colors, int cap, int *n, unsigned int *generation) {
    FIG_TRY
    *n = 0;
@@ -2566,7 +2576,10 @@ int fig_show_style_editor(int *open) {
    bool o = open ? *open != 0 : true;
    if (ImGui::Begin("Style editor", open ? &o : nullptr)) {
       if (ImGui::CollapsingHeader("Dear ImGui", ImGuiTreeNodeFlags_DefaultOpen)) ImGui::ShowStyleEditor();
-      if (ImGui::CollapsingHeader("ImPlot")) ImPlot::ShowStyleEditor();
+      if (ImGui::CollapsingHeader("ImPlot")) {
+         ImPlot::ShowStyleEditor();
+         ++st.implot_style_generation; // the user may have changed it
+      }
    }
    ImGui::End();
    if (open) *open = o ? 1 : 0;
@@ -2595,6 +2608,7 @@ int fig_push_style_color(int lib, const char *name, int name_len, const float *r
    ImVec4 &c = lib == 0 ? ImGui::GetStyle().Colors[i] : lib == 1 ? ImPlot::GetStyle().Colors[i] : ImPlot3D::GetStyle().Colors[i];
    remember(st.pushed_colors, reinterpret_cast<unsigned char *>(&c), sizeof(ImVec4));
    c = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
+   if (lib == 1) ++st.implot_style_generation;
    return FIG_OK;
    FIG_CATCH
 }
@@ -2616,6 +2630,7 @@ int fig_push_style_var(int lib, const char *name, int name_len, const double *va
    remember(st.pushed_vars, p, size);
    const std::vector<double> v(values, values + count);
    write_var(style_base(lib), *f, v);
+   if (lib == 1) ++st.implot_style_generation;
    return FIG_OK;
    FIG_CATCH
 }
@@ -2626,9 +2641,11 @@ int fig_pop_style(int vars, int n) {
    if (n < 1 || static_cast<size_t>(n) > stack.size())
       return fail(FIG_ERR_STATE, std::string(vars ? "pop style variable" : "pop style colour") + ": " +
                                      std::to_string(n) + " pop(s) for " + std::to_string(stack.size()) + " push(es)");
+   const unsigned char *ps0 = reinterpret_cast<const unsigned char *>(&ImPlot::GetStyle());
    for (int k = 0; k < n; ++k) {
       const state_t::saved_t &s = stack.back();
       std::memcpy(s.where, s.was.data(), s.was.size());
+      if (s.where >= ps0 && s.where < ps0 + sizeof(ImPlotStyle)) ++st.implot_style_generation;
       stack.pop_back();
    }
    return FIG_OK;
@@ -2720,12 +2737,19 @@ int fig_style_color(int lib, const char *name, int name_len, int set, float *rgb
    if (i < 0)
       return fail(FIG_ERR_ARGUMENT, std::string("style colour: unknown name \"") + n + "\" for " +
                                         (lib == 0 ? "Dear ImGui (ImGuiCol_*)" : "ImPlot (ImPlotCol_*)"));
-   if (set) {
+   if (set == 2) { // as stored: ImPlot's automatic colours (IMPLOT_AUTO_COL) left unresolved
+      const ImVec4 c = lib == 0 ? ImGui::GetStyle().Colors[i] : ImPlot::GetStyle().Colors[i];
+      rgba[0] = c.x;
+      rgba[1] = c.y;
+      rgba[2] = c.z;
+      rgba[3] = c.w;
+   } else if (set) {
       for (int k = 0; k < 4; ++k)
          if (!(rgba[k] >= 0.0f && rgba[k] <= 1.0f)) return fail(FIG_ERR_ARGUMENT, "style colour: components must be in [0, 1]");
       const ImVec4 c(rgba[0], rgba[1], rgba[2], rgba[3]);
       if (lib == 0) ImGui::GetStyle().Colors[i] = c;
       else ImPlot::GetStyle().Colors[i] = c;
+      if (lib == 1) ++st.implot_style_generation;
    } else {
       // ImPlot's automatic colours (derived from Dear ImGui's) are resolved, as ImPlot would draw them
       const ImVec4 c = lib == 0 ? ImGui::GetStyle().Colors[i] : ImPlot::GetStyleColorVec4(i);
@@ -2760,6 +2784,7 @@ int fig_style_var(int lib, const char *name, int name_len, int set, double *valu
       case figure_style::FIG_STYLE_BOOL: *reinterpret_cast<bool *>(p) = values[0] != 0.0; break;
       default: *reinterpret_cast<int *>(p) = static_cast<int>(values[0]); break;
       }
+      if (lib == 1) ++st.implot_style_generation;
    } else {
       *count = ncomp;
       switch (f->kind) {

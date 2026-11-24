@@ -77,7 +77,15 @@ struct sizes_t {
    ImPlotPlot             *plot = nullptr;
    ImPlotSubplot          *subplot = nullptr;
    ImPlot3DPlot           *plot3d = nullptr;
+   int                     frames[3] = {0, 0, 0}; // the Fortran plot frames' plot, subplot, 3-D plot (hooks.state)
 };
+
+// The Fortran plot frames' hooks (fig_scope_plot_hooks): none on the current path.
+struct hooks_t {
+   fig_scope_state_fn   state = nullptr;
+   fig_scope_recover_fn recover = nullptr;
+   fig_scope_close_fn   close = nullptr;
+} hooks;
 
 struct entry_t {
    int         kind = 0;
@@ -124,6 +132,7 @@ sizes_t take_sizes() {
       z.subplot = GImPlot->CurrentSubplot;
    }
    if (ImPlot3D::GetCurrentContext()) z.plot3d = ImPlot3D::GImPlot3D->CurrentPlot;
+   if (hooks.state) hooks.state(z.frames);
    return z;
 }
 
@@ -159,9 +168,9 @@ std::string grown(const sizes_t &then, int kind) {
    };
    other("table", now.table != then.table);
    other("tab bar", now.tab_bar != then.tab_bar);
-   other("plot", now.plot != then.plot);
-   other("subplot figure", now.subplot != then.subplot);
-   other("3-D plot", now.plot3d != then.plot3d);
+   other("plot", now.plot != then.plot || now.frames[0] != then.frames[0]);
+   other("subplot figure", now.subplot != then.subplot || now.frames[1] != then.frames[1]);
+   other("3-D plot", now.plot3d != then.plot3d || now.frames[2] != then.frames[2]);
    return out;
 }
 
@@ -171,6 +180,7 @@ void recover_to(const sizes_t &then) {
    const bool asserts = io.ConfigErrorRecoveryEnableAssert; // FIGURE's own repair: no assertion ('abort' included)
    io.ConfigErrorRecoveryEnableAssert = false;
    sc.muted = true;
+   if (hooks.recover) hooks.recover(then.frames); // the Fortran frames' plots (before ImPlot's, as their ends)
    if (ImPlot::GetCurrentContext() && GImPlot->CurrentPlot && !then.plot) fig_plot_end();
    if (ImPlot::GetCurrentContext() && GImPlot->CurrentSubplot && !then.subplot) ImPlot::EndSubplots();
    if (ImPlot3D::GetCurrentContext() && ImPlot3D::GImPlot3D->CurrentPlot && !then.plot3d) fig_plot3d_end();
@@ -235,6 +245,7 @@ void on_imgui_error(ImGuiContext *, void *, const char *msg) {
 
 // Close what the entry opened, as its end would (Dear ImGui's or ImPlot's end, FIGURE's style pop).
 void close_entry(const entry_t &e) {
+   if (hooks.close && hooks.close(e.kind)) return; // a Fortran frame's plot, subplot, group or popup
    switch (e.kind) {
    case K_WINDOW: ImGui::End(); break;
    case K_CHILD: ImGui::EndChild(); break;
@@ -505,6 +516,12 @@ void fig_scope_frame_end(void) {
       sc.errors.clear();
    } catch (...) {
    }
+}
+
+void fig_scope_plot_hooks(fig_scope_state_fn state, fig_scope_recover_fn recover, fig_scope_close_fn close) {
+   hooks.state = state;
+   hooks.recover = recover;
+   hooks.close = close;
 }
 
 void fig_scope_reset(void) {

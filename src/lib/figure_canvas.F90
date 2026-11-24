@@ -23,6 +23,7 @@ use figure_base, only : figure_check, figure_draw_refused, figure_fail, figure_u
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_canvas, fig_canvas_event, fig_cursor_screen_pos, fig_draw, &
                             fig_invisible_button
 use figure_cimgui, only : im_texture_ref
+use figure_plot_hooks, only : plot_layer_draw
 use figure_texture, only : texture_object, texture_ref
 
 implicit none
@@ -386,7 +387,15 @@ contains
    if (present(filled)) f = merge(1_c_int, 0_c_int, filled)
    rgba = 1.0_c_double
    rgba(1:size(color)) = real(color, c_double)
-   if (present(text)) then
+   if (l == LAYER_PLOT) then ! the plot seam's (figure_plot_hooks: ImPlot's plot, or the Fortran frame's)
+      if (present(text)) then
+         status = plot_layer_draw(kind, x, y, int(size(x), c_int), rgba, t, r, f, text, len(text, c_int), 0_c_long_long)
+      elseif (present(texture)) then
+         status = plot_layer_draw(kind, x, y, int(size(x), c_int), rgba, t, r, f, '', 0_c_int, texture)
+      else
+         status = plot_layer_draw(kind, x, y, int(size(x), c_int), rgba, t, r, f, '', 0_c_int, 0_c_long_long)
+      endif
+   elseif (present(text)) then
       status = fig_draw(kind, l, x, y, int(size(x), c_int), rgba, t, r, f, text, len(text, c_int), 0_c_long_long)
    elseif (present(texture)) then
       status = fig_draw(kind, l, x, y, int(size(x), c_int), rgba, t, r, f, '', 0_c_int, texture)

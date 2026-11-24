@@ -74,6 +74,10 @@ int    fig_palette_color(const char *role, int role_len, float *rgba);
  * packed as ImPlot's colormap keys (red in the low byte), the first cap of them into colors, *n their number (0: the
  * style has none, ImPlot's Deep); *generation changes whenever they do. */
 int    fig_style_lines(unsigned int *colors, int cap, int *n, unsigned int *generation);
+/* Change counters: the contexts created so far (a new init), and ImPlot's style changes (a theme, a set, a push or a
+ * pop of an ImPlot colour or variable, the style editor shown): the Fortran plot frame reads FIGURE's style again when
+ * the second changes (szaghi/figure#15, the seam's switch). */
+void   fig_generations(unsigned int *contexts, unsigned int *implot_style);
 /* Theme files (figure_theme.h format): load one, or write the style in effect as one (what differs from its base). */
 int    fig_load_style(const char *path, int path_len);
 int    fig_save_style(const char *path, int path_len);
@@ -90,6 +94,8 @@ int    fig_pop_font(void);
 int    fig_push_style_color(int lib, const char *name, int name_len, const float *rgba);
 int    fig_push_style_var(int lib, const char *name, int name_len, const double *values, int count);
 int    fig_pop_style(int vars, int n);
+/* fig_style_color: set 0 reads the colour (ImPlot's automatic ones resolved, as ImPlot draws them), 1 writes it, 2 reads
+ * it as stored (an automatic one IMPLOT_AUTO_COL, alpha -1). */
 int    fig_style_color(int lib, const char *name, int name_len, int set, float *rgba);
 int    fig_style_var(int lib, const char *name, int name_len, int set, double *values, int *count);
 void   fig_request_frames(int n);
@@ -478,6 +484,16 @@ int    fig_scope_report(int *notify);
 void   fig_scope_frame_begin(void);
 void   fig_scope_frame_end(void);
 void   fig_scope_reset(void);
+/* The Fortran plot frames' part of the record (szaghi/figure#15, the seam's switch; none registered on the current
+ * path): state gives what they have open (the plot, the subplot, the 3-D plot: the frames' own indices, 0 none), as
+ * the record snapshots ImPlot's CurrentPlot, CurrentSubplot and ImPlot3D's CurrentPlot; recover ends what is open now
+ * and was not in a snapshot (the three values of the snapshot), as the record ends ImPlot's; close ends one entry of
+ * kind K_PLOT, K_SUBPLOTS, K_PLOT3D, K_ALIGNED or K_LEGEND_POPUP and returns 1, or returns 0 for a kind the frames do
+ * not own (the record then ends it through ImPlot). */
+typedef void (*fig_scope_state_fn)(int *open);
+typedef void (*fig_scope_recover_fn)(const int *then);
+typedef int (*fig_scope_close_fn)(int kind);
+void   fig_scope_plot_hooks(fig_scope_state_fn state, fig_scope_recover_fn recover, fig_scope_close_fn close);
 
 /* Colormaps (figure_colormap.cpp): the bundled maps (third_party/colormaps), ImPlot's own and the user's, by name.
  * fig_colormap gives the ImPlot id of `name` (<name>_r reversed; levels > 0: that many discrete bands, in [2, 256]),

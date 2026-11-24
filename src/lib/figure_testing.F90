@@ -24,14 +24,14 @@ use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64
 use figure_base, only : figure_check, figure_fail, figure_last_error
 use figure_c_native, only : FIG_OK, FIG_ERR_ARGUMENT, fig_input_key, fig_input_mouse_button, fig_input_mouse_pos, &
                             fig_input_next_frame, fig_input_quit, fig_input_system_theme, fig_input_text, &
-                            fig_input_wheel, fig_window_rect, fig_plot_tick_label, fig_frame_hit, fig_frame_rect, &
+                            fig_input_wheel, fig_window_rect, fig_frame_hit, fig_frame_rect, &
                             fig_frame_state, fig_notification_rect, fig_notification_alpha, fig_drawn_extent, &
                             fig_file_browser_get, fig_file_browser_rect, fig_file_browser_settings, fig_input_drop, &
-                            fig_popup_rect, fig_opened_url, fig_drawn_extent_layer, fig_field_uploads, &
-                            fig_field_count, fig_field_time, fig_field_pixel, fig_test_glyph, fig_items_record, &
+                            fig_popup_rect, fig_opened_url, fig_drawn_extent_layer, fig_test_glyph, fig_items_record, &
                             fig_item_find, fig_item_value, fig_items_list, fig_item_click, fig_item_type, &
                             fig_menu_click, fig_test_run, fig_test_capture, fig_image_write, fig_set_last_error
 use figure_imgui, only : ig_item_rect
+use figure_plot_hooks, only : plot_field_count, plot_field_pixel, plot_field_time, plot_field_uploads, plot_tick_label
 use figure_plot_series, only : plot_copies, plot_stride
 use figure_texture, only : fig_read_image
 
@@ -102,7 +102,7 @@ contains
    endselect
    n = 0_c_int
    l = 0_c_int
-   call figure_check(fig_plot_tick_label(a, int(index, c_int), buf, len(buf, c_int), n, l), stat)
+   call figure_check(plot_tick_label(a, int(index, c_int), buf, len(buf, c_int), n, l), stat)
    if (present(count)) count = int(n, int32)
    if (l > 0_c_int) label = buf(1:min(l, len(buf, c_int)))
    endsubroutine test_plot_tick
@@ -640,21 +640,21 @@ contains
    !< before and after frames to check that a field is not coloured again when nothing changed (plots.md, "Fields").
    integer(int64) :: uploads !< Colourings uploaded.
 
-   uploads = int(fig_field_uploads(), int64)
+   uploads = int(plot_field_uploads(), int64)
    endfunction test_field_uploads
 
    function test_field_textures() result(count)
    !< How many field textures `ip_field_image` keeps: one per field drawn in the last 10 s (plots.md, "Fields").
    integer(int32) :: count !< Textures kept.
 
-   count = int(fig_field_count(), int32)
+   count = int(plot_field_count(), int32)
    endfunction test_field_textures
 
    function test_field_time() result(ms)
    !< The time the last colouring of `ip_field_image` took, range, colours and upload [ms] (plots.md, "Fields").
    real(real64) :: ms !< Time [ms].
 
-   ms = real(fig_field_time(), real64)
+   ms = real(plot_field_time(), real64)
    endfunction test_field_time
 
    subroutine test_field_pixel(label, i, j, rgba, stat)
@@ -668,7 +668,7 @@ contains
    real(c_float)                           :: c(4)    !< C copy.
 
    c = 0.0_c_float
-   call figure_check(fig_field_pixel(label, len(label, c_int), int(i, c_int), int(j, c_int), c), stat)
+   call figure_check(plot_field_pixel(label, len(label, c_int), int(i, c_int), int(j, c_int), c), stat)
    rgba = real(c, real64)
    endsubroutine test_field_pixel
 

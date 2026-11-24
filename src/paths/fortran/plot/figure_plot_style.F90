@@ -18,11 +18,14 @@ module figure_plot_style
 !< - `ps_set_var`, `ps_set_color`, `ps_push_var`, `ps_push_color`, `ps_pop_var`, `ps_pop_color` (`ip_set_style_*`,
 !<   `ip_push_style_*`; stacks of 64, their own: an error stop past them, for an unknown name or a wrong count);
 !< - `ps_sync`: the variables and colours as FIGURE's style holds them in ImPlot's context (`fig_style_var`,
-!<   `fig_style_color` of the library 1: what a theme's [implot.vars] and [implot.colors] and `ip_set_style_*` set),
-!<   while FIGURE's style is the current path's (until the seam's switch); not per frame (it allocates).
+!<   `fig_style_color` of the library 1: what a theme's [implot.vars] and [implot.colors] and `ip_set_style_*` set,
+!<   the colours as stored: an automatic one stays automatic, resolved when it is read), while FIGURE's style lives
+!<   there (the native layer's themes and `ip_*_style_*`); `ps_refresh`, which the Fortran path's `figure_implot` calls
+!<   at its entry points, syncs only when that style changed since (`fig_generations`: a new context, a theme, a set,
+!<   push or pop of an ImPlot colour or variable, the style editor), so a push inside a plot reaches the next item.
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
-use figure_c_native, only : fig_style_color, fig_style_var
+use figure_c_native, only : fig_generations, fig_style_color, fig_style_var
 use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_ButtonActive, ImGuiCol_ButtonHovered, ImGuiCol_FrameBg, &
                                 ImGuiCol_PopupBg, ImGuiCol_Text, ImGuiCol_WindowBg, ImGuiStyleVar_Alpha
 use figure_core, only : core_color, core_style_color_rgba, core_style_vec2
@@ -37,7 +40,7 @@ public :: PC_FRAME_BG, PC_PLOT_BG, PC_PLOT_BORDER, PC_LEGEND_BG, PC_LEGEND_BORDE
 public :: PC_INLAY_TEXT, PC_AXIS_TEXT, PC_AXIS_GRID, PC_AXIS_TICK, PC_AXIS_BG, PC_AXIS_BG_HOVERED, PC_AXIS_BG_ACTIVE
 public :: PC_SELECTION, PC_CROSSHAIRS
 public :: ps_vec4, ps_u32, ps_alpha_u32, ps_style_alpha, ps_set_var, ps_set_color, ps_push_var, ps_push_color
-public :: ps_pop_var, ps_pop_color, ps_sync, ps_reset
+public :: ps_pop_var, ps_pop_color, ps_sync, ps_reset, ps_refresh
 
 ! ImPlotCol (implot.h)
 integer(int32), parameter :: PC_FRAME_BG = 0_int32, PC_PLOT_BG = 1_int32, PC_PLOT_BORDER = 2_int32, &
@@ -109,6 +112,8 @@ integer(int32) :: n_var_stack = 0_int32                !< Pushes held.
 integer(int32) :: col_stack_idx(STACK) = 0_int32       !< A pushed colour.
 real(real32)   :: col_stack_val(4, STACK) = 0.0_real32 !< ... its value before.
 integer(int32) :: n_col_stack = 0_int32                !< Pushes held.
+logical        :: synced = .false.                     !< `ps_refresh` synced once.
+integer(c_int) :: synced_gen(2) = 0_c_int              !< ... at these generations (`fig_generations`).
 
 contains
    ! colours
@@ -414,9 +419,10 @@ contains
 
    subroutine ps_sync()
    !< The variables and colours as FIGURE's style holds them in ImPlot's context (a theme's [implot.vars] and
-   !< [implot.colors], `ip_set_style_*`): `fig_style_var`, `fig_style_color` of the library 1. Not per frame.
+   !< [implot.colors], `ip_set_style_*`, `ip_push_style_*`): `fig_style_var`, `fig_style_color` of the library 1, the
+   !< colours as stored (an automatic one stays automatic). No allocation (the names are passed as substrings).
    integer(int32) :: k   !< Index.
-   integer(c_int) :: n, st !< Count, status.
+   integer(c_int) :: n, st, l !< Count, status, a name's length.
    real(c_double) :: v(2) !< Value(s).
    real(c_float)  :: c(4) !< Colour.
    real(real32)   :: w(2) !< As floats.
@@ -424,16 +430,35 @@ contains
    do k = 1_int32, NVAR
       n = 0_c_int
       v = 0.0_c_double
-      st = fig_style_var(1_c_int, trim(VAR_NAMES(k)), len_trim(VAR_NAMES(k), c_int), 0_c_int, v, n)
+      l = len_trim(VAR_NAMES(k), c_int)
+      st = fig_style_var(1_c_int, VAR_NAMES(k)(1:l), l, 0_c_int, v, n)
       if (st /= 0_c_int) cycle
-      w = real(v, real32)
+      w(1) = real(v(1), real32)
+      w(2) = real(v(2), real32)
       call var_put(k, w)
    enddo
    do k = 0_int32, PC_COUNT - 1_int32
       c = 0.0_c_float
-      st = fig_style_color(1_c_int, trim(COL_NAMES(k)), len_trim(COL_NAMES(k), c_int), 0_c_int, c)
+      l = len_trim(COL_NAMES(k), c_int)
+      st = fig_style_color(1_c_int, COL_NAMES(k)(1:l), l, 2_c_int, c)
       if (st /= 0_c_int) cycle
-      colors(:, k) = real(c, real32)
+      colors(1, k) = real(c(1), real32)
+      colors(2, k) = real(c(2), real32)
+      colors(3, k) = real(c(3), real32)
+      colors(4, k) = real(c(4), real32)
    enddo
    endsubroutine ps_sync
+
+   subroutine ps_refresh()
+   !< `ps_sync` when FIGURE's ImPlot style changed since the last refresh (`fig_generations`: a new context, a theme, a
+   !< set, push or pop of an ImPlot colour or variable, the style editor shown); the Fortran path's entry points call
+   !< it, so the frame draws with the style in effect at the call, as ImPlot reads its style while it draws.
+   integer(c_int) :: gen(2) !< Generations: contexts, ImPlot's style.
+
+   call fig_generations(gen(1), gen(2))
+   if (synced .and. gen(1) == synced_gen(1) .and. gen(2) == synced_gen(2)) return
+   synced = .true.
+   synced_gen = gen
+   call ps_sync()
+   endsubroutine ps_refresh
 endmodule figure_plot_style

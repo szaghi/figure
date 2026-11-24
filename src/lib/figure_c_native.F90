@@ -48,6 +48,7 @@ public :: fig_plot_link, fig_aligned_open
 public :: fig_multi_select_begin, fig_multi_select_end, fig_multi_select_item, fig_clipper_include
 public :: fig_plot3d_mouse_ray
 public :: fig_set_checks, fig_checks, fig_draw_refuse, fig_scope_open, fig_scope_close, fig_scope_report
+public :: fig_scope_plot_hooks, fig_generations
 public :: fig_notify, fig_notification_count, fig_notification_get, fig_notification_rect, fig_drawn_extent
 public :: fig_notification_alpha
 public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig_file_browser_rect
@@ -785,6 +786,27 @@ interface
    integer(c_int)                     :: action   !< 0, 1 or 2.
    endfunction fig_scope_close
 
+   subroutine fig_scope_plot_hooks(state, recover, close) bind(C, name='fig_scope_plot_hooks')
+   !< The Fortran plot frames' part of the record (szaghi/figure#15, the seam's switch): `state(open)` gives the plot,
+   !< subplot and 3-D plot they have open (their indices, 0 none) as the record snapshots ImPlot's; `recover(then)`
+   !< ends what is open now and not in a snapshot; `close(kind)` ends one entry of a plot kind (1) or leaves it to
+   !< ImPlot (0). Null pointers: none (the current path).
+   import :: c_funptr
+   implicit none
+   type(c_funptr), value :: state   !< `void state(int open[3])`.
+   type(c_funptr), value :: recover !< `void recover(const int then[3])`.
+   type(c_funptr), value :: close   !< `int close(int kind)`.
+   endsubroutine fig_scope_plot_hooks
+
+   subroutine fig_generations(contexts, implot_style) bind(C, name='fig_generations')
+   !< Change counters: the contexts created so far (a new init), ImPlot's style changes (a theme, a set, a push or a pop
+   !< of an ImPlot colour or variable, the style editor shown).
+   import :: c_int
+   implicit none
+   integer(c_int), intent(out) :: contexts     !< Contexts created (C `unsigned int`).
+   integer(c_int), intent(out) :: implot_style !< ImPlot style changes (C `unsigned int`).
+   endsubroutine fig_generations
+
    function fig_scope_report(notify) result(status) bind(C, name='fig_scope_report')
    !< The usage errors of the last frame (and between frames): `FIG_ERR_STATE` with every message in the last error,
    !< or, in mode recover, `FIG_OK` and `notify` 1 when they are new.
@@ -1391,13 +1413,14 @@ interface
    endfunction fig_show_style_editor
 
    function fig_style_color(lib, name, name_len, set, rgba) result(status) bind(C, name='fig_style_color')
-   !< Read (set = 0) or write (set = 1) a style colour by name: lib 0 Dear ImGui, 1 ImPlot.
+   !< Read (set = 0: ImPlot's automatic colours resolved; 2: as stored, an automatic one with alpha -1) or write
+   !< (set = 1) a style colour by name: lib 0 Dear ImGui, 1 ImPlot.
    import :: c_char, c_float, c_int
    implicit none
    integer(c_int), value              :: lib      !< 0: Dear ImGui, 1: ImPlot.
    character(kind=c_char), intent(in) :: name(*)  !< Colour name (not NUL-terminated).
    integer(c_int), value              :: name_len !< Name length [bytes].
-   integer(c_int), value              :: set      !< 1: write, 0: read.
+   integer(c_int), value              :: set      !< 1: write, 0: read, 2: read as stored.
    real(c_float), intent(inout)       :: rgba(4)  !< Colour, components in [0, 1].
    integer(c_int)                     :: status   !< Status: FIG_OK or FIG_ERR_*.
    endfunction fig_style_color
