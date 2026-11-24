@@ -30,7 +30,12 @@ use figure_cimgui, only : im_vec2, im_vec4, igBeginChild_Str, igBeginPopup, igBe
                           igSetNextFrameWantCaptureKeyboard, igGetMousePos, igIsMouseDown_Nil, igIsMouseClicked_Bool,  &
                           igIsMouseDoubleClicked_Nil, igIsMouseReleased_Nil, igIsMouseDragging, igGetMouseDragDelta,   &
                           igResetMouseDragDelta, igSetMouseCursor, igGetTime, igGetWindowSize, igOpenPopup_Str,        &
-                          igSetClipboardText, igGetClipboardText
+                          igSetClipboardText, igGetClipboardText, igGetColorU32_Col, igGetFrameHeight,                 &
+                          igGetFrameHeightWithSpacing, igInvisibleButton, igButton, igGetContentRegionAvail,           &
+                          igSetNextWindowPos, igSetNextWindowSize, igSetNextWindowBgAlpha, igSetNextItemWidth,         &
+                          igSetKeyboardFocusHere, igIsItemDeactivated, igIsItemClicked, igBeginDisabled,               &
+                          igEndDisabled, igSameLine, igPushStyleColor_Vec4, igIsKeyChordPressed_Nil,                   &
+                          igSetWindowFocus_Nil, igIsWindowAppearing, igCloseCurrentPopup, igSetScrollHereY
 use figure_cimgui_core, only : ImDrawList_AddCircleFilled, ImDrawList_AddLine, ImDrawList_AddRect, ImDrawList_AddRectFilled, &
                                ImDrawList_AddText_Vec2, ImDrawList_GetClipRectMax, ImDrawList_GetClipRectMin,          &
                                ImDrawList_PopClipRect, ImDrawList_PushClipRect
@@ -49,10 +54,17 @@ public :: ct_push_id_int, ct_pop_id
 public :: ct_shortcut, ct_key_pressed, ct_key_down, ct_want_keyboard, ct_mouse_pos, ct_mouse_down, ct_mouse_clicked
 public :: ct_mouse_double_clicked, ct_mouse_released, ct_mouse_dragging, ct_mouse_drag_delta, ct_reset_mouse_drag_delta
 public :: ct_set_mouse_cursor, ct_time, ct_window_size, ct_open_popup, ct_set_clipboard, ct_clipboard
+public :: ct_style_u32, ct_frame_height, ct_frame_height_with_spacing, ct_invisible_button, ct_button, ct_content_avail
+public :: ct_set_next_window_pos, ct_set_next_window_size, ct_set_next_window_bg_alpha, ct_set_next_item_width
+public :: ct_set_keyboard_focus_here, ct_item_deactivated, ct_item_clicked, ct_begin_disabled, ct_end_disabled
+public :: ct_same_line, ct_push_style_color_vec4, ct_key_chord_pressed, ct_clear_window_focus, ct_window_appearing
+public :: ct_close_current_popup, ct_set_scroll_here_y, ct_bring_to_front, ct_input_text
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Strings copied into the module's buffer up to this length.
 
 character(kind=c_char, len=BUF_LEN + 1), target :: buf !< NUL-terminated copy of a string.
+integer(int32), parameter :: INPUT_LEN = 1024_int32 !< The find and replace fields' buffer [bytes].
+character(kind=c_char, len=INPUT_LEN), target :: input !< The field being edited.
 
 interface
    subroutine ImFont_RenderChar(self, draw_list, size, pos, col, c, cpu_fine_clip) bind(C, name='ImFont_RenderChar')
@@ -92,6 +104,21 @@ interface
    implicit none
    real(c_float), value :: x, y, h !< Position, line height.
    endsubroutine fig_core_text_ime
+
+   function fig_core_text_input(label, text, cap, flags) result(edited) bind(C, name='fig_core_text_input')
+   !< InputText over a buffer (native/figure_editor.cpp).
+   import :: c_char, c_int
+   implicit none
+   character(kind=c_char), intent(in)    :: label(*) !< Label.
+   character(kind=c_char), intent(inout) :: text(*)  !< Buffer.
+   integer(c_int), value                 :: cap      !< Its size.
+   integer(c_int), value                 :: flags    !< `ImGuiInputTextFlags_*`.
+   integer(c_int)                        :: edited   !< 1 when edited.
+   endfunction fig_core_text_input
+
+   subroutine fig_core_text_front() bind(C, name='fig_core_text_front')
+   !< BringWindowToDisplayFront(GetCurrentWindow()).
+   endsubroutine fig_core_text_front
 
    pure function c_strlen(p) result(n) bind(C, name='strlen')
    !< C's `strlen`.
@@ -673,4 +700,190 @@ contains
       text(k:k) = s(k)
    enddo
    endfunction ct_clipboard
+   ! ---- popups, widgets of the find and replace window (szaghi/figure#15 P16 step 13) ------------------------------
+   function ct_style_u32(idx) result(c)
+   !< `GetColorU32(idx)`.
+   integer(c_int), intent(in) :: idx !< `ImGuiCol_*`.
+   integer(c_int)             :: c   !< Packed colour.
+
+   c = igGetColorU32_Col(idx, 1.0_c_float)
+   endfunction ct_style_u32
+
+   function ct_frame_height() result(h)
+   !< `GetFrameHeight`.
+   real(c_float) :: h !< Height.
+
+   h = igGetFrameHeight()
+   endfunction ct_frame_height
+
+   function ct_frame_height_with_spacing() result(h)
+   !< `GetFrameHeightWithSpacing`.
+   real(c_float) :: h !< Height.
+
+   h = igGetFrameHeightWithSpacing()
+   endfunction ct_frame_height_with_spacing
+
+   function ct_invisible_button(id, w, h) result(pressed)
+   !< `InvisibleButton(id, ImVec2(w, h))`.
+   character(len=*), intent(in) :: id      !< ID.
+   real(c_float),    intent(in) :: w, h    !< Size.
+   logical                      :: pressed !< Pressed.
+
+   call to_buf(id(1:min(len(id), BUF_LEN)))
+   pressed = logical(igInvisibleButton(buf, v2(w, h), 0_c_int))
+   endfunction ct_invisible_button
+
+   function ct_button(label, w, h) result(pressed)
+   !< `Button(label, ImVec2(w, h))`.
+   character(len=*), intent(in) :: label   !< Label.
+   real(c_float),    intent(in) :: w, h    !< Size.
+   logical                      :: pressed !< Pressed.
+
+   call to_buf(label(1:min(len(label), BUF_LEN)))
+   pressed = logical(igButton(buf, v2(w, h)))
+   endfunction ct_button
+
+   subroutine ct_content_avail(w, h)
+   !< `GetContentRegionAvail`.
+   real(c_float), intent(out) :: w, h !< Size.
+   type(im_vec2)              :: s    !< Size.
+
+   s = igGetContentRegionAvail()
+   w = s%x
+   h = s%y
+   endsubroutine ct_content_avail
+
+   subroutine ct_set_next_window_pos(x, y)
+   !< `SetNextWindowPos(ImVec2(x, y))`.
+   real(c_float), intent(in) :: x, y !< Position.
+
+   call igSetNextWindowPos(v2(x, y), 0_c_int, v2(0.0_c_float, 0.0_c_float))
+   endsubroutine ct_set_next_window_pos
+
+   subroutine ct_set_next_window_size(w, h)
+   !< `SetNextWindowSize(ImVec2(w, h))`.
+   real(c_float), intent(in) :: w, h !< Size.
+
+   call igSetNextWindowSize(v2(w, h), 0_c_int)
+   endsubroutine ct_set_next_window_size
+
+   subroutine ct_set_next_window_bg_alpha(a)
+   !< `SetNextWindowBgAlpha`.
+   real(c_float), intent(in) :: a !< Alpha.
+
+   call igSetNextWindowBgAlpha(a)
+   endsubroutine ct_set_next_window_bg_alpha
+
+   subroutine ct_set_next_item_width(w)
+   !< `SetNextItemWidth`.
+   real(c_float), intent(in) :: w !< Width.
+
+   call igSetNextItemWidth(w)
+   endsubroutine ct_set_next_item_width
+
+   subroutine ct_set_keyboard_focus_here()
+   !< `SetKeyboardFocusHere()`.
+   call igSetKeyboardFocusHere(0_c_int)
+   endsubroutine ct_set_keyboard_focus_here
+
+   function ct_item_deactivated() result(yes)
+   !< `IsItemDeactivated`.
+   logical :: yes !< Deactivated.
+
+   yes = logical(igIsItemDeactivated())
+   endfunction ct_item_deactivated
+
+   function ct_item_clicked() result(yes)
+   !< `IsItemClicked(ImGuiMouseButton_Left)`.
+   logical :: yes !< Clicked.
+
+   yes = logical(igIsItemClicked(0_c_int))
+   endfunction ct_item_clicked
+
+   subroutine ct_begin_disabled()
+   !< `BeginDisabled()`.
+   call igBeginDisabled(.true._c_bool)
+   endsubroutine ct_begin_disabled
+
+   subroutine ct_end_disabled()
+   !< `EndDisabled`.
+   call igEndDisabled()
+   endsubroutine ct_end_disabled
+
+   subroutine ct_same_line()
+   !< `SameLine()`.
+   call igSameLine(0.0_c_float, -1.0_c_float)
+   endsubroutine ct_same_line
+
+   subroutine ct_push_style_color_vec4(idx, rgba)
+   !< `PushStyleColor(idx, ImVec4(rgba))`.
+   integer(c_int), intent(in) :: idx     !< `ImGuiCol_*`.
+   real(c_float),  intent(in) :: rgba(4) !< Colour.
+   type(im_vec4)              :: v       !< Colour.
+
+   v%x = rgba(1)
+   v%y = rgba(2)
+   v%z = rgba(3)
+   v%w = rgba(4)
+   call igPushStyleColor_Vec4(idx, v)
+   endsubroutine ct_push_style_color_vec4
+
+   function ct_key_chord_pressed(chord) result(yes)
+   !< `IsKeyChordPressed(chord)`.
+   integer(c_int), intent(in) :: chord !< Key chord.
+   logical                    :: yes   !< Pressed.
+
+   yes = logical(igIsKeyChordPressed_Nil(chord))
+   endfunction ct_key_chord_pressed
+
+   subroutine ct_clear_window_focus()
+   !< `SetWindowFocus(nullptr)`.
+   call igSetWindowFocus_Nil()
+   endsubroutine ct_clear_window_focus
+
+   function ct_window_appearing() result(yes)
+   !< `IsWindowAppearing`.
+   logical :: yes !< Appearing.
+
+   yes = logical(igIsWindowAppearing())
+   endfunction ct_window_appearing
+
+   subroutine ct_close_current_popup()
+   !< `CloseCurrentPopup`.
+   call igCloseCurrentPopup()
+   endsubroutine ct_close_current_popup
+
+   subroutine ct_set_scroll_here_y(ratio)
+   !< `SetScrollHereY`.
+   real(c_float), intent(in) :: ratio !< Ratio.
+
+   call igSetScrollHereY(ratio)
+   endsubroutine ct_set_scroll_here_y
+
+   subroutine ct_bring_to_front()
+   !< `BringWindowToDisplayFront(GetCurrentWindow())`.
+   call fig_core_text_front()
+   endsubroutine ct_bring_to_front
+
+   function ct_input_text(label, value, flags) result(changed)
+   !< `InputText(label, buffer, flags)` on `value` (a buffer of the module: up to 1023 bytes).
+   character(len=*),              intent(in)    :: label   !< Label.
+   character(len=:), allocatable, intent(inout) :: value   !< Text.
+   integer(c_int),                intent(in)    :: flags   !< `ImGuiInputTextFlags_*`.
+   logical                                      :: changed !< Edited.
+   integer(int32)                               :: n, k    !< Lengths.
+
+   n = min(len(value, int32), INPUT_LEN - 1_int32)
+   input(1:n) = value(1:n)
+   input(n + 1:n + 1) = c_null_char
+   call to_buf(label(1:min(len(label), BUF_LEN)))
+   changed = fig_core_text_input(buf, input, INPUT_LEN, flags) /= 0_c_int
+   k = index(input, c_null_char) - 1_int32
+   if (k < 0_int32) k = INPUT_LEN
+   if (k /= len(value, int32)) then
+      value = input(1:k)
+   elseif (value /= input(1:k)) then
+      value = input(1:k)
+   endif
+   endfunction ct_input_text
 endmodule figure_core_text

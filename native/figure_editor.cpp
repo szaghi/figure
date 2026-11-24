@@ -881,4 +881,12 @@ void fig_core_text_nav(float scale) {
    }
 }
 
+// The fork's find and replace fields: InputText over a buffer of cap bytes (NUL-terminated); 1 when edited.
+int fig_core_text_input(const char *label, char *buf, int cap, int flags) {
+   return ImGui::InputText(label, buf, static_cast<size_t>(cap), flags) ? 1 : 0;
+}
+
+// The autocomplete popup brought to the front (BringWindowToDisplayFront(GetCurrentWindow())).
+void fig_core_text_front(void) { ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow()); }
+
 } // extern "C"

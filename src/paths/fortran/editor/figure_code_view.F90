@@ -29,7 +29,10 @@ use figure_cimgui_enums, only : ImGuiChildFlags_Borders, ImGuiCol_ChildBg, ImGui
                                 ImGuiKey_LeftArrow, ImGuiKey_LeftBracket, ImGuiKey_PageDown, ImGuiKey_PageUp,             &
                                 ImGuiKey_RightArrow, ImGuiKey_RightBracket, ImGuiKey_Slash, ImGuiKey_Space, ImGuiKey_Tab, &
                                 ImGuiKey_UpArrow, ImGuiKey_V, ImGuiKey_X, ImGuiKey_Y, ImGuiKey_Z,                         &
-                                ImGuiMouseCursor_TextInput
+                                ImGuiMouseCursor_TextInput, ImGuiCol_Header, ImGuiCol_TextLink, ImGuiCol_Button,          &
+                                ImGuiCol_ButtonActive, ImGuiCol_ButtonHovered, ImGuiCol_TableBorderLight,                 &
+                                ImGuiWindowFlags_NoFocusOnAppearing, ImGuiWindowFlags_NoNav,                              &
+                                ImGuiInputTextFlags_AutoSelectAll, ImGuiInputTextFlags_NoUndoRedo
 use figure_code_document, only : code_cursor, code_pos, cursor_has_selection, cursor_selection_end, &
                                  cursor_selection_start, &
                                  cursors_any_selection, cursors_update, pos, pos_le, pos_lt, pos_eq, cursor_update,    &
@@ -37,11 +40,12 @@ use figure_code_document, only : code_cursor, code_pos, cursor_has_selection, cu
                                  cursors_add, cursors_set, cursors_clear_additional, cursors_adjust_insert,            &
                                  cursors_adjust_delete, doc_left, doc_right, doc_cp, doc_bottom, doc_end_of_line,      &
                                  doc_next_line, doc_normalize, doc_section_text, doc_find_text, doc_whole_word,        &
-                                 doc_find_word_start, doc_find_word_end, COLOR_BACKGROUND,         &
+                                 doc_find_word_start, doc_find_word_end, cursors_clear_all, COLOR_BACKGROUND,         &
                                  COLOR_BRACKET_ACTIVE, COLOR_BRACKET_BACKGROUND, COLOR_BRACKET_ERROR,                  &
                                  COLOR_BRACKET_LEVEL1, COLOR_BRACKET_LEVEL2, COLOR_BRACKET_LEVEL3, COLOR_CURSOR,       &
                                  COLOR_CURRENT_LINE, COLOR_CURRENT_LINE_BORDER, COLOR_CURRENT_LINE_NUMBER,              &
-                                 COLOR_LINE_NUMBER, COLOR_PUNCTUATION, COLOR_SELECTION, COLOR_TEXT, COLOR_WHITESPACE
+                                 COLOR_LINE_NUMBER, COLOR_PUNCTUATION, COLOR_COMMENT, COLOR_STRING, COLOR_SELECTION, &
+                                 COLOR_TEXT, COLOR_WHITESPACE
 use figure_code_editor, only : code_editor, editor_get, fail, line_severity, marker_tooltip, not_found, str, &
                                INVALID, N_SEVERITY, SEVERITY_RGB, make_cursor_visible, start_transaction,     &
                                end_transaction, insert_text, delete_text, delete_from_all_cursors,             &
@@ -49,7 +53,8 @@ use figure_code_editor, only : code_editor, editor_get, fail, line_severity, mar
                                select_next_occurrence, select_all_occurrences, replace_in_current_cursor
 use figure_code_language, only : colorize, lang_comment_single, lang_indentation_blocks
 use figure_code_unicode, only : cp_glyph_width, cp_is_bracket_closer, cp_is_bracket_opener, cp_is_white_space, &
-                                cp_is_word, cp_to_pair_closer, cp_to_pair_opener, cp_write
+                                cp_is_word, cp_to_pair_closer, cp_to_pair_opener, cp_write, cp_read, &
+                                cp_to_lower
 use figure_core_text, only : ct_begin_child, ct_begin_popup, ct_begin_tooltip, ct_char, ct_circle_filled, ct_clip_rect, &
                              ct_color_u32, ct_cursor_screen_pos, ct_end_child, ct_end_popup, ct_end_tooltip,            &
                              ct_float4_to_u32, ct_font_size, ct_hovering_rect, ct_item_rect, ct_line,                   &
@@ -62,7 +67,14 @@ use figure_core_text, only : ct_begin_child, ct_begin_popup, ct_begin_tooltip, c
                              ct_want_keyboard, ct_mouse_pos, ct_mouse_down, ct_mouse_clicked,                        &
                              ct_mouse_double_clicked, ct_mouse_released, ct_mouse_dragging, ct_mouse_drag_delta,     &
                              ct_reset_mouse_drag_delta, ct_set_mouse_cursor, ct_time, ct_window_size, ct_set_clipboard, &
-                             ct_clipboard, ct_chars, ct_ime, ct_window_hovered
+                             ct_clipboard, ct_chars, ct_ime, ct_window_hovered, ct_style_u32, ct_frame_height,        &
+                             ct_frame_height_with_spacing, ct_invisible_button, ct_button, ct_content_avail,         &
+                             ct_set_next_window_pos, ct_set_next_window_size, ct_set_next_window_bg_alpha,          &
+                             ct_set_next_item_width, ct_set_keyboard_focus_here, ct_item_deactivated,               &
+                             ct_item_clicked, ct_begin_disabled, ct_end_disabled, ct_same_line,                     &
+                             ct_push_style_color_vec4, ct_key_chord_pressed, ct_clear_window_focus,                 &
+                             ct_window_appearing, ct_close_current_popup, ct_set_scroll_here_y, ct_bring_to_front,   &
+                             ct_input_text, ct_open_popup
 
 implicit none
 private
@@ -764,6 +776,7 @@ contains
       call render_number_markers(e)
       call render_numbers(e, wx)
       call render_decorations(e, wx)
+      call render_find_replace(e)
       call render_popups(e)
       call handle_scrolling(e)
       call ct_nav(e%font_scale)
@@ -1062,13 +1075,21 @@ contains
 
    subroutine render_popups(e)
    !< `renderPopups`: the context menus' and the hover popup's (FIGURE sets no callback: never open), then the
-   !< autocomplete's (a later step).
-   type(code_editor), intent(inout) :: e !< Editor.
+   !< autocomplete's, a picked suggestion replacing its section.
+   type(code_editor), intent(inout) :: e      !< Editor.
+   logical                          :: picked !< A suggestion picked.
 
-   if (ct_begin_popup('LineNumberContextMenu', 0_c_int)) call ct_end_popup()
-   if (ct_begin_popup('TextContextMenu', 0_c_int)) call ct_end_popup()
+   if (ct_begin_popup('LineNumberContextMenu', 0_c_int)) then
+      call ct_close_current_popup()
+      call ct_end_popup()
+   endif
+   if (ct_begin_popup('TextContextMenu', 0_c_int)) then
+      call ct_close_current_popup()
+      call ct_end_popup()
+   endif
    if (ct_popup_open('TextHoverPopup')) continue
-   if (e%ac_active) continue
+   call render_autocomplete(e, picked)
+   if (picked) call replace_section(e, ac_replacement_start(e), ac_replacement_end(e), offered_word(e, e%ac_selection))
    endsubroutine render_popups
 
    ! ---- moves and edits the keys and the mouse make (szaghi/figure#15 P16 step 12) ------------------------------------
@@ -2189,6 +2210,493 @@ contains
    e%focus_on_find = .false.
    endsubroutine find_action
 
+   ! ---- the autocomplete popup and the find and replace window (szaghi/figure#15 P16 step 13) ---------------------
+   function ac_word_start(e, p) result(q)
+   !< `AutoComplete::findWordStart`.
+   type(code_editor), intent(in) :: e !< Editor.
+   type(code_pos),    intent(in) :: p !< From.
+   type(code_pos)                :: q !< Start of the term.
+
+   q = p
+   do while (q%i > 0_int32)
+      if (.not. ac_word_character(e, e%doc%lines(q%l + 1)%cp(q%i))) exit
+      q%i = q%i - 1_int32
+   enddo
+   endfunction ac_word_start
+
+   function ac_word_end(e, p) result(q)
+   !< `AutoComplete::findWordEnd`.
+   type(code_editor), intent(in) :: e !< Editor.
+   type(code_pos),    intent(in) :: p !< From.
+   type(code_pos)                :: q !< End of the word.
+
+   q = p
+   do while (q%i < e%doc%lines(q%l + 1)%n)
+      if (.not. ac_word_character(e, e%doc%lines(q%l + 1)%cp(q%i + 1))) exit
+      q%i = q%i + 1_int32
+   enddo
+   endfunction ac_word_end
+
+   subroutine ac_update_state(e, in_comment, in_string)
+   !< `AutoComplete::updateState`: the search term, where it is, the section a pick replaces.
+   type(code_editor), intent(inout) :: e          !< Editor.
+   logical,           intent(out)   :: in_comment !< In a comment.
+   logical,           intent(out)   :: in_string  !< In a string.
+   integer(int32)                   :: s          !< A line state.
+   integer(int8)                    :: col        !< A glyph's colour.
+
+   e%ac_term = doc_section_text(e%doc, e%ac_start, e%ac_location)
+   if (e%ac_location%i == 0_int32) then
+      s = e%doc%lines(e%ac_location%l + 1)%state
+      in_comment = s >= 1_int32 .and. s <= 8_int32
+      in_string = s >= 9_int32 .and. s <= 20_int32
+   else
+      col = e%doc%lines(e%ac_location%l + 1)%color(e%ac_location%i)
+      in_comment = col == COLOR_COMMENT
+      in_string = col == COLOR_STRING
+   endif
+   e%ac_rstart = e%ac_start
+   e%ac_rend = ac_word_end(e, e%ac_location)
+   endsubroutine ac_update_state
+
+   subroutine ac_refresh(e)
+   !< `refreshSuggestions` with the glue's callback (`suggest`): the program's words starting with the term (in any
+   !< case, the term itself left out), then those containing it; a term's leading blanks skipped.
+   type(code_editor), intent(inout) :: e    !< Editor.
+   character(len=:), allocatable    :: term, w !< The term in lower case, a word.
+   integer(int32)                   :: lead, pass, a, k, n !< Blanks, pass, a word's start, counters.
+
+   e%offered = ''
+   e%noffered = 0_int32
+   lead = 0_int32
+   do while (lead < len(e%ac_term, int32))
+      if (e%ac_term(lead + 1:lead + 1) /= ' ' .and. e%ac_term(lead + 1:lead + 1) /= achar(9)) exit
+      lead = lead + 1_int32
+   enddo
+   term = lower_ascii(e%ac_term(lead + 1:))
+   e%ac_rstart%i = e%ac_rstart%i + lead
+   if (len(term) > 0) then
+      do pass = 1_int32, 2_int32
+         a = 1_int32
+         n = len(e%words, int32)
+         do k = 1_int32, n + 1_int32
+            if (k <= n) then
+               if (e%words(k:k) /= achar(10)) cycle
+            endif
+            w = lower_ascii(e%words(a:k - 1_int32))
+            if (pass == 1_int32) then
+               if (starts(w, term) .and. .not. (w == term .and. len(w) == len(term))) call offer(e%words(a:k - 1_int32))
+            else
+               if (.not. starts(w, term) .and. index(w, term) > 0) call offer(e%words(a:k - 1_int32))
+            endif
+            a = k + 1_int32
+         enddo
+      enddo
+   endif
+   e%ac_selection = 0_int32
+   contains
+      subroutine offer(word)
+      !< A suggestion appended.
+      character(len=*), intent(in) :: word !< Word.
+
+      if (e%noffered > 0_int32) e%offered = e%offered//achar(10)
+      e%offered = e%offered//word
+      e%noffered = e%noffered + 1_int32
+      endsubroutine offer
+   endsubroutine ac_refresh
+
+   pure function starts(w, t) result(yes)
+   !< `w` starts with `t`.
+   character(len=*), intent(in) :: w, t !< Strings.
+   logical                      :: yes  !< A prefix.
+
+   yes = len(w) >= len(t)
+   if (yes) yes = w(1:len(t)) == t
+   endfunction starts
+
+   pure function lower_ascii(s) result(l)
+   !< ASCII lower case.
+   character(len=*), intent(in) :: s !< String.
+   character(len=len(s))        :: l !< Lower case.
+   integer(int32)               :: i, c !< Counter, code.
+
+   l = s
+   do i = 1_int32, len(s, int32)
+      c = iachar(s(i:i))
+      if (c >= 65_int32 .and. c <= 90_int32) l(i:i) = achar(c + 32_int32)
+   enddo
+   endfunction lower_ascii
+
+   function offered_word(e, k) result(w)
+   !< Suggestion k (from 0).
+   type(code_editor), intent(in) :: e !< Editor.
+   integer(int32),    intent(in) :: k !< Suggestion.
+   character(len=:), allocatable :: w !< Word.
+   integer(int32)                :: j, a, n, i !< Counters.
+
+   w = ''
+   a = 1_int32
+   n = 0_int32
+   do i = 1_int32, len(e%offered, int32) + 1_int32
+      if (i <= len(e%offered, int32)) then
+         if (e%offered(i:i) /= achar(10)) cycle
+      endif
+      if (n == k) then
+         w = e%offered(a:i - 1_int32)
+         return
+      endif
+      n = n + 1_int32
+      a = i + 1_int32
+   enddo
+   j = 0_int32
+   endfunction offered_word
+
+   function ac_replacement_start(e) result(p)
+   !< `getReplacementStart`.
+   type(code_editor), intent(in) :: e !< Editor.
+   type(code_pos)                :: p !< Start.
+
+   if (e%ac_rstart%l == e%ac_location%l .and. e%ac_rstart%i <= e%ac_location%i) then
+      p = e%ac_rstart
+   else
+      p = e%ac_start
+   endif
+   endfunction ac_replacement_start
+
+   function ac_replacement_end(e) result(p)
+   !< `getReplacementEnd`.
+   type(code_editor), intent(in) :: e !< Editor.
+   type(code_pos)                :: p !< End.
+
+   if (e%ac_rend%l == e%ac_location%l .and. e%ac_rend%i >= e%ac_location%i .and. &
+       e%ac_rend%i <= e%doc%lines(e%ac_rend%l + 1)%n) then
+      p = e%ac_rend
+   else
+      p = ac_word_end(e, e%ac_location)
+   endif
+   endfunction ac_replacement_end
+
+   function render_suggestion(e, text, term, width, selected) result(clicked)
+   !< The fork's `renderSuggestion`: an invisible button, the text glyph by glyph, the term's glyphs as a link.
+   type(code_editor), intent(in) :: e        !< Editor.
+   character(len=*),  intent(in) :: text     !< Suggestion.
+   character(len=*),  intent(in) :: term     !< The term typed.
+   real(c_float),     intent(in) :: width    !< Width.
+   logical,           intent(in) :: selected !< The selected one.
+   logical                       :: clicked  !< Clicked.
+   real(c_float)                 :: x, y, h, gw, f(16) !< Position, height, glyph width, style.
+   integer(c_int)                :: fi(5), col !< Flags, colour.
+   integer(int32)                :: i, j, cp, sp, jn !< Bytes, code points.
+
+   call ct_cursor_screen_pos(x, y)
+   h = ct_frame_height_with_spacing()
+   clicked = ct_invisible_button('suggestion', width, h)
+   gw = ct_text_width('#')
+   if (selected) call ct_rect_filled(x, y, x + width, y + h, ct_style_u32(ImGuiCol_Header))
+   call ct_state(f, fi)
+   x = x + f(14)
+   y = y + f(15)
+   i = 1_int32
+   if (len(text) >= 3) then
+      if (text(1:3) == achar(239)//achar(187)//achar(191)) i = 4_int32
+   endif
+   j = 1_int32
+   if (len(term) >= 3) then
+      if (term(1:3) == achar(239)//achar(187)//achar(191)) j = 4_int32
+   endif
+   do while (i <= len(text, int32))
+      call cp_read(text, i, cp)
+      col = ct_style_u32(ImGuiCol_Text)
+      if (j <= len(term, int32)) then
+         jn = j
+         call cp_read(term, jn, sp)
+         if (cp_to_lower(sp) == cp_to_lower(cp)) then
+            col = ct_style_u32(ImGuiCol_TextLink)
+            j = jn
+         endif
+      endif
+      call ct_char(x, y, col, cp)
+      x = x + gw
+   enddo
+   endfunction render_suggestion
+
+   subroutine render_autocomplete(e, picked)
+   !< `AutoComplete::render`; `picked` when the user chose a suggestion.
+   type(code_editor), intent(inout) :: e      !< Editor.
+   logical,           intent(out)   :: picked !< A suggestion picked.
+   logical                          :: in_comment, in_string, scroll !< Where the term is, scroll to the selection.
+   type(code_pos)                   :: now, start !< The cursor, its term's start.
+   integer(int32)                   :: r, c, n, visible, k !< Visual position, suggestions.
+   real(c_float)                    :: x, y, f(16) !< Cursor, style.
+   integer(c_int)                   :: fi(5) !< Flags.
+   character(len=:), allocatable    :: term  !< The term highlighted.
+
+   picked = .false.
+   if (e%ac_request_activation .and. .not. e%ac_active) then
+      if (.not. ct_window_focused() .or. .not. pos_eq(cursor_selection_end(e%cursors%c(e%cursors%main + 1)), &
+                                                      e%ac_location)) then
+         e%ac_request_activation = .false.
+      else
+         e%ac_request_activation = .false.
+         e%ac_start = ac_word_start(e, e%ac_location)
+         call ac_update_state(e, in_comment, in_string)
+         if (in_comment .or. in_string) return
+         call ac_refresh(e)
+         call ct_open_popup('AutoCompleteContextMenu')
+         e%ac_active = .true.
+      endif
+   endif
+   if (.not. e%ac_active) return
+   now = cursor_selection_end(e%cursors%c(e%cursors%main + 1))
+   if (.not. pos_eq(now, e%ac_location)) then
+      if (now%l /= e%ac_location%l) then
+         e%ac_request_deactivation = .true.
+      else
+         start = ac_word_start(e, now)
+         if (pos_eq(start, e%ac_start)) then
+            e%ac_location = now
+            if (pos_eq(e%ac_location, e%ac_start)) then
+               e%ac_request_deactivation = .true.
+            else
+               call ac_update_state(e, in_comment, in_string)
+               call ac_refresh(e)
+            endif
+         else
+            e%ac_request_deactivation = .true.
+         endif
+      endif
+   endif
+   call vis_pos(e, e%ac_location, r, c)
+   call ct_cursor_screen_pos(x, y)
+   call ct_set_next_window_pos(x + e%text_left + real(c, c_float) * e%glyph_w, y + real(r + 1_int32, c_float) * e%glyph_h)
+   n = e%noffered
+   if (n == 0_int32 .and. .not. e%ac_manual) e%ac_request_deactivation = .true.
+   visible = 1_int32
+   if (n > 0_int32) visible = min(10_int32, n)
+   call ct_state(f, fi)
+   call ct_set_next_window_size(30.0_c_float * e%glyph_w, &
+                                ct_frame_height_with_spacing() * real(visible, c_float) + f(11) * 2.0_c_float)
+   if (ct_begin_popup('AutoCompleteContextMenu', ior(ImGuiWindowFlags_NoFocusOnAppearing, ImGuiWindowFlags_NoNav))) then
+      if (ct_window_appearing()) call ct_bring_to_front()
+      if (e%ac_request_deactivation) then
+         call ct_close_current_popup()
+         e%ac_request_deactivation = .false.
+         e%ac_active = .false.
+      elseif (n > 0_int32) then
+         scroll = .false.
+         if (ct_key_pressed(ImGuiKey_UpArrow)) then
+            scroll = .true.
+            if (e%ac_selection == 0_int32) then
+               e%ac_selection = n - 1_int32
+            else
+               e%ac_selection = e%ac_selection - 1_int32
+            endif
+         elseif (ct_key_pressed(ImGuiKey_DownArrow)) then
+            scroll = .true.
+            if (e%ac_selection == n - 1_int32) then
+               e%ac_selection = 0_int32
+            else
+               e%ac_selection = e%ac_selection + 1_int32
+            endif
+         elseif (ct_key_pressed(ImGuiKey_Tab) .or. ct_key_pressed(ImGuiKey_Enter) .or. &
+                 ct_key_pressed(ImGuiKey_KeypadEnter)) then
+            e%ac_request_deactivation = .true.
+            picked = .true.
+         endif
+         term = doc_section_text(e%doc, ac_replacement_start(e), e%ac_location)
+         do k = 0_int32, n - 1_int32
+            call ct_push_id_int(int(k, c_int))
+            if (scroll .and. k == e%ac_selection) call ct_set_scroll_here_y(0.5_c_float)
+            call ct_content_avail(x, y)
+            if (render_suggestion(e, offered_word(e, k), term, x, k == e%ac_selection)) then
+               e%ac_selection = k
+               e%ac_request_deactivation = .true.
+               picked = .true.
+            endif
+            call ct_pop_id()
+         enddo
+      else
+         call ct_text_unformatted('No suggestions')
+      endif
+      call ct_end_popup()
+   else
+      e%ac_request_deactivation = .false.
+      e%ac_active = .false.
+   endif
+   endsubroutine render_autocomplete
+
+   subroutine replace_section(e, a, b, text)
+   !< `replaceSectionText`.
+   type(code_editor), intent(inout) :: e    !< Editor.
+   type(code_pos),    intent(in)    :: a, b !< Section.
+   character(len=*),  intent(in)    :: text !< Text.
+   type(code_pos)                   :: t    !< End of the insert.
+
+   call start_transaction(e, .true.)
+   call delete_text(e, a, b)
+   call insert_text(e, a, text, t)
+   call cursors_clear_additional(e%cursors, .false.)
+   call cursor_update(e%cursors%c(e%cursors%main + 1), t, t)
+   call end_transaction(e)
+   endsubroutine replace_section
+
+   function latch_button(label, value, w) result(changed)
+   !< The fork's `latchButton`: a button showing a state, toggled by a click.
+   character(len=*), intent(in)    :: label   !< Label.
+   logical,          intent(inout) :: value   !< State.
+   real(c_float),    intent(in)    :: w       !< Width.
+   logical                         :: changed !< Toggled.
+   real(c_float)                   :: active(4), light(4) !< The style's colours.
+   logical                         :: unused  !< Button's result.
+
+   changed = .false.
+   call ct_style_color(ImGuiCol_ButtonActive, active)
+   call ct_style_color(ImGuiCol_TableBorderLight, light)
+   if (value) then
+      call ct_push_style_color_vec4(ImGuiCol_Button, active)
+      call ct_push_style_color_vec4(ImGuiCol_ButtonHovered, active)
+      call ct_push_style_color_vec4(ImGuiCol_ButtonActive, light)
+   else
+      call ct_push_style_color_vec4(ImGuiCol_Button, light)
+      call ct_push_style_color_vec4(ImGuiCol_ButtonHovered, light)
+      call ct_push_style_color_vec4(ImGuiCol_ButtonActive, active)
+   endif
+   unused = ct_button(label, w, 0.0_c_float)
+   if (ct_item_clicked()) then
+      value = .not. value
+      changed = .true.
+   endif
+   call ct_pop_style_color(3_c_int)
+   endfunction latch_button
+
+   subroutine render_find_replace(e)
+   !< `renderFindReplace`: the find and replace window, a child at the editor's top right.
+   type(code_editor), intent(inout) :: e  !< Editor.
+   real(c_float)                    :: sx, sy, f(16), field, b1, b2, opt, wh, ww, avail, wx, wy, scroll_w !< Layout.
+   integer(c_int)                   :: fi(5) !< Flags.
+   logical                          :: disable, edited, unused !< Find buttons disabled, a field edited.
+
+   if (.not. e%find_visible) return
+   call ct_cursor_screen_pos(sx, sy)
+   call ct_push_style_var_vec2(ImGuiStyleVar_ItemSpacing, 6.0_c_float, 4.0_c_float)
+   call ct_state(f, fi)
+   field = 250.0_c_float * f(3)
+   b1 = ct_text_width('Find') + f(12) * 2.0_c_float
+   b2 = ct_text_width('Find All') + f(12) * 2.0_c_float
+   opt = 0.0_c_float
+   opt = max(opt, ct_text_width('Aa'))
+   opt = max(opt, ct_text_width('[]'))
+   opt = max(opt, ct_text_width('x'))
+   opt = opt + f(12) * 2.0_c_float
+   if (.not. e%read_only) then
+      b1 = max(b1, ct_text_width('Replace') + f(12) * 2.0_c_float)
+      b2 = max(b2, ct_text_width('Replace All') + f(12) * 2.0_c_float)
+   endif
+   wh = f(9) * 2.0_c_float
+   wh = wh + f(11) * 2.0_c_float
+   wh = wh + ct_frame_height()
+   if (e%read_only) then
+      wh = wh + 0.0_c_float
+   else
+      wh = wh + (f(13) + ct_frame_height())
+   endif
+   ww = f(9) * 2.0_c_float
+   ww = ww + f(10) * 2.0_c_float
+   ww = ww + field
+   ww = ww + f(12)
+   ww = ww + b1
+   ww = ww + f(12)
+   ww = ww + b2
+   ww = ww + f(12)
+   ww = ww + opt * 3.0_c_float
+   ww = ww + f(12) * 2.0_c_float
+   scroll_w = 0.0_c_float
+   if (fi(1) /= 0_c_int) scroll_w = f(8)
+   avail = f(16) - 0.0_c_float
+   avail = avail - scroll_w
+   call ct_window_pos(wx, wy)
+   call ct_set_next_window_pos(wx + (avail - ww - f(12)), wy + f(13) * 2.0_c_float)
+   call ct_set_next_window_size(ww, wh)
+   call ct_set_next_window_bg_alpha(0.75_c_float)
+   unused = ct_begin_child('find-replace', ww, wh, ImGuiChildFlags_Borders, 0_c_int)
+   call ct_set_next_item_width(field)
+   if (e%focus_on_find) then
+      call ct_set_keyboard_focus_here()
+      e%focus_on_find = .false.
+   elseif (e%find_cancelled_ac) then
+      call ct_set_keyboard_focus_here()
+      e%find_cancelled_ac = .false.
+   endif
+   edited = ct_input_text('###find', e%find_text, ior(ImGuiInputTextFlags_AutoSelectAll, ImGuiInputTextFlags_NoUndoRedo))
+   if (edited) then
+      if (len(e%find_text) > 0) then
+         call select_first_occurrence(e)
+      else
+         call cursors_clear_all(e%cursors)
+      endif
+   endif
+   if (ct_item_deactivated()) then
+      if (ct_key_pressed(ImGuiKey_Escape)) then
+         call close_find_replace(e)
+      elseif (ct_key_pressed(ImGuiKey_Enter) .or. ct_key_pressed(ImGuiKey_KeypadEnter)) then
+         e%focus_on_editor = .true.
+         e%focus_on_find = .false.
+      endif
+   endif
+   disable = len(e%find_text) == 0
+   if (disable) call ct_begin_disabled()
+   call ct_same_line()
+   if (ct_button('Find', b1, 0.0_c_float)) call find_action(e, 1_int32)
+   call ct_same_line()
+   if (ct_button('Find All', b2, 0.0_c_float)) call find_action(e, 3_int32)
+   if (disable) call ct_end_disabled()
+   call ct_same_line()
+   if (latch_button('Aa', e%find_case, opt)) call find_action(e, 1_int32)
+   call ct_same_line()
+   if (latch_button('[]', e%find_whole, opt)) call find_action(e, 1_int32)
+   call ct_same_line()
+   if (ct_button('x', opt, 0.0_c_float)) call close_find_replace(e)
+   if (.not. e%read_only) then
+      call ct_set_next_item_width(field)
+      edited = ct_input_text('###replace', e%replace_text, ImGuiInputTextFlags_NoUndoRedo)
+      call ct_same_line()
+      if (len(e%find_text) == 0 .or. len(e%replace_text) == 0) then
+         call ct_begin_disabled()
+         if (ct_button('Replace', b1, 0.0_c_float)) call find_action(e, 4_int32)
+         call ct_same_line()
+         if (ct_button('Replace All', b2, 0.0_c_float)) call find_action(e, 5_int32)
+         call ct_end_disabled()
+      else
+         if (ct_button('Replace', b1, 0.0_c_float)) call find_action(e, 4_int32)
+         call ct_same_line()
+         if (ct_button('Replace All', b2, 0.0_c_float)) call find_action(e, 5_int32)
+      endif
+   endif
+   if (ct_window_focused() .and. .not. disable) then
+      if (ct_key_chord_pressed(ior(ImGuiMod_Ctrl, ImGuiKey_G))) then
+         call ct_clear_window_focus()
+         call find_action(e, 1_int32)
+      endif
+   endif
+   call ct_end_child()
+   call ct_pop_style_var(1_c_int)
+   call ct_set_cursor_screen_pos(sx, sy)
+   endsubroutine render_find_replace
+
+   subroutine select_first_occurrence(e)
+   !< `selectFirstOccurrenceOf(findText, ...)`.
+   type(code_editor), intent(inout) :: e    !< Editor.
+   type(code_pos)                   :: a, b !< Occurrence.
+   logical                          :: found !< Found.
+
+   call doc_find_text(e%doc, pos(0_int32, 0_int32), e%find_text, e%find_case, e%find_whole, found, a, b)
+   if (found) then
+      call cursors_set(e%cursors, a, b)
+      call make_cursor_visible(e)
+   else
+      call cursors_clear_additional(e%cursors, .true.)
+   endif
+   endsubroutine select_first_occurrence
    ! ---- the glue's entry points ---------------------------------------------------------------------------------------
    function fig_editor_draw(handle, id, id_len, width, height, changed) result(status)
    !< Draw the editor as a widget (the glue's `fig_editor_draw`): the style's palette, IBM Plex Mono, the fork's render

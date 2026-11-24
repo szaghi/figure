@@ -141,6 +141,9 @@ type :: code_editor
    type(code_pos) :: ac_start                    !< startLocation.
    logical        :: ac_manual = .false.         !< triggeredManually.
    integer(int32) :: ac_selection = 0_int32      !< currentSelection, from 0.
+   type(code_pos) :: ac_rstart                   !< state.replacementStart.
+   type(code_pos) :: ac_rend                     !< state.replacementEnd.
+   character(len=:), allocatable :: ac_term      !< state.searchTerm.
    ! find and replace (the fork's window)
    logical        :: find_visible = .false.      !< findReplaceVisible.
    logical        :: focus_on_find = .false.     !< focusOnFind.
@@ -266,6 +269,7 @@ contains
    e%words = ''
    e%offered = ''
    e%find_text = ''
+   e%ac_term = ''
    e%replace_text = ''
    allocate(e%mk_number(8), e%mk_text(8), e%mk_off(8), e%mk_len(8))
    allocate(character(len=256) :: e%mk_pool)
