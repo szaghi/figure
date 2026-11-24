@@ -37,7 +37,9 @@ module figure_core
 !<   a glyph of the current font at its size (`core_font_glyph`: `GetFontBaked`, `FindGlyph`), for text drawn glyph by
 !<   glyph (ImPlot's vertical text); a rectangle of four corner colours (`core_draw_rect_filled_multicolor`:
 !<   `AddRectFilledMultiColor`, ImPlot's colour bars); P13: triangles appended as given (`core_draw_prims`, the 3-D
-!<   plots' depth-sorted list).
+!<   plots' depth-sorted list); P14, the gradient editor's widgets (`core_begin_child`, `core_end_child`,
+!<   `core_begin_group`, `core_end_group`, `core_dummy`, `core_same_line`, `core_begin_disabled`, `core_end_disabled`,
+!<   `core_button`, `core_color_edit3`) and the window's storage (`core_storage_int`, `core_set_storage_int`).
 !<
 !< The draw list is built in Fortran (figure_drawlist, the first piece of block E) and appended to the window's Dear
 !< ImGui list by `core_draw_end`: the primitives figure_drawlist tessellates (filled rectangles without rounding,
@@ -79,6 +81,8 @@ use figure_cimgui_core, only : ImDrawList_AddConcavePolyFilled, igArrowButtonEx
 use figure_cimgui, only : igBeginCombo, igEndCombo
 use figure_c_native, only : fig_window_skip_items
 use figure_drawlist, only : dl_prims
+use figure_cimgui, only : igBeginChild_ID, igBeginDisabled, igBeginGroup, igButton, igColorEdit3, igDummy, igEndChild,  &
+                          igEndDisabled, igEndGroup, igGetStateStorage, igSameLine
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
                             dl_triangle_filled, DL_LINE_TEXTURES
 
@@ -98,6 +102,8 @@ public :: core_push_clip_rect, core_pop_clip_rect, core_draw_callback
 public :: core_draw_line_h, core_draw_line_v, core_line_texture, core_draw_quad_uv
 public :: core_font_glyph, core_draw_rect_filled_multicolor
 public :: core_io_input, core_mouse_drag_delta, core_mouse_double_clicked, core_mouse_pos_valid, core_window_hovered
+public :: core_begin_child, core_end_child, core_begin_group, core_end_group, core_dummy, core_same_line   ! P14
+public :: core_begin_disabled, core_end_disabled, core_button, core_color_edit3, core_storage_int, core_set_storage_int
 public :: core_set_key_owner, core_set_mouse_cursor, core_push_override_id, core_push_id_int
 public :: core_push_item_width, core_push_item_flag, core_pop_item_flag, core_push_style_var, core_pop_style_var
 public :: core_drag_double, core_radio_button, core_invisible_button, core_text_unformatted
@@ -194,6 +200,26 @@ interface
    integer(c_int16_t), value :: c    !< C `ImWchar` (16 bits).
    type(c_ptr)               :: res  !< C `ImFontGlyph*`.
    endfunction ImFontBaked_FindGlyph
+
+   ! the window's storage, for the gradient editor's state (szaghi/figure#15 P14: ImGradient, FIGURE's patch 0003)
+   function ImGuiStorage_GetInt(self, key, default_val) result(res) bind(C, name='ImGuiStorage_GetInt')
+   !< ImGuiStorage::GetInt(ImGuiID,int), imgui.h.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: self        !< C `ImGuiStorage*`.
+   integer(c_int), value :: key         !< C `ImGuiID`.
+   integer(c_int), value :: default_val !< C `int`.
+   integer(c_int)        :: res         !< C `int`.
+   endfunction ImGuiStorage_GetInt
+
+   subroutine ImGuiStorage_SetInt(self, key, val) bind(C, name='ImGuiStorage_SetInt')
+   !< ImGuiStorage::SetInt(ImGuiID,int), imgui.h.
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: self !< C `ImGuiStorage*`.
+   integer(c_int), value :: key  !< C `ImGuiID`.
+   integer(c_int), value :: val  !< C `int`.
+   endsubroutine ImGuiStorage_SetInt
 endinterface
 
 type, bind(C) :: im_font_glyph
@@ -928,6 +954,99 @@ contains
 
    call igEndPopup()
    endsubroutine core_end_popup
+
+   ! the gradient editor's widgets (szaghi/figure#15 P14: ImGradient and its FIGURE glue)
+
+   function core_begin_child(id, w, h, flags) result(visible)
+   !< `BeginChild(id, (w, h), flags, 0)`: a child window of a given ID; `core_end_child` after it, whatever the result.
+   integer(int32), intent(in) :: id      !< ID.
+   real(real64),   intent(in) :: w, h    !< Size [pixels].
+   integer(int32), intent(in) :: flags   !< `ImGuiChildFlags`.
+   logical                    :: visible !< Visible.
+
+   visible = logical(igBeginChild_ID(int(id, c_int), v2(w, h), int(flags, c_int), 0_c_int))
+   endfunction core_begin_child
+
+   subroutine core_end_child()
+   !< `EndChild`.
+
+   call igEndChild()
+   endsubroutine core_end_child
+
+   subroutine core_begin_group()
+   !< `BeginGroup`.
+
+   call igBeginGroup()
+   endsubroutine core_begin_group
+
+   subroutine core_end_group()
+   !< `EndGroup`.
+
+   call igEndGroup()
+   endsubroutine core_end_group
+
+   subroutine core_dummy(w, h)
+   !< `Dummy((w, h))`: room in the layout, no item.
+   real(real64), intent(in) :: w, h !< Size [pixels].
+
+   call igDummy(v2(w, h))
+   endsubroutine core_dummy
+
+   subroutine core_same_line()
+   !< `SameLine()`.
+
+   call igSameLine(0.0_c_float, -1.0_c_float)
+   endsubroutine core_same_line
+
+   subroutine core_begin_disabled(disabled)
+   !< `BeginDisabled(disabled)`; `core_end_disabled` after it.
+   logical, intent(in) :: disabled !< Disabled.
+
+   call igBeginDisabled(logical(disabled, c_bool))
+   endsubroutine core_begin_disabled
+
+   subroutine core_end_disabled()
+   !< `EndDisabled`.
+
+   call igEndDisabled()
+   endsubroutine core_end_disabled
+
+   function core_button(label) result(pressed)
+   !< `Button(label)`, of its text's size.
+   character(len=*), intent(in) :: label   !< Label.
+   logical                      :: pressed !< Pressed.
+
+   call to_buf(label(1:min(len(label), BUF_LEN)))
+   pressed = logical(igButton(buf, v2(0.0_real64, 0.0_real64)))
+   endfunction core_button
+
+   function core_color_edit3(label, rgb, flags) result(changed)
+   !< `ColorEdit3(label, rgb, flags)`.
+   character(len=*),      intent(in)    :: label   !< Label.
+   real(real32), target,  intent(inout) :: rgb(3)  !< Colour (as floats).
+   integer(int32),        intent(in)    :: flags   !< `ImGuiColorEditFlags`.
+   logical                              :: changed !< Changed.
+
+   call to_buf(label(1:min(len(label), BUF_LEN)))
+   changed = logical(igColorEdit3(buf, c_loc(rgb), int(flags, c_int)))
+   endfunction core_color_edit3
+
+   function core_storage_int(id, default) result(v)
+   !< An integer kept in the current window's storage (`GetStateStorage()->GetInt(id, default)`).
+   integer(int32), intent(in) :: id      !< Key.
+   integer(int32), intent(in) :: default !< Value when none is kept.
+   integer(int32)             :: v       !< Value.
+
+   v = int(ImGuiStorage_GetInt(igGetStateStorage(), int(id, c_int), int(default, c_int)), int32)
+   endfunction core_storage_int
+
+   subroutine core_set_storage_int(id, v)
+   !< An integer kept in the current window's storage (`GetStateStorage()->SetInt(id, v)`).
+   integer(int32), intent(in) :: id !< Key.
+   integer(int32), intent(in) :: v  !< Value.
+
+   call ImGuiStorage_SetInt(igGetStateStorage(), int(id, c_int), int(v, c_int))
+   endsubroutine core_set_storage_int
 
    subroutine to_buf(s, at)
    !< A text copied into the module's buffer, NUL-terminated, from `at` (default 1); the caller checked it fits. Two

@@ -39,6 +39,7 @@ private
 public :: cm_colormap, cm_count, cm_current, cm_index, cm_is_qual, cm_key, cm_pop, cm_push, cm_register, cm_sample
 public :: cm_size, cm_style_refresh, mix_u32, pack_float4
 public :: cm_load, cm_list_count, cm_list_name, cm_stops, cm_edit_stops, cm_generation
+public :: cm_gradient_slot, cm_gradient_size, cm_gradient_get, cm_stops_at
 public :: CM_DEEP, CM_VIRIDIS
 
 integer(int32), parameter :: CM_DEEP = 0_int32    !< ImPlotColormap_Deep.
@@ -854,7 +855,8 @@ contains
    endsubroutine sorted_stops
 
    pure function stops_at(s, t) result(c)
-   !< `stops_at`: the colour of sorted stops at t, linear between them, the ends' beyond them.
+   !< `stops_at`: the colour of sorted stops at t, linear between them, the ends' beyond them. The differences of two
+   !< stops are taken in single precision, as C++ takes `b.w - a.w` and `b.x - a.x` of two floats.
    real(real32), intent(in) :: s(:,:) !< Sorted stops (4, n).
    real(real64), intent(in) :: t      !< Position.
    real(real64)             :: c(3)   !< Colour.
@@ -871,12 +873,12 @@ contains
    do i = 2_int32, n
       if (t <= real(s(4, i), real64)) then
          if (s(4, i) > s(4, i - 1_int32)) then
-            w = (t - real(s(4, i - 1_int32), real64)) / (real(s(4, i), real64) - real(s(4, i - 1_int32), real64))
+            w = (t - real(s(4, i - 1_int32), real64)) / real(s(4, i) - s(4, i - 1_int32), real64)
          else
             w = 1.0_real64
          endif
          do j = 1_int32, 3_int32
-            d = w * (real(s(j, i), real64) - real(s(j, i - 1_int32), real64))
+            d = w * real(s(j, i) - s(j, i - 1_int32), real64)
             c(j) = real(s(j, i - 1_int32), real64) + d
          enddo
          return
@@ -901,7 +903,6 @@ contains
    character(len=:), allocatable :: n                     !< Name.
    real(real64),     allocatable :: p0(:), c0(:,:), keys(:,:) !< Its stops now, its keys.
    real(real32),     allocatable :: st(:,:), sst(:,:)     !< The stops given, sorted.
-   type(gradient),   allocatable :: more(:)               !< Grown table.
    integer(int32)                :: g, k, nk, b, u, ns    !< Slots, counters.
    logical                       :: qual, same            !< Qualitative, the same stops.
 
@@ -925,26 +926,7 @@ contains
       st(4, k) = real(pos(k), real32)
    enddo
    g = grad_index(n)
-   if (g == 0_int32) then ! `gradient_of`: the stops it had, before this edit
-      if (.not. allocated(grads)) allocate(grads(4))
-      if (n_grads == size(grads, kind=int32)) then
-         allocate(more(2_int32 * n_grads))
-         do k = 1_int32, n_grads ! element by element (nvfortran: no section of a type with deferred-length parts)
-            call move_alloc(grads(k)%name, more(k)%name)
-            call move_alloc(grads(k)%stops, more(k)%stops)
-            if (allocated(grads(k)%table)) call move_alloc(grads(k)%table, more(k)%table)
-         enddo
-         call move_alloc(more, grads)
-      endif
-      n_grads = n_grads + 1_int32
-      g = n_grads
-      grads(g)%name = n
-      allocate(grads(g)%stops(4, size(p0)))
-      do k = 1_int32, size(p0, kind=int32)
-         grads(g)%stops(1:3, k) = real(c0(:, k), real32)
-         grads(g)%stops(4, k) = real(p0(k), real32)
-      enddo
-   endif
+   if (g == 0_int32) g = new_gradient(n, p0, c0) ! `gradient_of`: the stops it had, before this edit
    same = size(grads(g)%stops, 2) == ns
    if (same) same = all(grads(g)%stops == st)
    if (same) return
@@ -977,6 +959,85 @@ contains
    status = FIG_OK
    err = ''
    endsubroutine cm_edit_stops
+
+   function new_gradient(n, p0, c0) result(g)
+   !< `gradient_of` for a map not edited yet: its slot, holding the stops it has (`cm_stops`'s).
+   character(len=*), intent(in) :: n        !< Base name.
+   real(real64),     intent(in) :: p0(:)    !< Its stops' positions.
+   real(real64),     intent(in) :: c0(:,:)  !< Their colours (3, n).
+   integer(int32)               :: g        !< Slot.
+   type(gradient),   allocatable :: more(:) !< Grown table.
+   integer(int32)               :: k        !< Counter.
+
+   if (.not. allocated(grads)) allocate(grads(4))
+   if (n_grads == size(grads, kind=int32)) then
+      allocate(more(2_int32 * n_grads))
+      do k = 1_int32, n_grads ! element by element (nvfortran: no section of a type with deferred-length parts)
+         call move_alloc(grads(k)%name, more(k)%name)
+         call move_alloc(grads(k)%stops, more(k)%stops)
+         if (allocated(grads(k)%table)) call move_alloc(grads(k)%table, more(k)%table)
+      enddo
+      call move_alloc(more, grads)
+   endif
+   n_grads = n_grads + 1_int32
+   g = n_grads
+   grads(g)%name = n
+   allocate(grads(g)%stops(4, size(p0)))
+   do k = 1_int32, size(p0, kind=int32)
+      grads(g)%stops(1:3, k) = real(c0(:, k), real32)
+      grads(g)%stops(4, k) = real(p0(k), real32)
+   enddo
+   endfunction new_gradient
+
+   function cm_gradient_slot(name, status, err) result(g)
+   !< The slot of the map `name` (trimmed) as the gradient editor holds it (`editable`, then `gradient_of`): its stops in
+   !< the editor's order, those `cm_stops` gives until it is edited. 0, with `status` and `err` as `cm_stops`'s (named
+   !< `ig_gradient_edit`), for a map `editable` refuses. No allocation for a map that has its slot already.
+   character(len=*),              intent(in)  :: name    !< Name (trimmed).
+   integer(int32),                intent(out) :: status  !< Status.
+   character(len=:), allocatable, intent(out) :: err     !< Message.
+   integer(int32)                             :: g       !< Slot.
+   real(real64),     allocatable              :: p0(:), c0(:,:) !< Its stops.
+
+   call init()
+   status = FIG_OK
+   g = grad_index(name)
+   if (g > 0_int32) return
+   call cm_stops(name, p0, c0, status, err)
+   if (status /= FIG_OK) then
+      err = 'ig_gradient_edit'//err(len('ip_colormap_stops') + 1:)
+      return
+   endif
+   g = new_gradient(name, p0, c0)
+   endfunction cm_gradient_slot
+
+   function cm_gradient_size(g) result(n)
+   !< The stops of an edited map's slot.
+   integer(int32), intent(in) :: g !< Slot (`cm_gradient_slot`).
+   integer(int32)             :: n !< Stops.
+
+   n = size(grads(g)%stops, 2, kind=int32)
+   endfunction cm_gradient_size
+
+   subroutine cm_gradient_get(g, s)
+   !< An edited map's stops, in the editor's order, into `s(:, 1:cm_gradient_size(g))`.
+   integer(int32), intent(in)    :: g      !< Slot (`cm_gradient_slot`).
+   real(real32),   intent(inout) :: s(:,:) !< Stops (r, g, b, position), at least `cm_gradient_size(g)` of them.
+   integer(int32)                :: k      !< Counter.
+
+   do k = 1_int32, size(grads(g)%stops, 2, kind=int32)
+      s(:, k) = grads(g)%stops(:, k)
+   enddo
+   endsubroutine cm_gradient_get
+
+   pure function cm_stops_at(s, t) result(c)
+   !< `stops_at`: the colour of sorted stops at t, linear between them, the ends' beyond them.
+   real(real32), intent(in) :: s(:,:) !< Sorted stops (4, n).
+   real(real64), intent(in) :: t      !< Position.
+   real(real64)             :: c(3)   !< Colour.
+
+   c = stops_at(s, t)
+   endfunction cm_stops_at
 
    subroutine rewrite_variants(base, keys, qual, builtin_base)
    !< Every registered variant of an edited map (`<base>`, `<base>_r`, with 0 or 2-256 levels) rewritten from its keys
