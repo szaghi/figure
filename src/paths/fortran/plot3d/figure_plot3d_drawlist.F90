@@ -5,11 +5,14 @@ module figure_plot3d_drawlist
 !< szaghi/figure#15 P13. A 3-D plot's items write their triangles here (vertices: pixel position, texture coordinates,
 !< packed colour; three 0-based indices and a depth per triangle), as ImPlot3D's `ImDrawList3D`: `d3_reserve` and
 !< `d3_unreserve` (`PrimReserve`, `PrimUnreserve`), `d3_room` (what `RenderPrimitivesEx` may still draw: the list's
-!< 16-bit indices stop at 65535 vertices per plot, the primitives past them are not drawn), the writes
+!< indices are 32-bit, FIGURE's ImPlot3D patch 0002, so up to `D3_MAX_VTX` vertices per plot), the writes
 !< (`d3_vtx`, `d3_tri`), and `d3_flush` (`SortedMoveToImGuiDrawList`): the triangles sorted by increasing depth as
 !< glibc's `qsort` sorts them (2.39: a top-down merge sort, stable; reproduced step for step, so that a NaN depth, which
 !< the comparator calls equal to anything, lands where glibc puts it), appended to the window's list through
-!< figure_core (`core_draw_prims`), the list emptied.
+!< figure_core (`core_draw_prims`), the list emptied. A list of more than 65535 vertices (past 16-bit indices) is
+!< appended as ImPlot3D's patch appends it: each sorted triangle's three vertices in the sorted order, in runs of one
+!< texture of at most 21845 triangles, each run one `core_draw_prims` (a new batch, Dear ImGui's `VtxOffset`, when the
+!< window's would pass 65535 vertices).
 !<
 !< The buffers and the sort's scratch are module arrays grown once and kept (no allocation per frame).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
@@ -19,9 +22,12 @@ implicit none
 private
 public :: d3_reset, d3_reserve, d3_unreserve, d3_room, d3_vtx, d3_tri, d3_flush, d3_vtx_count, d3_tri_count
 public :: d3_set_texture
-public :: D3_MAX_IDX
+public :: D3_MAX_IDX, D3_MAX_VTX
 
-integer(int32), parameter :: D3_MAX_IDX = 65535_int32 !< ImDrawList3D::MaxIdx() (16-bit ImDrawIdx).
+integer(int32), parameter :: D3_MAX_IDX = 65535_int32     !< ImDrawList3D::MaxIdx() (16-bit ImDrawIdx).
+integer(int32), parameter :: D3_MAX_VTX = 536870911_int32 !< ImDrawList3D::MaxVtx() (FIGURE's patch): a plot's
+                                                          !< vertices at most, 2^29 - 1.
+integer(int32), parameter :: RUN_MAX = D3_MAX_IDX / 3_int32 !< Triangles of a run of a large list (21845).
 
 real(real32),   allocatable :: vx(:), vy(:), vu(:), vv(:) !< Vertices: position, texture coordinates.
 integer(int32), allocatable :: vc(:)                      !< ... packed colour.
@@ -34,6 +40,8 @@ integer(int32)              :: nt = 0_int32               !< Triangles.
 integer(int64)              :: run_tex(64) = 0_int64      !< Texture runs (`_TextureBuffer`): texture (0: the default),
 integer(int32)              :: run_vtx(64) = 0_int32      !< ... from this vertex (0-based) on.
 integer(int32)              :: nrun = 0_int32             !< Runs.
+real(real32),   allocatable :: bx(:), by(:), bu(:), bv(:) !< A large list's run: its vertices, in the sorted order,
+integer(int32), allocatable :: bc(:), bi(:)               !< ... their colours, their indices (0, 1, 2, ...).
 
 contains
    subroutine d3_reset()
@@ -83,12 +91,12 @@ contains
    endfunction d3_tri_count
 
    pure function d3_room(prims, vtx_per_prim) result(n)
-   !< `RenderPrimitivesEx`'s count: at most `prims`, as many as the vertices left under 65535 hold.
+   !< `RenderPrimitivesEx`'s count: at most `prims`, as many as the vertices left under `D3_MAX_VTX` hold.
    integer(int32), intent(in) :: prims        !< Primitives asked.
    integer(int32), intent(in) :: vtx_per_prim !< Vertices per primitive.
    integer(int32)             :: n            !< Primitives drawn.
 
-   n = min(prims, (D3_MAX_IDX - nv) / vtx_per_prim)
+   n = min(prims, (D3_MAX_VTX - nv) / vtx_per_prim)
    endfunction d3_room
 
    subroutine d3_reserve(nvtx, ntri)
@@ -154,7 +162,9 @@ contains
       sidx(3_int32 * k - 1_int32) = ix(3_int32 * t - 1_int32)
       sidx(3_int32 * k) = ix(3_int32 * t)
    enddo
-   if (nrun <= 1_int32) then
+   if (nv > D3_MAX_IDX) then
+      call flush_large()
+   elseif (nrun <= 1_int32) then
       call core_draw_prims(vx(1:nv), vy(1:nv), vu(1:nv), vv(1:nv), vc(1:nv), sidx(1:3_int32 * nt))
    else
       call flush_runs()
@@ -187,6 +197,57 @@ contains
       ta = tk
    enddo
    endsubroutine flush_runs
+
+   subroutine flush_large()
+   !< A list past 16-bit indices (ImPlot3D's patch 0002): each sorted triangle's three vertices in the sorted order, in
+   !< runs of one texture (`_TextureBuffer` read with two runs or more) of at most `RUN_MAX` triangles, each run drawn
+   !< with its texture (the default one without).
+   integer(int32) :: k, m, j, c, n !< Run start, its triangles, a triangle, a corner, vertices written.
+   integer(int64) :: tex          !< The run's texture.
+
+   if (.not. allocated(bx)) then
+      allocate(bx(3_int32 * RUN_MAX), by(3_int32 * RUN_MAX), bu(3_int32 * RUN_MAX), bv(3_int32 * RUN_MAX))
+      allocate(bc(3_int32 * RUN_MAX), bi(3_int32 * RUN_MAX))
+      do j = 1_int32, 3_int32 * RUN_MAX
+         bi(j) = j - 1_int32
+      enddo
+   endif
+   k = 1_int32
+   do while (k <= nt)
+      tex = large_texture(k)
+      m = 1_int32
+      do while (k + m <= nt .and. m < RUN_MAX)
+         if (large_texture(k + m) /= tex) exit
+         m = m + 1_int32
+      enddo
+      n = 0_int32
+      do j = k, k + m - 1_int32
+         do c = 2_int32, 0_int32, -1_int32
+            n = n + 1_int32
+            bx(n) = vx(sidx(3_int32 * j - c) + 1_int32)
+            by(n) = vy(sidx(3_int32 * j - c) + 1_int32)
+            bu(n) = vu(sidx(3_int32 * j - c) + 1_int32)
+            bv(n) = vv(sidx(3_int32 * j - c) + 1_int32)
+            bc(n) = vc(sidx(3_int32 * j - c) + 1_int32)
+         enddo
+      enddo
+      if (tex == 0_int64) then
+         call core_draw_prims(bx(1:n), by(1:n), bu(1:n), bv(1:n), bc(1:n), bi(1:n))
+      else
+         call core_draw_prims(bx(1:n), by(1:n), bu(1:n), bv(1:n), bc(1:n), bi(1:n), texture=tex)
+      endif
+      k = k + m
+   enddo
+   endsubroutine flush_large
+
+   pure function large_texture(k) result(tex)
+   !< The texture of the k-th sorted triangle of a large list (0, the default, with fewer than two runs).
+   integer(int32), intent(in) :: k   !< Sorted triangle.
+   integer(int64)             :: tex !< Texture.
+
+   tex = 0_int64
+   if (nrun > 1_int32) tex = tri_texture(sidx(3_int32 * k - 2_int32))
+   endfunction large_texture
 
    pure function tri_texture(i0) result(tex)
    !< The texture of a triangle whose first vertex is i0 (0-based).

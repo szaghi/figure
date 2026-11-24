@@ -3904,6 +3904,47 @@ void ImDrawList3D::SortedMoveToImGuiDrawList() {
         return (za < zb) ? -1 : (za > zb) ? 1 : 0;
     });
 
+    // FIGURE: more vertices than 16-bit indices address (the 3-D list's indices are 32-bit): each sorted triangle's
+    // three vertices written in the sorted order, in runs of one texture of at most MaxIdx() / 3 triangles, each run
+    // one PrimReserve, which starts a draw command at a new VtxOffset when the window's list would pass 65535 vertices
+    // (ImDrawFlags_UseVtxOffset; without it, the runs that fit are drawn)
+    if (VtxBuffer.Size > (int)MaxIdx()) {
+        const ImTextureRef default_tex = GET_TEX_REF(draw_list._CmdHeader);
+        auto tri_texture = [&](int tri_i) {
+            const ImTextureRef invalid_tex = ImTextureID(0);
+            ImTextureRef tri_tex = invalid_tex;
+            if (_TextureBuffer.Size > 1)
+                for (int j = 0; j < _TextureBuffer.Size; j++)
+                    if (IdxBuffer[tri_i * 3] >= _TextureBuffer[j].VtxIdx)
+                        tri_tex = _TextureBuffer[j].TexRef;
+            return tri_tex == invalid_tex ? default_tex : tri_tex;
+        };
+        const int run_max = (int)(MaxIdx() / 3);
+        for (int k = 0; k < tri_count;) {
+            const ImTextureRef tex = tri_texture(tris[k].tri_idx);
+            int m = 1;
+            while (k + m < tri_count && m < run_max && tri_texture(tris[k + m].tri_idx) == tex)
+                m++;
+            if (!(draw_list.Flags & ImDrawFlags_UseVtxOffset) && draw_list._VtxCurrentIdx + 3 * (unsigned int)m > MaxIdx())
+                break;
+            if (tex != default_tex)
+                draw_list.PushTexture(tex);
+            draw_list.PrimReserve(3 * m, 3 * m);
+            for (int j = k; j < k + m; j++) {
+                for (int c = 0; c < 3; c++) {
+                    *draw_list._VtxWritePtr++ = VtxBuffer[(int)IdxBuffer[tris[j].tri_idx * 3 + c]];
+                    *draw_list._IdxWritePtr++ = (ImDrawIdx)draw_list._VtxCurrentIdx++;
+                }
+            }
+            if (tex != default_tex)
+                draw_list.PopTexture();
+            k += m;
+        }
+        ResetBuffers();
+        IM_FREE(tris);
+        return;
+    }
+
     // Reserve space in the ImGui draw list
     draw_list.PrimReserve(IdxBuffer.Size, VtxBuffer.Size);
 
@@ -3919,7 +3960,7 @@ void ImDrawList3D::SortedMoveToImGuiDrawList() {
     // Copy indices with triangle sorting based on distance from viewer
     ImDrawIdx* idx_out_begin = draw_list._IdxWritePtr;
     ImDrawIdx* idx_out = idx_out_begin;
-    ImDrawIdx* idx_in = IdxBuffer.Data;
+    unsigned int* idx_in = IdxBuffer.Data;
     for (int i = 0; i < tri_count; i++) {
         int tri_i = tris[i].tri_idx;
         int base_idx = tri_i * 3;

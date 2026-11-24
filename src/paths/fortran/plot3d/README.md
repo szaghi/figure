@@ -20,8 +20,9 @@ Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figur
   per-point maps are scalar code in ImPlot3D's operation order.
 - `figure_plot3d_locators`: ImPlot3D's ticker and locators (default, log10, symlog: ImPlot3D's own rules, not
   ImPlot's).
-- `figure_plot3d_drawlist`: `ImDrawList3D`: the triangles with their depths, the 65535-vertex room, the texture runs,
-  and the move sorted as glibc's `qsort` sorts (its top-down merge sort, step for step).
+- `figure_plot3d_drawlist`: `ImDrawList3D`: the triangles with their depths, 32-bit indices (FIGURE's ImPlot3D patch
+  0002: no 65535-vertex cap per plot; a list past 16-bit indices moved as runs of sorted triangles, three vertices
+  each), the texture runs, and the move sorted as glibc's `qsort` sorts (its top-down merge sort, step for step).
 - `figure_plot3d_frame`: the plots kept between frames, begin and end, setup, `SetupLock`, the box, rotated text,
   input (`HandleInput`), the legend, the context menus, the mouse text, the queries, the items' hooks, `pf3_text`.
 - `figure_plot3d_style`: `ImPlot3DStyle`: its 14 colours (automatic until pushed, `GetAutoColor`: from Dear ImGui's
@@ -44,7 +45,7 @@ unfused, libm's `sincos`), `_box` (the box, axes, camera at several rotations an
 custom ticks, formats, flags), `_lines` (lines, markers, legend, the depth sort), `_surfaces` (triangles, quads,
 surfaces, meshes, images, texts), `_input` (rotation, pan, zoom, fit, animation), `_menus` (the context menus),
 `_style` (colours and variables pushed, the themes, Dear ImGui's style alpha), `_alloc` (no heap allocation per
-frame), `_big` (a 256 x 256 surface: ImPlot3D's 65535-vertex cap mirrored, the
+frame), `_big` (a 256 x 256 surface, every cell drawn past 65535 vertices, the
 frame times reported).
 
 ## The ImPlot3D calls the seam replaces

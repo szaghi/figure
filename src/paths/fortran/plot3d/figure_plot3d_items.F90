@@ -10,8 +10,8 @@ module figure_plot3d_items
 !< `RendererLineStripSkip` (the miter joints of consecutive segments: `PrimLineStrip`, `GetLineJointOffset`),
 !< `RendererLineSegments`, `RendererMarkersFill`, `RendererMarkersLine` and the marker tables; each segment clipped to
 !< the cull box (Liang-Barsky, `ImPlot3DBox::ClipLineSegment`), each marker culled, each triangle with its depth
-!< (`GetPointDepth`) into the 3-D list (figure_plot3d_drawlist), at most 65535 vertices per plot
-!< (`RenderPrimitivesEx`). Lines take the anti-aliased line texture (`GetLineRenderProps`), fills the white pixel.
+!< (`GetPointDepth`) into the 3-D list (figure_plot3d_drawlist), at most `D3_MAX_VTX` vertices per plot
+!< (`RenderPrimitivesEx`, FIGURE's ImPlot3D patch 0002: 32-bit indices, not 65535 vertices). Lines take the anti-aliased line texture (`GetLineRenderProps`), fills the white pixel.
 !<
 !< Step 5: `pf3_triangles` and `pf3_quads` (`PlotTriangle`, `PlotQuad`: `RendererTriangleFill`, `RendererQuadFill`,
 !< their edges through `GetterTriangleLines`/`GetterQuadLines`), `pf3_surface` on a rectilinear grid or any grid

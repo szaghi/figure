@@ -1,15 +1,18 @@
-!< figure_test_plot_frame_3d_big, a 256 x 256 surface on the Fortran 3-D frame: ImPlot3D's 65535-vertex cap, the time.
+!< figure_test_plot_frame_3d_big, a 256 x 256 surface on the Fortran 3-D frame: past 65535 vertices, the time.
 program figure_test_plot_frame_3d_big
-!< figure_test_plot_frame_3d_big, a 256 x 256 surface on the Fortran 3-D frame: ImPlot3D's 65535-vertex cap, the time.
+!< figure_test_plot_frame_3d_big, a 256 x 256 surface on the Fortran 3-D frame: past 65535 vertices, the time.
 !<
 !< szaghi/figure#15 P13, step 8. The bench scene `surface256` (figure_bench_scenes: 256 x 256 heights changing every
 !< frame) drawn by ImPlot3D through FIGURE's API (`ip3_surface`) and by the Fortran frame (`pf3_surface`), NF frames
-!< each. ImPlot3D's list has 16-bit indices and `RenderPrimitivesEx` draws, of each call, only the primitives the 65535
-!< vertices left hold: a surface spends 4 vertices per cell, so of the 255 x 255 = 65025 cells 16383 are drawn (the
-!< first 64 rows and a quarter), on both paths (the frame mirrors the cap). Checks:
+!< each. A surface spends 4 vertices per cell: its 255 x 255 = 65025 cells take 260100, past the 65535 that 16-bit
+!< indices address. ImPlot3D's list has 32-bit indices (FIGURE's patch 0002; upstream drew 16383 cells, the first 64
+!< rows and a quarter) and is moved to the window's list as runs of sorted triangles, three vertices each, a new draw
+!< command (`VtxOffset`) when 65535 would pass; the frame does the same. Checks:
 !<
-!< 1. the last frame's pictures equal at FIGURE's oracle rule (|d| <= 2, no pixel failing): the cap and the colours;
-!< 2. the box's corners' pixels equal to the bit on the last frame.
+!< 1. the last frame's pictures equal at FIGURE's oracle rule (|d| <= 2, no pixel failing): every cell and the colours;
+!< 2. the box's corners' pixels equal to the bit on the last frame;
+!< 3. the frame's 3-D list holds, before its end, every cell's two triangles and every grid segment's two (130050 and
+!<    2 x 2 x 256 x 255 = 261120): none dropped (with 1, ImPlot3D's neither).
 !<
 !< Reported, not checked: each side's median frame time over the NF frames (the headless CPU renderer's included).
 !< The pictures are `figure_test_plot_frame_3d_big.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
@@ -18,6 +21,7 @@ use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_
                    ip3_plot_to_pixels, ip3_setup_axes, ip3_surface, ImGuiWindowFlags_NoDecoration
 use figure_plot3d_frame, only : pf3_begin_plot, pf3_end_plot, pf3_plot_to_pixels, pf3_setup_axes
 use figure_plot3d_items, only : pf3_surface
+use figure_plot3d_drawlist, only : d3_tri_count
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 
 implicit none
@@ -29,7 +33,8 @@ real(real64)              :: x(N), y(N), z(N, N) !< The surface.
 real(real64)              :: corners(16, 2) !< The last frame's corners' pixels per side.
 real(real64)              :: times(NF, 2)   !< Frame times [ms] per side.
 type(app_object)          :: app            !< Application.
-logical                   :: test_passed(2) !< Per-check outcome.
+logical                   :: test_passed(3) !< Per-check outcome.
+integer(int32)            :: ntri = 0_int32 !< The frame's triangles before its end, the last frame.
 logical                   :: side_fortran   !< Drawing with the Fortran frame.
 integer(int32)            :: f, s, sd, i, j !< Frame, status, side, counters.
 integer(int64)            :: t0, t1, rate   !< Clock.
@@ -65,6 +70,8 @@ enddo
 call app%destroy()
 test_passed(1) = pictures_equal()
 test_passed(2) = all(corners(:, 1) == corners(:, 2))
+test_passed(3) = ntri == 2_int32 * (N - 1_int32)**2 + 4_int32 * N * (N - 1_int32)
+if (.not. test_passed(3)) write(output_unit, '(A,I0)') 'the frame drew triangles: ', ntri
 write(output_unit, '(A,F8.2,A,F8.2,A)') 'figure_test_plot_frame_3d_big: median frame time ImPlot3D ', &
    median(times(:, 1)), ' ms, Fortran frame ', median(times(:, 2)), ' ms (reported, not checked)'
 call get_environment_variable('FIGURE_TEST_KEEP', keep)
@@ -86,6 +93,7 @@ contains
       call pf3_setup_axes('x', 'y', 'z', limits=[-1.0_real64, 1.0_real64, -1.0_real64, 1.0_real64, -1.0_real64, &
                           1.0_real64], elevation=30.0_real64, azimuth=40.0_real64)
       call pf3_surface('surface', x, y, z)
+      ntri = d3_tri_count()
    else
       if (.not. ip3_begin_plot('Big', width=600.0_real64, height=440.0_real64)) return
       call ip3_setup_axes('x', 'y', 'z', limits=[-1.0_real64, 1.0_real64, -1.0_real64, 1.0_real64, -1.0_real64, &

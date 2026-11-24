@@ -14,7 +14,7 @@
 #                            generated against the same Dear ImGui 1.93 API; fetched without its submodule
 #   ImPlot3D              -> the small 3-D figures (ip3_*; MIT): brenocq/implot3d at commit c54525f (the submodule
 #                            cimplot3d v0.5 pins: v0.5 with its version bumped), vendored in third_party/implot3d with
-#                            FIGURE's one patch (its patches/ directory). It needs Dear ImGui only (not ImPlot) and
+#                            FIGURE's patches (its patches/ directory). It needs Dear ImGui only (not ImPlot) and
 #                            draws through its draw lists
 #   SDL     release-3.4.20
 #   miniz   3.0.2         -> deflate for the remote mode's compressed messages (MIT)

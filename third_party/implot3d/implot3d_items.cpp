@@ -318,12 +318,12 @@ IMPLOT3D_INLINE void PrimLine(ImDrawList3D& draw_list_3d, const ImVec2& P1, cons
     draw_list_3d._VtxWritePtr[3].uv = tex_uv1;
     draw_list_3d._VtxWritePtr[3].col = col;
     draw_list_3d._VtxWritePtr += 4;
-    draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-    draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
-    draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
-    draw_list_3d._IdxWritePtr[3] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-    draw_list_3d._IdxWritePtr[4] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
-    draw_list_3d._IdxWritePtr[5] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 3);
+    draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+    draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
+    draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
+    draw_list_3d._IdxWritePtr[3] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+    draw_list_3d._IdxWritePtr[4] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
+    draw_list_3d._IdxWritePtr[5] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 3);
     draw_list_3d._IdxWritePtr += 6;
     draw_list_3d._VtxCurrentIdx += 4;
     draw_list_3d._ZWritePtr[0] = z;
@@ -429,9 +429,9 @@ template <class _Getter, class _GetterColor, class _GetterSize> struct RendererM
         // 3 indices per triangle
         for (int i = 2; i < Count; i++) {
             // Indices
-            draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-            draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + i - 1);
-            draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + i);
+            draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+            draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + i - 1);
+            draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + i);
             draw_list_3d._IdxWritePtr += 3;
             // Z
             draw_list_3d._ZWritePtr[0] = GetPointDepth(p_plot);
@@ -655,9 +655,9 @@ template <class _Getter, class _GetterColor> struct RendererTriangleFill : Rende
         draw_list_3d._VtxWritePtr += 3;
 
         // 3 indices per triangle
-        draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-        draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
-        draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+        draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+        draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
+        draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
         draw_list_3d._IdxWritePtr += 3;
         // 1 Z per vertex
         draw_list_3d._ZWritePtr[0] = GetPointDepth((p_plot[0] + p_plot[1] + p_plot[2]) / 3);
@@ -722,13 +722,13 @@ template <class _Getter, class _GetterColor> struct RendererQuadFill : RendererB
         draw_list_3d._VtxWritePtr += 4;
 
         // Add indices for two triangles
-        draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-        draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
-        draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+        draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+        draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
+        draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
 
-        draw_list_3d._IdxWritePtr[3] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-        draw_list_3d._IdxWritePtr[4] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
-        draw_list_3d._IdxWritePtr[5] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 3);
+        draw_list_3d._IdxWritePtr[3] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+        draw_list_3d._IdxWritePtr[4] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
+        draw_list_3d._IdxWritePtr[5] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 3);
 
         draw_list_3d._IdxWritePtr += 6;
 
@@ -801,13 +801,13 @@ template <class _Getter> struct RendererQuadImage : RendererBase {
         draw_list_3d._VtxWritePtr += 4;
 
         // Add indices for two triangles
-        draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-        draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
-        draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+        draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+        draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
+        draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
 
-        draw_list_3d._IdxWritePtr[3] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-        draw_list_3d._IdxWritePtr[4] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
-        draw_list_3d._IdxWritePtr[5] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 3);
+        draw_list_3d._IdxWritePtr[3] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+        draw_list_3d._IdxWritePtr[4] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
+        draw_list_3d._IdxWritePtr[5] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 3);
 
         draw_list_3d._IdxWritePtr += 6;
 
@@ -925,13 +925,13 @@ template <class _Getter> struct RendererSurfaceFill : RendererBase {
         draw_list_3d._VtxWritePtr += 4;
 
         // Add indices for two triangles
-        draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-        draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
-        draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+        draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+        draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
+        draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
 
-        draw_list_3d._IdxWritePtr[3] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
-        draw_list_3d._IdxWritePtr[4] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
-        draw_list_3d._IdxWritePtr[5] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 3);
+        draw_list_3d._IdxWritePtr[3] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
+        draw_list_3d._IdxWritePtr[4] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
+        draw_list_3d._IdxWritePtr[5] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 3);
 
         draw_list_3d._IdxWritePtr += 6;
 
@@ -1148,7 +1148,8 @@ template <class _Renderer> void RenderPrimitivesEx(const _Renderer& renderer) {
     }
 
     // Find how many can be reserved up to end of current draw command's limit
-    unsigned int prims_to_render = ImMin(renderer.Prims, (ImDrawList3D::MaxIdx() - draw_list_3d._VtxCurrentIdx) / renderer.VtxConsumed);
+    // FIGURE: the 3-D list's indices are 32-bit: the room is MaxVtx(), not 16-bit ImDrawIdx's 65535 vertices per plot
+    unsigned int prims_to_render = ImMin(renderer.Prims, (ImDrawList3D::MaxVtx() - draw_list_3d._VtxCurrentIdx) / renderer.VtxConsumed);
 
     // Reserve vertices and indices to render the primitives
     draw_list_3d.PrimReserve(prims_to_render * renderer.IdxConsumed, prims_to_render * renderer.VtxConsumed);

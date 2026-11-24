@@ -4,7 +4,7 @@
 | cimgui | — | vendored in `third_party/cimgui` | Dear ImGui 1.93.1 WIP, docking branch at cf53467 (2026-11-10): cimgui has no tag there, so FIGURE runs cimgui's generator (its tag 1.93.1WIPdock) with scripts/gen_cimgui.sh (LuaJIT; to move Dear ImGui only, not to build) |
 | cimplot | v1.1 | fetched by the first build | ImPlot 1.2 WIP (git submodule of cimplot); generated against cimgui 1.93dock, the same Dear ImGui 1.93 API (docking only adds to it) |
 | cimplot3d | v0.5 | fetched by the first build | the C API of ImPlot3D 0.6 WIP and its generator metadata (read by gen_bindings.py), generated against the same Dear ImGui 1.93 API; fetched without its submodule |
-| ImPlot3D | — | vendored in `third_party/implot3d` | the small 3-D figures (ip3_*; MIT): brenocq/implot3d at commit c54525f (the submodule cimplot3d v0.5 pins: v0.5 with its version bumped) with FIGURE's one patch (its patches/ directory). It needs Dear ImGui only (not ImPlot) and draws through its draw lists |
+| ImPlot3D | — | vendored in `third_party/implot3d` | the small 3-D figures (ip3_*; MIT): brenocq/implot3d at commit c54525f (the submodule cimplot3d v0.5 pins: v0.5 with its version bumped) with FIGURE's patches (its patches/ directory). It needs Dear ImGui only (not ImPlot) and draws through its draw lists |
 | SDL | release-3.4.20 | fetched by the first build | — |
 | miniz | 3.0.2 | fetched by the first build | deflate for the remote mode's compressed messages (MIT) |
 | stb_image_write | v1.16 | vendored in `third_party/stb` | JPEG for the remote mode's changing images, PNG and JPEG files (MIT or public domain) |

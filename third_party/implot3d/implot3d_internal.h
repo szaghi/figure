@@ -157,12 +157,12 @@ struct ImDrawList3D {
         unsigned int VtxIdx;
     };
 
-    ImVector<ImDrawIdx> IdxBuffer;  // Index buffer
+    ImVector<unsigned int> IdxBuffer; // Index buffer (FIGURE: 32-bit, not ImDrawIdx: a plot's items may write more than 65535 vertices)
     ImVector<ImDrawVert> VtxBuffer; // Vertex buffer
     ImVector<double> ZBuffer;       // Z buffer. Depth value for each triangle
     unsigned int _VtxCurrentIdx;    // [Internal] current vertex index
     ImDrawVert* _VtxWritePtr; // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
-    ImDrawIdx* _IdxWritePtr;  // [Internal] point within IdxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
+    unsigned int* _IdxWritePtr; // [Internal] point within IdxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
     double* _ZWritePtr;       // [Internal] point within ZBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
     ImVector<ImTextureBufferItem> _TextureBuffer; // [Internal] buffer for SetTexture/ResetTexture
     ImDrawListSharedData* _SharedData;            // [Internal] shared draw list data
@@ -195,6 +195,9 @@ struct ImDrawList3D {
     }
 
     constexpr static unsigned int MaxIdx() { return sizeof(ImDrawIdx) == 2 ? 65535 : 4294967295; }
+    // FIGURE: the vertices a plot's items may write (RenderPrimitivesEx), 2^29 - 1: three indices per vertex at most
+    // stay within an int (ImVector's size); SortedMoveToImGuiDrawList splits them into draw commands of 16-bit indices
+    constexpr static unsigned int MaxVtx() { return 536870911; }
 };
 
 struct ImPlot3DNextItemData {

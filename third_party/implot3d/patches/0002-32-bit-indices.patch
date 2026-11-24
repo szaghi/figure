@@ -1,0 +1,222 @@
+FIGURE's patch 2 of 2 to ImPlot3D (commit c54525f8d46cece384cc2618761a2c55016b06db, the submodule of cimplot3d v0.5).
+
+ImDrawList3D kept its indices in Dear ImGui's ImDrawIdx (16-bit), so RenderPrimitivesEx drew, of a plot, only the
+primitives that 65535 vertices hold: a 256 x 256 surface (4 vertices per cell) showed 16383 of its 65025 cells, the
+rest silently dropped (#15, finding U1). The 3-D list's indices are now 32-bit (IdxBuffer, _IdxWritePtr: unsigned int;
+the items' 30 index writes cast to unsigned int, not ImDrawIdx), its room MaxVtx() = 2^29 - 1 vertices (three indices
+per vertex at most stay within ImVector's int). SortedMoveToImGuiDrawList keeps its path for a list of at most 65535
+vertices; a larger one is moved as runs of sorted triangles, each triangle's three vertices written in the sorted
+order (no index remap past 16 bits), a run one texture and at most MaxIdx() / 3 triangles, each run one PrimReserve,
+which starts a draw command at a new VtxOffset when the window's list would pass 65535 vertices (Dear ImGui's
+ImDrawFlags_UseVtxOffset, set by every renderer FIGURE has: OpenGL 3, the headless CPU one, the remote page); without
+that flag the runs that fit are drawn. The depth order and the pixels of a list that fitted before are unchanged.
+Applied to third_party/implot3d/implot3d_internal.h, implot3d.cpp, implot3d_items.cpp; without it
+src/tests/fortran/figure_test_plot_frame_3d_big.F90 draws a quarter of its surface on the current path. To offer
+upstream.
+
+--- a/implot3d.cpp
++++ b/implot3d.cpp
+@@ -3904,6 +3904,47 @@
+         return (za < zb) ? -1 : (za > zb) ? 1 : 0;
+     });
+ 
++    // FIGURE: more vertices than 16-bit indices address (the 3-D list's indices are 32-bit): each sorted triangle's
++    // three vertices written in the sorted order, in runs of one texture of at most MaxIdx() / 3 triangles, each run
++    // one PrimReserve, which starts a draw command at a new VtxOffset when the window's list would pass 65535 vertices
++    // (ImDrawFlags_UseVtxOffset; without it, the runs that fit are drawn)
++    if (VtxBuffer.Size > (int)MaxIdx()) {
++        const ImTextureRef default_tex = GET_TEX_REF(draw_list._CmdHeader);
++        auto tri_texture = [&](int tri_i) {
++            const ImTextureRef invalid_tex = ImTextureID(0);
++            ImTextureRef tri_tex = invalid_tex;
++            if (_TextureBuffer.Size > 1)
++                for (int j = 0; j < _TextureBuffer.Size; j++)
++                    if (IdxBuffer[tri_i * 3] >= _TextureBuffer[j].VtxIdx)
++                        tri_tex = _TextureBuffer[j].TexRef;
++            return tri_tex == invalid_tex ? default_tex : tri_tex;
++        };
++        const int run_max = (int)(MaxIdx() / 3);
++        for (int k = 0; k < tri_count;) {
++            const ImTextureRef tex = tri_texture(tris[k].tri_idx);
++            int m = 1;
++            while (k + m < tri_count && m < run_max && tri_texture(tris[k + m].tri_idx) == tex)
++                m++;
++            if (!(draw_list.Flags & ImDrawFlags_UseVtxOffset) && draw_list._VtxCurrentIdx + 3 * (unsigned int)m > MaxIdx())
++                break;
++            if (tex != default_tex)
++                draw_list.PushTexture(tex);
++            draw_list.PrimReserve(3 * m, 3 * m);
++            for (int j = k; j < k + m; j++) {
++                for (int c = 0; c < 3; c++) {
++                    *draw_list._VtxWritePtr++ = VtxBuffer[(int)IdxBuffer[tris[j].tri_idx * 3 + c]];
++                    *draw_list._IdxWritePtr++ = (ImDrawIdx)draw_list._VtxCurrentIdx++;
++                }
++            }
++            if (tex != default_tex)
++                draw_list.PopTexture();
++            k += m;
++        }
++        ResetBuffers();
++        IM_FREE(tris);
++        return;
++    }
++
+     // Reserve space in the ImGui draw list
+     draw_list.PrimReserve(IdxBuffer.Size, VtxBuffer.Size);
+ 
+@@ -3919,7 +3960,7 @@
+     // Copy indices with triangle sorting based on distance from viewer
+     ImDrawIdx* idx_out_begin = draw_list._IdxWritePtr;
+     ImDrawIdx* idx_out = idx_out_begin;
+-    ImDrawIdx* idx_in = IdxBuffer.Data;
++    unsigned int* idx_in = IdxBuffer.Data;
+     for (int i = 0; i < tri_count; i++) {
+         int tri_i = tris[i].tri_idx;
+         int base_idx = tri_i * 3;
+--- a/implot3d_internal.h
++++ b/implot3d_internal.h
+@@ -157,12 +157,12 @@
+         unsigned int VtxIdx;
+     };
+ 
+-    ImVector<ImDrawIdx> IdxBuffer;  // Index buffer
++    ImVector<unsigned int> IdxBuffer; // Index buffer (FIGURE: 32-bit, not ImDrawIdx: a plot's items may write more than 65535 vertices)
+     ImVector<ImDrawVert> VtxBuffer; // Vertex buffer
+     ImVector<double> ZBuffer;       // Z buffer. Depth value for each triangle
+     unsigned int _VtxCurrentIdx;    // [Internal] current vertex index
+     ImDrawVert* _VtxWritePtr; // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
+-    ImDrawIdx* _IdxWritePtr;  // [Internal] point within IdxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
++    unsigned int* _IdxWritePtr; // [Internal] point within IdxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
+     double* _ZWritePtr;       // [Internal] point within ZBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
+     ImVector<ImTextureBufferItem> _TextureBuffer; // [Internal] buffer for SetTexture/ResetTexture
+     ImDrawListSharedData* _SharedData;            // [Internal] shared draw list data
+@@ -195,6 +195,9 @@
+     }
+ 
+     constexpr static unsigned int MaxIdx() { return sizeof(ImDrawIdx) == 2 ? 65535 : 4294967295; }
++    // FIGURE: the vertices a plot's items may write (RenderPrimitivesEx), 2^29 - 1: three indices per vertex at most
++    // stay within an int (ImVector's size); SortedMoveToImGuiDrawList splits them into draw commands of 16-bit indices
++    constexpr static unsigned int MaxVtx() { return 536870911; }
+ };
+ 
+ struct ImPlot3DNextItemData {
+--- a/implot3d_items.cpp
++++ b/implot3d_items.cpp
+@@ -318,12 +318,12 @@
+     draw_list_3d._VtxWritePtr[3].uv = tex_uv1;
+     draw_list_3d._VtxWritePtr[3].col = col;
+     draw_list_3d._VtxWritePtr += 4;
+-    draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-    draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
+-    draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+-    draw_list_3d._IdxWritePtr[3] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-    draw_list_3d._IdxWritePtr[4] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+-    draw_list_3d._IdxWritePtr[5] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 3);
++    draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++    draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
++    draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
++    draw_list_3d._IdxWritePtr[3] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++    draw_list_3d._IdxWritePtr[4] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
++    draw_list_3d._IdxWritePtr[5] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 3);
+     draw_list_3d._IdxWritePtr += 6;
+     draw_list_3d._VtxCurrentIdx += 4;
+     draw_list_3d._ZWritePtr[0] = z;
+@@ -429,9 +429,9 @@
+         // 3 indices per triangle
+         for (int i = 2; i < Count; i++) {
+             // Indices
+-            draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-            draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + i - 1);
+-            draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + i);
++            draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++            draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + i - 1);
++            draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + i);
+             draw_list_3d._IdxWritePtr += 3;
+             // Z
+             draw_list_3d._ZWritePtr[0] = GetPointDepth(p_plot);
+@@ -655,9 +655,9 @@
+         draw_list_3d._VtxWritePtr += 3;
+ 
+         // 3 indices per triangle
+-        draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-        draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
+-        draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
++        draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++        draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
++        draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
+         draw_list_3d._IdxWritePtr += 3;
+         // 1 Z per vertex
+         draw_list_3d._ZWritePtr[0] = GetPointDepth((p_plot[0] + p_plot[1] + p_plot[2]) / 3);
+@@ -722,13 +722,13 @@
+         draw_list_3d._VtxWritePtr += 4;
+ 
+         // Add indices for two triangles
+-        draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-        draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
+-        draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+-
+-        draw_list_3d._IdxWritePtr[3] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-        draw_list_3d._IdxWritePtr[4] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+-        draw_list_3d._IdxWritePtr[5] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 3);
++        draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++        draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
++        draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
++
++        draw_list_3d._IdxWritePtr[3] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++        draw_list_3d._IdxWritePtr[4] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
++        draw_list_3d._IdxWritePtr[5] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 3);
+ 
+         draw_list_3d._IdxWritePtr += 6;
+ 
+@@ -801,13 +801,13 @@
+         draw_list_3d._VtxWritePtr += 4;
+ 
+         // Add indices for two triangles
+-        draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-        draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
+-        draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+-
+-        draw_list_3d._IdxWritePtr[3] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-        draw_list_3d._IdxWritePtr[4] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+-        draw_list_3d._IdxWritePtr[5] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 3);
++        draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++        draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
++        draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
++
++        draw_list_3d._IdxWritePtr[3] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++        draw_list_3d._IdxWritePtr[4] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
++        draw_list_3d._IdxWritePtr[5] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 3);
+ 
+         draw_list_3d._IdxWritePtr += 6;
+ 
+@@ -925,13 +925,13 @@
+         draw_list_3d._VtxWritePtr += 4;
+ 
+         // Add indices for two triangles
+-        draw_list_3d._IdxWritePtr[0] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-        draw_list_3d._IdxWritePtr[1] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 1);
+-        draw_list_3d._IdxWritePtr[2] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+-
+-        draw_list_3d._IdxWritePtr[3] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx);
+-        draw_list_3d._IdxWritePtr[4] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 2);
+-        draw_list_3d._IdxWritePtr[5] = (ImDrawIdx)(draw_list_3d._VtxCurrentIdx + 3);
++        draw_list_3d._IdxWritePtr[0] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++        draw_list_3d._IdxWritePtr[1] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 1);
++        draw_list_3d._IdxWritePtr[2] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
++
++        draw_list_3d._IdxWritePtr[3] = (unsigned int)(draw_list_3d._VtxCurrentIdx);
++        draw_list_3d._IdxWritePtr[4] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 2);
++        draw_list_3d._IdxWritePtr[5] = (unsigned int)(draw_list_3d._VtxCurrentIdx + 3);
+ 
+         draw_list_3d._IdxWritePtr += 6;
+ 
+@@ -1148,7 +1148,8 @@
+     }
+ 
+     // Find how many can be reserved up to end of current draw command's limit
+-    unsigned int prims_to_render = ImMin(renderer.Prims, (ImDrawList3D::MaxIdx() - draw_list_3d._VtxCurrentIdx) / renderer.VtxConsumed);
++    // FIGURE: the 3-D list's indices are 32-bit: the room is MaxVtx(), not 16-bit ImDrawIdx's 65535 vertices per plot
++    unsigned int prims_to_render = ImMin(renderer.Prims, (ImDrawList3D::MaxVtx() - draw_list_3d._VtxCurrentIdx) / renderer.VtxConsumed);
+ 
+     // Reserve vertices and indices to render the primitives
+     draw_list_3d.PrimReserve(prims_to_render * renderer.IdxConsumed, prims_to_render * renderer.VtxConsumed);
