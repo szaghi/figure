@@ -28,6 +28,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <map>
@@ -80,6 +81,8 @@ const font_asset FONT_ASSETS[] = {
 };
 
 RichMd::Context *context = nullptr; // created at the first Markdown drawn, destroyed by fig_markdown_shutdown
+ImFont *fortran_fonts[5] = {};       // the Fortran path's Markdown fonts (fig_markdown_fonts), forgotten at shutdown
+int fortran_generation = 1;          // ... their application: a new one after each shutdown (fig_markdown_generation)
 bool link_clicked = false;           // a link was clicked in the call being drawn
 std::string link;                    // its URL (kept until the next click)
 std::string swallow;                 // the anchor a view scrolls to by the program's request: not a link clicked
@@ -204,6 +207,8 @@ void fig_markdown_shutdown(void) {
    context = nullptr;
    link.clear();
    link_clicked = false;
+   for (ImFont *&f : fortran_fonts) f = nullptr; // the atlas goes with Dear ImGui's context
+   ++fortran_generation;
 }
 
 int fig_markdown(const char *text, long long len, int *clicked) {
@@ -349,6 +354,131 @@ int fig_markdown_view_draw(int handle, const char *id, int id_len, double width,
    link_clicked = false;
    return FIG_OK;
    MD_CATCH
+}
+
+// ---- the Fortran path (szaghi/figure#15 P15) ------------------------------------------------------------------------
+// The Fortran Markdown renderer (src/paths/fortran/markdown/) draws through figure_core; what figure_core_layout's
+// implementation over Dear ImGui (src/paths/imgui/core/figure_core_layout.F90) reads and writes of Dear ImGui's internals,
+// that no C API function gives, is here (implementation A of the core seam: it goes with Dear ImGui in P27). The
+// renderer's fonts are loaded as imgui_rich_md loads its own (the same files, sizes and configuration, then adopted as
+// FIGURE's fonts under the same keys), without its context.
+
+// The Markdown fonts of the Fortran renderer: regular, bold, italic, bold italic (IBM Plex Sans, loaded at 16 pixels as
+// imgui_rich_md's FontCollection does) and the code font (IBM Plex Mono at the text size), made at the first call of an
+// application. When imgui_rich_md has drawn already in this application (both paths' renderers in one program: the
+// side-by-side tests), its fonts are taken: a second copy of the same fonts, loaded later into the atlas, draws a few
+// glyphs' edge pixels otherwise (measured: up to 37 levels on 1 to 13 pixels of a 640 x 400 picture). A FIG_* status
+// (the error recorded).
+int fig_markdown_fonts(ImFont **fonts) {
+   MD_TRY
+   if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
+   if (!fortran_fonts[0] && context) { // the current path's Markdown drawn already: its fonts, not a second copy
+      RichMd::SetCurrentContext(context);
+      fortran_fonts[0] = RichMd::GetFont(RichMd::MarkdownFontSpec(false, false)).font;
+      fortran_fonts[1] = RichMd::GetFont(RichMd::MarkdownFontSpec(false, true)).font;
+      fortran_fonts[2] = RichMd::GetFont(RichMd::MarkdownFontSpec(true, false)).font;
+      fortran_fonts[3] = RichMd::GetFont(RichMd::MarkdownFontSpec(true, true)).font;
+      fortran_fonts[4] = RichMd::GetCodeFont().font;
+   }
+   if (!fortran_fonts[0]) {
+      struct spec {
+         const char *stem;  // the file's stem imgui_rich_md names the font after
+         const char *font;  // FIGURE's bundled font
+         float size;        // the size it is loaded at
+         const char *key;   // FIGURE's key
+         const char *label; // and name
+      };
+      const spec specs[] = {
+         {"IBMPlexSans-Regular", "plex-sans", 16.0f, "<markdown>", "IBM Plex Sans (Markdown)"},
+         {"IBMPlexSans-Bold", "plex-sans-bold", 16.0f, "<markdown bold>", "IBM Plex Sans Bold"},
+         {"IBMPlexSans-RegularItalic", "plex-sans-italic", 16.0f, "<markdown italic>", "IBM Plex Sans Italic"},
+         {"IBMPlexSans-BoldItalic", "plex-sans-bold-italic", 16.0f, "<markdown bold italic>", "IBM Plex Sans Bold Italic"},
+         {"Inconsolata-Medium", "plex-mono", TEXT_SIZE, "<markdown code>", "IBM Plex Mono (Markdown)"},
+      };
+      ImFont *made[5] = {};
+      for (int k = 0; k < 5; ++k) {
+         const unsigned char *data = nullptr;
+         int size = 0;
+         if (!figure_fonts::bytes(specs[k].font, data, size))
+            return fail(FIG_ERR_FAILED, std::string("markdown: no font ") + specs[k].font);
+         ImFontConfig cfg;
+         cfg.MergeMode = false;
+         cfg.FontDataOwnedByAtlas = true;
+         std::snprintf(cfg.Name, sizeof(cfg.Name), "%s %d", specs[k].stem, static_cast<int>(std::lround(specs[k].size)));
+         void *copy = IM_ALLOC(static_cast<size_t>(size));
+         std::memcpy(copy, data, static_cast<size_t>(size));
+         made[k] = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(copy, size, specs[k].size, &cfg);
+         std::string err;
+         if (!figure_fonts::adopt(made[k], specs[k].key, specs[k].label, err)) return fail(FIG_ERR_FAILED, "markdown: " + err);
+      }
+      for (int k = 0; k < 5; ++k) fortran_fonts[k] = made[k];
+   }
+   for (int k = 0; k < 5; ++k) fonts[k] = fortran_fonts[k];
+   return FIG_OK;
+   MD_CATCH
+}
+
+// The application the Fortran renderer's caches belong to (its fonts, its images' textures): another after each
+// shutdown.
+int fig_markdown_generation(void) { return fortran_generation; }
+
+// The scale of a size pushed with PushFont(NULL, size), relative to the frame's base size (imgui_rich_md's _FontScale).
+float fig_core_font_scale(void) {
+   ImGuiContext *g = ImGui::GetCurrentContext();
+   if (g == nullptr || g->FontStack.Size == 0 || g->FontStack[0].FontSizeBeforeScaling <= 0.f) return 1.f;
+   return g->FontSizeBase / g->FontStack[0].FontSizeBeforeScaling;
+}
+
+// Whether the current window's line is open (an item ended with SameLine: DC.IsSameLine).
+int fig_core_line_open(void) {
+   const ImGuiWindow *w = ImGui::GetCurrentContext() ? ImGui::GetCurrentWindowRead() : nullptr;
+   return w != nullptr && w->DC.IsSameLine ? 1 : 0;
+}
+
+// The current window's state: position (0, 1), scroll (2, 3), largest scroll (4, 5), the decorations above its content
+// (6: DecoOuterSizeY1, 7: DecoInnerSizeY1), its work rectangle's right edge (8), size (9, 10), a vertical scrollbar (11:
+// 0 or 1), its content's start in local coordinates (12, 13: DC.CursorStartPos - Pos).
+void fig_core_window_state(float *s) {
+   const ImGuiWindow *w = ImGui::GetCurrentWindowRead();
+   s[0] = w->Pos.x, s[1] = w->Pos.y, s[2] = w->Scroll.x, s[3] = w->Scroll.y, s[4] = w->ScrollMax.x, s[5] = w->ScrollMax.y;
+   s[6] = w->DecoOuterSizeY1, s[7] = w->DecoInnerSizeY1, s[8] = w->WorkRect.Max.x, s[9] = w->Size.x, s[10] = w->Size.y;
+   s[11] = w->ScrollbarY ? 1.f : 0.f;
+   s[12] = w->DC.CursorStartPos.x - w->Pos.x, s[13] = w->DC.CursorStartPos.y - w->Pos.y;
+}
+
+// The input state the renderer reads that no C API function gives: the position of the last left click (f[0:2]),
+// the wheel (f[2]), the mouse's move in x (f[3]); macOS behaviours (i[0]), a text field wants the keys (i[1]), a touch
+// screen (i[2]), shift held (i[3]), the characters typed this frame (i[4]) and a slash among them (i[5]).
+void fig_core_io_state(float *f, int *i) {
+   const ImGuiIO &io = ImGui::GetIO();
+   f[0] = io.MouseClickedPos[0].x, f[1] = io.MouseClickedPos[0].y, f[2] = io.MouseWheel, f[3] = io.MouseDelta.x;
+   i[0] = io.ConfigMacOSXBehaviors ? 1 : 0;
+   i[1] = io.WantTextInput ? 1 : 0;
+   i[2] = (io.ConfigFlags & ImGuiConfigFlags_IsTouchScreen) != 0 ? 1 : 0;
+   i[3] = io.KeyShift ? 1 : 0;
+   i[4] = io.InputQueueCharacters.Size;
+   i[5] = 0;
+   for (ImWchar c : io.InputQueueCharacters)
+      if (c == '/') i[5] = 1;
+}
+
+// The vertices of the current window's draw list, and those from `start` moved right by dx (an aligned table cell).
+int fig_core_vtx_count(void) { return ImGui::GetWindowDrawList()->VtxBuffer.Size; }
+void fig_core_vtx_shift(int start, float dx) {
+   ImDrawList *dl = ImGui::GetWindowDrawList();
+   for (int i = start; i < dl->VtxBuffer.Size; ++i) dl->VtxBuffer[i].pos.x += dx;
+}
+
+// SetTooltip("%s", text), the text of n bytes.
+void fig_core_tooltip(const char *text, int n) { ImGui::SetTooltip("%.*s", n, text); }
+
+// The style values the renderer reads: FramePadding (0, 1), IndentSpacing (2), ItemSpacing (3, 4), WindowPadding (5, 6),
+// ItemInnerSpacing (7, 8), ScrollbarSize (9), FontScaleMain (10), FontScaleDpi (11).
+void fig_core_style(float *s) {
+   const ImGuiStyle &st = ImGui::GetStyle();
+   s[0] = st.FramePadding.x, s[1] = st.FramePadding.y, s[2] = st.IndentSpacing, s[3] = st.ItemSpacing.x;
+   s[4] = st.ItemSpacing.y, s[5] = st.WindowPadding.x, s[6] = st.WindowPadding.y, s[7] = st.ItemInnerSpacing.x;
+   s[8] = st.ItemInnerSpacing.y, s[9] = st.ScrollbarSize, s[10] = st.FontScaleMain, s[11] = st.FontScaleDpi;
 }
 
 } // extern "C"
