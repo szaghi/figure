@@ -1,0 +1,5 @@
+--- a/implot.cpp
++++ b/implot.cpp
+@@ -2263,1 +2263,1 @@
+-        ImStrncpy(axis.FormatSpec,fmt,sizeof(axis.FormatSpec));
++        { static char* figure_fmt[ImAxis_COUNT] = {}; static size_t figure_cap[ImAxis_COUNT] = {}; const size_t n = strlen(fmt) + 1; if (n > figure_cap[idx]) { figure_fmt[idx] = (char*)realloc(figure_fmt[idx], n); figure_cap[idx] = n; } memcpy(figure_fmt[idx], fmt, n); ImStrncpy(axis.FormatSpec,fmt,sizeof(axis.FormatSpec)); axis.Formatter = Formatter_Default; axis.FormatterData = figure_fmt[idx]; } // FIGURE (native/patches/implot-0003): the whole format, not its first 15 characters (FormatSpec[16]); kept per axis until the next plot sets it, grown only when longer

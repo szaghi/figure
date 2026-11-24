@@ -9,12 +9,14 @@ program figure_test_plot_frame_ticks
 !< Checked on every frame: the ranges of X1 and Y1 (and Y2), the plot area's corners, equal to the bit; pictures at
 !< FIGURE's oracle rule (|d| <= 2, no pixel failing) on the first frame and the last. The cases:
 !<
-!< 1. formats on linear axes: X1 `%.2f s`, Y1 `%+.1e`, an X2 whose format is longer than ImPlot keeps (15 characters
-!<    of `%.1f metres per s`), a Y2 in `%.1a`; tags without text follow the formats;
+!< 1. formats on linear axes: X1 `%.2f s`, Y1 `%+.1e`, an X2 whose format is longer than ImPlot's `FormatSpec[16]`
+!<    (`%.1f metres per s`, kept whole: native/patches/implot-0003), a Y2 in `%.1a`; tags without text follow the
+!<    formats;
 !< 2. formats on a symlog X1 (`%.1f`) and a log Y1 (`%.0e`), a tag; a Y2 in `%.105f` (a precision of three digits,
 !<    the labels cut at ImPlot's 31 characters);
 !< 3. ticks given: X1's labelled in two calls (they add up: a label longer than ImPlot's 32-byte buffer, taken whole,
-!<    one with trailing blanks, an empty one, a value out of the range, one at 1e30), Y1's labelled by its format,
+!<    one with trailing blanks, an empty one, a value out of the range, one at 1e30), Y1's labelled by its format
+!<    (`value now is %.3f`: its conversion past ImPlot's 15 characters),
 !<    Y2's labelled "%g" (given before its format) while its tag and mouse text take the format set after;
 !< 4. a time X1 with ticks given (labelled by its format, `%.0f`, not as dates), the mouse text and a tag still dates.
 !<
@@ -156,7 +158,7 @@ contains
       call ip_line('##exp', ss, ls, spec=ip_spec(line_color=C1))
       call ip_tag('y1', 2.0_real64)
    case (3_int32)
-      call ip_setup_axes('', '', yformat='%.3f')
+      call ip_setup_axes('', '', yformat='value now is %.3f')
       call ip_setup_axis('y2')
       call ip_setup_axis_ticks('y2', Y2T)
       call ip_setup_axis('y2', format='%.2e')
@@ -214,7 +216,7 @@ contains
       call pf_line('##exp', ss, ls, spec=pf_spec(line_color=C1))
       call pf_tag('y1', 2.0_real64)
    case (3_int32)
-      call pf_setup_axes('', '', yformat='%.3f')
+      call pf_setup_axes('', '', yformat='value now is %.3f')
       call pf_setup_axis('y2')
       call pf_setup_axis_ticks('y2', Y2T)
       call pf_setup_axis('y2', format='%.2e')

@@ -150,6 +150,10 @@ figure_patch_line(${IMGUI_DIR}/imgui_tables.cpp ${CMAKE_CURRENT_SOURCE_DIR}/patc
 figure_patch_line(${IMPLOT_DIR}/implot_items.cpp ${CMAKE_CURRENT_SOURCE_DIR}/patches/implot-0001-digital-rect-order.patch
                   ${CMAKE_CURRENT_BINARY_DIR}/patched/implot_items.cpp
                   ${CMAKE_CURRENT_SOURCE_DIR}/patches/implot-0002-exact-inv-sqrt.patch)
+# SetupAxisFormat keeps a format's first 15 characters only (FormatSpec[16]): the whole format is kept, in a buffer of
+# its own per axis (#15, 2026-11-23: '%.1f metres per s' labelled '%.1f metres per' before)
+figure_patch_line(${IMPLOT_DIR}/implot.cpp ${CMAKE_CURRENT_SOURCE_DIR}/patches/implot-0003-whole-axis-format.patch
+                  ${CMAKE_CURRENT_BINARY_DIR}/patched/implot.cpp)
 
 add_library(figure_native STATIC
    ${cimgui_SOURCE_DIR}/cimgui.cpp
@@ -161,7 +165,7 @@ add_library(figure_native STATIC
    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
    ${cimplot_SOURCE_DIR}/cimplot.cpp
-   ${IMPLOT_DIR}/implot.cpp
+   ${CMAKE_CURRENT_BINARY_DIR}/patched/implot.cpp # patched: native/patches/implot-0003-*.patch
    ${CMAKE_CURRENT_BINARY_DIR}/patched/implot_items.cpp # patched: native/patches/implot-0001-*.patch
    ${IMPLOT_DIR}/implot_demo.cpp
    ${cimplot3d_SOURCE_DIR}/cimplot3d.cpp

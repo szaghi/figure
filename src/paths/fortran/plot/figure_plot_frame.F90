@@ -54,7 +54,7 @@ module figure_plot_frame
 !<   labels (`%g`; dates and times on two levels: the second level's room below the first, its labels lower, its ticks
 !<   without grid lines or tick marks);
 !< - the tick formats (`pf_setup_axes`' `xformat`, `yformat`, `pf_setup_axis`' `format`: `SetupAxisFormat`, this
-!<   frame's, ImPlot's first 15 characters of it) of the tick labels of linear, log and symlog axes, of the mouse text
+!<   frame's, whole: native/patches/implot-0003) of the tick labels of linear, log and symlog axes, of the mouse text
 !<   and of the tags (`Formatter_Default`, figure_plot_format: glibc's printf, `%a` included); the ticks given
 !<   (`pf_setup_axis_ticks`: `SetupAxisTicks` with `show_default` false, as `ip_setup_axis_ticks`), minor ticks
 !<   labelled by their text (whole) or by the axis's format when they are given, the axis's locator off;
@@ -4107,12 +4107,12 @@ contains
    endsubroutine format_refused
 
    subroutine setup_format(ax, fmt)
-   !< `SetupAxisFormat`: the axis's labels' format on this frame, as ImPlot keeps it: its first 15 characters
-   !< (`ImStrncpy` into `FormatSpec[16]`), parsed.
+   !< `SetupAxisFormat`: the axis's labels' format on this frame, whole (as ImPlot with native/patches/implot-0003,
+   !< not its first 15 characters, `FormatSpec[16]`), parsed.
    type(plot_axis),  intent(inout) :: ax  !< Axis.
    character(len=*), intent(in)    :: fmt !< Format.
 
-   call fmt_parse(fmt(1:min(len(fmt), 15)), ax%fmt)
+   call fmt_parse(fmt, ax%fmt)
    endsubroutine setup_format
 
    subroutine setup_scale(ax, scale, vertical)
