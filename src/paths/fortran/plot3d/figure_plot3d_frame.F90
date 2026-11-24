@@ -2741,9 +2741,12 @@ contains
    endfunction plot_handle
 
    subroutine reset_plot(p, id)
-   !< A slot made a new plot (`ImPlot3DPlot()`), field by field: nvfortran 26.9 crashes assigning the structure
-   !< constructor of a type with allocatable components (`plots(h) = plot3d_record()`), and emits invalid IR for a
-   !< component default-initialised with a named constant of a derived type; the axes' tick arrays are kept.
+   !< A slot made a new plot (`ImPlot3DPlot()`), field by field: nvfortran 26.9 assigns the structure constructor of a
+   !< type with a component whose own type has an allocatable component (`plot3d_record%ax(3)`, whose ticks hold
+   !< allocatable arrays) wrongly: an array element (`plots(h) = plot3d_record()`) segfaults in `pgf90_poly_asn_i8`, a
+   !< scalar keeps the subcomponent allocated (an allocatable component directly in the type is right); and it emits
+   !< invalid IR for a component default-initialised with a named constant of a derived type
+   !< (https://github.com/szaghi/figure/issues/4#issuecomment-7110453868). The axes' tick arrays are kept.
    type(plot3d_record), intent(inout) :: p  !< Slot.
    integer(int32),      intent(in)    :: id !< ID.
    integer(int32)                     :: i  !< Axis.

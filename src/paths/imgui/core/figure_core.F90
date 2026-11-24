@@ -531,8 +531,10 @@ contains
    subroutine core_style_vec2(idx, x, y)
    !< A pair of the style by its `ImGuiStyleVar` (`GetStyleVarInfo(idx)->GetVarPtr(&GetStyle())`), without the
    !< allocation of a lookup by name (`core_style_var`: a name past 15 characters is a heap `std::string`). The style
-   !< is read as floats (`style_floats`, a scalar pointer: nvfortran 26.9 allocates in `transfer` of a `c_ptr` and in
-   !< an array `c_f_pointer`), the pair at the info's Offset (the bitfield's high 16 bits, as GCC lays it out).
+   !< is read as floats (`style_floats`, a scalar pointer: no address arithmetic, since nvfortran 26.9's `transfer` of
+   !< an integer to a `c_ptr` allocates on the heap on every call; `transfer` of a `c_ptr` to an integer and an array
+   !< `c_f_pointer` do not, measured: https://github.com/szaghi/figure/issues/4#issuecomment-7110453868), the pair at
+   !< the info's Offset (the bitfield's high 16 bits, as GCC lays it out).
    integer(int32), intent(in)  :: idx  !< `ImGuiStyleVar` of an `ImVec2` (`ImGuiStyleVar_ItemInnerSpacing`, ...).
    real(real64),   intent(out) :: x, y !< Its components.
    integer(c_int32_t),  pointer :: info !< `ImGuiStyleVarInfo`: Count (8 bits), DataType (8), Offset (16).
