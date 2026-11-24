@@ -38,8 +38,8 @@ HEAD = (
 )
 NEW_HEAD = (
     "!< On the Fortran path (szaghi/figure#15 P16) the editor and the diff are Fortran, the fork's TextEditor and dtl and\n"
-    "!< FIGURE's glue ported (src/paths/fortran/editor/: figure_code_editor, figure_code_diff): window, headless and remote\n"
-    "!< modes show the same pixels. Written by scripts/gen_editor_path.py from the current path's module: do not edit.\n"
+    "!< FIGURE's glue ported (src/paths/fortran/editor/): window, headless and remote modes show the same pixels. Written\n"
+    "!< by scripts/gen_editor_path.py from the current path's module: do not edit.\n"
     "!< Text is UTF-8; lines and columns are numbered from 1, columns in characters. Everything is polled:\n"
 )
 USE_AFTER = "use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK\n"
@@ -59,8 +59,10 @@ def uses(names: list[str]) -> str:
         The statements, wrapped at 120 columns.
     """
     out = []
+    view = ("fig_editor_draw", "fig_editor_line_rect")
     for module, group in (
-        ("figure_code_editor", [n for n in names if not n.startswith("fig_code_diff")]),
+        ("figure_code_editor", [n for n in names if not n.startswith("fig_code_diff") and n not in view]),
+        ("figure_code_view", [n for n in names if n in view]),
         ("figure_code_diff", [n for n in names if n.startswith("fig_code_diff")]),
     ):
         head = f"use {module}, only : "

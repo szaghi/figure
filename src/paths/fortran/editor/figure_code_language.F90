@@ -24,7 +24,7 @@ implicit none
 private
 public :: code_lang, lang_of, lang_get, lang_name, lang_key_value, colorize, colorize_reset
 public :: STATE_TEXT, STATE_COMMENT, STATE_SINGLE, STATE_DOUBLE, STATE_OTHER, STATE_OTHER_ALT, STATE_STRING0
-public :: lang_comment_single
+public :: lang_comment_single, lang_indentation_blocks
 
 ! line states (TextEditor::LineState)
 integer(int32), parameter :: STATE_TEXT = 0_int32      !< inText.
@@ -128,6 +128,16 @@ contains
    if (id < 1_int32 .or. id > nregistry) return
    yes = registry(id)%l%key_value
    endfunction lang_key_value
+
+   function lang_indentation_blocks(id) result(yes)
+   !< The language's blocks are its indentation (`indentationForBlocks`).
+   integer(int32), intent(in) :: id  !< Language (0: plain text).
+   logical                    :: yes !< Indentation blocks.
+
+   yes = .false.
+   if (id < 1_int32 .or. id > nregistry) return
+   yes = registry(id)%l%indentation_blocks
+   endfunction lang_indentation_blocks
 
    function lang_comment_single(id) result(c)
    !< A language's line comment ('' for none, plain text).

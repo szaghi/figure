@@ -820,4 +820,65 @@ int fig_code_diff_lines(const char *left, long long left_len, const char *right,
    ED_CATCH
 }
 
+// ---- figure_core's reads for the Fortran code editor (szaghi/figure#15 P16; implementation A of the seam) ---------
+// What src/paths/fortran/editor/ reads of Dear ImGui that no C API function gives, through
+// src/paths/imgui/core/figure_core_text.F90: the current window's and the style's and io's values (f, i), the
+// characters typed this frame (taken, as the fork takes them), the input method's position, and the fork's
+// navigation-cursor workaround of a child window (TextEditor::render's end, verbatim).
+
+// f: InnerRect size (0, 1), style FontScaleDpi (2), InputTextCursorSize (3), Alpha (4), io DeltaTime (5),
+// MouseDoubleClickTime (6), style ScrollbarSize (7), ChildBorderSize (8), WindowPadding (9, 10), ItemSpacing (11, 12),
+// FramePadding (13, 14), the window's width (15); i: ScrollbarY (0), ConfigInputTextCursorBlink (1),
+// ConfigMacOSXBehaviors (2), ConfigFlags (3), the window's ParentWindow is not null (4).
+void fig_core_text_state(float *f, int *i) {
+   const ImGuiWindow *w = ImGui::GetCurrentWindowRead();
+   const ImGuiStyle &st = ImGui::GetStyle();
+   const ImGuiIO &io = ImGui::GetIO();
+   const ImVec2 inner = w->InnerRect.GetSize();
+   f[0] = inner.x, f[1] = inner.y, f[2] = st.FontScaleDpi, f[3] = st.InputTextCursorSize, f[4] = st.Alpha;
+   f[5] = io.DeltaTime, f[6] = io.MouseDoubleClickTime, f[7] = st.ScrollbarSize, f[8] = st.ChildBorderSize;
+   f[9] = st.WindowPadding.x, f[10] = st.WindowPadding.y, f[11] = st.ItemSpacing.x, f[12] = st.ItemSpacing.y;
+   f[13] = st.FramePadding.x, f[14] = st.FramePadding.y, f[15] = w->Size.x;
+   i[0] = w->ScrollbarY ? 1 : 0, i[1] = io.ConfigInputTextCursorBlink ? 1 : 0, i[2] = io.ConfigMacOSXBehaviors ? 1 : 0;
+   i[3] = io.ConfigFlags, i[4] = w->ParentWindow != nullptr ? 1 : 0;
+}
+
+// The characters typed this frame (up to cap of them, as ImWchar values) and their number; with take, the queue is
+// emptied (the fork's io.InputQueueCharacters.resize(0)).
+int fig_core_text_chars(int *out, int cap, int take) {
+   ImGuiIO &io = ImGui::GetIO();
+   const int n = io.InputQueueCharacters.Size;
+   for (int k = 0; k < n && k < cap; k++) out[k] = static_cast<int>(io.InputQueueCharacters[k]);
+   if (take) io.InputQueueCharacters.resize(0);
+   return n;
+}
+
+// The input method's position (TextEditor::handleKeyboardInputs: visible, text input, at x, y, a line of height h).
+void fig_core_text_ime(float x, float y, float h) {
+   ImGuiContext *context = ImGui::GetCurrentContext();
+   context->PlatformImeData.WantVisible = true;
+   context->PlatformImeData.WantTextInput = true;
+   context->PlatformImeData.InputPos = ImVec2(x, y);
+   context->PlatformImeData.InputLineHeight = h;
+   context->PlatformImeData.ViewportId = ImGui::GetCurrentWindow()->Viewport->ID;
+}
+
+// TextEditor::render's navigation-cursor workaround for a child window (scale: the style's FontScaleDpi).
+void fig_core_text_nav(float scale) {
+   if (ImGui::GetIO().ConfigFlags & (ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad)) {
+      auto window = ImGui::GetCurrentWindow();
+      if (ImGui::IsWindowFocused()) {
+         if (ImGui::GetCurrentContext()->NavCursorVisible && !window->ScrollbarY) {
+            const ImVec2 wp = ImGui::GetWindowPos(), ws = ImGui::GetWindowSize();
+            ImRect bb(wp, ImVec2(wp.x + ws.x, wp.y + ws.y));
+            bb.Expand(ImVec2(2.0f, 2.0f));
+            window->ParentWindow->DrawList->AddRect(bb.Min, bb.Max, ImGui::GetColorU32(ImGuiCol_NavCursor),
+                                                    ImGui::GetStyle().FrameRounding, scale);
+         }
+      } else {
+         window->DC.NavLayersActiveMaskNext |= (1 << window->DC.NavLayerCurrent);
+      }
+   }
+}
+
 } // extern "C"

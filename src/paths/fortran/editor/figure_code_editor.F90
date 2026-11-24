@@ -33,7 +33,11 @@ public :: fig_editor_create, fig_editor_destroy, fig_editor_language, fig_editor
 public :: fig_editor_mark, fig_editor_clear_marks, fig_editor_mark_of, fig_editor_goto, fig_editor_find
 public :: fig_editor_replace, fig_editor_cursor, fig_editor_selection, fig_editor_select, fig_editor_insert
 public :: fig_editor_completions, fig_editor_completing, fig_editor_option, fig_editor_undo, fig_editor_info
-public :: fig_editor_focus, fig_editor_draw, fig_editor_line_rect
+public :: fig_editor_focus
+public :: fail, not_found, str, editor_undo_, editor_redo_, make_cursor_visible, start_transaction, end_transaction
+public :: insert_text, delete_text, delete_from_all_cursors, insert_into_all_cursors, line_severity, marker_tooltip
+public :: with_alpha, SEVERITY_RGB, N_SEVERITY, INVALID, set_cursor, select_next_occurrence, select_all_occurrences
+public :: replace_in_current_cursor, ac_cancel, cursor_text
 
 integer(int32), parameter :: INVALID = -1_int32 !< `invalidLine`.
 integer(int32), parameter :: N_SEVERITY = 3_int32 !< Marks' severities: 1 error, 2 warning, 3 info.
@@ -94,6 +98,37 @@ type :: code_editor
    real(c_float)  :: caret_timer = -0.3_c_float  !< cursorAnimationTimer.
    integer(int32) :: first_row = 0_int32, last_row = 0_int32, first_column = 0_int32, last_column = 0_int32 !< In view.
    logical        :: drawn = .false.             !< Drawn once (the glue's line_rect).
+   integer(int32) :: scroll_align = 1_int32      !< scrollToAlignment: 0 top, 1 middle, 2 bottom.
+   real(c_float)  :: scroll_fraction = 0.0_c_float !< scrollToFraction.
+   ! the palette (Color::count entries, from 0)
+   integer(c_int) :: palette_base(0:32) = 0_c_int !< paletteBase (the glue's: the style's palette).
+   integer(c_int) :: palette(0:32) = 0_c_int      !< palette (the style's Alpha applied).
+   real(c_float)  :: palette_alpha = -1.0_c_float !< paletteAlpha.
+   logical        :: palette_set = .false.        !< The glue set a palette once.
+   ! layout (the fork's rendering context)
+   real(c_float)  :: cursor_width = 1.0_c_float  !< cursorWidth (FIGURE's patch 0002: initialised).
+   real(c_float)  :: screen_x = 0.0_c_float, screen_y = 0.0_c_float !< cursorScreenPos.
+   real(c_float)  :: visible_w = 0.0_c_float, visible_h = 0.0_c_float !< visibleSize.
+   real(c_float)  :: font_size = 0.0_c_float, font_scale = 1.0_c_float !< fontSize, fontScaleDpi.
+   real(c_float)  :: glyph_w = 0.0_c_float, glyph_h = 0.0_c_float !< glyphSize.
+   real(c_float)  :: number_left = 0.0_c_float, number_right = 0.0_c_float !< lineNumberLeft/RightOffset.
+   real(c_float)  :: decoration_offset = 0.0_c_float !< decorationOffset.
+   real(c_float)  :: text_left = 0.0_c_float, text_right = 0.0_c_float !< textLeft/RightOffset.
+   real(c_float)  :: text_w = 0.0_c_float, text_h = 0.0_c_float !< textSize.
+   real(c_float)  :: total_w = 0.0_c_float, total_h = 0.0_c_float !< totalSize.
+   real(c_float)  :: rect(4) = 0.0_c_float        !< The child window's rectangle on the last draw (the glue's).
+   ! the type setter (rows are lines: no folding, no wrap)
+   integer(int32) :: ts_tab = 0_int32            !< Its tab size.
+   integer(int32) :: ts_rows = 0_int32           !< Rows (totalRows).
+   integer(int32) :: ts_columns = 0_int32        !< totalColumns.
+   integer(int32), allocatable :: ts_cols(:)     !< Each row's columns, as at the last update.
+   ! the bracketeer
+   logical        :: bk_show = .false.           !< Its showMatchingBrackets.
+   integer(int32) :: bk_language = 0_int32       !< Its language.
+   integer(int32) :: nb = 0_int32                !< Bracket pairs.
+   type(code_pos), allocatable :: br_start(:), br_end(:) !< Pairs' positions.
+   integer(int32), allocatable :: br_open(:), br_close(:), br_level(:) !< Their characters, levels.
+   logical,        allocatable :: br_visible(:)  !< Visible (not an indentation block).
 endtype code_editor
 
 type :: editor_box
@@ -1103,50 +1138,4 @@ contains
    e%focus_on_editor = .true.
    status = FIG_OK
    endfunction fig_editor_focus
-   function fig_editor_draw(handle, id, id_len, width, height, changed) result(status)
-   !< Draw the editor as a widget (#15 P16: drawing is a later step of the Fortran path; refused until then).
-   integer(c_int),         intent(in)  :: handle  !< Handle.
-   character(kind=c_char), intent(in)  :: id(*)   !< Widget id.
-   integer(c_int),         intent(in)  :: id_len  !< Its length.
-   real(c_double),         intent(in)  :: width   !< Width.
-   real(c_double),         intent(in)  :: height  !< Height.
-   integer(c_int),         intent(out) :: changed !< The user changed the text.
-   integer(c_int)                      :: status  !< Status.
-   type(code_editor), pointer          :: e       !< Editor.
-
-   changed = 0_c_int
-   e => editor_get(handle)
-   if (.not. associated(e)) then
-      status = not_found('draw')
-      return
-   endif
-   status = fail(FIG_ERR_STATE, 'code_editor_object%draw: not yet on the Fortran path')
-   endfunction fig_editor_draw
-
-   function fig_editor_line_rect(handle, line, rect, visible) result(status)
-   !< The screen rectangle of a line's text on the last draw; `visible` when it was in view.
-   integer(c_int), intent(in)  :: handle  !< Handle.
-   integer(c_int), intent(in)  :: line    !< Line, from 1.
-   real(c_float),  intent(out) :: rect(4) !< Left, top, right, bottom [pixels].
-   integer(c_int), intent(out) :: visible !< In view.
-   integer(c_int)              :: status  !< Status.
-   type(code_editor), pointer  :: e       !< Editor.
-
-   visible = 0_c_int
-   rect = 0.0_c_float
-   e => editor_get(handle)
-   if (.not. associated(e)) then
-      status = not_found('line_rect')
-      return
-   endif
-   if (line < 1_c_int) then
-      status = fail(FIG_ERR_ARGUMENT, 'code_editor_object%line_rect: lines are numbered from 1')
-      return
-   endif
-   if (.not. e%drawn .or. line - 1_c_int >= e%doc%n) then
-      status = FIG_OK
-      return
-   endif
-   status = FIG_OK
-   endfunction fig_editor_line_rect
 endmodule figure_code_editor

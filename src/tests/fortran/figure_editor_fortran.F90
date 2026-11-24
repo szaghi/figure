@@ -3,8 +3,8 @@ module figure_editor_fortran
 !< figure_editor_fortran, a code editor (code_editor_object) with highlighting, marks, completion and find, and a text diff.
 !<
 !< On the Fortran path (szaghi/figure#15 P16) the editor and the diff are Fortran, the fork's TextEditor and dtl and
-!< FIGURE's glue ported (src/paths/fortran/editor/: figure_code_editor, figure_code_diff): window, headless and remote
-!< modes show the same pixels. Written by scripts/gen_editor_path.py from the current path's module: do not edit.
+!< FIGURE's glue ported (src/paths/fortran/editor/): window, headless and remote modes show the same pixels. Written
+!< by scripts/gen_editor_path.py from the current path's module: do not edit.
 !< Text is UTF-8; lines and columns are numbered from 1, columns in characters. Everything is polled:
 !< `ed%draw` returns true on the frame the user changed the text, `ed%completing` while the completion popup is open.
 !<
@@ -27,11 +27,12 @@ use, intrinsic :: iso_fortran_env, only : int32, real64
 use figure_base, only : cstr, figure_check, figure_draw_refused, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
 use figure_code_editor, only : fig_editor_create, fig_editor_destroy, fig_editor_language, fig_editor_set_text, &
-                               fig_editor_string, fig_editor_draw, fig_editor_mark, fig_editor_clear_marks, &
-                               fig_editor_mark_of, fig_editor_goto, fig_editor_find, fig_editor_replace, &
-                               fig_editor_cursor, fig_editor_selection, fig_editor_select, fig_editor_insert, &
-                               fig_editor_completions, fig_editor_completing, fig_editor_option, fig_editor_undo, &
-                               fig_editor_info, fig_editor_focus, fig_editor_line_rect
+                               fig_editor_string, fig_editor_mark, fig_editor_clear_marks, fig_editor_mark_of, &
+                               fig_editor_goto, fig_editor_find, fig_editor_replace, fig_editor_cursor, &
+                               fig_editor_selection, fig_editor_select, fig_editor_insert, fig_editor_completions, &
+                               fig_editor_completing, fig_editor_option, fig_editor_undo, fig_editor_info, &
+                               fig_editor_focus
+use figure_code_view, only : fig_editor_draw, fig_editor_line_rect
 use figure_code_diff, only : fig_code_diff, fig_code_diff_lines
 
 implicit none
