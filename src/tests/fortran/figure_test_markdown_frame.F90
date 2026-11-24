@@ -6,10 +6,11 @@ program figure_test_markdown_frame
 !< `ig_markdown`), then with the Fortran renderer (figure_markdown_render's `md_markdown`), 40 frames apart, each in a
 !< window of its own at the same place (`Markdown###cpp`, `Markdown###fortran`: the same title, other IDs, so each side
 !< starts from a fresh window). Checked on every frame: the cursor where the text starts and where it ends, whether a
-!< link was clicked and its URL, equal to the bit; the first and the last frame's pictures at FIGURE's oracle rule
-!< (|d| <= 2, no pixel failing). Scripted input, the same frames after each side's start: a click on a link (reported), on a link to a
-!< heading (scrolled to, not reported) and to a missing one (reported as `#` and its anchor), a mouse resting on a link
-!< (its tooltip), a double click (a word selected), a drag (a range selected), a right click (the menu). The cases:
+!< link was clicked and its URL, equal to the bit; the first and the last frame's pictures at FIGURE's oracle rule (|d|
+!< <= 2, no pixel failing). Scripted input, the same frames after each side's start: a click on a link (reported), on a
+!< link to a heading (scrolled to, not reported) and to a missing one (reported as `#` and its anchor), a mouse resting
+!< on a link (its tooltip), a double click (a word selected), a drag (a range selected), a right click (the menu). The
+!< cases:
 !<
 !< 1. headings `#` to `######`, paragraphs wrapped, emphasis, strong, both, code spans, strikethrough, underline, words
 !<    glued across the markup, soft and hard breaks;

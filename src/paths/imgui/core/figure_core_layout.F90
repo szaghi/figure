@@ -15,7 +15,8 @@ module figure_core_layout
 !< not NUL-terminated) or as a Fortran string (`cl_text_str`, copied into a buffer of the module). The reads of Dear
 !< ImGui's internals that no C API function gives (`DC.IsSameLine`, the window's scroll and decorations, the draw list's
 !< vertices, ...) are native/figure_markdown.cpp's `fig_core_*`.
-use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_f_pointer, c_float, c_int, c_intptr_t, c_loc, &
+use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_intptr_t, &
+                                         c_loc, &
                                          c_long_long, c_null_char, c_null_ptr, c_ptr, c_size_t
 use, intrinsic :: iso_fortran_env, only : int32
 use figure_cimgui, only : im_texture_ref, im_vec2, im_vec4, igBeginChild_Str, igBeginGroup, igBeginTable, igBullet,       &
@@ -32,8 +33,16 @@ use figure_cimgui, only : im_texture_ref, im_vec2, im_vec4, igBeginChild_Str, ig
                           igGetFrameHeight, igGetFrameHeightWithSpacing, igGetMousePos, igIsMouseDown_Nil,                &
                           igIsMousePosValid, igGetMouseClickedCount, igIsWindowHovered, igIsWindowFocused,                &
                           igIsAnyItemHovered, igOpenPopup_Str, igBeginPopup, igEndPopup,         &
-                          igMenuItem_Bool, igIsRectVisible_Vec2, igColorConvertFloat4ToU32, igGetFrameCount
+                          igMenuItem_Bool, igIsRectVisible_Vec2, igColorConvertFloat4ToU32, igGetFrameCount,              &
+                          igSetNextWindowFocus, igButton, igArrowButton, igIsItemActive, igIsItemDeactivated,             &
+                          igIsKeyPressed_Bool, igAlignTextToFramePadding, igCheckbox, igSelectable_Bool, igSetScrollHereY, &
+                          igIsWindowAppearing, igBeginTooltip, igEndTooltip, igSetNextWindowPos, igIsMouseHoveringRect,   &
+                          igCloseCurrentPopup, igBeginTabBar, igEndTabBar, igBeginTabItem, igEndTabItem, igBeginCombo,    &
+                          igEndCombo, igSetNextItemWidth, igShortcut_Nil, igInvisibleButton, igGetWindowHeight,           &
+                          igSetKeyboardFocusHere, igIsItemVisible, igGetTime, igSetCursorScreenPos
 use figure_cimgui_core, only : ImDrawList_AddLine, ImDrawList_AddRect, ImDrawList_AddRectFilled, igClearActiveID, &
+                               ImDrawList_AddText_Vec2, ImDrawList_AddCircle, ImDrawList_AddCircleFilled,          &
+                               ImDrawList_PushClipRect, ImDrawList_PopClipRect,                                     &
                                igGetActiveID, igGetCurrentWindow, igKeepAliveID, igSetActiveID
 
 implicit none
@@ -62,6 +71,13 @@ public :: cl_any_item_hovered, cl_active_id, cl_set_active_id, cl_keep_alive, cl
 public :: cl_open_popup, cl_begin_popup, cl_end_popup, cl_menu_item, cl_separator_item, cl_rect_visible, cl_hash_str
 public :: cl_splitter_split, cl_splitter_set, cl_splitter_merge, cl_float4_to_u32, cl_io_state
 public :: cl_font_text_width, cl_utf8_length, cl_frame_count
+public :: cl_set_next_window_focus, cl_button, cl_arrow_button, cl_find_field, cl_item_active, cl_item_deactivated
+public :: cl_key_pressed, cl_align_text_to_frame_padding, cl_checkbox, cl_selectable, cl_set_scroll_here_y
+public :: cl_window_appearing, cl_draw_text, cl_draw_circle, cl_begin_tooltip, cl_end_tooltip, cl_set_next_window_pos
+public :: cl_scrollbar_rect, cl_push_clip_rect, cl_pop_clip_rect, cl_mouse_hovering_rect, cl_close_current_popup
+public :: cl_begin_tab_bar, cl_end_tab_bar, cl_begin_tab_item, cl_end_tab_item, cl_begin_combo, cl_end_combo
+public :: cl_set_next_item_width, cl_shortcut, cl_invisible_button, cl_window_height, cl_set_keyboard_focus_here
+public :: cl_item_visible, cl_time, cl_set_cursor_screen_pos
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< A string copied into the module's buffer up to this length.
 
@@ -272,6 +288,29 @@ interface
    integer(c_int), value :: start !< First vertex, 0-based.
    real(c_float),  value :: dx    !< Shift [pixels].
    endsubroutine fig_core_vtx_shift
+
+   subroutine fig_core_scrollbar_rect(r) bind(C, name='fig_core_scrollbar_rect')
+   !< The current window's vertical scrollbar's rectangle (`GetWindowScrollbarRect(window, ImGuiAxis_Y)`).
+   import :: c_float
+   implicit none
+   real(c_float), intent(out) :: r(4) !< x0, y0, x1, y1.
+   endsubroutine fig_core_scrollbar_rect
+
+   function fig_core_find_field(label, hint, buf, size, step, dropdown, select_query) result(changed) &
+      bind(C, name='fig_core_find_field')
+   !< imgui_rich_md's find field: `InputTextWithHint` with its callback (the arrows step, the down arrow opens the list,
+   !< the text selected at the first callback when asked).
+   import :: c_char, c_int, c_ptr
+   implicit none
+   character(kind=c_char), intent(in) :: label(*)     !< NUL-terminated.
+   character(kind=c_char), intent(in) :: hint(*)      !< NUL-terminated.
+   type(c_ptr),            value      :: buf          !< The text, NUL-terminated, `size` bytes of room.
+   integer(c_int),         value      :: size         !< Room.
+   integer(c_int),         intent(inout) :: step      !< -1, 1 by the arrows.
+   integer(c_int),         intent(inout) :: dropdown  !< 1 by the down arrow.
+   integer(c_int),         intent(inout) :: select_query !< 1: select all at the first callback (then 0).
+   integer(c_int)                     :: changed      !< The text changed.
+   endfunction fig_core_find_field
 
    subroutine fig_core_tooltip(text, n) bind(C, name='fig_core_tooltip')
    !< SetTooltip("%s", text) of n bytes.
@@ -1191,4 +1230,293 @@ contains
    !< The client's splitter: `Merge(GetWindowDrawList())`.
    call ImDrawListSplitter_Merge(splitter, igGetWindowDrawList())
    endsubroutine cl_splitter_merge
+   ! ---- the documents' widgets (#15 P15, step 71) ------------------------------------------------------------------------
+   subroutine cl_set_next_window_focus()
+   !< `SetNextWindowFocus`.
+   call igSetNextWindowFocus()
+   endsubroutine cl_set_next_window_focus
+
+   function cl_button(label, w, h) result(pressed)
+   !< `Button(label, ImVec2(w, h))`.
+   character(len=*), intent(in) :: label   !< Label.
+   real(c_float),    intent(in) :: w, h    !< Size.
+   logical                      :: pressed !< Pressed.
+
+   pressed = logical(igButton(label//c_null_char, im_vec2(w, h)))
+   endfunction cl_button
+
+   function cl_arrow_button(id, dir) result(pressed)
+   !< `ArrowButton(id, dir)`.
+   character(len=*), intent(in) :: id      !< ID.
+   integer(c_int),   intent(in) :: dir     !< `ImGuiDir_*`.
+   logical                      :: pressed !< Pressed.
+
+   pressed = logical(igArrowButton(id//c_null_char, dir))
+   endfunction cl_arrow_button
+
+   function cl_find_field(label, hint, buf, step, dropdown, select_query) result(changed)
+   !< imgui_rich_md's find field: `InputTextWithHint(label, hint, buf, size(buf), CallbackHistory | CallbackAlways)`
+   !< with its callback: the up and down arrows set `step` (-1, 1), the down arrow opens the list (`dropdown`), the
+   !< text is selected at the first callback while `select_query`.
+   character(len=*),               intent(in)            :: label        !< Label.
+   character(len=*),               intent(in)            :: hint         !< Hint.
+   character(kind=c_char), target, intent(inout)         :: buf(:)       !< The text, NUL-terminated.
+   integer(c_int),                 intent(inout)         :: step         !< Step.
+   logical,                        intent(inout)         :: dropdown     !< The list asked.
+   logical,                        intent(inout)         :: select_query !< Select the text.
+   logical                                               :: changed      !< The text changed.
+   integer(c_int)                                        :: d, q         !< Flags (C).
+
+   d = merge(1_c_int, 0_c_int, dropdown)
+   q = merge(1_c_int, 0_c_int, select_query)
+   changed = fig_core_find_field(label//c_null_char, hint//c_null_char, c_loc(buf), size(buf, kind=c_int), step, d, q) &
+             /= 0_c_int
+   dropdown = d /= 0_c_int
+   select_query = q /= 0_c_int
+   endfunction cl_find_field
+
+   function cl_item_active() result(yes)
+   !< `IsItemActive`.
+   logical :: yes !< Active.
+
+   yes = logical(igIsItemActive())
+   endfunction cl_item_active
+
+   function cl_item_deactivated() result(yes)
+   !< `IsItemDeactivated`.
+   logical :: yes !< Deactivated.
+
+   yes = logical(igIsItemDeactivated())
+   endfunction cl_item_deactivated
+
+   function cl_key_pressed(key) result(yes)
+   !< `IsKeyPressed(key)` (repeating).
+   integer(c_int), intent(in) :: key !< `ImGuiKey_*`.
+   logical                    :: yes !< Pressed.
+
+   yes = logical(igIsKeyPressed_Bool(key, .true._c_bool))
+   endfunction cl_key_pressed
+
+   subroutine cl_align_text_to_frame_padding()
+   !< `AlignTextToFramePadding`.
+   call igAlignTextToFramePadding()
+   endsubroutine cl_align_text_to_frame_padding
+
+   function cl_checkbox(label, v) result(changed)
+   !< `Checkbox(label, &v)`.
+   character(len=*), intent(in)    :: label   !< Label.
+   logical,          intent(inout) :: v       !< Value.
+   logical                         :: changed !< Changed.
+   logical(c_bool), target         :: b       !< Value (C).
+
+   b = logical(v, c_bool)
+   changed = logical(igCheckbox(label//c_null_char, c_loc(b)))
+   v = logical(b)
+   endfunction cl_checkbox
+
+   function cl_selectable(label, selected, flags, w, h) result(pressed)
+   !< `Selectable(label, selected, flags, ImVec2(w, h))`.
+   character(len=*), intent(in) :: label    !< Label.
+   logical,          intent(in) :: selected !< Selected.
+   integer(c_int),   intent(in) :: flags    !< `ImGuiSelectableFlags_*`.
+   real(c_float),    intent(in) :: w, h     !< Size.
+   logical                      :: pressed  !< Pressed.
+
+   pressed = logical(igSelectable_Bool(label//c_null_char, logical(selected, c_bool), flags, im_vec2(w, h)))
+   endfunction cl_selectable
+
+   subroutine cl_set_scroll_here_y(ratio)
+   !< `SetScrollHereY(ratio)`.
+   real(c_float), intent(in) :: ratio !< Where.
+
+   call igSetScrollHereY(ratio)
+   endsubroutine cl_set_scroll_here_y
+
+   function cl_window_appearing() result(yes)
+   !< `IsWindowAppearing`.
+   logical :: yes !< Appearing.
+
+   yes = logical(igIsWindowAppearing())
+   endfunction cl_window_appearing
+
+   subroutine cl_draw_text(x, y, col, text)
+   !< `GetWindowDrawList()->AddText(ImVec2(x, y), col, text)`.
+   real(c_float),    intent(in) :: x, y !< Position.
+   integer(c_int),   intent(in) :: col  !< Colour.
+   character(len=*), intent(in) :: text !< Text.
+
+   if (len(text) == 0) return
+   call ImDrawList_AddText_Vec2(igGetWindowDrawList(), im_vec2(x, y), col, text//c_null_char, c_null_ptr)
+   endsubroutine cl_draw_text
+
+   subroutine cl_draw_circle(x, y, radius, col, filled, thickness)
+   !< `GetWindowDrawList()->AddCircle(ImVec2(x, y), radius, col, 0, thickness)` or `AddCircleFilled`.
+   real(c_float),  intent(in) :: x, y, radius !< Circle.
+   integer(c_int), intent(in) :: col          !< Colour.
+   logical,        intent(in) :: filled       !< Filled.
+   real(c_float),  intent(in) :: thickness    !< Thickness (outline).
+
+   if (filled) then
+      call ImDrawList_AddCircleFilled(igGetWindowDrawList(), im_vec2(x, y), radius, col, 0_c_int)
+   else
+      call ImDrawList_AddCircle(igGetWindowDrawList(), im_vec2(x, y), radius, col, 0_c_int, thickness, 0_c_int)
+   endif
+   endsubroutine cl_draw_circle
+
+   function cl_begin_tooltip() result(open)
+   !< `BeginTooltip`: `cl_end_tooltip` when true.
+   logical :: open !< Open.
+
+   open = logical(igBeginTooltip())
+   endfunction cl_begin_tooltip
+
+   subroutine cl_end_tooltip()
+   !< `EndTooltip`.
+   call igEndTooltip()
+   endsubroutine cl_end_tooltip
+
+   subroutine cl_set_next_window_pos(x, y, cond, px, py)
+   !< `SetNextWindowPos(ImVec2(x, y), cond, ImVec2(px, py))`.
+   real(c_float),  intent(in) :: x, y   !< Position.
+   integer(c_int), intent(in) :: cond   !< `ImGuiCond_*`.
+   real(c_float),  intent(in) :: px, py !< Pivot.
+
+   call igSetNextWindowPos(im_vec2(x, y), cond, im_vec2(px, py))
+   endsubroutine cl_set_next_window_pos
+
+   subroutine cl_scrollbar_rect(x0, y0, x1, y1)
+   !< The current window's vertical scrollbar (`GetWindowScrollbarRect(window, ImGuiAxis_Y)`).
+   real(c_float), intent(out) :: x0, y0, x1, y1 !< Rectangle.
+   real(c_float)              :: r(4)           !< Values.
+
+   call fig_core_scrollbar_rect(r)
+   x0 = r(1)
+   y0 = r(2)
+   x1 = r(3)
+   y1 = r(4)
+   endsubroutine cl_scrollbar_rect
+
+   subroutine cl_push_clip_rect(x0, y0, x1, y1)
+   !< `GetWindowDrawList()->PushClipRect(ImVec2(x0, y0), ImVec2(x1, y1))` (not intersected).
+   real(c_float), intent(in) :: x0, y0, x1, y1 !< Rectangle.
+
+   call ImDrawList_PushClipRect(igGetWindowDrawList(), im_vec2(x0, y0), im_vec2(x1, y1), .false._c_bool)
+   endsubroutine cl_push_clip_rect
+
+   subroutine cl_pop_clip_rect()
+   !< `GetWindowDrawList()->PopClipRect()`.
+   call ImDrawList_PopClipRect(igGetWindowDrawList())
+   endsubroutine cl_pop_clip_rect
+
+   function cl_mouse_hovering_rect(x0, y0, x1, y1, clip) result(yes)
+   !< `IsMouseHoveringRect(ImVec2(x0, y0), ImVec2(x1, y1), clip)`.
+   real(c_float), intent(in) :: x0, y0, x1, y1 !< Rectangle.
+   logical,       intent(in) :: clip           !< Clipped by the window.
+   logical                   :: yes            !< Hovered.
+
+   yes = logical(igIsMouseHoveringRect(im_vec2(x0, y0), im_vec2(x1, y1), logical(clip, c_bool)))
+   endfunction cl_mouse_hovering_rect
+
+   subroutine cl_close_current_popup()
+   !< `CloseCurrentPopup`.
+   call igCloseCurrentPopup()
+   endsubroutine cl_close_current_popup
+
+   function cl_begin_tab_bar(id) result(open)
+   !< `BeginTabBar(id)`: `cl_end_tab_bar` when true.
+   character(len=*), intent(in) :: id   !< ID.
+   logical                      :: open !< Open.
+
+   open = logical(igBeginTabBar(id//c_null_char, 0_c_int))
+   endfunction cl_begin_tab_bar
+
+   subroutine cl_end_tab_bar()
+   !< `EndTabBar`.
+   call igEndTabBar()
+   endsubroutine cl_end_tab_bar
+
+   function cl_begin_tab_item(label) result(open)
+   !< `BeginTabItem(label)`: `cl_end_tab_item` when true.
+   character(len=*), intent(in) :: label !< Label.
+   logical                      :: open  !< Selected.
+
+   open = logical(igBeginTabItem(label//c_null_char, c_null_ptr, 0_c_int))
+   endfunction cl_begin_tab_item
+
+   subroutine cl_end_tab_item()
+   !< `EndTabItem`.
+   call igEndTabItem()
+   endsubroutine cl_end_tab_item
+
+   function cl_begin_combo(label, preview, flags) result(open)
+   !< `BeginCombo(label, preview, flags)`: `cl_end_combo` when true.
+   character(len=*), intent(in) :: label   !< Label.
+   character(len=*), intent(in) :: preview !< Preview.
+   integer(c_int),   intent(in) :: flags   !< `ImGuiComboFlags_*`.
+   logical                      :: open    !< Open.
+
+   open = logical(igBeginCombo(label//c_null_char, preview//c_null_char, flags))
+   endfunction cl_begin_combo
+
+   subroutine cl_end_combo()
+   !< `EndCombo`.
+   call igEndCombo()
+   endsubroutine cl_end_combo
+
+   subroutine cl_set_next_item_width(w)
+   !< `SetNextItemWidth(w)`.
+   real(c_float), intent(in) :: w !< Width.
+
+   call igSetNextItemWidth(w)
+   endsubroutine cl_set_next_item_width
+
+   function cl_shortcut(chord) result(yes)
+   !< `Shortcut(chord)`: routed to the focused window and its parents.
+   integer(c_int), intent(in) :: chord !< Key chord.
+   logical                    :: yes   !< Pressed.
+
+   yes = logical(igShortcut_Nil(chord, 0_c_int))
+   endfunction cl_shortcut
+
+   function cl_invisible_button(id, w, h) result(pressed)
+   !< `InvisibleButton(id, ImVec2(w, h))`.
+   character(len=*), intent(in) :: id      !< ID.
+   real(c_float),    intent(in) :: w, h    !< Size.
+   logical                      :: pressed !< Pressed.
+
+   pressed = logical(igInvisibleButton(id//c_null_char, im_vec2(w, h), 0_c_int))
+   endfunction cl_invisible_button
+
+   function cl_window_height() result(h)
+   !< `GetWindowHeight`.
+   real(c_float) :: h !< Height.
+
+   h = igGetWindowHeight()
+   endfunction cl_window_height
+
+   subroutine cl_set_keyboard_focus_here()
+   !< `SetKeyboardFocusHere()`.
+   call igSetKeyboardFocusHere(0_c_int)
+   endsubroutine cl_set_keyboard_focus_here
+
+   function cl_item_visible() result(yes)
+   !< `IsItemVisible`.
+   logical :: yes !< Visible.
+
+   yes = logical(igIsItemVisible())
+   endfunction cl_item_visible
+
+   subroutine cl_set_cursor_screen_pos(x, y)
+   !< `SetCursorScreenPos`.
+   real(c_float), intent(in) :: x, y !< Position, on the screen.
+
+   call igSetCursorScreenPos(im_vec2(x, y))
+   endsubroutine cl_set_cursor_screen_pos
+
+   function cl_time() result(t)
+   !< `GetTime`.
+   real(c_double) :: t !< Seconds.
+
+   t = igGetTime()
+   endfunction cl_time
 endmodule figure_core_layout

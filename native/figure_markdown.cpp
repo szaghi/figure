@@ -481,4 +481,33 @@ void fig_core_style(float *s) {
    s[8] = st.ItemInnerSpacing.y, s[9] = st.ScrollbarSize, s[10] = st.FontScaleMain, s[11] = st.FontScaleDpi;
 }
 
+// The current window's vertical scrollbar (x0, y0, x1, y1).
+void fig_core_scrollbar_rect(float *r) {
+   ImGuiWindow *w = ImGui::GetCurrentWindow();
+   const ImRect bar = ImGui::GetWindowScrollbarRect(w, ImGuiAxis_Y);
+   r[0] = bar.Min.x, r[1] = bar.Min.y, r[2] = bar.Max.x, r[3] = bar.Max.y;
+}
+
+// imgui_rich_md's find field (rich_md.cpp's _DrawFindBar): InputTextWithHint with its callback, which steps with the
+// arrows (step -1 up, 1 down; the down arrow opens the list) and selects the text at its first call while select_query.
+int fig_core_find_field(const char *label, const char *hint, char *buf, int size, int *step, int *dropdown,
+                        int *select_query) {
+   struct state_t {
+      int *step, *dropdown, *select_query;
+   } state{step, dropdown, select_query};
+   auto callback = [](ImGuiInputTextCallbackData *data) {
+      state_t &s = *static_cast<state_t *>(data->UserData);
+      if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory) {
+         *s.step = (data->EventKey == ImGuiKey_UpArrow) ? -1 : 1;
+         if (data->EventKey == ImGuiKey_DownArrow) *s.dropdown = 1;
+      } else if (*s.select_query) {
+         data->SelectAll();
+         *s.select_query = 0;
+      }
+      return 0;
+   };
+   const ImGuiInputTextFlags flags = ImGuiInputTextFlags_CallbackHistory | ImGuiInputTextFlags_CallbackAlways;
+   return ImGui::InputTextWithHint(label, hint, buf, static_cast<size_t>(size), flags, callback, &state) ? 1 : 0;
+}
+
 } // extern "C"

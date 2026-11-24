@@ -37,7 +37,9 @@ use figure_cimgui_enums, only : ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiChi
                                 ImGuiTableFlags_BordersInnerV, ImGuiTableFlags_BordersOuterH,                         &
                                 ImGuiTableFlags_BordersOuterV, ImGuiTableFlags_Resizable,                             &
                                 ImGuiTableFlags_SizingStretchProp
-use figure_core_layout, only : cl_any_item_hovered, cl_active_id, cl_begin_child, cl_begin_group, cl_begin_popup,     &
+use figure_core_layout, only : cl_text_line_height, cl_rect_visible, cl_any_item_hovered, cl_active_id, cl_begin_child, &
+                               cl_begin_group, &
+                               cl_begin_popup, &
                                cl_begin_table, cl_bullet, cl_channels_merge, cl_channels_set, cl_channels_split,      &
                                cl_clear_active_id, cl_collapsing_header, cl_color_u32, cl_color_u32_rgba,             &
                                cl_content_avail, cl_cursor_pos, cl_cursor_screen_pos, cl_draw_line, cl_draw_rect,      &
@@ -69,11 +71,16 @@ use figure_md4c, only : md_attribute, md_block_code_detail, md_block_h_detail, m
                         MD_SPAN_STRONG, MD_SPAN_U, MD_TEXT_BR, MD_TEXT_CODE, MD_TEXT_ENTITY, MD_TEXT_HTML,            &
                         MD_TEXT_LATEXMATH, MD_TEXT_NORMAL, MD_TEXT_NULLCHAR, MD_TEXT_SOFTBR
 use figure_texture, only : texture_object, texture_ref
+use figure_markdown_search, only : find_matches
 use figure_cimgui, only : im_texture_ref
 
 implicit none
 private
 public :: md_markdown, md_last_link
+public :: md_ready, md_render_raw, md_open_link, md_regular_font, md_admonition_color, md_find_anchor_heading
+public :: md_scroll_to_show_at_top, md_correct_scroll, md_heading_text, md_heading_slug, md_heading_slug_of
+public :: md_unique_slug, md_match_text, md_link_clicked, md_doc_reset
+public :: SEARCH_MATCH, SEARCH_MATCH_CURRENT
 
 real(c_float), parameter :: REGULAR_SIZE = 15.0_c_float !< The text's size [logical pixels] (FIGURE's `TEXT_SIZE`).
 real(c_float), parameter :: HEADER_FACTORS(6) = [1.42_c_float, 1.33_c_float, 1.24_c_float, 1.15_c_float, 1.10_c_float, &
@@ -93,6 +100,10 @@ real(c_float), parameter :: ADMONITION_COLORS(4, 5) = reshape([0.35_c_float, 0.6
                                                                0.95_c_float, 0.75_c_float, 0.22_c_float, 1.0_c_float,  &
                                                                0.97_c_float, 0.32_c_float, 0.29_c_float, 1.0_c_float], &
                                                               [4, 5]) !< Note, Tip, Important, Warning, Caution.
+real(c_float), parameter :: SEARCH_MATCH(4) = [245.0_c_float / 255.0_c_float, 205.0_c_float / 255.0_c_float, &
+                                               60.0_c_float / 255.0_c_float, 0.45_c_float] !< A match of the search.
+real(c_float), parameter :: SEARCH_MATCH_CURRENT(4) = [1.0_c_float, 0.55_c_float, 0.1_c_float, 0.75_c_float] !< The current.
+integer, parameter :: CONTEXT_BYTES = 40 !< The context of a match, each side [bytes].
 integer(c_int), parameter :: ADMON_NONE = 0_c_int !< Not an admonition.
 integer(c_int), parameter :: MD_FLAGS = ior(ior(ior(MD_FLAG_TABLES, MD_FLAG_UNDERLINE), ior(MD_FLAG_STRIKETHROUGH, &
                                         MD_FLAG_TASKLISTS)), ior(ior(MD_FLAG_PERMISSIVEURLAUTOLINKS,               &
@@ -114,15 +125,42 @@ type :: text_run
    integer(c_int) :: repl = REPL_NONE   !< What it shows instead of its bytes.
 endtype text_run
 
-type :: md_heading
-   !< A heading of the last fragment.
-   integer(c_int) :: level = 1_c_int        !< 1 to 6.
-   real(c_float)  :: y = 0.0_c_float        !< Its top, in its window's content coordinates.
-   logical        :: hidden = .false.       !< Inside a collapsed `<details>`.
-   integer(c_int) :: details = 0_c_int      !< What hides it (0: none).
-   integer(c_int) :: slug_b = 0_c_int       !< Its slug: offset in the pool of slugs (0-based).
-   integer(c_int) :: slug_n = 0_c_int       !< ... bytes.
-endtype md_heading
+type, public :: heading_list
+   !< Headings (a fragment's, a document's): level, top (in their window's content coordinates), whether a collapsed
+   !< `<details>` hides them and its ID, their text and slug (in a pool of strings).
+   integer(c_int)                :: n = 0_c_int          !< Headings.
+   integer(c_int),   allocatable :: level(:)             !< 1 to 6.
+   real(c_float),    allocatable :: y(:)                 !< Top.
+   logical,          allocatable :: hidden(:)            !< Hidden.
+   integer(c_int),   allocatable :: details(:)           !< What hides it (0: none).
+   integer(c_int),   allocatable :: tb(:), tn(:)         !< Text: offset in the pool (0-based), bytes.
+   integer(c_int),   allocatable :: sb(:), sn(:)         !< Slug: offset in the pool (0-based), bytes.
+   character(len=:), allocatable :: pool                 !< The texts and slugs.
+   integer(c_int)                :: npool = 0_c_int      !< Bytes used.
+endtype heading_list
+
+type, public :: slug_set
+   !< The slugs given so far (a fragment's, a document's), with their counts (a repeated one gets -1, -2, ...).
+   integer(c_int)                :: n = 0_c_int     !< Slugs.
+   integer(c_int),   allocatable :: count(:)        !< Counts.
+   integer(c_int),   allocatable :: b(:), l(:)      !< Offset in the pool (0-based), bytes.
+   character(len=:), allocatable :: pool            !< The slugs.
+   integer(c_int)                :: npool = 0_c_int !< Bytes used.
+endtype slug_set
+
+type, public :: match_list
+   !< The matches of a document's search: their fragment (0-based rank) and bytes, their top and bottom in the
+   !< content's coordinates, the collapsed `<details>` that hides one (0: none), whether drawn as runs, their context
+   !< (before, the match, after: offsets and bytes in a pool).
+   integer(c_int)                :: n = 0_c_int             !< Matches.
+   integer(c_int),   allocatable :: frag(:), b(:), e(:)     !< Fragment, bytes.
+   real(c_float),    allocatable :: y(:), bottom(:)         !< Top, bottom.
+   integer(c_int),   allocatable :: details(:)              !< What hides it.
+   logical,          allocatable :: in_runs(:)              !< Drawn as runs (it can become the selection).
+   integer(c_int),   allocatable :: pb(:,:), pn(:,:)        !< Before, text, after: offsets, bytes.
+   character(len=:), allocatable :: pool                    !< The contexts.
+   integer(c_int)                :: npool = 0_c_int         !< Bytes used.
+endtype match_list
 
 type :: list_info
    !< A list being drawn.
@@ -154,6 +192,8 @@ integer(c_int)    :: fragment_counter = 0_c_int !< The fragments of this frame (
 ! links reported
 logical                       :: link_clicked = .false. !< A link was clicked in the fragment being drawn.
 character(len=:), allocatable :: link                   !< Its URL (kept until the next click).
+character(len=:), allocatable, public :: md_swallow     !< The anchor a view scrolls to by the program's request: not
+                                                        !< a link clicked ('': none).
 ! the renderer's state (rich_md_renderer.h)
 character(len=:), allocatable :: href      !< The link being drawn ('': none).
 character(len=:), allocatable :: img_src   !< The image being drawn.
@@ -202,14 +242,8 @@ integer(c_int) :: selection_anchor = 0_c_int, selection_focus = 0_c_int
 logical :: selection_by_unit = .false., press_in_selection = .false.
 character(len=:), allocatable :: menu_link
 ! the headings and anchors
-type(md_heading), allocatable :: headings(:)
-integer(c_int) :: nheadings = 0_c_int
-character(len=:), allocatable :: slug_pool    !< The headings' slugs.
-integer(c_int) :: nslug_pool = 0_c_int
-character(len=:), allocatable :: occ_pool     !< The slugs given so far (each followed by a NUL).
-integer(c_int), allocatable :: occ_count(:)   !< ... their counts.
-integer(c_int), allocatable :: occ_b(:), occ_n(:) !< ... their places in occ_pool.
-integer(c_int) :: nocc = 0_c_int
+type(heading_list) :: frag_heads !< The headings of the last fragment.
+type(slug_set)     :: frag_slugs !< ... their slugs.
 real(c_float)  :: heading_top = -1.0_c_float
 real(c_float)  :: hidden_y = 0.0_c_float, hidden_bottom = 0.0_c_float
 integer(c_int) :: hidden_id = 0_c_int
@@ -218,6 +252,35 @@ character(len=:), allocatable :: anchor_slug  !< An anchor clicked, being reache
 integer(c_int) :: anchor_frames = 8_c_int
 integer(c_int) :: anchor_fragment = 0_c_int
 integer(c_int) :: fragment_id = 0_c_int
+! the document being drawn (imgui_rich_md's DocumentRenders: figure_markdown_document's begin .. end), its renders'
+! shared data: headings, the anchor clicked, the search and its matches, the blocks at the top level
+logical,            public :: doc_on = .false.                 !< A document is being drawn.
+type(heading_list), public :: doc_heads                        !< Its headings.
+type(slug_set),     public :: doc_slugs                        !< ... their slugs.
+character(len=:), allocatable, public :: doc_clicked_anchor    !< The anchor clicked in this frame ('': none).
+real(c_float),      public :: doc_content_start_y = 0.0_c_float !< The content's top.
+integer(c_int),     public :: doc_fragment_count = 0_c_int     !< The renders so far.
+character(len=:), allocatable, public :: doc_query             !< The search ('': none).
+logical,            public :: doc_match_case = .false.         !< Its options.
+logical,            public :: doc_whole_words = .false.
+logical,            public :: doc_highlight_all = .true.
+integer(c_int),     public :: doc_current_fragment = -1_c_int  !< The current match, as of the last frame.
+integer(c_int),     public :: doc_current_begin = 0_c_int
+type(match_list),   public :: doc_matches                      !< The matches.
+integer(c_int), allocatable, public :: doc_blk_frag(:), doc_blk_index(:) !< The shown blocks at the top level.
+real(c_float),  allocatable, public :: doc_blk_y(:)
+integer(c_int),     public :: doc_nblocks = 0_c_int
+integer(c_int),     public :: doc_select_fragment = -1_c_int   !< The find bar closed on a match of this render.
+integer(c_int),     public :: doc_select_begin = 0_c_int, doc_select_end = 0_c_int
+! the text a fragment does not draw as runs: the collapsed sections' (searched at their header), the code blocks'
+character(len=:), allocatable :: hid_text      !< The hidden texts, one after the other.
+integer(c_int), allocatable   :: hid_src(:)    !< Per byte: its offset in the fragment.
+integer(c_int), allocatable   :: hid_start(:), hid_details(:) !< Each hidden text's first byte (0-based), its section.
+real(c_float),  allocatable   :: hid_y(:), hid_bottom(:)      !< ... the section's header.
+integer(c_int)                :: nhid = 0_c_int, nhid_bytes = 0_c_int
+integer(c_int), allocatable   :: code_src_code(:), code_src_frag(:) !< Per chunk of the code block: its offsets.
+integer(c_int)                :: ncode_src = 0_c_int
+type(match_list)              :: code_matches  !< The code blocks' matches of the fragment so far.
 ! the images
 type(md_image), allocatable :: images(:)
 integer(c_int) :: nimages = 0_c_int
@@ -256,13 +319,13 @@ contains
    clicked = .false.
    if (present(link_url)) link_url = ''
    if (figure_draw_refused('ig_markdown', stat)) return
-   s = ready()
+   s = md_ready()
    if (s /= FIG_OK) then
       call figure_check(s, stat)
       return
    endif
    link_clicked = .false.
-   call render_raw(text)
+   call md_render_raw(text)
    clicked = link_clicked
    link_clicked = .false.
    if (clicked .and. present(link_url)) link_url = link
@@ -277,7 +340,7 @@ contains
    if (allocated(link)) url = link
    endfunction md_last_link
 
-   function ready() result(status)
+   function md_ready() result(status)
    !< The fonts of this application (made at its first fragment), the caches of an earlier one forgotten.
    integer(c_int) :: status !< FIG_* status.
    integer(c_int) :: g      !< Generation.
@@ -292,9 +355,9 @@ contains
       generation = g
    endif
    status = fig_markdown_fonts(fonts)
-   endfunction ready
+   endfunction md_ready
 
-   subroutine render_raw(text)
+   subroutine md_render_raw(text)
    !< imgui_rich_md's `RenderRaw`: the fragment in its own ID scope (its rank among this frame's), in the default font.
    character(len=*), intent(in) :: text !< Markdown.
    integer(c_int)                :: frame !< Frame.
@@ -311,20 +374,27 @@ contains
    call print_fragment(text)
    call cl_pop_font()
    call cl_pop_id()
-   endsubroutine render_raw
+   endsubroutine md_render_raw
 
    ! ---- the fragment ------------------------------------------------------------------------------------------------
    subroutine print_fragment(text)
    !< imgui_rich_md's `Renderer::print`: the fragment parsed and drawn, its selection updated and drawn behind it.
    character(len=*), intent(in) :: text !< Markdown.
-   integer(c_int)               :: selection_id, r, k !< IDs, status, counter.
-   logical                      :: draw_selection     !< A selection to draw.
+   integer(c_int)               :: selection_id, r, k, fragment_index !< IDs, status, counter, rank in the document.
+   logical                      :: draw_selection, draw_search        !< A selection, the search's matches to draw.
+   real(c_float)                :: cx, cy                             !< Cursor.
 
-   nheadings = 0_c_int
-   nocc = 0_c_int
+   frag_heads%n = 0_c_int
+   frag_heads%npool = 0_c_int
+   frag_slugs%n = 0_c_int
+   frag_slugs%npool = 0_c_int
    if (len(text) == 0) return
    call set_fragment(text)
    skip_next_block_gap = .true.
+   if (doc_on) then ! in a document, a fragment that follows other content keeps its gap: the fragments read as one
+      call cl_cursor_pos(cx, cy)
+      skip_next_block_gap = cy <= doc_content_start_y
+   endif
    in_html_comment = .false.
    html_comment_closed = .false.
    html_gap_pending = .false.
@@ -335,7 +405,10 @@ contains
    pre_buffer = ''
    nruns = 0_c_int
    nlink_pool = 0_c_int
-   nslug_pool = 0_c_int
+   nhid = 0_c_int
+   nhid_bytes = 0_c_int
+   code_matches%n = 0_c_int
+   code_matches%npool = 0_c_int
    block_number = 0_c_int
    top_block_count = 0_c_int
    selection_id = cl_get_id('##rich_md_selection')
@@ -344,17 +417,27 @@ contains
       if (cl_hash_str(base, nfrag) /= selection_text_hash) selection_fragment = 0_c_int
    endif
    draw_selection = selection_fragment == selection_id .and. selection_anchor /= selection_focus
-   if (draw_selection) then
+   draw_search = .false.
+   if (doc_on) draw_search = len(doc_query) > 0
+   if (draw_selection .or. draw_search) then
       call cl_splitter_split(2_c_int)
       call cl_splitter_set(1_c_int)
    endif
    call reset_state()
    r = md_parse(base, nfrag, parser, c_null_ptr)
-   call resolve_anchor(selection_id)
+   fragment_index = -1_c_int
+   if (doc_on) then
+      fragment_index = doc_fragment_count
+      doc_fragment_count = doc_fragment_count + 1_c_int
+      if (doc_select_fragment == fragment_index) call select_range(selection_id, doc_select_begin, doc_select_end)
+   else
+      call resolve_anchor(selection_id)
+   endif
    call update_selection(selection_id)
-   if (draw_selection) then
+   if (draw_selection .or. draw_search) then
       call cl_splitter_set(0_c_int)
-      call draw_selection_rects()
+      if (draw_search) call search_fragment(fragment_index)
+      if (draw_selection) call draw_selection_rects()
       call cl_splitter_merge()
    endif
    call end_line()
@@ -749,15 +832,40 @@ contains
 
    ! ---- links and anchors -------------------------------------------------------------------------------------------
    subroutine open_url()
-   !< A link's URL reported (FIGURE's `on_link`).
-   link = href
-   link_clicked = .true.
+   !< The link's URL reported (FIGURE's `on_link`).
+   call md_open_link(href)
    endsubroutine open_url
+
+   subroutine md_open_link(url)
+   !< A link reported (FIGURE's `on_link`): kept for the call that draws it, unless it is the anchor of a scroll the
+   !< program asked (`md_swallow`).
+   character(len=*), intent(in) :: url !< URL.
+
+   if (.not. allocated(md_swallow)) md_swallow = ''
+   if (len(md_swallow) > 0) then
+      if (url == '#'//md_swallow) return
+   endif
+   link = url
+   link_clicked = .true.
+   endsubroutine md_open_link
+
+   function md_link_clicked(reset) result(clicked)
+   !< Whether a link was reported since the last reset (`reset`: start again).
+   logical, intent(in) :: reset   !< Start again.
+   logical             :: clicked !< Clicked.
+
+   clicked = link_clicked
+   if (reset) link_clicked = .false.
+   endfunction md_link_clicked
 
    subroutine follow_link()
    !< A click on a link: an anchor (`#slug`) waits for the end of the fragment, where its heading is known.
    if (len(href) > 1) then
       if (href(1:1) == '#') then
+         if (doc_on) then
+            doc_clicked_anchor = href(2:)
+            return
+         endif
          anchor_slug = href(2:)
          anchor_frames = 8_c_int
          anchor_fragment = fragment_id
@@ -788,21 +896,32 @@ contains
    !< when no heading has the anchor's slug.
    integer(c_int) :: i !< Heading.
 
-   do i = 1_c_int, nheadings
-      if (slug_pool(headings(i)%slug_b + 1:headings(i)%slug_b + headings(i)%slug_n) == anchor_slug) exit
+   i = md_find_anchor_heading(frag_heads, anchor_slug, anchor_frames)
+   endfunction find_anchor_heading
+
+   function md_find_anchor_heading(heads, slug, frames) result(i)
+   !< The heading of an anchor (`FindAnchorHeading`): its index (from 1), 0 while a collapsed section that hides it
+   !< opens (at the next frame), -1 when no heading has the anchor's slug.
+   type(heading_list), intent(in)    :: heads  !< Headings.
+   character(len=*),   intent(in)    :: slug   !< The anchor.
+   integer(c_int),     intent(inout) :: frames !< Its frames left.
+   integer(c_int)                    :: i      !< Heading.
+
+   do i = 1_c_int, heads%n
+      if (heads%pool(heads%sb(i) + 1:heads%sb(i) + heads%sn(i)) == slug) exit
    enddo
-   if (i > nheadings) then
+   if (i > heads%n) then
       i = -1_c_int
       return
    endif
-   if (headings(i)%hidden) then
-      anchor_frames = anchor_frames - 1_c_int
-      if (anchor_frames > 0_c_int) then
-         call cl_storage_set_int(headings(i)%details, 1_c_int) ! the section opens at the next frame
+   if (heads%hidden(i)) then
+      frames = frames - 1_c_int
+      if (frames > 0_c_int) then
+         call cl_storage_set_int(heads%details(i), 1_c_int) ! the section opens at the next frame
          i = 0_c_int
       endif
    endif
-   endfunction find_anchor_heading
+   endfunction md_find_anchor_heading
 
    function reach_anchor() result(status)
    !< One frame of the way to the anchor (`ResolveAnchor`): 1 reached, 0 waiting, -1 not found.
@@ -817,13 +936,13 @@ contains
    endif
    status = 0_c_int
    if (i == 0_c_int) return
-   if (correct_scroll(scroll_to_show_at_top(headings(i)%y), anchor_frames)) then
+   if (md_correct_scroll(md_scroll_to_show_at_top(frag_heads%y(i)), anchor_frames)) then
       anchor_slug = ''
       status = 1_c_int
    endif
    endfunction reach_anchor
 
-   function scroll_to_show_at_top(y) result(scroll)
+   function md_scroll_to_show_at_top(y) result(scroll)
    !< The scroll of the current window that shows its content's y at its top (`ScrollToShowAtTop`).
    real(c_float), intent(in) :: y      !< Content ordinate.
    real(c_float)             :: scroll !< Scroll.
@@ -838,9 +957,9 @@ contains
    elseif (scroll > s(6)) then
       scroll = s(6)
    endif
-   endfunction scroll_to_show_at_top
+   endfunction md_scroll_to_show_at_top
 
-   function correct_scroll(scroll, frames) result(holds)
+   function md_correct_scroll(scroll, frames) result(holds)
    !< One frame of the correction of a scroll (`CorrectScroll`): true when it holds or the frames ran out.
    real(c_float),  intent(in)    :: scroll !< The scroll wanted.
    integer(c_int), intent(inout) :: frames !< Frames left.
@@ -852,36 +971,111 @@ contains
    if (frames <= 0_c_int) return
    call cl_set_scroll_y(scroll)
    holds = .false.
-   endfunction correct_scroll
+   endfunction md_correct_scroll
 
    ! ---- headings ----------------------------------------------------------------------------------------------------
    subroutine add_heading(level, y, is_hidden)
-   !< A heading of the fragment, its slug unique in it.
+   !< A heading of the fragment, its slug unique in it (in a document: in the document, and the document's too).
    integer(c_int), intent(in)    :: level     !< Level.
    real(c_float),  intent(in)    :: y         !< Its top.
    logical,        intent(in)    :: is_hidden !< Hidden by a collapsed section.
    character(len=:), allocatable :: slug      !< Its slug.
-   type(md_heading), allocatable :: more(:)   !< Grown list.
-   integer(c_int)                :: k         !< Counter.
+   integer(c_int)                :: details   !< What hides it.
 
-   slug = unique_slug(heading_text)
-   if (.not. allocated(headings)) allocate(headings(16))
-   if (nheadings == size(headings, kind=c_int)) then
-      allocate(more(2 * nheadings))
-      do k = 1_c_int, nheadings
-         more(k) = headings(k)
-      enddo
-      call move_alloc(more, headings)
+   if (doc_on) then
+      slug = md_unique_slug(heading_text, doc_slugs)
+   else
+      slug = md_unique_slug(heading_text, frag_slugs)
    endif
-   nheadings = nheadings + 1_c_int
-   headings(nheadings)%level = level
-   headings(nheadings)%y = y
-   headings(nheadings)%hidden = is_hidden
-   headings(nheadings)%details = merge(hidden_id, 0_c_int, is_hidden)
-   call pool_add(slug_pool, nslug_pool, slug, headings(nheadings)%slug_b, headings(nheadings)%slug_n)
+   details = merge(hidden_id, 0_c_int, is_hidden)
+   if (doc_on) call heading_push(doc_heads, level, y, is_hidden, details, heading_text, slug)
+   call heading_push(frag_heads, level, y, is_hidden, details, heading_text, slug)
    endsubroutine add_heading
 
-   function heading_slug(text) result(slug)
+   subroutine heading_push(heads, level, y, is_hidden, details, text, slug)
+   !< A heading appended to a list.
+   type(heading_list), intent(inout) :: heads     !< Headings.
+   integer(c_int),     intent(in)    :: level     !< Level.
+   real(c_float),      intent(in)    :: y         !< Top.
+   logical,            intent(in)    :: is_hidden !< Hidden.
+   integer(c_int),     intent(in)    :: details   !< What hides it.
+   character(len=*),   intent(in)    :: text      !< Text.
+   character(len=*),   intent(in)    :: slug      !< Slug.
+   integer(c_int)                    :: k         !< Its index.
+
+   if (.not. allocated(heads%level)) then
+      allocate(heads%level(16), heads%y(16), heads%hidden(16), heads%details(16), heads%tb(16), heads%tn(16), &
+               heads%sb(16), heads%sn(16))
+   endif
+   if (heads%n == size(heads%level, kind=c_int)) then
+      call grow_int(heads%level)
+      call grow_real(heads%y)
+      call grow_logical(heads%hidden)
+      call grow_int(heads%details)
+      call grow_int(heads%tb)
+      call grow_int(heads%tn)
+      call grow_int(heads%sb)
+      call grow_int(heads%sn)
+   endif
+   heads%n = heads%n + 1_c_int
+   k = heads%n
+   heads%level(k) = level
+   heads%y(k) = y
+   heads%hidden(k) = is_hidden
+   heads%details(k) = details
+   call pool_add(heads%pool, heads%npool, text, heads%tb(k), heads%tn(k))
+   call pool_add(heads%pool, heads%npool, slug, heads%sb(k), heads%sn(k))
+   endsubroutine heading_push
+
+   function md_heading_text(heads, k) result(t)
+   !< Heading k's text.
+   type(heading_list), intent(in) :: heads !< Headings.
+   integer(c_int),     intent(in) :: k     !< Heading.
+   character(len=:), allocatable  :: t     !< Text.
+
+   t = heads%pool(heads%tb(k) + 1:heads%tb(k) + heads%tn(k))
+   endfunction md_heading_text
+
+   function md_heading_slug(heads, k) result(t)
+   !< Heading k's slug.
+   type(heading_list), intent(in) :: heads !< Headings.
+   integer(c_int),     intent(in) :: k     !< Heading.
+   character(len=:), allocatable  :: t     !< Slug.
+
+   t = heads%pool(heads%sb(k) + 1:heads%sb(k) + heads%sn(k))
+   endfunction md_heading_slug
+
+   subroutine grow_int(a)
+   !< An integer array doubled.
+   integer(c_int), allocatable, intent(inout) :: a(:)    !< Array.
+   integer(c_int), allocatable                :: more(:) !< Grown.
+
+   allocate(more(2 * size(a)))
+   more(1:size(a)) = a
+   call move_alloc(more, a)
+   endsubroutine grow_int
+
+   subroutine grow_real(a)
+   !< A real array doubled.
+   real(c_float), allocatable, intent(inout) :: a(:)    !< Array.
+   real(c_float), allocatable                :: more(:) !< Grown.
+
+   allocate(more(2 * size(a)))
+   more(1:size(a)) = a
+   call move_alloc(more, a)
+   endsubroutine grow_real
+
+   subroutine grow_logical(a)
+   !< A logical array doubled.
+   logical, allocatable, intent(inout) :: a(:)    !< Array.
+   logical, allocatable                :: more(:) !< Grown.
+
+   allocate(more(2 * size(a)))
+   more(1:size(a)) = a
+   call move_alloc(more, a)
+   endsubroutine grow_logical
+
+   function md_heading_slug_of(text) result(slug)
    !< A heading's anchor as GitHub makes it: lower case, the blanks as `-`, the ASCII punctuation dropped but `-`, `_`.
    character(len=*), intent(in)  :: text !< The heading's text.
    character(len=:), allocatable :: slug !< Slug.
@@ -901,74 +1095,62 @@ contains
          slug = slug//'-'
       endif
    enddo
-   endfunction heading_slug
+   endfunction md_heading_slug_of
 
-   function unique_slug(text) result(slug)
-   !< A slug unique among those given so far in the fragment: a repeated one gets `-1`, `-2`, ... (`UniqueSlug`).
-   character(len=*), intent(in)  :: text !< The heading's text.
-   character(len=:), allocatable :: slug !< Slug.
-   character(len=:), allocatable :: root !< The slug of the text.
-   character(len=16)             :: num  !< A number.
-   integer(c_int)                :: kb   !< The root's entry.
+   function md_unique_slug(text, set) result(slug)
+   !< A slug unique among those of a set: a repeated one gets `-1`, `-2`, ... (`UniqueSlug`).
+   character(len=*), intent(in)    :: text !< The heading's text.
+   type(slug_set),   intent(inout) :: set  !< The slugs given so far.
+   character(len=:), allocatable   :: slug !< Slug.
+   character(len=:), allocatable   :: root !< The slug of the text.
+   character(len=16)               :: num  !< A number.
+   integer(c_int)                  :: kb   !< The root's entry.
 
-   root = heading_slug(text)
+   root = md_heading_slug_of(text)
    slug = root
-   do while (occ_find(slug) > 0_c_int)
-      kb = occ_find(root)
-      if (kb == 0_c_int) kb = occ_add(root)
-      occ_count(kb) = occ_count(kb) + 1_c_int
-      write(num, '(I0)') occ_count(kb)
+   do while (slug_find(set, slug) > 0_c_int)
+      kb = slug_find(set, root)
+      if (kb == 0_c_int) kb = slug_add(set, root)
+      set%count(kb) = set%count(kb) + 1_c_int
+      write(num, '(I0)') set%count(kb)
       slug = root//'-'//trim(num)
    enddo
-   kb = occ_find(slug)
-   if (kb == 0_c_int) kb = occ_add(slug)
-   occ_count(kb) = 0_c_int
-   endfunction unique_slug
+   kb = slug_find(set, slug)
+   if (kb == 0_c_int) kb = slug_add(set, slug)
+   set%count(kb) = 0_c_int
+   endfunction md_unique_slug
 
-   function occ_find(slug) result(k)
-   !< The entry of a slug among those given (0: none).
+   function slug_find(set, slug) result(k)
+   !< The entry of a slug in a set (0: none).
+   type(slug_set),   intent(in) :: set  !< Set.
    character(len=*), intent(in) :: slug !< Slug.
    integer(c_int)               :: k    !< Entry.
 
-   do k = 1_c_int, nocc
-      if (occ_n(k) == len(slug, c_int)) then
-         if (occ_pool(occ_b(k) + 1:occ_b(k) + occ_n(k)) == slug) return
+   do k = 1_c_int, set%n
+      if (set%l(k) == len(slug, c_int)) then
+         if (set%pool(set%b(k) + 1:set%b(k) + set%l(k)) == slug) return
       endif
    enddo
    k = 0_c_int
-   endfunction occ_find
+   endfunction slug_find
 
-   function occ_add(slug) result(k)
-   !< A slug given, with a count of 0: its entry.
-   character(len=*), intent(in) :: slug !< Slug.
-   integer(c_int)               :: k    !< Entry.
-   integer(c_int), allocatable  :: more(:) !< Grown arrays.
-   integer(c_int)               :: n    !< Pool bytes.
+   function slug_add(set, slug) result(k)
+   !< A slug added to a set, with a count of 0: its entry.
+   type(slug_set),   intent(inout) :: set  !< Set.
+   character(len=*), intent(in)    :: slug !< Slug.
+   integer(c_int)                  :: k    !< Entry.
 
-   if (.not. allocated(occ_count)) then
-      allocate(occ_count(16), occ_b(16), occ_n(16))
-      occ_pool = ''
+   if (.not. allocated(set%count)) allocate(set%count(16), set%b(16), set%l(16))
+   if (set%n == size(set%count, kind=c_int)) then
+      call grow_int(set%count)
+      call grow_int(set%b)
+      call grow_int(set%l)
    endif
-   if (nocc == size(occ_count, kind=c_int)) then
-      allocate(more(2 * nocc))
-      more(1:nocc) = occ_count(1:nocc)
-      call move_alloc(more, occ_count)
-      allocate(more(2 * nocc))
-      more(1:nocc) = occ_b(1:nocc)
-      call move_alloc(more, occ_b)
-      allocate(more(2 * nocc))
-      more(1:nocc) = occ_n(1:nocc)
-      call move_alloc(more, occ_n)
-   endif
-   if (nocc == 0_c_int) occ_pool = ''
-   n = len(occ_pool, c_int)
-   occ_pool = occ_pool//slug
-   nocc = nocc + 1_c_int
-   k = nocc
-   occ_b(k) = n
-   occ_n(k) = len(slug, c_int)
-   occ_count(k) = 0_c_int
-   endfunction occ_add
+   set%n = set%n + 1_c_int
+   k = set%n
+   call pool_add(set%pool, set%npool, slug, set%b(k), set%l(k))
+   set%count(k) = 0_c_int
+   endfunction slug_add
 
    subroutine pool_add(pool, n, s, b, l)
    !< A string appended to a pool of strings: its place.
@@ -1007,7 +1189,10 @@ contains
       select case (type)
       case (MD_BLOCK_P, MD_BLOCK_H, MD_BLOCK_QUOTE, MD_BLOCK_HR, MD_BLOCK_CODE, MD_BLOCK_HTML, MD_BLOCK_TABLE, &
             MD_BLOCK_UL, MD_BLOCK_OL)
-         if (container_depth == merge(1_c_int, 0_c_int, type == MD_BLOCK_QUOTE)) top_block_count = top_block_count + 1_c_int
+         if (doc_on .and. container_depth == merge(1_c_int, 0_c_int, type == MD_BLOCK_QUOTE)) then
+            top_block_count = top_block_count + 1_c_int
+            if (.not. hidden()) call block_push(top_block_count - 1_c_int)
+         endif
       endselect
    endif
    if (hidden()) then
@@ -1356,6 +1541,7 @@ contains
    is_code_block = e
    if (e) then
       code_block = ''
+      ncode_src = 0_c_int
    else
       call end_line()
       call render_code_block()
@@ -1369,8 +1555,14 @@ contains
    !< in a frame (a child window of the frame's colour) with a Copy button, in the code font.
    character(len=:), allocatable, target :: code !< The code shown.
    integer(c_int)                        :: k, last !< Counters.
-   real(c_float)                         :: copy_width, cx, cy, ax, ay !< Layout.
+   real(c_float)                         :: copy_width, cx, cy, ax, ay, top, ox, oy, lh, line_no !< Layout.
    logical                               :: blank !< The last line is blank.
+   integer(int32), allocatable           :: mb(:), me(:) !< The search's matches in the code.
+   integer(int32)                        :: nm, j, line_start !< Matches, counters.
+   integer(c_int), allocatable           :: mcol(:) !< Their colours (0: not drawn).
+   real(c_float),  allocatable           :: rects(:,:) !< Their rectangles.
+   integer(c_int)                        :: nrect, frag_index !< Rectangles, this fragment's rank.
+   logical                               :: current !< The current match.
 
    code = code_block
    last = 0_c_int ! the start of the last line
@@ -1396,6 +1588,23 @@ contains
    else
       call cl_push_id(c_loc(nul), 0_c_int) ! PushID(""): a NUL where the text ends
    endif
+   nm = 0_int32
+   if (doc_on) then ! the search's matches in the code, drawn behind it
+      if (len(doc_query) > 0) call find_matches(code, doc_query, doc_match_case, doc_whole_words, mb, me, nm)
+   endif
+   allocate(mcol(max(nm, 1_int32)), rects(4, max(nm, 1_int32)))
+   frag_index = doc_fragment_count ! this fragment's, counted at its end
+   do j = 1_int32, nm
+      current = frag_index == doc_current_fragment .and. code_block_source(mb(j)) == doc_current_begin
+      mcol(j) = 0_c_int
+      if (current) then
+         mcol(j) = cl_color_u32_rgba(SEARCH_MATCH_CURRENT)
+      elseif (doc_highlight_all) then
+         mcol(j) = cl_color_u32_rgba(SEARCH_MATCH)
+      endif
+   enddo
+   nrect = 0_c_int
+   call cl_cursor_screen_pos(cx, top)
    call cl_push_style_color(ImGuiCol_ChildBg, style_color(ImGuiCol_FrameBg))
    if (cl_begin_child('code', 0.0_c_float, 0.0_c_float, &
                       ior(ImGuiChildFlags_AutoResizeY, ImGuiChildFlags_AlwaysUseWindowPadding), 0_c_int)) then
@@ -1412,6 +1621,20 @@ contains
       endif
       call cl_set_cursor_pos_x(style_value(6_c_int))
       call cl_push_font(fonts(5), REGULAR_SIZE * font_scale)
+      call cl_cursor_screen_pos(ox, oy)
+      do j = 1_int32, nm ! a match is on one line (the query has no newline)
+         line_start = 0_int32
+         if (mb(j) > 0_int32) line_start = index(code(1:mb(j)), achar(10), back=.true.)
+         line_no = real(count([(code(k:k) == achar(10), k = 1_c_int, line_start)]), c_float)
+         lh = cl_text_line_height()
+         nrect = nrect + 1_c_int
+         rects(1, nrect) = ox + code_width(code, line_start, mb(j))
+         rects(2, nrect) = oy + line_no * lh
+         rects(3, nrect) = rects(1, nrect) + code_width(code, mb(j), me(j))
+         rects(4, nrect) = rects(2, nrect) + lh
+         if (mcol(j) /= 0_c_int) call cl_draw_rect_filled(rects(1, nrect), rects(2, nrect), rects(3, nrect), &
+                                                          rects(4, nrect), mcol(j), 0.0_c_float)
+      enddo
       if (len(code) > 0) then
          call cl_text(c_loc(code), len(code, c_int))
       else
@@ -1421,8 +1644,73 @@ contains
    endif
    call cl_end_child()
    call cl_pop_style_color()
+   if (nm > 0_int32) call add_code_block_matches(code, mb, me, nm, rects, nrect, top)
    call cl_pop_id()
    endsubroutine render_code_block
+
+   function code_width(code, b, e) result(w)
+   !< `CalcTextSize(code + b, code + e).x` (0-based offsets).
+   character(len=*), intent(in), target :: code !< Code.
+   integer(int32),   intent(in)         :: b, e !< Offsets.
+   real(c_float)                        :: w    !< Width.
+
+   w = 0.0_c_float
+   if (e > b) w = cl_text_width(c_loc(code(b + 1:b + 1)), int(e - b, c_int))
+   endfunction code_width
+
+   subroutine code_source_push(code_offset, frag_offset)
+   !< A chunk of the code block: its offset in the code and in the fragment.
+   integer(c_int), intent(in) :: code_offset, frag_offset !< Offsets.
+
+   if (.not. allocated(code_src_code)) allocate(code_src_code(16), code_src_frag(16))
+   if (ncode_src == size(code_src_code, kind=c_int)) then
+      call grow_int(code_src_code)
+      call grow_int(code_src_frag)
+   endif
+   ncode_src = ncode_src + 1_c_int
+   code_src_code(ncode_src) = code_offset
+   code_src_frag(ncode_src) = frag_offset
+   endsubroutine code_source_push
+
+   function code_block_source(o) result(src)
+   !< The offset in the fragment of a byte of the code block.
+   integer(c_int), intent(in) :: o   !< Offset in the code.
+   integer(c_int)             :: src !< Offset in the fragment.
+   integer(c_int)             :: k   !< Chunk.
+
+   src = 0_c_int
+   do k = 1_c_int, ncode_src
+      if (code_src_code(k) <= o) src = code_src_frag(k) + (o - code_src_code(k))
+   enddo
+   endfunction code_block_source
+
+   subroutine add_code_block_matches(code, mb, me, nm, rects, nrect, block_top)
+   !< The code block's matches, added to the fragment's (their rectangles when the block drew them, else its top).
+   character(len=*), intent(in) :: code          !< Code.
+   integer(int32),   intent(in) :: mb(:), me(:)  !< Matches.
+   integer(int32),   intent(in) :: nm            !< How many.
+   real(c_float),    intent(in) :: rects(:,:)    !< Their rectangles.
+   integer(c_int),   intent(in) :: nrect         !< How many.
+   real(c_float),    intent(in) :: block_top     !< The block's top (screen).
+   real(c_float)                :: to_content, wx, wy, y, bottom !< Coordinates.
+   integer(int32)               :: j             !< Match.
+
+   call cl_window_pos(wx, wy)
+   to_content = cl_scroll_y() - wy
+   do j = 1_int32, nm
+      if (j <= nrect) then
+         y = rects(2, j) + to_content
+         bottom = rects(4, j) + to_content
+      else
+         y = block_top + to_content
+         bottom = block_top + cl_text_line_height()
+         bottom = bottom + to_content
+      endif
+      call match_push(code_matches, doc_fragment_count, code_block_source(mb(j)), code_block_source(me(j) - 1_c_int) + 1_c_int, &
+                      y, bottom, 0_c_int, .false., context_before(code, mb(j)), code(mb(j) + 1:me(j)), &
+                      context_after(code, me(j)))
+   enddo
+   endsubroutine add_code_block_matches
 
    subroutine block_table(d, e)
    !< A table: Dear ImGui's, resizable, with borders, in its own ID scope.
@@ -1658,6 +1946,11 @@ contains
 
    if (hidden() .and. type /= MD_TEXT_HTML) then
       if (hlevel > 0_c_int .and. (type == MD_TEXT_NORMAL .or. type == MD_TEXT_CODE)) heading_text = heading_text//slice(b, e)
+      if (type == MD_TEXT_NORMAL .or. type == MD_TEXT_CODE .or. type == MD_TEXT_LATEXMATH) then
+         if (doc_on) then ! the search finds it, at the section's header
+            if (len(doc_query) > 0) call add_hidden_text(b, e)
+         endif
+      endif
       return
    endif
    after_comment = html_comment_closed
@@ -1685,6 +1978,7 @@ contains
    case (MD_TEXT_CODE)
       if (hlevel > 0_c_int) heading_text = heading_text//slice(b, e)
       if (is_code_block) then
+         call code_source_push(len(code_block, c_int), b)
          code_block = code_block//slice(b, e)
       else
          call render_inline_code(b, e)
@@ -2646,10 +2940,13 @@ contains
    s = slice(b, e)
    endfunction selected_markdown
 
-   function visible_text(b, e) result(out)
+   function visible_text(b, e, src1, src2, nsrc) result(out)
    !< The text the runs between two offsets show: a run's replacement, a space at a wrap (blanks only between two runs
-   !< of a block), a newline between two blocks.
+   !< of a block), a newline between two blocks. With `src1`, `src2`: for each byte of the text the bytes of the
+   !< fragment it shows, [src1, src2) (a whole run for a replacement, an empty range for a separator).
    integer(c_int), intent(in)    :: b, e !< Range.
+   integer(c_int), allocatable, intent(inout), optional :: src1(:), src2(:) !< Sources.
+   integer(c_int),              intent(out),   optional :: nsrc             !< How many.
    character(len=:), allocatable :: out  !< Text.
    character(len=:), allocatable :: piece !< A run's part.
    integer(c_int)                :: k, prev, i, from, to !< Runs, offsets.
@@ -2657,6 +2954,10 @@ contains
 
    out = ''
    prev = 0_c_int
+   if (present(nsrc)) then
+      nsrc = 0_c_int
+      if (.not. allocated(src1)) allocate(src1(256), src2(256))
+   endif
    do k = 1_c_int, nruns
       if (runs(k)%e <= b .or. runs(k)%b >= e) cycle
       from = max(b, runs(k)%b)
@@ -2672,6 +2973,7 @@ contains
       if (prev > 0_c_int) then
          if (runs(k)%block /= runs(prev)%block) then
             out = out//achar(10)
+            if (present(nsrc)) call src_push(runs(prev)%e, runs(prev)%e)
          elseif (runs(k)%b > runs(prev)%e .and. len(out) > 0 .and. len(piece) > 0) then
             if (out(len(out):len(out)) /= ' ' .and. out(len(out):len(out)) /= achar(10) .and. piece(1:1) /= ' ') then
                blank = .true.
@@ -2681,13 +2983,40 @@ contains
                      exit
                   endif
                enddo
-               if (blank) out = out//' '
+               if (blank) then
+                  out = out//' '
+                  if (present(nsrc)) call src_push(runs(prev)%e, runs(prev)%e)
+               endif
             endif
          endif
       endif
       out = out//piece
+      if (present(nsrc)) then
+         if (runs(k)%repl /= REPL_NONE) then
+            do i = 1_c_int, len(piece, c_int)
+               call src_push(runs(k)%b, runs(k)%e)
+            enddo
+         else
+            do i = from, to - 1_c_int
+               call src_push(i, i + 1_c_int)
+            enddo
+         endif
+      endif
       prev = k
    enddo
+   contains
+      subroutine src_push(a, z)
+      !< A byte's source.
+      integer(c_int), intent(in) :: a, z !< Its range in the fragment.
+
+      if (nsrc == size(src1, kind=c_int)) then
+         call grow_int(src1)
+         call grow_int(src2)
+      endif
+      nsrc = nsrc + 1_c_int
+      src1(nsrc) = a
+      src2(nsrc) = z
+      endsubroutine src_push
    endfunction visible_text
 
    subroutine copy_string(s)
@@ -2815,4 +3144,363 @@ contains
       call cl_draw_rect_filled(x0, runs(k)%y0, x1, runs(k)%y1, col, 0.0_c_float)
    enddo
    endsubroutine draw_selection_rects
+   ! ---- the document's renders (figure_markdown_document) ----------------------------------------------------------
+   subroutine md_regular_font(font, size)
+   !< The Markdown's regular font, at the size a render would use now (`GetFont(MarkdownFontSpec())`).
+   type(c_ptr),   intent(out) :: font !< C `ImFont*`.
+   real(c_float), intent(out) :: size !< Size.
+
+   font = fonts(1)
+   size = REGULAR_SIZE * cl_font_scale()
+   endsubroutine md_regular_font
+
+   function md_admonition_color(kind) result(rgba)
+   !< An admonition's colour: 1 Note, 2 Tip, 3 Important, 4 Warning, 5 Caution.
+   integer(c_int), intent(in) :: kind    !< Kind.
+   real(c_float)              :: rgba(4) !< Colour.
+
+   rgba = admonition_color(kind)
+   endfunction md_admonition_color
+
+   subroutine md_doc_reset(query, match_case, whole_words, highlight_all, current_fragment, current_begin, &
+                           select_fragment, select_begin, select_end)
+   !< A document's renders start (`BeginDocument`): its shared data emptied, the search and the selection of the
+   !< find bar handed to its renders.
+   character(len=*), intent(in) :: query                 !< The search ('': none).
+   logical,          intent(in) :: match_case, whole_words, highlight_all !< Its options.
+   integer(c_int),   intent(in) :: current_fragment, current_begin       !< The current match.
+   integer(c_int),   intent(in) :: select_fragment, select_begin, select_end !< A match to select.
+
+   doc_on = .true.
+   doc_heads%n = 0_c_int
+   doc_heads%npool = 0_c_int
+   doc_slugs%n = 0_c_int
+   doc_slugs%npool = 0_c_int
+   doc_clicked_anchor = ''
+   doc_fragment_count = 0_c_int
+   doc_query = query
+   doc_match_case = match_case
+   doc_whole_words = whole_words
+   doc_highlight_all = highlight_all
+   doc_current_fragment = current_fragment
+   doc_current_begin = current_begin
+   doc_matches%n = 0_c_int
+   doc_matches%npool = 0_c_int
+   doc_nblocks = 0_c_int
+   doc_select_fragment = select_fragment
+   doc_select_begin = select_begin
+   doc_select_end = select_end
+   endsubroutine md_doc_reset
+
+   subroutine block_push(index)
+   !< A shown block at the top level of the fragment, for the document's scroll anchoring.
+   integer(c_int), intent(in) :: index !< Its rank among the fragment's top-level blocks.
+   real(c_float)              :: x, y  !< Cursor.
+
+   if (.not. allocated(doc_blk_frag)) allocate(doc_blk_frag(64), doc_blk_index(64), doc_blk_y(64))
+   if (doc_nblocks == size(doc_blk_frag, kind=c_int)) then
+      call grow_int(doc_blk_frag)
+      call grow_int(doc_blk_index)
+      call grow_real(doc_blk_y)
+   endif
+   call cl_cursor_pos(x, y)
+   doc_nblocks = doc_nblocks + 1_c_int
+   doc_blk_frag(doc_nblocks) = doc_fragment_count
+   doc_blk_index(doc_nblocks) = index
+   doc_blk_y(doc_nblocks) = y
+   endsubroutine block_push
+
+   subroutine add_hidden_text(b, e)
+   !< The text of a collapsed section, gathered for the search: a space between two chunks where the source between
+   !< them is blank, nothing where it is markup.
+   integer(c_int), intent(in) :: b, e !< Offsets.
+   integer(c_int)             :: k, prev !< Counters.
+   logical                    :: blank   !< Blank between.
+
+   if (b < 0_c_int .or. e > nfrag .or. b >= e) return
+   if (.not. allocated(hid_start)) then
+      allocate(hid_start(8), hid_details(8), hid_y(8), hid_bottom(8), hid_src(256))
+      hid_text = ''
+   endif
+   if (nhid == 0_c_int) then
+      call hidden_new()
+   elseif (hid_details(nhid) /= hidden_id) then
+      call hidden_new()
+   endif
+   if (nhid_bytes > hid_start(nhid)) then
+      prev = hid_src(nhid_bytes) + 1_c_int
+      blank = b > prev
+      do k = prev, b - 1_c_int
+         if (.not. blank) exit
+         blank = is_blank(at(k))
+      enddo
+      if (blank) call hidden_byte(' ', prev)
+   endif
+   do k = b, e - 1_c_int
+      call hidden_byte(at(k), k)
+   enddo
+   contains
+      subroutine hidden_new()
+      !< A hidden text started, at the section's header.
+      if (nhid == size(hid_start, kind=c_int)) then
+         call grow_int(hid_start)
+         call grow_int(hid_details)
+         call grow_real(hid_y)
+         call grow_real(hid_bottom)
+      endif
+      nhid = nhid + 1_c_int
+      hid_start(nhid) = nhid_bytes
+      hid_details(nhid) = hidden_id
+      hid_y(nhid) = hidden_y
+      hid_bottom(nhid) = hidden_bottom
+      endsubroutine hidden_new
+
+      subroutine hidden_byte(c, src)
+      !< A byte of the hidden text, with its offset in the fragment.
+      character(kind=c_char), intent(in) :: c   !< Byte.
+      integer(c_int),         intent(in) :: src !< Its source.
+
+      if (nhid_bytes == size(hid_src, kind=c_int)) call grow_int(hid_src)
+      if (nhid_bytes >= len(hid_text, c_int)) hid_text = hid_text//repeat(' ', max(256, len(hid_text)))
+      nhid_bytes = nhid_bytes + 1_c_int
+      hid_text(nhid_bytes:nhid_bytes) = c
+      hid_src(nhid_bytes) = src
+      endsubroutine hidden_byte
+   endsubroutine add_hidden_text
+
+   subroutine select_range(fragment, b, e)
+   !< A range of the fragment selected (the find bar closed on a match).
+   integer(c_int), intent(in) :: fragment, b, e !< Fragment, range.
+
+   selection_fragment = fragment
+   selection_text_hash = cl_hash_str(base, nfrag)
+   selection_anchor = b
+   selection_focus = e
+   selection_by_unit = .false.
+   endsubroutine select_range
+
+   subroutine range_rects(b, e, rects, n)
+   !< The rectangles (on the screen) of the text between two offsets: one per run.
+   integer(c_int),             intent(in)    :: b, e       !< Range.
+   real(c_float), allocatable, intent(inout) :: rects(:,:) !< Rectangles.
+   integer(c_int),             intent(out)   :: n          !< How many.
+   real(c_float), allocatable                :: more(:,:)  !< Grown.
+   integer(c_int)                            :: k          !< Run.
+   real(c_float)                             :: x0, x1     !< A part.
+
+   n = 0_c_int
+   if (.not. allocated(rects)) allocate(rects(4, 16))
+   do k = 1_c_int, nruns
+      if (runs(k)%e <= b .or. runs(k)%b >= e) cycle
+      x0 = runs(k)%x0
+      x1 = runs(k)%x1
+      if (runs(k)%repl == REPL_NONE) then
+         if (b > runs(k)%b) x0 = x0 + cl_font_text_width(runs(k)%font, runs(k)%font_size, ptr(runs(k)%b), b - runs(k)%b)
+         if (e < runs(k)%e) &
+            x1 = runs(k)%x0 + cl_font_text_width(runs(k)%font, runs(k)%font_size, ptr(runs(k)%b), e - runs(k)%b)
+      endif
+      if (n == size(rects, 2, kind=c_int)) then
+         allocate(more(4, 2 * n))
+         more(:, 1:n) = rects(:, 1:n)
+         call move_alloc(more, rects)
+      endif
+      n = n + 1_c_int
+      rects(:, n) = [x0, runs(k)%y0, x1, runs(k)%y1]
+   enddo
+   endsubroutine range_rects
+
+   function context_before(text, at0) result(c)
+   !< The context before a match (0-based offset): a few words on its line, `...` where it is cut.
+   character(len=*), intent(in)  :: text !< Text.
+   integer,          intent(in)  :: at0  !< The match's start.
+   character(len=:), allocatable :: c    !< Context.
+   integer                       :: start, i, space !< Offsets (0-based).
+   logical                       :: cut  !< Cut.
+
+   start = max(at0 - CONTEXT_BYTES, 0)
+   do i = start, at0 - 1
+      if (text(i + 1:i + 1) == achar(10)) start = i + 1
+   enddo
+   cut = .false.
+   if (start > 0) cut = text(start:start) /= achar(10)
+   do while (start < at0)
+      if (iand(iachar(text(start + 1:start + 1)), 192) /= 128) exit
+      start = start + 1
+   enddo
+   if (cut) then
+      space = index(text(start + 1:), ' ')
+      if (space > 0) then
+         space = space - 1 + start
+         if (space < at0) start = space + 1
+      endif
+   endif
+   c = text(start + 1:at0)
+   if (cut) c = '...'//c
+   endfunction context_before
+
+   function context_after(text, at0) result(c)
+   !< The context after a match (0-based offset of its end): a few words on its line, `...` where it is cut.
+   character(len=*), intent(in)  :: text !< Text.
+   integer,          intent(in)  :: at0  !< The match's end.
+   character(len=:), allocatable :: c    !< Context.
+   integer                       :: last, nl, space !< Offsets (0-based).
+   logical                       :: cut  !< Cut.
+
+   last = min(len(text), at0 + CONTEXT_BYTES)
+   nl = index(text(at0 + 1:), achar(10))
+   if (nl > 0) then
+      nl = nl - 1 + at0
+      if (nl < last) last = nl
+   endif
+   cut = .false.
+   if (last < len(text)) cut = text(last + 1:last + 1) /= achar(10)
+   do while (last > at0 .and. last < len(text))
+      if (iand(iachar(text(last + 1:last + 1)), 192) /= 128) exit
+      last = last - 1
+   enddo
+   if (cut) then
+      space = index(text(1:min(last + 1, len(text))), ' ', back=.true.)
+      if (space > 0) then
+         space = space - 1
+         if (space > at0) last = space
+      endif
+   endif
+   c = text(at0 + 1:last)
+   if (cut) c = c//'...'
+   endfunction context_after
+
+   subroutine match_push(list, frag, b, e, y, bottom, details, in_runs, before, text, after)
+   !< A match appended to a list.
+   type(match_list), intent(inout) :: list          !< Matches.
+   integer(c_int),   intent(in)    :: frag, b, e    !< Fragment, bytes.
+   real(c_float),    intent(in)    :: y, bottom     !< Top, bottom.
+   integer(c_int),   intent(in)    :: details       !< What hides it.
+   logical,          intent(in)    :: in_runs       !< Drawn as runs.
+   character(len=*), intent(in)    :: before, text, after !< Context.
+   integer(c_int),   allocatable   :: more(:,:)     !< Grown.
+   integer(c_int)                  :: k             !< Its index.
+
+   if (.not. allocated(list%frag)) then
+      allocate(list%frag(16), list%b(16), list%e(16), list%y(16), list%bottom(16), list%details(16), list%in_runs(16), &
+               list%pb(3, 16), list%pn(3, 16))
+   endif
+   if (list%n == size(list%frag, kind=c_int)) then
+      call grow_int(list%frag)
+      call grow_int(list%b)
+      call grow_int(list%e)
+      call grow_real(list%y)
+      call grow_real(list%bottom)
+      call grow_int(list%details)
+      call grow_logical(list%in_runs)
+      allocate(more(3, 2 * list%n))
+      more(:, 1:list%n) = list%pb(:, 1:list%n)
+      call move_alloc(more, list%pb)
+      allocate(more(3, 2 * list%n))
+      more(:, 1:list%n) = list%pn(:, 1:list%n)
+      call move_alloc(more, list%pn)
+   endif
+   list%n = list%n + 1_c_int
+   k = list%n
+   list%frag(k) = frag
+   list%b(k) = b
+   list%e(k) = e
+   list%y(k) = y
+   list%bottom(k) = bottom
+   list%details(k) = details
+   list%in_runs(k) = in_runs
+   call pool_add(list%pool, list%npool, before, list%pb(1, k), list%pn(1, k))
+   call pool_add(list%pool, list%npool, text, list%pb(2, k), list%pn(2, k))
+   call pool_add(list%pool, list%npool, after, list%pb(3, k), list%pn(3, k))
+   endsubroutine match_push
+
+   subroutine match_copy(from, k, to)
+   !< Match k of a list appended to another.
+   type(match_list), intent(in)    :: from !< Source.
+   integer(c_int),   intent(in)    :: k    !< Match.
+   type(match_list), intent(inout) :: to   !< Destination.
+
+   call match_push(to, from%frag(k), from%b(k), from%e(k), from%y(k), from%bottom(k), from%details(k), from%in_runs(k), &
+                   md_match_text(from, k, 1_c_int), md_match_text(from, k, 2_c_int), md_match_text(from, k, 3_c_int))
+   endsubroutine match_copy
+
+   function md_match_text(list, k, part) result(t)
+   !< Part of match k's context: 1 before, 2 the match, 3 after.
+   type(match_list), intent(in)  :: list !< Matches.
+   integer(c_int),   intent(in)  :: k    !< Match.
+   integer(c_int),   intent(in)  :: part !< Part.
+   character(len=:), allocatable :: t    !< Text.
+
+   t = list%pool(list%pb(part, k) + 1:list%pb(part, k) + list%pn(part, k))
+   endfunction md_match_text
+
+   subroutine search_fragment(fragment_index)
+   !< The matches of the document's search in this fragment (its runs', its collapsed sections', its code blocks'),
+   !< drawn behind the text and added to the document's, in the order of the text.
+   integer(c_int), intent(in)    :: fragment_index !< The fragment's rank.
+   character(len=:), allocatable :: text, hid      !< The visible text; a hidden one.
+   integer(c_int),   allocatable :: src1(:), src2(:) !< Its sources.
+   integer(int32),   allocatable :: mb(:), me(:)   !< Matches.
+   real(c_float),    allocatable :: rects(:,:)     !< A match's rectangles.
+   type(match_list)              :: found          !< The fragment's matches.
+   integer(c_int)                :: nsrc, nm, j, b, e, nr, r, match_col, current_col, h, hb, he !< Counters.
+   real(c_float)                 :: to_content, wx, wy !< Coordinates.
+   logical                       :: current        !< The current match.
+   integer(c_int), allocatable   :: order(:)       !< The stable order by first byte.
+
+   text = visible_text(0_c_int, huge(1_c_int), src1, src2, nsrc)
+   call cl_window_pos(wx, wy)
+   to_content = cl_scroll_y() - wy
+   match_col = cl_color_u32_rgba(SEARCH_MATCH)
+   current_col = cl_color_u32_rgba(SEARCH_MATCH_CURRENT)
+   call find_matches(text, doc_query, doc_match_case, doc_whole_words, mb, me, nm)
+   do j = 1_c_int, nm
+      b = src1(mb(j) + 1_c_int)
+      e = src2(me(j))
+      if (found%n > 0_c_int) then
+         if (found%b(found%n) == b .and. found%e(found%n) == e) cycle ! a formula is one match
+      endif
+      call range_rects(b, e, rects, nr)
+      if (nr == 0_c_int) cycle ! only the blank between two runs
+      current = fragment_index == doc_current_fragment .and. b == doc_current_begin
+      if (current .or. doc_highlight_all) then
+         do r = 1_c_int, nr
+            if (cl_rect_visible(rects(1, r), rects(2, r), rects(3, r), rects(4, r))) &
+               call cl_draw_rect_filled(rects(1, r), rects(2, r), rects(3, r), rects(4, r), &
+                                        merge(current_col, match_col, current), 0.0_c_float)
+         enddo
+      endif
+      call match_push(found, fragment_index, b, e, rects(2, 1) + to_content, rects(4, nr) + to_content, 0_c_int, .true., &
+                      context_before(text, mb(j)), text(mb(j) + 1:me(j)), context_after(text, me(j)))
+   enddo
+   do h = 1_c_int, nhid
+      hb = hid_start(h)
+      he = nhid_bytes
+      if (h < nhid) he = hid_start(h + 1_c_int)
+      hid = hid_text(hb + 1:he)
+      call find_matches(hid, doc_query, doc_match_case, doc_whole_words, mb, me, nm)
+      do j = 1_c_int, nm
+         call match_push(found, fragment_index, hid_src(hb + mb(j) + 1_c_int), hid_src(hb + me(j)) + 1_c_int, hid_y(h), &
+                         hid_bottom(h), hid_details(h), .false., context_before(hid, mb(j)), hid(mb(j) + 1:me(j)), &
+                         context_after(hid, me(j)))
+      enddo
+   enddo
+   do j = 1_c_int, code_matches%n
+      call match_copy(code_matches, j, found)
+   enddo
+   allocate(order(max(found%n, 1_c_int)))
+   do j = 1_c_int, found%n ! a stable insertion sort by the first byte
+      order(j) = j
+      r = j
+      do while (r > 1_c_int)
+         if (found%b(order(r - 1_c_int)) <= found%b(order(r))) exit
+         nr = order(r)
+         order(r) = order(r - 1_c_int)
+         order(r - 1_c_int) = nr
+         r = r - 1_c_int
+      enddo
+   enddo
+   do j = 1_c_int, found%n
+      call match_copy(found, order(j), doc_matches)
+   enddo
+   endsubroutine search_fragment
 endmodule figure_markdown_render
