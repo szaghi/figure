@@ -6,15 +6,16 @@ module figure_plot3d_drawlist
 !< packed colour; three 0-based indices and a depth per triangle), as ImPlot3D's `ImDrawList3D`: `d3_reserve` and
 !< `d3_unreserve` (`PrimReserve`, `PrimUnreserve`), `d3_room` (what `RenderPrimitivesEx` may still draw: the list's
 !< indices are 32-bit, FIGURE's ImPlot3D patch 0002, so up to `D3_MAX_VTX` vertices per plot), the writes
-!< (`d3_vtx`, `d3_tri`), and `d3_flush` (`SortedMoveToImGuiDrawList`): the triangles sorted by increasing depth as
-!< glibc's `qsort` sorts them (2.39: a top-down merge sort, stable; reproduced step for step, so that a NaN depth, which
-!< the comparator calls equal to anything, lands where glibc puts it), appended to the window's list through
-!< figure_core (`core_draw_prims`), the list emptied. A list of more than 65535 vertices (past 16-bit indices) is
+!< (`d3_vtx`, `d3_tri`), and `d3_flush` (`SortedMoveToImGuiDrawList`): the triangles with a NaN depth left out and the
+!< others sorted by increasing depth, equal depths by their index (FIGURE's ImPlot3D patch 0004: a total order, so any
+!< sort gives it; here glibc's top-down merge sort), appended to the window's list through figure_core
+!< (`core_draw_prims`), the list emptied. A list of more than 65535 vertices (past 16-bit indices) is
 !< appended as ImPlot3D's patch appends it: each sorted triangle's three vertices in the sorted order, in runs of one
 !< texture of at most 21845 triangles, each run one `core_draw_prims` (a new batch, Dear ImGui's `VtxOffset`, when the
 !< window's would pass 65535 vertices).
 !<
 !< The buffers and the sort's scratch are module arrays grown once and kept (no allocation per frame).
+use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_core, only : core_draw_prims
 
@@ -37,6 +38,7 @@ integer(int32), allocatable :: ord(:), tmp(:)             !< The sorted order, t
 integer(int32), allocatable :: sidx(:)                    !< The indices in the sorted order.
 integer(int32)              :: nv = 0_int32               !< Vertices (_VtxCurrentIdx).
 integer(int32)              :: nt = 0_int32               !< Triangles.
+integer(int32)              :: ns = 0_int32               !< Triangles sorted (those with a depth not NaN).
 integer(int64)              :: run_tex(64) = 0_int64      !< Texture runs (`_TextureBuffer`): texture (0: the default),
 integer(int32)              :: run_vtx(64) = 0_int32      !< ... from this vertex (0-based) on.
 integer(int32)              :: nrun = 0_int32             !< Runs.
@@ -144,19 +146,22 @@ contains
    endsubroutine d3_tri
 
    subroutine d3_flush()
-   !< `SortedMoveToImGuiDrawList`: the triangles by increasing depth (ties in their order), appended to the window's
-   !< list with every vertex; the list emptied.
+   !< `SortedMoveToImGuiDrawList`: the triangles with a depth not NaN by increasing depth (ties in their order),
+   !< appended to the window's list with every vertex; the list emptied.
    integer(int32) :: t, k !< Triangle, position.
 
-   if (nt == 0_int32) then
+   ns = 0_int32
+   do t = 1_int32, nt
+      if (ieee_is_nan(zb(t))) cycle ! FIGURE's ImPlot3D patch 0004: nothing to draw, no place in the order
+      ns = ns + 1_int32
+      ord(ns) = t
+   enddo
+   if (ns == 0_int32) then
       call d3_reset()
       return
    endif
-   do t = 1_int32, nt
-      ord(t) = t
-   enddo
    call merge_sort()
-   do k = 1_int32, nt
+   do k = 1_int32, ns
       t = ord(k)
       sidx(3_int32 * k - 2_int32) = ix(3_int32 * t - 2_int32)
       sidx(3_int32 * k - 1_int32) = ix(3_int32 * t - 1_int32)
@@ -165,7 +170,7 @@ contains
    if (nv > D3_MAX_IDX) then
       call flush_large()
    elseif (nrun <= 1_int32) then
-      call core_draw_prims(vx(1:nv), vy(1:nv), vu(1:nv), vv(1:nv), vc(1:nv), sidx(1:3_int32 * nt))
+      call core_draw_prims(vx(1:nv), vy(1:nv), vu(1:nv), vv(1:nv), vc(1:nv), sidx(1:3_int32 * ns))
    else
       call flush_runs()
    endif
@@ -182,10 +187,10 @@ contains
 
    a = 1_int32
    ta = tri_texture(sidx(1))
-   do k = 2_int32, nt + 1_int32
+   do k = 2_int32, ns + 1_int32
       tk = -1_int64
-      if (k <= nt) tk = tri_texture(sidx(3_int32 * k - 2_int32))
-      if (k <= nt .and. tk == ta) cycle
+      if (k <= ns) tk = tri_texture(sidx(3_int32 * k - 2_int32))
+      if (k <= ns .and. tk == ta) cycle
       b = k - 1_int32
       if (ta == 0_int64) then
          call core_draw_prims(vx(1:nv), vy(1:nv), vu(1:nv), vv(1:nv), vc(1:nv), sidx(3_int32 * a - 2_int32:3_int32 * b))
@@ -213,10 +218,10 @@ contains
       enddo
    endif
    k = 1_int32
-   do while (k <= nt)
+   do while (k <= ns)
       tex = large_texture(k)
       m = 1_int32
-      do while (k + m <= nt .and. m < RUN_MAX)
+      do while (k + m <= ns .and. m < RUN_MAX)
          if (large_texture(k + m) /= tex) exit
          m = m + 1_int32
       enddo
@@ -262,12 +267,10 @@ contains
    endfunction tri_texture
 
    subroutine merge_sort()
-   !< glibc's `qsort` (2.39: `msort_with_tmp`, a top-down merge sort) of `ord(1:nt)` by `zb` with ImPlot3D's comparator
-   !< (-1, 1 or 0: a NaN depth compares equal to anything): the same halving and the same merge (the left element taken
-   !< unless the comparator says the right one is smaller), so the order is glibc's even with NaN depths, for which no
-   !< other stable sort agrees.
+   !< glibc's `qsort` (2.39: `msort_with_tmp`, a top-down merge sort) of `ord(1:ns)` by `zb` with ImPlot3D's comparator
+   !< (FIGURE's patch 0004: no NaN depth, equal depths by index: a total order, which any correct sort follows).
 
-   call msort(1_int32, nt)
+   call msort(1_int32, ns)
    endsubroutine merge_sort
 
    recursive subroutine msort(b, n)
@@ -306,13 +309,18 @@ contains
    endsubroutine msort
 
    pure function compare(a, c) result(r)
-   !< ImPlot3D's comparator of two triangles: -1 when a's depth is below c's, 1 above, 0 otherwise.
+   !< ImPlot3D's comparator of two triangles: -1 when a's depth is below c's, 1 above; equal depths by index (FIGURE's
+   !< patch 0004).
    integer(int32), intent(in) :: a, c !< Triangles.
    integer(int32)             :: r    !< Order.
 
    if (zb(a) < zb(c)) then
       r = -1_int32
    elseif (zb(a) > zb(c)) then
+      r = 1_int32
+   elseif (a < c) then
+      r = -1_int32
+   elseif (a > c) then
       r = 1_int32
    else
       r = 0_int32

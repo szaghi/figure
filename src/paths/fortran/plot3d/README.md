@@ -22,7 +22,8 @@ Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figur
   ImPlot's).
 - `figure_plot3d_drawlist`: `ImDrawList3D`: the triangles with their depths, 32-bit indices (FIGURE's ImPlot3D patch
   0002: no 65535-vertex cap per plot; a list past 16-bit indices moved as runs of sorted triangles, three vertices
-  each), the texture runs, and the move sorted as glibc's `qsort` sorts (its top-down merge sort, step for step).
+  each), the texture runs, and the move sorted (a NaN depth left out, equal depths by index: FIGURE's ImPlot3D patch
+  0004, a total order, so not the C library's choice).
 - `figure_plot3d_frame`: the plots kept between frames, begin and end, setup, `SetupLock`, the box, rotated text,
   input (`HandleInput`), the legend, the context menus, the mouse text, the queries, the items' hooks, `pf3_text`.
 - `figure_plot3d_style`: `ImPlot3DStyle`: its 14 colours (automatic until pushed, `GetAutoColor`: from Dear ImGui's

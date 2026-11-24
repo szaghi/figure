@@ -1,0 +1,106 @@
+FIGURE's patch 4 of 4 to ImPlot3D (commit c54525f8d46cece384cc2618761a2c55016b06db, the submodule of cimplot3d v0.5).
+
+SortedMoveToImGuiDrawList sorts a plot's triangles by depth with qsort and a comparator that calls a NaN depth (a
+triangle with a NaN vertex) equal to anything: no total order, so where those triangles and their neighbours land is
+the C library's qsort's choice (glibc's merge sort, musl's smoothsort and Apple's differ), and so are the pixels
+(#15, finding U6). A triangle with a NaN depth is now left out (it has nothing to draw), and equal depths are ordered
+by the triangle's index: the comparator is a total order, so every qsort gives the order glibc's stable sort gave
+for the finite depths. The ImGui draw list is reserved for the triangles sorted, and the indices reserved but not
+written (a triangle past what 16-bit indices address, which the move drops) are given back: the draw command counted
+them before, over indices holding whatever the buffer had. Applied to third_party/implot3d/implot3d.cpp. To offer
+upstream.
+
+--- a/implot3d.cpp
++++ b/implot3d.cpp
+@@ -3896,17 +3896,31 @@
+         double z;
+         int tri_idx;
+     };
++    // FIGURE: a triangle with a NaN depth (a NaN vertex: nothing to draw) left out. The comparator called it equal to
++    // anything, so where it and its neighbours landed was the C library's qsort's choice; equal depths are ordered by
++    // the triangle's index, so the comparator is a total order and every qsort gives the same order
+     TriRef* tris = (TriRef*)IM_ALLOC(sizeof(TriRef) * tri_count);
++    int sort_count = 0;
+     for (int i = 0; i < tri_count; i++) {
+-        tris[i].z = ZBuffer[i];
+-        tris[i].tri_idx = i;
++        if (ImPlot3D::ImNan(ZBuffer[i]))
++            continue;
++        tris[sort_count].z = ZBuffer[i];
++        tris[sort_count].tri_idx = i;
++        sort_count++;
++    }
++    if (sort_count == 0) {
++        ResetBuffers();
++        IM_FREE(tris);
++        return;
+     }
+ 
+     // Sort by z (distance from viewer)
+-    ImQsort(tris, (size_t)tri_count, sizeof(TriRef), [](const void* a, const void* b) {
++    ImQsort(tris, (size_t)sort_count, sizeof(TriRef), [](const void* a, const void* b) {
+         double za = ((const TriRef*)a)->z;
+         double zb = ((const TriRef*)b)->z;
+-        return (za < zb) ? -1 : (za > zb) ? 1 : 0;
++        int ia = ((const TriRef*)a)->tri_idx;
++        int ib = ((const TriRef*)b)->tri_idx;
++        return (za < zb) ? -1 : (za > zb) ? 1 : (ia < ib) ? -1 : (ia > ib) ? 1 : 0;
+     });
+ 
+     // FIGURE: more vertices than 16-bit indices address (the 3-D list's indices are 32-bit): each sorted triangle's
+@@ -3925,10 +3939,10 @@
+             return tri_tex == invalid_tex ? default_tex : tri_tex;
+         };
+         const int run_max = (int)(MaxIdx() / 3);
+-        for (int k = 0; k < tri_count;) {
++        for (int k = 0; k < sort_count;) {
+             const ImTextureRef tex = tri_texture(tris[k].tri_idx);
+             int m = 1;
+-            while (k + m < tri_count && m < run_max && tri_texture(tris[k + m].tri_idx) == tex)
++            while (k + m < sort_count && m < run_max && tri_texture(tris[k + m].tri_idx) == tex)
+                 m++;
+             if (!(draw_list.Flags & ImDrawFlags_UseVtxOffset) && draw_list._VtxCurrentIdx + 3 * (unsigned int)m > MaxIdx())
+                 break;
+@@ -3950,8 +3964,8 @@
+         return;
+     }
+ 
+-    // Reserve space in the ImGui draw list
+-    draw_list.PrimReserve(IdxBuffer.Size, VtxBuffer.Size);
++    // Reserve space in the ImGui draw list (FIGURE: the indices of the triangles sorted)
++    draw_list.PrimReserve(3 * sort_count, VtxBuffer.Size);
+ 
+     // Copy vertices (no reordering needed)
+     memcpy(draw_list._VtxWritePtr, VtxBuffer.Data, VtxBuffer.Size * sizeof(ImDrawVert));
+@@ -3966,7 +3980,7 @@
+     ImDrawIdx* idx_out_begin = draw_list._IdxWritePtr;
+     ImDrawIdx* idx_out = idx_out_begin;
+     unsigned int* idx_in = IdxBuffer.Data;
+-    for (int i = 0; i < tri_count; i++) {
++    for (int i = 0; i < sort_count; i++) {
+         int tri_i = tris[i].tri_idx;
+         int base_idx = tri_i * 3;
+         unsigned int i0 = (unsigned int)idx_in[base_idx + 0];
+@@ -3985,6 +3999,13 @@
+     }
+     ImDrawIdx* idx_out_end = idx_out;
+     draw_list._IdxWritePtr = idx_out_end;
++    // FIGURE: the indices reserved and not written (a triangle past what 16-bit indices address, dropped) given back:
++    // the draw command counted them, and they held whatever the buffer had
++    const int idx_unwritten = 3 * sort_count - (int)(idx_out_end - idx_out_begin);
++    if (idx_unwritten > 0) {
++        draw_list.CmdBuffer.back().ElemCount -= (unsigned int)idx_unwritten;
++        draw_list.IdxBuffer.shrink(draw_list.IdxBuffer.Size - idx_unwritten);
++    }
+ 
+     // If multiple textures were used (e.g. PlotImage was called), generate multiple ImDrawCmd
+     if (_TextureBuffer.Size > 1) {
+@@ -3992,7 +4013,7 @@
+         ImTextureRef curr_tex = default_tex;
+ 
+         // Remove elements reserved from PrimReserve
+-        draw_list.CmdBuffer.back().ElemCount -= IdxBuffer.Size;
++        draw_list.CmdBuffer.back().ElemCount -= (unsigned int)(idx_out_end - idx_out_begin); // FIGURE: those written
+         ImDrawIdx* last_cmd_buffer_idx = idx_out_begin;
+ 
+         // For each triangle added to the draw_list

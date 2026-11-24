@@ -9,8 +9,9 @@ program figure_test_plot_frame_3d_lines
 !< failing): the triangles depth-sorted as ImPlot3D sorts them, the legend. The cases:
 !<
 !< 1. a helix (a line, automatic colour) and markers on it (a scatter, automatic: circles), limits given;
-!< 2. lines with flags: segments, a loop, a line skipping NaNs and one not, a line leaving the box (clipped), per-point
-!<    colours, a thick line, a line with square markers;
+!< 2. lines with flags: segments, a loop, a line skipping NaNs and one not (its segments at a NaN point give 8 triangles
+!<    with a NaN depth, left out of the sort on both sides: FIGURE's ImPlot3D patch 0004), a line leaving the box
+!<    (clipped), per-point colours, a thick line, a line with square markers;
 !< 3. every marker shape (a scatter each), a fill alpha of 0.5, per-point colours and sizes;
 !< 4. the first frame's fit to the data (no limits), single precision arrays, `equal`;
 !< 5. hidden labels ('##'), an item without legend (NoLegend), the legend horizontal at the south-east.
