@@ -56,6 +56,7 @@ The design decisions:
 | K7, text in the public API | `character(len=*)` only; a program holding a StringiFor `type(string)` passes `s%chars()`. StringiFor stays internal. |
 | K8, saved layout | A plain INI of FIGURE's own, read and written by FiNeR, matching K2's tree. Layouts saved by earlier versions are reset once, at the switch, and the release notes say so. |
 | K9, foresight's licence | foresight adds MIT to its GPL-3, as the other libraries have it; FIGURE then depends on it directly. |
+| K10, FIGURE's own readers | FIGURE's own C++ readers of outside data (the colormap CSV tables and ParaView JSON presets of `native/figure_colormap.cpp`) are ported to Fortran with the rest of the native layer; K1's rule keeps the C libraries it names, not FIGURE's glue. Numbers are read with C's `strtod`, so a table is the same to the bit. Accepted by the owner, 2026-11-23. |
 
 A decision found during a step is added to the plan as K10, K11, ..., recorded in the step's log before the step
 starts.
