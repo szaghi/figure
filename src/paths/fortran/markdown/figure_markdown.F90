@@ -2,13 +2,14 @@
 module figure_markdown
 !< figure_markdown, Markdown in the window: a text at the cursor (ig_markdown) and documents (markdown_view_object).
 !<
-!< The renderer is imgui_rich_md (pthom, MIT, vendored in third_party/imgui_rich_md with md4c, its parser) with FIGURE's
-!< glue (native/figure_markdown.cpp): it draws through Dear ImGui only, so window, headless and remote modes show the
-!< same pixels. Text in IBM Plex Sans (regular, bold, italic, bold italic: headings are larger), code spans and blocks
-!< in IBM Plex Mono, with the Lucide icons and the fallback fonts as everywhere else; tables, lists, quotes, task lists,
-!< GitHub's admonitions (`> [!NOTE]`), collapsible sections (`<details>`), images from PNG and JPEG files. No LaTeX, no
-!< image from a URL. Links are reported, never opened: the call that draws a text returns true on the frame one of its
-!< links is clicked, and gives its URL (polled, no callback); a link to a heading of the same text scrolls to it.
+!< The Fortran path's implementation (szaghi/figure#15 P15; the current path's is src/paths/imgui/markdown/, over
+!< imgui_rich_md): the same public API, statuses and messages, drawn by the Fortran renderer and documents
+!< (figure_markdown_render, figure_markdown_document: imgui_rich_md's, in Fortran over md4c and figure_core). Text in IBM
+!< Plex Sans (regular, bold, italic, bold italic: headings are larger), code spans and blocks in IBM Plex Mono, with the
+!< Lucide icons and the fallback fonts as everywhere else; tables, lists, quotes, task lists, GitHub's admonitions
+!< (`> [!NOTE]`), collapsible sections (`<details>`), images from PNG and JPEG files. No LaTeX, no image from a URL.
+!< Links are reported, never opened: the call that draws a text returns true on the frame one of its links is clicked,
+!< and gives its URL (polled, no callback); a link to a heading of the same text scrolls to it.
 !<
 !<```fortran
 !< type(markdown_view_object)    :: help
@@ -18,10 +19,13 @@ module figure_markdown
 !< ... every frame, inside a window:
 !< if (help%draw('help', url)) call follow(url)   ! the program decides: another page, a section, a browser
 !<```
-use, intrinsic :: iso_c_binding, only : c_char, c_double, c_int, c_long_long
-use, intrinsic :: iso_fortran_env, only : int32, real64
+use, intrinsic :: iso_c_binding, only : c_float, c_int
+use, intrinsic :: iso_fortran_env, only : int32, int64, real64
 use figure_base, only : figure_check, figure_draw_refused, figure_fail, figure_refused
-use figure_c_native, only : FIG_ERR_STATE, FIG_OK
+use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK
+use figure_markdown_document, only : md_view_create, md_view_destroy, md_view_draw, md_view_exists, md_view_find, &
+                                     md_view_info, md_view_load_text, md_view_scroll_to, md_view_set_text, md_view_text
+use figure_markdown_render, only : md_last_link, md_markdown
 
 implicit none
 private
@@ -31,7 +35,7 @@ type :: markdown_view_object
    !< A Markdown document: its text kept by FIGURE, drawn in a scroll area of its own with a table of contents beside it
    !< (from three headings) and a search (ctrl+f, or `find`). `view%init`, `view%set_text` or `view%load`, then
    !< `view%draw` every frame. Not to be copied (the copy would share the view); `destroy` releases it.
-   integer(c_int), private :: handle = 0_c_int !< Native handle (0: none).
+   integer(c_int), private :: handle = 0_c_int !< Handle (0: none).
    contains
       procedure, pass(self) :: init => view_init !< Create the view.
       procedure, pass(self) :: destroy => view_destroy !< Release it.
@@ -46,104 +50,6 @@ type :: markdown_view_object
       procedure, pass(self) :: scroll_to => view_scroll_to !< Scroll to a heading.
 endtype markdown_view_object
 
-interface
-   function fig_markdown(text, n, clicked) result(status) bind(C, name='fig_markdown')
-   import :: c_char, c_int, c_long_long
-   implicit none
-   character(kind=c_char), intent(in)  :: text(*)
-   integer(c_long_long),   value       :: n
-   integer(c_int),         intent(out) :: clicked
-   integer(c_int)                      :: status
-   endfunction fig_markdown
-
-   function fig_markdown_link(buf, n) result(length) bind(C, name='fig_markdown_link')
-   import :: c_char, c_long_long
-   implicit none
-   character(kind=c_char), intent(inout) :: buf(*)
-   integer(c_long_long),   value         :: n
-   integer(c_long_long)                  :: length
-   endfunction fig_markdown_link
-
-   function fig_markdown_view_create(handle, toc, search) result(status) bind(C, name='fig_markdown_view_create')
-   import :: c_int
-   implicit none
-   integer(c_int), intent(out) :: handle
-   integer(c_int), value       :: toc, search
-   integer(c_int)              :: status
-   endfunction fig_markdown_view_create
-
-   subroutine fig_markdown_view_destroy(handle) bind(C, name='fig_markdown_view_destroy')
-   import :: c_int
-   implicit none
-   integer(c_int), value :: handle
-   endsubroutine fig_markdown_view_destroy
-
-   function fig_markdown_view_set_text(handle, text, n) result(status) bind(C, name='fig_markdown_view_set_text')
-   import :: c_char, c_int, c_long_long
-   implicit none
-   integer(c_int),         value      :: handle
-   character(kind=c_char), intent(in) :: text(*)
-   integer(c_long_long),   value      :: n
-   integer(c_int)                     :: status
-   endfunction fig_markdown_view_set_text
-
-   function fig_markdown_view_load(handle, path, n) result(status) bind(C, name='fig_markdown_view_load')
-   import :: c_char, c_int
-   implicit none
-   integer(c_int),         value      :: handle
-   character(kind=c_char), intent(in) :: path(*)
-   integer(c_int),         value      :: n
-   integer(c_int)                     :: status
-   endfunction fig_markdown_view_load
-
-   function fig_markdown_view_text(handle, buf, n) result(length) bind(C, name='fig_markdown_view_text')
-   import :: c_char, c_int, c_long_long
-   implicit none
-   integer(c_int),         value         :: handle
-   character(kind=c_char), intent(inout) :: buf(*)
-   integer(c_long_long),   value         :: n
-   integer(c_long_long)                  :: length
-   endfunction fig_markdown_view_text
-
-   function fig_markdown_view_find(handle, text, n) result(status) bind(C, name='fig_markdown_view_find')
-   import :: c_char, c_int
-   implicit none
-   integer(c_int),         value      :: handle
-   character(kind=c_char), intent(in) :: text(*)
-   integer(c_int),         value      :: n
-   integer(c_int)                     :: status
-   endfunction fig_markdown_view_find
-
-   function fig_markdown_view_scroll_to(handle, heading, n) result(status) bind(C, name='fig_markdown_view_scroll_to')
-   import :: c_char, c_int
-   implicit none
-   integer(c_int),         value      :: handle
-   character(kind=c_char), intent(in) :: heading(*)
-   integer(c_int),         value      :: n
-   integer(c_int)                     :: status
-   endfunction fig_markdown_view_scroll_to
-
-   function fig_markdown_view_info(handle, matches, current) result(status) bind(C, name='fig_markdown_view_info')
-   import :: c_int
-   implicit none
-   integer(c_int), value       :: handle
-   integer(c_int), intent(out) :: matches, current
-   integer(c_int)              :: status
-   endfunction fig_markdown_view_info
-
-   function fig_markdown_view_draw(handle, id, id_len, width, height, clicked) result(status) &
-      bind(C, name='fig_markdown_view_draw')
-   import :: c_char, c_double, c_int
-   implicit none
-   integer(c_int),         value       :: handle
-   character(kind=c_char), intent(in)  :: id(*)
-   integer(c_int),         value       :: id_len
-   real(c_double),         value       :: width, height
-   integer(c_int),         intent(out) :: clicked
-   integer(c_int)                      :: status
-   endfunction fig_markdown_view_draw
-endinterface
-
 contains
    recursive function ig_markdown(text, link, stat) result(clicked)
    !< Draw `text` (Markdown, UTF-8, lines ended by LF or CR LF) at the cursor, inside a window, as wide as the window
@@ -157,15 +63,11 @@ contains
    character(len=:), allocatable, intent(out), optional :: link    !< The URL of the link clicked.
    integer(int32),                intent(out), optional :: stat    !< Status.
    logical                                              :: clicked !< A link was clicked this frame.
-   integer(c_int)                                       :: c       !< Clicked (C).
 
-   clicked = .false.
-   if (present(link)) link = ''
-   if (figure_draw_refused('ig_markdown', stat)) return
-   c = 0_c_int
-   call figure_check(fig_markdown(text, len(text, c_long_long), c), stat)
-   clicked = c /= 0_c_int
-   if (clicked .and. present(link)) link = clicked_link()
+   clicked = md_markdown(text, link, stat)
+   if (present(link)) then
+      if (.not. allocated(link)) link = ''
+   endif
    endfunction ig_markdown
 
    ! ---- markdown_view_object ------------------------------------------------------------------------------------------
@@ -178,22 +80,23 @@ contains
    logical,                     intent(in),  optional :: toc    !< A table of contents (default true).
    logical,                     intent(in),  optional :: search !< A search (default true).
    integer(int32),              intent(out), optional :: stat   !< Status.
-   integer(c_int)                                     :: t, s   !< Options (C).
+   logical                                            :: t, s   !< Options.
 
    if (figure_refused('markdown_view_object%init', stat)) return
    call self%destroy()
-   t = 1_c_int
-   if (present(toc)) t = merge(1_c_int, 0_c_int, toc)
-   s = 1_c_int
-   if (present(search)) s = merge(1_c_int, 0_c_int, search)
-   call figure_check(fig_markdown_view_create(self%handle, t, s), stat)
+   t = .true.
+   if (present(toc)) t = toc
+   s = .true.
+   if (present(search)) s = search
+   call md_view_create(t, s, self%handle)
+   call figure_check(FIG_OK, stat)
    endsubroutine view_init
 
    recursive subroutine view_destroy(self)
    !< Release the view (safe in any state).
    class(markdown_view_object), intent(inout) :: self !< View.
 
-   if (self%handle /= 0_c_int) call fig_markdown_view_destroy(self%handle)
+   if (self%handle /= 0_c_int) call md_view_destroy(self%handle)
    self%handle = 0_c_int
    endsubroutine view_destroy
 
@@ -213,7 +116,8 @@ contains
    integer(int32),              intent(out), optional :: stat !< Status.
 
    if (.not. alive(self, 'set_text', stat)) return
-   call figure_check(fig_markdown_view_set_text(self%handle, text, len(text, c_long_long)), stat)
+   call md_view_set_text(self%handle, text)
+   call figure_check(FIG_OK, stat)
    endsubroutine view_set_text
 
    recursive subroutine view_load(self, path, stat)
@@ -221,28 +125,44 @@ contains
    !< as `set_text` does. Its images are read from paths relative to the working directory, not to the file.
    !< Statuses: `FIG_ERR_ARGUMENT` for an empty name, `FIG_ERR_FAILED` if the file cannot be read (the text is kept);
    !< `FIG_ERR_STATE` before `init` and from a task.
-   class(markdown_view_object), intent(inout)         :: self !< View.
-   character(len=*),            intent(in)            :: path !< File.
-   integer(int32),              intent(out), optional :: stat !< Status.
+   class(markdown_view_object), intent(inout)         :: self  !< View.
+   character(len=*),            intent(in)            :: path  !< File.
+   integer(int32),              intent(out), optional :: stat  !< Status.
+   character(len=:), allocatable                      :: text  !< The file's content.
+   character(len=512)                                 :: msg   !< An I/O message.
+   integer(int32)                                     :: u, ios !< Unit, status.
+   integer(int64)                                     :: n     !< Bytes.
 
    if (.not. alive(self, 'load', stat)) return
-   call figure_check(fig_markdown_view_load(self%handle, path, len(path, c_int)), stat)
+   if (len(path) == 0) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'markdown_view_object%load: no file name', stat)
+      return
+   endif
+   msg = ''
+   open(newunit=u, file=path, access='stream', form='unformatted', status='old', action='read', iostat=ios, iomsg=msg)
+   if (ios == 0_int32) then
+      inquire(unit=u, size=n)
+      if (n < 0_int64) n = 0_int64
+      allocate(character(len=n) :: text)
+      if (n > 0_int64) read(u, iostat=ios, iomsg=msg) text
+      close(u)
+   endif
+   if (ios /= 0_int32) then
+      call figure_fail(FIG_ERR_FAILED, "markdown_view_object%load: '"//path//"' cannot be read: "//trim(msg), stat)
+      return
+   endif
+   call md_view_load_text(self%handle, text)
+   call figure_check(FIG_OK, stat)
    endsubroutine view_load
 
    recursive function view_text(self) result(t)
    !< The text (`''` before `init` and from a task).
-   class(markdown_view_object), intent(in) :: self  !< View.
-   character(len=:), allocatable           :: t     !< Markdown.
-   integer(c_long_long)                    :: n     !< Length.
-   character(kind=c_char, len=1)           :: probe !< Buffer for the length.
+   class(markdown_view_object), intent(in) :: self !< View.
+   character(len=:), allocatable           :: t    !< Markdown.
 
    t = ''
    if (.not. alive(self, 'text', quiet=.true.)) return
-   n = fig_markdown_view_text(self%handle, probe, 0_c_long_long)
-   if (n <= 0_c_long_long) return
-   deallocate(t)
-   allocate(character(len=n) :: t)
-   n = fig_markdown_view_text(self%handle, t, n)
+   t = md_view_text(self%handle)
    endfunction view_text
 
    recursive function view_draw(self, id, link, width, height, stat) result(clicked)
@@ -259,21 +179,24 @@ contains
    real(real64),                  intent(in),  optional :: height  !< Height [pixels] (default 0: the available height).
    integer(int32),                intent(out), optional :: stat    !< Status.
    logical                                              :: clicked !< A link was clicked this frame.
-   real(c_double)                                       :: w, h    !< Size.
-   integer(c_int)                                       :: c       !< Clicked (C).
+   real(c_float)                                        :: w, h    !< Size.
+   integer(c_int)                                       :: s       !< Status.
 
    clicked = .false.
    if (present(link)) link = ''
    if (figure_draw_refused('markdown_view_object%draw', stat)) return
    if (.not. alive(self, 'draw', stat)) return
-   w = 0.0_c_double
-   if (present(width)) w = real(width, c_double)
-   h = 0.0_c_double
-   if (present(height)) h = real(height, c_double)
-   c = 0_c_int
-   call figure_check(fig_markdown_view_draw(self%handle, id, len(id, c_int), w, h, c), stat)
-   clicked = c /= 0_c_int
-   if (clicked .and. present(link)) link = clicked_link()
+   if (len(id) == 0) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'markdown_view_object%draw: the id is empty', stat)
+      return
+   endif
+   w = 0.0_c_float
+   if (present(width)) w = real(width, c_float)
+   h = 0.0_c_float
+   if (present(height)) h = real(height, c_float)
+   s = md_view_draw(self%handle, id, w, h, clicked)
+   call figure_check(s, stat)
+   if (clicked .and. present(link)) link = md_last_link()
    endfunction view_draw
 
    recursive subroutine view_find(self, text, stat)
@@ -286,29 +209,40 @@ contains
    integer(int32),              intent(out), optional :: stat !< Status.
 
    if (.not. alive(self, 'find', stat)) return
-   call figure_check(fig_markdown_view_find(self%handle, text, len(text, c_int)), stat)
+   if (len(text) >= 256) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'markdown_view_object%find: the text is longer than 255 bytes', stat)
+      return
+   endif
+   if (index(text, achar(10)) > 0) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'markdown_view_object%find: the text is more than one line', stat)
+      return
+   endif
+   call md_view_find(self%handle, text)
+   call figure_check(FIG_OK, stat)
    endsubroutine view_find
 
    recursive function view_matches(self) result(n)
    !< The matches of the search at the last `draw` (0 with no search, before `init` and from a task).
    class(markdown_view_object), intent(in) :: self !< View.
    integer(int32)                          :: n    !< Matches.
-   integer(c_int)                          :: m, c !< Matches, current (C).
+   integer(c_int)                          :: m, c !< Matches, current.
 
    n = 0_int32
    if (.not. alive(self, 'matches', quiet=.true.)) return
-   if (fig_markdown_view_info(self%handle, m, c) == FIG_OK) n = int(m, int32)
+   call md_view_info(self%handle, m, c)
+   n = int(m, int32)
    endfunction view_matches
 
    recursive function view_current_match(self) result(k)
    !< The current match of the search at the last `draw`, from 1 (0 with none, before `init` and from a task).
    class(markdown_view_object), intent(in) :: self !< View.
    integer(int32)                          :: k    !< Current match.
-   integer(c_int)                          :: m, c !< Matches, current (C).
+   integer(c_int)                          :: m, c !< Matches, current.
 
    k = 0_int32
    if (.not. alive(self, 'current_match', quiet=.true.)) return
-   if (fig_markdown_view_info(self%handle, m, c) == FIG_OK) k = int(c, int32) + 1_int32
+   call md_view_info(self%handle, m, c)
+   k = int(c, int32) + 1_int32
    endfunction view_current_match
 
    recursive subroutine view_scroll_to(self, heading, stat)
@@ -321,7 +255,12 @@ contains
    integer(int32),              intent(out), optional :: stat    !< Status.
 
    if (.not. alive(self, 'scroll_to', stat)) return
-   call figure_check(fig_markdown_view_scroll_to(self%handle, heading, len(heading, c_int)), stat)
+   if (len(heading) == 0) then
+      call figure_fail(FIG_ERR_ARGUMENT, 'markdown_view_object%scroll_to: the heading is empty', stat)
+      return
+   endif
+   call md_view_scroll_to(self%handle, heading)
+   call figure_check(FIG_OK, stat)
    endsubroutine view_scroll_to
 
    ! ---- private --------------------------------------------------------------------------------------------------------
@@ -339,24 +278,10 @@ contains
    if (figure_refused('markdown_view_object%'//name, stat)) return
    q = .false.
    if (present(quiet)) q = quiet
-   if (self%handle == 0_c_int) then
+   if (.not. md_view_exists(self%handle)) then
       if (.not. q) call figure_fail(FIG_ERR_STATE, 'markdown_view_object%'//name//': the view is not initialized', stat)
       return
    endif
    ok = .true.
    endfunction alive
-
-   recursive function clicked_link() result(url)
-   !< The URL of the last link clicked.
-   character(len=:), allocatable :: url   !< URL.
-   integer(c_long_long)          :: n     !< Length.
-   character(kind=c_char, len=1) :: probe !< Buffer for the length.
-
-   url = ''
-   n = fig_markdown_link(probe, 0_c_long_long)
-   if (n <= 0_c_long_long) return
-   deallocate(url)
-   allocate(character(len=n) :: url)
-   n = fig_markdown_link(url, n)
-   endfunction clicked_link
 endmodule figure_markdown

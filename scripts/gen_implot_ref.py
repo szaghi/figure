@@ -9,9 +9,12 @@ over ImPlot and ImPlot3D as on the current path.
 
 The gizmos' seam (szaghi/figure#15 P14) the same way: ``figure_view3d_gizmos_ref`` is the current path's
 src/paths/imgui/gizmo/figure_view3d_gizmos.F90 (the native layer's ImGuizmo gizmos), for the Fortran gizmos' tests.
+The Markdown seam (#15 P15) likewise: ``figure_markdown_ref`` is src/paths/imgui/markdown/figure_markdown.F90 (over
+imgui_rich_md), for the Markdown tests.
 
 Usage: python3 scripts/gen_implot_ref.py           write src/tests/fortran/figure_implot_ref.F90, figure_implot3d_ref.F90,
-                                                   figure_view3d_gizmos_ref.F90
+                                                   figure_view3d_gizmos_ref.F90,
+                                                   figure_markdown_ref.F90
        python3 scripts/gen_implot_ref.py --check   exit status 1 when one is not the current path's module renamed
 """
 
@@ -22,7 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULES = {"figure_implot": ("plot", "ImPlot"), "figure_implot3d": ("plot3d", "ImPlot3D"),
-           "figure_view3d_gizmos": ("gizmo", "ImGuizmo")}
+           "figure_view3d_gizmos": ("gizmo", "ImGuizmo"), "figure_markdown": ("markdown", "imgui_rich_md")}
 TARGETS = {m: ROOT / "src" / "tests" / "fortran" / f"{m}_ref.F90" for m in MODULES}
 TARGET = TARGETS["figure_implot"]  # (check_sync's first)
 

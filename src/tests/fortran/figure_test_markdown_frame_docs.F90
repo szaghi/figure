@@ -24,8 +24,8 @@ program figure_test_markdown_frame_docs
 !< The pictures are `figure_test_markdown_frame_docs.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_cursor_screen_pos, ig_end, ig_set_next_window, &
-                   markdown_view_object
+use figure, only : app_object, figure_last_error, ig_begin, ig_cursor_screen_pos, ig_end, ig_set_next_window
+use figure_markdown_ref, only : markdown_view_object
 use figure_markdown_document, only : md_view_create, md_view_destroy, md_view_draw, md_view_find, md_view_info, &
                                      md_view_scroll_to, md_view_set_text
 use figure_markdown_render, only : md_last_link

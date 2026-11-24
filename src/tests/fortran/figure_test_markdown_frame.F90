@@ -2,8 +2,8 @@
 program figure_test_markdown_frame
 !< figure_test_markdown_frame, the Fortran path's Markdown renderer (`md_markdown`) against imgui_rich_md's (`ig_markdown`).
 !<
-!< szaghi/figure#15 P15. Each case draws one Markdown text on a few frames first with imgui_rich_md (FIGURE's
-!< `ig_markdown`), then with the Fortran renderer (figure_markdown_render's `md_markdown`), 40 frames apart, each in a
+!< szaghi/figure#15 P15. Each case draws one Markdown text on a few frames first with imgui_rich_md (the current
+!< path's `ig_markdown`, figure_markdown_ref), then with the Fortran renderer (figure_markdown_render's `md_markdown`), 40 frames apart, each in a
 !< window of its own at the same place (`Markdown###cpp`, `Markdown###fortran`: the same title, other IDs, so each side
 !< starts from a fresh window). Checked on every frame: the cursor where the text starts and where it ends, whether a
 !< link was clicked and its URL, equal to the bit; the first and the last frame's pictures at FIGURE's oracle rule (|d|
@@ -30,8 +30,8 @@ program figure_test_markdown_frame
 !< mismatch's .new.png and .diff.png are left for inspection).
 use, intrinsic :: iso_c_binding, only : c_int, c_loc
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
-use figure, only : app_object, figure_last_error, FIG_OK, ig_begin, ig_cursor_screen_pos, ig_end, ig_markdown, &
-                   ig_set_next_window
+use figure, only : app_object, figure_last_error, FIG_OK, ig_begin, ig_cursor_screen_pos, ig_end, ig_set_next_window
+use figure_markdown_ref, only : ig_markdown
 use figure_c_native, only : fig_image_write
 use figure_markdown_render, only : md_markdown
 use figure_testing, only : test_capture, test_click, test_compare_image, test_drag, test_mouse_move
