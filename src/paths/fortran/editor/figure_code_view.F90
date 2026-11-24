@@ -79,6 +79,7 @@ use figure_core_text, only : ct_begin_child, ct_begin_popup, ct_begin_tooltip, c
 implicit none
 private
 public :: fig_editor_draw, fig_editor_line_rect
+public :: style_palette, col32, u32, FONT_NAME
 public :: vis_pos, doc_pos_of, normalize_vis, update_state, handle_scrolling, enclosing_brackets, palette_color
 
 !< The marks' icons (circle-x, triangle-alert, info: FIGURE's icon font), by severity.
@@ -86,6 +87,7 @@ character(len=3), parameter :: SEVERITY_ICON(N_SEVERITY) = [achar(238)//achar(13
                                                             achar(238)//achar(134)//achar(147), &
                                                             achar(238)//achar(131)//achar(185)]
 integer(int32), parameter :: DECORATOR_WIDTH = 2_int32 !< The glue's decoration column [glyphs].
+character(len=*), parameter :: FONT_NAME = 'plex-mono' !< The editor's and the diff's font.
 
 interface
    pure function c_log10f(x) result(r) bind(C, name='log10f')

@@ -41,7 +41,8 @@ Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figur
   the find and replace window. It draws through `figure_core_text` (`src/paths/imgui/core/`, the inner
   seam's calls for the editor, `ct_*`).
 - `figure_code_diff`: dtl's `Diff::compose` (the O(NP) shortest edit script of two texts' lines) and the glue's
-  `fig_code_diff_lines`.
+  `fig_code_diff_lines`; the fork's `TextDiff` (one column and side by side, their scroll bars and the changes on the
+  vertical one) and the glue's `fig_code_diff` (a diff kept per id, forgotten after 600 frames not drawn).
 
 ## Tests
 
@@ -55,7 +56,7 @@ threshold 2 with no pixel failing (marks and their tooltips, focus and the caret
 tabs, wide glyphs, scrolling, the light palette, options). `_input`: the same scripted keys, characters, clicks, drags,
 middle button and wheel played to both editors, each frame's text, cursor, selection and rectangles to the bit, the
 last pictures equal. `_popups`: the same for the completion popup (its words every frame) and the find and replace
-window, two pictures per case.
+window, two pictures per case. `_diff`: `code_diff` by both, pictures equal, scrolled by the keys and the wheel.
 
 ## The native calls the seam replaces
 

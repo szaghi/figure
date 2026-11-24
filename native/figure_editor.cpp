@@ -889,4 +889,34 @@ int fig_core_text_input(const char *label, char *buf, int cap, int flags) {
 // The autocomplete popup brought to the front (BringWindowToDisplayFront(GetCurrentWindow())).
 void fig_core_text_front(void) { ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow()); }
 
+// TextDiff's horizontal scroll bar over [x0, x1] (renderScrollbar(s), verbatim): the frame at the bottom of the current
+// window, its rounding in the window, ScrollbarEx by id; scroll (pixels, whole) read and written; 1 when held.
+int fig_core_text_hscroll(float x0, float x1, const char *id, long long *scroll, float visible, float total) {
+   const auto window = ImGui::GetCurrentWindow();
+   const auto outerRect = window->Rect();
+   const auto borderSize = std::round(window->WindowBorderSize * 0.5f);
+   const auto scrollbarSize = ImGui::GetStyle().ScrollbarSize;
+   const auto scrollbarTop = std::max(outerRect.Min.y + borderSize, outerRect.Max.y - borderSize - scrollbarSize);
+   const ImRect frame(x0, scrollbarTop, x1, scrollbarTop + scrollbarSize);
+   ImS64 s = static_cast<ImS64>(*scroll);
+   const auto corners = ImGui::CalcRoundingFlagsForRectInRect(frame, outerRect, ImGui::GetStyle().WindowBorderSize);
+   const bool held = ImGui::ScrollbarEx(frame, ImGui::GetID(id), ImGuiAxis_X, &s, static_cast<ImS64>(visible),
+                                        static_cast<ImS64>(total), corners);
+   *scroll = static_cast<long long>(s);
+   return held ? 1 : 0;
+}
+
+// The current window's vertical scroll bar (r[0:4], GetWindowScrollbarRect; 1 when it has one), its border size
+// (r[4]), GetScrollMaxY (r[5]), io.MouseWheelH (r[6]).
+int fig_core_text_vscroll(float *r) {
+   const auto window = ImGui::GetCurrentWindow();
+   r[4] = window->WindowBorderSize;
+   r[5] = ImGui::GetScrollMaxY();
+   r[6] = ImGui::GetIO().MouseWheelH;
+   if (!window->ScrollbarY) return 0;
+   const ImRect rect = ImGui::GetWindowScrollbarRect(window, ImGuiAxis_Y);
+   r[0] = rect.Min.x, r[1] = rect.Min.y, r[2] = rect.Max.x, r[3] = rect.Max.y;
+   return 1;
+}
+
 } // extern "C"

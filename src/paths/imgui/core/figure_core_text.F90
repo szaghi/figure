@@ -16,7 +16,7 @@ module figure_core_text
 !< scrollbar, the style's DPI scale and caret width, the characters typed, the input method's position, the fork's
 !< navigation workaround of a child window) are native/figure_editor.cpp's `fig_core_text_*`.
 use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_null_char, &
-                                         c_null_ptr, c_ptr, c_size_t
+                                         c_null_ptr, c_ptr, c_size_t, c_long_long
 use, intrinsic :: iso_fortran_env, only : int32
 use figure_cimgui, only : im_vec2, im_vec4, igBeginChild_Str, igBeginPopup, igBeginTooltip, igCalcTextSize,             &
                           igColorConvertFloat4ToU32, igEndChild, igEndPopup, igEndTooltip, igGetColorU32_U32,          &
@@ -35,7 +35,8 @@ use figure_cimgui, only : im_vec2, im_vec4, igBeginChild_Str, igBeginPopup, igBe
                           igSetNextWindowPos, igSetNextWindowSize, igSetNextWindowBgAlpha, igSetNextItemWidth,         &
                           igSetKeyboardFocusHere, igIsItemDeactivated, igIsItemClicked, igBeginDisabled,               &
                           igEndDisabled, igSameLine, igPushStyleColor_Vec4, igIsKeyChordPressed_Nil,                   &
-                          igSetWindowFocus_Nil, igIsWindowAppearing, igCloseCurrentPopup, igSetScrollHereY
+                          igSetWindowFocus_Nil, igIsWindowAppearing, igCloseCurrentPopup, igSetScrollHereY, igGetID_Str, &
+                          igGetFrameCount
 use figure_cimgui_core, only : ImDrawList_AddCircleFilled, ImDrawList_AddLine, ImDrawList_AddRect, ImDrawList_AddRectFilled, &
                                ImDrawList_AddText_Vec2, ImDrawList_GetClipRectMax, ImDrawList_GetClipRectMin,          &
                                ImDrawList_PopClipRect, ImDrawList_PushClipRect
@@ -59,6 +60,7 @@ public :: ct_set_next_window_pos, ct_set_next_window_size, ct_set_next_window_bg
 public :: ct_set_keyboard_focus_here, ct_item_deactivated, ct_item_clicked, ct_begin_disabled, ct_end_disabled
 public :: ct_same_line, ct_push_style_color_vec4, ct_key_chord_pressed, ct_clear_window_focus, ct_window_appearing
 public :: ct_close_current_popup, ct_set_scroll_here_y, ct_bring_to_front, ct_input_text
+public :: ct_hscroll, ct_vscroll, ct_get_id, ct_frame_count
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Strings copied into the module's buffer up to this length.
 
@@ -119,6 +121,26 @@ interface
    subroutine fig_core_text_front() bind(C, name='fig_core_text_front')
    !< BringWindowToDisplayFront(GetCurrentWindow()).
    endsubroutine fig_core_text_front
+
+   function fig_core_text_hscroll(x0, x1, id, scroll, visible, total) result(held) bind(C, name='fig_core_text_hscroll')
+   !< TextDiff's horizontal scroll bar (native/figure_editor.cpp).
+   import :: c_char, c_float, c_int, c_long_long
+   implicit none
+   real(c_float),          value         :: x0, x1  !< Its ends.
+   character(kind=c_char), intent(in)    :: id(*)   !< Its id.
+   integer(c_long_long),   intent(inout) :: scroll  !< Scroll [pixels].
+   real(c_float),          value         :: visible !< Visible width.
+   real(c_float),          value         :: total   !< Total width.
+   integer(c_int)                        :: held    !< 1 when held.
+   endfunction fig_core_text_hscroll
+
+   function fig_core_text_vscroll(r) result(has) bind(C, name='fig_core_text_vscroll')
+   !< The window's vertical scroll bar, border, scroll max, horizontal wheel (native/figure_editor.cpp).
+   import :: c_float, c_int
+   implicit none
+   real(c_float), intent(out) :: r(7) !< Rectangle, border, scroll max, wheel.
+   integer(c_int)             :: has  !< 1 with a vertical scroll bar.
+   endfunction fig_core_text_vscroll
 
    pure function c_strlen(p) result(n) bind(C, name='strlen')
    !< C's `strlen`.
@@ -886,4 +908,43 @@ contains
       value = input(1:k)
    endif
    endfunction ct_input_text
+   ! ---- the diff view (szaghi/figure#15 P16 step 14) ------------------------------------------------------------
+   function ct_hscroll(x0, x1, id, scroll, visible, total) result(held)
+   !< TextDiff's horizontal scroll bar over [x0, x1] at the window's bottom (`ScrollbarEx`, by id); `scroll` whole pixels.
+   real(c_float),        intent(in)    :: x0, x1  !< Ends.
+   character(len=*),     intent(in)    :: id      !< ID.
+   integer(c_long_long), intent(inout) :: scroll  !< Scroll [pixels].
+   real(c_float),        intent(in)    :: visible !< Visible width.
+   real(c_float),        intent(in)    :: total   !< Total width.
+   logical                             :: held    !< Held.
+
+   call to_buf(id(1:min(len(id), BUF_LEN)))
+   held = fig_core_text_hscroll(x0, x1, buf, scroll, visible, total) /= 0_c_int
+   endfunction ct_hscroll
+
+   function ct_vscroll(r) result(has)
+   !< The window's vertical scroll bar (`r(1:4)`: `GetWindowScrollbarRect`), its border size (5), `GetScrollMaxY` (6),
+   !< io.MouseWheelH (7); true when it has the bar.
+   real(c_float), intent(out) :: r(7) !< Values.
+   logical                    :: has  !< A vertical scroll bar.
+
+   r = 0.0_c_float
+   has = fig_core_text_vscroll(r) /= 0_c_int
+   endfunction ct_vscroll
+
+   function ct_get_id(label) result(id)
+   !< `GetID(label)`.
+   character(len=*), intent(in) :: label !< Label.
+   integer(c_int)               :: id    !< ID.
+
+   call to_buf(label(1:min(len(label), BUF_LEN)))
+   id = igGetID_Str(buf)
+   endfunction ct_get_id
+
+   function ct_frame_count() result(n)
+   !< `GetFrameCount`.
+   integer(c_int) :: n !< Frame.
+
+   n = igGetFrameCount()
+   endfunction ct_frame_count
 endmodule figure_core_text
