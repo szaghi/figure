@@ -18,7 +18,11 @@ use, intrinsic :: iso_fortran_env, only : int8, int32, int64
 use figure_code_document, only : code_document, code_line, COLOR_COMMENT, COLOR_DECLARATION, COLOR_IDENTIFIER, &
                                  COLOR_KEYWORD, COLOR_KNOWN_IDENTIFIER, COLOR_NUMBER, COLOR_PREPROCESSOR,           &
                                  COLOR_PUNCTUATION, COLOR_STRING, COLOR_TEXT, COLOR_WHITESPACE
-use figure_code_unicode, only : cp_is_letter, cp_is_number, cp_is_white_space, cp_read, cp_to_lower, cp_write
+use figure_code_languages_fork, only : C_PUNCTUATION, JULIA_PUNCTUATION, c_number, cs_number, fork_data, json_token, &
+                                       lua_comment_end, lua_comment_start, lua_number, lua_string_end, lua_string_start, &
+                                       markdown_token, python_number
+use figure_code_unicode, only : cp_is_letter, cp_is_number, cp_is_white_space, cp_is_xid_continue, cp_is_xid_start, &
+                                cp_read, cp_to_lower, cp_write
 
 implicit none
 private
@@ -39,6 +43,13 @@ integer(int32), parameter :: MAX_LEVEL = 7_int32        !< maxCommentLevel, maxS
 ! tokenizers
 integer(int32), parameter :: TOK_NONE = 0_int32   !< None.
 integer(int32), parameter :: TOK_FIGURE = 1_int32 !< FIGURE's (native/figure_editor.cpp).
+integer(int32), parameter :: TOK_C = 2_int32      !< TextEditorC's (punctuation, identifiers, numbers).
+integer(int32), parameter :: TOK_CS = 3_int32     !< TextEditorCs's numbers.
+integer(int32), parameter :: TOK_PYTHON = 4_int32 !< TextEditorPython's numbers.
+integer(int32), parameter :: TOK_LUA = 5_int32    !< TextEditorLua's numbers, long comments and strings.
+integer(int32), parameter :: TOK_JULIA = 6_int32  !< TextEditorJulia's (punctuation, identifiers, numbers, tokens).
+integer(int32), parameter :: TOK_JSON = 7_int32   !< TextEditorJson's tokens.
+integer(int32), parameter :: TOK_MARKDOWN = 8_int32 !< TextEditorMarkdown's tokens.
 
 type :: code_lang
    !< A language (`TextEditor::Language`).
@@ -70,6 +81,7 @@ type :: code_lang
    integer(int32)                :: comment_level = TOK_NONE !< commentLevelStart, commentLevelEnd.
    integer(int32)                :: string_level = TOK_NONE  !< stringLevelStart, stringLevelEnd.
    logical                       :: key_value = .false.  !< FIGURE's key = value mode.
+   logical                       :: fork_words = .false. !< Words kept as given (the fork's sets), not in lower case.
 endtype code_lang
 
 type :: lang_box
@@ -297,18 +309,72 @@ contains
    endsubroutine figure_definition
 
    subroutine fork_definition(l)
-   !< A fork language's definition (its name set). Its rules come from the fork's language files (#15 P16, a later
-   !< step); until then it colours nothing.
-   type(code_lang), intent(inout) :: l !< The language.
+   !< A fork language's definition (its name set): its comments, strings, flags and keyword sets from the fork's files
+   !< (figure_code_languages_fork, generated), its tokenizers by name.
+   type(code_lang), intent(inout) :: l     !< The language.
+   character(len=:), allocatable  :: v     !< A field.
+   logical                        :: words !< A list.
+   integer(int32)                 :: f(7), ios !< Flags, status.
 
-   l%line_comment = ''
-   l%line_comment_alt = ''
-   l%comment_start = ''
-   l%comment_end = ''
-   l%other_start = ''
-   l%other_end = ''
-   l%other_alt_start = ''
-   l%other_alt_end = ''
+   call fork_data(l%name, 1_int32, v, words)
+   l%line_comment = v
+   call fork_data(l%name, 2_int32, v, words)
+   l%line_comment_alt = v
+   call fork_data(l%name, 3_int32, v, words)
+   l%comment_start = v
+   call fork_data(l%name, 4_int32, v, words)
+   l%comment_end = v
+   call fork_data(l%name, 5_int32, v, words)
+   l%other_start = v
+   call fork_data(l%name, 6_int32, v, words)
+   l%other_end = v
+   call fork_data(l%name, 7_int32, v, words)
+   l%other_alt_start = v
+   call fork_data(l%name, 8_int32, v, words)
+   l%other_alt_end = v
+   call fork_data(l%name, 9_int32, v, words)
+   read(v, *, iostat=ios) f
+   if (ios /= 0) f = 0_int32
+   l%preprocess = f(1)
+   l%escape = f(2)
+   l%single_quotes = f(3) /= 0_int32
+   l%double_quotes = f(4) /= 0_int32
+   l%case_sensitive = f(5) /= 0_int32
+   l%nested_comments = f(6) /= 0_int32
+   l%indentation_blocks = f(7) /= 0_int32
+   l%fork_words = .true.
+   call fork_data(l%name, 10_int32, v, words)
+   call add_words(l, v, 1_int32)
+   call fork_data(l%name, 11_int32, v, words)
+   call add_words(l, v, 2_int32)
+   call fork_data(l%name, 12_int32, v, words)
+   call add_words(l, v, 3_int32)
+   select case (l%name)
+   case ('JSON')
+      l%custom = TOK_JSON
+   case ('Markdown')
+      l%custom = TOK_MARKDOWN
+   case ('Julia')
+      l%punctuation = TOK_JULIA
+      l%identifier = TOK_JULIA
+      l%number = TOK_JULIA
+      l%custom = TOK_JULIA
+   case default
+      l%punctuation = TOK_C
+      l%identifier = TOK_C
+      select case (l%name)
+      case ('C#')
+         l%number = TOK_CS
+      case ('Python')
+         l%number = TOK_PYTHON
+      case ('Lua')
+         l%number = TOK_LUA
+         l%comment_level = TOK_LUA
+         l%string_level = TOK_LUA
+      case default
+         l%number = TOK_C
+      endselect
+   endselect
    endsubroutine fork_definition
 
    subroutine add_words(l, list, set)
@@ -339,7 +405,7 @@ contains
    integer(int32)                  :: at, k, c !< Insertion point, counter, comparison.
 
    if (len(word) == 0) return
-   if (l%case_sensitive) then
+   if (l%case_sensitive .or. l%fork_words) then
       w = word
    else
       w = lower(word)
@@ -646,7 +712,7 @@ contains
    type(code_line), intent(inout) :: line  !< Line.
    integer(int32)                 :: state !< State after the line.
    logical                        :: non_white !< A glyph other than blanks and the preprocessor seen.
-   integer(int32)                 :: g, start, e, t, size, set, ns, k, m !< Glyphs, a token's end and size, counters.
+   integer(int32)                 :: g, start, e, t, size, set, ns, k, m, level !< Glyphs, a token, counters, a level.
    integer(int8)                  :: color !< A token's colour.
    character(len=4)               :: b     !< A code point's bytes.
 
@@ -659,6 +725,24 @@ contains
       if (state == STATE_TEXT) then
          if (.not. non_white .and. l%preprocess /= 0_int32) then
             if (line%cp(g) /= l%preprocess .and. .not. cp_is_white_space(line%cp(g))) non_white = .true.
+         endif
+         if (l%comment_level /= TOK_NONE) then
+            t = lua_comment_start(line%cp, g, e, level)
+            if (t /= start) then
+               level = min(level, MAX_LEVEL)
+               state = STATE_COMMENT + level
+               call set_color(line, g, t, COLOR_COMMENT)
+               g = t
+            endif
+         endif
+         if (g == start .and. l%string_level /= TOK_NONE) then
+            t = lua_string_start(line%cp, g, e, level)
+            if (t /= start) then
+               level = min(level, MAX_LEVEL)
+               state = STATE_STRING0 + level
+               call set_color(line, g, t, COLOR_STRING)
+               g = t
+            endif
          endif
          if (g == start) then
             if (cp_is_white_space(line%cp(g))) then
@@ -757,6 +841,16 @@ contains
             call set_color(line, g, g + size, COLOR_COMMENT)
             g = g + size
             if (state /= STATE_COMMENT + MAX_LEVEL) state = state + 1_int32
+         elseif (l%comment_level /= TOK_NONE) then
+            t = lua_comment_end(line%cp, g, e, level)
+            if (t /= start) then
+               level = min(level, MAX_LEVEL)
+               if (state == STATE_COMMENT + level) then
+                  call set_color(line, g, t, COLOR_COMMENT)
+                  g = t
+                  state = STATE_TEXT
+               endif
+            endif
          endif
          if (g == start) then
             line%color(g) = COLOR_COMMENT
@@ -802,9 +896,23 @@ contains
             g = g + 1_int32
          endif
       else
-         ! a string level (a fork language's tokenizer: a later step): coloured as a string to the line's end
-         line%color(g) = COLOR_STRING
-         g = g + 1_int32
+         ! a string level (Lua's long brackets)
+         t = start
+         if (l%string_level /= TOK_NONE) t = lua_string_end(line%cp, g, e, level)
+         if (t /= start) then
+            level = min(level, MAX_LEVEL)
+            if (state == STATE_STRING0 + level) then
+               call set_color(line, g, t, COLOR_STRING)
+               g = t
+               state = STATE_TEXT
+            else
+               line%color(g) = COLOR_STRING
+               g = g + 1_int32
+            endif
+         else
+            line%color(g) = COLOR_STRING
+            g = g + 1_int32
+         endif
       endif
    enddo
    endfunction update_line
@@ -820,6 +928,12 @@ contains
    select case (l%custom)
    case (TOK_FIGURE)
       t = figure_key_value(cp, s, e, color)
+   case (TOK_JSON)
+      t = json_token(cp, s, e, color)
+   case (TOK_MARKDOWN)
+      t = markdown_token(cp, s, e, color)
+   case (TOK_JULIA)
+      t = julia_token(cp, s, e, color)
    case default
       t = s
    endselect
@@ -835,12 +949,16 @@ contains
    select case (l%identifier)
    case (TOK_FIGURE)
       t = figure_identifier(cp, s, e)
+   case (TOK_C)
+      t = c_identifier(cp, s, e)
+   case (TOK_JULIA)
+      t = julia_identifier(cp, s, e)
    case default
       t = s
    endselect
    endfunction identifier_token
 
-   pure function number_token(l, cp, s, e) result(t)
+   function number_token(l, cp, s, e) result(t)
    !< The language's number tokenizer.
    type(code_lang), intent(in) :: l     !< Language.
    integer(int32),  intent(in) :: cp(:) !< The line's code points.
@@ -850,6 +968,16 @@ contains
    select case (l%number)
    case (TOK_FIGURE)
       t = figure_number(cp, s, e)
+   case (TOK_C)
+      t = c_number(cp, s, e)
+   case (TOK_CS)
+      t = cs_number(cp, s, e)
+   case (TOK_PYTHON)
+      t = python_number(cp, s, e)
+   case (TOK_LUA)
+      t = lua_number(cp, s, e)
+   case (TOK_JULIA)
+      t = julia_number(cp, s, e)
    case default
       t = s
    endselect
@@ -864,10 +992,376 @@ contains
    select case (l%punctuation)
    case (TOK_FIGURE)
       yes = figure_punctuation(c)
+   case (TOK_C)
+      yes = .false.
+      if (c < 127_int32) yes = C_PUNCTUATION(c)
+   case (TOK_JULIA)
+      if (c < 127_int32) then
+         yes = JULIA_PUNCTUATION(c)
+      else
+         yes = c == 172_int32 .or. c == 177_int32 .or. c == 215_int32 .or. c == 247_int32 .or. c == 8722_int32 .or. &
+               (c >= 8592_int32 .and. c <= 11263_int32)
+      endif
    case default
       yes = .false.
    endselect
    endfunction is_punctuation
+
+   pure function c_identifier(cp, s, e) result(t)
+   !< `TextEditorC::getIdentifier`: an identifier's start and continuations (Unicode's XID).
+   integer(int32), intent(in) :: cp(:) !< The line's code points.
+   integer(int32), intent(in) :: s, e  !< Start, end.
+   integer(int32)             :: t     !< End of the token.
+
+   t = s
+   if (t < e) then
+      if (cp_is_xid_start(cp(t))) then
+         t = t + 1_int32
+         do while (t < e)
+            if (.not. cp_is_xid_continue(cp(t))) exit
+            t = t + 1_int32
+         enddo
+      endif
+   endif
+   endfunction c_identifier
+
+   ! ---- Julia's tokenizers (TextEditorJulia.h, by hand) ------------------------------------------------------------
+   pure function julia_id_start(c) result(yes)
+   !< `TextEditorJulia::isIdentifierStart` (16-bit code points).
+   integer(int32), intent(in) :: c   !< Code point.
+   logical                    :: yes !< Starts an identifier.
+
+   yes = cp_is_xid_start(c) .or. (c >= 8512_int32 .and. c <= 8516_int32) .or. c == 8704_int32 .or. &
+         (c >= 8706_int32 .and. c <= 8711_int32) .or. c == 8718_int32 .or. c == 8719_int32 .or. c == 8720_int32 .or. &
+         c == 8721_int32 .or. c == 8734_int32 .or. c == 8735_int32 .or. (c >= 8747_int32 .and. c <= 8755_int32) .or. &
+         c == 8767_int32 .or. c == 8868_int32 .or. c == 8869_int32 .or. c == 8894_int32 .or. c == 8895_int32 .or. &
+         (c >= 8896_int32 .and. c <= 8899_int32) .or. (c >= 9720_int32 .and. c <= 9727_int32) .or. c == 9839_int32 .or. &
+         c == 10176_int32 .or. c == 10177_int32 .or. c == 10200_int32 .or. c == 10201_int32 .or. &
+         (c >= 10672_int32 .and. c <= 10676_int32) .or. (c >= 10752_int32 .and. c <= 10758_int32) .or. &
+         (c >= 10761_int32 .and. c <= 10774_int32) .or. c == 10779_int32 .or. c == 10780_int32 .or. &
+         (c >= 8314_int32 .and. c <= 8318_int32) .or. (c >= 8330_int32 .and. c <= 8334_int32) .or. &
+         (c >= 8736_int32 .and. c <= 8738_int32) .or. (c >= 10651_int32 .and. c <= 10671_int32) .or. &
+         c == 12443_int32 .or. c == 12444_int32
+   endfunction julia_id_start
+
+   pure function julia_id_char(c) result(yes)
+   !< `TextEditorJulia::isIdentifierChar`.
+   integer(int32), intent(in) :: c   !< Code point.
+   logical                    :: yes !< Continues an identifier.
+
+   yes = cp_is_xid_continue(c) .or. julia_id_start(c) .or. c == 33_int32 .or. c == 178_int32 .or. c == 179_int32 .or. &
+         c == 185_int32 .or. (c >= 8242_int32 .and. c <= 8247_int32) .or. c == 8279_int32 .or. &
+         (c >= 8304_int32 .and. c <= 8348_int32) .or. (c >= 7522_int32 .and. c <= 7530_int32)
+   endfunction julia_id_char
+
+   pure function julia_identifier(cp, s, e) result(t)
+   !< `TextEditorJulia::getIdentifier` (`a!=b` is `a != b`).
+   integer(int32), intent(in) :: cp(:) !< The line's code points.
+   integer(int32), intent(in) :: s, e  !< Start, end.
+   integer(int32)             :: t     !< End of the token.
+
+   t = s
+   if (t >= e) return
+   if (.not. julia_id_start(cp(t))) return
+   t = t + 1_int32
+   do while (t < e)
+      if (.not. julia_id_char(cp(t))) exit
+      if (cp(t) == 33_int32) then
+         if (t + 1_int32 < e) then
+            if (cp(t + 1) == 61_int32) exit
+         endif
+      endif
+      t = t + 1_int32
+   enddo
+   endfunction julia_identifier
+
+   pure function julia_follows_operand(cp, s) result(yes)
+   !< `followsOperand`: the character before `s` on the line ends an operand.
+   integer(int32), intent(in) :: cp(:) !< The line's code points.
+   integer(int32), intent(in) :: s     !< Position.
+   logical                    :: yes   !< After an operand.
+   integer(int32)             :: c     !< The character before.
+
+   yes = .false.
+   if (s <= 1_int32) return
+   c = cp(s - 1)
+   yes = julia_id_char(c) .or. c == 41_int32 .or. c == 93_int32 .or. c == 125_int32 .or. c == 39_int32 .or. c == 46_int32
+   endfunction julia_follows_operand
+
+   pure function julia_digit(c, base) result(yes)
+   !< `isDigit`.
+   integer(int32), intent(in) :: c, base !< Code point, base.
+   logical                    :: yes     !< A digit.
+
+   if (base == 16_int32) then
+      yes = (c >= 48_int32 .and. c <= 57_int32) .or. (c >= 97_int32 .and. c <= 102_int32) .or. &
+            (c >= 65_int32 .and. c <= 70_int32)
+   else
+      yes = c >= 48_int32 .and. c < 48_int32 + min(base, 10_int32)
+   endif
+   endfunction julia_digit
+
+   pure function julia_skip_digits(cp, i, e, base) result(t)
+   !< `skipDigits` (underscores between digits).
+   integer(int32), intent(in) :: cp(:)  !< The line's code points.
+   integer(int32), intent(in) :: i, e   !< From, end.
+   integer(int32), intent(in) :: base   !< Base.
+   integer(int32)             :: t      !< After the digits.
+
+   t = i
+   do while (t < e)
+      if (julia_digit(cp(t), base)) then
+         t = t + 1_int32
+      elseif (cp(t) == 95_int32) then
+         if (t + 1_int32 < e) then
+            if (julia_digit(cp(t + 1), base)) then
+               t = t + 1_int32
+               cycle
+            endif
+         endif
+         exit
+      else
+         exit
+      endif
+   enddo
+   endfunction julia_skip_digits
+
+   pure function julia_skip_exponent(cp, i, e, hex) result(t)
+   !< `skipExponent` (only with its digits).
+   integer(int32), intent(in) :: cp(:) !< The line's code points.
+   integer(int32), intent(in) :: i, e  !< From, end.
+   logical,        intent(in) :: hex   !< A hexadecimal float's.
+   integer(int32)             :: t     !< After the exponent.
+   integer(int32)             :: j     !< Position.
+   logical                    :: mark  !< An exponent's letter.
+
+   t = i
+   if (i >= e) return
+   if (hex) then
+      mark = cp(i) == 112_int32 .or. cp(i) == 80_int32
+   else
+      mark = cp(i) == 101_int32 .or. cp(i) == 69_int32 .or. cp(i) == 102_int32
+   endif
+   if (.not. mark) return
+   j = i + 1_int32
+   if (j < e) then
+      if (cp(j) == 43_int32 .or. cp(j) == 45_int32 .or. cp(j) == 8722_int32) j = j + 1_int32
+   endif
+   if (j < e) then
+      if (julia_digit(cp(j), 10_int32)) t = julia_skip_digits(cp, j, e, 10_int32)
+   endif
+   endfunction julia_skip_exponent
+
+   pure function julia_dottable(c) result(yes)
+   !< `isDottableOperator`.
+   integer(int32), intent(in) :: c   !< Code point.
+   logical                    :: yes !< A dottable operator.
+
+   yes = c == 33_int32 .or. c == 37_int32 .or. c == 38_int32 .or. c == 42_int32 .or. c == 43_int32 .or. &
+         c == 45_int32 .or. c == 47_int32 .or. c == 60_int32 .or. c == 61_int32 .or. c == 62_int32 .or. &
+         c == 92_int32 .or. c == 94_int32 .or. c == 124_int32 .or. c == 126_int32 .or. c == 247_int32 .or. c == 8722_int32
+   endfunction julia_dottable
+
+   pure function julia_number(cp, s, e) result(t)
+   !< `TextEditorJulia::getNumber`.
+   integer(int32), intent(in) :: cp(:) !< The line's code points.
+   integer(int32), intent(in) :: s, e  !< Start, end.
+   integer(int32)             :: t     !< End of the token.
+   integer(int32)             :: i, nx, base, digits, fr, ex !< Positions, base.
+
+   i = s
+   t = s
+   if (cp(i) == 46_int32) then
+      i = i + 1_int32
+      if (i < e) then
+         if (julia_digit(cp(i), 10_int32)) then
+            t = julia_skip_exponent(cp, julia_skip_digits(cp, i, e, 10_int32), e, .false.)
+            return
+         endif
+      endif
+      return
+   elseif (julia_digit(cp(i), 10_int32)) then
+      nx = i + 1_int32
+      if (based(i, nx)) then
+         if (cp(nx) == 120_int32) then
+            base = 16_int32
+         elseif (cp(nx) == 98_int32) then
+            base = 2_int32
+         else
+            base = 8_int32
+         endif
+         digits = nx + 1_int32
+         i = nx
+         if (digits < e) then
+            if (julia_digit(cp(digits), base)) then
+               i = julia_skip_digits(cp, digits, e, base)
+               if (base == 16_int32) then
+                  fr = i
+                  if (fr < e) then
+                     if (cp(fr) == 46_int32) fr = julia_skip_digits(cp, fr + 1_int32, e, 16_int32)
+                  endif
+                  ex = julia_skip_exponent(cp, fr, e, .true.)
+                  if (ex /= fr) i = ex
+               endif
+            endif
+         endif
+      else
+         i = julia_skip_digits(cp, i, e, 10_int32)
+         if (i < e) then
+            if (cp(i) == 46_int32) then
+               nx = i + 1_int32
+               if (nx >= e) then
+                  i = julia_skip_digits(cp, nx, e, 10_int32)
+               elseif (cp(nx) /= 46_int32 .and. .not. julia_dottable(cp(nx))) then
+                  i = julia_skip_digits(cp, nx, e, 10_int32)
+               endif
+            endif
+         endif
+         i = julia_skip_exponent(cp, i, e, .false.)
+      endif
+   else
+      return
+   endif
+   t = i
+   contains
+      pure function based(k, n) result(yes)
+      !< `*k == '0' && n < end && (*n == 'x' || *n == 'b' || *n == 'o')`.
+      integer(int32), intent(in) :: k, n !< Positions.
+      logical                    :: yes  !< A based number.
+
+      yes = .false.
+      if (cp(k) /= 48_int32 .or. n >= e) return
+      yes = cp(n) == 120_int32 .or. cp(n) == 98_int32 .or. cp(n) == 111_int32
+      endfunction based
+   endfunction julia_number
+
+   pure function julia_matches(cp, a, b, word) result(yes)
+   !< `matchesWord`: glyphs [a, b) spell `word` exactly.
+   integer(int32),   intent(in) :: cp(:) !< The line's code points.
+   integer(int32),   intent(in) :: a, b  !< Range.
+   character(len=*), intent(in) :: word  !< Word (ASCII).
+   logical                      :: yes   !< Spelt.
+   integer(int32)               :: k     !< Counter.
+
+   yes = b - a == len(word, int32)
+   if (.not. yes) return
+   do k = 1_int32, len(word, int32)
+      if (cp(a + k - 1_int32) /= iachar(word(k:k))) then
+         yes = .false.
+         return
+      endif
+   enddo
+   endfunction julia_matches
+
+   function julia_token(cp, s, e, color) result(t)
+   !< `TextEditorJulia::tokenize`: macros, symbols, `::`, `<:`, characters and the adjoint, commands, two-word keywords.
+   integer(int32), intent(in)    :: cp(:) !< The line's code points.
+   integer(int32), intent(in)    :: s, e  !< Start, end.
+   integer(int8),  intent(inout) :: color !< The token's colour.
+   integer(int32)                :: t     !< End of the token.
+   integer(int32)                :: i, c, we, se !< Positions, the first character.
+   character(len=6)              :: second !< The second word.
+
+   t = s
+   i = s
+   c = cp(i)
+   i = i + 1_int32
+   if (c == 64_int32) then
+      if (at(i, 46_int32)) then
+         i = i + 1_int32
+      else
+         i = julia_identifier(cp, i, e)
+      endif
+      if (i - s > 1_int32) then
+         color = COLOR_PREPROCESSOR
+         t = i
+      endif
+   elseif (c == 58_int32) then
+      if (at(i, 58_int32)) then
+         color = COLOR_PUNCTUATION
+         t = i + 1_int32
+      elseif (.not. julia_follows_operand(cp, s)) then
+         i = julia_identifier(cp, i, e)
+         if (i - s > 1_int32) then
+            color = COLOR_STRING
+            t = i
+         endif
+      endif
+   elseif ((c == 60_int32 .or. c == 62_int32) .and. at(i, 58_int32)) then
+      color = COLOR_PUNCTUATION
+      t = i + 1_int32
+   elseif (c == 39_int32) then
+      if (julia_follows_operand(cp, s)) then
+         color = COLOR_PUNCTUATION
+         t = i
+         return
+      elseif (at(i, 92_int32)) then
+         i = i + 1_int32
+         if (i < e) i = i + 1_int32
+         do while (i < e)
+            if (cp(i) == 39_int32) exit
+            i = i + 1_int32
+         enddo
+         if (i < e) then
+            color = COLOR_STRING
+            t = i + 1_int32
+            return
+         endif
+      elseif (i < e .and. .not. at(i, 39_int32)) then
+         i = i + 1_int32
+         if (at(i, 39_int32)) then
+            color = COLOR_STRING
+            t = i + 1_int32
+            return
+         endif
+      endif
+      color = COLOR_PUNCTUATION
+      t = s + 1_int32
+   elseif (c == 96_int32) then
+      do while (i < e)
+         if (cp(i) == 96_int32) exit
+         i = i + 1_int32
+         if (cp(i - 1) == 92_int32 .and. i < e) i = i + 1_int32
+      enddo
+      color = COLOR_STRING
+      if (i < e) then
+         t = i + 1_int32
+      else
+         t = i
+      endif
+   elseif (c == 97_int32 .or. c == 112_int32 .or. c == 109_int32) then
+      we = julia_identifier(cp, s, e)
+      second = ''
+      if (julia_matches(cp, s, we, 'abstract') .or. julia_matches(cp, s, we, 'primitive')) then
+         second = 'type'
+      elseif (julia_matches(cp, s, we, 'mutable')) then
+         second = 'struct'
+      endif
+      if (len_trim(second) > 0) then
+         i = we
+         do while (i < e)
+            if (cp(i) /= 32_int32 .and. cp(i) /= 9_int32) exit
+            i = i + 1_int32
+         enddo
+         if (i /= we) then
+            se = julia_identifier(cp, i, e)
+            if (julia_matches(cp, i, se, trim(second))) then
+               color = COLOR_DECLARATION
+               t = se
+            endif
+         endif
+      endif
+   endif
+   contains
+      pure function at(k, v) result(yes)
+      !< Glyph k is inside the line and is v (`k < end && *k == v`).
+      integer(int32), intent(in) :: k, v !< Position, code point.
+      logical                    :: yes  !< Equal.
+
+      yes = .false.
+      if (k < e) yes = cp(k) == v
+      endfunction at
+   endfunction julia_token
 
    subroutine colorize_reset(doc)
    !< Every glyph text-coloured, every line's state in text (no language).

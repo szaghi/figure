@@ -299,7 +299,7 @@ def implot_ref() -> list[str]:
 
 
 def editor_generated() -> list[str]:
-    """Check the Fortran code editor's generated modules (gen_editor_tables.py, gen_editor_path.py; szaghi/figure#15 P16).
+    """Check the Fortran code editor's generated modules (gen_editor_*.py; szaghi/figure#15 P16).
 
     Returns
     -------
@@ -307,6 +307,7 @@ def editor_generated() -> list[str]:
         The discrepancies.
     """
     sys.path.insert(0, str(ROOT / "scripts"))
+    import gen_editor_languages  # noqa: PLC0415 (a sibling script)
     import gen_editor_path  # noqa: PLC0415 (a sibling script)
     import gen_editor_tables  # noqa: PLC0415 (a sibling script)
 
@@ -314,6 +315,7 @@ def editor_generated() -> list[str]:
     for script, target, generate in (
         ("gen_editor_tables.py", gen_editor_tables.OUT, gen_editor_tables.generate),
         ("gen_editor_path.py", gen_editor_path.TARGET, gen_editor_path.generate),
+        ("gen_editor_languages.py", gen_editor_languages.OUT, gen_editor_languages.generate),
     ):
         if not target.is_file() or target.read_text(encoding="utf-8") != generate():
             errors.append(f"{target.relative_to(ROOT).as_posix()} is not current: run python3 scripts/{script}")
