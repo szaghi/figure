@@ -21,17 +21,35 @@ use, intrinsic :: iso_fortran_env, only : int8, int32, int64
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK, fig_pop_font, fig_push_font
 use figure_cimgui_enums, only : ImGuiChildFlags_Borders, ImGuiCol_ChildBg, ImGuiCol_FrameBg, ImGuiCol_PopupBg, &
                                 ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiCol_TextSelectedBg, ImGuiCol_WindowBg, &
-                                ImGuiStyleVar_ItemSpacing, ImGuiWindowFlags_HorizontalScrollbar, ImGuiWindowFlags_NoMove
-use figure_code_document, only : code_pos, cursor_has_selection, cursor_selection_end, cursor_selection_start,         &
-                                 cursors_any_selection, cursors_update, pos, pos_le, pos_lt, COLOR_BACKGROUND,         &
+                                ImGuiStyleVar_ItemSpacing, ImGuiWindowFlags_HorizontalScrollbar, ImGuiWindowFlags_NoMove, &
+                                ImGuiInputFlags_Repeat, ImGuiMod_Alt, ImGuiMod_Ctrl, ImGuiMod_Shift, ImGuiMod_Super,      &
+                                ImGuiKey_A, ImGuiKey_Backspace, ImGuiKey_C, ImGuiKey_D, ImGuiKey_Delete,                  &
+                                ImGuiKey_DownArrow, ImGuiKey_End, ImGuiKey_Enter, ImGuiKey_Escape, ImGuiKey_F,            &
+                                ImGuiKey_G, ImGuiKey_Home, ImGuiKey_Insert, ImGuiKey_K, ImGuiKey_KeypadEnter, ImGuiKey_L,  &
+                                ImGuiKey_LeftArrow, ImGuiKey_LeftBracket, ImGuiKey_PageDown, ImGuiKey_PageUp,             &
+                                ImGuiKey_RightArrow, ImGuiKey_RightBracket, ImGuiKey_Slash, ImGuiKey_Space, ImGuiKey_Tab, &
+                                ImGuiKey_UpArrow, ImGuiKey_V, ImGuiKey_X, ImGuiKey_Y, ImGuiKey_Z,                         &
+                                ImGuiMouseCursor_TextInput
+use figure_code_document, only : code_cursor, code_pos, cursor_has_selection, cursor_selection_end, &
+                                 cursor_selection_start, &
+                                 cursors_any_selection, cursors_update, pos, pos_le, pos_lt, pos_eq, cursor_update,    &
+                                 cursor_update_keep, cursor_reset_to_start, cursor_reset_to_end, cursor_grow,          &
+                                 cursors_add, cursors_set, cursors_clear_additional, cursors_adjust_insert,            &
+                                 cursors_adjust_delete, doc_left, doc_right, doc_cp, doc_bottom, doc_end_of_line,      &
+                                 doc_next_line, doc_normalize, doc_section_text, doc_find_text, doc_whole_word,        &
+                                 doc_find_word_start, doc_find_word_end, COLOR_BACKGROUND,         &
                                  COLOR_BRACKET_ACTIVE, COLOR_BRACKET_BACKGROUND, COLOR_BRACKET_ERROR,                  &
                                  COLOR_BRACKET_LEVEL1, COLOR_BRACKET_LEVEL2, COLOR_BRACKET_LEVEL3, COLOR_CURSOR,       &
                                  COLOR_CURRENT_LINE, COLOR_CURRENT_LINE_BORDER, COLOR_CURRENT_LINE_NUMBER,              &
                                  COLOR_LINE_NUMBER, COLOR_PUNCTUATION, COLOR_SELECTION, COLOR_TEXT, COLOR_WHITESPACE
 use figure_code_editor, only : code_editor, editor_get, fail, line_severity, marker_tooltip, not_found, str, &
-                               INVALID, N_SEVERITY, SEVERITY_RGB
-use figure_code_language, only : colorize, lang_indentation_blocks
-use figure_code_unicode, only : cp_glyph_width, cp_is_bracket_closer, cp_is_bracket_opener, cp_to_pair_opener
+                               INVALID, N_SEVERITY, SEVERITY_RGB, make_cursor_visible, start_transaction,     &
+                               end_transaction, insert_text, delete_text, delete_from_all_cursors,             &
+                               insert_into_all_cursors, editor_undo_, editor_redo_, ac_cancel,                 &
+                               select_next_occurrence, select_all_occurrences, replace_in_current_cursor
+use figure_code_language, only : colorize, lang_comment_single, lang_indentation_blocks
+use figure_code_unicode, only : cp_glyph_width, cp_is_bracket_closer, cp_is_bracket_opener, cp_is_white_space, &
+                                cp_is_word, cp_to_pair_closer, cp_to_pair_opener, cp_write
 use figure_core_text, only : ct_begin_child, ct_begin_popup, ct_begin_tooltip, ct_char, ct_circle_filled, ct_clip_rect, &
                              ct_color_u32, ct_cursor_screen_pos, ct_end_child, ct_end_popup, ct_end_tooltip,            &
                              ct_float4_to_u32, ct_font_size, ct_hovering_rect, ct_item_rect, ct_line,                   &
@@ -40,7 +58,11 @@ use figure_core_text, only : ct_begin_child, ct_begin_popup, ct_begin_tooltip, c
                              ct_push_style_var_vec2, ct_rect, ct_rect_filled, ct_scroll, ct_set_cursor_screen_pos,      &
                              ct_set_next_window_content_size, ct_set_next_window_focus, ct_set_scroll_x,                &
                              ct_set_scroll_y, ct_state, ct_style_color, ct_text, ct_text_unformatted, ct_text_width,    &
-                             ct_window_focused, ct_window_pos
+                             ct_window_focused, ct_window_pos, ct_shortcut, ct_key_pressed, ct_key_down,             &
+                             ct_want_keyboard, ct_mouse_pos, ct_mouse_down, ct_mouse_clicked,                        &
+                             ct_mouse_double_clicked, ct_mouse_released, ct_mouse_dragging, ct_mouse_drag_delta,     &
+                             ct_reset_mouse_drag_delta, ct_set_mouse_cursor, ct_time, ct_window_size, ct_set_clipboard, &
+                             ct_clipboard, ct_chars, ct_ime, ct_window_hovered
 
 implicit none
 private
@@ -714,9 +736,9 @@ contains
       e%text_h = e%visible_h
       call update_state(e, unused)
       call handle_scrolling(e)
-      ! the keys (a later step)
+      call handle_keys(e)
       call update_state(e, changed)
-      ! the mouse (a later step)
+      call handle_mouse(e)
       call ct_scroll(sx, sy)
       e%first_row = int(floor(sy / e%glyph_h), int32)
       e%last_row = min(int(ceiling((sy + e%text_h) / e%glyph_h), int32), e%ts_rows - 1_int32)
@@ -1048,6 +1070,1124 @@ contains
    if (ct_popup_open('TextHoverPopup')) continue
    if (e%ac_active) continue
    endsubroutine render_popups
+
+   ! ---- moves and edits the keys and the mouse make (szaghi/figure#15 P16 step 12) ------------------------------------
+   subroutine move_up(e, rows, sel)
+   !< `moveUp` (rows < 0: the fork's size_t wrapped, the top).
+   type(code_editor), intent(inout) :: e    !< Editor.
+   integer(int32),    intent(in)    :: rows !< Rows.
+   logical,           intent(in)    :: sel  !< Extend the selection.
+   integer(int32)                   :: k, r, c !< Cursor, visual position.
+
+   do k = 1_int32, e%cursors%n
+      call vis_pos(e, e%cursors%c(k)%end, r, c)
+      if (e%navigating_vertically) then
+         c = e%cursors%c(k)%preferred
+      else
+         e%cursors%c(k)%preferred = c
+      endif
+      if (rows < 0_int32 .or. rows > r) then
+         r = 0_int32
+      else
+         r = r - rows
+      endif
+      call normalize_vis(e, r, c)
+      call cursor_update_keep(e%cursors%c(k), doc_pos_of(e, r, c), sel)
+   enddo
+   call make_cursor_visible(e)
+   e%navigating_vertically = .true.
+   endsubroutine move_up
+
+   subroutine move_down(e, rows, sel)
+   !< `moveDown` (a row past the end, or wrapped below 0 as the fork's size_t, is the last).
+   type(code_editor), intent(inout) :: e    !< Editor.
+   integer(int32),    intent(in)    :: rows !< Rows.
+   logical,           intent(in)    :: sel  !< Extend the selection.
+   integer(int32)                   :: k, r, c !< Cursor, visual position.
+
+   do k = 1_int32, e%cursors%n
+      call vis_pos(e, e%cursors%c(k)%end, r, c)
+      if (e%navigating_vertically) then
+         c = e%cursors%c(k)%preferred
+      else
+         e%cursors%c(k)%preferred = c
+      endif
+      r = r + rows
+      if (r < 0_int32) r = huge(r)
+      call normalize_vis(e, r, c)
+      call cursor_update_keep(e%cursors%c(k), doc_pos_of(e, r, c), sel)
+   enddo
+   call make_cursor_visible(e)
+   e%navigating_vertically = .true.
+   endsubroutine move_down
+
+   subroutine move_left(e, sel, word)
+   !< `moveLeft`.
+   type(code_editor), intent(inout) :: e         !< Editor.
+   logical,           intent(in)    :: sel, word !< Extend the selection, by words.
+   integer(int32)                   :: k         !< Cursor.
+
+   do k = 1_int32, e%cursors%n
+      if (cursor_has_selection(e%cursors%c(k)) .and. .not. sel .and. .not. word) then
+         call cursor_reset_to_start(e%cursors%c(k))
+      else
+         call cursor_update_keep(e%cursors%c(k), doc_left(e%doc, e%cursors%c(k)%end, word), sel)
+      endif
+   enddo
+   call make_cursor_visible(e)
+   e%navigating_vertically = .false.
+   endsubroutine move_left
+
+   subroutine move_right(e, sel, word)
+   !< `moveRight`.
+   type(code_editor), intent(inout) :: e         !< Editor.
+   logical,           intent(in)    :: sel, word !< Extend the selection, by words.
+   integer(int32)                   :: k         !< Cursor.
+
+   do k = 1_int32, e%cursors%n
+      if (cursor_has_selection(e%cursors%c(k)) .and. .not. sel .and. .not. word) then
+         call cursor_reset_to_end(e%cursors%c(k))
+      else
+         call cursor_update_keep(e%cursors%c(k), doc_right(e%doc, e%cursors%c(k)%end, word), sel)
+      endif
+   enddo
+   call make_cursor_visible(e)
+   e%navigating_vertically = .false.
+   endsubroutine move_right
+
+   subroutine move_to(e, p, sel)
+   !< `moveTo`.
+   type(code_editor), intent(inout) :: e   !< Editor.
+   type(code_pos),    intent(in)    :: p   !< Position.
+   logical,           intent(in)    :: sel !< Extend the selection.
+
+   call cursors_clear_additional(e%cursors, .false.)
+   call cursor_update_keep(e%cursors%c(e%cursors%current + 1), p, sel)
+   call make_cursor_visible(e)
+   e%navigating_vertically = .false.
+   endsubroutine move_to
+
+   subroutine add_next_occurrence(e, whole)
+   !< `addNextOccurrence`.
+   type(code_editor), intent(inout) :: e     !< Editor.
+   logical,           intent(in)    :: whole !< Whole words.
+   type(code_pos)                   :: a, b, s, t !< The current selection, the occurrence.
+   logical                          :: found !< Found.
+
+   a = cursor_selection_start(e%cursors%c(e%cursors%current + 1))
+   b = cursor_selection_end(e%cursors%c(e%cursors%current + 1))
+   call doc_find_text(e%doc, b, doc_section_text(e%doc, a, b), .true., whole, found, s, t)
+   if (found) call cursors_add(e%cursors, s, t)
+   endsubroutine add_next_occurrence
+
+   subroutine select_all_of_current(e, whole)
+   !< `selectAllOccurrences`: the current selection's text, everywhere.
+   type(code_editor), intent(inout) :: e     !< Editor.
+   logical,           intent(in)    :: whole !< Whole words.
+   type(code_pos)                   :: a, b  !< The current selection.
+
+   a = cursor_selection_start(e%cursors%c(e%cursors%current + 1))
+   b = cursor_selection_end(e%cursors%c(e%cursors%current + 1))
+   call select_all_occurrences(e, doc_section_text(e%doc, a, b), .true., whole)
+   endsubroutine select_all_of_current
+
+   pure function enclosing_both(e, a, b) result(k)
+   !< `getEnclosingBrackets(first, last)`.
+   type(code_editor), intent(in) :: e    !< Editor.
+   type(code_pos),    intent(in) :: a, b !< First, last.
+   integer(int32)                :: k    !< Pair (0 none).
+   integer(int32)                :: j    !< Counter.
+
+   k = 0_int32
+   do j = 1_int32, e%nb
+      if (pos_lt(a, e%br_start(j))) exit
+      if (pos_lt(e%br_start(j), a) .and. pos_le(a, e%br_end(j)) .and. pos_lt(e%br_start(j), b) .and. &
+          pos_le(b, e%br_end(j))) k = j
+   enddo
+   endfunction enclosing_both
+
+   pure function inner_brackets(e, a, b) result(k)
+   !< `getInnerBrackets(first, last)`.
+   type(code_editor), intent(in) :: e     !< Editor.
+   type(code_pos),    intent(in) :: a, b  !< First, last.
+   integer(int32)                :: k     !< Pair (0 none).
+   integer(int32)                :: outer, j !< Enclosing pair, counter.
+
+   k = 0_int32
+   outer = enclosing_both(e, a, b)
+   if (outer == 0_int32) return
+   do j = outer + 1_int32, e%nb
+      if (e%br_level(j) <= e%br_level(outer)) exit
+      if (e%br_level(j) == e%br_level(outer) + 1_int32 .and. pos_lt(a, e%br_start(j)) .and. &
+          pos_lt(e%br_end(j), b)) then
+         k = j
+         exit
+      endif
+   enddo
+   endfunction inner_brackets
+
+   subroutine grow_selections(e)
+   !< `growSelections`.
+   type(code_editor), intent(inout) :: e     !< Editor.
+   type(code_pos)                   :: a, b  !< A selection.
+   integer(int32)                   :: k, j, sc, ec !< Cursor, pair, code points.
+
+   do k = 1_int32, e%cursors%n
+      if (cursor_has_selection(e%cursors%c(k))) then
+         a = cursor_selection_start(e%cursors%c(k))
+         b = cursor_selection_end(e%cursors%c(k))
+         sc = doc_cp(e%doc, doc_left(e%doc, a, .false.))
+         ec = doc_cp(e%doc, b)
+         if (cp_is_bracket_opener(sc) .and. ec == cp_to_pair_closer(sc)) then
+            call cursor_update(e%cursors%c(k), doc_left(e%doc, a, .false.), doc_right(e%doc, b, .false.))
+         else
+            j = enclosing_both(e, a, b)
+            if (j > 0_int32) call cursor_update(e%cursors%c(k), doc_right(e%doc, e%br_start(j), .false.), e%br_end(j))
+         endif
+      else
+         b = cursor_selection_end(e%cursors%c(k))
+         call cursor_update(e%cursors%c(k), doc_find_word_start(e%doc, b, .false.), doc_find_word_end(e%doc, b, .false.))
+      endif
+   enddo
+   endsubroutine grow_selections
+
+   subroutine shrink_selections(e)
+   !< `shrinkSelections`.
+   type(code_editor), intent(inout) :: e     !< Editor.
+   type(code_pos)                   :: a, b  !< A selection.
+   integer(int32)                   :: k, j, sc, ec !< Cursor, pair, code points.
+
+   do k = 1_int32, e%cursors%n
+      if (.not. cursor_has_selection(e%cursors%c(k))) cycle
+      a = cursor_selection_start(e%cursors%c(k))
+      b = cursor_selection_end(e%cursors%c(k))
+      sc = doc_cp(e%doc, a)
+      ec = doc_cp(e%doc, doc_left(e%doc, b, .false.))
+      if (cp_is_bracket_opener(sc) .and. ec == cp_to_pair_closer(sc)) then
+         call cursor_update(e%cursors%c(k), doc_right(e%doc, a, .false.), doc_left(e%doc, b, .false.))
+      else
+         j = inner_brackets(e, a, b)
+         if (j > 0_int32) call cursor_update(e%cursors%c(k), e%br_start(j), doc_right(e%doc, e%br_end(j), .false.))
+      endif
+   enddo
+   endsubroutine shrink_selections
+
+   function line_text(e, l) result(t)
+   !< `getLineText`.
+   type(code_editor), intent(in) :: e !< Editor.
+   integer(int32),    intent(in) :: l !< Line, from 0.
+   character(len=:), allocatable :: t !< Text.
+
+   t = doc_section_text(e%doc, pos(l, 0_int32), pos(l, e%doc%lines(l + 1)%n))
+   endfunction line_text
+
+   subroutine copy(e)
+   !< `copy`: the selections (or the cursors' lines) to the clipboard.
+   type(code_editor), intent(inout) :: e !< Editor.
+   character(len=:), allocatable    :: t !< Text.
+   integer(int32)                   :: k !< Cursor.
+
+   t = ''
+   if (cursors_any_selection(e%cursors)) then
+      do k = 1_int32, e%cursors%n
+         if (len(t) > 0) t = t//achar(10)
+         if (cursor_has_selection(e%cursors%c(k))) then
+            t = t//doc_section_text(e%doc, cursor_selection_start(e%cursors%c(k)), cursor_selection_end(e%cursors%c(k)))
+         else
+            t = t//line_text(e, start_line(e%cursors%c(k)))
+         endif
+      enddo
+   else
+      do k = 1_int32, e%cursors%n
+         t = t//line_text(e, start_line(e%cursors%c(k)))//achar(10)
+      enddo
+   endif
+   call ct_set_clipboard(t)
+   endsubroutine copy
+
+   subroutine cut(e)
+   !< `cut`.
+   type(code_editor), intent(inout) :: e !< Editor.
+
+   call copy(e)
+   call start_transaction(e, .true.)
+   call delete_from_all_cursors(e)
+   call cursor_reset_to_start(e%cursors%c(e%cursors%current + 1))
+   call end_transaction(e)
+   endsubroutine cut
+
+   subroutine paste(e)
+   !< `paste`.
+   type(code_editor), intent(inout) :: e !< Editor.
+   character(len=:), allocatable    :: t !< Clipboard.
+
+   if (.not. ct_clipboard(t)) return
+   call start_transaction(e, .true.)
+   call insert_into_all_cursors(e, t)
+   call end_transaction(e)
+   endsubroutine paste
+
+   subroutine handle_backspace(e, word)
+   !< `handleBackspace`.
+   type(code_editor), intent(inout) :: e    !< Editor.
+   logical,           intent(in)    :: word !< By words.
+   type(code_pos)                   :: a, b !< Deleted.
+   integer(int32)                   :: k    !< Cursor.
+
+   call start_transaction(e, .false.)
+   do k = 1_int32, e%cursors%n
+      if (cursor_has_selection(e%cursors%c(k))) then
+         a = cursor_selection_start(e%cursors%c(k))
+      else
+         a = doc_left(e%doc, cursor_selection_start(e%cursors%c(k)), word)
+      endif
+      b = cursor_selection_end(e%cursors%c(k))
+      call delete_text(e, a, b)
+      call cursor_update(e%cursors%c(k), a, a)
+      call cursors_adjust_delete(e%cursors, k - 1_int32, a, b, .false.)
+   enddo
+   call end_transaction(e)
+   endsubroutine handle_backspace
+
+   subroutine handle_delete(e, word)
+   !< `handleDelete`.
+   type(code_editor), intent(inout) :: e    !< Editor.
+   logical,           intent(in)    :: word !< By words.
+   type(code_pos)                   :: a, b !< Deleted.
+   integer(int32)                   :: k    !< Cursor.
+
+   call start_transaction(e, .false.)
+   do k = 1_int32, e%cursors%n
+      a = cursor_selection_start(e%cursors%c(k))
+      if (cursor_has_selection(e%cursors%c(k))) then
+         b = cursor_selection_end(e%cursors%c(k))
+      else
+         b = doc_right(e%doc, cursor_selection_end(e%cursors%c(k)), word)
+      endif
+      call delete_text(e, a, b)
+      call cursor_update(e%cursors%c(k), a, a)
+      call cursors_adjust_delete(e%cursors, k - 1_int32, a, b, .false.)
+   enddo
+   call end_transaction(e)
+   endsubroutine handle_delete
+
+   subroutine remove_selected_lines(e)
+   !< `removeSelectedLines`.
+   type(code_editor), intent(inout) :: e    !< Editor.
+   type(code_pos)                   :: a, b !< Deleted.
+   integer(int32)                   :: k    !< Cursor.
+
+   call start_transaction(e, .true.)
+   do k = 1_int32, e%cursors%n
+      a = pos(start_line(e%cursors%c(k)), 0_int32)
+      b = cursor_selection_end(e%cursors%c(k))
+      if (b%i /= 0_int32) b = doc_next_line(e%doc, b)
+      call delete_text(e, a, b)
+      call cursor_update(e%cursors%c(k), a, a)
+      call cursors_adjust_delete(e%cursors, k - 1_int32, a, b, .false.)
+   enddo
+   call end_transaction(e)
+   endsubroutine remove_selected_lines
+
+   subroutine insert_line(e, below)
+   !< `insertLineAbove`, `insertLineBelow`.
+   type(code_editor), intent(inout) :: e     !< Editor.
+   logical,           intent(in)    :: below !< Below.
+   type(code_pos)                   :: a, b  !< Insert.
+   integer(int32)                   :: k     !< Cursor.
+
+   call start_transaction(e, .true.)
+   do k = 1_int32, e%cursors%n
+      if (below) then
+         a = cursor_selection_end(e%cursors%c(k))
+         if (a%i /= 0_int32) a = doc_next_line(e%doc, a)
+      else
+         a = pos(start_line(e%cursors%c(k)), 0_int32)
+      endif
+      call insert_text(e, a, achar(10), b)
+      call cursor_update(e%cursors%c(k), a, a)
+      call cursors_adjust_insert(e%cursors, k - 1_int32, a, b, .false.)
+   enddo
+   call end_transaction(e)
+   endsubroutine insert_line
+
+   subroutine indent_lines(e, deindent)
+   !< `indentLines`, `deindentLines`.
+   type(code_editor), intent(inout) :: e        !< Editor.
+   logical,           intent(in)    :: deindent !< Deindent.
+   type(code_pos)                   :: a, b, s, t !< The cursor's selection, an edit.
+   integer(int32)                   :: k, l, column, index !< Cursor, line, blanks.
+
+   call start_transaction(e, .true.)
+   do k = 1_int32, e%cursors%n
+      a = cursor_selection_start(e%cursors%c(k))
+      b = cursor_selection_end(e%cursors%c(k))
+      do l = a%l, b%l
+         if (cursor_has_selection(e%cursors%c(k)) .and. pos_eq(pos(l, 0_int32), b)) cycle
+         if (e%doc%lines(l + 1)%n == 0_int32) cycle
+         if (.not. deindent) then
+            s = pos(l, 0_int32)
+            call insert_text(e, s, achar(9), t)
+            call cursors_adjust_insert(e%cursors, k - 1_int32, s, t, .true.)
+         else
+            column = 0_int32
+            index = 0_int32
+            do while (column < e%tab_size .and. index < e%doc%lines(l + 1)%n)
+               if (e%doc%lines(l + 1)%cp(index + 1) /= 32_int32 .and. e%doc%lines(l + 1)%cp(index + 1) /= 9_int32) exit
+               column = column + e%doc%lines(l + 1)%cols(index + 1)
+               index = index + 1_int32
+            enddo
+            if (index /= 0_int32) then
+               s = pos(l, 0_int32)
+               t = pos(l, index)
+               call delete_text(e, s, t)
+               call cursors_adjust_delete(e%cursors, k - 1_int32, s, t, .true.)
+            endif
+         endif
+      enddo
+   enddo
+   call end_transaction(e)
+   endsubroutine indent_lines
+
+   subroutine move_lines(e, down)
+   !< `moveUpLines`, `moveDownLines`.
+   type(code_editor), intent(inout) :: e    !< Editor.
+   logical,           intent(in)    :: down !< Down.
+   type(code_pos)                   :: a, b, ds, de, is, ie !< Selection, deleted, inserted.
+   character(len=:), allocatable    :: t    !< The lines.
+   integer(int32)                   :: k    !< Cursor.
+
+   if (down) then
+      if (start_line(e%cursors%c(e%cursors%n)) == e%doc%n - 1_int32) return
+   else
+      if (start_line(e%cursors%c(1)) == 0_int32) return
+   endif
+   call start_transaction(e, .true.)
+   do k = 1_int32, e%cursors%n
+      a = cursor_selection_start(e%cursors%c(k))
+      b = cursor_selection_end(e%cursors%c(k))
+      ds = pos(a%l, 0_int32)
+      de = b
+      if (b%i /= 0_int32) de = doc_next_line(e%doc, b)
+      t = doc_section_text(e%doc, ds, de)
+      call delete_text(e, ds, de)
+      call cursors_adjust_delete(e%cursors, k - 1_int32, ds, de, .false.)
+      if (down) then
+         is = doc_next_line(e%doc, ds)
+      else
+         is = pos(ds%l - 1_int32, 0_int32)
+      endif
+      call insert_text(e, is, t, ie)
+      call cursors_adjust_insert(e%cursors, k - 1_int32, is, ie, .false.)
+      if (down) then
+         call cursor_update(e%cursors%c(k), pos(a%l + 1_int32, a%i), pos(b%l + 1_int32, b%i))
+      else
+         call cursor_update(e%cursors%c(k), pos(a%l - 1_int32, a%i), pos(b%l - 1_int32, b%i))
+      endif
+   enddo
+   call end_transaction(e)
+   endsubroutine move_lines
+
+   subroutine toggle_comments(e)
+   !< `toggleComments` (the language's line comment, compared byte by byte as the fork does).
+   type(code_editor), intent(inout) :: e       !< Editor.
+   character(len=:), allocatable    :: comment !< Line comment.
+   type(code_pos)                   :: a, b, s, t !< Selection, an edit.
+   integer(int32)                   :: k, l, start, i, eoc, n !< Cursor, line, positions, size.
+
+   comment = lang_comment_single(e%language)
+   call start_transaction(e, .true.)
+   do k = 1_int32, e%cursors%n
+      a = cursor_selection_start(e%cursors%c(k))
+      b = cursor_selection_end(e%cursors%c(k))
+      do l = a%l, b%l
+         if (cursor_has_selection(e%cursors%c(k)) .and. pos_eq(pos(l, 0_int32), b)) cycle
+         n = e%doc%lines(l + 1)%n
+         if (n == 0_int32) cycle
+         start = 0_int32
+         do while (start < n)
+            if (.not. cp_is_white_space(e%doc%lines(l + 1)%cp(start + 1))) exit
+            start = start + 1_int32
+         enddo
+         i = 0_int32
+         do while (start + i < n .and. i < len(comment, int32))
+            if (e%doc%lines(l + 1)%cp(start + i + 1) /= byte_cp(comment(i + 1:i + 1))) exit
+            i = i + 1_int32
+         enddo
+         if (i == len(comment, int32)) then
+            s = pos(l, start)
+            eoc = start + i
+            if (eoc < n - 1_int32) then
+               if (e%doc%lines(l + 1)%cp(eoc + 1) == 32_int32) eoc = eoc + 1_int32
+            endif
+            t = pos(l, eoc)
+            call delete_text(e, s, t)
+            call cursors_adjust_delete(e%cursors, k - 1_int32, s, t, .true.)
+         else
+            s = pos(l, start)
+            call insert_text(e, s, comment//' ', t)
+            call cursors_adjust_insert(e%cursors, k - 1_int32, s, t, .true.)
+         endif
+      enddo
+   enddo
+   call end_transaction(e)
+   endsubroutine toggle_comments
+
+   pure function byte_cp(c) result(cp)
+   !< `static_cast<ImWchar>(char)`: a byte as the fork's comparison sees it (signed char, 16 bits).
+   character(len=1), intent(in) :: c  !< Byte.
+   integer(int32)               :: cp !< Value.
+
+   cp = iachar(c)
+   if (cp >= 128_int32) cp = cp + 65280_int32
+   endfunction byte_cp
+
+   subroutine auto_indent(e)
+   !< `autoIndentAllCursors`.
+   type(code_editor), intent(inout) :: e      !< Editor.
+   type(code_pos)                   :: a, b   !< Positions.
+   integer(int32)                   :: k, index, prev, next, i, m, cursor_index !< Counters, code points.
+   character(len=:), allocatable    :: blanks, ins !< Leading white space, the insert.
+   character(len=4)                 :: u      !< A code point's bytes.
+
+   do k = 1_int32, e%cursors%n
+      a = cursor_selection_start(e%cursors%c(k))
+      if (cursor_has_selection(e%cursors%c(k))) then
+         b = cursor_selection_end(e%cursors%c(k))
+         call delete_text(e, a, b)
+         call cursors_adjust_delete(e%cursors, k - 1_int32, a, b, .false.)
+      endif
+      index = a%i
+      prev = 0_int32
+      next = 0_int32
+      if (index > 0_int32) prev = e%doc%lines(a%l + 1)%cp(index)
+      if (index < e%doc%lines(a%l + 1)%n) next = e%doc%lines(a%l + 1)%cp(index + 1)
+      if (cp_is_white_space(next)) then
+         do while (index < e%doc%lines(a%l + 1)%n)
+            if (.not. cp_is_white_space(e%doc%lines(a%l + 1)%cp(index + 1))) exit
+            index = index + 1_int32
+         enddo
+         b = pos(a%l, index)
+         call delete_text(e, a, b)
+         call cursors_adjust_delete(e%cursors, k - 1_int32, a, b, .false.)
+      endif
+      blanks = ''
+      do i = 1_int32, e%doc%lines(a%l + 1)%n
+         if (.not. cp_is_white_space(e%doc%lines(a%l + 1)%cp(i))) exit
+         call cp_write(e%doc%lines(a%l + 1)%cp(i), u, m)
+         blanks = blanks//u(1:m)
+      enddo
+      ins = achar(10)//blanks
+      cursor_index = len(blanks, int32)
+      if (prev == 123_int32 .or. prev == 91_int32) then
+         if (e%spaces_on_tabs) then
+            ins = ins//repeat(' ', e%tab_size)
+            cursor_index = cursor_index + e%tab_size
+         else
+            ins = ins//achar(9)
+            cursor_index = cursor_index + 1_int32
+         endif
+         if ((prev == 123_int32 .and. next == 125_int32) .or. (prev == 91_int32 .and. next == 93_int32)) &
+            ins = ins//achar(10)//blanks
+      endif
+      call insert_text(e, a, ins, b)
+      call cursors_adjust_insert(e%cursors, k - 1_int32, a, b, .false.)
+      call cursor_update(e%cursors%c(k), pos(a%l + 1_int32, cursor_index), pos(a%l + 1_int32, cursor_index))
+   enddo
+   endsubroutine auto_indent
+
+   subroutine handle_character(e, ch)
+   !< `handleCharacter` (FIGURE completes no pairs: the glue turns it off).
+   type(code_editor), intent(inout) :: e  !< Editor.
+   integer(int32),    intent(in)    :: ch !< Code point.
+   type(code_pos)                   :: a, b !< A glyph overwritten.
+   integer(int32)                   :: k, m !< Cursor, bytes.
+   character(len=4)                 :: u  !< Its bytes.
+
+   call start_transaction(e, .false.)
+   if (.not. e%overwrite .and. e%auto_indent .and. ch == 10_int32) then
+      call auto_indent(e)
+   else
+      if (e%overwrite) then
+         do k = 1_int32, e%cursors%n
+            if (cursor_has_selection(e%cursors%c(k))) cycle
+            a = cursor_selection_start(e%cursors%c(k))
+            if (pos_eq(a, doc_end_of_line(e%doc, a))) cycle
+            b = doc_right(e%doc, a, .false.)
+            call delete_text(e, a, b)
+            call cursors_adjust_delete(e%cursors, k - 1_int32, a, b, .false.)
+         enddo
+      endif
+      call cp_write(ch, u, m)
+      call insert_into_all_cursors(e, u(1:m))
+   endif
+   call end_transaction(e)
+   if (e%cursors%n == 1_int32) then
+      if (ac_start_typing(e, ch)) call make_cursor_visible(e)
+   endif
+   endsubroutine handle_character
+
+   function ac_word_character(e, cp) result(yes)
+   !< `AutoComplete::isWordCharacter` (the glue's extra word characters: blank and dash for key = value).
+   type(code_editor), intent(in) :: e   !< Editor.
+   integer(int32),    intent(in) :: cp  !< Code point.
+   logical                       :: yes !< Part of a search term.
+
+   yes = cp_is_word(cp)
+   if (.not. yes .and. e%ac_word_blank) yes = cp == 32_int32 .or. cp == 45_int32
+   endfunction ac_word_character
+
+   function ac_start_typing(e, ch) result(started)
+   !< `AutoComplete::startTyping` (no trigger characters: the glue sets none).
+   type(code_editor), intent(inout) :: e       !< Editor.
+   integer(int32),    intent(in)    :: ch      !< Character typed.
+   logical                          :: started !< A session asked for.
+
+   started = .false.
+   if (e%ac_request_activation) then
+      if (ac_word_character(e, ch)) e%ac_location = cursor_selection_end(e%cursors%c(e%cursors%main + 1))
+      return
+   endif
+   if (.not. e%ac_active .and. cp_is_word(ch) .and. e%ac_configured) then
+      e%ac_manual = .false.
+      call ac_cancel(e)
+      e%ac_request_activation = .true.
+      e%ac_location = cursor_selection_end(e%cursors%c(e%cursors%main + 1))
+      started = .true.
+   endif
+   endfunction ac_start_typing
+
+   subroutine handle_keys(e)
+   !< `handleKeyboardInputs`: the fork's shortcuts in its order (each `Shortcut` asked as the fork asks it), then the
+   !< characters typed, the input method's position.
+   type(code_editor), intent(inout) :: e      !< Editor.
+   logical                          :: mac, ro !< macOS behaviours, read-only.
+   integer(c_int)                   :: word_mod, grow_mod, chars(64), n, k !< Modifiers, characters.
+   integer(int32)                   :: r, c, page !< Visual position, a page.
+   real(c_float)                    :: f(16) !< State.
+   integer(c_int)                   :: fi(5) !< Flags.
+
+   if (.not. ct_window_focused()) return
+   call ct_state(f, fi)
+   mac = fi(3) /= 0_c_int
+   ro = e%read_only
+   word_mod = merge(ImGuiMod_Alt, ImGuiMod_Ctrl, mac)
+   grow_mod = merge(ImGuiMod_Super, ImGuiMod_Alt, mac)
+   page = e%last_row - e%first_row - 2_int32
+   if (e%ac_active) then
+      if (ac_special_key()) then
+         if (e%noffered > 0_int32) return
+         call ac_cancel(e)
+      endif
+   endif
+   if (ct_shortcut(ImGuiKey_UpArrow, ImGuiInputFlags_Repeat)) then
+      call move_up(e, 1_int32, .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Shift, ImGuiKey_UpArrow), ImGuiInputFlags_Repeat)) then
+      call move_up(e, 1_int32, .true.)
+   elseif (ct_shortcut(ImGuiKey_DownArrow, ImGuiInputFlags_Repeat)) then
+      call move_down(e, 1_int32, .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Shift, ImGuiKey_DownArrow), ImGuiInputFlags_Repeat)) then
+      call move_down(e, 1_int32, .true.)
+   elseif (ct_shortcut(ior(ior(grow_mod, ImGuiMod_Shift), ImGuiKey_LeftArrow), 0_c_int)) then
+      call shrink_selections(e)
+   elseif (ct_shortcut(ior(ior(grow_mod, ImGuiMod_Shift), ImGuiKey_RightArrow), 0_c_int)) then
+      call grow_selections(e)
+   elseif (ct_shortcut(ImGuiKey_LeftArrow, ImGuiInputFlags_Repeat)) then
+      call move_left(e, .false., .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Shift, ImGuiKey_LeftArrow), ImGuiInputFlags_Repeat)) then
+      call move_left(e, .true., .false.)
+   elseif (ct_shortcut(ior(word_mod, ImGuiKey_LeftArrow), ImGuiInputFlags_Repeat)) then
+      call move_left(e, .false., .true.)
+   elseif (ct_shortcut(ior(ior(word_mod, ImGuiMod_Shift), ImGuiKey_LeftArrow), ImGuiInputFlags_Repeat)) then
+      call move_left(e, .true., .true.)
+   elseif (ct_shortcut(ImGuiKey_RightArrow, ImGuiInputFlags_Repeat)) then
+      call move_right(e, .false., .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Shift, ImGuiKey_RightArrow), ImGuiInputFlags_Repeat)) then
+      call move_right(e, .true., .false.)
+   elseif (ct_shortcut(ior(word_mod, ImGuiKey_RightArrow), ImGuiInputFlags_Repeat)) then
+      call move_right(e, .false., .true.)
+   elseif (ct_shortcut(ior(ior(word_mod, ImGuiMod_Shift), ImGuiKey_RightArrow), ImGuiInputFlags_Repeat)) then
+      call move_right(e, .true., .true.)
+   elseif (ct_shortcut(ImGuiKey_PageUp, ImGuiInputFlags_Repeat)) then
+      call move_up(e, page, .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Shift, ImGuiKey_PageUp), ImGuiInputFlags_Repeat)) then
+      call move_up(e, page, .true.)
+   elseif (ct_shortcut(ImGuiKey_PageDown, ImGuiInputFlags_Repeat)) then
+      call move_down(e, page, .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Shift, ImGuiKey_PageDown), ImGuiInputFlags_Repeat)) then
+      call move_down(e, page, .true.)
+   elseif (ct_shortcut(ior(ImGuiMod_Ctrl, ImGuiKey_UpArrow), 0_c_int)) then
+      call move_to(e, pos(0_int32, 0_int32), .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Ctrl, ImGuiKey_Home), 0_c_int)) then
+      call move_to(e, pos(0_int32, 0_int32), .false.)
+   elseif (ct_shortcut(ior(ior(ImGuiMod_Ctrl, ImGuiMod_Shift), ImGuiKey_UpArrow), 0_c_int)) then
+      call move_to(e, pos(0_int32, 0_int32), .true.)
+   elseif (ct_shortcut(ior(ior(ImGuiMod_Ctrl, ImGuiMod_Shift), ImGuiKey_Home), 0_c_int)) then
+      call move_to(e, pos(0_int32, 0_int32), .true.)
+   elseif (ct_shortcut(ior(ImGuiMod_Ctrl, ImGuiKey_DownArrow), 0_c_int)) then
+      call move_to(e, doc_bottom(e%doc), .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Ctrl, ImGuiKey_End), 0_c_int)) then
+      call move_to(e, doc_bottom(e%doc), .false.)
+   elseif (ct_shortcut(ior(ior(ImGuiMod_Ctrl, ImGuiMod_Shift), ImGuiKey_DownArrow), 0_c_int)) then
+      call move_to(e, doc_bottom(e%doc), .true.)
+   elseif (ct_shortcut(ior(ior(ImGuiMod_Ctrl, ImGuiMod_Shift), ImGuiKey_End), 0_c_int)) then
+      call move_to(e, doc_bottom(e%doc), .true.)
+   elseif (ct_shortcut(ImGuiKey_Home, 0_c_int)) then
+      call move_to(e, pos(e%cursors%c(e%cursors%current + 1)%end%l, 0_int32), .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Shift, ImGuiKey_Home), 0_c_int)) then
+      call move_to(e, pos(e%cursors%c(e%cursors%current + 1)%end%l, 0_int32), .true.)
+   elseif (ct_shortcut(ImGuiKey_End, 0_c_int)) then
+      call move_to(e, doc_end_of_line(e%doc, e%cursors%c(e%cursors%current + 1)%end), .false.)
+   elseif (ct_shortcut(ior(ImGuiMod_Shift, ImGuiKey_End), 0_c_int)) then
+      call move_to(e, doc_end_of_line(e%doc, e%cursors%c(e%cursors%current + 1)%end), .true.)
+   elseif (ct_shortcut(ior(ImGuiMod_Ctrl, ImGuiKey_A), 0_c_int)) then
+      call move_to(e, pos(0_int32, 0_int32), .false.)
+      call move_to(e, doc_bottom(e%doc), .true.)
+   elseif (routed(current_selected(e), ior(ImGuiMod_Ctrl, ImGuiKey_D), 0_c_int)) then
+      call add_next_occurrence(e, .false.)
+   elseif (routed(current_selected(e), ior(ior(ImGuiMod_Ctrl, ImGuiMod_Alt), ImGuiKey_D), 0_c_int)) then
+      call add_next_occurrence(e, .true.)
+   elseif (routed(current_selected(e), ior(ior(ImGuiMod_Ctrl, ImGuiMod_Alt), ImGuiKey_L), 0_c_int)) then
+      call add_next_occurrence(e, .true.)
+   elseif (routed(current_selected(e), ior(ior(ImGuiMod_Ctrl, ImGuiMod_Shift), ImGuiKey_D), 0_c_int)) then
+      call select_all_of_current(e, .false.)
+   elseif (routed(current_selected(e), &
+           ior(ior(ior(ImGuiMod_Ctrl, ImGuiMod_Alt), ImGuiMod_Shift), ImGuiKey_D), 0_c_int)) then
+      call select_all_of_current(e, .true.)
+   elseif (ct_shortcut(ior(ImGuiMod_Ctrl, ImGuiKey_X), 0_c_int)) then
+      call cut(e) ! the fork's private cut: no read-only test
+   elseif (ct_shortcut(ior(ImGuiMod_Ctrl, ImGuiKey_C), 0_c_int)) then
+      call copy(e)
+   elseif (ct_shortcut(ior(ImGuiMod_Ctrl, ImGuiKey_Insert), 0_c_int)) then
+      call copy(e)
+   elseif (routed(.not. ro, ior(ImGuiMod_Ctrl, ImGuiKey_V), ImGuiInputFlags_Repeat)) then
+      call paste(e)
+   elseif (routed(.not. ro, ior(ImGuiMod_Ctrl, ImGuiKey_Insert), ImGuiInputFlags_Repeat)) then
+      call paste(e)
+   elseif (routed(.not. ro, ior(ImGuiMod_Ctrl, ImGuiKey_Z), ImGuiInputFlags_Repeat)) then
+      call editor_undo_(e)
+   elseif (routed(.not. ro, ior(ior(ImGuiMod_Ctrl, ImGuiMod_Shift), ImGuiKey_Z), ImGuiInputFlags_Repeat)) then
+      call editor_redo_(e)
+   elseif (routed(.not. ro, ior(ImGuiMod_Ctrl, ImGuiKey_Y), ImGuiInputFlags_Repeat)) then
+      call editor_redo_(e)
+   elseif (routed(.not. ro, ImGuiKey_Delete, ImGuiInputFlags_Repeat)) then
+      call handle_delete(e, .false.)
+   elseif (routed(.not. ro, ior(ImGuiMod_Shift, ImGuiKey_Delete), ImGuiInputFlags_Repeat)) then
+      call handle_delete(e, .false.)
+   elseif (routed(.not. ro, ior(word_mod, ImGuiKey_Delete), ImGuiInputFlags_Repeat)) then
+      call handle_delete(e, .true.)
+   elseif (routed(.not. ro, ImGuiKey_Backspace, ImGuiInputFlags_Repeat)) then
+      call handle_backspace(e, .false.)
+   elseif (routed(.not. ro, ior(ImGuiMod_Shift, ImGuiKey_Backspace), ImGuiInputFlags_Repeat)) then
+      call handle_backspace(e, .false.)
+   elseif (routed(.not. ro, ior(word_mod, ImGuiKey_Backspace), ImGuiInputFlags_Repeat)) then
+      call handle_backspace(e, .true.)
+   elseif (routed(.not. ro, ior(ior(ImGuiMod_Ctrl, ImGuiMod_Shift), ImGuiKey_K), 0_c_int)) then
+      call remove_selected_lines(e)
+   elseif (routed(.not. ro, ior(ImGuiMod_Ctrl, ImGuiKey_LeftBracket), ImGuiInputFlags_Repeat)) then
+      call indent_lines(e, .true.)
+   elseif (routed(.not. ro, ior(ImGuiMod_Ctrl, ImGuiKey_RightBracket), ImGuiInputFlags_Repeat)) then
+      call indent_lines(e, .false.)
+   elseif (routed(.not. ro, ior(ImGuiMod_Alt, ImGuiKey_UpArrow), 0_c_int)) then
+      call move_lines(e, .false.)
+   elseif (routed(.not. ro, ior(ImGuiMod_Alt, ImGuiKey_DownArrow), 0_c_int)) then
+      call move_lines(e, .true.)
+   elseif (routed(.not. ro .and. e%language /= 0_int32, ior(ImGuiMod_Ctrl, ImGuiKey_Slash), 0_c_int)) then
+      call toggle_comments(e)
+   elseif (routed(.not. ro .and. e%language /= 0_int32, ior(ImGuiMod_Ctrl, ImGuiKey_L), 0_c_int)) then
+      call toggle_comments(e)
+   elseif (routed(e%find_replace, ior(ImGuiMod_Ctrl, ImGuiKey_F), 0_c_int)) then
+      if (e%ac_active) then
+         call ac_cancel(e)
+         e%find_cancelled_ac = .true.
+      endif
+      call open_find_replace(e)
+   elseif (routed(e%find_replace, ior(ior(ImGuiMod_Ctrl, ImGuiMod_Shift), ImGuiKey_F), 0_c_int)) then
+      call find_action(e, 3_int32)
+   elseif (routed(e%find_replace, ior(ImGuiMod_Ctrl, ImGuiKey_G), ImGuiInputFlags_Repeat)) then
+      call find_action(e, 2_int32)
+   elseif (routed(.not. ro, ior(ImGuiMod_Ctrl, ImGuiKey_Space), 0_c_int)) then
+      if (e%cursors%n == 1_int32) then
+         if (ac_start_shortcut(e)) call make_cursor_visible(e)
+      endif
+   elseif (ct_shortcut(ImGuiKey_Insert, 0_c_int)) then
+      e%overwrite = .not. e%overwrite
+   elseif (routed(.not. ro, ImGuiKey_Enter, ImGuiInputFlags_Repeat)) then
+      call handle_character(e, 10_int32)
+   elseif (routed(.not. ro, ImGuiKey_KeypadEnter, ImGuiInputFlags_Repeat)) then
+      call handle_character(e, 10_int32)
+   elseif (routed(.not. ro, ior(ImGuiMod_Ctrl, ImGuiKey_Enter), ImGuiInputFlags_Repeat)) then
+      call insert_line(e, .true.)
+   elseif (routed(.not. ro, ior(ImGuiMod_Ctrl, ImGuiKey_KeypadEnter), ImGuiInputFlags_Repeat)) then
+      call insert_line(e, .true.)
+   elseif (routed(.not. ro, ior(ImGuiMod_Shift, ImGuiKey_Enter), ImGuiInputFlags_Repeat)) then
+      call insert_line(e, .false.)
+   elseif (routed(.not. ro, ior(ImGuiMod_Shift, ImGuiKey_KeypadEnter), ImGuiInputFlags_Repeat)) then
+      call insert_line(e, .false.)
+   elseif (routed(.not. ro, ImGuiKey_Tab, ImGuiInputFlags_Repeat)) then
+      if (cursors_any_selection(e%cursors)) then
+         call indent_lines(e, .false.)
+      else
+         call handle_character(e, 9_int32)
+      endif
+   elseif (routed(.not. ro, ior(ImGuiMod_Shift, ImGuiKey_Tab), ImGuiInputFlags_Repeat)) then
+      call indent_lines(e, .true.)
+   elseif (routed(e%ac_active .or. e%find_visible .or. e%cursors%n > 1_int32, ImGuiKey_Escape, 0_c_int)) then
+      if (e%ac_active) then
+         call ac_cancel(e)
+      elseif (e%find_visible) then
+         call close_find_replace(e)
+      elseif (e%cursors%n > 1_int32) then
+         call cursors_clear_additional(e%cursors, .false.)
+      endif
+   endif
+   n = ct_chars(chars, .false.)
+   if (n > 0_c_int) then
+      if (.not. (ct_key_down(ImGuiMod_Ctrl) .and. .not. ct_key_down(ImGuiMod_Alt)) .and. .not. ro) then
+         do k = 1_c_int, min(n, size(chars, kind=c_int))
+            if (chars(k) == 10_c_int .or. chars(k) >= 32_c_int) call handle_character(e, int(chars(k), int32))
+         enddo
+      endif
+      n = ct_chars(chars, .true.)
+   endif
+   if (.not. ro) then
+      call vis_pos(e, e%cursors%c(min(e%cursors%main, e%cursors%n - 1_int32) + 1)%end, r, c)
+      call ct_ime(e%screen_x + e%text_left + real(c, c_float) * e%glyph_w - 1.0_c_float, &
+                  e%screen_y + real(r, c_float) * e%glyph_h, e%glyph_h)
+   endif
+   call ct_want_keyboard()
+   endsubroutine handle_keys
+
+   function routed(cond, chord, flags) result(yes)
+   !< `cond && Shortcut(chord, flags)` with the C++ short circuit: `Shortcut` asked only when `cond` holds (a call
+   !< routes its chord: an extra one changes which shortcut wins).
+   logical,        intent(in) :: cond  !< The test before the shortcut.
+   integer(c_int), intent(in) :: chord !< Key chord.
+   integer(c_int), intent(in) :: flags !< `ImGuiInputFlags_*`.
+   logical                    :: yes   !< Both.
+
+   yes = .false.
+   if (cond) yes = ct_shortcut(chord, flags)
+   endfunction routed
+
+   pure function start_line(c) result(l)
+   !< The line of a cursor's selection start.
+   type(code_cursor), intent(in) :: c !< Cursor.
+   integer(int32)                :: l !< Line, from 0.
+   type(code_pos)                :: p !< Selection start.
+
+   p = cursor_selection_start(c)
+   l = p%l
+   endfunction start_line
+
+   pure function current_selected(e) result(yes)
+   !< `cursors.currentCursorHasSelection()`.
+   type(code_editor), intent(in) :: e   !< Editor.
+   logical                       :: yes !< The current cursor has a selection.
+
+   yes = cursor_has_selection(e%cursors%c(e%cursors%current + 1))
+   endfunction current_selected
+
+   function ac_special_key() result(yes)
+   !< `AutoComplete::isSpecialKeyPressed`.
+   logical :: yes !< Tab, enter or an up or down arrow pressed.
+
+   yes = ct_key_pressed(ImGuiKey_Tab) .or. ct_key_pressed(ImGuiKey_Enter) .or. ct_key_pressed(ImGuiKey_KeypadEnter) .or. &
+         ct_key_pressed(ImGuiKey_UpArrow) .or. ct_key_pressed(ImGuiKey_DownArrow)
+   endfunction ac_special_key
+
+   function ac_start_shortcut(e) result(started)
+   !< `AutoComplete::startShortcut`.
+   type(code_editor), intent(inout) :: e       !< Editor.
+   logical                          :: started !< A session asked for.
+
+   started = .false.
+   if (e%ac_active .or. e%ac_request_activation .or. .not. e%ac_configured) return
+   e%ac_manual = .true.
+   e%ac_request_activation = .true.
+   e%ac_location = cursor_selection_end(e%cursors%c(e%cursors%main + 1))
+   started = .true.
+   endfunction ac_start_shortcut
+
+   subroutine screen_to_doc(e, x, y, glyph, cursor)
+   !< `TypeSetter::screenPos2DocPos` (x, y in glyphs from the text's corner).
+   type(code_editor), intent(in)  :: e      !< Editor.
+   real(c_float),     intent(in)  :: x, y   !< Position [glyphs].
+   type(code_pos),    intent(out) :: glyph  !< The glyph under it.
+   type(code_pos),    intent(out) :: cursor !< The cursor position nearest to it.
+   integer(int32)                 :: row, j, idx, left, right !< Row, glyph, columns.
+   real(c_float)                  :: ld, rd !< Distances.
+
+   if (y <= 0.0_c_float) then
+      glyph = pos(0_int32, 0_int32)
+      cursor = glyph
+      return
+   endif
+   if (y >= real(e%ts_rows, c_float)) then
+      glyph = doc_bottom(e%doc)
+      cursor = glyph
+      return
+   endif
+   row = int(y, int32)
+   if (x <= 0.0_c_float) then
+      glyph = pos(row, 0_int32)
+      cursor = glyph
+   elseif (aint(x) > real(e%ts_cols(row + 1), c_float)) then
+      glyph = doc_end_of_line(e%doc, pos(row, 0_int32))
+      cursor = glyph
+   else
+      idx = 0_int32
+      left = 0_int32
+      right = 0_int32
+      j = 1_int32
+      do while (real(right, c_float) < x .and. j <= e%doc%lines(row + 1)%n)
+         left = right
+         right = right + e%doc%lines(row + 1)%cols(j)
+         idx = idx + 1_int32
+         j = j + 1_int32
+      enddo
+      ld = x - real(left, c_float)
+      rd = real(right, c_float) - x
+      if (left == right) then
+         glyph = pos(row, idx)
+      else
+         glyph = pos(row, idx - 1_int32)
+      endif
+      if (ld <= rd) then
+         cursor = pos(row, idx - 1_int32)
+      else
+         cursor = pos(row, idx)
+      endif
+   endif
+   endsubroutine screen_to_doc
+
+   subroutine handle_mouse(e)
+   !< `handleMouseInteractions` (FIGURE sets no context menu or hover callback; no mini-map).
+   type(code_editor), intent(inout) :: e      !< Editor.
+   real(c_float)                    :: mx, my, wx, wy, ax, ay, sx, sy, dx, dy, ww, wh, factor, now, dz, f(16) !< State.
+   integer(c_int)                   :: fi(5)  !< Flags.
+   logical                          :: over_numbers, over_text, dbl, triple, handled, extend, add, down !< Tests.
+   type(code_pos)                   :: glyph, cur, a, b !< Positions.
+   integer(int32)                   :: cp, k  !< Code point, pair.
+
+   call ct_mouse_pos(mx, my)
+   call ct_window_pos(wx, wy)
+   ax = mx - wx
+   ay = my - wy
+   mx = mx - e%screen_x
+   my = my - e%screen_y
+   call ct_scroll(sx, sy)
+   call ct_state(f, fi)
+   over_numbers = e%line_numbers .and. ax > e%number_left .and. ax < e%number_right
+   over_text = mx - sx > e%text_left .and. mx - sx < e%text_right .and. my - sy >= 0.0_c_float .and. my - sy < e%text_h
+   call screen_to_doc(e, (mx - e%text_left) / e%glyph_w, my / e%glyph_h, glyph, cur)
+   e%panning = e%panning .and. ct_mouse_down(2_c_int)
+   if (e%panning .and. ct_mouse_dragging(2_c_int)) then
+      call ct_window_size(ww, wh)
+      call ct_mouse_drag_delta(2_c_int, dx, dy)
+      factor = f(6) * 15.0_c_float
+      if (ax < e%text_left + e%glyph_w * 4.0_c_float) then
+         dx = (ax - (e%text_left + e%glyph_w * 4.0_c_float)) * factor
+      elseif (ax > ww - e%glyph_w * 4.0_c_float) then
+         dx = (ax - (ww - e%glyph_w * 4.0_c_float)) * factor
+      endif
+      if (ay < e%glyph_h * 2.0_c_float) then
+         dy = (ay - e%glyph_h * 2.0_c_float) * factor
+      elseif (ay > wh - e%glyph_h * 2.0_c_float) then
+         dy = (ay - (wh - e%glyph_h * 2.0_c_float)) * factor
+      endif
+      call ct_set_scroll_x(sx - dx)
+      call ct_scroll(sx, sy)
+      call ct_set_scroll_y(sy - dy)
+      call ct_reset_mouse_drag_delta(2_c_int)
+   elseif (e%scrolling) then
+      dz = e%glyph_w
+      dx = e%scroll_start(1) - ax
+      dy = e%scroll_start(2) - ay
+      if (dx < 0.0_c_float) then
+         dx = min(dx + dz, 0.0_c_float)
+      else
+         dx = max(dx - dz, 0.0_c_float)
+      endif
+      if (dy < 0.0_c_float) then
+         dy = min(dy + dz, 0.0_c_float)
+      else
+         dy = max(dy - dz, 0.0_c_float)
+      endif
+      factor = f(6) * 5.0_c_float
+      dx = dx * factor
+      dy = dy * factor
+      call ct_set_scroll_x(sx - dx)
+      call ct_scroll(sx, sy)
+      call ct_set_scroll_y(sy - dy)
+      if (ct_mouse_clicked(0_c_int) .or. ct_mouse_clicked(2_c_int) .or. ct_mouse_clicked(1_c_int)) e%scrolling = .false.
+   elseif (ct_mouse_dragging(0_c_int)) then
+      if (e%selecting_text .and. over_numbers) then
+         a = pos(cur%l, 0_int32)
+         b = doc_normalize(e%doc, pos(cur%l + 1_int32, 0_int32))
+         associate(cc => e%cursors%c(e%cursors%current + 1))
+            if (pos_lt(cc%end, cc%start)) then
+               call cursor_update_keep(cc, a, .true.)
+            else
+               call cursor_update_keep(cc, b, .true.)
+            endif
+         endassociate
+         call make_cursor_visible(e)
+      elseif (e%selecting_text .and. over_text) then
+         call cursor_update_keep(e%cursors%c(e%cursors%current + 1), cur, .true.)
+         call make_cursor_visible(e)
+      endif
+   elseif (ct_mouse_released(0_c_int)) then
+      e%selecting_text = .false.
+   elseif (ct_window_hovered()) then
+      if (ct_window_focused() .and. over_text) call ct_set_mouse_cursor(ImGuiMouseCursor_TextInput)
+      if (ct_mouse_clicked(2_c_int)) then
+         e%panning = .true.
+      elseif (ct_mouse_clicked(1_c_int)) then
+         continue ! no context menu callbacks
+      elseif (ct_mouse_clicked(0_c_int)) then
+         e%selecting_text = over_text .or. over_numbers
+         dbl = ct_mouse_double_clicked(0_c_int)
+         now = real(ct_time(), c_float)
+         triple = .not. dbl .and. e%last_click_time /= -1.0_c_float .and. (now - e%last_click_time) < f(7)
+         if (triple) then
+            e%last_click_time = -1.0_c_float
+         else
+            e%last_click_time = now
+         endif
+         if (triple) then
+            if (over_text) then
+               a = pos(cur%l, 0_int32)
+               b = doc_normalize(e%doc, pos(a%l + 1_int32, 0_int32))
+               call cursor_update(e%cursors%c(e%cursors%current + 1), a, b)
+            endif
+         elseif (dbl) then
+            if (over_text) then
+               cp = doc_cp(e%doc, glyph)
+               handled = .false.
+               if (cp_is_bracket_opener(cp)) then
+                  k = enclosing_brackets(e, doc_right(e%doc, glyph, .false.))
+                  if (k > 0_int32) then
+                     if (ct_key_down(ImGuiMod_Shift)) then
+                        call cursors_set(e%cursors, e%br_start(k), doc_right(e%doc, e%br_end(k), .false.))
+                     else
+                        call cursors_set(e%cursors, doc_right(e%doc, e%br_start(k), .false.), e%br_end(k))
+                     endif
+                     handled = .true.
+                  endif
+               elseif (cp_is_bracket_closer(cp)) then
+                  k = enclosing_brackets(e, glyph)
+                  if (k > 0_int32) then
+                     call cursors_set(e%cursors, e%br_start(k), doc_right(e%doc, e%br_end(k), .false.))
+                     handled = .true.
+                  endif
+               endif
+               if (.not. handled .and. glyph%i /= e%doc%lines(glyph%l + 1)%n) then
+                  call doc_whole_word(e%doc, glyph, .false., a, b)
+                  if (.not. pos_eq(a, b)) call cursor_update(e%cursors%c(e%cursors%current + 1), a, b)
+               endif
+            endif
+         else
+            extend = ct_key_down(ImGuiMod_Shift)
+            if (fi(3) /= 0_c_int) then
+               add = ct_key_down(ImGuiMod_Alt)
+            else
+               add = ct_key_down(ImGuiMod_Ctrl)
+            endif
+            if (over_numbers) then
+               a = pos(cur%l, 0_int32)
+               b = doc_normalize(e%doc, pos(cur%l + 1_int32, 0_int32))
+               if (extend) then
+                  associate(cc => e%cursors%c(e%cursors%current + 1))
+                     if (pos_lt(cc%end, cc%start)) then
+                        call cursor_update_keep(cc, a, .true.)
+                     else
+                        call cursor_update_keep(cc, b, .true.)
+                     endif
+                  endassociate
+                  call ac_cancel(e)
+               elseif (add) then
+                  call cursors_add(e%cursors, a, b)
+                  call ac_cancel(e)
+               else
+                  call cursors_set(e%cursors, a, b)
+               endif
+               call make_cursor_visible(e)
+            elseif (over_text) then
+               if (extend) then
+                  call cursor_grow(e%cursors%c(e%cursors%current + 1), cur)
+                  call ac_cancel(e)
+               elseif (add) then
+                  call cursors_add(e%cursors, cur, cur)
+                  call ac_cancel(e)
+               else
+                  call cursors_set(e%cursors, cur, cur)
+               endif
+               call make_cursor_visible(e)
+            endif
+         endif
+      endif
+      down = ct_mouse_down(0_c_int) .or. ct_mouse_down(1_c_int)
+      if (down) then
+         call cursors_update(e%cursors)
+         e%navigating_vertically = .false.
+      endif
+   endif
+   endsubroutine handle_mouse
+   ! ---- find and replace's state (its window: szaghi/figure#15 P16 step 13) ----------------------------------------
+   subroutine open_find_replace(e)
+   !< `openFindReplace`: the main cursor's one-line selection, or the word it is in, as the text to find.
+   type(code_editor), intent(inout) :: e    !< Editor.
+   type(code_pos)                   :: a, b !< Selection, word.
+
+   associate(c => e%cursors%c(e%cursors%main + 1))
+      if (cursor_has_selection(c)) then
+         a = cursor_selection_start(c)
+         b = cursor_selection_end(c)
+         if (a%l == b%l) e%find_text = doc_section_text(e%doc, a, b)
+      else
+         call doc_whole_word(e%doc, cursor_selection_start(c), .true., a, b)
+         if (.not. pos_eq(a, b)) e%find_text = doc_section_text(e%doc, a, b)
+      endif
+   endassociate
+   e%find_visible = .true.
+   e%focus_on_find = .true.
+   endsubroutine open_find_replace
+
+   subroutine close_find_replace(e)
+   !< `closeFindReplace`.
+   type(code_editor), intent(inout) :: e !< Editor.
+
+   if (.not. e%find_visible) return
+   e%find_visible = .false.
+   e%focus_on_editor = .true.
+   e%focus_on_find = .false.
+   endsubroutine close_find_replace
+
+   subroutine find_action(e, what)
+   !< `find` (1), `findNext` (2), `findAll` (3), `replace` (4), `replaceAll` (5).
+   type(code_editor), intent(inout) :: e    !< Editor.
+   integer(int32),    intent(in)    :: what !< Action.
+
+   if (len(e%find_text) == 0) return
+   select case (what)
+   case (1_int32, 2_int32)
+      call select_next_occurrence(e, e%find_text, e%find_case, e%find_whole)
+   case (3_int32)
+      call select_all_occurrences(e, e%find_text, e%find_case, e%find_whole)
+   case (4_int32)
+      if (.not. cursors_any_selection(e%cursors)) call select_next_occurrence(e, e%find_text, e%find_case, e%find_whole)
+      call replace_in_current_cursor(e, e%replace_text)
+      call select_next_occurrence(e, e%find_text, e%find_case, e%find_whole)
+   case default
+      call select_all_occurrences(e, e%find_text, e%find_case, e%find_whole)
+      call start_transaction(e, .true.)
+      call insert_into_all_cursors(e, e%replace_text)
+      call end_transaction(e)
+   endselect
+   e%focus_on_editor = .true.
+   e%focus_on_find = .false.
+   endsubroutine find_action
 
    ! ---- the glue's entry points ---------------------------------------------------------------------------------------
    function fig_editor_draw(handle, id, id_len, width, height, changed) result(status)

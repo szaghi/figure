@@ -129,6 +129,26 @@ type :: code_editor
    type(code_pos), allocatable :: br_start(:), br_end(:) !< Pairs' positions.
    integer(int32), allocatable :: br_open(:), br_close(:), br_level(:) !< Their characters, levels.
    logical,        allocatable :: br_visible(:)  !< Visible (not an indentation block).
+   ! interaction (the fork's)
+   logical        :: navigating_vertically = .false. !< navigatingVertically.
+   real(c_float)  :: last_click_time = -1.0_c_float  !< lastClickTime.
+   logical        :: panning = .false.           !< panning.
+   logical        :: scrolling = .false.         !< scrolling.
+   real(c_float)  :: scroll_start(2) = 0.0_c_float !< scrollStart.
+   logical        :: selecting_text = .false.    !< selectingText.
+   ! the autocomplete's session (AutoComplete)
+   type(code_pos) :: ac_location                 !< currentLocation.
+   type(code_pos) :: ac_start                    !< startLocation.
+   logical        :: ac_manual = .false.         !< triggeredManually.
+   integer(int32) :: ac_selection = 0_int32      !< currentSelection, from 0.
+   ! find and replace (the fork's window)
+   logical        :: find_visible = .false.      !< findReplaceVisible.
+   logical        :: focus_on_find = .false.     !< focusOnFind.
+   logical        :: find_cancelled_ac = .false. !< findCancelledAutocomplete.
+   logical        :: find_case = .false.         !< caseSensitiveFind.
+   logical        :: find_whole = .false.        !< wholeWordFind.
+   character(len=:), allocatable :: find_text    !< findText.
+   character(len=:), allocatable :: replace_text !< replaceText.
 endtype code_editor
 
 type :: editor_box
@@ -245,6 +265,8 @@ contains
    e%scroll_to = pos(INVALID, 0_int32)
    e%words = ''
    e%offered = ''
+   e%find_text = ''
+   e%replace_text = ''
    allocate(e%mk_number(8), e%mk_text(8), e%mk_off(8), e%mk_len(8))
    allocate(character(len=256) :: e%mk_pool)
    endsubroutine editor_new

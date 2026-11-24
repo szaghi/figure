@@ -15,7 +15,8 @@ module figure_core_text
 !< allocation). The reads of Dear ImGui's state that no C API function gives (the window's inner rectangle and
 !< scrollbar, the style's DPI scale and caret width, the characters typed, the input method's position, the fork's
 !< navigation workaround of a child window) are native/figure_editor.cpp's `fig_core_text_*`.
-use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_f_pointer, c_float, c_int, c_null_char, c_null_ptr, c_ptr
+use, intrinsic :: iso_c_binding, only : c_associated, c_bool, c_char, c_double, c_f_pointer, c_float, c_int, c_null_char, &
+                                         c_null_ptr, c_ptr, c_size_t
 use, intrinsic :: iso_fortran_env, only : int32
 use figure_cimgui, only : im_vec2, im_vec4, igBeginChild_Str, igBeginPopup, igBeginTooltip, igCalcTextSize,             &
                           igColorConvertFloat4ToU32, igEndChild, igEndPopup, igEndTooltip, igGetColorU32_U32,          &
@@ -25,7 +26,11 @@ use figure_cimgui, only : im_vec2, im_vec4, igBeginChild_Str, igBeginPopup, igBe
                           igIsWindowFocused, igIsWindowHovered, igPopID, igPopStyleColor, igPopStyleVar,              &
                           igPushID_Int, igPushStyleColor_U32, igPushStyleVar_Vec2, igSetCursorScreenPos,              &
                           igSetNextWindowContentSize, igSetNextWindowFocus, igSetScrollX_Float, igSetScrollY_Float,   &
-                          igTextUnformatted
+                          igTextUnformatted, igShortcut_Nil, igIsKeyPressed_Bool, igIsKeyDown_Nil,                     &
+                          igSetNextFrameWantCaptureKeyboard, igGetMousePos, igIsMouseDown_Nil, igIsMouseClicked_Bool,  &
+                          igIsMouseDoubleClicked_Nil, igIsMouseReleased_Nil, igIsMouseDragging, igGetMouseDragDelta,   &
+                          igResetMouseDragDelta, igSetMouseCursor, igGetTime, igGetWindowSize, igOpenPopup_Str,        &
+                          igSetClipboardText, igGetClipboardText
 use figure_cimgui_core, only : ImDrawList_AddCircleFilled, ImDrawList_AddLine, ImDrawList_AddRect, ImDrawList_AddRectFilled, &
                                ImDrawList_AddText_Vec2, ImDrawList_GetClipRectMax, ImDrawList_GetClipRectMin,          &
                                ImDrawList_PopClipRect, ImDrawList_PushClipRect
@@ -41,6 +46,9 @@ public :: ct_rect_filled, ct_rect, ct_line, ct_circle_filled, ct_text, ct_char, 
 public :: ct_hovering_rect, ct_begin_tooltip, ct_end_tooltip, ct_text_unformatted
 public :: ct_begin_popup, ct_end_popup, ct_popup_open, ct_window_focused, ct_window_hovered, ct_item_rect
 public :: ct_push_id_int, ct_pop_id
+public :: ct_shortcut, ct_key_pressed, ct_key_down, ct_want_keyboard, ct_mouse_pos, ct_mouse_down, ct_mouse_clicked
+public :: ct_mouse_double_clicked, ct_mouse_released, ct_mouse_dragging, ct_mouse_drag_delta, ct_reset_mouse_drag_delta
+public :: ct_set_mouse_cursor, ct_time, ct_window_size, ct_open_popup, ct_set_clipboard, ct_clipboard
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Strings copied into the module's buffer up to this length.
 
@@ -84,6 +92,14 @@ interface
    implicit none
    real(c_float), value :: x, y, h !< Position, line height.
    endsubroutine fig_core_text_ime
+
+   pure function c_strlen(p) result(n) bind(C, name='strlen')
+   !< C's `strlen`.
+   import :: c_ptr, c_size_t
+   implicit none
+   type(c_ptr), value :: p !< C string.
+   integer(c_size_t)  :: n !< Length.
+   endfunction c_strlen
 
    subroutine fig_core_text_nav(scale) bind(C, name='fig_core_text_nav')
    !< The fork's navigation-cursor workaround of a child window.
@@ -493,4 +509,168 @@ contains
    !< `PopID`.
    call igPopID()
    endsubroutine ct_pop_id
+   ! ---- keys, mouse, clipboard (szaghi/figure#15 P16 step 12) -------------------------------------------------------
+   function ct_shortcut(chord, flags) result(yes)
+   !< `Shortcut(chord, flags)`.
+   integer(c_int), intent(in) :: chord !< `ImGuiKey_*` with `ImGuiMod_*`.
+   integer(c_int), intent(in) :: flags !< `ImGuiInputFlags_*`.
+   logical                    :: yes   !< Pressed (routed to the window).
+
+   yes = logical(igShortcut_Nil(chord, flags))
+   endfunction ct_shortcut
+
+   function ct_key_pressed(key) result(yes)
+   !< `IsKeyPressed(key)` (repeating).
+   integer(c_int), intent(in) :: key !< `ImGuiKey_*`.
+   logical                    :: yes !< Pressed.
+
+   yes = logical(igIsKeyPressed_Bool(key, .true._c_bool))
+   endfunction ct_key_pressed
+
+   function ct_key_down(key) result(yes)
+   !< `IsKeyDown(key)` (a key or an `ImGuiMod_*`).
+   integer(c_int), intent(in) :: key !< Key.
+   logical                    :: yes !< Down.
+
+   yes = logical(igIsKeyDown_Nil(key))
+   endfunction ct_key_down
+
+   subroutine ct_want_keyboard()
+   !< `SetNextFrameWantCaptureKeyboard(true)`.
+   call igSetNextFrameWantCaptureKeyboard(.true._c_bool)
+   endsubroutine ct_want_keyboard
+
+   subroutine ct_mouse_pos(x, y)
+   !< `GetMousePos`.
+   real(c_float), intent(out) :: x, y !< Position.
+   type(im_vec2)              :: p    !< Position.
+
+   p = igGetMousePos()
+   x = p%x
+   y = p%y
+   endsubroutine ct_mouse_pos
+
+   function ct_mouse_down(button) result(yes)
+   !< `IsMouseDown(button)`.
+   integer(c_int), intent(in) :: button !< Button.
+   logical                    :: yes    !< Down.
+
+   yes = logical(igIsMouseDown_Nil(button))
+   endfunction ct_mouse_down
+
+   function ct_mouse_clicked(button) result(yes)
+   !< `IsMouseClicked(button)`.
+   integer(c_int), intent(in) :: button !< Button.
+   logical                    :: yes    !< Clicked.
+
+   yes = logical(igIsMouseClicked_Bool(button, .false._c_bool))
+   endfunction ct_mouse_clicked
+
+   function ct_mouse_double_clicked(button) result(yes)
+   !< `IsMouseDoubleClicked(button)`.
+   integer(c_int), intent(in) :: button !< Button.
+   logical                    :: yes    !< Double clicked.
+
+   yes = logical(igIsMouseDoubleClicked_Nil(button))
+   endfunction ct_mouse_double_clicked
+
+   function ct_mouse_released(button) result(yes)
+   !< `IsMouseReleased(button)`.
+   integer(c_int), intent(in) :: button !< Button.
+   logical                    :: yes    !< Released.
+
+   yes = logical(igIsMouseReleased_Nil(button))
+   endfunction ct_mouse_released
+
+   function ct_mouse_dragging(button) result(yes)
+   !< `IsMouseDragging(button)`.
+   integer(c_int), intent(in) :: button !< Button.
+   logical                    :: yes    !< Dragging.
+
+   yes = logical(igIsMouseDragging(button, -1.0_c_float))
+   endfunction ct_mouse_dragging
+
+   subroutine ct_mouse_drag_delta(button, dx, dy)
+   !< `GetMouseDragDelta(button)`.
+   integer(c_int), intent(in)  :: button !< Button.
+   real(c_float),  intent(out) :: dx, dy !< Delta.
+   type(im_vec2)               :: d      !< Delta.
+
+   d = igGetMouseDragDelta(button, -1.0_c_float)
+   dx = d%x
+   dy = d%y
+   endsubroutine ct_mouse_drag_delta
+
+   subroutine ct_reset_mouse_drag_delta(button)
+   !< `ResetMouseDragDelta(button)`.
+   integer(c_int), intent(in) :: button !< Button.
+
+   call igResetMouseDragDelta(button)
+   endsubroutine ct_reset_mouse_drag_delta
+
+   subroutine ct_set_mouse_cursor(cursor)
+   !< `SetMouseCursor`.
+   integer(c_int), intent(in) :: cursor !< `ImGuiMouseCursor_*`.
+
+   call igSetMouseCursor(cursor)
+   endsubroutine ct_set_mouse_cursor
+
+   function ct_time() result(t)
+   !< `GetTime`.
+   real(c_double) :: t !< Time [s].
+
+   t = igGetTime()
+   endfunction ct_time
+
+   subroutine ct_window_size(w, h)
+   !< `GetWindowSize`.
+   real(c_float), intent(out) :: w, h !< Size.
+   type(im_vec2)              :: s    !< Size.
+
+   s = igGetWindowSize()
+   w = s%x
+   h = s%y
+   endsubroutine ct_window_size
+
+   subroutine ct_open_popup(id)
+   !< `OpenPopup(id)`.
+   character(len=*), intent(in) :: id !< Popup.
+   logical(c_bool)              :: ok !< Unused.
+
+   call to_buf(id(1:min(len(id), BUF_LEN)))
+   ok = igOpenPopup_Str(buf, 0_c_int)
+   endsubroutine ct_open_popup
+
+   subroutine ct_set_clipboard(text)
+   !< `SetClipboardText`.
+   character(len=*), intent(in) :: text !< Text (UTF-8).
+
+   if (len(text) <= BUF_LEN) then
+      call to_buf(text)
+      call igSetClipboardText(buf)
+   else
+      call igSetClipboardText(text//c_null_char)
+   endif
+   endsubroutine ct_set_clipboard
+
+   function ct_clipboard(text) result(got)
+   !< `GetClipboardText`: false for no text (NULL).
+   character(len=:), allocatable, intent(out) :: text !< Text.
+   logical                                    :: got  !< Text there.
+   type(c_ptr)                                :: p    !< C string.
+   character(kind=c_char), pointer            :: s(:) !< Its bytes.
+   integer(int32)                             :: n, k !< Length, counter.
+
+   text = ''
+   p = igGetClipboardText()
+   got = c_associated(p)
+   if (.not. got) return
+   n = int(c_strlen(p), int32)
+   call c_f_pointer(p, s, [n])
+   deallocate(text)
+   allocate(character(len=n) :: text)
+   do k = 1_int32, n
+      text(k:k) = s(k)
+   enddo
+   endfunction ct_clipboard
 endmodule figure_core_text

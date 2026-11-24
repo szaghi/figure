@@ -36,7 +36,8 @@ Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figur
   word at the cursor.
 - `figure_code_view`: the editor drawn: the glue's `fig_editor_draw` (the style's palette, IBM Plex Mono, a bordered
   child window) and `fig_editor_line_rect`; the fork's `render` in its order, `updateState`, the type setter (a row a
-  line), the bracketeer, the scroll requests. It draws through `figure_core_text` (`src/paths/imgui/core/`, the inner
+  line), the bracketeer, the scroll requests; the keys and the mouse (`handleKeyboardInputs`,
+  `handleMouseInteractions`) with the edits and moves they make. It draws through `figure_core_text` (`src/paths/imgui/core/`, the inner
   seam's calls for the editor, `ct_*`).
 - `figure_code_diff`: dtl's `Diff::compose` (the O(NP) shortest edit script of two texts' lines) and the glue's
   `fig_code_diff_lines`.
@@ -50,7 +51,9 @@ on `figure_editor`'s `code_editor_object` (C++) and `figure_editor_fortran`'s (F
 `code_diff_lines` reports for 400 random pairs of texts. `_draw`: both editors drawn by the same calls in a window at
 the same place, each frame's draw result, cursor, selection and lines' rectangles to the bit, the last pictures at
 threshold 2 with no pixel failing (marks and their tooltips, focus and the caret, brackets, selections, white space,
-tabs, wide glyphs, scrolling, the light palette, options).
+tabs, wide glyphs, scrolling, the light palette, options). `_input`: the same scripted keys, characters, clicks, drags,
+middle button and wheel played to both editors, each frame's text, cursor, selection and rectangles to the bit, the
+last pictures equal.
 
 ## The native calls the seam replaces
 
