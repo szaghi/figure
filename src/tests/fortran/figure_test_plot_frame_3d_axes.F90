@@ -7,15 +7,18 @@ program figure_test_plot_frame_3d_axes
 !< corners' and two inner points' pixels, the pointer's ray in plot coordinates and whether it is over the plot; the
 !< last frame's pictures at FIGURE's oracle rule (|d| <= 2, no pixel failing). The cases:
 !<
-!< 1. a log10 z axis set up after the limits (ImPlot3D caches the scaled range when the range is set: the log axis maps
-!<    against the linear range of the first frame, until the range changes; the pointer's ray is then infinite or NaN,
-!<    equal when NaN on both sides), its decades and unlabelled minors;
-!< 2. symlog x across zero ([-1000, 50]: the decades on both sides) and symlog y within [-1, 1] (the default ticks);
+!< 1. a log10 z axis set up after the limits (FIGURE's ImPlot3D patch 0003: the scaled range cached again when the
+!<    scale is set; upstream mapped against the linear range cached by the limits until the range changed, the
+!<    pointer's ray infinite or NaN), its decades and unlabelled minors; the ray finite on every frame of both sides;
+!< 2. symlog x across zero ([-1000, 50]: the decades on both sides) and symlog y within [-1, 1] (the default ticks),
+!<    set up after the limits;
 !< 3. custom ticks: x with labels (trailing blanks not shown), y through a format ('%.1f m'), z's format '%.0e' on its
 !<    default ticks;
-!< 4. the flags: x locked, y without grid, z auto-fitting (no data: nothing to fit), a log10 y over [0.01, 1e5].
+!< 4. the flags: x locked, y without grid, z auto-fitting (no data: nothing to fit), a log10 y over [0.01, 1e5] (set up
+!<    after the limits too: the ray finite on every frame).
 !<
 !< The pictures are `figure_test_plot_frame_3d_axes.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ip3_begin_plot, ip3_end_plot, &
                    ip3_mouse_ray, ip3_plot_to_pixels, ip3_setup_axes, ip3_setup_axis, ip3_setup_axis_ticks,         &
@@ -65,6 +68,12 @@ do c = 1_int32, NCASE
       enddo
    enddo
    test_passed(c) = state_equal(c) .and. pictures_equal(c)
+   if (c == 1_int32 .or. c == NCASE) then ! a log axis set up after the limits: the pointer's ray finite
+      if (.not. all(ieee_is_finite(state(21:26, :, :)))) then
+         test_passed(c) = .false.
+         write(output_unit, '(A,I0,A)') 'case ', c, ': the pointer''s ray is not finite'
+      endif
+   endif
 enddo
 call app%destroy()
 call get_environment_variable('FIGURE_TEST_KEEP', keep)

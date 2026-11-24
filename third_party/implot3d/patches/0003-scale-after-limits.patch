@@ -1,0 +1,33 @@
+FIGURE's patch 3 of 3 to ImPlot3D (commit c54525f8d46cece384cc2618761a2c55016b06db, the submodule of cimplot3d v0.5).
+
+An axis caches its scaled range (UpdateTransformCache) when its range is set, through the transform it has then. A
+scale set after the limits (FIGURE's ip3_setup_axes(limits=...) then ip3_setup_axis(scale='log'), on a plot's first
+frame) left the cache linear: the log or symlog axis mapped against the linear range until the range next changed,
+and the pointer's ray came out infinite or NaN (#15, finding U5). SetupAxisScale now constrains the range to the new
+scale's constraint (a log axis's minimum above zero) and caches the scaled range through the new transform; the
+custom-transform overload caches it too. In ImPlot3D's own order (the scale, then the limits) nothing changes.
+Applied to third_party/implot3d/implot3d.cpp; without it src/tests/fortran/figure_test_plot_frame_3d_axes.F90's
+cases 1, 2 and 4 (a log z, symlog x and y, a log y, each set up after the limits) map against the linear range on the
+current path, case 1's pointer ray not finite. To offer upstream.
+
+--- a/implot3d.cpp
++++ b/implot3d.cpp
+@@ -2046,6 +2046,10 @@
+             axis.ConstraintRange = ImPlot3DRange(-INFINITY, INFINITY);
+             break;
+     }
++    // FIGURE: the range within the scale's constraint and the scaled range cached through the new transform (a scale set
++    // after the limits mapped against the range cached linear, until the range changed)
++    axis.Constrain();
++    axis.UpdateTransformCache();
+ }
+ 
+ void SetupAxisScale(ImAxis3D idx, ImPlot3DTransform forward, ImPlot3DTransform inverse, void* data) {
+@@ -2058,6 +2062,7 @@
+     axis.TransformForward = forward;
+     axis.TransformInverse = inverse;
+     axis.TransformData = data;
++    axis.UpdateTransformCache(); // FIGURE: the scaled range cached through the new transform
+ }
+ 
+ void SetupAxisLimitsConstraints(ImAxis3D idx, double v_min, double v_max) {

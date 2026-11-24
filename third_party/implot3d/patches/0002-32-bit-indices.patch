@@ -1,4 +1,4 @@
-FIGURE's patch 2 of 2 to ImPlot3D (commit c54525f8d46cece384cc2618761a2c55016b06db, the submodule of cimplot3d v0.5).
+FIGURE's patch 2 of 3 to ImPlot3D (commit c54525f8d46cece384cc2618761a2c55016b06db, the submodule of cimplot3d v0.5).
 
 ImDrawList3D kept its indices in Dear ImGui's ImDrawIdx (16-bit), so RenderPrimitivesEx drew, of a plot, only the
 primitives that 65535 vertices hold: a 256 x 256 surface (4 vertices per cell) showed 16383 of its 65025 cells, the

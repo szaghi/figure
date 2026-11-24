@@ -2046,6 +2046,10 @@ void SetupAxisScale(ImAxis3D idx, ImPlot3DScale scale) {
             axis.ConstraintRange = ImPlot3DRange(-INFINITY, INFINITY);
             break;
     }
+    // FIGURE: the range within the scale's constraint and the scaled range cached through the new transform (a scale set
+    // after the limits mapped against the range cached linear, until the range changed)
+    axis.Constrain();
+    axis.UpdateTransformCache();
 }
 
 void SetupAxisScale(ImAxis3D idx, ImPlot3DTransform forward, ImPlot3DTransform inverse, void* data) {
@@ -2058,6 +2062,7 @@ void SetupAxisScale(ImAxis3D idx, ImPlot3DTransform forward, ImPlot3DTransform i
     axis.TransformForward = forward;
     axis.TransformInverse = inverse;
     axis.TransformData = data;
+    axis.UpdateTransformCache(); // FIGURE: the scaled range cached through the new transform
 }
 
 void SetupAxisLimitsConstraints(ImAxis3D idx, double v_min, double v_max) {

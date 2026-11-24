@@ -21,9 +21,9 @@ module figure_plot3d_frame
 !< `GetAutoColor` from Dear ImGui's style of now; packed without the style's alpha as `GetStyleColorU32`, or with it where
 !< ImPlot3D calls `GetColorU32`).
 !<
-!< Axes (step 3): log10 and symlog scales (`SetupAxisScale`: ImPlot3D's transforms, constraints and locators; the scaled
-!< range cached when the range is set, as `UpdateTransformCache`: a scale set after the limits on a plot's first frame
-!< maps against the linear range until the range changes, as ImPlot3D), custom ticks (`SetupAxisTicks`: minor ticks,
+!< Axes (step 3): log10 and symlog scales (`SetupAxisScale`: ImPlot3D's transforms, constraints and locators; the range
+!< constrained and the scaled range cached when the scale is set, as FIGURE's ImPlot3D patch 0003, so a scale set
+!< after the limits maps against its own scaled range from the first frame on), custom ticks (`SetupAxisTicks`: minor ticks,
 !< labelled, the default ones off), a printf format of the tick labels (`SetupAxisFormat` with FIGURE's formatter:
 !< figure_plot_format's glibc printf), lock, no grid, auto-fit.
 !<
@@ -491,6 +491,10 @@ contains
          case default
             error stop "figure_plot3d_frame: pf3_setup_axis: a scale is 'linear', 'log' or 'symlog'"
          endselect
+         if (scale /= 'linear') then ! SetupAxisScale's end (FIGURE's ImPlot3D patch 0003): Constrain,
+            call constrain(p, i)     ! UpdateTransformCache
+            call update_scaled(p, i)
+         endif
       endif
       if (present(format)) call fmt_parse(format, p%ax(i)%fmt)
    endassociate
