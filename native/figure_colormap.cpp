@@ -1188,6 +1188,32 @@ int fig_gradient_edit(const char *id, int id_len, const char *name, int name_len
    }
 }
 
+int fig_colormap_set_stops(const char *name, int name_len, const double *pos, const double *rgb, int n, int *changed) {
+   try {
+      *changed = 0;
+      if (!ImPlot::GetCurrentContext()) return fail(FIG_ERR_STATE, "ig_gradient_edit: figure is not initialized");
+      const std::string nm = str(name, name_len);
+      std::string err;
+      if (!editable(nm, "ig_gradient_edit", err)) return fail(FIG_ERR_ARGUMENT, err);
+      if (n < 1) return fail(FIG_ERR_ARGUMENT, "ig_gradient_edit: no stops");
+      if (implot_map(nm) >= 0) apply_builtin(nm);
+      gradient_t &g = gradient_of(nm);
+      std::vector<ImVec4> s(static_cast<size_t>(n));
+      for (int i = 0; i < n; ++i)
+         s[static_cast<size_t>(i)] = ImVec4(static_cast<float>(rgb[3 * i]), static_cast<float>(rgb[3 * i + 1]),
+                                            static_cast<float>(rgb[3 * i + 2]), static_cast<float>(pos[i]));
+      if (same_stops(g.stops, s)) return FIG_OK;
+      g.stops = s;
+      resample_from_stops(nm, g);
+      *changed = 1;
+      return FIG_OK;
+   } catch (const std::exception &e) {
+      return fail(FIG_ERR_EXCEPTION, std::string("C++ exception: ") + e.what());
+   } catch (...) {
+      return fail(FIG_ERR_EXCEPTION, "unknown C++ exception");
+   }
+}
+
 int fig_colormap_stops(const char *name, int name_len, double *pos, double *rgb, int cap, int *n) {
    try {
       *n = 0;

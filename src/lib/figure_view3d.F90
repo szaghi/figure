@@ -27,6 +27,7 @@ use, intrinsic :: iso_c_binding, only : c_char, c_double, c_int, c_long_long, c_
 use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64
 use figure_base, only : figure_check, figure_draw_refused, figure_fail, figure_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
+use figure_view3d_gizmos, only : fig_view3d_cube, fig_view3d_gizmo ! the gizmos' seam (szaghi/figure#15 P14)
 
 implicit none
 private
@@ -229,30 +230,6 @@ interface
    real(c_double), intent(out) :: view(16), projection(16)
    integer(c_int)              :: status
    endfunction fig_view3d_matrices
-
-   function fig_view3d_cube(handle, size, corner, changed) result(status) bind(C, name='fig_view3d_cube')
-   import :: c_double, c_int
-   implicit none
-   integer(c_int), value       :: handle
-   real(c_double), value       :: size
-   integer(c_int), value       :: corner
-   integer(c_int), intent(out) :: changed
-   integer(c_int)              :: status
-   endfunction fig_view3d_cube
-
-   function fig_view3d_gizmo(handle, id, id_len, matrix, mode, space, has_snap, snap, changed) result(status) &
-      bind(C, name='fig_view3d_gizmo')
-   import :: c_char, c_double, c_int
-   implicit none
-   integer(c_int),         value         :: handle
-   character(kind=c_char), intent(in)    :: id(*)
-   integer(c_int),         value         :: id_len
-   real(c_double),         intent(inout) :: matrix(16)
-   integer(c_int),         value         :: mode, space, has_snap
-   real(c_double),         value         :: snap
-   integer(c_int),         intent(out)   :: changed
-   integer(c_int)                        :: status
-   endfunction fig_view3d_gizmo
 
    function fig_view3d_info(handle, renders, ms, width, height, half) result(status) bind(C, name='fig_view3d_info')
    import :: c_double, c_int
@@ -653,7 +630,7 @@ contains
 
    if (figure_refused('view3d_object%view', stat)) return
    if (.not. alive(self, 'view', stat)) return
-   select case (trim(adjustl(name)))
+   select case (name(max(verify(name, ' '), 1):len_trim(name))) ! no temporary (no heap allocation)
    case ('+x'); w = 0_c_int
    case ('-x'); w = 1_c_int
    case ('+y'); w = 2_c_int
@@ -872,7 +849,7 @@ contains
    if (present(size)) s = real(size, c_double)
    c = 0_c_int
    if (present(corner)) then
-      select case (trim(adjustl(corner)))
+      select case (corner(max(verify(corner, ' '), 1):len_trim(corner))) ! no temporary (no heap allocation)
       case ('top-right'); c = 0_c_int
       case ('top-left'); c = 1_c_int
       case ('bottom-right'); c = 2_c_int
@@ -915,13 +892,14 @@ contains
    real(c_double)                              :: a(16)        !< C copy.
    real(c_double)                              :: step         !< Snap.
    integer(c_int)                              :: has_step     !< Snap given.
+   integer(int32)                              :: k            !< Counter.
 
    changed = .false.
    if (figure_draw_refused('view3d_object%gizmo', stat)) return
    if (.not. alive(self, 'gizmo', stat)) return
    m = 0_c_int
    if (present(mode)) then
-      select case (trim(adjustl(mode)))
+      select case (mode(max(verify(mode, ' '), 1):len_trim(mode))) ! no temporary (no heap allocation)
       case ('translate'); m = 0_c_int
       case ('rotate'); m = 1_c_int
       case ('scale'); m = 2_c_int
@@ -933,7 +911,7 @@ contains
    endif
    s = 0_c_int
    if (present(space)) then
-      select case (trim(adjustl(space)))
+      select case (space(max(verify(space, ' '), 1):len_trim(space))) ! no temporary (no heap allocation)
       case ('world'); s = 0_c_int
       case ('local'); s = 1_c_int
       case default
@@ -948,11 +926,15 @@ contains
       step = real(snap, c_double)
       has_step = 1_c_int
    endif
-   a = reshape(real(matrix, c_double), [16])
+   do k = 1_int32, 16_int32 ! element by element: no temporary (no heap allocation per frame)
+      a(k) = real(matrix(mod(k - 1_int32, 4_int32) + 1_int32, (k - 1_int32) / 4_int32 + 1_int32), c_double)
+   enddo
    moved = 0_c_int
    call figure_check(fig_view3d_gizmo(self%handle, id, len(id, c_int), a, m, s, has_step, step, moved), stat)
    if (moved /= 0_c_int) then
-      matrix = reshape(real(a, real64), [4, 4])
+      do k = 1_int32, 16_int32
+         matrix(mod(k - 1_int32, 4_int32) + 1_int32, (k - 1_int32) / 4_int32 + 1_int32) = real(a(k), real64)
+      enddo
       changed = .true.
    endif
    endfunction gizmo

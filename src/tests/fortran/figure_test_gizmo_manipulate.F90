@@ -1,11 +1,12 @@
-!< figure_test_gizmo_manipulate, the Fortran gizmos (figure_gizmo's `gz_view_gizmo`) against ImGuizmo's `Manipulate`.
+!< figure_test_gizmo_manipulate, the Fortran gizmos (`v%gizmo` on the Fortran path) against ImGuizmo's `Manipulate`.
 program figure_test_gizmo_manipulate
-!< figure_test_gizmo_manipulate, the Fortran gizmos (figure_gizmo's `gz_view_gizmo`) against ImGuizmo's `Manipulate`.
+!< figure_test_gizmo_manipulate, the Fortran gizmos (`v%gizmo` on the Fortran path) against ImGuizmo's `Manipulate`.
 !<
 !< szaghi/figure#15 P14. A 400 x 400 view of a cube (eye at azimuth 30, elevation 20, 8 units from the origin), and a
 !< gizmo moving a matrix at the origin, driven by the same scripted input at the same frames, first through FIGURE's
-!< current path (`v%gizmo`: native/figure_view3d.cpp over ImGuizmo), then through the Fortran gizmo (`gz_view_gizmo`
-!< on the same view), 40 frames apart, the camera and the matrix set again before each side. The cases:
+!< current path (`fig_view3d_gizmo` of `figure_view3d_gizmos_ref`: native/figure_view3d.cpp over ImGuizmo), then
+!< through FIGURE's API on the Fortran path (`v%gizmo`: figure_gizmo), on the same view, 40 frames apart, the camera
+!< and the matrix set again before each side. The cases:
 !<
 !< 1. translate, world: the x arrow dragged; 2. the same with a snap of 0.25; 3. translate, local, the matrix turned
 !< 30 degrees about z: its own x arrow dragged; 4. translate on the screen's plane (the centre); 5. rotate, world: the
@@ -22,7 +23,7 @@ use, intrinsic :: iso_c_binding, only : c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_item_rect, ig_set_next_window, view3d_object, &
                    ImGuiWindowFlags_NoDecoration, FIG_OK
-use figure_gizmo, only : gz_view_gizmo
+use figure_view3d_gizmos_ref, only : fig_view3d_gizmo
 use figure_testing, only : test_capture, test_compare_image, test_mouse_button, test_mouse_move
 use figure_view3d, only : view3d_handle
 
@@ -126,7 +127,7 @@ contains
    call ig_item_rect(x0, y0, x1, y1)
    view0 = [x0, y0]
    changed = .false.
-   if (who == 1_int32) then
+   if (who == 2_int32) then
       select case (k)
       case (2_int32)
          changed = v%gizmo('g', m, mode='translate', snap=0.25_real64)
@@ -148,21 +149,21 @@ contains
       moved = 0_c_int
       select case (k)
       case (2_int32)
-         s = gz_view_gizmo(view3d_handle(v), 'g', a, 0_c_int, 0_c_int, 1_c_int, 0.25_c_double, moved)
+         s = fig_view3d_gizmo(view3d_handle(v), 'g', 1_c_int, a, 0_c_int, 0_c_int, 1_c_int, 0.25_c_double, moved)
       case (3_int32)
-         s = gz_view_gizmo(view3d_handle(v), 'g', a, 0_c_int, 1_c_int, 0_c_int, 0.0_c_double, moved)
+         s = fig_view3d_gizmo(view3d_handle(v), 'g', 1_c_int, a, 0_c_int, 1_c_int, 0_c_int, 0.0_c_double, moved)
       case (5_int32)
-         s = gz_view_gizmo(view3d_handle(v), 'g', a, 1_c_int, 0_c_int, 0_c_int, 0.0_c_double, moved)
+         s = fig_view3d_gizmo(view3d_handle(v), 'g', 1_c_int, a, 1_c_int, 0_c_int, 0_c_int, 0.0_c_double, moved)
       case (6_int32)
-         s = gz_view_gizmo(view3d_handle(v), 'g', a, 1_c_int, 1_c_int, 1_c_int, 15.0_c_double, moved)
+         s = fig_view3d_gizmo(view3d_handle(v), 'g', 1_c_int, a, 1_c_int, 1_c_int, 1_c_int, 15.0_c_double, moved)
       case (7_int32)
-         s = gz_view_gizmo(view3d_handle(v), 'g', a, 2_c_int, 0_c_int, 0_c_int, 0.0_c_double, moved)
+         s = fig_view3d_gizmo(view3d_handle(v), 'g', 1_c_int, a, 2_c_int, 0_c_int, 0_c_int, 0.0_c_double, moved)
       case (8_int32)
-         s = gz_view_gizmo(view3d_handle(v), 'g', a, 2_c_int, 0_c_int, 1_c_int, 0.5_c_double, moved)
+         s = fig_view3d_gizmo(view3d_handle(v), 'g', 1_c_int, a, 2_c_int, 0_c_int, 1_c_int, 0.5_c_double, moved)
       case default
-         s = gz_view_gizmo(view3d_handle(v), 'g', a, 0_c_int, 0_c_int, 0_c_int, 0.0_c_double, moved)
+         s = fig_view3d_gizmo(view3d_handle(v), 'g', 1_c_int, a, 0_c_int, 0_c_int, 0_c_int, 0.0_c_double, moved)
       endselect
-      if (s /= FIG_OK) write(output_unit, '(A)') 'gz_view_gizmo: '//figure_last_error()
+      if (s /= FIG_OK) write(output_unit, '(A)') 'fig_view3d_gizmo: '//figure_last_error()
       if (moved /= 0_c_int) then
          m = reshape(a, [4, 4])
          changed = .true.

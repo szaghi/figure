@@ -518,6 +518,12 @@ int    fig_colormap_name(int index, char *buf, int buf_len);
 int      fig_gradient_edit(const char *id, int id_len, const char *name, int name_len, float width, float height,
                            int *changed);
 int      fig_colormap_stops(const char *name, int name_len, double *pos, double *rgb, int cap, int *n);
+/* The stops of the map `name` set (the Fortran path's gradient editor, szaghi/figure#15 P14: its edits given to this
+ * registry, which the 3-D view's colouring reads): n positions pos[n] and colours rgb[3 n], in the editor's order;
+ * the map resampled as fig_gradient_edit resamples it, changed 1, unless they are the stops it has. Refusals and
+ * messages as fig_gradient_edit's. */
+int      fig_colormap_set_stops(const char *name, int name_len, const double *pos, const double *rgb, int n,
+                                int *changed);
 unsigned fig_colormap_generation(void);
 /* ImPlot3D (figure_plot3d.cpp): fig_plot3d_colormap gives the ImPlot3D id of the ImPlot colormap implot_id (FIGURE's
  * registry: fig_colormap), copied into ImPlot3D's registry under its name at its first use, and its keys copied again

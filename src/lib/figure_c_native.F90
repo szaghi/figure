@@ -55,7 +55,7 @@ public :: fig_file_browser, fig_file_browser_settings, fig_file_browser_get, fig
 public :: fig_text_set, fig_text_get, fig_text_length, fig_text_release, fig_widget_input_text_multiline
 public :: fig_input_drop, fig_dropped, fig_dropped_path, fig_set_clipboard, fig_get_clipboard
 public :: fig_colormap, fig_load_colormap, fig_colormap_count, fig_colormap_name
-public :: fig_gradient_edit, fig_colormap_stops
+public :: fig_gradient_edit, fig_colormap_stops, fig_colormap_set_stops
 public :: fig_plot_annotation, fig_drawn_extent_rgba, fig_plot_tag
 public :: fig_colormap_legend, fig_popup_rect, fig_opened_url
 public :: fig_items_record, fig_item_find, fig_item_value, fig_items_list, fig_items_name, fig_items_tooltip
@@ -2160,6 +2160,21 @@ interface
    integer(c_int), intent(out)         :: changed  !< 1: the map changed on this frame.
    integer(c_int)                      :: status   !< Status.
    endfunction fig_gradient_edit
+
+   function fig_colormap_set_stops(name, name_len, pos, rgb, n, changed) result(status) &
+      bind(C, name='fig_colormap_set_stops')
+   !< The stops of the colormap `name` set in the native registry (the Fortran path's gradient editor's edits), in the
+   !< editor's order; the map resampled, changed 1, unless they are the stops it has.
+   import :: c_char, c_double, c_int
+   implicit none
+   character(kind=c_char), intent(in)  :: name(*)    !< Map.
+   integer(c_int),         value       :: name_len   !< Its length.
+   real(c_double),         intent(in)  :: pos(*)     !< Positions.
+   real(c_double),         intent(in)  :: rgb(*)     !< Colours (3 n).
+   integer(c_int),         value       :: n          !< Stops.
+   integer(c_int),         intent(out) :: changed    !< Resampled.
+   integer(c_int)                      :: status     !< Status.
+   endfunction fig_colormap_set_stops
 
    function fig_colormap_stops(name, name_len, pos, rgb, cap, n) result(status) bind(C, name='fig_colormap_stops')
    !< The stops of the colormap `name` (sorted by position): up to `cap` copied, `n` their number.

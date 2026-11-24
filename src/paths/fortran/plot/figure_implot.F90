@@ -16,9 +16,10 @@ module figure_implot
 !<   ImPlot context, and `ps_refresh` brings it into the frame's (figure_plot_style) whenever it changed
 !<   (`fig_generations`), at each entry point: a push inside a plot reaches the next item;
 !< - the colormaps: the frame's registry (figure_plot_colormaps). Until the 3-D seam's switch, `ip_colormap` and
-!<   `ip_load_colormap` also register in the native one, which ImPlot3D (`ip3_surface`, the 3-D views) and the gradient
-!<   editor's widget (`ig_gradient_edit`, native: its edits given to the frame's registry) read: the same names in the
-!<   same order, so the same ids; the statuses and messages of those two are the native layer's;
+!<   `ip_load_colormap` also register in the native one, which the 3-D views (`view3d_object`, native) read: the same
+!<   names in the same order, so the same ids; the statuses and messages of those two are the native layer's. The
+!<   gradient editor (`ig_gradient_edit`) is figure_gradient_edit's (P14), its edits made in the frame's registry and
+!<   given to the native one (`fig_colormap_set_stops`);
 !< - `fig_plot_end`, `fig_plot_state`, `fig_plot_axis_constraints`, `fig_plot_x_transform`, `fig_plot_annotation`,
 !<   `fig_plot_tag`, `fig_plot_link`, `fig_aligned_open`, `fig_dnd_plot_target`, `fig_colormap_legend`,
 !<   `fig_field_image`, `fig_texture_sampling`: the frame's `pf_*` (their native refusals, which the frame stops on,
@@ -53,7 +54,7 @@ use figure_base, only : figure_check, figure_draw_refused, figure_fail, figure_r
                         figure_scope_refused, figure_usage_error, format_refused, FORMAT_REAL, SCOPE_PLOT, SCOPE_SUBPLOTS, &
                         SCOPE_ALIGNED, SCOPE_LEGEND_POPUP
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_ERR_STATE, FIG_OK, fig_colormap, fig_colormap_stops, &
-                            fig_gradient_edit, fig_load_colormap
+                            fig_colormap_set_stops, fig_load_colormap
 use figure_cimplot, only : ImPlot_GetColormapCount
 use figure_core, only : core_end_popup
 use figure_plot_series, only : plot_copies, plot_stride, series_gap
@@ -61,8 +62,9 @@ use figure_texture, only : texture_object
 use figure_plot_colorbar, only : pf_colormap_legend, pf_colormap_legend_edit
 use figure_plot_cmap_ids, only : cm_frame_id, cm_frame_id_set
 use figure_plot_scope, only : plot_path_ready
-use figure_plot_colormaps, only : cm_colormap, cm_edit_stops, cm_list_count, cm_list_name, cm_load, cm_push, &
-                                  cm_sample, cm_stops
+use figure_plot_colormaps, only : cm_colormap, cm_gradient_get, cm_gradient_size, cm_gradient_slot, cm_list_count, &
+                                  cm_list_name, cm_load, cm_push, cm_sample, cm_stops
+use figure_gradient_edit, only : gz_gradient_edit
 use figure_plot_frame, only : pf_aligned_open, pf_annotation, pf_begin_aligned, pf_begin_legend_popup, pf_begin_plot, &
                               pf_begin_subplots, pf_cancel_selection, pf_colormap_scale, pf_drop_target, pf_end_aligned, &
                               pf_end_legend_popup, pf_end_plot, pf_end_subplots, pf_hide_next_item, pf_last_item_color,   &
@@ -2743,43 +2745,48 @@ contains
    real(real64),     intent(in),  optional :: height   !< Height [pixels].
    integer(int32),   intent(out), optional :: stat     !< Status.
    logical                                 :: changed  !< The map changed on this frame.
-   real(c_float)                           :: w        !< Width.
-   real(c_float)                           :: h        !< Height.
-   integer(c_int)                          :: c        !< Changed.
-   integer(c_int)                          :: s        !< Status.
+   real(real32)                            :: w        !< Width.
+   real(real32)                            :: h        !< Height.
+   integer(int32)                          :: st       !< Status.
+   character(len=:), allocatable           :: err      !< Message.
 
    changed = .false.
    if (refused('ig_gradient_edit', stat)) return
-   w = 0.0_c_float
-   if (present(width)) w = real(width, c_float)
-   h = 0.0_c_float
-   if (present(height)) h = real(height, c_float)
-   c = 0_c_int
-   s = fig_gradient_edit(id, len(id, c_int), colormap, len_trim(colormap, c_int), w, h, c) ! the native widget
-   if (s == FIG_OK .and. c /= 0_c_int) call edited(colormap(1:len_trim(colormap)))       ! its stops to the frame's map
-   call figure_check(s, stat)
-   changed = c /= 0_c_int
+   w = 0.0_real32
+   if (present(width)) w = real(width, real32)
+   h = 0.0_real32
+   if (present(height)) h = real(height, real32)
+   call gz_gradient_edit(id, colormap(1:len_trim(colormap)), w, h, changed, st, err) ! figure_gradient_edit's widget
+   if (st /= FIG_OK) then
+      call figure_fail(int(st, c_int), err, stat)
+      return
+   endif
+   if (changed) call edited(colormap(1:len_trim(colormap))) ! its stops to the native registry
+   call figure_check(FIG_OK, stat)
    endfunction ig_gradient_edit
 
    subroutine edited(name)
-   !< The stops `ig_gradient_edit` (the native widget, until the widgets' layer is ported) gave a map, given to the
-   !< frame's registry (`cm_edit_stops`: the map resampled from them, its variants rewritten).
+   !< The stops the gradient editor gave a map (the frame's registry, `cm_gradient_slot`, in the editor's order), given
+   !< to the native registry (`fig_colormap_set_stops`), which the 3-D views' colouring reads.
    character(len=*), intent(in)  :: name     !< The map.
-   real(c_double)                :: p(1)     !< Probe.
-   real(c_double)                :: q(3)     !< Probe.
-   real(c_double), allocatable   :: pos(:)   !< Positions.
-   real(c_double), allocatable   :: rgb(:,:) !< Colours.
-   integer(c_int)                :: n, s     !< Stops, status.
-   integer(int32)                :: st       !< The frame's status.
-   character(len=:), allocatable :: err      !< ... its message.
+   real(real32),     allocatable :: s(:,:)   !< Stops.
+   real(c_double),   allocatable :: pos(:)   !< Positions.
+   real(c_double),   allocatable :: rgb(:)   !< Colours.
+   integer(int32)                :: g, n, k  !< Slot, stops, counter.
+   integer(int32)                :: st       !< Status.
+   integer(c_int)                :: c, s_    !< Changed, status.
+   character(len=:), allocatable :: err      !< Message.
 
-   n = 0_c_int
-   s = fig_colormap_stops(name, len(name, c_int), p, q, 0_c_int, n)
-   if (s /= FIG_OK .or. n < 2_c_int) return
-   allocate(pos(n), rgb(3, n))
-   s = fig_colormap_stops(name, len(name, c_int), pos, rgb, n, n)
-   if (s /= FIG_OK) return
-   call cm_edit_stops(name, real(pos, real64), real(rgb, real64), st, err)
+   g = cm_gradient_slot(name, st, err)
+   if (st /= FIG_OK) return
+   n = cm_gradient_size(g)
+   allocate(s(4, n), pos(n), rgb(3 * n))
+   call cm_gradient_get(g, s)
+   do k = 1_int32, n
+      pos(k) = real(s(4, k), c_double)
+      rgb(3 * k - 2:3 * k) = real(s(1:3, k), c_double)
+   enddo
+   s_ = fig_colormap_set_stops(name, len(name, c_int), pos, rgb, int(n, c_int), c)
    endsubroutine edited
 
    recursive subroutine ip_colormap_stops(name, positions, colours, stat)

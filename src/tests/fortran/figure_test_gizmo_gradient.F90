@@ -1,25 +1,27 @@
-!< figure_test_gizmo_gradient, the Fortran gradient editor (figure_gradient_edit) against ImGuizmo's ImGradient.
+!< figure_test_gizmo_gradient, the Fortran gradient editor (`ig_gradient_edit` on the Fortran path) against ImGradient.
 program figure_test_gizmo_gradient
-!< figure_test_gizmo_gradient, the Fortran gradient editor (figure_gradient_edit) against ImGuizmo's ImGradient.
+!< figure_test_gizmo_gradient, the Fortran gradient editor (`ig_gradient_edit` on the Fortran path) against ImGradient.
 !<
 !< szaghi/figure#15 P14. Three maps (ImPlot's Viridis, the bundled batlow, a user's loaded from a CSV) are edited by
 !< the same scripted input at the same frames, first with FIGURE's current path's editor (`ig_gradient_edit` of
-!< `figure_implot_ref`: native/figure_colormap.cpp over ImGradient), then with the Fortran one (`gz_gradient_edit`), 40
-!< frames apart, in a window without a title bar (a press on no item would move it). The input: the pointer over the
+!< `figure_implot_ref`: native/figure_colormap.cpp over ImGradient), then with FIGURE's API on the Fortran path
+!< (`ig_gradient_edit`: figure_gradient_edit), 40 frames apart, in a window without a title bar (a press on no item
+!< would move it). The input: the pointer over the
 !< first stop, a press (it is selected), a drag to the right (it moves, clamped at 1 past the end), the release; a
 !< double click on the row (a stop added there, of the map's colour); a click on the last stop, then on Remove (it is
 !< removed); a click on the strip (nothing). Checked on every frame, to the bit: the map's stops (native
 !< `ip_colormap_stops` against `cm_stops`, sorted), whether the frame reported a change, the window's position; the
 !< pictures of four frames at FIGURE's oracle rule (|d| <= 2, no pixel failing). The editors' IDs differ (`##ref`,
-!< `##fortran`): each keeps its selection in the window's storage.
+!< `##fortran`): each keeps its selection in the window's storage. After the Fortran side, the native registry holds
+!< its stops (`fig_colormap_set_stops`: what the 3-D views colour with): native `ip_colormap_stops` equal to `cm_stops`.
 !<
 !< The CSV and the pictures are `figure_test_gizmo_gradient.*.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
-use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
-use figure_implot_ref, only : ig_gradient_edit, ip_colormap_stops, ip_load_colormap
+use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_gradient_edit, ig_set_next_window, &
+                   ImGuiWindowFlags_NoDecoration
+use figure_implot_ref, only : ref_gradient_edit => ig_gradient_edit, ip_colormap_stops, ip_load_colormap
 use figure_cimgui_enums, only : ImGuiStyleVar_FramePadding, ImGuiStyleVar_ItemSpacing
 use figure_core, only : core_frame_height, core_style_vec2, core_text_size, core_window_pos
-use figure_gradient_edit, only : gz_gradient_edit
 use figure_plot_colormaps, only : cm_load, cm_stops
 use figure_testing, only : test_capture, test_compare_image, test_mouse_button, test_mouse_move, test_next_frame
 
@@ -97,11 +99,12 @@ contains
    character(len=:), allocatable :: e           !< Message.
 
    if (side == 1_int32) then
-      changed = ig_gradient_edit('##ref', trim(MAPS(k)), width=WIDTH, stat=s)
+      changed = ref_gradient_edit('##ref', trim(MAPS(k)), width=WIDTH, stat=s)
       call ip_colormap_stops(trim(MAPS(k)), p, c, s)
    else
-      call gz_gradient_edit('##fortran', trim(MAPS(k)), real(WIDTH, real32), 0.0_real32, changed, s, e)
+      changed = ig_gradient_edit('##fortran', trim(MAPS(k)), width=WIDTH, stat=s)
       call cm_stops(trim(MAPS(k)), p, c, s, e)
+      if (fr == NF) call synced(k, p, c)
    endif
    call core_window_pos(wx, wy)
    state(1, fr, side) = merge(1.0_real64, 0.0_real64, changed)
@@ -121,6 +124,21 @@ contains
       cy = 8.0_real64 + row + isy + 0.5_real64 * row ! the stops' row's middle
    endif
    endsubroutine draw
+
+   subroutine synced(k, p, c)
+   !< The native registry holds the Fortran side's stops of map k.
+   integer(int32), intent(in) :: k       !< Map.
+   real(real64),   intent(in) :: p(:), c(:,:) !< The Fortran side's stops.
+   real(real64), allocatable  :: q(:), d(:,:) !< The native ones.
+   integer(int32)             :: s       !< Status.
+
+   call ip_colormap_stops(trim(MAPS(k)), q, d, s)
+   if (size(q) == size(p)) then
+      if (all(q == p) .and. all(d == c)) return
+   endif
+   test_passed(k) = .false.
+   write(output_unit, '(A)') trim(MAPS(k))//': the native registry does not hold the edited stops'
+   endsubroutine synced
 
    subroutine pointer(fr)
    !< The input after frame fr, the same on both sides.

@@ -31,7 +31,8 @@ use figure_gizmo_math, only : DEG2RAD, FLT_EPSILON, FLT_MAX, RAD2DEG, ZPI, build
                               c_fmodf, c_sinf, look_at, mat_identity, mat_inverse, mat_mul, mat_ortho_normalize,    &
                               mat_rotation_axis, mat_scale, mat_translation, perspective, vec, vec_cross, vec_dot,  &
                               vec_dot3, vec_length, vec_length_sq, vec_lerp, vec_normalize, vec_normalized,         &
-                              vec_transform, vec_transform_point, vec_transform_vector
+                              vec_transform, vec_transform_point, vec_transform_vector, &
+                              vadd, vmul, vneg, vsub
 use figure_plot_format, only : fmt_int, fmt_parse, fmt_real, fmt_text, plot_format
 use figure_plot_hash, only : plot_hash_int
 
@@ -694,6 +695,7 @@ contains
    real(real32), intent(in)  :: view(4,4), proj(4,4) !< Matrices.
    real(real32), intent(in)  :: mx, my, px, py, sx, sy !< Pointer, rectangle.
    real(real32)              :: inv(4,4), vinv(4,4), mox, moy, ha(4), hb(4), pa(4), pb(4), eye(4), t !< ImGuizmo's.
+   real(real32)              :: d(4), la, lb     !< A difference, squared lengths.
    logical                   :: a_inf, b_inf     !< At infinity.
 
    inv = mat_inverse(mat_mul(view, proj))
@@ -711,21 +713,26 @@ contains
    if (.not. b_inf) pb = hb * (1.0_real32 / hb(4))
    vinv = mat_inverse(view)
    eye = vinv(:, 4)
-   if (vec_length_sq(pa - eye) <= vec_length_sq(pb - eye)) then
+   d = pa - eye ! differences in variables: nvfortran 26.9 makes a heap temporary of an array expression argument
+   la = vec_length_sq(d)
+   d = pb - eye
+   lb = vec_length_sq(d)
+   if (la <= lb) then
       origin = pa
       if (b_inf) then
-         dir = vec_normalized(pa - eye)
+         d = pa - eye
       else
-         dir = vec_normalized(pb - pa)
+         d = pb - pa
       endif
    else
       origin = pb
       if (a_inf) then
-         dir = vec_normalized(pb - eye)
+         d = pb - eye
       else
-         dir = vec_normalized(pa - pb)
+         d = pa - pb
       endif
    endif
+   dir = vec_normalized(d)
    endsubroutine camera_ray
 
    function segment_length_clip(start, end_, local) result(l)
@@ -733,7 +740,7 @@ contains
    real(real32), intent(in) :: start(4), end_(4) !< Segment.
    logical,      intent(in) :: local             !< Through mMVPLocal.
    real(real32)             :: l                 !< Length.
-   real(real32)             :: s(4), e(4), a(4), p, q !< Ends, axis, products.
+   real(real32)             :: s(4), e(4), a(4), p, q, f !< Ends, axis, products, a factor.
 
    if (local) then
       s = vec_transform_point(start, mvp_local)
@@ -742,8 +749,14 @@ contains
       s = vec_transform_point(start, mvp)
       e = vec_transform_point(end_, mvp)
    endif
-   if (abs(s(4)) > FLT_EPSILON) s = s * (1.0_real32 / s(4))
-   if (abs(e(4)) > FLT_EPSILON) e = e * (1.0_real32 / e(4))
+   if (abs(s(4)) > FLT_EPSILON) then ! the factor in a variable: no temporary for the overlap (nvfortran)
+      f = 1.0_real32 / s(4)
+      s = s * f
+   endif
+   if (abs(e(4)) > FLT_EPSILON) then
+      f = 1.0_real32 / e(4)
+      e = e * f
+   endif
    a = e - s
    if (display_ratio < 1.0_real32) then
       a(1) = a(1) * display_ratio
@@ -759,7 +772,7 @@ contains
    !< `GetParallelogram`.
    real(real32), intent(in) :: o(4), a(4), b(4) !< Corner, sides' ends.
    real(real32)             :: surface          !< Area in clip space.
-   real(real32)             :: pts(4, 3), sa(4), sb(4), ortho(4), dt, p, q !< ImGuizmo's.
+   real(real32)             :: pts(4, 3), sa(4), sb(4), ortho(4), dt, p, q, f !< ImGuizmo's.
    integer(int32)           :: i                !< Counter.
 
    pts(:, 1) = o
@@ -767,7 +780,10 @@ contains
    pts(:, 3) = b
    do i = 1_int32, 3_int32
       pts(:, i) = vec_transform_point(pts(:, i), mvp)
-      if (abs(pts(4, i)) > FLT_EPSILON) pts(:, i) = pts(:, i) * (1.0_real32 / pts(4, i))
+      if (abs(pts(4, i)) > FLT_EPSILON) then
+         f = 1.0_real32 / pts(4, i)
+         pts(:, i) = pts(:, i) * f
+      endif
    enddo
    sa = pts(:, 2) - pts(:, 1)
    sb = pts(:, 3) - pts(:, 1)
@@ -788,8 +804,8 @@ contains
    real(real32)             :: c(4), v(4), d, t       !< ImGuizmo's.
 
    c = point - v1
-   v = vec_normalized(v2 - v1)
-   d = vec_length(v2 - v1)
+   v = vec_normalized(vsub(v2, v1))
+   d = vec_length(vsub(v2, v1))
    t = vec_dot3(v, c)
    if (t < 0.0_real32) then
       r = v1
@@ -926,19 +942,19 @@ contains
       dir_y = dir_y * active_tripod_state%axis_factor(c)
    else
       ld = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), dir_axis, local)
-      ldm = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), -dir_axis, local)
+      ldm = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), vneg(dir_axis), local)
       lx = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), dir_x, local)
-      lxm = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), -dir_x, local)
+      lxm = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), vneg(dir_x), local)
       ly = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), dir_y, local)
-      lym = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), -dir_y, local)
+      lym = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), vneg(dir_y), local)
       ma = flip(ld, ldm)
       mx = flip(lx, lxm)
       my = flip(ly, lym)
       dir_axis = dir_axis * ma
       dir_x = dir_x * mx
       dir_y = dir_y * my
-      al = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), dir_axis * screen_factor, local)
-      ps = parallelogram(vec(0.0_real32, 0.0_real32, 0.0_real32), dir_x * screen_factor, dir_y * screen_factor)
+      al = segment_length_clip(vec(0.0_real32, 0.0_real32, 0.0_real32), vmul(dir_axis, screen_factor), local)
+      ps = parallelogram(vec(0.0_real32, 0.0_real32, 0.0_real32), vmul(dir_x, screen_factor), vmul(dir_y, screen_factor))
       below_plane = ps > axis_limit .and. mask_plane
       below_axis = al > plane_limit .and. .not. masked
       tripod_state%axis_factor(a) = ma
@@ -984,7 +1000,7 @@ contains
    real(real32) :: l, local_pos(4), perp(4), c !< ImGuizmo's.
 
    l = intersect_ray_plane(ray_origin, ray_vector, translation_plan)
-   local_pos = vec_normalized((ray_origin + ray_vector * l) - model(:, 4))
+   local_pos = vec_normalized(vsub(vadd(ray_origin, vmul(ray_vector, l)), model(:, 4)))
    perp = vec_cross(rotation_vector_source, translation_plan)
    call vec_normalize(perp)
    c = vec_dot(local_pos, rotation_vector_source)
@@ -1057,7 +1073,7 @@ contains
    n = 0_int32
    do k = 1_int32, nv
       if (k > 1_int32) call fmt_text(buf, n, ' ')
-      call fmt_text(buf, n, trim(head(k)))
+      call fmt_text(buf, n, head(k)(1:len_trim(head(k)))) ! not trim: no temporary
       call fmt_text(buf, n, ' : ')
       call fmt_real(buf, n, f, real(v(k), real64))
    enddo
@@ -1129,7 +1145,7 @@ contains
          rot = mat_rotation_axis(translation_plan, ng)
          pos = vec_transform_point(rotation_vector_source, rot)
          pos = pos * (screen_factor * ROTATION_DISPLAY_FACTOR)
-         call world_to_pos(pos + model(:, 4), view_projection, cp(:, i + 1_int32))
+         call world_to_pos(vadd(pos, model(:, 4)), view_projection, cp(:, i + 1_int32))
       enddo
       n = HALF_CIRCLE + 1_int32
       xs(1:n) = real(cp(1, 1:n), real64)
@@ -1139,7 +1155,8 @@ contains
                               closed=.true.)
       call fmt_parse('%5.2f', f)
       k = 0_int32
-      call fmt_text(buf, k, trim(NAMES(type - MT_ROTATE_X + 1_int32)))
+      i = type - MT_ROTATE_X + 1_int32
+      call fmt_text(buf, k, NAMES(i)(1:len_trim(NAMES(i))))
       call fmt_text(buf, k, ' : ')
       call fmt_real(buf, k, f, real((rotation_angle / ZPI) * 180.0_real32, real64))
       call fmt_text(buf, k, ' deg ')
@@ -1157,8 +1174,9 @@ contains
 
    if (st_hatched_axis_line_thickness <= 0.0_real32) return
    do j = 1_int32, 9_int32
-      call world_to_pos(((axis * 0.05_real32) * real(j * 2_int32, real32)) * screen_factor, mvp, a)
-      call world_to_pos(((axis * 0.05_real32) * real(j * 2_int32 + 1_int32, real32)) * screen_factor, mvp, b)
+      call world_to_pos(vmul(vmul(vmul(axis, 0.05_real32), real(j * 2_int32, real32)), screen_factor), mvp, a)
+      call world_to_pos(vmul(vmul(vmul(axis, 0.05_real32), real(j * 2_int32 + 1_int32, real32)), screen_factor), mvp, &
+                        b)
       call line(a, b, color_u32(HATCHED_AXIS_LINES), st_hatched_axis_line_thickness)
    enddo
    endsubroutine draw_hatched_axis
@@ -1167,7 +1185,7 @@ contains
    !< `DrawScaleGizmo`.
    integer(int32), intent(in) :: op, type !< Operation, handle.
    integer(int32) :: colors(0:6), i, k, ci                   !< Colours, counters.
-   real(real32)   :: sd(4), da(4), dx(4), dy(4), base(2), noscale(2), tip(2), dest(2), marker !< ImGuizmo's.
+   real(real32)   :: sd(4), da(4), dx(4), dy(4), base(2), noscale(2), tip(2), dest(2), marker, one(1) !< ImGuizmo's.
    logical        :: ba, bp, has_t                           !< Visibility, a translation on the axis.
    character(len=64) :: buf                                  !< Text.
    character(len=3), parameter :: NAMES(4) = ['X  ', 'Y  ', 'Z  ', 'XYZ'] !< scaleInfoMask's names.
@@ -1184,22 +1202,23 @@ contains
       has_t = iand(op, ishft(TRANSLATE_X, i)) == ishft(TRANSLATE_X, i)
       marker = 1.0_real32
       if (has_t) marker = 1.4_real32
-      call world_to_pos((da * 0.1_real32) * screen_factor, mvp, base)
-      call world_to_pos((da * marker) * screen_factor, mvp, noscale)
-      call world_to_pos(((da * marker) * sd(i + 1_int32)) * screen_factor, mvp, tip)
+      call world_to_pos(vmul(vmul(da, 0.1_real32), screen_factor), mvp, base)
+      call world_to_pos(vmul(vmul(da, marker), screen_factor), mvp, noscale)
+      call world_to_pos(vmul(vmul(vmul(da, marker), sd(i + 1_int32)), screen_factor), mvp, tip)
       if (is_using()) then
          call line(base, noscale, color_u32(SCALE_LINE), st_scale_line_thickness)
          call circle(noscale, st_scale_line_circle_size, color_u32(SCALE_LINE), .true.)
       endif
       if (.not. has_t .or. using) call line(base, tip, colors(i + 1), st_scale_line_thickness)
       call circle(tip, st_scale_line_circle_size, colors(i + 1), .true.)
-      if (current_tripod_factor(i) < 0.0_real32) call draw_hatched_axis(da * sd(i + 1_int32))
+      if (current_tripod_factor(i) < 0.0_real32) call draw_hatched_axis(vmul(da, sd(i + 1_int32)))
    enddo
    call circle(square_center, st_center_circle_size, colors(0), .true., 32_int32)
    if (is_using() .and. type >= MT_SCALE_X .and. type <= MT_SCALE_XYZ) then
       call world_to_pos(model(:, 4), view_projection, dest)
       ci = (type - MT_SCALE_X) * 3_int32
-      call format_values(NAMES(type - MT_SCALE_X + 1_int32:), [sd(INFO_INDEX(ci) + 1_int32)], 1_int32, '%5.2f', buf, k)
+      one(1) = sd(INFO_INDEX(ci) + 1_int32)
+      call format_values(NAMES(type - MT_SCALE_X + 1_int32:), one, 1_int32, '%5.2f', buf, k)
       call text_at(dest, buf, k)
    endif
    endsubroutine draw_scale
@@ -1235,8 +1254,8 @@ contains
       call tripod_axis(i, da, dx, dy, ba, bp, .false.)
       if (.not. using .or. (using .and. type == MT_MOVE_X + i)) then
          if (ba .and. iand(op, ishft(TRANSLATE_X, i)) /= 0_int32) then
-            call world_to_pos((da * 0.1_real32) * screen_factor, mvp, base)
-            call world_to_pos(da * screen_factor, mvp, tip)
+            call world_to_pos(vmul(vmul(da, 0.1_real32), screen_factor), mvp, base)
+            call world_to_pos(vmul(da, screen_factor), mvp, tip)
             call line(base, tip, colors(i + 1), st_translation_line_thickness)
             dir = origin - tip
             d = sqrt(dir(1) * dir(1) + dir(2) * dir(2))
@@ -1272,8 +1291,9 @@ contains
       dif = dif * 5.0_real32
       call circle(src, 6.0_real32, color_u32(TRANSLATION_LINE), .false.)
       call circle(dest, 6.0_real32, color_u32(TRANSLATION_LINE), .false.)
-      call line([src(1) + dif(1), src(2) + dif(2)], [dest(1) - dif(1), dest(2) - dif(2)], color_u32(TRANSLATION_LINE), &
-                2.0_real32)
+      a = [src(1) + dif(1), src(2) + dif(2)]
+      base = [dest(1) - dif(1), dest(2) - dif(2)]
+      call line(a, base, color_u32(TRANSLATION_LINE), 2.0_real32)
       delta = model(:, 4) - matrix_origin
       ci = (type - MT_MOVE_X) * 3_int32
       select case (type)
@@ -1328,17 +1348,17 @@ contains
       dy = vec_transform_vector(dy, model)
       l = intersect_ray_plane(ray_origin, ray_vector, build_plan(model(:, 4), da))
       pop = ray_origin + ray_vector * l
-      call world_to_pos(model(:, 4) + (da * screen_factor) * 0.1_real32, view_projection, as)
+      call world_to_pos(vadd(model(:, 4), vmul(vmul(da, screen_factor), 0.1_real32)), view_projection, as)
       as = as - [rx, ry]
-      call world_to_pos(model(:, 4) + da * screen_factor, view_projection, ae)
+      call world_to_pos(vadd(model(:, 4), vmul(da, screen_factor)), view_projection, ae)
       ae = ae - [rx, ry]
       cl = point_on_segment(sc, vec(as(1), as(2)), vec(ae(1), ae(2)))
-      if (vec_length(cl - sc) < 12.0_real32 .and. iand(op, ishft(TRANSLATE_X, i)) /= 0_int32) then
+      if (vec_length(vsub(cl, sc)) < 12.0_real32 .and. iand(op, ishft(TRANSLATE_X, i)) /= 0_int32) then
          if (masked) exit
          type = MT_MOVE_X + i
       endif
-      x = vec_dot3(dx, (pop - model(:, 4)) * (1.0_real32 / screen_factor))
-      y = vec_dot3(dy, (pop - model(:, 4)) * (1.0_real32 / screen_factor))
+      x = vec_dot3(dx, vmul(vsub(pop, model(:, 4)), 1.0_real32 / screen_factor))
+      y = vec_dot3(dy, vmul(vsub(pop, model(:, 4)), 1.0_real32 / screen_factor))
       if (bp .and. x >= QUAD_UV(0) .and. x <= QUAD_UV(4) .and. y >= QUAD_UV(1) .and. y <= QUAD_UV(3) .and. &
           iand(op, TRANSLATE_PLANS(i)) == TRANSLATE_PLANS(i)) then
          if ((.not. masked .or. multiple) .and. .not. none) exit
@@ -1377,10 +1397,10 @@ contains
          eo = 1.4_real32
       endif
       call world_to_pos(pop, view_projection, ps)
-      call world_to_pos(model_local(:, 4) + (da * screen_factor) * so, view_projection, as)
-      call world_to_pos(model_local(:, 4) + (da * screen_factor) * eo, view_projection, ae)
+      call world_to_pos(vadd(model_local(:, 4), vmul(vmul(da, screen_factor), so)), view_projection, as)
+      call world_to_pos(vadd(model_local(:, 4), vmul(vmul(da, screen_factor), eo)), view_projection, ae)
       cl = point_on_segment(vec(ps(1), ps(2)), vec(as(1), as(2)), vec(ae(1), ae(2)))
-      if (vec_length(cl - vec(ps(1), ps(2))) < 12.0_real32) then
+      if (vec_length(vsub(cl, vec(ps(1), ps(2)))) < 12.0_real32) then
          if (.not. masked) type = MT_SCALE_X + i
       endif
    enddo
@@ -1415,9 +1435,9 @@ contains
       iwp = ray_origin + ray_vector * l
       ivp = vec_transform_point(iwp, view_mat)
       if (abs(mvpos(3)) - abs(ivp(3)) < -FLT_EPSILON) cycle
-      ideal = vec_normalized(iwp - model(:, 4))
+      ideal = vec_normalized(vsub(iwp, model(:, 4)))
       ideal = vec_transform_vector(ideal, model_inverse)
-      call world_to_pos((ideal * ROTATION_DISPLAY_FACTOR) * screen_factor, mvp, is)
+      call world_to_pos(vmul(vmul(ideal, ROTATION_DISPLAY_FACTOR), screen_factor), mvp, is)
       dos = is - mouse
       if (vec_length(vec(dos(1), dos(2))) < 8.0_real32) then
          if ((.not. masked .or. multiple) .and. .not. none) exit
@@ -1499,7 +1519,7 @@ contains
             mpn(:, 4) = model(:, 2)
             mpn(:, 5) = model(:, 3)
             mpn(:, 6) = -camera_dir
-            cmn = vec_normalized(model(:, 4) - camera_eye)
+            cmn = vec_normalized(vsub(model(:, 4), camera_eye))
             do i = 0_int32, 2_int32
                ov = vec_cross(mpn(:, i), cmn)
                mpn(:, i) = vec_cross(mpn(:, i), ov)
@@ -1523,7 +1543,7 @@ contains
    real(real32),   intent(in)    :: snap(3)     !< Snap.
    logical,        intent(in)    :: has_snap    !< Snap given.
    logical                       :: modified    !< Moved.
-   real(real32)   :: mpn(4, 0:6), l, np(4), no(4), delta(4), av(4), loa, bv(4), ratio, sdelta !< ImGuizmo's.
+   real(real32)   :: mpn(4, 0:6), l, np(4), no(4), delta(4), av(4), loa, bv(4), ratio, sdelta, sv(4) !< ImGuizmo's.
    integer(int32) :: ai, i                      !< Axis, counter.
 
    modified = .false.
@@ -1573,7 +1593,7 @@ contains
          loa = vec_dot(av, delta)
          delta = av * loa
          bv = translation_plan_origin - model_local(:, 4)
-         ratio = vec_dot(av, bv + delta) / vec_dot(av, bv)
+         ratio = vec_dot(av, vadd(bv, delta)) / vec_dot(av, bv)
          scale(ai + 1_int32) = fmax(ratio, 0.001_real32)
       else
          sdelta = (mouse(1) - save_mouse_posx) * 0.01_real32
@@ -1589,7 +1609,8 @@ contains
       enddo
       if (any(bits(scale_last) /= bits(scale))) modified = .true.
       scale_last = scale
-      matrix = mat_mul(mat_scale(scale * scale_value_origin), model_local)
+      sv = scale * scale_value_origin
+      matrix = mat_mul(mat_scale(sv), model_local)
       if (.not. core_mouse_down(0_int32)) then
          using = .false.
          scale = vec(1.0_real32, 1.0_real32, 1.0_real32)
@@ -1733,7 +1754,7 @@ contains
    real(real32)   :: dir(4), up(4), eye(4), res(4,4), ivx(4), ivy(4), box_origin(4), n(4), vsn(4), vsp(4), vsfp(4) !< ...
    real(real32)   :: fplan(4), l, pop(4), lx, ly, dx(4), dy(4), origin(4), bc(4), p(2), s(2), pp(4, 4), fcs(2, 4) !< ...
    real(real32)   :: inv_, new_dir(4), new_up(4), new_eye(4), right(4), rxm(4,4), rym(4,4), roll(4,4), plan_dir(4), dt !<
-   real(real32)   :: md(2), ms(4,4)                              !< io.MouseDelta, mModelSource.
+   real(real32)   :: md(2), ms(4,4), zero3(3), pos2(2), siz2(2)  !< io.MouseDelta, mModelSource, the origin, the cube.
    integer(int32) :: mo                                          !< mMode.
    real(real64)   :: ddx, ddy, wheel, wheel_h, drag(5), xs(4), ys(4) !< io, a face for figure_core.
    real(real32), parameter :: REF_UP(4) = [0.0_real32, 1.0_real32, 0.0_real32, 0.0_real32] !< referenceUp.
@@ -1760,11 +1781,14 @@ contains
    dir = vec(vinv(1, 3), vinv(2, 3), vinv(3, 3))
    up = vec(vinv(1, 2), vinv(2, 2), vinv(3, 2))
    eye = (dir * hs) * 3.0_real32
-   cube_view = look_at(eye(1:3), [0.0_real32, 0.0_real32, 0.0_real32], up(1:3), right_handed)
+   zero3 = 0.0_real32
+   cube_view = look_at(eye(1:3), zero3, up(1:3), right_handed)
    view_mat = cube_view
    proj_mat = cube_proj
    call camera_ray(ray_origin, ray_vector, view_mat, proj_mat, mouse(1), mouse(2), px, py, sx, sy)
    res = mat_mul(cube_view, cube_proj)
+   pos2 = [px, py]
+   siz2 = [sx, sy]
    boxes = .false.
    down = core_mouse_down(0_int32)
    do pass = 0_int32, 1_int32
@@ -1780,10 +1804,10 @@ contains
          n = UNARY(:, ni) * inv_
          vsn = vec_transform_vector(n, cube_view)
          call vec_normalize(vsn)
-         vsp = vec_transform_point(n * 0.5_real32, cube_view)
+         vsp = vec_transform_point(vmul(n, 0.5_real32), cube_view)
          vsfp = build_plan(vsp, vsn)
          if (vsfp(4) > 0.0_real32) cycle ! back face culling
-         fplan = build_plan(n * 0.5_real32, n)
+         fplan = build_plan(vmul(n, 0.5_real32), n)
          l = intersect_ray_plane(ray_origin, ray_vector, fplan)
          pop = (ray_origin + ray_vector * l) - (n * 0.5_real32)
          lx = vec_dot(UNARY(:, px_), pop) * inv_ + 0.5_real32
@@ -1801,7 +1825,7 @@ contains
             pp(:, 3) = dx * (p(1) + s(1)) + dy * (p(2) + s(2))
             pp(:, 4) = dx * (p(1) + s(1)) + dy * p(2)
             do c = 1_int32, 4_int32
-               call world_to_pos(((pp(:, c) + origin) * 0.5_real32) * inv_, res, fcs(:, c), [px, py], [sx, sy])
+               call world_to_pos(vmul(vmul(vadd(pp(:, c), origin), 0.5_real32), inv_), res, fcs(:, c), pos2, siz2)
             enddo
             inside = lx > PANEL_POSITION(1, panel) .and. lx < PANEL_POSITION(1, panel) + PANEL_SIZE(1, panel) .and. &
                      ly > PANEL_POSITION(2, panel) .and. ly < PANEL_POSITION(2, panel) + PANEL_SIZE(2, panel)
@@ -1829,7 +1853,7 @@ contains
    if (cube_states(k)%frames /= 0_int32) then
       cube_states(k)%frames = cube_states(k)%frames - 1_int32
       new_dir = vinv(:, 3) * hs
-      call vec_lerp(new_dir, cube_states(k)%dir * hs, 0.2_real32)
+      call vec_lerp(new_dir, vmul(cube_states(k)%dir, hs), 0.2_real32)
       call vec_normalize(new_dir)
       if (cube_states(k)%frames == 0_int32) new_dir = cube_states(k)%dir * hs ! FIGURE's patch 0002
       new_up = cube_states(k)%up
@@ -1857,7 +1881,7 @@ contains
                right(1) = 0.0_real32
             endif
             call vec_normalize(right)
-            cube_states(k)%up = vec_cross(cube_states(k)%dir * hs, right)
+            cube_states(k)%up = vec_cross(vmul(cube_states(k)%dir, hs), right)
             call vec_normalize(cube_states(k)%up)
          else
             cube_states(k)%up = REF_UP

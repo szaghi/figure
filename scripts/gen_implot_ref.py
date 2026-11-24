@@ -7,7 +7,11 @@ Fortran path's ``figure_implot`` and ``figure_implot3d`` are the frames themselv
 src/paths/imgui/plot3d/figure_implot3d.F90) under other names, built by the -fortran modes only (src/tests/fortran/),
 over ImPlot and ImPlot3D as on the current path.
 
-Usage: python3 scripts/gen_implot_ref.py           write src/tests/fortran/figure_implot_ref.F90, figure_implot3d_ref.F90
+The gizmos' seam (szaghi/figure#15 P14) the same way: ``figure_view3d_gizmos_ref`` is the current path's
+src/paths/imgui/gizmo/figure_view3d_gizmos.F90 (the native layer's ImGuizmo gizmos), for the Fortran gizmos' tests.
+
+Usage: python3 scripts/gen_implot_ref.py           write src/tests/fortran/figure_implot_ref.F90, figure_implot3d_ref.F90,
+                                                   figure_view3d_gizmos_ref.F90
        python3 scripts/gen_implot_ref.py --check   exit status 1 when one is not the current path's module renamed
 """
 
@@ -17,7 +21,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MODULES = {"figure_implot": ("plot", "ImPlot"), "figure_implot3d": ("plot3d", "ImPlot3D")}
+MODULES = {"figure_implot": ("plot", "ImPlot"), "figure_implot3d": ("plot3d", "ImPlot3D"),
+           "figure_view3d_gizmos": ("gizmo", "ImGuizmo")}
 TARGETS = {m: ROOT / "src" / "tests" / "fortran" / f"{m}_ref.F90" for m in MODULES}
 TARGET = TARGETS["figure_implot"]  # (check_sync's first)
 

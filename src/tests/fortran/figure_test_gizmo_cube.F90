@@ -1,11 +1,12 @@
-!< figure_test_gizmo_cube, the Fortran view cube (figure_gizmo's `gz_view_cube`) against ImGuizmo's `ViewManipulate`.
+!< figure_test_gizmo_cube, the Fortran view cube (`v%view_cube` on the Fortran path) against ImGuizmo's `ViewManipulate`.
 program figure_test_gizmo_cube
-!< figure_test_gizmo_cube, the Fortran view cube (figure_gizmo's `gz_view_cube`) against ImGuizmo's `ViewManipulate`.
+!< figure_test_gizmo_cube, the Fortran view cube (`v%view_cube` on the Fortran path) against ImGuizmo's `ViewManipulate`.
 !<
 !< szaghi/figure#15 P14. A 400 x 400 view of a cube with its view cube, driven by the same scripted input at the same
-!< frames, first through FIGURE's current path (`v%view_cube`: native/figure_view3d.cpp over ImGuizmo), then through
-!< the Fortran cube (`gz_view_cube` on the same view), 40 frames apart, the camera set again before each side. The
-!< cases (the cube top-right, 96 pixels, unless said):
+!< frames, first through FIGURE's current path (`fig_view3d_cube` of `figure_view3d_gizmos_ref`:
+!< native/figure_view3d.cpp over ImGuizmo), then through FIGURE's API on the Fortran path (`v%view_cube`:
+!< figure_gizmo), on the same view, 40 frames apart, the camera set again before each side. The cases (the cube
+!< top-right, 96 pixels, unless said):
 !<
 !< 1. a click at the cube's centre, the eye at azimuth 10, elevation 5: the camera turned to the +x face over 40 frames;
 !< 2. a click near the cube's top front edge (an edge or a corner of the cube), the eye at azimuth 35, elevation 30;
@@ -22,7 +23,7 @@ use, intrinsic :: iso_c_binding, only : c_double, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_item_rect, ig_set_next_window, view3d_object, &
                    ImGuiWindowFlags_NoDecoration, FIG_OK
-use figure_gizmo, only : gz_view_cube
+use figure_view3d_gizmos_ref, only : fig_view3d_cube
 use figure_testing, only : test_capture, test_compare_image, test_mouse_button, test_mouse_move
 use figure_view3d, only : view3d_handle
 
@@ -117,24 +118,22 @@ contains
    view0 = [x0, y0]
    call v%get_camera(azimuth=az0, elevation=el0)
    turned = 0_c_int
-   if (who == 1_int32) then
+   if (who == 2_int32) then
       if (k == 5_int32) then
          call v%view_cube(size=120.0_real64, corner='bottom-left')
       else
          call v%view_cube()
       endif
-      call v%get_camera(azimuth=a, elevation=e)
-      if (a /= az0 .or. e /= el0) turned = 1_c_int
    else
       if (k == 5_int32) then
-         s = gz_view_cube(view3d_handle(v), 120.0_c_double, 3_c_int, turned)
+         s = fig_view3d_cube(view3d_handle(v), 120.0_c_double, 3_c_int, turned)
       else
-         s = gz_view_cube(view3d_handle(v), 96.0_c_double, 0_c_int, turned)
+         s = fig_view3d_cube(view3d_handle(v), 96.0_c_double, 0_c_int, turned)
       endif
-      if (s /= FIG_OK) write(output_unit, '(A)') 'gz_view_cube: '//figure_last_error()
-      call v%get_camera(azimuth=a, elevation=e) ! turned: as the other side sees it (at a pole a turn of the up vector
-      turned = merge(1_c_int, 0_c_int, a /= az0 .or. e /= el0) ! may leave the azimuth and the elevation as they were)
+      if (s /= FIG_OK) write(output_unit, '(A)') 'fig_view3d_cube: '//figure_last_error()
    endif
+   call v%get_camera(azimuth=a, elevation=e) ! turned: seen from the camera (at a pole a turn of the up vector may
+   turned = merge(1_c_int, 0_c_int, a /= az0 .or. e /= el0) ! leave the azimuth and the elevation as they were)
    call v%get_camera(target=t, distance=d, azimuth=a, elevation=e)
    state(:, fr, who) = [t, d, a, e, real(turned, real64)]
    if (k == 5_int32) then

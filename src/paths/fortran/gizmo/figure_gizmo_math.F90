@@ -13,6 +13,10 @@ module figure_gizmo_math
 !< `m(j, i)` its `m[i - 1][j - 1]`. ImGuizmo's matrices are OpenGL's column-major ones: `m(:, 4)` is the translation.
 !< The 3-D view's own matrices and its camera's quaternion-free azimuth and elevation are figure_view3d's (real64);
 !< VecFor's `vector_R8P` is not used here: ImGuizmo's numbers are single precision with a fourth component.
+!<
+!< `vadd`, `vsub`, `vmul`, `vneg` (a + b, a - b, a s, -a, component by component, as the operators compute them) are
+!< what figure_gizmo passes to a procedure instead of an array expression: nvfortran 26.9 makes a heap temporary of
+!< every array expression given as an actual argument (even of 4 elements), not of a function's result.
 use, intrinsic :: iso_c_binding, only : c_float
 use, intrinsic :: iso_fortran_env, only : int32, real32
 
@@ -21,6 +25,7 @@ private
 public :: FLT_EPSILON, FLT_MAX, ZPI, RAD2DEG, DEG2RAD
 public :: vec, vec_length, vec_length_sq, vec_normalize, vec_normalized, vec_cross, vec_dot, vec_dot3, vec_dot4
 public :: vec_lerp, vec_transform, vec_transform_point, vec_transform_vector, build_plan
+public :: vadd, vsub, vmul, vneg
 public :: mat_mul, mat_inverse, mat_identity, mat_translation, mat_scale, mat_rotation_axis, mat_ortho_normalize
 public :: look_at, perspective
 public :: c_sinf, c_cosf, c_tanf, c_acosf, c_atan2f, c_fmodf
@@ -94,6 +99,39 @@ contains
    if (present(z)) v(3) = z
    if (present(w)) v(4) = w
    endfunction vec
+
+   pure function vadd(a, b) result(r)
+   !< a + b.
+   real(real32), intent(in) :: a(4), b(4)   !< Vectors.
+   real(real32)             :: r(4)         !< Sum.
+
+   r = a + b
+   endfunction vadd
+
+   pure function vsub(a, b) result(r)
+   !< a - b.
+   real(real32), intent(in) :: a(4), b(4)   !< Vectors.
+   real(real32)             :: r(4)         !< Difference.
+
+   r = a - b
+   endfunction vsub
+
+   pure function vmul(a, s) result(r)
+   !< a s.
+   real(real32), intent(in) :: a(4)         !< Vector.
+   real(real32), intent(in) :: s            !< Factor.
+   real(real32)             :: r(4)         !< Product.
+
+   r = a * s
+   endfunction vmul
+
+   pure function vneg(a) result(r)
+   !< -a.
+   real(real32), intent(in) :: a(4)         !< Vector.
+   real(real32)             :: r(4)         !< Opposite.
+
+   r = -a
+   endfunction vneg
 
    pure function vec_length_sq(v) result(l)
    !< `LengthSq`: x x + y y + z z.
