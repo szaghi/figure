@@ -267,10 +267,18 @@ per thread: a few milliseconds for a whole window, paid only on the frame that s
   plus the spread of the paired runs' ratios (at least 5%). Use it to compare the Fortran path with the current path
   (two builds of the benchmark, one copied aside: the modes share `exe/`), or a change with the commit before it.
   `--self-test` checks the statistics and the gates without running anything.
+- `scripts/profile_scene.py SCENE` says where a scene's time goes: it runs the scene under valgrind's callgrind on two
+  builds (`--program` and `--against`, or `--build gnu|nvf|ifx` to build the Fortran path and the current path
+  itself) and sums the instructions executed by role: the scene's own data, primitives handed to the draw list,
+  values mapped to pixels, colormaps, data reads, the items' loops, the plot frame, the rest of Dear ImGui, memory
+  copies. Instruction counts do not depend on the machine's load: the same build gives the same count, so two
+  versions of a change compare exactly. It prints a Markdown table (`--markdown`, `--json` write it); a scene runs
+  about 50 times slower under callgrind, hence few frames by default.
 
 ```bash
 python3 scripts/bench_scenes.py --program exe/figure_bench_scenes --against /tmp/figure_bench_scenes.before \
                                 --scenes line1e5,heatmap512 --json against.json
+python3 scripts/profile_scene.py heatmap256 --build gnu --markdown heatmap256.md
 python3 scripts/measure_redraw.py --env GALLIUM_DRIVER=d3d12 --json results.json
 python3 scripts/measure_redraw.py --only "live-10 remote" --compress always
 ```
