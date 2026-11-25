@@ -7,7 +7,8 @@ sums the instructions executed (Ir) by role, the first matching ``BUCKETS`` entr
 
 - ``scene``: the scene's own data (libm's sin and cos, the program's procedures): left out of ``render``;
 - ``submission``: primitives handed to a draw list (figure_core's ``core_draw_*``, figure_drawlist, the plot items'
-  ``prim_*``, Dear ImGui's ``ImDrawList`` primitives);
+  ``prim_*``, Dear ImGui's ``ImDrawList`` primitives; ``c_associated``, which ifx calls as a function, from
+  figure_core's per-primitive checks);
 - ``transform``: values mapped to pixels; ``colour``: colormaps; ``getter``: the data read; ``item``: the items'
   loops (ImPlot's templates ``RenderPrimitives*`` inline their getter, transform and submission: their cost is all
   here); ``frame``: the plot frame and FIGURE's per-frame item bookkeeping; ``imgui``: the rest of Dear ImGui;
@@ -55,8 +56,8 @@ DEFAULT_FRAMES = (30, 2)
 # a function's role: the first pattern matching its name (without template arguments and parameters)
 BUCKETS: tuple[tuple[str, str], ...] = (
     ("scene", r"^(__)?(sin|cos|sincos|exp)(_fma|_avx2|_sse\d)?$|^_ZGV|^__fd_(sin|cos|sincos|exp)|^__svml_|"
-              r"^__mth_i_d(sin|cos|exp)|field_values|figure_bench_scenes|^MAIN__$|^main$"),
-    ("submission", r"core_draw_|(_MOD_|_mp_|core_)v2_?$|ImDrawList|figure_drawlist|(_MOD_|_mp_|drawlist_)dl_|put_vtx|"
+              r"^__mth_i_d(sin|cos|exp)|^__libm_(sin|cos|sincos|exp)|field_values|figure_bench_scenes|^MAIN__$|^main$"),
+    ("submission", r"core_draw_|(_MOD_|_mp_|core_)v2_?$|c_associated|ImDrawList|figure_drawlist|(_MOD_|_mp_|drawlist_)dl_|put_vtx|"
                    r"put_tri|prim_(line|quad|rect)|"
                    r"Prim(Reserve|Unreserve|QuadUV|Rect|RectUV|WriteVtx)"),
     ("transform", r"map_pixel|transform_|Transformer|plot_transform"),
@@ -207,7 +208,8 @@ def self_test() -> int:
         "ImFont::RenderText": "imgui", "ImGui::Begin": "imgui", "do_lookup_x": "libc", "_dl_relocate_object": "libc",
         "__fd_sin_4_avx2": "scene", "figure_core_v2_": "submission", "__figure_core_MOD_v2": "submission",
         "__figure_drawlist_MOD_dl_rect_filled": "submission", "figure_drawlist_dl_line_": "submission",
-        "check_match": "other",
+        "check_match": "other", "__libm_sin_l9": "scene", "iso_c_binding_mp_c_associated_ptr_": "submission",
+        "figure_plot_items_mp_prim_quad_": "submission", "figure_plot_colormaps_mp_cm_sample_": "colour",
     }
     failures = [f"{n}: {bucket(n)}, expected {b}" for n, b in cases.items() if bucket(n) != b]
     sample = """\
