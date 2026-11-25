@@ -41,6 +41,10 @@ jobs:
         python3 scripts/check_nvf_patterns.py --self-test
         python3 scripts/check_nvf_patterns.py
 
+    # the benchmark's statistics and speed gates (szaghi/figure#16), on fixed numbers
+    - name: Benchmark tools
+      run: python3 scripts/bench_scenes.py --self-test
+
     - name: Packages the toolchain image lacks
       run: |
         apt-get update

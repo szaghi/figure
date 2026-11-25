@@ -258,8 +258,19 @@ per thread: a few milliseconds for a whole window, paid only on the frame that s
   `--only` names the cases (or their prefixes), `--env VAR=value` passes variables to the program, `--compress`
   sets the remote mode's compression, and `--gpu` samples the utilisation of GPU 0 with `nvidia-smi` in window mode.
   Linux only (the CPU time comes from the kernel's accounting of the finished process).
+- `scripts/bench_scenes.py` runs the benchmark scenes of `figure_bench_scenes` (lines from 100 to 10⁸ points, a
+  scatter of 10⁶, heatmaps, fields, a surface, a table, widgets, a 10,000-line editor), five runs each, headless
+  (`--mode window` in a window), and reduces them to the median and the 99th percentile of the frame time and of the
+  UI's own time. `--write LABEL` records a baseline in `docs/data/bench-scenes.json` (a label is never overwritten),
+  `--compare LABEL` compares a run with one. `--against PROGRAM` compares two builds in one session instead: the
+  runs alternate between `--program` and PROGRAM scene by scene, and a scene fails when its median's ratio exceeds 1
+  plus the spread of the paired runs' ratios (at least 5%). Use it to compare the Fortran path with the current path
+  (two builds of the benchmark, one copied aside: the modes share `exe/`), or a change with the commit before it.
+  `--self-test` checks the statistics and the gates without running anything.
 
 ```bash
+python3 scripts/bench_scenes.py --program exe/figure_bench_scenes --against /tmp/figure_bench_scenes.before \
+                                --scenes line1e5,heatmap512 --json against.json
 python3 scripts/measure_redraw.py --env GALLIUM_DRIVER=d3d12 --json results.json
 python3 scripts/measure_redraw.py --only "live-10 remote" --compress always
 ```

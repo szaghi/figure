@@ -30,6 +30,19 @@ under a ``--label`` such as ``wsl-gnu-window``):
   not comparable (a 99th percentile over 30 frames is not one over 300). A scene measured over fewer than 300 frames
   (``FRAMES``) records ``p99_valid: false`` and a ``p99_note``: its ``_p99`` values are about the largest frame time.
 
+``--against PROGRAM`` compares two programs in one session instead (szaghi/figure#16 §5.1): ``--program`` is the
+candidate (e.g. the Fortran path's, ``tests-gnu-fortran``) and PROGRAM the reference (the current path's,
+``tests-gnu``, built the same day; the modes share exe/, so one of the two is a copy kept aside). Every scene's runs
+alternate between the two, in the order AB, BA, AB, ... (a slow minute of the machine hits both, and neither always
+runs first), and each pair gives the ratios candidate / reference of the frame median and of the UI median. The gate
+is on the ratio of the medians over the runs: a scene fails when it exceeds 1 + the spread of its pairs' ratios (the
+largest minus the smallest), taken at least ``--floor-rel`` (default 0.05), and the difference of the medians exceeds
+``--floor-ms`` (default 0 with ``--against``: a scene of 0.01 ms twice as slow is a regression, and its pairs' spread
+says how much of it is the clock's). Faster is never a failure; exit status 1 if any scene fails. The P2 baselines
+are not read: they predate #15 P4's decimation and ImPlot3D's patch 0002 for some scenes (#16 D4).
+
+``--self-test`` checks the reductions and both gates on fixed numbers, without running a program.
+
 ``--json FILE`` also writes the run (every run's statistics) to FILE. ``--scenes a,b`` runs those only (the
 ``EXTRA`` scenes, line1e8c and device1e8, only so: no baseline of #15 P2 has them); ``--frames``
 and ``--warmup`` override the scene's defaults (300 measured frames after 30, except the largest scenes: 30 after 3,
@@ -40,8 +53,9 @@ Usage::
 
     python3 scripts/bench_scenes.py [--program exe/figure_bench_scenes] [--mode headless|window] [--runs 5]
                                     [--scenes a,b] [--compiler NAME] [--file docs/data/bench-scenes.json]
-                                    (--write LABEL | --compare LABEL) [--json FILE] [--allow-llvmpipe]
-                                    [--floor-rel 0.05] [--floor-ms 0.05] [--p99-floor-rel 0.20]
+                                    (--write LABEL | --compare LABEL | --against PROGRAM) [--json FILE]
+                                    [--allow-llvmpipe] [--floor-rel 0.05] [--floor-ms 0.05] [--p99-floor-rel 0.20]
+    python3 scripts/bench_scenes.py --self-test
 
 Standard library only (Python >= 3.11). Run from the repository root.
 """
@@ -195,19 +209,76 @@ def measure(program: Path, scenes: list[str], mode: str, runs: int, frames: int 
         for s in scenes:
             nf, nw = FRAMES[mode].get(s, DEFAULT_FRAMES)
             out[s].warmup = nw if warmup is None else warmup
-            for attempt in range(RETRIES + 1):
-                try:
-                    stats = run_scene(program, s, mode, frames or nf, nw if warmup is None else warmup)
-                    break
-                except RuntimeError as err:
-                    if attempt == RETRIES:
-                        raise
-                    out[s].retries += 1
-                    print(f"run {k + 1}/{runs} {s}: failed, run again: {str(err).splitlines()[0]}", flush=True)
+            stats = run_with_retries(program, s, mode, frames or nf, out[s].warmup, out[s], f"run {k + 1}/{runs}")
             out[s].runs.append(stats)
             print(f"run {k + 1}/{runs} {s}: frame median {stats.frame_median:.3f} ms, p99 {stats.frame_p99:.3f} ms; "
                   f"UI median {stats.ui_median:.3f} ms, p99 {stats.ui_p99:.3f} ms", flush=True)
     return out
+
+
+def run_with_retries(program: Path, scene: str, mode: str, frames: int, warmup: int, out: SceneStats,
+                     tag: str) -> RunStats:
+    """One run of one scene, run again once (``RETRIES``) if it fails; the retries counted in `out`."""
+    for attempt in range(RETRIES + 1):
+        try:
+            return run_scene(program, scene, mode, frames, warmup)
+        except RuntimeError as err:
+            if attempt == RETRIES:
+                raise
+            out.retries += 1
+            print(f"{tag} {scene}: failed, run again: {str(err).splitlines()[0]}", flush=True)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def pair_order(k: int) -> tuple[int, int]:
+    """The order of the k-th pair of runs (0-based): candidate first on even pairs, reference first on odd ones."""
+    return (0, 1) if k % 2 == 0 else (1, 0)
+
+
+def measure_against(program: Path, against: Path, scenes: list[str], mode: str, runs: int, frames: int | None,
+                    warmup: int | None) -> tuple[dict[str, SceneStats], dict[str, SceneStats]]:
+    """Every scene `runs` times on both programs, pair after pair (``pair_order``), the pairs of a run of the scene
+    list before the next run's: the candidate's statistics and the reference's, run k of one paired with run k of the
+    other."""
+    progs = (program, against)
+    out = ({s: SceneStats() for s in scenes}, {s: SceneStats() for s in scenes})
+    for k in range(runs):
+        for s in scenes:
+            nf, nw = FRAMES[mode].get(s, DEFAULT_FRAMES)
+            nf = frames or nf
+            nw = nw if warmup is None else warmup
+            for side in pair_order(k):
+                out[side][s].warmup = nw
+                stats = run_with_retries(progs[side], s, mode, nf, nw, out[side][s], f"run {k + 1}/{runs}")
+                out[side][s].runs.append(stats)
+            a, b = out[0][s].runs[-1], out[1][s].runs[-1]
+            print(f"run {k + 1}/{runs} {s}: frame median {a.frame_median:.3f} / {b.frame_median:.3f} ms "
+                  f"({a.frame_median / b.frame_median:.3f}); UI median {a.ui_median:.3f} / {b.ui_median:.3f} ms "
+                  f"({a.ui_median / b.ui_median:.3f})", flush=True)
+    return out
+
+
+def against(cand: SceneStats, ref: SceneStats, floor_rel: float, floor_ms: float) -> dict:
+    """A scene's comparison of two programs (#16 §5.1): per gated statistic, both medians over the runs, the ratio of
+    the medians, the pairs' ratios' median and spread, the allowed ratio and whether the scene passes."""
+    rec: dict = {"candidate": cand.summary(), "reference": ref.summary(), "pass": True, "failures": []}
+    for key in GATED:
+        a = [getattr(r, key) for r in cand.runs]
+        b = [getattr(r, key) for r in ref.runs]
+        ratios = [x / y for x, y in zip(a, b, strict=True)]
+        ma, mb = statistics.median(a), statistics.median(b)
+        ratio = ma / mb
+        spread = max(ratios) - min(ratios)
+        allowed = 1.0 + max(spread, floor_rel)
+        ok = ratio <= allowed or (ma - mb) <= floor_ms
+        rec[key] = {"candidate": round(ma, 4), "reference": round(mb, 4), "ratio": round(ratio, 4),
+                    "pair_ratio_median": round(statistics.median(ratios), 4), "pair_ratio_spread": round(spread, 4),
+                    "allowed": round(allowed, 4), "pass": ok}
+        if not ok:
+            rec["pass"] = False
+            rec["failures"].append(f"{key} {ma:.3f} ms against {mb:.3f} ms: ratio {ratio:.3f}, allowed {allowed:.3f} "
+                                   f"(pairs' spread {spread:.3f}, floor {floor_rel:.2f})")
+    return rec
 
 
 GATED = ("frame_median", "ui_median")  # the gate: "at least the same speed" (#15 §4)
@@ -240,8 +311,55 @@ def compare(base: dict, run: dict[str, dict], floor_rel: float, floor_ms: float,
     return worse, warn
 
 
+def self_test() -> int:
+    """The reductions and the gates on fixed numbers; 0 if every case holds."""
+    failures: list[str] = []
+
+    def check(name: str, cond: bool) -> None:
+        if not cond:
+            failures.append(name)
+
+    check("percentile 99 of 1..100", abs(percentile([float(i) for i in range(1, 101)], 99.0) - 99.01) < 1e-12)
+    check("percentile of one value", percentile([3.0], 99.0) == 3.0)
+    check("pair order alternates", [pair_order(k) for k in range(3)] == [(0, 1), (1, 0), (0, 1)])
+
+    def scene(frames: list[float], ui: list[float]) -> SceneStats:
+        st = SceneStats(warmup=30)
+        st.runs = [RunStats(300, f, f * 1.1, u, u * 1.1) for f, u in zip(frames, ui, strict=True)]
+        return st
+
+    ref = scene([1.00, 1.02, 0.98, 1.01, 0.99], [0.50, 0.51, 0.49, 0.50, 0.50])
+    same = against(scene([1.01, 1.00, 0.99, 1.02, 0.98], [0.50, 0.50, 0.50, 0.51, 0.49]), ref, 0.05, 0.0)
+    check("equal programs pass", same["pass"])
+    slow = against(scene([2.0, 2.1, 1.9, 2.0, 2.05], [1.0, 1.05, 0.95, 1.0, 1.0]), ref, 0.05, 0.0)
+    check("twice as slow fails", not slow["pass"] and len(slow["failures"]) == 2)
+    check("ratio of the medians", slow["frame_median"]["ratio"] == 2.0)
+    tiny = against(scene([0.020] * 5, [0.010] * 5), scene([0.010] * 5, [0.010] * 5), 0.05, 0.0)
+    check("a tiny scene twice as slow fails with no ms floor", not tiny["pass"])
+    floor = against(scene([0.020] * 5, [0.010] * 5), scene([0.010] * 5, [0.010] * 5), 0.05, 0.05)
+    check("... and passes under a 0.05 ms floor", floor["pass"])
+    noisy = against(scene([1.0, 1.3, 1.0, 1.3, 1.1], [0.5] * 5), scene([1.0] * 5, [0.5] * 5), 0.05, 0.0)
+    check("a noisy pair spread widens the allowance", noisy["pass"] and noisy["frame_median"]["allowed"] > 1.29)
+    faster = against(scene([0.5] * 5, [0.25] * 5), ref, 0.05, 0.0)
+    check("faster passes", faster["pass"])
+    base = {"scenes": {"s": {"frames": 300, "warmup": 30, "frame_median": 1.0, "frame_median_spread": 0.01,
+                             "ui_median": 0.5, "ui_median_spread": 0.01, "frame_p99": 2.0, "frame_p99_spread": 0.1,
+                             "ui_p99": 1.0, "ui_p99_spread": 0.1}}}
+    run = {"s": {"frames": 300, "warmup": 30, "frame_median": 1.2, "ui_median": 0.5, "frame_p99": 2.0,
+                 "ui_p99": 1.0}}
+    worse, warn = compare(base, run, 0.05, 0.05)
+    check("--compare: a median 20% worse fails", len(worse) == 1 and not warn)
+    run["s"]["frames"] = 30
+    worse, _ = compare(base, run, 0.05, 0.05)
+    check("--compare: other frames not comparable", len(worse) == 1 and "not comparable" in worse[0])
+    for f in failures:
+        print(f"bench_scenes: self-test FAILED: {f}", file=sys.stderr)
+    print(f"bench_scenes: self-test: {'ok' if not failures else f'{len(failures)} failed'}")
+    return 1 if failures else 0
+
+
 def main(argv: list[str]) -> int:
-    """Run the scenes; write a baseline, or compare with one."""
+    """Run the scenes; write a baseline, compare with one, or compare two programs."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("--program", type=Path, default=ROOT / "exe" / "figure_bench_scenes")
     ap.add_argument("--mode", choices=("headless", "window"), default="headless")
@@ -254,14 +372,21 @@ def main(argv: list[str]) -> int:
     what = ap.add_mutually_exclusive_group()
     what.add_argument("--write", metavar="LABEL")
     what.add_argument("--compare", metavar="LABEL")
+    what.add_argument("--against", type=Path, metavar="PROGRAM",
+                      help="the reference program: compare --program with it in one session (#16)")
+    ap.add_argument("--self-test", action="store_true", help="check the reductions and the gates, run nothing")
     ap.add_argument("--json", type=Path, metavar="FILE")
     ap.add_argument("--allow-llvmpipe", action="store_true")
     ap.add_argument("--floor-rel", type=float, default=0.05)
-    ap.add_argument("--floor-ms", type=float, default=0.05)
+    ap.add_argument("--floor-ms", type=float, help="default 0.05 (0 with --against)")
     ap.add_argument("--p99-floor-rel", type=float, default=0.20)
     args = ap.parse_args(argv)
-    if not (args.write or args.compare or args.json):
-        ap.error("one of --write, --compare, --json is required")
+    if args.self_test:
+        return self_test()
+    if not (args.write or args.compare or args.against or args.json):
+        ap.error("one of --write, --compare, --against, --json is required")
+    if args.floor_ms is None:
+        args.floor_ms = 0.0 if args.against else 0.05
 
     scenes = [s for s in args.scenes.split(",") if s]
     unknown = [s for s in scenes if s not in SCENES + EXTRA]
@@ -279,6 +404,10 @@ def main(argv: list[str]) -> int:
     if args.compare and args.compare not in data["baselines"]:
         print(f"bench_scenes: no baseline {args.compare} in {args.file}", file=sys.stderr)
         return 2
+    for prog in (args.program, args.against):
+        if prog is not None and not prog.is_file():
+            print(f"bench_scenes: no program {prog}", file=sys.stderr)
+            return 2
     gl = renderer(args.mode)
     print(f"bench_scenes: {args.mode}, renderer: {gl}", flush=True)
     if args.mode == "window" and "llvmpipe" in gl.lower() and not args.allow_llvmpipe:
@@ -286,6 +415,8 @@ def main(argv: list[str]) -> int:
               "--allow-llvmpipe", file=sys.stderr)
         return 2
 
+    if args.against:
+        return main_against(args, scenes, skipped, gl)
     stats = measure(args.program, scenes, args.mode, args.runs, args.frames, args.warmup)
     record = {
         "date": datetime.date.today().isoformat(),
@@ -324,6 +455,49 @@ def main(argv: list[str]) -> int:
               f"the baseline {args.compare} and its spread")
         return 1 if worse else 0
     return 0
+
+
+def rel(p: Path) -> str:
+    """A program's path, relative to the repository when it is inside it."""
+    return str(p.relative_to(ROOT) if p.is_relative_to(ROOT) else p)
+
+
+def main_against(args: argparse.Namespace, scenes: list[str], skipped: dict[str, str], gl: str) -> int:
+    """--against: both programs in one session, the gate on the ratios (#16 §5.1)."""
+    cand, ref = measure_against(args.program, args.against, scenes, args.mode, args.runs, args.frames, args.warmup)
+    rows = {s: against(cand[s], ref[s], args.floor_rel, args.floor_ms) for s in scenes}
+    record = {
+        "date": datetime.date.today().isoformat(),
+        "machine": machine(),
+        "compiler": args.compiler,
+        "mode": args.mode,
+        "renderer": gl,
+        "environment": {k: os.environ[k] for k in ("GALLIUM_DRIVER",) if k in os.environ},
+        "program": rel(args.program),
+        "against": rel(args.against),
+        "rule": f"a scene fails when a median's ratio program / against exceeds 1 + max(its pairs' spread, "
+                f"{args.floor_rel}) and the difference exceeds {args.floor_ms} ms (#16 §5.1); pairs alternate AB, BA",
+        "scenes": rows,
+        "skipped": skipped,
+        "per_run": {s: {"candidate": [vars(r) for r in cand[s].runs], "reference": [vars(r) for r in ref[s].runs]}
+                    for s in scenes},
+    }
+    print(f"{'scene':12s} {'frame: program':>15s} {'against':>10s} {'ratio':>7s} {'allowed':>8s}   "
+          f"{'UI: program':>12s} {'against':>10s} {'ratio':>7s} {'allowed':>8s}")
+    for s, r in rows.items():
+        f, u = r["frame_median"], r["ui_median"]
+        print(f"{s:12s} {f['candidate']:12.3f} ms {f['reference']:7.3f} ms {f['ratio']:7.3f} {f['allowed']:8.3f}   "
+              f"{u['candidate']:9.3f} ms {u['reference']:7.3f} ms {u['ratio']:7.3f} {u['allowed']:8.3f}"
+              f"{'' if r['pass'] else '   FAIL'}")
+    if args.json:
+        args.json.write_text(json.dumps(record, indent=1) + "\n")
+        print(f"bench_scenes: written {args.json}")
+    failed = [s for s, r in rows.items() if not r["pass"]]
+    for s in failed:
+        for w in rows[s]["failures"]:
+            print(f"bench_scenes: slower: {s}: {w}", file=sys.stderr)
+    print(f"bench_scenes: {len(scenes) - len(failed)} of {len(scenes)} scenes at least as fast as {rel(args.against)}")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
