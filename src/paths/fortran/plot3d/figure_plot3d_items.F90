@@ -25,7 +25,7 @@ module figure_plot3d_items
 !< no copy); per-point colours are packed point by point as figure_implot3d packs them. No allocation per item per
 !< frame.
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
+use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use figure_core, only : core_color, core_line_texture, core_white_pixel
 use figure_plot_colormaps, only : cm_sample
 use figure_texture, only : texture_object, texture_ref
@@ -144,7 +144,32 @@ type(view3d)          :: v                   !< The plot's view.
 real(real64)          :: cmin(3), cmax(3)    !< Cull box.
 real(real32)          :: uvw(2)              !< The white pixel's texture coordinates.
 
+interface finite_value
+   !< `ieee_is_finite` inline (see `finite_value_r32`).
+   module procedure finite_value_r32, finite_value_r64
+endinterface finite_value
+
 contains
+   elemental function finite_value_r32(x) result(yes)
+   !< `ieee_is_finite` for the per-element loops (szaghi/figure#16 S2): a NaN fails `x == x` (a quiet comparison, no
+   !< FPE under traps), then an infinity fails `abs(x) <= huge(x)` (compared only when not a NaN); inline on the three
+   !< compilers, where `ieee_is_finite` is a library call on ifx (and nvfortran).
+   real(real32), intent(in) :: x   !< Value.
+   logical                  :: yes !< Finite.
+
+   yes = x == x
+   if (yes) yes = abs(x) <= huge(x)
+   endfunction finite_value_r32
+
+   elemental function finite_value_r64(x) result(yes)
+   !< `finite_value_r32` in double precision.
+   real(real64), intent(in) :: x   !< Value.
+   logical                  :: yes !< Finite.
+
+   yes = x == x
+   if (yes) yes = abs(x) <= huge(x)
+   endfunction finite_value_r64
+
    function pf3_spec(line_color, line_weight, fill_color, fill_alpha, marker, marker_size, marker_line_color, &
                      marker_fill_color, flags) result(spec)
    !< As `ip3_spec`: ImPlot3D's item style with the given properties (RGBA in [0, 1]; absent: automatic).
@@ -760,7 +785,7 @@ contains
    hi = -huge(1.0_real32)
    do j = 1_int32, size(z, 2, kind=int32)
       do i = 1_int32, size(z, 1, kind=int32)
-         if (.not. ieee_is_finite(z(i, j))) cycle
+         if (.not. finite_value(z(i, j))) cycle
          lo = min(lo, z(i, j))
          hi = max(hi, z(i, j))
       enddo
@@ -787,7 +812,7 @@ contains
    hi = -huge(1.0_real64)
    do j = 1_int32, size(z, 2, kind=int32)
       do i = 1_int32, size(z, 1, kind=int32)
-         if (.not. ieee_is_finite(z(i, j))) cycle
+         if (.not. finite_value(z(i, j))) cycle
          lo = min(lo, z(i, j))
          hi = max(hi, z(i, j))
       enddo
@@ -1306,7 +1331,7 @@ contains
    real(real64), intent(in) :: p(3) !< Point.
    logical                  :: yes  !< NaN.
 
-   yes = ieee_is_nan(p(1)) .or. ieee_is_nan(p(2)) .or. ieee_is_nan(p(3))
+   yes = p(1) /= p(1) .or. p(2) /= p(2) .or. p(3) /= p(3) ! (inline: ieee_is_nan is a call on ifx and nvfortran)
    endfunction any_nan
 
    function contains(p) result(yes)

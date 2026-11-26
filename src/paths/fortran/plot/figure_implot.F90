@@ -266,7 +266,32 @@ endinterface in_line
 character(len=2), parameter :: AXIS_NAMES(0:5) = ['x1', 'x2', 'x3', 'y1', 'y2', 'y3'] !< ImAxis names, as the frame takes
                                                                                          !< them.
 
+interface finite_value
+   !< `ieee_is_finite` inline (see `finite_value_r32`).
+   module procedure finite_value_r32, finite_value_r64
+endinterface finite_value
+
 contains
+   elemental function finite_value_r32(x) result(yes)
+   !< `ieee_is_finite` for the per-element loops (szaghi/figure#16 S2): a NaN fails `x == x` (a quiet comparison, no
+   !< FPE under traps), then an infinity fails `abs(x) <= huge(x)` (compared only when not a NaN); inline on the three
+   !< compilers, where `ieee_is_finite` is a library call on ifx (and nvfortran).
+   real(real32), intent(in) :: x   !< Value.
+   logical                  :: yes !< Finite.
+
+   yes = x == x
+   if (yes) yes = abs(x) <= huge(x)
+   endfunction finite_value_r32
+
+   elemental function finite_value_r64(x) result(yes)
+   !< `finite_value_r32` in double precision.
+   real(real64), intent(in) :: x   !< Value.
+   logical                  :: yes !< Finite.
+
+   yes = x == x
+   if (yes) yes = abs(x) <= huge(x)
+   endfunction finite_value_r64
+
    ! plots
 
    recursive function ip_begin_plot(title, width, height, equal) result(visible)
@@ -3606,7 +3631,7 @@ contains
    if (.not. ends_ok('ip_histogram', 'vmin', vmin, 'vmax', vmax, stat)) return
    if (plot_refused('ip_histogram', .false., stat)) return
    if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_histogram', stat)) return
-   n = count(ieee_is_finite(values))
+   n = count(finite_value(values))
    if (.not. (n == size(values, kind=int64) .and. in_line(values))) plot_copies = plot_copies + 1_int64
    if (n == 0_int64) then
       call figure_check(FIG_OK, stat) ! nothing to count: no item
@@ -3644,7 +3669,7 @@ contains
    if (.not. ends_ok('ip_histogram', 'vmin', vmin, 'vmax', vmax, stat)) return
    if (plot_refused('ip_histogram', .false., stat)) return
    if (.not. series_ok(size(values, kind=int64), size(values, kind=int64), 'ip_histogram', stat)) return
-   n = count(ieee_is_finite(values))
+   n = count(finite_value(values))
    if (.not. (n == size(values, kind=int64) .and. in_line(values))) plot_copies = plot_copies + 1_int64
    if (n == 0_int64) then
       call figure_check(FIG_OK, stat) ! nothing to count: no item
@@ -3692,7 +3717,7 @@ contains
    if (.not. colormap_ok('ip_histogram2d', colormap, cmap, stat)) return
    if (plot_refused('ip_histogram2d', .false., stat)) return
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_histogram2d', stat)) return
-   n = count(ieee_is_finite(x) .and. ieee_is_finite(y))
+   n = count(finite_value(x) .and. finite_value(y))
    if (n == size(x, kind=int64)) then
       call acct_lead_r32(s, y)
       call acct_put_r32(s, x)
@@ -3747,7 +3772,7 @@ contains
    if (.not. colormap_ok('ip_histogram2d', colormap, cmap, stat)) return
    if (plot_refused('ip_histogram2d', .false., stat)) return
    if (.not. series_ok(size(x, kind=int64), size(y, kind=int64), 'ip_histogram2d', stat)) return
-   n = count(ieee_is_finite(x) .and. ieee_is_finite(y))
+   n = count(finite_value(x) .and. finite_value(y))
    if (n == size(x, kind=int64)) then
       call acct_lead_r64(s, y)
       call acct_put_r64(s, x)
@@ -3880,7 +3905,7 @@ contains
       n = 0_int64
       do k = 1_int32, size(levels, kind=int32)
          first(k) = n + 1_int64
-         if (.not. ieee_is_finite(levels(k))) cycle
+         if (.not. finite_value(levels(k))) cycle
          do j = 1_int32, size(f, 2, kind=int32) - 1_int32
             do i = 1_int32, size(f, 1, kind=int32) - 1_int32
                call cell_segments(real([f(i, j), f(i + 1, j), f(i + 1, j + 1), f(i, j + 1)], real64), levels(k),      &
@@ -3936,7 +3961,7 @@ contains
       n = 0_int64
       do k = 1_int32, size(levels, kind=int32)
          first(k) = n + 1_int64
-         if (.not. ieee_is_finite(levels(k))) cycle
+         if (.not. finite_value(levels(k))) cycle
          do j = 1_int32, size(f, 2, kind=int32) - 1_int32
             do i = 1_int32, size(f, 1, kind=int32) - 1_int32
                call cell_segments([f(i, j), f(i + 1, j), f(i + 1, j + 1), f(i, j + 1)], levels(k),                    &
@@ -4015,7 +4040,7 @@ contains
    m = 0_int32
    sx = 0.0_real64
    sy = 0.0_real64
-   if (.not. all(ieee_is_finite(v))) return ! a hole (and no comparison with a NaN: an FPE under traps)
+   if (.not. all(finite_value(v))) return ! a hole (and no ordered comparison with a NaN: an FPE under traps)
    up = v >= level
    cx = [xl, xr, xr, xl]
    cy = [yb, yb, yt, yt]
@@ -4061,7 +4086,7 @@ contains
    found = .false.
    do j = 1_int64, size(f, 2, kind=int64)
       do i = 1_int64, size(f, 1, kind=int64)
-         if (.not. ieee_is_finite(f(i, j))) cycle
+         if (.not. finite_value(f(i, j))) cycle
          if (.not. found) then
             fmin = real(f(i, j), real64)
             fmax = fmin
@@ -4086,7 +4111,7 @@ contains
    found = .false.
    do j = 1_int64, size(f, 2, kind=int64)
       do i = 1_int64, size(f, 1, kind=int64)
-         if (.not. ieee_is_finite(f(i, j))) cycle
+         if (.not. finite_value(f(i, j))) cycle
          if (.not. found) then
             fmin = f(i, j)
             fmax = fmin

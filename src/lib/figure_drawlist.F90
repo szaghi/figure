@@ -261,10 +261,34 @@ contains
    dl%idx(ii + 3_int32) = int(b, c_int)
    dl%idx(ii + 4_int32) = int(b + 2_int32, c_int)
    dl%idx(ii + 5_int32) = int(b + 3_int32, c_int)
-   dl%vtx(iv) = draw_vert(x(1), y(1), u(1), v(1), col)
-   dl%vtx(iv + 1_int32) = draw_vert(x(2), y(2), u(2), v(2), col)
-   dl%vtx(iv + 2_int32) = draw_vert(x(3), y(3), u(3), v(3), col)
-   dl%vtx(iv + 3_int32) = draw_vert(x(4), y(4), u(4), v(4), col)
+   associate(vt => dl%vtx(iv))
+      vt%x = x(1)
+      vt%y = y(1)
+      vt%u = u(1)
+      vt%v = v(1)
+      vt%col = col
+   endassociate
+   associate(vt => dl%vtx(iv + 1_int32))
+      vt%x = x(2)
+      vt%y = y(2)
+      vt%u = u(2)
+      vt%v = v(2)
+      vt%col = col
+   endassociate
+   associate(vt => dl%vtx(iv + 2_int32))
+      vt%x = x(3)
+      vt%y = y(3)
+      vt%u = u(3)
+      vt%v = v(3)
+      vt%col = col
+   endassociate
+   associate(vt => dl%vtx(iv + 3_int32))
+      vt%x = x(4)
+      vt%y = y(4)
+      vt%u = u(4)
+      vt%v = v(4)
+      vt%col = col
+   endassociate
    endsubroutine dl_put_quad_uv
 
    subroutine dl_rect_filled(dl, x0, y0, x1, y1, col)
@@ -417,7 +441,13 @@ contains
       endif
       mx = mx * half_aa
       my = my * half_aa
-      dl%vtx(dl%batch_vtx(dl%nbatch) + b + i1 - 1_int32) = draw_vert(px(i1) - mx, py(i1) - my, u, v, col) ! inner
+      associate(vt => dl%vtx(dl%batch_vtx(dl%nbatch) + b + i1 - 1_int32))
+         vt%x = px(i1) - mx ! inner
+         vt%y = py(i1) - my
+         vt%u = u
+         vt%v = v
+         vt%col = col
+      endassociate
       outer = dl%nvtx - dl%batch_vtx(dl%nbatch) + 1_int32
       if (bevel .and. bevels < MAX_BEVELS) then
          bevels = bevels + 1_int32
@@ -775,14 +805,22 @@ contains
    endsubroutine new_batch
 
    subroutine put_vtx(dl, x, y, u, v, col)
-   !< Append a vertex to the open batch.
+   !< Append a vertex to the open batch (field by field, as `dl_put_quad_uv`: a `draw_vert(...)` constructor makes ifx
+   !< copy a temporary with one 16-byte load over smaller stores, a store-forwarding stall; szaghi/figure#16 S2).
    type(draw_list),    intent(inout) :: dl         !< List.
    real(c_float),      intent(in)    :: x, y, u, v !< Position, texture coordinates.
    integer(c_int32_t), intent(in)    :: col        !< Colour.
 
    dl%nvtx = dl%nvtx + 1_int32
-   dl%vtx(dl%nvtx) = draw_vert(x, y, u, v, col)
+   associate(vt => dl%vtx(dl%nvtx))
+      vt%x = x
+      vt%y = y
+      vt%u = u
+      vt%v = v
+      vt%col = col
+   endassociate
    endsubroutine put_vtx
+
 
    subroutine put_tri(dl, i, j, k)
    !< Append a triangle (vertices 0-based in the open batch).

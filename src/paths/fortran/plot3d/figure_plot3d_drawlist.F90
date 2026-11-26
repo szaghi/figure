@@ -15,7 +15,6 @@ module figure_plot3d_drawlist
 !< window's would pass 65535 vertices).
 !<
 !< The buffers and the sort's scratch are module arrays grown once and kept (no allocation per frame).
-use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_core, only : core_draw_prims
 
@@ -152,7 +151,7 @@ contains
 
    ns = 0_int32
    do t = 1_int32, nt
-      if (ieee_is_nan(zb(t))) cycle ! FIGURE's ImPlot3D patch 0004: nothing to draw, no place in the order
+      if (zb(t) /= zb(t)) cycle ! a NaN (inline): FIGURE's ImPlot3D patch 0004: nothing to draw, no place in the order
       ns = ns + 1_int32
       ord(ns) = t
    enddo

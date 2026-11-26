@@ -65,7 +65,6 @@ module figure_plot_items
 !< The items' array dummies are ASYNCHRONOUS, as figure_implot's (the Fortran path's calls them with its own): nvfortran
 !< otherwise copies an asynchronous actual at the call, and the address a view (and a series' cache) keeps is that of a
 !< temporary.
-use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_intptr_t, c_loc
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui_enums, only : ImGuiCol_Text
@@ -4090,7 +4089,11 @@ contains
          else
             r%culled = r%culled + 1_int32
          endif
-         if (.not. skip_nan .or. .not. (ieee_is_nan(p2(1)) .or. ieee_is_nan(p2(2)))) p1 = p2
+         if (.not. skip_nan) then
+            p1 = p2
+         elseif (.not. (p2(1) /= p2(1) .or. p2(2) /= p2(2))) then ! (NaN tests inline: ieee_is_nan is a call on ifx)
+            p1 = p2
+         endif
       enddo
       k0 = k0 + cnt
    enddo
@@ -4283,11 +4286,41 @@ contains
          iv = r%iv ! vertices P11, P21, X, P12, P22; triangles (0, 1 + x, 3) and (1, 4, 3 - x)
          ii = r%ii
          b = r%b
-         r%dl%vtx(iv) = draw_vert(p11(1), p11(2), uv(1), uv(2), col)
-         r%dl%vtx(iv + 1_int32) = draw_vert(p21(1), p21(2), uv(1), uv(2), col)
-         r%dl%vtx(iv + 2_int32) = draw_vert(q(1), q(2), uv(1), uv(2), col)
-         r%dl%vtx(iv + 3_int32) = draw_vert(p12(1), p12(2), uv(1), uv(2), col)
-         r%dl%vtx(iv + 4_int32) = draw_vert(p22(1), p22(2), uv(1), uv(2), col)
+         associate(vt => r%dl%vtx(iv))
+            vt%x = p11(1)
+            vt%y = p11(2)
+            vt%u = uv(1)
+            vt%v = uv(2)
+            vt%col = col
+         endassociate
+         associate(vt => r%dl%vtx(iv + 1_int32))
+            vt%x = p21(1)
+            vt%y = p21(2)
+            vt%u = uv(1)
+            vt%v = uv(2)
+            vt%col = col
+         endassociate
+         associate(vt => r%dl%vtx(iv + 2_int32))
+            vt%x = q(1)
+            vt%y = q(2)
+            vt%u = uv(1)
+            vt%v = uv(2)
+            vt%col = col
+         endassociate
+         associate(vt => r%dl%vtx(iv + 3_int32))
+            vt%x = p12(1)
+            vt%y = p12(2)
+            vt%u = uv(1)
+            vt%v = uv(2)
+            vt%col = col
+         endassociate
+         associate(vt => r%dl%vtx(iv + 4_int32))
+            vt%x = p22(1)
+            vt%y = p22(2)
+            vt%u = uv(1)
+            vt%v = uv(2)
+            vt%col = col
+         endassociate
          r%dl%idx(ii) = b
          r%dl%idx(ii + 1_int32) = b + 1_int32 + x
          r%dl%idx(ii + 2_int32) = b + 3_int32
@@ -4407,7 +4440,13 @@ contains
             x = p(1) + w
             w = shape(2, k) * msize
             y = p(2) + w
-            r%dl%vtx(r%iv + k - 1_int32) = draw_vert(x, y, uv(1), uv(2), col)
+            associate(vt => r%dl%vtx(r%iv + k - 1_int32))
+               vt%x = x
+               vt%y = y
+               vt%u = uv(1)
+               vt%v = uv(2)
+               vt%col = col
+            endassociate
          enddo
          do k = 2_int32, nv - 1_int32
             r%dl%idx(r%ii) = r%b
@@ -4545,7 +4584,10 @@ contains
    endsubroutine run_end
 
    subroutine put_line(r, p1, p2, hw, col, uv0, uv1)
-   !< `PrimLine` into the run: a segment as a quad of the line's texture, `hw` each side, at the cursor.
+   !< `PrimLine` into the run: a segment as a quad of the line's texture, `hw` each side, at the cursor. The run's
+   !< writers set a vertex field by field: a `draw_vert(...)` constructor makes ifx build it in a temporary and copy it
+   !< with one 16-byte load over smaller stores, a store-forwarding stall a vertex; a helper subroutine for it is not
+   !< inlined by nvfortran (szaghi/figure#16 S2).
    type(prim_run), intent(inout) :: r              !< The run.
    real(real32),   intent(in)    :: p1(2), p2(2)   !< Ends [pixels].
    real(real32),   intent(in)    :: hw             !< Half width [pixels].
@@ -4569,10 +4611,34 @@ contains
    iv = r%iv
    ii = r%ii
    k = r%b
-   r%dl%vtx(iv) = draw_vert(p1(1) + dy, p1(2) - dx, uv0(1), uv0(2), col)
-   r%dl%vtx(iv + 1_int32) = draw_vert(p2(1) + dy, p2(2) - dx, uv0(1), uv0(2), col)
-   r%dl%vtx(iv + 2_int32) = draw_vert(p2(1) - dy, p2(2) + dx, uv1(1), uv1(2), col)
-   r%dl%vtx(iv + 3_int32) = draw_vert(p1(1) - dy, p1(2) + dx, uv1(1), uv1(2), col)
+   associate(vt => r%dl%vtx(iv))
+      vt%x = p1(1) + dy
+      vt%y = p1(2) - dx
+      vt%u = uv0(1)
+      vt%v = uv0(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 1_int32))
+      vt%x = p2(1) + dy
+      vt%y = p2(2) - dx
+      vt%u = uv0(1)
+      vt%v = uv0(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 2_int32))
+      vt%x = p2(1) - dy
+      vt%y = p2(2) + dx
+      vt%u = uv1(1)
+      vt%v = uv1(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 3_int32))
+      vt%x = p1(1) - dy
+      vt%y = p1(2) + dx
+      vt%u = uv1(1)
+      vt%v = uv1(2)
+      vt%col = col
+   endassociate
    r%dl%idx(ii) = k
    r%dl%idx(ii + 1_int32) = k + 1_int32
    r%dl%idx(ii + 2_int32) = k + 2_int32
@@ -4605,10 +4671,34 @@ contains
    iv = r%iv
    ii = r%ii
    k = r%b
-   r%dl%vtx(iv) = draw_vert(ax, ay, uv(1), uv(2), col)
-   r%dl%vtx(iv + 1_int32) = draw_vert(bx, by, uv(1), uv(2), col)
-   r%dl%vtx(iv + 2_int32) = draw_vert(ax, by, uv(1), uv(2), col)
-   r%dl%vtx(iv + 3_int32) = draw_vert(bx, ay, uv(1), uv(2), col)
+   associate(vt => r%dl%vtx(iv))
+      vt%x = ax
+      vt%y = ay
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 1_int32))
+      vt%x = bx
+      vt%y = by
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 2_int32))
+      vt%x = ax
+      vt%y = by
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 3_int32))
+      vt%x = bx
+      vt%y = ay
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
    r%dl%idx(ii) = k
    r%dl%idx(ii + 1_int32) = k + 1_int32
    r%dl%idx(ii + 2_int32) = k + 2_int32
@@ -4636,14 +4726,62 @@ contains
    iv = r%iv
    ii = r%ii
    k = r%b
-   r%dl%vtx(iv) = draw_vert(pmin(1), pmin(2), uv(1), uv(2), col)
-   r%dl%vtx(iv + 1_int32) = draw_vert(pmin(1), pmax(2), uv(1), uv(2), col)
-   r%dl%vtx(iv + 2_int32) = draw_vert(pmax(1), pmax(2), uv(1), uv(2), col)
-   r%dl%vtx(iv + 3_int32) = draw_vert(pmax(1), pmin(2), uv(1), uv(2), col)
-   r%dl%vtx(iv + 4_int32) = draw_vert(pmin(1) + w, pmin(2) + w, uv(1), uv(2), col)
-   r%dl%vtx(iv + 5_int32) = draw_vert(pmin(1) + w, pmax(2) - w, uv(1), uv(2), col)
-   r%dl%vtx(iv + 6_int32) = draw_vert(pmax(1) - w, pmax(2) - w, uv(1), uv(2), col)
-   r%dl%vtx(iv + 7_int32) = draw_vert(pmax(1) - w, pmin(2) + w, uv(1), uv(2), col)
+   associate(vt => r%dl%vtx(iv))
+      vt%x = pmin(1)
+      vt%y = pmin(2)
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 1_int32))
+      vt%x = pmin(1)
+      vt%y = pmax(2)
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 2_int32))
+      vt%x = pmax(1)
+      vt%y = pmax(2)
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 3_int32))
+      vt%x = pmax(1)
+      vt%y = pmin(2)
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 4_int32))
+      vt%x = pmin(1) + w
+      vt%y = pmin(2) + w
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 5_int32))
+      vt%x = pmin(1) + w
+      vt%y = pmax(2) - w
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 6_int32))
+      vt%x = pmax(1) - w
+      vt%y = pmax(2) - w
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
+   associate(vt => r%dl%vtx(iv + 7_int32))
+      vt%x = pmax(1) - w
+      vt%y = pmin(2) + w
+      vt%u = uv(1)
+      vt%v = uv(2)
+      vt%col = col
+   endassociate
    do j = 1_int32, 24_int32
       r%dl%idx(ii + j - 1_int32) = k + TRI(j)
    enddo
@@ -4663,7 +4801,13 @@ contains
    integer(int32)                :: i       !< Vertex.
 
    do i = 1_int32, n
-      r%dl%vtx(r%iv + i - 1_int32) = draw_vert(v(1, i), v(2, i), uv(1), uv(2), col)
+      associate(vt => r%dl%vtx(r%iv + i - 1_int32))
+         vt%x = v(1, i)
+         vt%y = v(2, i)
+         vt%u = uv(1)
+         vt%v = uv(2)
+         vt%col = col
+      endassociate
    enddo
    do i = 2_int32, n - 1_int32
       r%dl%idx(r%ii) = r%b
