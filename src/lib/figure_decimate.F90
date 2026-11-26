@@ -34,7 +34,6 @@ module figure_decimate
 !<   a rounding of the pixel that differs from ImPlot's in the last bit): a filled area (shaded items, stairs and lines
 !<   with the `Shaded` flag) covers a pixel when its centre is inside, so the area is the same at every centre.
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 
 implicit none
 private
@@ -213,7 +212,7 @@ contains
    nkeep = 0_int64
    done = .false.
    n = size(y, kind=int64)
-   if (ieee_is_nan(dx) .or. ieee_is_nan(x0)) return
+   if (dx /= dx .or. x0 /= x0) return ! a NaN (the quiet test of `extremes_of_r64`)
    if (dx < 0.0_real64) return
    if (.not. columns(axis, n, kmin, kmax)) return
    if (present(cache)) then
@@ -256,7 +255,7 @@ contains
    nkeep = 0_int64
    done = .false.
    n = size(y, kind=int64)
-   if (ieee_is_nan(dx) .or. ieee_is_nan(x0)) return
+   if (dx /= dx .or. x0 /= x0) return ! a NaN (the quiet test of `extremes_of_r64`)
    if (dx < 0.0_real64) return
    if (.not. columns(axis, n, kmin, kmax)) return
    if (present(cache)) then
@@ -507,8 +506,10 @@ contains
       integer(int64), intent(in) :: i      !< Point.
       logical                    :: nan    !< NaN.
 
-      nan = ieee_is_nan(y(i))
-      if (present(y2)) nan = nan .or. ieee_is_nan(y2(i))
+      nan = y(i) /= y(i) ! (the quiet NaN test of `extremes_of_r64`: ieee_is_nan is a call on nvfortran and ifx)
+      if (present(y2)) then
+         if (y2(i) /= y2(i)) nan = .true.
+      endif
       endfunction nan_at
 
       subroutine extremes(s, e, cand, nc, gap)
@@ -619,8 +620,10 @@ contains
       integer(int64), intent(in) :: i      !< Point.
       logical                    :: nan    !< NaN.
 
-      nan = ieee_is_nan(y(i))
-      if (present(y2)) nan = nan .or. ieee_is_nan(y2(i))
+      nan = y(i) /= y(i) ! (the quiet NaN test of `extremes_of_r64`: ieee_is_nan is a call on nvfortran and ifx)
+      if (present(y2)) then
+         if (y2(i) /= y2(i)) nan = .true.
+      endif
       endfunction nan_at
 
       subroutine extremes(s, e, cand, nc, gap)
