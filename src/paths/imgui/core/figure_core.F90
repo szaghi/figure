@@ -23,6 +23,9 @@ module figure_core
 !<   polylines, circles, text, images, clip rectangles and callbacks, and `core_draw_end`; for the plot frame
 !<   (src/paths/fortran/plot/), Dear ImGui 1.93's axis-aligned lines (`core_draw_line_h`, `core_draw_line_v`), a
 !<   line's texture (`core_line_texture`) and a textured quad (`core_draw_quad_uv`), thin wrappers of the list's calls;
+!<   szaghi/figure#16 S2: the batch interface of the Fortran draw list for the frames' loops (`core_prim_reserve`,
+!<   `core_prim_unreserve`, `core_prim_vtx_current`, and `core_prim_list`, the list itself, written in place: no Dear
+!<   ImGui type);
 !< - for the plot frame's input and menus (szaghi/figure#15 P10 step 8, ImPlot's `UpdateInput` and context menus):
 !<   the input state no C API gives (`core_io_input`: io.MouseDelta, MouseWheel, MouseWheelH, MouseDragMaxDistanceSqr,
 !<   KeyMods, g.DragDropActive), `core_mouse_drag_delta`, `core_mouse_double_clicked`, `core_mouse_pos_valid`,
@@ -45,7 +48,9 @@ module figure_core
 !<
 !< The draw list is built in Fortran (figure_drawlist, the first piece of block E) and appended to the window's Dear
 !< ImGui list by `core_draw_end`: the primitives figure_drawlist tessellates (filled rectangles without rounding,
-!< lines, filled triangles and convex polygons) are kept there; the others (rounded rectangles, outlines, polylines,
+!< lines, filled triangles and convex polygons, textured quads and the frames' batches) are kept there, its finished
+!< batches appended as soon as a new one opens (the list's sink), its first batch opened in the window's draw command
+!< as Dear ImGui's `PrimReserve` would continue it (`dl_open` with its `_VtxCurrentIdx`); the others (rounded rectangles, outlines, polylines,
 !< circles, text, images, clip rectangles, callbacks) are drawn by Dear ImGui's list after what is pending was appended,
 !< so the order of the primitives is the order of the calls. Coordinates are screen pixels (`real(real64)`, as the
 !< public API's); colours are packed `ImU32` in an `integer(int32)`, red in the low byte (`core_color`).
@@ -74,7 +79,7 @@ use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,
                                igGetHoveredID, igItemAdd, igItemSize_Vec2, igKeepAliveID, ImDrawList_AddCallback,          &
                                ImDrawList_AddCircle, ImDrawList_AddCircleFilled, ImDrawList_AddImage, ImDrawList_AddPolyline, &
                                ImDrawList_AddRect, ImDrawList_AddRectFilled, ImDrawList_AddText_Vec2, ImDrawList_PopClipRect, &
-                               ImDrawList_PrimReserve, ImDrawList_PushClipRect, igBeginPopupEx, igOpenPopupEx, &
+                               ImDrawList_PushClipRect, igBeginPopupEx, igOpenPopupEx, &
                                igGetStyleVarInfo,              &
                                ImDrawList_PushTexture, ImDrawList_PopTexture
 use figure_c_native, only : fig_texture_sampling
@@ -90,6 +95,7 @@ use figure_cimgui_core, only : igClearActiveID, igGetCurrentWindow, igSetActiveI
 use figure_c_native, only : fig_window_hover_state
 use figure_drawlist, only : draw_list, dl_batch, dl_convex_poly_filled, dl_line, dl_rect_filled, dl_reset, dl_set_state, &
                             dl_triangle_filled, DL_LINE_TEXTURES
+use figure_drawlist, only : draw_vert, dl_open, dl_quad_uv, dl_reserve, dl_unreserve, dl_vtx_current
 
 implicit none
 private
@@ -122,6 +128,7 @@ public :: core_draw_list
 public :: core_draw_concave_poly_filled
 public :: core_arrow_button, core_begin_combo, core_end_combo
 public :: core_window_skip_items
+public :: core_prim_reserve, core_prim_unreserve, core_prim_vtx_current, core_prim_list
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
 
@@ -154,16 +161,6 @@ interface
    real(c_float),  value :: thickness    !< C `float`.
    integer(c_int), value :: flags        !< C `ImDrawFlags`.
    endsubroutine ImDrawList_AddLineV
-
-   subroutine ImDrawList_PrimQuadUV(self, a, b, c, d, uv_a, uv_b, uv_c, uv_d, col) bind(C, name='ImDrawList_PrimQuadUV')
-   !< ImDrawList::PrimQuadUV(ImVec2 x4, ImVec2 x4, ImU32), imgui.h.
-   import :: c_int, c_ptr, im_vec2
-   implicit none
-   type(c_ptr),    value :: self                   !< C `ImDrawList*`.
-   type(im_vec2),  value :: a, b, c, d             !< C `const ImVec2_c`.
-   type(im_vec2),  value :: uv_a, uv_b, uv_c, uv_d !< C `const ImVec2_c`.
-   integer(c_int), value :: col                    !< C `ImU32`.
-   endsubroutine ImDrawList_PrimQuadUV
 
    subroutine ImDrawList__SelectLineTexture(self, screen_thickness, out_uv0, out_uv1, out_fringe, flags) &
       bind(C, name='ImDrawList__SelectLineTexture')
@@ -268,6 +265,18 @@ type, bind(C) :: im_io_head
    real(c_float)  :: display_framebuffer_scale(2) !< DisplayFramebufferScale.
    real(c_float)  :: delta_time                   !< DeltaTime.
 endtype im_io_head
+
+type, bind(C) :: im_draw_list_head
+   !< The first members of ImDrawList (imgui.h, 1.93), up to _VtxCurrentIdx.
+   integer(c_int) :: cmd_size, cmd_capacity !< CmdBuffer's Size, Capacity.
+   type(c_ptr)    :: cmd_data               !< ... Data.
+   integer(c_int) :: idx_size, idx_capacity !< IdxBuffer's Size, Capacity.
+   type(c_ptr)    :: idx_data               !< ... Data.
+   integer(c_int) :: vtx_size, vtx_capacity !< VtxBuffer's Size, Capacity.
+   type(c_ptr)    :: vtx_data               !< ... Data.
+   integer(c_int) :: flags                  !< Flags.
+   integer(c_int) :: vtx_current_idx        !< _VtxCurrentIdx (unsigned in C): the open command's vertices.
+endtype im_draw_list_head
 
 contains
    ! IDs
@@ -1143,8 +1152,7 @@ contains
    if (.not. c_associated(target_list)) return
    do k = 1_int32, list%nbatch
       call dl_batch(list, k, v0, nv, i0, ni)
-      if (nv > 0_int32 .and. ni > 0_int32) &
-         call figure_ImDrawList_append(target_list, c_loc(list%vtx(v0)), int(nv, c_int), list%idx(i0:), int(ni, c_int))
+      if (nv > 0_int32 .and. ni > 0_int32) call append_batch(list%vtx(v0), nv, list%idx(i0), ni)
    enddo
    call dl_reset(list)
    endsubroutine core_draw_end
@@ -1165,6 +1173,7 @@ contains
 
    t = 1.0_c_float
    if (present(thickness)) t = real(thickness, c_float)
+   call open_list()
    call dl_line(list, real(x1, c_float), real(y1, c_float), real(x2, c_float), real(y2, c_float), int(col, c_int32_t), t, &
                 0_c_int)
    endsubroutine core_draw_line
@@ -1182,6 +1191,7 @@ contains
          return
       endif
    endif
+   call open_list()
    call dl_rect_filled(list, real(x0, c_float), real(y0, c_float), real(x1, c_float), real(y1, c_float), int(col, c_int32_t))
    endsubroutine core_draw_rect_filled
 
@@ -1213,6 +1223,7 @@ contains
    real(real64),   intent(in) :: x1, y1, x2, y2, x3, y3 !< Vertices [pixels].
    integer(int32), intent(in) :: col                    !< Packed colour.
 
+   call open_list()
    call dl_triangle_filled(list, real(x1, c_float), real(y1, c_float), real(x2, c_float), real(y2, c_float), &
                            real(x3, c_float), real(y3, c_float), int(col, c_int32_t))
    endsubroutine core_draw_triangle_filled
@@ -1226,6 +1237,7 @@ contains
    real(c_float)              :: fx(NFIX), fy(NFIX) !< Points, C kind.
    integer(int32)             :: n          !< Points.
 
+   call open_list()
    n = size(x, kind=int32)
    if (n <= NFIX) then
       fx(1:n) = real(x, c_float)
@@ -1465,7 +1477,7 @@ contains
    type(im_vec2)             :: a, b      !< C values.
    real(c_float)             :: f         !< C value.
 
-   call core_draw_end_pending()
+   if (.not. c_associated(target_list)) target_list = igGetWindowDrawList() ! it reads the list: what is pending stays
    call ImDrawList__SelectLineTexture(target_list, real(thickness, c_float), a, b, f, list%flags)
    uv0 = [real(a%x, real64), real(a%y, real64)]
    uv1 = [real(b%x, real64), real(b%y, real64)]
@@ -1485,29 +1497,90 @@ contains
    type(im_texture_ref)                 :: t          !< Its reference.
 
    if (.not. present(texture)) then
+      call open_list()
       call dl_prims(list, x, y, u, v, col, idx)
       return
    endif
    call core_draw_end_pending()
    t%texid = texture
    call ImDrawList_PushTexture(target_list, t)
+   call open_list()
    call dl_prims(list, x, y, u, v, col, idx)
    call core_draw_end_pending()
    call ImDrawList_PopTexture(target_list)
    endsubroutine core_draw_prims
 
    subroutine core_draw_quad_uv(x, y, u, v, col)
-   !< A quad of four textured vertices, triangles (1, 2, 3) and (1, 3, 4) (`PrimReserve(6, 4)` and `PrimQuadUV`): the
-   !< texture is the list's current one (the font atlas: its white pixel, a line's texture).
-   real(real64),   intent(in) :: x(4), y(4) !< Vertices [pixels].
-   real(real64),   intent(in) :: u(4), v(4) !< Their texture coordinates.
-   integer(int32), intent(in) :: col        !< Packed colour.
+   !< A quad of four textured vertices, triangles (1, 2, 3) and (1, 3, 4) (`PrimReserve(6, 4)` and `PrimQuadUV`, into
+   !< the Fortran list: `dl_quad_uv`): the texture is the list's current one (the font atlas: its white pixel, a line's
+   !< texture).
+   real(real64),   intent(in) :: x(4), y(4)   !< Vertices [pixels].
+   real(real64),   intent(in) :: u(4), v(4)   !< Their texture coordinates.
+   integer(int32), intent(in) :: col          !< Packed colour.
+   real(c_float)              :: fx(4), fy(4) !< Vertices, C kind.
+   real(c_float)              :: fu(4), fv(4) !< Texture coordinates, C kind.
 
-   call core_draw_end_pending()
-   call ImDrawList_PrimReserve(target_list, 6_c_int, 4_c_int)
-   call ImDrawList_PrimQuadUV(target_list, v2(x(1), y(1)), v2(x(2), y(2)), v2(x(3), y(3)), v2(x(4), y(4)), &
-                              v2(u(1), v(1)), v2(u(2), v(2)), v2(u(3), v(3)), v2(u(4), v(4)), int(col, c_int))
+   fx(1) = real(x(1), c_float)
+   fx(2) = real(x(2), c_float)
+   fx(3) = real(x(3), c_float)
+   fx(4) = real(x(4), c_float)
+   fy(1) = real(y(1), c_float)
+   fy(2) = real(y(2), c_float)
+   fy(3) = real(y(3), c_float)
+   fy(4) = real(y(4), c_float)
+   fu(1) = real(u(1), c_float)
+   fu(2) = real(u(2), c_float)
+   fu(3) = real(u(3), c_float)
+   fu(4) = real(u(4), c_float)
+   fv(1) = real(v(1), c_float)
+   fv(2) = real(v(2), c_float)
+   fv(3) = real(v(3), c_float)
+   fv(4) = real(v(4), c_float)
+   call open_list()
+   call dl_quad_uv(list, fx, fy, fu, fv, int(col, c_int32_t))
    endsubroutine core_draw_quad_uv
+
+   subroutine core_prim_reserve(nvtx, nidx, iv, ii, base)
+   !< `PrimReserve(nidx, nvtx)` on the Fortran list (`dl_reserve`): room for nvtx vertices and nidx indices, written in
+   !< place by the caller into `core_prim_list()`: the vertices at `%vtx(iv:iv + nvtx - 1)`, the indices at
+   !< `%idx(ii:ii + nidx - 1)`, 0-based in the batch from `base` (the first vertex's). A reservation that opens a new
+   !< batch appends the finished ones to Dear ImGui and starts the list again: what was reserved before it must be
+   !< written or given back first (as ImPlot's `RenderPrimitivesEx` does).
+   integer(int32), intent(in)  :: nvtx !< Vertices.
+   integer(int32), intent(in)  :: nidx !< Indices.
+   integer(int32), intent(out) :: iv   !< First vertex's place in the list's `vtx`.
+   integer(int32), intent(out) :: ii   !< First index's place in the list's `idx`.
+   integer(int32), intent(out) :: base !< First vertex, 0-based in its batch.
+
+   call open_list()
+   call dl_reserve(list, nvtx, nidx, base)
+   iv = list%nvtx - nvtx + 1_int32
+   ii = list%nidx - nidx + 1_int32
+   endsubroutine core_prim_reserve
+
+   subroutine core_prim_unreserve(nvtx, nidx)
+   !< `PrimUnreserve(nidx, nvtx)` on the Fortran list (`dl_unreserve`): the last room reserved and not written given back.
+   integer(int32), intent(in) :: nvtx !< Vertices.
+   integer(int32), intent(in) :: nidx !< Indices.
+
+   call dl_unreserve(list, nvtx, nidx)
+   endsubroutine core_prim_unreserve
+
+   function core_prim_vtx_current() result(n)
+   !< The window's draw command's vertices as Dear ImGui's `_VtxCurrentIdx` counts them, with the Fortran list's pending
+   !< ones and reserved ones (`dl_vtx_current`): what ImPlot sizes a run of primitives by.
+   integer(int32) :: n !< Vertices.
+
+   call open_list()
+   n = dl_vtx_current(list)
+   endfunction core_prim_vtx_current
+
+   function core_prim_list() result(dl)
+   !< The Fortran draw list the primitives go to, for a loop that writes its reservations in place.
+   type(draw_list), pointer :: dl !< List.
+
+   dl => list
+   endfunction core_prim_list
 
    subroutine core_font_glyph(c, found, scale, advance, x0, y0, x1, y1, u0, v0, u1, v1)
    !< A glyph of the current font at the current size (`g.Font->GetFontBaked(g.FontSize)`, `FindGlyph((ImWchar)c)`:
@@ -1564,11 +1637,33 @@ contains
    type(c_ptr) :: keep !< The bound list.
 
    if (.not. c_associated(target_list)) target_list = igGetWindowDrawList()
-   if (list%nvtx == 0_int32) return
+   if (list%nbatch == 0_int32) return ! (an opened list, even empty, is reset: its first batch is opened again)
    keep = target_list
    call core_draw_end()
    target_list = keep
    endsubroutine core_draw_end_pending
+
+   subroutine open_list()
+   !< Before the Fortran list's primitives: an empty list opened in the window's draw command, which holds
+   !< `_VtxCurrentIdx` vertices already (so its batches split where Dear ImGui's would), its sink set.
+   type(im_draw_list_head), pointer :: h !< Dear ImGui's list.
+
+   if (list%nbatch > 0_int32) return
+   if (.not. c_associated(target_list)) target_list = igGetWindowDrawList()
+   if (.not. associated(list%sink)) list%sink => append_batch
+   call c_f_pointer(target_list, h)
+   call dl_open(list, int(h%vtx_current_idx, int32))
+   endsubroutine open_list
+
+   subroutine append_batch(vtx, nv, idx, ni)
+   !< A batch of the Fortran list appended to Dear ImGui's as one primitive (the list's sink).
+   integer(int32),  intent(in)         :: nv      !< Vertices.
+   type(draw_vert), intent(in), target :: vtx(nv) !< The batch's vertices.
+   integer(int32),  intent(in)         :: ni      !< Indices.
+   integer(c_int),  intent(in)         :: idx(ni) !< Its indices, 0-based in the batch.
+
+   call figure_ImDrawList_append(target_list, c_loc(vtx), int(nv, c_int), idx, int(ni, c_int))
+   endsubroutine append_batch
 
    pure function rect(x0, y0, x1, y1) result(r)
    !< An `ImRect`.

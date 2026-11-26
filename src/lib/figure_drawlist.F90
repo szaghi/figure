@@ -11,16 +11,30 @@ module figure_drawlist
 !< - the indices, 0-based in their batch;
 !< - the batches, a structure of arrays (each one's first vertex and first index; `dl_batch` gives its extent):
 !<   consecutive primitives share a batch while its vertices fit 16-bit indices (Dear ImGui's `ImDrawIdx`), so a batch
-!<   is one `PrimReserve` there.
+!<   is one `PrimReserve` there. A batch splits where Dear ImGui's `PrimReserve` starts a draw command: when the
+!<   reservation would take the batch past 65535 vertices, counting those the target's open command already holds
+!<   before the list's first batch (`dl_open`).
 !<
 !< The primitives (`dl_rect_filled`, `dl_rect_filled_multicolor`, `dl_convex_poly_filled`, `dl_triangle_filled`,
-!< `dl_line`) give the vertices and indices that Dear ImGui 1.93's `ImDrawList` gives for the same call
+!< `dl_line`, `dl_quad_uv`) give the vertices and indices that Dear ImGui 1.93's `ImDrawList` gives for the same call
 !< (imgui_draw.cpp: `AddRectFilled` without rounding, `AddRectFilledMultiColor`, `AddConvexPolyFilled`,
-!< `AddTriangleFilled`, `AddLine`), in the same order, from the same state: the fringe scale, the white pixel's
+!< `AddTriangleFilled`, `AddLine`, `PrimReserve(6, 4)` and `PrimQuadUV`), in the same order, from the same state: the
+!< fringe scale, the white pixel's
 !< coordinates, the anti-aliased lines' texture coordinates and the list's flags (`dl_set_state`). Arithmetic in
 !< `real(c_float)`, as the C++'s; `ImRsqrtPrecise` is `1 / sqrt` (Dear ImGui built with `IMGUI_DISABLE_SSE`, no
 !< rsqrtss estimate). Rounded rectangles, polylines, circles and text are not here yet: figure_core draws them
 !< through Dear ImGui.
+!<
+!< Loops that write many primitives (the plot frames' items: szaghi/figure#16 S2) use the batch interface, as ImPlot's
+!< `RenderPrimitives` uses `PrimReserve` and `PrimUnreserve`: `dl_reserve` takes room for a run of primitives (the
+!< vertices and indices at the end of the list, `dl%vtx` and `dl%idx`, written in place by the caller, for instance with
+!< `dl_put_quad_uv`), `dl_unreserve` gives back what the caller did not write (the culled primitives), and
+!< `dl_vtx_current` is what Dear ImGui's `_VtxCurrentIdx` would be, to size a run as ImPlot does.
+!<
+!< A list with a sink (`dl%sink`, figure_core's appends to Dear ImGui) hands its batches to it when a reservation opens a
+!< new batch, and starts again from its first vertex: the list holds one batch at most, not the frame's whole draw data.
+!< So what was reserved before a reservation that opens a batch must be written (or given back) first; the primitives,
+!< and loops that reserve as ImPlot's `RenderPrimitivesEx` does, keep to it.
 !<
 !< Colours are `ImU32` packed as Dear ImGui packs them (red in the low byte, alpha in the high one), held in a
 !< `c_int32_t`; the alpha is read and rewritten with explicit unsigned arithmetic on 64-bit integers (#15 §5).
@@ -36,6 +50,7 @@ private
 public :: draw_vert, draw_list
 public :: dl_reset, dl_set_state, dl_rect_filled, dl_rect_filled_multicolor, dl_convex_poly_filled, dl_triangle_filled
 public :: dl_line, dl_prim_rect, dl_batch, dl_prims
+public :: dl_quad_uv, dl_put_quad_uv, dl_open, dl_reserve, dl_unreserve, dl_vtx_current, dl_sink
 public :: DL_LINE_TEXTURES, DL_BATCH_VERTICES
 
 integer(int32), parameter :: DL_LINE_TEXTURES = 64_int32  !< Room for the anti-aliased lines' textures (Dear ImGui 1.93
@@ -59,6 +74,18 @@ type, bind(C) :: draw_vert
    integer(c_int32_t) :: col = 0_c_int32_t !< Colour, packed `ImU32`.
 endtype draw_vert
 
+abstract interface
+   subroutine dl_sink(vtx, nv, idx, ni)
+   !< Where a list's finished batches go (figure_core: appended to Dear ImGui's list, one primitive each).
+   import :: c_int, draw_vert, int32
+   implicit none
+   integer(int32),  intent(in)         :: nv       !< Vertices.
+   type(draw_vert), intent(in), target :: vtx(nv)  !< The batch's vertices.
+   integer(int32),  intent(in)         :: ni       !< Indices.
+   integer(c_int),  intent(in)         :: idx(ni)  !< Its indices, 0-based in the batch.
+   endsubroutine dl_sink
+endinterface
+
 type :: draw_list
    !< A draw list: vertices, indices and their batches, and the state the primitives read.
    type(draw_vert), allocatable :: vtx(:)        !< Vertices, 1-based.
@@ -68,6 +95,8 @@ type :: draw_list
    integer(int32), allocatable  :: batch_vtx(:)  !< Each batch's first vertex.
    integer(int32), allocatable  :: batch_idx(:)  !< ... its first index.
    integer(int32)               :: nbatch = 0    !< Batches used.
+   integer(int32)               :: seed = 0      !< Vertices the target's open command holds before the first batch.
+   procedure(dl_sink), pointer, nopass :: sink => null() !< Where finished batches go (none: kept until emptied).
    real(c_float)                :: fringe = 1.0_c_float     !< `_FringeScale`: the anti-aliasing fringe [pixels].
    real(c_float)                :: inv_fringe = 1.0_c_float !< `_InvFringeScale`.
    logical                      :: fringe_integer = .true.  !< `_FringeScaleIsInteger`.
@@ -87,7 +116,58 @@ contains
    dl%nvtx = 0_int32
    dl%nidx = 0_int32
    dl%nbatch = 0_int32
+   dl%seed = 0_int32
    endsubroutine dl_reset
+
+   subroutine dl_open(dl, vtx_current)
+   !< Open an empty list's first batch in the target's open command, which holds `vtx_current` vertices already (Dear
+   !< ImGui's `_VtxCurrentIdx`): the batch splits where `PrimReserve` would split that command. A list not opened
+   !< starts its first batch from 0 at its first reservation.
+   type(draw_list), intent(inout) :: dl          !< List.
+   integer(int32),  intent(in)    :: vtx_current !< Vertices of the target's open command.
+
+   if (dl%nbatch > 0_int32) return
+   call new_batch(dl)
+   dl%seed = max(0_int32, min(vtx_current, DL_BATCH_VERTICES))
+   endsubroutine dl_open
+
+   pure function dl_vtx_current(dl) result(n)
+   !< The open batch's vertices, as Dear ImGui's `_VtxCurrentIdx` counts them: those of the target's command before the
+   !< first batch included, the reserved ones too (a caller with culled primitives pending subtracts their vertices).
+   type(draw_list), intent(in) :: dl !< List.
+   integer(int32)              :: n  !< Vertices.
+
+   n = 0_int32
+   if (dl%nbatch == 0_int32) return
+   n = dl%nvtx - dl%batch_vtx(dl%nbatch) + 1_int32
+   if (dl%nbatch == 1_int32) n = n + dl%seed
+   endfunction dl_vtx_current
+
+   subroutine dl_reserve(dl, nv, ni, b)
+   !< `PrimReserve(ni, nv)`: room for nv vertices and ni indices at the end of the list, in the open batch or in a new one
+   !< when it would pass 65535 vertices; b is the first one's index in its batch (0-based). The caller writes them in
+   !< place: the vertices `dl%vtx(dl%nvtx - nv + 1:dl%nvtx)`, the indices `dl%idx(dl%nidx - ni + 1:dl%nidx)` (0-based
+   !< in the batch, from b). With a sink, a new batch hands the finished ones to it first (the module's description).
+   type(draw_list), intent(inout) :: dl !< List.
+   integer(int32),  intent(in)    :: nv !< Vertices.
+   integer(int32),  intent(in)    :: ni !< Indices.
+   integer(int32),  intent(out)   :: b  !< First vertex, 0-based in the batch.
+
+   call reserve(dl, nv, ni, b)
+   dl%nvtx = dl%nvtx + nv
+   dl%nidx = dl%nidx + ni
+   endsubroutine dl_reserve
+
+   subroutine dl_unreserve(dl, nv, ni)
+   !< `PrimUnreserve(ni, nv)`: the last nv vertices and ni indices reserved given back (not past the open batch's start).
+   type(draw_list), intent(inout) :: dl !< List.
+   integer(int32),  intent(in)    :: nv !< Vertices.
+   integer(int32),  intent(in)    :: ni !< Indices.
+
+   if (dl%nbatch == 0_int32) return
+   dl%nvtx = max(dl%nvtx - nv, dl%batch_vtx(dl%nbatch) - 1_int32)
+   dl%nidx = max(dl%nidx - ni, dl%batch_idx(dl%nbatch) - 1_int32)
+   endsubroutine dl_unreserve
 
    subroutine dl_set_state(dl, fringe, uv_white, uv_lines, n_lines, flags)
    !< The state the primitives read, from the list they are drawn for (figure_core reads Dear ImGui's).
@@ -143,6 +223,42 @@ contains
    call put_tri(dl, b, b + 1_int32, b + 2_int32)
    call put_tri(dl, b, b + 2_int32, b + 3_int32)
    endsubroutine dl_prim_rect
+
+   subroutine dl_quad_uv(dl, x, y, u, v, col)
+   !< `PrimReserve(6, 4)` and `PrimQuadUV`: the quad a, b, c, d (x(1:4), y(1:4)) of the given texture coordinates and
+   !< colour, triangles (a, b, c) and (a, c, d); no anti-aliasing, the texture the target's current one.
+   type(draw_list),    intent(inout) :: dl         !< List.
+   real(c_float),      intent(in)    :: x(4), y(4) !< Vertices [pixels].
+   real(c_float),      intent(in)    :: u(4), v(4) !< Their texture coordinates.
+   integer(c_int32_t), intent(in)    :: col        !< Colour.
+   integer(int32)                    :: b          !< First vertex in the batch.
+
+   call dl_reserve(dl, 4_int32, 6_int32, b)
+   call dl_put_quad_uv(dl, dl%nvtx - 3_int32, dl%nidx - 5_int32, b, x, y, u, v, col)
+   endsubroutine dl_quad_uv
+
+   subroutine dl_put_quad_uv(dl, iv, ii, b, x, y, u, v, col)
+   !< `PrimQuadUV` into reserved room: the four vertices at `dl%vtx(iv:iv + 3)` (a, b, c, d: x(1:4), y(1:4), their
+   !< texture coordinates, the colour), the indices (b, b + 1, b + 2) and (b, b + 2, b + 3) at `dl%idx(ii:ii + 5)`.
+   type(draw_list),    intent(inout) :: dl         !< List.
+   integer(int32),     intent(in)    :: iv         !< First vertex's place in `dl%vtx`.
+   integer(int32),     intent(in)    :: ii         !< First index's place in `dl%idx`.
+   integer(int32),     intent(in)    :: b          !< First vertex, 0-based in its batch.
+   real(c_float),      intent(in)    :: x(4), y(4) !< Vertices [pixels].
+   real(c_float),      intent(in)    :: u(4), v(4) !< Their texture coordinates.
+   integer(c_int32_t), intent(in)    :: col        !< Colour.
+
+   dl%idx(ii) = int(b, c_int)
+   dl%idx(ii + 1_int32) = int(b + 1_int32, c_int)
+   dl%idx(ii + 2_int32) = int(b + 2_int32, c_int)
+   dl%idx(ii + 3_int32) = int(b, c_int)
+   dl%idx(ii + 4_int32) = int(b + 2_int32, c_int)
+   dl%idx(ii + 5_int32) = int(b + 3_int32, c_int)
+   dl%vtx(iv) = draw_vert(x(1), y(1), u(1), v(1), col)
+   dl%vtx(iv + 1_int32) = draw_vert(x(2), y(2), u(2), v(2), col)
+   dl%vtx(iv + 2_int32) = draw_vert(x(3), y(3), u(3), v(3), col)
+   dl%vtx(iv + 3_int32) = draw_vert(x(4), y(4), u(4), v(4), col)
+   endsubroutine dl_put_quad_uv
 
    subroutine dl_rect_filled(dl, x0, y0, x1, y1, col)
    !< `AddRectFilled` without rounding: the rectangle from (x0, y0) to (x1, y1).
@@ -331,7 +447,7 @@ contains
    n = size(px, kind=int32)
    if (n == 0_int32 .or. size(idx) < 3) return
    call reserve(dl, n, size(idx, kind=int32), b)
-   mx = DL_BATCH_VERTICES - b
+   mx = DL_BATCH_VERTICES - dl_vtx_current(dl) ! ImPlot3D's MaxIdx() - _VtxCurrentIdx, after the reservation
    do i = 1_int32, n
       call put_vtx(dl, px(i), py(i), pu(i), pv(i), col(i))
    enddo
@@ -575,22 +691,40 @@ contains
    endfunction packed
 
    subroutine reserve(dl, nv, ni, b)
-   !< Room for nv vertices and ni indices; the batch they go to (a new one when its 16-bit indices would wrap) and
+   !< Room for nv vertices and ni indices; the batch they go to (a new one when its 16-bit indices would wrap, as
+   !< `PrimReserve`'s `_VtxCurrentIdx + vtx_count >= 65536`; with a sink, the finished batches handed to it first) and
    !< their first vertex's index in it, b.
    type(draw_list), intent(inout) :: dl !< List.
    integer(int32),  intent(in)    :: nv !< Vertices.
    integer(int32),  intent(in)    :: ni !< Indices.
    integer(int32),  intent(out)   :: b  !< First vertex, 0-based in the batch.
+   integer(int32)                 :: n  !< The open batch's vertices, as `_VtxCurrentIdx`.
 
-   call grow_vtx(dl, dl%nvtx + nv)
-   call grow_idx(dl, dl%nidx + ni)
-   if (dl%nbatch == 0_int32) then
-      call new_batch(dl)
-   elseif (dl%nvtx - dl%batch_vtx(dl%nbatch) + 1_int32 + nv > DL_BATCH_VERTICES) then
+   if (dl%nbatch == 0_int32) call new_batch(dl)
+   n = dl_vtx_current(dl)
+   if (n > 0_int32 .and. n + nv > DL_BATCH_VERTICES) then
+      if (associated(dl%sink)) call hand_over(dl)
       call new_batch(dl)
    endif
+   call grow_vtx(dl, dl%nvtx + nv)
+   call grow_idx(dl, dl%nidx + ni)
    b = dl%nvtx - dl%batch_vtx(dl%nbatch) + 1_int32
    endsubroutine reserve
+
+   subroutine hand_over(dl)
+   !< The list's batches handed to its sink, the list emptied (its storage kept).
+   type(draw_list), intent(inout) :: dl                !< List.
+   integer(int32)                 :: k, v0, nv, i0, ni !< Batch, its extent.
+
+   do k = 1_int32, dl%nbatch
+      call dl_batch(dl, k, v0, nv, i0, ni)
+      if (nv > 0_int32 .and. ni > 0_int32) call dl%sink(dl%vtx(v0), nv, dl%idx(i0), ni)
+   enddo
+   dl%nvtx = 0_int32
+   dl%nidx = 0_int32
+   dl%nbatch = 0_int32
+   dl%seed = 0_int32
+   endsubroutine hand_over
 
    subroutine new_batch(dl)
    !< A batch starting at the next vertex and index.
