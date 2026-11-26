@@ -21,10 +21,14 @@ module figure_plot_items
 !<   loop's getter for `Loop`), `RendererLineSegments1` (`Segments`), `RendererShaded` (the `Shaded` flag, against
 !<   y = 0; `PlotShaded`: between two series, or a series and a reference), `RendererStairsPre`/`Post` and their
 !<   shaded forms, `RendererLineSegments2` (stems), `RendererMarkersFill`/`Line` and the marker shapes of
-!<   `MARKER_FILL_*`/`MARKER_LINE_*`; each primitive culled as `RenderPrimitivesEx` culls it (the plot rectangle),
-!<   drawn with figure_core's textured quads (`core_draw_quad_uv`: two triangles sharing a diagonal; ImPlot's raw
-!<   triangles are the same triangles, a fan's or a lone one's as quads with a repeated vertex); lines with the
-!<   anti-aliased line texture (`GetLineRenderProps`), fills with the white pixel;
+!<   `MARKER_FILL_*`/`MARKER_LINE_*`; each primitive culled as `RenderPrimitivesEx` culls it (the plot rectangle);
+!<   lines with the anti-aliased line texture (`GetLineRenderProps`), fills with the white pixel. The line strips,
+!<   segments and markers (szaghi/figure#16 S2) are written as `RenderPrimitivesEx` writes them: runs reserved in
+!<   figure_core's draw list (`core_prim_reserve`, sized by `core_prim_vtx_current` as by `_VtxCurrentIdx`), each
+!<   primitive's vertices and indices written in place (`PrimLine`; a marker's fan as `RendererMarkersFill`'s), the
+!<   culled ones' room given back (`core_prim_unreserve`), a `prim_run` holding the run's state; the other items still
+!<   draw with figure_core's textured quads (`core_draw_quad_uv`: two triangles sharing a diagonal; ImPlot's raw
+!<   triangles are the same triangles, a fan's or a lone one's as quads with a repeated vertex);
 !< - the clip: the plot rectangle (`PushPlotClipRect`), expanded by the marker size for the markers of stairs and
 !<   stems, and of lines and scatters with `NoClip`;
 !< - the decimation of long line-like series (figure_decimate, as figure_implot's `series_decimate`: M4 per pixel
@@ -65,6 +69,8 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_intptr_t, c_loc
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui_enums, only : ImGuiCol_Text
+use figure_core, only : core_prim_list, core_prim_reserve, core_prim_unreserve, core_prim_vtx_current
+use figure_drawlist, only : draw_list, draw_vert, DL_BATCH_VERTICES
 use figure_core, only : core_draw_image, core_draw_line, core_draw_line_h, core_draw_line_v, core_draw_quad_uv,     &
                         core_draw_rect_filled, core_draw_text, core_frame_count, core_framebuffer_scale, core_time, &
                         core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,             &
@@ -306,6 +312,17 @@ integer(int64), allocatable :: keep(:)                !< The decimation's kept i
 real(real32),   allocatable :: conv32(:)              !< Integer abscissae converted (decimated items).
 real(real64),   allocatable :: conv64(:)              !< ...
 real(real64)                :: uv_white(2) = 0.0_real64 !< The white pixel's texture coordinates (this item's).
+type :: prim_run
+   !< A renderer's run of primitives as `RenderPrimitivesEx` reserves it: the room per primitive, the culled ones whose
+   !< room is still reserved, and the write cursor in figure_core's draw list.
+   type(draw_list), pointer :: dl => null()  !< The list (`core_prim_list`).
+   integer(int32)           :: vtx = 0_int32 !< Vertices a primitive (`VtxConsumed`).
+   integer(int32)           :: idx = 0_int32 !< Indices a primitive (`IdxConsumed`).
+   integer(int32)           :: culled = 0_int32 !< Primitives culled, their room reserved (`prims_culled`).
+   integer(int32)           :: iv = 0_int32  !< Next vertex's place in `dl%vtx`.
+   integer(int32)           :: ii = 0_int32  !< Next index's place in `dl%idx`.
+   integer(int32)           :: b = 0_int32   !< Next vertex, 0-based in its batch (`_VtxCurrentIdx` there).
+endtype prim_run
 real(real64), allocatable, target :: stack_tmp(:)     !< Stacked bar groups' neg, pos, curr_min, curr_max (TempDouble1).
 real(real64), allocatable, target :: hist_a(:), hist_b(:) !< Histograms' centres and counts (TempDouble1/2), 2-D counts.
 real(real64), allocatable         :: finite_x(:), finite_y(:) !< The finite values of a histogram (kept, grown).
@@ -4034,19 +4051,31 @@ contains
    logical,             intent(in) :: loop     !< GetterLoop: the first point again at the end.
    logical,             intent(in) :: skip_nan !< SkipNaN.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
-   real(real64)                    :: uv0(2), uv1(2)   !< Texture.
-   integer(int32)                  :: k, nprim         !< Primitive, count.
+   real(real32)                    :: uv0(2), uv1(2)   !< Texture.
+   type(prim_run)                  :: r                !< The run.
+   integer(int32)                  :: k, k0, nprim, cnt !< Primitive, run's start, primitives left, run.
 
-   call line_props(weight, hw, uv0, uv1)
+   call line_props32(weight, hw, uv0, uv1)
    nprim = g%n - 1_int32
    if (loop) nprim = g%n
    call pixel(ctx, g, 1_int32, p1)
-   do k = 1_int32, nprim
-      call pixel(ctx, g, mod(k, g%n) + 1_int32, p2) ! (the loop's last point is the first)
-      if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                   im_max(p1(2), p2(2)))) call prim_line(p1, p2, hw, col, uv0, uv1)
-      if (.not. skip_nan .or. .not. (ieee_is_nan(p2(1)) .or. ieee_is_nan(p2(2)))) p1 = p2
+   call run_begin(r, 4_int32, 6_int32)
+   k0 = 0_int32
+   do while (nprim > 0_int32)
+      call run_next(r, nprim, cnt)
+      do k = k0 + 1_int32, k0 + cnt
+         call pixel(ctx, g, mod(k, g%n) + 1_int32, p2) ! (the loop's last point is the first)
+         if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
+                      im_max(p1(2), p2(2)))) then
+            call put_line(r, p1, p2, hw, col, uv0, uv1)
+         else
+            r%culled = r%culled + 1_int32
+         endif
+         if (.not. skip_nan .or. .not. (ieee_is_nan(p2(1)) .or. ieee_is_nan(p2(2)))) p1 = p2
+      enddo
+      k0 = k0 + cnt
    enddo
+   call run_end(r)
    endsubroutine render_strip
 
    subroutine render_segments1(ctx, g, col, weight)
@@ -4056,16 +4085,29 @@ contains
    integer(int32),      intent(in) :: col    !< Colour.
    real(real32),        intent(in) :: weight !< Line weight.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
-   real(real64)                    :: uv0(2), uv1(2)   !< Texture.
-   integer(int32)                  :: k                !< Primitive.
+   real(real32)                    :: uv0(2), uv1(2)   !< Texture.
+   type(prim_run)                  :: r                !< The run.
+   integer(int32)                  :: k, k0, nprim, cnt !< Primitive (0-based), run's start, primitives left, run.
 
-   call line_props(weight, hw, uv0, uv1)
-   do k = 0_int32, g%n / 2_int32 - 1_int32
-      call pixel(ctx, g, 2_int32 * k + 1_int32, p1)
-      call pixel(ctx, g, 2_int32 * k + 2_int32, p2)
-      if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                   im_max(p1(2), p2(2)))) call prim_line(p1, p2, hw, col, uv0, uv1)
+   call line_props32(weight, hw, uv0, uv1)
+   nprim = g%n / 2_int32
+   call run_begin(r, 4_int32, 6_int32)
+   k0 = 0_int32
+   do while (nprim > 0_int32)
+      call run_next(r, nprim, cnt)
+      do k = k0, k0 + cnt - 1_int32
+         call pixel(ctx, g, 2_int32 * k + 1_int32, p1)
+         call pixel(ctx, g, 2_int32 * k + 2_int32, p2)
+         if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
+                      im_max(p1(2), p2(2)))) then
+            call put_line(r, p1, p2, hw, col, uv0, uv1)
+         else
+            r%culled = r%culled + 1_int32
+         endif
+      enddo
+      k0 = k0 + cnt
    enddo
+   call run_end(r)
    endsubroutine render_segments1
 
    subroutine render_segments2(ctx, g1, g2, col, weight)
@@ -4075,16 +4117,29 @@ contains
    integer(int32),      intent(in) :: col    !< Colour.
    real(real32),        intent(in) :: weight !< Line weight.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
-   real(real64)                    :: uv0(2), uv1(2)   !< Texture.
-   integer(int32)                  :: k                !< Primitive.
+   real(real32)                    :: uv0(2), uv1(2)   !< Texture.
+   type(prim_run)                  :: r                !< The run.
+   integer(int32)                  :: k, k0, nprim, cnt !< Primitive, run's start, primitives left, run.
 
-   call line_props(weight, hw, uv0, uv1)
-   do k = 1_int32, min(g1%n, g2%n)
-      call pixel(ctx, g1, k, p1)
-      call pixel(ctx, g2, k, p2)
-      if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                   im_max(p1(2), p2(2)))) call prim_line(p1, p2, hw, col, uv0, uv1)
+   call line_props32(weight, hw, uv0, uv1)
+   nprim = min(g1%n, g2%n)
+   call run_begin(r, 4_int32, 6_int32)
+   k0 = 0_int32
+   do while (nprim > 0_int32)
+      call run_next(r, nprim, cnt)
+      do k = k0 + 1_int32, k0 + cnt
+         call pixel(ctx, g1, k, p1)
+         call pixel(ctx, g2, k, p2)
+         if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
+                      im_max(p1(2), p2(2)))) then
+            call put_line(r, p1, p2, hw, col, uv0, uv1)
+         else
+            r%culled = r%culled + 1_int32
+         endif
+      enddo
+      k0 = k0 + cnt
    enddo
+   call run_end(r)
    endsubroutine render_segments2
 
    subroutine render_stairs(ctx, g, col, weight, pre)
@@ -4246,37 +4301,50 @@ contains
    endfunction circle_outline
 
    subroutine markers_fill(ctx, g, shape, col, msize)
-   !< `RendererMarkersFill`: the shape's vertices about each point, a fan from the first (as quads of the fan's
-   !< triangles: (0, 1, 2, 3), (0, 3, 4, 5), ...; a lone last triangle with a repeated vertex).
+   !< `RendererMarkersFill`: the shape's vertices about each point (count of them), a fan from the first: triangles
+   !< (0, i - 1, i), i = 2 .. count - 1.
    type(plot_item_ctx), intent(in) :: ctx         !< The plot.
    type(item_series),   intent(in) :: g           !< Getter.
    real(real32),        intent(in) :: shape(:, :) !< The shape (x, y) x count.
    integer(int32),      intent(in) :: col         !< Colour.
    real(real32),        intent(in) :: msize       !< Size [pixels].
-   real(real32)                    :: p(2), v(2, 10), w !< Point, vertices, product.
-   integer(int32)                  :: i, k, nv    !< Point, vertex, count.
+   real(real32)                    :: p(2), x, y, w, uv(2) !< Point, a vertex, product, white pixel.
+   type(prim_run)                  :: r           !< The run.
+   integer(int32)                  :: i, k, nv, i0, nprim, cnt !< Point, vertex, count, run's start, points left, run.
 
    nv = int(size(shape, 2), int32)
-   do i = 1_int32, g%n
-      call pixel(ctx, g, i, p)
-      if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
-                 p(2) <= ctx%rect(4))) cycle
-      do k = 1_int32, nv
-         w = shape(1, k) * msize
-         v(1, k) = p(1) + w
-         w = shape(2, k) * msize
-         v(2, k) = p(2) + w
-      enddo
-      k = 2_int32 ! the fan's triangles (1, k, k + 1), two a quad
-      do while (k < nv)
-         if (k + 2_int32 <= nv) then
-            call prim_quad(v(:, 1), v(:, k), v(:, k + 1), v(:, k + 2), col)
-         else
-            call prim_quad(v(:, 1), v(:, k), v(:, k + 1), v(:, 1), col)
+   uv = real(uv_white, real32)
+   nprim = g%n
+   call run_begin(r, nv, (nv - 2_int32) * 3_int32)
+   i0 = 0_int32
+   do while (nprim > 0_int32)
+      call run_next(r, nprim, cnt)
+      do i = i0 + 1_int32, i0 + cnt
+         call pixel(ctx, g, i, p)
+         if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
+                    p(2) <= ctx%rect(4))) then
+            r%culled = r%culled + 1_int32
+            cycle
          endif
-         k = k + 2_int32
+         do k = 1_int32, nv
+            w = shape(1, k) * msize
+            x = p(1) + w
+            w = shape(2, k) * msize
+            y = p(2) + w
+            r%dl%vtx(r%iv + k - 1_int32) = draw_vert(x, y, uv(1), uv(2), col)
+         enddo
+         do k = 2_int32, nv - 1_int32
+            r%dl%idx(r%ii) = r%b
+            r%dl%idx(r%ii + 1_int32) = r%b + k - 1_int32
+            r%dl%idx(r%ii + 2_int32) = r%b + k
+            r%ii = r%ii + 3_int32
+         enddo
+         r%iv = r%iv + nv
+         r%b = r%b + nv
       enddo
+      i0 = i0 + cnt
    enddo
+   call run_end(r)
    endsubroutine markers_fill
 
    subroutine markers_line(ctx, g, shape, col, msize, weight)
@@ -4288,26 +4356,40 @@ contains
    real(real32),        intent(in) :: msize       !< Size [pixels].
    real(real32),        intent(in) :: weight      !< Line weight.
    real(real32)                    :: p(2), p1(2), p2(2), hw, w !< Point, ends, half weight, product.
-   real(real64)                    :: uv0(2), uv1(2) !< Texture.
-   integer(int32)                  :: i, k        !< Point, segment.
+   real(real32)                    :: uv0(2), uv1(2) !< Texture.
+   type(prim_run)                  :: r           !< The run.
+   integer(int32)                  :: i, k, ns, i0, nprim, cnt !< Point, segment, shape's points, run's start, points
+                                                               !< left, run.
 
-   call line_props(weight, hw, uv0, uv1)
-   do i = 1_int32, g%n
-      call pixel(ctx, g, i, p)
-      if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
-                 p(2) <= ctx%rect(4))) cycle
-      do k = 1_int32, int(size(shape, 2), int32) - 1_int32, 2_int32
-         w = shape(1, k) * msize
-         p1(1) = p(1) + w
-         w = shape(2, k) * msize
-         p1(2) = p(2) + w
-         w = shape(1, k + 1_int32) * msize
-         p2(1) = p(1) + w
-         w = shape(2, k + 1_int32) * msize
-         p2(2) = p(2) + w
-         call prim_line(p1, p2, hw, col, uv0, uv1)
+   call line_props32(weight, hw, uv0, uv1)
+   ns = int(size(shape, 2), int32)
+   nprim = g%n
+   call run_begin(r, ns / 2_int32 * 4_int32, ns / 2_int32 * 6_int32)
+   i0 = 0_int32
+   do while (nprim > 0_int32)
+      call run_next(r, nprim, cnt)
+      do i = i0 + 1_int32, i0 + cnt
+         call pixel(ctx, g, i, p)
+         if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
+                    p(2) <= ctx%rect(4))) then
+            r%culled = r%culled + 1_int32
+            cycle
+         endif
+         do k = 1_int32, ns - 1_int32, 2_int32
+            w = shape(1, k) * msize
+            p1(1) = p(1) + w
+            w = shape(2, k) * msize
+            p1(2) = p(2) + w
+            w = shape(1, k + 1_int32) * msize
+            p2(1) = p(1) + w
+            w = shape(2, k + 1_int32) * msize
+            p2(2) = p(2) + w
+            call put_line(r, p1, p2, hw, col, uv0, uv1)
+         enddo
       enddo
+      i0 = i0 + cnt
    enddo
+   call run_end(r)
    endsubroutine markers_line
 
    ! private: the primitives (PrimLine, PrimRectFill, raw triangles), through figure_core's textured quad
@@ -4323,6 +4405,108 @@ contains
    call core_line_texture(real(hw * 2.0_real32, real64), uv0, uv1, fringe)
    hw = hw + real(fringe, real32) * 0.5_real32
    endsubroutine line_props
+
+   subroutine line_props32(weight, hw, uv0, uv1)
+   !< `GetLineRenderProps` with the texture coordinates in single precision (as `ImVec2`), for the runs.
+   real(real32), intent(in)  :: weight         !< Line weight.
+   real(real32), intent(out) :: hw             !< Half weight [pixels].
+   real(real32), intent(out) :: uv0(2), uv1(2) !< Texture coordinates.
+   real(real64)              :: u0(2), u1(2)   !< ... as line_props gives them (single precision values).
+
+   call line_props(weight, hw, u0, u1)
+   uv0 = real(u0, real32)
+   uv1 = real(u1, real32)
+   endsubroutine line_props32
+
+   subroutine run_begin(r, vtx, idx)
+   !< A renderer's run starts (`RenderPrimitivesEx`): vtx vertices and idx indices a primitive, nothing culled.
+   type(prim_run), intent(out) :: r   !< The run.
+   integer(int32), intent(in)  :: vtx !< Vertices a primitive.
+   integer(int32), intent(in)  :: idx !< Indices a primitive.
+
+   r%dl => core_prim_list()
+   r%vtx = vtx
+   r%idx = idx
+   endsubroutine run_begin
+
+   subroutine run_next(r, prims, cnt)
+   !< `RenderPrimitivesEx`'s reservation for the next cnt of the prims left (taken from them): up to the draw command's
+   !< limit, the culled primitives' room used again first; fewer than 64 fitting (or all the prims left): the culled
+   !< room given back and a new command reserved. The write cursor at the reservation when nothing is pending.
+   type(prim_run), intent(inout) :: r     !< The run.
+   integer(int32), intent(inout) :: prims !< Primitives left.
+   integer(int32), intent(out)   :: cnt   !< Primitives of this run.
+   integer(int32)                :: iv, ii, b !< A reservation's cursor.
+
+   cnt = min(prims, (DL_BATCH_VERTICES - (core_prim_vtx_current() - r%culled * r%vtx)) / r%vtx)
+   if (cnt >= min(64_int32, prims)) then
+      if (r%culled >= cnt) then
+         r%culled = r%culled - cnt ! the previous reservation used again
+      else
+         call core_prim_reserve((cnt - r%culled) * r%vtx, (cnt - r%culled) * r%idx, iv, ii, b)
+         if (r%culled == 0_int32) then
+            r%iv = iv
+            r%ii = ii
+            r%b = b
+         endif
+         r%culled = 0_int32
+      endif
+   else
+      if (r%culled > 0_int32) call core_prim_unreserve(r%culled * r%vtx, r%culled * r%idx)
+      r%culled = 0_int32
+      cnt = min(prims, DL_BATCH_VERTICES / r%vtx)
+      call core_prim_reserve(cnt * r%vtx, cnt * r%idx, r%iv, r%ii, r%b) ! a new draw command
+   endif
+   prims = prims - cnt
+   endsubroutine run_next
+
+   subroutine run_end(r)
+   !< The run ends: the culled primitives' room given back.
+   type(prim_run), intent(inout) :: r !< The run.
+
+   if (r%culled > 0_int32) call core_prim_unreserve(r%culled * r%vtx, r%culled * r%idx)
+   r%culled = 0_int32
+   endsubroutine run_end
+
+   subroutine put_line(r, p1, p2, hw, col, uv0, uv1)
+   !< `PrimLine` into the run: a segment as a quad of the line's texture, `hw` each side, at the cursor.
+   type(prim_run), intent(inout) :: r              !< The run.
+   real(real32),   intent(in)    :: p1(2), p2(2)   !< Ends [pixels].
+   real(real32),   intent(in)    :: hw             !< Half width [pixels].
+   integer(int32), intent(in)    :: col            !< Colour.
+   real(real32),   intent(in)    :: uv0(2), uv1(2) !< Texture.
+   real(real32)                  :: dx, dy, d2, inv, a, b !< Direction, products.
+   integer(int32)                :: iv, ii, k      !< Cursor.
+
+   dx = p2(1) - p1(1)
+   dy = p2(2) - p1(2)
+   a = dx * dx ! (IMPLOT_NORMALIZE2F_OVER_ZERO; the products apart)
+   b = dy * dy
+   d2 = a + b
+   if (d2 > 0.0_real32) then
+      inv = 1.0_real32 / sqrt(d2)
+      dx = dx * inv
+      dy = dy * inv
+   endif
+   dx = dx * hw
+   dy = dy * hw
+   iv = r%iv
+   ii = r%ii
+   k = r%b
+   r%dl%vtx(iv) = draw_vert(p1(1) + dy, p1(2) - dx, uv0(1), uv0(2), col)
+   r%dl%vtx(iv + 1_int32) = draw_vert(p2(1) + dy, p2(2) - dx, uv0(1), uv0(2), col)
+   r%dl%vtx(iv + 2_int32) = draw_vert(p2(1) - dy, p2(2) + dx, uv1(1), uv1(2), col)
+   r%dl%vtx(iv + 3_int32) = draw_vert(p1(1) - dy, p1(2) + dx, uv1(1), uv1(2), col)
+   r%dl%idx(ii) = k
+   r%dl%idx(ii + 1_int32) = k + 1_int32
+   r%dl%idx(ii + 2_int32) = k + 2_int32
+   r%dl%idx(ii + 3_int32) = k
+   r%dl%idx(ii + 4_int32) = k + 2_int32
+   r%dl%idx(ii + 5_int32) = k + 3_int32
+   r%iv = iv + 4_int32
+   r%ii = ii + 6_int32
+   r%b = k + 4_int32
+   endsubroutine put_line
 
    subroutine prim_line(p1, p2, hw, col, uv0, uv1)
    !< `PrimLine`: a segment as a quad of the line's texture, `hw` each side.

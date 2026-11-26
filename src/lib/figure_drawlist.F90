@@ -706,8 +706,16 @@ contains
       if (associated(dl%sink)) call hand_over(dl)
       call new_batch(dl)
    endif
-   call grow_vtx(dl, dl%nvtx + nv)
-   call grow_idx(dl, dl%nidx + ni)
+   if (.not. allocated(dl%vtx)) then ! (the calls only when the storage must grow)
+      call grow_vtx(dl, dl%nvtx + nv)
+   elseif (size(dl%vtx, kind=int32) < dl%nvtx + nv) then
+      call grow_vtx(dl, dl%nvtx + nv)
+   endif
+   if (.not. allocated(dl%idx)) then
+      call grow_idx(dl, dl%nidx + ni)
+   elseif (size(dl%idx, kind=int32) < dl%nidx + ni) then
+      call grow_idx(dl, dl%nidx + ni)
+   endif
    b = dl%nvtx - dl%batch_vtx(dl%nbatch) + 1_int32
    endsubroutine reserve
 
