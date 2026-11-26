@@ -29,6 +29,10 @@ module figure_plot_items
 !<   `RendererMarkersFill`, `RendererCircleFill` and `PrimPieSliceFill`), the culled ones' room given back
 !<   (`core_prim_unreserve`), a `prim_run` holding the run's state; a pie slice reserves its fan and its border once
 !<   each, as `RenderPieSlice`; error bars and digital signals are `AddLine` and `AddRectFilled`, as ImPlot's;
+!< - the per-point getter and transform (szaghi/figure#16 S3): the line strips', segments' and markers' renderers map
+!<   their points to pixels a block at a time (`pixel_block`): per block and coordinate, the getter's source and the
+!<   axis's scale are chosen once, then one loop does `coordinate`'s and `map_pixel`'s arithmetic, in their order and
+!<   precision, with the axis's constants hoisted (a log10 or symlog axis calls `map_pixel` per point);
 !< - the clip: the plot rectangle (`PushPlotClipRect`), expanded by the marker size for the markers of stairs and
 !<   stems, and of lines and scatters with `NoClip`;
 !< - the decimation of long line-like series (figure_decimate, as figure_implot's `series_decimate`: M4 per pixel
@@ -88,7 +92,7 @@ use figure_plot_frame, only : plot_item_ctx, pf_digital_offset, pf_item_begin, p
                               pf_item_fit, pf_item_fit_axis, pf_item_fit_with, pf_item_hidden, pf_item_shown_at, &
                               pf_item_id, pf_item_recolor, pf_item_state, pf_legend_hovered, pf_pixels_to_plot,    &
                               pf_plot_ctx, pf_text_vertical
-use figure_plot_transform, only : map_pixel, MAP_LINEAR, MAP_LOG10, MAP_SYMLOG, MAP_TIME
+use figure_plot_transform, only : map_pixel, plot_axis_map, MAP_LINEAR, MAP_LOG10, MAP_SYMLOG, MAP_TIME
 
 implicit none
 private
@@ -172,6 +176,7 @@ integer(int32), parameter :: SRC_I32 = 3_int32   !< An int32 array.
 integer(int32), parameter :: SRC_I64 = 4_int32   !< An int64 array.
 integer(int32), parameter :: SRC_LIN = 5_int32   !< x0 + i dx (IndexerLin, i from 0).
 integer(int32), parameter :: SRC_CONST = 6_int32 !< A constant (IndexerConst).
+integer(int32), parameter :: PIX_BLOCK = 512_int32 !< Points a renderer maps to pixels at once (`pixel_block`).
 ! the markers' shapes (MARKER_FILL_*, MARKER_LINE_*): x, y pairs
 real(real32), parameter :: FILL_CIRCLE(2, 10) = reshape([1.0_real32, 0.0_real32, 0.809017_real32, 0.58778524_real32, &
                            0.30901697_real32, 0.95105654_real32, -0.30901703_real32, 0.9510565_real32,             &
@@ -2262,7 +2267,7 @@ contains
       call run_begin(run, (n + 1_int32) * 4_int32, (n + 1_int32) * 6_int32)
       call run_reserve(run)
       do k = 1_int32, n + 1_int32
-         call put_line(run, b(:, k), b(:, k + 1_int32), hw, col, uv0, uv1)
+         call put_line(run, b(1, k), b(2, k), b(1, k + 1_int32), b(2, k + 1_int32), hw, col, uv0, uv1)
       enddo
    endif
    endsubroutine pie_slice
@@ -2353,7 +2358,7 @@ contains
          if (ns < 64_int32) call core_prim_unreserve(64_int32 - ns, (62_int32 - (ns - 2_int32)) * 3_int32) ! the unused
       else
          do k = 1_int32, ns
-            call put_line(run, v(:, k), v(:, mod(k, ns) + 1_int32), hw, col, uv0, uv1)
+            call put_line(run, v(1, k), v(2, k), v(1, mod(k, ns) + 1_int32), v(2, mod(k, ns) + 1_int32), hw, col, uv0, uv1)
          enddo
          if (ns < 64_int32) call core_prim_unreserve((64_int32 - ns) * 4_int32, (64_int32 - ns) * 6_int32)
       endif
@@ -3599,6 +3604,196 @@ contains
    p(2) = map_pixel(ctx%ty, y)
    endsubroutine pixel
 
+   subroutine pixel_block(ctx, g, i0, n, px, py)
+   !< The pixels of a getter's points i0 .. i0 + n - 1 (n at most PIX_BLOCK), as `pixel` gives each: per coordinate the
+   !< values read (`coordinates`), then mapped (`map_block`), each choosing its source or scale once for the block.
+   type(plot_item_ctx), intent(in)  :: ctx    !< The plot.
+   type(item_series),   intent(in)  :: g      !< Getter.
+   integer(int32),      intent(in)  :: i0     !< First point (from 1).
+   integer(int32),      intent(in)  :: n      !< Points.
+   real(real32),        intent(out) :: px(n)  !< Pixels' x.
+   real(real32),        intent(out) :: py(n)  !< Pixels' y.
+   real(real64)                     :: v(PIX_BLOCK) !< A coordinate's values.
+
+   call coordinates(g, 1_int32, i0, n, v)
+   call map_block(ctx%tx, v, n, px)
+   call coordinates(g, 2_int32, i0, n, v)
+   call map_block(ctx%ty, v, n, py)
+   endsubroutine pixel_block
+
+   subroutine coordinates(g, k, i0, n, v)
+   !< Coordinate k of a getter's points i0 .. i0 + n - 1 (through the kept indices when decimated), as `coordinate`
+   !< gives each: the source chosen once, then a loop of its read (a contiguous array's by `read_r64`, `read_r32`).
+   type(item_series), intent(in)  :: g      !< Getter.
+   integer(int32),    intent(in)  :: k      !< Coordinate.
+   integer(int32),    intent(in)  :: i0     !< First point (from 1).
+   integer(int32),    intent(in)  :: n      !< Points.
+   real(real64),      intent(out) :: v(n)   !< Values.
+   real(real64), pointer          :: a64(:) !< The coordinate's real64 array.
+   real(real32), pointer          :: a32(:) !< ... real32 array.
+   real(real64), pointer, contiguous :: c64(:) !< ... when contiguous.
+   real(real32), pointer, contiguous :: c32(:) !< ...
+   real(real64)                   :: x0, dx, w !< A uniform coordinate's start and spacing, a product.
+   integer(int64)                 :: j0     !< Element before the first.
+   integer(int32)                 :: m      !< Point of the block.
+
+   if (k == 1_int32) then
+      a64 => g%a64
+      a32 => g%a32
+   else
+      a64 => g%b64
+      a32 => g%b32
+   endif
+   x0 = g%lin(1, k)
+   dx = g%lin(2, k)
+   if (g%kept) then
+      select case (g%src(k))
+      case (SRC_R64)
+         do m = 1_int32, n
+            v(m) = a64(keep(i0 + m - 1_int32))
+         enddo
+      case (SRC_R32)
+         do m = 1_int32, n
+            v(m) = real(a32(keep(i0 + m - 1_int32)), real64)
+         enddo
+      case (SRC_I32)
+         if (g%via32) then
+            do m = 1_int32, n
+               v(m) = real(real(g%ai32(keep(i0 + m - 1_int32)), real32), real64)
+            enddo
+         else
+            do m = 1_int32, n
+               v(m) = real(g%ai32(keep(i0 + m - 1_int32)), real64)
+            enddo
+         endif
+      case (SRC_I64)
+         if (g%via32) then
+            do m = 1_int32, n
+               v(m) = real(real(g%ai64(keep(i0 + m - 1_int32)), real32), real64)
+            enddo
+         else
+            do m = 1_int32, n
+               v(m) = real(g%ai64(keep(i0 + m - 1_int32)), real64)
+            enddo
+         endif
+      case (SRC_LIN) ! M idx + B, idx from 0 (the product apart: no FMA)
+         do m = 1_int32, n
+            w = dx * real(keep(i0 + m - 1_int32) - 1_int64, real64)
+            v(m) = w + x0
+         enddo
+      case (SRC_CONST)
+         v(1:n) = g%con(k)
+      case default
+         v(1:n) = 0.0_real64
+      endselect
+   else
+      j0 = int(i0, int64) - 1_int64
+      select case (g%src(k))
+      case (SRC_R64)
+         if (is_contiguous(a64)) then
+            c64 => a64
+            call read_r64(c64, j0, n, v)
+         else
+            do m = 1_int32, n
+               v(m) = a64(j0 + m)
+            enddo
+         endif
+      case (SRC_R32)
+         if (is_contiguous(a32)) then
+            c32 => a32
+            call read_r32(c32, j0, n, v)
+         else
+            do m = 1_int32, n
+               v(m) = real(a32(j0 + m), real64)
+            enddo
+         endif
+      case (SRC_I32)
+         if (g%via32) then
+            do m = 1_int32, n
+               v(m) = real(real(g%ai32(j0 + m), real32), real64)
+            enddo
+         else
+            do m = 1_int32, n
+               v(m) = real(g%ai32(j0 + m), real64)
+            enddo
+         endif
+      case (SRC_I64)
+         if (g%via32) then
+            do m = 1_int32, n
+               v(m) = real(real(g%ai64(j0 + m), real32), real64)
+            enddo
+         else
+            do m = 1_int32, n
+               v(m) = real(g%ai64(j0 + m), real64)
+            enddo
+         endif
+      case (SRC_LIN) ! M idx + B, idx from 0 (the product apart: no FMA)
+         do m = 1_int32, n
+            w = dx * real(j0 + m - 1_int64, real64)
+            v(m) = w + x0
+         enddo
+      case (SRC_CONST)
+         v(1:n) = g%con(k)
+      case default
+         v(1:n) = 0.0_real64
+      endselect
+   endif
+   endsubroutine coordinates
+
+   subroutine read_r64(a, j0, n, v)
+   !< v(m) = a(j0 + m), m = 1 .. n, from a contiguous array: a dummy of unit stride, which gfortran vectorises (a
+   !< pointer's elements it reads through the pointer's span, one at a time); the actual a contiguous pointer, so no
+   !< copy is made.
+   real(real64),   contiguous, intent(in)  :: a(:) !< Array.
+   integer(int64),             intent(in)  :: j0   !< Element before the first.
+   integer(int32),             intent(in)  :: n    !< Values.
+   real(real64),               intent(out) :: v(n) !< Values.
+   integer(int32)                          :: m    !< Value.
+
+   do m = 1_int32, n
+      v(m) = a(j0 + m)
+   enddo
+   endsubroutine read_r64
+
+   subroutine read_r32(a, j0, n, v)
+   !< v(m) = a(j0 + m) as double, m = 1 .. n, from a contiguous array (as `read_r64`).
+   real(real32),   contiguous, intent(in)  :: a(:) !< Array.
+   integer(int64),             intent(in)  :: j0   !< Element before the first.
+   integer(int32),             intent(in)  :: n    !< Values.
+   real(real64),               intent(out) :: v(n) !< Values.
+   integer(int32)                          :: m    !< Value.
+
+   do m = 1_int32, n
+      v(m) = real(a(j0 + m), real64)
+   enddo
+   endsubroutine read_r32
+
+   subroutine map_block(a, v, n, px)
+   !< The pixels of n values on an axis, as `map_pixel` gives each (`Transformer1`): a linear (or time) axis's constants
+   !< hoisted and its arithmetic in a loop, in `map_pixel`'s order (the product in a statement of its own: no FMA); a
+   !< log10 or symlog axis through `map_pixel`.
+   type(plot_axis_map), intent(in)  :: a     !< Axis.
+   integer(int32),      intent(in)  :: n     !< Values.
+   real(real64),        intent(in)  :: v(n)  !< Values.
+   real(real32),        intent(out) :: px(n) !< Pixels.
+   real(real64)                     :: pix_min, plt_min, s, w !< The axis's PixelMin, PltMin, ScaleToPixel; a product.
+   integer(int32)                   :: m     !< Value.
+
+   if (a%scale == MAP_LOG10 .or. a%scale == MAP_SYMLOG) then
+      do m = 1_int32, n
+         px(m) = map_pixel(a, v(m))
+      enddo
+   else
+      pix_min = a%pix_min
+      plt_min = a%plt_min
+      s = a%m
+      do m = 1_int32, n
+         w = s * (v(m) - plt_min)
+         px(m) = real(pix_min + w, real32)
+      enddo
+   endif
+   endsubroutine map_block
+
    ! private: the decimation (figure_implot's series_decimate)
 
    subroutine decimate_series(g, item, spec, ctx, fill)
@@ -4070,30 +4265,47 @@ contains
    logical,             intent(in) :: skip_nan !< SkipNaN.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
    real(real32)                    :: uv0(2), uv1(2)   !< Texture.
+   real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
    type(prim_run)                  :: r                !< The run.
-   integer(int32)                  :: k, k0, nprim, cnt !< Primitive, run's start, primitives left, run.
+   integer(int32)                  :: k, k0, ke, m, nprim, cnt !< Primitive, run's start, block's last primitive,
+                                                               !< its point, primitives left, run.
 
    call line_props32(weight, hw, uv0, uv1)
    nprim = g%n - 1_int32
    if (loop) nprim = g%n
-   call pixel(ctx, g, 1_int32, p1)
+   if (nprim <= 0_int32) return
+   call pixel_block(ctx, g, 1_int32, 1_int32, bx, by)
+   p1(1) = bx(1)
+   p1(2) = by(1)
    call run_begin(r, 4_int32, 6_int32)
    k0 = 0_int32
    do while (nprim > 0_int32)
       call run_next(r, nprim, cnt)
-      do k = k0 + 1_int32, k0 + cnt
-         call pixel(ctx, g, mod(k, g%n) + 1_int32, p2) ! (the loop's last point is the first)
-         if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                      im_max(p1(2), p2(2)))) then
-            call put_line(r, p1, p2, hw, col, uv0, uv1)
-         else
-            r%culled = r%culled + 1_int32
+      k = k0 + 1_int32
+      do while (k <= k0 + cnt)
+         if (k < g%n) then ! primitive k ends at point k + 1
+            ke = min(k0 + cnt, k + PIX_BLOCK - 1_int32, g%n - 1_int32)
+            call pixel_block(ctx, g, k + 1_int32, ke - k + 1_int32, bx, by)
+         else ! the loop's last primitive ends at the first point
+            ke = k
+            call pixel_block(ctx, g, 1_int32, 1_int32, bx, by)
          endif
-         if (.not. skip_nan) then
-            p1 = p2
-         elseif (.not. (p2(1) /= p2(1) .or. p2(2) /= p2(2))) then ! (NaN tests inline: ieee_is_nan is a call on ifx)
-            p1 = p2
-         endif
+         do m = 1_int32, ke - k + 1_int32
+            p2(1) = bx(m)
+            p2(2) = by(m)
+            if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
+                         im_max(p1(2), p2(2)))) then
+               call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
+            else
+               r%culled = r%culled + 1_int32
+            endif
+            if (.not. skip_nan) then
+               p1 = p2
+            elseif (.not. (p2(1) /= p2(1) .or. p2(2) /= p2(2))) then ! (NaN tests inline: ieee_is_nan is a call on ifx)
+               p1 = p2
+            endif
+         enddo
+         k = ke + 1_int32
       enddo
       k0 = k0 + cnt
    enddo
@@ -4108,8 +4320,10 @@ contains
    real(real32),        intent(in) :: weight !< Line weight.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
    real(real32)                    :: uv0(2), uv1(2)   !< Texture.
+   real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
    type(prim_run)                  :: r                !< The run.
-   integer(int32)                  :: k, k0, nprim, cnt !< Primitive (0-based), run's start, primitives left, run.
+   integer(int32)                  :: k, k0, nb, m, nprim, cnt !< Primitive (0-based), run's start, block's primitives,
+                                                               !< one of them, primitives left, run.
 
    call line_props32(weight, hw, uv0, uv1)
    nprim = g%n / 2_int32
@@ -4117,15 +4331,23 @@ contains
    k0 = 0_int32
    do while (nprim > 0_int32)
       call run_next(r, nprim, cnt)
-      do k = k0, k0 + cnt - 1_int32
-         call pixel(ctx, g, 2_int32 * k + 1_int32, p1)
-         call pixel(ctx, g, 2_int32 * k + 2_int32, p2)
-         if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                      im_max(p1(2), p2(2)))) then
-            call put_line(r, p1, p2, hw, col, uv0, uv1)
-         else
-            r%culled = r%culled + 1_int32
-         endif
+      k = k0
+      do while (k < k0 + cnt)
+         nb = min(PIX_BLOCK / 2_int32, k0 + cnt - k)
+         call pixel_block(ctx, g, 2_int32 * k + 1_int32, 2_int32 * nb, bx, by) ! points 2 k + 1, 2 k + 2, ...
+         do m = 1_int32, 2_int32 * nb - 1_int32, 2_int32
+            p1(1) = bx(m)
+            p1(2) = by(m)
+            p2(1) = bx(m + 1_int32)
+            p2(2) = by(m + 1_int32)
+            if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
+                         im_max(p1(2), p2(2)))) then
+               call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
+            else
+               r%culled = r%culled + 1_int32
+            endif
+         enddo
+         k = k + nb
       enddo
       k0 = k0 + cnt
    enddo
@@ -4140,8 +4362,11 @@ contains
    real(real32),        intent(in) :: weight !< Line weight.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
    real(real32)                    :: uv0(2), uv1(2)   !< Texture.
+   real(real32)                    :: ax(PIX_BLOCK), ay(PIX_BLOCK), bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels of
+                                                                                               !< g1 and g2.
    type(prim_run)                  :: r                !< The run.
-   integer(int32)                  :: k, k0, nprim, cnt !< Primitive, run's start, primitives left, run.
+   integer(int32)                  :: k, k0, nb, m, nprim, cnt !< Primitive, run's start, block's primitives, one of
+                                                               !< them, primitives left, run.
 
    call line_props32(weight, hw, uv0, uv1)
    nprim = min(g1%n, g2%n)
@@ -4149,15 +4374,24 @@ contains
    k0 = 0_int32
    do while (nprim > 0_int32)
       call run_next(r, nprim, cnt)
-      do k = k0 + 1_int32, k0 + cnt
-         call pixel(ctx, g1, k, p1)
-         call pixel(ctx, g2, k, p2)
-         if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                      im_max(p1(2), p2(2)))) then
-            call put_line(r, p1, p2, hw, col, uv0, uv1)
-         else
-            r%culled = r%culled + 1_int32
-         endif
+      k = k0 + 1_int32
+      do while (k <= k0 + cnt)
+         nb = min(PIX_BLOCK, k0 + cnt - k + 1_int32)
+         call pixel_block(ctx, g1, k, nb, ax, ay)
+         call pixel_block(ctx, g2, k, nb, bx, by)
+         do m = 1_int32, nb
+            p1(1) = ax(m)
+            p1(2) = ay(m)
+            p2(1) = bx(m)
+            p2(2) = by(m)
+            if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
+                         im_max(p1(2), p2(2)))) then
+               call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
+            else
+               r%culled = r%culled + 1_int32
+            endif
+         enddo
+         k = k + nb
       enddo
       k0 = k0 + cnt
    enddo
@@ -4418,8 +4652,10 @@ contains
    integer(int32),      intent(in) :: col         !< Colour.
    real(real32),        intent(in) :: msize       !< Size [pixels].
    real(real32)                    :: p(2), x, y, w, uv(2) !< Point, a vertex, product, white pixel.
+   real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
    type(prim_run)                  :: r           !< The run.
-   integer(int32)                  :: i, k, nv, i0, nprim, cnt !< Point, vertex, count, run's start, points left, run.
+   integer(int32)                  :: i, k, nv, i0, nb, m, nprim, cnt !< Point, vertex, count, run's start, block's
+                                                                      !< points, one of them, points left, run.
 
    nv = int(size(shape, 2), int32)
    uv = real(uv_white, real32)
@@ -4428,34 +4664,41 @@ contains
    i0 = 0_int32
    do while (nprim > 0_int32)
       call run_next(r, nprim, cnt)
-      do i = i0 + 1_int32, i0 + cnt
-         call pixel(ctx, g, i, p)
-         if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
-                    p(2) <= ctx%rect(4)) .or. is_nan2(p)) then ! (a NaN outside: see im_min)
-            r%culled = r%culled + 1_int32
-            cycle
-         endif
-         do k = 1_int32, nv
-            w = shape(1, k) * msize
-            x = p(1) + w
-            w = shape(2, k) * msize
-            y = p(2) + w
-            associate(vt => r%dl%vtx(r%iv + k - 1_int32))
-               vt%x = x
-               vt%y = y
-               vt%u = uv(1)
-               vt%v = uv(2)
-               vt%col = col
-            endassociate
+      i = i0 + 1_int32
+      do while (i <= i0 + cnt)
+         nb = min(PIX_BLOCK, i0 + cnt - i + 1_int32)
+         call pixel_block(ctx, g, i, nb, bx, by)
+         do m = 1_int32, nb
+            p(1) = bx(m)
+            p(2) = by(m)
+            if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
+                       p(2) <= ctx%rect(4)) .or. is_nan2(p)) then ! (a NaN outside: see im_min)
+               r%culled = r%culled + 1_int32
+               cycle
+            endif
+            do k = 1_int32, nv
+               w = shape(1, k) * msize
+               x = p(1) + w
+               w = shape(2, k) * msize
+               y = p(2) + w
+               associate(vt => r%dl%vtx(r%iv + k - 1_int32))
+                  vt%x = x
+                  vt%y = y
+                  vt%u = uv(1)
+                  vt%v = uv(2)
+                  vt%col = col
+               endassociate
+            enddo
+            do k = 2_int32, nv - 1_int32
+               r%dl%idx(r%ii) = r%b
+               r%dl%idx(r%ii + 1_int32) = r%b + k - 1_int32
+               r%dl%idx(r%ii + 2_int32) = r%b + k
+               r%ii = r%ii + 3_int32
+            enddo
+            r%iv = r%iv + nv
+            r%b = r%b + nv
          enddo
-         do k = 2_int32, nv - 1_int32
-            r%dl%idx(r%ii) = r%b
-            r%dl%idx(r%ii + 1_int32) = r%b + k - 1_int32
-            r%dl%idx(r%ii + 2_int32) = r%b + k
-            r%ii = r%ii + 3_int32
-         enddo
-         r%iv = r%iv + nv
-         r%b = r%b + nv
+         i = i + nb
       enddo
       i0 = i0 + cnt
    enddo
@@ -4472,9 +4715,10 @@ contains
    real(real32),        intent(in) :: weight      !< Line weight.
    real(real32)                    :: p(2), p1(2), p2(2), hw, w !< Point, ends, half weight, product.
    real(real32)                    :: uv0(2), uv1(2) !< Texture.
+   real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
    type(prim_run)                  :: r           !< The run.
-   integer(int32)                  :: i, k, ns, i0, nprim, cnt !< Point, segment, shape's points, run's start, points
-                                                               !< left, run.
+   integer(int32)                  :: i, k, ns, i0, nb, m, nprim, cnt !< Point, segment, shape's points, run's start,
+                                                                      !< block's points, one of them, points left, run.
 
    call line_props32(weight, hw, uv0, uv1)
    ns = int(size(shape, 2), int32)
@@ -4483,24 +4727,31 @@ contains
    i0 = 0_int32
    do while (nprim > 0_int32)
       call run_next(r, nprim, cnt)
-      do i = i0 + 1_int32, i0 + cnt
-         call pixel(ctx, g, i, p)
-         if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
-                    p(2) <= ctx%rect(4)) .or. is_nan2(p)) then ! (a NaN outside: see im_min)
-            r%culled = r%culled + 1_int32
-            cycle
-         endif
-         do k = 1_int32, ns - 1_int32, 2_int32
-            w = shape(1, k) * msize
-            p1(1) = p(1) + w
-            w = shape(2, k) * msize
-            p1(2) = p(2) + w
-            w = shape(1, k + 1_int32) * msize
-            p2(1) = p(1) + w
-            w = shape(2, k + 1_int32) * msize
-            p2(2) = p(2) + w
-            call put_line(r, p1, p2, hw, col, uv0, uv1)
+      i = i0 + 1_int32
+      do while (i <= i0 + cnt)
+         nb = min(PIX_BLOCK, i0 + cnt - i + 1_int32)
+         call pixel_block(ctx, g, i, nb, bx, by)
+         do m = 1_int32, nb
+            p(1) = bx(m)
+            p(2) = by(m)
+            if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
+                       p(2) <= ctx%rect(4)) .or. is_nan2(p)) then ! (a NaN outside: see im_min)
+               r%culled = r%culled + 1_int32
+               cycle
+            endif
+            do k = 1_int32, ns - 1_int32, 2_int32
+               w = shape(1, k) * msize
+               p1(1) = p(1) + w
+               w = shape(2, k) * msize
+               p1(2) = p(2) + w
+               w = shape(1, k + 1_int32) * msize
+               p2(1) = p(1) + w
+               w = shape(2, k + 1_int32) * msize
+               p2(2) = p(2) + w
+               call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
+            enddo
          enddo
+         i = i + nb
       enddo
       i0 = i0 + cnt
    enddo
@@ -4583,21 +4834,23 @@ contains
    r%culled = 0_int32
    endsubroutine run_end
 
-   subroutine put_line(r, p1, p2, hw, col, uv0, uv1)
+   subroutine put_line(r, x1, y1, x2, y2, hw, col, uv0, uv1)
    !< `PrimLine` into the run: a segment as a quad of the line's texture, `hw` each side, at the cursor. The run's
    !< writers set a vertex field by field: a `draw_vert(...)` constructor makes ifx build it in a temporary and copy it
    !< with one 16-byte load over smaller stores, a store-forwarding stall a vertex; a helper subroutine for it is not
-   !< inlined by nvfortran (szaghi/figure#16 S2).
+   !< inlined by nvfortran (szaghi/figure#16 S2). The ends come as four scalars, not two pairs: a caller sets a pair's
+   !< x and y with two 4-byte stores just before, and nvfortran read a pair with one 8-byte load, which the store buffer
+   !< cannot forward from two stores (a stall a pair; szaghi/figure#16 S3).
    type(prim_run), intent(inout) :: r              !< The run.
-   real(real32),   intent(in)    :: p1(2), p2(2)   !< Ends [pixels].
+   real(real32),   intent(in)    :: x1, y1, x2, y2 !< Ends [pixels].
    real(real32),   intent(in)    :: hw             !< Half width [pixels].
    integer(int32), intent(in)    :: col            !< Colour.
    real(real32),   intent(in)    :: uv0(2), uv1(2) !< Texture.
    real(real32)                  :: dx, dy, d2, inv, a, b !< Direction, products.
    integer(int32)                :: iv, ii, k      !< Cursor.
 
-   dx = p2(1) - p1(1)
-   dy = p2(2) - p1(2)
+   dx = x2 - x1
+   dy = y2 - y1
    a = dx * dx ! (IMPLOT_NORMALIZE2F_OVER_ZERO; the products apart)
    b = dy * dy
    d2 = a + b
@@ -4612,29 +4865,29 @@ contains
    ii = r%ii
    k = r%b
    associate(vt => r%dl%vtx(iv))
-      vt%x = p1(1) + dy
-      vt%y = p1(2) - dx
+      vt%x = x1 + dy
+      vt%y = y1 - dx
       vt%u = uv0(1)
       vt%v = uv0(2)
       vt%col = col
    endassociate
    associate(vt => r%dl%vtx(iv + 1_int32))
-      vt%x = p2(1) + dy
-      vt%y = p2(2) - dx
+      vt%x = x2 + dy
+      vt%y = y2 - dx
       vt%u = uv0(1)
       vt%v = uv0(2)
       vt%col = col
    endassociate
    associate(vt => r%dl%vtx(iv + 2_int32))
-      vt%x = p2(1) - dy
-      vt%y = p2(2) + dx
+      vt%x = x2 - dy
+      vt%y = y2 + dx
       vt%u = uv1(1)
       vt%v = uv1(2)
       vt%col = col
    endassociate
    associate(vt => r%dl%vtx(iv + 3_int32))
-      vt%x = p1(1) - dy
-      vt%y = p1(2) + dx
+      vt%x = x1 - dy
+      vt%y = y1 + dx
       vt%u = uv1(1)
       vt%v = uv1(2)
       vt%col = col
