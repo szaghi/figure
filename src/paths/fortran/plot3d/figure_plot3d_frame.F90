@@ -52,7 +52,7 @@ use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_ButtonActive, ImGuiCol
                                 ImGuiCol_PopupBg, ImGuiCol_Text, ImGuiCol_TextDisabled, ImGuiCol_WindowBg,      &
                                 ImGuiKey_MouseWheelY, ImGuiStyleVar_ItemSpacing
 use figure_core, only : core_button_behavior, core_content_region_avail, core_cursor_screen_pos, core_draw_begin, &
-                        core_draw_convex_poly_filled, core_draw_end, core_draw_line, core_draw_quad_uv,          &
+                        core_draw_convex_poly_filled, core_draw_end, core_draw_line,                             &
                         core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, core_frame_count, &
                         core_get_id, core_item_add, core_item_size, core_mouse_pos, core_mouse_pos_valid,        &
                         core_pop_clip_rect, core_push_clip_rect, core_style_color, core_text_size, core_color,  &
@@ -89,6 +89,8 @@ use figure_plot3d_style, only : style3_vec4, style3_u32, style3_color_u32, style
 use figure_plot3d_locators, only : ticks3d, ticks3_add, ticks3_reset, locate3_default, locate3_log10, locate3_symlog
 use vecfor_R8P, only : vector_R8P
 
+use figure_core, only : core_prim_list, core_prim_reserve, core_prim_unreserve
+use figure_drawlist, only : draw_list, dl_put_quad_uv
 implicit none
 private
 public :: pf3_begin_plot, pf3_end_plot, pf3_setup_axes, pf3_setup_axis, pf3_setup_axis_ticks, pf3_setup_box
@@ -1756,15 +1758,18 @@ contains
 
    subroutine text_rotated(x, y, angle, col, s)
    !< `AddTextRotated`: a text centred on (x, y) (floored), turned by `angle` [radians] (screen y down: -angle's cosine
-   !< and sine), glyph by glyph from the current font's baked glyphs, each a textured quad.
+   !< and sine), glyph by glyph from the current font's baked glyphs, each a textured quad (`PrimQuadUV`) into room
+   !< reserved for one quad a byte, the unused given back (`PrimReserve`, `PrimUnreserve`).
    real(real32),     intent(in) :: x, y  !< Centre [pixels].
    real(real32),     intent(in) :: angle !< Angle [radians].
    integer(int32),   intent(in) :: col   !< Colour.
    character(len=*), intent(in) :: s     !< Text (UTF-8).
    real(real32)                 :: px, py, ca, sa, pen(2), sc, go(2), gs(2), cx(4), cy(4), cxr, cyr !< Work.
    real(real64)                 :: w, h, scale, adv, x0, y0, x1, y1, u0, v0, u1, v1 !< Text size, a glyph.
-   real(real64)                 :: qx(4), qy(4), qu(4), qv(4) !< Its quad.
+   real(real32)                 :: qx(4), qy(4), qu(4), qv(4) !< Its quad.
+   type(draw_list), pointer     :: dl !< figure_core's draw list.
    integer(int32)               :: k, cc, nb, j !< Byte, code point, its bytes, corner.
+   integer(int32)               :: n, nq, iv, ii, b !< Bytes, quads written, the write cursor.
    logical                      :: found !< A glyph.
 
    px = im_floor(x)
@@ -1772,6 +1777,10 @@ contains
    call text_size_a(s, w, h)
    ca = c_cosf(-angle)
    sa = c_sinf(-angle)
+   n = len(s, kind=int32) ! PrimReserve: a quad a byte, the unused given back at the end
+   call core_prim_reserve(4_int32 * n, 6_int32 * n, iv, ii, b)
+   dl => core_prim_list()
+   nq = 0_int32
    pen(1) = -real(w, real32) * 0.5_real32
    pen(2) = -real(h, real32) * 0.5_real32
    k = 1_int32
@@ -1796,20 +1805,25 @@ contains
       do j = 1_int32, 4_int32
          cxr = (cx(j) * ca - cy(j) * sa) + px
          cyr = (cx(j) * sa + cy(j) * ca) + py
-         qx(j) = real(cxr, real64)
-         qy(j) = real(cyr, real64)
+         qx(j) = cxr
+         qy(j) = cyr
       enddo
-      qu(1) = u0
-      qv(1) = v0
-      qu(2) = u1
-      qv(2) = v0
-      qu(3) = u1
-      qv(3) = v1
-      qu(4) = u0
-      qv(4) = v1
-      call core_draw_quad_uv(qx, qy, qu, qv, col)
+      qu(1) = real(u0, real32)
+      qv(1) = real(v0, real32)
+      qu(2) = real(u1, real32)
+      qv(2) = real(v0, real32)
+      qu(3) = real(u1, real32)
+      qv(3) = real(v1, real32)
+      qu(4) = real(u0, real32)
+      qv(4) = real(v1, real32)
+      call dl_put_quad_uv(dl, iv, ii, b, qx, qy, qu, qv, col)
+      iv = iv + 4_int32
+      ii = ii + 6_int32
+      b = b + 4_int32
+      nq = nq + 1_int32
       pen(1) = pen(1) + real(adv, real32) * sc
    enddo
+   call core_prim_unreserve(4_int32 * (n - nq), 6_int32 * (n - nq))
    endsubroutine text_rotated
 
    subroutine text_size_a(s, w, h)

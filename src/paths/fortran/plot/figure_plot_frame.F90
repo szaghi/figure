@@ -154,7 +154,7 @@ use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_BorderShadow, ImGuiCol
                                 ImGuiStyleVar_ItemSpacing, ImGuiCol_SeparatorActive, ImGuiCol_SeparatorHovered, &
                                 ImGuiStyleVar_FrameBorderSize
 use figure_core, only : core_button_behavior, core_color, core_content_region_avail, core_cursor_screen_pos, &
-                        core_draw_begin, core_draw_end, core_draw_line_h, core_draw_line_v, core_draw_quad_uv, &
+                        core_draw_begin, core_draw_end, core_draw_line_h, core_draw_line_v,                    &
                         core_draw_rect, core_draw_rect_filled, core_draw_text, core_font_glyph, core_font_size, &
                         core_frame_count, core_get_id, core_item_add, core_item_size, core_keep_alive,         &
                         core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,           &
@@ -190,6 +190,8 @@ use figure_imgui, only : ig_button, ig_checkbox, ig_same_line, ig_separator
 use figure_menu, only : ig_begin_menu, ig_end_menu, ig_menu_item
 use figure_plot_time_picker, only : pf_time_picker_menu
 
+use figure_core, only : core_prim_list, core_prim_reserve, core_prim_unreserve
+use figure_drawlist, only : draw_list, dl_put_quad_uv
 implicit none
 private
 public :: pf_begin_plot, pf_end_plot, pf_plot_limits
@@ -5412,7 +5414,8 @@ contains
 
    subroutine text_vertical(x, y, col, s)
    !< `AddTextVertical`: a text rotated a quarter turn anticlockwise, (x, y) its bottom-left corner (floored), glyph by
-   !< glyph from the current font's baked glyphs (`core_font_glyph`), each a textured quad, the pen moving up by its
+   !< glyph from the current font's baked glyphs (`core_font_glyph`), each a textured quad (`PrimQuadUV`) into room
+   !< reserved for one quad a byte, the unused given back (`PrimReserve`, `PrimUnreserve`), the pen moving up by its
    !< advance; characters decoded from UTF-8, those without a glyph skipped.
    real(real32),     intent(in) :: x, y !< Bottom-left corner [pixels].
    integer(int32),   intent(in) :: col  !< Colour.
@@ -5420,12 +5423,18 @@ contains
    real(real32)                 :: px, py, sc !< Pen, scale.
    real(real32)                 :: a0, a1, b0, b1 !< A glyph's corners from the pen [pixels].
    real(real64)                 :: scale, adv, x0, y0, x1, y1, u0, v0, u1, v1 !< A glyph.
-   real(real64)                 :: qx(4), qy(4), qu(4), qv(4) !< Its quad.
+   real(real32)                 :: qx(4), qy(4), qu(4), qv(4) !< Its quad.
+   type(draw_list), pointer     :: dl !< figure_core's draw list.
    integer(int32)               :: k, c, nb !< Byte, code point, its bytes.
+   integer(int32)               :: n, nq, iv, ii, b !< Bytes, quads written, the write cursor.
    logical                      :: found !< A glyph.
 
    px = im_floor(x)
    py = im_floor(y)
+   n = len(s, kind=int32)
+   call core_prim_reserve(4_int32 * n, 6_int32 * n, iv, ii, b)
+   dl => core_prim_list()
+   nq = 0_int32
    k = 1_int32
    do while (k <= len(s, kind=int32))
       call utf8_char(s, k, c, nb)
@@ -5437,26 +5446,31 @@ contains
       a1 = real(y1, real32) * sc
       b0 = (-real(x0, real32)) * sc
       b1 = (-real(x1, real32)) * sc
-      qx(1) = real(px + a0, real64)
-      qx(2) = real(px + a0, real64)
-      qx(3) = real(px + a1, real64)
-      qx(4) = real(px + a1, real64)
-      qy(1) = real(py + b0, real64)
-      qy(2) = real(py + b1, real64)
-      qy(3) = real(py + b1, real64)
-      qy(4) = real(py + b0, real64)
-      qu(1) = u0
-      qu(2) = u1
-      qu(3) = u1
-      qu(4) = u0
-      qv(1) = v0
-      qv(2) = v0
-      qv(3) = v1
-      qv(4) = v1
-      call core_draw_quad_uv(qx, qy, qu, qv, col)
+      qx(1) = px + a0
+      qx(2) = px + a0
+      qx(3) = px + a1
+      qx(4) = px + a1
+      qy(1) = py + b0
+      qy(2) = py + b1
+      qy(3) = py + b1
+      qy(4) = py + b0
+      qu(1) = real(u0, real32)
+      qu(2) = real(u1, real32)
+      qu(3) = real(u1, real32)
+      qu(4) = real(u0, real32)
+      qv(1) = real(v0, real32)
+      qv(2) = real(v0, real32)
+      qv(3) = real(v1, real32)
+      qv(4) = real(v1, real32)
+      call dl_put_quad_uv(dl, iv, ii, b, qx, qy, qu, qv, col)
+      iv = iv + 4_int32
+      ii = ii + 6_int32
+      b = b + 4_int32
+      nq = nq + 1_int32
       a0 = real(adv, real32) * sc
       py = py - a0
    enddo
+   call core_prim_unreserve(4_int32 * (n - nq), 6_int32 * (n - nq))
    endsubroutine text_vertical
 
    pure subroutine utf8_char(s, k, c, nb)
