@@ -1,9 +1,9 @@
 """Profile a benchmark scene on two builds with callgrind: the instructions by role, and their ratios.
 
-szaghi/figure#16 §5.2. Runs ``figure_bench_scenes SCENE`` (src/tests/figure_bench_scenes.F90) under valgrind's
-callgrind on two programs, the candidate (``--program``, e.g. the Fortran path's) and the reference (``--against``,
-e.g. the current path's), reads each profile with ``callgrind_annotate`` (self cost per function, every function) and
-sums the instructions executed (Ir) by role, the first matching ``BUCKETS`` entry naming a function's role:
+szaghi/figure#16 §5.2. Runs ``figure_bench_scenes SCENE`` (src/tests/bench/figure_bench_scenes.F90) under valgrind's
+callgrind on two programs, the candidate (``--program``, e.g. the Fortran path's) and the reference (``--against``, e.g.
+the current path's), reads each profile with ``callgrind_annotate`` (self cost per function, every function) and sums
+the instructions executed (Ir) by role, the first matching ``BUCKETS`` entry naming a function's role:
 
 - ``scene``: the scene's own data (libm's sin and cos, the program's procedures): left out of ``render``;
 - ``submission``: primitives handed to a draw list (figure_core's ``core_draw_*``, figure_drawlist, the plot items'

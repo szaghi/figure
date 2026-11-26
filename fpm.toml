@@ -307,7 +307,7 @@ main = "figure_test_layout_view.F90"
 
 [[test]]
 name = "figure_bench_scenes"
-source-dir = "src/tests"
+source-dir = "src/tests/bench"  # with figure_bench_data, its scene data (fpm reads a source-dir flat)
 main = "figure_bench_scenes.F90"
 
 [[test]]

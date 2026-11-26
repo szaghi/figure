@@ -1,6 +1,6 @@
 """Run the benchmark scenes of #15 P2, record a baseline, compare a run with it.
 
-Runs ``figure_bench_scenes`` (src/tests/figure_bench_scenes.F90) once per scene and per run. Each run of a scene
+Runs ``figure_bench_scenes`` (src/tests/bench/figure_bench_scenes.F90) once per scene and per run. Each run of a scene
 prints the time of every measured frame and of the scene's own calls in it (the UI, up to the draw data); this script
 reduces them to the scene's statistics:
 
@@ -440,7 +440,7 @@ def main(argv: list[str]) -> int:
         args.json.write_text(json.dumps(record, indent=1) + "\n")
         print(f"bench_scenes: written {args.json}")
     if args.write:
-        data.setdefault("tool", "scripts/bench_scenes.py running src/tests/figure_bench_scenes.F90 (#15 P2)")
+        data.setdefault("tool", "scripts/bench_scenes.py running src/tests/bench/figure_bench_scenes.F90 (#15 P2)")
         data["baselines"][args.write] = record
         args.file.write_text(json.dumps(data, indent=1) + "\n")
         print(f"bench_scenes: baseline {args.write} written to {args.file}")

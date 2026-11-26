@@ -6,12 +6,17 @@ Checked:
   - the varset of the platform this runs on covers the static link line SDL reports for it
     (``lib/pkgconfig/sdl3.pc``, written by the native build): every ``-l`` library and every framework (checked only
     when the native layer is built);
-  - every program under src/examples/ and src/tests/ is declared in fpm.toml (fobos discovers them by itself);
+  - every program under src/examples/, src/tests/ and src/tests/bench/ (the benchmark and its scene data, its fpm
+    source-dir) is declared in fpm.toml (fobos discovers them by itself);
   - the two paths (szaghi/figure#15 §2): every mode of fobos builds the library from ``src/lib`` and one path's set of
     seam implementations, ``$PATH_IMGUI`` (the current path) or, for the ``-fortran`` modes, ``$PATH_FORTRAN``; each
     set defines every module once (one implementation of each seam); fpm.toml's library is the assembled tree of the
     current path (``[library] source-dir`` is ``build/fpm-lib``, written by ``--fpm-tree``);
   - every program declared in fpm.toml exists;
+  - the benchmark's per-frame scene data (``$BENCH_DATA``, szaghi/figure#16 C7): each ``bench-data-<m>`` mode builds it
+    with the compiler and flags of the test mode ``tests-<m>``; every mode that compiles src/tests leaves it out and
+    depends on one ``bench-data-*`` mode of its compiler, a ``-fortran`` mode on its template's, so the two paths'
+    benchmarks compute their scenes with the same code;
   - the static-library modes (``figure-static-*``) build from ``src/lib/figure_library.F90``, which uses every public
     module (``figure``, ``figure_testing``): FoBiS archives a target and what it uses, so a module left out of that
     root is missing from ``lib/libfigure.a`` and ``lib/mod`` (what ``fobis fetch`` gives a downstream project).
@@ -63,6 +68,9 @@ LIB_SOURCE_SUFFIXES = (".f90", ".F90", ".inc", ".INC", ".h", ".H")  # sources an
 PATH_VARIABLES = {"imgui": "$PATH_IMGUI", "fortran": "$PATH_FORTRAN"}
 FPM_TREE = "build/fpm-lib"
 PROGRAM_DIRS = ("src/tests", "src/examples")  # what a mode's `src` adds to the library: programs (and their modules)
+# the benchmark's per-frame scene data (szaghi/figure#16 C7): the fobos variable naming its source, its modes' prefix
+BENCH_DATA = "$BENCH_DATA"
+BENCH_DATA_MODE = "bench-data-"
 FORTRAN_SUFFIXES = (".f90", ".F90", ".inc")
 
 
@@ -543,6 +551,8 @@ def paths() -> list[str]:
     sets = {path: set(path_dirs(path)) for path in PATH_VARIABLES}
     modes = parser.get("modes", "modes", fallback="").split() if parser.has_section("modes") else []
     for mode in modes:
+        if mode.startswith(BENCH_DATA_MODE):  # no library: the benchmark's scene data (bench_data)
+            continue
         options = mode_options(parser, mode)
         src = [d.rstrip("/") for d in expand(options.get("src", ""), variables)]
         library = {d for d in src if not d.startswith(PROGRAM_DIRS)}
@@ -568,6 +578,66 @@ def paths() -> list[str]:
     source_dir = manifest.get("library", {}).get("source-dir")
     if source_dir != FPM_TREE:
         errors.append(f"fpm.toml [library] source-dir must be {FPM_TREE} (the current path's tree), it is {source_dir}")
+    return errors
+
+
+def bench_data() -> list[str]:
+    """Check that the two paths' benchmarks build their per-frame scene data with the same flags (szaghi/figure#16 C7).
+
+    Each ``bench-data-<m>`` mode builds ``$BENCH_DATA`` (its target), with the compiler, cflags and OpenMP setting of
+    the test mode ``tests-<m>``. Every mode that compiles src/tests excludes ``$BENCH_DATA`` (``exclude``) and depends
+    (``dependon``) on one ``bench-data-*`` mode of its own compiler; a ``-fortran`` mode on the same one as its template
+    (its default mode).
+
+    Returns
+    -------
+    list[str]
+        The discrepancies.
+    """
+    parser = fobos_parser()
+    variables = fobos_variables(parser)
+    if BENCH_DATA not in variables:
+        return [f"fobos [common-variables] lacks {BENCH_DATA} (the benchmark's scene data, #16 C7)"]
+    data = variables[BENCH_DATA].rstrip("/")
+    modes = parser.get("modes", "modes", fallback="").split() if parser.has_section("modes") else []
+    builds = [m for m in modes if m.startswith(BENCH_DATA_MODE)]
+    if not builds:
+        return [f"fobos has no {BENCH_DATA_MODE}* mode (the benchmark's scene data, #16 C7)"]
+    errors: list[str] = []
+
+    def words(options: dict[str, str], key: str) -> list[str]:
+        return [w.rstrip("/") for w in expand(options.get(key, ""), variables)]
+
+    for build in builds:
+        own = mode_options(parser, build)
+        reference = "tests-" + build.removeprefix(BENCH_DATA_MODE)
+        if reference not in modes:
+            errors.append(f"fobos [{build}]: no test mode {reference} to take the flags of")
+            continue
+        ref = mode_options(parser, reference)
+        for key in ("compiler", "cflags", "openmp"):
+            if words(own, key) != words(ref, key):
+                errors.append(f"fobos [{build}]: its {key} must be [{reference}]'s, {ref.get(key, '')!r}")
+        if words(own, "target") != [data]:
+            errors.append(f"fobos [{build}]: its target must be {BENCH_DATA} ({data})")
+    for mode in modes:
+        options = mode_options(parser, mode)
+        if mode in builds or "src/tests" not in words(options, "src"):
+            continue
+        if data not in words(options, "exclude"):
+            errors.append(f"fobos [{mode}]: must exclude {BENCH_DATA} ({data}), linked from a {BENCH_DATA_MODE}* mode")
+        deps = [d.removeprefix("fobos:") for d in options.get("dependon", "").split() if d.startswith("fobos:")]
+        deps = [d for d in deps if d.startswith(BENCH_DATA_MODE)]
+        if len(deps) != 1 or deps[0] not in builds:
+            errors.append(f"fobos [{mode}]: must depend on one {BENCH_DATA_MODE}* mode (dependon), not {deps}")
+            continue
+        if words(mode_options(parser, deps[0]), "compiler") != words(options, "compiler"):
+            errors.append(f"fobos [{mode}]: depends on {deps[0]}, built by another compiler")
+        template = parser.get(mode, "template", fallback="")
+        if mode.endswith("-fortran") and template in modes:
+            ref_deps = [d.removeprefix("fobos:") for d in mode_options(parser, template).get("dependon", "").split()]
+            if deps[0] not in ref_deps:
+                errors.append(f"fobos [{mode}]: must link [{template}]'s scene data, not {deps[0]}")
     return errors
 
 
@@ -640,7 +710,7 @@ def check() -> int:
             f"check_sync: {pc.relative_to(ROOT)} not built: the {platform} link line is not checked against SDL"
         )
 
-    on_disk = program_sources(ROOT / "src" / "examples", ROOT / "src" / "tests")
+    on_disk = program_sources(ROOT / "src" / "examples", ROOT / "src" / "tests", ROOT / "src" / "tests" / "bench")
     declared = fpm_programs(manifest)
     errors.extend(
         f"program not declared in fpm.toml: {p}" for p in sorted(on_disk - declared)
@@ -652,6 +722,7 @@ def check() -> int:
     errors.extend(package_sources())
     errors.extend(library_root())
     errors.extend(paths())
+    errors.extend(bench_data())
     errors.extend(implot_ref())
     errors.extend(editor_generated())
     errors.extend(fortran_libraries())

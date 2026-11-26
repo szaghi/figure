@@ -28,8 +28,12 @@ program figure_bench_scenes
 !< - `field512`, `field1024`, `field4096`: the same through `ip_field_image` (a texture coloured again every frame);
 !< - `surface256`: a 3-D surface of 256 x 256 points (ImPlot3D), its heights changing every frame;
 !< - `editor10k`: the code editor showing a file of 10000 lines.
+!<
+!< The data the heatmap, field and surface scenes recompute every frame come from `figure_bench_data`
+!< (src/tests/bench/), built with the default test mode's flags on both paths (szaghi/figure#16, C7).
 use, intrinsic :: iso_fortran_env, only : int32, int64, real64, output_unit, error_unit
 use fundal, only : dev_alloc, dev_free, dev_init, dev_memcpy_to_device
+use figure_bench_data, only : field_values
 use figure, only : app_object, code_editor_object, ig_begin, ig_begin_main_menu_bar, ig_begin_menu, ig_begin_table, &
                    ig_tree_node, ig_button, ig_checkbox, ig_dock_id, ig_dock_layout_begin,                          &
                    ig_dock_layout_end, ig_dock_space, ig_dock_split, ig_dock_window, ig_end, ig_end_main_menu_bar, &
@@ -268,7 +272,7 @@ contains
       endselect
       if (smoke) n = min(n, 64_int64)
       allocate(f(n, n))
-      call field_values(0_int32)
+      call field_values(f, 0_int32)
    case ('surface256')
       n = 256_int64
       if (smoke) n = 32_int64
@@ -277,7 +281,7 @@ contains
          gx(j) = real(j - 1_int64, real64) / real(n - 1_int64, real64)
       enddo
       gy = gx
-      call field_values(0_int32)
+      call field_values(f, 0_int32)
    case ('editor10k')
       n = 10000_int64
       if (smoke) n = 100_int64
@@ -307,20 +311,6 @@ contains
    if (ed%is_initialized()) call ed%destroy()
    endsubroutine release
 
-   subroutine field_values(phase)
-   !< A field's values at a phase: two waves moving one cell a frame.
-   integer(int32), intent(in) :: phase !< Frame.
-   integer(int64)             :: a, b  !< Cells.
-   real(real64)               :: c     !< A wave number.
-
-   c = 12.0_real64 / real(size(f, 1), real64)
-   do b = 1_int64, size(f, 2, kind=int64)
-      do a = 1_int64, size(f, 1, kind=int64)
-         f(a, b) = sin(c * real(a + phase, real64)) * cos(c * real(b, real64))
-      enddo
-   enddo
-   endsubroutine field_values
-
    subroutine draw()
    !< One frame of the scene.
    frame = frame + 1_int32
@@ -336,7 +326,7 @@ contains
       endif
       call ig_end()
    case ('surface256')
-      call field_values(frame)
+      call field_values(f, frame)
       call full_window()
       if (ig_begin('surface', flags=ImGuiWindowFlags_NoDecoration)) then
          if (ip3_begin_plot('##surface', height=-1.0_real64)) then
@@ -354,11 +344,11 @@ contains
             case ('scatter1e6')
                call ip_scatter('points', x, y)
             case ('heatmap256', 'heatmap512', 'heatmap1024', 'heatmap4096')
-               call field_values(frame)
+               call field_values(f, frame)
                call ip_heatmap('f', f, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, scale_min=-1.0_real64, &
                                scale_max=1.0_real64)
             case ('field512', 'field1024', 'field4096')
-               call field_values(frame)
+               call field_values(f, frame)
                call ip_field_image('f', f, 0.0_real64, 1.0_real64, 0.0_real64, 1.0_real64, vmin=-1.0_real64, &
                                    vmax=1.0_real64, changed=.true.)
             case ('line1e8c')

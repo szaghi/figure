@@ -266,6 +266,8 @@ per thread: a few milliseconds for a whole window, paid only on the frame that s
   runs alternate between `--program` and PROGRAM scene by scene, and a scene fails when its median's ratio exceeds 1
   plus the spread of the paired runs' ratios (at least 5%). Use it to compare the Fortran path with the current path
   (two builds of the benchmark, one copied aside: the modes share `exe/`), or a change with the commit before it.
+  The data the heatmap, field and surface scenes recompute every frame (`src/tests/bench/figure_bench_data.F90`) are compiled with the
+  default mode's flags in both builds, so the comparison measures the paths alone.
   `--self-test` checks the statistics and the gates without running anything.
 - `scripts/profile_scene.py SCENE` says where a scene's time goes: it runs the scene under valgrind's callgrind on two
   builds (`--program` and `--against`, or `--build gnu|nvf|ifx` to build the Fortran path and the current path

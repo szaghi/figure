@@ -30,6 +30,7 @@ modes = tests-gnu tests-gnu-debug examples-gnu examples-gnu-traps
         figure-static-gnu figure-static-nvf figure-static-ifx
         tests-gnu-fortran examples-gnu-fortran tests-nvf-fortran examples-nvf-fortran tests-nvf-acc-fortran
         tests-ifx-fortran examples-ifx-fortran
+        bench-data-gnu bench-data-gnu-debug bench-data-nvf bench-data-nvf-acc bench-data-ifx
 
 # The native layer (libfigure_native.a + libSDL3.a in lib/) is built by `fobis rule --ex native` (CMake), run
 # automatically before every build (pre_build): a no-op once built. Linking it needs platform libraries: one varset per
@@ -72,6 +73,10 @@ $EXCLUDE     = src/third_party/FUNDAL/src/lib/fundal_mpih_object.F90
 $PATH_IMGUI   = src/paths/imgui/
 $PATH_FORTRAN = src/paths/imgui/core/ src/paths/fortran/
 $FORTRAN_ONLY = src/tests/fortran
+# the benchmark's per-frame scene data (figure_bench_data, next to the benchmark figure_bench_scenes; szaghi/figure#16
+# C7): left out of the test modes' sources (the templates' exclude) and linked from bench-data-<mode> (below), the same
+# build on both paths
+$BENCH_DATA   = src/tests/bench/figure_bench_data.F90
 
 # main modes: the tests build into exe/ (scripts/run_tests.sh runs every program there), the examples into exe/examples/
 # (with their own mod/ and obj/), which run_tests.sh does not enter
@@ -80,12 +85,14 @@ template  = template-gnu
 cflags    = $CGNU -O2
 build_dir = exe
 src       = src/lib/ $PATH_IMGUI src/tests/
+dependon  = fobos:bench-data-gnu
 
 [tests-gnu-debug]
 template  = template-gnu
 cflags    = $CGNU $CGNU_DEBUG
 build_dir = exe
 src       = src/lib/ $PATH_IMGUI src/tests/
+dependon  = fobos:bench-data-gnu-debug
 
 [examples-gnu]
 template  = template-gnu
@@ -116,6 +123,7 @@ cflags    = $CNVF -O2
 openmp    = True
 build_dir = exe
 src       = src/lib/ $PATH_IMGUI src/tests/
+dependon  = fobos:bench-data-nvf
 
 # tests-nvf-acc: the tests with OpenACC on the GPU (szaghi/figure#15 P6): FUNDAL and figure_decimate_device's kernels
 # compiled for the device (FUNDAL's -DDEV_OAC -DCOMPILER_NVF), for the RTX 4070 of the WSL box (-gpu=cc89; another GPU:
@@ -129,6 +137,7 @@ cflags    = $CNVF -O2 -acc -gpu=cc89 -DDEV_OAC -DCOMPILER_NVF
 lflags    = $NATIVE_LFLAGS -Munixlogical -acc -gpu=cc89
 build_dir = exe
 src       = src/lib/ $PATH_IMGUI src/tests/
+dependon  = fobos:bench-data-nvf-acc
 
 [examples-nvf]
 template  = template-nvf
@@ -144,6 +153,7 @@ template  = template-ifx
 cflags    = $CIFX -O2
 build_dir = exe
 src       = src/lib/ $PATH_IMGUI src/tests/
+dependon  = fobos:bench-data-ifx
 
 [examples-ifx]
 template  = template-ifx
@@ -182,12 +192,12 @@ mklib     = static
 # the Fortran path (szaghi/figure#15 §2): a -fortran mode builds the newest path, $PATH_FORTRAN in place of $PATH_IMGUI
 # (the seams already ported, the others from the current path). Each takes its default mode as its template (every
 # key but `src`) and builds, besides, the Fortran path's tests the default modes leave out ($FORTRAN_ONLY, through the
-# templates' exclude_dirs; emptied here). With ifx the Fortran path is value-safe (-fp-model precise): the CPU
-# renderer's picture is figure_swrast's to the bit only without the default fast model's reassociation (as the native
-# layer is built with -ffp-contract=off); with nvfortran it is built without FMA (-Mnofma): nvfortran -O2 fuses `a*b + c`,
-# also inside VecFor's one-line dot and cross products, which ImPlot3D's build does not (#15 P13); the default modes keep
-# their flags. They build into the default's directories: switching path, as switching compiler, needs
-# `--force-compile` (or `rm -rf exe`)
+# templates' exclude_dirs; emptied here; $BENCH_DATA stays out, linked from the default mode's bench-data-<mode>).
+# With ifx the Fortran path is value-safe (-fp-model precise): the CPU renderer's picture is figure_swrast's to the bit
+# only without the default fast model's reassociation (as the native layer is built with -ffp-contract=off); with
+# nvfortran it is built without FMA (-Mnofma): nvfortran -O2 fuses `a*b + c`, also inside VecFor's one-line dot and
+# cross products, which ImPlot3D's build does not (#15 P13); the default modes keep their flags. They build into the
+# default's directories: switching path, as switching compiler, needs `--force-compile` (or `rm -rf exe`)
 [tests-gnu-fortran]
 template     = tests-gnu
 src          = src/lib/ $PATH_FORTRAN src/tests/
@@ -233,10 +243,60 @@ src          = src/lib/ $PATH_FORTRAN src/examples/
 cflags       = $CIFX -O2 -fp-model precise
 exclude_dirs =
 
+# the benchmark's per-frame scene data (szaghi/figure#16 C7): figure_bench_scenes recomputes the heatmaps', fields' and
+# surface's values inside the timed frame, and the two paths' builds of it must compute them with the same code, so that
+# bench_scenes.py --against and profile_scene.py measure the paths alone (the -fortran modes' value-safe flags made ifx's
+# loop scalar libm instead of SVML). bench-data-<mode> builds $BENCH_DATA with the compiler and flags of the test mode
+# <mode> (scripts/check_sync.py checks them) into a static library of its own, exe/bench-<mode>/, rebuilt when its flags
+# change (cflags_heritage). Every test mode leaves $BENCH_DATA out (the templates' exclude) and builds and links its
+# bench-data-<mode> through `dependon`, which its -fortran mode inherits: no test mode writes figure_bench_data.mod into
+# the shared exe/mod/ (a module compiled by some modes only would be read stale by the others)
+[template-bench-data]
+mod_dir         = mod
+obj_dir         = obj
+src             = src/tests/bench/
+exclude         = src/tests/bench/figure_bench_scenes.F90
+target          = $BENCH_DATA
+mklib           = static
+output          = libfigure_bench_data.a
+cflags_heritage = True
+colors          = True
+
+[bench-data-gnu]
+template  = template-bench-data
+compiler  = gnu
+cflags    = $CGNU -O2
+build_dir = exe/bench-gnu
+
+[bench-data-gnu-debug]
+template  = template-bench-data
+compiler  = gnu
+cflags    = $CGNU $CGNU_DEBUG
+build_dir = exe/bench-gnu-debug
+
+[bench-data-nvf]
+template  = template-bench-data
+compiler  = nvfortran
+cflags    = $CNVF -O2
+openmp    = True
+build_dir = exe/bench-nvf
+
+[bench-data-nvf-acc]
+template  = template-bench-data
+compiler  = nvfortran
+cflags    = $CNVF -O2 -acc -gpu=cc89 -DDEV_OAC -DCOMPILER_NVF
+build_dir = exe/bench-nvf-acc
+
+[bench-data-ifx]
+template  = template-bench-data
+compiler  = intel_nextgen
+cflags    = $CIFX -O2
+build_dir = exe/bench-ifx
+
 # templates
 [template-gnu]
 compiler  = gnu
-exclude   = $EXCLUDE
+exclude   = $EXCLUDE $BENCH_DATA
 exclude_dirs = $FORTRAN_ONLY
 mod_dir   = mod
 obj_dir   = obj
@@ -250,7 +310,7 @@ jobs      = 4
 
 [template-nvf]
 compiler  = nvfortran
-exclude   = $EXCLUDE
+exclude   = $EXCLUDE $BENCH_DATA
 exclude_dirs = $FORTRAN_ONLY
 mod_dir   = mod
 obj_dir   = obj
@@ -264,7 +324,7 @@ jobs      = 4
 
 [template-ifx]
 compiler  = intel_nextgen
-exclude   = $EXCLUDE
+exclude   = $EXCLUDE $BENCH_DATA
 exclude_dirs = $FORTRAN_ONLY
 mod_dir   = mod
 obj_dir   = obj
