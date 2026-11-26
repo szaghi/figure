@@ -22,13 +22,13 @@ module figure_plot_items
 !<   y = 0; `PlotShaded`: between two series, or a series and a reference), `RendererStairsPre`/`Post` and their
 !<   shaded forms, `RendererLineSegments2` (stems), `RendererMarkersFill`/`Line` and the marker shapes of
 !<   `MARKER_FILL_*`/`MARKER_LINE_*`; each primitive culled as `RenderPrimitivesEx` culls it (the plot rectangle);
-!<   lines with the anti-aliased line texture (`GetLineRenderProps`), fills with the white pixel. The line strips,
-!<   segments and markers (szaghi/figure#16 S2) are written as `RenderPrimitivesEx` writes them: runs reserved in
-!<   figure_core's draw list (`core_prim_reserve`, sized by `core_prim_vtx_current` as by `_VtxCurrentIdx`), each
-!<   primitive's vertices and indices written in place (`PrimLine`; a marker's fan as `RendererMarkersFill`'s), the
-!<   culled ones' room given back (`core_prim_unreserve`), a `prim_run` holding the run's state; the other items still
-!<   draw with figure_core's textured quads (`core_draw_quad_uv`: two triangles sharing a diagonal; ImPlot's raw
-!<   triangles are the same triangles, a fan's or a lone one's as quads with a repeated vertex);
+!<   lines with the anti-aliased line texture (`GetLineRenderProps`), fills with the white pixel. The primitives
+!<   (szaghi/figure#16 S2) are written as `RenderPrimitivesEx` writes them: runs reserved in figure_core's draw list
+!<   (`core_prim_reserve`, sized by `core_prim_vtx_current` as by `_VtxCurrentIdx`), each primitive's vertices and
+!<   indices written in place (`PrimLine`, `PrimRectFill`, `PrimRectLine`, the shaded quad of five vertices, the fans of
+!<   `RendererMarkersFill`, `RendererCircleFill` and `PrimPieSliceFill`), the culled ones' room given back
+!<   (`core_prim_unreserve`), a `prim_run` holding the run's state; a pie slice reserves its fan and its border once
+!<   each, as `RenderPieSlice`; error bars and digital signals are `AddLine` and `AddRectFilled`, as ImPlot's;
 !< - the clip: the plot rectangle (`PushPlotClipRect`), expanded by the marker size for the markers of stairs and
 !<   stems, and of lines and scatters with `NoClip`;
 !< - the decimation of long line-like series (figure_decimate, as figure_implot's `series_decimate`: M4 per pixel
@@ -71,7 +71,7 @@ use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui_enums, only : ImGuiCol_Text
 use figure_core, only : core_prim_list, core_prim_reserve, core_prim_unreserve, core_prim_vtx_current
 use figure_drawlist, only : draw_list, draw_vert, DL_BATCH_VERTICES
-use figure_core, only : core_draw_image, core_draw_line, core_draw_line_h, core_draw_line_v, core_draw_quad_uv,     &
+use figure_core, only : core_draw_image, core_draw_line, core_draw_line_h, core_draw_line_v,                        &
                         core_draw_rect_filled, core_draw_text, core_frame_count, core_framebuffer_scale, core_time, &
                         core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,             &
                         core_style_var, core_text_size, core_texture_sampling, core_white_pixel
@@ -1692,11 +1692,23 @@ contains
    real(real32),        intent(in) :: weight   !< Outline weight (< 0: fill).
    real(real64)                    :: half, x1, y1, x2, y2 !< Half size, ends.
    real(real32)                    :: p1(2), p2(2), pmin(2), pmax(2), wpx !< Pixels, the bar's size.
-   integer(int32)                  :: i, a     !< Bar, the sized coordinate.
+   real(real32)                    :: uv(2)    !< White pixel.
+   type(prim_run)                  :: r        !< The run.
+   integer(int32)                  :: i, a, i0, nprim, cnt !< Bar, the sized coordinate, run's start, bars left, run.
 
    half = bar_size / 2.0_real64
    a = merge(2_int32, 1_int32, horz)
-   do i = 1_int32, min(g1%n, g2%n)
+   uv = real(uv_white, real32)
+   nprim = min(g1%n, g2%n)
+   if (weight < 0.0_real32) then
+      call run_begin(r, 4_int32, 6_int32)
+   else
+      call run_begin(r, 8_int32, 24_int32)
+   endif
+   i0 = 0_int32
+   do while (nprim > 0_int32)
+   call run_next(r, nprim, cnt)
+   do i = i0 + 1_int32, i0 + cnt
       call point(g1, i, x1, y1)
       call point(g2, i, x2, y2)
       if (horz) then
@@ -1727,37 +1739,20 @@ contains
       pmin(2) = im_min(p1(2), p2(2))
       pmax(1) = im_max(p1(1), p2(1))
       pmax(2) = im_max(p1(2), p2(2))
-      if (.not. overlaps(ctx%rect, pmin(1), pmin(2), pmax(1), pmax(2))) cycle
+      if (.not. overlaps(ctx%rect, pmin(1), pmin(2), pmax(1), pmax(2))) then
+         r%culled = r%culled + 1_int32
+         cycle
+      endif
       if (weight < 0.0_real32) then
-         call prim_rect_fill(pmin(1), pmin(2), pmax(1), pmax(2), col)
+         call put_rect_fill(r, pmin(1), pmin(2), pmax(1), pmax(2), col, uv)
       else
-         call prim_rect_line(pmin, pmax, weight, col)
+         call put_rect_line(r, pmin, pmax, weight, col, uv)
       endif
    enddo
+   i0 = i0 + cnt
+   enddo
+   call run_end(r)
    endsubroutine render_bars
-
-   subroutine prim_rect_line(pmin, pmax, w, col)
-   !< `PrimRectLine`: a rectangle's outline `w` pixels inside it, eight triangles over its eight vertices (outer 0-3:
-   !< (min.x, min.y), (min.x, max.y), (max.x, max.y), (max.x, min.y); inner 4-7 the same `w` inside): (0, 1, 5),
-   !< (0, 5, 4), (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7), as four quads.
-   real(real32),   intent(in) :: pmin(2), pmax(2) !< Corners [pixels].
-   real(real32),   intent(in) :: w                !< Weight [pixels].
-   integer(int32), intent(in) :: col              !< Colour.
-   real(real32)               :: v(2, 0:7)        !< Vertices.
-
-   v(:, 0) = [pmin(1), pmin(2)]
-   v(:, 1) = [pmin(1), pmax(2)]
-   v(:, 2) = [pmax(1), pmax(2)]
-   v(:, 3) = [pmax(1), pmin(2)]
-   v(:, 4) = [pmin(1) + w, pmin(2) + w]
-   v(:, 5) = [pmin(1) + w, pmax(2) - w]
-   v(:, 6) = [pmax(1) - w, pmax(2) - w]
-   v(:, 7) = [pmax(1) - w, pmin(2) + w]
-   call prim_quad(v(:, 0), v(:, 1), v(:, 5), v(:, 4), col)
-   call prim_quad(v(:, 1), v(:, 2), v(:, 6), v(:, 5), col)
-   call prim_quad(v(:, 2), v(:, 3), v(:, 7), v(:, 6), col)
-   call prim_quad(v(:, 3), v(:, 0), v(:, 4), v(:, 7), col)
-   endsubroutine prim_rect_line
 
    subroutine stack_room(ng)
    !< Room for a stacked bar group's four columns of `ng` (TempDouble1), kept between frames.
@@ -2223,7 +2218,8 @@ contains
    real(real32), parameter         :: RESOLUTION = 50.0_real32 / (2.0_real32 * IM_PI) !< Points a radian (a float).
    real(real32)                    :: b(2, 52), hw !< The points [pixels], half weight.
    real(real64)                    :: da, a, ox, oy, r, mid, na0, na1, t, u !< Angles, centre, radius.
-   real(real64)                    :: uv0(2), uv1(2) !< Texture.
+   real(real32)                    :: uv0(2), uv1(2), uv(2) !< Texture, white pixel.
+   type(prim_run)                  :: run       !< The slice's reservations (`PrimReserve`, no culling).
    integer(int32)                  :: n, i, k   !< Points, counters.
 
    t = (a1 - a0) * real(RESOLUTION, real64)
@@ -2258,35 +2254,19 @@ contains
       b(2, i + 2_int32) = map_pixel(ctx%ty, oy + u)
    enddo
    b(:, n + 2_int32) = b(:, 1)
-   call fan(b, n + 2_int32, col)
-   if (iand(flags, PF_PIE_NO_SLICE_BORDER) == 0_int32) then
-      hw = 1.0_real32 ! GetLineRenderProps of half weight 1
-      call core_line_texture(2.0_real64, uv0, uv1, t)
-      hw = hw + real(t, real32) * 0.5_real32
+   uv = real(uv_white, real32)
+   call run_begin(run, n + 2_int32, n * 3_int32) ! RenderPieSliceFill: PrimReserve((count - 2) * 3, count)
+   call run_reserve(run)
+   call put_fan(run, b, n + 2_int32, col, uv)
+   if (iand(flags, PF_PIE_NO_SLICE_BORDER) == 0_int32) then ! RenderPieSliceLine
+      call line_props32(2.0_real32, hw, uv0, uv1) ! GetLineRenderProps of half weight 1
+      call run_begin(run, (n + 1_int32) * 4_int32, (n + 1_int32) * 6_int32)
+      call run_reserve(run)
       do k = 1_int32, n + 1_int32
-         call prim_line(b(:, k), b(:, k + 1_int32), hw, col, uv0, uv1)
+         call put_line(run, b(:, k), b(:, k + 1_int32), hw, col, uv0, uv1)
       enddo
    endif
    endsubroutine pie_slice
-
-   subroutine fan(v, nv, col)
-   !< A triangle fan from v(:, 1): (1, k, k + 1), k = 2 .. nv - 1, as quads (1, k, k + 1, k + 2) of two triangles (a
-   !< lone last one with a repeated vertex).
-   real(real32),   intent(in) :: v(:, :) !< Vertices [pixels].
-   integer(int32), intent(in) :: nv      !< Their count.
-   integer(int32), intent(in) :: col     !< Colour.
-   integer(int32)             :: k       !< Vertex.
-
-   k = 2_int32
-   do while (k < nv)
-      if (k + 2_int32 <= nv) then
-         call prim_quad(v(:, 1), v(:, k), v(:, k + 1), v(:, k + 2), col)
-      else
-         call prim_quad(v(:, 1), v(:, k), v(:, k + 1), v(:, 1), col)
-      endif
-      k = k + 2_int32
-   enddo
-   endsubroutine fan
 
    subroutine bubbles_item(label, g, r, spec)
    !< `PlotBubblesEx`: `FitterBubbles1` (each centre +- its radius on both axes), the filled circles
@@ -2326,11 +2306,24 @@ contains
    real(real32),        intent(in) :: weight !< Line weight (< 0: fill).
    real(real32)                    :: v(2, 64), p1(2), p2(2), pmin(2), pmax(2), rad, ar, a_step, ang, cs, sn, hw !<
                                        !< Points, box, radius, angles.
-   real(real64)                    :: x, y, dummy, uv0(2), uv1(2), t !< A bubble, texture.
-   integer(int32)                  :: i, k, ns  !< Bubble, point, segments.
+   real(real32)                    :: uv0(2), uv1(2), uv(2) !< Texture, white pixel.
+   real(real64)                    :: x, y, dummy, t !< A bubble.
+   type(prim_run)                  :: run       !< The run.
+   integer(int32)                  :: i, k, ns, i0, nprim, cnt !< Bubble, point, segments, run's start, bubbles left,
+                                                               !< run.
 
-   if (weight >= 0.0_real32) call line_props(weight, hw, uv0, uv1)
-   do i = 1_int32, g%n
+   uv = real(uv_white, real32)
+   if (weight >= 0.0_real32) then
+      call line_props32(weight, hw, uv0, uv1)
+      call run_begin(run, 64_int32 * 4_int32, 64_int32 * 6_int32) ! RendererCircleLine
+   else
+      call run_begin(run, 64_int32, 62_int32 * 3_int32) ! RendererCircleFill
+   endif
+   nprim = g%n
+   i0 = 0_int32
+   do while (nprim > 0_int32)
+   call run_next(run, nprim, cnt)
+   do i = i0 + 1_int32, i0 + cnt
       call point(g, i, x, y)
       call point(r, i, dummy, t)
       rad = real(t, real32)
@@ -2344,7 +2337,10 @@ contains
       pmin(2) = im_min(p1(2), p2(2))
       pmax(1) = im_max(p1(1), p2(1))
       pmax(2) = im_max(p1(2), p2(2))
-      if (.not. overlaps(ctx%rect, pmin(1), pmin(2), pmax(1), pmax(2))) cycle
+      if (.not. overlaps(ctx%rect, pmin(1), pmin(2), pmax(1), pmax(2))) then
+         run%culled = run%culled + 1_int32
+         cycle
+      endif
       a_step = (IM_PI * 2.0_real32) / real(ns, real32)
       do k = 0_int32, ns - 1_int32
          ang = a_step * real(k, real32)
@@ -2354,13 +2350,18 @@ contains
          v(2, k + 1_int32) = map_pixel(ctx%ty, y + real(sn, real64))
       enddo
       if (weight < 0.0_real32) then
-         call fan(v, ns, col)
+         call put_fan(run, v, ns, col, uv)
+         if (ns < 64_int32) call core_prim_unreserve(64_int32 - ns, (62_int32 - (ns - 2_int32)) * 3_int32) ! the unused
       else
          do k = 1_int32, ns
-            call prim_line(v(:, k), v(:, mod(k, ns) + 1_int32), hw, col, uv0, uv1)
+            call put_line(run, v(:, k), v(:, mod(k, ns) + 1_int32), hw, col, uv0, uv1)
          enddo
+         if (ns < 64_int32) call core_prim_unreserve((64_int32 - ns) * 4_int32, (64_int32 - ns) * 6_int32)
       endif
    enddo
+   i0 = i0 + cnt
+   enddo
+   call run_end(run)
    endsubroutine render_circles
 
    subroutine digital_item(label, g, spec)
@@ -2573,7 +2574,10 @@ contains
    real(real64)                    :: smin, smax, w, h, hx, hy, yref, ydir, px, py, v, t, a !< Cells.
    real(real32)                    :: p1(2), p2(2), tsz(2) !< Pixels, a label's size.
    real(real64)                    :: tw, th          !< Text size.
+   real(real32)                    :: uv(2)           !< White pixel.
    integer(int32)                  :: idx, r, c, col, nl !< Value, row, column, colour, label length.
+   integer(int32)                  :: cm, i0, nprim, cnt !< Colormap, run's start, cells left, run.
+   type(prim_run)                  :: run             !< The run.
    character(len=31)               :: lab             !< A label.
 
    smin = smin_
@@ -2592,7 +2596,14 @@ contains
    h = (by1 - by0) / real(rows, real64)
    hx = w * 0.5_real64
    hy = h * 0.5_real64
-   do idx = 0_int32, rows * cols - 1_int32
+   cm = cm_current() ! (one lookup an item)
+   uv = real(uv_white, real32)
+   call run_begin(run, 4_int32, 6_int32) ! RendererRectC
+   nprim = rows * cols
+   i0 = 0_int32
+   do while (nprim > 0_int32)
+   call run_next(run, nprim, cnt)
+   do idx = i0, i0 + cnt - 1_int32
       if (col_maj) then
          r = mod(idx, rows)
          c = idx / rows
@@ -2607,14 +2618,22 @@ contains
       a = hy + t
       t = ydir * a
       py = yref + t
-      col = cm_sample(cm_current(), min(max(real((v - smin) / (smax - smin), real32), 0.0_real32), 1.0_real32))
-      p1 = [map_pixel(ctx%tx, px - hx), map_pixel(ctx%ty, py - hy)]
-      p2 = [map_pixel(ctx%tx, px + hx), map_pixel(ctx%ty, py + hy)]
-      if (iand(ishft(int(col, int64), -24), 255_int64) == 0_int64) cycle
-      if (.not. overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                         im_max(p1(2), p2(2)))) cycle
-      call prim_rect_fill(p1(1), p1(2), p2(1), p2(2), col)
+      col = cm_sample(cm, min(max(real((v - smin) / (smax - smin), real32), 0.0_real32), 1.0_real32))
+      p1(1) = map_pixel(ctx%tx, px - hx)
+      p1(2) = map_pixel(ctx%ty, py - hy)
+      p2(1) = map_pixel(ctx%tx, px + hx)
+      p2(2) = map_pixel(ctx%ty, py + hy)
+      if (iand(ishft(int(col, int64), -24), 255_int64) == 0_int64 .or. &
+          .not. overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
+                         im_max(p1(2), p2(2)))) then
+         run%culled = run%culled + 1_int32
+         cycle
+      endif
+      call put_rect_fill(run, p1(1), p1(2), p2(1), p2(2), col, uv)
    enddo
+   i0 = i0 + cnt
+   enddo
+   call run_end(run)
    if (.not. labelled) return
    idx = 0_int32
    do r = 0_int32, merge(cols, rows, col_maj) - 1_int32 ! (outer loop: columns when column major)
@@ -2648,7 +2667,7 @@ contains
       call core_text_size(lab(1:nl), tw, th)
       tsz = [real(tw, real32), real(th, real32)] * 0.5_real32
       q = min(max((v - smin) / (smax - smin), 0.0_real64), 1.0_real64)
-      col = text_on(unpack_u32(cm_sample(cm_current(), real(q, real32)))) ! CalcTextColor(SampleColormap((float)t))
+      col = text_on(unpack_u32(cm_sample(cm, real(q, real32)))) ! CalcTextColor(SampleColormap((float)t))
       call core_draw_text(real(map_pixel(ctx%tx, qx) - tsz(1), real64), real(map_pixel(ctx%ty, qy) - tsz(2), real64), &
                           col, lab(1:nl))
       endsubroutine label_cell
@@ -4150,24 +4169,37 @@ contains
    real(real32),        intent(in) :: weight !< Line weight.
    logical,             intent(in) :: pre    !< PreStep.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
-   integer(int32)                  :: k                !< Primitive.
+   real(real32)                    :: uv(2)            !< White pixel.
+   type(prim_run)                  :: r                !< The run.
+   integer(int32)                  :: k, k0, nprim, cnt !< Primitive, run's start, primitives left, run.
 
    hw = max(1.0_real32, weight) * 0.5_real32
+   uv = real(uv_white, real32)
    call pixel(ctx, g, 1_int32, p1)
-   do k = 1_int32, g%n - 1_int32
-      call pixel(ctx, g, k + 1_int32, p2)
-      if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                   im_max(p1(2), p2(2)))) then
-         if (pre) then
-            call prim_rect_fill(p1(1) - hw, p1(2), p1(1) + hw, p2(2), col)
-            call prim_rect_fill(p1(1), p2(2) + hw, p2(1), p2(2) - hw, col)
+   call run_begin(r, 8_int32, 12_int32)
+   nprim = g%n - 1_int32
+   k0 = 0_int32
+   do while (nprim > 0_int32)
+      call run_next(r, nprim, cnt)
+      do k = k0 + 1_int32, k0 + cnt
+         call pixel(ctx, g, k + 1_int32, p2)
+         if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
+                      im_max(p1(2), p2(2)))) then
+            if (pre) then
+               call put_rect_fill(r, p1(1) - hw, p1(2), p1(1) + hw, p2(2), col, uv)
+               call put_rect_fill(r, p1(1), p2(2) + hw, p2(1), p2(2) - hw, col, uv)
+            else
+               call put_rect_fill(r, p1(1), p1(2) + hw, p2(1), p1(2) - hw, col, uv)
+               call put_rect_fill(r, p2(1) - hw, p2(2), p2(1) + hw, p1(2), col, uv)
+            endif
          else
-            call prim_rect_fill(p1(1), p1(2) + hw, p2(1), p1(2) - hw, col)
-            call prim_rect_fill(p2(1) - hw, p2(2), p2(1) + hw, p1(2), col)
+            r%culled = r%culled + 1_int32
          endif
-      endif
-      p1 = p2
+         p1 = p2
+      enddo
+      k0 = k0 + cnt
    enddo
+   call run_end(r)
    endsubroutine render_stairs
 
    subroutine render_stairs_shaded(ctx, g, col, pre)
@@ -4177,11 +4209,19 @@ contains
    integer(int32),      intent(in) :: col !< Colour.
    logical,             intent(in) :: pre !< PreStep.
    real(real32)                    :: p1(2), p2(2), y0, pmin(2), pmax(2) !< Ends, the pixel of y = 0, the rectangle.
-   integer(int32)                  :: k   !< Primitive.
+   real(real32)                    :: uv(2) !< White pixel.
+   type(prim_run)                  :: r   !< The run.
+   integer(int32)                  :: k, k0, nprim, cnt !< Primitive, run's start, primitives left, run.
 
    call pixel(ctx, g, 1_int32, p1)
    y0 = map_pixel(ctx%ty, 0.0_real64)
-   do k = 1_int32, g%n - 1_int32
+   uv = real(uv_white, real32)
+   call run_begin(r, 4_int32, 6_int32)
+   nprim = g%n - 1_int32
+   k0 = 0_int32
+   do while (nprim > 0_int32)
+   call run_next(r, nprim, cnt)
+   do k = k0 + 1_int32, k0 + cnt
       call pixel(ctx, g, k + 1_int32, p2)
       pmin(1) = im_min(p1(1), p2(1))
       pmax(1) = im_max(p1(1), p2(1))
@@ -4192,10 +4232,16 @@ contains
          pmin(2) = im_min(p1(2), y0)
          pmax(2) = im_max(p1(2), y0)
       endif
-      if (overlaps(ctx%rect, pmin(1), pmin(2), pmax(1), pmax(2))) &
-         call prim_rect_fill(pmin(1), pmin(2), pmax(1), pmax(2), col)
+      if (overlaps(ctx%rect, pmin(1), pmin(2), pmax(1), pmax(2))) then
+         call put_rect_fill(r, pmin(1), pmin(2), pmax(1), pmax(2), col, uv)
+      else
+         r%culled = r%culled + 1_int32
+      endif
       p1 = p2
    enddo
+   k0 = k0 + cnt
+   enddo
+   call run_end(r)
    endsubroutine render_stairs_shaded
 
    subroutine render_shaded(ctx, g1, g2, col)
@@ -4205,12 +4251,21 @@ contains
    integer(int32),      intent(in) :: col    !< Colour.
    real(real32)                    :: p11(2), p12(2), p21(2), p22(2), q(2) !< Corners, the crossing.
    real(real32)                    :: rmin(2), rmax(2) !< Their bounds.
-   integer(int32)                  :: k                !< Primitive.
+   real(real32)                    :: uv(2)            !< White pixel.
+   type(prim_run)                  :: r                !< The run.
+   integer(int32)                  :: k, k0, nprim, cnt, x, iv, ii, b !< Primitive, run's start, primitives left, run,
+                                                                      !< crossing (0, 1), cursor.
    logical                         :: cross            !< The curves cross.
 
    call pixel(ctx, g1, 1_int32, p11)
    call pixel(ctx, g2, 1_int32, p12)
-   do k = 1_int32, min(g1%n, g2%n) - 1_int32
+   uv = real(uv_white, real32)
+   call run_begin(r, 5_int32, 6_int32)
+   nprim = min(g1%n, g2%n) - 1_int32
+   k0 = 0_int32
+   do while (nprim > 0_int32)
+   call run_next(r, nprim, cnt)
+   do k = k0 + 1_int32, k0 + cnt
       call pixel(ctx, g1, k + 1_int32, p21)
       call pixel(ctx, g2, k + 1_int32, p22)
       rmin(1) = im_min(im_min(im_min(p11(1), p12(1)), p21(1)), p22(1))
@@ -4219,17 +4274,38 @@ contains
       rmax(2) = im_max(im_max(im_max(p11(2), p12(2)), p21(2)), p22(2))
       if (overlaps(ctx%rect, rmin(1), rmin(2), rmax(1), rmax(2))) then
          cross = (p11(2) > p12(2) .and. p22(2) > p21(2)) .or. (p12(2) > p11(2) .and. p21(2) > p22(2))
-         if (cross) then ! triangles (P11, X, P12) and (P21, P22, X)
+         x = 0_int32
+         q = 0.0_real32
+         if (cross) then
+            x = 1_int32
             q = intersection(p11, p21, p12, p22)
-            call prim_quad(p11, q, p12, p11, col)
-            call prim_quad(p21, p22, q, p21, col)
-         else ! triangles (P11, P21, P12) and (P21, P22, P12)
-            call prim_quad(p21, p22, p12, p11, col)
          endif
+         iv = r%iv ! vertices P11, P21, X, P12, P22; triangles (0, 1 + x, 3) and (1, 4, 3 - x)
+         ii = r%ii
+         b = r%b
+         r%dl%vtx(iv) = draw_vert(p11(1), p11(2), uv(1), uv(2), col)
+         r%dl%vtx(iv + 1_int32) = draw_vert(p21(1), p21(2), uv(1), uv(2), col)
+         r%dl%vtx(iv + 2_int32) = draw_vert(q(1), q(2), uv(1), uv(2), col)
+         r%dl%vtx(iv + 3_int32) = draw_vert(p12(1), p12(2), uv(1), uv(2), col)
+         r%dl%vtx(iv + 4_int32) = draw_vert(p22(1), p22(2), uv(1), uv(2), col)
+         r%dl%idx(ii) = b
+         r%dl%idx(ii + 1_int32) = b + 1_int32 + x
+         r%dl%idx(ii + 2_int32) = b + 3_int32
+         r%dl%idx(ii + 3_int32) = b + 1_int32
+         r%dl%idx(ii + 4_int32) = b + 4_int32
+         r%dl%idx(ii + 5_int32) = b + 3_int32 - x
+         r%iv = iv + 5_int32
+         r%ii = ii + 6_int32
+         r%b = b + 5_int32
+      else
+         r%culled = r%culled + 1_int32
       endif
       p11 = p21
       p12 = p22
    enddo
+   k0 = k0 + cnt
+   enddo
+   call run_end(r)
    endsubroutine render_shaded
 
    subroutine render_markers(ctx, g, s)
@@ -4508,74 +4584,96 @@ contains
    r%b = k + 4_int32
    endsubroutine put_line
 
-   subroutine prim_line(p1, p2, hw, col, uv0, uv1)
-   !< `PrimLine`: a segment as a quad of the line's texture, `hw` each side.
-   real(real32),   intent(in) :: p1(2), p2(2)   !< Ends [pixels].
-   real(real32),   intent(in) :: hw             !< Half width [pixels].
-   integer(int32), intent(in) :: col            !< Colour.
-   real(real64),   intent(in) :: uv0(2), uv1(2) !< Texture.
-   real(real32)               :: dx, dy, d2, inv, a, b !< Direction, products.
-   real(real64)               :: qx(4), qy(4), qu(4), qv(4) !< The quad.
+   subroutine run_reserve(r)
+   !< A direct `PrimReserve` of the run's room per primitive, for one primitive (no culling: the pie slices), the cursor
+   !< at it.
+   type(prim_run), intent(inout) :: r !< The run.
 
-   dx = p2(1) - p1(1)
-   dy = p2(2) - p1(2)
-   a = dx * dx ! (IMPLOT_NORMALIZE2F_OVER_ZERO; the products apart)
-   b = dy * dy
-   d2 = a + b
-   if (d2 > 0.0_real32) then
-      inv = 1.0_real32 / sqrt(d2)
-      dx = dx * inv
-      dy = dy * inv
-   endif
-   dx = dx * hw
-   dy = dy * hw
-   qx(1) = real(p1(1) + dy, real64)
-   qy(1) = real(p1(2) - dx, real64)
-   qx(2) = real(p2(1) + dy, real64)
-   qy(2) = real(p2(2) - dx, real64)
-   qx(3) = real(p2(1) - dy, real64)
-   qy(3) = real(p2(2) + dx, real64)
-   qx(4) = real(p1(1) - dy, real64)
-   qy(4) = real(p1(2) + dx, real64)
-   qu(1) = uv0(1)
-   qu(2) = uv0(1)
-   qu(3) = uv1(1)
-   qu(4) = uv1(1)
-   qv(1) = uv0(2)
-   qv(2) = uv0(2)
-   qv(3) = uv1(2)
-   qv(4) = uv1(2)
-   call core_draw_quad_uv(qx, qy, qu, qv, col)
-   endsubroutine prim_line
+   call core_prim_reserve(r%vtx, r%idx, r%iv, r%ii, r%b)
+   endsubroutine run_reserve
 
-   subroutine prim_rect_fill(x0, y0, x1, y1, col)
-   !< `PrimRectFill(Pmin, Pmax)`: triangles (Pmin, Pmax, (Pmin.x, Pmax.y)) and (Pmin, Pmax, (Pmax.x, Pmin.y)), the
-   !< white pixel; as the quad (Pmin, (Pmin.x, Pmax.y), Pmax, (Pmax.x, Pmin.y)): the same two triangles.
-   real(real32),   intent(in) :: x0, y0 !< Pmin [pixels].
-   real(real32),   intent(in) :: x1, y1 !< Pmax [pixels].
-   integer(int32), intent(in) :: col    !< Colour.
+   subroutine put_rect_fill(r, ax, ay, bx, by, col, uv)
+   !< `PrimRectFill(Pmin, Pmax)` into the run: vertices Pmin = (ax, ay), Pmax = (bx, by), (Pmin.x, Pmax.y),
+   !< (Pmax.x, Pmin.y); triangles (0, 1, 2) and (0, 1, 3).
+   type(prim_run), intent(inout) :: r      !< The run.
+   real(real32),   intent(in)    :: ax, ay !< Pmin [pixels].
+   real(real32),   intent(in)    :: bx, by !< Pmax [pixels].
+   integer(int32), intent(in)    :: col    !< Colour.
+   real(real32),   intent(in)    :: uv(2)  !< White pixel.
+   integer(int32)                :: iv, ii, k !< Cursor.
 
-   call prim_quad([x0, y0], [x0, y1], [x1, y1], [x1, y0], col)
-   endsubroutine prim_rect_fill
+   iv = r%iv
+   ii = r%ii
+   k = r%b
+   r%dl%vtx(iv) = draw_vert(ax, ay, uv(1), uv(2), col)
+   r%dl%vtx(iv + 1_int32) = draw_vert(bx, by, uv(1), uv(2), col)
+   r%dl%vtx(iv + 2_int32) = draw_vert(ax, by, uv(1), uv(2), col)
+   r%dl%vtx(iv + 3_int32) = draw_vert(bx, ay, uv(1), uv(2), col)
+   r%dl%idx(ii) = k
+   r%dl%idx(ii + 1_int32) = k + 1_int32
+   r%dl%idx(ii + 2_int32) = k + 2_int32
+   r%dl%idx(ii + 3_int32) = k
+   r%dl%idx(ii + 4_int32) = k + 1_int32
+   r%dl%idx(ii + 5_int32) = k + 3_int32
+   r%iv = iv + 4_int32
+   r%ii = ii + 6_int32
+   r%b = k + 4_int32
+   endsubroutine put_rect_fill
 
-   subroutine prim_quad(a, b, c, d, col)
-   !< Triangles (a, b, c) and (a, c, d) of the white pixel (`d = a`: the triangle (a, b, c) alone).
-   real(real32),   intent(in) :: a(2), b(2), c(2), d(2) !< Vertices [pixels].
-   integer(int32), intent(in) :: col                    !< Colour.
-   real(real64)               :: qx(4), qy(4), qu(4), qv(4) !< The quad.
+   subroutine put_rect_line(r, pmin, pmax, w, col, uv)
+   !< `PrimRectLine` into the run: a rectangle's outline `w` pixels inside it, eight vertices (outer 0-3: (min.x, min.y),
+   !< (min.x, max.y), (max.x, max.y), (max.x, min.y); inner 4-7 the same `w` inside), triangles (0, 1, 5), (0, 5, 4),
+   !< (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7).
+   type(prim_run), intent(inout) :: r                !< The run.
+   real(real32),   intent(in)    :: pmin(2), pmax(2) !< Corners [pixels].
+   real(real32),   intent(in)    :: w                !< Weight [pixels].
+   integer(int32), intent(in)    :: col              !< Colour.
+   real(real32),   intent(in)    :: uv(2)            !< White pixel.
+   integer(int32), parameter     :: TRI(24) = [0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7] !<
+                                                                                                   !< The triangles.
+   integer(int32)                :: iv, ii, k, j     !< Cursor, counter.
 
-   qx(1) = real(a(1), real64)
-   qy(1) = real(a(2), real64)
-   qx(2) = real(b(1), real64)
-   qy(2) = real(b(2), real64)
-   qx(3) = real(c(1), real64)
-   qy(3) = real(c(2), real64)
-   qx(4) = real(d(1), real64)
-   qy(4) = real(d(2), real64)
-   qu = uv_white(1)
-   qv = uv_white(2)
-   call core_draw_quad_uv(qx, qy, qu, qv, col)
-   endsubroutine prim_quad
+   iv = r%iv
+   ii = r%ii
+   k = r%b
+   r%dl%vtx(iv) = draw_vert(pmin(1), pmin(2), uv(1), uv(2), col)
+   r%dl%vtx(iv + 1_int32) = draw_vert(pmin(1), pmax(2), uv(1), uv(2), col)
+   r%dl%vtx(iv + 2_int32) = draw_vert(pmax(1), pmax(2), uv(1), uv(2), col)
+   r%dl%vtx(iv + 3_int32) = draw_vert(pmax(1), pmin(2), uv(1), uv(2), col)
+   r%dl%vtx(iv + 4_int32) = draw_vert(pmin(1) + w, pmin(2) + w, uv(1), uv(2), col)
+   r%dl%vtx(iv + 5_int32) = draw_vert(pmin(1) + w, pmax(2) - w, uv(1), uv(2), col)
+   r%dl%vtx(iv + 6_int32) = draw_vert(pmax(1) - w, pmax(2) - w, uv(1), uv(2), col)
+   r%dl%vtx(iv + 7_int32) = draw_vert(pmax(1) - w, pmin(2) + w, uv(1), uv(2), col)
+   do j = 1_int32, 24_int32
+      r%dl%idx(ii + j - 1_int32) = k + TRI(j)
+   enddo
+   r%iv = iv + 8_int32
+   r%ii = ii + 24_int32
+   r%b = k + 8_int32
+   endsubroutine put_rect_line
+
+   subroutine put_fan(r, v, n, col, uv)
+   !< A fan into the run (`PrimPieSliceFill`, `RendererCircleFill`): n vertices v(:, 1:n), triangles (0, i - 1, i),
+   !< i = 2 .. n - 1.
+   type(prim_run), intent(inout) :: r       !< The run.
+   real(real32),   intent(in)    :: v(:, :) !< Vertices [pixels].
+   integer(int32), intent(in)    :: n       !< Their count.
+   integer(int32), intent(in)    :: col     !< Colour.
+   real(real32),   intent(in)    :: uv(2)   !< White pixel.
+   integer(int32)                :: i       !< Vertex.
+
+   do i = 1_int32, n
+      r%dl%vtx(r%iv + i - 1_int32) = draw_vert(v(1, i), v(2, i), uv(1), uv(2), col)
+   enddo
+   do i = 2_int32, n - 1_int32
+      r%dl%idx(r%ii) = r%b
+      r%dl%idx(r%ii + 1_int32) = r%b + i - 1_int32
+      r%dl%idx(r%ii + 2_int32) = r%b + i
+      r%ii = r%ii + 3_int32
+   enddo
+   r%iv = r%iv + n
+   r%b = r%b + n
+   endsubroutine put_fan
 
    ! private: numerics as ImPlot's
 
