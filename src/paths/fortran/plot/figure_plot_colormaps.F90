@@ -36,7 +36,8 @@ use figure_plot_colormaps_bundled, only : BUNDLED_COUNT, BUNDLED_NAMES, BUNDLED_
 
 implicit none
 private
-public :: cm_colormap, cm_count, cm_current, cm_index, cm_is_qual, cm_key, cm_pop, cm_push, cm_register, cm_sample
+public :: cm_colormap, cm_count, cm_current, cm_index, cm_is_qual, cm_key, cm_lookup, cm_pop, cm_push, cm_register
+public :: cm_sample
 public :: cm_size, cm_style_refresh, mix_u32, pack_float4
 public :: cm_load, cm_list_count, cm_list_name, cm_stops, cm_edit_stops, cm_generation
 public :: cm_gradient_slot, cm_gradient_size, cm_gradient_get, cm_stops_at
@@ -157,7 +158,7 @@ integer(int32),   allocatable :: name_len(:)        !< ... its name's length.
 logical,          allocatable :: quals(:)           !< ... qualitative.
 integer(int32),   allocatable :: keys(:)            !< Keys of all the maps (packed colours).
 integer(int32)                :: n_keys = 0_int32   !< ... in use.
-integer(int32),   allocatable :: tables(:)          !< Tables of all the maps.
+integer(int32),   allocatable, target :: tables(:)  !< Tables of all the maps (`cm_lookup` points into them).
 integer(int32)                :: n_tab = 0_int32    !< ... in use.
 character(len=:), allocatable :: names              !< Names of all the maps.
 integer(int32)                :: n_names = 0_int32  !< ... characters in use.
@@ -379,6 +380,20 @@ contains
    endif
    col = tables(tab_off(k) + idx + 1_int32)
    endfunction cm_sample
+
+   subroutine cm_lookup(id, tab, qual)
+   !< A map's table and kind, for a renderer that samples it per element (szaghi/figure#16 S3): `cm_sample(id, t)` is
+   !< `tab(idx + 1)`, idx computed from `size(tab)` and t as there. The table is valid until a map is registered.
+   integer(int32),                      intent(in)  :: id     !< Map.
+   integer(int32), pointer, contiguous, intent(out) :: tab(:) !< Its table (`LerpTable`'s).
+   logical,                             intent(out) :: qual   !< Qualitative.
+   integer(int32)                                   :: k      !< Slot.
+
+   call init()
+   k = id + 1_int32
+   tab => tables(tab_off(k) + 1_int32:tab_off(k) + tab_size(k))
+   qual = quals(k)
+   endsubroutine cm_lookup
 
    ! FIGURE's names (ip_colormap)
 

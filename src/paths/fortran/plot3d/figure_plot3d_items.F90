@@ -27,7 +27,7 @@ module figure_plot3d_items
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
 use figure_core, only : core_color, core_line_texture, core_white_pixel
-use figure_plot_colormaps, only : cm_sample
+use figure_plot_colormaps, only : cm_lookup, cm_sample
 use figure_texture, only : texture_object, texture_ref
 use figure_cimgui, only : im_texture_ref
 use figure_plot3d_camera, only : view3d, plot_to_pixels, point_depth
@@ -143,6 +143,7 @@ integer(int32)        :: count = 0_int32     !< Points.
 type(view3d)          :: v                   !< The plot's view.
 real(real64)          :: cmin(3), cmax(3)    !< Cull box.
 real(real32)          :: uvw(2)              !< The white pixel's texture coordinates.
+real(real64), allocatable :: row_a(:, :), row_b(:, :) !< Two rows of a grid's vertices (`grid_row`; kept, grown).
 
 interface finite_value
    !< `ieee_is_finite` inline (see `finite_value_r32`).
@@ -653,33 +654,53 @@ contains
    !< triangles each at its corners' mean depth.
    type(item3d_style), intent(in) :: st      !< Style.
    real(real64),       intent(in) :: lohi(2) !< Scale's ends.
-   integer(int32)                 :: np, k, ix, iy, j, base, cols(4), cfill, cm !< Work.
+   integer(int32)                 :: np, k, ix, iy, j, base, cols(4), cfill, cm, siz, e !< Work; the map's table size,
+                                                                                      !< an entry.
    real(real64)                   :: q(3, 4), m(3), zmin, zmax, lo, hi, t !< Corners, mean, ranges, fraction.
-   real(real32)                   :: px, py, f(4) !< Pixel, a colour.
-   logical                        :: any_in !< A corner in the box.
+   real(real32)                   :: px, py, f(4), xq !< Pixel, a colour, a table entry unrounded.
+   integer(int32), pointer, contiguous :: tab(:) !< The map's table (`cm_sample`'s, sampled as there).
+   logical                        :: any_in, qual !< A corner in the box; the map qualitative.
 
    np = d3_room((nx - 1_int32) * (ny - 1_int32), 4_int32)
    call d3_reserve(4_int32 * np, 2_int32 * np)
    cfill = style3_color_u32(st%fill_color)
    cm = pf3_colormap()
+   call cm_lookup(cm, tab, qual)
+   siz = int(size(tab), int32)
+   call row_room()
    zmin = 0.0_real64
    zmax = 0.0_real64
-   if (st%auto_fill) then ! Init: the data's range
+   if (st%auto_fill) then ! Init: the data's range, the vertices in their order (a grid's a row at a time)
       zmin = huge(1.0_real64)
       zmax = -huge(1.0_real64)
-      do k = 0_int32, count - 1_int32
-         call point(k, q(:, 1))
-         if (.not. zmin < q(3, 1)) zmin = q(3, 1) ! ImMin, ImMax (a NaN taken as C takes it)
-         if (.not. zmax > q(3, 1)) zmax = q(3, 1)
+      k = 0_int32
+      iy = 0_int32
+      do while (k < count)
+         call grid_row(iy, row_a)
+         do ix = 1_int32, min(nx, count - k)
+            if (.not. zmin < row_a(3, ix)) zmin = row_a(3, ix) ! ImMin, ImMax (a NaN taken as C takes it)
+            if (.not. zmax > row_a(3, ix)) zmax = row_a(3, ix)
+         enddo
+         k = k + nx
+         iy = iy + 1_int32
       enddo
    endif
-   do k = 0_int32, np - 1_int32
-      ix = mod(k, nx - 1_int32)
-      iy = k / (nx - 1_int32)
-      call point(ix + iy * nx, q(:, 1))
-      call point(ix + 1_int32 + iy * nx, q(:, 2))
-      call point(ix + 1_int32 + (iy + 1_int32) * nx, q(:, 3))
-      call point(ix + (iy + 1_int32) * nx, q(:, 4))
+   k = 0_int32
+   iy = 0_int32
+   ix = nx - 1_int32
+   do while (k < np) ! the cells in their order: ix the faster, the corners from two rows read once a row
+      if (ix == nx - 1_int32) then
+         ix = 0_int32
+         if (k > 0_int32) iy = iy + 1_int32
+         call grid_row(iy, row_a)
+         call grid_row(iy + 1_int32, row_b)
+      endif
+      q(:, 1) = row_a(:, ix + 1_int32)
+      q(:, 2) = row_a(:, ix + 2_int32)
+      q(:, 3) = row_b(:, ix + 2_int32)
+      q(:, 4) = row_b(:, ix + 1_int32)
+      ix = ix + 1_int32
+      k = k + 1_int32
       any_in = .false.
       do j = 1_int32, 4_int32
          if (contains(q(:, j))) any_in = .true.
@@ -700,7 +721,15 @@ contains
             elseif (t > 1.0_real64) then
                t = 1.0_real64
             endif
-            call unpack4(cm_sample(cm, real(t, real32)), f)
+            if (qual) then ! cm_sample (LerpTable) inline
+               xq = real(siz, real32) * real(t, real32)
+               e = min(max(int(xq, int32), 0_int32), siz - 1_int32)
+            else
+               xq = real(siz - 1_int32, real32) * real(t, real32)
+               xq = xq + 0.5_real32
+               e = int(xq, int32)
+            endif
+            call unpack4(tab(e + 1_int32), f)
             f(4) = f(4) * st%fill_alpha
             cols(j) = u32(f)
          enddo
@@ -1239,6 +1268,59 @@ contains
    call vertex(i, p)
    endsubroutine point
 
+   subroutine row_room()
+   !< Room for two rows of the grid (nx vertices each), kept between frames.
+
+   if (allocated(row_a)) then
+      if (size(row_a, 2) < nx) deallocate(row_a, row_b)
+   endif
+   if (.not. allocated(row_a)) allocate(row_a(3, max(nx, 256_int32)), row_b(3, max(nx, 256_int32)))
+   endsubroutine row_room
+
+   subroutine grid_row(iy, row)
+   !< Row iy (0-based) of the base getter's vertices, each as `point` gives it (points iy nx .. iy nx + nx - 1): a
+   !< grid's arrays and precision chosen once a row (szaghi/figure#16 S3), other getters through `point`.
+   integer(int32), intent(in)  :: iy        !< Row.
+   real(real64),   intent(out) :: row(:, :) !< Its vertices (3, nx).
+   integer(int32)              :: a, b      !< Grid indices (1-based).
+
+   b = iy + 1_int32
+   select case (gmode)
+   case (G_RECT)
+      if (k64) then
+         do a = 1_int32, nx
+            row(1, a) = x64(a)
+            row(2, a) = y64(b)
+            row(3, a) = z2_64(a, b)
+         enddo
+      else
+         do a = 1_int32, nx
+            row(1, a) = real(x32(a), real64)
+            row(2, a) = real(y32(b), real64)
+            row(3, a) = real(z2_32(a, b), real64)
+         enddo
+      endif
+   case (G_GRID)
+      if (k64) then
+         do a = 1_int32, nx
+            row(1, a) = x2_64(a, b)
+            row(2, a) = y2_64(a, b)
+            row(3, a) = z2_64(a, b)
+         enddo
+      else
+         do a = 1_int32, nx
+            row(1, a) = real(x2_32(a, b), real64)
+            row(2, a) = real(y2_32(a, b), real64)
+            row(3, a) = real(z2_32(a, b), real64)
+         enddo
+      endif
+   case default
+      do a = 1_int32, nx
+         call point(a - 1_int32 + iy * nx, row(:, a))
+      enddo
+   endselect
+   endsubroutine grid_row
+
    subroutine vertex(i, p)
    !< Vertex i (0-based) of the series as double.
    integer(int32), intent(in)  :: i    !< Index.
@@ -1284,11 +1366,42 @@ contains
          px = col
          py = row + e
       endif
-      call point(py * nx + px, p)
+      call grid_vertex(px + 1_int32, py + 1_int32, p)
    case default
       call point(i, p)
    endselect
    endsubroutine line_point
+
+   subroutine grid_vertex(a, b, p)
+   !< The grid's vertex (a, b) (1-based), as `point` gives point (b - 1) nx + a - 1 (without its division).
+   integer(int32), intent(in)  :: a, b !< Grid indices.
+   real(real64),   intent(out) :: p(3) !< Point.
+
+   select case (gmode)
+   case (G_RECT)
+      if (k64) then
+         p(1) = x64(a)
+         p(2) = y64(b)
+         p(3) = z2_64(a, b)
+      else
+         p(1) = real(x32(a), real64)
+         p(2) = real(y32(b), real64)
+         p(3) = real(z2_32(a, b), real64)
+      endif
+   case (G_GRID)
+      if (k64) then
+         p(1) = x2_64(a, b)
+         p(2) = y2_64(a, b)
+         p(3) = z2_64(a, b)
+      else
+         p(1) = real(x2_32(a, b), real64)
+         p(2) = real(y2_32(a, b), real64)
+         p(3) = real(z2_32(a, b), real64)
+      endif
+   case default
+      call point((b - 1_int32) * nx + a - 1_int32, p)
+   endselect
+   endsubroutine grid_vertex
 
    function line_count(lg, n) result(m)
    !< A line getter's endpoints over a base of n points.

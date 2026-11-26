@@ -82,7 +82,7 @@ use figure_decimate, only : decimate, decimate_axis, decimate_cache, DECIMATE_LI
                             DECIMATE_THRESHOLD
 use figure_decimate_device, only : decimate_device_r32, decimate_device_r64
 use fundal, only : dev_memcpy_from_device
-use figure_plot_colormaps, only : cm_current, cm_key, cm_pop, cm_push, cm_sample, CM_VIRIDIS
+use figure_plot_colormaps, only : cm_current, cm_key, cm_lookup, cm_pop, cm_push, cm_sample, CM_VIRIDIS
 use figure_plot_field, only : field_colour, field_count, field_sweep, field_uploads, FIELD_LINEAR, FIELD_LOG, &
                               FIELD_SYMLOG
 use figure_plot_format, only : plot_format, fmt_parse, fmt_real
@@ -327,6 +327,22 @@ type :: prim_run
    integer(int32)           :: ii = 0_int32  !< Next index's place in `dl%idx`.
    integer(int32)           :: b = 0_int32   !< Next vertex, 0-based in its batch (`_VtxCurrentIdx` there).
 endtype prim_run
+type :: point_reader
+   !< A getter's points read a block at a time (`read_point`): the last block's values, as `point` gives them.
+   integer(int32) :: i0 = 0_int32       !< The block's first point (0: none read).
+   integer(int32) :: n = 0_int32        !< Its points.
+   real(real64)   :: x(PIX_BLOCK)       !< Their x.
+   real(real64)   :: y(PIX_BLOCK)       !< Their y.
+endtype point_reader
+type :: pixel_reader
+   !< A getter's pixels mapped a block at a time (`read_pixel`): the last block's, as `pixel` gives them.
+   integer(int32) :: i0 = 0_int32       !< The block's first point (0: none read).
+   integer(int32) :: n = 0_int32        !< Its points.
+   real(real32)   :: x(PIX_BLOCK)       !< Their pixels' x.
+   real(real32)   :: y(PIX_BLOCK)       !< Their pixels' y.
+endtype pixel_reader
+real(real32), allocatable :: cell_x(:, :), cell_y(:, :) !< A heatmap's cells' edges in pixels, per column and row
+                                                          !< (left, right; top, bottom: kept, grown).
 real(real64), allocatable, target :: stack_tmp(:)     !< Stacked bar groups' neg, pos, curr_min, curr_max (TempDouble1).
 real(real64), allocatable, target :: hist_a(:), hist_b(:) !< Histograms' centres and counts (TempDouble1/2), 2-D counts.
 real(real64), allocatable         :: finite_x(:), finite_y(:) !< The finite values of a histogram (kept, grown).
@@ -1657,13 +1673,14 @@ contains
    real(real64)                     :: x1, y1, x2, y2 !< Ends.
    integer(int32)                   :: i        !< Bar.
    logical                          :: line     !< Outlines.
+   type(point_reader)               :: rd1, rd2 !< The getters' points, a block at a time.
 
    if (.not. begin(label, spec, spec%fill_color, PF_MARKER_INVALID, ctx, s)) return
    half = bar_size * 0.5_real64
    if (fits(ctx, spec)) then
       do i = 1_int32, min(g1%n, g2%n)
-         call point(g1, i, x1, y1)
-         call point(g2, i, x2, y2)
+         call read_point(rd1, g1, i, x1, y1)
+         call read_point(rd2, g2, i, x2, y2)
          if (horz) then
             y1 = y1 - half
             y2 = y2 + half
@@ -1698,6 +1715,7 @@ contains
    real(real32)                    :: p1(2), p2(2), pmin(2), pmax(2), wpx !< Pixels, the bar's size.
    real(real32)                    :: uv(2)    !< White pixel.
    type(prim_run)                  :: r        !< The run.
+   type(point_reader)              :: rd1, rd2 !< The getters' points, a block at a time.
    integer(int32)                  :: i, a, i0, nprim, cnt !< Bar, the sized coordinate, run's start, bars left, run.
 
    half = bar_size / 2.0_real64
@@ -1713,8 +1731,8 @@ contains
    do while (nprim > 0_int32)
    call run_next(r, nprim, cnt)
    do i = i0 + 1_int32, i0 + cnt
-      call point(g1, i, x1, y1)
-      call point(g2, i, x2, y2)
+      call read_point(rd1, g1, i, x1, y1)
+      call read_point(rd2, g2, i, x2, y2)
       if (horz) then
          y1 = y1 + half
          y2 = y2 - half
@@ -1801,6 +1819,7 @@ contains
    integer(int32)                             :: i, col, pass !< Bar, colour, fit pass.
    logical                                    :: horz   !< Along x.
    real(real32)                               :: auto_col(4) !< IMPLOT_AUTO_COL.
+   type(point_reader)                         :: rg, re !< The points and the errors, a block at a time.
 
    horz = iand(spec%flags, PF_ERROR_BARS_HORIZONTAL) /= 0_int32
    if (present(horizontal)) horz = horz .or. horizontal
@@ -1809,7 +1828,7 @@ contains
    if (fits(ctx, spec)) then ! Fitter2: the positive ends, then the negative ones
       do pass = 1_int32, 2_int32
          do i = 1_int32, g%n
-            call error_ends(g, e, i, horz, ax, ay, bx, by)
+            call error_ends(rg, re, g, e, i, horz, ax, ay, bx, by)
             if (pass == 1_int32) then
                call pf_item_fit(bx, by)
             else
@@ -1826,7 +1845,7 @@ contains
       endif
       hw = s%size * 0.5_real32
       do i = 1_int32, g%n
-         call error_ends(g, e, i, horz, ax, ay, bx, by)
+         call error_ends(rg, re, g, e, i, horz, ax, ay, bx, by)
          p1 = [map_pixel(ctx%tx, ax), map_pixel(ctx%ty, ay)]
          p2 = [map_pixel(ctx%tx, bx), map_pixel(ctx%ty, by)]
          call core_draw_line(real(p1(1), real64), real(p1(2), real64), real(p2(1), real64), real(p2(2), real64), &
@@ -1849,9 +1868,10 @@ contains
    call finish()
    endsubroutine error_bars_item
 
-   subroutine error_ends(g, e, i, horz, ax, ay, bx, by)
+   subroutine error_ends(rg, re, g, e, i, horz, ax, ay, bx, by)
    !< An error bar's ends: (x, y - neg) and (x, y + pos) (`IndexerAdd`: 1 y + (-1) neg, 1 y + 1 pos); along x the same
    !< on x.
+   type(point_reader), intent(inout) :: rg, re !< Their readers.
    type(item_series), intent(in)  :: g, e   !< Getters.
    integer(int32),    intent(in)  :: i      !< Bar.
    logical,           intent(in)  :: horz   !< Along x.
@@ -1859,8 +1879,8 @@ contains
    real(real64),      intent(out) :: bx, by !< The positive end.
    real(real64)                   :: x, y, en, ep !< The point, its errors.
 
-   call point(g, i, x, y)
-   call point(e, i, en, ep)
+   call read_point(rg, g, i, x, y)
+   call read_point(re, e, i, en, ep)
    if (horz) then
       ax = x - en
       bx = x + ep
@@ -2283,12 +2303,13 @@ contains
    type(item_style)                 :: s     !< Staged style.
    real(real64)                     :: x, y, rad, dummy !< A bubble.
    integer(int32)                   :: i     !< Bubble.
+   type(point_reader)               :: rd, rr !< Centres and radii, a block at a time.
 
    if (.not. begin(label, spec, spec%fill_color, spec%marker, ctx, s)) return
    if (fits(ctx, spec)) then
       do i = 1_int32, g%n
-         call point(g, i, x, y)
-         call point(r, i, dummy, rad)
+         call read_point(rd, g, i, x, y)
+         call read_point(rr, r, i, dummy, rad)
          call pf_item_fit_with(x - rad, y, .false.)
          call pf_item_fit_with(x + rad, y, .false.)
          call pf_item_fit_with(y - rad, x, .true.)
@@ -2313,6 +2334,7 @@ contains
    real(real32)                    :: uv0(2), uv1(2), uv(2) !< Texture, white pixel.
    real(real64)                    :: x, y, dummy, t !< A bubble.
    type(prim_run)                  :: run       !< The run.
+   type(point_reader)              :: rd, rr    !< Centres and radii, a block at a time.
    integer(int32)                  :: i, k, ns, i0, nprim, cnt !< Bubble, point, segments, run's start, bubbles left,
                                                                !< run.
 
@@ -2328,8 +2350,8 @@ contains
    do while (nprim > 0_int32)
    call run_next(run, nprim, cnt)
    do i = i0 + 1_int32, i0 + cnt
-      call point(g, i, x, y)
-      call point(r, i, dummy, t)
+      call read_point(rd, g, i, x, y)
+      call read_point(rr, r, i, dummy, t)
       rad = real(t, real32)
       ar = real(abs(real(rad, real64) * ctx%tx%m), real32)
       ns = min(max(int(ar, int32), 10_int32), 64_int32)
@@ -2380,15 +2402,16 @@ contains
    real(real64)                     :: x1, y1, x2, y2, xn, yn !< Points.
    real(real32)                     :: pmin(2), pmax(2), pix1, y_ref, lo, hi, base !< Pixels.
    integer(int32)                   :: i, pix0, choff, pixmax, poff !< Point, pixel sizes.
+   type(point_reader)               :: rd    !< The points, a block at a time.
 
    if (.not. begin(label, spec, spec%fill_color, PF_MARKER_INVALID, ctx, s)) return
    if (g%n > 1_int32 .and. s%fill) then
       pixmax = 0_int32
-      call point(g, 1_int32, x1, y1)
+      call read_point(rd, g, 1_int32, x1, y1)
       base = real(pf_digital_offset(0_int32), real32)
       i = 1_int32
       do while (i <= g%n)
-         call point(g, i, x2, y2)
+         call read_point(rd, g, i, x2, y2)
          if (.not. (abs(y1) <= huge(1.0_real64))) then ! ImNanOrInf
             x1 = x2
             y1 = y2
@@ -2408,7 +2431,7 @@ contains
          pmin(2) = y_ref - (base + real(poff, real32))
          pmax(2) = y_ref - (base + real(pix0 + int(pix1, int32) + poff, real32))
          do while (i + 2_int32 <= g%n .and. y1 == y2) ! one rectangle a run of equal values
-            call point(g, i + 1_int32, xn, yn)
+            call read_point(rd, g, i + 1_int32, xn, yn)
             x2 = xn
             y2 = yn
             if (.not. (abs(yn) <= huge(1.0_real64))) exit
@@ -2575,12 +2598,19 @@ contains
    real(real64),        intent(in) :: bx0, by0, bx1, by1 !< bounds_min, bounds_max.
    logical,             intent(in) :: reverse_y      !< Row 0 at bounds_max.y.
    logical,             intent(in) :: col_maj        !< Column major.
-   real(real64)                    :: smin, smax, w, h, hx, hy, yref, ydir, px, py, v, t, a !< Cells.
+   real(real64)                    :: smin, smax, w, h, hx, hy, yref, ydir, px, py, v, t, a, d !< Cells.
    real(real32)                    :: p1(2), p2(2), tsz(2) !< Pixels, a label's size.
    real(real64)                    :: tw, th          !< Text size.
    real(real32)                    :: uv(2)           !< White pixel.
+   real(real32)                    :: tt, xq, fq, fc  !< A cell's place on the map, its table entry unrounded; the
+                                                      !< table's size and size - 1.
+   real(real64)                    :: vb(PIX_BLOCK)   !< A block's values.
    integer(int32)                  :: idx, r, c, col, nl !< Value, row, column, colour, label length.
-   integer(int32)                  :: cm, i0, nprim, cnt !< Colormap, run's start, cells left, run.
+   integer(int32)                  :: cm, i0, nprim, cnt, ib, nb, m, siz, e !< Colormap, run's start, cells left,
+                                                      !< run, block's first cell, its cells, one of them, table size,
+                                                      !< entry.
+   integer(int32), pointer, contiguous :: tab(:)      !< The map's table.
+   logical                         :: qual            !< ... qualitative.
    type(prim_run)                  :: run             !< The run.
    character(len=31)               :: lab             !< A label.
 
@@ -2601,32 +2631,80 @@ contains
    hx = w * 0.5_real64
    hy = h * 0.5_real64
    cm = cm_current() ! (one lookup an item)
+   call cm_lookup(cm, tab, qual) ! cm_sample's table, sampled below as cm_sample samples it
+   siz = int(size(tab), int32)
+   fq = real(siz, real32)
+   fc = real(siz - 1_int32, real32)
+   d = smax - smin
+   ! the cells' edges in pixels: the same for every cell of a column (row), mapped once a column (row)
+   if (allocated(cell_x)) then
+      if (size(cell_x, 2) < cols) deallocate(cell_x)
+   endif
+   if (.not. allocated(cell_x)) allocate(cell_x(2, max(cols, 256_int32)))
+   if (allocated(cell_y)) then
+      if (size(cell_y, 2) < rows) deallocate(cell_y)
+   endif
+   if (.not. allocated(cell_y)) allocate(cell_y(2, max(rows, 256_int32)))
+   do c = 0_int32, cols - 1_int32
+      t = real(c, real64) * w ! XRef + HalfSize.x + c Width
+      px = (bx0 + hx) + t
+      cell_x(1, c + 1_int32) = map_pixel(ctx%tx, px - hx)
+      cell_x(2, c + 1_int32) = map_pixel(ctx%tx, px + hx)
+   enddo
+   do r = 0_int32, rows - 1_int32
+      t = real(r, real64) * h ! YRef + YDir (HalfSize.y + r Height)
+      a = hy + t
+      t = ydir * a
+      py = yref + t
+      cell_y(1, r + 1_int32) = map_pixel(ctx%ty, py - hy)
+      cell_y(2, r + 1_int32) = map_pixel(ctx%ty, py + hy)
+   enddo
    uv = real(uv_white, real32)
    call run_begin(run, 4_int32, 6_int32) ! RendererRectC
    nprim = rows * cols
    i0 = 0_int32
    do while (nprim > 0_int32)
    call run_next(run, nprim, cnt)
-   do idx = i0, i0 + cnt - 1_int32
-      if (col_maj) then
-         r = mod(idx, rows)
-         c = idx / rows
+   ib = i0
+   do while (ib < i0 + cnt)
+   nb = min(PIX_BLOCK, i0 + cnt - ib)
+   call coordinates(g, 2_int32, ib + 1_int32, nb, vb)
+   if (col_maj) then
+      r = mod(ib, rows)
+      c = ib / rows
+   else
+      r = ib / cols
+      c = mod(ib, cols)
+   endif
+   do m = 1_int32, nb
+      v = vb(m)
+      tt = min(max(real((v - smin) / d, real32), 0.0_real32), 1.0_real32) ! cm_sample (LerpTable) inline
+      if (qual) then
+         xq = fq * tt
+         e = min(max(int(xq, int32), 0_int32), siz - 1_int32)
       else
-         r = idx / cols
-         c = mod(idx, cols)
+         xq = fc * tt
+         xq = xq + 0.5_real32
+         e = int(xq, int32)
       endif
-      v = coordinate(g, 2_int32, int(idx + 1_int32, int64))
-      t = real(c, real64) * w ! XRef + HalfSize.x + c Width
-      px = (bx0 + hx) + t
-      t = real(r, real64) * h ! YRef + YDir (HalfSize.y + r Height)
-      a = hy + t
-      t = ydir * a
-      py = yref + t
-      col = cm_sample(cm, min(max(real((v - smin) / (smax - smin), real32), 0.0_real32), 1.0_real32))
-      p1(1) = map_pixel(ctx%tx, px - hx)
-      p1(2) = map_pixel(ctx%ty, py - hy)
-      p2(1) = map_pixel(ctx%tx, px + hx)
-      p2(2) = map_pixel(ctx%ty, py + hy)
+      col = tab(e + 1_int32)
+      p1(1) = cell_x(1, c + 1_int32)
+      p1(2) = cell_y(1, r + 1_int32)
+      p2(1) = cell_x(2, c + 1_int32)
+      p2(2) = cell_y(2, r + 1_int32)
+      if (col_maj) then ! the next cell
+         r = r + 1_int32
+         if (r == rows) then
+            r = 0_int32
+            c = c + 1_int32
+         endif
+      else
+         c = c + 1_int32
+         if (c == cols) then
+            c = 0_int32
+            r = r + 1_int32
+         endif
+      endif
       if (iand(ishft(int(col, int64), -24), 255_int64) == 0_int64 .or. &
           .not. overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
                          im_max(p1(2), p2(2)))) then
@@ -2634,6 +2712,8 @@ contains
          cycle
       endif
       call put_rect_fill(run, p1(1), p1(2), p2(1), p2(2), col, uv)
+   enddo
+   ib = ib + nb
    enddo
    i0 = i0 + cnt
    enddo
@@ -2682,15 +2762,20 @@ contains
    type(item_series), intent(in)  :: g      !< Values.
    integer(int32),    intent(in)  :: n      !< Count.
    real(real64),      intent(out) :: lo, hi !< Range.
-   integer(int32)                 :: i      !< Counter.
-   real(real64)                   :: v      !< A value.
+   integer(int32)                 :: i, nb, m !< Block's first value, its values, one of them.
+   real(real64)                   :: v(PIX_BLOCK) !< A block's values.
 
    lo = coordinate(g, 2_int32, 1_int64)
    hi = lo
-   do i = 2_int32, n
-      v = coordinate(g, 2_int32, int(i, int64))
-      if (v < lo) lo = v
-      if (v > hi) hi = v
+   i = 2_int32
+   do while (i <= n)
+      nb = min(PIX_BLOCK, n - i + 1_int32)
+      call coordinates(g, 2_int32, i, nb, v)
+      do m = 1_int32, nb
+         if (v(m) < lo) lo = v(m)
+         if (v(m) > hi) hi = v(m)
+      enddo
+      i = i + nb
    enddo
    endsubroutine min_max
 
@@ -3621,6 +3706,42 @@ contains
    call map_block(ctx%ty, v, n, py)
    endsubroutine pixel_block
 
+   subroutine read_point(rd, g, i, x, y)
+   !< The i-th point of a getter, as `point` gives it, from the reader's block: read again (`coordinates`) from point i
+   !< when i is outside it, so a loop running forward reads each block once.
+   type(point_reader), intent(inout) :: rd   !< Reader.
+   type(item_series),  intent(in)    :: g    !< Getter.
+   integer(int32),     intent(in)    :: i    !< Point (from 1).
+   real(real64),       intent(out)   :: x, y !< Coordinates.
+
+   if (i < rd%i0 .or. i >= rd%i0 + rd%n) then
+      rd%i0 = i
+      rd%n = max(1_int32, min(PIX_BLOCK, g%n - i + 1_int32))
+      call coordinates(g, 1_int32, rd%i0, rd%n, rd%x)
+      call coordinates(g, 2_int32, rd%i0, rd%n, rd%y)
+   endif
+   x = rd%x(i - rd%i0 + 1_int32)
+   y = rd%y(i - rd%i0 + 1_int32)
+   endsubroutine read_point
+
+   subroutine read_pixel(rd, ctx, g, i, p)
+   !< The pixel of a getter's i-th point, as `pixel` gives it, from the reader's block (mapped again by `pixel_block`
+   !< from point i when i is outside it).
+   type(pixel_reader),  intent(inout) :: rd   !< Reader.
+   type(plot_item_ctx), intent(in)    :: ctx  !< The plot.
+   type(item_series),   intent(in)    :: g    !< Getter.
+   integer(int32),      intent(in)    :: i    !< Point (from 1).
+   real(real32),        intent(out)   :: p(2) !< Pixel.
+
+   if (i < rd%i0 .or. i >= rd%i0 + rd%n) then
+      rd%i0 = i
+      rd%n = max(1_int32, min(PIX_BLOCK, g%n - i + 1_int32))
+      call pixel_block(ctx, g, rd%i0, rd%n, rd%x, rd%y)
+   endif
+   p(1) = rd%x(i - rd%i0 + 1_int32)
+   p(2) = rd%y(i - rd%i0 + 1_int32)
+   endsubroutine read_pixel
+
    subroutine coordinates(g, k, i0, n, v)
    !< Coordinate k of a getter's points i0 .. i0 + n - 1 (through the kept indices when decimated), as `coordinate`
    !< gives each: the source chosen once, then a loop of its read (a contiguous array's by `read_r64`, `read_r32`).
@@ -4408,18 +4529,19 @@ contains
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
    real(real32)                    :: uv(2)            !< White pixel.
    type(prim_run)                  :: r                !< The run.
+   type(pixel_reader)              :: rd               !< The pixels, a block at a time.
    integer(int32)                  :: k, k0, nprim, cnt !< Primitive, run's start, primitives left, run.
 
    hw = max(1.0_real32, weight) * 0.5_real32
    uv = real(uv_white, real32)
-   call pixel(ctx, g, 1_int32, p1)
+   call read_pixel(rd, ctx, g, 1_int32, p1)
    call run_begin(r, 8_int32, 12_int32)
    nprim = g%n - 1_int32
    k0 = 0_int32
    do while (nprim > 0_int32)
       call run_next(r, nprim, cnt)
       do k = k0 + 1_int32, k0 + cnt
-         call pixel(ctx, g, k + 1_int32, p2)
+         call read_pixel(rd, ctx, g, k + 1_int32, p2)
          if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
                       im_max(p1(2), p2(2)))) then
             if (pre) then
@@ -4448,9 +4570,10 @@ contains
    real(real32)                    :: p1(2), p2(2), y0, pmin(2), pmax(2) !< Ends, the pixel of y = 0, the rectangle.
    real(real32)                    :: uv(2) !< White pixel.
    type(prim_run)                  :: r   !< The run.
+   type(pixel_reader)              :: rd  !< The pixels, a block at a time.
    integer(int32)                  :: k, k0, nprim, cnt !< Primitive, run's start, primitives left, run.
 
-   call pixel(ctx, g, 1_int32, p1)
+   call read_pixel(rd, ctx, g, 1_int32, p1)
    y0 = map_pixel(ctx%ty, 0.0_real64)
    uv = real(uv_white, real32)
    call run_begin(r, 4_int32, 6_int32)
@@ -4459,7 +4582,7 @@ contains
    do while (nprim > 0_int32)
    call run_next(r, nprim, cnt)
    do k = k0 + 1_int32, k0 + cnt
-      call pixel(ctx, g, k + 1_int32, p2)
+      call read_pixel(rd, ctx, g, k + 1_int32, p2)
       pmin(1) = im_min(p1(1), p2(1))
       pmax(1) = im_max(p1(1), p2(1))
       if (pre) then
@@ -4490,12 +4613,13 @@ contains
    real(real32)                    :: rmin(2), rmax(2) !< Their bounds.
    real(real32)                    :: uv(2)            !< White pixel.
    type(prim_run)                  :: r                !< The run.
+   type(pixel_reader)              :: rd1, rd2         !< The pixels, a block at a time.
    integer(int32)                  :: k, k0, nprim, cnt, x, iv, ii, b !< Primitive, run's start, primitives left, run,
                                                                       !< crossing (0, 1), cursor.
    logical                         :: cross            !< The curves cross.
 
-   call pixel(ctx, g1, 1_int32, p11)
-   call pixel(ctx, g2, 1_int32, p12)
+   call read_pixel(rd1, ctx, g1, 1_int32, p11)
+   call read_pixel(rd2, ctx, g2, 1_int32, p12)
    uv = real(uv_white, real32)
    call run_begin(r, 5_int32, 6_int32)
    nprim = min(g1%n, g2%n) - 1_int32
@@ -4503,8 +4627,8 @@ contains
    do while (nprim > 0_int32)
    call run_next(r, nprim, cnt)
    do k = k0 + 1_int32, k0 + cnt
-      call pixel(ctx, g1, k + 1_int32, p21)
-      call pixel(ctx, g2, k + 1_int32, p22)
+      call read_pixel(rd1, ctx, g1, k + 1_int32, p21)
+      call read_pixel(rd2, ctx, g2, k + 1_int32, p22)
       rmin(1) = im_min(im_min(im_min(p11(1), p12(1)), p21(1)), p22(1))
       rmin(2) = im_min(im_min(im_min(p11(2), p12(2)), p21(2)), p22(2))
       rmax(1) = im_max(im_max(im_max(p11(1), p12(1)), p21(1)), p22(1))

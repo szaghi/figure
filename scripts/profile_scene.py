@@ -62,7 +62,8 @@ BUCKETS: tuple[tuple[str, str], ...] = (
                    r"Prim(Reserve|Unreserve|QuadUV|Rect|RectUV|WriteVtx)"),
     ("transform", r"map_pixel|map_block|transform_|Transformer|plot_transform"),
     ("colour", r"(^|_)cm_|[Cc]olormap"),
-    ("getter", r"coordinate|pixel_block|(_MOD_|_mp_|items_)point_?$|Getter|Indexer"),
+    ("getter", r"coordinate|pixel_block|read_(point|pixel)|grid_(row|vertex)|line_point|(_MOD_|_mp_|items_)point_?$|"
+               r"Getter|Indexer"),
     ("item", r"RenderPrimitives|Renderer[A-Z]|render_|markers_|figure_plot_items|figure_plot3d_items|Plot(Line|Scatter|"
              r"Heatmap|Image|Bars|Shaded)"),
     ("frame", r"figure_items::|plot_frame|plot3d_frame|ImPlot|ImPlot3D"),
@@ -204,7 +205,8 @@ def self_test() -> int:
         "__figure_plot_colormaps_MOD_cm_sample": "colour", "__figure_plot_items_MOD_coordinate": "getter",
         "__figure_plot_items_MOD_point": "getter", "figure_plot_items_point_": "getter",
         "__figure_plot_items_MOD_map_block": "transform", "figure_plot_items_mp_coordinates_": "getter",
-        "__figure_plot_items_MOD_pixel_block": "getter",
+        "__figure_plot_items_MOD_pixel_block": "getter", "figure_plot3d_items_mp_grid_row_": "getter",
+        "figure_plot3d_items_mp_line_point_": "getter", "__figure_plot_items_MOD_read_point": "getter",
         "ImPlot::RenderPrimitivesEx": "item", "figure_items::frame_begin": "frame", "__sin_fma": "scene",
         "_ZGVbN2v_sin_sse4": "scene", "field_values.4.isra.0": "scene", "__memcpy_avx_unaligned_erms": "libc",
         "ImFont::RenderText": "imgui", "ImGui::Begin": "imgui", "do_lookup_x": "libc", "_dl_relocate_object": "libc",
