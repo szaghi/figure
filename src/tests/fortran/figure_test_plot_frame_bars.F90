@@ -25,6 +25,10 @@ program figure_test_plot_frame_bars
 !< not passed on to `ip_error_bars`'s `err_high` (nvfortran 26.9 stops there: "TMP_DESC: invalid original").
 !<
 !< The pictures are `figure_test_plot_frame_bars.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
+!<
+!< szaghi/figure#16 S2: every frame's draw data of the two sides are equal too (`figure_test_drawdata`: the
+!< window's draw commands, vertices and indices, and each command's offsets and count): the batching, which
+!< the pictures do not see.
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
 use figure_implot_ref, only : ip_bar_groups, ip_bars, ip_begin_plot, ip_colormap, ip_end_plot, ip_error_bars, &
@@ -34,6 +38,7 @@ use figure_plot_frame, only : pf_begin_plot, pf_colormap, pf_end_plot, pf_hide_n
 use figure_plot_items, only : pf_bar_groups, pf_bars, pf_error_bars, pf_inf_lines, pf_spec
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 
+use figure_test_drawdata, only : dd_equal, dd_snapshot, draw_data
 implicit none
 integer(int32), parameter :: W = 640_int32      !< Display width [pixels].
 integer(int32), parameter :: H = 440_int32      !< Display height [pixels].
@@ -45,6 +50,7 @@ real(real64),   parameter :: C(4, 4) = reshape([0.91_real64, 0.40_real64, 0.30_r
                                                 0.30_real64, 0.62_real64, 0.85_real64, 1.0_real64,  &
                                                 0.35_real64, 0.75_real64, 0.40_real64, 1.0_real64,  &
                                                 0.20_real64, 0.20_real64, 0.20_real64, 1.0_real64], [4, 4]) !< Colours.
+type(draw_data)           :: dd(NF, 2)          !< Each frame's draw data, per side.
 type(app_object)          :: app                !< Application.
 real(real64)              :: bx(NB), by(NB), by2(NB), err(NB), errh(NB) !< Bars, errors.
 real(real32)              :: bx32(NB), by32(NB) !< Single precision.
@@ -92,6 +98,7 @@ do cs = 1_int32, NCASE
          if (.not. app%next_frame()) error stop 'figure_test_plot_frame_bars: next_frame returned false headless'
          call ig_set_next_window(0.0_real64, 0.0_real64, real(W, real64), real(H, real64), always=.true.)
          if (ig_begin('plot frame bars', flags=ImGuiWindowFlags_NoDecoration)) call draw_case(cs, f)
+         call dd_snapshot(dd(f, sd))
          call ig_end()
          if (f == NF) call test_capture(picture(cs, side_fortran), s)
       enddo
@@ -101,6 +108,7 @@ do cs = 1_int32, NCASE
    enddo
    test_passed(cs) = ranges_equal(cs)
    test_passed(cs) = pictures_equal(cs) .and. test_passed(cs)
+   test_passed(cs) = draws_equal(cs) .and. test_passed(cs)
 enddo
 call app%destroy()
 call get_environment_variable('FIGURE_TEST_KEEP', keep)
@@ -111,6 +119,20 @@ write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function draws_equal(k) result(ok)
+   !< Both sides' draw data equal on every frame (`dd_equal`).
+   integer(int32), intent(in) :: k     !< Case.
+   logical                    :: ok    !< Equal.
+   integer(int32)             :: fr    !< Frame.
+   character(len=32)          :: label !< The case and frame.
+
+   ok = .true.
+   do fr = 1_int32, NF
+      write(label, '(A,I0,A,I0)') 'case ', k, ', frame ', fr
+      ok = dd_equal(dd(fr, 1), dd(fr, 2), trim(label)) .and. ok
+   enddo
+   endfunction draws_equal
+
    subroutine draw_case(k, fr)
    !< A case's plot on a frame, by the side drawing.
    integer(int32), intent(in) :: k, fr !< Case, frame.

@@ -1148,11 +1148,16 @@ contains
    subroutine core_draw_end()
    !< Append what is pending to Dear ImGui's list (one primitive per batch) and empty the Fortran list.
    integer(int32) :: k, v0, nv, i0, ni !< Batch, its extent.
+   logical        :: split             !< It starts a draw command.
 
    if (.not. c_associated(target_list)) return
    do k = 1_int32, list%nbatch
-      call dl_batch(list, k, v0, nv, i0, ni)
-      if (nv > 0_int32 .and. ni > 0_int32) call append_batch(list%vtx(v0), nv, list%idx(i0), ni)
+      call dl_batch(list, k, v0, nv, i0, ni, split)
+      if (nv > 0_int32 .and. ni > 0_int32) then
+         call append_batch(list%vtx(v0), nv, list%idx(i0), ni, split)
+      elseif (split) then ! empty, the command started all the same
+         call append_batch(list%vtx(1), 0_int32, list%idx(1), 0_int32, split)
+      endif
    enddo
    call dl_reset(list)
    endsubroutine core_draw_end
@@ -1655,14 +1660,21 @@ contains
    call dl_open(list, int(h%vtx_current_idx, int32))
    endsubroutine open_list
 
-   subroutine append_batch(vtx, nv, idx, ni)
-   !< A batch of the Fortran list appended to Dear ImGui's as one primitive (the list's sink).
+   subroutine append_batch(vtx, nv, idx, ni, split)
+   !< A batch of the Fortran list appended to Dear ImGui's as one primitive (the list's sink), a draw command started
+   !< first when it starts one (`split`: `PrimReserve`'s, at a 16-bit wrap).
    integer(int32),  intent(in)         :: nv      !< Vertices.
    type(draw_vert), intent(in), target :: vtx(nv) !< The batch's vertices.
    integer(int32),  intent(in)         :: ni      !< Indices.
    integer(c_int),  intent(in)         :: idx(ni) !< Its indices, 0-based in the batch.
+   logical,         intent(in)         :: split   !< It starts a draw command.
 
-   call figure_ImDrawList_append(target_list, c_loc(vtx), int(nv, c_int), idx, int(ni, c_int))
+   if (nv > 0_int32) then
+      call figure_ImDrawList_append(target_list, c_loc(vtx), int(nv, c_int), idx, int(ni, c_int), &
+                                    merge(1_c_int, 0_c_int, split))
+   else ! (no vertices: the command started only; c_loc of an empty array is not allowed)
+      call figure_ImDrawList_append(target_list, c_null_ptr, 0_c_int, idx, 0_c_int, merge(1_c_int, 0_c_int, split))
+   endif
    endsubroutine append_batch
 
    pure function rect(x0, y0, x1, y1) result(r)

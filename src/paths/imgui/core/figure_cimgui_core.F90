@@ -471,9 +471,9 @@ interface
    type(im_texture_ref), intent(in) :: tex_ref !< C `ImTextureRef`, by value in C.
    endsubroutine ImDrawList_PushTexture
 
-   subroutine figure_ImDrawList_append(dl, vtx, n_vtx, idx, n_idx) bind(C, name='figure_ImDrawList_append')
+   subroutine figure_ImDrawList_append(dl, vtx, n_vtx, idx, n_idx, new_cmd) bind(C, name='figure_ImDrawList_append')
    !< A batch of vertices (ImDrawVert's layout) and indices (0-based in the batch) appended to an ImDrawList as one
-   !< primitive (CORE_GLUE in scripts/gen_bindings.py).
+   !< primitive, after a new draw command when new_cmd is not 0 (CORE_GLUE in scripts/gen_bindings.py).
    import :: c_int, c_ptr
    implicit none
    type(c_ptr),    value      :: dl       !< C `ImDrawList*`.
@@ -481,6 +481,7 @@ interface
    integer(c_int), value      :: n_vtx    !< Vertices.
    integer(c_int), intent(in) :: idx(*)   !< Indices, 0-based in the batch.
    integer(c_int), value      :: n_idx    !< Indices.
+   integer(c_int), value      :: new_cmd  !< Not 0: a new draw command first (PrimReserve's, at a 16-bit wrap).
    endsubroutine figure_ImDrawList_append
 
    function figure_ImDrawList_shared(dl, fringe_scale, uv_white, uv_lines, n_lines, flags) result(res) &

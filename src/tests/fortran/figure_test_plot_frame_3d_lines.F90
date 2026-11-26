@@ -17,6 +17,10 @@ program figure_test_plot_frame_3d_lines
 !< 5. hidden labels ('##'), an item without legend (NoLegend), the legend horizontal at the south-east.
 !<
 !< The pictures are `figure_test_plot_frame_3d_lines.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
+!<
+!< szaghi/figure#16 S2: every frame's draw data of the two sides are equal too (`figure_test_drawdata`: the
+!< window's draw commands, vertices and indices, and each command's offsets and count): the batching, which
+!< the pictures do not see.
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
@@ -29,6 +33,7 @@ use figure_plot3d_frame, only : pf3_begin_plot, pf3_end_plot, pf3_mouse_ray, pf3
 use figure_plot3d_items, only : pf3_line, pf3_scatter, pf3_spec
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 
+use figure_test_drawdata, only : dd_equal, dd_snapshot, draw_data
 implicit none
 integer(int32), parameter :: W = 640_int32     !< Display width [pixels].
 integer(int32), parameter :: H = 480_int32     !< Display height [pixels].
@@ -44,6 +49,7 @@ real(real32)              :: sx(NP), sy(NP), sz(NP) !< The helix, single precisi
 real(real64)              :: cols(4, NP)            !< Per-point colours.
 real(real64)              :: sizes(NP)              !< Per-point sizes.
 real(real64)              :: nx(12), ny(12), nz(12) !< A line with NaNs.
+type(draw_data)           :: dd(NF, 2)          !< Each frame's draw data, per side.
 type(app_object)          :: app               !< Application.
 real(real64)              :: state(NSTATE, NF, 2) !< Per frame and side.
 logical                   :: test_passed(NCASE) !< Per-case outcome.
@@ -79,6 +85,7 @@ do c = 1_int32, NCASE
          if (.not. app%next_frame()) error stop 'figure_test_plot_frame_3d_lines: next_frame returned false headless'
          call ig_set_next_window(0.0_real64, 0.0_real64, real(W, real64), real(H, real64), always=.true.)
          if (ig_begin('plot frame 3d lines', flags=ImGuiWindowFlags_NoDecoration)) call draw_case(c, f)
+         call dd_snapshot(dd(f, sd))
          call ig_end()
          if (f == NF) call test_capture(picture(c, side_fortran), s)
          if (f == 1_int32) call test_capture(picture(10_int32 + c, side_fortran), s)
@@ -88,6 +95,7 @@ do c = 1_int32, NCASE
       enddo
    enddo
    test_passed(c) = state_equal(c) .and. pictures_equal(c) .and. pictures_equal(10_int32 + c)
+   test_passed(c) = draws_equal(c) .and. test_passed(c)
 enddo
 call app%destroy()
 call get_environment_variable('FIGURE_TEST_KEEP', keep)
@@ -98,6 +106,20 @@ write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function draws_equal(k) result(ok)
+   !< Both sides' draw data equal on every frame (`dd_equal`).
+   integer(int32), intent(in) :: k     !< Case.
+   logical                    :: ok    !< Equal.
+   integer(int32)             :: fr    !< Frame.
+   character(len=32)          :: label !< The case and frame.
+
+   ok = .true.
+   do fr = 1_int32, NF
+      write(label, '(A,I0,A,I0)') 'case ', k, ', frame ', fr
+      ok = dd_equal(dd(fr, 1), dd(fr, 2), trim(label)) .and. ok
+   enddo
+   endfunction draws_equal
+
    subroutine draw_case(k, fr)
    !< A case's plot on a frame, by the side drawing.
    integer(int32), intent(in) :: k, fr !< Case, frame.

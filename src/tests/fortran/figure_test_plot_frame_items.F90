@@ -20,13 +20,20 @@ program figure_test_plot_frame_items
 !< 9. the fit of every item (no limits: the plot fits on its first frame), items NoFit and NoLegend;
 !< 10. the decimation: a line and a shaded area of 400 000 points (M4 per pixel column), on a linear and a log x axis;
 !< 11. a log y axis with markers and stairs;
-!< 12. a hovered legend entry: the item's line twice as thick, its markers 1.25 times larger.
+!< 12. a hovered legend entry: the item's line twice as thick, its markers 1.25 times larger;
+!< 13. past 16-bit indices (#16 S2): 30 000 filled and outlined circle markers and 30 000 segments, a third of the
+!<     markers and half the segments outside the plot (culled), about a million vertices a frame: the draw commands
+!<     split where ImPlot's `RenderPrimitivesEx` splits them.
 !<
 !< The data given to the items are arrays or array sections, never elemental expressions of strided sections:
 !< nvfortran 26.9 gives `xs(1::4) * 0.25` the extent of `xs` (41 for 11, the rest garbage), as an actual argument and
 !< in an assignment to an allocatable (`af` builds them element by element).
 !<
 !< The pictures are `figure_test_plot_frame_items.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
+!<
+!< szaghi/figure#16 S2: every frame's draw data of the two sides are equal too (`figure_test_drawdata`: the
+!< window's draw commands, vertices and indices, and each command's offsets and count): the batching, which
+!< the pictures do not see.
 use, intrinsic :: ieee_arithmetic, only : ieee_negative_inf, ieee_positive_inf, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
@@ -36,13 +43,15 @@ use figure_plot_frame, only : pf_begin_plot, pf_end_plot, pf_plot_limits, pf_set
 use figure_plot_items, only : pf_line, pf_scatter, pf_shaded, pf_spec, pf_stairs, pf_stems
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 
+use figure_test_drawdata, only : dd_equal, dd_snapshot, draw_data
 implicit none
 integer(int32), parameter :: W = 640_int32      !< Display width [pixels].
 integer(int32), parameter :: H = 440_int32      !< Display height [pixels].
-integer(int32), parameter :: NCASE = 12_int32   !< Cases.
+integer(int32), parameter :: NCASE = 13_int32   !< Cases.
 integer(int32), parameter :: NF = 3_int32       !< Frames per side.
 integer(int32), parameter :: NP = 41_int32      !< Points of a series.
 integer(int32), parameter :: NBIG = 400000_int32 !< Points of a decimated series.
+integer(int32), parameter :: NMANY = 30000_int32 !< Markers (and segments) of case 13.
 ! ImPlotMarker, ImPlot*Flags (implot.h): the same integers on both sides
 integer(int32), parameter :: MK_AUTO = -1_int32, MK_CIRCLE = 0_int32, MK_SQUARE = 1_int32 !< Markers.
 integer(int32), parameter :: FL_NO_LEGEND = 1_int32, FL_NO_FIT = 2_int32 !< ImPlotItemFlags.
@@ -60,6 +69,7 @@ real(real64),   parameter :: C(4, 6) = reshape([0.91_real64, 0.40_real64, 0.30_r
 real(real64),   parameter :: LEG_X = 90.0_real64  !< The pointer over case 12's first legend entry [pixels].
 real(real64),   parameter :: LEG_Y = 40.0_real64  !< ...
 real(real64),   parameter :: CLEAR(4) = [0.0_real64, 0.0_real64, 0.0_real64, 0.0_real64] !< Transparent.
+type(draw_data)           :: dd(NF, 2)          !< Each frame's draw data, per side.
 type(app_object)          :: app                !< Application.
 real(real64)              :: xs(NP), ys(NP, 4)  !< Series.
 real(real32)              :: xs32(NP), ys32(NP) !< Single precision.
@@ -67,6 +77,7 @@ integer(int32)            :: xi32(NP)           !< int32 abscissae.
 integer(int64)            :: xi64(NP)           !< int64 abscissae.
 real(real64)              :: mat(3, NP)         !< A matrix (rows).
 real(real64), allocatable :: xb(:), yb(:), yb2(:) !< The decimated series.
+real(real64), allocatable :: xm(:), ym(:), xg(:), yg(:) !< Case 13's markers and segments.
 real(real64)              :: yh(NP), xr(NP), yr(NP), yv(NP) !< Case 8's series (named: see the header on nvfortran).
 real(real32)              :: y32s(NP), x32s(NP), y32b(NP) !< ...
 real(real64)              :: lim(4, NF, 2)      !< Ranges per frame and side.
@@ -96,6 +107,15 @@ do i = 1_int32, NP
    x32s(i) = xs32(i) + 20.0_real32
    y32b(i) = ys32(i) - 0.3_real32
 enddo
+allocate(xm(NMANY), ym(NMANY), xg(2 * NMANY), yg(2 * NMANY))
+do i = 1_int32, NMANY
+   xm(i) = real(i - 1_int32, real64) * (3.0_real64 / real(NMANY, real64)) ! 0 to 3: the plot shows 0 to 2
+   ym(i) = sin(xm(i) * 7.0_real64) + 0.2_real64 * cos(xm(i) * 131.0_real64)
+   xg(2 * i - 1) = real(i - 1_int32, real64) * (4.0_real64 / real(NMANY, real64)) ! 0 to 4
+   yg(2 * i - 1) = -1.0_real64
+   xg(2 * i) = xg(2 * i - 1) + 0.01_real64
+   yg(2 * i) = 0.5_real64 * sin(xg(2 * i) * 11.0_real64)
+enddo
 allocate(xb(NBIG), yb(NBIG), yb2(NBIG))
 do i = 1_int32, NBIG
    xb(i) = 1.0_real64 + real(i - 1_int32, real64) * 1.0e-4_real64
@@ -112,6 +132,7 @@ do cs = 1_int32, NCASE
          if (.not. app%next_frame()) error stop 'figure_test_plot_frame_items: next_frame returned false headless'
          call ig_set_next_window(0.0_real64, 0.0_real64, real(W, real64), real(H, real64), always=.true.)
          if (ig_begin('plot frame items', flags=ImGuiWindowFlags_NoDecoration)) call draw_case(cs, f)
+         call dd_snapshot(dd(f, sd))
          call ig_end()
          if (f == NF) call test_capture(picture(cs, side_fortran), s)
          if (cs == 12_int32 .and. f == 1_int32) call test_mouse_move(LEG_X, LEG_Y)
@@ -123,6 +144,7 @@ do cs = 1_int32, NCASE
    enddo
    test_passed(cs) = ranges_equal(cs)
    test_passed(cs) = pictures_equal(cs) .and. test_passed(cs)
+   test_passed(cs) = draws_equal(cs) .and. test_passed(cs)
 enddo
 call app%destroy()
 call get_environment_variable('FIGURE_TEST_KEEP', keep)
@@ -133,6 +155,20 @@ write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function draws_equal(k) result(ok)
+   !< Both sides' draw data equal on every frame (`dd_equal`).
+   integer(int32), intent(in) :: k     !< Case.
+   logical                    :: ok    !< Equal.
+   integer(int32)             :: fr    !< Frame.
+   character(len=32)          :: label !< The case and frame.
+
+   ok = .true.
+   do fr = 1_int32, NF
+      write(label, '(A,I0,A,I0)') 'case ', k, ', frame ', fr
+      ok = dd_equal(dd(fr, 1), dd(fr, 2), trim(label)) .and. ok
+   enddo
+   endfunction draws_equal
+
    subroutine draw_case(k, fr)
    !< A case's plot on a frame, by the side drawing.
    integer(int32), intent(in) :: k, fr !< Case, frame.
@@ -217,6 +253,10 @@ contains
       call line('exp', xs, ys(:, 4), lc=C(:, 1), mk=MK_CIRCLE, ms=3.0_real64)
       call stairs('steps', xs(::4), af(ys(::4, 4), 0.5_real64, 0.0_real64), lc=C(:, 2), fl=FL_STAIRS_SHADED, &
                   fa=0.3_real64)
+   case (13_int32)
+      call limits(0.0_real64, 2.0_real64, -1.5_real64, 1.5_real64)
+      call scatter('many', xm, ym, lc=C(:, 1), mk=MK_CIRCLE, ms=2.0_real64, mfc=C(:, 2))
+      call line('segments', xg, yg, lc=C(:, 3), fl=FL_SEGMENTS)
    case default
       call limits(0.0_real64, 10.0_real64, -1.5_real64, 1.5_real64)
       call line('hovered', xs, ys(:, 1), lc=C(:, 1), mk=MK_SQUARE, ms=4.0_real64)

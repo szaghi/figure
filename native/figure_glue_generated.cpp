@@ -442,9 +442,16 @@ void figure_ImPlot3DSpec_default(ImPlot3DSpec_c* res) noexcept {
 
 // figure_core's draw list (szaghi/figure#15 P8): a batch of n_vtx vertices (ImDrawVert's layout) and n_idx indices
 // (0-based in the batch) appended to an ImDrawList as one primitive (PrimReserve: a new command when the 16-bit
-// indices would wrap), and the state its primitives read: _FringeScale, the white pixel's and the anti-aliased line
+// indices would wrap; with new_cmd, a batch the Fortran list opened where PrimReserve would have started a command,
+// that command started first, as PrimReserve starts it, even when the batch, its culled room given back, would fit:
+// szaghi/figure#16 S2), and the state its primitives read: _FringeScale, the white pixel's and the anti-aliased line
 // textures' UVs (n_lines of them, u0 u1 v 1/thickness), the list's flags.
-void figure_ImDrawList_append(ImDrawList* dl, const ImDrawVert* vtx, int n_vtx, const int* idx, int n_idx) noexcept {
+void figure_ImDrawList_append(ImDrawList* dl, const ImDrawVert* vtx, int n_vtx, const int* idx, int n_idx,
+                              int new_cmd) noexcept {
+   if (new_cmd && sizeof(ImDrawIdx) == 2 && (dl->Flags & ImDrawFlags_UseVtxOffset)) {
+      dl->_CmdHeader.VtxOffset = dl->VtxBuffer.Size;
+      dl->_OnChangedVtxOffset();
+   }
    if (n_vtx <= 0 || n_idx <= 0) return;
    dl->PrimReserve(n_idx, n_vtx);
    const unsigned int base = dl->_VtxCurrentIdx;

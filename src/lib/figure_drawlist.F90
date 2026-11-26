@@ -33,6 +33,8 @@ module figure_drawlist
 !<
 !< A list with a sink (`dl%sink`, figure_core's appends to Dear ImGui) hands its batches to it when a reservation opens a
 !< new batch, and starts again from its first vertex: the list holds one batch at most, not the frame's whole draw data.
+!< A batch opened at a 16-bit wrap is marked (`dl_batch`'s `split`): Dear ImGui's `PrimReserve` starts its draw command
+!< at the reservation, so the batch starts one even when the room given back afterwards would let it fit the previous.
 !< So what was reserved before a reservation that opens a batch must be written (or given back) first; the primitives,
 !< and loops that reserve as ImPlot's `RenderPrimitivesEx` does, keep to it.
 !<
@@ -75,7 +77,7 @@ type, bind(C) :: draw_vert
 endtype draw_vert
 
 abstract interface
-   subroutine dl_sink(vtx, nv, idx, ni)
+   subroutine dl_sink(vtx, nv, idx, ni, split)
    !< Where a list's finished batches go (figure_core: appended to Dear ImGui's list, one primitive each).
    import :: c_int, draw_vert, int32
    implicit none
@@ -83,6 +85,7 @@ abstract interface
    type(draw_vert), intent(in), target :: vtx(nv)  !< The batch's vertices.
    integer(int32),  intent(in)         :: ni       !< Indices.
    integer(c_int),  intent(in)         :: idx(ni)  !< Its indices, 0-based in the batch.
+   logical,         intent(in)         :: split    !< The batch starts a draw command (`PrimReserve`'s 16-bit wrap).
    endsubroutine dl_sink
 endinterface
 
@@ -94,6 +97,8 @@ type :: draw_list
    integer(int32)               :: nidx = 0      !< Indices used.
    integer(int32), allocatable  :: batch_vtx(:)  !< Each batch's first vertex.
    integer(int32), allocatable  :: batch_idx(:)  !< ... its first index.
+   logical,        allocatable  :: batch_split(:) !< ... it starts a draw command (opened where `PrimReserve` would
+                                                  !< start one: kept even if its culled room is given back).
    integer(int32)               :: nbatch = 0    !< Batches used.
    integer(int32)               :: seed = 0      !< Vertices the target's open command holds before the first batch.
    procedure(dl_sink), pointer, nopass :: sink => null() !< Where finished batches go (none: kept until emptied).
@@ -127,7 +132,7 @@ contains
    integer(int32),  intent(in)    :: vtx_current !< Vertices of the target's open command.
 
    if (dl%nbatch > 0_int32) return
-   call new_batch(dl)
+   call new_batch(dl, .false.)
    dl%seed = max(0_int32, min(vtx_current, DL_BATCH_VERTICES))
    endsubroutine dl_open
 
@@ -187,13 +192,15 @@ contains
    dl%flags = flags
    endsubroutine dl_set_state
 
-   subroutine dl_batch(dl, k, v0, nv, i0, ni)
-   !< Batch k's extent: its first vertex and vertices, its first index and indices.
-   type(draw_list), intent(in)  :: dl     !< List.
-   integer(int32),  intent(in)  :: k      !< Batch, 1 to dl%nbatch.
-   integer(int32),  intent(out) :: v0, nv !< First vertex (1-based), vertices.
-   integer(int32),  intent(out) :: i0, ni !< First index (1-based), indices.
+   subroutine dl_batch(dl, k, v0, nv, i0, ni, split)
+   !< Batch k's extent: its first vertex and vertices, its first index and indices; whether it starts a draw command.
+   type(draw_list), intent(in)            :: dl     !< List.
+   integer(int32),  intent(in)            :: k      !< Batch, 1 to dl%nbatch.
+   integer(int32),  intent(out)           :: v0, nv !< First vertex (1-based), vertices.
+   integer(int32),  intent(out)           :: i0, ni !< First index (1-based), indices.
+   logical,         intent(out), optional :: split  !< It starts a draw command.
 
+   if (present(split)) split = dl%batch_split(k)
    v0 = dl%batch_vtx(k)
    i0 = dl%batch_idx(k)
    if (k < dl%nbatch) then
@@ -700,11 +707,11 @@ contains
    integer(int32),  intent(out)   :: b  !< First vertex, 0-based in the batch.
    integer(int32)                 :: n  !< The open batch's vertices, as `_VtxCurrentIdx`.
 
-   if (dl%nbatch == 0_int32) call new_batch(dl)
+   if (dl%nbatch == 0_int32) call new_batch(dl, .false.)
    n = dl_vtx_current(dl)
    if (n > 0_int32 .and. n + nv > DL_BATCH_VERTICES) then
       if (associated(dl%sink)) call hand_over(dl)
-      call new_batch(dl)
+      call new_batch(dl, .true.)
    endif
    if (.not. allocated(dl%vtx)) then ! (the calls only when the storage must grow)
       call grow_vtx(dl, dl%nvtx + nv)
@@ -723,10 +730,15 @@ contains
    !< The list's batches handed to its sink, the list emptied (its storage kept).
    type(draw_list), intent(inout) :: dl                !< List.
    integer(int32)                 :: k, v0, nv, i0, ni !< Batch, its extent.
+   logical                        :: split             !< It starts a draw command.
 
    do k = 1_int32, dl%nbatch
-      call dl_batch(dl, k, v0, nv, i0, ni)
-      if (nv > 0_int32 .and. ni > 0_int32) call dl%sink(dl%vtx(v0), nv, dl%idx(i0), ni)
+      call dl_batch(dl, k, v0, nv, i0, ni, split)
+      if (nv > 0_int32 .and. ni > 0_int32) then
+         call dl%sink(dl%vtx(v0), nv, dl%idx(i0), ni, split)
+      elseif (split) then ! an empty batch that starts a command: the command started all the same, as PrimReserve's
+         call dl%sink(dl%vtx(1), 0_int32, dl%idx(1), 0_int32, split)
+      endif
    enddo
    dl%nvtx = 0_int32
    dl%nidx = 0_int32
@@ -734,11 +746,13 @@ contains
    dl%seed = 0_int32
    endsubroutine hand_over
 
-   subroutine new_batch(dl)
-   !< A batch starting at the next vertex and index.
-   type(draw_list), intent(inout) :: dl  !< List.
-   integer(int32), allocatable    :: t(:) !< Grown array.
-   integer(int32)                 :: c   !< Capacity.
+   subroutine new_batch(dl, split)
+   !< A batch starting at the next vertex and index; `split`: where a draw command starts (a 16-bit wrap).
+   type(draw_list), intent(inout) :: dl    !< List.
+   logical,         intent(in)    :: split !< It starts a draw command.
+   integer(int32), allocatable    :: t(:)  !< Grown array.
+   logical,        allocatable    :: l(:)  !< ...
+   integer(int32)                 :: c     !< Capacity.
 
    c = 0_int32
    if (allocated(dl%batch_vtx)) c = size(dl%batch_vtx, kind=int32)
@@ -750,10 +764,14 @@ contains
       allocate(t(c))
       if (dl%nbatch > 0_int32) t(1:dl%nbatch) = dl%batch_idx(1:dl%nbatch)
       call move_alloc(t, dl%batch_idx)
+      allocate(l(c))
+      if (dl%nbatch > 0_int32) l(1:dl%nbatch) = dl%batch_split(1:dl%nbatch)
+      call move_alloc(l, dl%batch_split)
    endif
    dl%nbatch = dl%nbatch + 1_int32
    dl%batch_vtx(dl%nbatch) = dl%nvtx + 1_int32
    dl%batch_idx(dl%nbatch) = dl%nidx + 1_int32
+   dl%batch_split(dl%nbatch) = split
    endsubroutine new_batch
 
    subroutine put_vtx(dl, x, y, u, v, col)

@@ -4398,7 +4398,7 @@ contains
       do i = i0 + 1_int32, i0 + cnt
          call pixel(ctx, g, i, p)
          if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
-                    p(2) <= ctx%rect(4))) then
+                    p(2) <= ctx%rect(4)) .or. is_nan2(p)) then ! (a NaN outside: see im_min)
             r%culled = r%culled + 1_int32
             cycle
          endif
@@ -4447,7 +4447,7 @@ contains
       do i = i0 + 1_int32, i0 + cnt
          call pixel(ctx, g, i, p)
          if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
-                    p(2) <= ctx%rect(4))) then
+                    p(2) <= ctx%rect(4)) .or. is_nan2(p)) then ! (a NaN outside: see im_min)
             r%culled = r%culled + 1_int32
             cycle
          endif
@@ -4701,16 +4701,21 @@ contains
    endfunction intersection
 
    pure function overlaps(r, x0, y0, x1, y1) result(yes)
-   !< `ImRect::Overlaps` of the plot rectangle and (x0, y0)-(x1, y1) (false with a NaN).
+   !< `ImRect::Overlaps` of the plot rectangle and (x0, y0)-(x1, y1) (false with a NaN; nvfortran: see `im_min`).
    real(real32), intent(in) :: r(4)           !< Rectangle.
    real(real32), intent(in) :: x0, y0, x1, y1 !< Other.
    logical                  :: yes            !< Overlap.
 
    yes = r(2) < y1 .and. r(4) > y0 .and. r(1) < x1 .and. r(3) > x0
+#ifdef __NVCOMPILER
+   if (yes) yes = .not. (x0 /= x0 .or. y0 /= y0 .or. x1 /= x1 .or. y1 /= y1) ! (a NaN; not ieee_is_nan: a library call)
+#endif
    endfunction overlaps
 
    pure function im_min(a, b) result(c)
-   !< `ImMin`: a < b ? a : b (the second with a NaN).
+   !< `ImMin`: a < b ? a : b (the second with a NaN). nvfortran 26.9 (no -Kieee) compiles `a < b` true when one is a
+   !< NaN (seen: `im_min(100, NaN)` gave 100; szaghi/figure#16 S2 05, the draw data of a line through a NaN): the NaN
+   !< case is tested explicitly there.
    real(real32), intent(in) :: a, b !< Values.
    real(real32)             :: c    !< Minimum.
 
@@ -4719,10 +4724,24 @@ contains
    else
       c = b
    endif
+#ifdef __NVCOMPILER
+   if (a /= a .or. b /= b) c = b ! (a NaN; nvfortran gets `/=` right, and ieee_is_nan is a library call there)
+#endif
    endfunction im_min
 
+   pure function is_nan2(p) result(yes)
+   !< A NaN in a pixel: false but on nvfortran, whose comparisons with a NaN are not IEEE's (see `im_min`).
+   real(real32), intent(in) :: p(2) !< Pixel.
+   logical                  :: yes  !< A NaN (nvfortran only).
+
+   yes = .false.
+#ifdef __NVCOMPILER
+   yes = p(1) /= p(1) .or. p(2) /= p(2)
+#endif
+   endfunction is_nan2
+
    pure function im_max(a, b) result(c)
-   !< `ImMax`: a >= b ? a : b.
+   !< `ImMax`: a >= b ? a : b (the second with a NaN; nvfortran: see `im_min`).
    real(real32), intent(in) :: a, b !< Values.
    real(real32)             :: c    !< Maximum.
 
@@ -4731,6 +4750,9 @@ contains
    else
       c = b
    endif
+#ifdef __NVCOMPILER
+   if (a /= a .or. b /= b) c = b ! (a NaN; nvfortran gets `/=` right, and ieee_is_nan is a library call there)
+#endif
    endfunction im_max
 
    pure function is_auto(c) result(yes)

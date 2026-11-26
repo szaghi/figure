@@ -19,6 +19,10 @@ program figure_test_plot_frame_fields
 !< 10. single precision histograms, 1-D and 2-D.
 !<
 !< The pictures are `figure_test_plot_frame_fields.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
+!<
+!< szaghi/figure#16 S2: every frame's draw data of the two sides are equal too (`figure_test_drawdata`: the
+!< window's draw commands, vertices and indices, and each command's offsets and count): the batching, which
+!< the pictures do not see.
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use figure, only : app_object, figure_last_error, ig_begin, ig_end, ig_set_next_window, ImGuiWindowFlags_NoDecoration
@@ -28,6 +32,7 @@ use figure_plot_frame, only : pf_begin_plot, pf_colormap, pf_end_plot, pf_plot_l
 use figure_plot_items, only : pf_heatmap, pf_histogram, pf_histogram2d, pf_spec
 use figure_testing, only : test_capture, test_compare_image, test_mouse_move
 
+use figure_test_drawdata, only : dd_equal, dd_snapshot, draw_data
 implicit none
 integer(int32), parameter :: W = 640_int32      !< Display width [pixels].
 integer(int32), parameter :: H = 440_int32      !< Display height [pixels].
@@ -39,6 +44,7 @@ integer(int32), parameter :: FL_HORIZONTAL = 1024_int32, FL_CUMULATIVE = 2048_in
 integer(int32), parameter :: FL_NO_OUTLIERS = 8192_int32 !< ImPlotHistogramFlags_NoOutliers.
 integer(int32), parameter :: FL_HEAT_COL_MAJOR = 1024_int32 !< ImPlotHeatmapFlags_ColMajor.
 integer(int32), parameter :: BIN_SCOTT = -4_int32 !< ImPlotBin_Scott.
+type(draw_data)           :: dd(NF, 2)          !< Each frame's draw data, per side.
 type(app_object)          :: app                !< Application.
 real(real64)              :: field(6, 4), flat(3, 2) !< Heatmaps.
 real(real32)              :: field32(5, 7)      !< ... single precision.
@@ -81,6 +87,7 @@ do cs = 1_int32, NCASE
          if (.not. app%next_frame()) error stop 'figure_test_plot_frame_fields: next_frame returned false headless'
          call ig_set_next_window(0.0_real64, 0.0_real64, real(W, real64), real(H, real64), always=.true.)
          if (ig_begin('plot frame fields', flags=ImGuiWindowFlags_NoDecoration)) call draw_case(cs, f)
+         call dd_snapshot(dd(f, sd))
          call ig_end()
          if (f == NF) call test_capture(picture(cs, side_fortran), s)
       enddo
@@ -91,6 +98,7 @@ do cs = 1_int32, NCASE
    test_passed(cs) = ranges_equal(cs) .and. tops(1) == tops(2)
    if (tops(1) /= tops(2)) write(output_unit, '(A,I0,A,2ES24.16)') 'case ', cs, ': max_count ', tops
    test_passed(cs) = pictures_equal(cs) .and. test_passed(cs)
+   test_passed(cs) = draws_equal(cs) .and. test_passed(cs)
 enddo
 call app%destroy()
 call get_environment_variable('FIGURE_TEST_KEEP', keep)
@@ -101,6 +109,20 @@ write(output_unit, '(A,L1)') 'Are all tests passed? ', all(test_passed)
 if (.not. all(test_passed)) error stop 1
 
 contains
+   function draws_equal(k) result(ok)
+   !< Both sides' draw data equal on every frame (`dd_equal`).
+   integer(int32), intent(in) :: k     !< Case.
+   logical                    :: ok    !< Equal.
+   integer(int32)             :: fr    !< Frame.
+   character(len=32)          :: label !< The case and frame.
+
+   ok = .true.
+   do fr = 1_int32, NF
+      write(label, '(A,I0,A,I0)') 'case ', k, ', frame ', fr
+      ok = dd_equal(dd(fr, 1), dd(fr, 2), trim(label)) .and. ok
+   enddo
+   endfunction draws_equal
+
    subroutine draw_case(k, fr)
    !< A case's plot on a frame, by the side drawing.
    integer(int32), intent(in) :: k, fr !< Case, frame.

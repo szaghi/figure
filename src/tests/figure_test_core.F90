@@ -19,8 +19,9 @@ program figure_test_core
 !< their own, 20000 quads one by one (`PrimReserve(6, 4)` and `PrimQuadUV` against `core_draw_quad_uv`), a text, then
 !< 30000 quads in runs as ImPlot's `RenderPrimitivesEx` makes them, one in seven culled (`PrimReserve`, `PrimQuadUV`,
 !< `PrimUnreserve` against `core_prim_reserve`, `dl_put_quad_uv` into `core_prim_list()`, `core_prim_unreserve`, the
-!< runs sized by `_VtxCurrentIdx` against `core_prim_vtx_current`): the window's vertices, indices and draw commands
-!< (their vertex and index offsets and counts) are the same, past 65535 vertices included.
+!< runs sized by `_VtxCurrentIdx` against `core_prim_vtx_current`), then a run whose last reservation opens a draw
+!< command and keeps two quads only (the rest culled): the window's vertices, indices and draw commands (their vertex
+!< and index offsets and counts) are the same, past 65535 vertices included.
 !< The captures are `figure_test_core.*.png.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 ! oracle: click
 use, intrinsic :: iso_c_binding, only : c_f_pointer, c_float, c_funptr, c_int, c_int16_t, c_int32_t, c_int64_t, c_loc, c_ptr
@@ -301,14 +302,15 @@ contains
    endsubroutine quad
 
    subroutine quads_imgui()
-   !< The quads through Dear ImGui's list: one by one, a text, then ImPlot's runs (`RenderPrimitivesEx`).
+   !< The quads through Dear ImGui's list: one by one, a text, then ImPlot's runs (`RenderPrimitivesEx`), then a run
+   !< whose new draw command keeps two quads only.
    integer(int32), parameter :: N1 = 20000_int32, N2 = 30000_int32 !< Quads one by one, in runs.
    type(c_ptr)                :: dl         !< Window's list.
    type(list_head), pointer   :: h          !< ... its head.
    real(c_float)              :: x(4), y(4) !< A quad.
    real(real64)               :: wu, wv     !< White pixel.
    type(im_vec2)              :: uv         !< ... as an ImVec2.
-   integer(int32)             :: k, col, prims, culled, cnt, j !< Counters, colour, runs.
+   integer(int32)             :: k, col     !< Counter, colour.
 
    dl = igGetWindowDrawList()
    call c_f_pointer(dl, h)
@@ -321,7 +323,25 @@ contains
                                  uv, uv, uv, uv, int(col, c_int))
    enddo
    call ImDrawList_AddText_Vec2(dl, v2(20, 15), core_color(1.0d0, 1.0d0, 1.0d0, 1.0d0), 'quads'//char(0), c_null())
-   prims = N2
+   call runs_imgui(dl, h, uv, N1, N2, .false.)
+   call runs_imgui(dl, h, uv, N1 + N2, 0_int32, .true.)
+   endsubroutine quads_imgui
+
+   subroutine runs_imgui(dl, h, uv, first, n, tail)
+   !< ImPlot's `RenderPrimitivesEx` of n quads (from quad first + 1) on Dear ImGui's list: one in seven culled; or
+   !< (`tail`) as many quads as the open command has room for plus 100, the 50 before that room's end culled (so the
+   !< next run finds room for fewer than 64 and opens a new command) and all but two of the last 100.
+   type(c_ptr),              intent(in) :: dl    !< Window's list.
+   type(list_head), pointer, intent(in) :: h     !< ... its head.
+   type(im_vec2),            intent(in) :: uv    !< White pixel.
+   integer(int32),           intent(in) :: first !< Quads before.
+   integer(int32),           intent(in) :: n     !< Quads (not with `tail`).
+   logical,                  intent(in) :: tail  !< The run that ends in a new, nearly empty command.
+   real(c_float)                        :: x(4), y(4) !< A quad.
+   integer(int32)                       :: k, col, prims, culled, cnt, j, c1 !< Counters, colour, runs, the room.
+
+   c1 = (65535_int32 - int(h%vtx_current_idx, int32)) / 4_int32
+   prims = merge(c1 + 100_int32, n, tail)
    culled = 0_int32
    j = 0_int32
    do while (prims > 0_int32)
@@ -341,10 +361,10 @@ contains
       endif
       prims = prims - cnt
       do k = j + 1_int32, j + cnt
-         if (mod(k, 7_int32) == 3_int32) then
+         if (is_culled(k, tail, c1)) then
             culled = culled + 1_int32
          else
-            call quad(N1 + k, x, y, col)
+            call quad(first + k, x, y, col)
             call ImDrawList_PrimQuadUV(dl, im_vec2(x(1), y(1)), im_vec2(x(2), y(2)), im_vec2(x(3), y(3)), &
                                        im_vec2(x(4), y(4)), uv, uv, uv, uv, int(col, c_int))
          endif
@@ -352,30 +372,46 @@ contains
       j = j + cnt
    enddo
    if (culled > 0_int32) call ImDrawList_PrimUnreserve(dl, int(culled * 6_int32, c_int), int(culled * 4_int32, c_int))
-   endsubroutine quads_imgui
+   endsubroutine runs_imgui
 
    subroutine quads_core()
    !< The quads through figure_core: `core_draw_quad_uv`, a text, then the runs through the batch interface.
    integer(int32), parameter  :: N1 = 20000_int32, N2 = 30000_int32 !< Quads one by one, in runs.
-   type(draw_list), pointer   :: dl         !< The Fortran list.
    real(c_float)              :: x(4), y(4) !< A quad.
-   real(c_float)              :: uu(4), vv(4) !< Its texture coordinates.
    real(real64)               :: wu, wv     !< White pixel.
-   integer(int32)             :: k, col, prims, culled, cnt, j !< Counters, colour, runs.
-   integer(int32)             :: iv, ii, b  !< The write cursor: vertex, index, first vertex in the batch.
-   integer(int32)             :: riv, rii, rb !< A reservation's.
+   integer(int32)             :: k, col     !< Counter, colour.
 
    call core_draw_begin()
    call core_white_pixel(wu, wv)
-   uu = real(wu, c_float)
-   vv = real(wv, c_float)
    do k = 1_int32, N1
       call quad(k, x, y, col)
       call core_draw_quad_uv(real(x, real64), real(y, real64), [wu, wu, wu, wu], [wv, wv, wv, wv], col)
    enddo
    call core_draw_text(20d0, 15d0, core_color(1.0d0, 1.0d0, 1.0d0, 1.0d0), 'quads')
+   call runs_core(real(wu, c_float), real(wv, c_float), N1, N2, .false.)
+   call runs_core(real(wu, c_float), real(wv, c_float), N1 + N2, 0_int32, .true.)
+   call core_draw_end()
+   endsubroutine quads_core
+
+   subroutine runs_core(wu, wv, first, n, tail)
+   !< `runs_imgui` through figure_core's batch interface (`core_prim_reserve`, `dl_put_quad_uv` into
+   !< `core_prim_list()`, `core_prim_unreserve`, the runs sized by `core_prim_vtx_current`).
+   real(c_float),  intent(in) :: wu, wv     !< White pixel.
+   integer(int32), intent(in) :: first      !< Quads before.
+   integer(int32), intent(in) :: n          !< Quads (not with `tail`).
+   logical,        intent(in) :: tail       !< The run that ends in a new, nearly empty command.
+   type(draw_list), pointer   :: dl         !< The Fortran list.
+   real(c_float)              :: x(4), y(4) !< A quad.
+   real(c_float)              :: uu(4), vv(4) !< Its texture coordinates.
+   integer(int32)             :: k, col, prims, culled, cnt, j, c1 !< Counters, colour, runs, the room.
+   integer(int32)             :: iv, ii, b  !< The write cursor: vertex, index, first vertex in the batch.
+   integer(int32)             :: riv, rii, rb !< A reservation's.
+
    dl => core_prim_list()
-   prims = N2
+   uu = wu
+   vv = wv
+   c1 = (65535_int32 - core_prim_vtx_current()) / 4_int32
+   prims = merge(c1 + 100_int32, n, tail)
    culled = 0_int32
    j = 0_int32
    iv = 0_int32
@@ -403,10 +439,10 @@ contains
       endif
       prims = prims - cnt
       do k = j + 1_int32, j + cnt
-         if (mod(k, 7_int32) == 3_int32) then
+         if (is_culled(k, tail, c1)) then
             culled = culled + 1_int32
          else
-            call quad(N1 + k, x, y, col)
+            call quad(first + k, x, y, col)
             call dl_put_quad_uv(dl, iv, ii, b, x, y, uu, vv, int(col, c_int32_t))
             iv = iv + 4_int32
             ii = ii + 6_int32
@@ -416,8 +452,21 @@ contains
       j = j + cnt
    enddo
    if (culled > 0_int32) call core_prim_unreserve(culled * 4_int32, culled * 6_int32)
-   call core_draw_end()
-   endsubroutine quads_core
+   endsubroutine runs_core
+
+   pure function is_culled(k, tail, c1) result(yes)
+   !< The runs' culling: one quad in seven; or (`tail`) the 50 before the room's end (c1) and all but two after it.
+   integer(int32), intent(in) :: k    !< Quad of the run (1-based).
+   logical,        intent(in) :: tail !< The tail run.
+   integer(int32), intent(in) :: c1   !< Quads the open command had room for.
+   logical                    :: yes  !< Culled.
+
+   if (tail) then
+      yes = (k > c1 - 50_int32 .and. k <= c1) .or. k > c1 + 2_int32
+   else
+      yes = mod(k, 7_int32) == 3_int32
+   endif
+   endfunction is_culled
 
    subroutine snapshot(vtx, idx, cmd)
    !< The window's draw data: its vertices' bits (five words each), indices, and commands (vertex offset, index offset,
