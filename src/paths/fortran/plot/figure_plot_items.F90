@@ -4216,9 +4216,12 @@ contains
    subroutine pf_line_device_r64(label, x, y, spec, ierr)
    !< A line through (x(i), y(i)) of two contiguous real64 arrays on a device (`ip_line_device`): decimated there
    !< (figure_decimate_device, FUNDAL), only the kept points copied to the host; a series not decimated copied whole.
+   !< The array dummies are not ASYNCHRONOUS, unlike the other items': nvfortran 26.9 copies an ASYNCHRONOUS dummy
+   !< passed on to a dummy that is not (here figure_decimate_device's and FUNDAL's dev_memcpy_from_device), on the host,
+   !< and the device's memory cannot be read there (szaghi/figure#16 S5: tests-nvf-acc-fortran crashed).
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real64),         intent(in), target, asynchronous :: x(:)  !< Abscissae, on the device.
-   real(real64),         intent(in), target, asynchronous :: y(:)  !< Ordinates, on the device.
+   real(real64),         intent(in), target :: x(:)  !< Abscissae, on the device (not ASYNCHRONOUS: pf_line_device_r64).
+   real(real64),         intent(in), target :: y(:)  !< Ordinates, on the device.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    integer(int32),       intent(out), optional :: ierr !< FUNDAL's status of a copy from the device (absent: a failure
                                                        !< stops; present: nothing drawn on a failure).
@@ -4262,8 +4265,8 @@ contains
    subroutine pf_line_device_r32(label, x, y, spec, ierr)
    !< A line of two contiguous real32 device arrays (`ip_line_device`), as `pf_line_device_r64`.
    character(len=*),     intent(in)           :: label !< Legend label.
-   real(real32),         intent(in), target, asynchronous :: x(:)  !< Abscissae, on the device.
-   real(real32),         intent(in), target, asynchronous :: y(:)  !< Ordinates, on the device.
+   real(real32),         intent(in), target :: x(:)  !< Abscissae, on the device (not ASYNCHRONOUS: pf_line_device_r64).
+   real(real32),         intent(in), target :: y(:)  !< Ordinates, on the device.
    type(plot_item_spec), intent(in), optional :: spec  !< Style.
    integer(int32),       intent(out), optional :: ierr !< FUNDAL's status of a copy from the device (absent: a failure
                                                        !< stops; present: nothing drawn on a failure).

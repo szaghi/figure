@@ -153,6 +153,11 @@ typed-constructor defects have canaries in `figure_test_canaries`, which fail on
   allocatable or passed as an actual argument, gets the parent array's extent, its tail garbage (its `size()` is right,
   and so is a fixed-shape target): name the section first, or loop. A user's `ip_*` call with such an argument is
   refused when its arrays' sizes then disagree, drawn wrong when they agree.
+- **An ASYNCHRONOUS assumed-shape dummy passed on to a TARGET assumed-shape dummy that is not ASYNCHRONOUS** is
+  copied on the host (a pointer to the array is not associated with the dummy, which the standard requires): with
+  device memory the copy reads it on the host and crashes. The device lines' dummies (`pf_line_device`) are not
+  ASYNCHRONOUS, so they pass on in place to figure_decimate_device and FUNDAL; ASYNCHRONOUS to ASYNCHRONOUS, plain to
+  plain and plain to ASYNCHRONOUS are passed in place. (#16 S5)
 - **An absent optional array forwarded to an optional dummy that is TARGET and ASYNCHRONOUS** stops the program
   (`TMP_DESC: invalid original`); either attribute alone is right. The `ip_*` items' array dummies have both: a
   program forwarding its own optional to one must test `present()` and call without it.
