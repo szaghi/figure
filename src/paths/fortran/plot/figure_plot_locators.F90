@@ -185,10 +185,12 @@ contains
    procedure(text_measure)                         :: measure  !< Text sizes.
    real(real32),           intent(inout), optional :: total(2) !< Labels' total size.
    integer(int32)                                  :: k        !< The tick.
-   integer(int32)                                  :: nl, o    !< The label's length, its start.
+   integer(int32)                                  :: nl, o, i !< The label's length, its start, a character.
    character(len=:),                   allocatable :: more     !< A larger text.
 
-   if (.not. allocated(t%pos)) call grow(t, 64_int32)
+   if (t%n == 0_int32) then ! (`allocated` asked of an empty list only: a call on nvfortran)
+      if (.not. allocated(t%pos)) call grow(t, 64_int32)
+   endif
    if (t%n == size(t%pos, kind=int32)) call grow(t, 2_int32 * t%n)
    k = t%n + 1_int32
    t%n = k
@@ -202,14 +204,18 @@ contains
    t%label_len(k) = 0_int32
    if (show) then
       nl = len(label, kind=int32)
-      if (.not. allocated(t%text)) allocate(character(len=max(2048_int32, nl)) :: t%text)
+      if (t%n_text == 0_int32) then ! (as t%pos above)
+         if (.not. allocated(t%text)) allocate(character(len=max(2048_int32, nl)) :: t%text)
+      endif
       if (t%n_text + nl > len(t%text, kind=int32)) then ! grown, the labels held kept
          allocate(character(len=max(2_int32 * len(t%text, kind=int32), t%n_text + nl)) :: more)
          if (t%n_text > 0_int32) more(1:t%n_text) = t%text(1:t%n_text)
          call move_alloc(more, t%text)
       endif
       o = t%n_text + 1_int32
-      t%text(o:o + nl - 1_int32) = label
+      do i = 1_int32, nl ! (a character at a time: nvfortran calls pgf90_str_copy_klen for a substring assignment)
+         t%text(o + i - 1_int32:o + i - 1_int32) = label(i:i)
+      enddo
       t%n_text = t%n_text + nl
       t%label_off(k) = o
       t%label_len(k) = nl

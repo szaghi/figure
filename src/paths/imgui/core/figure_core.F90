@@ -1116,16 +1116,19 @@ contains
    endsubroutine core_window_hover_state
 
    subroutine to_buf(s, at)
-   !< A text copied into the module's buffer, NUL-terminated, from `at` (default 1); the caller checked it fits. Two
-   !< assignments, no concatenation: a concatenation of run-time length is a heap temporary (gfortran).
+   !< A text copied into the module's buffer, NUL-terminated, from `at` (default 1); the caller checked it fits. No
+   !< concatenation (of run-time length: a heap temporary on gfortran) and no substring assignment (nvfortran calls
+   !< pgf90_str_copy_klen for it): a character at a time.
    character(len=*), intent(in)           :: s  !< Text.
    integer(int32),   intent(in), optional :: at !< Where it starts.
-   integer(int32)                         :: a, n !< Start, length.
+   integer(int32)                         :: a, n, i !< Start, length, a character.
 
    a = 1_int32
    if (present(at)) a = at
    n = len(s, kind=int32)
-   buf(a:a + n - 1_int32) = s
+   do i = 1_int32, n
+      buf(a + i - 1_int32:a + i - 1_int32) = s(i:i)
+   enddo
    buf(a + n:a + n) = c_null_char
    endsubroutine to_buf
 

@@ -184,10 +184,17 @@ contains
    integer(int32),   intent(inout) :: n   !< Characters in use.
    character(len=*), intent(in)    :: s   !< Text.
    integer(int32)                  :: k   !< Characters that fit.
+   integer(int32)                  :: i   !< Character.
 
    k = min(len(s, kind=int32), len(buf, kind=int32) - n)
    if (k <= 0_int32) return
-   buf(n + 1_int32:n + k) = s(1:k)
+   if (k == 1_int32) then ! (one character: a store; the loop below is a memory copy call on nvfortran)
+      buf(n + 1_int32:n + 1_int32) = s(1:1)
+   else
+      do i = 1_int32, k ! (a character at a time: nvfortran calls pgf90_str_copy_klen for a substring assignment)
+         buf(n + i:n + i) = s(i:i)
+      enddo
+   endif
    n = n + k
    endsubroutine fmt_text
 
@@ -254,7 +261,8 @@ contains
 
    call fmt_text(buf, n, f%prefix(1:f%prefix_len))
    if (f%text) return
-   upper = scan(f%ctype, 'FEGA') > 0
+   upper = f%ctype == 'F' .or. f%ctype == 'E' .or. f%ctype == 'G' .or. f%ctype == 'A' ! (comparisons, not `scan`:
+                                                                                        ! a call on nvfortran)
    nl = 0_int32
    lead = ' '
    bits = transfer(v, 0_int64) ! the value read from its bits: the sign of a zero or a NaN, subnormals under DAZ
@@ -271,19 +279,19 @@ contains
    finite = ibits(bits, 52, 11) /= 2047_int64
    nb = 0_int32
    extra = 0_int32
-   if (f%prec > PREC_CAP .and. finite .and. (scan(f%ctype, 'gG') == 0 .or. f%alt)) extra = f%prec - PREC_CAP
+   if (f%prec > PREC_CAP .and. finite .and. (.not. (f%ctype == 'g' .or. f%ctype == 'G') .or. f%alt)) extra = f%prec - PREC_CAP
    if (.not. finite) then
       if (ibits(bits, 0, 52) /= 0_int64) then
          call put(body, nb, merge('NAN', 'nan', upper))
       else
          call put(body, nb, merge('INF', 'inf', upper))
       endif
-   elseif (scan(f%ctype, 'aA') > 0) then
+   elseif (f%ctype == 'a' .or. f%ctype == 'A') then
       call hex_text(bits, min(f%prec, PREC_CAP), f%alt, upper, body, nb)
       lead(nl + 1_int32:nl + 2_int32) = merge('0X', '0x', upper)
       nl = nl + 2_int32
    else
-      call exact_digits(v, dg, nd, e)
+      call exact_digits(bits, dg, nd, e)
       p = min(f%prec, PREC_CAP)
       if (p < 0_int32) p = 6_int32
       select case (f%ctype)
@@ -296,14 +304,14 @@ contains
          call exponent_text(merge('E', 'e', upper), x, body, nb)
       case default ! g, G: precision in significant digits, the fixed form when the exponent is in [-4, p)
          if (p == 0_int32) p = 1_int32
-         call exp_text(dg, nd, e, p - 1_int32, body, nb, x)
-         if (x < p .and. x >= -4_int32) then
-            nb = 0_int32
+         x = exp_of(dg, nd, e, p - 1_int32)
+         if (x < p .and. x >= -4_int32) then ! (the exponent form's text not built: x alone decides)
             call fixed_text(dg, nd, e, p - 1_int32 - x, body, nb)
             call trailing(body, nb, f%alt)
          else
             ! glibc (2.39): `#` with a value whose rounding up to the next power of ten made the exponent p (the fixed
             ! form's, before the rounding) keeps no zeros: "%#g" of 999999.5 is "1.e+06"
+            call exp_text(dg, nd, e, p - 1_int32, body, nb, x)
             if (f%alt .and. x == p .and. x /= nd - 1_int32 + e) nb = 1_int32
             call trailing(body, nb, f%alt)
             call exponent_text(merge('E', 'e', upper), x, body, nb)
@@ -400,7 +408,11 @@ contains
       enddo
    endif
    call put(body, nb, 'p')
-   call put(body, nb, merge('-', '+', x < 0_int32))
+   if (x < 0_int32) then ! (not a character `merge`: a call on nvfortran)
+      call put(body, nb, '-')
+   else
+      call put(body, nb, '+')
+   endif
    call fmt_int(body, nb, abs(x))
    if (upper) then
       do k = n0 + 1_int32, nb
@@ -409,19 +421,19 @@ contains
    endif
    endsubroutine hex_text
 
-   pure subroutine exact_digits(v, dg, nd, e)
-   !< The exact decimal value of the finite v: |v| = dg(1:nd) 10^e, `dg` without leading or trailing zeros ('0' for
-   !< zero). A double is m 2^k, that is m 5^(-k) 10^k when k < 0: the product computed exactly in base 10^9 limbs.
-   real(real64),     intent(in)  :: v   !< Value.
+   pure subroutine exact_digits(bits, dg, nd, e)
+   !< The exact decimal value of the finite double of these bits, v: |v| = dg(1:nd) 10^e, `dg` without leading or
+   !< trailing zeros ('0' for zero). A double is m 2^k, that is m 5^(-k) 10^k when k < 0: the product computed exactly
+   !< in base 10^9 limbs. (The bits, read once by the caller: `transfer` is a library call on nvfortran.)
+   integer(int64),   intent(in)  :: bits !< The value's bits.
    character(len=*), intent(out) :: dg  !< Digits.
    integer(int32),   intent(out) :: nd  !< Their count.
    integer(int32),   intent(out) :: e   !< Decimal exponent.
    integer(int64)                :: limbs(LIMB_ROOM) !< Base 10^9 digits, least significant first.
-   integer(int64)                :: m, q, bits !< Binary mantissa, a limb, the value's bits.
+   integer(int64)                :: m, q !< Binary mantissa, a limb.
    integer(int32)                :: k, nl, step, i, j, d !< Binary exponent, limbs in use, counters.
 
    e = 0_int32
-   bits = transfer(v, 0_int64)
    m = ibits(bits, 0, 52)
    k = int(ibits(bits, 52, 11), int32)
    if (k == 0_int32 .and. m == 0_int64) then
@@ -435,14 +447,15 @@ contains
       m = m + 4503599627370496_int64 ! 2^52
       k = k - 1075_int32
    endif
-   do while (k < 0_int32 .and. modulo(m, 2_int64) == 0_int64)
+   do while (k < 0_int32 .and. iand(m, 1_int64) == 0_int64) ! (m > 0; no int64 modulo: a library call on nvfortran)
       m = m / 2_int64
       k = k + 1_int32
    enddo
-   limbs = 0_int64
-   limbs(1) = modulo(m, LIMB)
-   limbs(2) = modulo(m / LIMB, LIMB)
-   limbs(3) = m / (LIMB * LIMB)
+   ! (limbs past nl are never read: limbs_multiply writes a limb before nl reaches it; no zero fill, a memset a value)
+   q = m / LIMB ! (m >= 0: the remainders as differences)
+   limbs(1) = m - q * LIMB
+   limbs(3) = q / LIMB
+   limbs(2) = q - limbs(3) * LIMB
    nl = 3_int32
    if (k >= 0_int32) then
       do while (k > 0_int32)
@@ -499,16 +512,17 @@ contains
    integer(int32)                :: j        !< Counter.
 
    carry = 0_int64
-   do j = 1_int32, nl
+   do j = 1_int32, nl ! (p >= 0: the remainder as a difference, no int64 modulo: a library call on nvfortran)
       p = limbs(j) * f
       p = p + carry
-      limbs(j) = modulo(p, LIMB)
       carry = p / LIMB
+      limbs(j) = p - carry * LIMB
    enddo
    do while (carry > 0_int64)
       nl = nl + 1_int32
-      limbs(nl) = modulo(carry, LIMB)
-      carry = carry / LIMB
+      p = carry / LIMB
+      limbs(nl) = carry - p * LIMB
+      carry = p
    enddo
    endsubroutine limbs_multiply
 
@@ -530,13 +544,17 @@ contains
       return
    endif
    if (keep >= nd) then
-      r(1:nd) = dg(1:nd)
+      do k = 1_int32, nd ! (a character at a time: see fmt_text)
+         r(k:k) = dg(k:k)
+      enddo
       do k = nd + 1_int32, keep
          r(k:k) = '0'
       enddo
       nr = keep
    else
-      r(1:keep) = dg(1:keep)
+      do k = 1_int32, keep
+         r(k:k) = dg(k:k)
+      enddo
       nr = keep
       if (dg(keep + 1_int32:keep + 1_int32) > '5') then
          up = .true.
@@ -545,7 +563,7 @@ contains
       elseif (nd > keep + 1_int32) then ! digits after the 5 (no trailing zeros: one of them is not 0)
          up = .true.
       else
-         up = scan(dg(keep:keep), '13579') > 0
+         up = iand(iachar(dg(keep:keep)), 1) == 1 ! an odd digit ('0' is 48; not `scan`: a call on nvfortran)
       endif
       if (up) then
          k = keep
@@ -641,6 +659,39 @@ contains
    endif
    endsubroutine exp_text
 
+   pure function exp_of(dg, nd, e, prec) result(x)
+   !< The exponent `exp_text` gives dg 10^e with `prec` decimals, without the text: the leading digit's, one more when
+   !< rounding to prec + 1 digits (`round_keep`: half to even) carries out of them, all nines rounded up.
+   character(len=*), intent(in) :: dg   !< Digits.
+   integer(int32),   intent(in) :: nd   !< Their count.
+   integer(int32),   intent(in) :: e    !< Exponent.
+   integer(int32),   intent(in) :: prec !< Decimals.
+   integer(int32)               :: x    !< Exponent of the leading digit.
+   integer(int32)               :: keep, k !< Digits kept, counter.
+   logical                      :: up   !< Round up.
+
+   if (dg(1:1) == '0') then
+      x = 0_int32
+      return
+   endif
+   x = nd - 1_int32 + e
+   keep = prec + 1_int32
+   if (keep <= 0_int32 .or. keep >= nd) return ! (keep > 0 here: prec >= 0; no rounding when every digit is kept)
+   do k = 1_int32, keep
+      if (dg(k:k) /= '9') return ! a digit below 9 takes the carry
+   enddo
+   if (dg(keep + 1_int32:keep + 1_int32) > '5') then ! round_keep's decision
+      up = .true.
+   elseif (dg(keep + 1_int32:keep + 1_int32) < '5') then
+      up = .false.
+   elseif (nd > keep + 1_int32) then
+      up = .true.
+   else
+      up = iand(iachar(dg(keep:keep)), 1) == 1
+   endif
+   if (up) x = x + 1_int32
+   endfunction exp_of
+
    pure subroutine exponent_text(letter, x, body, nb)
    !< C's exponent appended: the letter, the sign, two digits at least.
    character(len=1), intent(in)    :: letter !< 'e' or 'E'.
@@ -649,7 +700,11 @@ contains
    integer(int32),   intent(inout) :: nb     !< Its length.
 
    call put(body, nb, letter)
-   call put(body, nb, merge('-', '+', x < 0_int32))
+   if (x < 0_int32) then ! (not a character `merge`: a call on nvfortran)
+      call put(body, nb, '-')
+   else
+      call put(body, nb, '+')
+   endif
    call fmt_int(body, nb, abs(x), 2_int32)
    endsubroutine exponent_text
 
@@ -658,12 +713,21 @@ contains
    character(len=*), intent(inout) :: body !< Text.
    integer(int32),   intent(inout) :: nb   !< Its length.
    logical,          intent(in)    :: alt  !< Flag `#`.
+   logical                         :: point !< The text has a point.
+   integer(int32)                  :: k     !< Character.
 
+   point = .false. ! (a loop, not `index`: a call on nvfortran)
+   do k = 1_int32, nb
+      if (body(k:k) == '.') then
+         point = .true.
+         exit
+      endif
+   enddo
    if (alt) then
-      if (index(body(1:nb), '.') == 0) call put(body, nb, '.')
+      if (.not. point) call put(body, nb, '.')
       return
    endif
-   if (index(body(1:nb), '.') == 0) return
+   if (.not. point) return
    do while (body(nb:nb) == '0')
       nb = nb - 1_int32
    enddo
@@ -675,8 +739,15 @@ contains
    character(len=*), intent(inout) :: s !< Buffer.
    integer(int32),   intent(inout) :: n !< Characters in use.
    character(len=*), intent(in)    :: t !< Text.
+   integer(int32)                  :: i !< Character.
 
-   s(n + 1_int32:n + len(t, kind=int32)) = t
+   if (len(t) == 1) then ! (one character: a store; the loop is a memory copy call on nvfortran)
+      s(n + 1_int32:n + 1_int32) = t(1:1)
+   else
+      do i = 1_int32, len(t, kind=int32) ! (a character at a time: see fmt_text)
+         s(n + i:n + i) = t(i:i)
+      enddo
+   endif
    n = n + len(t, kind=int32)
    endsubroutine put
 endmodule figure_plot_format
