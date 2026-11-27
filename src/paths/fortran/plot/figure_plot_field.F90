@@ -16,12 +16,16 @@ module figure_plot_field
 !<   most 65536 bins, each the colour of its centre), as figure_field.cpp; linear fields per value;
 !< - the range: vmin/vmax given, else the finite values' (positive ones on log; [0, 1] or [1, 10] when none), a log
 !<   range with an end <= 0 rebuilt a decade from the other end; a constant field the colormap's middle.
+!<
+!< szaghi/figure#16 S7: a linear field (constant or not) is coloured by one loop with the colormap's table looked up
+!< once (`cm_lookup`) and `at`'s and `cm_sample`'s arithmetic written in it, in their order and precision; no call per
+!< value (nvfortran inlines nothing at `-mp`, gfortran does not inline `cm_sample` across modules).
 use, intrinsic :: iso_c_binding, only : c_associated, c_double, c_int, c_long_long, c_loc, c_null_ptr, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : figure_time
 use figure_c_native, only : fig_texture_create, fig_texture_destroy, fig_texture_update
 use figure_core, only : core_time
-use figure_plot_colormaps, only : cm_generation, cm_sample
+use figure_plot_colormaps, only : cm_generation, cm_lookup, cm_sample
 
 implicit none
 private
@@ -51,11 +55,12 @@ type :: field_entry
    integer(int32)       :: nan = 0_int32         !< NaN colour (packed).
    real(real64)         :: last_time = 0.0_real64 !< Time of the last drawing.
    character(len=:), allocatable :: label        !< The item's label (`field_pixel`).
-   integer(int32),   allocatable :: px(:)        !< The colours of its last colouring (`field_pixel`).
+   integer(int32),   allocatable :: px(:)        !< The colours of its last colouring, uploaded from here and read by
+                                                 !< `field_pixel` (figure_field.cpp's entry_t::rgba).
 endtype field_entry
 
-type(field_entry), allocatable :: cache(:) !< The colourings.
-integer(int32),    allocatable, target :: rgba(:) !< The colours of the last colouring (kept, grown).
+type(field_entry), allocatable, target :: cache(:) !< The colourings.
+integer(int32), pointer, contiguous    :: rgba(:) => null() !< The colouring in progress: its entry's `px`.
 integer(int32),    allocatable :: lut(:)   !< The bit table (kept, grown).
 integer(int64)                 :: uploads = 0_int64 !< Colourings uploaded since the start (tests).
 real(real64)                   :: last_ms = 0.0_real64 !< The last colouring's time, upload included [ms] (tests).
@@ -180,10 +185,11 @@ contains
             if (.not. (e%lo > 0.0_real64)) e%lo = e%hi / 10.0_real64
             if (.not. (e%hi > 0.0_real64)) e%hi = e%lo * 10.0_real64
          endif
-         if (allocated(rgba)) then
-            if (size(rgba, kind=int64) < n) deallocate(rgba)
+         if (allocated(e%px)) then ! the entry's colours, written in place (allocated when the shape changes)
+            if (size(e%px, kind=int64) /= n) deallocate(e%px)
          endif
-         if (.not. allocated(rgba)) allocate(rgba(max(n, 1024_int64)))
+         if (.not. allocated(e%px)) allocate(e%px(n))
+         rgba => e%px
          if (kind == 4_int32) then
             call colour_r32(f32, e, n)
          else
@@ -196,14 +202,7 @@ contains
          endif
          uploads = uploads + 1_int64
          last_ms = (figure_time() - t0) * 1000.0_real64
-         if (present(label)) then ! kept for field_pixel (allocated when coloured, not per frame)
-            if (allocated(e%px)) then
-               if (size(e%px, kind=int64) /= n) deallocate(e%px)
-            endif
-            if (.not. allocated(e%px)) allocate(e%px(n))
-            e%px(1:n) = rgba(1:n)
-            e%label = label
-         endif
+         if (present(label)) e%label = label ! for field_pixel
       endif
       tex = e%tex
       lo = e%lo
@@ -422,9 +421,46 @@ contains
    type(field_entry), intent(in) :: e      !< Entry.
    integer(int64),    intent(in) :: n      !< Values.
    integer(int64)                :: i, j, k !< Counters.
+   integer(int32), pointer, contiguous :: tab(:) !< The colormap's table.
+   logical                       :: qual    !< ... qualitative.
+   integer(int32)                :: mid, siz, idx !< The constant field's colour, the table's size, an entry.
+   real(real32)                  :: fsiz, x !< The size factor of `cm_sample` (siz or siz - 1), the entry unrounded.
+   real(real64)                  :: lo, hi, s0, inv, v, t !< The colouring's constants, a value, its position.
 
    call colour_setup(e, n)
    k = 0_int64
+   if (e%scale == FIELD_LINEAR) then ! one loop, no call per value (never the bit table: log and symlog only)
+      call linear_setup(e, tab, qual, mid, siz, fsiz)
+      lo = lo_
+      hi = hi_
+      s0 = s0_
+      inv = inv_
+      do j = 1_int64, size(f, 2, kind=int64)
+         do i = 1_int64, size(f, 1, kind=int64)
+            k = k + 1_int64
+            v = f(i, j)
+            if (.not. (abs(v) <= huge(1.0_real64))) then ! masked
+               rgba(k) = e%nan
+            elseif (const_) then
+               rgba(k) = mid
+            else ! at(clamp(v, lo, hi)): t, clamped, as a float; then LerpTable
+               v = min(max(v, lo), hi)
+               t = (v - s0) * inv
+               x = real(min(max(t, 0.0_real64), 1.0_real64), real32)
+               if (qual) then
+                  x = fsiz * x
+                  idx = min(max(int(x, int32), 0_int32), siz - 1_int32)
+               else
+                  x = fsiz * x
+                  x = x + 0.5_real32
+                  idx = int(x, int32)
+               endif
+               rgba(k) = tab(idx + 1_int32)
+            endif
+         enddo
+      enddo
+      return
+   endif
    do j = 1_int64, size(f, 2, kind=int64)
       do i = 1_int64, size(f, 1, kind=int64)
          k = k + 1_int64
@@ -439,9 +475,46 @@ contains
    type(field_entry), intent(in) :: e      !< Entry.
    integer(int64),    intent(in) :: n      !< Values.
    integer(int64)                :: i, j, k !< Counters.
+   integer(int32), pointer, contiguous :: tab(:) !< The colormap's table.
+   logical                       :: qual    !< ... qualitative.
+   integer(int32)                :: mid, siz, idx !< The constant field's colour, the table's size, an entry.
+   real(real32)                  :: fsiz, x !< The size factor of `cm_sample` (siz or siz - 1), the entry unrounded.
+   real(real64)                  :: lo, hi, s0, inv, v, t !< The colouring's constants, a value, its position.
 
    call colour_setup(e, n)
    k = 0_int64
+   if (e%scale == FIELD_LINEAR) then ! one loop, no call per value (never the bit table: log and symlog only)
+      call linear_setup(e, tab, qual, mid, siz, fsiz)
+      lo = lo_
+      hi = hi_
+      s0 = s0_
+      inv = inv_
+      do j = 1_int64, size(f, 2, kind=int64)
+         do i = 1_int64, size(f, 1, kind=int64)
+            k = k + 1_int64
+            v = real(f(i, j), real64)
+            if (.not. (abs(v) <= huge(1.0_real64))) then ! masked
+               rgba(k) = e%nan
+            elseif (const_) then
+               rgba(k) = mid
+            else ! at(clamp(v, lo, hi)): t, clamped, as a float; then LerpTable
+               v = min(max(v, lo), hi)
+               t = (v - s0) * inv
+               x = real(min(max(t, 0.0_real64), 1.0_real64), real32)
+               if (qual) then
+                  x = fsiz * x
+                  idx = min(max(int(x, int32), 0_int32), siz - 1_int32)
+               else
+                  x = fsiz * x
+                  x = x + 0.5_real32
+                  idx = int(x, int32)
+               endif
+               rgba(k) = tab(idx + 1_int32)
+            endif
+         enddo
+      enddo
+      return
+   endif
    do j = 1_int64, size(f, 2, kind=int64)
       do i = 1_int64, size(f, 1, kind=int64)
          k = k + 1_int64
@@ -449,6 +522,24 @@ contains
       enddo
    enddo
    endsubroutine colour_r32
+
+   subroutine linear_setup(e, tab, qual, mid, siz, fsiz)
+   !< The per-field constants of the one-loop colouring: the colormap's table (`cm_lookup`) and kind, its size and the
+   !< factor `cm_sample` multiplies t by (siz for a qualitative map, siz - 1 for a continuous one), the middle colour of
+   !< a constant field (`cm_sample` at 0.5).
+   type(field_entry),                   intent(in)  :: e      !< Entry.
+   integer(int32), pointer, contiguous, intent(out) :: tab(:) !< Table.
+   logical,                             intent(out) :: qual   !< Qualitative.
+   integer(int32),                      intent(out) :: mid    !< Constant field's colour.
+   integer(int32),                      intent(out) :: siz    !< Table's size.
+   real(real32),                        intent(out) :: fsiz   !< Size factor.
+
+   call cm_lookup(e%cmap, tab, qual)
+   siz = size(tab, kind=int32)
+   fsiz = real(merge(siz, siz - 1_int32, qual), real32)
+   mid = 0_int32
+   if (const_) mid = cm_sample(e%cmap, 0.5_real32)
+   endsubroutine linear_setup
 
    ! the colouring's state for one field: the per-value constants and, for large log/symlog fields, the bit table
    subroutine colour_setup(e, n)
