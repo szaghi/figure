@@ -77,6 +77,12 @@ $FORTRAN_ONLY = src/tests/fortran
 # C7): left out of the test modes' sources (the templates' exclude) and linked from bench-data-<mode> (below), the same
 # build on both paths
 $BENCH_DATA   = src/tests/bench/figure_bench_data.F90
+# $NVF_INLINE (szaghi/figure#16 S11): nvfortran at -mp inlines no procedure, so the -fortran nvf modes name the plot
+# items' per-primitive helpers to inline (figure_plot_items: the writers, the block mapper, the run's reservation, the
+# cull's ImMin/ImMax/Overlaps); `-Minline` of every procedure broke the code editor's tests (wrong results). Measured:
+# line1e4 and line1e5 0.84, scatter1e6 0.90 of the frame without it, no scene slower; the side-by-side checks equal to
+# the bit. A helper renamed must be renamed here too (it would silently stay a call)
+$NVF_INLINE  = -Minline=put_line,put_rect_fill,put_rect_line,put_fan,pixel_block,run_next,im_min,im_max,overlaps
 
 # main modes: the tests build into exe/ (scripts/run_tests.sh runs every program there), the examples into exe/examples/
 # (with their own mod/ and obj/), which run_tests.sh does not enter
@@ -211,7 +217,7 @@ exclude_dirs =
 [tests-nvf-fortran]
 template     = tests-nvf
 src          = src/lib/ $PATH_FORTRAN src/tests/
-cflags       = $CNVF -O2 -Mnofma
+cflags       = $CNVF -O2 -Mnofma $NVF_INLINE
 exclude_dirs =
 
 # tests-nvf-acc-fortran: the Fortran path with OpenACC on the GPU, as tests-nvf-acc for the current path (its flags, with
@@ -222,13 +228,13 @@ exclude_dirs =
 [tests-nvf-acc-fortran]
 template     = tests-nvf-acc
 src          = src/lib/ $PATH_FORTRAN src/tests/
-cflags       = $CNVF -O2 -Mnofma -acc -gpu=cc89 -DDEV_OAC -DCOMPILER_NVF
+cflags       = $CNVF -O2 -Mnofma $NVF_INLINE -acc -gpu=cc89 -DDEV_OAC -DCOMPILER_NVF
 exclude_dirs =
 
 [examples-nvf-fortran]
 template     = examples-nvf
 src          = src/lib/ $PATH_FORTRAN src/examples/
-cflags       = $CNVF -O2 -Mnofma
+cflags       = $CNVF -O2 -Mnofma $NVF_INLINE
 exclude_dirs =
 
 [tests-ifx-fortran]

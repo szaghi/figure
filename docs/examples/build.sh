@@ -28,7 +28,8 @@
 #   Fortran path (szaghi/figure#15 §2: its seams, fobos' $PATH_FORTRAN, as the -fortran modes), so that
 #   `docs_media.py --check` compares its pictures; the default is the current path (imgui). --compiler nvf or ifx builds
 #   them with nvfortran or ifx and the flags of fobos' tests-nvf / tests-ifx modes (with --path fortran: of the
-#   -fortran modes, -Mnofma, -fp-model precise), FC naming the compiler's binary (default nvfortran, ifx). A build
+#   -fortran modes, -Mnofma and $NVF_INLINE, -fp-model precise), FC naming the compiler's binary (default nvfortran,
+#   ifx). A build
 #   other than the default one (gnu, imgui) writes the snippets and the runs' outputs under build/docs-examples/pages,
 #   not into docs/examples/: the pages show the default build's, and the runs still fail the build on a bad status.
 set -euo pipefail
@@ -55,7 +56,8 @@ case $compiler in
    # nvf: -mp as tests-nvf's openmp, for nvfortran's I/O runtime is thread-safe with -mp only (the examples whose
    # tasks read and write files on worker threads failed at random without it: FIO-F-209, FIO-F-254)
    nvf) fc=${FC:-nvfortran}; fobis_compiler=nvfortran; cflags="-c -Mstandard -Mfree -Munixlogical -O2 -mp"
-        [[ $path == fortran ]] && cflags="$cflags -Mnofma"
+        # the Fortran path: no FMA (the oracle's bit equality) and the plot items' helpers inlined (fobos' $NVF_INLINE)
+        [[ $path == fortran ]] && cflags="$cflags -Mnofma -Minline=put_line,put_rect_fill,put_rect_line,put_fan,pixel_block,run_next,im_min,im_max,overlaps"
         extra_lflags="-Munixlogical -mp" ;;
    ifx) fc=${FC:-ifx}; fobis_compiler=intel_nextgen; cflags="-c -stand f18 -free -fpscomp logicals -O2"
         [[ $path == fortran ]] && cflags="$cflags -fp-model precise"
