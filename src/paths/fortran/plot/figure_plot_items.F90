@@ -2600,6 +2600,8 @@ contains
    logical,             intent(in) :: col_maj        !< Column major.
    real(real64)                    :: smin, smax, w, h, hx, hy, yref, ydir, px, py, v, t, a, d !< Cells.
    real(real32)                    :: p1(2), p2(2), tsz(2) !< Pixels, a label's size.
+   real(real32)                    :: xlo, ylo, xhi, yhi !< The primitive's bounds (`ImMin`, `ImMax` of its ends).
+   logical                         :: vis                !< They overlap the plot rectangle (`Overlaps`).
    real(real64)                    :: tw, th          !< Text size.
    real(real32)                    :: uv(2)           !< White pixel.
    real(real32)                    :: tt, xq, fq, fc  !< A cell's place on the map, its table entry unrounded; the
@@ -2705,9 +2707,25 @@ contains
             r = r + 1_int32
          endif
       endif
-      if (iand(ishft(int(col, int64), -24), 255_int64) == 0_int64 .or. &
-          .not. overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                         im_max(p1(2), p2(2)))) then
+      xlo = merge(p1(1), p2(1), p1(1) < p2(1)) ! ImMin, ImMax and Overlaps written out: nvfortran -O2 -mp
+      ylo = merge(p1(2), p2(2), p1(2) < p2(2)) ! inlines no procedure (im_min: the NaN cases)
+      xhi = merge(p1(1), p2(1), p1(1) >= p2(1))
+      yhi = merge(p1(2), p2(2), p1(2) >= p2(2))
+#ifdef __NVCOMPILER
+      if (p1(1) /= p1(1) .or. p2(1) /= p2(1)) then
+         xlo = p2(1)
+         xhi = p2(1)
+      endif
+      if (p1(2) /= p1(2) .or. p2(2) /= p2(2)) then
+         ylo = p2(2)
+         yhi = p2(2)
+      endif
+#endif
+      vis = ctx%rect(2) < yhi .and. ctx%rect(4) > ylo .and. ctx%rect(1) < xhi .and. ctx%rect(3) > xlo
+#ifdef __NVCOMPILER
+      if (vis) vis = .not. (xlo /= xlo .or. ylo /= ylo .or. xhi /= xhi .or. yhi /= yhi)
+#endif
+      if (iand(ishft(int(col, int64), -24), 255_int64) == 0_int64 .or. .not. vis) then
          run%culled = run%culled + 1_int32
          cycle
       endif
@@ -4385,6 +4403,8 @@ contains
    logical,             intent(in) :: loop     !< GetterLoop: the first point again at the end.
    logical,             intent(in) :: skip_nan !< SkipNaN.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
+   real(real32)                    :: xlo, ylo, xhi, yhi !< The primitive's bounds (`ImMin`, `ImMax` of its ends).
+   logical                         :: vis                !< They overlap the plot rectangle (`Overlaps`).
    real(real32)                    :: uv0(2), uv1(2)   !< Texture.
    real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
    type(prim_run)                  :: r                !< The run.
@@ -4414,8 +4434,25 @@ contains
          do m = 1_int32, ke - k + 1_int32
             p2(1) = bx(m)
             p2(2) = by(m)
-            if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                         im_max(p1(2), p2(2)))) then
+            xlo = merge(p1(1), p2(1), p1(1) < p2(1)) ! ImMin, ImMax and Overlaps written out: nvfortran -O2 -mp
+            ylo = merge(p1(2), p2(2), p1(2) < p2(2)) ! inlines no procedure (im_min: the NaN cases)
+            xhi = merge(p1(1), p2(1), p1(1) >= p2(1))
+            yhi = merge(p1(2), p2(2), p1(2) >= p2(2))
+#ifdef __NVCOMPILER
+            if (p1(1) /= p1(1) .or. p2(1) /= p2(1)) then
+               xlo = p2(1)
+               xhi = p2(1)
+            endif
+            if (p1(2) /= p1(2) .or. p2(2) /= p2(2)) then
+               ylo = p2(2)
+               yhi = p2(2)
+            endif
+#endif
+            vis = ctx%rect(2) < yhi .and. ctx%rect(4) > ylo .and. ctx%rect(1) < xhi .and. ctx%rect(3) > xlo
+#ifdef __NVCOMPILER
+            if (vis) vis = .not. (xlo /= xlo .or. ylo /= ylo .or. xhi /= xhi .or. yhi /= yhi)
+#endif
+            if (vis) then
                call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
             else
                r%culled = r%culled + 1_int32
@@ -4440,6 +4477,8 @@ contains
    integer(int32),      intent(in) :: col    !< Colour.
    real(real32),        intent(in) :: weight !< Line weight.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
+   real(real32)                    :: xlo, ylo, xhi, yhi !< The primitive's bounds (`ImMin`, `ImMax` of its ends).
+   logical                         :: vis                !< They overlap the plot rectangle (`Overlaps`).
    real(real32)                    :: uv0(2), uv1(2)   !< Texture.
    real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
    type(prim_run)                  :: r                !< The run.
@@ -4461,8 +4500,25 @@ contains
             p1(2) = by(m)
             p2(1) = bx(m + 1_int32)
             p2(2) = by(m + 1_int32)
-            if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                         im_max(p1(2), p2(2)))) then
+            xlo = merge(p1(1), p2(1), p1(1) < p2(1)) ! ImMin, ImMax and Overlaps written out: nvfortran -O2 -mp
+            ylo = merge(p1(2), p2(2), p1(2) < p2(2)) ! inlines no procedure (im_min: the NaN cases)
+            xhi = merge(p1(1), p2(1), p1(1) >= p2(1))
+            yhi = merge(p1(2), p2(2), p1(2) >= p2(2))
+#ifdef __NVCOMPILER
+            if (p1(1) /= p1(1) .or. p2(1) /= p2(1)) then
+               xlo = p2(1)
+               xhi = p2(1)
+            endif
+            if (p1(2) /= p1(2) .or. p2(2) /= p2(2)) then
+               ylo = p2(2)
+               yhi = p2(2)
+            endif
+#endif
+            vis = ctx%rect(2) < yhi .and. ctx%rect(4) > ylo .and. ctx%rect(1) < xhi .and. ctx%rect(3) > xlo
+#ifdef __NVCOMPILER
+            if (vis) vis = .not. (xlo /= xlo .or. ylo /= ylo .or. xhi /= xhi .or. yhi /= yhi)
+#endif
+            if (vis) then
                call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
             else
                r%culled = r%culled + 1_int32
@@ -4482,6 +4538,8 @@ contains
    integer(int32),      intent(in) :: col    !< Colour.
    real(real32),        intent(in) :: weight !< Line weight.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
+   real(real32)                    :: xlo, ylo, xhi, yhi !< The primitive's bounds (`ImMin`, `ImMax` of its ends).
+   logical                         :: vis                !< They overlap the plot rectangle (`Overlaps`).
    real(real32)                    :: uv0(2), uv1(2)   !< Texture.
    real(real32)                    :: ax(PIX_BLOCK), ay(PIX_BLOCK), bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels of
                                                                                                !< g1 and g2.
@@ -4505,8 +4563,25 @@ contains
             p1(2) = ay(m)
             p2(1) = bx(m)
             p2(2) = by(m)
-            if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                         im_max(p1(2), p2(2)))) then
+            xlo = merge(p1(1), p2(1), p1(1) < p2(1)) ! ImMin, ImMax and Overlaps written out: nvfortran -O2 -mp
+            ylo = merge(p1(2), p2(2), p1(2) < p2(2)) ! inlines no procedure (im_min: the NaN cases)
+            xhi = merge(p1(1), p2(1), p1(1) >= p2(1))
+            yhi = merge(p1(2), p2(2), p1(2) >= p2(2))
+#ifdef __NVCOMPILER
+            if (p1(1) /= p1(1) .or. p2(1) /= p2(1)) then
+               xlo = p2(1)
+               xhi = p2(1)
+            endif
+            if (p1(2) /= p1(2) .or. p2(2) /= p2(2)) then
+               ylo = p2(2)
+               yhi = p2(2)
+            endif
+#endif
+            vis = ctx%rect(2) < yhi .and. ctx%rect(4) > ylo .and. ctx%rect(1) < xhi .and. ctx%rect(3) > xlo
+#ifdef __NVCOMPILER
+            if (vis) vis = .not. (xlo /= xlo .or. ylo /= ylo .or. xhi /= xhi .or. yhi /= yhi)
+#endif
+            if (vis) then
                call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
             else
                r%culled = r%culled + 1_int32
@@ -4527,6 +4602,8 @@ contains
    real(real32),        intent(in) :: weight !< Line weight.
    logical,             intent(in) :: pre    !< PreStep.
    real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
+   real(real32)                    :: xlo, ylo, xhi, yhi !< The primitive's bounds (`ImMin`, `ImMax` of its ends).
+   logical                         :: vis                !< They overlap the plot rectangle (`Overlaps`).
    real(real32)                    :: uv(2)            !< White pixel.
    type(prim_run)                  :: r                !< The run.
    type(pixel_reader)              :: rd               !< The pixels, a block at a time.
@@ -4542,8 +4619,25 @@ contains
       call run_next(r, nprim, cnt)
       do k = k0 + 1_int32, k0 + cnt
          call read_pixel(rd, ctx, g, k + 1_int32, p2)
-         if (overlaps(ctx%rect, im_min(p1(1), p2(1)), im_min(p1(2), p2(2)), im_max(p1(1), p2(1)), &
-                      im_max(p1(2), p2(2)))) then
+         xlo = merge(p1(1), p2(1), p1(1) < p2(1)) ! ImMin, ImMax and Overlaps written out: nvfortran -O2 -mp
+         ylo = merge(p1(2), p2(2), p1(2) < p2(2)) ! inlines no procedure (im_min: the NaN cases)
+         xhi = merge(p1(1), p2(1), p1(1) >= p2(1))
+         yhi = merge(p1(2), p2(2), p1(2) >= p2(2))
+#ifdef __NVCOMPILER
+         if (p1(1) /= p1(1) .or. p2(1) /= p2(1)) then
+            xlo = p2(1)
+            xhi = p2(1)
+         endif
+         if (p1(2) /= p1(2) .or. p2(2) /= p2(2)) then
+            ylo = p2(2)
+            yhi = p2(2)
+         endif
+#endif
+         vis = ctx%rect(2) < yhi .and. ctx%rect(4) > ylo .and. ctx%rect(1) < xhi .and. ctx%rect(3) > xlo
+#ifdef __NVCOMPILER
+         if (vis) vis = .not. (xlo /= xlo .or. ylo /= ylo .or. xhi /= xhi .or. yhi /= yhi)
+#endif
+         if (vis) then
             if (pre) then
                call put_rect_fill(r, p1(1) - hw, p1(2), p1(1) + hw, p2(2), col, uv)
                call put_rect_fill(r, p1(1), p2(2) + hw, p2(1), p2(2) - hw, col, uv)
@@ -4778,6 +4872,7 @@ contains
    real(real32)                    :: p(2), x, y, w, uv(2) !< Point, a vertex, product, white pixel.
    real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
    type(prim_run)                  :: r           !< The run.
+   logical                         :: vis         !< Inside the plot rectangle.
    integer(int32)                  :: i, k, nv, i0, nb, m, nprim, cnt !< Point, vertex, count, run's start, block's
                                                                       !< points, one of them, points left, run.
 
@@ -4795,8 +4890,12 @@ contains
          do m = 1_int32, nb
             p(1) = bx(m)
             p(2) = by(m)
-            if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
-                       p(2) <= ctx%rect(4)) .or. is_nan2(p)) then ! (a NaN outside: see im_min)
+            vis = p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
+                  p(2) <= ctx%rect(4)
+#ifdef __NVCOMPILER
+            if (vis) vis = .not. (p(1) /= p(1) .or. p(2) /= p(2)) ! (a NaN outside; nvfortran: see im_min)
+#endif
+            if (.not. vis) then
                r%culled = r%culled + 1_int32
                cycle
             endif
@@ -4841,6 +4940,7 @@ contains
    real(real32)                    :: uv0(2), uv1(2) !< Texture.
    real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
    type(prim_run)                  :: r           !< The run.
+   logical                         :: vis         !< Inside the plot rectangle.
    integer(int32)                  :: i, k, ns, i0, nb, m, nprim, cnt !< Point, segment, shape's points, run's start,
                                                                       !< block's points, one of them, points left, run.
 
@@ -4858,8 +4958,12 @@ contains
          do m = 1_int32, nb
             p(1) = bx(m)
             p(2) = by(m)
-            if (.not. (p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
-                       p(2) <= ctx%rect(4)) .or. is_nan2(p)) then ! (a NaN outside: see im_min)
+            vis = p(1) >= ctx%rect(1) .and. p(2) >= ctx%rect(2) .and. p(1) <= ctx%rect(3) .and. &
+                  p(2) <= ctx%rect(4)
+#ifdef __NVCOMPILER
+            if (vis) vis = .not. (p(1) /= p(1) .or. p(2) /= p(2)) ! (a NaN outside; nvfortran: see im_min)
+#endif
+            if (.not. vis) then
                r%culled = r%culled + 1_int32
                cycle
             endif
@@ -5249,17 +5353,6 @@ contains
    if (a /= a .or. b /= b) c = b ! (a NaN; nvfortran gets `/=` right, and ieee_is_nan is a library call there)
 #endif
    endfunction im_min
-
-   pure function is_nan2(p) result(yes)
-   !< A NaN in a pixel: false but on nvfortran, whose comparisons with a NaN are not IEEE's (see `im_min`).
-   real(real32), intent(in) :: p(2) !< Pixel.
-   logical                  :: yes  !< A NaN (nvfortran only).
-
-   yes = .false.
-#ifdef __NVCOMPILER
-   yes = p(1) /= p(1) .or. p(2) /= p(2)
-#endif
-   endfunction is_nan2
 
    pure function im_max(a, b) result(c)
    !< `ImMax`: a >= b ? a : b (the second with a NaN; nvfortran: see `im_min`).
