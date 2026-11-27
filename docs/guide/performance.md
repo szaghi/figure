@@ -268,7 +268,19 @@ per thread: a few milliseconds for a whole window, paid only on the frame that s
   (two builds of the benchmark, one copied aside: the modes share `exe/`), or a change with the commit before it.
   The data the heatmap, field and surface scenes recompute every frame (`src/tests/bench/figure_bench_data.F90`) are compiled with the
   default mode's flags in both builds, so the comparison measures the paths alone.
-  `--self-test` checks the statistics and the gates without running anything.
+  `--pin auto|none|CPUS` sets the CPUs both programs run on. `auto`, the default, pins to the performance cores when
+  the topology in `/sys` shows them: a hybrid CPU's P-cores (`/sys/devices/cpu_core/cpus`), or the CPUs of the
+  largest `cpu_capacity`. If every CPU looks alike, `auto` pins nothing. That is the case under WSL 2, where the
+  host shows an i9-13900KF's 8 P-cores and 16 E-cores as 16 identical CPUs and decides itself which core each one
+  runs on. The JSON records what was asked, the CPUs used and why (`pinning`).
+  A run of a scene lands on one kind of core as a whole, and an E-core run of a scene under 0.3 ms a frame takes 2 to
+  2.5 times a P-core run, so a few pairs drawn at random can give ratios from 0.5 to 3.6. With `--against`, the small
+  scenes (widgets, table, line100, line1e4, editor10k) therefore run each side `--best-of` times in a row (default
+  3) and keep the fastest run: a disturbed run is only ever slower, and both sides get the same treatment. On the
+  WSL box this shrank those scenes' pair spread from up to 2.8 to 0.04 or less. The larger scenes run once.
+  `profile_scene.py` needs neither: instruction counts do not depend on the core.
+  `--self-test` checks the statistics, the gates, the CPU lists, the core classes and the best-of choice without
+  running anything.
 - `scripts/profile_scene.py SCENE` says where a scene's time goes: it runs the scene under valgrind's callgrind on two
   builds (`--program` and `--against`, or `--build gnu|nvf|ifx` to build the Fortran path and the current path
   itself) and sums the instructions executed by role: the scene's own data, primitives handed to the draw list,

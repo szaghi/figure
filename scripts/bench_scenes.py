@@ -41,7 +41,25 @@ largest minus the smallest), taken at least ``--floor-rel`` (default 0.05), and 
 says how much of it is the clock's). Faster is never a failure; exit status 1 if any scene fails. The P2 baselines
 are not read: they predate #15 P4's decimation and ImPlot3D's patch 0002 for some scenes (#16 D4).
 
-``--self-test`` checks the reductions and both gates on fixed numbers, without running a program.
+``--pin auto|none|CPUS`` sets the CPUs both programs run on (this process's affinity, which every run inherits), so a
+pair's runs see the same core class (szaghi/figure#16 S9). ``auto`` (the default) pins to the performance cores when
+the topology in /sys shows them: the CPUs of ``/sys/devices/cpu_core/cpus`` (a hybrid Intel CPU's P-cores), else the
+CPUs of the largest ``cpu_capacity`` when the capacities differ. When every CPU looks alike it pins nothing: under
+WSL 2 (Hyper-V) the i9-13900KF's 8 P-cores and 16 E-cores appear as 16 identical CPUs (8 cores of 2 threads, the same
+capacity), and the host places them on P- or E-cores itself, so no affinity set inside the guest chooses the class.
+``none`` pins nothing, ``CPUS`` (a list such as ``0-7`` or ``14,15``) pins to those. What was asked, the CPUs used
+and why are recorded in the JSON (``pinning``).
+
+``--best-of K`` (default 3, ``--against`` only) is what makes the small scenes measurable where pinning cannot: a run
+of a scene lands on one core class as a whole, and on WSL an E-core run of a scene under 0.3 ms a frame takes 2 to 2.5
+times a P-core run, so five pairs drawn at random gave pair ratios of 0.5 to 3.6 (S5, S9). For the scenes of
+``SMALL`` each side of a pair is run K times in a row and the run with the smallest frame median kept (an interfered
+run is only ever slower); the other scenes are run once (a frame of milliseconds or more does not fit this
+bimodality, and K times their runs would be hours). Both sides are treated alike, so the ratio stays fair; K is
+recorded with the runs it kept (``best_of``).
+
+``--self-test`` checks the reductions, both gates, the CPU lists, the topology's core classes and the best-of choice
+on fixed numbers, without running a program.
 
 ``--json FILE`` also writes the run (every run's statistics) to FILE. ``--scenes a,b`` runs those only (the
 ``EXTRA`` scenes, line1e8c and device1e8, only so: no baseline of #15 P2 has them); ``--frames``
@@ -55,6 +73,7 @@ Usage::
                                     [--scenes a,b] [--compiler NAME] [--file docs/data/bench-scenes.json]
                                     (--write LABEL | --compare LABEL | --against PROGRAM) [--json FILE]
                                     [--allow-llvmpipe] [--floor-rel 0.05] [--floor-ms 0.05] [--p99-floor-rel 0.20]
+                                    [--pin auto|none|CPUS] [--best-of 3]
     python3 scripts/bench_scenes.py --self-test
 
 Standard library only (Python >= 3.11). Run from the repository root.
@@ -70,6 +89,7 @@ import platform
 import statistics
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -95,6 +115,10 @@ P99_FRAMES = 300  # frames a 99th percentile needs (#15 P2): fewer, and a scene'
 # scenes not run in a mode, with the reason
 SKIP = {"window": {"line1e8": "8 GB of vertices a frame for the GPU: the baseline cannot draw it in a window"}}
 RETRIES = 1  # a scene's run that fails is run again once (a window closed under a long frame once, 2026-11-20)
+# the scenes under 0.3 ms a frame headless on the WSL box (#16 S5, S9): with --against, each side's run is the best of
+# --best-of runs (their runs fall on a P- or an E-core as a whole: two levels 2 to 2.5x apart)
+SMALL = ("widgets", "table", "line100", "line1e4", "editor10k")
+SYS = Path("/sys")
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -136,12 +160,13 @@ class SceneStats:
     runs: list[RunStats] = field(default_factory=list)
     retries: int = 0  # runs that failed and were run again
     warmup: int = 0  # frames not measured before each run's measured ones
+    best_of: int = 1  # runs in a row each kept run is the best of (--best-of, SMALL scenes with --against)
 
     def summary(self) -> dict[str, float | int]:
         """The scene's record: medians and spreads of the four statistics, the frames per run."""
         frames = self.runs[0].frames
         out: dict[str, float | int | str] = {"frames": frames, "runs": len(self.runs), "retries": self.retries,
-                                           "warmup": self.warmup}
+                                           "warmup": self.warmup, "best_of": self.best_of}
         for key in ("frame_median", "frame_p99", "ui_median", "ui_p99"):
             vals = [getattr(r, key) for r in self.runs]
             out[key] = round(statistics.median(vals), 4)
@@ -200,6 +225,52 @@ def machine() -> str:
     return f"{platform.system()} {platform.release()}, {cpu}, {os.cpu_count()} hardware threads"
 
 
+def cpu_list(text: str) -> list[int]:
+    """The CPUs of a list as /sys and taskset write it ('0-3,8,10-11'), sorted, each once."""
+    cpus: set[int] = set()
+    for part in text.strip().split(","):
+        if not part:
+            continue
+        lo, _, hi = part.partition("-")
+        first, last = int(lo), int(hi or lo)
+        if last < first:
+            msg = f"bad CPU range {part!r}"
+            raise ValueError(msg)
+        cpus.update(range(first, last + 1))
+    return sorted(cpus)
+
+
+def core_class(sys_root: Path = SYS) -> tuple[list[int], str]:
+    """The performance cores as the topology under `sys_root` shows them, and how they were found; no CPU when every
+    CPU looks alike."""
+    hybrid = sys_root / "devices" / "cpu_core" / "cpus"
+    if hybrid.is_file():
+        return cpu_list(hybrid.read_text()), "devices/cpu_core/cpus (a hybrid CPU's P-cores)"
+    caps: dict[int, int] = {}
+    for f in sorted((sys_root / "devices" / "system" / "cpu").glob("cpu[0-9]*/cpu_capacity")):
+        caps[int(f.parent.name[3:])] = int(f.read_text())
+    if caps and len(set(caps.values())) > 1:
+        top = max(caps.values())
+        return sorted(c for c, v in caps.items() if v == top), f"cpu_capacity: the largest class ({top})"
+    return [], (f"uniform topology ({len(caps) or 'no'} CPUs alike in cpu_capacity, no devices/cpu_core): no class "
+                "to pin to (under WSL 2 the host places the virtual CPUs on P- or E-cores itself)")
+
+
+def pinning(request: str, sys_root: Path = SYS) -> dict:
+    """The CPUs `request` ('auto', 'none' or a CPU list) pins to: {'request', 'cpus' (empty: not pinned), 'source'}."""
+    if request == "none":
+        return {"request": request, "cpus": [], "source": "not pinned (--pin none)"}
+    if request == "auto":
+        cpus, source = core_class(sys_root)
+        return {"request": request, "cpus": cpus, "source": source}
+    return {"request": request, "cpus": cpu_list(request), "source": "the given list"}
+
+
+def best_run(runs: list[RunStats]) -> RunStats:
+    """Of a scene's runs in a row, the one of the smallest frame median (an interfered run is only slower)."""
+    return min(runs, key=lambda r: r.frame_median)
+
+
 def measure(program: Path, scenes: list[str], mode: str, runs: int, frames: int | None,
             warmup: int | None) -> dict[str, SceneStats]:
     """Every scene `runs` times, the runs interleaved (scene after scene, then again) so that a slow minute of the
@@ -236,10 +307,10 @@ def pair_order(k: int) -> tuple[int, int]:
 
 
 def measure_against(program: Path, against: Path, scenes: list[str], mode: str, runs: int, frames: int | None,
-                    warmup: int | None) -> tuple[dict[str, SceneStats], dict[str, SceneStats]]:
+                    warmup: int | None, best_of: int = 1) -> tuple[dict[str, SceneStats], dict[str, SceneStats]]:
     """Every scene `runs` times on both programs, pair after pair (``pair_order``), the pairs of a run of the scene
     list before the next run's: the candidate's statistics and the reference's, run k of one paired with run k of the
-    other."""
+    other. A scene of ``SMALL``: each side's run is the best of `best_of` in a row (``best_run``)."""
     progs = (program, against)
     out = ({s: SceneStats() for s in scenes}, {s: SceneStats() for s in scenes})
     for k in range(runs):
@@ -247,9 +318,12 @@ def measure_against(program: Path, against: Path, scenes: list[str], mode: str, 
             nf, nw = FRAMES[mode].get(s, DEFAULT_FRAMES)
             nf = frames or nf
             nw = nw if warmup is None else warmup
+            tries = best_of if s in SMALL else 1
             for side in pair_order(k):
                 out[side][s].warmup = nw
-                stats = run_with_retries(progs[side], s, mode, nf, nw, out[side][s], f"run {k + 1}/{runs}")
+                out[side][s].best_of = tries
+                stats = best_run([run_with_retries(progs[side], s, mode, nf, nw, out[side][s], f"run {k + 1}/{runs}")
+                                  for _ in range(tries)])
                 out[side][s].runs.append(stats)
             a, b = out[0][s].runs[-1], out[1][s].runs[-1]
             print(f"run {k + 1}/{runs} {s}: frame median {a.frame_median:.3f} / {b.frame_median:.3f} ms "
@@ -352,6 +426,31 @@ def self_test() -> int:
     run["s"]["frames"] = 30
     worse, _ = compare(base, run, 0.05, 0.05)
     check("--compare: other frames not comparable", len(worse) == 1 and "not comparable" in worse[0])
+    check("cpu list", cpu_list("0-3,8,10-11") == [0, 1, 2, 3, 8, 10, 11] and cpu_list("15") == [15])
+    try:
+        cpu_list("5-2")
+        check("a reversed CPU range is refused", False)
+    except ValueError:
+        pass
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for c, cap in enumerate((1024, 1024, 1024, 1024)):
+            d = root / "devices" / "system" / "cpu" / f"cpu{c}"
+            d.mkdir(parents=True)
+            (d / "cpu_capacity").write_text(f"{cap}\n")
+        cpus, why = core_class(root)
+        check("uniform topology (WSL): nothing to pin", cpus == [] and "uniform" in why)
+        check("--pin auto on it pins nothing", pinning("auto", root)["cpus"] == [])
+        for c, cap in ((2, 600), (3, 600)):
+            (root / "devices" / "system" / "cpu" / f"cpu{c}" / "cpu_capacity").write_text(f"{cap}\n")
+        check("capacities differ: the largest class", core_class(root)[0] == [0, 1])
+        (root / "devices" / "cpu_core").mkdir(parents=True)
+        (root / "devices" / "cpu_core" / "cpus").write_text("0-1,3\n")
+        check("a hybrid CPU's cpu_core list wins", core_class(root)[0] == [0, 1, 3])
+        check("--pin none", pinning("none", root)["cpus"] == [])
+        check("--pin a list", pinning("14,15", root)["cpus"] == [14, 15])
+    runs3 = [RunStats(300, f, f, f, f) for f in (0.16, 0.07, 0.15)]
+    check("best of three: the fastest run", best_run(runs3).frame_median == 0.07)
     for f in failures:
         print(f"bench_scenes: self-test FAILED: {f}", file=sys.stderr)
     print(f"bench_scenes: self-test: {'ok' if not failures else f'{len(failures)} failed'}")
@@ -380,6 +479,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--floor-rel", type=float, default=0.05)
     ap.add_argument("--floor-ms", type=float, help="default 0.05 (0 with --against)")
     ap.add_argument("--p99-floor-rel", type=float, default=0.20)
+    ap.add_argument("--pin", default="auto", metavar="auto|none|CPUS",
+                    help="the CPUs both programs run on: auto (the P-cores the topology shows, else none), none, or a "
+                         "list such as 0-7 (#16 S9)")
+    ap.add_argument("--best-of", type=int, default=3, metavar="K",
+                    help="with --against, each side's run of a SMALL scene is the best of K in a row (#16 S9)")
     args = ap.parse_args(argv)
     if args.self_test:
         return self_test()
@@ -392,10 +496,19 @@ def main(argv: list[str]) -> int:
     unknown = [s for s in scenes if s not in SCENES + EXTRA]
     skipped = {s: why for s, why in SKIP.get(args.mode, {}).items() if s in scenes}
     scenes = [s for s in scenes if s not in skipped]
-    if unknown or args.runs < 1:
-        print(f"bench_scenes: unknown scene {unknown[0]}" if unknown else "bench_scenes: --runs must be >= 1",
-              file=sys.stderr)
+    if unknown or args.runs < 1 or args.best_of < 1:
+        print(f"bench_scenes: unknown scene {unknown[0]}" if unknown else "bench_scenes: --runs and --best-of must be "
+              ">= 1", file=sys.stderr)
         return 2
+    try:
+        args.pinning = pinning(args.pin)
+        if args.pinning["cpus"]:
+            os.sched_setaffinity(0, args.pinning["cpus"])
+    except (ValueError, OSError) as err:
+        print(f"bench_scenes: --pin {args.pin}: {err}", file=sys.stderr)
+        return 2
+    print(f"bench_scenes: pinned to CPUs {args.pinning['cpus']}" if args.pinning["cpus"] else
+          "bench_scenes: not pinned", f"({args.pinning['source']})", flush=True)
     data = json.loads(args.file.read_text()) if args.file.is_file() else {"baselines": {}}
     if args.write and args.write in data["baselines"]:
         print(f"bench_scenes: the baseline {args.write} exists in {args.file}: a baseline is never overwritten "
@@ -426,6 +539,7 @@ def main(argv: list[str]) -> int:
         "renderer": gl,
         "environment": {k: os.environ[k] for k in ("GALLIUM_DRIVER",) if k in os.environ},
         "program": str(args.program.relative_to(ROOT) if args.program.is_relative_to(ROOT) else args.program),
+        "pinning": args.pinning,
         "statistics": "per scene: the median over the runs of each run's median and 99th percentile [ms] of the frame "
                       "time and of the UI time (the scene's own calls), and their spread (largest minus smallest)",
         "scenes": {s: st.summary() for s, st in stats.items()},
@@ -464,7 +578,8 @@ def rel(p: Path) -> str:
 
 def main_against(args: argparse.Namespace, scenes: list[str], skipped: dict[str, str], gl: str) -> int:
     """--against: both programs in one session, the gate on the ratios (#16 §5.1)."""
-    cand, ref = measure_against(args.program, args.against, scenes, args.mode, args.runs, args.frames, args.warmup)
+    cand, ref = measure_against(args.program, args.against, scenes, args.mode, args.runs, args.frames, args.warmup,
+                                args.best_of)
     rows = {s: against(cand[s], ref[s], args.floor_rel, args.floor_ms) for s in scenes}
     record = {
         "date": datetime.date.today().isoformat(),
@@ -475,6 +590,9 @@ def main_against(args: argparse.Namespace, scenes: list[str], skipped: dict[str,
         "environment": {k: os.environ[k] for k in ("GALLIUM_DRIVER",) if k in os.environ},
         "program": rel(args.program),
         "against": rel(args.against),
+        "pinning": args.pinning,
+        "best_of": {"k": args.best_of, "scenes": [s for s in scenes if s in SMALL],
+                    "rule": "each side's run of these scenes is the best (smallest frame median) of k in a row"},
         "rule": f"a scene fails when a median's ratio program / against exceeds 1 + max(its pairs' spread, "
                 f"{args.floor_rel}) and the difference exceeds {args.floor_ms} ms (#16 §5.1); pairs alternate AB, BA",
         "scenes": rows,
