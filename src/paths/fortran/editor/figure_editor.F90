@@ -796,9 +796,17 @@ contains
    logical,                   intent(in),  optional :: quiet !< A query: no failure before `init`.
    logical                                          :: ok    !< Go on.
    logical                                          :: q     !< Quiet.
+   character(len=64)                                :: full  !< `code_editor_object%<name>`, in place (a concatenation
+                                                             !< as an actual is a heap temporary on nvfortran, per call).
 
    ok = .false.
-   if (figure_refused('code_editor_object%'//name, stat)) return
+   if (len(name) <= len(full) - 19) then
+      full(1:19) = 'code_editor_object%'
+      full(20:19 + len(name)) = name
+      if (figure_refused(full(1:19 + len(name)), stat)) return
+   else
+      if (figure_refused('code_editor_object%'//name, stat)) return
+   endif
    q = .false.
    if (present(quiet)) q = quiet
    if (self%handle == 0_c_int) then

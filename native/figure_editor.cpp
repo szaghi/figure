@@ -853,6 +853,16 @@ int fig_core_text_chars(int *out, int cap, int take) {
    return n;
 }
 
+// The code editor's glyphs, a run of n on one row at y, each as the fork's renderText draws it:
+// font->RenderChar(drawList, fontSize, ImVec2(x[k], y), col[k], cp[k]), with the current font, the window's draw list
+// and the font size taken once (szaghi/figure#16 S10: one call a run, not three getters and a cimgui call a glyph).
+void fig_core_text_glyphs(int n, const float *x, float y, const unsigned int *col, const int *cp) {
+   ImFont *font = ImGui::GetFont();
+   ImDrawList *dl = ImGui::GetWindowDrawList();
+   const float size = ImGui::GetFontSize();
+   for (int k = 0; k < n; k++) font->RenderChar(dl, size, ImVec2(x[k], y), col[k], static_cast<ImWchar>(cp[k]));
+}
+
 // The input method's position (TextEditor::handleKeyboardInputs: visible, text input, at x, y, a line of height h).
 void fig_core_text_ime(float x, float y, float h) {
    ImGuiContext *context = ImGui::GetCurrentContext();

@@ -55,6 +55,7 @@ use figure_code_language, only : colorize, lang_comment_single, lang_indentation
 use figure_code_unicode, only : cp_glyph_width, cp_is_bracket_closer, cp_is_bracket_opener, cp_is_white_space, &
                                 cp_is_word, cp_to_pair_closer, cp_to_pair_opener, cp_write, cp_read, &
                                 cp_to_lower
+use figure_core_text, only : ct_glyphs
 use figure_core_text, only : ct_begin_child, ct_begin_popup, ct_begin_tooltip, ct_char, ct_circle_filled, ct_clip_rect, &
                              ct_color_u32, ct_cursor_screen_pos, ct_end_child, ct_end_popup, ct_end_tooltip,            &
                              ct_float4_to_u32, ct_font_size, ct_hovering_rect, ct_item_rect, ct_line,                   &
@@ -942,21 +943,35 @@ contains
    integer(int32)                   :: i, j, column, first_col !< Row, glyph, columns.
    real(c_float)                    :: rx, ry, gx, gy, x1, x2, y, d !< Positions.
    integer(int32)                   :: cp       !< Code point.
+   integer(int32),  parameter       :: GLYPHS = 256_int32 !< A run's glyphs at most.
+   real(c_float)                    :: run_x(GLYPHS) !< The row's run of glyphs (`ct_glyphs`, one call a run): x.
+   integer(c_int)                   :: run_col(GLYPHS), run_cp(GLYPHS) !< ... colours, code points.
+   integer(c_int)                   :: nrun     !< ... glyphs in it.
+   real(c_float)                    :: gw       !< Glyph width (the loop's constants as locals: no reload per glyph).
+   integer(int32)                   :: last_col, ncol !< The last visible column, the line's columns.
+   integer(c_int)                   :: pal(0:32) !< The palette.
 
    rx = e%screen_x + e%text_left
    ry = e%screen_y + real(e%first_row, c_float) * e%glyph_h
    first_col = (e%first_column / e%tab_size) * e%tab_size
+   nrun = 0_c_int ! glyphs go in runs (`ct_glyphs`), drawn in order: a run is drawn before any other primitive
+   gw = e%glyph_w
+   last_col = e%last_column
+   pal = e%palette
    do i = e%first_row, e%last_row
       associate(line => e%doc%lines(i + 1))
          j = 0_int32
          column = 0_int32
-         do while (column < line%columns .and. column <= e%last_column)
+         ncol = line%columns
+         do while (column < ncol .and. column <= last_col)
             j = j + 1_int32
             cp = line%cp(j)
-            gx = rx + real(column, c_float) * e%glyph_w
+            gx = rx + real(column, c_float) * gw
             gy = ry
             if (cp == 9_int32) then
                if (e%show_tabs .and. column >= first_col) then
+                  call ct_glyphs(nrun, run_x, ry, run_col, run_cp)
+                  nrun = 0_c_int
                   x1 = gx + e%glyph_w * 0.3_c_float
                   if (e%short_tabs) then
                      x2 = gx + e%glyph_w
@@ -971,15 +986,26 @@ contains
                endif
             elseif (cp == 32_int32) then
                if (e%show_spaces .and. column >= first_col) then
+                  call ct_glyphs(nrun, run_x, ry, run_col, run_cp)
+                  nrun = 0_c_int
                   call ct_circle_filled(gx + e%glyph_w * 0.5_c_float, gy + e%font_size * 0.5_c_float, 1.5_c_float, &
                                         e%palette(COLOR_WHITESPACE), 4_c_int)
                endif
             elseif (column >= first_col) then
-               call ct_char(gx, gy, e%palette(line%color(j)), cp)
+               if (nrun == GLYPHS) then
+                  call ct_glyphs(nrun, run_x, ry, run_col, run_cp)
+                  nrun = 0_c_int
+               endif
+               nrun = nrun + 1_c_int
+               run_x(nrun) = gx
+               run_col(nrun) = pal(line%color(j))
+               run_cp(nrun) = cp
             endif
             column = column + line%cols(j)
          enddo
       endassociate
+      call ct_glyphs(nrun, run_x, ry, run_col, run_cp)
+      nrun = 0_c_int
       ry = ry + e%glyph_h
    enddo
    endsubroutine render_text
@@ -1038,6 +1064,7 @@ contains
    real(c_float)                    :: x, width !< Right end, the number's width.
    character(len=12)                :: number   !< The number.
    integer(int8)                    :: which    !< Colour.
+   integer(int32)                   :: n, m, k  !< The number, its rest, its length.
 
    if (.not. e%line_numbers) return
    current = e%cursors%c(e%cursors%current + 1)%end%l
@@ -1047,8 +1074,16 @@ contains
       width = real(digits, c_float) * e%glyph_w
       which = COLOR_LINE_NUMBER
       if (i == current) which = COLOR_CURRENT_LINE_NUMBER
-      write(number, '(I0)') i + 1_int32
-      call ct_text(x + (-width), e%screen_y + real(i, c_float) * e%glyph_h, e%palette(which), trim(number))
+      n = i + 1_int32 ! its decimal digits from the right of `number` (no internal write: it allocates per call)
+      k = len(number) + 1
+      do
+         m = n / 10_int32
+         k = k - 1
+         number(k:k) = achar(iachar('0') + (n - 10_int32 * m))
+         n = m
+         if (n == 0_int32) exit
+      enddo
+      call ct_text(x + (-width), e%screen_y + real(i, c_float) * e%glyph_h, e%palette(which), number(k:))
    enddo
    endsubroutine render_numbers
 
@@ -2713,6 +2748,8 @@ contains
    type(code_editor), pointer          :: e       !< Editor.
    integer(c_int)                      :: p(0:32) !< The style's palette.
    logical                             :: ch      !< Changed.
+   character(len=256)                  :: idb     !< The id, copied (no allocated `str` per frame).
+   integer(int32)                      :: k       !< Counter.
    character(len=*), parameter         :: FONT = 'plex-mono' !< The editor's font.
 
    changed = 0_c_int
@@ -2732,7 +2769,14 @@ contains
    endif
    status = fig_push_font(FONT, len(FONT, c_int), 0.0_c_double)
    if (status /= FIG_OK) return
-   call render(e, str(id, int(id_len, int64)), real(width, c_float), real(height, c_float), ch)
+   if (id_len <= len(idb)) then
+      do k = 1_int32, int(id_len, int32)
+         idb(k:k) = id(k)
+      enddo
+      call render(e, idb(1:id_len), real(width, c_float), real(height, c_float), ch)
+   else
+      call render(e, str(id, int(id_len, int64)), real(width, c_float), real(height, c_float), ch)
+   endif
    status = fig_pop_font()
    call ct_item_rect(e%rect(1), e%rect(2), e%rect(3), e%rect(4))
    e%drawn = .true.

@@ -61,6 +61,7 @@ public :: ct_set_keyboard_focus_here, ct_item_deactivated, ct_item_clicked, ct_b
 public :: ct_same_line, ct_push_style_color_vec4, ct_key_chord_pressed, ct_clear_window_focus, ct_window_appearing
 public :: ct_close_current_popup, ct_set_scroll_here_y, ct_bring_to_front, ct_input_text
 public :: ct_hscroll, ct_vscroll, ct_get_id, ct_frame_count
+public :: ct_glyphs
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Strings copied into the module's buffer up to this length.
 
@@ -99,6 +100,17 @@ interface
    integer(c_int), value         :: take   !< Empty the queue.
    integer(c_int)                :: n      !< Characters typed.
    endfunction fig_core_text_chars
+
+   subroutine fig_core_text_glyphs(n, x, y, col, cp) bind(C, name='fig_core_text_glyphs')
+   !< A row's run of glyphs (native/figure_editor.cpp).
+   import :: c_float, c_int
+   implicit none
+   integer(c_int), value      :: n      !< Glyphs.
+   real(c_float),  intent(in) :: x(*)   !< Their x.
+   real(c_float),  value      :: y      !< The row's y.
+   integer(c_int), intent(in) :: col(*) !< Their colours (`ImU32`).
+   integer(c_int), intent(in) :: cp(*)  !< Their code points.
+   endsubroutine fig_core_text_glyphs
 
    subroutine fig_core_text_ime(x, y, h) bind(C, name='fig_core_text_ime')
    !< The input method's position.
@@ -437,6 +449,19 @@ contains
 
    call ImFont_RenderChar(igGetFont(), igGetWindowDrawList(), igGetFontSize(), v2(x, y), col, cp, c_null_ptr)
    endsubroutine ct_char
+
+   subroutine ct_glyphs(n, x, y, col, cp)
+   !< n glyphs of one row at y, in order, each as `ct_char` draws it (`font->RenderChar(drawList, fontSize, ImVec2(x(k),
+   !< y), col(k), cp(k))`), the font, the list and the size taken once (szaghi/figure#16 S10: the fork's `renderText`
+   !< keeps them; one call a run).
+   integer(c_int), intent(in) :: n      !< Glyphs.
+   real(c_float),  intent(in) :: x(*)   !< Their x.
+   real(c_float),  intent(in) :: y      !< The row's y.
+   integer(c_int), intent(in) :: col(*) !< Their colours.
+   integer(c_int), intent(in) :: cp(*)  !< Their code points.
+
+   if (n > 0_c_int) call fig_core_text_glyphs(n, x, y, col, cp)
+   endsubroutine ct_glyphs
 
    subroutine ct_push_clip(x0, y0, x1, y1, intersect)
    !< The window's draw list's `PushClipRect`.
