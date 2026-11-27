@@ -23,11 +23,12 @@ module figure_plot_items
 !<   shaded forms, `RendererLineSegments2` (stems), `RendererMarkersFill`/`Line` and the marker shapes of
 !<   `MARKER_FILL_*`/`MARKER_LINE_*`; each primitive culled as `RenderPrimitivesEx` culls it (the plot rectangle);
 !<   lines with the anti-aliased line texture (`GetLineRenderProps`), fills with the white pixel. The primitives
-!<   (szaghi/figure#16 S2) are written as `RenderPrimitivesEx` writes them: runs reserved in figure_core's draw list
-!<   (`core_prim_reserve`, sized by `core_prim_vtx_current` as by `_VtxCurrentIdx`), each primitive's vertices and
-!<   indices written in place (`PrimLine`, `PrimRectFill`, `PrimRectLine`, the shaded quad of five vertices, the fans of
-!<   `RendererMarkersFill`, `RendererCircleFill` and `PrimPieSliceFill`), the culled ones' room given back
-!<   (`core_prim_unreserve`), a `prim_run` holding the run's state; a pie slice reserves its fan and its border once
+!<   (szaghi/figure#16 S2) are written as `RenderPrimitivesEx` writes them: runs reserved in the target draw list's own
+!<   buffers (`core_run_reserve`, sized by `core_run_vtx_current` as by `_VtxCurrentIdx`; szaghi/figure#16 D2: no
+!<   second copy), each primitive's vertices and 16-bit indices written in place (`PrimLine`, `PrimRectFill`,
+!<   `PrimRectLine`, the shaded quad of five vertices, the fans of `RendererMarkersFill`, `RendererCircleFill` and
+!<   `PrimPieSliceFill`), the culled ones' room given back (`core_run_unreserve`), a `prim_run` holding the run's
+!<   state; a pie slice reserves its fan and its border once
 !<   each, as `RenderPieSlice`; error bars and digital signals are `AddLine` and `AddRectFilled`, as ImPlot's;
 !< - the per-point getter and transform (szaghi/figure#16 S3): the line strips', segments' and markers' renderers map
 !<   their points to pixels a block at a time (`pixel_block`): per block and coordinate, the getter's source and the
@@ -69,11 +70,11 @@ module figure_plot_items
 !< The items' array dummies are ASYNCHRONOUS, as figure_implot's (the Fortran path's calls them with its own): nvfortran
 !< otherwise copies an asynchronous actual at the call, and the address a view (and a series' cache) keeps is that of a
 !< temporary.
-use, intrinsic :: iso_c_binding, only : c_double, c_float, c_intptr_t, c_loc
+use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int16_t, c_intptr_t, c_loc
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_cimgui_enums, only : ImGuiCol_Text
-use figure_core, only : core_prim_list, core_prim_reserve, core_prim_unreserve, core_prim_vtx_current
-use figure_drawlist, only : draw_list, draw_vert, DL_BATCH_VERTICES
+use figure_core, only : core_run_reserve, core_run_unreserve, core_run_vtx_current
+use figure_drawlist, only : draw_vert, DL_BATCH_VERTICES
 use figure_core, only : core_draw_image, core_draw_line, core_draw_line_h, core_draw_line_v,                        &
                         core_draw_rect_filled, core_draw_text, core_frame_count, core_framebuffer_scale, core_time, &
                         core_line_texture, core_pop_clip_rect, core_push_clip_rect, core_style_color,             &
@@ -177,6 +178,12 @@ integer(int32), parameter :: SRC_I64 = 4_int32   !< An int64 array.
 integer(int32), parameter :: SRC_LIN = 5_int32   !< x0 + i dx (IndexerLin, i from 0).
 integer(int32), parameter :: SRC_CONST = 6_int32 !< A constant (IndexerConst).
 integer(int32), parameter :: PIX_BLOCK = 512_int32 !< Points a renderer maps to pixels at once (`pixel_block`).
+integer(int32), parameter :: IDX16_SIGN = 32768_int32 !< A run's index, vertex v (0 to 65535), is stored in its 16-bit
+                                                      !< `ImDrawIdx` as `v - ishft(iand(v, IDX16_SIGN), 1)`: v or
+                                                      !< v - 65536, the same 16 bits in `c_int16_t`'s range (an
+                                                      !< explicit `int(v, c_int16_t)` would be out of range, and
+                                                      !< nvfortran calls `pgf90_int2` for it); a plain 16-bit store
+                                                      !< on the three compilers.
 ! the markers' shapes (MARKER_FILL_*, MARKER_LINE_*): x, y pairs
 real(real32), parameter :: FILL_CIRCLE(2, 10) = reshape([1.0_real32, 0.0_real32, 0.809017_real32, 0.58778524_real32, &
                            0.30901697_real32, 0.95105654_real32, -0.30901703_real32, 0.9510565_real32,             &
@@ -318,14 +325,16 @@ real(real64),   allocatable :: conv64(:)              !< ...
 real(real64)                :: uv_white(2) = 0.0_real64 !< The white pixel's texture coordinates (this item's).
 type :: prim_run
    !< A renderer's run of primitives as `RenderPrimitivesEx` reserves it: the room per primitive, the culled ones whose
-   !< room is still reserved, and the write cursor in figure_core's draw list.
-   type(draw_list), pointer :: dl => null()  !< The list (`core_prim_list`).
+   !< room is still reserved, and the write cursor in the target's buffers (`core_run_reserve`: written in place,
+   !< szaghi/figure#16 D2).
+   type(draw_vert),    pointer, contiguous :: vb(:) => null() !< The target's vertices (`core_run_reserve`).
+   integer(c_int16_t), pointer, contiguous :: ib(:) => null() !< ... its 16-bit indices (stored as IDX16_SIGN says).
    integer(int32)           :: vtx = 0_int32 !< Vertices a primitive (`VtxConsumed`).
    integer(int32)           :: idx = 0_int32 !< Indices a primitive (`IdxConsumed`).
    integer(int32)           :: culled = 0_int32 !< Primitives culled, their room reserved (`prims_culled`).
-   integer(int32)           :: iv = 0_int32  !< Next vertex's place in `dl%vtx`.
-   integer(int32)           :: ii = 0_int32  !< Next index's place in `dl%idx`.
-   integer(int32)           :: b = 0_int32   !< Next vertex, 0-based in its batch (`_VtxCurrentIdx` there).
+   integer(int32)           :: iv = 0_int32  !< Next vertex's place in `vb`.
+   integer(int32)           :: ii = 0_int32  !< Next index's place in `ib`.
+   integer(int32)           :: b = 0_int32   !< Next vertex's index in the draw command (`_VtxCurrentIdx`), 0 to 65535.
 endtype prim_run
 type :: point_reader
    !< A getter's points read a block at a time (`read_point`): the last block's values, as `point` gives them.
@@ -2377,12 +2386,12 @@ contains
       enddo
       if (weight < 0.0_real32) then
          call put_fan(run, v, ns, col, uv)
-         if (ns < 64_int32) call core_prim_unreserve(64_int32 - ns, (62_int32 - (ns - 2_int32)) * 3_int32) ! the unused
+         if (ns < 64_int32) call core_run_unreserve(64_int32 - ns, (62_int32 - (ns - 2_int32)) * 3_int32) ! the unused
       else
          do k = 1_int32, ns
             call put_line(run, v(1, k), v(2, k), v(1, mod(k, ns) + 1_int32), v(2, mod(k, ns) + 1_int32), hw, col, uv0, uv1)
          enddo
-         if (ns < 64_int32) call core_prim_unreserve((64_int32 - ns) * 4_int32, (64_int32 - ns) * 6_int32)
+         if (ns < 64_int32) call core_run_unreserve((64_int32 - ns) * 4_int32, (64_int32 - ns) * 6_int32)
       endif
    enddo
    i0 = i0 + cnt
@@ -4741,47 +4750,47 @@ contains
          iv = r%iv ! vertices P11, P21, X, P12, P22; triangles (0, 1 + x, 3) and (1, 4, 3 - x)
          ii = r%ii
          b = r%b
-         associate(vt => r%dl%vtx(iv))
+         associate(vt => r%vb(iv))
             vt%x = p11(1)
             vt%y = p11(2)
             vt%u = uv(1)
             vt%v = uv(2)
             vt%col = col
          endassociate
-         associate(vt => r%dl%vtx(iv + 1_int32))
+         associate(vt => r%vb(iv + 1_int32))
             vt%x = p21(1)
             vt%y = p21(2)
             vt%u = uv(1)
             vt%v = uv(2)
             vt%col = col
          endassociate
-         associate(vt => r%dl%vtx(iv + 2_int32))
+         associate(vt => r%vb(iv + 2_int32))
             vt%x = q(1)
             vt%y = q(2)
             vt%u = uv(1)
             vt%v = uv(2)
             vt%col = col
          endassociate
-         associate(vt => r%dl%vtx(iv + 3_int32))
+         associate(vt => r%vb(iv + 3_int32))
             vt%x = p12(1)
             vt%y = p12(2)
             vt%u = uv(1)
             vt%v = uv(2)
             vt%col = col
          endassociate
-         associate(vt => r%dl%vtx(iv + 4_int32))
+         associate(vt => r%vb(iv + 4_int32))
             vt%x = p22(1)
             vt%y = p22(2)
             vt%u = uv(1)
             vt%v = uv(2)
             vt%col = col
          endassociate
-         r%dl%idx(ii) = b
-         r%dl%idx(ii + 1_int32) = b + 1_int32 + x
-         r%dl%idx(ii + 2_int32) = b + 3_int32
-         r%dl%idx(ii + 3_int32) = b + 1_int32
-         r%dl%idx(ii + 4_int32) = b + 4_int32
-         r%dl%idx(ii + 5_int32) = b + 3_int32 - x
+         r%ib(ii) = b - ishft(iand(b, IDX16_SIGN), 1_int32)
+         r%ib(ii + 1_int32) = (b + 1_int32 + x) - ishft(iand(b + 1_int32 + x, IDX16_SIGN), 1_int32)
+         r%ib(ii + 2_int32) = (b + 3_int32) - ishft(iand(b + 3_int32, IDX16_SIGN), 1_int32)
+         r%ib(ii + 3_int32) = (b + 1_int32) - ishft(iand(b + 1_int32, IDX16_SIGN), 1_int32)
+         r%ib(ii + 4_int32) = (b + 4_int32) - ishft(iand(b + 4_int32, IDX16_SIGN), 1_int32)
+         r%ib(ii + 5_int32) = (b + 3_int32 - x) - ishft(iand(b + 3_int32 - x, IDX16_SIGN), 1_int32)
          r%iv = iv + 5_int32
          r%ii = ii + 6_int32
          r%b = b + 5_int32
@@ -4907,7 +4916,7 @@ contains
                x = p(1) + w
                w = shape(2, k) * msize
                y = p(2) + w
-               associate(vt => r%dl%vtx(r%iv + k - 1_int32))
+               associate(vt => r%vb(r%iv + k - 1_int32))
                   vt%x = x
                   vt%y = y
                   vt%u = uv(1)
@@ -4916,9 +4925,9 @@ contains
                endassociate
             enddo
             do k = 2_int32, nv - 1_int32
-               r%dl%idx(r%ii) = r%b
-               r%dl%idx(r%ii + 1_int32) = r%b + k - 1_int32
-               r%dl%idx(r%ii + 2_int32) = r%b + k
+               r%ib(r%ii) = r%b - ishft(iand(r%b, IDX16_SIGN), 1_int32)
+               r%ib(r%ii + 1_int32) = (r%b + k - 1_int32) - ishft(iand(r%b + k - 1_int32, IDX16_SIGN), 1_int32)
+               r%ib(r%ii + 2_int32) = (r%b + k) - ishft(iand(r%b + k, IDX16_SIGN), 1_int32)
                r%ii = r%ii + 3_int32
             enddo
             r%iv = r%iv + nv
@@ -5021,7 +5030,6 @@ contains
    integer(int32), intent(in)  :: vtx !< Vertices a primitive.
    integer(int32), intent(in)  :: idx !< Indices a primitive.
 
-   r%dl => core_prim_list()
    r%vtx = vtx
    r%idx = idx
    endsubroutine run_begin
@@ -5035,12 +5043,12 @@ contains
    integer(int32), intent(out)   :: cnt   !< Primitives of this run.
    integer(int32)                :: iv, ii, b !< A reservation's cursor.
 
-   cnt = min(prims, (DL_BATCH_VERTICES - (core_prim_vtx_current() - r%culled * r%vtx)) / r%vtx)
+   cnt = min(prims, (DL_BATCH_VERTICES - (core_run_vtx_current() - r%culled * r%vtx)) / r%vtx)
    if (cnt >= min(64_int32, prims)) then
       if (r%culled >= cnt) then
          r%culled = r%culled - cnt ! the previous reservation used again
       else
-         call core_prim_reserve((cnt - r%culled) * r%vtx, (cnt - r%culled) * r%idx, iv, ii, b)
+         call core_run_reserve((cnt - r%culled) * r%vtx, (cnt - r%culled) * r%idx, iv, ii, b, r%vb, r%ib)
          if (r%culled == 0_int32) then
             r%iv = iv
             r%ii = ii
@@ -5049,10 +5057,10 @@ contains
          r%culled = 0_int32
       endif
    else
-      if (r%culled > 0_int32) call core_prim_unreserve(r%culled * r%vtx, r%culled * r%idx)
+      if (r%culled > 0_int32) call core_run_unreserve(r%culled * r%vtx, r%culled * r%idx)
       r%culled = 0_int32
       cnt = min(prims, DL_BATCH_VERTICES / r%vtx)
-      call core_prim_reserve(cnt * r%vtx, cnt * r%idx, r%iv, r%ii, r%b) ! a new draw command
+      call core_run_reserve(cnt * r%vtx, cnt * r%idx, r%iv, r%ii, r%b, r%vb, r%ib) ! a new draw command
    endif
    prims = prims - cnt
    endsubroutine run_next
@@ -5061,7 +5069,7 @@ contains
    !< The run ends: the culled primitives' room given back.
    type(prim_run), intent(inout) :: r !< The run.
 
-   if (r%culled > 0_int32) call core_prim_unreserve(r%culled * r%vtx, r%culled * r%idx)
+   if (r%culled > 0_int32) call core_run_unreserve(r%culled * r%vtx, r%culled * r%idx)
    r%culled = 0_int32
    endsubroutine run_end
 
@@ -5095,40 +5103,40 @@ contains
    iv = r%iv
    ii = r%ii
    k = r%b
-   associate(vt => r%dl%vtx(iv))
+   associate(vt => r%vb(iv))
       vt%x = x1 + dy
       vt%y = y1 - dx
       vt%u = uv0(1)
       vt%v = uv0(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 1_int32))
+   associate(vt => r%vb(iv + 1_int32))
       vt%x = x2 + dy
       vt%y = y2 - dx
       vt%u = uv0(1)
       vt%v = uv0(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 2_int32))
+   associate(vt => r%vb(iv + 2_int32))
       vt%x = x2 - dy
       vt%y = y2 + dx
       vt%u = uv1(1)
       vt%v = uv1(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 3_int32))
+   associate(vt => r%vb(iv + 3_int32))
       vt%x = x1 - dy
       vt%y = y1 + dx
       vt%u = uv1(1)
       vt%v = uv1(2)
       vt%col = col
    endassociate
-   r%dl%idx(ii) = k
-   r%dl%idx(ii + 1_int32) = k + 1_int32
-   r%dl%idx(ii + 2_int32) = k + 2_int32
-   r%dl%idx(ii + 3_int32) = k
-   r%dl%idx(ii + 4_int32) = k + 2_int32
-   r%dl%idx(ii + 5_int32) = k + 3_int32
+   r%ib(ii) = k - ishft(iand(k, IDX16_SIGN), 1_int32)
+   r%ib(ii + 1_int32) = (k + 1_int32) - ishft(iand(k + 1_int32, IDX16_SIGN), 1_int32)
+   r%ib(ii + 2_int32) = (k + 2_int32) - ishft(iand(k + 2_int32, IDX16_SIGN), 1_int32)
+   r%ib(ii + 3_int32) = k - ishft(iand(k, IDX16_SIGN), 1_int32)
+   r%ib(ii + 4_int32) = (k + 2_int32) - ishft(iand(k + 2_int32, IDX16_SIGN), 1_int32)
+   r%ib(ii + 5_int32) = (k + 3_int32) - ishft(iand(k + 3_int32, IDX16_SIGN), 1_int32)
    r%iv = iv + 4_int32
    r%ii = ii + 6_int32
    r%b = k + 4_int32
@@ -5139,7 +5147,7 @@ contains
    !< at it.
    type(prim_run), intent(inout) :: r !< The run.
 
-   call core_prim_reserve(r%vtx, r%idx, r%iv, r%ii, r%b)
+   call core_run_reserve(r%vtx, r%idx, r%iv, r%ii, r%b, r%vb, r%ib)
    endsubroutine run_reserve
 
    subroutine put_rect_fill(r, ax, ay, bx, by, col, uv)
@@ -5155,40 +5163,40 @@ contains
    iv = r%iv
    ii = r%ii
    k = r%b
-   associate(vt => r%dl%vtx(iv))
+   associate(vt => r%vb(iv))
       vt%x = ax
       vt%y = ay
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 1_int32))
+   associate(vt => r%vb(iv + 1_int32))
       vt%x = bx
       vt%y = by
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 2_int32))
+   associate(vt => r%vb(iv + 2_int32))
       vt%x = ax
       vt%y = by
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 3_int32))
+   associate(vt => r%vb(iv + 3_int32))
       vt%x = bx
       vt%y = ay
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   r%dl%idx(ii) = k
-   r%dl%idx(ii + 1_int32) = k + 1_int32
-   r%dl%idx(ii + 2_int32) = k + 2_int32
-   r%dl%idx(ii + 3_int32) = k
-   r%dl%idx(ii + 4_int32) = k + 1_int32
-   r%dl%idx(ii + 5_int32) = k + 3_int32
+   r%ib(ii) = k - ishft(iand(k, IDX16_SIGN), 1_int32)
+   r%ib(ii + 1_int32) = (k + 1_int32) - ishft(iand(k + 1_int32, IDX16_SIGN), 1_int32)
+   r%ib(ii + 2_int32) = (k + 2_int32) - ishft(iand(k + 2_int32, IDX16_SIGN), 1_int32)
+   r%ib(ii + 3_int32) = k - ishft(iand(k, IDX16_SIGN), 1_int32)
+   r%ib(ii + 4_int32) = (k + 1_int32) - ishft(iand(k + 1_int32, IDX16_SIGN), 1_int32)
+   r%ib(ii + 5_int32) = (k + 3_int32) - ishft(iand(k + 3_int32, IDX16_SIGN), 1_int32)
    r%iv = iv + 4_int32
    r%ii = ii + 6_int32
    r%b = k + 4_int32
@@ -5210,56 +5218,56 @@ contains
    iv = r%iv
    ii = r%ii
    k = r%b
-   associate(vt => r%dl%vtx(iv))
+   associate(vt => r%vb(iv))
       vt%x = pmin(1)
       vt%y = pmin(2)
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 1_int32))
+   associate(vt => r%vb(iv + 1_int32))
       vt%x = pmin(1)
       vt%y = pmax(2)
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 2_int32))
+   associate(vt => r%vb(iv + 2_int32))
       vt%x = pmax(1)
       vt%y = pmax(2)
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 3_int32))
+   associate(vt => r%vb(iv + 3_int32))
       vt%x = pmax(1)
       vt%y = pmin(2)
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 4_int32))
+   associate(vt => r%vb(iv + 4_int32))
       vt%x = pmin(1) + w
       vt%y = pmin(2) + w
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 5_int32))
+   associate(vt => r%vb(iv + 5_int32))
       vt%x = pmin(1) + w
       vt%y = pmax(2) - w
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 6_int32))
+   associate(vt => r%vb(iv + 6_int32))
       vt%x = pmax(1) - w
       vt%y = pmax(2) - w
       vt%u = uv(1)
       vt%v = uv(2)
       vt%col = col
    endassociate
-   associate(vt => r%dl%vtx(iv + 7_int32))
+   associate(vt => r%vb(iv + 7_int32))
       vt%x = pmax(1) - w
       vt%y = pmin(2) + w
       vt%u = uv(1)
@@ -5267,7 +5275,7 @@ contains
       vt%col = col
    endassociate
    do j = 1_int32, 24_int32
-      r%dl%idx(ii + j - 1_int32) = k + TRI(j)
+      r%ib(ii + j - 1_int32) = (k + TRI(j)) - ishft(iand(k + TRI(j), IDX16_SIGN), 1_int32)
    enddo
    r%iv = iv + 8_int32
    r%ii = ii + 24_int32
@@ -5285,7 +5293,7 @@ contains
    integer(int32)                :: i       !< Vertex.
 
    do i = 1_int32, n
-      associate(vt => r%dl%vtx(r%iv + i - 1_int32))
+      associate(vt => r%vb(r%iv + i - 1_int32))
          vt%x = v(1, i)
          vt%y = v(2, i)
          vt%u = uv(1)
@@ -5294,9 +5302,9 @@ contains
       endassociate
    enddo
    do i = 2_int32, n - 1_int32
-      r%dl%idx(r%ii) = r%b
-      r%dl%idx(r%ii + 1_int32) = r%b + i - 1_int32
-      r%dl%idx(r%ii + 2_int32) = r%b + i
+      r%ib(r%ii) = r%b - ishft(iand(r%b, IDX16_SIGN), 1_int32)
+      r%ib(r%ii + 1_int32) = (r%b + i - 1_int32) - ishft(iand(r%b + i - 1_int32, IDX16_SIGN), 1_int32)
+      r%ib(r%ii + 2_int32) = (r%b + i) - ishft(iand(r%b + i, IDX16_SIGN), 1_int32)
       r%ii = r%ii + 3_int32
    enddo
    r%iv = r%iv + n

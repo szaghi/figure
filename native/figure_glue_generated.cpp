@@ -475,6 +475,29 @@ int figure_ImDrawList_shared(const ImDrawList* dl, float* fringe_scale, ImVec2_c
    return n;
 }
 
+// figure_core's runs written in place (szaghi/figure#16 D2, the plot items' primitives): PrimReserve(n_idx, n_vtx),
+// then the write cursors and _VtxCurrentIdx moved past the room, as if written; the caller writes the vertices and
+// their 16-bit indices (absolute in the draw command, from *base) itself, into the list's buffers (*vtx, *idx: the
+// whole of them, sizes included; a reservation may move them). The unreservation is PrimUnreserve with the cursors
+// and _VtxCurrentIdx moved back: the end of the last room given back, unwritten.
+static_assert(sizeof(ImDrawIdx) == 2, "figure_core's runs write 16-bit indices");
+void figure_ImDrawList_reserve(ImDrawList* dl, int n_vtx, int n_idx, int* base, ImDrawVert** vtx, int* vtx_size,
+                               ImDrawIdx** idx, int* idx_size) noexcept {
+   dl->PrimReserve(n_idx, n_vtx);
+   *base = (int)dl->_VtxCurrentIdx;
+   dl->_VtxCurrentIdx += (unsigned int)n_vtx;
+   dl->_VtxWritePtr = dl->VtxBuffer.Data + dl->VtxBuffer.Size;
+   dl->_IdxWritePtr = dl->IdxBuffer.Data + dl->IdxBuffer.Size;
+   *vtx = dl->VtxBuffer.Data, *vtx_size = dl->VtxBuffer.Size;
+   *idx = dl->IdxBuffer.Data, *idx_size = dl->IdxBuffer.Size;
+}
+void figure_ImDrawList_unreserve(ImDrawList* dl, int n_vtx, int n_idx) noexcept {
+   dl->PrimUnreserve(n_idx, n_vtx);
+   dl->_VtxCurrentIdx -= (unsigned int)n_vtx;
+   dl->_VtxWritePtr = dl->VtxBuffer.Data + dl->VtxBuffer.Size;
+   dl->_IdxWritePtr = dl->IdxBuffer.Data + dl->IdxBuffer.Size;
+}
+
 // The input state the plot frame reads (#15 P10 step 8: ImPlot's UpdateInput) that no C API function gives: the
 // frame's mouse delta (mouse[0:2]), the wheel (mouse[2], horizontal mouse[3]), the squared distance each button has
 // travelled since its click (mouse[4:9], MouseDragMaxDistanceSqr), the key mods (state[0], io.KeyMods) and whether a

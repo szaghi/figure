@@ -25,7 +25,8 @@ module figure_drawlist
 !< rsqrtss estimate). Rounded rectangles, polylines, circles and text are not here yet: figure_core draws them
 !< through Dear ImGui.
 !<
-!< Loops that write many primitives (the plot frames' items: szaghi/figure#16 S2) use the batch interface, as ImPlot's
+!< Loops that write many primitives (the plot frames' own quads: szaghi/figure#16 S2; the frames' items write their runs
+!< in place in the target list's buffers instead, figure_core's `core_run_reserve`: D2) use the batch interface, as ImPlot's
 !< `RenderPrimitives` uses `PrimReserve` and `PrimUnreserve`: `dl_reserve` takes room for a run of primitives (the
 !< vertices and indices at the end of the list, `dl%vtx` and `dl%idx`, written in place by the caller, for instance with
 !< `dl_put_quad_uv`), `dl_unreserve` gives back what the caller did not write (the culled primitives), and

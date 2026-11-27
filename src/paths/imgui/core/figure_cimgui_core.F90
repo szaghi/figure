@@ -20,10 +20,11 @@ public :: ImDrawList_AddConcavePolyFilled, ImDrawList_AddConvexPolyFilled, ImDra
 public :: ImDrawList_AddLine, ImDrawList_AddPolyline, ImDrawList_AddRect, ImDrawList_AddRectFilled
 public :: ImDrawList_AddRectFilledMultiColor, ImDrawList_AddText_Vec2, ImDrawList_AddTriangleFilled, ImDrawList_GetClipRectMax
 public :: ImDrawList_GetClipRectMin, ImDrawList_PopClipRect, ImDrawList_PopTexture, ImDrawList_PrimReserve, ImDrawList_PrimUnreserve
-public :: ImDrawList_PushClipRect, ImDrawList_PushTexture, figure_ImDrawList_append, figure_ImDrawList_shared, figure_io_input
-public :: figure_ImDrawData_get, figure_ImDrawData_list, figure_ImDrawData_cmd, figure_ImTextureData_pixels, figure_renderer_backend
-public :: figure_ImDrawData_textures, figure_ImDrawData_texture, figure_ImTextureData_state, figure_ImTextureData_rect
-public :: figure_ImTextureData_set, figure_ImTextureData_id, figure_ImDrawData_callback
+public :: ImDrawList_PushClipRect, ImDrawList_PushTexture, figure_ImDrawList_append, figure_ImDrawList_shared
+public :: figure_ImDrawList_reserve, figure_ImDrawList_unreserve, figure_io_input, figure_ImDrawData_get, figure_ImDrawData_list
+public :: figure_ImDrawData_cmd, figure_ImTextureData_pixels, figure_renderer_backend, figure_ImDrawData_textures
+public :: figure_ImDrawData_texture, figure_ImTextureData_state, figure_ImTextureData_rect, figure_ImTextureData_set
+public :: figure_ImTextureData_id, figure_ImDrawData_callback
 
 interface
    function igArrowButtonEx(str_id, dir, size_arg, flags) result(res) bind(C, name='igArrowButtonEx')
@@ -499,6 +500,33 @@ interface
    integer(c_int), intent(out)   :: flags        !< `Flags`.
    integer(c_int)                :: res          !< Line textures (0: none yet).
    endfunction figure_ImDrawList_shared
+
+   subroutine figure_ImDrawList_reserve(dl, n_vtx, n_idx, base, vtx, vtx_size, idx, idx_size) &
+      bind(C, name='figure_ImDrawList_reserve')
+   !< `PrimReserve(n_idx, n_vtx)` with the list's write cursors and `_VtxCurrentIdx` moved past the room, written in
+   !< place by the caller: the vertices and their 16-bit indices from base; the list's buffers, whole (CORE_GLUE in
+   !< scripts/gen_bindings.py).
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value       :: dl       !< C `ImDrawList*`.
+   integer(c_int), value       :: n_vtx    !< Vertices.
+   integer(c_int), value       :: n_idx    !< Indices.
+   integer(c_int), intent(out) :: base     !< The first vertex's index in the draw command (`_VtxCurrentIdx`).
+   type(c_ptr),    intent(out) :: vtx      !< C `ImDrawVert*`: `VtxBuffer.Data`.
+   integer(c_int), intent(out) :: vtx_size !< `VtxBuffer.Size`, the room included.
+   type(c_ptr),    intent(out) :: idx      !< C `ImDrawIdx*` (16-bit): `IdxBuffer.Data`.
+   integer(c_int), intent(out) :: idx_size !< `IdxBuffer.Size`, the room included.
+   endsubroutine figure_ImDrawList_reserve
+
+   subroutine figure_ImDrawList_unreserve(dl, n_vtx, n_idx) bind(C, name='figure_ImDrawList_unreserve')
+   !< `PrimUnreserve(n_idx, n_vtx)` with the write cursors and `_VtxCurrentIdx` moved back: the end of the room of
+   !< `figure_ImDrawList_reserve` given back unwritten (CORE_GLUE in scripts/gen_bindings.py).
+   import :: c_int, c_ptr
+   implicit none
+   type(c_ptr),    value :: dl    !< C `ImDrawList*`.
+   integer(c_int), value :: n_vtx !< Vertices.
+   integer(c_int), value :: n_idx !< Indices.
+   endsubroutine figure_ImDrawList_unreserve
 
    subroutine figure_io_input(mouse, state) bind(C, name='figure_io_input')
    !< The input state ImPlot's UpdateInput reads: the mouse delta, the wheels, the buttons' squared drag distances,

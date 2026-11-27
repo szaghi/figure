@@ -166,6 +166,29 @@ int figure_ImDrawList_shared(const ImDrawList* dl, float* fringe_scale, ImVec2_c
    return n;
 }
 
+// figure_core's runs written in place (szaghi/figure#16 D2, the plot items' primitives): PrimReserve(n_idx, n_vtx),
+// then the write cursors and _VtxCurrentIdx moved past the room, as if written; the caller writes the vertices and
+// their 16-bit indices (absolute in the draw command, from *base) itself, into the list's buffers (*vtx, *idx: the
+// whole of them, sizes included; a reservation may move them). The unreservation is PrimUnreserve with the cursors
+// and _VtxCurrentIdx moved back: the end of the last room given back, unwritten.
+static_assert(sizeof(ImDrawIdx) == 2, "figure_core's runs write 16-bit indices");
+void figure_ImDrawList_reserve(ImDrawList* dl, int n_vtx, int n_idx, int* base, ImDrawVert** vtx, int* vtx_size,
+                               ImDrawIdx** idx, int* idx_size) noexcept {
+   dl->PrimReserve(n_idx, n_vtx);
+   *base = (int)dl->_VtxCurrentIdx;
+   dl->_VtxCurrentIdx += (unsigned int)n_vtx;
+   dl->_VtxWritePtr = dl->VtxBuffer.Data + dl->VtxBuffer.Size;
+   dl->_IdxWritePtr = dl->IdxBuffer.Data + dl->IdxBuffer.Size;
+   *vtx = dl->VtxBuffer.Data, *vtx_size = dl->VtxBuffer.Size;
+   *idx = dl->IdxBuffer.Data, *idx_size = dl->IdxBuffer.Size;
+}
+void figure_ImDrawList_unreserve(ImDrawList* dl, int n_vtx, int n_idx) noexcept {
+   dl->PrimUnreserve(n_idx, n_vtx);
+   dl->_VtxCurrentIdx -= (unsigned int)n_vtx;
+   dl->_VtxWritePtr = dl->VtxBuffer.Data + dl->VtxBuffer.Size;
+   dl->_IdxWritePtr = dl->IdxBuffer.Data + dl->IdxBuffer.Size;
+}
+
 // The input state the plot frame reads (#15 P10 step 8: ImPlot's UpdateInput) that no C API function gives: the
 // frame's mouse delta (mouse[0:2]), the wheel (mouse[2], horizontal mouse[3]), the squared distance each button has
 // travelled since its click (mouse[4:9], MouseDragMaxDistanceSqr), the key mods (state[0], io.KeyMods) and whether a
@@ -309,6 +332,33 @@ CORE_INTERFACES = [
     "   integer(c_int), intent(out)   :: flags        !< `Flags`.",
     "   integer(c_int)                :: res          !< Line textures (0: none yet).",
     "   endfunction figure_ImDrawList_shared",
+    "",
+    "   subroutine figure_ImDrawList_reserve(dl, n_vtx, n_idx, base, vtx, vtx_size, idx, idx_size) &",
+    "      bind(C, name='figure_ImDrawList_reserve')",
+    "   !< `PrimReserve(n_idx, n_vtx)` with the list's write cursors and `_VtxCurrentIdx` moved past the room, written in",
+    "   !< place by the caller: the vertices and their 16-bit indices from base; the list's buffers, whole (CORE_GLUE in",
+    "   !< scripts/gen_bindings.py).",
+    "   import :: c_int, c_ptr",
+    "   implicit none",
+    "   type(c_ptr),    value       :: dl       !< C `ImDrawList*`.",
+    "   integer(c_int), value       :: n_vtx    !< Vertices.",
+    "   integer(c_int), value       :: n_idx    !< Indices.",
+    "   integer(c_int), intent(out) :: base     !< The first vertex's index in the draw command (`_VtxCurrentIdx`).",
+    "   type(c_ptr),    intent(out) :: vtx      !< C `ImDrawVert*`: `VtxBuffer.Data`.",
+    "   integer(c_int), intent(out) :: vtx_size !< `VtxBuffer.Size`, the room included.",
+    "   type(c_ptr),    intent(out) :: idx      !< C `ImDrawIdx*` (16-bit): `IdxBuffer.Data`.",
+    "   integer(c_int), intent(out) :: idx_size !< `IdxBuffer.Size`, the room included.",
+    "   endsubroutine figure_ImDrawList_reserve",
+    "",
+    "   subroutine figure_ImDrawList_unreserve(dl, n_vtx, n_idx) bind(C, name='figure_ImDrawList_unreserve')",
+    "   !< `PrimUnreserve(n_idx, n_vtx)` with the write cursors and `_VtxCurrentIdx` moved back: the end of the room of",
+    "   !< `figure_ImDrawList_reserve` given back unwritten (CORE_GLUE in scripts/gen_bindings.py).",
+    "   import :: c_int, c_ptr",
+    "   implicit none",
+    "   type(c_ptr),    value :: dl    !< C `ImDrawList*`.",
+    "   integer(c_int), value :: n_vtx !< Vertices.",
+    "   integer(c_int), value :: n_idx !< Indices.",
+    "   endsubroutine figure_ImDrawList_unreserve",
     "",
     "   subroutine figure_io_input(mouse, state) bind(C, name='figure_io_input')",
     "   !< The input state ImPlot's UpdateInput reads: the mouse delta, the wheels, the buttons' squared drag distances,",

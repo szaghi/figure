@@ -25,7 +25,10 @@ module figure_core
 !<   line's texture (`core_line_texture`) and a textured quad (`core_draw_quad_uv`), thin wrappers of the list's calls;
 !<   szaghi/figure#16 S2: the batch interface of the Fortran draw list for the frames' loops (`core_prim_reserve`,
 !<   `core_prim_unreserve`, `core_prim_vtx_current`, and `core_prim_list`, the list itself, written in place: no Dear
-!<   ImGui type);
+!<   ImGui type); szaghi/figure#16 D2, the plot items' runs written in place in the target's own buffers, no second copy
+!<   (`core_run_reserve`, `core_run_unreserve`, `core_run_vtx_current`: the room as `draw_vert` vertices and 16-bit
+!<   indices, absolute in the draw command, as Dear ImGui's `PrimReserve` gives it; implementation B gives the same
+!<   room in its own list);
 !< - for the plot frame's input and menus (szaghi/figure#15 P10 step 8, ImPlot's `UpdateInput` and context menus):
 !<   the input state no C API gives (`core_io_input`: io.MouseDelta, MouseWheel, MouseWheelH, MouseDragMaxDistanceSqr,
 !<   KeyMods, g.DragDropActive), `core_mouse_drag_delta`, `core_mouse_double_clicked`, `core_mouse_pos_valid`,
@@ -75,7 +78,8 @@ use figure_cimgui, only : im_rect, im_texture_ref, im_vec2, im_vec4, igCalcTextS
                           igTextUnformatted, igBeginPopup, igEndPopup, igOpenPopup_Str, igGetIO_Nil
 use figure_cimgui_enums, only : ImDrawFlags_Closed, ImGuiDataType_Double_ => ImGuiDataType_Double
 use figure_cimgui_core, only : figure_io_input, igPushOverrideID, igSetKeyOwner,                                         &
-                               figure_ImDrawList_append, figure_ImDrawList_shared, igButtonBehavior, igGetActiveID,         &
+                               figure_ImDrawList_append, figure_ImDrawList_reserve, figure_ImDrawList_shared,               &
+                               figure_ImDrawList_unreserve, igButtonBehavior, igGetActiveID,                                &
                                igGetHoveredID, igItemAdd, igItemSize_Vec2, igKeepAliveID, ImDrawList_AddCallback,          &
                                ImDrawList_AddCircle, ImDrawList_AddCircleFilled, ImDrawList_AddImage, ImDrawList_AddPolyline, &
                                ImDrawList_AddRect, ImDrawList_AddRectFilled, ImDrawList_AddText_Vec2, ImDrawList_PopClipRect, &
@@ -129,6 +133,7 @@ public :: core_draw_concave_poly_filled
 public :: core_arrow_button, core_begin_combo, core_end_combo
 public :: core_window_skip_items
 public :: core_prim_reserve, core_prim_unreserve, core_prim_vtx_current, core_prim_list
+public :: core_run_reserve, core_run_unreserve, core_run_vtx_current
 
 integer(int32), parameter :: BUF_LEN = 4096_int32 !< Text copied into the module's buffer up to this length.
 
@@ -1586,6 +1591,54 @@ contains
 
    dl => list
    endfunction core_prim_list
+
+   subroutine core_run_reserve(nvtx, nidx, iv, ii, base, vtx, idx)
+   !< `PrimReserve(nidx, nvtx)` in the target list itself (szaghi/figure#16 D2), for a run of primitives written in
+   !< place: what the Fortran list holds appended first (the order of the calls kept); `vtx` and `idx` are the whole of
+   !< the target's buffers (valid until the next reservation, which may move them), the room at `vtx(iv:iv + nvtx -
+   !< 1)` and `idx(ii:ii + nidx - 1)`. The indices are the target's (Dear ImGui's `ImDrawIdx`, 16-bit), absolute in its
+   !< draw command from `base`, the first vertex's (`_VtxCurrentIdx` there: a new command started where `PrimReserve`
+   !< starts one, base 0): a vertex number v (0 to 65535) is stored as `v - ishft(iand(v, 32768), 1)`, its 16-bit
+   !< pattern. The target's vertex count moves past the room as if written: what is not written is given back with
+   !< `core_run_unreserve` before the next reservation or draw.
+   integer(int32),     intent(in)                      :: nvtx   !< Vertices.
+   integer(int32),     intent(in)                      :: nidx   !< Indices.
+   integer(int32),     intent(out)                     :: iv     !< First vertex's place in vtx.
+   integer(int32),     intent(out)                     :: ii     !< First index's place in idx.
+   integer(int32),     intent(out)                     :: base   !< First vertex's index in the draw command.
+   type(draw_vert),    intent(inout), pointer, contiguous :: vtx(:) !< The target's vertices.
+   integer(c_int16_t), intent(inout), pointer, contiguous :: idx(:) !< The target's indices.
+   type(c_ptr)                                         :: pv, pi !< Buffers.
+   integer(c_int)                                      :: nv, ni, b !< Their sizes, the base.
+
+   call core_draw_end_pending()
+   call figure_ImDrawList_reserve(target_list, int(nvtx, c_int), int(nidx, c_int), b, pv, nv, pi, ni)
+   call c_f_pointer(pv, vtx, [nv])
+   call c_f_pointer(pi, idx, [ni])
+   iv = int(nv, int32) - nvtx + 1_int32
+   ii = int(ni, int32) - nidx + 1_int32
+   base = int(b, int32)
+   endsubroutine core_run_reserve
+
+   subroutine core_run_unreserve(nvtx, nidx)
+   !< `PrimUnreserve(nidx, nvtx)` in the target list (szaghi/figure#16 D2): the end of the last room of
+   !< `core_run_reserve` given back unwritten, the target's vertex count moved back.
+   integer(int32), intent(in) :: nvtx !< Vertices.
+   integer(int32), intent(in) :: nidx !< Indices.
+
+   call figure_ImDrawList_unreserve(target_list, int(nvtx, c_int), int(nidx, c_int))
+   endsubroutine core_run_unreserve
+
+   function core_run_vtx_current() result(n)
+   !< The target's draw command's vertices (Dear ImGui's `_VtxCurrentIdx`, the room of `core_run_reserve` not given
+   !< back included), what the Fortran list holds appended first: what ImPlot sizes a run of primitives by.
+   integer(int32)                   :: n !< Vertices.
+   type(im_draw_list_head), pointer :: h !< Dear ImGui's list.
+
+   call core_draw_end_pending()
+   call c_f_pointer(target_list, h)
+   n = int(h%vtx_current_idx, int32)
+   endfunction core_run_vtx_current
 
    subroutine core_font_glyph(c, found, scale, advance, x0, y0, x1, y1, u0, v0, u1, v1)
    !< A glyph of the current font at the current size (`g.Font->GetFontBaked(g.FontSize)`, `FindGlyph((ImWchar)c)`:
