@@ -57,7 +57,7 @@ case $compiler in
    # tasks read and write files on worker threads failed at random without it: FIO-F-209, FIO-F-254)
    nvf) fc=${FC:-nvfortran}; fobis_compiler=nvfortran; cflags="-c -Mstandard -Mfree -Munixlogical -O2 -mp"
         # the Fortran path: no FMA (the oracle's bit equality) and the plot items' helpers inlined (fobos' $NVF_INLINE)
-        [[ $path == fortran ]] && cflags="$cflags -Mnofma -Minline=put_line,put_rect_fill,put_rect_line,put_fan,pixel_block,run_next,im_min,im_max,overlaps"
+        [[ $path == fortran ]] && cflags="$cflags -Mnofma -Minline=put_rect_fill,put_rect_line,put_fan,pixel_block,run_next,im_min,im_max,overlaps"
         extra_lflags="-Munixlogical -mp" ;;
    ifx) fc=${FC:-ifx}; fobis_compiler=intel_nextgen; cflags="-c -stand f18 -free -fpscomp logicals -O2"
         [[ $path == fortran ]] && cflags="$cflags -fp-model precise"

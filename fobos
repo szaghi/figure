@@ -81,8 +81,9 @@ $BENCH_DATA   = src/tests/bench/figure_bench_data.F90
 # items' per-primitive helpers to inline (figure_plot_items: the writers, the block mapper, the run's reservation, the
 # cull's ImMin/ImMax/Overlaps); `-Minline` of every procedure broke the code editor's tests (wrong results). Measured:
 # line1e4 and line1e5 0.84, scatter1e6 0.90 of the frame without it, no scene slower; the side-by-side checks equal to
-# the bit. A helper renamed must be renamed here too (it would silently stay a call)
-$NVF_INLINE  = -Minline=put_line,put_rect_fill,put_rect_line,put_fan,pixel_block,run_next,im_min,im_max,overlaps
+# the bit. A helper renamed must be renamed here too (it would silently stay a call). The lines' writer, put_lines,
+# is not named: it takes a block of segments a call (szaghi/figure#16 S5)
+$NVF_INLINE  = -Minline=put_rect_fill,put_rect_line,put_fan,pixel_block,run_next,im_min,im_max,overlaps
 
 # main modes: the tests build into exe/ (scripts/run_tests.sh runs every program there), the examples into exe/examples/
 # (with their own mod/ and obj/), which run_tests.sh does not enter

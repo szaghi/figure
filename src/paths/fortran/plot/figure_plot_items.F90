@@ -184,6 +184,7 @@ integer(int32), parameter :: IDX16_SIGN = 32768_int32 !< A run's index, vertex v
                                                       !< explicit `int(v, c_int16_t)` would be out of range, and
                                                       !< nvfortran calls `pgf90_int2` for it); a plain 16-bit store
                                                       !< on the three compilers.
+integer(int32), parameter :: MARKER_SEGMENTS = 10_int32 !< Segments of the largest outline marker (the circle's).
 ! the markers' shapes (MARKER_FILL_*, MARKER_LINE_*): x, y pairs
 real(real32), parameter :: FILL_CIRCLE(2, 10) = reshape([1.0_real32, 0.0_real32, 0.809017_real32, 0.58778524_real32, &
                            0.30901697_real32, 0.95105654_real32, -0.30901703_real32, 0.9510565_real32,             &
@@ -2250,6 +2251,7 @@ contains
    logical,             intent(in) :: detached !< Exploded.
    real(real32), parameter         :: RESOLUTION = 50.0_real32 / (2.0_real32 * IM_PI) !< Points a radian (a float).
    real(real32)                    :: b(2, 52), hw !< The points [pixels], half weight.
+   real(real32)                    :: bx(52), by(52) !< ... the border's (`put_lines`).
    real(real64)                    :: da, a, ox, oy, r, mid, na0, na1, t, u !< Angles, centre, radius.
    real(real32)                    :: uv0(2), uv1(2), uv(2) !< Texture, white pixel.
    type(prim_run)                  :: run       !< The slice's reservations (`PrimReserve`, no culling).
@@ -2295,9 +2297,11 @@ contains
       call line_props32(2.0_real32, hw, uv0, uv1) ! GetLineRenderProps of half weight 1
       call run_begin(run, (n + 1_int32) * 4_int32, (n + 1_int32) * 6_int32)
       call run_reserve(run)
-      do k = 1_int32, n + 1_int32
-         call put_line(run, b(1, k), b(2, k), b(1, k + 1_int32), b(2, k + 1_int32), hw, col, uv0, uv1)
+      do k = 1_int32, n + 2_int32
+         bx(k) = b(1, k)
+         by(k) = b(2, k)
       enddo
+      call put_lines(run, run%vb, run%ib, n + 1_int32, bx, by, bx(2:), by(2:), hw, col, uv0, uv1)
    endif
    endsubroutine pie_slice
 
@@ -2340,6 +2344,7 @@ contains
    real(real32),        intent(in) :: weight !< Line weight (< 0: fill).
    real(real32)                    :: v(2, 64), p1(2), p2(2), pmin(2), pmax(2), rad, ar, a_step, ang, cs, sn, hw !<
                                        !< Points, box, radius, angles.
+   real(real32)                    :: vx(65), vy(65) !< The points, the first again at the end (`put_lines`).
    real(real32)                    :: uv0(2), uv1(2), uv(2) !< Texture, white pixel.
    real(real64)                    :: x, y, dummy, t !< A bubble.
    type(prim_run)                  :: run       !< The run.
@@ -2389,8 +2394,12 @@ contains
          if (ns < 64_int32) call core_run_unreserve(64_int32 - ns, (62_int32 - (ns - 2_int32)) * 3_int32) ! the unused
       else
          do k = 1_int32, ns
-            call put_line(run, v(1, k), v(2, k), v(1, mod(k, ns) + 1_int32), v(2, mod(k, ns) + 1_int32), hw, col, uv0, uv1)
+            vx(k) = v(1, k)
+            vy(k) = v(2, k)
          enddo
+         vx(ns + 1_int32) = v(1, 1)
+         vy(ns + 1_int32) = v(2, 1)
+         call put_lines(run, run%vb, run%ib, ns, vx, vy, vx(2:), vy(2:), hw, col, uv0, uv1)
          if (ns < 64_int32) call core_run_unreserve((64_int32 - ns) * 4_int32, (64_int32 - ns) * 6_int32)
       endif
    enddo
@@ -4407,27 +4416,28 @@ contains
    ! private: the renderers (RenderPrimitivesEx: each primitive culled against the plot rectangle)
 
    subroutine render_strip(ctx, g, col, weight, loop, skip_nan)
-   !< `RendererLineStrip` (`...Skip`: a NaN point keeps the last good one), over the loop's getter with `loop`.
+   !< `RendererLineStrip` (`...Skip`: a NaN point keeps the last good one), over the loop's getter with `loop`. A block's
+   !< primitives go to `put_lines` at once: primitive m from the block's point m - 1 (the previous block's last at 0)
+   !< to its point m; with `skip_nan`, from the last point that is not NaN, collected first.
    type(plot_item_ctx), intent(in) :: ctx      !< The plot.
    type(item_series),   intent(in) :: g        !< Getter.
    integer(int32),      intent(in) :: col      !< Colour.
    real(real32),        intent(in) :: weight   !< Line weight.
    logical,             intent(in) :: loop     !< GetterLoop: the first point again at the end.
    logical,             intent(in) :: skip_nan !< SkipNaN.
-   real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
-   real(real32)                    :: xlo, ylo, xhi, yhi !< The primitive's bounds (`ImMin`, `ImMax` of its ends).
-   logical                         :: vis                !< They overlap the plot rectangle (`Overlaps`).
+   real(real32)                    :: p1(2), hw        !< The next primitive's start, half weight.
    real(real32)                    :: uv0(2), uv1(2)   !< Texture.
-   real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
+   real(real32)                    :: bx(0:PIX_BLOCK), by(0:PIX_BLOCK) !< A block's pixels (0: the start).
+   real(real32)                    :: sx(PIX_BLOCK), sy(PIX_BLOCK)     !< Its primitives' starts (`skip_nan`).
    type(prim_run)                  :: r                !< The run.
-   integer(int32)                  :: k, k0, ke, m, nprim, cnt !< Primitive, run's start, block's last primitive,
-                                                               !< its point, primitives left, run.
+   integer(int32)                  :: k, k0, ke, m, nb, nprim, cnt !< Primitive, run's start, block's last primitive,
+                                                                   !< one of them, its primitives, primitives left, run.
 
    call line_props32(weight, hw, uv0, uv1)
    nprim = g%n - 1_int32
    if (loop) nprim = g%n
    if (nprim <= 0_int32) return
-   call pixel_block(ctx, g, 1_int32, 1_int32, bx, by)
+   call pixel_block(ctx, g, 1_int32, 1_int32, bx(1:), by(1:))
    p1(1) = bx(1)
    p1(2) = by(1)
    call run_begin(r, 4_int32, 6_int32)
@@ -4438,43 +4448,29 @@ contains
       do while (k <= k0 + cnt)
          if (k < g%n) then ! primitive k ends at point k + 1
             ke = min(k0 + cnt, k + PIX_BLOCK - 1_int32, g%n - 1_int32)
-            call pixel_block(ctx, g, k + 1_int32, ke - k + 1_int32, bx, by)
+            call pixel_block(ctx, g, k + 1_int32, ke - k + 1_int32, bx(1:), by(1:))
          else ! the loop's last primitive ends at the first point
             ke = k
-            call pixel_block(ctx, g, 1_int32, 1_int32, bx, by)
+            call pixel_block(ctx, g, 1_int32, 1_int32, bx(1:), by(1:))
          endif
-         do m = 1_int32, ke - k + 1_int32
-            p2(1) = bx(m)
-            p2(2) = by(m)
-            xlo = merge(p1(1), p2(1), p1(1) < p2(1)) ! ImMin, ImMax and Overlaps written out: nvfortran -O2 -mp
-            ylo = merge(p1(2), p2(2), p1(2) < p2(2)) ! inlines no procedure (im_min: the NaN cases)
-            xhi = merge(p1(1), p2(1), p1(1) >= p2(1))
-            yhi = merge(p1(2), p2(2), p1(2) >= p2(2))
-#ifdef __NVCOMPILER
-            if (p1(1) /= p1(1) .or. p2(1) /= p2(1)) then
-               xlo = p2(1)
-               xhi = p2(1)
-            endif
-            if (p1(2) /= p1(2) .or. p2(2) /= p2(2)) then
-               ylo = p2(2)
-               yhi = p2(2)
-            endif
-#endif
-            vis = ctx%rect(2) < yhi .and. ctx%rect(4) > ylo .and. ctx%rect(1) < xhi .and. ctx%rect(3) > xlo
-#ifdef __NVCOMPILER
-            if (vis) vis = .not. (xlo /= xlo .or. ylo /= ylo .or. xhi /= xhi .or. yhi /= yhi)
-#endif
-            if (vis) then
-               call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
-            else
-               r%culled = r%culled + 1_int32
-            endif
-            if (.not. skip_nan) then
-               p1 = p2
-            elseif (.not. (p2(1) /= p2(1) .or. p2(2) /= p2(2))) then ! (NaN tests inline: ieee_is_nan is a call on ifx)
-               p1 = p2
-            endif
-         enddo
+         nb = ke - k + 1_int32
+         if (skip_nan) then
+            do m = 1_int32, nb
+               sx(m) = p1(1)
+               sy(m) = p1(2)
+               if (.not. (bx(m) /= bx(m) .or. by(m) /= by(m))) then ! (NaN tests inline: ieee_is_nan is a call on ifx)
+                  p1(1) = bx(m)
+                  p1(2) = by(m)
+               endif
+            enddo
+            call put_lines(r, r%vb, r%ib, nb, sx, sy, bx(1:), by(1:), hw, col, uv0, uv1, ctx%rect)
+         else
+            bx(0) = p1(1)
+            by(0) = p1(2)
+            call put_lines(r, r%vb, r%ib, nb, bx, by, bx(1:), by(1:), hw, col, uv0, uv1, ctx%rect)
+            p1(1) = bx(nb)
+            p1(2) = by(nb)
+         endif
          k = ke + 1_int32
       enddo
       k0 = k0 + cnt
@@ -4488,11 +4484,11 @@ contains
    type(item_series),   intent(in) :: g      !< Getter.
    integer(int32),      intent(in) :: col    !< Colour.
    real(real32),        intent(in) :: weight !< Line weight.
-   real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
-   real(real32)                    :: xlo, ylo, xhi, yhi !< The primitive's bounds (`ImMin`, `ImMax` of its ends).
-   logical                         :: vis                !< They overlap the plot rectangle (`Overlaps`).
+   real(real32)                    :: hw     !< Half weight.
    real(real32)                    :: uv0(2), uv1(2)   !< Texture.
    real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
+   real(real32)                    :: ax(PIX_BLOCK / 2), ay(PIX_BLOCK / 2), cx(PIX_BLOCK / 2), cy(PIX_BLOCK / 2) !< Its
+                                                                                       !< segments' first and second ends.
    type(prim_run)                  :: r                !< The run.
    integer(int32)                  :: k, k0, nb, m, nprim, cnt !< Primitive (0-based), run's start, block's primitives,
                                                                !< one of them, primitives left, run.
@@ -4507,35 +4503,13 @@ contains
       do while (k < k0 + cnt)
          nb = min(PIX_BLOCK / 2_int32, k0 + cnt - k)
          call pixel_block(ctx, g, 2_int32 * k + 1_int32, 2_int32 * nb, bx, by) ! points 2 k + 1, 2 k + 2, ...
-         do m = 1_int32, 2_int32 * nb - 1_int32, 2_int32
-            p1(1) = bx(m)
-            p1(2) = by(m)
-            p2(1) = bx(m + 1_int32)
-            p2(2) = by(m + 1_int32)
-            xlo = merge(p1(1), p2(1), p1(1) < p2(1)) ! ImMin, ImMax and Overlaps written out: nvfortran -O2 -mp
-            ylo = merge(p1(2), p2(2), p1(2) < p2(2)) ! inlines no procedure (im_min: the NaN cases)
-            xhi = merge(p1(1), p2(1), p1(1) >= p2(1))
-            yhi = merge(p1(2), p2(2), p1(2) >= p2(2))
-#ifdef __NVCOMPILER
-            if (p1(1) /= p1(1) .or. p2(1) /= p2(1)) then
-               xlo = p2(1)
-               xhi = p2(1)
-            endif
-            if (p1(2) /= p1(2) .or. p2(2) /= p2(2)) then
-               ylo = p2(2)
-               yhi = p2(2)
-            endif
-#endif
-            vis = ctx%rect(2) < yhi .and. ctx%rect(4) > ylo .and. ctx%rect(1) < xhi .and. ctx%rect(3) > xlo
-#ifdef __NVCOMPILER
-            if (vis) vis = .not. (xlo /= xlo .or. ylo /= ylo .or. xhi /= xhi .or. yhi /= yhi)
-#endif
-            if (vis) then
-               call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
-            else
-               r%culled = r%culled + 1_int32
-            endif
+         do m = 1_int32, nb
+            ax(m) = bx(2_int32 * m - 1_int32)
+            ay(m) = by(2_int32 * m - 1_int32)
+            cx(m) = bx(2_int32 * m)
+            cy(m) = by(2_int32 * m)
          enddo
+         call put_lines(r, r%vb, r%ib, nb, ax, ay, cx, cy, hw, col, uv0, uv1, ctx%rect)
          k = k + nb
       enddo
       k0 = k0 + cnt
@@ -4549,15 +4523,13 @@ contains
    type(item_series),   intent(in) :: g1, g2 !< Getters.
    integer(int32),      intent(in) :: col    !< Colour.
    real(real32),        intent(in) :: weight !< Line weight.
-   real(real32)                    :: p1(2), p2(2), hw !< Ends, half weight.
-   real(real32)                    :: xlo, ylo, xhi, yhi !< The primitive's bounds (`ImMin`, `ImMax` of its ends).
-   logical                         :: vis                !< They overlap the plot rectangle (`Overlaps`).
+   real(real32)                    :: hw     !< Half weight.
    real(real32)                    :: uv0(2), uv1(2)   !< Texture.
    real(real32)                    :: ax(PIX_BLOCK), ay(PIX_BLOCK), bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels of
                                                                                                !< g1 and g2.
    type(prim_run)                  :: r                !< The run.
-   integer(int32)                  :: k, k0, nb, m, nprim, cnt !< Primitive, run's start, block's primitives, one of
-                                                               !< them, primitives left, run.
+   integer(int32)                  :: k, k0, nb, nprim, cnt !< Primitive, run's start, block's primitives, primitives
+                                                            !< left, run.
 
    call line_props32(weight, hw, uv0, uv1)
    nprim = min(g1%n, g2%n)
@@ -4570,35 +4542,7 @@ contains
          nb = min(PIX_BLOCK, k0 + cnt - k + 1_int32)
          call pixel_block(ctx, g1, k, nb, ax, ay)
          call pixel_block(ctx, g2, k, nb, bx, by)
-         do m = 1_int32, nb
-            p1(1) = ax(m)
-            p1(2) = ay(m)
-            p2(1) = bx(m)
-            p2(2) = by(m)
-            xlo = merge(p1(1), p2(1), p1(1) < p2(1)) ! ImMin, ImMax and Overlaps written out: nvfortran -O2 -mp
-            ylo = merge(p1(2), p2(2), p1(2) < p2(2)) ! inlines no procedure (im_min: the NaN cases)
-            xhi = merge(p1(1), p2(1), p1(1) >= p2(1))
-            yhi = merge(p1(2), p2(2), p1(2) >= p2(2))
-#ifdef __NVCOMPILER
-            if (p1(1) /= p1(1) .or. p2(1) /= p2(1)) then
-               xlo = p2(1)
-               xhi = p2(1)
-            endif
-            if (p1(2) /= p1(2) .or. p2(2) /= p2(2)) then
-               ylo = p2(2)
-               yhi = p2(2)
-            endif
-#endif
-            vis = ctx%rect(2) < yhi .and. ctx%rect(4) > ylo .and. ctx%rect(1) < xhi .and. ctx%rect(3) > xlo
-#ifdef __NVCOMPILER
-            if (vis) vis = .not. (xlo /= xlo .or. ylo /= ylo .or. xhi /= xhi .or. yhi /= yhi)
-#endif
-            if (vis) then
-               call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
-            else
-               r%culled = r%culled + 1_int32
-            endif
-         enddo
+         call put_lines(r, r%vb, r%ib, nb, ax, ay, bx, by, hw, col, uv0, uv1, ctx%rect)
          k = k + nb
       enddo
       k0 = k0 + cnt
@@ -4941,25 +4885,37 @@ contains
    endsubroutine markers_fill
 
    subroutine markers_line(ctx, g, shape, col, msize, weight)
-   !< `RendererMarkersLine`: the shape's segments (pairs of vertices) about each point, as anti-aliased lines.
+   !< `RendererMarkersLine`: the shape's segments (pairs of vertices) about each point, as anti-aliased lines; the
+   !< shape's offsets (vertex times size) once, a point's segments to `put_lines` at once.
    type(plot_item_ctx), intent(in) :: ctx         !< The plot.
    type(item_series),   intent(in) :: g           !< Getter.
-   real(real32),        intent(in) :: shape(:, :) !< Segments' ends (x, y) x count.
+   real(real32),        intent(in) :: shape(:, :) !< Segments' ends (x, y) x count (at most 2 MARKER_SEGMENTS).
    integer(int32),      intent(in) :: col         !< Colour.
    real(real32),        intent(in) :: msize       !< Size [pixels].
    real(real32),        intent(in) :: weight      !< Line weight.
-   real(real32)                    :: p(2), p1(2), p2(2), hw, w !< Point, ends, half weight, product.
+   real(real32)                    :: p(2), hw    !< Point, half weight.
    real(real32)                    :: uv0(2), uv1(2) !< Texture.
    real(real32)                    :: bx(PIX_BLOCK), by(PIX_BLOCK) !< A block's pixels.
+   real(real32)                    :: ox1(MARKER_SEGMENTS), oy1(MARKER_SEGMENTS), ox2(MARKER_SEGMENTS), &
+                                      oy2(MARKER_SEGMENTS) !< The segments' ends' offsets [pixels].
+   real(real32)                    :: x1(MARKER_SEGMENTS), y1(MARKER_SEGMENTS), x2(MARKER_SEGMENTS), &
+                                      y2(MARKER_SEGMENTS) !< A point's segments' ends [pixels].
    type(prim_run)                  :: r           !< The run.
    logical                         :: vis         !< Inside the plot rectangle.
-   integer(int32)                  :: i, k, ns, i0, nb, m, nprim, cnt !< Point, segment, shape's points, run's start,
-                                                                      !< block's points, one of them, points left, run.
+   integer(int32)                  :: i, k, ns, i0, nb, m, nprim, cnt !< Point, segment, the shape's segments, run's
+                                                                      !< start, block's points, one of them, points
+                                                                      !< left, run.
 
    call line_props32(weight, hw, uv0, uv1)
-   ns = int(size(shape, 2), int32)
+   ns = int(size(shape, 2), int32) / 2_int32
+   do k = 1_int32, ns
+      ox1(k) = shape(1, 2_int32 * k - 1_int32) * msize
+      oy1(k) = shape(2, 2_int32 * k - 1_int32) * msize
+      ox2(k) = shape(1, 2_int32 * k) * msize
+      oy2(k) = shape(2, 2_int32 * k) * msize
+   enddo
    nprim = g%n
-   call run_begin(r, ns / 2_int32 * 4_int32, ns / 2_int32 * 6_int32)
+   call run_begin(r, ns * 4_int32, ns * 6_int32)
    i0 = 0_int32
    do while (nprim > 0_int32)
       call run_next(r, nprim, cnt)
@@ -4979,17 +4935,13 @@ contains
                r%culled = r%culled + 1_int32
                cycle
             endif
-            do k = 1_int32, ns - 1_int32, 2_int32
-               w = shape(1, k) * msize
-               p1(1) = p(1) + w
-               w = shape(2, k) * msize
-               p1(2) = p(2) + w
-               w = shape(1, k + 1_int32) * msize
-               p2(1) = p(1) + w
-               w = shape(2, k + 1_int32) * msize
-               p2(2) = p(2) + w
-               call put_line(r, p1(1), p1(2), p2(1), p2(2), hw, col, uv0, uv1)
+            do k = 1_int32, ns
+               x1(k) = p(1) + ox1(k)
+               y1(k) = p(2) + oy1(k)
+               x2(k) = p(1) + ox2(k)
+               y2(k) = p(2) + oy2(k)
             enddo
+            call put_lines(r, r%vb, r%ib, ns, x1, y1, x2, y2, hw, col, uv0, uv1)
          enddo
          i = i + nb
       enddo
@@ -5073,74 +5025,133 @@ contains
    r%culled = 0_int32
    endsubroutine run_end
 
-   subroutine put_line(r, x1, y1, x2, y2, hw, col, uv0, uv1)
-   !< `PrimLine` into the run: a segment as a quad of the line's texture, `hw` each side, at the cursor. The run's
-   !< writers set a vertex field by field: a `draw_vert(...)` constructor makes ifx build it in a temporary and copy it
-   !< with one 16-byte load over smaller stores, a store-forwarding stall a vertex; a helper subroutine for it is not
-   !< inlined by nvfortran (szaghi/figure#16 S2). The ends come as four scalars, not two pairs: a caller sets a pair's
-   !< x and y with two 4-byte stores just before, and nvfortran read a pair with one 8-byte load, which the store buffer
-   !< cannot forward from two stores (a stall a pair; szaghi/figure#16 S3).
-   type(prim_run), intent(inout) :: r              !< The run.
-   real(real32),   intent(in)    :: x1, y1, x2, y2 !< Ends [pixels].
-   real(real32),   intent(in)    :: hw             !< Half width [pixels].
-   integer(int32), intent(in)    :: col            !< Colour.
-   real(real32),   intent(in)    :: uv0(2), uv1(2) !< Texture.
-   real(real32)                  :: dx, dy, d2, inv, a, b !< Direction, products.
-   integer(int32)                :: iv, ii, k      !< Cursor.
+   subroutine put_lines(r, vb, ib, n, x1, y1, x2, y2, hw, col, uv0, uv1, rect)
+   !< `PrimLine` for n segments into the run, segment m from (x1(m), y1(m)) to (x2(m), y2(m)): a quad of the line's
+   !< texture, `hw` each side, at the cursor. With `rect`, each segment is first culled as `RenderPrimitivesEx` culls it
+   !< (`ImMin` and `ImMax` of its ends, `Overlaps` with the plot rectangle), a culled one counted in the run.
+   !< One call a block of segments, not one a segment: gfortran -O2 does not inline a writer of several callers and
+   !< nvfortran -O2 -mp inlines none, and the call (by-reference ends, the run's cursor and the buffers' descriptors read
+   !< again and stored back) cost more than ImPlot's whole `PrimLine` (szaghi/figure#16 S5, S8). So the cursor lives in
+   !< locals for the block, and the run's buffers come as `vb` and `ib`, explicit-size dummies (the actuals `r%vb` and
+   !< `r%ib`, contiguous: no copy), so a vertex's address needs no pointer descriptor. The vertices are set field by
+   !< field: a `draw_vert(...)` constructor makes ifx build it in a temporary and copy it with one 16-byte load over
+   !< smaller stores, a store-forwarding stall a vertex (szaghi/figure#16 S2). The arithmetic is `PrimLine`'s, in its
+   !< order and precision (szaghi/figure#16 D3).
+   type(prim_run),     intent(inout)        :: r       !< The run.
+   type(draw_vert),    intent(inout)        :: vb(*)   !< Its vertices, `r%vb`.
+   integer(c_int16_t), intent(inout)        :: ib(*)   !< Its indices, `r%ib`.
+   integer(int32),     intent(in)           :: n       !< Segments.
+   real(real32),       intent(in)           :: x1(*), y1(*), x2(*), y2(*) !< Their ends [pixels].
+   real(real32),       intent(in)           :: hw      !< Half width [pixels].
+   integer(int32),     intent(in)           :: col     !< Colour.
+   real(real32),       intent(in)           :: uv0(2), uv1(2) !< Texture.
+   real(real32),       intent(in), optional :: rect(4) !< Plot rectangle: cull against it.
+   real(real32)                             :: xa, ya, xb, yb !< A segment's ends.
+   real(real32)                             :: dx, dy, d2, inv, a, b !< Direction, products.
+   real(real32)                             :: xlo, ylo, xhi, yhi !< Its bounds (`ImMin`, `ImMax` of its ends).
+   real(real32)                             :: rx0, ry0, rx1, ry1 !< The plot rectangle.
+   real(real32)                             :: u0, v0, u1, v1, w  !< Texture, half width (the dummies' values in
+                                                                  !< locals: a store to the buffers could alias them).
+   logical                                  :: cull, vis !< Cull, the segment overlaps the rectangle (`Overlaps`).
+   integer(int32)                           :: c, iv, ii, k, nc, m !< Colour, cursor, culled, segment.
 
-   dx = x2 - x1
-   dy = y2 - y1
-   a = dx * dx ! (IMPLOT_NORMALIZE2F_OVER_ZERO; the products apart)
-   b = dy * dy
-   d2 = a + b
-   if (d2 > 0.0_real32) then
-      inv = 1.0_real32 / sqrt(d2)
-      dx = dx * inv
-      dy = dy * inv
+   cull = present(rect)
+   rx0 = 0.0_real32
+   ry0 = 0.0_real32
+   rx1 = 0.0_real32
+   ry1 = 0.0_real32
+   if (cull) then
+      rx0 = rect(1)
+      ry0 = rect(2)
+      rx1 = rect(3)
+      ry1 = rect(4)
    endif
-   dx = dx * hw
-   dy = dy * hw
+   u0 = uv0(1)
+   v0 = uv0(2)
+   u1 = uv1(1)
+   v1 = uv1(2)
+   w = hw
+   c = col
    iv = r%iv
    ii = r%ii
    k = r%b
-   associate(vt => r%vb(iv))
-      vt%x = x1 + dy
-      vt%y = y1 - dx
-      vt%u = uv0(1)
-      vt%v = uv0(2)
-      vt%col = col
-   endassociate
-   associate(vt => r%vb(iv + 1_int32))
-      vt%x = x2 + dy
-      vt%y = y2 - dx
-      vt%u = uv0(1)
-      vt%v = uv0(2)
-      vt%col = col
-   endassociate
-   associate(vt => r%vb(iv + 2_int32))
-      vt%x = x2 - dy
-      vt%y = y2 + dx
-      vt%u = uv1(1)
-      vt%v = uv1(2)
-      vt%col = col
-   endassociate
-   associate(vt => r%vb(iv + 3_int32))
-      vt%x = x1 - dy
-      vt%y = y1 + dx
-      vt%u = uv1(1)
-      vt%v = uv1(2)
-      vt%col = col
-   endassociate
-   r%ib(ii) = k - ishft(iand(k, IDX16_SIGN), 1_int32)
-   r%ib(ii + 1_int32) = (k + 1_int32) - ishft(iand(k + 1_int32, IDX16_SIGN), 1_int32)
-   r%ib(ii + 2_int32) = (k + 2_int32) - ishft(iand(k + 2_int32, IDX16_SIGN), 1_int32)
-   r%ib(ii + 3_int32) = k - ishft(iand(k, IDX16_SIGN), 1_int32)
-   r%ib(ii + 4_int32) = (k + 2_int32) - ishft(iand(k + 2_int32, IDX16_SIGN), 1_int32)
-   r%ib(ii + 5_int32) = (k + 3_int32) - ishft(iand(k + 3_int32, IDX16_SIGN), 1_int32)
-   r%iv = iv + 4_int32
-   r%ii = ii + 6_int32
-   r%b = k + 4_int32
-   endsubroutine put_line
+   nc = 0_int32
+   do m = 1_int32, n
+      xa = x1(m)
+      ya = y1(m)
+      xb = x2(m)
+      yb = y2(m)
+      if (cull) then
+         xlo = merge(xa, xb, xa < xb) ! ImMin, ImMax and Overlaps written out: nvfortran -O2 -mp inlines no procedure
+         ylo = merge(ya, yb, ya < yb) ! (im_min: the NaN cases)
+         xhi = merge(xa, xb, xa >= xb)
+         yhi = merge(ya, yb, ya >= yb)
+#ifdef __NVCOMPILER
+         if (xa /= xa .or. xb /= xb) then
+            xlo = xb
+            xhi = xb
+         endif
+         if (ya /= ya .or. yb /= yb) then
+            ylo = yb
+            yhi = yb
+         endif
+#endif
+         vis = ry0 < yhi .and. ry1 > ylo .and. rx0 < xhi .and. rx1 > xlo
+#ifdef __NVCOMPILER
+         if (vis) vis = .not. (xlo /= xlo .or. ylo /= ylo .or. xhi /= xhi .or. yhi /= yhi)
+#endif
+         if (.not. vis) then
+            nc = nc + 1_int32
+            cycle
+         endif
+      endif
+      dx = xb - xa
+      dy = yb - ya
+      a = dx * dx ! (IMPLOT_NORMALIZE2F_OVER_ZERO; the products apart)
+      b = dy * dy
+      d2 = a + b
+      if (d2 > 0.0_real32) then
+         inv = 1.0_real32 / sqrt(d2)
+         dx = dx * inv
+         dy = dy * inv
+      endif
+      dx = dx * w
+      dy = dy * w
+      vb(iv)%x = xa + dy
+      vb(iv)%y = ya - dx
+      vb(iv)%u = u0
+      vb(iv)%v = v0
+      vb(iv)%col = c
+      vb(iv + 1_int32)%x = xb + dy
+      vb(iv + 1_int32)%y = yb - dx
+      vb(iv + 1_int32)%u = u0
+      vb(iv + 1_int32)%v = v0
+      vb(iv + 1_int32)%col = c
+      vb(iv + 2_int32)%x = xb - dy
+      vb(iv + 2_int32)%y = yb + dx
+      vb(iv + 2_int32)%u = u1
+      vb(iv + 2_int32)%v = v1
+      vb(iv + 2_int32)%col = c
+      vb(iv + 3_int32)%x = xa - dy
+      vb(iv + 3_int32)%y = ya + dx
+      vb(iv + 3_int32)%u = u1
+      vb(iv + 3_int32)%v = v1
+      vb(iv + 3_int32)%col = c
+      ib(ii) = k - ishft(iand(k, IDX16_SIGN), 1_int32)
+      ib(ii + 1_int32) = (k + 1_int32) - ishft(iand(k + 1_int32, IDX16_SIGN), 1_int32)
+      ib(ii + 2_int32) = (k + 2_int32) - ishft(iand(k + 2_int32, IDX16_SIGN), 1_int32)
+      ib(ii + 3_int32) = k - ishft(iand(k, IDX16_SIGN), 1_int32)
+      ib(ii + 4_int32) = (k + 2_int32) - ishft(iand(k + 2_int32, IDX16_SIGN), 1_int32)
+      ib(ii + 5_int32) = (k + 3_int32) - ishft(iand(k + 3_int32, IDX16_SIGN), 1_int32)
+      iv = iv + 4_int32
+      ii = ii + 6_int32
+      k = k + 4_int32
+   enddo
+   r%iv = iv
+   r%ii = ii
+   r%b = k
+   r%culled = r%culled + nc
+   endsubroutine put_lines
 
    subroutine run_reserve(r)
    !< A direct `PrimReserve` of the run's room per primitive, for one primitive (no culling: the pie slices), the cursor
