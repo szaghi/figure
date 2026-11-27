@@ -228,6 +228,7 @@ contains
    real(real64),     intent(in) :: v(2) !< Values.
    logical,          intent(in) :: pair !< A pair given.
    integer(int32)               :: k    !< Variable.
+   real(real32)                 :: w(2) !< Values, single precision.
 
    k = var_index(name)
    if (k == 0_int32) error stop 'figure_plot3d_style: an unknown ImPlot3D style variable'
@@ -236,7 +237,8 @@ contains
    n_var = n_var + 1_int32
    call get_var(k, var_stack(:, n_var))
    var_stack_idx(n_var) = k
-   call set_var(k, real(v, real32))
+   w = real(v, real32) ! (named: a converted array actual is a heap temporary on nvfortran, #16 S5)
+   call set_var(k, w)
    endsubroutine push_var
 
    subroutine pf3_pop_style_var(n)

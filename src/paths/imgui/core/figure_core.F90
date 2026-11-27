@@ -1250,7 +1250,7 @@ contains
       call dl_convex_poly_filled(list, fx(1:n), fy(1:n), int(col, c_int32_t), 0_c_int)
       return
    endif
-   call dl_convex_poly_filled(list, real(x, c_float), real(y, c_float), int(col, c_int32_t), 0_c_int)
+   call dl_convex_poly_filled(list, real(x, c_float), real(y, c_float), int(col, c_int32_t), 0_c_int) ! nvf-ok: > NFIX
    endsubroutine core_draw_convex_poly_filled
 
    subroutine core_draw_polyline(x, y, col, thickness, closed)

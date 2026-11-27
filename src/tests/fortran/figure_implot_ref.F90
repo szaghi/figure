@@ -4011,9 +4011,9 @@ contains
    sd = 0.0_real64
    if (nb == ImPlotBin_Scott) then
       if (allocated(packed)) then
-         sd = std_dev(real(packed, real64))
+         sd = std_dev(real(packed, real64)) ! nvf-ok: once per item
       else
-         sd = std_dev(real(values, real64))
+         sd = std_dev(real(values, real64)) ! nvf-ok: once per item
       endif
    endif
    nb = rule_bins(nb, n, r, sd)
@@ -4107,8 +4107,8 @@ contains
    endif
    sx = 0.0_real64
    sy = 0.0_real64
-   if (nbx == ImPlotBin_Scott) sx = std_dev(real(pack(x, fin), real64))
-   if (nby == ImPlotBin_Scott) sy = std_dev(real(pack(y, fin), real64))
+   if (nbx == ImPlotBin_Scott) sx = std_dev(real(pack(x, fin), real64)) ! nvf-ok: once per item
+   if (nby == ImPlotBin_Scott) sy = std_dev(real(pack(y, fin), real64)) ! nvf-ok: once per item
    nbx = rule_bins(nbx, n, r%X, sx)
    nby = rule_bins(nby, n, r%Y, sy)
    c = series_spec(d, spec)
@@ -4176,9 +4176,9 @@ contains
    sd = 0.0_real64
    if (nb == ImPlotBin_Scott) then
       if (allocated(packed)) then
-         sd = std_dev(real(packed, real64))
+         sd = std_dev(real(packed, real64)) ! nvf-ok: once per item
       else
-         sd = std_dev(real(values, real64))
+         sd = std_dev(real(values, real64)) ! nvf-ok: once per item
       endif
    endif
    nb = rule_bins(nb, n, r, sd)
@@ -4272,8 +4272,8 @@ contains
    endif
    sx = 0.0_real64
    sy = 0.0_real64
-   if (nbx == ImPlotBin_Scott) sx = std_dev(real(pack(x, fin), real64))
-   if (nby == ImPlotBin_Scott) sy = std_dev(real(pack(y, fin), real64))
+   if (nbx == ImPlotBin_Scott) sx = std_dev(real(pack(x, fin), real64)) ! nvf-ok: once per item
+   if (nby == ImPlotBin_Scott) sy = std_dev(real(pack(y, fin), real64)) ! nvf-ok: once per item
    nbx = rule_bins(nbx, n, r%X, sx)
    nby = rule_bins(nby, n, r%Y, sy)
    c = series_spec(d, spec)

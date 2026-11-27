@@ -157,7 +157,19 @@ typed-constructor defects have canaries in `figure_test_canaries`, which fail on
   (`TMP_DESC: invalid original`); either attribute alone is right. The `ip_*` items' array dummies have both: a
   program forwarding its own optional to one must test `present()` and call without it.
 
-The move_alloc, size, append and typed-constructor defects and the strided expression are checked in the sources by
+Two forms are right but cost a heap allocation each time they run (szaghi/figure#16 S5, counted with a malloc
+counter; gfortran and ifx make none):
+
+- **An array-valued expression as an actual argument** (`call f(p + q)`, `call f(real(v, c_double))`, `abs(v)`,
+  `-v`, an elemental function of an array): name it first, in a fixed local, or pass scalars. An array constructor
+  (`[x, y]`, even of expressions), a section, a function result and an expression assigned to a variable make none.
+- **An assignment between two sections of one array, or substrings of one variable, whose ranges differ** and are
+  not both constant and disjoint (`c(p + 2:n + 1) = c(p + 1:n)`, `s(2:6) = s(1:5)`): write the loop. The same section
+  (`v(1:n) = v(1:n) * s`), another column (`m(:, k + 1) = m(:, k)`) and constant disjoint ranges make none. The
+  decimation's insertion of a candidate made 38,600 allocations a frame on the 10^6 to 10^8 point lines.
+
+The move_alloc, size, append and typed-constructor defects, the strided expression and the two temporaries (in
+`src/lib` and `src/paths`, a cold line accepted with `! nvf-ok: <reason>`) are checked in the sources by
 `scripts/check_nvf_patterns.py` (Checks), because a test catches them only on the paths it runs: the audits of
 2026-11-21 and 2026-11-22 found none in FIGURE's sources, and the check keeps the layers to come so.
 

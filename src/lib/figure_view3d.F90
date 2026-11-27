@@ -697,10 +697,13 @@ contains
    real(real64),         intent(in)            :: normal(3) !< Towards the part kept.
    real(real64),         intent(in)            :: point(3)  !< A point of the plane [world units].
    integer(int32),       intent(out), optional :: stat      !< Status.
+   real(c_double)                              :: n(3), q(3) !< Normal and point, C kind.
 
    if (figure_refused('view3d_object%clip', stat)) return
    if (.not. alive(self, 'clip', stat)) return
-   call figure_check(fig_view3d_clip(self%handle, real(normal, c_double), real(point, c_double)), stat)
+   n = real(normal, c_double) ! (named: a converted array actual is a heap temporary on nvfortran, #16 S5)
+   q = real(point, c_double)
+   call figure_check(fig_view3d_clip(self%handle, n, q), stat)
    endsubroutine clip
 
    recursive subroutine unclip(self, stat)

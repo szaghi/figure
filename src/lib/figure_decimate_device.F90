@@ -596,6 +596,7 @@ contains
    integer(int64), intent(inout) :: nc   !< ... how many.
    integer(int64), intent(in)    :: j    !< Point.
    integer(int64)                :: p    !< Position.
+   integer(int64)                :: i    !< Candidate moved.
 
    if (j <= 0_int64) return
    p = nc
@@ -604,7 +605,9 @@ contains
       if (c(p) == j) return
       p = p - 1_int64
    enddo
-   c(p + 2_int64:nc + 1_int64) = c(p + 1_int64:nc)
+   do i = nc, p + 1_int64, -1_int64 ! up one, the last first (a section copy is a heap temporary on nvfortran, #16 S5)
+      c(i + 1_int64) = c(i)
+   enddo
    c(p + 1_int64) = j
    nc = nc + 1_int64
    endsubroutine add

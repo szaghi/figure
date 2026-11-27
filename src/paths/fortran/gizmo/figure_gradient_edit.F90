@@ -129,7 +129,7 @@ contains
       call core_same_line()
       call core_begin_disabled(n <= 2_int32)
       if (core_button('Remove')) then
-         stops(:, selected + 1_int32:n - 1_int32) = stops(:, selected + 2_int32:n)
+         stops(:, selected + 1_int32:n - 1_int32) = stops(:, selected + 2_int32:n) ! nvf-ok: on a click
          n = n - 1_int32
       endif
       call core_end_disabled()
@@ -141,7 +141,8 @@ contains
    same = n == n0
    if (same) same = all(stops(:, 1:n) == before(:, 1:n))
    if (.not. same) then
-      call cm_edit_stops(name, real(stops(4, 1:n), real64), real(stops(1:3, 1:n), real64), status, err)
+      call cm_edit_stops(name, real(stops(4, 1:n), real64), real(stops(1:3, 1:n), real64), & ! nvf-ok: an edit
+                         status, err)
       changed = status == FIG_OK
    endif
    endsubroutine gz_gradient_edit

@@ -283,6 +283,7 @@ contains
    integer(int32), intent(out), optional :: vertices !< Vertices drawn in the colour.
    integer(c_int)                        :: nv       !< Native count.
    real(c_float)                         :: r(4)     !< Native rectangle.
+   real(c_float)                         :: c(4)     !< Colour, C kind.
    integer(c_int)                        :: f        !< Found flag.
    integer(c_int)                        :: l        !< Layer code.
 
@@ -293,7 +294,8 @@ contains
       if (layer == 'foreground') l = 2_c_int
       if (layer == 'background') l = 3_c_int
    endif
-   call figure_check(fig_drawn_extent_layer(real(color, c_float), l, r, f, nv), stat)
+   c = real(color, c_float) ! (named: a converted array actual is a heap temporary on nvfortran, #16 S5)
+   call figure_check(fig_drawn_extent_layer(c, l, r, f, nv), stat)
    if (present(vertices)) vertices = int(nv, int32)
    xmin = real(r(1), real64)
    ymin = real(r(2), real64)

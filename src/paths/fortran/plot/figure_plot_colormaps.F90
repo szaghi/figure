@@ -1172,7 +1172,7 @@ contains
       write(name(13_int32 + 9_int32 * (k - 1_int32):), '(A,Z8.8)') ' ', cols(k)
    enddo
    id = cm_index(trim(name))
-   if (id < 0_int32) id = cm_register(trim(name), int(cols(1:n), int32), .true.)
+   if (id < 0_int32) id = cm_register(trim(name), int(cols(1:n), int32), .true.) ! nvf-ok: once a set of colours
    current = id
    endsubroutine cm_style_refresh
 

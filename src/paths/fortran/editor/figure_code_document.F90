@@ -1538,7 +1538,7 @@ contains
             u%astart(keep_a + k) = u%astart(u%b_first + k - 1_int32)
             u%aend(keep_a + k) = u%aend(u%b_first + k - 1_int32)
             u%alen(keep_a + k) = u%alen(u%b_first + k - 1_int32)
-            u%text(keep_t + 1_int64:keep_t + u%alen(keep_a + k)) = &
+            u%text(keep_t + 1_int64:keep_t + u%alen(keep_a + k)) = & ! nvf-ok: once per undo step kept
                u%text(u%off(u%b_first + k - 1_int32) + 1_int64:u%off(u%b_first + k - 1_int32) + u%alen(keep_a + k))
             u%off(keep_a + k) = keep_t
             keep_t = keep_t + u%alen(keep_a + k)

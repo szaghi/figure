@@ -135,8 +135,10 @@ contains
    real(real64),     intent(in)            :: values(2) !< Values.
    integer(c_int),   intent(in)            :: n         !< How many.
    integer(int32),   intent(out), optional :: stat      !< Status.
+   real(c_double)                          :: v(2)      !< Values, C kind.
 
-   call figure_check(fig_push_style_var(lib, name, len_trim(name, c_int), real(values, c_double), n), stat)
+   v = real(values, c_double) ! (named: a converted array actual is a heap temporary on nvfortran, #16 S5)
+   call figure_check(fig_push_style_var(lib, name, len_trim(name, c_int), v, n), stat)
    endsubroutine push_var
 
    subroutine pop(vars, n, stat)

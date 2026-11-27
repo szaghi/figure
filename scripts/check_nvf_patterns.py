@@ -20,6 +20,18 @@ figure_test_canaries):
   - ``stride-expr``: an arithmetic operator applied to a strided section (``x(1::4) * 0.25``, ``y(1:n:2, k) + 1``): the
     expression, assigned to an allocatable or passed as an actual argument, gets the parent array's extent (its
     ``size()`` is right); name the section first, or loop.
+
+Two more patterns are not wrong code but a heap allocation per execution (szaghi/figure#16 S5, C4; measured with a
+malloc counter, gfortran and ifx make none), checked in the library and the paths only (``src/lib``, ``src/paths``):
+
+  - ``temp-actual``: an array-valued expression as an actual argument: an operator, a type conversion or an elemental
+    function (``real(v, real64)``, ``abs(v)``, ``-v``, ``p + q``, ``merge(p, q, p > q)``) applied to a whole array or a
+    section (an array constructor, a variable, a section, a parenthesised variable, a function result and an
+    expression assigned to a variable or reduced by ``sum`` make none); name the value first (a fixed local), or pass
+    scalars;
+  - ``temp-overlap``: an assignment between two sections of the same array (or substrings of the same variable)
+    whose ranges in one dimension differ and are not both constant and disjoint (``c(p + 2:n + 1) = c(p + 1:n)``,
+    ``s(2:6) = s(1:5)``); write the loop (backward for a shift up).
 The check is syntactic and conservative: a line may carry ``! nvf-ok: <reason>`` to accept it. Exit status 0 when no
 pattern is found, 1 otherwise (each finding printed as ``file:line: pattern: text``). ``--self-test`` runs the check on
 built-in cases, each of which must be found or not as stated. Standard library only (Python >= 3.11).
@@ -75,6 +87,29 @@ ELEMENTAL_SAFE = {
     "dble", "min", "max", "merge", "ieee_is_nan", "ieee_is_finite",
 }
 APPEND = re.compile(r"^\s*([A-Za-z_][\w%]*)\s*=\s*\[(.*)\]\s*$", re.I)
+# temp-actual, temp-overlap: where they are checked, and what the expressions' names are
+HOT_DIRS = ("src/lib/", "src/paths/")
+NAME_REF = re.compile(r"([A-Za-z_][\w%]*)\s*\(")
+# intrinsics whose result is not an array temporary of the expression (inquiries, reductions, scalar character work)
+SCALAR_RESULT = {
+    "size", "sum", "product", "maxval", "minval", "any", "all", "count", "maxloc", "minloc", "findloc", "norm2",
+    "dot_product", "ubound", "lbound", "shape", "rank", "allocated", "associated", "present", "kind", "len",
+    "len_trim", "storage_size", "is_contiguous", "c_loc", "c_associated", "loc", "trim", "adjustl", "adjustr",
+    "index", "scan", "verify",
+}
+# intrinsic elemental (and array) functions: applied to an array, a temporary
+INTRINSIC_ARRAY = {
+    "abs", "real", "int", "nint", "dble", "sqrt", "exp", "log", "log10", "sin", "cos", "tan", "atan2", "min", "max",
+    "merge", "floor", "ceiling", "mod", "modulo", "sign", "iand", "ior", "ieor", "ishft", "btest", "achar", "char",
+    "ichar", "iachar", "cmplx", "aimag", "conjg", "transfer", "reshape", "pack", "spread", "matmul", "transpose",
+    "cshift", "eoshift", "ieee_is_nan", "ieee_is_finite", "logical",
+}
+# names followed by a parenthesis that are statements, not references
+KEYWORDS = {
+    "if", "while", "case", "write", "read", "print", "open", "close", "inquire", "format", "where", "forall",
+    "select", "associate", "call", "allocate", "deallocate", "nullify", "character", "type", "class", "integer",
+    "complex", "rewind", "flush", "backspace", "endfile", "return", "stop", "error", "intent", "dimension", "go",
+}
 
 
 @dataclass
@@ -195,13 +230,186 @@ def split_arguments(text: str) -> list[str]:
     return items
 
 
+def balanced_end(text: str, start: int) -> int:
+    """Return the index of the parenthesis closing the one at start (len(text) when none)."""
+    depth = 0
+    for k in range(start, len(text)):
+        if text[k] == "(":
+            depth += 1
+        elif text[k] == ")":
+            depth -= 1
+            if depth == 0:
+                return k
+    return len(text)
+
+
+def array_names(statement: str) -> set[str]:
+    """Return the arrays a type declaration statement declares (empty for another statement)."""
+    if "::" not in statement or not re.match(
+        r"^\s*(integer|real|logical|complex|character|type|class|double)\b", statement, re.I
+    ):
+        return set()
+    attributes, entities = statement.split("::", 1)
+    dimension = bool(re.search(r"\bdimension\s*\(", attributes, re.I))
+    out = set()
+    for entity in split_arguments(entities):
+        if (m := re.match(r"\s*([A-Za-z_]\w*)\s*(\()?", entity)) and (dimension or m.group(2)):
+            out.add(m.group(1).lower())
+    return out
+
+
+def is_designator(text: str) -> bool:
+    """Whether text is a name followed only by parenthesised groups and components (a variable, an element, a
+    section; or, written the same, a function reference)."""
+    t = text.strip()
+    m = re.match(r"[A-Za-z_]\w*", t)
+    if not m:
+        return False
+    k = m.end()
+    while k < len(t):
+        rest = t[k:].lstrip()
+        k = len(t) - len(rest)
+        if rest.startswith("("):
+            k = balanced_end(t, k) + 1
+        elif part := re.match(r"%\s*[A-Za-z_]\w*", rest):
+            k += part.end()
+        else:
+            return False
+    return True
+
+
+def mask_calls(expr: str, keep: set[str]) -> str:
+    """Return expr with the arguments of the references not named in keep replaced by 0 (their results are not
+    temporaries of the expression; a call's own actual arguments are checked as that call's)."""
+    out, k = expr, 0
+    while m := NAME_REF.search(out, k):
+        start = m.end() - 1
+        if m.group(1).lower().split("%")[-1] in keep:
+            k = start + 1
+            continue
+        end = balanced_end(out, start)
+        out = out[:start] + "(0)" + out[end + 1 :]
+        k = start + 3
+    return out
+
+
+def refers_to_array(expr: str, arrays: set[str]) -> bool:
+    """Whether expr names a whole array or a section of one (an element does not count)."""
+    for m in re.finditer(r"\b([A-Za-z_]\w*)\b(\s*\()?", expr):
+        if m.group(1).lower() not in arrays or expr[: m.start()].rstrip().endswith("%"):
+            continue
+        if not m.group(2):
+            return True
+        inner = expr[m.end() : balanced_end(expr, m.end() - 1)]
+        if any(":" in a for a in split_arguments(inner)):
+            return True
+    return False
+
+
+def is_array_expression(actual: str, arrays: set[str], elemental: set[str]) -> bool:
+    """Whether an actual argument is an array-valued expression (temp-actual)."""
+    a = re.sub(r"^\s*[A-Za-z_]\w*\s*=(?!=)\s*", "", actual).strip()  # a keyword argument's value
+    if not a or a.startswith("["):
+        return False
+    head = re.match(r"([A-Za-z_]\w*)\s*\(", a)
+    applied = bool(head) and head.group(1).lower() in INTRINSIC_ARRAY | elemental
+    if (is_designator(a) and not applied) or re.fullmatch(r"\(\s*[A-Za-z_][\w%]*\s*\)", a):
+        return False
+    return refers_to_array(mask_calls(a, (INTRINSIC_ARRAY | elemental | arrays) - SCALAR_RESULT), arrays)
+
+
+def constant_disjoint(a: str, b: str) -> bool:
+    """Whether two subscript triplets are constant ranges that do not overlap."""
+    ra, rb = (re.fullmatch(r"(\d+)(?:_\w+)?:(\d+)(?:_\w+)?", t) for t in (a, b))
+    if not (ra and rb):
+        return False
+    return int(ra.group(2)) < int(rb.group(1)) or int(rb.group(2)) < int(ra.group(1))
+
+
+def single(triplet: str) -> bool:
+    """Whether a subscript triplet is a single element written as a range (``k:k``): a copy of one, no temporary."""
+    lo, _, hi = triplet.partition(":")
+    return lo == hi and ":" not in hi
+
+
+def check_temporaries(lines: list[tuple[int, str, bool]], text: str) -> list[tuple[int, str, str]]:
+    """Return the temp-actual and temp-overlap findings of a source's statements."""
+    elemental = {
+        m.group(1).lower()
+        for m in re.finditer(
+            r"^\s*(?:\w+\s+)*elemental\s+(?:\w+\s+)*(?:function|subroutine)\s+(\w+)", text, re.I | re.M
+        )
+    }
+    module_arrays: set[str] = set()
+    scopes: list[set[str]] = []
+    findings: list[tuple[int, str, str]] = []
+    in_type, in_interface = False, 0
+    for number, statement, _ in lines:
+        if TYPE_DEF.match(statement) or END_TYPE.match(statement):
+            in_type = bool(TYPE_DEF.match(statement))
+            continue
+        if INTERFACE.match(statement) or END_INTERFACE.match(statement):
+            in_interface += 1 if INTERFACE.match(statement) else -1
+            continue
+        if in_type or in_interface:
+            continue
+        if PROC.match(statement) and not re.match(r"^\s*end\b", statement, re.I):
+            scopes.append(set())
+            continue
+        if END_PROC.match(statement) and scopes:
+            scopes.pop()
+            continue
+        if names := array_names(statement):
+            (scopes[-1] if scopes else module_arrays).update(names)
+            continue
+        if not scopes:
+            continue
+        arrays = module_arrays.union(*scopes)
+        code = re.sub(r"'[^']*'|\"[^\"]*\"", "''", statement)
+        for m in NAME_REF.finditer(code):  # every call and function reference, nested ones too
+            name = m.group(1).lower()
+            last = name.split("%")[-1]
+            if name in arrays or last in arrays or last in SCALAR_RESULT | INTRINSIC_ARRAY | KEYWORDS:
+                continue
+            args = code[m.end() : balanced_end(code, m.end() - 1)]
+            if any(is_array_expression(a, arrays, elemental) for a in split_arguments(args)):
+                findings.append((number, "temp-actual", statement))
+                break
+        else:
+            lhs = re.match(r"^\s*([A-Za-z_][\w%]*)\s*\(", code)
+            if not lhs:
+                continue
+            end = balanced_end(code, lhs.end() - 1)
+            base = lhs.group(1).lower()
+            if not re.match(r"^\s*=(?!=)", code[end + 1 :]):
+                continue
+            left = [a.replace(" ", "") for a in split_arguments(code[lhs.end() : end])]
+            for m in NAME_REF.finditer(code[end + 1 :]):
+                if m.group(1).lower() != base:
+                    continue
+                rhs = code[end + 1 :]
+                right = [a.replace(" ", "") for a in split_arguments(rhs[m.end() : balanced_end(rhs, m.end() - 1)])]
+                if len(right) == len(left) and any(
+                    ":" in x and ":" in y and x != y and not constant_disjoint(x, y) and not (single(x) and single(y))
+                    for x, y in zip(left, right)
+                ):
+                    findings.append((number, "temp-overlap", statement))
+                    break
+    return findings
+
+
 def check_source(
-    path: str, text: str, derived_elsewhere: frozenset[str] = frozenset()
+    path: str, text: str, derived_elsewhere: frozenset[str] = frozenset(), hot: bool | None = None
 ) -> list[tuple[int, str, str]]:
     """Return the findings of one source file: (line, pattern, statement); derived_elsewhere: the components other
-    files' type definitions declare ``type(...)`` or ``class(...)``."""
+    files' type definitions declare ``type(...)`` or ``class(...)``; hot: check the temporaries (default: a file under
+    ``HOT_DIRS``)."""
     lines = logical_lines(text)
     findings: list[tuple[int, str, str]] = []
+    if hot is None:
+        hot = any(d in Path(path).as_posix() for d in HOT_DIRS)
+    if hot:
+        findings += check_temporaries(lines, text)
     units: list[Unit] = []
     stack: list[Unit] = []
     module_names: set[str] = set()
@@ -439,7 +647,7 @@ def check_source(
     return sorted({f for f in findings if f[0] not in accepted_lines})
 
 
-SELF_TESTS: list[tuple[str, str, set[str]]] = [
+SELF_TESTS: list[tuple[str, str, set[str]] | tuple[str, str, set[str], bool]] = [
     (
         "an elemental expression of a strided section",
         """subroutine s(xs, ys)
@@ -636,6 +844,94 @@ endmodule
         {"select"},
     ),
     (
+        "temporaries: an array expression, a conversion, an elemental function as actual arguments",
+        """module m
+contains
+pure elemental function twice(a) result(b)
+real, intent(in) :: a
+real :: b
+b = 2.0 * a
+endfunction
+subroutine s(v, w)
+real, intent(in) :: v(:), w(2)
+real :: p(2), q(2)
+call take(p + q)
+call take_d(real(v(1:2), kind(1.0d0)))
+call take(abs(w))
+call take(twice(p))
+endsubroutine
+endmodule
+""",
+        {"temp-actual"},
+        True,
+    ),
+    (
+        "temporaries: a constructor, a variable, a section, an element expression, a function result, a reduction (right)",
+        """subroutine s(v, x, y)
+real, intent(in) :: v(:), x, y
+real :: p(2), q(2), t
+call take([x, y])
+call take([p(1) + q(1), p(2)])
+call take(p)
+call take(v(1:2))
+call take(v(1::2))
+call take((p))
+call take(p(1) + 1.0)
+call take(pair(x, y))
+call take(real(x, kind(1.0d0)))
+t = sum(p * q)
+p = q * 2.0
+call take(size(v) * 1.0)
+endsubroutine
+""",
+        set(),
+        True,
+    ),
+    (
+        "temporaries: shifted sections of one array, and substrings of one variable",
+        """subroutine add(c, nc, p, s, k)
+integer, intent(inout) :: c(:), nc
+integer, intent(in) :: p, k
+character(len=*), intent(inout) :: s
+real :: r(6)
+c(p + 2:nc + 1) = c(p + 1:nc)
+r(2:6) = r(1:5)
+s(k:k + 20) = s(k + 5:k + 25)
+endsubroutine
+""",
+        {"temp-overlap"},
+        True,
+    ),
+    (
+        "temporaries: the same section, other columns, constant disjoint ranges, one character (right)",
+        """subroutine s(m, k)
+real, intent(inout) :: m(:, :)
+integer, intent(in) :: k
+real :: r(4)
+m(:, 2) = m(:, 2) * 2.0
+m(:, k + 1) = m(:, k)
+r(3:4) = r(1:2) + 1.0
+r(1:2) = r(1:2) + 1.0
+endsubroutine
+subroutine t(u, k, z)
+character(len=*), intent(inout) :: u
+integer, intent(in) :: k, z
+u(k + z:k + z) = u(k:k)
+endsubroutine
+""",
+        set(),
+        True,
+    ),
+    (
+        "temporaries outside the library and the paths (right)",
+        """subroutine s(p, q)
+real, intent(in) :: p(2), q(2)
+call take(p + q)
+endsubroutine
+""",
+        set(),
+    ),
+    (
         "an accepted line",
         """subroutine outer()
 real, allocatable :: a(:), b(:)
@@ -653,8 +949,8 @@ endsubroutine
 def self_test() -> int:
     """Run the built-in cases; return the number that fail."""
     failed = 0
-    for title, source, expected in SELF_TESTS:
-        found = {pattern for _, pattern, _ in check_source(title, source)}
+    for title, source, expected, *hot in SELF_TESTS:
+        found = {pattern for _, pattern, _ in check_source(title, source, hot=bool(hot and hot[0]))}
         status = "ok" if found == expected else "FAIL"
         failed += status == "FAIL"
         print(f"{status}: {title}: expected {sorted(expected)}, found {sorted(found)}")
