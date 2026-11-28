@@ -4,7 +4,7 @@ module figure_cimgui_core
 !<
 !< Of the 46 functions of cimgui selected for figure_core (szaghi/figure#15 P8: ImDrawList methods and
 !< imgui_internal functions; implementation A of the seam), 39 are bound directly (`bind(C)`) and 7 through the
-!< generated C++ glue (native/figure_glue_generated.cpp: `figure_<name>`, structs passed by reference instead of by
+!< generated C++ glue (native/figure_glue_generated*.cpp: `figure_<name>`, structs passed by reference instead of by
 !< value, struct results through `res`); the rest are skipped: see docs/guide/raw-bindings.md. Private to the
 !< library: applications use the figure_* wrapper modules. Each dummy documents its C type and default.
 use, intrinsic :: iso_c_binding, only : c_bool, c_char, c_float, c_funptr, c_int, c_long_long, c_ptr, c_size_t

@@ -4,6 +4,7 @@
 // generated layer cannot pass (ImPlot3DRay has no C mirror): FIGURE takes the pointer's ray here and hands the
 // Fortran side six doubles. Main thread only, inside a 3-D plot (the Fortran wrapper checks the place).
 #include "figure_native.h"
+#include "figure_plot_backend.h"
 
 #include "imgui.h"
 #include "implot3d.h"
@@ -31,3 +32,8 @@ int fig_plot3d_mouse_ray(double *origin, double *direction) {
 }
 
 } // extern "C"
+
+namespace {
+// ImPlot's (ImPlot3D's) contexts: the plot side linked with this file (szaghi/figure#15 G2).
+const int anchored = (fig_implot_glue_anchor(), 0);
+} // namespace

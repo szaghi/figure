@@ -8,13 +8,10 @@
 // scope left at its begin, so calls made through the raw bindings that leave something open inside a scope are caught
 // too (and repaired by Dear ImGui's error recovery). Main thread only: the entry points refuse a task first.
 #include "figure_native.h"
+#include "figure_plot_backend.h"
 
 #include "imgui.h"
 #include "imgui_internal.h"
-#include "implot.h"
-#include "implot_internal.h"
-#include "implot3d.h"
-#include "implot3d_internal.h"
 
 #include <string>
 #include <vector>
@@ -74,9 +71,7 @@ struct sizes_t {
    ImGuiErrorRecoveryState s;
    ImGuiTable             *table = nullptr;
    ImGuiTabBar            *tab_bar = nullptr;
-   ImPlotPlot             *plot = nullptr;
-   ImPlotSubplot          *subplot = nullptr;
-   ImPlot3DPlot           *plot3d = nullptr;
+   void                   *implot[3] = {nullptr, nullptr, nullptr}; // ImPlot's plot, subplot, ImPlot3D's plot (fig_implot)
    int                     frames[3] = {0, 0, 0}; // the Fortran plot frames' plot, subplot, 3-D plot (hooks.state)
 };
 
@@ -127,11 +122,7 @@ sizes_t take_sizes() {
    ImGuiContext &g = *GImGui;
    z.table = g.CurrentTable;
    z.tab_bar = g.CurrentTabBar;
-   if (ImPlot::GetCurrentContext()) {
-      z.plot = GImPlot->CurrentPlot;
-      z.subplot = GImPlot->CurrentSubplot;
-   }
-   if (ImPlot3D::GetCurrentContext()) z.plot3d = ImPlot3D::GImPlot3D->CurrentPlot;
+   if (fig_implot) fig_implot->snapshot(z.implot); // ImPlot's and ImPlot3D's, where the plot side is linked
    if (hooks.state) hooks.state(z.frames);
    return z;
 }
@@ -168,9 +159,9 @@ std::string grown(const sizes_t &then, int kind) {
    };
    other("table", now.table != then.table);
    other("tab bar", now.tab_bar != then.tab_bar);
-   other("plot", now.plot != then.plot || now.frames[0] != then.frames[0]);
-   other("subplot figure", now.subplot != then.subplot || now.frames[1] != then.frames[1]);
-   other("3-D plot", now.plot3d != then.plot3d || now.frames[2] != then.frames[2]);
+   other("plot", now.implot[0] != then.implot[0] || now.frames[0] != then.frames[0]);
+   other("subplot figure", now.implot[1] != then.implot[1] || now.frames[1] != then.frames[1]);
+   other("3-D plot", now.implot[2] != then.implot[2] || now.frames[2] != then.frames[2]);
    return out;
 }
 
@@ -181,9 +172,7 @@ void recover_to(const sizes_t &then) {
    io.ConfigErrorRecoveryEnableAssert = false;
    sc.muted = true;
    if (hooks.recover) hooks.recover(then.frames); // the Fortran frames' plots (before ImPlot's, as their ends)
-   if (ImPlot::GetCurrentContext() && GImPlot->CurrentPlot && !then.plot) fig_plot_end();
-   if (ImPlot::GetCurrentContext() && GImPlot->CurrentSubplot && !then.subplot) ImPlot::EndSubplots();
-   if (ImPlot3D::GetCurrentContext() && ImPlot3D::GImPlot3D->CurrentPlot && !then.plot3d) fig_plot3d_end();
+   if (fig_implot) fig_implot->recover(then.implot); // ImPlot's and ImPlot3D's plots open now and not then
    if (GImGui->CurrentWindowStack.Size > then.s.SizeOfWindowStack)
       ImGui::ErrorRecoveryTryToRecoverState(&then.s);
    else
@@ -257,8 +246,8 @@ void close_entry(const entry_t &e) {
    case K_MENU_BAR: ImGui::EndMenuBar(); break;
    case K_MENU: ImGui::EndMenu(); break;
    case K_POPUP: ImGui::EndPopup(); break;
-   case K_PLOT: fig_plot_end(); break;
-   case K_SUBPLOTS: ImPlot::EndSubplots(); break;
+   case K_PLOT: if (fig_implot) fig_implot->close(FIG_PLOT_KIND_PLOT); break;
+   case K_SUBPLOTS: if (fig_implot) fig_implot->close(FIG_PLOT_KIND_SUBPLOTS); break;
    case K_DOCK_LAYOUT: ImGui::DockBuilderFinish(static_cast<ImGuiID>(static_cast<unsigned int>(e.aux))); break;
    case K_ID: ImGui::PopID(); break;
    case K_DISABLED: ImGui::EndDisabled(); break;
@@ -269,9 +258,12 @@ void close_entry(const entry_t &e) {
    case K_ALIGN: fig_align_end(); break;
    case K_ITEM_WIDTH: ImGui::PopItemWidth(); break;
    case K_TOOLTIP: ImGui::EndTooltip(); break;
-   case K_PLOT3D: fig_plot3d_end(); break;
-   case K_ALIGNED: ImPlot::EndAlignedPlots(); break;
-   case K_LEGEND_POPUP: ImPlot::EndLegendPopup(); break;
+   case K_PLOT3D: if (fig_implot) fig_implot->close(FIG_PLOT_KIND_PLOT3D); break;
+   case K_ALIGNED: if (fig_implot) fig_implot->close(FIG_PLOT_KIND_ALIGNED); break;
+   case K_LEGEND_POPUP:
+      if (fig_implot) fig_implot->close(FIG_PLOT_KIND_LEGEND_POPUP);
+      else ImGui::EndPopup(); // (EndLegendPopup is EndPopup)
+      break;
    case K_MULTI_SELECT: ImGui::EndMultiSelect(); fig_multi_select_reset(); break; // its requests dropped
    default: break;
    }

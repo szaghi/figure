@@ -19,6 +19,7 @@
 //   gains 1.2-1.6x at the same 1/255: not taken, linear stays exact. Ranges narrower than single precision (lo and
 //   hi the same float) and small fields are coloured per pixel.
 #include "figure_native.h"
+#include "figure_plot_backend.h"
 
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -274,3 +275,10 @@ int fig_field_pixel(const char *label, int label_len, int i, int j, float *rgba)
    }
    return fail(FIG_ERR_ARGUMENT, "test_field_pixel: no field '" + name + "' is cached");
 }
+
+namespace {
+// The field cache asks the core to sweep it at each frame's end and to forget it at shutdown; the plot side (its
+// contexts, ImPlot's registry) is linked with it (szaghi/figure#15 G2).
+const int registered = (figure_on_frame_end(fig_field_sweep), figure_on_shutdown(fig_field_reset),
+                        fig_implot_glue_anchor(), 0);
+} // namespace

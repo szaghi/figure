@@ -16,6 +16,7 @@
 //     library's internal document state (rich_md_internal.h: no patch).
 // Every function is extern "C", returns a FIG_* status and never lets a C++ exception escape (figure_native.h).
 #include "figure_native.h"
+#include "figure_plot_backend.h"
 #include "figure_fonts.h"
 
 #include "imgui.h"
@@ -511,3 +512,9 @@ int fig_core_find_field(const char *label, const char *hint, char *buf, int size
 }
 
 } // extern "C"
+
+namespace {
+// Markdown's context, fonts and images released at shutdown, while the renderer can free them (the core calls it only
+// where this file is linked: szaghi/figure#15 G2).
+const int registered = (figure_on_shutdown(fig_markdown_shutdown), 0);
+} // namespace

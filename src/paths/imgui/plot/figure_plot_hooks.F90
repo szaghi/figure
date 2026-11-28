@@ -12,19 +12,21 @@ module figure_plot_hooks
 !< Also: `plot_native_install`, what the path installs in the native layer before the app's contexts are made
 !< (figure_app; nothing here: the native layer's own colormaps serve the 3-D views), and the colormap registry as the
 !< tests read it (`plot_colormap_count`, `plot_colormap_size`, `plot_colormap_color`, `plot_colormap_sample`: ImPlot's,
-!< which `ip_colormap` registers in on this path).
-use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_long_long
+!< which `ip_colormap` registers in on this path; id -1, the style's map), the plot style's colour names
+!< (`plot_style_color_name`) and the map of the style's line colours (`plot_lines_map`).
+use, intrinsic :: iso_c_binding, only : c_char, c_double, c_f_pointer, c_float, c_int, c_long_long, c_null_char, c_ptr
 use, intrinsic :: iso_fortran_env, only : int32, real32
 use figure_c_native, only : fig_draw, fig_field_count, fig_field_pixel, fig_field_time, fig_field_uploads, &
                             fig_plot_tick_label
 use figure_cimgui, only : im_vec4
-use figure_cimplot, only : ImPlot_GetColormapColor, ImPlot_GetColormapCount, ImPlot_GetColormapSize, &
-                           ImPlot_SampleColormap
+use figure_cimplot, only : ImPlot_GetColormapColor, ImPlot_GetColormapCount, ImPlot_GetColormapIndex, &
+                           ImPlot_GetColormapSize, ImPlot_GetStyleColorName, ImPlot_SampleColormap
 
 implicit none
 private
 public :: plot_layer_draw, plot_tick_label, plot_field_uploads, plot_field_count, plot_field_time, plot_field_pixel
 public :: plot_native_install, plot_colormap_count, plot_colormap_size, plot_colormap_color, plot_colormap_sample
+public :: plot_style_color_name, plot_lines_map
 
 contains
    subroutine plot_native_install()
@@ -40,7 +42,7 @@ contains
 
    function plot_colormap_size(id) result(n)
    !< A colormap's keys (`ImPlot::GetColormapSize`).
-   integer(int32), intent(in) :: id !< Colormap id (`ip_colormap`).
+   integer(int32), intent(in) :: id !< Colormap id (`ip_colormap`; -1 the style's).
    integer(int32)             :: n  !< Keys.
 
    n = int(ImPlot_GetColormapSize(int(id, c_int)), int32)
@@ -48,7 +50,7 @@ contains
 
    subroutine plot_colormap_color(id, idx, rgba)
    !< A colormap's key `idx` (0-based, modulo the keys; `ImPlot::GetColormapColor`).
-   integer(int32), intent(in)  :: id      !< Colormap id (`ip_colormap`).
+   integer(int32), intent(in)  :: id      !< Colormap id (`ip_colormap`; -1 the style's).
    integer(int32), intent(in)  :: idx     !< Key.
    real(real32),   intent(out) :: rgba(4) !< Colour.
    type(im_vec4)               :: v       !< ImPlot's.
@@ -133,4 +135,30 @@ contains
 
    status = fig_field_pixel(label, label_len, i, j, rgba)
    endfunction plot_field_pixel
+
+   function plot_style_color_name(idx) result(name)
+   !< The name of the plot style's colour `idx` (0-based, `ImPlot::GetStyleColorName`).
+   integer(int32), intent(in)     :: idx  !< Colour (ImPlotCol).
+   character(len=16)              :: name !< Name (blank-padded).
+   type(c_ptr)                    :: p    !< ImPlot's string.
+   character(kind=c_char), pointer :: c(:) !< ... its characters.
+   integer(int32)                 :: k    !< Counter.
+
+   name = ''
+   p = ImPlot_GetStyleColorName(int(idx, c_int))
+   call c_f_pointer(p, c, [len(name)])
+   do k = 1_int32, len(name, int32)
+      if (c(k) == c_null_char) exit
+      name(k:k) = c(k)
+   enddo
+   endfunction plot_style_color_name
+
+   function plot_lines_map(theme) result(id)
+   !< The colormap of the style's line colours, as the theme `theme` (or the line palette) named them (`'FIGURE <name>'`);
+   !< -1 if none.
+   character(len=*), intent(in) :: theme !< Theme or line palette name.
+   integer(int32)               :: id    !< Colormap id.
+
+   id = int(ImPlot_GetColormapIndex('FIGURE '//theme//c_null_char), int32)
+   endfunction plot_lines_map
 endmodule figure_plot_hooks

@@ -1,5 +1,6 @@
 // FIGURE native glue: SDL3 window + OpenGL3 renderer + Dear ImGui/ImPlot contexts, behind the C ABI of figure_native.h.
 #include "figure_native.h"
+#include "figure_plot_backend.h"
 #include "figure_fonts.h"
 #include "figure_image.h"
 #include "figure_items.h"
@@ -12,10 +13,6 @@
 #include "imgui_internal.h" // DockBuilder*: Dear ImGui keeps the dock builder internal
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl3.h"
-#include "implot.h"
-#include "implot_internal.h" // GetStyleColorVec4: ImPlot's automatic colours resolved
-#include "implot3d.h"        // ImPlot3D's context, beside ImPlot's
-#include "implot3d_internal.h" // ImPlot3D::GetStyleColorName (style colours by name)
 // stb_truetype, as Dear ImGui bundles it, private to this file: an ICON_* rendered as the window's icon (set_icon)
 #define STBRP_STATIC
 #define STB_RECT_PACK_IMPLEMENTATION
@@ -49,6 +46,22 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+// The plot side and the parts linked only where referenced (figure_plot_backend.h, szaghi/figure#15 G2).
+fig_implot_backend_t *fig_implot = nullptr;
+
+static std::vector<void (*)()> &frame_end_fns() {
+   static std::vector<void (*)()> fns;
+   return fns;
+}
+
+static std::vector<void (*)()> &shutdown_fns() {
+   static std::vector<void (*)()> fns;
+   return fns;
+}
+
+void figure_on_frame_end(void (*fn)()) { frame_end_fns().push_back(fn); }
+void figure_on_shutdown(void (*fn)()) { shutdown_fns().push_back(fn); }
 
 namespace {
 
@@ -207,7 +220,8 @@ struct state_t {
    struct saved_t {                                // a style value changed by a push, and what it was
       unsigned char             *where = nullptr;
       std::vector<unsigned char> was;
-      int                        lib = 0;          // its library: 1, 2 also pushed in the Fortran store (pstyle)
+      int                        lib = 0;          // its library: 0 Dear ImGui's (where, was), 1 ImPlot's or 2
+                                                   // ImPlot3D's (the plots' style stores keep it: popped there)
    };
    std::vector<saved_t> pushed_colors, pushed_vars; // scoped changes, undone by the pops (newest last)
    struct input_t {                                // synthetic input (figure_testing), applied at the next frames
@@ -842,8 +856,8 @@ ImFont *get_font(const std::string &name, std::string &err) {
 void create_contexts() {
    IMGUI_CHECKVERSION();
    ImGui::CreateContext();
-   ImPlot::CreateContext();
-   ImPlot3D::CreateContext(); // the small 3-D figures (figure_plot3d.cpp)
+   if (fig_implot) fig_implot->create(); // ImPlot's and ImPlot3D's, where the plot side is linked (szaghi/figure#15 G2)
+   // name map: ImPlot::CreateContext, ImPlot3D::CreateContext
    ++st.contexts;
    ++st.implot_style_generation;
    ImGuiIO &io = ImGui::GetIO();
@@ -868,82 +882,78 @@ void destroy_contexts() {
    st.font_em.clear();
    st.fallbacks.clear(); // a program's fallbacks belong to its application: a new init starts without them
    st.fallbacks_merged = 0;
-   if (ImPlot3D::GetCurrentContext()) ImPlot3D::DestroyContext();
-   if (ImPlot::GetCurrentContext()) ImPlot::DestroyContext();
-   fig_plot_links_reset(); // the link groups belong to the plots
+   if (fig_implot) fig_implot->destroy(); // ImPlot's and ImPlot3D's contexts, the plot links
+   // name map: ImPlot::DestroyContext, ImPlot3D::DestroyContext
    if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
 }
 
-// FIGURE's plot styles in Fortran (fig_plot_style_hooks; the Fortran path, szaghi/figure#15 G2): the store its plot
-// frames draw with, which the style functions read and every change reaches; ImPlot's and ImPlot3D's styles are kept
-// equal to it while their contexts exist. None on the current path.
-struct pstyle_hooks_t {
-   fig_pstyle_color_fn color = nullptr;
-   fig_pstyle_var_fn   var = nullptr;
-   fig_pstyle_push_fn  push = nullptr;
-   fig_pstyle_pop_fn   pop = nullptr;
-   fig_pstyle_theme_fn theme = nullptr;
-} pstyle;
+// The plots' style stores (figure_plot_backend.h): the Fortran path's (fig_plot_style_hooks, szaghi/figure#15 G2), the
+// one its plot frames draw with, and ImPlot's (fig_implot->style) where the plot side is linked; the first present is
+// the one read, every change goes to each. The core holds no plot style of its own.
+fig_pstyle_store_t pstyle;
+
+// One step of a style's plot part (fig_pstyle_theme_fn's ops 1-6), replayed into the stores at the commit.
+struct pstyle_op_t {
+   int                 op = 0;
+   std::string         name;
+   std::vector<double> values;
+};
+
+// The store read: the Fortran one, else ImPlot's (null: neither, no plot style is known).
+const fig_pstyle_store_t *read_store() {
+   if (pstyle.color) return &pstyle;
+   return fig_implot ? &fig_implot->style : nullptr;
+}
+
+// Every store, the Fortran one first.
+template <class F> void each_store(F &&f) {
+   if (pstyle.color) f(pstyle);
+   if (fig_implot) f(fig_implot->style);
+}
+
+// A plot style's colour name known (lib 1 ImPlot's, 2 ImPlot3D's), as the store read knows it.
+bool plot_color_known(int lib, const std::string &name) {
+   const fig_pstyle_store_t *r = read_store();
+   float c[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+   return r && r->color(lib, name.c_str(), static_cast<int>(name.size()), 2, c) == 0;
+}
+
+// A plot style's variable: its number of values (1 or 2), 0 for an unknown name.
+int plot_var_count(int lib, const std::string &name) {
+   const fig_pstyle_store_t *r = read_store();
+   double v[2] = {0.0, 0.0};
+   int n = 0;
+   if (!r || r->var(lib, name.c_str(), static_cast<int>(name.size()), 0, v, &n) != 0) return 0;
+   return n;
+}
+
+// A style's plot part, replayed into every store (ops 1-6), then made the one in effect (op 7).
+void plot_ops_commit(const std::vector<pstyle_op_t> &ops) {
+   each_store([&](const fig_pstyle_store_t &x) {
+      for (const pstyle_op_t &o : ops)
+         x.theme(o.op, o.name.c_str(), static_cast<int>(o.name.size()), o.values.data(),
+                 static_cast<int>(o.values.size()));
+      x.theme(7, "", 0, nullptr, 0);
+   });
+}
 
 // ---- Style fields by name ------------------------------------------------------------------------------------------
-// lib 0: Dear ImGui (ImGuiStyle), 1: ImPlot (ImPlotStyle). Colours by the libraries' own names (GetStyleColorName);
-// the other fields by the generated tables of figure_style_generated.cpp.
+// Dear ImGui's (ImGuiStyle): colours by its own names (GetStyleColorName), the other fields by the generated table of
+// figure_style_generated.cpp. The plots' (ImPlot's, ImPlot3D's) are the stores' (plot_color_known, plot_var_count).
 
-// The libraries a style name belongs to: 0 Dear ImGui, 1 ImPlot, 2 ImPlot3D.
-int style_color_index(int lib, const std::string &name) {
-   const int n = lib == 0 ? static_cast<int>(ImGuiCol_COUNT)
-                 : lib == 1 ? static_cast<int>(ImPlotCol_COUNT) : static_cast<int>(ImPlot3DCol_COUNT);
-   for (int i = 0; i < n; ++i)
-      if (name == (lib == 0 ? ImGui::GetStyleColorName(i)
-                   : lib == 1 ? ImPlot::GetStyleColorName(i) : ImPlot3D::GetStyleColorName(i))) return i;
+int style_color_index(const std::string &name) {
+   for (int i = 0; i < static_cast<int>(ImGuiCol_COUNT); ++i)
+      if (name == ImGui::GetStyleColorName(i)) return i;
    return -1;
 }
 
-const figure_style::field *style_field(int lib, const std::string &name) {
-   const figure_style::field *t = lib == 0 ? figure_style::IMGUI_FIELDS
-                                  : lib == 1 ? figure_style::IMPLOT_FIELDS : figure_style::IMPLOT3D_FIELDS;
-   const int n = lib == 0 ? figure_style::IMGUI_FIELDS_COUNT
-                 : lib == 1 ? figure_style::IMPLOT_FIELDS_COUNT : figure_style::IMPLOT3D_FIELDS_COUNT;
-   for (int i = 0; i < n; ++i)
-      if (name == t[i].name) return &t[i];
+const figure_style::field *style_field(const std::string &name) {
+   for (int i = 0; i < figure_style::IMGUI_FIELDS_COUNT; ++i)
+      if (name == figure_style::IMGUI_FIELDS[i].name) return &figure_style::IMGUI_FIELDS[i];
    return nullptr;
 }
 
-// The Fortran store made equal to ImPlot's style (after ImPlot's style editor): every variable and colour, as stored.
-void pstyle_from_implot();
-
-unsigned char *style_base(int lib) {
-   return lib == 0 ? reinterpret_cast<unsigned char *>(&ImGui::GetStyle())
-          : lib == 1 ? reinterpret_cast<unsigned char *>(&ImPlot::GetStyle())
-                     : reinterpret_cast<unsigned char *>(&ImPlot3D::GetStyle());
-}
-
-void pstyle_from_implot() {
-   const unsigned char *base = reinterpret_cast<const unsigned char *>(&ImPlot::GetStyle());
-   for (int i = 0; i < figure_style::IMPLOT_FIELDS_COUNT; ++i) {
-      const figure_style::field &f = figure_style::IMPLOT_FIELDS[i];
-      const unsigned char *p = base + f.offset;
-      double v[2] = {0.0, 0.0};
-      int n = 1;
-      switch (f.kind) {
-      case figure_style::FIG_STYLE_FLOAT: v[0] = *reinterpret_cast<const float *>(p); break;
-      case figure_style::FIG_STYLE_VEC2:
-         v[0] = reinterpret_cast<const ImVec2 *>(p)->x;
-         v[1] = reinterpret_cast<const ImVec2 *>(p)->y;
-         n = 2;
-         break;
-      case figure_style::FIG_STYLE_BOOL: v[0] = *reinterpret_cast<const bool *>(p) ? 1.0 : 0.0; break;
-      default: v[0] = *reinterpret_cast<const int *>(p); break;
-      }
-      pstyle.var(1, f.name, static_cast<int>(std::strlen(f.name)), 1, v, &n);
-   }
-   for (int i = 0; i < ImPlotCol_COUNT; ++i) {
-      const ImVec4 &c = ImPlot::GetStyle().Colors[i];
-      float rgba[4] = {c.x, c.y, c.z, c.w};
-      const char *name = ImPlot::GetStyleColorName(i);
-      pstyle.color(1, name, static_cast<int>(std::strlen(name)), 1, rgba);
-   }
-}
+unsigned char *style_base() { return reinterpret_cast<unsigned char *>(&ImGui::GetStyle()); }
 
 // ---- Styles ---------------------------------------------------------------------------------------------------
 // A style is a theme (figure_theme.h): a look (geometry: the variables of both libraries), a palette or a base (the
@@ -1140,20 +1150,12 @@ bool load_palette(const std::string &name, figure_theme::theme_t &pal, std::stri
    return true;
 }
 
-// One step of a style's plot part (fig_pstyle_theme_fn's ops 1-6), replayed into the Fortran store at the commit.
-struct pstyle_op_t {
-   int                 op = 0;
-   std::string         name;
-   std::vector<double> values;
-};
-
 // A style being built: both libraries' styles and what goes with them, applied at once by commit_style (a failure
 // on the way leaves the style in effect untouched).
 struct style_build_t {
    ImGuiStyle           s;                // sizes multiplied by the content scale
-   ImPlotStyle          ps;               // colours: ImPlot's automatic ones unless set
-   std::vector<pstyle_op_t> plot_ops;     // ps's steps, for the Fortran store (pstyle.theme): from ImPlot's defaults
-                                          // (op 1, a style_build_t{}) unless current_build gives op 2
+   std::vector<pstyle_op_t> plot_ops;     // the plots' style, as steps replayed into the stores at the commit: from
+                                          // ImPlot's defaults (op 1, build_theme) or the style in effect (op 2)
    bool                 lines_set = false; // the line colours change (empty lines: ImPlot's Deep)
    std::vector<color_t> lines;
    std::string          cmap_name;
@@ -1171,7 +1173,6 @@ struct style_build_t {
 style_build_t current_build() {
    style_build_t b;
    b.s = ImGui::GetStyle();
-   b.ps = ImPlot::GetStyle();
    b.plot_ops.push_back({2, "", {}});
    for (int i = 0; i < 3; ++i) b.clear[i] = st.clear[i];
    b.base = st.style_base;
@@ -1222,22 +1223,19 @@ bool palette_colors(const figure_theme::theme_t &t, const std::string &where, st
    }
    derive_colors(roles, b.s.Colors);
    for (const auto &e : pal.imgui_colors) {
-      const int i = style_color_index(0, e.name);
+      const int i = style_color_index(e.name);
       if (i < 0) {
          err = "themes/palettes/" + name + ".toml:" + std::to_string(e.line) + ": unknown Dear ImGui colour \"" + e.name + "\"";
          return false;
       }
       b.s.Colors[i] = vec4(e.color);
    }
-   for (ImVec4 &c : b.ps.Colors) c = IMPLOT_AUTO_COL; // as ImPlot::StyleColorsAuto, which also resets MinorAlpha
-   b.plot_ops.push_back({3, "", {}});
+   b.plot_ops.push_back({3, "", {}}); // every colour automatic (as ImPlot::StyleColorsAuto, which also resets MinorAlpha)
    for (const auto &e : pal.implot_colors) {
-      const int i = style_color_index(1, e.name);
-      if (i < 0) {
+      if (!plot_color_known(1, e.name)) {
          err = "themes/palettes/" + name + ".toml:" + std::to_string(e.line) + ": unknown ImPlot colour \"" + e.name + "\"";
          return false;
       }
-      b.ps.Colors[i] = vec4(e.color);
       b.plot_ops.push_back({6, e.name, {e.color.r, e.color.g, e.color.b, e.color.a}});
    }
    const color_t clear = pal.has_background ? pal.background : derived_clear(roles);
@@ -1256,14 +1254,14 @@ bool palette_colors(const figure_theme::theme_t &t, const std::string &where, st
 
 // The variables of a look (`name`) into fresh styles: Dear ImGui's and ImPlot's defaults, then the look's; its title
 // bar's height [logical pixels] (0: the menu bar's).
-bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, float &title_bar, std::string &err,
+bool look_vars(const std::string &name, ImGuiStyle &s, float &title_bar, std::string &err,
                std::vector<pstyle_op_t> &ops) {
    figure_theme::theme_t look;
    if (!load_look(name, look, err)) return false;
    title_bar = look.title_bar_height > 0.0 ? static_cast<float>(look.title_bar_height) : 0.0f;
    const std::string where = "themes/looks/" + name + ".toml";
    for (const auto &e : look.imgui_vars) {
-      const figure_style::field *f = style_field(0, e.name);
+      const figure_style::field *f = style_field(e.name);
       if (!f || !write_var(reinterpret_cast<unsigned char *>(&s), *f, e.values)) {
          err = where + ":" + std::to_string(e.line) + ": wrong Dear ImGui style variable \"" + e.name + "\"";
          return false;
@@ -1271,8 +1269,7 @@ bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, float &t
    }
    ops.push_back({4, "", {}}); // fresh variables: ImPlot's defaults, then the look's (the colours kept by the callers)
    for (const auto &e : look.implot_vars) {
-      const figure_style::field *f = style_field(1, e.name);
-      if (!f || !write_var(reinterpret_cast<unsigned char *>(&ps), *f, e.values)) {
+      if (plot_var_count(1, e.name) != static_cast<int>(e.values.size())) {
          err = where + ":" + std::to_string(e.line) + ": wrong ImPlot style variable \"" + e.name + "\"";
          return false;
       }
@@ -1284,18 +1281,14 @@ bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, float &t
 // A look in place of the geometry of b: every variable from the look (sizes scaled), the colours kept.
 bool apply_look(const std::string &name, style_build_t &b, std::string &err) {
    ImGuiStyle  s;
-   ImPlotStyle ps;
    float       title_bar = 0.0f;
-   if (!look_vars(name, s, ps, title_bar, err, b.plot_ops)) return false;
+   if (!look_vars(name, s, title_bar, err, b.plot_ops)) return false;
    s.ScaleAllSizes(st.scale);
    std::memcpy(s.Colors, b.s.Colors, sizeof(s.Colors));
    s.FontSizeBase = b.s.FontSizeBase;
    s.FontScaleMain = b.s.FontScaleMain;
    s.FontScaleDpi = b.s.FontScaleDpi;
-   std::memcpy(ps.Colors, b.ps.Colors, sizeof(ps.Colors));
-   ps.Colormap = b.ps.Colormap;
    b.s = s;
-   b.ps = ps;
    b.look = name;
    b.title_bar = title_bar;
    return true;
@@ -1319,36 +1312,31 @@ bool build_theme(const figure_theme::theme_t &t, const std::string &where, const
    b.lines_set = true;
    if (t.has_palette() && !palette_colors(t, where, b, err)) return false;
    if (!t.look.empty()) {
-      ImGuiStyle  s;
-      ImPlotStyle ps;
-      if (!look_vars(t.look, s, ps, b.title_bar, err, b.plot_ops)) return false;
+      ImGuiStyle s;
+      if (!look_vars(t.look, s, b.title_bar, err, b.plot_ops)) return false;
       std::memcpy(s.Colors, b.s.Colors, sizeof(s.Colors));
-      std::memcpy(ps.Colors, b.ps.Colors, sizeof(ps.Colors));
       b.s = s;
-      b.ps = ps;
       b.look = t.look;
    }
    if (t.title_bar_height >= 0.0) b.title_bar = static_cast<float>(t.title_bar_height);
    for (const auto &e : t.imgui_vars) {
-      const figure_style::field *f = style_field(0, e.name);
+      const figure_style::field *f = style_field(e.name);
       if (!f) return bad(e, "unknown Dear ImGui style variable");
       if (!write_var(reinterpret_cast<unsigned char *>(&b.s), *f, e.values)) return bad(e, "wrong number of values for");
    }
    for (const auto &e : t.imgui_colors) {
-      const int i = style_color_index(0, e.name);
+      const int i = style_color_index(e.name);
       if (i < 0) return bad(e, "unknown Dear ImGui colour");
       b.s.Colors[i] = vec4(e.color);
    }
    for (const auto &e : t.implot_vars) {
-      const figure_style::field *f = style_field(1, e.name);
-      if (!f) return bad(e, "unknown ImPlot style variable");
-      if (!write_var(reinterpret_cast<unsigned char *>(&b.ps), *f, e.values)) return bad(e, "wrong number of values for");
+      const int n = plot_var_count(1, e.name);
+      if (n == 0) return bad(e, "unknown ImPlot style variable");
+      if (n != static_cast<int>(e.values.size())) return bad(e, "wrong number of values for");
       b.plot_ops.push_back({5, e.name, e.values});
    }
    for (const auto &e : t.implot_colors) {
-      const int i = style_color_index(1, e.name);
-      if (i < 0) return bad(e, "unknown ImPlot colour");
-      b.ps.Colors[i] = vec4(e.color);
+      if (!plot_color_known(1, e.name)) return bad(e, "unknown ImPlot colour");
       b.plot_ops.push_back({6, e.name, {e.color.r, e.color.g, e.color.b, e.color.a}});
    }
    if (!t.lines.empty()) {
@@ -1387,31 +1375,17 @@ void commit_style(style_build_t &b, const figure_theme::theme_t *t = nullptr) {
    b.s.FontSizeBase = b.font_size > 0.0f ? b.font_size : old.FontSizeBase;
    b.s.FontScaleMain = old.FontScaleMain;
    b.s.FontScaleDpi = old.FontScaleDpi;
+   std::vector<ImU32> keys; // the style's line colours as FIGURE's own state (fig_style_lines), not read back
+   for (const auto &c : b.lines) keys.push_back(ImGui::ColorConvertFloat4ToU32(vec4(c)));
+   ImGui::GetStyle() = b.s;
+   plot_ops_commit(b.plot_ops); // the plots' style into every store
    if (b.lines_set) {
-      int cmap = ImPlotColormap_Deep;
-      if (!b.lines.empty()) {
-         cmap = ImPlot::GetColormapIndex(b.cmap_name.c_str()); // ImPlot keeps colormaps for the context's life
-         if (cmap < 0) {
-            std::vector<ImU32> cols;
-            for (const auto &c : b.lines) cols.push_back(ImGui::ColorConvertFloat4ToU32(vec4(c)));
-            cmap = ImPlot::AddColormap(b.cmap_name.c_str(), cols.data(), static_cast<int>(cols.size()), true);
-         }
-      }
-      b.ps.Colormap = cmap;
-      std::vector<ImU32> keys; // the style's line colours as FIGURE's own state (fig_style_lines), not read back
-      for (const auto &c : b.lines) keys.push_back(ImGui::ColorConvertFloat4ToU32(vec4(c)));
+      // ImPlot's colormap of the lines (ImPlot keeps colormaps for the context's life; empty: its Deep)
+      if (fig_implot) fig_implot->lines(b.cmap_name.c_str(), keys.data(), static_cast<int>(keys.size()));
       if (keys != st.lines) {
          st.lines = std::move(keys);
          ++st.lines_generation;
       }
-   }
-   ImGui::GetStyle() = b.s;
-   ImPlot::GetStyle() = b.ps;
-   if (pstyle.theme) { // the plot part into the Fortran store, as into ImPlot's
-      for (const pstyle_op_t &o : b.plot_ops)
-         pstyle.theme(o.op, o.name.c_str(), static_cast<int>(o.name.size()), o.values.data(),
-                      static_cast<int>(o.values.size()));
-      pstyle.theme(7, "", 0, nullptr, 0);
    }
    ++st.implot_style_generation;
    for (int i = 0; i < 3; ++i) st.clear[i] = b.clear[i];
@@ -1625,12 +1599,20 @@ bool save_style_file(const std::string &path, std::string &err) {
    if (st.font != "plex-sans") out += "font = \"" + st.font + "\"\n";
    if (cur.FontSizeBase != DEFAULT_FONT_SIZE) out += "font_size = " + short_float(cur.FontSizeBase) + "\n";
    out += "background = " + theme_color(ImVec4(st.clear[0], st.clear[1], st.clear[2], 1.0f)) + "\n";
-   const ImPlotColormap cmap = ImPlot::GetStyle().Colormap;
-   if (cmap != ImPlotColormap_Deep) {
+   // name map: ImPlot::GetColormapSize, ImPlot::GetColormapColor, ImPlot::GetStyleColorName
+   std::vector<ImU32> line_keys = st.lines; // the style's line colours: FIGURE's own state, or ImPlot's colormap
+   bool                has_lines = !line_keys.empty();
+   if (read_store() != &pstyle && fig_implot) { // (ImPlot's style editor may have chosen another map)
+      const int n = fig_implot->saved_lines(nullptr, 0);
+      has_lines = n >= 0;
+      line_keys.assign(static_cast<size_t>(std::max(n, 0)), 0u);
+      if (n > 0) fig_implot->saved_lines(line_keys.data(), n);
+   }
+   if (has_lines) {
       out += "lines = [";
-      for (int i = 0; i < ImPlot::GetColormapSize(cmap); ++i) {
+      for (size_t i = 0; i < line_keys.size(); ++i) {
          if (i) out += ", ";
-         ImVec4 c = ImPlot::GetColormapColor(i, cmap);
+         ImVec4 c = ImGui::ColorConvertU32ToFloat4(line_keys[i]);
          c.w = 1.0f;
          out += theme_color(c);
       }
@@ -1692,17 +1674,44 @@ bool save_style_file(const std::string &path, std::string &err) {
       colors += std::string(ImGui::GetStyleColorName(i)) + " = " + theme_color(c) + "\n";
    }
    if (!colors.empty()) out += "\n[imgui.colors]\n" + colors;
-   vars("implot.vars", figure_style::IMPLOT_FIELDS, figure_style::IMPLOT_FIELDS_COUNT,
-        reinterpret_cast<const unsigned char *>(&ImPlot::GetStyle()), reinterpret_cast<const unsigned char *>(&ref.ps),
-        nullptr);
-   colors.clear();
-   for (int i = 0; i < ImPlotCol_COUNT; ++i) {
-      const ImVec4 &c = ImPlot::GetStyle().Colors[i], &rc = ref.ps.Colors[i];
-      if (ImPlot::IsColorAuto(c)) continue; // derived from Dear ImGui's: nothing to write
-      if (c.x == rc.x && c.y == rc.y && c.z == rc.z && c.w == rc.w) continue; // as the palette gives it
-      colors += std::string(ImPlot::GetStyleColorName(i)) + " = " + theme_color(c) + "\n";
+   if (const fig_pstyle_store_t *r = read_store()) { // the plots' style, against the reference's (replayed as scratch)
+      for (const pstyle_op_t &o : ref.plot_ops)
+         r->theme(o.op + 10, o.name.c_str(), static_cast<int>(o.name.size()), o.values.data(),
+                  static_cast<int>(o.values.size()));
+      std::string block;
+      char        name[64], rname[64];
+      double      v[4], w[4];
+      int         type = 0, rtype = 0;
+      for (int i = 0; r->field(0, 0, i, name, sizeof name, v, &type) && r->field(1, 0, i, rname, sizeof rname, w, &rtype);
+           ++i) {
+         if (type == 1) {
+            if (static_cast<float>(v[0]) == static_cast<float>(w[0]) && static_cast<float>(v[1]) == static_cast<float>(w[1]))
+               continue;
+            std::snprintf(num, sizeof(num), "[%s, %s]", short_float(static_cast<float>(v[0])).c_str(),
+                          short_float(static_cast<float>(v[1])).c_str());
+         } else if (type == 2) {
+            if ((v[0] != 0.0) == (w[0] != 0.0)) continue;
+            std::snprintf(num, sizeof(num), "%s", v[0] != 0.0 ? "true" : "false");
+         } else {
+            if (static_cast<float>(v[0]) == static_cast<float>(w[0])) continue;
+            std::snprintf(num, sizeof(num), "%s", short_float(static_cast<float>(v[0])).c_str());
+         }
+         block += std::string(name) + " = " + num + "\n";
+      }
+      if (!block.empty()) out += "\n[implot.vars]\n" + block;
+      colors.clear();
+      for (int i = 0; r->field(0, 1, i, name, sizeof name, v, &type) && r->field(1, 1, i, rname, sizeof rname, w, &rtype);
+           ++i) {
+         const ImVec4 c(static_cast<float>(v[0]), static_cast<float>(v[1]), static_cast<float>(v[2]),
+                        static_cast<float>(v[3]));
+         const ImVec4 rc(static_cast<float>(w[0]), static_cast<float>(w[1]), static_cast<float>(w[2]),
+                         static_cast<float>(w[3]));
+         if (c.w == -1.0f) continue; // automatic, derived from Dear ImGui's: nothing to write
+         if (c.x == rc.x && c.y == rc.y && c.z == rc.z && c.w == rc.w) continue; // as the palette gives it
+         colors += std::string(name) + " = " + theme_color(c) + "\n";
+      }
+      if (!colors.empty()) out += "\n[implot.colors]\n" + colors;
    }
-   if (!colors.empty()) out += "\n[implot.colors]\n" + colors;
    if (st.title_bar != ref.title_bar) out += "\n[figure.vars]\nTitleBarHeight = " + short_float(st.title_bar) + "\n";
    FILE *f = std::fopen(path.c_str(), "wb");
    if (!f) {
@@ -2488,12 +2497,15 @@ void fig_generations(unsigned int *contexts, unsigned int *implot_style) {
 }
 
 void fig_plot_style_hooks(fig_pstyle_color_fn color, fig_pstyle_var_fn var, fig_pstyle_push_fn push,
-                          fig_pstyle_pop_fn pop, fig_pstyle_theme_fn theme) {
+                          fig_pstyle_pop_fn pop, fig_pstyle_theme_fn theme, fig_pstyle_field_fn field,
+                          fig_pstyle_editor_fn editor) {
    pstyle.color = color;
    pstyle.var = var;
    pstyle.push = push;
    pstyle.pop = pop;
    pstyle.theme = theme;
+   pstyle.field = field;
+   pstyle.editor = editor;
 }
 
 int fig_style_lines(unsigned int *colors, int cap, int *n, unsigned int *generation) {
@@ -2652,10 +2664,11 @@ int fig_show_style_editor(int *open) {
    bool o = open ? *open != 0 : true;
    if (ImGui::Begin("Style editor", open ? &o : nullptr)) {
       if (ImGui::CollapsingHeader("Dear ImGui", ImGuiTreeNodeFlags_DefaultOpen)) ImGui::ShowStyleEditor();
-      if (ImGui::CollapsingHeader("ImPlot")) {
-         ImPlot::ShowStyleEditor();
+      if (ImGui::CollapsingHeader("ImPlot")) { // the store read's editor (ImPlot's own, or the Fortran path's)
+         // name map: ImPlot::ShowStyleEditor
+         const fig_pstyle_store_t *r = read_store();
+         if (r && r->editor) r->editor();
          ++st.implot_style_generation; // the user may have changed it
-         if (pstyle.var) pstyle_from_implot(); // ... the Fortran store too
       }
    }
    ImGui::End();
@@ -2679,18 +2692,20 @@ int fig_push_style_color(int lib, const char *name, int name_len, const float *r
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if (lib < 0 || lib > 2) return fail(FIG_ERR_ARGUMENT, "push style colour: unknown library");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
-   const int i = style_color_index(lib, n);
+   const int i = lib == 0 ? style_color_index(n) : plot_color_known(lib, n) ? 0 : -1; // name map: ImPlot::GetStyleColorName
    if (i < 0) return fail(FIG_ERR_ARGUMENT, "push style colour: unknown name \"" + n + "\"");
    for (int k = 0; k < 4; ++k)
       if (!(rgba[k] >= 0.0f && rgba[k] <= 1.0f)) return fail(FIG_ERR_ARGUMENT, "push style colour: components must be in [0, 1]");
-   ImVec4 &c = lib == 0 ? ImGui::GetStyle().Colors[i] : lib == 1 ? ImPlot::GetStyle().Colors[i] : ImPlot3D::GetStyle().Colors[i];
-   remember(st.pushed_colors, reinterpret_cast<unsigned char *>(&c), sizeof(ImVec4), lib);
-   c = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
-   if (lib >= 1 && pstyle.push) { // the Fortran store's push (its pop with this entry's)
+   if (lib == 0) {
+      ImVec4 &c = ImGui::GetStyle().Colors[i];
+      remember(st.pushed_colors, reinterpret_cast<unsigned char *>(&c), sizeof(ImVec4));
+      c = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
+   } else { // the stores' pushes (their pops with this entry's)
       const double v[4] = {rgba[0], rgba[1], rgba[2], rgba[3]};
-      if (pstyle.push(lib, 0, n.c_str(), static_cast<int>(n.size()), v, 4) != 0) st.pushed_colors.back().lib = 0;
+      each_store([&](const fig_pstyle_store_t &x) { x.push(lib, 0, n.c_str(), static_cast<int>(n.size()), v, 4); });
+      remember(st.pushed_colors, nullptr, 0, lib);
+      ++st.implot_style_generation;
    }
-   if (lib >= 1) ++st.implot_style_generation;
    return FIG_OK;
    FIG_CATCH
 }
@@ -2700,21 +2715,28 @@ int fig_push_style_var(int lib, const char *name, int name_len, const double *va
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if (lib < 0 || lib > 2) return fail(FIG_ERR_ARGUMENT, "push style variable: unknown library");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
-   const figure_style::field *f = style_field(lib, n);
+   if (lib >= 1) { // a plot style's variable: the stores' pushes (their pops with this entry's)
+      const int ncomp = plot_var_count(lib, n);
+      if (ncomp == 0) return fail(FIG_ERR_ARGUMENT, "push style variable: unknown name \"" + n + "\"");
+      if (count != ncomp)
+         return fail(FIG_ERR_ARGUMENT, "push style variable \"" + n + "\" takes " + std::to_string(ncomp) + " value(s)");
+      each_store([&](const fig_pstyle_store_t &x) { x.push(lib, 1, n.c_str(), static_cast<int>(n.size()), values, count); });
+      remember(st.pushed_vars, nullptr, 0, lib);
+      ++st.implot_style_generation;
+      return FIG_OK;
+   }
+   const figure_style::field *f = style_field(n);
    if (!f) return fail(FIG_ERR_ARGUMENT, "push style variable: unknown name \"" + n + "\"");
    const int ncomp = f->kind == figure_style::FIG_STYLE_VEC2 ? 2 : 1;
    if (count != ncomp)
       return fail(FIG_ERR_ARGUMENT, "push style variable \"" + n + "\" takes " + std::to_string(ncomp) + " value(s)");
-   unsigned char *p = style_base(lib) + f->offset;
+   unsigned char *p = style_base() + f->offset;
    const size_t size = f->kind == figure_style::FIG_STYLE_VEC2 ? sizeof(ImVec2)
                        : f->kind == figure_style::FIG_STYLE_BOOL ? sizeof(bool)
                        : f->kind == figure_style::FIG_STYLE_FLOAT ? sizeof(float) : sizeof(int);
-   remember(st.pushed_vars, p, size, lib);
+   remember(st.pushed_vars, p, size);
    const std::vector<double> v(values, values + count);
-   write_var(style_base(lib), *f, v);
-   if (lib >= 1 && pstyle.push && pstyle.push(lib, 1, n.c_str(), static_cast<int>(n.size()), values, count) != 0)
-      st.pushed_vars.back().lib = 0; // (the names are the same: not expected)
-   if (lib >= 1) ++st.implot_style_generation;
+   write_var(style_base(), *f, v);
    return FIG_OK;
    FIG_CATCH
 }
@@ -2725,15 +2747,14 @@ int fig_pop_style(int vars, int n) {
    if (n < 1 || static_cast<size_t>(n) > stack.size())
       return fail(FIG_ERR_STATE, std::string(vars ? "pop style variable" : "pop style colour") + ": " +
                                      std::to_string(n) + " pop(s) for " + std::to_string(stack.size()) + " push(es)");
-   const unsigned char *ps0 = reinterpret_cast<const unsigned char *>(&ImPlot::GetStyle());
-   const unsigned char *ps3 = reinterpret_cast<const unsigned char *>(&ImPlot3D::GetStyle());
    for (int k = 0; k < n; ++k) {
       const state_t::saved_t &s = stack.back();
-      std::memcpy(s.where, s.was.data(), s.was.size());
-      if ((s.where >= ps0 && s.where < ps0 + sizeof(ImPlotStyle)) ||
-          (s.where >= ps3 && s.where < ps3 + sizeof(ImPlot3DStyle)))
+      if (s.lib >= 1) { // a plot style's push: undone in each store
+         each_store([&](const fig_pstyle_store_t &x) { x.pop(s.lib, vars ? 1 : 0); });
          ++st.implot_style_generation;
-      if (s.lib >= 1 && pstyle.pop) pstyle.pop(s.lib, vars ? 1 : 0); // the Fortran store's push undone too
+      } else {
+         std::memcpy(s.where, s.was.data(), s.was.size());
+      }
       stack.pop_back();
    }
    return FIG_OK;
@@ -2821,30 +2842,27 @@ int fig_style_color(int lib, const char *name, int name_len, int set, float *rgb
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if ((lib != 0 && lib != 1) && !(lib == 2 && set == 2)) return fail(FIG_ERR_ARGUMENT, "style colour: unknown library");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
-   const int i = style_color_index(lib, n);
+   const int i = lib == 0 ? style_color_index(n) : plot_color_known(lib, n) ? 0 : -1; // name map: ImPlot::GetStyleColorName
    if (i < 0)
       return fail(FIG_ERR_ARGUMENT, std::string("style colour: unknown name \"") + n + "\" for " +
                                         (lib == 0 ? "Dear ImGui (ImGuiCol_*)" : "ImPlot (ImPlotCol_*)"));
-   if (lib >= 1 && set != 1 && pstyle.color) { // the Fortran store's, as stored or resolved
-      pstyle.color(lib, n.c_str(), static_cast<int>(n.size()), set, rgba);
-   } else if (set == 2) { // as stored: ImPlot's (ImPlot3D's) automatic colours left unresolved
-      const ImVec4 c = lib == 0 ? ImGui::GetStyle().Colors[i]
-                       : lib == 1 ? ImPlot::GetStyle().Colors[i] : ImPlot3D::GetStyle().Colors[i];
-      rgba[0] = c.x;
-      rgba[1] = c.y;
-      rgba[2] = c.z;
-      rgba[3] = c.w;
-   } else if (set) {
+   if (set == 1) {
       for (int k = 0; k < 4; ++k)
          if (!(rgba[k] >= 0.0f && rgba[k] <= 1.0f)) return fail(FIG_ERR_ARGUMENT, "style colour: components must be in [0, 1]");
-      const ImVec4 c(rgba[0], rgba[1], rgba[2], rgba[3]);
-      if (lib == 0) ImGui::GetStyle().Colors[i] = c;
-      else ImPlot::GetStyle().Colors[i] = c;
-      if (lib >= 1 && pstyle.color) pstyle.color(lib, n.c_str(), static_cast<int>(n.size()), 1, rgba);
-      if (lib >= 1) ++st.implot_style_generation;
+   }
+   if (lib >= 1) { // a plot style's: read from the store read (as stored, or an automatic one resolved), set in each
+      if (set == 1) {
+         each_store([&](const fig_pstyle_store_t &x) { x.color(lib, n.c_str(), static_cast<int>(n.size()), 1, rgba); });
+         ++st.implot_style_generation;
+      } else {
+         read_store()->color(lib, n.c_str(), static_cast<int>(n.size()), set, rgba);
+      }
+      return FIG_OK;
+   }
+   if (set == 1) {
+      ImGui::GetStyle().Colors[i] = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
    } else {
-      // ImPlot's automatic colours (derived from Dear ImGui's) are resolved, as ImPlot would draw them
-      const ImVec4 c = lib == 0 ? ImGui::GetStyle().Colors[i] : ImPlot::GetStyleColorVec4(i);
+      const ImVec4 c = ImGui::GetStyle().Colors[i];
       rgba[0] = c.x;
       rgba[1] = c.y;
       rgba[2] = c.z;
@@ -2859,15 +2877,27 @@ int fig_style_var(int lib, const char *name, int name_len, int set, double *valu
    if (st.m == mode::none) return fail(FIG_ERR_STATE, "figure is not initialized");
    if ((lib != 0 && lib != 1) && !(lib == 2 && !set)) return fail(FIG_ERR_ARGUMENT, "style variable: unknown library");
    const std::string n(name, name_len > 0 ? static_cast<size_t>(name_len) : 0);
-   const figure_style::field *f = style_field(lib, n);
-   if (!f)
+   const figure_style::field *f = lib == 0 ? style_field(n) : nullptr;
+   const int ncomp = lib == 0 ? (f ? (f->kind == figure_style::FIG_STYLE_VEC2 ? 2 : 1) : 0) : plot_var_count(lib, n);
+   if (ncomp == 0)
       return fail(FIG_ERR_ARGUMENT, std::string("style variable: unknown name \"") + n + "\" for " +
                                         (lib == 0 ? "Dear ImGui (ImGuiStyle)" : "ImPlot (ImPlotStyle)"));
-   unsigned char *p = style_base(lib) + f->offset;
-   const int ncomp = f->kind == figure_style::FIG_STYLE_VEC2 ? 2 : 1;
+   if (set && *count != ncomp)
+      return fail(FIG_ERR_ARGUMENT, "style variable \"" + n + "\" takes " + std::to_string(ncomp) + " value(s)");
+   if (lib >= 1) { // a plot style's: read from the store read, set in each
+      if (set) {
+         each_store([&](const fig_pstyle_store_t &x) {
+            int c = *count;
+            x.var(lib, n.c_str(), static_cast<int>(n.size()), 1, values, &c);
+         });
+         ++st.implot_style_generation;
+      } else {
+         read_store()->var(lib, n.c_str(), static_cast<int>(n.size()), 0, values, count);
+      }
+      return FIG_OK;
+   }
+   unsigned char *p = style_base() + f->offset;
    if (set) {
-      if (*count != ncomp)
-         return fail(FIG_ERR_ARGUMENT, "style variable \"" + n + "\" takes " + std::to_string(ncomp) + " value(s)");
       switch (f->kind) {
       case figure_style::FIG_STYLE_FLOAT: *reinterpret_cast<float *>(p) = static_cast<float>(values[0]); break;
       case figure_style::FIG_STYLE_VEC2:
@@ -2876,10 +2906,6 @@ int fig_style_var(int lib, const char *name, int name_len, int set, double *valu
       case figure_style::FIG_STYLE_BOOL: *reinterpret_cast<bool *>(p) = values[0] != 0.0; break;
       default: *reinterpret_cast<int *>(p) = static_cast<int>(values[0]); break;
       }
-      if (lib >= 1 && pstyle.var) pstyle.var(lib, n.c_str(), static_cast<int>(n.size()), 1, values, count);
-      if (lib >= 1) ++st.implot_style_generation;
-   } else if (lib >= 1 && pstyle.var) { // the Fortran store's
-      pstyle.var(lib, n.c_str(), static_cast<int>(n.size()), 0, values, count);
    } else {
       *count = ncomp;
       switch (f->kind) {
@@ -3166,7 +3192,7 @@ int fig_end_frame(void) {
    fig_app_draw();          // the message boxes, modals over the program's windows
    draw_notifications();    // after the program's windows, above them
    st.in_frame = false;
-   fig_field_sweep(); // field textures not drawn for a while released
+   for (void (*fn)() : frame_end_fns()) fn(); // the parts linked where referenced (field textures not drawn for a while released)
    ImGui::Render();
    if (st.m == mode::headless) {
       headless_textures();
@@ -3225,8 +3251,8 @@ int fig_end_frame(void) {
 void fig_shutdown(void) {
    try {
       fig_app_shutdown(); // the preferences saved while the window and the contexts exist, then forgotten
-      fig_field_reset(); // the field cache forgotten: its textures go with the others below
-      fig_markdown_shutdown(); // Markdown's context, its fonts and images: while the renderer can free them
+      for (void (*fn)() : shutdown_fns()) fn(); // the parts linked where referenced: the field cache forgotten,
+                                                // Markdown's context, fonts and images (while the renderer can free them)
       fig_process_shutdown(); // the captured children end with the program (before SDL_Quit)
       if (st.in_frame) {
          fig_scope_frame_end(); // what the program left open, closed
@@ -3354,7 +3380,9 @@ void fig_texture_sampling(int plot, int from_texture) {
       const ImGuiPlatformIO &pio = ImGui::GetPlatformIO();
       const ImDrawCallback cb = from_texture ? pio.DrawCallback_SetSamplerFromTex : pio.DrawCallback_ResetRenderState;
       if (cb == nullptr) return;
-      ImDrawList *dl = plot ? ImPlot::GetPlotDrawList() : ImGui::GetWindowDrawList();
+      // name map: ImPlot::GetPlotDrawList
+      ImDrawList *dl = plot ? (fig_implot ? fig_implot->plot_draw_list() : nullptr) : ImGui::GetWindowDrawList();
+      if (dl == nullptr) return;
       dl->AddCallback(cb, nullptr);
    } catch (...) {
    }
@@ -4196,68 +4224,6 @@ void align_shift(float width, int where) {
 }
 } // namespace
 
-// ImPlot's EndPlot fits the axes asked to fit this frame (every axis of a plot on its first frame, an auto-fitting
-// axis, a double click): an axis that received no data has empty extents (+inf, -inf), and ImPlotAxis::ApplyFit
-// computes (-inf) * padding, NaN with the default padding 0: an invalid operation, which stops a program built with
-// -ffpe-trap=invalid (gfortran's debug flags) at a plot that has no data yet. Without traps ImPlot then ignores the
-// NaN and keeps the axis's range, so not fitting such an axis draws the same plot.
-void fig_plot_end(void) {
-   if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot) return;
-   ImPlot::SetupLock(); // as EndPlot would: a plot without items finishes its setup there, which asks for the fits
-   ImPlotPlot &p = *GImPlot->CurrentPlot;
-   for (int i = 0; i < ImAxis_COUNT; ++i) {
-      ImPlotAxis &a = p.Axes[i];
-      if (a.FitThisFrame && a.FitExtents.Min > a.FitExtents.Max) a.FitThisFrame = false; // no data: nothing to fit
-   }
-   ImPlot::EndPlot();
-}
-
-int fig_plot_state(int *enabled, int *scale) {
-   for (int i = 0; i < ImAxis_COUNT; ++i) {
-      enabled[i] = 0;
-      scale[i] = ImPlotScale_Linear;
-   }
-   if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot) return 0;
-   const ImPlotPlot &p = *GImPlot->CurrentPlot;
-   for (int i = 0; i < ImAxis_COUNT; ++i) {
-      enabled[i] = p.Axes[i].Enabled ? 1 : 0;
-      scale[i] = p.Axes[i].Scale;
-   }
-   return p.SetupLocked ? 2 : 1;
-}
-
-int fig_plot_x_transform(double *v, int *scale) {
-   // name map: implot_items.cpp Transformer1 (the pixel of an abscissa, as the items compute it)
-   for (int i = 0; i < 9; ++i) v[i] = 0.0;
-   *scale = ImPlotScale_Linear;
-   if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot) return 0;
-   ImPlot::SetupLock(); // as an item would: the ranges, the plot area and the transforms final for this frame
-   const ImPlotPlot &p = *GImPlot->CurrentPlot;
-   const ImPlotAxis &a = p.Axes[p.CurrentX];
-   v[0] = a.PixelMin;
-   v[1] = a.Range.Min;
-   v[2] = a.Range.Max;
-   v[3] = a.ScaleToPixel;
-   v[4] = a.ScaleMin;
-   v[5] = a.ScaleMax;
-   v[6] = p.PlotRect.Min.x;
-   v[7] = p.PlotRect.Max.x;
-   v[8] = ImGui::GetIO().DisplayFramebufferScale.x;
-   *scale = a.Scale;
-   if (a.TransformForward != nullptr && a.Scale != ImPlotScale_Log10 && a.Scale != ImPlotScale_SymLog) *scale = -1;
-   return 1;
-}
-
-void fig_plot_axis_constraints(int axis, int given, const double *v) {
-   if (!ImPlot::GetCurrentContext() || !GImPlot->CurrentPlot || axis < 0 || axis >= ImAxis_COUNT) return;
-   // name map: ImPlot::SetupAxisLimitsConstraints, ImPlot::SetupAxisZoomConstraints (each sets both ends at once)
-   ImPlotAxis &a = GImPlot->CurrentPlot->Axes[axis];
-   if (given & 1) a.ConstraintRange.Min = v[0];
-   if (given & 2) a.ConstraintRange.Max = v[1];
-   if (given & 4) a.ConstraintZoom.Min = v[2];
-   if (given & 8) a.ConstraintZoom.Max = v[3];
-}
-
 int fig_align_begin(const char *id, int id_len, int where) {
    FIG_TRY
    if (!ImGui::GetCurrentContext() || !GImGui->WithinFrameScope) return fail(FIG_ERR_STATE, "no frame open");
@@ -4539,71 +4505,6 @@ long long fig_get_clipboard(char *buf, long long cap) {
    const size_t n = std::min(len, static_cast<size_t>(cap > 0 ? cap : 0));
    if (n > 0) std::memcpy(buf, text, n);
    return static_cast<long long>(len);
-}
-
-// A tick label of the plot being declared (between BeginPlot and EndPlot, after its setup): axis 0 x, 1 y; index from 1;
-// count is the number of ticks. For tests of axis formats.
-int fig_plot_tick_label(int axis, int index, char *buf, int buf_len, int *count, int *len) {
-   *count = 0;
-   *len = 0;
-   ImPlotPlot *plot = ImPlot::GetCurrentContext() ? ImPlot::GetCurrentPlot() : nullptr;
-   if (!plot)
-      return fail(FIG_ERR_STATE, "test_plot_tick: no plot is being declared (between ip_begin_plot and ip_end_plot)");
-   static const char *names[ImAxis_COUNT] = {"x1", "x2", "x3", "y1", "y2", "y3"};
-   if (axis < 0 || axis >= ImAxis_COUNT)
-      return fail(FIG_ERR_ARGUMENT, "test_plot_tick: unknown axis ('x1', 'x2', 'x3', 'y1', 'y2', 'y3', 'x' or 'y')");
-   if (!plot->Axes[axis].Enabled)
-      return fail(FIG_ERR_STATE, std::string("test_plot_tick: axis '") + names[axis] +
-                                 "' is not set up (ip_setup_axis('" + names[axis] + "'))");
-   ImPlot::SetupLock(); // the ticks exist once the setup is locked (the first item locks it)
-   const ImPlotTicker &ticker = plot->Axes[axis].Ticker;
-   *count = ticker.TickCount();
-   if (index < 1 || index > *count) return FIG_OK;
-   const char *text = ticker.GetText(index - 1);
-   *len = static_cast<int>(std::strlen(text));
-   const int n = std::min(*len, buf_len);
-   if (n > 0) std::memcpy(buf, text, static_cast<size_t>(n));
-   return FIG_OK;
-}
-
-// An annotation of the plot being declared: text in a box at (x, y) [plot units], offset [pixels] (0: centred), drawn at
-// EndPlot; rgba[3] = 0: no box, the plot's inlay text colour. Refused outside a plot (ImPlot would assert).
-int fig_plot_annotation(double x, double y, const float *rgba, float dx, float dy, int clamp, const char *text,
-                        int text_len) {
-   if (!ImPlot::GetCurrentContext() || !ImPlot::GetCurrentPlot())
-      return fail(FIG_ERR_STATE, "ip_annotation: no plot is being declared (between ip_begin_plot and ip_end_plot)");
-   const std::string t(text, text_len > 0 ? static_cast<size_t>(text_len) : 0);
-   ImPlot::Annotation(x, y, ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]), ImVec2(dx, dy), clamp != 0, "%s", t.c_str());
-   return FIG_OK;
-}
-
-// A tag of the plot being declared on the axis `axis` (an ImAxis set up on this frame) at `value` [axis units], drawn at
-// EndPlot over the axis: a box of colour rgba (rgba[3] < 0: the colour of the last item drawn; alpha 0: no box, the
-// axis's text colour) holding `text` (has_text 1) or the value labelled as the axis labels its ticks (has_text 0).
-// Refused outside a plot and for an axis not set up (ImPlot would assert, or draw on a hidden axis).
-int fig_plot_tag(int axis, double value, const float *rgba, const char *text, int text_len, int has_text) {
-   if (!ImPlot::GetCurrentContext() || !ImPlot::GetCurrentPlot())
-      return fail(FIG_ERR_STATE, "ip_tag: no plot is being declared (call it between a true ip_begin_plot and ip_end_plot)");
-   if (axis < 0 || axis >= ImAxis_COUNT || !GImPlot->CurrentPlot->Axes[axis].Enabled)
-      return fail(FIG_ERR_STATE, "ip_tag: the axis is not set up");
-   const ImVec4 c = rgba[3] < 0.0f ? ImPlot::GetLastItemColor() : ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
-   const std::string t(text, text_len > 0 ? static_cast<size_t>(text_len) : 0);
-   // ImPlot's public TagX/TagY tag the current axes (its Tag(ImAxis, ...) is not in a header): the axis is made current
-   // for the call, then the program's current axes are restored
-   ImPlotPlot &plot = *GImPlot->CurrentPlot;
-   const ImAxis cx = plot.CurrentX, cy = plot.CurrentY;
-   if (axis < ImAxis_Y1) {
-      plot.CurrentX = axis;
-      if (has_text != 0) ImPlot::TagX(value, c, "%s", t.c_str());
-      else ImPlot::TagX(value, c, false);
-   } else {
-      plot.CurrentY = axis;
-      if (has_text != 0) ImPlot::TagY(value, c, "%s", t.c_str());
-      else ImPlot::TagY(value, c, false);
-   }
-   plot.CurrentX = cx;
-   plot.CurrentY = cy;
-   return FIG_OK;
 }
 
 // The rectangle of the innermost open popup (a menu, a combo's list, a colour picker), as drawn in the last frame;

@@ -76,6 +76,21 @@ int  fig_view3d_matrices(int handle, double *view, double *projection);
 int  fig_view3d_widget(int handle, int *drawn, double *rect);
 int  fig_view3d_overlay(int handle, int what, const double *cube);
 int  fig_view3d_cube(int handle, double size, int corner, int *changed);
+/* The two above, apart from ImGuizmo (figure_view3d_gizmo.cpp holds ImGuizmo's calls and these two entry points, so
+ * that a program which never calls them links no ImGuizmo: szaghi/figure#15 G2): cube runs ViewManipulate on the
+ * camera cv (the cube's y-up world) in the view's rectangle rect (x, y, w, h), the cube at (x, y) of side s, under the
+ * id `id`, and returns 1 when it started being used on this call; manipulate runs Manipulate (mode 0 translate,
+ * 1 rotate, 2 scale; space 0 world, 1 local; snap NULL: none) on fm with the gizmo's size in clip space, sets
+ * *using_it and *over (a handle hovered), and returns 1 when fm moved. The views' side (native internal). */
+typedef struct fig_v3d_gizmo_ops {
+   int (*cube)(const float *rect, float *cv, const float *fp, float distance, float x, float y, float s,
+               unsigned int id);
+   int (*manipulate)(const float *rect, float size_clip, const float *fv, const float *fp, int mode, int space,
+                     float *fm, const float *snap, unsigned int id, int *using_it, int *over);
+} fig_v3d_gizmo_ops;
+int  figure_view3d_cube_impl(int handle, double size, int corner, int *changed, const fig_v3d_gizmo_ops *ops);
+int  figure_view3d_gizmo_impl(int handle, const char *id, int id_len, double *matrix, int mode, int space,
+                              int has_snap, double snap, int *changed, const fig_v3d_gizmo_ops *ops);
 int  fig_view3d_gizmo(int handle, const char *id, int id_len, double *matrix, int mode, int space, int has_snap,
                       double snap, int *changed);
 /* The colormaps of the Fortran path (szaghi/figure#15 G2; none registered on the current path, whose meshes take theirs

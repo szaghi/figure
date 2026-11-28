@@ -91,6 +91,8 @@ NATIVE_FILES = [
     "figure_markdown.cpp", "figure_fonts.h", "figure_rich_md_stb.h",
     "figure_colormap.cpp", "figure_field.cpp", "figure_view3d.cpp", "figure_view3d.h",
     "figure_remote.h", "figure_theme.cpp", "figure_theme.h", "figure_style.h", "figure_glue_generated.cpp", "figure_style_generated.cpp",
+    "figure_glue_generated_plot.cpp", "figure_glue_generated_layout.cpp", "figure_implot_glue.cpp", "figure_plot_backend.h",
+    "figure_view3d_gizmo.cpp", "figure_core_text.cpp",
 ]  # fmt: skip
 
 IMCONFIG_ADDITION = """

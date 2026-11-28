@@ -47,7 +47,7 @@ public :: PC_INLAY_TEXT, PC_AXIS_TEXT, PC_AXIS_GRID, PC_AXIS_TICK, PC_AXIS_BG, P
 public :: PC_SELECTION, PC_CROSSHAIRS
 public :: ps_vec4, ps_u32, ps_alpha_u32, ps_style_alpha, ps_set_var, ps_set_color, ps_push_var, ps_push_color
 public :: ps_pop_var, ps_pop_color, ps_sync, ps_reset
-public :: ps_color_named, ps_var_named, ps_push_named, ps_theme
+public :: ps_color_named, ps_var_named, ps_push_named, ps_theme, ps_field
 
 ! ImPlotCol (implot.h)
 integer(int32), parameter :: PC_FRAME_BG = 0_int32, PC_PLOT_BG = 1_int32, PC_PLOT_BORDER = 2_int32, &
@@ -140,8 +140,9 @@ integer(int32) :: n_var_stack = 0_int32                !< Pushes held.
 integer(int32) :: col_stack_idx(STACK) = 0_int32       !< A pushed colour.
 real(real32)   :: col_stack_val(4, STACK) = 0.0_real32 !< ... its value before.
 integer(int32) :: n_col_stack = 0_int32                !< Pushes held.
-real(real32)   :: pend_vars(2, NVAR) = 0.0_real32      !< A style being built (`ps_theme`): its variables ...
-real(real32)   :: pend_colors(4, 0:15) = 0.0_real32    !< ... and colours.
+real(real32)   :: pend_vars(2, NVAR, 2) = 0.0_real32   !< Styles being built (`ps_theme`): the pending one (1) and save_style's
+                                                       !< reference (2, scratch): their variables ...
+real(real32)   :: pend_colors(4, 0:15, 2) = 0.0_real32 !< ... and colours.
 
 contains
    ! colours
@@ -604,7 +605,8 @@ contains
    !< One step of a style's plot part, as the native layer builds a theme (`fig_pstyle_theme_fn`): op 1 ImPlot's
    !< defaults (`ImPlotStyle()`), 2 the style in effect, 3 every colour automatic, 4 the variables to ImPlot's defaults
    !< (a look; the colours kept), 5 the variable `name` set (`values`), 6 the colour `name` set (`values(1:4)`), 7 the
-   !< style built made the one in effect (the pushes held are kept). `status`: 0, 1 an unknown name, 2 a wrong count.
+   !< style built made the one in effect (the pushes held are kept); ops 11-16 as 1-6 on a scratch style (save_style's
+   !< reference, read by `ps_field`). `status`: 0, 1 an unknown name, 2 a wrong count.
    integer(int32),   intent(in)  :: op        !< Step.
    character(len=*), intent(in)  :: name      !< Name (ops 5, 6).
    real(real64),     intent(in)  :: values(:) !< Values (ops 5, 6).
@@ -612,23 +614,34 @@ contains
    integer(int32)                :: k         !< Index.
 
    status = 0_int32
-   select case (op)
+   if (op > 10_int32) then
+      call build(op - 10_int32, 2_int32)
+   else
+      call build(op, 1_int32)
+   endif
+   contains
+      subroutine build(o, t)
+      !< A step on the style `t` (1 pending, 2 scratch).
+      integer(int32), intent(in) :: o !< Step.
+      integer(int32), intent(in) :: t !< Style.
+
+   select case (o)
    case (1_int32)
-      pend_vars = VAR_DEFAULTS
+      pend_vars(:, :, t) = VAR_DEFAULTS
       do k = 0_int32, PC_COUNT - 1_int32
-         pend_colors(:, k) = AUTO
+         pend_colors(:, k, t) = AUTO
       enddo
    case (2_int32)
       do k = 1_int32, NVAR
-         call var_get(k, pend_vars(:, k))
+         call var_get(k, pend_vars(:, k, t))
       enddo
-      pend_colors = colors
+      pend_colors(:, :, t) = colors
    case (3_int32)
       do k = 0_int32, PC_COUNT - 1_int32
-         pend_colors(:, k) = AUTO
+         pend_colors(:, k, t) = AUTO
       enddo
    case (4_int32)
-      pend_vars = VAR_DEFAULTS
+      pend_vars(:, :, t) = VAR_DEFAULTS
    case (5_int32)
       k = name_var(name)
       if (k == 0_int32) then
@@ -636,9 +649,9 @@ contains
       elseif (size(values) /= VAR_COUNTS(k)) then
          status = 2_int32
       else
-         pend_vars(:, k) = 0.0_real32
-         pend_vars(1:VAR_COUNTS(k), k) = real(values, real32)
-         if (VAR_BOOL(k)) pend_vars(1, k) = merge(1.0_real32, 0.0_real32, values(1) /= 0.0_real64)
+         pend_vars(:, k, t) = 0.0_real32
+         pend_vars(1:VAR_COUNTS(k), k, t) = real(values, real32)
+         if (VAR_BOOL(k)) pend_vars(1, k, t) = merge(1.0_real32, 0.0_real32, values(1) /= 0.0_real64)
       endif
    case (6_int32)
       k = name_col(name)
@@ -647,13 +660,57 @@ contains
       elseif (size(values) /= 4) then
          status = 2_int32
       else
-         pend_colors(:, k) = real(values, real32)
+         pend_colors(:, k, t) = real(values, real32)
       endif
    case (7_int32)
       do k = 1_int32, NVAR
-         call var_put(k, pend_vars(:, k))
+         call var_put(k, pend_vars(:, k, t))
       enddo
-      colors = pend_colors
+      colors = pend_colors(:, :, t)
    endselect
+      endsubroutine build
    endsubroutine ps_theme
+
+   function ps_field(which, colour, index, name, values, kind) result(found)
+   !< The `index`-th (from 0) variable (`colour` false) or colour of the style in effect (`which` 0) or of the scratch
+   !< one (`which` 1, `ps_theme`'s ops 11-16): its name, values (a colour's RGBA) and `kind` (0 a number, 1 a pair, 2 a
+   !< logical); false past the last (save_style's reading, `fig_pstyle_field_fn`).
+   integer(int32),   intent(in)  :: which     !< 0 in effect, 1 scratch.
+   logical,          intent(in)  :: colour    !< A colour, else a variable.
+   integer(int32),   intent(in)  :: index     !< From 0.
+   character(len=*), intent(out) :: name      !< Name (blank-padded).
+   real(real64),     intent(out) :: values(4) !< Values.
+   integer(int32),   intent(out) :: kind      !< 0 a number, 1 a pair, 2 a logical.
+   logical                       :: found     !< Within the list.
+   real(real32)                  :: v(2)      !< A variable's values.
+
+   values = 0.0_real64
+   kind = 0_int32
+   name = ''
+   if (colour) then
+      found = index >= 0_int32 .and. index < PC_COUNT
+      if (.not. found) return
+      name = COL_NAMES(index)
+      if (which == 1_int32) then
+         values = real(pend_colors(:, index, 2), real64)
+      else
+         values = real(colors(:, index), real64)
+      endif
+      return
+   endif
+   found = index >= 0_int32 .and. index < NVAR
+   if (.not. found) return
+   name = VAR_NAMES(index + 1_int32)
+   if (which == 1_int32) then
+      v = pend_vars(:, index + 1_int32, 2)
+   else
+      call var_get(index + 1_int32, v)
+   endif
+   values(1:2) = real(v, real64)
+   if (VAR_BOOL(index + 1_int32)) then
+      kind = 2_int32
+   elseif (VAR_COUNTS(index + 1_int32) == 2_int32) then
+      kind = 1_int32
+   endif
+   endfunction ps_field
 endmodule figure_plot_style

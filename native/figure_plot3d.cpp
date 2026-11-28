@@ -8,6 +8,7 @@
 // ImPlot3D's registry, under the same name, when a 3-D item first asks for it, and its keys copied again when they
 // changed (an edit by ig_gradient_edit). Main thread only: the Fortran entry points refuse a task first.
 #include "figure_native.h"
+#include "figure_plot_backend.h"
 
 #include "imgui.h"
 #include "implot.h"
@@ -76,3 +77,8 @@ int fig_plot3d_state(void) {
    if (!ImPlot3D::GetCurrentContext() || !ImPlot3D::GImPlot3D->CurrentPlot) return 0;
    return ImPlot3D::GImPlot3D->CurrentPlot->SetupLocked ? 2 : 1;
 }
+
+namespace {
+// ImPlot's (ImPlot3D's) contexts: the plot side linked with this file (szaghi/figure#15 G2).
+const int anchored = (fig_implot_glue_anchor(), 0);
+} // namespace

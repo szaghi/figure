@@ -19,9 +19,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"
-#include "implot.h"
 
-#include "ImGuizmo.h"
 
 #include <SDL3/SDL.h>
 
@@ -173,13 +171,14 @@ struct view_t {
 
 std::map<int, std::unique_ptr<view_t>> views;
 
-// The colormaps of the Fortran path (fig_view3d_colormap_hooks): FIGURE's registry in Fortran, the only one there
-// (szaghi/figure#15 G2). Null: the native registry (figure_colormap.cpp, ImPlot's ids), the current path's.
+// The colormap registry the views take their maps from (fig_view3d_colormap_hooks, szaghi/figure#15 G2): the native
+// one (figure_colormap.cpp, ImPlot's ids), registered when it is linked (the current path), or FIGURE's registry in
+// Fortran, registered at init on the Fortran path. None: every map unknown.
 fig_view3d_cmap_table_fn      cmap_table = nullptr;
 fig_view3d_cmap_generation_fn cmap_generation = nullptr;
 
 // The registry's edits so far (a view colours its meshes again when they change).
-unsigned colormap_generation() { return cmap_generation ? cmap_generation() : fig_colormap_generation(); }
+unsigned colormap_generation() { return cmap_generation ? cmap_generation() : 0u; }
 int next_view = 1;
 
 view_t *find(int handle) {
@@ -337,29 +336,14 @@ void matrices(const view_t &v, int w, int h, double mvp[16]) {
 
 // ---- colours -----------------------------------------------------------------------------------------------------
 
-// The 256 colours of the mesh's colormap (ImPlot's registry: fig_colormap registers bundled and user maps).
+// The 256 colours of the mesh's colormap, from the registry (cmap_table); a grey ramp for an unknown map.
 void load_table(mesh_t &m) {
-   int id = -1;
-   if (cmap_table) { // the Fortran path's registry: its colours as sampled below
-      unsigned char rgb[768];
-      if (cmap_table(m.colormap.c_str(), static_cast<int>(m.colormap.size()), rgb) != FIG_OK) {
-         for (int k = 0; k < 256; ++k) m.table[k][0] = m.table[k][1] = m.table[k][2] = static_cast<uint8_t>(k);
-      } else {
-         for (int k = 0; k < 256; ++k)
-            for (int d = 0; d < 3; ++d) m.table[k][d] = rgb[3 * k + d];
-      }
-      m.table_ok = true;
-      return;
-   }
-   if (fig_colormap(m.colormap.c_str(), static_cast<int>(m.colormap.size()), 0, &id) != FIG_OK || id < 0) {
+   unsigned char rgb[768];
+   if (!cmap_table || cmap_table(m.colormap.c_str(), static_cast<int>(m.colormap.size()), rgb) != FIG_OK) {
       for (int k = 0; k < 256; ++k) m.table[k][0] = m.table[k][1] = m.table[k][2] = static_cast<uint8_t>(k);
    } else {
-      for (int k = 0; k < 256; ++k) {
-         const ImVec4 c = ImPlot::SampleColormap(static_cast<float>(k) / 255.0f, id);
-         m.table[k][0] = static_cast<uint8_t>(std::lround(std::clamp(c.x, 0.0f, 1.0f) * 255.0f));
-         m.table[k][1] = static_cast<uint8_t>(std::lround(std::clamp(c.y, 0.0f, 1.0f) * 255.0f));
-         m.table[k][2] = static_cast<uint8_t>(std::lround(std::clamp(c.z, 0.0f, 1.0f) * 255.0f));
-      }
+      for (int k = 0; k < 256; ++k)
+         for (int d = 0; d < 3; ++d) m.table[k][d] = rgb[3 * k + d];
    }
    m.table_ok = true;
 }
@@ -1012,16 +996,6 @@ void style_background(view_t &v) {
 // The view cube's world has y up, FIGURE's z: its camera is turned by C (x' = x, y' = z, z' = -y) on the way in and
 // back on the way out, and its faces take FIGURE's axis colours (x red, y green, z blue).
 
-// ImGuizmo's per-frame state, once a frame, without its full-screen window (FIGURE's patch 0001).
-void gizmo_frame() {
-   static int last = -1;
-   static ImGuiContext *context = nullptr;
-   const int frame = ImGui::GetFrameCount();
-   if (frame == last && context == ImGui::GetCurrentContext()) return;
-   last = frame, context = ImGui::GetCurrentContext();
-   ImGuizmo::BeginFrameState();
-}
-
 // The view's matrices for its widget size, the world moved by -o (o: the camera's target), in single precision. The
 // projection's depth range is widened to [distance / 1000, 1000 distance] (x and y unchanged): ImGuizmo casts its
 // mouse rays from the point at clip depth 0, which with the view's own near and far planes (around the meshes'
@@ -1183,9 +1157,8 @@ int fig_view3d_style(int handle, int mesh, const char *colormap, int colormap_le
    if (!m) return fail(FIG_ERR_ARGUMENT, "view3d: unknown mesh " + std::to_string(mesh));
    if (colormap_len > 0) {
       const std::string name(colormap, static_cast<size_t>(colormap_len));
-      int id = -1;
-      const int s = cmap_table ? cmap_table(name.c_str(), colormap_len, nullptr)
-                               : fig_colormap(name.c_str(), colormap_len, 0, &id);
+      if (!cmap_table) return fail(FIG_ERR_STATE, "view3d: no colormap registry is linked");
+      const int s = cmap_table(name.c_str(), colormap_len, nullptr);
       if (s != FIG_OK) return s; // its message names the map
       m->colormap = name;
       m->table_ok = false;
@@ -1544,7 +1517,7 @@ int fig_view3d_overlay(int handle, int what, const double *cube) {
    V3_CATCH
 }
 
-int fig_view3d_cube(int handle, double size, int corner, int *changed) {
+int figure_view3d_cube_impl(int handle, double size, int corner, int *changed, const fig_v3d_gizmo_ops *ops) {
    V3_TRY
    V3_VIEW
    *changed = 0;
@@ -1555,10 +1528,7 @@ int fig_view3d_cube(int handle, double size, int corner, int *changed) {
    const ImVec2 rel((corner == 1 || corner == 3) ? 0.0f : static_cast<float>(v->vw) - s,
                     (corner == 2 || corner == 3) ? static_cast<float>(v->vh) - s : 0.0f);
    const ImVec2 pos(v->image_pos.x + rel.x, v->image_pos.y + rel.y);
-   gizmo_frame();
-   ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
-   ImGuizmo::SetOrthographic(false);
-   ImGuizmo::SetRect(v->image_pos.x, v->image_pos.y, static_cast<float>(v->vw), static_cast<float>(v->vh));
+   const float rect[4] = {v->image_pos.x, v->image_pos.y, static_cast<float>(v->vw), static_cast<float>(v->vh)};
    float fv[16], fp[16];
    double o[3];
    gizmo_matrices(*v, fv, fp, o);
@@ -1569,22 +1539,12 @@ int fig_view3d_cube(int handle, double size, int corner, int *changed) {
    for (int r = 0; r < 3; ++r) cv[4 + r] = fv[8 + r], cv[8 + r] = -fv[4 + r];
    float before[16];
    std::memcpy(before, cv, sizeof cv);
-   static const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
-   float model[16];
-   std::memcpy(model, identity, sizeof model);
-   ImGuizmo::Style &st = ImGuizmo::GetStyle();
-   std::swap(st.Colors[ImGuizmo::DIRECTION_Y], st.Colors[ImGuizmo::DIRECTION_Z]); // y' is FIGURE's z
    const ImGuiID id = ImGui::GetID(("##figure-view-cube-" + std::to_string(handle)).c_str());
-   ImGuizmo::PushID(static_cast<int>(id));
-   const bool using_before = ImGuizmo::IsUsingViewManipulate();
+   bool using_it = false;
    {
       const mouse_guard guard;
-      ImGuizmo::ViewManipulate(cv, fp, ImGuizmo::TRANSLATE, ImGuizmo::WORLD, model, static_cast<float>(v->cam.distance),
-                               pos, ImVec2(s, s), 0);
+      using_it = ops->cube(rect, cv, fp, static_cast<float>(v->cam.distance), pos.x, pos.y, s, id) != 0;
    }
-   const bool using_it = ImGuizmo::IsUsingViewManipulate() && !using_before;
-   ImGuizmo::PopID();
-   std::swap(st.Colors[ImGuizmo::DIRECTION_Y], st.Colors[ImGuizmo::DIRECTION_Z]);
    const ImVec2 mp = ImGui::GetIO().MousePos;
    const bool inside = mp.x >= pos.x && mp.x < pos.x + s && mp.y >= pos.y && mp.y < pos.y + s &&
                        ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
@@ -1608,8 +1568,8 @@ int fig_view3d_cube(int handle, double size, int corner, int *changed) {
    V3_CATCH
 }
 
-int fig_view3d_gizmo(int handle, const char *id, int id_len, double *matrix, int mode, int space, int has_snap,
-                     double snap, int *changed) {
+int figure_view3d_gizmo_impl(int handle, const char *id, int id_len, double *matrix, int mode, int space,
+                             int has_snap, double snap, int *changed, const fig_v3d_gizmo_ops *ops) {
    V3_TRY
    V3_VIEW
    *changed = 0;
@@ -1622,33 +1582,27 @@ int fig_view3d_gizmo(int handle, const char *id, int id_len, double *matrix, int
    if (matrix[3] != 0.0 || matrix[7] != 0.0 || matrix[11] != 0.0 || matrix[15] != 1.0)
       return fail(FIG_ERR_ARGUMENT, "view3d_object%gizmo: the matrix's last row must be (0, 0, 0, 1)");
    const std::string label(id, static_cast<size_t>(std::max(id_len, 0)));
-   gizmo_frame();
-   ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
-   ImGuizmo::SetOrthographic(false);
    const float w = static_cast<float>(v->vw), h = static_cast<float>(v->vh);
-   ImGuizmo::SetRect(v->image_pos.x, v->image_pos.y, w, h);
+   const float rect[4] = {v->image_pos.x, v->image_pos.y, w, h};
    // the axes about a fifth of the view's shorter side, in [40, 120] pixels; ImGuizmo's size is in clip space,
    // measured along the view's longer side
    const float px = std::clamp(0.2f * std::min(w, h), 40.0f, 120.0f);
-   ImGuizmo::SetGizmoSizeClipSpace(2.0f * px / std::max(std::max(w, h), 1.0f));
-   ImGuizmo::AllowAxisFlip(false); // the arrows point along +x, +y, +z (ImGuizmo's default flips them to the eye)
+   const float size_clip = 2.0f * px / std::max(std::max(w, h), 1.0f);
    float fv[16], fp[16], fm[16];
    double o[3];
    gizmo_matrices(*v, fv, fp, o);
    for (int k = 0; k < 16; ++k) fm[k] = static_cast<float>(matrix[k] - (k >= 12 && k < 15 ? o[k - 12] : 0.0));
-   static const ImGuizmo::OPERATION OPS[3] = {ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE};
    float s3[3] = {static_cast<float>(snap), static_cast<float>(snap), static_cast<float>(snap)};
    const ImGuiID gid = ImGui::GetID(label.c_str());
-   ImGuizmo::PushID(static_cast<int>(gid));
    bool moved = false;
+   int using_i = 0, over_i = 0;
    {
       const mouse_guard guard;
-      moved = ImGuizmo::Manipulate(fv, fp, OPS[mode], space == 1 ? ImGuizmo::LOCAL : ImGuizmo::WORLD, fm, nullptr,
-                                   has_snap ? s3 : nullptr);
+      moved = ops->manipulate(rect, size_clip, fv, fp, mode, space, fm, has_snap ? s3 : nullptr, gid, &using_i,
+                              &over_i) != 0;
    }
-   const bool using_it = ImGuizmo::IsUsing();
-   const bool over = ImGuizmo::GetHoveredHandleType() != ImGuizmo::MT_NONE;
-   ImGuizmo::PopID();
+   const bool using_it = using_i != 0;
+   const bool over = over_i != 0;
    hold_active(gid, using_it);
    if (using_it || over) v->overlay_frame = ImGui::GetFrameCount();
    if (moved) {

@@ -3,11 +3,10 @@
 // sizes): what reaches here is drawn. Main thread only, inside a frame: the Fortran entry points refuse a task and a
 // call with no frame open first.
 #include "figure_native.h"
+#include "figure_plot_backend.h"
 
 #include "imgui.h"
 #include "imgui_internal.h"
-#include "implot.h"
-#include "implot_internal.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,24 +34,6 @@ int fail(int status, const std::string &msg) {
 enum layer_t { L_WINDOW = 1, L_FOREGROUND = 2, L_BACKGROUND = 3, L_PLOT = 4 };
 // Primitives: must match the DRAW_* parameters of src/lib/figure_canvas.F90.
 enum kind_t { D_LINE = 1, D_RECT, D_CIRCLE, D_POLYLINE, D_POLYGON, D_TEXT, D_IMAGE };
-
-// A pixel coordinate computed in double precision from plot units, kept within 1e7 pixels of the display's origin: a
-// point far outside the plot (a strong zoom) would overflow single precision when ImGui stores it (a trap under
-// -ffpe-trap=overflow), and 1e7 pixels is still far beyond any display, so the visible part of a line hardly moves.
-float to_pixel(double v) {
-   constexpr double LIMIT = 1.0e7;
-   return static_cast<float>(std::min(std::max(v, -LIMIT), LIMIT));
-}
-
-// One plot coordinate to pixels along an ImPlot axis, in double precision (ImPlotAxis::PlotToPixels, before its cast).
-double axis_to_pixel(const ImPlotAxis &a, double plt) {
-   if (a.TransformForward != nullptr) {
-      const double s = a.TransformForward(plt, a.TransformData);
-      const double t = (s - a.ScaleMin) / (a.ScaleMax - a.ScaleMin);
-      plt = a.Range.Min + a.Range.Size() * t;
-   }
-   return a.PixelMin + a.ScaleToPixel * (plt - a.Range.Min);
-}
 
 } // namespace
 
@@ -131,18 +112,16 @@ extern "C" int fig_draw(int kind, int layer, const double *x, const double *y, i
    FIG_TRY_CANVAS
    if (!ImGui::GetCurrentContext()) return fail(FIG_ERR_STATE, "figure is not initialized");
    ImDrawList *dl = nullptr;
-   const ImPlotAxis *ax = nullptr, *ay = nullptr;
+   std::vector<ImVec2> p(static_cast<size_t>(std::max(n, 0)));
    switch (layer) {
    case L_FOREGROUND: dl = ImGui::GetForegroundDrawList(); break;
    case L_BACKGROUND: dl = ImGui::GetBackgroundDrawList(); break;
-   case L_PLOT: {
-      ImPlotContext *gp = ImPlot::GetCurrentContext();
-      if (gp == nullptr || gp->CurrentPlot == nullptr) return -1; // a usage error, worded by the Fortran caller
-      ImPlot::SetupLock(); // the axes' ranges and pixels are final from here (ImPlot's own PlotToPixels does the same)
-      ImPlotPlot &plot = *gp->CurrentPlot;
-      ax = &plot.Axes[plot.CurrentX];
-      ay = &plot.Axes[plot.CurrentY];
-      dl = ImPlot::GetPlotDrawList();
+   case L_PLOT: { // ImPlot's current plot (the plot side: szaghi/figure#15 G2), its points into pixels, its clip pushed
+      // name map: ImPlot::GetPlotDrawList, ImPlot::PushPlotClipRect, ImPlot::PopPlotClipRect, ImPlot::SetupLock
+      std::vector<float> px(p.size()), py(p.size());
+      dl = fig_implot ? fig_implot->plot_layer(n, x, y, px.data(), py.data()) : nullptr;
+      if (dl == nullptr) return -1; // a usage error, worded by the Fortran caller
+      for (int i = 0; i < n; ++i) p[i] = ImVec2(px[i], py[i]);
       break;
    }
    default: dl = ImGui::GetWindowDrawList(); break;
@@ -150,14 +129,8 @@ extern "C" int fig_draw(int kind, int layer, const double *x, const double *y, i
    const ImU32 col = ImGui::GetColorU32(ImVec4(static_cast<float>(rgba[0]), static_cast<float>(rgba[1]),
                                                static_cast<float>(rgba[2]), static_cast<float>(rgba[3])));
    const float t = static_cast<float>(thickness);
-   std::vector<ImVec2> p(static_cast<size_t>(std::max(n, 0)));
-   for (int i = 0; i < n; ++i) {
-      if (ax != nullptr)
-         p[i] = ImVec2(to_pixel(axis_to_pixel(*ax, x[i])), to_pixel(axis_to_pixel(*ay, y[i])));
-      else
-         p[i] = ImVec2(static_cast<float>(x[i]), static_cast<float>(y[i]));
-   }
-   if (layer == L_PLOT) ImPlot::PushPlotClipRect();
+   if (layer != L_PLOT)
+      for (int i = 0; i < n; ++i) p[i] = ImVec2(static_cast<float>(x[i]), static_cast<float>(y[i]));
    switch (kind) {
    case D_LINE: dl->AddLine(p[0], p[1], col, t); break;
    case D_RECT: {
@@ -196,7 +169,7 @@ extern "C" int fig_draw(int kind, int layer, const double *x, const double *y, i
    }
    default: break;
    }
-   if (layer == L_PLOT) ImPlot::PopPlotClipRect();
+   if (layer == L_PLOT) fig_implot->plot_layer_end();
    return FIG_OK;
    FIG_CATCH_CANVAS
 }

@@ -53,6 +53,13 @@ flowchart TD
   [Processes and tasks](processes)), `figure_items.cpp` (the items of each frame, for the paths of
   [Headless testing](testing#finding-items-by-path)) and `figure_view3d.cpp` (the 3-D views' rasterizer,
   [3-D views](view3d)).
+- **The plot side of the glue** (`native/figure_implot_glue.cpp`, `native/figure_plot_backend.h`): ImPlot's and
+  ImPlot3D's contexts and styles, the current path's plot queries, the canvas's plot layer, the scope record's plot
+  entries. The rest of the glue reaches it through a table that file registers when it is linked, and a program links
+  it only when something references it: the current path's plots do, the Fortran path's do not. The same holds for
+  ImGuizmo (`figure_view3d_gizmo.cpp`), ImGradient (`figure_colormap.cpp`) and the code editor's ImGuiColorTextEdit
+  (`figure_editor.cpp`): a program of the Fortran path links Dear ImGui, SDL3, the backends and FIGURE's own glue, and
+  none of the five ([#15](https://github.com/szaghi/figure/issues/15) G2).
 - **Styles and themes** (`native/figure_theme.cpp`, `native/figure_style_generated.cpp`): the theme files of
   `themes/`, embedded at build time and parsed by the glue; every style colour and variable reached by name, through
   a table of the style fields generated from the libraries' metadata ([Styles](styles)).
@@ -91,7 +98,8 @@ Fortran calls only C functions, through `bind(C)` interfaces; no C++ type, excep
 cimplot function is bound **directly** when all its arguments are scalars, pointers or the two-float `ImVec2_c`
 (declared in Fortran as the interoperable `im_vec2`). Functions that take larger structures by value, such as
 ImPlot's item functions with their `ImPlotSpec_c`, go through the **generated glue**
-(`native/figure_glue_generated.cpp`): a wrapper `figure_<name>` takes the structure by pointer, from a Fortran
+(`native/figure_glue_generated*.cpp`, Dear ImGui's and the plots' apart): a wrapper `figure_<name>` takes the
+structure by pointer, from a Fortran
 `bind(C)` mirror type passed by reference (`im_plot_spec`), and calls the C function with it by value. `ip_line`
 calls `ImPlot_PlotLine_doublePtrdoublePtr` (bound to `figure_ImPlot_PlotLine_doublePtrdoublePtr`), which calls
 `ImPlot::PlotLine`. The generated wrappers are `noexcept`: an exception would terminate the program rather than

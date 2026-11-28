@@ -11,7 +11,7 @@ public free function is **direct** when every argument is a scalar, a pointer or
 is its result): it is bound with `bind(C)` in `figure_cimgui` / `figure_cimplot` / `figure_cimplot3d`. A
 function passing a larger struct by value (`ImVec4`, `ImPlotSpec`, `ImPlot3DSpec`, ...) goes through the
 generated **glue**
-(`native/figure_glue_generated.cpp`): a C wrapper `figure_<name>` takes the struct by pointer and returns a
+(`native/figure_glue_generated*.cpp`): a C wrapper `figure_<name>` takes the struct by pointer and returns a
 struct result through `res`; the Fortran interface keeps the C API name, with the struct as a `bind(C)` mirror
 type (`im_vec4`, `im_plot_spec`, ...) passed by reference. `src/tests/figure_test_layout.F90` checks that each
 mirror has the size of its C struct. Variadic functions and functions taking callbacks are **skipped**.

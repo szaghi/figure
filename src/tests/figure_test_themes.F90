@@ -33,7 +33,7 @@ use figure, only : app_object, FIG_ERR_ARGUMENT, figure_last_error, ig_get_style
 use figure_testing, only : test_system_theme
 use figure_cimgui, only : im_vec4, igGetStyleColorName
 use figure_cimgui_enums, only : ImGuiCol_COUNT
-use figure_cimplot, only : ImPlot_GetColormapColor, ImPlot_GetColormapSize, ImPlot_GetStyleColorName
+use figure_plot_hooks, only : plot_colormap_color, plot_colormap_size, plot_style_color_name
 use figure_cimplot_enums, only : ImPlotCol_COUNT
 
 implicit none
@@ -159,7 +159,7 @@ contains
    integer(int32)    :: fp(FP_N)  !< Fingerprint.
    real(real64)      :: rgba(4)   !< A colour.
    real(real64)      :: v(2)      !< A variable.
-   type(im_vec4)     :: c         !< A line colour.
+   real(real32)      :: c(4)      !< A line colour.
    integer(int32)    :: n         !< Values of a variable.
    integer(int32)    :: i         !< Counter.
    integer(int32)    :: k         !< Position in fp.
@@ -172,7 +172,7 @@ contains
       k = k + 4_int32
    enddo
    do i = 0_int32, ImPlotCol_COUNT - 1_int32
-      call ip_get_style_color(c_string(ImPlot_GetStyleColorName(int(i, c_int))), rgba)
+      call ip_get_style_color(trim(plot_style_color_name(i)), rgba)
       fp(k + 1:k + 4) = bits(rgba)
       k = k + 4_int32
    enddo
@@ -188,13 +188,12 @@ contains
       fp(k + 1:k + 2) = bits(v)
       k = k + 2_int32
    enddo
-   n = min(int(ImPlot_GetColormapSize(-1_c_int), int32), MAX_LINES)
+   n = min(int(plot_colormap_size(-1_int32), int32), MAX_LINES)
    fp(k + 1) = n
    k = k + 1_int32
    do i = 0_int32, n - 1_int32
-      call ImPlot_GetColormapColor(int(i, c_int), -1_c_int, c)
-      fp(k + 4 * i + 1:k + 4 * i + 4) = bits([real(c%x, real64), real(c%y, real64), real(c%z, real64), &
-                                              real(c%w, real64)])
+      call plot_colormap_color(-1_int32, i, c)
+      fp(k + 4 * i + 1:k + 4 * i + 4) = bits(real(c, real64))
    enddo
    k = k + 4_int32 * MAX_LINES
    fp(k + 1:k + 3) = saved_background()
@@ -331,7 +330,7 @@ contains
    real(real64)               :: text_min   !< Lowest text contrast on a fill.
    real(real64)               :: line_min   !< Lowest line contrast.
    real(real64)               :: plot_bg(4) !< Plot background.
-   type(im_vec4)              :: lc         !< A line colour.
+   real(real32)               :: lc(4)      !< A line colour.
    integer(int32)             :: k          !< Counter.
    integer(int32)             :: n          !< Values of a variable.
    integer(int32)             :: stat       !< Status.
@@ -383,9 +382,9 @@ contains
    call ip_get_style_color('PlotBg', plot_bg)
    plot_bg = over(plot_bg, role(:, 1))
    line_min = huge(1.0_real64)
-   do k = 0_int32, ImPlot_GetColormapSize(-1_c_int) - 1_int32
-      call ImPlot_GetColormapColor(int(k, c_int), -1_c_int, lc)
-      line_min = min(line_min, contrast([real(lc%x, real64), real(lc%y, real64), real(lc%z, real64), 1.0_real64], &
+   do k = 0_int32, plot_colormap_size(-1_int32) - 1_int32
+      call plot_colormap_color(-1_int32, k, lc)
+      line_min = min(line_min, contrast([real(lc(1:3), real64), 1.0_real64], &
                                         plot_bg))
    enddo
    passed = text_min >= 4.5_real64 .and. line_min >= 3.0_real64
@@ -630,7 +629,7 @@ contains
    !< The contrast of theme `t` against its promise (text on every surface; lines on the plot background).
    integer(int32), intent(in) :: t           !< Theme.
    logical                    :: passed      !< Promise kept.
-   type(im_vec4)              :: c           !< A line colour.
+   real(real32)               :: c(4)        !< A line colour.
    real(real64)               :: text(4)     !< Text colour.
    real(real64)               :: window(4)   !< Window background.
    real(real64)               :: surface(4)  !< A surface.
@@ -660,10 +659,9 @@ contains
    call ip_get_style_color('PlotBg', plot_bg)
    plot_bg = over(plot_bg, window)
    line_min = huge(1.0_real64)
-   do k = 0_int32, ImPlot_GetColormapSize(-1_c_int) - 1_int32
-      call ImPlot_GetColormapColor(int(k, c_int), -1_c_int, c)
-      line_min = min(line_min, contrast(over([real(c%x, real64), real(c%y, real64), real(c%z, real64), &
-                                               real(c%w, real64)], plot_bg), plot_bg))
+   do k = 0_int32, plot_colormap_size(-1_int32) - 1_int32
+      call plot_colormap_color(-1_int32, k, c)
+      line_min = min(line_min, contrast(over(real(c, real64), plot_bg), plot_bg))
    enddo
    passed = .true.
    if (TEXT_TARGET(t) > 0.0_real64) passed = text_min >= TEXT_TARGET(t) .and. line_min >= LINE_TARGET

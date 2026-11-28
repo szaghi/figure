@@ -22,7 +22,8 @@ use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_FAILED, FIG_OK, app_object, figure_
 use figure_cimgui, only : im_vec2, im_vec4, igCalcTextSize, igGetFontSize, igGetStyleColorVec4
 use figure_cimgui_enums, only : ImGuiCol_WindowBg
 use figure, only : ip_plot_limits, ip_plot_to_pixels
-use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapIndex
+use figure_cimplot, only : im_plot_rect
+use figure_plot_hooks, only : plot_colormap_color, plot_lines_map
 use figure_testing, only : test_click, test_drag, test_drawn_extent, test_key, test_type, test_window_rect
 
 implicit none
@@ -98,7 +99,7 @@ real(real64)              :: back_plot_bg(4)  !< ImPlot PlotBg after the round t
 real(real64)              :: back_round(2)    !< FrameRounding after the round trip.
 real(real64)              :: back_padding(2)  !< ImPlot PlotPadding after the round trip.
 integer(int32)            :: back_n(2)        !< Their counts.
-type(im_vec4)             :: back_line        !< First line colour after the round trip.
+real(real32)              :: back_line(4)     !< First line colour after the round trip.
 character(len=:), allocatable :: bad_message  !< Error message of the malformed file.
 integer(int32)            :: unit             !< File unit.
 integer(int32)            :: stat_font(4)     !< set_font: proggy, plex-sans at 18, a missing file, not a font.
@@ -308,7 +309,7 @@ enddo
 call ip_line('bad row', m, 4_int32, stat=stat_bad_row)
 call c_f_pointer(igGetStyleColorVec4(ImGuiCol_WindowBg), style_color)
 window_bg = style_color ! the default style, seal
-seal_cmap = ImPlot_GetColormapIndex('FIGURE seal'//c_null_char)
+seal_cmap = int(plot_lines_map('seal'), c_int)
 call app%set_style('dark', stat=stat_style(1))
 call app%set_style('bogus', stat=stat_style(2))
 ! style by name: colours (hex and components) and variables of both libraries, then the failures
@@ -333,7 +334,7 @@ call app%set_style('classic', stat=stat_builtin(3))
 call app%set_style('seal-light', stat=stat_builtin(4))
 call app%set_style('seal', stat=stat_builtin(5))
 call app%set_style('seal', lines='okabe-ito', stat=stat_lines(1))
-okabe_cmap = ImPlot_GetColormapIndex('FIGURE okabe-ito'//c_null_char)
+okabe_cmap = int(plot_lines_map('okabe-ito'), c_int)
 call app%set_style('seal', lines='rainbow', stat=stat_lines(2))
 call app%set_style('seal')
 ! theme files: save the style in effect (seal + four changes by name), switch away, load it back
@@ -350,7 +351,7 @@ call ig_get_style_color('WindowBg', back_window)
 call ip_get_style_color('PlotBg', back_plot_bg)
 call ig_get_style_var('FrameRounding', back_round, back_n(1))
 call ip_get_style_var('PlotPadding', back_padding, back_n(2))
-call ImPlot_GetColormapColor(0_c_int, -1_c_int, back_line)
+call plot_colormap_color(-1_int32, 0_int32, back_line)
 open(newunit=unit, file=BAD_FILE, action='write', status='replace')
 write(unit, '(A)') 'base = "dark"', '[imgui.colors]', 'Buton = "#ffffff"'
 close(unit)
@@ -500,7 +501,7 @@ test_passed(32) = all(stat_builtin == int(FIG_OK, int32))                       
 test_passed(34) = all(stat_file(1:2) == int(FIG_OK, int32)) .and.                                        &
                   all(abs(back_button - [18.0_real64, 52.0_real64, 86.0_real64, 255.0_real64] / 255.0_real64) < 1.0e-6_real64) &
                   .and. all(abs(back_window - [28.0_real64, 25.0_real64, 21.0_real64, 255.0_real64] / 255.0_real64)  &
-                  < 1.0e-6_real64) .and. abs(back_line%x - 232.0_c_float / 255.0_c_float) < 1.0e-6_c_float ! colours back
+                  < 1.0e-6_real64) .and. abs(back_line(1) - 232.0_c_float / 255.0_c_float) < 1.0e-6_c_float ! colours back
 test_passed(35) = back_n(1) == 1_int32 .and. abs(back_round(1) - 5.0_real64) < 1.0e-6_real64 .and.          &
                   back_n(2) == 2_int32 .and. all(abs(back_padding - [3.0_real64, 4.0_real64]) < 1.0e-6_real64) .and. &
                   all(abs(back_plot_bg - [32.0_real64, 48.0_real64, 64.0_real64, 128.0_real64] / 255.0_real64)       &

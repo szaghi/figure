@@ -6,6 +6,7 @@
 // first fit, so a new group is not linked on its first frame: its first plot fits its data alone, and from the next
 // frame the group takes that plot's range and every plot of the group shares it. Main thread only.
 #include "figure_native.h"
+#include "figure_plot_backend.h"
 
 #include "imgui.h"
 #include "implot.h"
@@ -63,3 +64,8 @@ int fig_aligned_open(void) {
 }
 
 } // extern "C"
+
+namespace {
+// ImPlot's (ImPlot3D's) contexts: the plot side linked with this file (szaghi/figure#15 G2).
+const int anchored = (fig_implot_glue_anchor(), 0);
+} // namespace

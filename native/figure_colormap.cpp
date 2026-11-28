@@ -9,6 +9,8 @@
 // context (after app%destroy and a new init) registers them again at their next use. Everything runs on the main
 // thread (the Fortran entry points are refused from tasks).
 #include "figure_native.h"
+#include "figure_plot_backend.h"
+#include "figure_view3d.h"
 
 #include "imgui.h"
 #include "implot.h"
@@ -1235,3 +1237,28 @@ int fig_colormap_stops(const char *name, int name_len, double *pos, double *rgb,
       return fail(FIG_ERR_EXCEPTION, "unknown C++ exception");
    }
 }
+
+namespace {
+
+// The 3-D views' colormaps from this registry (fig_view3d_colormap_hooks), the current path's: a map by name as
+// fig_colormap gives it, its 256 colours sampled at k / 255 (SampleColormap, rounded to bytes); the edits counted by
+// fig_colormap_generation. Registered at load, where this file is linked; the Fortran path registers its own at init.
+int view3d_table(const char *name, int name_len, unsigned char *rgb) {
+   int id = -1;
+   const int s = fig_colormap(name, name_len, 0, &id);
+   if (s != FIG_OK) return s;
+   if (id < 0) return FIG_ERR_FAILED;
+   if (rgb)
+      for (int k = 0; k < 256; ++k) {
+         const ImVec4 c = ImPlot::SampleColormap(static_cast<float>(k) / 255.0f, id);
+         rgb[3 * k] = static_cast<unsigned char>(std::lround(std::clamp(c.x, 0.0f, 1.0f) * 255.0f));
+         rgb[3 * k + 1] = static_cast<unsigned char>(std::lround(std::clamp(c.y, 0.0f, 1.0f) * 255.0f));
+         rgb[3 * k + 2] = static_cast<unsigned char>(std::lround(std::clamp(c.z, 0.0f, 1.0f) * 255.0f));
+      }
+   return FIG_OK;
+}
+
+// The plot side (ImPlot's contexts, which the registry needs) linked with this file (szaghi/figure#15 G2).
+const int registered = (fig_view3d_colormap_hooks(view3d_table, fig_colormap_generation), fig_implot_glue_anchor(), 0);
+
+} // namespace

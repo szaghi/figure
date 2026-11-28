@@ -20,11 +20,14 @@ use, intrinsic :: iso_c_binding, only : c_associated, c_char, c_double, c_float,
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
 use figure_base, only : figure_fail
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
-use figure_plot_colormaps, only : cm_colormap, cm_count, cm_generation, cm_key, cm_sample, cm_size
+use figure_plot_colormaps, only : cm_colormap, cm_count, cm_current, cm_generation, cm_key, cm_sample, cm_size, &
+                                  cm_style_refresh
 use figure_plot_draw, only : pf_draw_prim
 use figure_plot_field, only : field_count, field_pixel, field_time, field_uploads
 use figure_plot_frame, only : pf_plot_state, pf_tick_label
-use figure_plot_style, only : ps_color_named, ps_pop_color, ps_pop_var, ps_push_named, ps_reset, ps_theme, ps_var_named
+use figure_plot_style, only : ps_color_named, ps_field, ps_pop_color, ps_pop_var, ps_push_named, ps_reset, ps_theme, &
+                              ps_var_named
+use figure_plot_style_editor, only : pse_draw
 use figure_plot3d_style, only : pf3_pop_style_color, pf3_pop_style_var, ps3_color_named, ps3_push_named, ps3_reset, &
                                 ps3_var_named
 
@@ -32,6 +35,7 @@ implicit none
 private
 public :: plot_layer_draw, plot_tick_label, plot_field_uploads, plot_field_count, plot_field_time, plot_field_pixel
 public :: plot_native_install, plot_colormap_count, plot_colormap_size, plot_colormap_color, plot_colormap_sample
+public :: plot_style_color_name, plot_lines_map
 
 character(len=2), parameter :: AXIS_NAMES(0:5) = ['x1', 'x2', 'x3', 'y1', 'y2', 'y3'] !< ImAxis names.
 
@@ -45,16 +49,18 @@ interface
    type(c_funptr), value :: generation !< `unsigned (*)(void)`.
    endsubroutine fig_view3d_colormap_hooks
 
-   subroutine fig_plot_style_hooks(color, var, push, pop, theme) bind(C, name='fig_plot_style_hooks')
+   subroutine fig_plot_style_hooks(color, var, push, pop, theme, field, editor) bind(C, name='fig_plot_style_hooks')
    !< The plots' styles in Fortran (native/figure_native.h): the store the native layer's style functions read and
    !< every change reaches.
    import :: c_funptr
    implicit none
-   type(c_funptr), value :: color !< `int (*)(int lib, const char *name, int name_len, int mode, float *rgba)`.
-   type(c_funptr), value :: var   !< `int (*)(int lib, const char *name, int name_len, int set, double *v, int *n)`.
-   type(c_funptr), value :: push  !< `int (*)(int lib, int vars, const char *name, int name_len, const double *v, int n)`.
-   type(c_funptr), value :: pop   !< `void (*)(int lib, int vars)`.
-   type(c_funptr), value :: theme !< `int (*)(int op, const char *name, int name_len, const double *v, int n)`.
+   type(c_funptr), value :: color  !< `int (*)(int lib, const char *name, int name_len, int mode, float *rgba)`.
+   type(c_funptr), value :: var    !< `int (*)(int lib, const char *name, int name_len, int set, double *v, int *n)`.
+   type(c_funptr), value :: push   !< `int (*)(int lib, int vars, const char *name, int name_len, const double *v, int n)`.
+   type(c_funptr), value :: pop    !< `void (*)(int lib, int vars)`.
+   type(c_funptr), value :: theme  !< `int (*)(int op, const char *name, int name_len, const double *v, int n)`.
+   type(c_funptr), value :: field  !< `int (*)(int which, int colour, int index, char *name, int cap, double *v, int *t)`.
+   type(c_funptr), value :: editor !< `void (*)(void)`.
    endsubroutine fig_plot_style_hooks
 endinterface
 
@@ -68,7 +74,7 @@ contains
    call ps_reset()
    call ps3_reset()
    call fig_plot_style_hooks(c_funloc(style_color), c_funloc(style_var), c_funloc(style_push), c_funloc(style_pop), &
-                             c_funloc(style_theme))
+                             c_funloc(style_theme), c_funloc(style_field), c_funloc(style_editor))
    endsubroutine plot_native_install
 
    function style_color(lib, name, name_len, mode, rgba) result(status) bind(C)
@@ -184,6 +190,35 @@ contains
    status = int(st, c_int)
    endfunction style_theme
 
+   function style_field(which, colour, index, name, cap, values, kind) result(found) bind(C)
+   !< A variable or colour of the ImPlot style in effect (which 0) or of save_style's reference (which 1), by index
+   !< (`fig_pstyle_field_fn`): its NUL-terminated name, values and kind; 0 past the last.
+   integer(c_int),         value       :: which     !< 0 in effect, 1 the reference.
+   integer(c_int),         value       :: colour    !< 1 a colour, 0 a variable.
+   integer(c_int),         value       :: index     !< From 0.
+   character(kind=c_char), intent(out) :: name(*)   !< Name, NUL-terminated (at most `cap` bytes).
+   integer(c_int),         value       :: cap       !< Its room.
+   real(c_double),         intent(out) :: values(4) !< Values.
+   integer(c_int),         intent(out) :: kind      !< 0 a number, 1 a pair, 2 a logical.
+   integer(c_int)                      :: found     !< 1 within the list.
+   character(len=NAME_MAX)             :: n         !< The name.
+   integer(int32)                      :: k, l, t   !< Counter, length, kind.
+
+   found = merge(1_c_int, 0_c_int, ps_field(int(which, int32), colour /= 0_c_int, int(index, int32), n, values, t))
+   kind = int(t, c_int)
+   if (found == 0_c_int .or. cap < 1_c_int) return
+   l = min(len_trim(n, int32), int(cap, int32) - 1_int32)
+   do k = 1_int32, l
+      name(k) = n(k:k)
+   enddo
+   name(l + 1_int32) = achar(0)
+   endfunction style_field
+
+   subroutine style_editor() bind(C)
+   !< The style editor's ImPlot section (`fig_pstyle_editor_fn`): figure_plot_style_editor's widget.
+   call pse_draw()
+   endsubroutine style_editor
+
    subroutine name_of(name, name_len, n, l)
    !< A C name into a buffer (no allocation); a name longer than the buffer is cut (no style name is).
    character(kind=c_char), intent(in)  :: name(*)  !< Name (not NUL-terminated).
@@ -250,19 +285,19 @@ contains
 
    function plot_colormap_size(id) result(n)
    !< A colormap's keys (`cm_size`, as `ImPlot::GetColormapSize`).
-   integer(int32), intent(in) :: id !< Colormap id (`ip_colormap`).
+   integer(int32), intent(in) :: id !< Colormap id (`ip_colormap`; -1 the style's).
    integer(int32)             :: n  !< Keys.
 
-   n = cm_size(id)
+   n = cm_size(map_of(id))
    endfunction plot_colormap_size
 
    subroutine plot_colormap_color(id, idx, rgba)
    !< A colormap's key `idx` (0-based, modulo the keys; `cm_key` unpacked as `ImPlot::GetColormapColor`).
-   integer(int32), intent(in)  :: id      !< Colormap id (`ip_colormap`).
+   integer(int32), intent(in)  :: id      !< Colormap id (`ip_colormap`; -1 the style's).
    integer(int32), intent(in)  :: idx     !< Key.
    real(real32),   intent(out) :: rgba(4) !< Colour.
 
-   call unpack(cm_key(id, idx), rgba)
+   call unpack(cm_key(map_of(id), idx), rgba)
    endsubroutine plot_colormap_color
 
    subroutine plot_colormap_sample(id, t, rgba)
@@ -273,6 +308,39 @@ contains
 
    call unpack(cm_sample(id, t), rgba)
    endsubroutine plot_colormap_sample
+
+   function map_of(id) result(m)
+   !< A colormap id, -1 the style's (`cm_current`, the style's line colours read first).
+   integer(int32), intent(in) :: id !< Colormap id.
+   integer(int32)             :: m  !< The map.
+
+   m = id
+   if (id >= 0_int32) return
+   call cm_style_refresh()
+   m = cm_current()
+   endfunction map_of
+
+   function plot_style_color_name(idx) result(name)
+   !< The name of the plot style's colour `idx` (0-based, as `ImPlot::GetStyleColorName`: figure_plot_style's).
+   integer(int32), intent(in) :: idx  !< Colour (ImPlotCol).
+   character(len=16)          :: name !< Name (blank-padded).
+   real(real64)               :: v(4) !< Its values (not used).
+   integer(int32)             :: t    !< Its kind (not used).
+
+   if (.not. ps_field(0_int32, .true., idx, name, v, t)) name = ''
+   endfunction plot_style_color_name
+
+   function plot_lines_map(theme) result(id)
+   !< The colormap of the style's line colours (the registry's, named by the colours: `theme` is the current path's
+   !< name of it, not needed here); -1 if the style has none (ImPlot's Deep).
+   character(len=*), intent(in) :: theme !< Theme or line palette name (the current path's map name).
+   integer(int32)               :: id    !< Colormap id.
+
+   id = -1_int32
+   if (len(theme) < 0) return
+   call cm_style_refresh()
+   if (cm_current() /= 0_int32) id = cm_current()
+   endfunction plot_lines_map
 
    subroutine unpack(col, rgba)
    !< A packed colour as floats (`ColorConvertU32ToFloat4`: each byte times 1/255, in float).
