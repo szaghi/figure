@@ -505,7 +505,7 @@ contains
 
    pure subroutine limbs_multiply(limbs, nl, f)
    !< limbs(1:nl) times f (base 10^9, least significant first; f below 2^31), nl grown with the carry.
-   integer(int64), intent(inout) :: limbs(:) !< Digits.
+   integer(int64), intent(inout) :: limbs(LIMB_ROOM) !< Digits (explicit shape: no descriptor a call on nvfortran).
    integer(int32), intent(inout) :: nl       !< Limbs in use.
    integer(int64), intent(in)    :: f        !< Factor.
    integer(int64)                :: carry, p !< Carry, partial product.

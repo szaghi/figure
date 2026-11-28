@@ -379,6 +379,9 @@ type :: item_group
    integer(int32), allocatable   :: leg_len(:)            !< ... label's length.
    integer(int32)                :: leg_n = 0_int32       !< Characters of `leg_text` in use.
    character(len=:), allocatable :: leg_text              !< Legend's labels.
+   integer(int32)                :: leg_room = 0_int32    !< `size(leg_item)` (0 not allocated yet; a count, not
+                                                          !< `allocated`, a call on nvfortran).
+   integer(int32)                :: leg_text_room = 0_int32 !< `len(leg_text)` (0 not allocated yet).
 endtype item_group
 
 type :: plot_record
@@ -496,6 +499,9 @@ type(plot_ticks), target               :: ticks(AXES)    !< The open plot's tick
 type(plot_ticks)                       :: cticks         !< A colour bar's ticks (CTicker).
 character(len=:), allocatable          :: text           !< The open plot's title and axis labels (TextBuffer).
 integer(int32)                         :: n_text = 0_int32 !< Characters of `text` in use.
+real(real64)                           :: pos_inf = 0.0_real64 !< +infinity (set at the first plot).
+type(plot_format), parameter           :: DEFAULT_FORMAT = plot_format() !< An axis's format reset ("%g").
+integer(int32)                         :: text_room = 0_int32 !< `len(text)` (0 not allocated yet).
 logical                                :: open_context = .false. !< A context menu opens (OpenContextThisFrame).
 character(len=MOUSE_TEXT_LEN)          :: mouse_text     !< The mouse text (MousePosStringBuilder).
 integer(int32)                         :: digital_offset = 0_int32 !< The digital items' bands (DigitalPlotOffset).
@@ -573,6 +579,7 @@ contains
 
    visible = .false.
    if (cur /= 0_int32) error stop 'figure_plot_frame: pf_begin_plot while a plot is open'
+   if (pos_inf == 0.0_real64) pos_inf = ieee_value(1.0_real64, ieee_positive_inf) ! (once: a call on nvfortran)
    if (fits_pending > 0_int32) then ! a cell of a subplot drawn for the first time: every axis fits (ip_begin_plot)
       next_fit = .true.
       fits_pending = fits_pending - 1_int32
@@ -617,8 +624,8 @@ contains
          p%ax(i)%con_min = -huge(1.0_real64)
          p%ax(i)%con_max = huge(1.0_real64)
          p%ax(i)%zoom_min = tiny(1.0_real64)                         ! ConstraintZoom (DBL_MIN, INFINITY)
-         p%ax(i)%zoom_max = ieee_value(1.0_real64, ieee_positive_inf)
-         p%ax(i)%fmt = plot_format() ! HasFormatSpec false: "%g"
+         p%ax(i)%zoom_max = pos_inf
+         p%ax(i)%fmt = DEFAULT_FORMAT ! HasFormatSpec false: "%g" (a named constant: no character copies a call)
          p%ax(i)%show_default = .true.
          call ticks_reset(ticks(i)) ! Ticker::Reset (the ticks given at the setup follow): MaxSize = LateSize (a
          ticks(i)%max_size = p%ax(i)%late ! tag's room), LateSize = 0
@@ -2313,6 +2320,7 @@ contains
    type(plot_record), intent(inout) :: p       !< Plot.
    logical                          :: can_ctx !< A menu may open.
    integer(int32)                   :: i, k    !< Axis, index on its direction.
+   character(len=10), parameter     :: CONTEXT_IDS(2) = ['##XContext', '##YContext'] !< The axes' menus.
 
    call core_push_override_id(p%id)
    can_ctx = open_context .and. .not. has_flag(p%flags, PF_NO_MENUS) .and. .not. p%items%leg_hovered
@@ -2325,8 +2333,8 @@ contains
       k = merge(i - AX_X1, i - AX_Y1, i <= AX_X3)
       call core_push_id_int(k)
       if (can_ctx .and. p%ax(i)%hovered .and. .not. has_flag(p%ax(i)%flags, AXF_NO_MENUS)) &
-         call core_open_popup(merge('##XContext', '##YContext', i <= AX_X3))
-      if (core_begin_popup(merge('##XContext', '##YContext', i <= AX_X3))) then
+         call core_open_popup(CONTEXT_IDS(merge(1_int32, 2_int32, i <= AX_X3))) ! (no `merge` of texts: a library call)
+      if (core_begin_popup(CONTEXT_IDS(merge(1_int32, 2_int32, i <= AX_X3)))) then
          if (has_label(p%ax(i))) then
             call core_text_unformatted(text(p%ax(i)%label_off:p%ax(i)%label_off + p%ax(i)%label_len - 1_int32))
          else
@@ -2690,8 +2698,17 @@ contains
    character(len=*), intent(in) :: label !< Label.
    integer(int32)               :: n     !< Characters shown.
 
-   n = int(index(label, '##'), int32) - 1_int32
-   if (n < 0_int32) n = len(label, kind=int32)
+   integer(int32)               :: k     !< A character.
+
+   n = len(label, kind=int32) ! (a loop, not `index`: a library call on nvfortran)
+   do k = 1_int32, len(label, kind=int32) - 1_int32
+      if (label(k:k) == '#') then
+         if (label(k + 1_int32:k + 1_int32) == '#') then
+            n = k - 1_int32
+            return
+         endif
+      endif
+   enddo
    endfunction rendered_len
 
    subroutine append_text(s, off, n)
@@ -2699,19 +2716,29 @@ contains
    character(len=*), intent(in)  :: s   !< Text.
    integer(int32),   intent(out) :: off !< Its start.
    integer(int32),   intent(out) :: n   !< Its length.
-   character(len=:), allocatable :: more !< Grown text.
 
    n = len(s, kind=int32)
-   if (.not. allocated(text)) allocate(character(len=max(256_int32, n)) :: text)
-   if (n_text + n > len(text, kind=int32)) then
-      allocate(character(len=max(2_int32 * len(text, kind=int32), n_text + n)) :: more)
-      more(1:n_text) = text(1:n_text)
-      call move_alloc(more, text)
-   endif
+   if (n_text + n > text_room) call grow_text(n) ! (a count, not `allocated`: a library call on nvfortran)
    off = n_text + 1_int32
    text(off:off + n - 1_int32) = s
    n_text = n_text + n
    endsubroutine append_text
+
+   subroutine grow_text(n)
+   !< The open plot's text allocated or grown for `n` more characters, what it holds kept (apart from `append_text`:
+   !< an allocatable local costs every call a check on nvfortran, szaghi/figure#16).
+   integer(int32), intent(in)    :: n    !< Characters to add.
+   character(len=:), allocatable :: more !< Grown text.
+
+   if (.not. allocated(text)) then
+      allocate(character(len=max(256_int32, n)) :: text)
+   else
+      allocate(character(len=max(2_int32 * len(text, kind=int32), n_text + n)) :: more)
+      if (n_text > 0_int32) more(1:n_text) = text(1:n_text)
+      call move_alloc(more, text)
+   endif
+   text_room = len(text, kind=int32)
+   endsubroutine grow_text
 
    subroutine reset_next()
    !< `ResetCtxForNextPlot`: the next plot's and the next item's data cleared.
@@ -3313,29 +3340,12 @@ contains
    type(item_group),  intent(inout) :: g     !< Items.
    integer(int32),    intent(in)    :: it    !< Item.
    character(len=*),  intent(in)    :: label !< Its label.
-   integer(int32),    allocatable   :: item(:), off(:), ln(:) !< Grown columns.
-   character(len=:),  allocatable   :: more  !< Grown text.
    integer(int32)                   :: n, m  !< Entries, characters.
 
-   n = g%n_leg
-   if (.not. allocated(g%leg_item)) then
-      allocate(g%leg_item(8), g%leg_off(8), g%leg_len(8))
-   elseif (n == size(g%leg_item, kind=int32)) then
-      allocate(item(2_int32 * n), off(2_int32 * n), ln(2_int32 * n))
-      item(1:n) = g%leg_item(1:n)
-      off(1:n) = g%leg_off(1:n)
-      ln(1:n) = g%leg_len(1:n)
-      call move_alloc(item, g%leg_item)
-      call move_alloc(off, g%leg_off)
-      call move_alloc(ln, g%leg_len)
-   endif
+   n = g%n_leg ! (the room grown apart, without `allocated` a call: see legend_grow)
+   if (n == g%leg_room) call legend_grow(g)
    m = len(label, kind=int32)
-   if (.not. allocated(g%leg_text)) allocate(character(len=max(256_int32, m)) :: g%leg_text)
-   if (g%leg_n + m > len(g%leg_text, kind=int32)) then
-      allocate(character(len=max(2_int32 * len(g%leg_text, kind=int32), g%leg_n + m)) :: more)
-      more(1:g%leg_n) = g%leg_text(1:g%leg_n)
-      call move_alloc(more, g%leg_text)
-   endif
+   if (g%leg_n + m > g%leg_text_room) call legend_grow_text(g, m)
    n = n + 1_int32
    g%n_leg = n
    g%leg_item(n) = it
@@ -3344,6 +3354,44 @@ contains
    g%leg_text(g%leg_n + 1_int32:g%leg_n + m) = label
    g%leg_n = g%leg_n + m
    endsubroutine legend_append
+
+   subroutine legend_grow(g)
+   !< The legend's columns allocated (8) or doubled, the entries kept (apart from `legend_append`: allocatable locals
+   !< cost every call a check on nvfortran, szaghi/figure#16).
+   type(item_group), intent(inout) :: g !< Items.
+   integer(int32),   allocatable   :: item(:), off(:), ln(:) !< Grown columns.
+   integer(int32)                  :: n !< Entries.
+
+   n = g%n_leg
+   if (.not. allocated(g%leg_item)) then
+      allocate(g%leg_item(8), g%leg_off(8), g%leg_len(8))
+   else
+      allocate(item(2_int32 * n), off(2_int32 * n), ln(2_int32 * n))
+      item(1:n) = g%leg_item(1:n)
+      off(1:n) = g%leg_off(1:n)
+      ln(1:n) = g%leg_len(1:n)
+      call move_alloc(item, g%leg_item)
+      call move_alloc(off, g%leg_off)
+      call move_alloc(ln, g%leg_len)
+   endif
+   g%leg_room = size(g%leg_item, kind=int32)
+   endsubroutine legend_grow
+
+   subroutine legend_grow_text(g, m)
+   !< The legend's text allocated or grown for `m` more characters, the labels kept (apart: see `legend_grow`).
+   type(item_group), intent(inout) :: g    !< Items.
+   integer(int32),   intent(in)    :: m    !< Characters to add.
+   character(len=:), allocatable   :: more !< Grown text.
+
+   if (.not. allocated(g%leg_text)) then
+      allocate(character(len=max(256_int32, m)) :: g%leg_text)
+   else
+      allocate(character(len=max(2_int32 * len(g%leg_text, kind=int32), g%leg_n + m)) :: more)
+      if (g%leg_n > 0_int32) more(1:g%leg_n) = g%leg_text(1:g%leg_n)
+      call move_alloc(more, g%leg_text)
+   endif
+   g%leg_text_room = len(g%leg_text, kind=int32)
+   endsubroutine legend_grow_text
 
    ! private: the tables
 
@@ -5621,8 +5669,10 @@ contains
    integer(int32), intent(in) :: c   !< Channel.
    integer(int32)             :: v   !< Value.
 
-   v = int(iand(ishft(int(col, int64), -8 * int(c, int64)), 255_int64), int32)
-   endfunction channel
+   integer(int64), parameter  :: UNIT(0:3) = [1_int64, 256_int64, 65536_int64, 16777216_int64] !< The bytes' units.
+
+   v = int(iand(iand(int(col, int64), 4294967295_int64) / UNIT(c), 255_int64), int32) ! (no variable shift of an int64:
+   endfunction channel                                                                ! a library call on nvfortran)
 
    pure function with_alpha(col, a) result(c)
    !< A packed colour with the alpha a (0-255).

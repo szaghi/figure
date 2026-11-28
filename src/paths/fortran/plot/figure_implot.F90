@@ -4656,7 +4656,8 @@ contains
    !< The frame's name of an ImPlotScale ('linear' leaves an axis's scale as it is, as `SetupAxisScale` is called for
    !< the others only).
    integer(c_int), intent(in)    :: code !< ImPlotScale.
-   character(len=:), allocatable :: name !< Name.
+   character(len=6)              :: name !< Name, blank-padded (the frame ignores trailing blanks; a fixed length: no
+                                         !< allocation a call).
 
    select case (code)
    case (ImPlotScale_Log10)

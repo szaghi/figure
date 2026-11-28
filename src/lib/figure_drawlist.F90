@@ -101,6 +101,9 @@ type :: draw_list
    logical,        allocatable  :: batch_split(:) !< ... it starts a draw command (opened where `PrimReserve` would
                                                   !< start one: kept even if its culled room is given back).
    integer(int32)               :: nbatch = 0    !< Batches used.
+   integer(int32)               :: vtx_cap = 0   !< `size(vtx)`, `size(idx)`, `size(batch_vtx)` (0 not allocated yet: a
+   integer(int32)               :: idx_cap = 0   !< count, not `allocated`, which is a library call on nvfortran,
+   integer(int32)               :: batch_cap = 0 !< szaghi/figure#16).
    integer(int32)               :: seed = 0      !< Vertices the target's open command holds before the first batch.
    procedure(dl_sink), pointer, nopass :: sink => null() !< Where finished batches go (none: kept until emptied).
    real(c_float)                :: fringe = 1.0_c_float     !< `_FringeScale`: the anti-aliasing fringe [pixels].
@@ -744,16 +747,8 @@ contains
       if (associated(dl%sink)) call hand_over(dl)
       call new_batch(dl, .true.)
    endif
-   if (.not. allocated(dl%vtx)) then ! (the calls only when the storage must grow)
-      call grow_vtx(dl, dl%nvtx + nv)
-   elseif (size(dl%vtx, kind=int32) < dl%nvtx + nv) then
-      call grow_vtx(dl, dl%nvtx + nv)
-   endif
-   if (.not. allocated(dl%idx)) then
-      call grow_idx(dl, dl%nidx + ni)
-   elseif (size(dl%idx, kind=int32) < dl%nidx + ni) then
-      call grow_idx(dl, dl%nidx + ni)
-   endif
+   if (dl%vtx_cap < dl%nvtx + nv) call grow_vtx(dl, dl%nvtx + nv) ! (the calls only when the storage must grow)
+   if (dl%idx_cap < dl%nidx + ni) call grow_idx(dl, dl%nidx + ni)
    b = dl%nvtx - dl%batch_vtx(dl%nbatch) + 1_int32
    endsubroutine reserve
 
@@ -781,29 +776,34 @@ contains
    !< A batch starting at the next vertex and index; `split`: where a draw command starts (a 16-bit wrap).
    type(draw_list), intent(inout) :: dl    !< List.
    logical,         intent(in)    :: split !< It starts a draw command.
-   integer(int32), allocatable    :: t(:)  !< Grown array.
-   logical,        allocatable    :: l(:)  !< ...
-   integer(int32)                 :: c     !< Capacity.
 
-   c = 0_int32
-   if (allocated(dl%batch_vtx)) c = size(dl%batch_vtx, kind=int32)
-   if (dl%nbatch >= c) then
-      c = max(16_int32, 2_int32 * c)
-      allocate(t(c))
-      if (dl%nbatch > 0_int32) t(1:dl%nbatch) = dl%batch_vtx(1:dl%nbatch)
-      call move_alloc(t, dl%batch_vtx)
-      allocate(t(c))
-      if (dl%nbatch > 0_int32) t(1:dl%nbatch) = dl%batch_idx(1:dl%nbatch)
-      call move_alloc(t, dl%batch_idx)
-      allocate(l(c))
-      if (dl%nbatch > 0_int32) l(1:dl%nbatch) = dl%batch_split(1:dl%nbatch)
-      call move_alloc(l, dl%batch_split)
-   endif
+   if (dl%nbatch >= dl%batch_cap) call grow_batches(dl)
    dl%nbatch = dl%nbatch + 1_int32
    dl%batch_vtx(dl%nbatch) = dl%nvtx + 1_int32
    dl%batch_idx(dl%nbatch) = dl%nidx + 1_int32
    dl%batch_split(dl%nbatch) = split
    endsubroutine new_batch
+
+   subroutine grow_batches(dl)
+   !< The batches' columns allocated (16) or doubled, the batches kept (apart from `new_batch`: allocatable locals cost
+   !< every call a check on nvfortran, szaghi/figure#16).
+   type(draw_list), intent(inout) :: dl   !< List.
+   integer(int32), allocatable    :: t(:) !< Grown array.
+   logical,        allocatable    :: l(:) !< ...
+   integer(int32)                 :: c    !< Capacity.
+
+   c = max(16_int32, 2_int32 * dl%batch_cap)
+   allocate(t(c))
+   if (dl%nbatch > 0_int32) t(1:dl%nbatch) = dl%batch_vtx(1:dl%nbatch)
+   call move_alloc(t, dl%batch_vtx)
+   allocate(t(c))
+   if (dl%nbatch > 0_int32) t(1:dl%nbatch) = dl%batch_idx(1:dl%nbatch)
+   call move_alloc(t, dl%batch_idx)
+   allocate(l(c))
+   if (dl%nbatch > 0_int32) l(1:dl%nbatch) = dl%batch_split(1:dl%nbatch)
+   call move_alloc(l, dl%batch_split)
+   dl%batch_cap = c
+   endsubroutine grow_batches
 
    subroutine put_vtx(dl, x, y, u, v, col)
    !< Append a vertex to the open batch (field by field, as `dl_put_quad_uv`: a `draw_vert(...)` constructor makes ifx
@@ -859,6 +859,7 @@ contains
    allocate(more(max(need, c + c / 2_int32, 1024_int32)))
    if (dl%nvtx > 0_int32) more(1:dl%nvtx) = dl%vtx(1:dl%nvtx)
    call move_alloc(more, dl%vtx)
+   dl%vtx_cap = size(dl%vtx, kind=int32)
    endsubroutine grow_vtx
 
    subroutine grow_idx(dl, need)
@@ -874,5 +875,6 @@ contains
    allocate(more(max(need, c + c / 2_int32, 1536_int32)))
    if (dl%nidx > 0_int32) more(1:dl%nidx) = dl%idx(1:dl%nidx)
    call move_alloc(more, dl%idx)
+   dl%idx_cap = size(dl%idx, kind=int32)
    endsubroutine grow_idx
 endmodule figure_drawlist

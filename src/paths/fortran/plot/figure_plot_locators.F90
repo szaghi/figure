@@ -173,6 +173,18 @@ contains
    t%max_size = 0.0_real32
    endsubroutine ticks_reset
 
+   subroutine grow_text(t, nl)
+   !< The ticks' text grown for a label of `nl` more characters, the labels held kept (apart from `add_tick`: an
+   !< allocatable local costs every call a check on nvfortran, szaghi/figure#16).
+   type(plot_ticks), intent(inout) :: t    !< Ticks.
+   integer(int32),  intent(in)    :: nl   !< Characters to add.
+   character(len=:), allocatable  :: more !< A larger text.
+
+   allocate(character(len=max(2_int32 * len(t%text, kind=int32), t%n_text + nl)) :: more)
+   if (t%n_text > 0_int32) more(1:t%n_text) = t%text(1:t%n_text)
+   call move_alloc(more, t%text)
+   endsubroutine grow_text
+
    subroutine add_tick(t, v, major, level, show, label, measure, total)
    !< `ImPlotTicker::AddTick`: a tick, its label (if shown) measured, the largest shown label kept; `total` (if given)
    !< adds its size.
@@ -186,7 +198,6 @@ contains
    real(real32),           intent(inout), optional :: total(2) !< Labels' total size.
    integer(int32)                                  :: k        !< The tick.
    integer(int32)                                  :: nl, o, i !< The label's length, its start, a character.
-   character(len=:),                   allocatable :: more     !< A larger text.
 
    if (t%n == 0_int32) then ! (`allocated` asked of an empty list only: a call on nvfortran)
       if (.not. allocated(t%pos)) call grow(t, 64_int32)
@@ -207,11 +218,7 @@ contains
       if (t%n_text == 0_int32) then ! (as t%pos above)
          if (.not. allocated(t%text)) allocate(character(len=max(2048_int32, nl)) :: t%text)
       endif
-      if (t%n_text + nl > len(t%text, kind=int32)) then ! grown, the labels held kept
-         allocate(character(len=max(2_int32 * len(t%text, kind=int32), t%n_text + nl)) :: more)
-         if (t%n_text > 0_int32) more(1:t%n_text) = t%text(1:t%n_text)
-         call move_alloc(more, t%text)
-      endif
+      if (t%n_text + nl > len(t%text, kind=int32)) call grow_text(t, nl) ! grown, the labels held kept
       o = t%n_text + 1_int32
       do i = 1_int32, nl ! (a character at a time: nvfortran calls pgf90_str_copy_klen for a substring assignment)
          t%text(o + i - 1_int32:o + i - 1_int32) = label(i:i)

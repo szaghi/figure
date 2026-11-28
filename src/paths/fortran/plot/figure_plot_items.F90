@@ -166,6 +166,8 @@ real(real32),   parameter :: AUTO_ALPHA = -1.0_real32       !< IMPLOT_AUTO_COL's
 real(real32),   parameter :: HIGHLIGHT_LINE_SCALE = 2.0_real32 !< ITEM_HIGHLIGHT_LINE_SCALE.
 real(real32),   parameter :: HIGHLIGHT_MARK_SCALE = 1.25_real32 !< ITEM_HIGHLIGHT_MARK_SCALE.
 real(real32),   parameter :: SQRT_1_2 = 0.70710678118_real32 !< SQRT_1_2 (implot_items.cpp).
+integer(int64), parameter :: BYTE_UNIT(4) = [1_int64, 256_int64, 65536_int64, 16777216_int64] !< A packed colour's
+                                                                                              !< bytes' units (RGBA).
 real(real32),   parameter :: SQRT_3_2 = 0.86602540378_real32 !< SQRT_3_2.
 ! the items' kinds (what decides the decimation and its fill)
 integer(int32), parameter :: KIND_LINE = 1_int32, KIND_STAIRS = 2_int32, KIND_SHADED = 3_int32 !< Item kinds.
@@ -5406,8 +5408,11 @@ contains
    real(real32), parameter    :: S = 1.0_real32 / 255.0_real32 !< 1/255.
    integer(int32)             :: k    !< Channel.
 
-   do k = 1_int32, 4_int32
-      c(k) = real(iand(ishft(int(col, int64), -8 * int(k - 1_int32, int64)), 255_int64), real32) * S
+   integer(int64)             :: u    !< Unsigned value.
+
+   u = iand(int(col, int64), 4294967295_int64) ! (the channels by constant divisors: a variable shift of an int64 is a
+   do k = 1_int32, 4_int32                     ! library call on nvfortran, ftn_i_kishft)
+      c(k) = real(iand(u / BYTE_UNIT(k), 255_int64), real32) * S
    enddo
    endfunction unpack_u32
 
@@ -5423,9 +5428,9 @@ contains
    v = c
    v(4) = v(4) * alpha
    u = 0_int64
-   do k = 1_int32, 4_int32
-      u = ior(u, ishft(int(min(max(v(k), 0.0_real32), 1.0_real32) * 255.0_real32 + 0.5_real32, int64), &
-                       8 * int(k - 1_int32, int64)))
+   do k = 1_int32, 4_int32 ! (each channel in 0-255 times its byte's unit: the bits of the shifts, without a variable
+                           ! shift of an int64, a library call on nvfortran)
+      u = u + int(min(max(v(k), 0.0_real32), 1.0_real32) * 255.0_real32 + 0.5_real32, int64) * BYTE_UNIT(k)
    enddo
    if (u >= 2147483648_int64) u = u - 4294967296_int64
    col = int(u, int32)

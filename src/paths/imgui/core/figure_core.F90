@@ -496,7 +496,6 @@ contains
    logical,          intent(in), optional :: hide_after_hash !< Measure the part before `##`.
    type(im_vec2)                          :: p               !< C value.
    logical(c_bool)                        :: hide            !< C copy.
-   character(kind=c_char, len=:), allocatable :: long        !< A text longer than the buffer.
 
    hide = .false.
    if (present(hide_after_hash)) hide = logical(hide_after_hash, c_bool)
@@ -504,12 +503,23 @@ contains
       call to_buf(text)
       p = igCalcTextSize(buf, c_null_ptr, hide, -1.0_c_float)
    else
-      long = text//c_null_char
-      p = igCalcTextSize(long, c_null_ptr, hide, -1.0_c_float)
+      p = text_size_long(text, hide)
    endif
    w = real(p%x, real64)
    h = real(p%y, real64)
    endsubroutine core_text_size
+
+   function text_size_long(text, hide) result(p)
+   !< `core_text_size` of a text longer than the buffer (apart: its allocatable local costs every call a check on
+   !< nvfortran, szaghi/figure#16).
+   character(len=*), intent(in) :: text !< Text (UTF-8).
+   logical(c_bool),  intent(in) :: hide !< Measure the part before `##`.
+   type(im_vec2)                :: p    !< Size.
+   character(kind=c_char, len=:), allocatable :: long !< The text, NUL-terminated.
+
+   long = text//c_null_char
+   p = igCalcTextSize(long, c_null_ptr, hide, -1.0_c_float)
+   endfunction text_size_long
 
    ! style colours
 
@@ -949,9 +959,17 @@ contains
       call to_buf(id)
       open = logical(igBeginPopup(buf, 0_c_int))
    else
-      open = logical(igBeginPopup(id//c_null_char, 0_c_int))
+      open = begin_popup_long(id)
    endif
    endfunction core_begin_popup
+
+   function begin_popup_long(id) result(open)
+   !< `core_begin_popup` of an id longer than the buffer (apart: its temporary costs every call a free on nvfortran).
+   character(len=*), intent(in) :: id   !< Popup id.
+   logical                      :: open !< Open.
+
+   open = logical(igBeginPopup(id//c_null_char, 0_c_int))
+   endfunction begin_popup_long
 
    subroutine core_open_popup_id(id)
    !< `OpenPopupEx(id, ImGuiPopupFlags_None)`: the popup of an ID (ImPlot's `BeginLegendPopup`).
@@ -1347,17 +1365,26 @@ contains
    real(real64),     intent(in) :: x, y !< Position [pixels].
    integer(int32),   intent(in) :: col  !< Packed colour.
    character(len=*), intent(in) :: text !< Text (UTF-8).
-   character(kind=c_char, len=:), allocatable :: long !< A text longer than the buffer.
 
    call core_draw_end_pending()
    if (len(text) <= BUF_LEN) then
       call to_buf(text)
       call ImDrawList_AddText_Vec2(target_list, v2(x, y), int(col, c_int), buf, c_null_ptr)
    else
-      long = text//c_null_char
-      call ImDrawList_AddText_Vec2(target_list, v2(x, y), int(col, c_int), long, c_null_ptr)
+      call draw_text_long(x, y, col, text)
    endif
    endsubroutine core_draw_text
+
+   subroutine draw_text_long(x, y, col, text)
+   !< `core_draw_text` of a text longer than the buffer (apart: see `text_size_long`).
+   real(real64),     intent(in) :: x, y !< Position [pixels].
+   integer(int32),   intent(in) :: col  !< Packed colour.
+   character(len=*), intent(in) :: text !< Text (UTF-8).
+   character(kind=c_char, len=:), allocatable :: long !< The text, NUL-terminated.
+
+   long = text//c_null_char
+   call ImDrawList_AddText_Vec2(target_list, v2(x, y), int(col, c_int), long, c_null_ptr)
+   endsubroutine draw_text_long
 
    subroutine core_draw_image(texture, x0, y0, x1, y1, u0, v0, u1, v1, col)
    !< A texture on a rectangle (`AddImage`), texture coordinates (u0, v0)-(u1, v1) (default 0-1), tinted by `col`
