@@ -78,6 +78,25 @@ int    fig_style_lines(unsigned int *colors, int cap, int *n, unsigned int *gene
  * pop of an ImPlot or ImPlot3D colour or variable, the style editor shown): the Fortran plot frames read FIGURE's
  * styles again when the second changes (szaghi/figure#15, the seam's switch). */
 void   fig_generations(unsigned int *contexts, unsigned int *implot_style);
+/* FIGURE's plot styles in Fortran (szaghi/figure#15 G2, option A; none registered on the current path): the Fortran
+ * path's store of the ImPlot (lib 1) and ImPlot3D (lib 2) styles, the one its plot frames draw with. Registered, it is
+ * the store the style functions read (fig_style_color, fig_style_var: ImPlot's and ImPlot3D's, while their contexts
+ * exist, are kept equal to it) and every change reaches it: a set, a push (fig_push_style_color, fig_push_style_var)
+ * and its pop (fig_pop_style, the scope record's), a theme's plot part at its commit, the style editor's edits. color:
+ * mode 0 the colour resolved (an automatic one from Dear ImGui's colours), 1 set, 2 as stored (alpha -1: automatic);
+ * var: set 0 the values (*count of them), 1 set *count values; push: a variable's values[count] (vars 1) or a colour's
+ * rgba (vars 0, count 4), the old value kept; pop: the newest push of lib's colours (vars 0) or variables (vars 1)
+ * undone. theme: the plot part of a style being committed, in order, op 1 ImPlot's defaults (ImPlotStyle()), 2 the
+ * style in effect, 3 every colour automatic, 4 the variables to ImPlot's defaults (a look; the colours kept), 5 the
+ * variable `name` set (values[count]), 6 the colour `name` set (values[4]), 7 the style made the one in effect.
+ * Statuses: 0, 1 an unknown name, 2 a wrong number of values (*count, for var, the right one). */
+typedef int  (*fig_pstyle_color_fn)(int lib, const char *name, int name_len, int mode, float *rgba);
+typedef int  (*fig_pstyle_var_fn)(int lib, const char *name, int name_len, int set, double *values, int *count);
+typedef int  (*fig_pstyle_push_fn)(int lib, int vars, const char *name, int name_len, const double *values, int count);
+typedef void (*fig_pstyle_pop_fn)(int lib, int vars);
+typedef int  (*fig_pstyle_theme_fn)(int op, const char *name, int name_len, const double *values, int count);
+void   fig_plot_style_hooks(fig_pstyle_color_fn color, fig_pstyle_var_fn var, fig_pstyle_push_fn push,
+                            fig_pstyle_pop_fn pop, fig_pstyle_theme_fn theme);
 /* Theme files (figure_theme.h format): load one, or write the style in effect as one (what differs from its base). */
 int    fig_load_style(const char *path, int path_len);
 int    fig_save_style(const char *path, int path_len);

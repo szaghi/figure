@@ -2,13 +2,11 @@
 program cb_gradient
 !< cb_gradient, cookbook: edit a colormap by its stops while a field drawn with it changes, and save it. With
 !< `--test`, headless: a stop dragged, a stop added by a double click, the map saved and read back.
-use, intrinsic :: iso_c_binding, only : c_float, c_int
-use, intrinsic :: iso_fortran_env, only : int32, output_unit, real64
+use, intrinsic :: iso_fortran_env, only : int32, output_unit, real32, real64
 use figure, only : app_object, ig_begin, ig_button, ig_end, ig_same_line, ig_set_next_window, ig_text, &
                    ig_gradient_edit, ip_begin_plot, ip_colormap, ip_colormap_legend, ip_colormap_stops, ip_end_plot, &
                    ip_field_image, ip_load_colormap, ip_setup_axes
-use figure_cimgui, only : im_vec4
-use figure_cimplot, only : ImPlot_SampleColormap
+use figure_plot_hooks, only : plot_colormap_sample
 use figure_testing, only : test_item_rect, test_mouse_button, test_mouse_move, test_next_frame
 
 implicit none
@@ -98,7 +96,7 @@ contains
    real(real64)              :: cx                         !< A stop's centre.
    integer(int32)            :: k, mid                     !< Counter, the middle stop.
    real(real64)              :: diff                       !< The saved map against the edited one.
-   type(im_vec4)             :: a, b                       !< Their colours.
+   real(real32)              :: a(4), b(4)                 !< Their colours.
 
    call ip_colormap_stops('cool-warm', positions, colours)
    write(output_unit, '(A,I0,A)') 'cool-warm: ', size(positions), ' stops'
@@ -125,9 +123,9 @@ contains
    call ip_load_colormap('cool-warm-saved', 'cb_gradient.csv.tmp')
    diff = 0.0_real64
    do k = 0_int32, 100_int32
-      call ImPlot_SampleColormap(real(k, c_float) / 100.0_c_float, int(ip_colormap('cool-warm'), c_int), a)
-      call ImPlot_SampleColormap(real(k, c_float) / 100.0_c_float, int(ip_colormap('cool-warm-saved'), c_int), b)
-      diff = max(diff, abs(real(a%x - b%x, real64)), abs(real(a%y - b%y, real64)), abs(real(a%z - b%z, real64)))
+      call plot_colormap_sample(ip_colormap('cool-warm'), real(k, real32) / 100.0_real32, a)
+      call plot_colormap_sample(ip_colormap('cool-warm-saved'), real(k, real32) / 100.0_real32, b)
+      diff = max(diff, abs(real(a(1) - b(1), real64)), abs(real(a(2) - b(2), real64)), abs(real(a(3) - b(3), real64)))
    enddo
    write(output_unit, '(A,I0,A)') 'saved and read back: within ', nint(diff * 255.0_real64), ' of 255 per channel'
    open(newunit=k, file='cb_gradient.csv.tmp', status='old')

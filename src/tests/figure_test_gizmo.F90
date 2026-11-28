@@ -14,20 +14,18 @@ program figure_test_gizmo
 !< - view_matrix and projection_matrix: the eye's position from the view matrix, a world point to the pixel the view
 !<   shows it at;
 !< - the gradient editor of a map of three stops (red, green, blue): the green stop dragged 60 pixels to the right
-!<   moves to 0.5 + 60 / (the stops' width), and the map's colour at 0.5 changes as the stops say in ImPlot's registry,
+!<   moves to 0.5 + 60 / (the stops' width), and the map's colour at 0.5 changes as the stops say in the colormap registry,
 !<   in its reverse registered before, in a field image and a 3-D view coloured by it, the window not moved; a double
 !<   click adds a stop; a qualitative or reversed map is refused;
 !< - a golden picture of the view, its cube and a gizmo, and the gradient editor (src/tests/data, |d| <= 2);
 !< - the statuses: before the view is drawn, unknown modes and corners, a matrix with a bad last row.
 !< The pictures are `figure_test_gizmo.*.tmp`, removed at the end (FIGURE_TEST_KEEP=1 keeps them).
 ! oracle: click drag view3d-orbit view3d-gizmo view3d-cube
-use, intrinsic :: iso_c_binding, only : c_float, c_int
-use, intrinsic :: iso_fortran_env, only : int8, int32, real64, output_unit
+use, intrinsic :: iso_fortran_env, only : int8, int32, real32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_end, ig_item_rect, ig_set_next_window, ip_begin_plot, ip_colormap, &
                    ip_colormap_stops, ip_end_plot, ip_field_image, ip_load_colormap, ig_gradient_edit, view3d_object, &
                    ImGuiWindowFlags_NoDecoration, FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
-use figure_cimgui, only : im_vec4
-use figure_cimplot, only : ImPlot_SampleColormap
+use figure_plot_hooks, only : plot_colormap_sample
 use figure_testing, only : test_capture, test_compare_image, test_field_pixel, test_item_rect, test_mouse_button, &
                            test_mouse_move, test_next_frame, test_window_rect
 
@@ -432,16 +430,16 @@ contains
    endsubroutine matrices
 
    subroutine gradient(ok)
-   !< The green stop dragged 60 pixels right: its position, the map's colour at 0.5 in ImPlot and in the field.
-   logical, intent(out)      :: ok(2)          !< Outcomes: stops and ImPlot's map; the field.
+   !< The green stop dragged 60 pixels right: its position, the map's colour at 0.5 in the registry and in the field.
+   logical, intent(out)      :: ok(2)          !< Outcomes: stops and the registry's map; the field.
    real(real64), allocatable :: pos(:)         !< Stop positions.
    real(real64), allocatable :: rgb(:,:)       !< Stop colours.
    real(real64)              :: x, y, sw, sh   !< The stops' row.
    real(real64)              :: before(4)      !< The field's colour at 0.5 before.
    real(real64)              :: after(4)       !< ... after.
    real(real64)              :: p, wt          !< The green stop's new position, the weight of green at 0.5.
-   type(im_vec4)             :: c              !< ImPlot's colour at 0.5.
-   type(im_vec4)             :: cr             !< ... of the reversed map.
+   real(real32)              :: c(4)           !< The registry's colour at 0.5 (ImPlot's on the current path).
+   real(real32)              :: cr(4)          !< ... of the reversed map.
    integer(int32)            :: r_id           !< The reversed map's id.
    real(real64)              :: wx, wy, wx1, wy1 !< The window's rectangle.
    real(real64)              :: sw_before(3)   !< The 3-D swatch's colour before.
@@ -465,10 +463,10 @@ contains
    ok(1) = ok(1) .and. edited .and. size(pos) == 3 .and. abs(pos(2) - p) < 2.0e-3_real64 .and. &
            all(abs(rgb(:, 2) - [0.0_real64, 1.0_real64, 0.0_real64]) < 1.0e-6_real64)
    wt = 0.5_real64 / pos(2) ! 0.5 between red at 0 and green at pos(2)
-   call ImPlot_SampleColormap(0.5_c_float, int(ip_colormap('rgb3'), c_int), c)
-   ok(1) = ok(1) .and. abs(c%y - wt) < 0.02_real64 .and. abs(c%x - (1.0_real64 - wt)) < 0.02_real64
-   call ImPlot_SampleColormap(0.5_c_float, int(r_id, c_int), cr)
-   ok(1) = ok(1) .and. abs(cr%x - c%x) < 0.02_real64 .and. abs(cr%y - c%y) < 0.02_real64
+   call plot_colormap_sample(ip_colormap('rgb3'), 0.5_real32, c)
+   ok(1) = ok(1) .and. abs(c(2) - wt) < 0.02_real64 .and. abs(c(1) - (1.0_real64 - wt)) < 0.02_real64
+   call plot_colormap_sample(r_id, 0.5_real32, cr)
+   ok(1) = ok(1) .and. abs(cr(1) - c(1)) < 0.02_real64 .and. abs(cr(2) - c(2)) < 0.02_real64
    call test_field_pixel('rgb', 2_int32, 1_int32, after)
    ok(2) = ok(2) .and. abs(after(2) - wt) < 0.02_real64 .and. abs(after(1) - (1.0_real64 - wt)) < 0.02_real64
    call test_window_rect('gizmos', wx, wy, wx1, wy1)
@@ -476,7 +474,7 @@ contains
    call swatch_colour(sw_after)                 ! the 3-D view coloured again
    ok(2) = ok(2) .and. abs(sw_before(2) - 1.0_real64) < 0.01_real64 .and. abs(sw_after(2) - wt) < 0.02_real64 .and. &
            abs(sw_after(1) - (1.0_real64 - wt)) < 0.02_real64
-   if (.not. all(ok)) write(output_unit, '(A,L2,*(G12.4))') 'gradient: edited, stop, colour ', edited, pos, c%x, c%y, &
+   if (.not. all(ok)) write(output_unit, '(A,L2,*(G12.4))') 'gradient: edited, stop, colour ', edited, pos, c(1), c(2), &
                                                             after
    call park()
    endsubroutine gradient

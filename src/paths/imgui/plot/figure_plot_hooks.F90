@@ -8,15 +8,66 @@ module figure_plot_hooks
 !< textures of `ip_field_image`: `plot_field_uploads`, `plot_field_count`, `plot_field_time`, `plot_field_pixel`).
 !< The Fortran path's module of the same name answers them from the Fortran plot frame (src/paths/fortran/plot/).
 !< Arguments and results are the native layer's, as figure_canvas and figure_testing called it before.
+!<
+!< Also: `plot_native_install`, what the path installs in the native layer before the app's contexts are made
+!< (figure_app; nothing here: the native layer's own colormaps serve the 3-D views), and the colormap registry as the
+!< tests read it (`plot_colormap_count`, `plot_colormap_size`, `plot_colormap_color`, `plot_colormap_sample`: ImPlot's,
+!< which `ip_colormap` registers in on this path).
 use, intrinsic :: iso_c_binding, only : c_char, c_double, c_float, c_int, c_long_long
+use, intrinsic :: iso_fortran_env, only : int32, real32
 use figure_c_native, only : fig_draw, fig_field_count, fig_field_pixel, fig_field_time, fig_field_uploads, &
                             fig_plot_tick_label
+use figure_cimgui, only : im_vec4
+use figure_cimplot, only : ImPlot_GetColormapColor, ImPlot_GetColormapCount, ImPlot_GetColormapSize, &
+                           ImPlot_SampleColormap
 
 implicit none
 private
 public :: plot_layer_draw, plot_tick_label, plot_field_uploads, plot_field_count, plot_field_time, plot_field_pixel
+public :: plot_native_install, plot_colormap_count, plot_colormap_size, plot_colormap_color, plot_colormap_sample
 
 contains
+   subroutine plot_native_install()
+   !< Install the path's plot hooks in the native layer, before the app's contexts are made (nothing here).
+   endsubroutine plot_native_install
+
+   function plot_colormap_count() result(n)
+   !< The colormaps registered (`ImPlot::GetColormapCount`).
+   integer(int32) :: n !< Maps.
+
+   n = int(ImPlot_GetColormapCount(), int32)
+   endfunction plot_colormap_count
+
+   function plot_colormap_size(id) result(n)
+   !< A colormap's keys (`ImPlot::GetColormapSize`).
+   integer(int32), intent(in) :: id !< Colormap id (`ip_colormap`).
+   integer(int32)             :: n  !< Keys.
+
+   n = int(ImPlot_GetColormapSize(int(id, c_int)), int32)
+   endfunction plot_colormap_size
+
+   subroutine plot_colormap_color(id, idx, rgba)
+   !< A colormap's key `idx` (0-based, modulo the keys; `ImPlot::GetColormapColor`).
+   integer(int32), intent(in)  :: id      !< Colormap id (`ip_colormap`).
+   integer(int32), intent(in)  :: idx     !< Key.
+   real(real32),   intent(out) :: rgba(4) !< Colour.
+   type(im_vec4)               :: v       !< ImPlot's.
+
+   call ImPlot_GetColormapColor(int(idx, c_int), int(id, c_int), v)
+   rgba = [v%x, v%y, v%z, v%w]
+   endsubroutine plot_colormap_color
+
+   subroutine plot_colormap_sample(id, t, rgba)
+   !< A colormap's colour at `t` in [0, 1] (`ImPlot::SampleColormap`).
+   integer(int32), intent(in)  :: id      !< Colormap id (`ip_colormap`).
+   real(real32),   intent(in)  :: t       !< Position.
+   real(real32),   intent(out) :: rgba(4) !< Colour.
+   type(im_vec4)               :: v       !< ImPlot's.
+
+   call ImPlot_SampleColormap(real(t, c_float), int(id, c_int), v)
+   rgba = [v%x, v%y, v%z, v%w]
+   endsubroutine plot_colormap_sample
+
    function plot_layer_draw(kind, x, y, n, rgba, thickness, radius, filled, text, text_len, texture) result(status)
    !< One drawing primitive in the plot being declared, in plot units (`fig_draw` on the plot layer): FIG_OK, -1
    !< outside a plot.

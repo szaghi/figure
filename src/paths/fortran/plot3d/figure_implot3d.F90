@@ -9,9 +9,10 @@ module figure_implot3d
 !< figure_plot3d_items, figure_plot3d_style), which reproduces ImPlot3D's pictures and behaviour (README there). What
 !< the current path asks of the native layer is here the frame's: the scope record's 3-D plot (figure_plot_scope's
 !< hooks), `fig_plot3d_state`, `fig_plot3d_axis_format`, `fig_plot3d_mouse_ray` (`pf3_*`); the colormaps
-!< (`fig_plot3d_colormap`: the frame's map of an id of `ip_colormap`, figure_plot_cmap_ids); FIGURE's ImPlot3D style
-!< (`ip3_push_style_*`, figure_style's, on its one native stack) brought into the frame's when it changed
-!< (`ps3_refresh`, at each entry point). `test_plot_copies` and `test_plot_stride` count what the current path copies
+!< (`fig_plot3d_colormap`: the ids of `ip_colormap` are FIGURE's registry's, figure_plot_colormaps, the frame's own,
+!< szaghi/figure#15 G2); FIGURE's ImPlot3D style
+!< (`ip3_push_style_*`, figure_style's, on its one native stack), the frame's own store (figure_plot3d_style), which
+!< the native layer's hooks keep current. `test_plot_copies` and `test_plot_stride` count what the current path copies
 !< and the stride it gives ImPlot3D (the frame reads every array in place).
 !<
 !< `ip3_begin_plot` returns true when the plot is visible: then declare its axes (`ip3_setup_axes`) and items, and close
@@ -30,7 +31,6 @@ use, intrinsic :: ieee_arithmetic, only : ieee_is_finite, ieee_is_nan
 use figure_base, only : figure_check, figure_draw_refused, figure_fail, figure_scope_open, figure_scope_refused, &
                         figure_usage_error, SCOPE_PLOT3D, FORMAT_REAL, format_refused
 use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_OK
-use figure_cimplot, only : ImPlot_GetColormapCount
 use figure_texture, only : texture_object
 use figure_cimplot_enums, only : ImPlotColormap_Viridis
 use figure_cimplot3d_enums, only : ImPlot3DMarker_None, ImPlot3DMarker_Auto, ImPlot3DMarker_Circle,              &
@@ -44,7 +44,7 @@ use figure_cimplot3d_enums, only : ImPlot3DMarker_None, ImPlot3DMarker_Auto, ImP
                                    ImPlot3DMeshFlags_NoFill, ImPlot3DMeshFlags_NoMarkers
 use figure_plot_series, only : plot_copies, plot_stride, series_gap
 use figure_plot3d_series, only : grid_ok, per_point_ok, rgba_ok
-use figure_plot_cmap_ids, only : cm_frame_id
+use figure_plot_colormaps, only : cm_count, cm_style_refresh
 use figure_plot_scope, only : plot_path_ready
 use figure_plot3d_frame, only : pf3_begin_plot, pf3_end_plot, pf3_mouse_ray, pf3_plot_state, pf3_plot_to_pixels, &
                                 pf3_setup_axes, pf3_setup_axis, pf3_setup_axis_ticks, pf3_setup_box, pf3_setup_legend, &
@@ -324,7 +324,7 @@ contains
    call acct_field_r32(s, z)
    plot_copies = plot_copies + 2_int64 ! the grid's two coordinate arrays, laid out at the stride
    plot_stride = s
-   call pf3_surface(label, x, y, z, cm_frame_id(int(cmap, int32)), scale_min, scale_max, spec=item_spec(spec))
+   call pf3_surface(label, x, y, z, int(cmap, int32), scale_min, scale_max, spec=item_spec(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_surface_r32
 
@@ -353,7 +353,7 @@ contains
    call acct_field_r64(s, z)
    plot_copies = plot_copies + 2_int64 ! the grid's two coordinate arrays, laid out at the stride
    plot_stride = s
-   call pf3_surface(label, x, y, z, cm_frame_id(int(cmap, int32)), scale_min, scale_max, spec=item_spec(spec))
+   call pf3_surface(label, x, y, z, int(cmap, int32), scale_min, scale_max, spec=item_spec(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_surface_r64
 
@@ -381,7 +381,7 @@ contains
    call acct_field_r32(s, x, s)
    call acct_field_r32(s, y, s)
    plot_stride = s
-   call pf3_surface(label, x, y, z, cm_frame_id(int(cmap, int32)), scale_min, scale_max, spec=item_spec(spec))
+   call pf3_surface(label, x, y, z, int(cmap, int32), scale_min, scale_max, spec=item_spec(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_surface_grid_r32
 
@@ -409,7 +409,7 @@ contains
    call acct_field_r64(s, x, s)
    call acct_field_r64(s, y, s)
    plot_stride = s
-   call pf3_surface(label, x, y, z, cm_frame_id(int(cmap, int32)), scale_min, scale_max, spec=item_spec(spec))
+   call pf3_surface(label, x, y, z, int(cmap, int32), scale_min, scale_max, spec=item_spec(spec))
    call figure_check(FIG_OK, stat)
    endsubroutine ip3_surface_grid_r64
 
@@ -920,14 +920,15 @@ contains
    !< The ImPlot3D id of the colormap to draw with (default Viridis), copied from FIGURE's registry; false, with
    !< `FIG_ERR_ARGUMENT`, if it is not registered.
    integer(int32), intent(in),  optional :: colormap !< Colormap (`ip_colormap`), if given.
-   integer(c_int), intent(out)           :: cmap     !< ImPlot3D id.
+   integer(c_int), intent(out)           :: cmap     !< Colormap id (FIGURE's registry's).
    integer(int32), intent(out), optional :: stat     !< Status, on a failure.
    logical                               :: ok       !< Usable.
    character(len=12)                     :: text     !< The id, printed.
 
    cmap = int(ImPlotColormap_Viridis, c_int)
    if (present(colormap)) cmap = int(colormap, c_int)
-   ok = cmap >= 0_c_int .and. cmap < ImPlot_GetColormapCount() ! fig_plot3d_colormap's refusal (the native registry's ids)
+   call cm_style_refresh() ! the style's line colours registered first, as the theme registers them at its commit
+   ok = cmap >= 0_c_int .and. cmap < int(cm_count(), c_int) ! fig_plot3d_colormap's refusal (FIGURE's registry's ids)
    if (.not. ok) then
       write(text, '(I0)') cmap
       call figure_fail(FIG_ERR_ARGUMENT, 'ip3_surface: the colormap '//trim(text)//' is not registered (see ip_colormap)', &

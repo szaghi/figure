@@ -21,14 +21,13 @@ program figure_test_view3d
 !< the mesh ids (each the next one, none given back by remove or clear), and the time of a 3.2e5-triangle render
 !< (printed, not checked).
 ! oracle: drag wheel scrolling view3d-orbit
-use, intrinsic :: iso_c_binding, only : c_float, c_int
-use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real64, output_unit
+use, intrinsic :: iso_c_binding, only : c_float
+use, intrinsic :: iso_fortran_env, only : int8, int32, int64, real32, real64, output_unit
 use figure, only : app_object, ig_begin, ig_end, ig_item_rect, ig_set_next_window, ip_colormap, view3d_object, &
                    ImGuiWindowFlags_NoDecoration, FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK
 use figure, only : ig_begin_child, ig_end_child
-use figure_cimgui, only : im_vec4
 use figure_cimgui, only : igDummy, igGetScrollY, im_vec2
-use figure_cimplot, only : ImPlot_SampleColormap
+use figure_plot_hooks, only : plot_colormap_sample
 use figure_testing, only : test_mouse_button, test_mouse_move, test_wheel
 
 implicit none
@@ -273,7 +272,7 @@ contains
    logical function check_colours()
    !< Cells coloured by cividis at their scalar: 0 and 1 give the map's ends, 0.5 its middle (one unit of 8 bits).
    integer(int32) :: x, y, id !< Pixel, map.
-   type(im_vec4)  :: c        !< Sampled colour.
+   real(real32)   :: c(4)     !< Sampled colour.
    integer(int32) :: ref(3)   !< Expected.
 
    id = ip_colormap('cividis')
@@ -284,8 +283,8 @@ contains
       case (2); i = 3; j = 2
       case (3); i = 3; j = 1
       endselect
-      call ImPlot_SampleColormap(real(grid_cells(i, j), c_float), int(id, c_int), c)
-      ref = nint([c%x, c%y, c%z] * 255.0_real64)
+      call plot_colormap_sample(id, real(grid_cells(i, j), real32), c) ! the registry's (ImPlot's on the current path)
+      ref = nint(c(1:3) * 255.0_real64)
       call cell_pixel(i, j, x, y)
       check_colours = check_colours .and. near(px(3, x, y), ref, 1)
       if (.not. near(px(3, x, y), ref, 1)) write(output_unit, '(A,2I3,2(1X,3I4))') 'colour of cell', i, j, &

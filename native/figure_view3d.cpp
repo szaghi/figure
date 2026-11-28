@@ -172,6 +172,14 @@ struct view_t {
 };
 
 std::map<int, std::unique_ptr<view_t>> views;
+
+// The colormaps of the Fortran path (fig_view3d_colormap_hooks): FIGURE's registry in Fortran, the only one there
+// (szaghi/figure#15 G2). Null: the native registry (figure_colormap.cpp, ImPlot's ids), the current path's.
+fig_view3d_cmap_table_fn      cmap_table = nullptr;
+fig_view3d_cmap_generation_fn cmap_generation = nullptr;
+
+// The registry's edits so far (a view colours its meshes again when they change).
+unsigned colormap_generation() { return cmap_generation ? cmap_generation() : fig_colormap_generation(); }
 int next_view = 1;
 
 view_t *find(int handle) {
@@ -332,6 +340,17 @@ void matrices(const view_t &v, int w, int h, double mvp[16]) {
 // The 256 colours of the mesh's colormap (ImPlot's registry: fig_colormap registers bundled and user maps).
 void load_table(mesh_t &m) {
    int id = -1;
+   if (cmap_table) { // the Fortran path's registry: its colours as sampled below
+      unsigned char rgb[768];
+      if (cmap_table(m.colormap.c_str(), static_cast<int>(m.colormap.size()), rgb) != FIG_OK) {
+         for (int k = 0; k < 256; ++k) m.table[k][0] = m.table[k][1] = m.table[k][2] = static_cast<uint8_t>(k);
+      } else {
+         for (int k = 0; k < 256; ++k)
+            for (int d = 0; d < 3; ++d) m.table[k][d] = rgb[3 * k + d];
+      }
+      m.table_ok = true;
+      return;
+   }
    if (fig_colormap(m.colormap.c_str(), static_cast<int>(m.colormap.size()), 0, &id) != FIG_OK || id < 0) {
       for (int k = 0; k < 256; ++k) m.table[k][0] = m.table[k][1] = m.table[k][2] = static_cast<uint8_t>(k);
    } else {
@@ -1165,7 +1184,8 @@ int fig_view3d_style(int handle, int mesh, const char *colormap, int colormap_le
    if (colormap_len > 0) {
       const std::string name(colormap, static_cast<size_t>(colormap_len));
       int id = -1;
-      const int s = fig_colormap(name.c_str(), colormap_len, 0, &id);
+      const int s = cmap_table ? cmap_table(name.c_str(), colormap_len, nullptr)
+                               : fig_colormap(name.c_str(), colormap_len, 0, &id);
       if (s != FIG_OK) return s; // its message names the map
       m->colormap = name;
       m->table_ok = false;
@@ -1362,8 +1382,8 @@ int fig_view3d_draw(int handle, const char *id, int id_len, double width, double
    const bool deactivated = !overlay && ImGui::IsItemDeactivated();
    if (iw != v->vw || ih != v->vh) v->vw = iw, v->vh = ih, v->dirty = true;
    style_background(*v);
-   if (v->colormaps != fig_colormap_generation()) { // a colormap was edited (ig_gradient_edit): its tables again
-      v->colormaps = fig_colormap_generation();
+   if (v->colormaps != colormap_generation()) { // a colormap was edited (ig_gradient_edit): its tables again
+      v->colormaps = colormap_generation();
       for (auto &m : v->meshes) m->table_ok = false;
       v->dirty = true;
    }
@@ -1638,6 +1658,11 @@ int fig_view3d_gizmo(int handle, const char *id, int id_len, double *matrix, int
    }
    return FIG_OK;
    V3_CATCH
+}
+
+void fig_view3d_colormap_hooks(fig_view3d_cmap_table_fn table, fig_view3d_cmap_generation_fn generation) {
+   cmap_table = table;
+   cmap_generation = generation;
 }
 
 } // extern "C"

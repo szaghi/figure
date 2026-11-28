@@ -207,6 +207,7 @@ struct state_t {
    struct saved_t {                                // a style value changed by a push, and what it was
       unsigned char             *where = nullptr;
       std::vector<unsigned char> was;
+      int                        lib = 0;          // its library: 1, 2 also pushed in the Fortran store (pstyle)
    };
    std::vector<saved_t> pushed_colors, pushed_vars; // scoped changes, undone by the pops (newest last)
    struct input_t {                                // synthetic input (figure_testing), applied at the next frames
@@ -873,6 +874,17 @@ void destroy_contexts() {
    if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
 }
 
+// FIGURE's plot styles in Fortran (fig_plot_style_hooks; the Fortran path, szaghi/figure#15 G2): the store its plot
+// frames draw with, which the style functions read and every change reaches; ImPlot's and ImPlot3D's styles are kept
+// equal to it while their contexts exist. None on the current path.
+struct pstyle_hooks_t {
+   fig_pstyle_color_fn color = nullptr;
+   fig_pstyle_var_fn   var = nullptr;
+   fig_pstyle_push_fn  push = nullptr;
+   fig_pstyle_pop_fn   pop = nullptr;
+   fig_pstyle_theme_fn theme = nullptr;
+} pstyle;
+
 // ---- Style fields by name ------------------------------------------------------------------------------------------
 // lib 0: Dear ImGui (ImGuiStyle), 1: ImPlot (ImPlotStyle). Colours by the libraries' own names (GetStyleColorName);
 // the other fields by the generated tables of figure_style_generated.cpp.
@@ -897,10 +909,40 @@ const figure_style::field *style_field(int lib, const std::string &name) {
    return nullptr;
 }
 
+// The Fortran store made equal to ImPlot's style (after ImPlot's style editor): every variable and colour, as stored.
+void pstyle_from_implot();
+
 unsigned char *style_base(int lib) {
    return lib == 0 ? reinterpret_cast<unsigned char *>(&ImGui::GetStyle())
           : lib == 1 ? reinterpret_cast<unsigned char *>(&ImPlot::GetStyle())
                      : reinterpret_cast<unsigned char *>(&ImPlot3D::GetStyle());
+}
+
+void pstyle_from_implot() {
+   const unsigned char *base = reinterpret_cast<const unsigned char *>(&ImPlot::GetStyle());
+   for (int i = 0; i < figure_style::IMPLOT_FIELDS_COUNT; ++i) {
+      const figure_style::field &f = figure_style::IMPLOT_FIELDS[i];
+      const unsigned char *p = base + f.offset;
+      double v[2] = {0.0, 0.0};
+      int n = 1;
+      switch (f.kind) {
+      case figure_style::FIG_STYLE_FLOAT: v[0] = *reinterpret_cast<const float *>(p); break;
+      case figure_style::FIG_STYLE_VEC2:
+         v[0] = reinterpret_cast<const ImVec2 *>(p)->x;
+         v[1] = reinterpret_cast<const ImVec2 *>(p)->y;
+         n = 2;
+         break;
+      case figure_style::FIG_STYLE_BOOL: v[0] = *reinterpret_cast<const bool *>(p) ? 1.0 : 0.0; break;
+      default: v[0] = *reinterpret_cast<const int *>(p); break;
+      }
+      pstyle.var(1, f.name, static_cast<int>(std::strlen(f.name)), 1, v, &n);
+   }
+   for (int i = 0; i < ImPlotCol_COUNT; ++i) {
+      const ImVec4 &c = ImPlot::GetStyle().Colors[i];
+      float rgba[4] = {c.x, c.y, c.z, c.w};
+      const char *name = ImPlot::GetStyleColorName(i);
+      pstyle.color(1, name, static_cast<int>(std::strlen(name)), 1, rgba);
+   }
 }
 
 // ---- Styles ---------------------------------------------------------------------------------------------------
@@ -1098,11 +1140,20 @@ bool load_palette(const std::string &name, figure_theme::theme_t &pal, std::stri
    return true;
 }
 
+// One step of a style's plot part (fig_pstyle_theme_fn's ops 1-6), replayed into the Fortran store at the commit.
+struct pstyle_op_t {
+   int                 op = 0;
+   std::string         name;
+   std::vector<double> values;
+};
+
 // A style being built: both libraries' styles and what goes with them, applied at once by commit_style (a failure
 // on the way leaves the style in effect untouched).
 struct style_build_t {
    ImGuiStyle           s;                // sizes multiplied by the content scale
    ImPlotStyle          ps;               // colours: ImPlot's automatic ones unless set
+   std::vector<pstyle_op_t> plot_ops;     // ps's steps, for the Fortran store (pstyle.theme): from ImPlot's defaults
+                                          // (op 1, a style_build_t{}) unless current_build gives op 2
    bool                 lines_set = false; // the line colours change (empty lines: ImPlot's Deep)
    std::vector<color_t> lines;
    std::string          cmap_name;
@@ -1121,6 +1172,7 @@ style_build_t current_build() {
    style_build_t b;
    b.s = ImGui::GetStyle();
    b.ps = ImPlot::GetStyle();
+   b.plot_ops.push_back({2, "", {}});
    for (int i = 0; i < 3; ++i) b.clear[i] = st.clear[i];
    b.base = st.style_base;
    b.look = st.look;
@@ -1178,6 +1230,7 @@ bool palette_colors(const figure_theme::theme_t &t, const std::string &where, st
       b.s.Colors[i] = vec4(e.color);
    }
    for (ImVec4 &c : b.ps.Colors) c = IMPLOT_AUTO_COL; // as ImPlot::StyleColorsAuto, which also resets MinorAlpha
+   b.plot_ops.push_back({3, "", {}});
    for (const auto &e : pal.implot_colors) {
       const int i = style_color_index(1, e.name);
       if (i < 0) {
@@ -1185,6 +1238,7 @@ bool palette_colors(const figure_theme::theme_t &t, const std::string &where, st
          return false;
       }
       b.ps.Colors[i] = vec4(e.color);
+      b.plot_ops.push_back({6, e.name, {e.color.r, e.color.g, e.color.b, e.color.a}});
    }
    const color_t clear = pal.has_background ? pal.background : derived_clear(roles);
    b.clear[0] = clear.r;
@@ -1202,7 +1256,8 @@ bool palette_colors(const figure_theme::theme_t &t, const std::string &where, st
 
 // The variables of a look (`name`) into fresh styles: Dear ImGui's and ImPlot's defaults, then the look's; its title
 // bar's height [logical pixels] (0: the menu bar's).
-bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, float &title_bar, std::string &err) {
+bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, float &title_bar, std::string &err,
+               std::vector<pstyle_op_t> &ops) {
    figure_theme::theme_t look;
    if (!load_look(name, look, err)) return false;
    title_bar = look.title_bar_height > 0.0 ? static_cast<float>(look.title_bar_height) : 0.0f;
@@ -1214,12 +1269,14 @@ bool look_vars(const std::string &name, ImGuiStyle &s, ImPlotStyle &ps, float &t
          return false;
       }
    }
+   ops.push_back({4, "", {}}); // fresh variables: ImPlot's defaults, then the look's (the colours kept by the callers)
    for (const auto &e : look.implot_vars) {
       const figure_style::field *f = style_field(1, e.name);
       if (!f || !write_var(reinterpret_cast<unsigned char *>(&ps), *f, e.values)) {
          err = where + ":" + std::to_string(e.line) + ": wrong ImPlot style variable \"" + e.name + "\"";
          return false;
       }
+      ops.push_back({5, e.name, e.values});
    }
    return true;
 }
@@ -1229,7 +1286,7 @@ bool apply_look(const std::string &name, style_build_t &b, std::string &err) {
    ImGuiStyle  s;
    ImPlotStyle ps;
    float       title_bar = 0.0f;
-   if (!look_vars(name, s, ps, title_bar, err)) return false;
+   if (!look_vars(name, s, ps, title_bar, err, b.plot_ops)) return false;
    s.ScaleAllSizes(st.scale);
    std::memcpy(s.Colors, b.s.Colors, sizeof(s.Colors));
    s.FontSizeBase = b.s.FontSizeBase;
@@ -1254,6 +1311,7 @@ bool build_theme(const figure_theme::theme_t &t, const std::string &where, const
       return false;
    };
    b = style_build_t{};
+   b.plot_ops.push_back({1, "", {}});
    b.base = t.base;
    if (t.base == "light") ImGui::StyleColorsLight(&b.s);
    else if (t.base == "classic") ImGui::StyleColorsClassic(&b.s);
@@ -1263,7 +1321,7 @@ bool build_theme(const figure_theme::theme_t &t, const std::string &where, const
    if (!t.look.empty()) {
       ImGuiStyle  s;
       ImPlotStyle ps;
-      if (!look_vars(t.look, s, ps, b.title_bar, err)) return false;
+      if (!look_vars(t.look, s, ps, b.title_bar, err, b.plot_ops)) return false;
       std::memcpy(s.Colors, b.s.Colors, sizeof(s.Colors));
       std::memcpy(ps.Colors, b.ps.Colors, sizeof(ps.Colors));
       b.s = s;
@@ -1285,11 +1343,13 @@ bool build_theme(const figure_theme::theme_t &t, const std::string &where, const
       const figure_style::field *f = style_field(1, e.name);
       if (!f) return bad(e, "unknown ImPlot style variable");
       if (!write_var(reinterpret_cast<unsigned char *>(&b.ps), *f, e.values)) return bad(e, "wrong number of values for");
+      b.plot_ops.push_back({5, e.name, e.values});
    }
    for (const auto &e : t.implot_colors) {
       const int i = style_color_index(1, e.name);
       if (i < 0) return bad(e, "unknown ImPlot colour");
       b.ps.Colors[i] = vec4(e.color);
+      b.plot_ops.push_back({6, e.name, {e.color.r, e.color.g, e.color.b, e.color.a}});
    }
    if (!t.lines.empty()) {
       b.lines = t.lines;
@@ -1347,6 +1407,12 @@ void commit_style(style_build_t &b, const figure_theme::theme_t *t = nullptr) {
    }
    ImGui::GetStyle() = b.s;
    ImPlot::GetStyle() = b.ps;
+   if (pstyle.theme) { // the plot part into the Fortran store, as into ImPlot's
+      for (const pstyle_op_t &o : b.plot_ops)
+         pstyle.theme(o.op, o.name.c_str(), static_cast<int>(o.name.size()), o.values.data(),
+                      static_cast<int>(o.values.size()));
+      pstyle.theme(7, "", 0, nullptr, 0);
+   }
    ++st.implot_style_generation;
    for (int i = 0; i < 3; ++i) st.clear[i] = b.clear[i];
    st.style_base = b.base;
@@ -2421,6 +2487,15 @@ void fig_generations(unsigned int *contexts, unsigned int *implot_style) {
    *implot_style = st.implot_style_generation;
 }
 
+void fig_plot_style_hooks(fig_pstyle_color_fn color, fig_pstyle_var_fn var, fig_pstyle_push_fn push,
+                          fig_pstyle_pop_fn pop, fig_pstyle_theme_fn theme) {
+   pstyle.color = color;
+   pstyle.var = var;
+   pstyle.push = push;
+   pstyle.pop = pop;
+   pstyle.theme = theme;
+}
+
 int fig_style_lines(unsigned int *colors, int cap, int *n, unsigned int *generation) {
    FIG_TRY
    *n = 0;
@@ -2580,6 +2655,7 @@ int fig_show_style_editor(int *open) {
       if (ImGui::CollapsingHeader("ImPlot")) {
          ImPlot::ShowStyleEditor();
          ++st.implot_style_generation; // the user may have changed it
+         if (pstyle.var) pstyle_from_implot(); // ... the Fortran store too
       }
    }
    ImGui::End();
@@ -2590,10 +2666,11 @@ int fig_show_style_editor(int *open) {
 
 // Scoped style changes: remember the bytes a push overwrites, restore them on pop. Any colour or variable of either
 // library (the whole generated field table, not only Dear ImGui's ImGuiStyleVar subset).
-void remember(std::vector<state_t::saved_t> &stack, unsigned char *where, size_t size) {
+void remember(std::vector<state_t::saved_t> &stack, unsigned char *where, size_t size, int lib = 0) {
    state_t::saved_t s;
    s.where = where;
    s.was.assign(where, where + size);
+   s.lib = lib;
    stack.push_back(std::move(s));
 }
 
@@ -2607,8 +2684,12 @@ int fig_push_style_color(int lib, const char *name, int name_len, const float *r
    for (int k = 0; k < 4; ++k)
       if (!(rgba[k] >= 0.0f && rgba[k] <= 1.0f)) return fail(FIG_ERR_ARGUMENT, "push style colour: components must be in [0, 1]");
    ImVec4 &c = lib == 0 ? ImGui::GetStyle().Colors[i] : lib == 1 ? ImPlot::GetStyle().Colors[i] : ImPlot3D::GetStyle().Colors[i];
-   remember(st.pushed_colors, reinterpret_cast<unsigned char *>(&c), sizeof(ImVec4));
+   remember(st.pushed_colors, reinterpret_cast<unsigned char *>(&c), sizeof(ImVec4), lib);
    c = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
+   if (lib >= 1 && pstyle.push) { // the Fortran store's push (its pop with this entry's)
+      const double v[4] = {rgba[0], rgba[1], rgba[2], rgba[3]};
+      if (pstyle.push(lib, 0, n.c_str(), static_cast<int>(n.size()), v, 4) != 0) st.pushed_colors.back().lib = 0;
+   }
    if (lib >= 1) ++st.implot_style_generation;
    return FIG_OK;
    FIG_CATCH
@@ -2628,9 +2709,11 @@ int fig_push_style_var(int lib, const char *name, int name_len, const double *va
    const size_t size = f->kind == figure_style::FIG_STYLE_VEC2 ? sizeof(ImVec2)
                        : f->kind == figure_style::FIG_STYLE_BOOL ? sizeof(bool)
                        : f->kind == figure_style::FIG_STYLE_FLOAT ? sizeof(float) : sizeof(int);
-   remember(st.pushed_vars, p, size);
+   remember(st.pushed_vars, p, size, lib);
    const std::vector<double> v(values, values + count);
    write_var(style_base(lib), *f, v);
+   if (lib >= 1 && pstyle.push && pstyle.push(lib, 1, n.c_str(), static_cast<int>(n.size()), values, count) != 0)
+      st.pushed_vars.back().lib = 0; // (the names are the same: not expected)
    if (lib >= 1) ++st.implot_style_generation;
    return FIG_OK;
    FIG_CATCH
@@ -2650,6 +2733,7 @@ int fig_pop_style(int vars, int n) {
       if ((s.where >= ps0 && s.where < ps0 + sizeof(ImPlotStyle)) ||
           (s.where >= ps3 && s.where < ps3 + sizeof(ImPlot3DStyle)))
          ++st.implot_style_generation;
+      if (s.lib >= 1 && pstyle.pop) pstyle.pop(s.lib, vars ? 1 : 0); // the Fortran store's push undone too
       stack.pop_back();
    }
    return FIG_OK;
@@ -2741,7 +2825,9 @@ int fig_style_color(int lib, const char *name, int name_len, int set, float *rgb
    if (i < 0)
       return fail(FIG_ERR_ARGUMENT, std::string("style colour: unknown name \"") + n + "\" for " +
                                         (lib == 0 ? "Dear ImGui (ImGuiCol_*)" : "ImPlot (ImPlotCol_*)"));
-   if (set == 2) { // as stored: ImPlot's (ImPlot3D's) automatic colours left unresolved
+   if (lib >= 1 && set != 1 && pstyle.color) { // the Fortran store's, as stored or resolved
+      pstyle.color(lib, n.c_str(), static_cast<int>(n.size()), set, rgba);
+   } else if (set == 2) { // as stored: ImPlot's (ImPlot3D's) automatic colours left unresolved
       const ImVec4 c = lib == 0 ? ImGui::GetStyle().Colors[i]
                        : lib == 1 ? ImPlot::GetStyle().Colors[i] : ImPlot3D::GetStyle().Colors[i];
       rgba[0] = c.x;
@@ -2754,6 +2840,7 @@ int fig_style_color(int lib, const char *name, int name_len, int set, float *rgb
       const ImVec4 c(rgba[0], rgba[1], rgba[2], rgba[3]);
       if (lib == 0) ImGui::GetStyle().Colors[i] = c;
       else ImPlot::GetStyle().Colors[i] = c;
+      if (lib >= 1 && pstyle.color) pstyle.color(lib, n.c_str(), static_cast<int>(n.size()), 1, rgba);
       if (lib >= 1) ++st.implot_style_generation;
    } else {
       // ImPlot's automatic colours (derived from Dear ImGui's) are resolved, as ImPlot would draw them
@@ -2789,7 +2876,10 @@ int fig_style_var(int lib, const char *name, int name_len, int set, double *valu
       case figure_style::FIG_STYLE_BOOL: *reinterpret_cast<bool *>(p) = values[0] != 0.0; break;
       default: *reinterpret_cast<int *>(p) = static_cast<int>(values[0]); break;
       }
+      if (lib >= 1 && pstyle.var) pstyle.var(lib, n.c_str(), static_cast<int>(n.size()), 1, values, count);
       if (lib >= 1) ++st.implot_style_generation;
+   } else if (lib >= 1 && pstyle.var) { // the Fortran store's
+      pstyle.var(lib, n.c_str(), static_cast<int>(n.size()), 0, values, count);
    } else {
       *count = ncomp;
       switch (f->kind) {

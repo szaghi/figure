@@ -17,14 +17,16 @@ module figure_plot3d_style
 !< with Dear ImGui's `GetColorU32` (the grid, the legend's text, the items' lines, fills and markers) the alpha is
 !< times the style's (`style3_color_u32`, `style3_alpha_u32`).
 !<
-!< `ps3_sync` takes the colours and variables as FIGURE's style holds them in ImPlot3D's context (`fig_style_color`,
-!< `fig_style_var` of the library 2: what `ip3_push_style_*` pushed, the colours as stored); `ps3_refresh`, which the
-!< Fortran path's `figure_implot3d` calls at its entry points (szaghi/figure#15, the 3-D seam's switch), syncs when
-!< the plots' styles changed (`fig_generations`): `ip3_push_style_*` and `ip3_pop_style_*` stay figure_style's, on
-!< its one stack, as on the current path.
+!< FIGURE's ImPlot3D style on the Fortran path (szaghi/figure#15 G2, option A): the native layer's style functions read
+!< this store and every change reaches it (`fig_plot_style_hooks`, registered by figure_plot_hooks'
+!< `plot_native_install`): `ip3_push_style_*` and `ip3_pop_style_*` stay figure_style's, on its one native stack, as
+!< on the current path, each push and pop of the library 2 made here too (`ps3_push_named`, the pops); `ps3_color_named`
+!< and `ps3_var_named` give a colour or a variable by name, with a status. `ps3_sync` takes the colours (as stored) and
+!< the variables as `fig_style_color` and `fig_style_var` of the library 2 give them: this store's own (the
+!< side-by-side tests). `ps3_reset`: ImPlot3D's defaults, the stacks emptied (a new context).
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
-use figure_c_native, only : fig_generations, fig_style_color, fig_style_var
+use figure_c_native, only : fig_style_color, fig_style_var
 use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_ButtonActive, ImGuiCol_ButtonHovered, ImGuiCol_FrameBg, &
                                 ImGuiCol_PopupBg, ImGuiCol_Text, ImGuiCol_WindowBg
 use figure_core, only : core_color, core_style_color_rgba, core_style_var
@@ -33,7 +35,7 @@ implicit none
 private
 public :: style3_vec4, style3_u32, style3_color_u32, style3_alpha_u32
 public :: pf3_push_style_color, pf3_pop_style_color, pf3_push_style_var, pf3_pop_style_var
-public :: ps3_sync, ps3_refresh
+public :: ps3_sync, ps3_reset, ps3_color_named, ps3_var_named, ps3_push_named
 public :: S3_TITLE_TEXT, S3_INLAY_TEXT, S3_FRAME_BG, S3_PLOT_BG, S3_PLOT_BORDER, S3_LEGEND_BG, S3_LEGEND_BORDER, &
           S3_LEGEND_TEXT, S3_AXIS_TEXT, S3_AXIS_GRID, S3_AXIS_TICK, S3_AXIS_BG, S3_AXIS_BG_HOVERED, S3_AXIS_BG_ACTIVE
 public :: s3_line_weight, s3_marker_size, s3_fill_alpha, s3_default_size, s3_min_size, s3_plot_padding, &
@@ -47,7 +49,7 @@ integer(int32), parameter :: S3_TITLE_TEXT = 1_int32, S3_INLAY_TEXT = 2_int32, S
                              S3_AXIS_BG_HOVERED = 13_int32, S3_AXIS_BG_ACTIVE = 14_int32 !< Colours.
 integer(int32), parameter :: NCOL = 14_int32  !< ImPlot3DCol_COUNT.
 integer(int32), parameter :: NVAR = 11_int32  !< Variables.
-integer(int32), parameter :: STACK = 64_int32 !< Pushes held at most.
+integer(int32), parameter :: STACK = 4096_int32 !< Pushes held at most.
 character(len=*), parameter :: COL_NAMES(NCOL) = ['TitleText    ', 'InlayText    ', 'FrameBg      ', 'PlotBg       ', &
                                                   'PlotBorder   ', 'LegendBg     ', 'LegendBorder ', 'LegendText   ', &
                                                   'AxisText     ', 'AxisGrid     ', 'AxisTick     ', 'AxisBg       ', &
@@ -71,15 +73,27 @@ real(real32), protected :: s3_legend_padding(2) = [10.0_real32, 10.0_real32] !< 
 real(real32), protected :: s3_legend_inner(2) = [5.0_real32, 5.0_real32]  !< LegendInnerPadding.
 real(real32), protected :: s3_legend_spacing(2) = [5.0_real32, 0.0_real32] !< LegendSpacing.
 
-real(real32)   :: colors(4, NCOL) = -1.0_real32     !< The colours: alpha -1 automatic (IMPLOT3D_AUTO_COL).
+real(real32)   :: colors(4, NCOL) = reshape([0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32], [4, 14]) !< The colours:
+                                    !< alpha -1 automatic (IMPLOT3D_AUTO_COL).
 real(real32)   :: col_stack(4, STACK) = 0.0_real32   !< Colours pushed: the old values.
 integer(int32) :: col_stack_idx(STACK) = 0_int32     !< ... which colour.
 integer(int32) :: n_col = 0_int32                    !< Colour pushes held.
 real(real32)   :: var_stack(2, STACK) = 0.0_real32   !< Variables pushed: the old values.
 integer(int32) :: var_stack_idx(STACK) = 0_int32     !< ... which variable.
 integer(int32) :: n_var = 0_int32                    !< Variable pushes held.
-logical        :: synced = .false.                   !< `ps3_refresh` synced once.
-integer(c_int) :: synced_gen(2) = 0_c_int            !< ... at these generations (`fig_generations`).
 
 interface pf3_push_style_var
    !< As `ip3_push_style_var`: a variable of one number, or of a pair.
@@ -288,16 +302,103 @@ contains
    enddo
    endsubroutine ps3_sync
 
-   subroutine ps3_refresh()
-   !< `ps3_sync` when the plots' styles changed since the last refresh (`fig_generations`).
-   integer(c_int) :: gen(2) !< Generations: contexts, the plots' styles.
+   subroutine ps3_reset()
+   !< ImPlot3D's defaults (`ImPlot3DStyle()`), the stacks emptied.
+   integer(int32) :: k !< Colour.
 
-   call fig_generations(gen(1), gen(2))
-   if (synced .and. gen(1) == synced_gen(1) .and. gen(2) == synced_gen(2)) return
-   synced = .true.
-   synced_gen = gen
-   call ps3_sync()
-   endsubroutine ps3_refresh
+   s3_line_weight = 1.0_real32
+   s3_marker_size = 4.0_real32
+   s3_fill_alpha = 1.0_real32
+   s3_default_size = [400.0_real32, 400.0_real32]
+   s3_min_size = [200.0_real32, 200.0_real32]
+   s3_plot_padding = [10.0_real32, 10.0_real32]
+   s3_label_padding = [5.0_real32, 5.0_real32]
+   s3_view_factor = 1.0_real32
+   s3_legend_padding = [10.0_real32, 10.0_real32]
+   s3_legend_inner = [5.0_real32, 5.0_real32]
+   s3_legend_spacing = [5.0_real32, 0.0_real32]
+   do k = 1_int32, NCOL
+      colors(:, k) = [0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32]
+   enddo
+   n_col = 0_int32
+   n_var = 0_int32
+   endsubroutine ps3_reset
+
+   subroutine ps3_color_named(name, mode, rgba, status)
+   !< A colour by name (`fig_style_color` of the library 2): mode 0 resolved (`GetStyleColorVec4`), 1 set, 2 as
+   !< stored. `status`: 0, 1 an unknown name.
+   character(len=*), intent(in)    :: name    !< Name (`ImPlot3DCol_*` without its prefix).
+   integer(int32),   intent(in)    :: mode    !< 0 resolved, 1 set, 2 as stored.
+   real(real32),     intent(inout) :: rgba(4) !< Colour.
+   integer(int32),   intent(out)   :: status  !< Status.
+   integer(int32)                  :: k       !< Colour.
+
+   k = col_index(name)
+   status = merge(1_int32, 0_int32, k == 0_int32)
+   if (status /= 0_int32) return
+   select case (mode)
+   case (0_int32)
+      call style3_vec4(k, rgba)
+   case (1_int32)
+      colors(:, k) = rgba
+   case default
+      rgba = colors(:, k)
+   endselect
+   endsubroutine ps3_color_named
+
+   subroutine ps3_var_named(name, values, count, status)
+   !< A variable's values by name (`fig_style_var` of the library 2: read only), `count` of them. `status`: 0, 1 an
+   !< unknown name.
+   character(len=*), intent(in)  :: name      !< Name (FIGURE's field table of `ImPlot3DStyle`).
+   real(real64),     intent(out) :: values(2) !< Values.
+   integer(int32),   intent(out) :: count     !< Their number.
+   integer(int32),   intent(out) :: status    !< Status.
+   integer(int32)                :: k         !< Variable.
+   real(real32)                  :: v(2)      !< As floats.
+
+   values = 0.0_real64
+   count = 0_int32
+   k = var_index(name)
+   status = merge(1_int32, 0_int32, k == 0_int32)
+   if (status /= 0_int32) return
+   call get_var(k, v)
+   values = real(v, real64)
+   count = merge(2_int32, 1_int32, VAR_PAIR(k))
+   endsubroutine ps3_var_named
+
+   subroutine ps3_push_named(vars, name, values, count, status)
+   !< A push by name (`fig_push_style_color`, `fig_push_style_var` of the library 2): a colour's RGBA (vars false,
+   !< count 4) or a variable's values. `status`: 0, 1 an unknown name, 2 a wrong count.
+   logical,          intent(in)  :: vars      !< A variable, else a colour.
+   character(len=*), intent(in)  :: name      !< Name.
+   real(real64),     intent(in)  :: values(:) !< Values.
+   integer(int32),   intent(in)  :: count     !< Values given.
+   integer(int32),   intent(out) :: status    !< Status.
+   integer(int32)                :: k         !< Index.
+   real(real64)                  :: v(2)      !< A variable's values.
+
+   status = 0_int32
+   if (vars) then
+      k = var_index(name)
+      if (k == 0_int32) then
+         status = 1_int32
+      elseif (count /= merge(2_int32, 1_int32, VAR_PAIR(k))) then
+         status = 2_int32
+      else
+         v = 0.0_real64
+         v(1:count) = values(1:count)
+         call push_var(name, v, VAR_PAIR(k))
+      endif
+   else
+      if (col_index(name) == 0_int32) then
+         status = 1_int32
+      elseif (count /= 4_int32) then
+         status = 2_int32
+      else
+         call pf3_push_style_color(name, values(1:4))
+      endif
+   endif
+   endsubroutine ps3_push_named
 
    ! private
 

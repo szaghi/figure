@@ -3,9 +3,10 @@ program figure_test_fields
 !< figure_test_fields, a field through a colormap (ip_field_image) and the legend the user drags (S14), headless.
 !<
 !< 1. colours: values at the range's ends get the colormap's ends, values beyond them are clamped, a value in between
-!<    gets the colour ImPlot samples at its fraction (real64 and real32); vmin > vmax turns the map over; without vmin
-!<    and vmax the range is the data's; NaN and infinite values get nan_color (transparent by default); on 'log' values
-!<    <= 0 are masked to nan_color and 10 is the middle of [1, 100]; on 'symlog' 0 is the middle of [-100, 100];
+!<    gets the colour the registry samples at its fraction (real64 and real32); vmin > vmax turns the map over;
+!<    without vmin and vmax the range is the data's; NaN and infinite values get nan_color (transparent by default); on
+!<    'log' values <= 0 are masked to nan_color and 10 is the middle of [1, 100]; on 'symlog' 0 is the middle of
+!<    [-100, 100];
 !< 2. the texture is not coloured again while nothing changes (the upload counter), and is when changed, vmax, the
 !<    colormap, the scale, the NaN colour or the array change;
 !< 3. 1024 x 1024 fields coloured within a time measured here (linear real32, log real32 by the bit table, linear
@@ -17,13 +18,11 @@ program figure_test_fields
 !< 6. wrong calls.
 ! oracle: drag wheel
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
-use, intrinsic :: iso_c_binding, only : c_float, c_int
 use, intrinsic :: ieee_arithmetic, only : ieee_value, ieee_quiet_nan, ieee_positive_inf, ieee_negative_inf
 use figure, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, app_object, ig_begin, ig_end, ig_item_rect, ig_line_height, ig_same_line, &
                    ig_set_next_window, &
                    ip_begin_plot, ip_end_plot, ip_colormap, ip_colormap_legend, ip_colormap_legend_edit, ip_field_image
-use figure_cimgui, only : im_vec4
-use figure_cimplot, only : ImPlot_SampleColormap
+use figure_plot_hooks, only : plot_colormap_sample
 use figure_testing, only : test_drag, test_field_pixel, test_field_textures, test_field_time, test_field_uploads, &
                            test_mouse_move, test_next_frame, test_wheel
 
@@ -138,7 +137,7 @@ do frame = 1_int32, 700_int32
    call ig_end()
 enddo
 
-! 1. colours (the expected colours sampled from ImPlot: before app%destroy)
+! 1. colours (the expected colours sampled from the registry: before app%destroy)
 ok(1) = same(px(:, 1), sample(cmap, 0.0_real64)) .and. same(px(:, 2), sample(cmap, 1.0_real64)) .and. &
         same(px(:, 3), sample(cmap, 0.5_real64)) .and. same(px(:, 4), sample(cmap, 0.25_real64))
 ok(2) = same(px(:, 5), sample(cmap, 0.0_real64)) .and. same(px(:, 6), sample(cmap, 1.0_real64))   ! clamped
@@ -201,14 +200,14 @@ write(output_unit, '(A)') 'figure_test_fields: all checks passed'
 
 contains
    function sample(c, t) result(rgba)
-   !< ImPlot's colour of the colormap `c` at the fraction `t`.
+   !< The registry's colour of the colormap `c` at the fraction `t` (ImPlot's on the current path).
    integer(int32), intent(in) :: c       !< Colormap.
    real(real64),   intent(in) :: t       !< Fraction in [0, 1].
    real(real64)               :: rgba(4) !< Colour.
-   type(im_vec4)              :: v       !< ImPlot's.
+   real(real32)               :: v(4)    !< The registry's.
 
-   call ImPlot_SampleColormap(real(t, c_float), int(c, c_int), v)
-   rgba = real([v%x, v%y, v%z, v%w], real64)
+   call plot_colormap_sample(c, real(t, real32), v)
+   rgba = real(v, real64)
    endfunction sample
 
    pure function same(a, b) result(yes)

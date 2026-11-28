@@ -4,28 +4,34 @@ module figure_plot_style
 !<
 !< szaghi/figure#15 P10 (what P10-P12 left, night 2026-11-23 step 09). The `ImPlotStyle` the frame draws with, its own
 !< (as the 3-D frame's figure_plot3d_style), ImPlot's defaults (`ImPlotStyle::ImPlotStyle`, `StyleColorsAuto`) until
-!< changed:
+!< changed. FIGURE's ImPlot style on the Fortran path (szaghi/figure#15 G2, option A): the native layer's style
+!< functions read this store and every change reaches it (`fig_plot_style_hooks`, registered by figure_plot_hooks'
+!< `plot_native_install`: `ip_set_style_*`, `ip_get_style_*`, `ip_push_style_*` and their pops, a theme's plot part at
+!< its commit, `ps_theme`); ImPlot's own style, while its context exists, is kept equal to it by the native layer.
 !<
 !< - the variables (PlotDefaultSize, PlotMinSize, PlotBorderSize, MinorAlpha, MajorTickLen, MinorTickLen,
 !<   MajorTickSize, MinorTickSize, MajorGridSize, MinorGridSize, PlotPadding, LabelPadding, LegendPadding,
 !<   LegendInnerPadding, LegendSpacing, MousePosPadding, AnnotationPadding, FitPadding, DigitalPadding,
 !<   DigitalSpacing), public module variables under the names the frame's parameters had (STYLE_PLOT_PADDING, ...);
+!<   UseLocalTime, UseISO8601, Use24HourClock kept as set (0 or 1), not read by the frame;
 !< - the colours (`ImPlotCol_*`, IMPLOT_AUTO_COL for an automatic one), read as ImPlot reads them:
 !<   `ps_vec4` (`GetStyleColorVec4`: an automatic colour from Dear ImGui's style, `GetAutoColor`), `ps_u32`
 !<   (`GetStyleColorU32`: packed as they are, the style's Alpha not applied), `ps_alpha_u32` (`ImGui::GetColorU32` of
 !<   a colour: its alpha times Dear ImGui's style Alpha, as ImPlot packs the grid, the legend's text, the boxes of
 !<   tags and annotations);
 !< - `ps_set_var`, `ps_set_color`, `ps_push_var`, `ps_push_color`, `ps_pop_var`, `ps_pop_color` (`ip_set_style_*`,
-!<   `ip_push_style_*`; stacks of 64, their own: an error stop past them, for an unknown name or a wrong count);
-!< - `ps_sync`: the variables and colours as FIGURE's style holds them in ImPlot's context (`fig_style_var`,
-!<   `fig_style_color` of the library 1: what a theme's [implot.vars] and [implot.colors] and `ip_set_style_*` set,
-!<   the colours as stored: an automatic one stays automatic, resolved when it is read), while FIGURE's style lives
-!<   there (the native layer's themes and `ip_*_style_*`); `ps_refresh`, which the Fortran path's `figure_implot` calls
-!<   at its entry points, syncs only when that style changed since (`fig_generations`: a new context, a theme, a set,
-!<   push or pop of an ImPlot colour or variable, the style editor), so a push inside a plot reaches the next item.
+!<   `ip_push_style_*`; stacks of 4096, their own: an error stop past them, for an unknown name or a wrong count);
+!<   `ps_color_named`, `ps_var_named`, `ps_push_named`, the same with a status for an unknown name or a wrong count
+!<   (the native layer's checks and messages come first);
+!< - `ps_theme`: a style's plot part, replayed into a pending style and made the one in effect at its commit, as the
+!<   native layer builds a theme (ImPlot's defaults or the style in effect, colours automatic, a look's variables, a
+!<   variable or a colour by name);
+!< - `ps_sync`: the variables and colours as FIGURE's style functions give them (`fig_style_var`, `fig_style_color` of
+!<   the library 1, the colours as stored: an automatic one stays automatic, resolved when it is read): this store's
+!<   own, the native layer reading it (the side-by-side tests call it after a style is set).
 use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, real32, real64
-use figure_c_native, only : fig_generations, fig_style_color, fig_style_var
+use figure_c_native, only : fig_style_color, fig_style_var
 use figure_cimgui_enums, only : ImGuiCol_Border, ImGuiCol_ButtonActive, ImGuiCol_ButtonHovered, ImGuiCol_FrameBg, &
                                 ImGuiCol_PopupBg, ImGuiCol_Text, ImGuiCol_WindowBg, ImGuiStyleVar_Alpha
 use figure_core, only : core_color, core_style_color_rgba, core_style_vec2
@@ -40,7 +46,8 @@ public :: PC_FRAME_BG, PC_PLOT_BG, PC_PLOT_BORDER, PC_LEGEND_BG, PC_LEGEND_BORDE
 public :: PC_INLAY_TEXT, PC_AXIS_TEXT, PC_AXIS_GRID, PC_AXIS_TICK, PC_AXIS_BG, PC_AXIS_BG_HOVERED, PC_AXIS_BG_ACTIVE
 public :: PC_SELECTION, PC_CROSSHAIRS
 public :: ps_vec4, ps_u32, ps_alpha_u32, ps_style_alpha, ps_set_var, ps_set_color, ps_push_var, ps_push_color
-public :: ps_pop_var, ps_pop_color, ps_sync, ps_reset, ps_refresh
+public :: ps_pop_var, ps_pop_color, ps_sync, ps_reset
+public :: ps_color_named, ps_var_named, ps_push_named, ps_theme
 
 ! ImPlotCol (implot.h)
 integer(int32), parameter :: PC_FRAME_BG = 0_int32, PC_PLOT_BG = 1_int32, PC_PLOT_BORDER = 2_int32, &
@@ -56,16 +63,33 @@ character(len=13), parameter :: COL_NAMES(0:15) = ['FrameBg      ', 'PlotBg     
                                                    'AxisGrid     ', 'AxisTick     ', 'AxisBg       ', &
                                                    'AxisBgHovered', 'AxisBgActive ', 'Selection    ', &
                                                    'Crosshairs   '] !< `GetStyleColorName`.
-integer(int32), parameter :: NVAR = 20_int32 !< The variables.
+integer(int32), parameter :: NVAR = 23_int32 !< The variables (figure_style_generated.cpp's IMPLOT_FIELDS).
 character(len=18), parameter :: VAR_NAMES(NVAR) = ['PlotDefaultSize   ', 'PlotMinSize       ', 'PlotBorderSize    ', &
                                                    'MinorAlpha        ', 'MajorTickLen      ', 'MinorTickLen      ', &
                                                    'MajorTickSize     ', 'MinorTickSize     ', 'MajorGridSize     ', &
                                                    'MinorGridSize     ', 'PlotPadding       ', 'LabelPadding      ', &
                                                    'LegendPadding     ', 'LegendInnerPadding', 'LegendSpacing     ', &
                                                    'MousePosPadding   ', 'AnnotationPadding ', 'FitPadding        ', &
-                                                   'DigitalPadding    ', 'DigitalSpacing    '] !< Names.
-integer(int32), parameter :: VAR_COUNTS(NVAR) = [2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1] !< Values.
-integer(int32), parameter :: STACK = 64_int32 !< Pushes held at most.
+                                                   'DigitalPadding    ', 'DigitalSpacing    ', 'UseLocalTime      ', &
+                                                   'UseISO8601        ', 'Use24HourClock    '] !< Names.
+integer(int32), parameter :: VAR_COUNTS(NVAR) = [2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, &
+                                                 1] !< Values.
+logical,        parameter :: VAR_BOOL(NVAR) = [.false., .false., .false., .false., .false., .false., .false., .false., &
+                                               .false., .false., .false., .false., .false., .false., .false., .false., &
+                                               .false., .false., .false., .false., .true., .true., .true.] !< 0 or 1.
+real(real32),   parameter :: VAR_DEFAULTS(2, NVAR) = reshape([400.0_real32, 300.0_real32, 200.0_real32, 150.0_real32, &
+                                                              1.0_real32, 0.0_real32, 0.25_real32, 0.0_real32,       &
+                                                              10.0_real32, 10.0_real32, 5.0_real32, 5.0_real32,      &
+                                                              1.0_real32, 1.0_real32, 1.0_real32, 1.0_real32,        &
+                                                              1.0_real32, 1.0_real32, 1.0_real32, 1.0_real32,        &
+                                                              10.0_real32, 10.0_real32, 5.0_real32, 5.0_real32,      &
+                                                              10.0_real32, 10.0_real32, 5.0_real32, 5.0_real32,      &
+                                                              5.0_real32, 0.0_real32, 10.0_real32, 10.0_real32,      &
+                                                              2.0_real32, 2.0_real32, 0.0_real32, 0.0_real32,        &
+                                                              20.0_real32, 0.0_real32, 4.0_real32, 0.0_real32,       &
+                                                              0.0_real32, 0.0_real32, 0.0_real32, 0.0_real32,        &
+                                                              0.0_real32, 0.0_real32], [2, 23]) !< `ImPlotStyle()`.
+integer(int32), parameter :: STACK = 4096_int32 !< Pushes held at most.
 real(real32),   parameter :: AUTO(4) = [0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32] !< IMPLOT_AUTO_COL.
 
 ! the variables, ImPlot's defaults
@@ -89,31 +113,35 @@ real(real32) :: ANNOTATION_PADDING(2) = [2.0_real32, 2.0_real32]   !< Annotation
 real(real32) :: FIT_PADDING(2) = [0.0_real32, 0.0_real32]          !< FitPadding (fraction of the range).
 real(real32) :: DIGITAL_PADDING = 20.0_real32                      !< DigitalPadding [pixels].
 real(real32) :: DIGITAL_SPACING = 4.0_real32                       !< DigitalSpacing [pixels].
+real(real32) :: use_local_time = 0.0_real32                        !< UseLocalTime (1 true).
+real(real32) :: use_iso8601 = 0.0_real32                           !< UseISO8601 (1 true).
+real(real32) :: use_24h = 0.0_real32                               !< Use24HourClock (1 true).
 
-real(real32)   :: colors(4, 0:15) = reshape([0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, & ! all automatic but
-                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, & ! AxisBg (transparent)
-                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, & ! and Selection
-                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, & ! (yellow), as
-                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, & ! StyleColorsAuto
+real(real32)   :: colors(4, 0:15) = reshape([0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
                                              0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
                                              0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
                                              0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
                                              0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
                                              0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
                                              0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
-                                             0.0_real32, 0.0_real32, 0.0_real32, 0.0_real32,  &
                                              0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
                                              0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
-                                             1.0_real32, 1.0_real32, 0.0_real32, 1.0_real32,  &
-                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32], [4, 16]) !< Colours.
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32, &
+                                             0.0_real32, 0.0_real32, 0.0_real32, -1.0_real32], [4, 16]) !< Colours: all
+                                    !< automatic, as `StyleColorsAuto` (ImPlot 1.2) leaves them.
 integer(int32) :: var_stack_idx(STACK) = 0_int32       !< A pushed variable.
 real(real32)   :: var_stack_val(2, STACK) = 0.0_real32 !< ... its value before.
 integer(int32) :: n_var_stack = 0_int32                !< Pushes held.
 integer(int32) :: col_stack_idx(STACK) = 0_int32       !< A pushed colour.
 real(real32)   :: col_stack_val(4, STACK) = 0.0_real32 !< ... its value before.
 integer(int32) :: n_col_stack = 0_int32                !< Pushes held.
-logical        :: synced = .false.                     !< `ps_refresh` synced once.
-integer(c_int) :: synced_gen(2) = 0_c_int              !< ... at these generations (`fig_generations`).
+real(real32)   :: pend_vars(2, NVAR) = 0.0_real32      !< A style being built (`ps_theme`): its variables ...
+real(real32)   :: pend_colors(4, 0:15) = 0.0_real32    !< ... and colours.
 
 contains
    ! colours
@@ -145,6 +173,10 @@ contains
       c(4) = real(real(c(4), real32) * 0.25_real32, real64)
    case (PC_AXIS_TICK)
       c = ps_vec4(PC_AXIS_GRID)
+   case (PC_AXIS_BG) ! GetAutoColor: transparent
+      c = 0.0_real64
+   case (PC_SELECTION) ! GetAutoColor: yellow
+      c = [1.0_real64, 1.0_real64, 0.0_real64, 1.0_real64]
    case (PC_AXIS_BG_HOVERED)
       call core_style_color_rgba(ImGuiCol_ButtonHovered, c)
    case (PC_AXIS_BG_ACTIVE)
@@ -252,8 +284,14 @@ contains
       v = FIT_PADDING
    case (19_int32)
       v(1) = DIGITAL_PADDING
-   case default
+   case (20_int32)
       v(1) = DIGITAL_SPACING
+   case (21_int32)
+      v(1) = use_local_time
+   case (22_int32)
+      v(1) = use_iso8601
+   case default
+      v(1) = use_24h
    endselect
    endsubroutine var_get
 
@@ -301,8 +339,14 @@ contains
       FIT_PADDING = v
    case (19_int32)
       DIGITAL_PADDING = v(1)
-   case default
+   case (20_int32)
       DIGITAL_SPACING = v(1)
+   case (21_int32)
+      use_local_time = v(1)
+   case (22_int32)
+      use_iso8601 = v(1)
+   case default
+      use_24h = v(1)
    endselect
    endsubroutine var_put
 
@@ -317,6 +361,7 @@ contains
    if (size(values) /= VAR_COUNTS(k)) error stop 'figure_plot_style: a wrong count of values for the variable'
    v = 0.0_real32
    v(1:VAR_COUNTS(k)) = real(values(1:VAR_COUNTS(k)), real32)
+   if (VAR_BOOL(k)) v(1) = merge(1.0_real32, 0.0_real32, values(1) /= 0.0_real64) ! as a C++ bool
    call var_put(k, v)
    endsubroutine ps_set_var
 
@@ -408,11 +453,12 @@ contains
    FIT_PADDING = 0.0_real32
    DIGITAL_PADDING = 20.0_real32
    DIGITAL_SPACING = 4.0_real32
+   use_local_time = 0.0_real32
+   use_iso8601 = 0.0_real32
+   use_24h = 0.0_real32
    do k = 0_int32, PC_COUNT - 1_int32
       colors(:, k) = AUTO
    enddo
-   colors(:, PC_AXIS_BG) = 0.0_real32
-   colors(:, PC_SELECTION) = [1.0_real32, 1.0_real32, 0.0_real32, 1.0_real32]
    n_var_stack = 0_int32
    n_col_stack = 0_int32
    endsubroutine ps_reset
@@ -449,16 +495,165 @@ contains
    enddo
    endsubroutine ps_sync
 
-   subroutine ps_refresh()
-   !< `ps_sync` when FIGURE's ImPlot style changed since the last refresh (`fig_generations`: a new context, a theme, a
-   !< set, push or pop of an ImPlot colour or variable, the style editor shown); the Fortran path's entry points call
-   !< it, so the frame draws with the style in effect at the call, as ImPlot reads its style while it draws.
-   integer(c_int) :: gen(2) !< Generations: contexts, ImPlot's style.
+   ! by name, with a status (the native layer's hooks: figure_plot_hooks)
 
-   call fig_generations(gen(1), gen(2))
-   if (synced .and. gen(1) == synced_gen(1) .and. gen(2) == synced_gen(2)) return
-   synced = .true.
-   synced_gen = gen
-   call ps_sync()
-   endsubroutine ps_refresh
+   function name_var(name) result(k)
+   !< A variable's index by name; 0 if unknown.
+   character(len=*), intent(in) :: name !< Name.
+   integer(int32)               :: k    !< Index.
+
+   do k = 1_int32, NVAR
+      if (trim(VAR_NAMES(k)) == name) return
+   enddo
+   k = 0_int32
+   endfunction name_var
+
+   function name_col(name) result(k)
+   !< A colour's index by name; -1 if unknown.
+   character(len=*), intent(in) :: name !< Name.
+   integer(int32)               :: k    !< ImPlotCol.
+
+   do k = 0_int32, PC_COUNT - 1_int32
+      if (trim(COL_NAMES(k)) == name) return
+   enddo
+   k = -1_int32
+   endfunction name_col
+
+   subroutine ps_color_named(name, mode, rgba, status)
+   !< A colour by name (`fig_style_color` of the library 1): mode 0 resolved (`GetStyleColorVec4`), 1 set (`rgba`, its
+   !< alpha -1 automatic), 2 as stored. `status`: 0, 1 an unknown name.
+   character(len=*), intent(in)    :: name    !< Name (`ImPlotCol_*` without its prefix).
+   integer(int32),   intent(in)    :: mode    !< 0 resolved, 1 set, 2 as stored.
+   real(real32),     intent(inout) :: rgba(4) !< Colour.
+   integer(int32),   intent(out)   :: status  !< Status.
+   integer(int32)                  :: k       !< ImPlotCol.
+
+   k = name_col(name)
+   status = merge(1_int32, 0_int32, k < 0_int32)
+   if (status /= 0_int32) return
+   select case (mode)
+   case (0_int32)
+      rgba = real(ps_vec4(k), real32)
+   case (1_int32)
+      colors(:, k) = rgba
+   case default
+      rgba = colors(:, k)
+   endselect
+   endsubroutine ps_color_named
+
+   subroutine ps_var_named(name, set, values, count, status)
+   !< A variable by name (`fig_style_var` of the library 1): set 0 its values (`count` of them), 1 set from `values`
+   !< (`count` of them). `status`: 0, 1 an unknown name, 2 a wrong count (`count` the right one).
+   character(len=*), intent(in)    :: name      !< Name (an `ImPlotStyle` field).
+   integer(int32),   intent(in)    :: set       !< 0 get, 1 set.
+   real(real64),     intent(inout) :: values(2) !< Values.
+   integer(int32),   intent(inout) :: count     !< Values given or taken.
+   integer(int32),   intent(out)   :: status    !< Status.
+   integer(int32)                  :: k         !< Index.
+   real(real32)                    :: v(2)      !< As floats.
+
+   k = name_var(name)
+   status = merge(1_int32, 0_int32, k == 0_int32)
+   if (status /= 0_int32) return
+   if (set == 0_int32) then
+      call var_get(k, v)
+      values = real(v, real64)
+      count = VAR_COUNTS(k)
+      return
+   endif
+   if (count /= VAR_COUNTS(k)) then
+      count = VAR_COUNTS(k)
+      status = 2_int32
+      return
+   endif
+   call ps_set_var(name, values(1:count))
+   endsubroutine ps_var_named
+
+   subroutine ps_push_named(vars, name, values, count, status)
+   !< A push by name (`fig_push_style_color`, `fig_push_style_var` of the library 1): a colour's RGBA (vars 0, count
+   !< 4) or a variable's values (vars 1). `status`: 0, 1 an unknown name, 2 a wrong count.
+   logical,          intent(in)  :: vars      !< A variable, else a colour.
+   character(len=*), intent(in)  :: name      !< Name.
+   real(real64),     intent(in)  :: values(:) !< Values.
+   integer(int32),   intent(in)  :: count     !< Values given.
+   integer(int32),   intent(out) :: status    !< Status.
+   integer(int32)                :: k         !< Index.
+
+   status = 0_int32
+   if (vars) then
+      k = name_var(name)
+      if (k == 0_int32) then
+         status = 1_int32
+      elseif (count /= VAR_COUNTS(k)) then
+         status = 2_int32
+      else
+         call ps_push_var(name, values(1:count))
+      endif
+   else
+      if (name_col(name) < 0_int32) then
+         status = 1_int32
+      elseif (count /= 4_int32) then
+         status = 2_int32
+      else
+         call ps_push_color(name, values(1:4))
+      endif
+   endif
+   endsubroutine ps_push_named
+
+   subroutine ps_theme(op, name, values, status)
+   !< One step of a style's plot part, as the native layer builds a theme (`fig_pstyle_theme_fn`): op 1 ImPlot's
+   !< defaults (`ImPlotStyle()`), 2 the style in effect, 3 every colour automatic, 4 the variables to ImPlot's defaults
+   !< (a look; the colours kept), 5 the variable `name` set (`values`), 6 the colour `name` set (`values(1:4)`), 7 the
+   !< style built made the one in effect (the pushes held are kept). `status`: 0, 1 an unknown name, 2 a wrong count.
+   integer(int32),   intent(in)  :: op        !< Step.
+   character(len=*), intent(in)  :: name      !< Name (ops 5, 6).
+   real(real64),     intent(in)  :: values(:) !< Values (ops 5, 6).
+   integer(int32),   intent(out) :: status    !< Status.
+   integer(int32)                :: k         !< Index.
+
+   status = 0_int32
+   select case (op)
+   case (1_int32)
+      pend_vars = VAR_DEFAULTS
+      do k = 0_int32, PC_COUNT - 1_int32
+         pend_colors(:, k) = AUTO
+      enddo
+   case (2_int32)
+      do k = 1_int32, NVAR
+         call var_get(k, pend_vars(:, k))
+      enddo
+      pend_colors = colors
+   case (3_int32)
+      do k = 0_int32, PC_COUNT - 1_int32
+         pend_colors(:, k) = AUTO
+      enddo
+   case (4_int32)
+      pend_vars = VAR_DEFAULTS
+   case (5_int32)
+      k = name_var(name)
+      if (k == 0_int32) then
+         status = 1_int32
+      elseif (size(values) /= VAR_COUNTS(k)) then
+         status = 2_int32
+      else
+         pend_vars(:, k) = 0.0_real32
+         pend_vars(1:VAR_COUNTS(k), k) = real(values, real32)
+         if (VAR_BOOL(k)) pend_vars(1, k) = merge(1.0_real32, 0.0_real32, values(1) /= 0.0_real64)
+      endif
+   case (6_int32)
+      k = name_col(name)
+      if (k < 0_int32) then
+         status = 1_int32
+      elseif (size(values) /= 4) then
+         status = 2_int32
+      else
+         pend_colors(:, k) = real(values, real32)
+      endif
+   case (7_int32)
+      do k = 1_int32, NVAR
+         call var_put(k, pend_vars(:, k))
+      enddo
+      colors = pend_colors
+   endselect
+   endsubroutine ps_theme
 endmodule figure_plot_style

@@ -23,8 +23,8 @@ call save('cool-warm', 'cb_gradient.csv.tmp')
 call ip_load_colormap('cool-warm-saved', 'cb_gradient.csv.tmp')
 diff = 0.0_real64
 do k = 0_int32, 100_int32
-   call ImPlot_SampleColormap(real(k, c_float) / 100.0_c_float, int(ip_colormap('cool-warm'), c_int), a)
-   call ImPlot_SampleColormap(real(k, c_float) / 100.0_c_float, int(ip_colormap('cool-warm-saved'), c_int), b)
-   diff = max(diff, abs(real(a%x - b%x, real64)), abs(real(a%y - b%y, real64)), abs(real(a%z - b%z, real64)))
+   call plot_colormap_sample(ip_colormap('cool-warm'), real(k, real32) / 100.0_real32, a)
+   call plot_colormap_sample(ip_colormap('cool-warm-saved'), real(k, real32) / 100.0_real32, b)
+   diff = max(diff, abs(real(a(1) - b(1), real64)), abs(real(a(2) - b(2), real64)), abs(real(a(3) - b(3), real64)))
 enddo
 write(output_unit, '(A,I0,A)') 'saved and read back: within ', nint(diff * 255.0_real64), ' of 255 per channel'

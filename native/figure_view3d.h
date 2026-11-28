@@ -78,6 +78,13 @@ int  fig_view3d_overlay(int handle, int what, const double *cube);
 int  fig_view3d_cube(int handle, double size, int corner, int *changed);
 int  fig_view3d_gizmo(int handle, const char *id, int id_len, double *matrix, int mode, int space, int has_snap,
                       double snap, int *changed);
+/* The colormaps of the Fortran path (szaghi/figure#15 G2; none registered on the current path, whose meshes take theirs
+ * from the native registry, fig_colormap): table(name, name_len, rgb) checks a map by name, FIG_OK or a status with
+ * the message set, and when rgb is not NULL gives its 256 colours (bytes RGB, the map sampled at k / 255); generation()
+ * changes at each edit of a map (the meshes are coloured again). */
+typedef int (*fig_view3d_cmap_table_fn)(const char *name, int name_len, unsigned char *rgb);
+typedef unsigned (*fig_view3d_cmap_generation_fn)(void);
+void fig_view3d_colormap_hooks(fig_view3d_cmap_table_fn table, fig_view3d_cmap_generation_fn generation);
 
 #ifdef __cplusplus
 }

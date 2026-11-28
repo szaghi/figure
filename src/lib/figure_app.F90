@@ -36,6 +36,7 @@ use figure_c_native, only : FIG_ERR_ARGUMENT, FIG_ERR_STATE, FIG_OK, fig_begin_f
                             fig_layout_current, fig_prefs_open, fig_prefs_file, fig_pref_set, fig_pref_get,         &
                             fig_message_box, fig_set_size_limits
 use figure_icons, only : ICON_CIRCLE_CHECK, ICON_CIRCLE_X, ICON_INFO, ICON_TRIANGLE_ALERT
+use figure_plot_hooks, only : plot_native_install
 use figure_renderer, only : renderer_install
 
 implicit none
@@ -144,6 +145,7 @@ contains
    v = 1_c_int
    if (present(vsync)) v = merge(1_c_int, 0_c_int, vsync)
    call renderer_install() ! the path's renderers (szaghi/figure#15 §2: the build mode picks the implementation)
+   call plot_native_install() ! the path's plot hooks (the 3-D views' colormaps on the Fortran path)
    status = fig_init(title, len(title, c_int), int(width, c_int), int(height, c_int), v)
    if (status == FIG_OK .and. present(ini_file)) status = fig_set_ini_file(ini_file, len(ini_file, c_int))
    call figure_check(status, stat)
@@ -165,6 +167,7 @@ contains
    if (figure_refused('app%init_headless', stat)) return ! a task does not draw
    status = frame_options(decorations, buttons)
    call renderer_install() ! the path's renderers (szaghi/figure#15 §2: the build mode picks the implementation)
+   call plot_native_install() ! the path's plot hooks (the 3-D views' colormaps on the Fortran path)
    if (status == FIG_OK) status = fig_init_headless(int(width, c_int), int(height, c_int))
    call figure_check(status, stat)
    endsubroutine init_headless
@@ -310,6 +313,7 @@ contains
    h = 800_c_int
    if (present(height)) h = int(height, c_int)
    call renderer_install() ! the path's renderers (szaghi/figure#15 §2: the build mode picks the implementation)
+   call plot_native_install() ! the path's plot hooks (the 3-D views' colormaps on the Fortran path)
    if (present(host)) then
       status = fig_init_remote(w, h, host, len(host, c_int), p, bound)
    else

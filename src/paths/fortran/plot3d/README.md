@@ -32,8 +32,9 @@ Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figur
   colours of now, so FIGURE's themes, which set no ImPlot3D colour, reach the 3-D plots as on the current path) and
   the 11 variables `ip3_push_style_var` names; `pf3_push_style_color`, `pf3_pop_style_color`, `pf3_push_style_var`,
   `pf3_pop_style_var` (stacks of their own: on the current path figure_style's one stack is shared with ImGui's and
-  ImPlot's pushes); `ps3_sync`, `ps3_refresh`: FIGURE's ImPlot3D style (`ip3_push_style_*`, which stay figure_style's)
-  brought in from the native layer when it changed, at the Fortran path's `figure_implot3d`'s entry points.
+  ImPlot's pushes); FIGURE's ImPlot3D style on this path (szaghi/figure#15 G2): `ip3_push_style_*` and their pops stay
+  figure_style's, on its one native stack, and the native layer makes each here too (`ps3_push_named`, the hooks of
+  `figure_plot_hooks`); `ps3_color_named`, `ps3_var_named` read it by name; `ps3_reset` at each `init`.
 - `figure_plot3d_items`: the items (`pf3_line`, `pf3_scatter`, `pf3_triangles`, `pf3_quads`, `pf3_surface`,
   `pf3_mesh`, `pf3_image`), `pf3_spec`; the user's arrays read in place, any stride, `real32` or `real64`.
 

@@ -11,8 +11,8 @@ The seam of the view's gizmos is `figure_view3d_gizmos` (`fig_view3d_cube`, `fig
 `src/lib/figure_view3d.F90` calls): on the current path the native layer's (`src/paths/imgui/gizmo/`), here
 figure_gizmo's under the same names, arguments, statuses and messages. The gradient editor is the plot seam's
 `ig_gradient_edit` (`src/paths/fortran/plot/figure_implot.F90`), drawn by `figure_gradient_edit`; an edit resamples the
-map in the Fortran frame's registry (`figure_plot_colormaps`) and gives its stops to the native one
-(`fig_colormap_set_stops`), which the 3-D view's colouring reads.
+map in the Fortran frame's registry (`figure_plot_colormaps`), the only one on this path: the 3-D view's colouring
+reads its tables from it too (`fig_view3d_colormap_hooks`, installed by the plot seam's `figure_plot_hooks`).
 
 Progress, and what is left, are tracked on [#15](https://github.com/szaghi/figure/issues/15) (P14), not here.
 

@@ -1,13 +1,13 @@
-!< figure_plot_scope, the Fortran plot frames' part of the scope record, and the plots' style brought in, on the Fortran path.
+!< figure_plot_scope, the Fortran plot frames' part of the scope record, on the Fortran path.
 module figure_plot_scope
-!< figure_plot_scope, the Fortran plot frames' part of the scope record, and the plots' style brought in, on the Fortran path.
+!< figure_plot_scope, the Fortran plot frames' part of the scope record, on the Fortran path.
 !<
 !< szaghi/figure#15, the seam's switch. `plot_path_ready`, which the Fortran path's `figure_implot` and
 !< `figure_implot3d` call at their entry points: the hooks of native/figure_scope.cpp registered once
 !< (`fig_scope_plot_hooks`: the record snapshots the 2-D frame's open plot and subplot and the 3-D frame's open plot,
 !< as it snapshots ImPlot's and ImPlot3D's; recovers them, `pf_recover_to` and `pf3_end_plot`; closes the plot kinds'
-!< entries with the frames' ends), and FIGURE's ImPlot and ImPlot3D styles, which the native layer holds, brought into
-!< the frames' when they changed (`ps_refresh`, `ps3_refresh`).
+!< entries with the frames' ends). The plots' styles are the frames' own stores (figure_plot_style,
+!< figure_plot3d_style: szaghi/figure#15 G2), kept current by the native layer's hooks (figure_plot_hooks).
 use, intrinsic :: iso_c_binding, only : c_funloc, c_int
 use, intrinsic :: iso_fortran_env, only : int32
 use figure_base, only : SCOPE_ALIGNED, SCOPE_LEGEND_POPUP, SCOPE_PLOT, SCOPE_PLOT3D, SCOPE_SUBPLOTS
@@ -15,9 +15,7 @@ use figure_c_native, only : fig_scope_plot_hooks
 use figure_core, only : core_end_popup
 use figure_plot_frame, only : pf_aligned_open, pf_end_aligned, pf_end_legend_popup, pf_end_plot, pf_end_subplots, &
                               pf_open_ids, pf_recover_to
-use figure_plot_style, only : ps_refresh
 use figure_plot3d_frame, only : pf3_end_plot, pf3_open_id
-use figure_plot3d_style, only : ps3_refresh
 
 implicit none
 private
@@ -27,13 +25,11 @@ logical :: hooks_set = .false. !< The scope record's hooks registered.
 
 contains
    subroutine plot_path_ready()
-   !< The scope record's hooks registered (once), FIGURE's plot styles brought into the frames' when they changed.
+   !< The scope record's hooks registered (once).
    if (.not. hooks_set) then
       call fig_scope_plot_hooks(c_funloc(scope_state), c_funloc(scope_recover), c_funloc(scope_close))
       hooks_set = .true.
    endif
-   call ps_refresh()
-   call ps3_refresh()
    endsubroutine plot_path_ready
 
    subroutine scope_state(open) bind(C)

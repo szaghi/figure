@@ -22,7 +22,6 @@ program figure_test_plots
 !< with levels, a band edge of 87.5 reads 87.5 under '%.0f' (and 87.5% under '%.0f%%'); a continuous bar's ticks keep
 !< the format ('%.0f': 0.25 reads 0).
 ! oracle: drag plot-drag-tools dock-split
-use, intrinsic :: iso_c_binding, only : c_double, c_float, c_int
 use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64, output_unit
 use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
 use figure, only : app_object, ig_begin, ig_dock_id, ig_dock_layout_begin, ig_dock_layout_end, ig_dock_space, &
@@ -33,10 +32,9 @@ use figure, only : app_object, ig_begin, ig_dock_id, ig_dock_layout_begin, ig_do
 use figure, only : ig_set_next_window, ip_annotation, ip_contour, ip_contour_levels, ip_contour_lines, ip_drag_line_x, &
                    ip_drag_line_y, ip_drag_point, ip_error_bars, ip_setup_axes_limits, ip_spec
 use figure, only : ig_item_rect, ig_same_line, ig_text_size, ip_colormap_legend, ip_plot_limits, ip_plot_to_pixels
-use figure_cimgui, only : im_vec4
 use figure_cimgui, only : im_vec2
-use figure_cimplot, only : im_plot_rect, ImPlot_GetColormapColor, ImPlot_GetColormapCount, ImPlot_GetColormapSize, &
-                           ImPlot_SampleColormap
+use figure_cimplot, only : im_plot_rect
+use figure_plot_hooks, only : plot_colormap_color, plot_colormap_count, plot_colormap_sample, plot_colormap_size
 use figure_testing, only : test_drag, test_drawn_extent, test_plot_tick
 
 implicit none
@@ -258,25 +256,25 @@ contains
    endsubroutine delete_files
 
    function colour(id, index) result(c)
-   !< The index-th colour (from 0) of the ImPlot colormap id, rgb.
+   !< The index-th colour (from 0) of the colormap id (the registry's: ImPlot's on the current path), rgb.
    integer(int32), intent(in) :: id    !< Colormap id.
    integer(int32), intent(in) :: index !< Colour index, from 0.
    real(real64)               :: c(3)  !< Colour.
-   type(im_vec4)              :: v     !< ImPlot's.
+   real(real32)               :: v(4)  !< The registry's.
 
-   call ImPlot_GetColormapColor(int(index, c_int), int(id, c_int), v)
-   c = real([v%x, v%y, v%z], real64)
+   call plot_colormap_color(id, index, v)
+   c = real(v(1:3), real64)
    endfunction colour
 
    function sample(id, t) result(c)
-   !< The colour of the ImPlot colormap id at t in [0, 1] (ImPlot's lookup, as a heatmap colours a value), rgb.
+   !< The colour of the colormap id at t in [0, 1] (the registry's lookup, as a heatmap colours a value), rgb.
    integer(int32), intent(in) :: id   !< Colormap id.
    real(real64),   intent(in) :: t    !< Position.
    real(real64)               :: c(3) !< Colour.
-   type(im_vec4)              :: v    !< ImPlot's.
+   real(real32)               :: v(4) !< The registry's.
 
-   call ImPlot_SampleColormap(real(t, c_float), int(id, c_int), v)
-   c = real([v%x, v%y, v%z], real64)
+   call plot_colormap_sample(id, real(t, real32), v)
+   c = real(v(1:3), real64)
    endfunction sample
 
    subroutine check_colormaps(passed)
@@ -297,27 +295,27 @@ contains
       ok = ok .and. trim(names(j)) == trim(BUNDLED(j))
       id = ip_colormap(trim(BUNDLED(j)), stat=s(1))
       ok = ok .and. s(1) == FIG_OK .and. id >= 16_int32
-      ok = ok .and. ImPlot_GetColormapSize(int(id, c_int)) == 256_c_int
+      ok = ok .and. plot_colormap_size(id) == 256_int32
       ok = ok .and. all(abs(colour(id, 0_int32) - ENDS(1:3, j)) <= TOL8)
       ok = ok .and. all(abs(colour(id, 255_int32) - ENDS(4:6, j)) <= TOL8)
-      count0 = int(ImPlot_GetColormapCount(), int32)
-      ok = ok .and. ip_colormap(trim(BUNDLED(j))) == id .and. int(ImPlot_GetColormapCount(), int32) == count0
+      count0 = plot_colormap_count()
+      ok = ok .and. ip_colormap(trim(BUNDLED(j))) == id .and. plot_colormap_count() == count0
    enddo
    passed(1) = ok .and. ip_colormap('Viridis') == 4_int32
    ! 2. reversed: a bundled map and one of ImPlot's
    id = ip_colormap('magma')
    rid = ip_colormap('magma_r', stat=s(1))
-   ok = s(1) == FIG_OK .and. rid /= id .and. ImPlot_GetColormapSize(int(rid, c_int)) == 256_c_int
+   ok = s(1) == FIG_OK .and. rid /= id .and. plot_colormap_size(rid) == 256_int32
    do j = 0_int32, 255_int32, 15_int32
       ok = ok .and. all(abs(colour(rid, j) - colour(id, 255_int32 - j)) < 1.0e-6_real64)
    enddo
    rid = ip_colormap('Viridis_r')
-   passed(2) = ok .and. all(abs(colour(rid, 0_int32) - colour(4_int32, ImPlot_GetColormapSize(4_c_int) - 1_int32)) &
+   passed(2) = ok .and. all(abs(colour(rid, 0_int32) - colour(4_int32, plot_colormap_size(4_int32) - 1_int32)) &
                             < 1.0e-6_real64)
    ! 3. discrete: 5 bands, each the map at its centre, not blended (the same colour across a band)
    id = ip_colormap('cool-warm')
    id2 = ip_colormap('cool-warm', levels=5_int32, stat=s(1))
-   ok = s(1) == FIG_OK .and. id2 /= id .and. ImPlot_GetColormapSize(int(id2, c_int)) == 5_c_int
+   ok = s(1) == FIG_OK .and. id2 /= id .and. plot_colormap_size(id2) == 5_int32
    do j = 0_int32, 4_int32
       ok = ok .and. all(abs(colour(id2, j) - sample(id, (j + 0.5_real64) / 5.0_real64)) <= 2.0_real64 / 255.0_real64)
    enddo
@@ -331,12 +329,12 @@ contains
    ! 4. a CSV table loaded before init (0-255, header, comment) and one with positions (resampled)
    id = ip_colormap('rgb-test', stat=s(1))
    ok = all(stat_before == [FIG_OK, FIG_ERR_STATE]) .and. id_before == -1_int32 .and. s(1) == FIG_OK
-   ok = ok .and. ImPlot_GetColormapSize(int(id, c_int)) == 3_c_int .and. all(abs(colour(id, 2_int32) - BLUE) < 1.0e-6_real64)
+   ok = ok .and. plot_colormap_size(id) == 3_int32 .and. all(abs(colour(id, 2_int32) - BLUE) < 1.0e-6_real64)
    ok = ok .and. all(abs(colour(id, 0_int32) - [1.0_real64, 0.0_real64, 0.0_real64]) < 1.0e-6_real64)
    ok = ok .and. all(abs(colour(id, 1_int32) - [0.0_real64, 128.0_real64 / 255.0_real64, 0.0_real64]) <= TOL8)
    call ip_load_colormap('peak', CSV4, stat=s(2))
    id = ip_colormap('peak')
-   passed(4) = ok .and. s(2) == FIG_OK .and. ImPlot_GetColormapSize(int(id, c_int)) == 256_c_int .and. &
+   passed(4) = ok .and. s(2) == FIG_OK .and. plot_colormap_size(id) == 256_int32 .and. &
                all(colour(id, 64_int32) > 0.98_real64) .and. all(colour(id, 255_int32) < 1.0e-6_real64) .and. &
                all(abs(colour(id, 160_int32) - (1.0_real64 - (160.0_real64 / 255.0_real64 - 0.25_real64) / 0.75_real64)) &
                    <= TOL8 + 1.0e-3_real64)
@@ -344,7 +342,7 @@ contains
    call ip_load_colormap('Cool to Warm', JSON, stat=s(1))
    id = ip_colormap('Cool to Warm')
    id2 = ip_colormap('cool-warm')
-   ok = s(1) == FIG_OK .and. ImPlot_GetColormapSize(int(id, c_int)) == 256_c_int
+   ok = s(1) == FIG_OK .and. plot_colormap_size(id) == 256_int32
    ok = ok .and. all(abs(colour(id, 0_int32) - [0.231373_real64, 0.298039_real64, 0.752941_real64]) <= TOL8)
    ok = ok .and. all(abs(colour(id, 255_int32) - [0.705882_real64, 0.0156863_real64, 0.14902_real64]) <= TOL8)
    do j = 0_int32, 255_int32, 17_int32
