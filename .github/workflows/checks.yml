@@ -6,7 +6,8 @@
 #     (#7 §4.6);
 #   - tsan: ThreadSanitizer on the calls a task may make (quit, request_frames, wake, ...): scripts/tsan_check.sh;
 #   - fortran-path: the tests and the examples of the Fortran path (#15 §2, the -fortran modes of fobos), beside ci.yml's
-#     current path (the Platforms workflow builds nvfortran's and ifx's).
+#     current path (the Platforms workflow builds nvfortran's and ifx's), and the symbols their programs define: none of
+#     the C++ libraries above Dear ImGui (#15 G2, scripts/check_fortran_path_symbols.py).
 # All run in the toolchain image of ci.yml (fobos [scaffold] toolchain_image: gfortran 16.2, the compiler the pictures
 # are rendered with), with the packages it lacks (fobos [scaffold] toolchain_packages, plus ImageMagick).
 name: Checks
@@ -142,3 +143,10 @@ jobs:
 
     - name: Examples, the Fortran path (FoBiS)
       run: fobis build --mode examples-gnu-fortran
+
+    # #15 G2: the Fortran path's programs (the tests and examples just built) link none of ImPlot, ImPlot3D, ImGuizmo,
+    # ImGradient, TextEditor; the side-by-side tests only what their reference modules need
+    - name: Fortran-path symbols
+      run: |
+        python3 scripts/check_fortran_path_symbols.py --self-test
+        python3 scripts/check_fortran_path_symbols.py exe exe/examples

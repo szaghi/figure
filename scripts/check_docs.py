@@ -11,6 +11,9 @@ Default checks (exit 1 and a list of what is missing):
   generic interface, a derived type; the specific procedures of a generic and the procedures bound to a public type
   included), every public component of a public type and every dummy argument of those procedures has a ``!<``
   comment on its declaration.
+- **Tags:** no doc comment (``!<``) of the library's sources, both paths, holds a bare HTML-like tag (``<name>``)
+  outside backticks: the API pages are generated from them and VitePress reads such a tag as HTML (an unclosed one
+  breaks the site's build).
 - **Examples:** every section a feature-map row links to (``[text](page#anchor)``, or a whole page) includes a
   compiled example (``<<< @/examples/snippets/...``); a row marked ``<!-- visual -->`` also needs a ``<Media`` in
   each section it links to.
@@ -295,6 +298,24 @@ def type_bound(module: Path, type_name: str) -> list[str]:
         for b in re.finditer(r"^\s*procedure[^:]*::\s*(\w+)", m.group(1), re.M | re.I)
         if "private" not in b.group(0).lower()
     ]
+
+
+TAG = re.compile(r"</?[A-Za-z][\w.:-]*(?:\s[^<>]*)?/?>")  # an HTML-like tag, as VitePress would read it
+
+
+def check_tags() -> list[str]:
+    """Doc comments of the library (src/lib, src/paths: both paths) with a bare tag outside backticks."""
+    missing: list[str] = []
+    for path in sorted([*LIB.rglob("*.F90"), *(ROOT / "src" / "paths").rglob("*.F90")]):
+        for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+            at = line.find("!<")
+            if at < 0:
+                continue
+            text = re.sub(r"`[^`]*`", "", line[at + 2:])
+            for m in TAG.finditer(text):
+                missing.append(f"{path.relative_to(ROOT)}:{n}: a bare tag {m.group(0)} in a doc comment (write it in "
+                               "backticks: VitePress reads it as HTML)")
+    return missing
 
 
 def check_comments() -> list[str]:
@@ -839,13 +860,13 @@ def main(argv: list[str]) -> int:
         return 2
     missing = (check_feature_map() + check_comments() + check_rows() + check_code_blocks() + check_readme()
                + check_version() + check_tables() + check_links() + check_generated() + check_prose()
-               + check_examples())
+               + check_examples() + check_tags())
     done = ["the feature map lists every public procedure", "every public entity and argument has a doc comment",
             "every row's section has a compiled example", "no hand-written Fortran block",
             "README.md's example is the compiled one", "the docs say the version in VERSION",
             "every table row has its header's cells", "every internal link and anchor exists",
             "the generated tables are current", "every public name is in a sentence of its page",
-            "every public name is called by a docs program"]
+            "every public name is called by a docs program", "no bare tag in a doc comment"]
     if "--names" in argv:
         missing += check_names()
         done.append("the name map is current")

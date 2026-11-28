@@ -61,6 +61,15 @@ the repository. The same rule run locally writes them into `docs/guide`.
   `src/lib/figure_plot_series.F90`): the Fortran plot frame grows in `src/paths/fortran/plot/` under its own module
   names until it replaces it. The 3-D seam likewise: `figure_implot3d` (`src/paths/imgui/plot3d/`; its
   path-independent checks `src/lib/figure_plot3d_series.F90`), the Fortran 3-D frame in `src/paths/fortran/plot3d/`.
+- **Nothing above Dear ImGui on the Fortran path** ([#15](https://github.com/szaghi/figure/issues/15) G2). A program
+  built by a `-fortran` mode links Dear ImGui, SDL3, the backends and FIGURE's own glue, and none of ImPlot, ImPlot3D,
+  ImGuizmo, ImGradient or TextEditor: the native glue reaches them only through objects a program links when it
+  references them (`native/figure_implot_glue.cpp`, `figure_view3d_gizmo.cpp`, `figure_colormap.cpp`,
+  `figure_editor.cpp`). `scripts/check_fortran_path_symbols.py` (CI, the `fortran-path` job, after the tests and the
+  examples are built; `--self-test` checks its decisions) reads the symbols every program defines and fails on one of
+  theirs. Only the side-by-side tests of `src/tests/fortran` may link them, and only what their reference modules
+  need (`figure_implot_ref`: ImPlot, ImPlot3D, ImGradient; `figure_implot3d_ref`: ImPlot3D, ImPlot;
+  `figure_view3d_gizmos_ref`: ImGuizmo; `figure_editor_ref`: TextEditor): the C++ library is their oracle.
 - **Pinned versions.** cimgui, cimplot and SDL3 are a matched set: do not bump one alone.
 - **Tests grow with bindings.** Every new widget or plot item gets a headless check driven by synthetic input, as in
   `src/tests/figure_test_headless.F90`.
